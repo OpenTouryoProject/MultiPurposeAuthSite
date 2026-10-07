@@ -22,6 +22,7 @@
     //*  2026/09/27  玄人 幸道         post_logout_redirect_uri の入力欄を追加（#232）
     //*  2026/10/02  玄人 幸道         署名アルゴリズムの入力欄を追加（#129 の段階 2）
     //*  2026/10/03  玄人 幸道         検証する側のalgの入力欄を追加（#262）
+    //*  2026/10/04  玄人 幸道         web_originsの入力欄を追加（#266）
     //**********************************************************************************
 *@
 
@@ -122,6 +123,13 @@
         @Html.LabelFor(m => m.IdTokenSignedResponseAlg, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.IdTokenSignedResponseAlg, Model.DdlIdTokenSignedResponseAlgItems, new { @class = "form-control" })
+        </div>
+    </div>
+    @* **CORS で許可するオリジン**（#266）。空なら redirect_uri から導く *@
+    <div class="form-group">
+        @Html.LabelFor(m => m.WebOrigins, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.WebOrigins, new { @class = "form-control" })
         </div>
     </div>
     @* **検証する側の署名アルゴリズム**（#262）。空なら絞らない *@

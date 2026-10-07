@@ -37,6 +37,7 @@
 //*  2026/10/01  玄人 幸道         利用者名とメアドの規則を追加（#151 の段階 3）
 //*  2026/10/01  玄人 幸道         利用者名を運ぶクレーム（preferred_username）を追加（#151 の段階 4）
 //*  2026/10/04  玄人 幸道         test_self_code_manage を追加（C-10）
+//*  2026/10/06  玄人 幸道         セッション キャッシュの表名を追加（#256）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -158,6 +159,34 @@ namespace MultiPurposeAuthSite.Co
         /// **記号を足して通常の照合に載せ、分岐を消した**（`ANALYSIS-IdP.md` の C-10）。
         /// </remarks>
         public const string TestSelfCodeManage = "test_self_code_manage";
+
+        #endregion
+
+        #region セッションの置き場（#256）
+
+        /// <summary>セッション キャッシュのスキーマ名（#256。SqlServer のとき）</summary>
+        /// <remarks>
+        /// **`Create_SessionCache.sql` と同じ値にすること。**
+        /// **設定キーにしていない**のは、**DDL と食い違うと黙って動かなくなる**ためである。
+        /// </remarks>
+        public const string SessionCacheSchemaName = "dbo";
+
+        /// <summary>セッション キャッシュのテーブル名（#256。SqlServer のとき）</summary>
+        /// <remarks>**`Create_SessionCache.sql` と同じ値にすること。**</remarks>
+        public const string SessionCacheTableName = "SessionCache";
+
+        #endregion
+
+        #region WebAuthn（#137）
+
+        /// <summary>WebAuthn の RP の表示名（#137）</summary>
+        /// <remarks>
+        /// **認証器の画面に出る名前**である（`RPName`）。
+        /// **RPID とは別物**で、**RPID は配備先のホスト名から取る**
+        /// （`WebAuthnHelper` の constructor）。
+        /// **設定キーにしていない**のは、**表示名を変えても振る舞いが変わらない**ため。
+        /// </remarks>
+        public const string WebAuthnRpName = "MultiPurposeAuthSite";
 
         #endregion
 

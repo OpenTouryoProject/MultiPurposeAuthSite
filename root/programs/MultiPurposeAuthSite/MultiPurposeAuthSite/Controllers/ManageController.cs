@@ -23,6 +23,10 @@
 //*  2026/10/01  玄人 幸道         メアドの追加・削除を引退させ、利用者名の変更と分けた（#151 の段階 3）
 //*  2026/10/02  玄人 幸道         メアドの追加・削除のアクションを削除（#151 の段階 5）
 //*  2026/10/04  玄人 幸道         折り返し先の既定をtest_self_code_manageに（C-10）
+//*  2026/10/04  玄人 幸道         登録の保存でCORSのキャッシュを捨てる（#266）
+//*  2026/10/06  玄人 幸道         クライアント登録を専用列に保存する（#270）
+//*  2026/10/06  玄人 幸道         CORSの許可オリジンのキャッシュをやめた（#271）
+//*  2026/10/06  玄人 幸道         同意の一覧と取り消しを追加（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -33,8 +37,8 @@ using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-//using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
+using Token = MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.IO;
@@ -60,9 +64,6 @@ using Newtonsoft.Json.Serialization;
 
 using Facebook;
 
-//using Fido2NetLib;
-//using Fido2NetLib.Objects;
-//using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
@@ -95,6 +96,8 @@ namespace MultiPurposeAuthSite.Controllers
             ChangePasswordSuccess,
             /// <summary>RemoveExternalLoginSuccess</summary>
             RemoveExternalLoginSuccess,
+            /// <summary>RevokeConsentSuccess（#272 の段階 2）</summary>
+            RevokeConsentSuccess,
             /// <summary>AccountConflictInSocialLogin</summary>
             AccountConflictInSocialLogin,
             /// <summary>SetTwoFactorSuccess</summary>
@@ -115,14 +118,6 @@ namespace MultiPurposeAuthSite.Controllers
             AddSaml2OAuth2DataSuccess,
             /// <summary>RemoveSaml2OAuth2DataSuccess</summary>
             RemoveSaml2OAuth2DataSuccess,
-            /// <summary>AddMsPassDataSuccess</summary>
-            AddMsPassDataSuccess,
-            /// <summary>RemoveMsPassDataSuccess</summary>
-            RemoveMsPassDataSuccess,
-            /// <summary>AddWebAuthnDataSuccess</summary>
-            AddWebAuthnDataSuccess,
-            /// <summary>RemoveWebAuthnDataSuccess</summary>
-            RemoveWebAuthnDataSuccess,
             /// <summary>Error</summary>
             Error
         }
@@ -201,6 +196,7 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.ChangeEmailFailure ? Resources.ManageController.ChangeEmailFailure
                 : message == EnumManageMessageId.ChangePasswordSuccess ? Resources.ManageController.ChangePasswordSuccess
                 : message == EnumManageMessageId.RemoveExternalLoginSuccess ? Resources.ManageController.RemoveExternalLoginSuccess
+                : message == EnumManageMessageId.RevokeConsentSuccess ? Resources.ManageController.RevokeConsentSuccess
                 : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
                 : message == EnumManageMessageId.AddPhoneSuccess ? Resources.ManageController.AddPhoneSuccess
@@ -211,10 +207,6 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
                 : message == EnumManageMessageId.AddSaml2OAuth2DataSuccess ? Resources.ManageController.AddSaml2OAuth2DataSuccess
                 : message == EnumManageMessageId.RemoveSaml2OAuth2DataSuccess ? Resources.ManageController.RemoveSaml2OAuth2DataSuccess
-                : message == EnumManageMessageId.AddMsPassDataSuccess ? Resources.ManageController.AddMsPassDataSuccess
-                : message == EnumManageMessageId.RemoveMsPassDataSuccess ? Resources.ManageController.RemoveMsPassDataSuccess
-                : message == EnumManageMessageId.AddWebAuthnDataSuccess ? Resources.ManageController.AddWebAuthnDataSuccess
-                : message == EnumManageMessageId.RemoveWebAuthnDataSuccess ? Resources.ManageController.RemoveWebAuthnDataSuccess
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
 
@@ -222,7 +214,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
+                bool hasSaml2OAuth2Data = (Sts.DataProvider.Get(user.ClientID) != null);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
@@ -241,20 +233,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 非構造化データ
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = !string.IsNullOrEmpty(saml2OAuth2Data),
-                    // FIDO2PublicKey
-                    /*HasFIDO2Data = new Func<bool>(() =>
-                    {
-                        if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                        {
-                            return !string.IsNullOrEmpty(user.FIDO2PublicKey);
-                        }
-                        else if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                        {
-                            return (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count);
-                        }
-                        else return false;                        
-                    })(),*/
+                    HasSaml2OAuth2Data = hasSaml2OAuth2Data,
                     // Scopes
                     Scopes = Const.StandardScopes
                 };
@@ -1062,6 +1041,66 @@ namespace MultiPurposeAuthSite.Controllers
         #region (External) Logins
 
         /// <summary>
+        /// 同意（consent grant）の一覧（#272 の段階 2 / D-6）
+        /// GET: /Manage/ConsentGrants
+        /// </summary>
+        /// <param name="message">ManageMessageId</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **利用者が「どのアプリケーションに何を許したか」を見る画面である。
+        /// **記録するなら、取り消せなければならない**（そうでないと記録が増えるだけになる）。
+        /// </remarks>
+        [HttpGet]
+        public async Task<ActionResult> ConsentGrants(EnumManageMessageId? message)
+        {
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+            ViewBag.StatusMessage = (message == EnumManageMessageId.RevokeConsentSuccess)
+                ? Resources.ManageController.RevokeConsentSuccess : "";
+
+            List<ConsentGrantViewModel> grants = new List<ConsentGrantViewModel>();
+
+            foreach (KeyValuePair<string, string> kv
+                in Sts.ConsentProvider.GetByUser(user.Id))
+            {
+                // **client_name を引けなければ client_id を出す**
+                //   （登録を消した後でも、同意の記録は残る）。
+                string clientName = Sts.Helper.GetInstance().GetClientName(kv.Key);
+
+                grants.Add(new ConsentGrantViewModel()
+                {
+                    ClientId = kv.Key,
+                    ClientName = string.IsNullOrEmpty(clientName) ? kv.Key : clientName,
+                    Scopes = kv.Value
+                });
+            }
+
+            return View(new ManageConsentGrantsViewModel() { Grants = grants });
+        }
+
+        /// <summary>
+        /// 同意を取り消す（#272 の段階 2 / D-6）
+        /// POST: /Manage/RevokeConsent
+        /// </summary>
+        /// <param name="clientId">client_id</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **次の認可で同意画面が出る**（`prompt=none` なら `consent_required`）。
+        /// **発行済みのトークンは失効しない。** そちらは `/revoke`（RFC 7009）の役目である。
+        /// </remarks>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RevokeConsent(string clientId)
+        {
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+            Sts.ConsentProvider.Revoke(user.Id, clientId);
+
+            return RedirectToAction("ConsentGrants",
+                new { Message = EnumManageMessageId.RevokeConsentSuccess });
+        }
+
+        /// <summary>
         /// 外部ログイン管理画面（初期表示）
         /// GET: /Manage/ManageLogins
         /// </summary>
@@ -1848,11 +1887,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddSaml2OAuth2DataViewModel model = null;
 
-                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
+                model = Sts.DataProvider.Get(user.ClientID);
 
-                if (!string.IsNullOrEmpty(saml2OAuth2Data))
+                if (model != null)
                 {
-                    model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                     if (string.IsNullOrEmpty(model.ClientID))
                     {
                         // 空（userから取得
@@ -1922,12 +1960,11 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // ユーザを取得できた。
                             model.ClientName = user.UserName; // ClientNameはUser入力ではない。
-                            string unstructuredData = JsonConvert.SerializeObject(model);
 
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                Sts.DataProvider.Update(user.ClientID, unstructuredData);
+                                Sts.DataProvider.Update(user.ClientID, model);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -1947,7 +1984,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
                                     if (!string.IsNullOrEmpty(temp)) Sts.DataProvider.Delete(temp);
-                                    Sts.DataProvider.Create(user.ClientID, unstructuredData);
+                                    Sts.DataProvider.Create(user.ClientID, model);
 
                                     // 再ログイン
                                     await this.ReSignInAsync();
@@ -2104,304 +2141,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region FIDO Data
-
-        #region WebAuthn
-        /*
-        /// <summary>
-        /// WebAuthn関連の非構造化データの追加・編集画面（初期表示）
-        /// GET: /Manage/AddWebAuthnData
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpGet]
-        public async Task<ActionResult> AddWebAuthnData()
-        {
-            if ((Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                ViewBag.SequenceNo = "0";
-                ViewBag.UserName = user.UserName;
-                ViewBag.FIDO2Data = "";
-
-                return View();
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-        
-        /// <summary>
-        /// WebAuthn関連の非構造化データの追加・編集画面（初期表示）
-        /// GET: /Manage/AddWebAuthnData
-        /// </summary>
-        /// <param name="fido2Data">string</param>
-        /// <param name="sequenceNo">string</param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        public async Task<ActionResult> AddWebAuthnData(string fido2Data, string sequenceNo)
-        {
-            if ((Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                ViewBag.UserName = user.UserName;
-
-                string temp = "";
-
-                if (sequenceNo == "0")
-                {
-                    CredentialCreateOptions options = null;
-
-                    try
-                    {
-                        JObject requestJSON = JsonConvert.DeserializeObject<JObject>(fido2Data);
-                        string username = (string)requestJSON["username"];
-                        string displayName = (string)requestJSON["displayName"];
-                        bool residentKey = bool.Parse((string)requestJSON["authenticatorSelection"]["residentKey"]);
-                        string authenticatorAttachment = (string)requestJSON["authenticatorSelection"]["authenticatorAttachment"];
-                        string userVerification = (string)requestJSON["authenticatorSelection"]["userVerification"];
-                        string attestation = (string)requestJSON["attestation"];
-
-                        if (username == user.UserName)
-                        {
-                            FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
-
-                            options = webAuthnHelper.CredentialCreationOptions(
-                                username, attestation, authenticatorAttachment, residentKey, userVerification);
-
-                            // Sessionに保存
-                            temp = options.ToJson();
-                            Session["fido2.CredentialCreateOptions"] = temp;
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        options = new CredentialCreateOptions
-                        {
-                            Status = OAuth2AndOIDCConst.error,
-                            ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
-                        };
-                    }
-
-                    // Htmlを返す。
-                    ViewBag.SequenceNo = "1";
-                    ViewBag.UserName = user.UserName;
-                    ViewBag.FIDO2Data = temp;
-
-                    return View();
-                }
-                else if (sequenceNo == "1")
-                {
-                    CredentialMakeResult result = null;
-
-                    try
-                    {
-                        AuthenticatorAttestationRawResponse attestationResponse
-                        = JsonConvert.DeserializeObject<AuthenticatorAttestationRawResponse>(fido2Data);
-
-                        FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
-
-                        // Sessionから復元
-                        CredentialCreateOptions options =
-                            CredentialCreateOptions.FromJson(
-                                (string)Session["fido2.CredentialCreateOptions"]);
-
-                        result = await webAuthnHelper.AuthenticatorAttestation(attestationResponse, options);
-
-                    }
-                    catch (Exception e)
-                    {
-                        result = new CredentialMakeResult
-                        {
-                            Status = OAuth2AndOIDCConst.error,
-                            ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
-                        };
-                    }
-                    // Htmlを返す。
-                    ViewBag.SequenceNo = "2";
-                    ViewBag.UserName = user.UserName;
-                    ViewBag.FIDO2Data = JsonConvert.SerializeObject(result);
-
-                    return View();
-                }
-                else if (sequenceNo == "2")
-                {
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddWebAuthnDataSuccess });
-                }
-            }
-
-            // エラー画面
-            return View("Error");
-        }
-
-        /// <summary>
-        /// WebAuthn関連の非構造化データの削除
-        /// POST: /Manage/RemoveWebAuthnData
-        /// </summary>
-
-        /// <param name="publicKeys"></param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        public async Task<ActionResult> RemoveWebAuthnData(string publicKeys)
-        {
-            if ((Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                // 削除処理
-                if (!string.IsNullOrEmpty(publicKeys))
-                {
-                    string[] _publicKeys = publicKeys.Split(',');
-
-                    foreach (string publicKey in _publicKeys)
-                    {
-                        FIDO.DataProvider.Delete(publicKey, user.UserName);
-                    }
-                }
-                
-                // 公開鍵の検索
-                List<PublicKeyCredentialDescriptor> existingPubCredDescriptor = FIDO.DataProvider.GetCredentialsByUser(user.UserName);
-
-                // 対策コード
-                List<string> existingPubCredDescriptorId = new List<string>();
-                foreach (PublicKeyCredentialDescriptor temp in existingPubCredDescriptor)
-                {
-                    existingPubCredDescriptorId.Add(CustomEncode.ToBase64UrlString(temp.Id));
-                }
-
-                // Htmlを返す。
-                ViewBag.ExistingPubCredDescriptorId = existingPubCredDescriptorId;
-                return View();
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-        */
-        #endregion
-
-        #region MsPass
-        /*
-        /// <summary>
-        /// MsPass関連の非構造化データの追加・編集画面（初期表示）
-        /// GET: /Manage/AddMsPassData
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpGet]
-        public async Task<ActionResult> AddMsPassData()
-        {
-            if ((Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                ViewBag.UserId = user.Id;
-                ViewBag.UserName = user.UserName;
-                ViewBag.AttestationChallenge = GetPassword.Generate(22, 0);
-
-                return View();
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-
-        /// <summary>
-        /// MsPass関連の非構造化データの追加・編集画面
-        /// POST: /Manage/AddMsPassData
-        /// </summary>
-        /// <param name="msPassUserId">string</param>
-        /// <param name="msPassPublickey">string</param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddMsPassData(
-            string msPassUserId, string msPassPublickey)
-        {
-            if ((Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                if (user != null)
-                {
-                    // ユーザを取得できた。
-                    //if (user.Id == credentialId)
-                    if (user.UserName == msPassUserId)
-                    {
-                        // 公開鍵を保存
-                        user.FIDO2PublicKey = msPassPublickey;
-
-                        // ユーザーの保存
-                        IdentityResult result = await UserManager.UpdateAsync(user);
-
-                        // 結果の確認
-                        if (result.Succeeded)
-                        {
-                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddMsPassDataSuccess });
-                        }
-                    }
-                }
-            }
-
-            // エラー画面
-            return View("Error");
-        }
-
-        /// <summary>
-        /// MsPass関連の非構造化データの削除
-        /// POST: /Manage/RemoveMsPassData
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveMsPassData()
-        {
-            if ((Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                if (user != null)
-                {
-                    // ユーザを取得できた
-
-                    // 公開鍵をクリア
-                    user.FIDO2PublicKey = null;
-
-                    // ユーザーの保存
-                    IdentityResult result = await UserManager.UpdateAsync(user);
-
-                    // 結果の確認
-                    if (result.Succeeded)
-                    {
-                        return RedirectToAction("Index",
-                            new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
-                    }
-                }
-            }
-
-            // エラー画面
-            return View("Error");
-        }
-        */
-        #endregion
-
-        #endregion
-
         #region GDPR
 
         /// <summary>
@@ -2495,7 +2234,6 @@ namespace MultiPurposeAuthSite.Controllers
                 user.ClientID = user.Id;
                 user.PaymentInformation = "";
                 user.UnstructuredData = "";
-                user.FIDO2PublicKey = "";
                 //user.CreatedDate = ;
                 //user.PasswordChangeDate = 
                 #endregion

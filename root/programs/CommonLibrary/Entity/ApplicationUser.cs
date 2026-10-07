@@ -20,6 +20,7 @@
 //*  201X/XX/XX  西野 大介         FIDO2PublicKey追加(WebAuthn)
 //*  2020/02/27  西野 大介         DeviceToken追加(プッシュ通知)
 //*  2026/10/01  玄人 幸道         CreateUser を利用者名とメアドの 2 つを受け取る形にした（#151 の段階 3）
+//*  2026/10/07  玄人 幸道         FIDO2PublicKeyを削除(MsPass専用。WebAuthnはFIDO2Data表。#137)
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -373,11 +374,6 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// 非構造化データ
         /// </summary>
         public string UnstructuredData { get; set; } = null;
-
-        /// <summary>
-        /// FIDO2PublicKey
-        /// </summary>
-        public string FIDO2PublicKey { get; set; } = null;
 
         /// <summary>
         /// DeviceToken 

@@ -80,6 +80,11 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_6` / `_7` | **写しただけ**（`subject_types` を書かない）。**既定が public になった**ことを 2 つの client_id で測る（#151 の段階 4） | 同上 |
 | `TestClient_8`〜`_13` | 同じく写しで、**`id_token_signed_response_alg`** を `RS512` / `ES384` / `ES512` / `PS256` / `PS384` / `PS512` に（#129 の段階 2〜4）。`_8` は **`token_endpoint_auth_signing_alg = RS256`** も登録（#262） | 同上 |
 | `TestClient_15` | 同じく写しで、**`redirect_uri_code` を `test_self_code_manage`** に（C-10）。**管理画面の自己テストの折り返し先が、登録値として通る**ことを測る | 同上 |
+| `TestClient_16` | 同じく写しで、**`client_secret` を空（public）**にし、**`web_origins`** と**別オリジンの `redirect_uri_code`** を登録（#266）。**`web_origins` が勝つ**ことを測る | 同上 |
+| `TestClient_17` | 同じく public で、**`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つ**を登録（#269）。**登録全体が 2000 文字を超えても保存できる**ことを測る（#270 で列に切り出した後も、列ごとの幅に入ることの確かめになっている） | 同上 |
+| `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `TestClient6` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
+| `TestClient_19` | 同じく写し。**どのテストも「許可」を押さない**（#272 の段階 2）。**「同意の記録が無い」状態を測るためだけに在る**（`RT-272.3` / `RT-272.4`）。**押すと記録が残り、DB ストアでは 2 回目から測れなくなる** | 同上 |
+| `TestClient_20` | 同じく写し。**同意の取り消しを測るためだけに在る**（#272 の段階 2。`RT-272.7`）。**「許可 → 取り消し → prompt=none」**を回すので、**終わった時点で記録を残さない** | 同上 |
 
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
@@ -309,6 +314,13 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
+| `Tests/Issues/WebAuthnTests.cs` | `RT-137` | **WebAuthn**（`Fido2` 4.2.0）。登録・認証の**要求を組み立てる段**（`CredentialCreateOptions` / `AssertionOptions`）、**壊れた入力を封筒に入れて 200 で返すこと**、**challenge を使い回していないこと**。**net48 版には口が無いこと**も測る |
+
+> **WebAuthn（`RT-137`）は、登録と認証そのものを測っていない。**
+> **`navigator.credentials` を呼ぶのはブラウザ**なので、
+> **attestation / assertion を作るには仮想認証器（CDP の WebAuthn ドメイン）が要る。**
+> **この基盤は HttpClient だけ**なので、**そこは測らないと決めてある。**
+> 測っているのは**サーバ側が要求を組み立てる段と、壊れた入力の扱い**である。
 
 **`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
 

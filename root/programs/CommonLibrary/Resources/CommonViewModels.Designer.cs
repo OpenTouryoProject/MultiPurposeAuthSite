@@ -367,6 +367,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
+        ///   CORS allowed origins (web_origins) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string WebOrigins {
+            get {
+                return ResourceManager.GetString("WebOrigins", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Request object signing algorithm (request_object_signing_alg) に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RequestObjectSigningAlg {

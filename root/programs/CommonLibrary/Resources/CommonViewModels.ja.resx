@@ -240,6 +240,9 @@
   <data name="TokenEndpointAuthSigningAlg" xml:space="preserve">
     <value>client_assertion の署名アルゴリズム（token_endpoint_auth_signing_alg）</value>
   </data>
+  <data name="WebOrigins" xml:space="preserve">
+    <value>CORS で許可するオリジン（web_origins）</value>
+  </data>
   <data name="SubjectTypes" xml:space="preserve">
     <value>サブジェクト識別子タイプ</value>
   </data>

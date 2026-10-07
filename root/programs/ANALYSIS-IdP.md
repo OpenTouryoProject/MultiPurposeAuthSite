@@ -1186,10 +1186,13 @@ RFC 7009 §2.1 / RFC 7662 §2.1 はいずれも所有者確認を要求してい
 `/introspect` の `active` が **`"true"` という文字列**だったのも真偽値に直した
 （A-3 / A-4 と同じ defect だが #184 では未列挙だった分）。
 
-### C-3. `prompt=none` が同意画面を無条件にスキップする **[Core]**
+### C-3. `prompt=none` が同意画面を無条件にスキップする **[Lib][Core][NetFx]** — **✅ 修正済み（#272）**
+
+> **`[Core]` と書いていたが、誤り。** **同じコードが net48 版にもある。**
+> 判定を `CommonLibrary` へ寄せたので、いまは `[Lib]` でもある。
 
 ```csharp
-// MultiPurposeAuthSiteCore/.../AccountController.cs:2764
+// 直す前（両アプリに同じコードがあった）
 if (isAuth || prompt.ToLower() == "none")   // 認可画面をスキップ
 ```
 
@@ -1203,6 +1206,78 @@ OIDC Core §3.1.2.1 の `prompt=none` は
 「以前に同意済みか」を判定する土台が無いのが根本原因（D-6）。
 
 `prompt=login` / `select_account` / `consent` は未処理。
+
+**段階 1 は片付いた（#272）** — **`prompt` の照合を集合に寄せた。**
+
+**同じ要求の中で、照合規則が 2 つ混在していた。**
+
+| 書き方 | 問題 |
+|---|---|
+| `prompt.ToLower().Contains("none")`（#247 / #254 で入れた側） | **部分文字列**なので、**`prompt=nonexistent` でも `none` 扱い** |
+| `prompt.ToLower() == "none"`（同意スキップの側） | **完全一致**なので、**`prompt=none login` で `none` 扱いにならない** |
+
+その結果、**`prompt=none login` は「`login_required` の判定では none 扱い、
+同意画面の判定では none でない」**という状態になっていた。
+
+- **`CmnEndpoints.SplitPrompt` / `HasPrompt` / `CheckPrompt` に寄せた**
+  （#267 の `NormalizeResponseType` と同じ流儀。**大文字小文字の寛容さも残す**）
+- **`none` の併記は `invalid_request`**（§3.1.2.1 :
+  「If this parameter contains none with any other value, an error is returned.」）。
+  **これを入れないと、集合に揃えたことで振る舞いが悪くなる** —
+  以前は同意画面を出していたが、**同意を飛ばして code を発行する**ことになる
+- **判定は `redirect_uri` を確かめた後**（`ValidateAuthZReqParamCore`）。
+  **でないとエラーを RP へ返せない**（#187 / #247 と同じ理由）
+- **PAR（`/par`）にも掛かる**（RFC 9126 §2.1 が「認可エンドポイントと同じ検証」を求めるため）
+- **E2E** : **`RT-272.1`**（`none` の併記で `invalid_request`）/
+  **`RT-272.2`**（`none` 単体は従来どおり）/
+  **`RT-272.3`**（`nonexistent` を `none` 扱いにしない。**同意画面で止まるか**で見る）。
+  **旧挙動に戻すと `RT-272.1` と `RT-272.3` が落ちることを確かめてある**
+
+**段階 2（同意の永続化。D-6）も片付いた（#272）** — **`ConsentGrant` 表を持った。**
+
+| 状況 | いまの振る舞い |
+|---|---|
+| 要求 scope が記録の部分集合 | **同意画面を飛ばす** |
+| 記録が無い ＋ `prompt=none` | **`consent_required`**（§3.1.2.6）。**これが C-3 そのもの** |
+| 記録が無い | 同意画面を出し、**許可で記録する**（scope は足し込む） |
+| `prompt=consent` | **記録が在っても出す** |
+| `prompt=select_account` | **出す**（画面に「別のアカウントでログイン」が在る） |
+| `prompt=login` | **再認証する**（`max_age` の再認証と同じ経路。印で繰り返しを防ぐ） |
+
+- **置き場** : `ConsentGrant`（`UserId` / `ClientID` の PK、`Scopes`、`CreatedDate`、`UpdatedDate`）。
+  **DDL 3 方言**。**`Users.Id` への FK（`ON DELETE CASCADE`）**なので、
+  **利用者を消せば同意も消える**
+- **粒度は（利用者, クライアント）で 1 行**。**scope は集合として足し込む**
+  （並びは辞書順に正規化して持つ。**"openid email" と "email openid" を別物にしない**）
+- **管理画面から取り消せる**（`/Manage/ConsentGrants`）。
+  **記録するなら、取り消せなければならない**。
+  **発行済みのトークンは失効しない**（そちらは `/revoke`。RFC 7009）
+- **設定キーは置いていない。** **常に仕様どおり**である
+  （「記録が無いときは従来どおり通す」逃げ道を作らないという判断）
+- **E2E** : `RT-272.4`（記録が無ければ `consent_required`）/
+  `RT-272.5`（`prompt=consent`）/ `RT-272.6`（拒否 → `access_denied`）/
+  `RT-272.7`（管理画面からの取り消し）
+- **自己テスト画面も直した。** **OIDC のボタンが `prompt=none` を固定で付けていた**ので、
+  **記録が無い配備では初回に必ず `consent_required`** になる。
+  **固定を外した**ので、**初回だけ同意画面を通る**（2 回目以降は記録が効いて飛ぶ）。
+  `prompt` を試したいときは**画面の選択**で指定する（#246 の項目 3）
+- **E2E（続き）** : `RT-272.8`（**`prompt=login`**。再認証を求め、
+  **印（`re_auth_at`）で繰り返しにならない**ことまで見る）/
+  `RT-272.9`（**`prompt=select_account`**。同意画面を出し、
+  **その画面に「別のアカウントでログイン」が在る**ことを見る）
+- **測っていないもの** : **アカウントの一覧から選ぶ仕組み**。
+  **この実装は 1 利用者ずつのサインインしか持たない**ので、
+  `select_account` は**同意画面を出すところまで**である
+  （**`account_selection_required` を返す道もあった**が、切り替えの口が画面に在るので、画面を出す方を選んだ）
+
+**あわせて E-6（認可画面の Deny ボタン）も入れた。**
+**同意を記録するなら、拒否もできなければ筋が通らない。**
+**拒否は記録しない**（「拒否した」を覚えて次回以降自動で断ると、
+**利用者が気を変えられなくなる**）。
+
+> **Implicit の経路には同意画面が無い（以前から）。**
+> 同意の判定を入れたのは **`response_type=code` の経路だけ**である。
+> **Implicit は既定で無効**（#220）で、OAuth 2.1 でも廃止されているため。
 
 ### C-4. 認可コードに有効期限が無い **[Lib]** — **✅ 修正済み（#188）**
 
@@ -1812,10 +1887,17 @@ Entra ID の SPA プラットフォームと同じ考え方**である。
 
 - **`AllowCredentials` は、どちらのポリシーにも付けない。**
   **Cookie で通る口をこの範囲に入れない**ため（入れると、他オリジンの JS から資格情報で呼べる）
-- **画面登録（`saml2OAuth2Data`）は導出に含めない。**
-  プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、
-  `DataProvider` に全件を列挙する口が無く、**分散キャッシュも無い**（E-2）。
-  **画面登録の SPA は `CorsAllowedOrigins` に足して通す**
+- **画面登録（`saml2OAuth2Data`）も導出に含める**（#266）。
+  全件を読む口を足し、**クライアント単位の登録項目 `web_origins`** を持たせた
+  （**#270 で専用列に切り出したので、いまは `DataProvider.GetAllUris`**。
+  **JSON を全部読んで逆直列化するのをやめ、URI 関連の列だけを読む**）
+  （**空なら `redirect_uri_*` から導出**。Keycloak の Web origins / Auth0 の `web_origins` に相当）。
+  **許可オリジンはキャッシュしていた**（60 秒 ＋ 登録の保存で破棄）が、
+  **✅ やめた（#271）**。**毎回作るので、登録の変更が即座に効く。**
+  **捨てられない経路が 2 つあった** — 複数インスタンスの他のインスタンスと、
+  **利用者の削除（`UsersAdmin`）で登録が FK で消える場合**。
+  **#270 で読む量が URI 関連の 6 列だけになった**ので、キャッシュを置く理由が消えた
+  （**重くなったときは `IDistributedCache`。#256 で使えるようになっている**）
 - **3 重定義（E-3）も片付いた。** `AllowAllOrigins` は**自己テスト用の口だけ**が使う
   （`ValuesController` / `TestHybridFlow`。どちらも `IsLockedDownTestEndpoints` で経路ごと閉じる）
 - **E2E** : **`RT-265.1`**（公開情報は全開／ブラウザから叩く口は導出したオリジンだけ／
@@ -2013,8 +2095,9 @@ services.ConfigureApplicationCookie(options =>
 > - **有効にした配備では、有効にした時点で 1 度だけ全員がサインアウトする**（鍵の置き場が変わるため）。
 >   **以降は再起動に耐える**
 >
-> **`AddDistributedMemoryCache`（E-2）は、まだそのまま。**
-> **スケールアウトするには、そちらも要る。**
+> **`AddDistributedMemoryCache`（E-2）も ✅ 片付いた**（#256）。
+> **`SessionStoreType` で `sql` / `redis` を選べる。**
+> **DataProtection の鍵とセッションは別物**で、**両方そろって初めてスケールアウトできる。**
 
 `services.AddDataProtection().PersistKeysTo***()` を呼んでいない。
 既定では鍵はローカル プロファイル（コンテナでは揮発）に置かれるため、
@@ -2042,11 +2125,47 @@ A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce �
 このブロックは `scope=openid` の内側に在るため、**単純にコメントを外すと
 Authorization Code フローまで必須になってしまう**点が要だった。
 
-### C-15. `response_type` の照合が文字列完全一致 **[Lib]**
+### C-15. `response_type` の照合が文字列完全一致 **[Lib]** — **✅ 修正済み（#267）**
 
-`response_type` は**順不同の空白区切り集合**（OAuth 2.0 Multiple Response Types §3）。
-現状は `response_type.ToLower() == "code id_token"` のような完全一致なので、
-`id_token code` と書く RP を弾く。
+`response_type` は**順不同の空白区切り集合**（OAuth 2.0 Multiple Response Types §3。
+**並びは意味を持たない**）。
+**直す前は `response_type.ToLower() == "code id_token"` のような完全一致**で、
+**`id_token code` と書く RP を `unsupported_response_type` で弾いていた。**
+
+**扱いが混ざっていた。** **フローの判定は既に集合として見ていた**
+（`GetFlowOfResponseType` が `Split(' ')` ＋ `Any`）のに、
+**要求の検証・`redirect_uri` の選択・応答の振り分けが完全一致**だった。
+
+**直し方。** **正規化を 1 か所に作り、入口で 1 回だけ掛ける。**
+
+```csharp
+// CmnEndpoints
+public static string NormalizeResponseType(string response_type)
+//   空白で分け、空を捨て、重複を除き、辞書順に並べて、空白 1 個で繋ぐ
+```
+
+**辞書順が、そのまま `OAuth2AndOIDCConst` の並びになる**（`code` < `id_token` < `token`）ので、
+**定数側を変えなくてよい。**
+
+| | |
+|---|---|
+| 掛ける場所 | **`ValidateAuthZReqParam` の入口**（`CheckRedirectUri` より前） |
+| 渡し方 | **`ref string response_type`。** 呼び出し元の変数も正規化された値になるので、**この後ろの完全一致の照合は、そのままで正しくなる** |
+| `ref` にした理由 | **呼び出し元を取りこぼさないため。** コンパイラが全ての呼び出し元（両アプリの `AccountController` ×2、`/par`）に `ref` を書かせる |
+| 直していない場所 | `GetFlowOfResponseType` と `CmnEndpoints.cs:810`（**既に集合として見ている**） |
+
+**`/par` は、正規化した値を payload に書き戻す**（預けた Request Object は `/authorize` で読み直すため）。
+
+- **大文字小文字の扱いは変えていない。**
+  **仕様では値は case-sensitive** だが、**以前から `ToLower()` していて `CODE` も通っていた。**
+  **弾く範囲が変わるだけ**なので寛容さを残した（`Contributing.ja.md` の下位互換の方針）。
+  #263 で `redirect_uri` を厳密にしたのは、**仕様が単純文字列比較を明示し、
+  かつ照合の緩さが安全性に効く**ためで、性質が違う
+- **E2E** : **`RT-267.1`**（`code id_token` / `id_token token` / `code token` /
+  `code id_token token` の 4 組について、**並べ替えても同じ応答になる**）。
+  **正規化を外すと、両系統で `unsupported_response_type` になって落ちることを確かめてある**
+- **利用者への影響** : **通る範囲が広がるだけ。**
+  **いま通っている `response_type` は、すべてそのまま通る。** Discovery の広告も変えていない
 
 ### C-16. 送られていない `nonce` を `state` から捏造している **[Lib]** — **✅ 修正済み（#191）**
 
@@ -2461,7 +2580,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
 | D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）／**✅ 修正済み（#252）**。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`）。**`form_post` だけ抜けていた**（`iss` は `BuildRedirectUrl` が付けており、**URL を組まない `form_post` はそこを通らない**）。**View で出すようにした**（`RT-231.5` / `RT-231.6`） | Mix-Up 攻撃への対策 |
-| D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
+| D-6 | **同意（consent）の永続化** | **✅ 実装済み（#272 の段階 2）**。`ConsentGrant` 表（DDL 3 方言）。**粒度は（利用者, クライアント）で 1 行、scope は集合として足し込む**。管理画面から取り消せる | C-3 の根本原因だった。これで `prompt=none` を仕様どおり扱える |
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった。**標準クレームのサンプルを持たせた**（#261）。`IsDebug` のとき **2 人目のテスト利用者に OIDC Core 5.1 の形で仕込み**、雛形には対応付けのサンプルを コメントで置いた（`RT-261.1`）。**画面は変えていない**（入れ物の中身は導入する側が決める方針を保つ）。あわせて**クレームの型を JSON のまま返すよう直した**（`updated_at` は数値。以前は文字列。#184 と同種） |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | **✅ 解けた（#129 の段階 3）。** **alg → 鍵の対応を `SigningKeys` の表 1 か所に寄せ**、**`CreateJwkSetJson` がその表を回して `jwkcerts` を作る**ようにした（ソース参照）。**JWK Set は追記式**なので、**新しい鍵を先に載せ、RP のキャッシュが切れてから署名に切り替えられる**（手順は `CONFIGURATION.md`）。**広告と鍵が揃っていることは `RT-129.6` で測る** | **無停止で替えられるようになった**（残り : 旧い `kid` を外すのは手作業） |
@@ -2480,11 +2599,11 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | # | 内容 |
 |---|---|
 | E-1 | `Startup.cs` 方式のまま。.NET 6 以降の Minimal Hosting（`WebApplication.CreateBuilder`）へ寄せると、`Program.cs` の `IWebHost` / `IHost` のコメント アウト群も整理できる |
-| E-2 | `AddDistributedMemoryCache()` のままなのでスケールアウト不可。**DataProtection の方は ✅ 永続化できるようにした**（C-13 / #251。`DataProtectionKeyPath`） |
+| E-2 | **✅ 修正済み（#256）**。`AddDistributedMemoryCache()` 固定をやめ、**`SessionStoreType`（`mem` / `sql` / `redis`）で選べるようにした**（`UserStoreType` と同じ流儀）。**既定は `mem`**（キーを書かなければも `mem`。既存の配備は従来どおり）。**単一インスタンスならそれが正しい**ので、**雛形を `redis` にはしない**（[`TESTING.md`](../TESTING.md) 1 節の「既定は `mem`」と同じ理由）。**セッションには途中の状態が載っている** — ID 連携の `state` / `nonce` / `code_verifier`、管理画面の `access_token`、FIDO2 の challenge、自己テスト画面の値（**実測 14 キー・46 か所。net10.0 版**）。`mem` のまま増やすと、要求が別のインスタンスへ回った時にそれらが読めず、**途中で失敗する**。**Cookie へ寄せる案（案 B）は採らなかった**（量と、`access_token` を Cookie に置きたくないため）。**`sql` は `Create_SessionCache.sql`**（`dotnet sql-cache create` と同じスキーマ。スキーマ名・表名は `Const` に置き、設定キーにしない）。**Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、**3 方言が揃わない唯一の設定**であり、それらのストアでは `redis` を使う。**`mem` 以外で接続文字列が空なら、`ConfigureServices` で落とす**（`IDistributedCache` は遅延で落ちるため、放っておくと「画面が 500 を返すだけ」になる）。**DataProtection の方は C-13 / #251 で済んでいる**（`DataProtectionKeyPath`）。**検証は通し × 3 通り ＋ ストア側の件数**（[`TESTING.md`](../TESTING.md) 1 節） |
 | E-3 | ✅ **CORS の 3 重定義を片付けた**（C-9 / #265）。既定のポリシーを置かず、口ごとに属性で選ぶ。`AllowAllOrigins` は自己テスト用の口だけが使う |
 | E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
 | E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
-| E-6 | 認可画面（`Views/Account/OAuth2Authorize.cshtml`）に **Deny ボタンが無い**。ユーザは拒否できず、`access_denied` を返す経路も無い。scope も生の識別子をそのまま表示している |
+| E-6 | **✅ Deny ボタンは入れた（#272 の段階 2）**。認可画面で拒否でき、**`access_denied` を `redirect_uri` へ返す**（RFC 6749 §4.1.2.1。`RT-272.6`）。**拒否は記録しない**。残るのは **scope が生の識別子のまま**であること |
 | E-7 | `/jwkcerts` は毎回ファイルを読む（キャッシュ・`Cache-Control` なし） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
 | E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
@@ -2540,7 +2659,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **C-8 検証アルゴリズムの固定** #129 の段階 1 |
 | ✅ **C-9 CORS をエンドポイント単位に** #265 |
 | ✅ **C-10 `redirect_uri` の厳密比較** #263 ／ **テスト用抜け道の削除**（`test_self_code_manage`） |
-| ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251（`AddDistributedMemoryCache` は E-2 として残る） |
+| ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251 ／ ✅ **E-2 セッションの置き場を選べるように** #256（`SessionStoreType`） |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 
@@ -2549,7 +2668,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | 項目 |
 |---|
 | ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換え**（#224 の段階 1）、**振る舞いを見直した**（段階 2 : 使えない `refresh_token` を出さない・早い拒否・`unauthorized_client`・不正な登録値の拒否）。**mTLS の経路の E2E も張った**（#226。`FA-6`） |
-| C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`） |
+| ✅ **C-3 / D-6 同意の永続化と `prompt` の正しい処理** #272（段階 1 : `prompt` を集合として扱う / 段階 2 : `ConsentGrant` 表。**あわせて E-6 の Deny ボタンも**） |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |
 | D-10 `typ: at+jwt`、`jku` の除去 |

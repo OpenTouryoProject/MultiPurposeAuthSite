@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,6 +19,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="10.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Twitter" Version="10.0.2" />
     <!-- Open棟梁 のアセンブリと版を揃える（#242。NetCoreLibrary.csproj と同じ版にすること） -->
+    <!-- セッションの置き場（#256）。SessionStoreType で選ぶ -->
+    <PackageReference Include="Microsoft.Extensions.Caching.SqlServer" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.2" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <!-- **スキャフォールディング（dotnet aspnet-codegenerator）の参照は外した**（#242）。
          ビルド・実行には不要な開発時ツールで、推移的に入る NuGet.Packaging / NuGet.Protocol 6.12.1 が

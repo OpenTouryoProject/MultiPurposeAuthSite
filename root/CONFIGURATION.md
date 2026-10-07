@@ -502,11 +502,29 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 
 **`Access-Control-Allow-Credentials` は付けない**（Cookie は飛ばない）。
 
-#### 許すオリジンは、登録から導く
+#### クライアント単位で書ける — `web_origins`（#266）
+
+**クライアント登録に `web_origins` を書くと、そのオリジンだけが許される。**
+**構成ファイルと画面（`/Manage/AddSaml2OAuth2Data`）の両方**で使える。
+
+```json
+"web_origins": "https://spa.example https://spa2.example:8443"
+```
+
+| | |
+|---|---|
+| **書いたとき** | **その値だけ**（`redirect_uri_*` からは導出しない） |
+| **空のとき** | **`redirect_uri_*` から導出**（下記） |
+| **効く範囲** | **public クライアントのみ**（`client_secret` を持たないもの） |
+
+> **Keycloak の Web origins、Auth0 の `web_origins`、
+> Duende IdentityServer の `AllowedCorsOrigins` に相当する。**
+
+#### 空なら、`redirect_uri` から導く
 
 **設定を書かなくてよい。**
-**構成ファイルの public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`**
-から、オリジンを取る。
+**public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`**
+から、オリジンを取る。**構成ファイルと画面登録の両方を見る**（#266）。
 
 ```json
 "AuthenticationDevice_Web": { "redirect_uri_code": "http://localhost:5610/" }
@@ -531,9 +549,8 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 
 - **区切りは空白かカンマ。** **末尾の `/` は付けない**（CORS の比較はオリジン同士）
 - **`*` は書かない。** 落とすので許可されず、`ProductionCheck` が警告する
-- **画面（`/Manage/AddSaml2OAuth2Data`）から登録した SPA は、ここに足す。**
-  画面登録は導出に含めていない（プリフライトは `client_id` を持たないため
-  オリジンの集合全体が要るが、user store には全件を列挙する口が無い）
+- **画面から登録した SPA も、導出に含まれる**（#266）。**ここに足す必要は無い。**
+  `CorsAllowedOrigins` は、**どちらの登録にも書けないものを足すための口**である
 
 #### 影響しないもの
 
@@ -545,6 +562,16 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 
 > **WebView / Electron / Cordova / Flutter Web は、ブラウザ実行なので対象**である。
 > 同梱の認証デバイスの web ビルドがこれに当たる（`AuthenticationDevice_Web` の登録から導出される）。
+
+> **許可オリジンはキャッシュしない**（#271）。**毎回作るので、登録の変更が即座に効く。**
+>
+> 以前は 60 秒のキャッシュを持ち、保存時に捨てていた（#266）。
+> **捨てられない経路が 2 つあった** — **複数インスタンスの他のインスタンス**と、
+> **利用者の削除（`UsersAdmin`）で登録が FK で消える場合**である。
+> **後者は、消した登録のオリジンが最長 60 秒許され続けるということである。**
+>
+> **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
+> **公開情報の口は全開なので、この一覧を引かない。**
 
 ## 5. ルート URI と、自己テストの折り返し（重要）
 
@@ -644,6 +671,51 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 > `NVARCHAR2(800)` の列への一意制約も、`db_block_size` 8192・`max_string_size` STANDARD の
 > 既定のままで作成された。
 
+> **クライアント登録（`Saml2OAuth2Data`）は、JSON 1 列から専用列になった**（#270）。
+>
+> **`UnstructuredData` 列は無くなり、`ClientID` 以下 17 列になった**
+> （`ClientSecret` / `RedirectUri*` / `WebOrigins` / `Jwk*` / `*Alg` / `ClientMode` /
+> `RequirePkce` / `ClientName` など。列名は属性名と同じ）。
+>
+> **移行用のスクリプトは置いていない。** 既存のデータベースは次のどちらか。
+>
+> - **`Create_UserStore.sql` を流し直す**（E2E 用の `store/` は使い捨てなのでこれ）
+> - **`ALTER` で 16 列を足し、画面から再登録する**
+>
+> **列を足しただけでは、登録済みのクライアントは読めない**
+> （古い JSON は読まないため。**値を残したい場合は、落とす前に JSON 関数で列へ写せる**
+> — SQL Server `JSON_VALUE`、PostgreSQL `::json ->>`、Oracle `JSON_VALUE`）。
+>
+> **`RequirePkce` だけは `NOT NULL`** なので、`ALTER` で足すときは既定値が要る。
+
+> **同意（consent）を記録する表を足した**（#272 の段階 2）。
+>
+> ```sql
+> CREATE TABLE [ConsentGrant](
+>     [UserId] [nvarchar](38) NOT NULL,        -- *PK
+>     [ClientID] [nvarchar](256) NOT NULL,     -- *PK
+>     [Scopes] [nvarchar](1024) NOT NULL,      -- 許可した scope（空白区切り。辞書順）
+>     [CreatedDate] [smalldatetime] NOT NULL,
+>     [UpdatedDate] [smalldatetime] NOT NULL
+> )
+> ```
+>
+> **これが無いと `prompt=none` の判定ができない。**
+> 以前は**記録を持たず、`prompt=none` で無条件に同意画面を飛ばしていた**
+> （`ANALYSIS-IdP.md` の C-3）。
+>
+> **既存のデータベースにはこの表が要る。**
+> **`Create_UserStore.sql` を流し直す**か、**表を 1 つ足す**
+> （`Users.Id` への FK（`ON DELETE CASCADE`）も張る。おかないと利用者を消しても同意が残る）。
+> **表が無いと、認可が通らなくなる**（同意の読み書きで落ちる）。
+>
+> **設定キーは置いていない。** **常に仕様どおり**である。
+> **記録が無いクライアントの `prompt=none` は `consent_required`** になるので、
+> **初回は必ず同意画面を通る**（一度通せば、その後は飛ぶ）。
+>
+> **利用者は `/Manage/ConsentGrants` から取り消せる。**
+> **発行済みのトークンは失効しない**（そちらは `/revoke`。RFC 7009）。
+
 **3 つの DDL がミラーかどうかは、機械的に確かめられる。**
 
 ```powershell
@@ -656,6 +728,101 @@ cd root
 **型は比べない**（`nvarchar(max)` と `NVARCHAR2(2000)` のように、対応はするが同一ではない）。
 **SQL が実行できるかは分からない。** それは、ストアを切り替えて E2E を回して確かめる
 （[`TESTING.md`](TESTING.md) 1 節「ストアを切り替える」、#207）。
+
+### セッションの置き場 — `SessionStoreType`（#256）
+
+**`UserStoreType` とは別のストアである。** 利用者やトークンではなく、
+**画面のセッション**（`HttpContext.Session`）の置き場を決める。
+
+```json
+"SessionStoreType": "mem",   // mem / sql / redis
+"SessionStoreConnectionString": "",
+```
+
+| 値 | 置き場 | 複数インスタンス |
+|---|---|---|
+| `mem` | プロセス内（`AddDistributedMemoryCache`） | **共有されない** |
+| `sql` | SQL Server のテーブル（`AddDistributedSqlServerCache`） | 共有される |
+| `redis` | Redis（`AddStackExchangeRedisCache`） | 共有される |
+
+**雛形の既定は `mem`で、キーを書かなければも `mem`。**
+**単一インスタンスなら、これで正しい**（既存の配備も従来どおり動く）。
+**インスタンスを増やすなら `redis` または `sql` にする**（次項）。
+
+**net10.0 版だけが読む。** net48 版は `Web.config` の `sessionState` で選ぶ
+（`InProc` / `StateServer` / `SQLServer` / Oracle は `Custom`）。雛形は `StateServer` で、
+**ASP.NET 状態サービス（`aspnet_state`）が止まっていると画面が 500 になる**
+（[`TESTING.md`](TESTING.md) 8 節）。
+
+#### `mem` のままスケールアウトすると、途中で失敗する
+
+**セッションに置いているのは、途中の状態である。** 要求が別のインスタンスへ回ると読めない。
+
+| 置いているもの | 壊れるとどうなるか |
+|---|---|
+| ID 連携の `state` / `nonce` / `code_verifier` | 上流から戻った先が別のインスタンスだと、照合できずサインインが失敗する |
+| 管理画面の `access_token` / `get_oauth2_token_state` | 「OAuth2 のトークンを取得」以降の操作ができない |
+| FIDO2 の challenge | 登録・認証が成立しない |
+| 自己テスト画面の値 | 画面の往復が途切れる |
+
+**実測では 14 キー・46 か所がセッションを使っている**（net10.0 版）。
+**Cookie へ寄せる案は採らなかった**（量と、`access_token` を Cookie に置きたくないため）。
+
+#### `sql` はテーブルが要る
+
+```powershell
+sqlcmd -S localhost,1433 -U sa -P '...' -i root\files\resource\MultiPurposeAuthSite\Sql\sqlserver\Create_SessionCache.sql
+```
+
+**`dotnet sql-cache create` が作るものと同じスキーマ**である（列名・型・索引を変えると動かない）。
+スキーマ名・テーブル名は `Const.SessionCacheSchemaName` / `Const.SessionCacheTableName` に
+置いてあり、**設定キーにはしていない**（DDL とコードを食い違わせないため）。
+
+> **`Create_UserStore.sql` は DATABASE を作り直す。**
+> 後から流すと `SessionCache` は消える。**UserStore を作り直したら、これも流し直す。**
+
+#### `redis` は方言に依らない
+
+**Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い。**
+`UserStoreType` が `ora` / `npg` の配備でセッションを共有するなら、**`redis` を選ぶ。**
+（3 方言が揃わない唯一の設定である。）
+
+#### 接続文字列が無ければ、起動時に落とす
+
+**`mem` 以外で `SessionStoreConnectionString` が空なら、`ConfigureServices` で例外を投げる。**
+`IDistributedCache` は**最初にセッションを触った時に**落ちるので、
+そのままだと**起動は通り、画面が 500 を返すだけで理由が分からない。**
+
+```
+Unhandled exception. System.InvalidOperationException:
+SessionStoreType が SqlServer なので、SessionStoreConnectionString が必要です。
+```
+
+### WebAuthn の有効・無効 — `FIDOServerMode`（#137）
+
+**net10.0 版だけの設定である。**
+
+| 値 | |
+|---|---|
+| `webauthn` | **有効**（雛形の既定）。登録は `/Manage/AddWebAuthnData`、認証はサインイン画面の [WebAuthn] |
+| `none`（またはキーが無い） | **無効**。画面の導線も出ない |
+
+**net48 版にこのキーは無い。**
+**現行版の WebAuthn ライブラリが `netstandard2.0` を支えていない**ためである。
+`Fido2` は **2.0.2 を最後に `netstandard2.0` を落としている**（3.0 以降は `net6.0` 以降）。
+`WebAuthn.Net` / `Shark.Fido2` / `Rsk.AspNetCore.Fido` も net8.0 以降だけである。
+
+#### 配備したときに注意すること
+
+| | |
+|---|---|
+| **RPID はホスト名から決まる** | `OAuth2AuthorizationServerEndpointsRootURI` のホストをそのまま使う（`WebAuthnHelper` の constructor）。**資格情報はこの値に紐づく**ので、**ホスト名を変えると登録済みの認証器が使えなくなる** |
+| **https が必要** | WebAuthn は安全なコンテキストしか走らない（`localhost` は例外） |
+| **セッションに challenge を置く** | 複数インスタンスなら `SessionStoreType` を `mem` 以外にする（#256。置くのは `fido2.CredentialCreateOptions` / `fido2.AssertionOptions`） |
+| **保存先は `FIDO2Data` 表** | `UserStoreType` が `mem` ならプロセス内の辞書に入るので、**再起動で消える** |
+| **利用者を消すと、資格情報も消す** | `FIDO2Data` は `UserName` で持っており、**`Users` への外部キーが無い**。GDPR の削除（`/Manage/DeleteGdprPersonalData`）が明示的に消す |
+
+---
 
 ## 8. 証明書
 
@@ -738,6 +905,8 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | 既定の起動 | IIS Express | IIS Express / Kestrel |
 | パッケージ | `packages.config` ＋ `PackageReference` | `PackageReference` |
 | 認証クッキーの設定 | `App_Start/StartupAuth.cs` | `Startup.cs` の `ConfigureApplicationCookie`（#223） |
+| セッションの置き場 | `Web.config` の `sessionState`（既定 `StateServer`） | `SessionStoreType`（`mem` / `sql` / `redis`。#256） |
+| WebAuthn | **無し**（設定キーも無い。#137） | `FIDOServerMode`（`none` / `webauthn`。既定 `webauthn`） |
 
 **両者は共通ライブラリを使う別アプリである。** 片方にしか無い問題があり得る。
 
@@ -761,6 +930,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|---|---|
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
+| `SessionStoreType` | `mem`（#256） | **複数インスタンスなら `redis` / `sql`** | **画面のセッションの置き場**（7 節「セッションの置き場」）。**`mem` は複数インスタンスで共有されない** — ID 連携の `state` / `nonce` / `code_verifier`、管理画面の `access_token`、FIDO2 の challenge が読めず、**途中で失敗する**。**書かなければ `mem`**（既存の配備は従来どおり）。`sql` は `Create_SessionCache.sql` が要る。**`ora` / `npg` 用の実装は標準に無いので `redis`。** **net10.0 版だけ**（net48 版は `Web.config` の `sessionState`） |
 | `DataProtectionKeyPath` | `""`（空） | **コンテナでは必須**（#251） | **DataProtection の鍵の置き場。** 空なら `%LOCALAPPDATA%` 配下（**コンテナでは揮発 → 再起動で全員サインアウト**）。**net48 の `machineKey` と同じ役割**だが、**鍵そのものは書かない**（置き場を共有する。鍵は自動生成・自動ローテーション）。**効くのは画面のセッション**（認証 Cookie / AntiForgery / メール確認のリンク）で、**access_token・PPID・refresh_token には影響しない**。**鍵リングは平文の XML**。**net10.0 版だけ** |
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。AntiForgery は**もともとアプリごとに違う名前**になるので対象外。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |

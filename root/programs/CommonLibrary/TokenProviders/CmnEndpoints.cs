@@ -113,6 +113,11 @@
 //*  2026/10/03  玄人 幸道         redirect_uriを単純文字列比較にした（#263）
 //*  2026/10/04  玄人 幸道         redirect_uriの登録迂回の分岐を削除（C-10）
 //*  2026/10/04  玄人 幸道         CORSで許可するオリジンの導出を追加（#265）
+//*  2026/10/04  玄人 幸道         response_typeを順不同の集合として扱う（#267）
+//*  2026/10/04  玄人 幸道         CORSのオリジンにweb_originsと画面登録を含める（#266）
+//*  2026/10/06  玄人 幸道         CORSの許可オリジンをキャッシュしないようにした（#271）
+//*  2026/10/06  玄人 幸道         promptを空白区切りの集合として扱う（#272 の段階 1）
+//*  2026/10/06  玄人 幸道         promptのlogin/consent/select_accountの値を追加（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -634,6 +639,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
         /// <param name="code_challenge">string</param>
+        /// <param name="prompt">string</param>
         /// <returns>成功 or 失敗</returns>
         /// <remarks>
         /// **エラーは、返せるなら RP へリダイレクトで返す**（RFC 6749 4.1.2.1。#187 の残り）。
@@ -646,13 +652,21 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 既定（false）では、渡さなくても従来どおり動く。
         /// </remarks>
         public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
-            string response_type, string scope, string nonce,
+            ref string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge = "")
+            string code_challenge = "", string prompt = "")
         {
+            // **response_type を正規化する**（#267）。**ここで 1 回だけ掛ける。**
+            //   **`ref` で受けているので、呼び出し元の変数も正規化された値になる。**
+            //   そのため、**この後ろの照合（検証・redirect_uri の選択・応答の振り分け）は、
+            //   完全一致のままで正しくなる。**
+            //   **`ref` にしたのは、呼び出し元を取りこぼさないため**
+            //   （コンパイラが全ての呼び出し元に `ref` を書かせる）。
+            response_type = CmnEndpoints.NormalizeResponseType(response_type);
+
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge);
+                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt);
 
             if (!isValid && string.IsNullOrEmpty(valid_redirect_uri))
             {
@@ -681,7 +695,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         private static bool ValidateAuthZReqParamCore(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge)
+            string code_challenge, string prompt)
         {
             valid_redirect_uri = "";
             // 各分岐で上書きする。ここは想定外のケースの既定値（#187）。
@@ -813,6 +827,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "code_challenge is required.";
+                    return false;
+                }
+
+                #endregion
+
+                #region prompt（#272 の段階 1）
+
+                // **`none` を他の値と併記していないか**（OIDC Core §3.1.2.1）。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                if (!CmnEndpoints.CheckPrompt(prompt, ref err, ref errDescription))
+                {
                     return false;
                 }
 
@@ -1540,19 +1565,27 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region 認可エンドポイントと同じ検証（RFC 9126 §2.1）
 
+            // **`response_type` は `ref` で渡す**（#267。正規化した値が返る）。
+            //   **預けた Request Object は、/authorize でもう一度読む**ので、
+            //   **ここで正規化した値を payload に書き戻しておく**（並びを揃える）。
+            string parResponseType = (string)payload[OAuth2AndOIDCConst.response_type];
+
             if (!CmnEndpoints.ValidateAuthZReqParam(
                 (string)payload[OAuth2AndOIDCConst.client_id],
                 (string)payload[OAuth2AndOIDCConst.redirect_uri],
-                (string)payload[OAuth2AndOIDCConst.response_type],
+                ref parResponseType,
                 (string)payload[OAuth2AndOIDCConst.scope] ?? "",
                 (string)payload[OAuth2AndOIDCConst.nonce],
                 out string _, out string error, out string errorDescription,
-                (string)payload[OAuth2AndOIDCConst.code_challenge] ?? ""))
+                (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
+                (string)payload[OAuth2AndOIDCConst.prompt] ?? ""))
             {
                 err.Add(OAuth2AndOIDCConst.error, error);
                 err.Add(OAuth2AndOIDCConst.error_description, errorDescription);
                 return false;
             }
+
+            payload[OAuth2AndOIDCConst.response_type] = parResponseType;
 
             #endregion
 
@@ -3963,6 +3996,162 @@ namespace MultiPurposeAuthSite.TokenProviders
             return ret;
         }
 
+        #region NormalizeResponseType
+
+        /// <summary>response_type を正規化する（#267）</summary>
+        /// <param name="response_type">response_type</param>
+        /// <returns>正規化した response_type</returns>
+        /// <remarks>
+        /// **`response_type` は順不同の空白区切り集合**である
+        /// （OAuth 2.0 Multiple Response Type Encoding Practices §3。**並びは意味を持たない**）。
+        /// **以前は文字列の完全一致で照合していたため、`id_token code` と書く RP を弾いていた。**
+        ///
+        /// **空白で分け、空を捨て、重複を除き、辞書順に並べて、空白 1 個で繋ぐ。**
+        /// **辞書順が、そのまま `OAuth2AndOIDCConst` の並びになる**ので、定数側は変えなくてよい。
+        ///
+        /// ```
+        /// code &lt; id_token &lt; token
+        ///   → "code id_token token" / "id_token token" / "code token" / "code id_token"
+        /// ```
+        ///
+        /// **大文字小文字は、いまの扱いを変えない。**
+        /// **仕様では値は case-sensitive** だが、**以前から `ToLower()` していて `CODE` も通っていた。**
+        /// **ここは安全性の性質ではなく、弾く範囲が変わるだけ**なので、
+        /// **寛容さを残す**（`Contributing.ja.md` の下位互換の方針）。
+        /// #263 で `redirect_uri` を厳密にしたのは、**仕様が単純文字列比較を明示し、
+        /// かつ照合の緩さが安全性に効く**ためで、性質が違う。
+        /// </remarks>
+        public static string NormalizeResponseType(string response_type)
+        {
+            if (string.IsNullOrEmpty(response_type))
+            {
+                return response_type;
+            }
+
+            // **区切りは空白。** 連続した空白やタブでも分かれるようにする。
+            string[] types = response_type.ToLower().Split(
+                new char[] { ' ', '	' }, StringSplitOptions.RemoveEmptyEntries);
+
+            List<string> normalized = new List<string>();
+
+            foreach (string type in types)
+            {
+                // **重複は 1 つにする**（"code code" は "code"）。
+                if (!normalized.Contains(type))
+                {
+                    normalized.Add(type);
+                }
+            }
+
+            normalized.Sort(StringComparer.Ordinal);
+
+            return string.Join(" ", normalized);
+        }
+
+        #endregion
+
+        #region Prompt
+
+        /// <summary>prompt の値 : none（OIDC Core §3.1.2.1）</summary>
+        public const string PromptNone = "none";
+
+        /// <summary>prompt の値 : login（再認証を求める。#272 の段階 2）</summary>
+        public const string PromptLogin = "login";
+
+        /// <summary>prompt の値 : consent（同意を取り直す。#272 の段階 2）</summary>
+        public const string PromptConsent = "consent";
+
+        /// <summary>prompt の値 : select_account（アカウントを選ばせる。#272 の段階 2）</summary>
+        public const string PromptSelectAccount = "select_account";
+
+        /// <summary>prompt を空白区切りの集合として分ける（#272 の段階 1）</summary>
+        /// <param name="prompt">prompt</param>
+        /// <returns>値の一覧（重複なし。空なら空の一覧）</returns>
+        /// <remarks>
+        /// **`prompt` は空白区切りの集合**である（OIDC Core §3.1.2.1）。
+        /// **並びは意味を持たない**ので、`response_type`（#267）と同じ扱いにする。
+        ///
+        /// **大文字小文字は、いまの扱いを変えない。**
+        /// **仕様では値は case-sensitive** だが、**以前から `ToLower()` していた**。
+        /// #267 と同じ理由で、**寛容さを残す**（`Contributing.ja.md` の下位互換の方針）。
+        /// </remarks>
+        public static List<string> SplitPrompt(string prompt)
+        {
+            List<string> values = new List<string>();
+
+            if (string.IsNullOrEmpty(prompt))
+            {
+                return values;
+            }
+
+            foreach (string value in prompt.ToLower().Split(
+                new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!values.Contains(value))
+                {
+                    values.Add(value);
+                }
+            }
+
+            return values;
+        }
+
+        /// <summary>prompt に、その値が入っているか（#272 の段階 1）</summary>
+        /// <param name="prompt">prompt</param>
+        /// <param name="value">探す値（`PromptNone` など）</param>
+        /// <returns>入っていれば true</returns>
+        /// <remarks>
+        /// **以前は、同じ要求の中で照合規則が 2 つあった。**
+        ///
+        /// | 書き方 | 問題 |
+        /// |---|---|
+        /// | `prompt.ToLower().Contains("none")` | **部分文字列**なので、**`prompt=nonexistent` でも true になっていた** |
+        /// | `prompt.ToLower() == "none"` | **完全一致**なので、**`prompt=none login` で false になっていた** |
+        ///
+        /// **同じ `/authorize` の中でこの 2 つが混在していた**ので、
+        /// **`prompt=none login` は「login_required の判定では none 扱い、
+        /// 同意画面の判定では none でない」という状態になっていた。**
+        /// </remarks>
+        public static bool HasPrompt(string prompt, string value)
+        {
+            return CmnEndpoints.SplitPrompt(prompt).Contains(value);
+        }
+
+        /// <summary>prompt の組み合わせを確かめる（#272 の段階 1）</summary>
+        /// <param name="prompt">prompt</param>
+        /// <param name="err">string</param>
+        /// <param name="errDescription">string</param>
+        /// <returns>正しければ true</returns>
+        /// <remarks>
+        /// **`none` は、他の値と併記できない**（OIDC Core §3.1.2.1 :
+        /// 「If this parameter contains none with any other value, an error is returned.」）。
+        ///
+        /// **これを入れないと、集合にしたことで振る舞いが悪くなる。**
+        /// 以前の `prompt=none login` は**同意画面を出していた**が、
+        /// 集合の判定に揃えると**同意を飛ばして code を発行する**ことになる。
+        /// **仕様どおりエラーにするのが、安全側でもある。**
+        ///
+        /// **既知でない値は、それ自身ではエラーにしない**
+        /// （§3.1.2.1 は未知の値を `invalid_request` とはしていない）。
+        /// **ただし `none` と併記されたときは「他の値」なので、エラーになる。**
+        /// </remarks>
+        public static bool CheckPrompt(string prompt, ref string err, ref string errDescription)
+        {
+            List<string> values = CmnEndpoints.SplitPrompt(prompt);
+
+            if (values.Contains(CmnEndpoints.PromptNone)
+                && 1 < values.Count)
+            {
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "prompt=none must not be combined with other values.";
+                return false;
+            }
+
+            return true;
+        }
+
+        #endregion
+
         #region GetCorsAllowedOrigins
 
         /// <summary>CORS で許可するオリジン（#265）</summary>
@@ -3983,22 +4172,58 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`*` は受けない。** 書かれていても落とす（`ProductionCheck` が警告する）。
         /// **カスタム スキーム**（`com.opentouryo:/oauthredirect` など）**も落とす。**
         /// ネイティブの折り返し先はブラウザの話ではないため。
+        ///
+        /// **キャッシュしない**（#271）。**毎回作る。**
+        ///
+        /// 以前は 60 秒のキャッシュを持ち、登録の保存で破棄していた。
+        /// **やめた理由は 3 つ。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **読む量が減った** | #270 で専用列に切り出したので、`DataProvider.GetAllUris` は **URI 関連の 6 列だけ**を読む。以前は**全行の JSON を読んで 1 件ずつ逆直列化**していた |
+        /// | **複数インスタンスでは正しく捨てられない** | `static` なので、**他のインスタンスの分は捨てられない**。登録を保存してから最長 60 秒、そちらでは新しいオリジンが許されなかった |
+        /// | **間接的に消える経路を捕まえていなかった** | **利用者の削除**（`UsersAdmin`）で登録も FK で消えるが、破棄を呼んでいなかった。**消した登録のオリジンが、最長 60 秒許され続けていた** |
+        ///
+        /// **呼ばれるのは、`Origin` 付きの要求のときだけ**である
+        /// （`MpasBrowserApi` ポリシー。**公開情報の口は全開なので、この一覧を引かない**）。
+        /// **重くなったときは、共有キャッシュ（`IDistributedCache`。#256）を考えること。
+        /// **プロセス内に戻すのは、上の 2 つ目・3 つ目を戻すことになる。**
         /// </remarks>
         public static List<string> GetCorsAllowedOrigins()
         {
+            // **キャッシュしない**（#271）。理由は上の remarks。
+            return CmnEndpoints.BuildCorsAllowedOrigins();
+        }
+
+        /// <summary>許可オリジンを作る（#266）</summary>
+        /// <returns>オリジンの一覧（重複なし）</returns>
+        /// <remarks>
+        /// **3 つを合わせる。** **登録（構成ファイル）→ 登録（画面）→ 設定の追加分**の順。
+        /// </remarks>
+        private static List<string> BuildCorsAllowedOrigins()
+        {
             List<string> origins = new List<string>();
 
-            // 1. 登録から導く。
-            foreach (string registered in Helper.GetInstance().GetConfigClientsPublicRedirectUris())
-            {
-                // 定数値（test_self_code など）は実 URL に変換する。
-                string origin = CmnEndpoints.ToOrigin(
-                    CmnEndpoints.GetRedirectUriFromConstr(registered));
+            // 1. 登録から導く（構成ファイル ＋ 画面）。
+            List<string> registeredAll = Helper.GetInstance().GetConfigClientsPublicRedirectUris();
+            registeredAll.AddRange(Helper.GetInstance().GetStoredClientsPublicRedirectUris());
 
-                if (!string.IsNullOrEmpty(origin)
-                    && !origins.Contains(origin))
+            foreach (string registered in registeredAll)
+            {
+                // **`web_origins` は複数書ける**（#266）ので、区切って 1 つずつ解決する。
+                //   `redirect_uri_*` は 1 つだけなので、分けても 1 件のまま。
+                foreach (string value in registered.Split(
+                    new char[] { ' ', ',', '	' }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    origins.Add(origin);
+                    // 定数値（test_self_code など）は実 URL に変換する。
+                    string origin = CmnEndpoints.ToOrigin(
+                        CmnEndpoints.GetRedirectUriFromConstr(value.Trim()));
+
+                    if (!string.IsNullOrEmpty(origin)
+                        && !origins.Contains(origin))
+                    {
+                        origins.Add(origin);
+                    }
                 }
             }
 

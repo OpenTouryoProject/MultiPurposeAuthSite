@@ -324,24 +324,6 @@
   <data name="IndexOAuth2TokenGetButton" xml:space="preserve">
     <value>OAuth2アクセス トークンの取得</value>
   </data>
-  <data name="AddMsPassDataH4" xml:space="preserve">
-    <value>Microsoft Passportデータの追加フォーム</value>
-  </data>
-  <data name="AddMsPassDataSubmit" xml:space="preserve">
-    <value>Microsoft Passport認証器を登録する</value>
-  </data>
-  <data name="AddMsPassDataTitle" xml:space="preserve">
-    <value>Microsoft Passportデータの追加</value>
-  </data>
-  <data name="IndexMsPassData" xml:space="preserve">
-    <value>Microsoft Passportデータ</value>
-  </data>
-  <data name="IndexMsPassDataAddActionLink" xml:space="preserve">
-    <value>Microsoft Passportデータの設定</value>
-  </data>
-  <data name="IndexMsPassDataRemoveButton" xml:space="preserve">
-    <value>Microsoft Passportデータの削除</value>
-  </data>
   <data name="IndexDeleteGdprPersonalDataButton" xml:space="preserve">
     <value>GDPR 個人情報データ削除</value>
   </data>
@@ -467,5 +449,23 @@
   </data>
   <data name="RemoveWebAuthnDataTitle" xml:space="preserve">
     <value>WebAuthnデータの削除</value>
+  </data>
+  <data name="ConsentGrantsClient" xml:space="preserve">
+    <value>クライアント</value>
+  </data>
+  <data name="ConsentGrantsNone" xml:space="preserve">
+    <value>認可したアプリケーションはありません。</value>
+  </data>
+  <data name="ConsentGrantsRevokeButton" xml:space="preserve">
+    <value>取り消す</value>
+  </data>
+  <data name="ConsentGrantsScopes" xml:space="preserve">
+    <value>許可した scope</value>
+  </data>
+  <data name="ConsentGrantsTitle" xml:space="preserve">
+    <value>認可したアプリケーション</value>
+  </data>
+  <data name="IndexConsentGrantsActionLink" xml:space="preserve">
+    <value>管理</value>
   </data>
 </root>

@@ -61,33 +61,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add Microsoft Passport data form に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddMsPassDataH4 {
-            get {
-                return ResourceManager.GetString("AddMsPassDataH4", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Register Microsoft Passport 2 authenticator に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddMsPassDataSubmit {
-            get {
-                return ResourceManager.GetString("AddMsPassDataSubmit", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add Microsoft Passport data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddMsPassDataTitle {
-            get {
-                return ResourceManager.GetString("AddMsPassDataTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Add payment information に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentH4 {
@@ -489,33 +462,6 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexManageGdprData {
             get {
                 return ResourceManager.GetString("IndexManageGdprData", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Microsoft Passport data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexMsPassData {
-            get {
-                return ResourceManager.GetString("IndexMsPassData", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add your Microsoft Passport data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexMsPassDataAddActionLink {
-            get {
-                return ResourceManager.GetString("IndexMsPassDataAddActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Remove your Microsoft Passport data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexMsPassDataRemoveButton {
-            get {
-                return ResourceManager.GetString("IndexMsPassDataRemoveButton", resourceCulture);
             }
         }
         
@@ -1103,5 +1049,59 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("VerifyPhoneNumberTitle", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Client に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsClient {
+            get {
+                return ResourceManager.GetString("ConsentGrantsClient", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   No application has been granted access. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsNone {
+            get {
+                return ResourceManager.GetString("ConsentGrantsNone", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Revoke に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsRevokeButton {
+            get {
+                return ResourceManager.GetString("ConsentGrantsRevokeButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Granted scopes に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsScopes {
+            get {
+                return ResourceManager.GetString("ConsentGrantsScopes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Applications you have granted access to に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsTitle {
+            get {
+                return ResourceManager.GetString("ConsentGrantsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Manage に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexConsentGrantsActionLink {
+            get {
+                return ResourceManager.GetString("IndexConsentGrantsActionLink", resourceCulture);
+            }
+        }
+        
     }
 }

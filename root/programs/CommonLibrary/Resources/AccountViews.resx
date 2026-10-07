@@ -210,11 +210,8 @@
   <data name="LoginWithTwoFactorAuthenticatorTitle" xml:space="preserve">
     <value>TOTP Two-factor authentication</value>
   </data>
-  <data name="MsPassLogin" xml:space="preserve">
-    <value>Microsoft Passport login</value>
-  </data>
-  <data name="MsPassLoginSubmit" xml:space="preserve">
-    <value>Login with Microsoft Passport authenticator</value>
+  <data name="OAuth2AuthorizeDenyButton" xml:space="preserve">
+    <value>Deny</value>
   </data>
   <data name="OAuth2AuthorizeGrantButton" xml:space="preserve">
     <value>Grant</value>

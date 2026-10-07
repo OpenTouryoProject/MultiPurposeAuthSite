@@ -30,6 +30,10 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/03  玄人 幸道         新規（#264）
 //*  2026/10/04  玄人 幸道         TestClient_15（test_self_code_manage）を追加（C-10）
+//*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
+//*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
+//*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
+//*  2026/10/06  玄人 幸道         同意を記録しないTestClient_19を追加（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -264,6 +268,74 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **2000 文字を超える登録**（#269）。
+                //   **Oracle / PostgreSQL の UnstructuredData が 2000 文字だと保存できない。**
+                //   **画面から入れられる範囲で作ってある**（各項目は Const.MaxLengthOfUri = 512 以内）。
+                //   **`web_origins` に 24 件**＋**長い redirect_uri を 2 つ**で、
+                //   JWK 2 本と合わせて **2000 文字を超える**。
+                //   **保存できていれば、先頭のオリジンで CORS が通る**（`RT-269.1`）。
+                ClientName = "TestClient_17", ClientId = "e2e0tc17000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "client_secret", "" },
+                    { "web_origins", "https://o001.example https://o002.example https://o003.example https://o004.example https://o005.example https://o006.example https://o007.example https://o008.example https://o009.example https://o010.example https://o011.example https://o012.example https://o013.example https://o014.example https://o015.example https://o016.example https://o017.example https://o018.example https://o019.example https://o020.example https://o021.example https://o022.example https://o023.example https://o024.example" },
+                    { "redirect_uri_saml", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+                    { "post_logout_redirect_uri", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+                }
+            },
+            new Entry()
+            {
+                // **同意を記録しないクライアント**（#272 の段階 2）。
+                //   **「同意の記録が無い」状態を測るためだけに在る。**
+                //   **このクライアントに対しては、どのテストも「許可」を押さない。**
+                //   **押すと記録が残り、DB ストアでは 2 回目の実行から
+                //   `RT-272.3` / `RT-272.4` が測れなくなる。**
+                ClientName = "TestClient_19", ClientId = "e2e0tc19000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient"
+            },
+            new Entry()
+            {
+                // **同意の取り消しを測るためのクライアント**（#272 の段階 2）。
+                //   **`RT-272.7` が「許可 → 取り消し → prompt=none」を回す。**
+                //   **専用にしてあるのは、取り消しが他のテストに影響しないようにするため。**
+                ClientName = "TestClient_20", ClientId = "e2e0tc20000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient"
+            },
+            new Entry()
+            {
+                // **登録で require_pkce を立てたクライアント**（#270）。
+                //   **構成ファイル側の TestClient6 と対をなす。**
+                //   `require_pkce` は**唯一の bool の登録項目**で、
+                //   **列に切り出した後は方言で形が違う**
+                //   （SQL Server : bit / PostgreSQL : boolean / Oracle : NUMBER(3) の -1）。
+                //   **これが落ちると「締めたつもりが締まっていない」になる**ので、
+                //   **登録経由で測る**（`RT-270.1`）。
+                ClientName = "TestClient_18", ClientId = "e2e0tc18000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "require_pkce", "true" }
+                }
+            },
+            new Entry()
+            {
+                // **CORS の許可オリジンを登録で決めたクライアント**（#266）。
+                //   **`client_secret` を空にして public にする**（CORS は public だけに効く）。
+                //   **`web_origins` が `redirect_uri_code` に勝つ**ことを測るため、
+                //   **`redirect_uri_code` には別のオリジン**を入れてある（`RT-266.1`）。
+                //   **画面登録（user store）の経路そのもの**でもある（種データは user store に入る）。
+                ClientName = "TestClient_16", ClientId = "e2e0tc16000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "client_secret", "" },
+                    { "redirect_uri_code", "https://notallowed.example/cb" },
+                    { "web_origins", "https://spa.example" }
+                }
+            },
+            new Entry()
+            {
                 // **管理画面の自己テストの折り返し先を登録したもの**（C-10）。
                 //   **記号が解決され、通常の照合で通ること**を測る（`RT-C10.1`）。
                 //   以前は `CheckRedirectUri` の分岐が、**登録を確かめずにこの URL を通していた。**
@@ -280,19 +352,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region CreateSaml2OAuth2Data
 
-        /// <summary>登録（saml2OAuth2Data）の JSON を作る（#264）</summary>
+        /// <summary>登録（saml2OAuth2Data）を作る（#264）</summary>
         /// <param name="entry">表の 1 件</param>
-        /// <returns>saml2OAuth2Data の JSON（写す元が無ければ空）</returns>
+        /// <returns>クライアント登録（写す元が無ければ null）</returns>
         /// <remarks>
         /// **`AddSaml2OAuth2Data` 画面が保存するものと同じ形**にする
-        /// （`ManageAddSaml2OAuth2DataViewModel` を `JsonConvert` する）。
-        /// **読む側（`Helper` の各 `Get*`）は、この形で逆変換する**ため、
+        /// （同じ `ManageAddSaml2OAuth2DataViewModel` を `DataProvider` に渡す。#270）。
+        /// **読む側（`Helper` の各 `Get*`）も同じ型で受け取る**ため、
         /// **画面から登録したのと区別がつかない。**
         ///
         /// **写す元は `Helper` の公開の取得口から読む。**
         /// 構成ファイルの辞書を直接見ないので、**写す項目がここで明示される。**
         /// </remarks>
-        public static string CreateSaml2OAuth2Data(Entry entry)
+        public static ManageAddSaml2OAuth2DataViewModel CreateSaml2OAuth2Data(Entry entry)
         {
             Helper helper = Helper.GetInstance();
 
@@ -301,7 +373,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (string.IsNullOrEmpty(sourceId))
             {
                 // **写す元が構成ファイルに無い。** 種データを作らない（E2E はその分を Skip する）。
-                return "";
+                return null;
             }
 
             ManageAddSaml2OAuth2DataViewModel model = new ManageAddSaml2OAuth2DataViewModel()
@@ -334,7 +406,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
             }
 
-            return JsonConvert.SerializeObject(model);
+            return model;
         }
 
         #endregion
@@ -357,6 +429,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 case "client_secret":
                     model.ClientSecret = value;
+                    break;
+
+                case "redirect_uri_saml":
+                    model.RedirectUriSaml = value;
                     break;
 
                 case "redirect_uri_code":
@@ -389,6 +465,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case "request_object_signing_alg":
                     model.RequestObjectSigningAlg = value;
+                    break;
+
+                case "web_origins":
+                    model.WebOrigins = value;
+                    break;
+
+                case "require_pkce":
+                    // **ここだけ bool**（#270）。
+                    //   **綾り違いを黙って false にしない**ため、`Parse` で落とす。
+                    model.RequirePkce = bool.Parse(value);
                     break;
 
                 default:

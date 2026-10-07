@@ -70,15 +70,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your MsPass data has been added. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddMsPassDataSuccess {
-            get {
-                return ResourceManager.GetString("AddMsPassDataSuccess", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Your payment information has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentInformationSuccess {
@@ -205,15 +196,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your MsPass has been removed. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string RemoveMsPassDataSuccess {
-            get {
-                return ResourceManager.GetString("RemoveMsPassDataSuccess", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Your payment information has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RemovePaymentInformationSuccess {
@@ -275,5 +257,14 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("SetTwoFactorSuccess", resourceCulture);
             }
         }
+        /// <summary>
+        ///   The consent has been revoked. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RevokeConsentSuccess {
+            get {
+                return ResourceManager.GetString("RevokeConsentSuccess", resourceCulture);
+            }
+        }
+        
     }
 }

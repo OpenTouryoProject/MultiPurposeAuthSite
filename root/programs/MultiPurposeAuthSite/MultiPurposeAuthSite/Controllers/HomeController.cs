@@ -40,6 +40,7 @@
 //*  2026/09/29  玄人 幸道         OIDC ボタンの prompt=none を、画面の選択で上書きできるようにした（#247）
 //*  2026/09/29  玄人 幸道         FAPI1 PKCE のボタンが S256 の値を plain と宣言していた（#245）
 //*  2026/10/01  玄人 幸道         自己テストの宛先を、メアドではなく利用者名にした（#151 の段階 3）
+//*  2026/10/06  玄人 幸道         OIDCボタンの固定のprompt=noneを外した（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -156,21 +157,6 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
-
-        #endregion
-
-        #region Test WebAuthn
-
-        /// <summary>
-        /// GET: Home/WebAuthnStarters
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult WebAuthnStarters()
-        {
-            return View();
-        }
 
         #endregion
 
@@ -1075,13 +1061,15 @@ namespace MultiPurposeAuthSite.Controllers
             this.InitOAuth2Params();
 
             // Assemble
+            // **prompt は固定しない**（#272 の段階 2）。
+            //   以前は、画面で選んでいなければ **`prompt=none` を付けていた**
+            //   （同意画面を飛ばして 1 回のクリックで通すため）。
+            //   **同意を記録するようになったので、それでは回らない。**
+            //   **記録が無い配備では、初回に必ず `consent_required` になる。**
+            //   いまは**初回だけ同意画面を通る**（2 回目以降は記録が効いて飛ぶ）。
+            //   **`prompt` を試したいときは、画面の選択で指定する**（#246 の項目 3）。
             string redirect = this.AssembleOidcStarter(
-                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                // **画面で prompt を選んでいれば、そちらを使う**（#247 で気付いた）。
-                //   選んでいなければ、従来どおり prompt=none（同意画面を飛ばすため）。
-                //   固定で付けていたため、**画面の選択と実際が食い違っていた**
-                //   （max_age=0 を選んでも、prompt=none なので login_required が返っていた）。
-                + (string.IsNullOrEmpty(this.Prompt) ? "&prompt=none" : "");
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
             this.SaveOAuth2Params();
 

@@ -60,6 +60,12 @@ cd root
 中身の意味は [CONFIGURATION.md](CONFIGURATION.md)。**設定ファイルが無いと実行できません**
 （ビルドは通ります）→ [BUILDING.md](BUILDING.md) 10 節
 
+> **`SessionStoreType` の既定は `mem`（プロセス内）です**（#256。net10.0 版だけ）。
+> **単一インスタンスなら、このままで正しく動きます。**
+> **インスタンスを増やすときは `redis`（または `sql`）にしてください**
+> — `mem` は共有されないので、要求が別のインスタンスへ回ると画面の往復で失敗します
+> → [CONFIGURATION.md](CONFIGURATION.md) 7 節「セッションの置き場」
+
 ### 3. 証明書を配置する
 
 `root\files\resource\X509` の pfx / cer を、設定ファイルが指すパスへ置きます

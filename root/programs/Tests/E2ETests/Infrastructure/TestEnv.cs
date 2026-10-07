@@ -32,6 +32,8 @@
 //*  2026/09/12  玄人 幸道         プッシュ通知の送信箱（MPAS_CORE_FCM_OUTBOX / MPAS_NETFX_FCM_OUTBOX）を受け取る（#196）
 //*  2026/10/01  玄人 幸道         テスト利用者の利用者名とメアドを分けた（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに分けた（#260）
+//*  2026/10/04  玄人 幸道         到達性のプローブを数回試す（#266。DBストアで踏んだ）
+//*  2026/10/06  玄人 幸道         構成ファイルのクライアントの同意を先に通す（#272 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -39,6 +41,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Text.Json;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
@@ -174,6 +177,46 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </summary>
         /// <returns>起動していれば true</returns>
         public bool IsReachable()
+        {
+            if (this._reachable.HasValue)
+            {
+                return this._reachable.Value;
+            }
+
+            // **時間切れは、1 回で「居ない」と決めない**（#266 で踏んだ）。
+            //   **DB ストアでは、初回の種データ作成が重い**
+            //   （ロール・管理者・テスト利用者に加えて、クライアント登録を 17 件作る。#264）。
+            //   **その間に走ったプローブが 10 秒で時間切れになり、
+            //   `_reachable = false` を掴むと、その対象のテストが全部 Skip になっていた**
+            //   （`sql` で 247 件 Skip。実測）。
+            //   **数回に分けて待つ。** 本当に居なければ、どの回も失敗する。
+            for (int i = 0; i < TargetInfo.ReachableRetryCount; i++)
+            {
+                if (this.Probe())
+                {
+                    return true;
+                }
+
+                // **最後の回でなければ、少し待ってもう一度。**
+                if (i < TargetInfo.ReachableRetryCount - 1)
+                {
+                    this._reachable = null;
+                    Thread.Sleep(TargetInfo.ReachableRetryWait);
+                }
+            }
+
+            return this._reachable.Value;
+        }
+
+        /// <summary>プローブの試行回数（#266）</summary>
+        private const int ReachableRetryCount = 3;
+
+        /// <summary>プローブの間隔（#266）</summary>
+        private static readonly TimeSpan ReachableRetryWait = TimeSpan.FromSeconds(5);
+
+        /// <summary>1 回だけ、到達性を確かめる（#266 で IsReachable から切り出した）</summary>
+        /// <returns>到達できれば true</returns>
+        private bool Probe()
         {
             if (this._reachable.HasValue)
             {
@@ -350,7 +393,80 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     // 取れなくても、ここでは落とさない。
                 }
 
+                this.EnsureConsentSeed();
+
                 this._seeded = true;
+            }
+        }
+
+        #endregion
+
+        #region EnsureConsentSeed
+
+        /// <summary>構成ファイルのクライアントの同意を、先に通しておく（#272 の段階 2）</summary>
+        /// <remarks>
+        /// **同意を記録するようになった**ので、
+        /// **記録が無いクライアントに `prompt=none` で認可を求めると `consent_required`** になる。
+        ///
+        /// **`prompt=none` を自分で送るテストは 12 ファイルに散っている。**
+        /// それぞれに「先に同意を通す」を書くと、
+        /// **書き忘れたものが「先に走ったテスト次第で落ちる」**ことになる。
+        /// **順序で結果が変わるテストは、落ちたときに原因に辿り着けない。**
+        ///
+        /// **そこで、種データと同じところで 1 度だけ通す。**
+        /// **通すのは構成ファイルのクライアントだけ**で、
+        /// **種データのクライアント（`TestClient_*`）は通さない**
+        /// （`TestClient_19` は**記録が無いこと**を測るために在る。`RT-272.3` / `RT-272.4`）。
+        ///
+        /// **落ちても無視する。** ここで測りたいのは同意ではなく、
+        /// 足りなければテスト自身が落ちて分かる。
+        /// </remarks>
+        private void EnsureConsentSeed()
+        {
+            string[] clientNames = new string[]
+            {
+                KnownClients.TestClient,
+                KnownClients.TestClient1,
+                KnownClients.TestClient2,
+                KnownClients.TestClient3,
+                KnownClients.TestClient4,
+                KnownClients.TestClient5,
+                KnownClients.TestClient6,
+                KnownClients.MvcSample
+            };
+
+            try
+            {
+                using (IdPClient client = new IdPClient(this))
+                {
+                    client.SignInAsync().GetAwaiter().GetResult();
+
+                    foreach (string name in clientNames)
+                    {
+                        ClientRegistration reg = null;
+
+                        try
+                        {
+                            reg = Flows.Registration(client, name);
+                        }
+                        catch
+                        {
+                            // 構成ファイルに無いクライアントは飛ばす。
+                            continue;
+                        }
+
+                        if (reg == null || string.IsNullOrEmpty(reg.ClientId))
+                        {
+                            continue;
+                        }
+
+                        Flows.EnsureConsentAsync(client, reg).GetAwaiter().GetResult();
+                    }
+                }
+            }
+            catch
+            {
+                // 通せなくても、ここでは落とさない。
             }
         }
 

@@ -19,6 +19,7 @@
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2020/12/21  西野 大介         Enum追加対応実施
 //*  2026/09/28  玄人 幸道         prompt / max_age を画面から選べるようにした（#246 の項目 3）
+//*  2026/10/06  玄人 幸道         promptの選択肢から「未対応」を外した（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -96,10 +97,15 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>prompt（OIDC Core 3.1.2.1。#246 の項目 3）</summary>
         /// <remarks>
         /// **認可画面（同意）の出方を、画面から試せるようにするためにある。**
-        /// `none` は「UI を出すな」、`login` は再認証、`consent` は再同意、
-        /// `select_account` はアカウントの選択を求める指定。
-        /// **この実装が扱えるのは `none` だけ**（`ANALYSIS-IdP.md` C-3）なので、
-        /// 他の値を選ぶと**無視される**ことが観測できる。
+        ///
+        /// | 値 | この実装の振る舞い |
+        /// |---|---|
+        /// | `none` | **UI を出さない。** 同意の記録が在れば code、無ければ `consent_required`（#272 の段階 2）。**他の値と併記すると `invalid_request`**（段階 1） |
+        /// | `login` | **再認証を求める**（サインアウトして同じ URL に戻る。`max_age` の再認証と同じ経路） |
+        /// | `consent` | **同意済みでも、必ず同意画面を出す** |
+        /// | `select_account` | **同意画面を出す**（その画面に「別のアカウントでログイン」が在る）。**アカウントの一覧から選ぶ仕組みは持っていない** |
+        ///
+        /// **以前は `none` だけを扱っていた**（他の値は無視。`ANALYSIS-IdP.md` C-3）。
         /// </remarks>
         [Display(Name = "prompt")]
         public string Prompt { get; set; }
@@ -113,9 +119,9 @@ namespace MultiPurposeAuthSite.ViewModels
                 {
                     new SelectListItem() { Text = "指定しない", Value = "" },
                     new SelectListItem() { Text = "none（UI を出さない）", Value = "none" },
-                    new SelectListItem() { Text = "login（再認証。未対応）", Value = "login" },
-                    new SelectListItem() { Text = "consent（再同意。未対応）", Value = "consent" },
-                    new SelectListItem() { Text = "select_account（選択。未対応）", Value = "select_account" }
+                    new SelectListItem() { Text = "login（再認証）", Value = "login" },
+                    new SelectListItem() { Text = "consent（再同意）", Value = "consent" },
+                    new SelectListItem() { Text = "select_account（同意画面を出す）", Value = "select_account" }
                 };
             }
         }

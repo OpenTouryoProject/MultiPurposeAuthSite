@@ -47,6 +47,10 @@
 //*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
 //*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
 //*  2026/10/04  玄人 幸道         TestClient_15とtest_self_code_manageの解決を追加（C-10）
+//*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
+//*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
+//*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
+//*  2026/10/06  玄人 幸道         prompt=noneを付けず、同意画面を通すようにした（#272 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -237,6 +241,47 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public const string TestClient_15 = "TestClient_15";
 
+        /// <summary>
+        /// TestClient（normal）を写し、**`web_origins` を登録した public クライアント**（#266）。
+        /// **構成ファイルには無い。** 種データが作る（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **`client_secret` を空にして public にしてある**（CORS は public クライアントだけに効く）。
+        /// **`redirect_uri_code` には別のオリジン**（`https://notallowed.example/cb`）を入れてあり、
+        /// **`web_origins`（`https://spa.example`）が勝つ**ことを `RT-266.1` で測る。
+        /// </remarks>
+        public const string TestClient_16 = "TestClient_16";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**2000 文字を超える登録**にした public クライアント（#269）。
+        /// **構成ファイルには無い。** 種データが作る（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **Oracle / PostgreSQL の `UnstructuredData` が 2000 文字だと保存できない。**
+        /// **画面から入れられる範囲で作ってある**（各項目は `Const.MaxLengthOfUri` = 512 以内）。
+        /// **保存できていれば、`web_origins` の先頭のオリジンで CORS が通る**（`RT-269.1`）。
+        /// </remarks>
+        public const string TestClient_17 = "TestClient_17";
+
+        /// <summary>登録で require_pkce を立てたクライアント（#270）</summary>
+        public const string TestClient_18 = "TestClient_18";
+
+        /// <summary>同意を記録しないクライアント（#272 の段階 2）</summary>
+        /// <remarks>**どのテストも「許可」を押さない。** 押すと記録が残る。</remarks>
+        public const string TestClient_19 = "TestClient_19";
+
+        /// <summary>同意の取り消しを測るクライアント（#272 の段階 2）</summary>
+        public const string TestClient_20 = "TestClient_20";
+
+        /// <summary>TestClient_17 の web_origins の先頭（#269）</summary>
+        public const string LongRegistrationOrigin = "https://o001.example";
+
+        /// <summary>TestClient_16 に登録した web_origins（#266）</summary>
+        public const string WebOrigin = "https://spa.example";
+
+        /// <summary>TestClient_16 の redirect_uri_code のオリジン（#266。許されない側）</summary>
+        public const string NotAllowedOrigin = "https://notallowed.example";
+
         #region 種データで登録される client_id（#264）
 
         /// <summary>
@@ -260,6 +305,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_5,  "e2e0tc05000000000000000000000000" },
                 { KnownClients.TestClient_6,  "e2e0tc06000000000000000000000000" },
                 { KnownClients.TestClient_7,  "e2e0tc07000000000000000000000000" },
+                { KnownClients.TestClient_16, "e2e0tc16000000000000000000000000" },
+                { KnownClients.TestClient_17, "e2e0tc17000000000000000000000000" },
+                { KnownClients.TestClient_18, "e2e0tc18000000000000000000000000" },
+                { KnownClients.TestClient_19, "e2e0tc19000000000000000000000000" },
+                { KnownClients.TestClient_20, "e2e0tc20000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
@@ -439,6 +489,29 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         }
 
         /// <summary>
+        /// 先に同意を記録しておく（#272 の段階 2）。
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="registration">クライアント</param>
+        /// <param name="scope">scope</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **`prompt=none` を自分で送るテストは、これを先に呼ぶ。**
+        /// **記録が無いと `consent_required` になる**ので、
+        /// **他のテストが先に同意を通していたかどうかに依存する**ことになる
+        /// （**順序で結果が変わるテストは、落ちたときに原因に辿り着けない**）。
+        ///
+        /// **DB ストアでは記録が残る**ので、2 回目以降の実行では何も起きない。
+        /// </remarks>
+        public static async Task EnsureConsentAsync(
+            IdPClient client, ClientRegistration registration, string scope = "openid email")
+        {
+            await Flows.AuthorizeCodeAsync(
+                client, registration, scope, "state-consent", "nonce-consent",
+                registration.RedirectUri);
+        }
+
+        /// <summary>
         /// 認可コードを取得する（サインイン済みであること）。
         /// </summary>
         /// <param name="client">IdPClient</param>
@@ -461,10 +534,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { "scope", scope },
                 { "state", state },
                 { "nonce", nonce },
-                { "redirect_uri", redirectUri },
+                { "redirect_uri", redirectUri }
 
-                // 同意画面を挟まず、サインイン済みのセッションでそのまま認可させる。
-                { "prompt", "none" }
+                // **prompt=none は付けない**（#272 の段階 2）。
+                //   **以前は「同意画面を挟まない」ために付けていた**が、
+                //   **同意を記録するようになった**ので、
+                //   **記録が無いと consent_required になる。**
+                //   代わりに、**同意画面が出たら「許可」まで進める。**
+                //   **2 回目以降は記録が在るので出ない。**
             };
 
             if (extra != null)
@@ -475,7 +552,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
             }
 
-            return client.AuthorizeAsync(q);
+            return client.AuthorizeAndGrantAsync(q);
         }
 
         /// <summary>
@@ -719,6 +796,35 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2〜4）。
                 sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_17)
+            {
+                // **2000 文字を超える登録**（#269）。**client_secret は空**（public）。
+                sourceName = KnownClients.TestClient;
+                overriddenSecret = "";
+            }
+            else if (clientName == KnownClients.TestClient_20)
+            {
+                // **同意の取り消しを測る**（#272 の段階 2）。写すだけ。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_19)
+            {
+                // **同意を記録しないクライアント**（#272 の段階 2）。写すだけ。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_18)
+            {
+                // **登録で require_pkce を立てた**（#270）。client_secret は写す元のまま。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_16)
+            {
+                // **web_origins を登録した public クライアント**（#266）。
+                //   **client_secret は空**にしてある（CORS は public だけに効く）ので、
+                //   写す元の秘密では認証できない。**このテストは CORS だけを測る。**
+                sourceName = KnownClients.TestClient;
+                overriddenSecret = "";
             }
             else if (clientName == KnownClients.TestClient_15)
             {

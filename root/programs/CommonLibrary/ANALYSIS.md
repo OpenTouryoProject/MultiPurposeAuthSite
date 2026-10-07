@@ -84,7 +84,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
 | ファイル | net48 | net10.0 |
 |---|---|---|
-| `Extensions/FIDO/{DataProvider,EnumFidoType,MsPassHelper,WebAuthnHelper}.cs` | **✗ 列挙されていない** | **✗ `Compile Remove`** |
+| `Extensions/FIDO/{DataProvider,EnumFidoType,StoredCredential,WebAuthnHelper}.cs` | **✗ 列挙されていない**（#137） | ✓ |
 | `Data/UserStore.cs` | ✓ | ✗ `Compile Remove` |
 | `Data/{UserStoreCore,RoleStoreCore}.cs` | ✗ | ✓ |
 | `Manager/**`（`Application{User,Role,SignIn}Manager`） | ✓ | ✗ `Compile Remove` |
@@ -94,7 +94,9 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Properties/AssemblyInfo.cs` | ✓ | ✗ `Compile Remove` |
 | `ViewModels/*TwoFactorAuthenticator*.cs`（TOTP 系 5 件） | ✗ | ✓ |
 
-**→ `Extensions/FIDO/**` は 4 ファイルとも死んでいる（12 節）。**
+**→ `Extensions/FIDO/**` は net10.0 版だけがビルドする**（#137、12 節）。
+**`Fido2` は 2.0.2 を最後に `netstandard2.0` を落としている**ので、
+**net48 版では現行版を支えられない。**
 
 **新規ファイルを足すときの注意:**
 - .NET 側は SDK 形式なので**黙って含まれる**。net48 専用 API を使うなら `Compile Remove` が要る。
@@ -111,7 +113,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
 | `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1553) `SelfTestClient`(800) `DeviceAuthZProvider`(646) `CibaProvider`(505) `DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
-| `Extensions/FIDO/` | WebAuthn / MS Passport | **現在ビルド対象外**（12 節） |
+| `Extensions/FIDO/` | WebAuthn（**net10.0 版だけ**。#137） | `WebAuthnHelper` `DataProvider` `StoredCredential` `EnumFidoType` |
 | `Log/` | ロギングの façade | `Logging`（`ACCESS` / `SQLTRACE` ロガー） |
 | `Manager/` | ASP.NET Identity の Manager（**net48 のみ**） | `ApplicationUserManager` `ApplicationRoleManager` `ApplicationSignInManager` |
 | `Network/` | HTTP まわり | `WebAPIHelper` `CreateProxy` |
@@ -365,7 +367,7 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 | Identity | `Microsoft.AspNet.Identity.{Core,Owin}.ja` 2.2.4 / `Microsoft.Owin.Security.{Cookies,OAuth}` 4.2.3 | `Microsoft.AspNetCore.App`（FrameworkReference） |
 | 暗号 | `System.IdentityModel.Tokens.Jwt` 8.15.0 | `BouncyCastle.NetCore` 2.2.1 |
 | 通知 | `FirebaseAdmin` 3.4.0 / `Twilio` 7.14.0 | `FirebaseAdmin` 3.4.0 / `Twilio` 7.14.1 |
-| FIDO | `Fido2` 4.0.0（**参照だけ残り、使うコードは無い**） | — |
+| FIDO | —（**落とした**。#137） | **`Fido2` 4.2.0** |
 | Open棟梁 | `../OpenTouryoAssemblies/Build_net48/*.dll` を `HintPath` | `../OpenTouryoAssemblies/Build_netcore100/net10.0/*.dll` を `HintPath` |
 
 **版が微妙にズレている**（`Twilio` 7.14.0 / 7.14.1 など）。揃えるかどうかは別途判断。
@@ -392,20 +394,25 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 1. **`NetFxLibrary.csproj` の Release 構成に `NETFX` が無い**（2.1 節）。
    Release でビルドすると全ての条件コンパイルが .NET 側に落ちる。
 2. **`ApplicationUser` / `ApplicationRole` は名前空間が系統で違う**（2.2 節）。
-3. **`Extensions/FIDO/**` は 4 ファイルとも、どちらの csproj からもビルドされない。**
-   併せて次も**すべて無効化されている**。
-   - `Co/Config.cs` の `FIDOServerMode` プロパティは `/* */` でコメント アウト。
-   - `../MultiPurposeAuthSite` / `../MultiPurposeAuthSiteCore` の
-     `AccountController` / `ManageController` の WebAuthn 分岐もコメント アウト
-     （`//using FIDO = MultiPurposeAuthSite.Extensions.FIDO;`）。
-   - net48 側の `Controllers/Fido2ServerController.cs` は**ファイルは在るが csproj の
-     `<Compile Include>` に無い**（＝ビルドされない）。
-   - それでも `_app.config` / `_appsettings.json` には `FIDOServerMode` キーが残り、
-     `NetFxLibrary.csproj` には `Fido2` 4.0.0 の `PackageReference` が残り、
-     `Views/Manage/Add{WebAuthn,MsPass}Data.cshtml` などの View も残っている。
+3. **`Extensions/FIDO/**` は net10.0 版だけがビルドする**（#137 で復活させた）。
 
-   **FIDO/WebAuthn は「設定は在るが動かない」状態である。** 復活させるなら
-   csproj への追加・`Config` のコメント解除・Controller のコメント解除がセットで要る。
+   | | |
+   |---|---|
+   | **net10.0 版** | **`Fido2` 4.2.0 で WebAuthn が動く**。`FIDOServerMode` の既定は `webauthn` |
+   | **net48 版** | **退役**。csproj に列挙していない。`_app.config` から設定キーも落とした |
+   | **MsPass** | **退役**。`MsPassHelper.cs` / `msWebauthn.js` / `AddMsPassData.cshtml` / `Users.FIDO2PublicKey` 列を落とした |
+
+   **net48 を落としたのは、動かないからでなく、現行版で支える手段が無いためである。**
+   `Fido2` は **2.0.2 を最後に `netstandard2.0` を落としている**（3.0 以降は
+   `net6.0` / `net8.0` / `net10.0`）。`WebAuthn.Net` / `Shark.Fido2` / `Rsk.AspNetCore.Fido` も
+   **net8.0 以降だけ**なので、**代わりが居ない**（測定は #137 のコメント）。
+
+   **`Config.FIDOServerMode` は `#if NETCORE` で囲んである。**
+   net48 版から参照するとビルドで落ちる（それが正しい）。
+
+   **以前のコードは「コメント アウトして保持」されていたが、そのままは動かない。**
+   `uri.GetDomain()` / `uri.GetHost()` / `.ToEnum<T>()` といった**存在しない拡張メソッド**を
+   呼んでいた（ビルド対象外だったため、誤りが表に出ていなかった）。
 
 3-2. **外部ログインの Facebook / Twitter も、同じ「設定は在るが動かない」状態にした**（#249）。
    **動かないからではなく、維持コストが便益に見合わないため取り下げた。**

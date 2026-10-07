@@ -1,4 +1,4 @@
--- For the information of using Oracle database and ODP.NET managed driver
+﻿-- For the information of using Oracle database and ODP.NET managed driver
 -- for the user store of multi-purpose authentication site, see the following site.
 --     Oracle11gXE + ODP.NET Managed Driver - マイクロソフト系技術情報 Wiki
 --     https://techinfoofmicrosofttech.osscons.jp/index.php?Oracle11gXE%20%2B%20ODP.NET%20Managed%20Driver
@@ -24,8 +24,7 @@ CREATE TABLE "Users"(              -- Users
     -- 追加の情報
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
-    "UnstructuredData" NVARCHAR2(2000) NULL,
-    "FIDO2PublicKey" NVARCHAR2(2000) NULL,
+    "UnstructuredData" NCLOB NULL,
     "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
     "PasswordChangeDate" TIMESTAMP NOT NULL,
@@ -103,6 +102,15 @@ CREATE TABLE "SubjectIdentifier"(
     CONSTRAINT "PK.SubjectIdentifier" PRIMARY KEY ("Sector", "UserId")
 );
 
+CREATE TABLE "ConsentGrant"(   -- 同意の記録（#272 の段階 2）
+    "UserId" NVARCHAR2(38) NOT NULL,               -- *PK, guid
+    "ClientID" NVARCHAR2(256) NOT NULL,         -- *PK
+    "Scopes" NVARCHAR2(1024) NOT NULL,            -- 許可した scope（空白区切り。辞書順）
+    "CreatedDate" DATE NOT NULL,
+    "UpdatedDate" DATE NOT NULL,             -- scope を足したときに更新
+    CONSTRAINT "PK.ConsentGrant" PRIMARY KEY ("UserId", "ClientID")
+);
+
 CREATE TABLE "CustomizedConfirmation"(
     "UserId" NVARCHAR2(38) NOT NULL,         -- PK, guid
     "Value" NVARCHAR2(2000) NOT NULL,        -- Value
@@ -110,16 +118,31 @@ CREATE TABLE "CustomizedConfirmation"(
     CONSTRAINT "PK.CustomizedConfirmation" PRIMARY KEY ("UserId")
 );
 
-CREATE TABLE "Saml2OAuth2Data"(
+CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
-    "UnstructuredData" NVARCHAR2(2000) NULL, -- Saml2/OAuth2 Unstructured Data
+    "ClientSecret" NVARCHAR2(256) NULL,
+    "RedirectUriSaml" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
+    "RedirectUriCode" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
+    "RedirectUriToken" NVARCHAR2(512) NULL,          -- Const.MaxLengthOfUri
+    "PostLogoutRedirectUri" NVARCHAR2(512) NULL,     -- Const.MaxLengthOfUri
+    "WebOrigins" NCLOB NULL,                         -- 空白・カンマ区切りの列挙
+    "JwkRsaPublickey" NCLOB NULL,
+    "JwkECDsaPublickey" NCLOB NULL,
+    "TlsClientAuthSubjectDn" NVARCHAR2(512) NULL,
+    "SubjectTypes" NVARCHAR2(32) NULL,
+    "IdTokenSignedResponseAlg" NVARCHAR2(16) NULL,
+    "TokenEndpointAuthSigningAlg" NVARCHAR2(16) NULL,
+    "RequestObjectSigningAlg" NVARCHAR2(16) NULL,
+    "ClientMode" NVARCHAR2(32) NULL,                 -- oauth2_oidc_mode
+    "RequirePkce" NUMBER(3) NOT NULL,                -- 真は -1（Users の bool 列と同じ）
+    "ClientName" NVARCHAR2(256) NULL,                -- Users.UserName と同じ幅
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 
 CREATE TABLE "FIDO2Data"(
     "PublicKeyId" NVARCHAR2(256) NOT NULL,   -- PK
     "UserName" NVARCHAR2(256) NOT NULL,      -- Value
-    "UnstructuredData" NVARCHAR2(2000) NULL, -- FIDO2 Unstructured Data
+    "UnstructuredData" NCLOB NULL, -- FIDO2 Unstructured Data
     CONSTRAINT "PK.FIDO2Data" PRIMARY KEY ("PublicKeyId")
 );
 
@@ -144,7 +167,7 @@ CREATE TABLE "CibaData"(
     "AuthReqId" NVARCHAR2(800) NOT NULL,         -- 乱数(800)
     "AuthReqExp" NUMBER(19) NOT NULL,            -- UNIX時刻(long)
     "AuthZCode" NVARCHAR2(64) NOT NULL,          -- AuthZCode
-    "UnstructuredData" NVARCHAR2(2000) NULL,     -- binding_message, user_code, etc.
+    "UnstructuredData" NCLOB NULL,     -- binding_message, user_code, etc.
     "Result" NUMBER(3) NULL,                     -- Result of CIBA
     "UserId" NVARCHAR2(128) NULL,                -- 承認する利用者 (Users.Id)
     CONSTRAINT "PK.CibaData" PRIMARY KEY ("Id")
@@ -220,5 +243,7 @@ ALTER TABLE "TotpTokens" ADD CONSTRAINT "FK.TotpTokens.Users_UserId" FOREIGN KEY
 ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_ClientID" FOREIGN KEY("ClientID") REFERENCES "Users" ("ClientID") ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE "FIDO2Data" ADD CONSTRAINT "FK.FIDO2Data.Users_UserName" FOREIGN KEY("UserName") REFERENCES "Users" ("UserName") ON DELETE CASCADE;
+---- ConsentGrant
+ALTER TABLE "ConsentGrant" ADD CONSTRAINT "FK.ConsentGrant.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- SubjectIdentifier
 ALTER TABLE "SubjectIdentifier" ADD CONSTRAINT "FK.SubjectIdentifier.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;

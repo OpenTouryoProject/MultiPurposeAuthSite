@@ -430,7 +430,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 | `private_key_jwt` | FAPI1 / FAPI2 / PAR の交換 | 同上（`RT-238`） |
 | `tls_client_auth`（mTLS） | **無い** | **ブラウザからは試せない**（クライアント証明書の提示が要る）。E2E の `FA-6` が測る |
 | Hybrid-IdP（ID フェデレーション） | **無い** | **外部 IdP の登録が要る。** サインイン画面の外部ログインから入る |
-| WebAuthn / MS Passport | net48 版に `WebAuthnStarters.cshtml` が**残っているが動かない** | ライブラリごと無効（`../CommonLibrary/ANALYSIS.md` 12 節） |
+| WebAuthn | **自己テストのボタンには無い** | **画面から試せる**— 登録は `/Manage/AddWebAuthnData`、認証はサインイン画面の [WebAuthn]（#137）。**認証器が要る**ので E2E では測れない（`RT-137`） |
 | 2FA のプッシュ承認 | ボタンではなく**サインインの経路**（`MobileApp` を選ぶ） | 認証デバイスが要る（#213 / #216） |
 
 **方針。** **「選べない」ものを無理にボタンにしない。**
@@ -481,9 +481,8 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 | TOTP（Authenticator アプリ 2FA） | **✓ あり**（`EnableTwoFactorAuthenticator` / リカバリ コード / `ManageTwoFactorAuthenticator`） | ✗ 無し |
 | プッシュ 2FA（`MobileApp`） | ✓ あり（`SendCode` の中で一覧に足し、コードは `Email` で作る。#213） | ✓ あり（**2FAプロバイダとして登録**する。`Manager/MobileAppTokenProvider`。#216） |
 | ユーザ・ロール管理画面 | **✓ あり**（#258 で移植。`Config.EnableAdministrationOfUsersAndRoles` で開閉） | ✓ `UsersAdminController` / `RolesAdminController` |
-| FIDO2 サーバ用 WebAPI | ✗ 無し | △ `Fido2ServerController.cs` は在るが**ビルド対象外** |
 | 疎通用 WebAPI | ✓ `ValuesController` | ✗ |
-| WebAuthn / MS Passport | ✗（`../CommonLibrary` 側ごと無効） | ✗（同左） |
+| WebAuthn | **✓ `Fido2` 4.2.0**（#137）。`FIDOServerMode=webauthn` | **✗ 退役**（現行版のライブラリが `netstandard2.0` を支えていない） |
 
 > **`EnableAdministrationOfUsersAndRoles` は、両系統で同じ 2 つに効く**（#258）。
 > **① 管理画面の入口**（2 つの Controller の `Authorize()`）と
@@ -570,9 +569,20 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
    - `Views/Manage/ManageTwoFactorAuthenticator.cshtml`
 
    他は BOM 付き UTF-8。**編集ツールによっては保存時に壊すので注意。**
-10. **`ManageController` / `AccountController` の WebAuthn 分岐はコメント アウト済み。**
-    View（`Add{WebAuthn,MsPass}Data.cshtml`）と JS（`wwwroot/js/multiauthsite/{ff,ms}Webauthn.js`）
-    は残っているが、機能しない（`../CommonLibrary/ANALYSIS.md` 12 節）。
+10. **WebAuthn はこのアプリだけにある**（#137。`Fido2` 4.2.0）。
+    - 登録 : `/Manage/AddWebAuthnData`（**form post で 3 往復**。`ffWebauthn.js`）
+    - 一覧・削除 : `/Manage/RemoveWebAuthnData`
+    - 認証 : サインイン画面の `webauthn_signin`（**form post で 2 往復**）
+
+    **`status` / `errorMessage` の封筒はこちら側で付けている**
+    （`FIDO.WebAuthnHelper.ToOkJson` / `ToErrorJson`）。
+    **4.x の options / result は `Status` を持たない**し、
+    **form post では HTTP のステータス コードでエラーを伝えられない。**
+
+    **生データの読み書きは System.Text.Json で行う**（`Stj.JsonSerializer`）。
+    **Newtonsoft で読むと base64url の `byte[]` が壊れる**。
+    **キー名の大文字小文字も区別される**ので、
+    **JS 側も `attestationObject` / `clientDataJSON` に直してある**。
 11. **`AccountController.cs` は 4402 行、`ManageController.cs` は 3262 行と巨大。**
     変更は該当 `#region` に閉じ、全体リファクタは避ける。
 12. **`ErrorController` は `MyBaseMVControllerCore` を継承するが、net48 側は素の `Controller`。**

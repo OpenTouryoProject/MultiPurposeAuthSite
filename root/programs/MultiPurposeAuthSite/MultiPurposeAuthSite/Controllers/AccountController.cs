@@ -49,6 +49,10 @@
 //*  2026/10/01  玄人 幸道         ID 連携の新規作成で preferred_username を優先（#151 の段階 4）
 //*  2026/10/03  玄人 幸道         テスト利用者の名前に接尾辞を付けられるようにした（#260）
 //*  2026/10/03  玄人 幸道         E2E専用のクライアント登録を種データにした（#264）
+//*  2026/10/04  玄人 幸道         response_typeを正規化して受ける（#267）
+//*  2026/10/06  玄人 幸道         種データのクライアント登録を専用列で作る（#270）
+//*  2026/10/06  玄人 幸道         promptの照合を集合に寄せた（#272 の段階 1）
+//*  2026/10/06  玄人 幸道         同意を記録し、promptの各値を処理（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -63,7 +67,6 @@ using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Saml = MultiPurposeAuthSite.SamlProviders;
-//using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -93,8 +96,6 @@ using Newtonsoft.Json.Linq;
 
 using Facebook;
 
-//using Fido2NetLib;
-//using Fido2NetLib.Objects;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
@@ -216,20 +217,11 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // サインイン画面（初期表示）
+            // **WebAuthn は net48 版では扱わない**（#137）。
+            //   **現行版の WebAuthn ライブラリが netstandard2.0 を支えていない。**
+            //   **ビューの欄は残す**（ViewModel を両系統で共有しているため）。
             string fido2Challenge = "";
             string sequenceNo = "";
-
-            /*
-            if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-            {
-                sequenceNo = "0";
-            }
-            else if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-            {
-                fido2Challenge = GetPassword.Generate(22, 0);
-                Session["fido2Challenge"] = fido2Challenge;
-            }
-            */
 
             // **Email 欄が「利用者名またはメアド」の入力である**（#151 の段階 3）。
             //   **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の login_hint に
@@ -368,158 +360,6 @@ namespace MultiPurposeAuthSite.Controllers
                         "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256 +
                         "&login_hint=" + uid + "&prompt=none");
                 }
-                /*
-                else if (submitButtonName == "webauthn_signin"
-                    && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                {
-                    // WebAuthnのサインイン
-                    if (model.SequenceNo == "0")
-                    {
-                        AssertionOptions options = null;
-                        JObject requestJSON = JsonConvert.DeserializeObject<JObject>(model.Fido2Data);
-
-                        string username = (string)requestJSON["username"];
-                        string userVerification = (string)requestJSON["userVerification"];
-                        // ※ userVerification を使ってない。
-
-                        try
-                        {
-                            FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
-                            options = webAuthnHelper.CredentialGetOptions(username);
-
-                            // Sessionに保存
-                            Session["fido2.AssertionOptions"] = options.ToJson();
-                        }
-                        catch (Exception e)
-                        {
-                            options = new AssertionOptions
-                            {
-                                Status = OAuth2AndOIDCConst.error,
-                                ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
-                            };
-                        }
-
-                        ModelState.Clear();
-                        model.SequenceNo = "1";
-                        model.Fido2Data = JsonConvert.SerializeObject(options);
-                    }
-                    else if (model.SequenceNo == "1")
-                    {
-                        AssertionVerificationResult result = null;
-
-                        try
-                        {
-                            AuthenticatorAssertionRawResponse clientResponse
-                                = JsonConvert.DeserializeObject<AuthenticatorAssertionRawResponse>(model.Fido2Data);
-
-                            FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
-
-                            // Sessionから復元
-                            AssertionOptions options = AssertionOptions.FromJson(
-                                (string)Session["fido2.AssertionOptions"]);
-
-                            result = await webAuthnHelper.AuthenticatorAssertion(clientResponse, options);
-
-                            if (result.Status.ToLower() == "ok")
-                            {
-                                ApplicationUser user = await UserManager.FindByNameAsync(
-                                    FIDO.DataProvider.GetUserByCredential(clientResponse.RawId).Name);
-
-                                // ロックアウト
-                                if (user.LockoutEndDateUtc != null
-                                    && DateTime.Now <= user.LockoutEndDateUtc)
-                                {
-                                    signInStatus = SignInStatus.LockedOut;
-                                }
-                                // 2FAは不要（デバイス特定されているため）
-                                //else if (true) { }
-                                else
-                                {
-                                    await SignInManager.SignInAsync(user, false, false);
-                                    signInStatus = SignInStatus.Success;
-                                }
-
-                                return VerifySignInStatus(signInStatus, model, user);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            result = new AssertionVerificationResult
-                            {
-                                Status = OAuth2AndOIDCConst.error,
-                                ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
-                            };
-                        }
-
-                        ModelState.Clear();
-                        model.SequenceNo = "2";
-                        model.Fido2Data = JsonConvert.SerializeObject(result);
-                    }
-                }
-                else if (submitButtonName == "mspass_signin"
-                    && Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                {
-                    // Microsoft Passportのサインイン
-                    JObject fido2Data = JsonConvert.DeserializeObject<JObject>(model.Fido2Data);
-                    ApplicationUser user = await UserManager.FindByNameAsync((string)fido2Data["fido2UserId"]);
-
-                    if (user == null)
-                    {
-                        // メッセージを設定
-                        ModelState.AddModelError("", Resources.AccountController.Login_Error);
-                    }
-                    if (string.IsNullOrEmpty(user.FIDO2PublicKey))
-                    {
-                        // メッセージを設定
-                        ModelState.AddModelError("", Resources.AccountController.Login_Error);
-                    }
-                    else
-                    {
-                        // EmailConfirmedだけでなく、ロックアウト、2FAについて検討が必要
-                        if (await UserManager.IsEmailConfirmedAsync(user.Id))
-                        {
-                            // ロックアウト
-                            if (user.LockoutEndDateUtc != null
-                                && DateTime.Now <= user.LockoutEndDateUtc)
-                            {
-                                signInStatus = SignInStatus.LockedOut;
-                            }
-                            // 2FAは不要（デバイス特定されているため）
-                            //else if (true) { }
-                            else
-                            {
-                                string fido2Challenge = (string)Session["fido2Challenge"];
-
-                                FIDO.MsPassHelper msPassHelper = new FIDO.MsPassHelper(user.FIDO2PublicKey, fido2Challenge);
-                                if (msPassHelper.ValidateSignature(
-                                    (string)fido2Data["fido2ClientData"],
-                                    (string)fido2Data["fido2AuthenticatorData"],
-                                    (string)fido2Data["fido2Signature"]))
-                                {
-                                    await SignInManager.SignInAsync(user, false, false);
-                                    signInStatus = SignInStatus.Success;
-                                }
-                                else
-                                {
-                                    signInStatus = SignInStatus.Failure;
-                                }
-                            }
-
-                            return VerifySignInStatus(signInStatus, model, user);
-                        }
-                        else
-                        {
-                            // EmailConfirmed == false の場合、
-
-                            // メアド検証用のメールを送信して、
-                            this.SendConfirmEmail(user);
-
-                            // メッセージを設定
-                            ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
-                        }
-                    }
-                }
-                */
                 else
                 {
                     // 不明なボタン
@@ -2777,8 +2617,8 @@ namespace MultiPurposeAuthSite.Controllers
             //   **valid_redirect_uri も err も空のまま、文面の無いエラー画面**になっていた
             //   （`ANALYSIS-IdP.md` の A-12）。
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                client_id, redirect_uri, response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge))
+                client_id, redirect_uri, ref response_type, scope, nonce,
+                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt))
             {
                 // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
                 Token.CmnEndpoints.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
@@ -2793,7 +2633,7 @@ namespace MultiPurposeAuthSite.Controllers
                     errDescription = "max_age must be a non-negative integer.";
                 }
                 else if (!this.User.Identity.IsAuthenticated
-                    && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))
+                    && Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptNone))
                 {
                     // **そもそもサインインしていない**（OIDC Core 3.1.2.6 : login_required）。
                     //   **#247 で足したのは「セッションは在るが古い」場合だけ**だった。
@@ -2811,11 +2651,24 @@ namespace MultiPurposeAuthSite.Controllers
                     return new HttpUnauthorizedResult();
                 }
                 else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication
-                    && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))
+                    && Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptNone))
                 {
                     // **prompt=none では UI を出せない**（OIDC Core 3.1.2.6 : login_required）。
                     err = OAuth2AndOIDCConst.login_required;
                     errDescription = "Re-authentication is required, but prompt=none was specified.";
+                }
+                else if (Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptLogin)
+                    && string.IsNullOrEmpty(Request.Cookies[Config.ReAuthenticatedAtCookieName] == null ? "" : Request.Cookies[Config.ReAuthenticatedAtCookieName].Value))
+                {
+                    // **prompt=login は、再認証を求める**（OIDC Core §3.1.2.1。#272 の段階 2）。
+                    //   **max_age の再認証と同じ経路**を使う（印を残してサインアウトし、同じ URL に戻す）。
+                    //   **印（re_auth_at）が在るときはここを通らない。**
+                    //   **戻ってきた要求にも prompt=login が付いている**ので、
+                    //   印が無いと永久に送り返すことになる。
+                    Response.Cookies.Add(new HttpCookie(Config.ReAuthenticatedAtCookieName,
+                        FormatConverter.ToW3cTimestamp(DateTime.UtcNow)));
+                    this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+                    return new RedirectResult(Request.RawUrl);
                 }
                 else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication)
                 {
@@ -2876,8 +2729,31 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
-                        if (isAuth                           // OAuth2 拡張仕様
-                            || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                        #region 同意の判定（#272 の段階 2 / D-6）
+
+                        // **以前は「`prompt=none` なら無条件に飛ばす」だった**（C-3）。
+                        //   **記録を持ったので、「以前に同意済みか」で判定できる。**
+                        //
+                        //   | 状況 | ここでの扱い |
+                        //   |---|---|
+                        //   | scope に `auth`（独自の認証用） | **従来どおり飛ばす** |
+                        //   | 要求 scope が記録の部分集合 | **飛ばす** |
+                        //   | `prompt=consent` | **記録が在っても出す**（§3.1.2.1） |
+                        //   | `prompt=select_account` | **出す**（画面に「別のアカウントでログイン」が在る） |
+                        //   | 記録が無い ＋ `prompt=none` | **`consent_required`**（§3.1.2.6） |
+                        //   | 記録が無い | 同意画面を出す |
+                        string userId = User.Identity.GetUserId();
+
+                        bool hasConsent = Sts.ConsentProvider.HasConsent(userId, client_id, scopes);
+                        bool asksConsent = Token.CmnEndpoints.HasPrompt(
+                                               prompt, Token.CmnEndpoints.PromptConsent)
+                                           || Token.CmnEndpoints.HasPrompt(
+                                               prompt, Token.CmnEndpoints.PromptSelectAccount);
+
+                        #endregion
+
+                        if (isAuth                              // OAuth2 拡張仕様
+                            || (hasConsent && !asksConsent))    // 同意済み（#272 の段階 2）
                         {
                             // 認可画面をスキップ
 
@@ -2895,6 +2771,17 @@ namespace MultiPurposeAuthSite.Controllers
                             ActionResult actionResult = this.RedirectCode(
                                 client_id, response_mode, valid_redirect_uri, code, state);
                             if (actionResult != null) return actionResult;
+                        }
+                        else if (Token.CmnEndpoints.HasPrompt(
+                            prompt, Token.CmnEndpoints.PromptNone))
+                        {
+                            // **UI を出せないので、エラーを RP へ返す**
+                            //   （OIDC Core §3.1.2.6 : consent_required。#272 の段階 2）。
+                            //   **ここが C-3 そのものである** — 以前は同意を飛ばして
+                            //   code を発行していたので、**セッションが生きていれば
+                            //   どのクライアントも無音で認可を取れた。**
+                            err = OAuth2AndOIDCConst.consent_required;
+                            errDescription = "Consent is required, but prompt=none was specified.";
                         }
                         else
                         {
@@ -3035,8 +2922,9 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                client_id, redirect_uri, response_type, scope, nonce,
-                out string valid_redirect_uri, out string err, out string errDescription, code_challenge))
+                client_id, redirect_uri, ref response_type, scope, nonce,
+                out string valid_redirect_uri, out string err, out string errDescription,
+                code_challenge, prompt))
             {
                 // Cookie認証チケットからClaimsIdentityを取得しておく。
                 AuthenticateResult ticket = this.AuthenticationManager
@@ -3058,6 +2946,16 @@ namespace MultiPurposeAuthSite.Controllers
                     this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
                     return new RedirectResult(Request.RawUrl);
                 }
+                else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Deny")))
+                {
+                    // **拒否した**（E-6 / #272 の段階 2）。
+                    //   **RFC 6749 §4.1.2.1 : access_denied を redirect_uri へ返す。**
+                    //   **以前は拒否できず、access_denied を返す経路も無かった。**
+                    //   **記録は残さない**（「拒否した」を覚えて、
+                    //   次回以降自動で断ることはしない。利用者が気を変えられなくなる）。
+                    err = OAuth2AndOIDCConst.access_denied;
+                    errDescription = "The resource owner denied the request.";
+                }
                 else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
                 {
                     // アクセス要求を保存して、仲介コードを発行する。
@@ -3065,6 +2963,12 @@ namespace MultiPurposeAuthSite.Controllers
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
                     // ★ Codeの生成
+                    // **同意を記録する**（#272 の段階 2 / D-6）。
+                    //   **これが次回以降の `prompt=none` の判定の土台になる。**
+                    //   **scope は足し込む**（増えた scope で同意し直しても、以前の分を失わない）。
+                    Sts.ConsentProvider.Grant(
+                        User.Identity.GetUserId(), client_id, scopes);
+
                     string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
                         identity, Request.QueryString, client_id, state, scopes, claims, nonce);
 
@@ -4608,9 +4512,10 @@ namespace MultiPurposeAuthSite.Controllers
             //   **サイトごとに分ける必要も無い**（作った後は読むだけで、書き換え合わない。#260）。
             foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
             {
-                string saml2OAuth2Data = Sts.TestClients.CreateSaml2OAuth2Data(entry);
+                ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data
+                    = Sts.TestClients.CreateSaml2OAuth2Data(entry);
 
-                if (string.IsNullOrEmpty(saml2OAuth2Data))
+                if (saml2OAuth2Data == null)
                 {
                     // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
                     continue;
@@ -4631,7 +4536,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // **登録が無ければ入れる**（在れば触らない）。
                 //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
                 //   **書き込みを 1 回に閉じる。**
-                if (string.IsNullOrEmpty(Sts.DataProvider.Get(entry.ClientId)))
+                if (Sts.DataProvider.Get(entry.ClientId) == null)
                 {
                     Sts.DataProvider.Create(entry.ClientId, saml2OAuth2Data);
                 }

@@ -54,10 +54,13 @@
 //*  2026/10/01  玄人 幸道         RequireUniqueEmail の設定を削除（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         TestUserSuffix を追加（#260）
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins を追加（#265）
+//*  2026/10/06  玄人 幸道         SessionStoreType / SessionStoreConnectionString を追加（#256）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
-//using MultiPurposeAuthSite.Extensions.FIDO;
+#if NETCORE
+using MultiPurposeAuthSite.Extensions.FIDO;
+#endif
 
 using System;
 using System.Collections.Generic;
@@ -682,6 +685,68 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>セッションの置き場（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`mem`（既定） / `sql` / `redis`。**
+        /// **書かなければ `mem`**（＝ 従来どおり。プロセス内のメモリ）。
+        ///
+        /// **net48 版は読まない。** あちらは `Web.config` の `sessionState` で選ぶ。
+        ///
+        /// | 値 | 置き場 | 複数インスタンス |
+        /// |---|---|---|
+        /// | `mem` | プロセス内 | **共有されない**（単一インスタンス向け） |
+        /// | `sql` | SQL Server のテーブル | 共有される。`Create_SessionCache.sql` を流しておく |
+        /// | `redis` | Redis | 共有される。**`UserStoreType` の方言に依らない** |
+        ///
+        /// **`UserStoreType` と同じ流儀**にしてある（`EnumSessionStoreType`）。
+        /// **Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、
+        /// **それらのストアで複数インスタンスにするなら `redis` を使う。**
+        /// </remarks>
+        public static EnumSessionStoreType SessionStoreType
+        {
+            get
+            {
+                // **キーが無いと null が返る。** `UserStoreType` と違い、
+                //   **このキーは雛形以外では無いことがある**（既存の配備）ので、
+                //   そのまま `ToUpper()` すると、起動時に落ちる。
+                string sessionStoreType = GetConfigParameter.GetConfigValue("SessionStoreType");
+
+                switch ((sessionStoreType ?? "").ToUpper())
+                {
+                    case "MEM":
+                        return EnumSessionStoreType.Memory;
+                    case "SQL":
+                        return EnumSessionStoreType.SqlServer;
+                    case "REDIS":
+                        return EnumSessionStoreType.Redis;
+                    default:
+                        // **書かなければプロセス内**（＝ 従来どおり）。
+                        return EnumSessionStoreType.Memory;
+                }
+            }
+        }
+
+        /// <summary>セッションの置き場への接続文字列（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`SessionStoreType` で意味が変わる。**
+        ///
+        /// | `SessionStoreType` | 書くもの |
+        /// |---|---|
+        /// | `mem` | **要らない**（読まない） |
+        /// | `sql` | **SQL Server の接続文字列。** `ConnectionString_SQL` と同じでよいが、別の DB にもできる |
+        /// | `redis` | **Redis の接続文字列**（`localhost:6379` など） |
+        ///
+        /// **`UserStoreType` のように方言ごとに分けていない**のは、
+        /// **`SessionStoreType` が置き場を一意に決める**ためである。
+        /// </remarks>
+        public static string SessionStoreConnectionString
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("SessionStoreConnectionString");
+            }
+        }
+
         /// <summary>CORS で追加して許可するオリジン（任意。#265）</summary>
         /// <remarks>
         /// **空でよい。** 既定では、**構成ファイルに登録された public クライアントの
@@ -1182,27 +1247,34 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region FIDO
-        /*
+#if NETCORE
+
         /// <summary>
         /// FIDOServerMode
         /// </summary>
+        /// <remarks>
+        /// **net10.0 版だけの設定**（#137）。
+        /// **`Fido2` は 2.0.2 を最後に `netstandard2.0` を落としている**ので、
+        /// **net48 版では WebAuthn を支えられない。**
+        /// **設定キーも net48 版の `_app.config` から落としてある。**
+        /// </remarks>
         public static EnumFidoType FIDOServerMode
         {
             get
             {
+                // **キーが無ければ null が返る**ので、null 合流で受ける（#256 と同じ）。
                 string temp = GetConfigParameter.GetConfigValue("FIDOServerMode");
-                switch (temp.ToLower())
+                switch ((temp ?? "").ToLower())
                 {
                     case "webauthn":
                         return EnumFidoType.WebAuthn;
-                    case "mspass":
-                        return EnumFidoType.MsPass;
                     default:
                         return EnumFidoType.None;
                 }
             }
         }
-        */
+
+#endif
         #endregion
 
         #region STS

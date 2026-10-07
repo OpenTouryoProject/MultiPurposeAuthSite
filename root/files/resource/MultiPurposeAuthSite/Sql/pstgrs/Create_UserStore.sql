@@ -1,4 +1,4 @@
-
+﻿
 -- TABLE
 CREATE TABLE Users(                -- Users
     Id varchar(38) NOT NULL,                 -- PK, guid
@@ -19,8 +19,7 @@ CREATE TABLE Users(                -- Users
     -- 追加の情報
     ClientID varchar(256) NOT NULL,
     PaymentInformation varchar(256) NULL,
-    UnstructuredData varchar(2000) NULL,
-    FIDO2PublicKey varchar(2000) NULL,
+    UnstructuredData text NULL,
     DeviceToken varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,
     PasswordChangeDate timestamp NOT NULL,
@@ -102,6 +101,15 @@ CREATE TABLE SubjectIdentifier(
     CONSTRAINT PK_SubjectIdentifier PRIMARY KEY (Sector, UserId)
 );
 
+CREATE TABLE ConsentGrant(   -- 同意の記録（#272 の段階 2）
+    UserId varchar(38) NOT NULL,                   -- *PK, guid
+    ClientID varchar(256) NOT NULL,             -- *PK
+    Scopes varchar(1024) NOT NULL,                -- 許可した scope（空白区切り。辞書順）
+    CreatedDate timestamp NOT NULL,
+    UpdatedDate timestamp NOT NULL,          -- scope を足したときに更新
+    CONSTRAINT PK_ConsentGrant PRIMARY KEY (UserId, ClientID)
+);
+
 CREATE TABLE CustomizedConfirmation(
     UserId varchar(38) NOT NULL,             -- PK, guid
     Value varchar(2000) NOT NULL,            -- Value
@@ -109,16 +117,31 @@ CREATE TABLE CustomizedConfirmation(
     CONSTRAINT PK_CustomizedConfirmation PRIMARY KEY (UserId)
 );
 
-CREATE TABLE Saml2OAuth2Data(
+CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     ClientID varchar(256) NOT NULL,          -- PK
-    UnstructuredData varchar(2000) NULL,     -- Saml2/OAuth2 Unstructured Data
+    ClientSecret varchar(256) NULL,
+    RedirectUriSaml varchar(512) NULL,               -- Const.MaxLengthOfUri
+    RedirectUriCode varchar(512) NULL,               -- Const.MaxLengthOfUri
+    RedirectUriToken varchar(512) NULL,              -- Const.MaxLengthOfUri
+    PostLogoutRedirectUri varchar(512) NULL,         -- Const.MaxLengthOfUri
+    WebOrigins text NULL,                            -- 空白・カンマ区切りの列挙
+    JwkRsaPublickey text NULL,
+    JwkECDsaPublickey text NULL,
+    TlsClientAuthSubjectDn varchar(512) NULL,
+    SubjectTypes varchar(32) NULL,
+    IdTokenSignedResponseAlg varchar(16) NULL,
+    TokenEndpointAuthSigningAlg varchar(16) NULL,
+    RequestObjectSigningAlg varchar(16) NULL,
+    ClientMode varchar(32) NULL,                     -- oauth2_oidc_mode
+    RequirePkce boolean NOT NULL,
+    ClientName varchar(256) NULL,                    -- Users.UserName と同じ幅
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 
 CREATE TABLE FIDO2Data(
     PublicKeyId varchar(256) NOT NULL,       -- PK
     UserName varchar(256) NOT NULL,          -- Value
-    UnstructuredData varchar(2000) NULL,     -- FIDO2 Unstructured Data
+    UnstructuredData text NULL,     -- FIDO2 Unstructured Data
     CONSTRAINT PK_FIDO2Data PRIMARY KEY (PublicKeyId)
 );
 
@@ -139,7 +162,7 @@ CREATE TABLE CibaData(
     AuthReqId varchar(800) NOT NULL,                  -- 乱数(800)
     AuthReqExp bigint NOT NULL,                       -- UNIX時刻(long)
     AuthZCode varchar(64) NOT NULL,                   -- AuthZCode
-    UnstructuredData varchar(2000) NULL,              -- binding_message, user_code, etc.
+    UnstructuredData text NULL,              -- binding_message, user_code, etc.
     Result boolean NULL,                              -- Result of CIBA
     UserId varchar(128) NULL,                         -- 承認する利用者 (Users.Id)
     CONSTRAINT PK_CibaData PRIMARY KEY (Id)
@@ -209,5 +232,7 @@ ALTER TABLE TotpTokens ADD CONSTRAINT FK_TotpTokens_Users_UserId FOREIGN KEY(Use
 ALTER TABLE Saml2OAuth2Data ADD CONSTRAINT FK_Saml2OAuth2Data_Users_ClientID FOREIGN KEY(ClientID) REFERENCES Users (ClientID) ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE FIDO2Data ADD CONSTRAINT FK_FIDO2Data_Users_UserName FOREIGN KEY(UserName) REFERENCES Users (UserName) ON DELETE CASCADE;
+---- ConsentGrant
+ALTER TABLE ConsentGrant ADD CONSTRAINT FK_ConsentGrant_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- SubjectIdentifier
 ALTER TABLE SubjectIdentifier ADD CONSTRAINT FK_SubjectIdentifier_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;

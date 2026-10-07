@@ -35,7 +35,6 @@ CREATE TABLE [Users](              -- Users
     [ClientID] [nvarchar](256) NOT NULL,
     [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
-    [FIDO2PublicKey] [nvarchar](max) NULL,
     [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
     [PasswordChangeDate] [smalldatetime] NOT NULL,
@@ -126,6 +125,16 @@ CREATE TABLE [SubjectIdentifier](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+CREATE TABLE [ConsentGrant](   -- 同意の記録（#272 の段階 2）
+    [UserId] [nvarchar](38) NOT NULL,              -- *PK, guid
+    [ClientID] [nvarchar](256) NOT NULL,        -- *PK
+    [Scopes] [nvarchar](1024) NOT NULL,           -- 許可した scope（空白区切り。辞書順）
+    [CreatedDate] [smalldatetime] NOT NULL,
+    [UpdatedDate] [smalldatetime] NOT NULL,  -- scope を足したときに更新
+    CONSTRAINT [PK.ConsentGrant] PRIMARY KEY NONCLUSTERED ([UserId] ASC, [ClientID] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [CustomizedConfirmation](
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [Value] [nvarchar](max) NOT NULL,        -- Value
@@ -134,9 +143,24 @@ CREATE TABLE [CustomizedConfirmation](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [Saml2OAuth2Data](
+CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
-    [UnstructuredData] [nvarchar](max) NULL, -- Saml2/OAuth2 Unstructured Data
+    [ClientSecret] [nvarchar](256) NULL,
+    [RedirectUriSaml] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
+    [RedirectUriCode] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
+    [RedirectUriToken] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
+    [PostLogoutRedirectUri] [nvarchar](512) NULL,    -- Const.MaxLengthOfUri
+    [WebOrigins] [nvarchar](max) NULL,               -- 空白・カンマ区切りの列挙
+    [JwkRsaPublickey] [nvarchar](max) NULL,
+    [JwkECDsaPublickey] [nvarchar](max) NULL,
+    [TlsClientAuthSubjectDn] [nvarchar](512) NULL,
+    [SubjectTypes] [nvarchar](32) NULL,
+    [IdTokenSignedResponseAlg] [nvarchar](16) NULL,
+    [TokenEndpointAuthSigningAlg] [nvarchar](16) NULL,
+    [RequestObjectSigningAlg] [nvarchar](16) NULL,
+    [ClientMode] [nvarchar](32) NULL,                -- oauth2_oidc_mode
+    [RequirePkce] [bit] NOT NULL,
+    [ClientName] [nvarchar](256) NULL,               -- Users.UserName と同じ幅
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
@@ -241,5 +265,7 @@ ALTER TABLE [TotpTokens] WITH CHECK ADD CONSTRAINT [FK.TotpTokens.Users_UserId] 
 ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_ClientID] FOREIGN KEY([ClientID]) REFERENCES [Users] ([ClientID]) ON DELETE CASCADE
 ---- FIDO2Data
 ALTER TABLE [FIDO2Data] WITH CHECK ADD CONSTRAINT [FK.FIDO2Data.Users_UserName] FOREIGN KEY([UserName]) REFERENCES [Users] ([UserName]) ON DELETE CASCADE
+---- ConsentGrant
+ALTER TABLE [ConsentGrant] WITH CHECK ADD CONSTRAINT [FK.ConsentGrant.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- SubjectIdentifier
 ALTER TABLE [SubjectIdentifier] WITH CHECK ADD CONSTRAINT [FK.SubjectIdentifier.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
