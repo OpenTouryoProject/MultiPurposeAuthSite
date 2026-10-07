@@ -55,6 +55,7 @@
 //*  2026/10/06  玄人 幸道         promptの照合を集合に寄せた（#272 の段階 1）
 //*  2026/10/06  玄人 幸道         同意を記録し、promptの各値を処理（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthn / MsPass のサインインを削除（#137）
+//*  2026/10/07  玄人 幸道         SAML2の応答を3分岐にし、SP側の照合に期待値を渡した（#276）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2314,14 +2315,12 @@ namespace MultiPurposeAuthSite.Controllers
 
             string iss = "";
             string id = "";
-            string rtnUrl = "";
 
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
                 .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
             ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
 
-            string samlResponse = "";
             SAML2Enum.StatusCode statusCode = SAML2Enum.StatusCode.Success;
 
             try
@@ -2376,23 +2375,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // Assertion > AttributeStatement > Attribute > AttributeValueに
                     // クレームを足すなら、ココで、identity.Claimsに値を詰めたりする。
 
-                    if (Saml.CmnEndpoints.CreateSamlResponse(identity,
-                        SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, statusCode,
-                        iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
-                        == SAML2Enum.ProtocolBinding.HttpRedirect)
-                    {
-                        // Redirect
-                        return Redirect(rtnUrl + "?" + queryString);
-                    }
-                    else
-                    {
-                        // Post
-                        ViewData["RelayState"] = relayState;
-                        ViewData["SAMLResponse"] = samlResponse;
-                        ViewData["Action"] = rtnUrl;
-
-                        return View("PostBinding");
-                    }
+                    return this.CreateSaml2Response(
+                        identity, statusCode, iss, relayState, id, samlRequest2, samlNsMgr);
                 }
                 else
                 {
@@ -2409,29 +2393,74 @@ namespace MultiPurposeAuthSite.Controllers
             // Error Response
             try
             {
-                if (Saml.CmnEndpoints.CreateSamlResponse(identity,
-                    SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, statusCode,
-                    iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
-                    == SAML2Enum.ProtocolBinding.HttpRedirect)
-                {
-                    // Redirect
-                    return Redirect(rtnUrl + "?" + queryString);
-                }
-                else
-                {
-                    // Post
-                    ViewData["RelayState"] = relayState;
-                    ViewData["SAMLResponse"] = samlResponse;
-                    ViewData["Action"] = rtnUrl;
-
-                    return View("PostBinding");
-                }
+                return this.CreateSaml2Response(
+                    identity, statusCode, iss, relayState, id, samlRequest2, samlNsMgr);
             }
             catch
             {
-                // issなどが取れていないと返せない。
-                return null;
+                // **iss などが取れていないと返せない。**
+                //   **以前は null を返していた**が、
+                //   **MVC のアクションから null を返すと 500 になる**（#276）。
+                return View("Error");
             }
+        }
+
+        /// <summary>SAML2 の応答を返す（#276）</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="statusCode">SAML2Enum.StatusCode</param>
+        /// <param name="iss">Request の Issuer</param>
+        /// <param name="relayState">RelayState</param>
+        /// <param name="inResponseTo">Request の ID</param>
+        /// <param name="samlRequest">XmlDocument（読めていなければ null）</param>
+        /// <param name="samlNsMgr">XmlNamespaceManager（同上）</param>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **応答を組み立てて返すところを 1 本にまとめた**（#276）。
+        ///
+        /// **`CreateSamlResponse` は 3 通りを返す。**
+        ///
+        /// | 戻り値 | 意味 | 返し方 |
+        /// |---|---|---|
+        /// | `HttpRedirect` | Redirect Binding で返す | クエリ文字列付きのリダイレクト |
+        /// | `HttpPost` | POST Binding で返す | 自動送信フォーム |
+        /// | **`null`** | **応答を返す先が決まらない** | **エラー画面** |
+        ///
+        /// **以前は `== HttpRedirect` の 2 分岐**だったので、
+        /// **`null` が POST 側に落ち、`action` も `SAMLResponse` も空の
+        /// 自動送信フォームが返っていた。**
+        /// </remarks>
+        private ActionResult CreateSaml2Response(
+            ClaimsIdentity identity, SAML2Enum.StatusCode statusCode,
+            string iss, string relayState, string inResponseTo,
+            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
+        {
+            string rtnUrl = "";
+            string samlResponse = "";
+            string queryString = "";
+
+            SAML2Enum.ProtocolBinding? protocolBinding = Saml.CmnEndpoints.CreateSamlResponse(
+                identity, SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, statusCode,
+                iss, relayState, inResponseTo,
+                out rtnUrl, out samlResponse, out queryString, samlRequest, samlNsMgr);
+
+            if (protocolBinding == SAML2Enum.ProtocolBinding.HttpRedirect)
+            {
+                // Redirect
+                return Redirect(rtnUrl + "?" + queryString);
+            }
+            else if (protocolBinding == SAML2Enum.ProtocolBinding.HttpPost)
+            {
+                // Post
+                ViewData["RelayState"] = relayState;
+                ViewData["SAMLResponse"] = samlResponse;
+                ViewData["Action"] = rtnUrl;
+
+                return View("PostBinding");
+            }
+
+            // **応答を返す先が決まらない**（ACS URL が事前登録されていない）。
+            //   **要求に書かれた URL へは返さない**（SAML Core 3.2.1）。
+            return View("Error");
         }
 
         #endregion
@@ -2482,9 +2511,14 @@ namespace MultiPurposeAuthSite.Controllers
                 out nonce_InSessionOrCookie,
                 out code_verifier_InSessionOrCookie);
 
+            // **自分の ACS URL**（#276。Audience / Recipient と照合する）。
+            //   **IdP は登録値「test_self_saml」をこの形に展開して入れる**
+            //   （`SamlProviders/CmnEndpoints`）。
+            string acsUrl = Config.OAuth2ClientEndpointsRootURI + Config.Saml2ResponseEndpoint;
+
             Sts.SelfTestClient.Saml2Result result = Sts.SelfTestClient.VerifySaml2Response(
-                samlResponse, queryString, sigAlg,
-                relayState, state_InSessionOrCookie, isGet);
+                samlResponse, queryString, sigAlg, relayState,
+                state_InSessionOrCookie, isGet, acsUrl, this.LoadTestSamlRequestId());
 
             ViewBag.Verdict = result.Verdict;
             ViewBag.Reason = result.Reason;
@@ -2492,6 +2526,10 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.SigAlg = result.SigAlg;
             ViewBag.RelayState = result.RelayState;
             ViewBag.RelayStateMatched = result.RelayStateMatched;
+            ViewBag.AudienceMatched = result.AudienceMatched;
+            ViewBag.RecipientMatched = result.RecipientMatched;
+            ViewBag.InResponseToMatched = result.InResponseToMatched;
+            ViewBag.NotExpired = result.NotExpired;
             ViewBag.SignatureVerified = result.SignatureVerified;
             ViewBag.IssuerMatched = result.IssuerMatched;
             ViewBag.NameId = result.NameId;
@@ -2506,6 +2544,34 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.ResponseXml = result.ResponseXml;
 
             return View("Saml2Response");
+        }
+
+        /// <summary>送った AuthnRequest の ID を取り出す（#276）</summary>
+        /// <returns>ID（無ければ空）</returns>
+        /// <remarks>
+        /// **`LoadRequestParameters` と同じ流儀**（Session → Cookie、読んだら消す）。
+        /// **あちらは 5 つの out を持っており、OAuth2 側からも呼ばれる**ので、
+        /// **SAML 専用のこれを別に立てている**（引数を増やさないため）。
+        /// </remarks>
+        private string LoadTestSamlRequestId()
+        {
+            string id = (string)Session[Const.TestSamlRequestId];
+
+            if (!string.IsNullOrEmpty(id))
+            {
+                Session.Remove(Const.TestSamlRequestId);
+            }
+            else
+            {
+                id = Request.Cookies[Const.TestSamlRequestId]?.Value;
+
+                if (!string.IsNullOrEmpty(id))
+                {
+                    Response.Cookies[Const.TestSamlRequestId].Value = "";
+                }
+            }
+
+            return id ?? "";
         }
 
         #endregion

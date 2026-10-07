@@ -798,6 +798,50 @@ Unhandled exception. System.InvalidOperationException:
 SessionStoreType が SqlServer なので、SessionStoreConnectionString が必要です。
 ```
 
+### SAML2（#276）
+
+**実装しているのは SP-initiated Web Browser SSO Profile** である（最も初歩的なもの）。
+**SLO・アサーションの暗号化・Artifact バインディング・IdP-initiated（未承諾応答）は持っていない。**
+
+| 設定キー | 既定 | |
+|---|---|---|
+| `Saml2RequestEndpoint` | `/saml2request` | **IdP の口**（SSO）。メタデータの `SingleSignOnService` にこの値が出る |
+| `Saml2ResponseEndpoint` | `/Account/AssertionConsumerService` | **自己テストの SP の口**（`redirect_uri_saml` を `test_self_saml` で登録したときの展開先） |
+| `Saml2AssertionExpireTimeSpanFromMinutes` | `30`（**分**） | **アサーションの有効期限**（#276）。**書かなければ `OidcIdTokenExpireTimeSpanFromMinutes` を使う**（従来の振る舞い） |
+| `RsaPfxFilePath` | — | **応答の署名鍵**。メタデータの `KeyDescriptor` に、対応する証明書（`RsaCerFilePath`）が出る |
+
+クライアントの登録（`OAuth2ClientsInformation` または管理画面）側は次の 2 つ。
+
+| 登録項目 | |
+|---|---|
+| `redirect_uri_saml` | **ACS URL**（`AssertionConsumerServiceURL`） |
+| `jwk_rsa_publickey` | **`AuthnRequest` の署名を検証する鍵**（OAuth2 側と共用） |
+
+> `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
+> **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
+
+#### 署名のない `AuthnRequest` は通る
+
+**`jwk_rsa_publickey` を登録していないクライアントの `AuthnRequest` は、署名が無くても通る**
+（`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
+
+**SAML では `AuthnRequest` の署名は任意**であり、**守りは別のところで効いている。**
+
+| | |
+|---|---|
+| **返す先は、常に事前登録の `redirect_uri_saml`** | **要求に書かれた `AssertionConsumerServiceURL` は、登録値との照合にしか使わない**（#276）。一致するか、省略されているときだけ通す |
+| **不一致なら、登録値へ `Requester`** | **要求の URL へは返さない** |
+| **登録が無ければ、応答しない** | **返す先が決まらない**ので、エラー画面を返す（SAML Core 3.2.1） |
+
+**つまり、署名が無くても「他人の ACS へアサーションを飛ばす」ことはできない。**
+**署名を必須にしたい配備では、`jwk_rsa_publickey` を登録すること。**
+
+> **メタデータは `WantAuthnRequestsSigned="true"` を固定で出している**（Open棟梁 の雛形）。
+> **鍵を登録していない配備では、広告と振る舞いが揃っていない。**
+> 測定は `SA-2.1`（広告）と `SA-5.4`（登録した場合に効くこと）。
+
+---
+
 ### WebAuthn の有効・無効 — `FIDOServerMode`（#137）
 
 **net10.0 版だけの設定である。**

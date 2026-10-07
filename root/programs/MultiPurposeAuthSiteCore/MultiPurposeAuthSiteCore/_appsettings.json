@@ -288,6 +288,9 @@
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // 認可エンドポイント
     "OAuth2AuthorizeEndpoint": "/authorize",
+    // SAML2 Assertion の有効期限（分）。#276
+    //   書かなければ OidcIdTokenExpireTimeSpanFromMinutes を使う（従来の振る舞い）。
+    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
     "Saml2RequestEndpoint": "/saml2request",
     // RP からのログアウト（RP-Initiated Logout 1.0。#232）
     //   **既に配備された設定ファイルに無くても動く**（無ければ /end_session を使う）

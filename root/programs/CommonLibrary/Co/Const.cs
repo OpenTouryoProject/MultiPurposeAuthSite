@@ -40,6 +40,7 @@
 //*  2026/10/04  玄人 幸道         CORS のポリシー名を追加（#265）
 //*  2026/10/06  玄人 幸道         セッション キャッシュの表名を追加（#256）
 //*  2026/10/07  玄人 幸道         WebAuthn の RP の表示名を追加（#137）
+//*  2026/10/07  玄人 幸道         SAML2 の AuthnRequest の ID を保存するキーを追加（#276）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -227,6 +228,13 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>テスト用CodeVerifierを保存するSession, CookieのKey</summary>
         public const string TestCodeVerifier = "test_code_verifier";
+
+        /// <summary>テスト用の SAML2 AuthnRequest の ID を保存する Session, Cookie の Key（#276）</summary>
+        /// <remarks>
+        /// **応答の `InResponseTo` と照合するために保存する**（Web SSO Profile 4.1.4.3）。
+        /// **以前は `out id` を捨てていた**ので、照合できなかった。
+        /// </remarks>
+        public const string TestSamlRequestId = "test_saml_request_id";
 
         #endregion
 

@@ -56,6 +56,7 @@
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins を追加（#265）
 //*  2026/10/06  玄人 幸道         SessionStoreType / SessionStoreConnectionString を追加（#256）
 //*  2026/10/07  玄人 幸道         FIDOServerModeをnet10.0版だけで復活（#137）
+//*  2026/10/07  玄人 幸道         Saml2AssertionExpireTimeSpanFromMinutesを専用キーにした（#276）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1353,11 +1354,31 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>
         /// SAML2 Assertionの有効期限（分）
         /// </summary>
+        /// <remarks>
+        /// **専用のキーを読む**（#276）。
+        /// **以前は `OidcIdTokenExpireTimeSpanFromMinutes` を読んでいた**が、
+        /// **この名前のキーはどちらの雛形にも在らなかった**。
+        ///
+        /// **キーが無ければ、従来どおり id_token の値を使う**
+        /// （**既存の配備を壊さないため**）。
+        ///
+        /// > **单位に注意。** `SAML2Bindings.CreateAssertion` の引数は
+        /// > **`double expiresFromSecond`（秒）** である。
+        /// > **渡すときに 60 を掛けること**（`SamlProviders/CmnEndpoints`）。
+        /// </remarks>
         public static double Saml2AssertionExpireTimeSpanFromMinutes
         {
             get
             {
-                return double.Parse(GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes"));
+                string temp = GetConfigParameter.GetConfigValue("Saml2AssertionExpireTimeSpanFromMinutes");
+
+                if (string.IsNullOrEmpty(temp))
+                {
+                    // **従来の振る舞い**（id_token の値を流用）。
+                    temp = GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes");
+                }
+
+                return double.Parse(temp);
             }
         }
 

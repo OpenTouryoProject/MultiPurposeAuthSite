@@ -42,6 +42,7 @@
 //*  2026/10/01  玄人 幸道         自己テストの宛先を、メアドではなく利用者名にした（#151 の段階 3）
 //*  2026/10/06  玄人 幸道         OIDCボタンの固定のprompt=noneを外した（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthnStarters を削除（#137）
+//*  2026/10/07  玄人 幸道         SAML2のAuthnRequestのIDを保存するようにした（#276）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -178,6 +179,10 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>認可エンドポイント</summary>
         private string Saml2RequestEndpoint = "";
+
+        /// <summary>AuthnRequest の ID（#276）</summary>
+        /// <remarks>**応答の `InResponseTo` と照合する**ために持つ。</remarks>
+        private string SamlRequestId = "";
                 
         #endregion
 
@@ -258,6 +263,10 @@ namespace MultiPurposeAuthSite.Controllers
             // state → RelayState
             Session[Const.TestState] = this.State;
             Response.Cookies[Const.TestState].Value = this.State;
+
+            // **AuthnRequest の ID**（#276。応答の InResponseTo と照合する）
+            Session[Const.TestSamlRequestId] = this.SamlRequestId;
+            Response.Cookies[Const.TestSamlRequestId].Value = this.SamlRequestId;
         }
 
         #endregion
@@ -950,6 +959,9 @@ namespace MultiPurposeAuthSite.Controllers
                 SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
 
+            // **応答の InResponseTo と照合する**（#276）。
+            this.SamlRequestId = id;
+
             this.SaveSaml2Params();
 
             // Redirect
@@ -971,6 +983,9 @@ namespace MultiPurposeAuthSite.Controllers
                 SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
 
+            // **応答の InResponseTo と照合する**（#276）。
+            this.SamlRequestId = id;
+
             this.SaveSaml2Params();
 
             // Redirect
@@ -990,6 +1005,9 @@ namespace MultiPurposeAuthSite.Controllers
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
+
+            // **応答の InResponseTo と照合する**（#276）。
+            this.SamlRequestId = id;
 
             this.SaveSaml2Params();
 
@@ -1017,6 +1035,9 @@ namespace MultiPurposeAuthSite.Controllers
                 SAML2Enum.ProtocolBinding.HttpRedirect,
                 SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
+
+            // **応答の InResponseTo と照合する**（#276）。
+            this.SamlRequestId = id;
 
             this.SaveSaml2Params();
 

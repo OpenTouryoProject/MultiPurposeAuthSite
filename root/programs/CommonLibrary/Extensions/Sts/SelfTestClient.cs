@@ -32,6 +32,7 @@
 //*  2026/09/28  玄人 幸道         CIBA の通しを寄せ、判定とポーリングを直した（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         Device Authorization Grant のポーリングも寄せた（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         SAML2 の応答（Assertion）を読む処理を寄せた（#246 の項目 3）
+//*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -644,6 +645,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             /// <summary>RelayState が、送った state と一致したか（送っていなければ null）</summary>
             public bool? RelayStateMatched { get; set; }
 
+            /// <summary>Audience が、自分の ACS URL と一致したか（#276。期待値が無ければ null）</summary>
+            /// <remarks>SAML Core 2.5.1.4。**自分あてのアサーションか**を確かめる。</remarks>
+            public bool? AudienceMatched { get; set; }
+
+            /// <summary>Recipient が、自分の ACS URL と一致したか（#276。同上）</summary>
+            public bool? RecipientMatched { get; set; }
+
+            /// <summary>InResponseTo が、送った AuthnRequest の ID と一致したか（#276）</summary>
+            /// <remarks>
+            /// Web SSO Profile 4.1.4.3。
+            /// **Open棟梁 の `VerifyResponse` は、Response と Assertion の間の食い違いしか見ていない**。
+            /// </remarks>
+            public bool? InResponseToMatched { get; set; }
+
+            /// <summary>NotOnOrAfter を過ぎていないか（#276。読めなければ null）</summary>
+            public bool? NotExpired { get; set; }
+
             /// <summary>署名を検証できたか</summary>
             public bool SignatureVerified { get; set; }
 
@@ -688,6 +706,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="relayState">RelayState</param>
         /// <param name="expectedRelayState">送った state（照合する。無ければ空）</param>
         /// <param name="isGet">GET（Redirect Binding）で受け取ったか</param>
+        /// <param name="expectedAcsUrl">
+        /// 自分の ACS URL（#276）。**Audience と Recipient の両方に照合する。**
+        /// （IdP はどちらにも同じ値（recipient）を入れる。空なら照合しない。）
+        /// </param>
+        /// <param name="expectedInResponseTo">
+        /// 送った AuthnRequest の ID（#276。空なら照合しない）
+        /// </param>
         /// <returns>結果（画面で見せる）</returns>
         /// <remarks>
         /// **両アプリの `AccountController.AssertionConsumerService` に同文で在ったもの**を寄せた（#246）。
@@ -698,12 +723,27 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// 読み取った属性（`Audience`・`NotOnOrAfter`・`AuthnContextClassRef` など）も、
         /// **XML そのもの**（`samlResponse2`）も捨てていた（「必要に応じて読んで拡張可能」というコメントだけが在った）。
         ///
-        /// **判定は「署名の検証」と「Issuer の一致」の両方**である（従来と同じ条件）。
-        /// **どちらで落ちたかを `Reason` に出す。**
+        /// **判定に次を含む**（#276）。
+        ///
+        /// | | 根拠 |
+        /// |---|---|
+        /// | 署名と XML（スキーマ） | 従来から |
+        /// | Issuer が設定と一致 | 従来から |
+        /// | **Audience が自分の ACS URL** | SAML Core 2.5.1.4 |
+        /// | **Recipient が自分の ACS URL** | 同上 |
+        /// | **InResponseTo が、送った AuthnRequest の ID** | Web SSO Profile 4.1.4.3 |
+        /// | **RelayState が、送った state** | 従来は算出するだけで、判定に効いていなかった |
+        ///
+        /// **StatusCode と NotOnOrAfter は、Open棟梁 の `VerifyResponse` が既に落としている**
+        /// （非 `Success` と期限切れは `false` を返す）。
+        /// **ただし `bool` しか返ってこない**ので、
+        /// **受け取った out パラメタから理由を推定して `Reason` に出す**（#276）。
+        /// **以前はどの場合も「署名を検証できなかった」と出ていた。**
         /// </remarks>
         public static Saml2Result VerifySaml2Response(
             string samlResponse, string queryString, string sigAlg,
-            string relayState, string expectedRelayState, bool isGet)
+            string relayState, string expectedRelayState, bool isGet,
+            string expectedAcsUrl = null, string expectedInResponseTo = null)
         {
             Saml2Result ret = new Saml2Result()
             {
@@ -716,6 +756,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     ? (bool?)null : (relayState == expectedRelayState),
                 SignatureVerified = false,
                 IssuerMatched = false,
+                AudienceMatched = null,
+                RecipientMatched = null,
+                InResponseToMatched = null,
+                NotExpired = null,
                 NameId = "",
                 Issuer = "",
                 Audience = "",
@@ -785,10 +829,41 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             ret.IssuerMatched = (ret.Issuer == Config.IssuerId);
 
+            // **期限**（`VerifyResponse` も見ているが、**画面に分けて出す**ため）
+            ret.NotExpired = (notOnOrAfter == null)
+                ? (bool?)null : (DateTime.UtcNow <= (DateTime)notOnOrAfter);
+
+            // **Audience / Recipient**（IdP はどちらにも ACS URL を入れる）
+            if (!string.IsNullOrEmpty(expectedAcsUrl))
+            {
+                ret.AudienceMatched = (ret.Audience == expectedAcsUrl);
+                ret.RecipientMatched = (ret.Recipient == expectedAcsUrl);
+            }
+
+            // **InResponseTo**（送った AuthnRequest の ID）
+            if (!string.IsNullOrEmpty(expectedInResponseTo))
+            {
+                ret.InResponseToMatched = (ret.InResponseTo == expectedInResponseTo);
+            }
+
             if (!ret.SignatureVerified)
             {
-                ret.Reason = "署名を検証できなかった"
-                    + (string.IsNullOrEmpty(ret.StatusCode) ? "。" : "（StatusCode=" + ret.StatusCode + "）。");
+                // **`VerifyResponse` は bool しか返さない**ので、
+                //   **受け取った値から理由を推定する**（#276）。
+                if (!string.IsNullOrEmpty(ret.StatusCode)
+                    && statusCode != SAML2Enum.StatusCode.Success)
+                {
+                    ret.Reason = "エラー応答である（StatusCode=" + ret.StatusCode + "）。";
+                }
+                else if (ret.NotExpired == false)
+                {
+                    ret.Reason = "アサーションの有効期限が切れている（NotOnOrAfter="
+                        + ret.NotOnOrAfter + "）。";
+                }
+                else
+                {
+                    ret.Reason = "署名または XML（スキーマ）の検証で落ちた。";
+                }
             }
             else if (!ret.IssuerMatched)
             {
@@ -796,10 +871,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     + (string.IsNullOrEmpty(ret.Issuer) ? "（無し）" : ret.Issuer)
                     + "（期待 : " + Config.IssuerId + "）";
             }
+            else if (ret.AudienceMatched == false)
+            {
+                ret.Reason = "Audience が自分の ACS URL と違う : "
+                    + (string.IsNullOrEmpty(ret.Audience) ? "（無し）" : ret.Audience)
+                    + "（期待 : " + expectedAcsUrl + "）";
+            }
+            else if (ret.RecipientMatched == false)
+            {
+                ret.Reason = "Recipient が自分の ACS URL と違う : "
+                    + (string.IsNullOrEmpty(ret.Recipient) ? "（無し）" : ret.Recipient)
+                    + "（期待 : " + expectedAcsUrl + "）";
+            }
+            else if (ret.InResponseToMatched == false)
+            {
+                // **値そのものは出す**（ID は秘密ではないが、照合の証拠になる）。
+                ret.Reason = "InResponseTo が、送った要求の ID と違う : "
+                    + (string.IsNullOrEmpty(ret.InResponseTo) ? "（無し）" : ret.InResponseTo)
+                    + "（期待 : " + expectedInResponseTo + "）";
+            }
+            else if (ret.RelayStateMatched == false)
+            {
+                ret.Reason = "RelayState が、送った state と違う。";
+            }
             else
             {
                 ret.Verdict = "NORMAL_END";
-                ret.Reason = "署名を検証し、Issuer も一致した。";
+                ret.Reason = "署名、Issuer、Audience、Recipient、InResponseTo、RelayState を照合した。";
             }
 
             return ret;
