@@ -196,6 +196,12 @@ public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 > **`MinimumSameSitePolicy = None` の明示は外していない** —
 > **外すと `samesite` 属性ごと出なくなる**（実測。`RT-279.1` で固定）。
 
+> **上流 IdP コンテナ（`store/`）でも測った**（#279）。
+> **4 つの設定はどれも空のまま**なので、挙動は従来どおりである。
+> **既定の鍵リング（`store/keys`）はそのまま使われ、作り直されない**（実測）。
+> ただし **`SetApplicationName` を入れる前に発行した Cookie は復号できなくなる**ので、
+> **入れ替えの際に 1 度だけ全員がサインアウトする**（仕様上。ここは実測していない）。
+
 ### 4.1 ASP.NET Core Identity の登録
 
 **Entity Framework は使わない。** 自前ストア（`../CommonLibrary`）を注入する。
