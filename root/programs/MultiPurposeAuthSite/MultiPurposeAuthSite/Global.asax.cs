@@ -341,31 +341,8 @@ namespace MultiPurposeAuthSite
         {
         }
 
-        ///////////////////////////////////////////////////
-        // https://stackoverflow.com/questions/9594229/accessing-session-using-asp-net-web-api
-        ///////////////////////////////////////////////////
-        
-        /// <summary>Application_PostAuthorizeRequest</summary>
-        void Application_PostAuthorizeRequest()
-        {
-            if (this.IsRequest4WebApiThatIsRequiredSession())
-            {
-                HttpContext.Current.SetSessionStateBehavior(SessionStateBehavior.Required);
-            }
-        }
-
-        /// <summary>Is request for webapi that is required session.</summary>
-        /// <returns>bool</returns>
-        bool IsRequest4WebApiThatIsRequiredSession()
-        {
-            if (HttpContext.Current.Request.AppRelativeCurrentExecutionFilePath.IndexOf("/Fido2/") != -1)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
+        //  **WebAPI にセッションを有効にする仕掛けは落とした**（#137）。
+        //    **真になる条件が `/Fido2/` だけで、**
+        //    **`Fido2ServerController` を落としたので、残すと常に何もしない。**
     }
 }

@@ -35,7 +35,6 @@ CREATE TABLE [Users](              -- Users
     [ClientID] [nvarchar](256) NOT NULL,
     [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
-    [FIDO2PublicKey] [nvarchar](max) NULL,
     [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
     [PasswordChangeDate] [smalldatetime] NOT NULL,

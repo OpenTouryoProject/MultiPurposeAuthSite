@@ -67,7 +67,6 @@ using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Saml = MultiPurposeAuthSite.SamlProviders;
-//using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -97,8 +96,6 @@ using Newtonsoft.Json.Linq;
 
 using Facebook;
 
-//using Fido2NetLib;
-//using Fido2NetLib.Objects;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
@@ -220,20 +217,11 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // サインイン画面（初期表示）
+            // **WebAuthn は net48 版では扱わない**（#137）。
+            //   **現行版の WebAuthn ライブラリが netstandard2.0 を支えていない。**
+            //   **ビューの欄は残す**（ViewModel を両系統で共有しているため）。
             string fido2Challenge = "";
             string sequenceNo = "";
-
-            /*
-            if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-            {
-                sequenceNo = "0";
-            }
-            else if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-            {
-                fido2Challenge = GetPassword.Generate(22, 0);
-                Session["fido2Challenge"] = fido2Challenge;
-            }
-            */
 
             // **Email 欄が「利用者名またはメアド」の入力である**（#151 の段階 3）。
             //   **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の login_hint に
@@ -372,158 +360,6 @@ namespace MultiPurposeAuthSite.Controllers
                         "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256 +
                         "&login_hint=" + uid + "&prompt=none");
                 }
-                /*
-                else if (submitButtonName == "webauthn_signin"
-                    && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                {
-                    // WebAuthnのサインイン
-                    if (model.SequenceNo == "0")
-                    {
-                        AssertionOptions options = null;
-                        JObject requestJSON = JsonConvert.DeserializeObject<JObject>(model.Fido2Data);
-
-                        string username = (string)requestJSON["username"];
-                        string userVerification = (string)requestJSON["userVerification"];
-                        // ※ userVerification を使ってない。
-
-                        try
-                        {
-                            FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
-                            options = webAuthnHelper.CredentialGetOptions(username);
-
-                            // Sessionに保存
-                            Session["fido2.AssertionOptions"] = options.ToJson();
-                        }
-                        catch (Exception e)
-                        {
-                            options = new AssertionOptions
-                            {
-                                Status = OAuth2AndOIDCConst.error,
-                                ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
-                            };
-                        }
-
-                        ModelState.Clear();
-                        model.SequenceNo = "1";
-                        model.Fido2Data = JsonConvert.SerializeObject(options);
-                    }
-                    else if (model.SequenceNo == "1")
-                    {
-                        AssertionVerificationResult result = null;
-
-                        try
-                        {
-                            AuthenticatorAssertionRawResponse clientResponse
-                                = JsonConvert.DeserializeObject<AuthenticatorAssertionRawResponse>(model.Fido2Data);
-
-                            FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
-
-                            // Sessionから復元
-                            AssertionOptions options = AssertionOptions.FromJson(
-                                (string)Session["fido2.AssertionOptions"]);
-
-                            result = await webAuthnHelper.AuthenticatorAssertion(clientResponse, options);
-
-                            if (result.Status.ToLower() == "ok")
-                            {
-                                ApplicationUser user = await UserManager.FindByNameAsync(
-                                    FIDO.DataProvider.GetUserByCredential(clientResponse.RawId).Name);
-
-                                // ロックアウト
-                                if (user.LockoutEndDateUtc != null
-                                    && DateTime.Now <= user.LockoutEndDateUtc)
-                                {
-                                    signInStatus = SignInStatus.LockedOut;
-                                }
-                                // 2FAは不要（デバイス特定されているため）
-                                //else if (true) { }
-                                else
-                                {
-                                    await SignInManager.SignInAsync(user, false, false);
-                                    signInStatus = SignInStatus.Success;
-                                }
-
-                                return VerifySignInStatus(signInStatus, model, user);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            result = new AssertionVerificationResult
-                            {
-                                Status = OAuth2AndOIDCConst.error,
-                                ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
-                            };
-                        }
-
-                        ModelState.Clear();
-                        model.SequenceNo = "2";
-                        model.Fido2Data = JsonConvert.SerializeObject(result);
-                    }
-                }
-                else if (submitButtonName == "mspass_signin"
-                    && Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                {
-                    // Microsoft Passportのサインイン
-                    JObject fido2Data = JsonConvert.DeserializeObject<JObject>(model.Fido2Data);
-                    ApplicationUser user = await UserManager.FindByNameAsync((string)fido2Data["fido2UserId"]);
-
-                    if (user == null)
-                    {
-                        // メッセージを設定
-                        ModelState.AddModelError("", Resources.AccountController.Login_Error);
-                    }
-                    if (string.IsNullOrEmpty(user.FIDO2PublicKey))
-                    {
-                        // メッセージを設定
-                        ModelState.AddModelError("", Resources.AccountController.Login_Error);
-                    }
-                    else
-                    {
-                        // EmailConfirmedだけでなく、ロックアウト、2FAについて検討が必要
-                        if (await UserManager.IsEmailConfirmedAsync(user.Id))
-                        {
-                            // ロックアウト
-                            if (user.LockoutEndDateUtc != null
-                                && DateTime.Now <= user.LockoutEndDateUtc)
-                            {
-                                signInStatus = SignInStatus.LockedOut;
-                            }
-                            // 2FAは不要（デバイス特定されているため）
-                            //else if (true) { }
-                            else
-                            {
-                                string fido2Challenge = (string)Session["fido2Challenge"];
-
-                                FIDO.MsPassHelper msPassHelper = new FIDO.MsPassHelper(user.FIDO2PublicKey, fido2Challenge);
-                                if (msPassHelper.ValidateSignature(
-                                    (string)fido2Data["fido2ClientData"],
-                                    (string)fido2Data["fido2AuthenticatorData"],
-                                    (string)fido2Data["fido2Signature"]))
-                                {
-                                    await SignInManager.SignInAsync(user, false, false);
-                                    signInStatus = SignInStatus.Success;
-                                }
-                                else
-                                {
-                                    signInStatus = SignInStatus.Failure;
-                                }
-                            }
-
-                            return VerifySignInStatus(signInStatus, model, user);
-                        }
-                        else
-                        {
-                            // EmailConfirmed == false の場合、
-
-                            // メアド検証用のメールを送信して、
-                            this.SendConfirmEmail(user);
-
-                            // メッセージを設定
-                            ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
-                        }
-                    }
-                }
-                */
                 else
                 {
                     // 不明なボタン

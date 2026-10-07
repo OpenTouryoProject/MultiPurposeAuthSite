@@ -26,7 +26,6 @@
 @using MultiPurposeAuthSite.Entity
 @using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.ViewModels
-@*using MultiPurposeAuthSite.Extensions.FIDO*@
 @using Manager = MultiPurposeAuthSite.Manager
 
 @using System.Web
@@ -304,55 +303,6 @@
             {
                 // OAuth2データの変更が許可されていない場合。
             }
-@*
-            @if (Config.FIDOServerMode != EnumFidoType.None)
-            {
-                // FIDO2データの変更が許可されている場合。
-                <dt>EditFIDO2Data :</dt>
-                <dd>
-                    @if (Config.FIDOServerMode == EnumFidoType.MsPass)
-                    {
-                        // Microsoft Passport
-                        if (!Model.HasFIDO2Data)
-                        {
-                            <text>None</text><br />
-                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexMsPassDataAddActionLink, "AddMsPassData")&nbsp;&nbsp;]</text>
-                        }
-                        else
-                        {
-                            <text>XXXXXXXXXX</text><br />
-                            using (Html.BeginForm("RemoveMsPassData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                            {
-                                @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexMsPassDataRemoveButton" class="btn btn-link" />]</text>
-                            }
-                        }
-                    }
-                    else if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
-                    {
-                        // WebAuthn
-                        if (!Model.HasFIDO2Data)
-                        {
-                            <text>None</text><br />
-                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexWebAuthnDataAddActionLink, "AddWebAuthnData")&nbsp;&nbsp;]</text>
-                        }
-                        else
-                        {
-                            <text>XXXXXXXXXX</text><br />
-                            using (Html.BeginForm("RemoveWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                            {
-                                @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexWebAuthnDataRemoveButton" class="btn btn-link" />]</text>
-                            }
-                        }
-                    }
-                </dd>
-            }
-            else
-            {
-                // FIDO2データの変更が許可されていない場合。
-            }
-*@
             @if (Config.CanUseGdprFunction)
             {
                 // GDPR 個人情報管理が許可されている場合。

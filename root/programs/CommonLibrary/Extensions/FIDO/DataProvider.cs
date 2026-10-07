@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/03/13  西野 大介         新規
+//*  2026/10/07  玄人 幸道         fido2-net-lib 4.2.0 に合わせた（#137）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -48,8 +49,6 @@ using Newtonsoft.Json.Serialization;
 
 using Fido2NetLib;
 using Fido2NetLib.Objects;
-using Fido2NetLib.Development;
-using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Public.Str;
 
@@ -62,37 +61,16 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
     /// </summary>
     public class DataProvider
     {
-        /// <summary>
-        /// 《 開発時のストレージ 》
-        /// 
-        /// ・User
-        ///   - string Name
-        ///   - byte[] Id
-        ///   - string DisplayName
-        ///   
-        /// ・StoredCredential
-        ///   - byte[] UserId
-        ///   - PublicKeyCredentialDescriptor Descriptor
-        ///     - byte[] Id (CredentialId)
-        ///     - enum PublicKeyCredentialType? Type
-        ///     - enum AuthenticatorTransport[] Transports
-        ///   - byte[] PublicKey
-        ///   - byte[] UserHandle = UserId
-        ///   - uint SignatureCounter
-        ///   - string CredType
-        ///   - DateTime RegDate
-        ///   - Guid AaGuid
-        ///
-        /// PublicKeyCredentialDescriptor.Idを一意のKeyにする（KVSではK、RDBでは主キー）。
-        /// UserIdを主要な検索Keyにする（KVSではV + LINQ、RDBでは外部キー）。
-        /// </summary>
-        /// <see cref="https://techinfoofmicrosofttech.osscons.jp/index.php?fido2-net-lib#sabce498"/>
-
-        //private StoredCredential sc = new StoredCredential();
-        //private PublicKeyCredentialDescriptor pd = new PublicKeyCredentialDescriptor();
-        //private PublicKeyCredentialType pc = new PublicKeyCredentialType();
-        //private AuthenticatorTransport at = new AuthenticatorTransport();
-        //private AttestationVerificationSuccess avs = new AttestationVerificationSuccess();
+        //  《 保存する形 》
+        //
+        //  ・FIDO2Data 表
+        //    - PublicKeyId      : StoredCredential.CredentialId の base64url（主キー）
+        //    - UserName         : StoredCredential.UserId の UTF-8（検索キー）
+        //    - UnstructuredData : StoredCredential の JSON
+        //
+        //  **StoredCredential は自前の型である**（`StoredCredential.cs`）。
+        //  **以前は `Fido2NetLib.Development.StoredCredential` を直列化していた**が、
+        //  **`Development` 名前空間は 3.0 で消えた**（#137）。
 
         /// <summary>
         /// FIDO2Data
@@ -106,7 +84,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// <param name="storedCredential">StoredCredential</param>
         public static void Create(StoredCredential storedCredential)
         {
-            string publicKeyId = CustomEncode.ToBase64UrlString(storedCredential.Descriptor.Id);
+            string publicKeyId = CustomEncode.ToBase64UrlString(storedCredential.CredentialId);
             string userName = CustomEncode.ByteToString(storedCredential.UserId, CustomEncode.UTF_8);
             string unstructuredData = JsonConvert.SerializeObject(storedCredential);
             
@@ -284,7 +262,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
 
                             if (CustomEncode.ByteToString(storedCredential.UserId, CustomEncode.UTF_8) == userName)
                             {
-                                existingPubCredDescriptor.Add(storedCredential.Descriptor);
+                                existingPubCredDescriptor.Add(storedCredential.ToDescriptor());
                             }
                         }
                     }
@@ -333,7 +311,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
 
                         if (storedCredential != null)
                         {
-                            existingPubCredDescriptor.Add(storedCredential.Descriptor);
+                            existingPubCredDescriptor.Add(storedCredential.ToDescriptor());
                         }
                     }
 
@@ -341,6 +319,24 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             }
 
             return existingPubCredDescriptor;
+        }
+
+        /// <summary>GetCredentialIdsByUser</summary>
+        /// <param name="userName">string</param>
+        /// <returns>List(string) — base64url の credentialId</returns>
+        //  **画面（RemoveWebAuthnData）は id の文字列しか要らない**ので、
+        //    **PublicKeyCredentialDescriptor を画面まで持ち込まない。**
+        public static List<string> GetCredentialIdsByUser(string userName)
+        {
+            List<string> ids = new List<string>();
+
+            foreach (PublicKeyCredentialDescriptor descriptor
+                in DataProvider.GetCredentialsByUser(userName))
+            {
+                ids.Add(CustomEncode.ToBase64UrlString(descriptor.Id));
+            }
+
+            return ids;
         }
 
         #endregion
@@ -351,7 +347,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// <param name="storedCredential">StoredCredential</param>
         public static void Update(StoredCredential storedCredential)
         {
-            string publicKeyId = CustomEncode.ToBase64UrlString(storedCredential.Descriptor.Id);
+            string publicKeyId = CustomEncode.ToBase64UrlString(storedCredential.CredentialId);
             string userName = CustomEncode.ByteToString(storedCredential.UserId, CustomEncode.UTF_8);
             string unstructuredData = JsonConvert.SerializeObject(storedCredential);
         
@@ -453,6 +449,78 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                                 cnn.Execute(
                                     "DELETE FROM \"fido2data\" WHERE \"publickeyid\" = @PublicKeyId AND \"username\" = @UserName",
                                     new { PublicKeyId = publicKeyId, UserName = userName });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>DeleteByUser</summary>
+        /// <param name="userName">string</param>
+        //  **利用者ごと消す**（#137）。
+        //    **FIDO2Data は UserName で持っており、Users への外部キーが無い。**
+        //    **利用者を消しても資格情報が残る**ので、GDPR の削除から呼ぶ。
+        public static void DeleteByUser(string userName)
+        {
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    foreach (string key in DataProvider.FIDO2Data.Keys)
+                    {
+                        string unstructuredData = "";
+                        if (DataProvider.FIDO2Data.TryGetValue(key, out unstructuredData)
+                            && !string.IsNullOrEmpty(unstructuredData))
+                        {
+                            StoredCredential storedCredential =
+                                JsonConvert.DeserializeObject<StoredCredential>(unstructuredData);
+
+                            if (storedCredential != null
+                                && CustomEncode.ByteToString(
+                                    storedCredential.UserId, CustomEncode.UTF_8) == userName)
+                            {
+                                string temp = "";
+                                DataProvider.FIDO2Data.TryRemove(key, out temp);
+                            }
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "DELETE FROM [FIDO2Data] WHERE [UserName] = @UserName",
+                                    new { UserName = userName });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"FIDO2Data\" WHERE \"UserName\" = :UserName",
+                                    new { UserName = userName });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"fido2data\" WHERE \"username\" = @UserName",
+                                    new { UserName = userName });
 
                                 break;
                         }

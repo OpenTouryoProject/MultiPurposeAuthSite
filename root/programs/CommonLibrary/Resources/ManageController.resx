@@ -120,9 +120,6 @@
   <data name="AccountConflictInSocialLogin" xml:space="preserve">
     <value>Account do not match in social login.</value>
   </data>
-  <data name="AddMsPassDataSuccess" xml:space="preserve">
-    <value>Your MsPass data has been added.</value>
-  </data>
   <data name="AddSaml2OAuth2DataSuccess" xml:space="preserve">
     <value>Your Saml2 and OAuth2 data has been added.</value>
   </data>
@@ -164,9 +161,6 @@
   </data>
   <data name="RemoveExternalLoginSuccess" xml:space="preserve">
     <value>The external login has been removed.</value>
-  </data>
-  <data name="RemoveMsPassDataSuccess" xml:space="preserve">
-    <value>Your MsPass has been removed.</value>
   </data>
   <data name="RemoveSaml2OAuth2DataSuccess" xml:space="preserve">
     <value>Your Saml2 and OAuth2 has been removed.</value>

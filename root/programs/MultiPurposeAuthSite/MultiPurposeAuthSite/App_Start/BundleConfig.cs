@@ -61,9 +61,7 @@ namespace MultiPurposeAuthSite
 
             bundles.Add(new ScriptBundle("~/bundles/multiauthsite").Include(
                         "~/Scripts/touryo/oauthimplicit.js",
-                        "~/Scripts/touryo/arrayBufferUtil.js",
-                        "~/Scripts/touryo/msWebauthn.js",
-                        "~/Scripts/touryo/ffWebauthn.js"));
+                        "~/Scripts/touryo/arrayBufferUtil.js"));
 
             //jquery、jqueryvalを新規作成テンプレ準拠に
             bundles.Add(new ScriptBundle("~/bundles/jquery").Include(

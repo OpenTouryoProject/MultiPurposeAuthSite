@@ -157,12 +157,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Id], [UserName], [NormalizedUserName], [PasswordHash], " +
                                         "    [Email], [NormalizedEmail], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], [TotpAuthenticatorKey], " +
-                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
+                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
 
@@ -173,12 +173,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Id\", \"UserName\", \"NormalizedUserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"NormalizedEmail\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", \"TotpAuthenticatorKey\", " +
-                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
+                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :NormalizedUserName, :PasswordHash, " +
                                         "        :Email, :NormalizedEmail, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, :TotpAuthenticatorKey, " +
-                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
+                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -199,7 +199,6 @@ namespace MultiPurposeAuthSite.Data
                                             ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
-                                            FIDO2PublicKey = user.FIDO2PublicKey,
                                             DeviceToken = user.DeviceToken,
                                             CreatedDate = user.CreatedDate,
                                             PasswordChangeDate = user.PasswordChangeDate
@@ -214,12 +213,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"id\", \"username\", \"normalizedusername\", \"passwordhash\", " +
                                         "    \"email\", \"normalizedemail\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
                                         "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", \"totpauthenticatorkey\", " +
-                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
+                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
                             }
@@ -681,7 +680,7 @@ namespace MultiPurposeAuthSite.Data
                                         "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
                                         "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
                                         "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, " + 
-                                        "    [FIDO2PublicKey] = @FIDO2PublicKey, [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
+                                        "    [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
                                         "WHERE [Id] = @Id", user);
 
                                     break;
@@ -695,7 +694,7 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
                                         "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
                                         "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, " +
-                                        "    \"FIDO2PublicKey\" = :FIDO2PublicKey, \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
+                                        "    \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
                                         "WHERE \"Id\" = :Id",
                                         new // 拡張メソッドで対策できる。
                                         {
@@ -717,7 +716,6 @@ namespace MultiPurposeAuthSite.Data
                                             ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
-                                            FIDO2PublicKey = user.FIDO2PublicKey,
                                             DeviceToken = user.DeviceToken,
                                             //CreatedDate = user.CreatedDate,
                                             PasswordChangeDate = user.PasswordChangeDate
@@ -734,7 +732,7 @@ namespace MultiPurposeAuthSite.Data
                                        "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
                                        "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
                                        "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, " +
-                                       "    \"fido2publickey\" = @FIDO2PublicKey, \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
+                                       "    \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
                                        "WHERE \"id\" = @Id", user);
 
                                     break;

@@ -160,21 +160,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Test WebAuthn
-
-        /// <summary>
-        /// GET: Home/WebAuthnStarters
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult WebAuthnStarters()
-        {
-            return View();
-        }
-
-        #endregion
-
         #region Test STS
 
         #region Params

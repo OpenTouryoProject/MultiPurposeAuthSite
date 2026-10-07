@@ -798,6 +798,32 @@ Unhandled exception. System.InvalidOperationException:
 SessionStoreType が SqlServer なので、SessionStoreConnectionString が必要です。
 ```
 
+### WebAuthn の有効・無効 — `FIDOServerMode`（#137）
+
+**net10.0 版だけの設定である。**
+
+| 値 | |
+|---|---|
+| `webauthn` | **有効**（雛形の既定）。登録は `/Manage/AddWebAuthnData`、認証はサインイン画面の [WebAuthn] |
+| `none`（またはキーが無い） | **無効**。画面の導線も出ない |
+
+**net48 版にこのキーは無い。**
+**現行版の WebAuthn ライブラリが `netstandard2.0` を支えていない**ためである。
+`Fido2` は **2.0.2 を最後に `netstandard2.0` を落としている**（3.0 以降は `net6.0` 以降）。
+`WebAuthn.Net` / `Shark.Fido2` / `Rsk.AspNetCore.Fido` も net8.0 以降だけである。
+
+#### 配備したときに注意すること
+
+| | |
+|---|---|
+| **RPID はホスト名から決まる** | `OAuth2AuthorizationServerEndpointsRootURI` のホストをそのまま使う（`WebAuthnHelper` の constructor）。**資格情報はこの値に紐づく**ので、**ホスト名を変えると登録済みの認証器が使えなくなる** |
+| **https が必要** | WebAuthn は安全なコンテキストしか走らない（`localhost` は例外） |
+| **セッションに challenge を置く** | 複数インスタンスなら `SessionStoreType` を `mem` 以外にする（#256。置くのは `fido2.CredentialCreateOptions` / `fido2.AssertionOptions`） |
+| **保存先は `FIDO2Data` 表** | `UserStoreType` が `mem` ならプロセス内の辞書に入るので、**再起動で消える** |
+| **利用者を消すと、資格情報も消す** | `FIDO2Data` は `UserName` で持っており、**`Users` への外部キーが無い**。GDPR の削除（`/Manage/DeleteGdprPersonalData`）が明示的に消す |
+
+---
+
 ## 8. 証明書
 
 ```json
@@ -880,6 +906,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | パッケージ | `packages.config` ＋ `PackageReference` | `PackageReference` |
 | 認証クッキーの設定 | `App_Start/StartupAuth.cs` | `Startup.cs` の `ConfigureApplicationCookie`（#223） |
 | セッションの置き場 | `Web.config` の `sessionState`（既定 `StateServer`） | `SessionStoreType`（`mem` / `sql` / `redis`。#256） |
+| WebAuthn | **無し**（設定キーも無い。#137） | `FIDOServerMode`（`none` / `webauthn`。既定 `webauthn`） |
 
 **両者は共通ライブラリを使う別アプリである。** 片方にしか無い問題があり得る。
 

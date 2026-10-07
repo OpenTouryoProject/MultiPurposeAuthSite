@@ -25,7 +25,6 @@ CREATE TABLE "Users"(              -- Users
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NCLOB NULL,
-    "FIDO2PublicKey" NVARCHAR2(2000) NULL,
     "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
     "PasswordChangeDate" TIMESTAMP NOT NULL,

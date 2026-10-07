@@ -408,6 +408,43 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 **認証を疑って時間を使った**が、原因は画面側だった。
 **net10.0 側の 500 を先に見れば、すぐに分かる**（ログに例外の文面が出る）。
 
+#### WebAuthn を復活させ、`Users.FIDO2PublicKey` を落とした（#137）
+
+**DDL が変わったので、`store/` は作り直すこと**
+（`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
+
+| | |
+|---|---|
+| **落とした列** | `Users.FIDO2PublicKey`（3 方言）。**MsPass（Microsoft Passport）専用だった** |
+| **表はそのまま** | `FIDO2Data`（`PublicKeyId` / `UserName` / `UnstructuredData`） |
+| **入れ物の形が変わった** | `UnstructuredData` に入れる JSON は**自前の `StoredCredential`** になった（以前は `Fido2NetLib.Development.StoredCredential`。**`Development` 名前空間は 3.0 で消えた**） |
+
+**古い行は読めない。** とはいえ、**測った時点で `FIDO2Data` は 0 行だった**
+（`store/` の `sql`。#270 の調査）ので、**実際に読む行は存在しない。**
+
+- **E2E** : `RT-137.1`（登録の要求）/ `RT-137.2`（認証の要求）/
+  `RT-137.3`（壊れた入力を封筒に入れて 200 で返す）/ `RT-137.4`（challenge を使い回していない）
+- **net48 版は退役した**ので、`RT-137.1` / `RT-137.2` の netfx 側は**「口が無いこと」を測る**
+
+##### 登録と認証そのものは、この基盤では測れない
+
+**`navigator.credentials` を呼ぶのはブラウザである。**
+**attestation / assertion を作るには、仮想認証器（CDP の WebAuthn ドメイン）が要る。**
+**E2E は HttpClient だけなので、ここは測らないと決めてある。**
+
+**測っているのは、要求を組み立てる段と、壊れた入力の扱いである。**
+**「通った」の範囲を広く読まないこと。**
+
+##### 歯が立つことの確かめ方（実施済み）
+
+| 崩したところ | 結果 |
+|---|---|
+| `appsettings.json` の `FIDOServerMode` を `none` にした | **core の 4 件が落ちた**（netfx の 2 件は通る。そういうテストだから） |
+| `CredentialGetOptions` を 1.x の `UserVerificationRequirement.Discouraged` 固定に戻した | **`RT-137.2`（core）だけが落ちた** |
+
+**netfx 側の 2 件は「無いこと」を測っている**ので、
+**歯を確かめるには退役させた画面を戻すことになる。それはやっていない。**
+
 #### CORS の許可オリジンのキャッシュをやめた（#271）
 
 **`GetCorsAllowedOrigins` は毎回作るようになった。**

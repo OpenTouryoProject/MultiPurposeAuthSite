@@ -117,15 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="AddMsPassDataH4" xml:space="preserve">
-    <value>Add Microsoft Passport data form</value>
-  </data>
-  <data name="AddMsPassDataSubmit" xml:space="preserve">
-    <value>Register Microsoft Passport 2 authenticator</value>
-  </data>
-  <data name="AddMsPassDataTitle" xml:space="preserve">
-    <value>Add Microsoft Passport data</value>
-  </data>
   <data name="AddSaml2OAuth2DataH4" xml:space="preserve">
     <value>Add Saml2 and OAuth2 data form</value>
   </data>
@@ -260,15 +251,6 @@
   </data>
   <data name="IndexManageGdprData" xml:space="preserve">
     <value>Gdpr personal data</value>
-  </data>
-  <data name="IndexMsPassData" xml:space="preserve">
-    <value>Microsoft Passport data</value>
-  </data>
-  <data name="IndexMsPassDataAddActionLink" xml:space="preserve">
-    <value>Add your Microsoft Passport data</value>
-  </data>
-  <data name="IndexMsPassDataRemoveButton" xml:space="preserve">
-    <value>Remove your Microsoft Passport data</value>
   </data>
   <data name="IndexSaml2OAuth2Data" xml:space="preserve">
     <value>Saml2 and OAuth2 data</value>

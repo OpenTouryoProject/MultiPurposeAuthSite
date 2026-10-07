@@ -202,7 +202,9 @@
     "CanEditUnstructuredData": "true",
     "CanEditSaml2OAuth2Data": "true",
     "CanUseGdprFunction": "true",
-    // FIDOServerMode: none, mspass, webauthn
+    // FIDOServerMode: none, webauthn
+    //   **net10.0 版だけの設定**（#137）。net48 版にはこのキーが無い。
+    //   **mspass（Microsoft Passport）は落とした**（前身 API で、動く環境が無い）。
     "FIDOServerMode": "webauthn",
 
     // 本サイトでSaltとして機能する値

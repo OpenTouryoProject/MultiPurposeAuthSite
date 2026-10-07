@@ -340,24 +340,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Microsoft Passport login に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string MsPassLogin {
-            get {
-                return ResourceManager.GetString("MsPassLogin", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Login with Microsoft Passport authenticator に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string MsPassLoginSubmit {
-            get {
-                return ResourceManager.GetString("MsPassLoginSubmit", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Deny に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string OAuth2AuthorizeDenyButton {

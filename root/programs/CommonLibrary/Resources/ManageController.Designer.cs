@@ -70,15 +70,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your MsPass data has been added. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddMsPassDataSuccess {
-            get {
-                return ResourceManager.GetString("AddMsPassDataSuccess", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Your payment information has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentInformationSuccess {
@@ -201,15 +192,6 @@ namespace MultiPurposeAuthSite.Resources {
         public static string RemoveExternalLoginSuccess {
             get {
                 return ResourceManager.GetString("RemoveExternalLoginSuccess", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Your MsPass has been removed. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string RemoveMsPassDataSuccess {
-            get {
-                return ResourceManager.GetString("RemoveMsPassDataSuccess", resourceCulture);
             }
         }
         

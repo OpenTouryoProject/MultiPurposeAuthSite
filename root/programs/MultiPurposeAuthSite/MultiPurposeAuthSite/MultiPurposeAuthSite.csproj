@@ -419,10 +419,7 @@
     <Content Include="Scripts\src\utils\setAttributes.js" />
     <Content Include="Scripts\src\utils\setStyles.js" />
     <Content Include="Scripts\src\utils\setupEventListeners.js" />
-    <Content Include="Scripts\touryo\msWebauthn.js" />
     <Content Include="Scripts\touryo\arrayBufferUtil.js" />
-    <Content Include="Scripts\touryo\ffWebauthn.js" />
-    <Content Include="Scripts\touryo\webauthn.js" />
     <Content Include="fonts\fontawesome-webfont.svg" />
     <Content Include="Global.asax" />
     <Content Include="app.config">
@@ -505,15 +502,11 @@
     <Content Include="Views\Manage\OAuth2AuthorizationCodeGrantClient.cshtml" />
     <Content Include="Views\Manage\AddSaml2OAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
-    <Content Include="Views\Manage\AddMsPassData.cshtml" />
     <Content Include="Views\Home\Saml2OAuth2Starters.cshtml" />
     <Content Include="Views\Home\PushedAuthorizationResponse.cshtml" />
     <Content Include="Views\Home\OAuth2ClientAuthenticationFlow.cshtml" />
     <Content Include="Views\Manage\ManageGDPRData.cshtml" />
     <Content Include="Views\Home\Scroll.cshtml" />
-    <Content Include="Views\Manage\AddWebAuthnData.cshtml" />
-    <Content Include="Views\Home\WebAuthnStarters.cshtml" />
-    <Content Include="Views\Manage\RemoveWebAuthnData.cshtml" />
     <Content Include="Views\Account\FormPost.cshtml" />
     <Content Include="Views\Account\PostBinding.cshtml" />
     <Content Include="Views\Home\PostBinding.cshtml" />

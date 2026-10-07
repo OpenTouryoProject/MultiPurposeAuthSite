@@ -53,6 +53,7 @@
 //*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/04  玄人 幸道         CORSを測る口（Origin付きGET / プリフライト）を追加（#265）
+//*  2026/10/07  玄人 幸道         WebAuthn の登録・認証の画面操作を追加（#137）
 //**********************************************************************************
 
 using System;
@@ -1446,6 +1447,132 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                         Uri.UnescapeDataString(pair.Substring(eq + 1).Replace("+", "%20"));
                 }
             }
+        }
+
+        #endregion
+
+        #region WebAuthn（#137）
+
+        //  **認証器が無いので、測れるのはサーバ側だけである。**
+        //    **`navigator.credentials` を呼ぶのはブラウザ**なので、
+        //    **attestation / assertion を作るには仮想認証器（CDP）が要る。**
+        //    **この基盤は HttpClient だけなので、そこまでは測らない。**
+        //
+        //    **測れるのは、「要求を組み立てる段」と「壊れた入力の扱い」**である。
+
+        /// <summary>WebAuthn の登録画面を開いて、段階 0（options）まで進める（#137）</summary>
+        /// <param name="userName">登録する利用者名</param>
+        /// <param name="residentKey">レジデント・キーを要求するか</param>
+        /// <param name="authenticatorAttachment">platform / cross-platform / 空</param>
+        /// <param name="userVerification">required / preferred / discouraged</param>
+        /// <param name="attestation">none / indirect / direct</param>
+        /// <returns>応答の HTML（画面が無ければ null）</returns>
+        public async Task<string> WebAuthnCreationOptionsAsync(
+            string userName, bool residentKey = false,
+            string authenticatorAttachment = "", string userVerification = "preferred",
+            string attestation = "none")
+        {
+            HttpResponseMessage get = await this.GetAsync("/Manage/AddWebAuthnData");
+
+            if (get.StatusCode != HttpStatusCode.OK)
+            {
+                return null;
+            }
+
+            string html = await get.Content.ReadAsStringAsync();
+
+            string fido2Data =
+                "{\"username\":\"" + userName + "\""
+                + ",\"displayName\":\"" + userName + "\""
+                + ",\"authenticatorSelection\":{"
+                + "\"residentKey\":" + (residentKey ? "true" : "false")
+                + ",\"authenticatorAttachment\":\"" + authenticatorAttachment + "\""
+                + ",\"userVerification\":\"" + userVerification + "\"}"
+                + ",\"attestation\":\"" + attestation + "\"}";
+
+            return await this.PostWebAuthnRegisterAsync(html, "0", fido2Data);
+        }
+
+        /// <summary>WebAuthn の登録画面へ、段階 1（attestation）を送る（#137）</summary>
+        /// <param name="htmlOfStep0">段階 0 の応答の HTML（トークンを取る）</param>
+        /// <param name="attestationJson">attestation の JSON</param>
+        /// <returns>応答の HTML</returns>
+        public Task<string> WebAuthnAttestationAsync(string htmlOfStep0, string attestationJson)
+        {
+            return this.PostWebAuthnRegisterAsync(htmlOfStep0, "1", attestationJson);
+        }
+
+        /// <summary>登録画面への POST（段階番号を指定する）</summary>
+        /// <param name="html">トークンを含む HTML</param>
+        /// <param name="sequenceNo">段階番号</param>
+        /// <param name="fido2Data">送る JSON</param>
+        /// <returns>応答の HTML</returns>
+        private async Task<string> PostWebAuthnRegisterAsync(
+            string html, string sequenceNo, string fido2Data)
+        {
+            if (string.IsNullOrEmpty(html))
+            {
+                return null;
+            }
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "sequenceNo", sequenceNo },
+                { "fido2Data", fido2Data }
+            };
+
+            Match m = AntiforgeryRegex.Match(html);
+
+            if (m.Success)
+            {
+                form.Add("__RequestVerificationToken", m.Groups["value"].Value);
+            }
+
+            HttpResponseMessage post =
+                await this.PostFormAsync("/Manage/AddWebAuthnData", form);
+
+            return await post.Content.ReadAsStringAsync();
+        }
+
+        /// <summary>WebAuthn のサインインの段階 0（options）まで進める（#137）</summary>
+        /// <param name="userName">利用者名</param>
+        /// <param name="userVerification">required / preferred / discouraged</param>
+        /// <returns>応答の HTML（画面が無ければ null）</returns>
+        public async Task<string> WebAuthnAssertionOptionsAsync(
+            string userName, string userVerification = "preferred")
+        {
+            HttpResponseMessage get = await this.GetAsync("/Account/Login");
+
+            if (get.StatusCode != HttpStatusCode.OK)
+            {
+                return null;
+            }
+
+            string html = await get.Content.ReadAsStringAsync();
+
+            string fido2Data =
+                "{\"username\":\"" + userName + "\""
+                + ",\"userVerification\":\"" + userVerification + "\"}";
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "Email", userName },
+                { "Password", "" },
+                { "SequenceNo", "0" },
+                { "Fido2Data", fido2Data },
+                { "submitButtonName", "webauthn_signin" }
+            };
+
+            Match m = AntiforgeryRegex.Match(html);
+
+            if (m.Success)
+            {
+                form.Add("__RequestVerificationToken", m.Groups["value"].Value);
+            }
+
+            HttpResponseMessage post = await this.PostFormAsync("/Account/Login", form);
+
+            return await post.Content.ReadAsStringAsync();
         }
 
         #endregion

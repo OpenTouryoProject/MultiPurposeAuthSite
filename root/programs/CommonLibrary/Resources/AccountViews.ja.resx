@@ -210,12 +210,6 @@
   <data name="LoginWithTwoFactorAuthenticatorTitle" xml:space="preserve">
     <value>TOTP二要素認証</value>
   </data>
-  <data name="MsPassLogin" xml:space="preserve">
-    <value>Microsoft Passportログイン</value>
-  </data>
-  <data name="MsPassLoginSubmit" xml:space="preserve">
-    <value>Microsoft Passport認証器でログインする。</value>
-  </data>
   <data name="OAuth2AuthorizeDenyButton" xml:space="preserve">
     <value>拒否する</value>
   </data>

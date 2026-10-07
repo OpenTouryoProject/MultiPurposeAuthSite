@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/03/0?  西野 大介         新規作成
+//*  2026/10/07  玄人 幸道         fido2-net-lib 4.2.0 に合わせた（#137）
 //**********************************************************************************
 
 //**********************************************************************************
@@ -90,7 +91,11 @@ function setInput() {
         input.requireResidentKey = $("#checkbox-residentCredentials").is(':checked');
     }
     else {
-        username = localStorage["userId"];
+        // サインイン画面（/Account/Login）。
+        // **入力欄（#Email）を優先する**（#137）。
+        //   **以前は localStorage だけを見ていた**ので、
+        //   **登録したブラウザ以外では利用者名が決まらなかった。**
+        username = $("#Email").val() || localStorage["userId"] || "";
         input.userVerification = $('#select-userVerification').find(':selected').val();
     }
 
@@ -323,14 +328,18 @@ function registerNewCredential(authenticatorAttestationResponse) {
     let rawId = Fx_CoerceToBase64Url(authenticatorAttestationResponse.rawId);
 
     // POST JSONデータ生成
+    // **キー名は W3C のものをそのまま使う**（#137）。
+    //   **4.x の直列化は System.Text.Json で、既定で大文字小文字を区別する。**
+    //   **以前の `AttestationObject` / `clientDataJson` では読めず、
+    //   "missing required properties" で落ちる。**
     const data = {
         id: authenticatorAttestationResponse.id,
         rawId: rawId,
         type: authenticatorAttestationResponse.type,
-        extensions: authenticatorAttestationResponse.getClientExtensionResults(),
+        clientExtensionResults: authenticatorAttestationResponse.getClientExtensionResults(),
         response: {
-            AttestationObject: attestationObject,
-            clientDataJson: clientDataJSON
+            attestationObject: attestationObject,
+            clientDataJSON: clientDataJSON
         }
     };
 
@@ -422,12 +431,13 @@ function getAssertion2() {
     }
 
     // JSON to PublicKeyCredentialRequestOptions
-    const challenge = publicKeyCredentialRequestOptions.challenge.replace(/-/g, "+").replace(/_/g, "/");
-    publicKeyCredentialRequestOptions.challenge = Fx_CoerceToArrayBuffer(challenge);
+    // **base64url → base64 の置換は Fx_CoerceToArrayBuffer がやる**ので、
+    // **ここで先にやる必要は無い**（#137 で落とした）。
+    publicKeyCredentialRequestOptions.challenge =
+        Fx_CoerceToArrayBuffer(publicKeyCredentialRequestOptions.challenge);
 
     publicKeyCredentialRequestOptions.allowCredentials.forEach(function (listItem) {
-        var fixedId = listItem.id.replace(/\_/g, "/").replace(/\-/g, "+");
-        listItem.id = Fx_CoerceToArrayBuffer(fixedId);
+        listItem.id = Fx_CoerceToArrayBuffer(listItem.id);
     });
 
     Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 2:", publicKeyCredentialRequestOptions);
@@ -488,16 +498,21 @@ function verifyAssertion(authenticatorAttestationResponse) {
     let clientDataJSON = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.clientDataJSON);
     let rawId = Fx_CoerceToBase64Url(authenticatorAttestationResponse.rawId);
     let sig = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.signature);
+    // **userHandle はレジデント・キーのときだけ返る**（無ければ null）。
+    let userHandle = authenticatorAttestationResponse.response.userHandle
+        ? Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.userHandle) : null;
 
+    // **キー名は W3C のものをそのまま使う**（#137。registerNewCredential と同じ）。
     const data = {
         id: authenticatorAttestationResponse.id,
         rawId: rawId,
         type: authenticatorAttestationResponse.type,
-        extensions: authenticatorAttestationResponse.getClientExtensionResults(),
+        clientExtensionResults: authenticatorAttestationResponse.getClientExtensionResults(),
         response: {
             authenticatorData: authData,
-            clientDataJson: clientDataJSON,
-            signature: sig
+            clientDataJSON: clientDataJSON,
+            signature: sig,
+            userHandle: userHandle
         }
     };
 

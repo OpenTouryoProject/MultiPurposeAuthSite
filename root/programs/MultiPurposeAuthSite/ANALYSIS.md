@@ -122,7 +122,6 @@ MultiPurposeAuthSite/
    │   ├─ OAuth2EndpointController.cs 1332 行
    │   ├─ UsersAdminController.cs      610 行  ★net10.0 版へ移植済み（#258）
    │   ├─ RolesAdminController.cs      431 行  ★net10.0 版へ移植済み（#258）
-   │   ├─ Fido2ServerController.cs     261 行  ★ファイルは在るがビルド対象外（10 節）
    │   ├─ ErrorController.cs           232 行
    │   ├─ OAuth2ResourceServerController.cs 203 行
    │   └─ PingController.cs             56 行
@@ -136,7 +135,7 @@ MultiPurposeAuthSite/
 - `AccountController` / `ManageController` / `HomeController` /
   `UsersAdminController` / `RolesAdminController` は
   **Open棟梁の `MyBaseMVController` を継承**（`Touryo.Infrastructure.Business.Presentation`）。
-- `OAuth2EndpointController` / `OAuth2ResourceServerController` / `Fido2ServerController` は
+- `OAuth2EndpointController` / `OAuth2ResourceServerController` は
   `ApiController`（Web API2）。
 - **`ErrorController` は素の `Controller`**（net10.0 版は `MyBaseMVControllerCore` 継承。非対称）。
 
@@ -237,7 +236,7 @@ ASP.NET Core が `Async` サフィックスを既定で落とすため、こう�
 |---|---|---|
 | `~/bundles/css` | bootstrap / font-awesome / touryo / app | ✓ |
 | `~/bundles/modernizr` `~/bundles/jquery` `~/bundles/bootstrap` `~/bundles/touryo` `~/bundles/app` | — | ✓ |
-| `~/bundles/multiauthsite` | `oauthimplicit.js` `arrayBufferUtil.js` `msWebauthn.js` `ffWebauthn.js` | ✗（個別 View で Render） |
+| `~/bundles/multiauthsite` | `oauthimplicit.js` `arrayBufferUtil.js` | ✗（個別 View で Render） |
 | `~/bundles/jqueryval` | `jquery.validate*` | ✗ |
 
 - `ScriptBundle` の仮想パスは**実在するパスと衝突すると壊れる**（コード中のコメント）。
@@ -264,16 +263,17 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
 |---|---|---|
 | ユーザ・ロール管理画面 | ✓ `UsersAdminController` / `RolesAdminController`（`Config.EnableAdministrationOfUsersAndRoles` で開閉） | **✓ 移植済み**（#258。画面と導線は同じ） |
 | TOTP（Authenticator アプリ 2FA） | **✗ 無し** | ✓ あり（登録 / リカバリ コード / 管理） |
-| FIDO2 サーバ用 WebAPI | △ `Fido2ServerController.cs` は在るが**ビルド対象外** | ✗ 無し |
 | 疎通用 WebAPI | ✗ | ✓ `ValuesController`（`api/values/get`） |
 | 外部ログインのプロキシ対応 | ✓（`BackchannelHttpHandler`） | ✗ |
 | セッション | StateServer（既定） | 分散メモリ キャッシュ（開発用） |
 | エラー画面の基底 | 素の `Controller` | `MyBaseMVControllerCore` |
-| WebAuthn / MS Passport | ✗（`../CommonLibrary` 側ごと無効） | ✗（同左） |
+| WebAuthn | **✗ 退役**（#137。現行版のライブラリが `netstandard2.0` を支えていない） | **✓ `Fido2` 4.2.0**（#137） |
 
-**net48 側の View には、対応する機能が無いものが残っている。**
+**WebAuthn の View と JS は、#137 で落とした。**
 `Views/Home/WebAuthnStarters.cshtml` / `Views/Manage/Add{WebAuthn,MsPass}Data.cshtml` /
-`Views/Manage/RemoveWebAuthnData.cshtml` は、FIDO が無効なので動かない（10 節）。
+`Views/Manage/RemoveWebAuthnData.cshtml` / `Scripts/touryo/{,ff,ms}Webauthn.js` /
+`Controllers/Fido2ServerController.cs` は**削除してある**。
+**「設定は在るが動かない」を残すと、次に読む人が同じ検討をやる。**
 
 ---
 
@@ -303,14 +303,16 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
 
 ## 10. 落とし穴 / 既知の不整合
 
-1. **`Controllers/Fido2ServerController.cs` は csproj の `<Compile Include>` に無い＝ビルドされない。**
-   併せて FIDO / WebAuthn は**全面的に無効**である。
-   - `AccountController` / `ManageController` の WebAuthn 分岐は `/* */` でコメント アウト
-   - `../CommonLibrary/Extensions/FIDO/**` は net48 / net10.0 のどちらでもビルドされない
-   - `../CommonLibrary/Co/Config.cs` の `FIDOServerMode` プロパティもコメント アウト
-   - それでも `app.config` の `FIDOServerMode` キー、`Fido2` 4.0.0 の `PackageReference`、
-     View と JS（`Scripts/touryo/{ms,ff}Webauthn.js` `webauthn.js`）は残っている
+1. **WebAuthn はこのアプリに無い**（#137 で退役した）。
+   **現行版の WebAuthn ライブラリが `netstandard2.0` を支えていない**ためである
+   （`Fido2` は 2.0.2 が最後。`WebAuthn.Net` / `Shark.Fido2` / `Rsk.AspNetCore.Fido` も net8.0 以降）。
+   - `Fido2ServerController.cs` / View / JS は**削除済み**
+   - `app.config` / `_app.config` から **`FIDOServerMode` キーも落とした**
+   - `../CommonLibrary/Co/Config.cs` の `FIDOServerMode` は **`#if NETCORE`** で囲んである
+   - `AccountLoginViewModel` の `Fido2Data` / `SequenceNo` は**残してある**
+     （ViewModel を両系統で共有しているため。欄だけで、使われていない）
 
+   **net10.0 版にはある**（`Fido2` 4.2.0）。
    詳細は [`../CommonLibrary/ANALYSIS.md`](../CommonLibrary/ANALYSIS.md) 12 節。
 2. **`NetFxLibrary.csproj` の Release で `NETFX` が定義されない**（9 節）。
 3. **ASP.NET 状態サービスが要る**（2.5 節）。落ちる原因として気付きにくい。

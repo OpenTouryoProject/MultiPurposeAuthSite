@@ -20,7 +20,6 @@ CREATE TABLE Users(                -- Users
     ClientID varchar(256) NOT NULL,
     PaymentInformation varchar(256) NULL,
     UnstructuredData text NULL,
-    FIDO2PublicKey varchar(2000) NULL,
     DeviceToken varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,
     PasswordChangeDate timestamp NOT NULL,

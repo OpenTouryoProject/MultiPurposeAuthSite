@@ -120,9 +120,6 @@
   <data name="AccountConflictInSocialLogin" xml:space="preserve">
     <value>ソーシャルログインでアカウントが一致しません。</value>
   </data>
-  <data name="AddMsPassDataSuccess" xml:space="preserve">
-    <value>MsPassデータが追加されました。</value>
-  </data>
   <data name="AddSaml2OAuth2DataSuccess" xml:space="preserve">
     <value>Saml2, OAuth2データが追加されました。</value>
   </data>
@@ -164,9 +161,6 @@
   </data>
   <data name="RemoveExternalLoginSuccess" xml:space="preserve">
     <value>外部ログインが削除されました。</value>
-  </data>
-  <data name="RemoveMsPassDataSuccess" xml:space="preserve">
-    <value>MsPassデータが削除されました。</value>
   </data>
   <data name="RemoveSaml2OAuth2DataSuccess" xml:space="preserve">
     <value>Saml2, OAuth2データが削除されました。</value>

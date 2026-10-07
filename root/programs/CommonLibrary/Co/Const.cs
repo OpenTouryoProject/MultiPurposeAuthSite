@@ -177,6 +177,19 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region WebAuthn（#137）
+
+        /// <summary>WebAuthn の RP の表示名（#137）</summary>
+        /// <remarks>
+        /// **認証器の画面に出る名前**である（`RPName`）。
+        /// **RPID とは別物**で、**RPID は配備先のホスト名から取る**
+        /// （`WebAuthnHelper` の constructor）。
+        /// **設定キーにしていない**のは、**表示名を変えても振る舞いが変わらない**ため。
+        /// </remarks>
+        public const string WebAuthnRpName = "MultiPurposeAuthSite";
+
+        #endregion
+
         #region CORS のポリシー名（#265）
 
         /// <summary>公開情報の口のポリシー名（#265）</summary>

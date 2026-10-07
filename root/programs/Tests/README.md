@@ -314,6 +314,13 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
+| `Tests/Issues/WebAuthnTests.cs` | `RT-137` | **WebAuthn**（`Fido2` 4.2.0）。登録・認証の**要求を組み立てる段**（`CredentialCreateOptions` / `AssertionOptions`）、**壊れた入力を封筒に入れて 200 で返すこと**、**challenge を使い回していないこと**。**net48 版には口が無いこと**も測る |
+
+> **WebAuthn（`RT-137`）は、登録と認証そのものを測っていない。**
+> **`navigator.credentials` を呼ぶのはブラウザ**なので、
+> **attestation / assertion を作るには仮想認証器（CDP の WebAuthn ドメイン）が要る。**
+> **この基盤は HttpClient だけ**なので、**そこは測らないと決めてある。**
+> 測っているのは**サーバ側が要求を組み立てる段と、壊れた入力の扱い**である。
 
 **`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
 

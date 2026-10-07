@@ -58,7 +58,9 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
-//using MultiPurposeAuthSite.Extensions.FIDO;
+#if NETCORE
+using MultiPurposeAuthSite.Extensions.FIDO;
+#endif
 
 using System;
 using System.Collections.Generic;
@@ -1245,27 +1247,34 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region FIDO
-        /*
+#if NETCORE
+
         /// <summary>
         /// FIDOServerMode
         /// </summary>
+        /// <remarks>
+        /// **net10.0 版だけの設定**（#137）。
+        /// **`Fido2` は 2.0.2 を最後に `netstandard2.0` を落としている**ので、
+        /// **net48 版では WebAuthn を支えられない。**
+        /// **設定キーも net48 版の `_app.config` から落としてある。**
+        /// </remarks>
         public static EnumFidoType FIDOServerMode
         {
             get
             {
+                // **キーが無ければ null が返る**ので、null 合流で受ける（#256 と同じ）。
                 string temp = GetConfigParameter.GetConfigValue("FIDOServerMode");
-                switch (temp.ToLower())
+                switch ((temp ?? "").ToLower())
                 {
                     case "webauthn":
                         return EnumFidoType.WebAuthn;
-                    case "mspass":
-                        return EnumFidoType.MsPass;
                     default:
                         return EnumFidoType.None;
                 }
             }
         }
-        */
+
+#endif
         #endregion
 
         #region STS

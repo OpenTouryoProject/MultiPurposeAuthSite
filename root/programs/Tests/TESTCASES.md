@@ -1725,6 +1725,110 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **`jwkcerts` の鍵は 4 本のまま**である（RSA 1 本 ＋ EC 3 本）。**`PS*` は `RS*` と同じ鍵を使う**ので、**9 つの alg に対して鍵は 4 本**になる。**JWK の `alg` は `RS256` のまま**だが、**それでよい**（RFC 7517 の `alg` は「用途」で任意。照合は `kty` で行う）。
 - **パディングが違えば、鍵が合っていても通らない。**`RS256` で署名したトークンの alg を `PS256` に書き換えても受けないことは、**`RT-129.2` の (4)** で見ている。
 
+## RT-137.1 WebAuthn の登録画面が、CredentialCreateOptions を組み立てて返す
+
+| | |
+|---|---|
+| 観点 | **`RequestNewCredential` は 4.x で引数オブジェクトになった**（`RequestNewCredentialParams`）。**戻り値の直列化も Newtonsoft から System.Text.Json に変わっている。****組み立てた JSON が、W3C の `PublicKeyCredentialCreationOptions` の形で出ているか**を見る。**net48 版はこの口を持たない**（現行版のライブラリが netstandard2.0 を支えていない）。 |
+| 根拠 | W3C WebAuthn Level 2 §5.4 / fido2-net-lib 4.2.0 / #137 |
+| テスト | `RT13701_登録の要求が組み立てられる` |
+
+**手順**
+
+1. 登録画面を開いて、options を受け取る
+1. options の中身が、W3C の形になっている
+
+**検証（合否を判定する）**
+
+- 登録画面が開く
+- options が隠しフィールドに入る
+- status が ok
+- challenge がある
+- rp.id がある（RPID）
+- user.id がある
+- pubKeyCredParams に鍵アルゴリズムが並ぶ
+- 認証器の指定が渡る（cross-platform）
+
+**補足**
+
+- **`status` / `errorMessage` は、こちらで付けている封筒である**（#137）。**4.x の options は `Status` も `ErrorMessage` も持たない**（成功は「例外が出ないこと」で表す形になった）。**画面は form post で値を往復させる**ので、**HTTP のステータス コードでエラーを伝える余地が無い。**
+
+## RT-137.2 サインイン画面が、AssertionOptions を組み立てて返す
+
+| | |
+|---|---|
+| 観点 | **`GetAssertionOptions` も 4.x で引数オブジェクトになった**（`GetAssertionOptionsParams`）。**1.x では `UserVerificationRequirement.Discouraged` 固定で、画面の指定を捨てていた**ので、**渡るようにした。****net48 版は、サインイン画面に WebAuthn のボタンを出さない。** |
+| 根拠 | W3C WebAuthn Level 2 §5.5 / fido2-net-lib 4.2.0 / #137 |
+| テスト | `RT13702_認証の要求が組み立てられる` |
+
+**手順**
+
+1. サインイン画面に WebAuthn のボタンが在るかを見る
+1. 利用者名を送って、options を受け取る
+
+**検証（合否を判定する）**
+
+- net10.0 版にはボタンが在る
+- 応答が返る
+- 段階が 1 へ進む
+- options が隠しフィールドに入る
+- status が ok
+- challenge がある
+- rpId がある
+- userVerification に画面の指定が渡る
+
+**補足**
+
+- **`allowCredentials` は空である**（この利用者は認証器を登録していない）。**登録には実際の認証器が要る**ので、**この基盤では踏めない。**
+
+## RT-137.3 壊れた attestation を送っても、例外が画面に漏れない
+
+| | |
+|---|---|
+| 観点 | **4.x は失敗を `Fido2VerificationException` で返す**（`Status` を持たない形になった）。**封筒の `status` が `error` になり、HTTP 500 にならないこと**を見る。**JSON の直列化が System.Text.Json に変わった**ので、**形の違う JSON は `JsonException` で落ちる。** それも封筒に入る必要がある。 |
+| 根拠 | fido2-net-lib 4.2.0 / #137 |
+| テスト | `RT13703_壊れた入力はエラーとして返る` |
+
+**手順**
+
+1. 段階 0 を通して、段階 1 のトークンを得る
+1. 段階 1 に、attestation ではない JSON を送る
+
+**検証（合否を判定する）**
+
+- 段階 0 が通る
+- 画面が返る（500 ではない）
+- 結果が隠しフィールドに入る
+- status が error
+- 理由が入る
+
+**補足**
+
+- **画面を白くしない**のが要点である。**net48 版は `customErrors` が例外を 302 に変える**ため、**「未認証のリダイレクト」と見分けがつかなくなる**（#272 で踏んだ）。**net10.0 版は 500 になる**ので、**封筒に入れて 200 で返す。**
+
+## RT-137.4 challenge は要求ごとに作り直される（使い回さない）
+
+| | |
+|---|---|
+| 観点 | **challenge は再生攻撃を防ぐためのもの**なので、**要求ごとに新しい値でなければならない**（W3C WebAuthn §13.4.3）。**`Fido2Configuration.ChallengeSize` の既定は 16 バイト**で、**`RequestNewCredential` が毎回作る。****セッションに置いた値を使い回していないこと**を、2 回取って確かめる。 |
+| 根拠 | W3C WebAuthn Level 2 §13.4.3 / #137 |
+| テスト | `RT13704_challengeは要求ごとに変わる` |
+
+**手順**
+
+1. options を 2 回取る
+1. challenge が違うことを確かめる
+
+**検証（合否を判定する）**
+
+- 2 回とも返る
+- challenge が違う
+- 16 バイト分の長さがある（base64url で 22 文字）
+
+**補足**
+
+- **値そのものは出さない。** 長さだけを記録する。
+
 ## RT-140.2 subject_types=pairwise のクライアントでも、/userinfo が sub 以外のクレームを返す
 
 | | |
