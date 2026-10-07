@@ -85,6 +85,8 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `TestClient6` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
 | `TestClient_19` | 同じく写し。**どのテストも「許可」を押さない**（#272 の段階 2）。**「同意の記録が無い」状態を測るためだけに在る**（`RT-272.3` / `RT-272.4`）。**押すと記録が残り、DB ストアでは 2 回目から測れなくなる** | 同上 |
 | `TestClient_20` | 同じく写し。**同意の取り消しを測るためだけに在る**（#272 の段階 2。`RT-272.7`）。**「許可 → 取り消し → prompt=none」**を回すので、**終わった時点で記録を残さない** | 同上 |
+| `TestClient_21` | **写す元が `TestClient3`**（#275）。**`jwk_rsa_publickey` を持たない**ので、**署名の無い `AuthnRequest` が通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録してある — **応答は辿らず、返ってきた場所と `SAMLResponse` を読むだけ**。`SA-1` 以外の SAML のテストが使う | 同上 |
+| `TestClient_22` | 同じく（`https://saml.e2e.example/acs2`）。**`NameIDPolicy=persistent` の PPID が RP ごとに違うこと**を測るための 2 つ目（`SA-3.3`） | 同上 |
 
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
@@ -340,6 +342,34 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 > 以前ここには「**E2E で守られていない行がある** : 認可コードの private_key_jwt」と書いてあった。
 > **`RT-238.4`（#238）と `RT-239.5`（#239）で埋まっており、記述が古かった。**
+
+**最後が `Tests/Saml/`。** SAML2 の Web Browser SSO（#275）。
+
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/Saml/WebSsoBindingTests.cs` | `SA-1` | **4 通りのバインディング**（要求・応答それぞれ Redirect / POST）。**SP 側の照合**（`Audience` / `Recipient` / `InResponseTo` / `RelayState`）と、**アサーションの有効期限の幅**（#276） |
+| `Tests/Saml/MetadataTests.cs` | `SA-2` | `/samlmetadata`（`entityID` が Discovery の `issuer` と一致・署名用の証明書・`NameIDFormat` 3 種・SSO の口 2 件・CORS） |
+| `Tests/Saml/NameIdFormatTests.cs` | `SA-3` | `NameIDPolicy` の値ごとの `NameID`（`unspecified` / `emailAddress` / **`persistent` は RP ごとに違う PPID**） |
+| `Tests/Saml/SignInFlowTests.cs` | `SA-4` | **未サインイン → サインイン画面 → アサーション**（SP-initiated SSO の本来の形） |
+| `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
+
+> **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**
+> あちらは**自己テストの画面が目視できる形になっていること**（#246 の項目 3）で、**観点が違う。**
+> **消すと、画面の退行を拾えなくなる。**
+
+> **要求は自前で組み立てられる**（`Infrastructure/Saml2`）。
+> **自己テストのボタンは、どれも正しい値しか送らない**ので、
+> **`NameIDPolicy` の差・ACS URL の不一致・壊れた要求は、それでしか測れない。**
+>
+> **署名は作らない。**
+> **`TestClient_21` / `TestClient_22` は `jwk_rsa_publickey` を持たない**ので
+> （写す元を `TestClient3` にしてある）、**署名の無い要求が通る。**
+> **`TestClient` は持っている**ので、同じ要求が `SA-5.4` で落ちる。**差は登録だけである。**
+>
+> **`client_id` の接頭辞は `sa`**（`e2e0sa21…`）。
+> **`tcNN` は `TestClient_NN` という意味ではない** — `TestClient2_2` が `e2e0tc22`、
+> `TestClient4_2` が `e2e0tc42` を使っている。**`e2e0tc22` を取ろうとして衝突した**
+> （先に在る方が登録され、こちらは「登録されていない」ことになり、**応答が返らなかった**）。
 > 残っていた空きは `refresh_token × mTLS` の 1 行だけで、#245 で `FA-6.5` を足した。
 
 **有効期限（`RT-188`）は、`-ShortLifetimes` で起動したときだけ回る**（#188）。

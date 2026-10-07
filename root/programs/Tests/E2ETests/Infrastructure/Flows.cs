@@ -51,6 +51,7 @@
 //*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
 //*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
 //*  2026/10/06  玄人 幸道         prompt=noneを付けず、同意画面を通すようにした（#272 の段階 2）
+//*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22とACS URLを追加（#275）
 //**********************************************************************************
 
 using System;
@@ -273,6 +274,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>同意の取り消しを測るクライアント（#272 の段階 2）</summary>
         public const string TestClient_20 = "TestClient_20";
 
+        /// <summary>SAML2 を測るクライアント（#275）</summary>
+        /// <remarks>
+        /// **`jwk_rsa_publickey` を持たない**（写す元が TestClient3）ので、
+        /// **署名の無い AuthnRequest が通る**。**要求を自前で組み立てられる。**
+        /// </remarks>
+        public const string TestClient_21 = "TestClient_21";
+
+        /// <summary>SAML2 の PPID を RP ごとに比べるための 2 つ目（#275）</summary>
+        public const string TestClient_22 = "TestClient_22";
+
+        /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
+        public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
+
+        /// <summary>TestClient_22 に登録した ACS URL（#275）</summary>
+        public const string Saml2AcsUrl2 = "https://saml.e2e.example/acs2";
+
         /// <summary>TestClient_17 の web_origins の先頭（#269）</summary>
         public const string LongRegistrationOrigin = "https://o001.example";
 
@@ -310,6 +327,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_18, "e2e0tc18000000000000000000000000" },
                 { KnownClients.TestClient_19, "e2e0tc19000000000000000000000000" },
                 { KnownClients.TestClient_20, "e2e0tc20000000000000000000000000" },
+                { KnownClients.TestClient_21, "e2e0sa21000000000000000000000000" },
+                { KnownClients.TestClient_22, "e2e0sa22000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },

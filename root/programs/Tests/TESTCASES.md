@@ -5718,7 +5718,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **アカウントの一覧から選ぶ仕組みは持っていない。** 仕様（§3.1.2.1）は「選ばせろ」だが、**この実装は 1 利用者ずつのサインインしか持たない**。**`account_selection_required` を返す道もあった**が、**切り替えの口が画面に在るので、画面を出す方を選んだ。**
 
-# FA
+# FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
 
@@ -6051,7 +6051,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **fapi2 は client_secret を通さない**ので、証明書が無ければ更新できない（表の `refresh_token × Any → normal` の行には当たらない）。
 
-# 21
+# 21. OAuth 2.1（許されない経路の抑止）
 
 ## 21-1.1 OAuth 2.1 が許さない経路（Implicit / ROPC / PKCE 無し）が、締めた登録では塞がる
 
@@ -6104,6 +6104,434 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **要求 URL はここに出さない**（トークンを含むため）。
+
+# SA. SAML2（Web Browser SSO）
+
+## SA-1.1 SP-initiated Web Browser SSO が成立する（要求 Redirect / 応答 Redirect）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0101_Redirect要求とRedirect応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- IdP のエンドポイントへ送られる
+- SP（ACS）へリダイレクトで返る
+- 応答のクエリ文字列に SigAlg と Signature が付く
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**観測（判定しない）**
+
+- XML の中の署名
+  - **Redirect Binding では、署名は XML ではなくクエリ文字列に付く**（SAML 2.0 Bindings 3.4.4.1）。無いのが正しい。
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-1.2 SP-initiated Web Browser SSO が成立する（要求 Redirect / 応答 POST）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0102_Redirect要求とPost応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- IdP のエンドポイントへ送られる
+- 自動送信フォームで返る（action は SP）
+- フォームに SAMLResponse がある
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- XML の中に署名がある
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-1.3 SP-initiated Web Browser SSO が成立する（要求 POST / 応答 Redirect）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0103_Post要求とRedirect応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- 要求の自動送信フォームが返る（HTTP 200）
+- フォームに SAMLRequest がある
+- SP（ACS）へリダイレクトで返る
+- 応答のクエリ文字列に SigAlg と Signature が付く
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**観測（判定しない）**
+
+- XML の中の署名
+  - **Redirect Binding では、署名は XML ではなくクエリ文字列に付く**（SAML 2.0 Bindings 3.4.4.1）。無いのが正しい。
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-1.4 SP-initiated Web Browser SSO が成立する（要求 POST / 応答 POST）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0104_Post要求とPost応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- 要求の自動送信フォームが返る（HTTP 200）
+- フォームに SAMLRequest がある
+- 自動送信フォームで返る（action は SP）
+- フォームに SAMLResponse がある
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- XML の中に署名がある
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-2.1 /samlmetadata が、entityID・証明書・NameIDFormat・SSO の口を出す
+
+| | |
+|---|---|
+| 観点 | **SP は、この XML だけを見て IdP に繋ぐ。****entityID が応答の Issuer と違えば、SP の照合が落ちる。****SSO の口が違えば要求が届かず、証明書が違えば署名を検証できない。****E2E が 1 件も無かった口である**（#275）。 |
+| 根拠 | SAML 2.0 Metadata 2.4.3（IDPSSODescriptor）/ #275 |
+| テスト | `SA0201_メタデータの中身がIdPの設定と揃っている` |
+
+**手順**
+
+1. XML として読める
+1. entityID が、OIDC の issuer と同じ値である
+1. IDPSSODescriptor に、署名用の証明書がある
+1. NameIDFormat を 3 種とも広告している
+1. SSO の口が、Redirect と POST の両方にあり、設定と一致する
+1. 公開情報なので、許していないオリジンにも開く
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- Content-Type
+- XML として読める
+- entityID = Discovery の issuer
+- IDPSSODescriptor がある
+- protocolSupportEnumeration
+- 署名用の X509Certificate がある
+- NameIDFormat の件数
+- urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified を広告する
+- urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress を広告する
+- urn:oasis:names:tc:SAML:2.0:nameid-format:persistent を広告する
+- SingleSignOnService の件数
+- HTTP-Redirect の Location
+- HTTP-POST の Location
+- Access-Control-Allow-Origin
+
+**観測（判定しない）**
+
+- WantAuthnRequestsSigned
+  - **固定で true を出している**（Open棟梁 の雛形）。**実際は、`jwk_rsa_publickey` を登録していないクライアントの要求は、署名が無くても通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**広告と振る舞いが揃っていない**ので、`CONFIGURATION.md` に明記してある。
+
+## SA-3.1 NameIDPolicy=unspecified は、sub（既定は利用者 ID）を NameID にする
+
+| | |
+|---|---|
+| 観点 | **`NameIDPolicy` の値で `NameID` の中身が変わる**（`PPIDExtension.GetSubForSAML2`）。**自己テストのボタンは `unspecified` 固定**なので、**ここだけが従来の E2E と重なる**（他の 2 種は未測定だった）。 |
+| 根拠 | SAML Core 2.2.2 / 8.3 / #275 |
+| テスト | `SA0301_UnspecifiedはsubをNameIDにする` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID の Format が echo される
+- NameID がある
+- メアドではない（既定は public ＝ 利用者 ID）
+
+## SA-3.2 NameIDPolicy=emailAddress は、利用者のメアドを NameID にする
+
+| | |
+|---|---|
+| 観点 | **メタデータは広告しているのに、E2E が踏んでいなかった**（#275）。**`user.Email` をそのまま入れる**（`GetSubForSAML2`）。**利用者名とメアドは #151 の段階 3 で分かれている**ので、**`unspecified` とは必ず違う値になる。** |
+| 根拠 | SAML Core 8.3.2 / #275 |
+| テスト | `SA0302_EmailAddressはメアドをNameIDにする` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID の Format が echo される
+- NameID がメアドの形である
+
+**補足**
+
+- **メアドを NameID にすると、RP に利用者のメアドが渡る。****pairwise（PPID）を使っていても、この指定で素のメアドが出る**ので、**配備のときに意識すること。**
+
+## SA-3.3 NameIDPolicy=persistent は、RP ごとに違う PPID を NameID にする
+
+| | |
+|---|---|
+| 観点 | **`persistent` は `subject_types` に依らず、必ず PPID になる**（`GeneratePPIDByUserID(iss, user.Id)`）。**同じ利用者でも、RP が違えば値が違う**ので、**RP 同士が突き合わせられない**（OIDC の pairwise と同じ狙い）。**2 つのクライアントで比べる**ことで、それを測る。 |
+| 根拠 | SAML Core 8.3.7 / #275 |
+| テスト | `SA0303_PersistentはRPごとに違うPPIDをNameIDにする` |
+
+**手順**
+
+1. RP その 1（TestClient_21）
+1. RP その 2（TestClient_22）
+1. 2 つの RP で、値が違う
+1. unspecified とも違う
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID の Format が echo される
+- NameID がある
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID がある
+- RP ごとに違う値になる
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- 同じ RP でも、unspecified とは違う値になる
+
+**補足**
+
+- **`subject_types` を書いていないクライアントでも、`persistent` を指定すれば PPID になる。****OIDC 側の既定（public。#151 の段階 4）とは別の話である。**
+
+## SA-4.1 未サインインの要求はサインイン画面へ送られ、サインイン後にアサーションが返る
+
+| | |
+|---|---|
+| 観点 | **SP-initiated Web Browser SSO の本来の形**である（Web SSO Profile 4.1.1）。**従来の E2E はすべてサインイン済みから始めていた**ので、**`[Authorize]` のチャレンジを通って戻る経路が未測定だった**（#275）。**送られることだけでなく、戻ってアサーションが返ることまで見る。** |
+| 根拠 | SAML 2.0 Web SSO Profile 4.1.1 / #275 |
+| テスト | `SA0401_未サインインならサインインさせてからアサーションを返す` |
+
+**手順**
+
+1. 未サインインだと、サインイン画面へ送られる
+1. サインインして、同じ要求をもう一度送る
+1. 返ったアサーションが、送った要求に対応している
+
+**検証（合否を判定する）**
+
+- まだサインインしていない（測る前提）
+- リダイレクトする（302）
+- 送り先はサインイン画面
+- この時点でアサーションを返さない
+- サインインできた
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- Destination（登録した ACS URL）
+- Assertion を含む
+- NameID がある
+
+**補足**
+
+- **同じ URL をもう一度送っている**（SP が `RelayState` で復帰させる形は測っていない）。**この実装の `Saml2Request` は `ReturnUrl` で戻る**ので、**ブラウザなら、サインインの後に自動で戻る。**
+
+## SA-5.1 AssertionConsumerServiceURL が登録値と違えば、登録値へ Requester を返す
+
+| | |
+|---|---|
+| 観点 | **要求に書かれた ACS URL をそのまま使うと、任意の URL へアサーションを飛ばせられる。****事前登録の値と完全一致するか、省略されているときだけ通す。****以前は `CreateSamlResponse` が `null` を返していたが、呼び出し側が `== HttpRedirect` で分岐していたため、`null` が POST 側に落ち、`action` も `SAMLResponse` も空の自動送信フォームが返っていた**（#276 の (1)）。 |
+| 根拠 | SAML Core 3.2.1 / Web SSO Profile 4.1.4.1 / #276 |
+| テスト | `SA0501_ACSURLが登録値と違えば登録値へエラー応答` |
+
+**手順**
+
+1. 登録値と違う ACS URL で、要求を送る
+1. 返す先は、要求の値ではなく登録値である
+1. StatusCode は Requester である
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- フォームの action
+- 要求に書いた URL へは返さない
+- SAMLResponse がある（空のフォームではない）
+- 応答を読める
+- StatusCode
+- Destination（応答の宛先）
+- InResponseTo（送った要求の ID）
+
+**観測（判定しない）**
+
+- エラー応答に Assertion が入るか
+  - **いまの実装は、エラー応答にも Assertion を組み込む**（`CreateSamlResponse` が `CreateResponse` と `CreateAssertion` を常に呼ぶため）。**仕様としては、エラー応答にアサーションは要らない。****直すなら別 Issue**（この Issue の範囲では、返す先と StatusCode を測る）。
+
+## SA-5.2 未登録の Issuer には、応答せずエラー画面を返す
+
+| | |
+|---|---|
+| 観点 | **応答を返す先は、事前登録の ACS URL だけ**である。**登録が無ければ、返す先が決まらない**ので、**要求に書かれた URL へは返さない**（SAML Core 3.2.1）。**以前は `action` が空の自動送信フォームが返っていた**（#276 の (1)）。 |
+| 根拠 | SAML Core 3.2.1 / #276 |
+| テスト | `SA0502_未登録のIssuerにはエラー画面` |
+
+**手順**
+
+1. 未登録の Issuer で、要求を送る
+
+**検証（合否を判定する）**
+
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+
+## SA-5.3 壊れた SAMLRequest を送っても、500 にしない
+
+| | |
+|---|---|
+| 観点 | **外から任意の文字列が来る口である。****base64 でない・XML でない・AuthnRequest でない**ものが来ても、**サーバの例外を見せない。****#241 と同じ観点**（JWT でない値・`iss` の無い JWT で 500 にしない）。 |
+| 根拠 | #241 と同じ観点 / #275 |
+| テスト | `SA0503_壊れたSAMLRequestでも500にしない` |
+
+**手順**
+
+1. SAMLRequest = （壊れた値 1）
+1. SAMLRequest = （壊れた値 2）
+1. SAMLRequest = （壊れた値 3）
+
+**検証（合否を判定する）**
+
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+
+**補足**
+
+- **net48 版は `customErrors` が例外を 302 に変える**ので、**500 でないことだけでは足りない**（#272 で踏んだ）。**エラー画面が開くことまで見る。**
+
+## SA-5.4 鍵を登録したクライアントの、署名の無い要求は断る
+
+| | |
+|---|---|
+| 観点 | **`jwk_rsa_publickey` を登録していれば、署名を検証する。****登録していなければ、署名の無い要求も通す**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**`AuthnRequest` の署名は SAML では任意**で、**応答が事前登録の ACS URL にしか飛ばない**ことで守っている。**登録した場合に、それが効いていること**をここで測る。 |
+| 根拠 | SAML Core 3.4 / Web SSO Profile / #275 |
+| テスト | `SA0504_鍵を登録したクライアントの署名の無い要求を断る` |
+
+**手順**
+
+1. 署名を付けずに要求を送る
+1. StatusCode は Requester である（署名を検証できない）
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+
+**補足**
+
+- **`TestClient_21` は鍵を登録していない**ので、**同じ要求が `SA-3.*` では通る。** 差は登録だけである。
 
 # TC. 基本テストケース
 
