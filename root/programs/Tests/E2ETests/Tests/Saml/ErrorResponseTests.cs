@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
+//*  2026/10/07  玄人 幸道         エラー応答にAssertionを入れないことと、画面の理由を測る（#278）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -150,11 +151,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 r.VerifyEqual("InResponseTo（送った要求の ID）", id, decoded.InResponseTo);
 
-                r.Observe("エラー応答に Assertion が入るか", decoded.HasAssertion ? "入る" : "入らない",
-                    "**いまの実装は、エラー応答にも Assertion を組み込む**"
+                r.Verify("エラー応答に Assertion を入れない", !decoded.HasAssertion,
+                    "入れない", decoded.HasAssertion ? "**入っている**" : "入れていない");
+
+                r.Verify("NameID を含まない（利用者を指す値を返さない）",
+                    string.IsNullOrEmpty(decoded.NameId),
+                    "含まない",
+                    string.IsNullOrEmpty(decoded.NameId) ? "含まない" : "**含んでいる**");
+
+                r.Note("**以前は、エラー応答にも Assertion を組み込んでいた**"
                     + "（`CreateSamlResponse` が `CreateResponse` と `CreateAssertion` を"
-                    + "常に呼ぶため）。**仕様としては、エラー応答にアサーションは要らない。**"
-                    + "**直すなら別 Issue**（この Issue の範囲では、返す先と StatusCode を測る）。");
+                    + "常に呼んでいた）。**認証が成立していないのに、認証の主張を返していた**"
+                    + "（#278。SAML 2.0 Core 3.2.2 / 4.1.4.2 のとおり、"
+                    + "エラー応答は `Status` だけで正当）。");
 
                 r.Done();
             }
@@ -291,8 +300,57 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 r.VerifyEqual("StatusCode", Saml2.StatusRequester, decoded.StatusCode);
 
+                r.Verify("エラー応答に Assertion を入れない（#278）", !decoded.HasAssertion,
+                    "入れない", decoded.HasAssertion ? "**入っている**" : "入れていない");
+
                 r.Note("**`TestClient_21` は鍵を登録していない**ので、"
                     + "**同じ要求が `SA-3.*` では通る。** 差は登録だけである。");
+
+                r.Step("(3) SP の画面が「エラー応答である」と出す");
+
+                // **TestClient は redirect_uri_saml に test_self_saml を登録している**ので、
+                //   **応答は自己テストの ACS へ返る。** そこまで進めて、画面の理由を読む。
+                string action = Html.FormAttribute(form, "action");
+
+                r.Verify("応答の宛先は自己テストの ACS である",
+                    !string.IsNullOrEmpty(action), "ある",
+                    string.IsNullOrEmpty(action) ? "**無い**" : action);
+
+                Assert.False(string.IsNullOrEmpty(action), "前提: 自己テストの ACS へ返ること");
+
+                HttpResponseMessage acs = await client.PostFormAsync(
+                    client.ToLocalUrl(action), hidden);
+
+                r.VerifyEqual("HTTP 200（結果の画面）", "200", ((int)acs.StatusCode).ToString());
+
+                // **net10.0 版の Razor は非 ASCII を数値文字参照で出す**ので、戻してから判定する。
+                string html = System.Net.WebUtility.HtmlDecode(
+                    await acs.Content.ReadAsStringAsync());
+
+                r.Verify("判定は ABNORMAL_END", html.Contains("ABNORMAL_END"),
+                    "ABNORMAL_END",
+                    html.Contains("ABNORMAL_END") ? "ABNORMAL_END" : "**NORMAL_END**");
+
+                // **ここが上流（Open棟梁 #598）の修正が効いていることの確認でもある。**
+                //   **以前は `VerifyByXPath` が Assertion を必須にしており、**
+                //   **`out statusCode` も `if (verified)` の中で代入されていたので、**
+                //   **Assertion の無いエラー応答は「署名または XML」と出ていた。**
+                r.Verify("理由が「エラー応答である」と出る",
+                    html.Contains("エラー応答である"),
+                    "エラー応答である",
+                    html.Contains("エラー応答である")
+                        ? "出ている"
+                        : (html.Contains("署名または XML")
+                            ? "**「署名または XML」と出ている**（上流の修正が入っていない）"
+                            : "**出ていない**"));
+
+                r.Verify("StatusCode が画面に出る", html.Contains("Requester"),
+                    "Requester", html.Contains("Requester") ? "出ている" : "**出ていない**");
+
+                r.Note("**上流（Open棟梁 #598）で 2 つが直っている。**"
+                    + "**`VerifyByXPath` が `StatusCode` を見るようになり**、"
+                    + "**`VerifyResponse` の `out statusCode` が検証の前に設定される**ようになった。"
+                    + "**そのため、こちら側に回避を置かずに理由を出せている。**");
 
                 r.Done();
             }

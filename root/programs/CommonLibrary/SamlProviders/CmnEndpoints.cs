@@ -32,6 +32,7 @@
 //*  2020/01/07  西野 大介         PPID対応実施
 //*  2026/10/07  玄人 幸道         ACS URL の不一致を登録値へのエラー応答にした（#276）
 //*  2026/10/07  玄人 幸道         アサーションの有効期限の単位を直した（分→秒。#276）
+//*  2026/10/07  玄人 幸道         エラー応答にAssertionを組み込まないようにした（#278）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -213,9 +214,6 @@ namespace MultiPurposeAuthSite.SamlProviders
             SAML2Enum.StringToEnum(nameIdPolicy, out nameIDFormat);
             if (!nameIDFormat.HasValue) nameIDFormat = SAML2Enum.NameIDFormat.Unspecified;
 
-            // nameIDFormat.Valueに合わせて処理（PPID）
-            string sub = PPIDExtension.GetSubForSAML2(iss, identity.Name, nameIDFormat.Value);
-
             // rtnProtocol
             rtnProtocol = SAML2Bindings.GetProtocolBindingInRequest(samlRequest, samlNsMgr);
             SAML2Enum.ProtocolBinding? protocolBinding = null;
@@ -223,29 +221,46 @@ namespace MultiPurposeAuthSite.SamlProviders
             if (!protocolBinding.HasValue) protocolBinding = SAML2Enum.ProtocolBinding.HttpRedirect;
 
             string id1 = "";
-            string id2 = "";
 
             // SamlResponseを作成する。
             XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
                 Config.IssuerId, rtnUrl, inResponseTo, statusCode, out id1);
 
-            // SamlAssertionを作成する
-            //  **引数は秒である**（`double expiresFromSecond`。`AddSeconds` される）。
-            //    **以前は分の値をそのまま渡していた**ので、
-            //    **「30 分」のつもりが「30 秒」になっていた**（#276）。
-            //    **E2E では見えない**（SAML の往復は 1 秒ほどで終わるため）。
-            XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
-                inResponseTo, Config.IssuerId,
-                sub, nameIDFormat.Value, authnContextClassRef,
-                Config.Saml2AssertionExpireTimeSpanFromMinutes * 60, rtnUrl, out id2);
+            //  **Assertion は、成功のときだけ組み込む**（#278）。
+            //    **以前は statusCode に関わらず常に繋いでいた**ので、
+            //    **エラー応答にも、利用者の NameID を含むアサーションが入っていた。**
+            //    **認証が成立していないのに、認証の主張を返していた**
+            //    （SAML 2.0 Core 3.2.2 / 4.1.4.2 のとおり、エラー応答は Status だけで正当）。
+            //
+            //    **sub の算出も、この中に入れている。**
+            //    `PPIDExtension.GetSubForSAML2` は**利用者を引く**ので、
+            //    **サインインしていない状態では落ちる**（`EmailAddress` で `user.Email`）。
+            //    **エラー応答では要らない値である。**
+            if (statusCode == SAML2Enum.StatusCode.Success)
+            {
+                string id2 = "";
 
-            // 必要に応じて、identity.Claimsを使用して、様々なクレームを追加できる。
-            //  > Assertion > AttributeStatement > Attribute > AttributeValue
+                // nameIDFormat.Valueに合わせて処理（PPID）
+                string sub = PPIDExtension.GetSubForSAML2(iss, identity.Name, nameIDFormat.Value);
 
-            // ResponseにAssertionを組込
-            XmlNode newNode = samlResponse2.ImportNode( // 御呪い
-                samlAssertion.GetElementsByTagName("saml:Assertion")[0], true);
-            samlResponse2.GetElementsByTagName("samlp:Response")[0].AppendChild(newNode);
+                // SamlAssertionを作成する
+                //  **引数は秒である**（`double expiresFromSecond`。`AddSeconds` される）。
+                //    **以前は分の値をそのまま渡していた**ので、
+                //    **「30 分」のつもりが「30 秒」になっていた**（#276）。
+                //    **E2E では見えない**（SAML の往復は 1 秒ほどで終わるため）。
+                XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
+                    inResponseTo, Config.IssuerId,
+                    sub, nameIDFormat.Value, authnContextClassRef,
+                    Config.Saml2AssertionExpireTimeSpanFromMinutes * 60, rtnUrl, out id2);
+
+                // 必要に応じて、identity.Claimsを使用して、様々なクレームを追加できる。
+                //  > Assertion > AttributeStatement > Attribute > AttributeValue
+
+                // ResponseにAssertionを組込
+                XmlNode newNode = samlResponse2.ImportNode( // 御呪い
+                    samlAssertion.GetElementsByTagName("saml:Assertion")[0], true);
+                samlResponse2.GetElementsByTagName("samlp:Response")[0].AppendChild(newNode);
+            }
 
             // 返しのProtocol Binding
             switch (protocolBinding)

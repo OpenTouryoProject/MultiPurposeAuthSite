@@ -6456,11 +6456,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - StatusCode
 - Destination（応答の宛先）
 - InResponseTo（送った要求の ID）
+- エラー応答に Assertion を入れない
+- NameID を含まない（利用者を指す値を返さない）
 
-**観測（判定しない）**
+**補足**
 
-- エラー応答に Assertion が入るか
-  - **いまの実装は、エラー応答にも Assertion を組み込む**（`CreateSamlResponse` が `CreateResponse` と `CreateAssertion` を常に呼ぶため）。**仕様としては、エラー応答にアサーションは要らない。****直すなら別 Issue**（この Issue の範囲では、返す先と StatusCode を測る）。
+- **以前は、エラー応答にも Assertion を組み込んでいた**（`CreateSamlResponse` が `CreateResponse` と `CreateAssertion` を常に呼んでいた）。**認証が成立していないのに、認証の主張を返していた**（#278。SAML 2.0 Core 3.2.2 / 4.1.4.2 のとおり、エラー応答は `Status` だけで正当）。
 
 ## SA-5.2 未登録の Issuer には、応答せずエラー画面を返す
 
@@ -6522,16 +6523,24 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 1. 署名を付けずに要求を送る
 1. StatusCode は Requester である（署名を検証できない）
+1. SP の画面が「エラー応答である」と出す
 
 **検証（合否を判定する）**
 
 - HTTP 200（自動送信フォーム）
 - SAMLResponse がある
 - StatusCode
+- エラー応答に Assertion を入れない（#278）
+- 応答の宛先は自己テストの ACS である
+- HTTP 200（結果の画面）
+- 判定は ABNORMAL_END
+- 理由が「エラー応答である」と出る
+- StatusCode が画面に出る
 
 **補足**
 
 - **`TestClient_21` は鍵を登録していない**ので、**同じ要求が `SA-3.*` では通る。** 差は登録だけである。
+- **上流（Open棟梁 #598）で 2 つが直っている。****`VerifyByXPath` が `StatusCode` を見るようになり**、**`VerifyResponse` の `out statusCode` が検証の前に設定される**ようになった。**そのため、こちら側に回避を置かずに理由を出せている。**
 
 # TC. 基本テストケース
 
