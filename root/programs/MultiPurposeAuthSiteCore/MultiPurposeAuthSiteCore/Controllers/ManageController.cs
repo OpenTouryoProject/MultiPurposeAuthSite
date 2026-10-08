@@ -28,6 +28,7 @@
 //*  2026/10/06  玄人 幸道         同意の一覧と取り消しを追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthnの登録・削除をFido2 4.2.0で復活、MsPassを削除（#137）
 //*  2026/10/09  玄人 幸道         SAML2 のテスト ボタンを追加（#277 の段階 5）
+//*  2026/10/09  玄人 幸道         WebAuthn の削除を複数選択に対応（#277 の段階 6）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2667,11 +2668,25 @@ namespace MultiPurposeAuthSite.Controllers
         /// WebAuthnの資格情報の一覧・削除
         /// POST: /Manage/RemoveWebAuthnData
         /// </summary>
-        /// <param name="publicKeys">string（base64url のカンマ区切り）</param>
+        /// <param name="publicKeys">string[]（選ばれた PublicKeyId。base64url）</param>
         /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **`string` ではなく `string[]` で受ける**（#277 の段階 6）。
+        ///
+        /// **画面は同じ名前のチェックボックスを並べる**ので、
+        /// **選んだ数だけ同名の値が送られてくる**（`publicKeys=A&publicKeys=B`）。
+        ///
+        /// **`string` で受けると、ASP.NET Core は先頭の 1 つだけを採る**
+        /// （`ValueProviderResult.FirstValue`）。**実測 : 2 つ送って `A` だけが届いた。**
+        /// **そのため「複数選んでも 1 件しか消えない」状態だった。**
+        ///
+        /// **カンマ区切りの前提は、net48（MVC 5）のもの**である
+        /// （あちらは複数値を "," で連結する）。**この画面は net10.0 版だけに在る**ので、
+        /// **連結を当てにせず、配列で受けて素直に回す。**
+        /// </remarks>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveWebAuthnData(string publicKeys)
+        public async Task<ActionResult> RemoveWebAuthnData(string[] publicKeys)
         {
             if ((Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
                 && Config.EnableEditingOfUserAttribute)
@@ -2680,12 +2695,15 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // 削除処理
-                if (!string.IsNullOrEmpty(publicKeys))
+                if (publicKeys != null)
                 {
-                    string[] _publicKeys = publicKeys.Split(',');
-
-                    foreach (string publicKey in _publicKeys)
+                    foreach (string publicKey in publicKeys)
                     {
+                        if (string.IsNullOrEmpty(publicKey))
+                        {
+                            continue;
+                        }
+
                         // **利用者名を WHERE に入れている**ので、
                         // **他人の資格情報の id を送っても消せない。**
                         FIDO.DataProvider.Delete(publicKey, user.UserName);
