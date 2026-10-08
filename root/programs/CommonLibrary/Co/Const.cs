@@ -37,7 +37,11 @@
 //*  2026/10/01  玄人 幸道         利用者名とメアドの規則を追加（#151 の段階 3）
 //*  2026/10/01  玄人 幸道         利用者名を運ぶクレーム（preferred_username）を追加（#151 の段階 4）
 //*  2026/10/04  玄人 幸道         test_self_code_manage を追加（C-10）
+//*  2026/10/04  玄人 幸道         CORS のポリシー名を追加（#265）
 //*  2026/10/06  玄人 幸道         セッション キャッシュの表名を追加（#256）
+//*  2026/10/07  玄人 幸道         WebAuthn の RP の表示名を追加（#137）
+//*  2026/10/07  玄人 幸道         SAML2 の AuthnRequest の ID を保存するキーを追加（#276）
+//*  2026/10/07  玄人 幸道         データ保護のアプリケーション名を追加（#279）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -190,6 +194,22 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region データ保護のアプリケーション名（#279）
+
+        /// <summary>データ保護のアプリケーション名（#279）</summary>
+        /// <remarks>
+        /// **`DataProtectionKeyPath` で鍵を共有しても、これが揃わないと復号できない。**
+        /// **既定ではコンテンツ ルートのパスから決まる**ため、
+        /// **配置先のパスが違うと、同じ鍵を見ていても復号できない**
+        /// （Windows の `C:\…` とコンテナの `/app` など）。
+        ///
+        /// **固定値にしてある。** 設定キーにすると、
+        /// **揃っていない配備ができてしまい、症状が「ログインし直しになる」だけなので気付けない。**
+        /// </remarks>
+        public const string DataProtectionApplicationName = "MultiPurposeAuthSite";
+
+        #endregion
+
         #region CORS のポリシー名（#265）
 
         /// <summary>公開情報の口のポリシー名（#265）</summary>
@@ -225,6 +245,13 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>テスト用CodeVerifierを保存するSession, CookieのKey</summary>
         public const string TestCodeVerifier = "test_code_verifier";
+
+        /// <summary>テスト用の SAML2 AuthnRequest の ID を保存する Session, Cookie の Key（#276）</summary>
+        /// <remarks>
+        /// **応答の `InResponseTo` と照合するために保存する**（Web SSO Profile 4.1.4.3）。
+        /// **以前は `out id` を捨てていた**ので、照合できなかった。
+        /// </remarks>
+        public const string TestSamlRequestId = "test_saml_request_id";
 
         #endregion
 

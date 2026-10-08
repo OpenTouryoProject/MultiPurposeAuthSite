@@ -21,12 +21,15 @@
 //*                                OnPostRequestHandlerExecuteにACCESSログを追加
 //*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
 //*  2026/09/30  玄人 幸道         OAuth2AndOIDCClient の HttpClient を初期化（#250 の段階 4）
+//*  2026/10/07  玄人 幸道         /Fido2/ 専用のセッション有効化を削除（#137）
+//*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
 //**********************************************************************************
 
 // System
 using System;
 using System.Net.Http;
 using System.Web;
+using System.Web.Helpers;   // AntiForgeryConfig（#282）
 using System.Web.SessionState;
 
 using MultiPurposeAuthSite.Co;
@@ -90,6 +93,23 @@ namespace MultiPurposeAuthSite
             // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
             //   起動は止めない。警告を OPERATION ログに出すだけ。
             ProductionCheck.WarnIfRisky();
+
+            // **AntiForgery の Cookie にも接頭辞を掛ける**（#282。#255 の続き）。
+            //   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+            //   **同じホストに 2 つ建てると互いに上書きする。**
+            //
+            //   **既定の名前は `__RequestVerificationToken` に仮想パス由来の接尾が付く**ので、
+            //   **仮想パスが違えば分かれるが、同じパスで 2 つ建てると衝突する。**
+            //
+            //   **静的な設定なので、ここ（Application_Start）で 1 度だけ行う。**
+            //   net10.0 版は `PostConfigure<AntiforgeryOptions>`（Startup）で行っている。
+            //
+            //   **接頭辞が空なら、名前は従来どおりである**（PrefixCookieName がそのまま返す）。
+            if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
+            {
+                AntiForgeryConfig.CookieName =
+                    Config.PrefixCookieName(AntiForgeryConfig.CookieName);
+            }
         }
 
         /// <summary>

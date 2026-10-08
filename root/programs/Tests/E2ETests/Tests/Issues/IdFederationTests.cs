@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/30  玄人 幸道         新規（#250 の段階 5 : ID フェデレーションを E2E で駆動する）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/08  玄人 幸道         上流の同意の記録が無ければ、準備するようにした（#280）
+//*  2026/10/08  玄人 幸道         手順を Infrastructure/IdFederation へ移した（#284）
 //**********************************************************************************
 
 using System;
@@ -61,6 +63,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// （`OAuth2AndOidcClientID` / `IdFederationRedirectEndpoint` を差し込む）。
     ///
     /// **目視で見つかった欠陥は、どれもここで出るはずのものだった**（#250 の段階 4）。
+    ///
+    /// **上流には「同意の記録」という前提がある**（#280）。
+    /// **上流は `UserStoreType=mem` なので、コンテナを作り直すと記録が消える。**
+    /// **この E2E は `prompt=none` で委譲する**ので、
+    /// **記録が無い上流に対しては `consent_required` になる**
+    /// （OIDC Core §3.1.2.6。#272 の段階 2。**IdP の側は仕様どおり**）。
+    ///
+    /// **それは前提が整っていないだけ**なので、
+    /// `EnsureUpstreamConsentAsync` で整える。**測るのは ID 連携の一巡である。**
     /// </remarks>
     public class IdFederationTests : TargetTestBase
     {
@@ -70,212 +81,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
         }
 
-        #region 上流
-
-        /// <summary>AntiForgery トークンを拾う</summary>
-        private static readonly Regex AntiforgeryRegex = new Regex(
-            "name=\"__RequestVerificationToken\"[^>]*value=\"(?<value>[^\"]+)\"",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-        /// <summary>上流の URL（スキーム＋ホスト＋ポート）</summary>
-        /// <param name="client">IdPClient</param>
-        /// <returns>上流の URL。分からなければ null</returns>
-        /// <remarks>
-        /// **構成ファイルの `IdFederationAuthorizeEndpoint` から引く。**
-        /// **テストに URL を書かない**（`test.ps1` はここを上書きしないので、
-        /// 構成ファイルの値が、そのままサイトの向き先である）。
-        /// </remarks>
-        private static string UpstreamOrigin(IdPClient client)
-        {
-            string endpoint = client.Config.Get("IdFederationAuthorizeEndpoint");
-
-            if (string.IsNullOrEmpty(endpoint))
-            {
-                return null;
-            }
-
-            return new Uri(endpoint).GetLeftPart(UriPartial.Authority);
-        }
-
-        /// <summary>上流が起動していなければ Skip する</summary>
-        /// <param name="client">IdPClient</param>
-        /// <returns>上流の URL</returns>
-        private static async Task<string> SkipIfUpstreamIsDownAsync(IdPClient client)
-        {
-            string origin = IdFederationTests.UpstreamOrigin(client);
-
-            Skip.If(string.IsNullOrEmpty(origin),
-                "IdFederationAuthorizeEndpoint が構成ファイルにありません。");
-
-            bool up = false;
-
-            try
-            {
-                HttpResponseMessage res = await client.GetAsync(
-                    origin + "/.well-known/openid-configuration");
-
-                up = res.IsSuccessStatusCode;
-            }
-            catch (HttpRequestException)
-            {
-                up = false;
-            }
-            catch (TaskCanceledException)
-            {
-                up = false;
-            }
-
-            Skip.IfNot(up,
-                "上流の IdP（" + origin + "）が起動していません。"
-                + "store\\1_DockerComposeUp.bat で建ててください（#250 の段階 5）。");
-
-            return origin;
-        }
-
-        /// <summary>上流でサインインする（<c>prompt=none</c> の前提）</summary>
-        /// <param name="client">IdPClient（Cookie は下流と同じ入れ物）</param>
-        /// <param name="origin">上流の URL</param>
-        /// <returns>サインインできたら true</returns>
-        /// <remarks>
-        /// **下流と同じ `IdPClient` を使う。** `CookieContainer` が 1 つなので、
-        /// **ブラウザと同じ状態**（上流・下流の Cookie を同時に持つ）になる。
-        /// </remarks>
-        private static async Task<bool> SignInUpstreamAsync(IdPClient client, string origin)
-        {
-            HttpResponseMessage get = await client.GetAsync(origin + "/Account/Login");
-            string html = await get.Content.ReadAsStringAsync();
-
-            Match m = IdFederationTests.AntiforgeryRegex.Match(html);
-
-            if (!m.Success)
-            {
-                return false;
-            }
-
-            HttpResponseMessage post = await client.PostFormAsync(
-                origin + "/Account/Login",
-                new Dictionary<string, string>()
-                {
-                    { "__RequestVerificationToken", m.Groups["value"].Value },
-                    // **上流の利用者である**（#260）。**下流の接尾辞を渡してはならない。**
-                    //   上流は自分のストアを持ち、種データは super_tanaka である。
-                    { "Email", TestEnv.UpstreamUserName },
-                    { "Password", client.Config.Get("TestUserPWD") },
-                    { "RememberMe", "false" },
-                    { "submitButtonName", "normal_signin" }
-                });
-
-            // 成功時はリダイレクト。失敗時はログイン画面を返す（HTTP 200）。
-            return post.StatusCode == HttpStatusCode.Found
-                || post.StatusCode == HttpStatusCode.Redirect
-                || post.StatusCode == HttpStatusCode.SeeOther;
-        }
-
-        #endregion
-
-        #region 連携の一巡
-
-        /// <summary>ID 連携の結果</summary>
-        private sealed class FederationResult
-        {
-            /// <summary>下流が上流へ送った認可要求の URL</summary>
-            public string AuthorizeUrl { get; set; }
-
-            /// <summary>上流の認可応答（form_post の自動送信フォーム）</summary>
-            public HttpResponseMessage AuthorizeResponse { get; set; }
-
-            /// <summary>自動送信フォームの hidden</summary>
-            public Dictionary<string, string> Hidden { get; set; }
-
-            /// <summary>下流の Redirect エンドポイントの応答</summary>
-            public HttpResponseMessage Callback { get; set; }
-
-            /// <summary>上流が認可応答を返したか（form_post になったか）</summary>
-            public bool Authorized
-            {
-                get
-                {
-                    return this.Hidden != null && this.Hidden.ContainsKey("code");
-                }
-            }
-        }
-
-        /// <summary>下流の「ID連携でサインイン」を押して、最後まで流す</summary>
-        /// <param name="client">IdPClient</param>
-        /// <returns>FederationResult</returns>
-        private static async Task<FederationResult> FederateAsync(IdPClient client)
-        {
-            FederationResult result = new FederationResult();
-
-            // (1) 下流のログイン画面
-            HttpResponseMessage login = await client.GetAsync("/Account/Login");
-            string loginHtml = await login.Content.ReadAsStringAsync();
-
-            Match m = IdFederationTests.AntiforgeryRegex.Match(loginHtml);
-
-            Assert.True(m.Success, "前提: 下流のログイン画面から AntiForgery トークンを取れること");
-
-            // (2) 「ID連携でサインイン」を押す（上流の /authorize へリダイレクトされる）
-            HttpResponseMessage start = await client.PostFormAsync(
-                "/Account/Login",
-                new Dictionary<string, string>()
-                {
-                    { "__RequestVerificationToken", m.Groups["value"].Value },
-                    // **下流の画面なので、下流のターゲットから引く**（#260）。
-                    { "Email", TestEnv.TestUserName(client.Target.Key) },
-                    { "Password", "" },
-                    { "RememberMe", "false" },
-                    { "submitButtonName", "id_federation_signin" }
-                });
-
-            if (start.Headers.Location == null)
-            {
-                return result;
-            }
-
-            result.AuthorizeUrl = start.Headers.Location.ToString();
-
-            // (3) 上流の /authorize（prompt=none）
-            result.AuthorizeResponse = await client.GetAsync(result.AuthorizeUrl);
-
-            string authzHtml = await result.AuthorizeResponse.Content.ReadAsStringAsync();
-            result.Hidden = Html.HiddenInputs(authzHtml);
-
-            if (!result.Authorized)
-            {
-                return result;
-            }
-
-            // (4) 自動送信フォームを、下流の Redirect エンドポイントへ POST する
-            string action = Html.FormAttribute(authzHtml, "action");
-
-            Dictionary<string, string> form = new Dictionary<string, string>();
-
-            foreach (KeyValuePair<string, string> item in result.Hidden)
-            {
-                form[item.Key] = item.Value;
-            }
-
-            result.Callback = await client.PostFormAsync(action, form);
-
-            return result;
-        }
-
-        /// <summary>下流にサインインできているか</summary>
-        /// <param name="client">IdPClient</param>
-        /// <returns>サインインしていたら true</returns>
-        /// <remarks>
-        /// **保護された画面が開くかどうかで見る。**
-        /// 未サインインなら、Cookie 認証がログイン画面へリダイレクトする。
-        /// </remarks>
-        private static async Task<bool> IsSignedInAsync(IdPClient client)
-        {
-            HttpResponseMessage res = await client.GetAsync("/Manage/Index");
-
-            return res.StatusCode == HttpStatusCode.OK;
-        }
-
-        #endregion
 
         /// <summary>RT-140.4 ID 連携でサインインできる</summary>
         /// <param name="targetKey">core / netfx</param>
@@ -286,7 +91,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = this.Client(targetKey))
             {
-                string upstream = await IdFederationTests.SkipIfUpstreamIsDownAsync(client);
+                string upstream = await IdFederation.SkipIfUpstreamIsDownAsync(client);
 
                 TestReport r = this.Report("RT-140.4",
                     "上流の IdP へ委譲して、下流にサインインできる",
@@ -301,7 +106,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(1) 上流でサインインしておく（下流は prompt=none で委譲する）");
 
                 bool upstreamSignedIn =
-                    await IdFederationTests.SignInUpstreamAsync(client, upstream);
+                    await IdFederation.SignInUpstreamAsync(client, upstream);
 
                 r.Verify("上流にサインインできる", upstreamSignedIn,
                     "サインインする", upstreamSignedIn ? "サインインした" : "**できなかった**");
@@ -310,7 +115,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) 下流で「ID連携でサインイン」を押す");
 
-                FederationResult fed = await IdFederationTests.FederateAsync(client);
+                FederationResult fed = await IdFederation.FederateAsync(client, TestEnv.TestUserName(targetKey));
 
                 r.Verify("上流の認可エンドポイントへ送られる",
                     !string.IsNullOrEmpty(fed.AuthorizeUrl),
@@ -336,7 +141,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(4) 下流の Redirect エンドポイントへ渡す");
 
-                bool signedIn = await IdFederationTests.IsSignedInAsync(client);
+                bool signedIn = await IdFederation.IsSignedInAsync(client);
 
                 r.Verify("下流にサインインできている", signedIn,
                     "保護された画面が開く",
@@ -365,17 +170,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 // **毎回、新しい入れ物で始める**（Cookie を持ち越さない）。
                 using (IdPClient client = this.Client(targetKey))
                 {
-                    string upstream = await IdFederationTests.SkipIfUpstreamIsDownAsync(client);
+                    string upstream = await IdFederation.SkipIfUpstreamIsDownAsync(client);
 
-                    Assert.True(await IdFederationTests.SignInUpstreamAsync(client, upstream),
+                    Assert.True(await IdFederation.SignInUpstreamAsync(client, upstream),
                         "前提: 上流にサインインできること（" + round + " 回目）");
 
-                    FederationResult fed = await IdFederationTests.FederateAsync(client);
+                    FederationResult fed = await IdFederation.FederateAsync(client, TestEnv.TestUserName(targetKey));
 
                     Assert.True(fed.Authorized,
                         "前提: 上流が認可コードを返すこと（" + round + " 回目）");
 
-                    Assert.True(await IdFederationTests.IsSignedInAsync(client),
+                    Assert.True(await IdFederation.IsSignedInAsync(client),
                         "前提: 下流にサインインできること（" + round + " 回目）");
 
                     // **下流の sub を、下流自身の /userinfo から引く。**
@@ -451,7 +256,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = this.Client(targetKey))
             {
-                string upstream = await IdFederationTests.SkipIfUpstreamIsDownAsync(client);
+                string upstream = await IdFederation.SkipIfUpstreamIsDownAsync(client);
 
                 TestReport r = this.Report("RT-140.6",
                     "上流にセッションが無ければ、ID 連携は成立しない",
@@ -465,7 +270,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("上流にサインインせずに、下流で「ID連携でサインイン」を押す");
 
-                FederationResult fed = await IdFederationTests.FederateAsync(client);
+                FederationResult fed = await IdFederation.FederateAsync(client, TestEnv.TestUserName(targetKey));
 
                 r.Verify("上流の認可エンドポイントへは送られる",
                     !string.IsNullOrEmpty(fed.AuthorizeUrl),
@@ -475,7 +280,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("認可コードは返らない", !fed.Authorized,
                     "code なし", fed.Authorized ? "**code が返った**" : "返らなかった");
 
-                bool signedIn = await IdFederationTests.IsSignedInAsync(client);
+                bool signedIn = await IdFederation.IsSignedInAsync(client);
 
                 r.Verify("下流はサインインしない", !signedIn,
                     "サインインしない", signedIn ? "**サインインしてしまった**" : "しなかった");
@@ -497,7 +302,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = this.Client(targetKey))
             {
-                string upstream = await IdFederationTests.SkipIfUpstreamIsDownAsync(client);
+                string upstream = await IdFederation.SkipIfUpstreamIsDownAsync(client);
 
                 TestReport r = this.Report("RT-140.7",
                     "ID 連携の認可応答（form_post）にも、iss が付く",
@@ -520,10 +325,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) ID 連携を行い、認可応答の hidden を見る");
 
-                Assert.True(await IdFederationTests.SignInUpstreamAsync(client, upstream),
+                Assert.True(await IdFederation.SignInUpstreamAsync(client, upstream),
                     "前提: 上流にサインインできること");
 
-                FederationResult fed = await IdFederationTests.FederateAsync(client);
+                FederationResult fed = await IdFederation.FederateAsync(client, TestEnv.TestUserName(targetKey));
 
                 Assert.True(fed.Authorized, "前提: 上流が認可コードを返すこと");
 

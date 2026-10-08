@@ -34,6 +34,7 @@
 //*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
 //*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
 //*  2026/10/06  玄人 幸道         同意を記録しないTestClient_19を追加（#272 の段階 2）
+//*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22を追加（鍵なし。#275）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -344,6 +345,43 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Overrides = new Dictionary<string, string>()
                 {
                     { "redirect_uri_code", Co.Const.TestSelfCodeManage }
+                }
+            },
+            new Entry()
+            {
+                // **SAML2 を測るためのクライアント**（#275）。
+                //   **写す元を TestClient3 にしているのは、
+                //   そこに `jwk_rsa_publickey` が無いからである。**
+                //   **鍵が無いクライアントの AuthnRequest は、署名が無くても通る**
+                //   （`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
+                //   **そのため、要求を自前で組み立てて測れる**
+                //   （NameIDPolicy の差い、ACS URL の不一致など）。
+                //
+                //   **ACS URL は存在しない URL でよい。** 応答は辣らず、
+                //   **返ってきた場所と SAMLResponse を読むだけ**である。
+                //   **client_id の接頭辞を `sa` にしている**（#275）。
+                //     **`tcNN` は `TestClient_NN` という意味ではない。**
+                //     `TestClient2_2` が `e2e0tc22`、`TestClient2_3` が `e2e0tc23`、
+                //     `TestClient4_2` が `e2e0tc42`、`TestClient4_3` が `e2e0tc43` を使っている。
+                //     **`e2e0tc22` を取ろうとして衝突した**（先に在る方が登録され、
+                //     こちらは「登録されていない」ことになり、応答が返らなかった）。
+                ClientName = "TestClient_21", ClientId = "e2e0sa21000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient3",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "redirect_uri_saml", "https://saml.e2e.example/acs" }
+                }
+            },
+            new Entry()
+            {
+                // **PPID が RP ごとに違うことを測るための 2 つ目**（#275）。
+                //   `NameIDFormat=persistent` は `GeneratePPIDByUserID(iss, user.Id)` なので、
+                //   **iss が違えば値が違う**ことを確かめる。
+                ClientName = "TestClient_22", ClientId = "e2e0sa22000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient3",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "redirect_uri_saml", "https://saml.e2e.example/acs2" }
                 }
             }
         };

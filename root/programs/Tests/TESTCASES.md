@@ -5718,7 +5718,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **アカウントの一覧から選ぶ仕組みは持っていない。** 仕様（§3.1.2.1）は「選ばせろ」だが、**この実装は 1 利用者ずつのサインインしか持たない**。**`account_selection_required` を返す道もあった**が、**切り替えの口が画面に在るので、画面を出す方を選んだ。**
 
-# FA
+## RT-279.1 SameSite=None を宣言した Cookie が、Cookie ポリシーで格上げされない
+
+| | |
+|---|---|
+| 観点 | **`app.UseCookiePolicy()` の引数を外し、DI 側に一本化した**（#279）。**引数を渡す overload は DI の設定を読まない**ので、**一本化し損なうと `MinimumSameSitePolicy` の明示が失われ、`samesite` 属性ごと出なくなる**（実測）。**属性が無ければブラウザ側の既定（Chrome は `Lax`）が適用される**ので、**ID 連携の外部ログインや `response_mode=form_post` の戻りで、Cookie が送られなくなる。****ブラウザを使わないと気付けない**ので、ここで固定する。 |
+| 根拠 | #279（上流 Open棟梁 #541） |
+| テスト | `RT27901_SameSiteがNoneのCookieが格上げされない` |
+
+**手順**
+
+1. 自己テストのボタンを押して、Set-Cookie を受け取る
+1. test_state の Cookie が SameSite=None のままである
+1. HttpOnly も効いている
+
+**検証（合否を判定する）**
+
+- Set-Cookie が返る
+- test_state の Set-Cookie がある
+- samesite=none である
+- httponly が付く
+
+**補足**
+
+- **`CookieSecurePolicy` は既定（空）のままなので、`Secure` 属性は各 Cookie の宣言に従う。**`always` にすると全部に付くが、**平文 HTTP ではサインインできなくなる**ので既定では変えない（#279）。
+
+# FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
 
@@ -6051,7 +6076,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **fapi2 は client_secret を通さない**ので、証明書が無ければ更新できない（表の `refresh_token × Any → normal` の行には当たらない）。
 
-# 21
+# 21. OAuth 2.1（許されない経路の抑止）
 
 ## 21-1.1 OAuth 2.1 が許さない経路（Implicit / ROPC / PKCE 無し）が、締めた登録では塞がる
 
@@ -6104,6 +6129,685 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **要求 URL はここに出さない**（トークンを含むため）。
+
+# SA. SAML2（Web Browser SSO）
+
+## SA-1.1 SP-initiated Web Browser SSO が成立する（要求 Redirect / 応答 Redirect）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0101_Redirect要求とRedirect応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- IdP のエンドポイントへ送られる
+- SP（ACS）へリダイレクトで返る
+- 応答のクエリ文字列に SigAlg と Signature が付く
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**観測（判定しない）**
+
+- XML の中の署名
+  - **Redirect Binding では、署名は XML ではなくクエリ文字列に付く**（SAML 2.0 Bindings 3.4.4.1）。無いのが正しい。
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-1.2 SP-initiated Web Browser SSO が成立する（要求 Redirect / 応答 POST）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0102_Redirect要求とPost応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- IdP のエンドポイントへ送られる
+- 自動送信フォームで返る（action は SP）
+- フォームに SAMLResponse がある
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- XML の中に署名がある
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-1.3 SP-initiated Web Browser SSO が成立する（要求 POST / 応答 Redirect）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0103_Post要求とRedirect応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- 要求の自動送信フォームが返る（HTTP 200）
+- フォームに SAMLRequest がある
+- SP（ACS）へリダイレクトで返る
+- 応答のクエリ文字列に SigAlg と Signature が付く
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**観測（判定しない）**
+
+- XML の中の署名
+  - **Redirect Binding では、署名は XML ではなくクエリ文字列に付く**（SAML 2.0 Bindings 3.4.4.1）。無いのが正しい。
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-1.4 SP-initiated Web Browser SSO が成立する（要求 POST / 応答 POST）
+
+| | |
+|---|---|
+| 観点 | **要求と応答で、それぞれ Redirect / POST が選べる**ので 4 通りある。**署名の対象が違う** — Redirect はクエリ文字列、POST は XML の中。**SP 側の照合（Audience / Recipient / InResponseTo / RelayState）がすべて通ること**を見る（#276 で足した）。 |
+| 根拠 | SAML 2.0 Core / Bindings 3.4・3.5 / Web SSO Profile / #275 |
+| テスト | `SA0104_Post要求とPost応答で成立する` |
+
+**手順**
+
+1. 自己テストのボタンを押す（要求を組み立てて IdP へ）
+1. IdP が応答（アサーション）を返す
+1. SP の照合が、すべて通る
+
+**検証（合否を判定する）**
+
+- 要求の自動送信フォームが返る（HTTP 200）
+- フォームに SAMLRequest がある
+- 自動送信フォームで返る（action は SP）
+- フォームに SAMLResponse がある
+- 応答の XML を復号して読める
+- StatusCode は Success
+- Assertion を含む
+- NameID がある
+- Conditions に NotOnOrAfter がある
+- NotOnOrAfter を時刻として読める
+- 有効期限の幅が 25〜35 分（雛形の 30 分）
+- XML の中に署名がある
+- HTTP 200（結果の画面）
+- 判定は NORMAL_END
+- 照合していない項目が無い
+- 画面に「✓ 検証できた」が出る
+- 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の ACS URL」が出る
+- 画面に「✓ 送った要求の ID と一致」が出る
+- 画面に「✓ 期限内」が出る
+- RelayState が送った state と一致する
+
+**補足**
+
+- **NameID と XML は画面に出ているが、ここでは値を報告しない**（利用者を指す値のため）。**有無と照合の結果だけを見る。**
+
+## SA-2.1 /samlmetadata が、entityID・証明書・NameIDFormat・SSO の口を出す
+
+| | |
+|---|---|
+| 観点 | **SP は、この XML だけを見て IdP に繋ぐ。****entityID が応答の Issuer と違えば、SP の照合が落ちる。****SSO の口が違えば要求が届かず、証明書が違えば署名を検証できない。****E2E が 1 件も無かった口である**（#275）。 |
+| 根拠 | SAML 2.0 Metadata 2.4.3（IDPSSODescriptor）/ #275 |
+| テスト | `SA0201_メタデータの中身がIdPの設定と揃っている` |
+
+**手順**
+
+1. XML として読める
+1. entityID が、OIDC の issuer と同じ値である
+1. IDPSSODescriptor に、署名用の証明書がある
+1. NameIDFormat を 3 種とも広告している
+1. SSO の口が、Redirect と POST の両方にあり、設定と一致する
+1. 公開情報なので、許していないオリジンにも開く
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- Content-Type
+- XML として読める
+- entityID = Discovery の issuer
+- IDPSSODescriptor がある
+- protocolSupportEnumeration
+- 署名用の X509Certificate がある
+- NameIDFormat の件数
+- urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified を広告する
+- urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress を広告する
+- urn:oasis:names:tc:SAML:2.0:nameid-format:persistent を広告する
+- SingleSignOnService の件数
+- HTTP-Redirect の Location
+- HTTP-POST の Location
+- Access-Control-Allow-Origin
+
+**観測（判定しない）**
+
+- WantAuthnRequestsSigned
+  - **固定で true を出している**（Open棟梁 の雛形）。**実際は、`jwk_rsa_publickey` を登録していないクライアントの要求は、署名が無くても通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**広告と振る舞いが揃っていない**ので、`CONFIGURATION.md` に明記してある。
+
+## SA-3.1 NameIDPolicy=unspecified は、sub（既定は利用者 ID）を NameID にする
+
+| | |
+|---|---|
+| 観点 | **`NameIDPolicy` の値で `NameID` の中身が変わる**（`PPIDExtension.GetSubForSAML2`）。**自己テストのボタンは `unspecified` 固定**なので、**ここだけが従来の E2E と重なる**（他の 2 種は未測定だった）。 |
+| 根拠 | SAML Core 2.2.2 / 8.3 / #275 |
+| テスト | `SA0301_UnspecifiedはsubをNameIDにする` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID の Format が echo される
+- NameID がある
+- メアドではない（既定は public ＝ 利用者 ID）
+
+## SA-3.2 NameIDPolicy=emailAddress は、利用者のメアドを NameID にする
+
+| | |
+|---|---|
+| 観点 | **メタデータは広告しているのに、E2E が踏んでいなかった**（#275）。**`user.Email` をそのまま入れる**（`GetSubForSAML2`）。**利用者名とメアドは #151 の段階 3 で分かれている**ので、**`unspecified` とは必ず違う値になる。** |
+| 根拠 | SAML Core 8.3.2 / #275 |
+| テスト | `SA0302_EmailAddressはメアドをNameIDにする` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID の Format が echo される
+- NameID がメアドの形である
+
+**補足**
+
+- **メアドを NameID にすると、RP に利用者のメアドが渡る。****pairwise（PPID）を使っていても、この指定で素のメアドが出る**ので、**配備のときに意識すること。**
+
+## SA-3.3 NameIDPolicy=persistent は、RP ごとに違う PPID を NameID にする
+
+| | |
+|---|---|
+| 観点 | **`persistent` は `subject_types` に依らず、必ず PPID になる**（`GeneratePPIDByUserID(iss, user.Id)`）。**同じ利用者でも、RP が違えば値が違う**ので、**RP 同士が突き合わせられない**（OIDC の pairwise と同じ狙い）。**2 つのクライアントで比べる**ことで、それを測る。 |
+| 根拠 | SAML Core 8.3.7 / #275 |
+| テスト | `SA0303_PersistentはRPごとに違うPPIDをNameIDにする` |
+
+**手順**
+
+1. RP その 1（TestClient_21）
+1. RP その 2（TestClient_22）
+1. 2 つの RP で、値が違う
+1. unspecified とも違う
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID の Format が echo される
+- NameID がある
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID がある
+- RP ごとに違う値になる
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- 同じ RP でも、unspecified とは違う値になる
+
+**補足**
+
+- **`subject_types` を書いていないクライアントでも、`persistent` を指定すれば PPID になる。****OIDC 側の既定（public。#151 の段階 4）とは別の話である。**
+
+## SA-4.1 未サインインの要求はサインイン画面へ送られ、サインイン後にアサーションが返る
+
+| | |
+|---|---|
+| 観点 | **SP-initiated Web Browser SSO の本来の形**である（Web SSO Profile 4.1.1）。**従来の E2E はすべてサインイン済みから始めていた**ので、**`[Authorize]` のチャレンジを通って戻る経路が未測定だった**（#275）。**送られることだけでなく、戻ってアサーションが返ることまで見る。** |
+| 根拠 | SAML 2.0 Web SSO Profile 4.1.1 / #275 |
+| テスト | `SA0401_未サインインならサインインさせてからアサーションを返す` |
+
+**手順**
+
+1. 未サインインだと、サインイン画面へ送られる
+1. サインインして、同じ要求をもう一度送る
+1. 返ったアサーションが、送った要求に対応している
+
+**検証（合否を判定する）**
+
+- まだサインインしていない（測る前提）
+- リダイレクトする（302）
+- 送り先はサインイン画面
+- この時点でアサーションを返さない
+- サインインできた
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- InResponseTo（送った要求の ID）
+- Destination（登録した ACS URL）
+- Assertion を含む
+- NameID がある
+
+**補足**
+
+- **同じ URL をもう一度送っている**（SP が `RelayState` で復帰させる形は測っていない）。**この実装の `Saml2Request` は `ReturnUrl` で戻る**ので、**ブラウザなら、サインインの後に自動で戻る。**
+
+## SA-5.1 AssertionConsumerServiceURL が登録値と違えば、登録値へ Requester を返す
+
+| | |
+|---|---|
+| 観点 | **要求に書かれた ACS URL をそのまま使うと、任意の URL へアサーションを飛ばせられる。****事前登録の値と完全一致するか、省略されているときだけ通す。****以前は `CreateSamlResponse` が `null` を返していたが、呼び出し側が `== HttpRedirect` で分岐していたため、`null` が POST 側に落ち、`action` も `SAMLResponse` も空の自動送信フォームが返っていた**（#276 の (1)）。 |
+| 根拠 | SAML Core 3.2.1 / Web SSO Profile 4.1.4.1 / #276 |
+| テスト | `SA0501_ACSURLが登録値と違えば登録値へエラー応答` |
+
+**手順**
+
+1. 登録値と違う ACS URL で、要求を送る
+1. 返す先は、要求の値ではなく登録値である
+1. StatusCode は Requester である
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- フォームの action
+- 要求に書いた URL へは返さない
+- SAMLResponse がある（空のフォームではない）
+- 応答を読める
+- StatusCode
+- Destination（応答の宛先）
+- InResponseTo（送った要求の ID）
+- エラー応答に Assertion を入れない
+- NameID を含まない（利用者を指す値を返さない）
+
+**補足**
+
+- **以前は、エラー応答にも Assertion を組み込んでいた**（`CreateSamlResponse` が `CreateResponse` と `CreateAssertion` を常に呼んでいた）。**認証が成立していないのに、認証の主張を返していた**（#278。SAML 2.0 Core 3.2.2 / 4.1.4.2 のとおり、エラー応答は `Status` だけで正当）。
+
+## SA-5.2 未登録の Issuer には、応答せずエラー画面を返す
+
+| | |
+|---|---|
+| 観点 | **応答を返す先は、事前登録の ACS URL だけ**である。**登録が無ければ、返す先が決まらない**ので、**要求に書かれた URL へは返さない**（SAML Core 3.2.1）。**以前は `action` が空の自動送信フォームが返っていた**（#276 の (1)）。 |
+| 根拠 | SAML Core 3.2.1 / #276 |
+| テスト | `SA0502_未登録のIssuerにはエラー画面` |
+
+**手順**
+
+1. 未登録の Issuer で、要求を送る
+
+**検証（合否を判定する）**
+
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+
+## SA-5.3 壊れた SAMLRequest を送っても、500 にしない
+
+| | |
+|---|---|
+| 観点 | **外から任意の文字列が来る口である。****base64 でない・XML でない・AuthnRequest でない**ものが来ても、**サーバの例外を見せない。****#241 と同じ観点**（JWT でない値・`iss` の無い JWT で 500 にしない）。 |
+| 根拠 | #241 と同じ観点 / #275 |
+| テスト | `SA0503_壊れたSAMLRequestでも500にしない` |
+
+**手順**
+
+1. SAMLRequest = （壊れた値 1）
+1. SAMLRequest = （壊れた値 2）
+1. SAMLRequest = （壊れた値 3）
+
+**検証（合否を判定する）**
+
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+- 500 にしない
+- エラー画面が開く
+- 空の自動送信フォームではない
+
+**補足**
+
+- **net48 版は `customErrors` が例外を 302 に変える**ので、**500 でないことだけでは足りない**（#272 で踏んだ）。**エラー画面が開くことまで見る。**
+
+## SA-5.4 鍵を登録したクライアントの、署名の無い要求は断る
+
+| | |
+|---|---|
+| 観点 | **`jwk_rsa_publickey` を登録していれば、署名を検証する。****登録していなければ、署名の無い要求も通す**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**`AuthnRequest` の署名は SAML では任意**で、**応答が事前登録の ACS URL にしか飛ばない**ことで守っている。**登録した場合に、それが効いていること**をここで測る。 |
+| 根拠 | SAML Core 3.4 / Web SSO Profile / #275 |
+| テスト | `SA0504_鍵を登録したクライアントの署名の無い要求を断る` |
+
+**手順**
+
+1. 署名を付けずに要求を送る
+1. StatusCode は Requester である（署名を検証できない）
+1. SP の画面が「エラー応答である」と出す
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- StatusCode
+- エラー応答に Assertion を入れない（#278）
+- 応答の宛先は自己テストの ACS である
+- HTTP 200（結果の画面）
+- 判定は ABNORMAL_END
+- 理由が「エラー応答である」と出る
+- StatusCode が画面に出る
+
+**補足**
+
+- **`TestClient_21` は鍵を登録していない**ので、**同じ要求が `SA-3.*` では通る。** 差は登録だけである。
+- **上流（Open棟梁 #598）で 2 つが直っている。****`VerifyByXPath` が `StatusCode` を見るようになり**、**`VerifyResponse` の `out statusCode` が検証の前に設定される**ようになった。**そのため、こちら側に回避を置かずに理由を出せている。**
+
+# CN. コンテナ配備（疎通と配備固有）
+
+## CN-1.1 コンテナの Discovery が返り、`issuer` が構成の `IssuerId` と一致する
+
+| | |
+|---|---|
+| 観点 | **コンテナは `appsettings.json` と compose の環境変数で構成される**（#284）。**`issuer` は待ち受けている URL とは別の値**（`IssuerId`）であり、**compose が上書きしている**ので、**重ね読みが効いていなければ合わない。** |
+| 根拠 | #281 / #284 |
+| テスト | `CN0101_Discoveryが返りissuerが構成と一致する(containerKey: "downstream")` |
+
+**手順**
+
+1. Discovery を引く
+1. issuer が構成の IssuerId と一致する
+
+**検証（合否を判定する）**
+
+- JSON が返る
+- issuer が一致する
+
+## CN-1.2 上流コンテナと下流コンテナの `issuer` が違う
+
+| | |
+|---|---|
+| 観点 | **ハイブリッド構成では、2 つの IdP が建つ**（#281）。**同じ `iss` を名乗ると、連携キー `(iss, sub)` の意味が曖昧になる。****`IssuerId` は URL に依らない固定値**なので、**設定で分けるしかない。** |
+| 根拠 | #281 |
+| テスト | `CN0102_上流と下流のissuerが違う` |
+
+**手順**
+
+1. 両方の issuer を引く
+1. 違う値である
+
+**検証（合否を判定する）**
+
+- 上流の issuer が取れる
+- 下流の issuer が取れる
+- issuer が違う
+
+## CN-1.3 `jwkcerts` が鍵を返す（マウントした署名鍵まで読めている）
+
+| | |
+|---|---|
+| 観点 | **署名鍵はイメージに入れず、ホストの `C:\root\files\resource` をマウントしている**（#250 の段階 2）。**資源のパスは 19 件を環境変数で振り替えており、1 つでも漏らすと、その設定を使った瞬間に落ちる。****`jwkcerts` が返れば、少なくとも署名鍵までは届いている。** |
+| 根拠 | #250 の段階 2 / #284 |
+| テスト | `CN0103_jwkcertsが鍵を返す(containerKey: "downstream")` |
+
+**手順**
+
+1. jwkcerts を引く
+
+**検証（合否を判定する）**
+
+- 鍵が 1 つ以上ある
+
+## CN-1.4 `/Ping` が応答する（死活監視の口）
+
+| | |
+|---|---|
+| 観点 | **`IsLockedDownTestEndpoints` でも閉じない口である**（`CONFIGURATION.md` 11 節の注意 3）。**コンテナを監視するなら、ここを見ることになる。** |
+| 根拠 | #219 / #284 |
+| テスト | `CN0104_Pingが応答する(containerKey: "downstream")` |
+
+**手順**
+
+1. /Ping を叩く
+
+**検証（合否を判定する）**
+
+- HTTP 200 が返る
+
+## CN-2.1 コンテナで、種データの利用者でサインインできる
+
+| | |
+|---|---|
+| 観点 | **`mem` なので、作り直すたびに種データが作られる**（`CreateData`）。**サインインできることは、画面・ビュー・メールの雛形・DataProtection の鍵まで届いていることを意味する**（どれもマウントか設定で与えている）。 |
+| 根拠 | #250 の段階 2 / #264 / #284 |
+| テスト | `CN0201_種データの利用者でサインインできる(containerKey: "downstream")` |
+
+**手順**
+
+1. サインインする（利用者名は構成から。パスワードは出さない）
+1. 保護された画面が開く
+
+**検証（合否を判定する）**
+
+- サインインできた
+- `/Manage/Index` が開く
+
+## CN-3.1 自己テストの `ClientCredentialsFlow` が通る（折り返しが届いている）
+
+| | |
+|---|---|
+| 観点 | **サーバが自分自身を呼ぶ**ので、**コンテナの中から届く宛先が要る**（#250）。**`OAuth2ContainerizatedAuthSvrEPRootURI` に HTTP のループバックを与えている**（HTTPS にすると、コンテナの中でホストの開発用証明書を検証できない）。**この設定が欠けると、画面は出るのに結果が `ABNORMAL_END` になる。** |
+| 根拠 | #250 / #284 |
+| テスト | `CN0301_自己テストのclient_credentialsが通る(containerKey: "downstream")` |
+
+**手順**
+
+1. サインインして、自己テストのボタンを押す
+1. 応答に access_token がある
+1. トークンが空でない
+
+**検証（合否を判定する）**
+
+- 応答に access_token がある
+- トークンが空でない
+
+**補足**
+
+- **値は出さない。** 有無と長さだけを見る（`TESTING.md` 9 節）。**折り返しが届いていなければ、ここが空になる。**
+
+## CN-4.1 上流コンテナと下流コンテナが、同じ名前の Cookie を発行しない
+
+| | |
+|---|---|
+| 観点 | **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、**ポートを分けても Cookie は分かれない。** **名前で分けるしかない**（#255）。**掛かっていないものが 1 つでもあると、そこだけが奪い合いになる** — **#282 の AntiForgery がそれだった。** |
+| 根拠 | RFC 6265 §8.5 / #250 の段階 4 / #255 / #282 |
+| テスト | `CN0401_上流と下流で同じ名前のCookieを発行しない` |
+
+**手順**
+
+1. それぞれサインインして、発行された Cookie の名前を集める
+1. 名前が 1 つも重なっていない
+
+**検証（合否を判定する）**
+
+- 上流が Cookie を発行する
+- 下流が Cookie を発行する
+- 重なる名前が無い
+
+**補足**
+
+- **値は出さない。** 名前だけを見る（`TESTING.md` 9 節）。**`SessionTimeOut` だけは除いている** — **Open棟梁 の定数で、設定で分けられない**が、**雛形は `FxSessionTimeOutCheck` を `off` にしているので読まれない**（`CONFIGURATION.md` 11 節）。
+
+## CN-5.1 下流コンテナから上流コンテナへ委譲して、下流にサインインできる
+
+| | |
+|---|---|
+| 観点 | **コンテナ 2 つだけでハイブリッド IdP 構成が取れること**（#281）。**ブラウザが行く先（`authorize`）とサーバが呼ぶ先（`token` / `userinfo`）を分けた設定が効いていなければ、`code` の後で止まる。****どちらも「同じイメージの別の配備」**なので、**ここで出るのは配備の差である。** |
+| 根拠 | OIDC Core §3.1 / #140 / #281 / #284 |
+| テスト | `CN0501_コンテナ2つでID連携できる` |
+
+**手順**
+
+1. 上流コンテナでサインインしておく（下流は prompt=none で委譲する）
+1. 下流コンテナで「ID連携でサインイン」を押す
+1. 上流が認可応答（form_post）を返す
+1. 下流コンテナにサインインできている
+
+**検証（合否を判定する）**
+
+- 上流にサインインできる
+- 上流の認可エンドポイントへ送られる
+- prompt=none で要求する（画面を出させない）
+- code が返る
+- 保護された画面が開く
+
+**補足**
+
+- **`token` / `userinfo` はコンテナ内の宛先（`http://upstream:8080`）で呼ばれる**（#281）。**届いていなければ、この画面は開かない。**
+
+## CN-5.2 コンテナ 2 つの構成でも、二度目の連携で同じ利用者になる
+
+| | |
+|---|---|
+| 観点 | **連携キーは `(iss, sub)`**（#140 の段階 3）。**下流コンテナは `IssuerId` を上流と分けている**（#281）が、**連携キーに使うのは上流の `iss`** なので、分けても同じ利用者になる。**毎回新しいアカウントが作られないこと**を見る。 |
+| 根拠 | #140 の段階 3 / #281 / #284 |
+| テスト | `CN0502_二度目の連携でも同じ利用者になる` |
+
+**手順**
+
+1. 上流でサインインして、1 回目の連携を通す
+1. もう一度、同じ経路を通す
+1. 同じ利用者である
+
+**検証（合否を判定する）**
+
+- 1 回目でサインインできる
+- 1 回目と 2 回目が同じ利用者
+
+## CN-6.1 `/MultiPurposeAuthSite/...` では開かない（コンテナは root 配信である）
+
+| | |
+|---|---|
+| 観点 | **コンテナは `UsePathBase` を呼んでいないので root で配信する**（#250 の段階 2）。**Visual Studio は `/MultiPurposeAuthSite` の仮想アプリ**であり、**「VS と同じ設定」のうち、ここだけは同じにできない**（#281 で決めた）。**どちらの形なのかを取り違えると、`redirect_uri` の照合が合わなくなる**ので、**root 配信であることを固定する。** |
+| 根拠 | #250 の段階 2 / #281 / #284 |
+| テスト | `CN0601_仮想ディレクトリ付きのパスでは開かない(containerKey: "downstream")` |
+
+**手順**
+
+1. 仮想ディレクトリ付きのパスを叩く
+1. 開かない（404。リダイレクトもしない）
+1. root のパスなら開く
+
+**検証（合否を判定する）**
+
+- HTTP 404 である
+- `/Account/Login` は開く
+
+## CN-6.2 同意の記録が無いクライアントは、`prompt=none` で `consent_required` になる
+
+| | |
+|---|---|
+| 観点 | **上流は `mem` なので、作り直すと同意の記録が消える**（#280）。**`prompt=none` では UI を出せない**ので、**記録が無ければ `consent_required` を返すのが正しい**（OIDC Core §3.1.2.6）。**どのテストも「許可」を押さない専用のクライアント**で測る（他のクライアントは `CN-5` が同意を記録してしまう）。 |
+| 根拠 | OIDC Core §3.1.2.6 / #272 の段階 2 / #280 / #284 |
+| テスト | `CN0602_同意の記録が無ければconsent_requiredになる` |
+
+**手順**
+
+1. 専用のクライアント（同意を押さない）を構成から引く
+1. サインインして、prompt=none で認可を要求する
+1. consent_required が返る
+
+**検証（合否を判定する）**
+
+- `redirect_uri` が登録されている
+- リダイレクトで返る
+- error が consent_required
+
+**補足**
+
+- **同意画面を出さないのが肝である。** `prompt=none` は「UI を出すな」であり、**記録が無いときに黙って code を出してはならない**（#272 の段階 2 ＝ C-3）。
+
+## CN-6.3 未登録の `client_id` では認可せず、エラーの画面が出せる
+
+| | |
+|---|---|
+| 観点 | **プロトコルの確認はホスト側で済んでいる。****ここで見たいのは「コンテナでエラーの画面が出せること」**である — **ビューや資源のパスが届いていなければ、ここが 500 になる。** |
+| 根拠 | #284 |
+| テスト | `CN0603_未登録のclient_idでは認可しない(containerKey: "downstream")` |
+
+**手順**
+
+1. 未登録の client_id で認可を要求する
+1. code は出ない。500 でもない
+
+**検証（合否を判定する）**
+
+- code が出ない
+- 500 ではない
 
 # TC. 基本テストケース
 

@@ -168,7 +168,7 @@ docker compose up -d upstream
 |---|---|---|
 | URL | **`https://localhost:44301`** | 雛形が上流として書いている番号 |
 | パス | **root**（`/authorize`） | `UsePathBase` を呼んでいない |
-| ストア | **`mem`** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない |
+| ストア | **`mem`（固定）** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない。**下流は `-UserStoreType` で切り替わるが、上流は常に `mem`**（つまり **`sql` で回すとクロス ストアになる**。5 節の対応表） |
 | 証明書 | **ホストの `dotnet dev-certs`** を書き出したもの | 既に信頼済み。**ブラウザが警告を出さない** |
 | ログ | `store/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
 
@@ -184,18 +184,150 @@ docker compose up -d upstream
 > E2E の net10.0 版（`https://localhost:44300`）も**既に root で配信している**ので、
 > **root がこのアプリの Kestrel での通常の形である。**
 
+**どの口も、ポートで分けている。**
+**仮想パスを VS と同じにできない**（コンテナは root 配信）ため、
+**パスでは分けられないからである。**
+
+| ポート | 何 |
+|---|---|
+| **44300** | 下流（net10.0）。VS / `test.ps1 -Launch` の Kestrel |
+| **44301** | **上流コンテナ**（雛形が上流として書いている番号） |
+| **44302** | 下流（net48）。IIS Express |
+| **44303** | **下流コンテナ用に空けてある**（#281） |
+
+> **ポートを分けても Cookie は分かれない。**
+> **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+> **名前で分ける**（`CookieNamePrefix` / `AuthCookieName` / `sessionState:SessionCookieName`）。
+> **パスが違っても解決しない**のも同じ理由である（#250 の段階 4 で実測）。
+>
+> **44300〜44399 は IIS Express の開発用証明書が http.sys に登録済み**なので、
+> この範囲を使っている（5 節「net48 版も同時に測る」）。
+
 **リソースはイメージに入れず、ホストの `C:\root\files\resource` をマウントする**（読み取り専用）。
 **署名鍵（`X509` の pfx、`JwkSet.json`）を含む**ため、イメージに焼くべきではない。
 中身は [`Readme.ja.md`](Readme.ja.md) の手順で用意されているものを、そのまま使う。
 
-> **雛形の設定は 15 箇所が `C:/root/files/resource/...` である**（Windows 前提）。
+> **雛形の設定は 19 箇所が `C:/root/files/resource/...` である**
+> （Windows 前提。**実測 2026/10/08**。以前の記述は 15 で、古くなっていた）。
 > **Linux ではドライブ文字が効かない**ので、`docker-compose.yml` が
-> **15 個すべてをマウント先（`/resource`）に振り替えている。**
+> **19 個すべてをマウント先（`/resource`）に振り替えている。**
 > **1 つでも漏らすと、その設定を使った瞬間に落ちる**ので、
 > `appsettings.json` を `"C:/root/files` で grep した数と突き合わせること。
 >
 > **`log4net` だけは中身（出力先）も Windows のパス**なので、
 > **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
+
+#### 接頭辞を付けた配備を測る（#282 / #283）
+
+**`CookieNamePrefix` を使っている配備の Cookie 名は、通しでは現れない**
+（E2E のサイトは接頭辞を使わない）。**環境変数で渡して測る。**
+
+```powershell
+# **FxContainerization=ON なので、環境変数が設定キーを上書きする**（2 節）
+$env:CookieNamePrefix = 'probe_'
+.\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~CookiePolicyTests"
+```
+
+**起動している間に `Set-Cookie` を見る**（別のプロセスから叩く）。
+**実測（2026/10/08。`AuthCookieName` は空。サインイン後）。**
+
+```
+.probe_AspNetCore.Identity.Application          認証（枠組みの既定名 ＋ 接頭辞。#283）
+.probe_AspNetCore.Antiforgery.…                AntiForgery（#282）
+.probe_AspNetCore.Mvc.CookieTempDataProvider    TempData
+probe_MultiPurposeAuthSiteCoreSession           セッション
+probe_auth_time                                 max_age の判定
+```
+
+| 測ること | 期待 |
+|---|---|
+| `CookieNamePrefix` だけ | **500 にならず、認証 Cookie が `.probe_AspNetCore.Identity.Application`**（#283 より前は **500**） |
+| `CookieNamePrefix` ＋ `AuthCookieName` | **`.probe_MultiPurposeAuthSite`**（従来どおり。コンテナの上流・下流はこれ） |
+| `CookieNamePrefix` なし | **枠組みの既定のまま**（通しがこれ） |
+| net48 版 | **`probe___RequestVerificationToken`**（既定名の先頭に `.` が無いので前に付く） |
+
+> **通しに入れていない。**
+> **接頭辞を使う配備を立てるには、サイトの起動条件を変える必要があり**、
+> **`test.ps1` はサイトを 1 組しか立てない**ためである。
+> **上の手順が、その代わりである。**
+
+#### 下流もコンテナで建てる（#281）
+
+**上流と同じイメージを、別の設定で建てる。**
+**これでコンテナ 2 つだけでハイブリッド IdP 構成が取れる。**
+
+```powershell
+cd store
+.\1_DockerComposeUp.bat    # DB 3 つ ＋ 上流 ＋ 下流をまとめて起動する
+```
+
+**上流だけ・下流だけを建て直すなら、サービスを名指す。**
+
+```powershell
+.\3_PublishUpstream.ps1          # 成果物は 1 つ。上流も下流も同じイメージ
+docker compose up -d --build upstream downstream
+```
+
+> **#284 で、既定で起動するようにした**（profile を外した）。
+> **`CN-*` がこの 2 つを測る**ので、起動していないとほぼ常に Skip になる —
+> **「成功 0 件を NG にしている」のと同じ理屈で、測られないテストは危ない。**
+
+| | 値 | なぜ |
+|---|---|---|
+| URL | **`https://localhost:44303`** | **口はポートで分ける**（上のポートの表） |
+| `IssuerId` | **`https://downstream.ssoauth.opentouryo.com`** | **2 つの IdP が同じ `iss` を名乗らない**ようにする |
+| `SpRp_Isser` | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
+| `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
+| `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
+| 鍵の置き場 / ログ | `store/keys-downstream` / `store/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
+
+**どのコンテナにも要る設定は `store/mpas-common.env` に 1 か所だけ置いてある**
+（リソースのパス 19 件 ＋ log4net）。
+**サービスごとに書くと 2 回書くことになり、片方だけ直す事故が起きる。**
+
+> **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
+> **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
+
+##### 目視の手順（実測 2026/10/08）
+
+**両方を作り直した状態から 1 巡測った。**
+
+| 手順 | 実測 |
+|---|---|
+| 1. 両方の Discovery | **`issuer` が違う**（`https://ssoauth.opentouryo.com` / `https://downstream.ssoauth.opentouryo.com`） |
+| 2. 下流の `jwkcerts` | **鍵が 4 つ**（マウントした署名鍵まで読めている） |
+| 3. 上流でサインイン | HTTP 302 |
+| 4. 下流で「ID 連携でサインイン」 | 上流の `/authorize` へリダイレクト（`prompt=none`） |
+| 5. 1 回目 | **`consent_required`**（#280 と同じ。同意を 1 度整える）→ `code` |
+| 6. 下流へ戻す | `/Manage/Index` が **HTTP 200**（サインインできた） |
+| 7. 2 回目 | **同じ利用者**（`super_tanaka`）。連携キーが `(iss, sub)` であること |
+| 8. Cookie | **上流・下流が並んだ**（下記） |
+
+```
+.upstream_MultiPurposeAuthSite        .downstream_MultiPurposeAuthSite
+upstream_auth_time                    downstream_auth_time
+upstream_MultiPurposeAuthSiteSession  downstream_MultiPurposeAuthSiteSession
+```
+
+**`token` / `userinfo` が `http://upstream:8080` で届いていることは、6 で分かる**
+（届いていなければ `/Manage/Index` は 200 にならない）。
+
+##### AntiForgery の Cookie も、名前が分かれる（✅ 修正済み。#282）
+
+**#281 の時点では、AntiForgery だけが同じ名前であった**（`CookieNamePrefix` が掛かっていなかった）。
+**片方がもう片方のトークンを上書きし、ログに復号失敗が残っていた。**
+
+| | AntiForgery の Cookie 名 |
+|---|---|
+| #282 より前 | 上流 `.AspNetCore.Antiforgery.xxxxxxxxxxx` / 下流 `.AspNetCore.Antiforgery.xxxxxxxxxxx`（**同じ**） |
+| #282 より後 | 上流 `.upstream_AspNetCore.Antiforgery.…` / 下流 `.downstream_AspNetCore.Antiforgery.…`（**分かれた**） |
+
+**実測（2026/10/08。#282 の後）** : ID 連携を 2 巡させて、
+**`The antiforgery token could not be decrypted.` が両方とも 0 件**（直す前は上流 5 件 / 下流 10 件）。
+
+> **名前は DataProtection の識別子から導かれる**（net10.0 版。実測）。
+> **#279 で `SetApplicationName` を入れたので、`DataProtectionKeyPath` を設定した配備同士は、
+> パスが違っても同じ名前になる。** そのため、**接頭辞で分けるのが必須になった。**
 
 #### 上流コンテナの自己テスト（#250）
 
@@ -234,7 +366,7 @@ docker compose up -d upstream
 
 ```powershell
 Invoke-RestMethod https://localhost:44301/.well-known/openid-configuration
-Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つが出る
+Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実測 2026/10/08）
 ```
 
 **`jwkcerts` が返れば、マウントした署名鍵まで読めている。**
@@ -407,6 +539,38 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 **net48 の 302 は「未認証」と見分けがつかない。**
 **認証を疑って時間を使った**が、原因は画面側だった。
 **net10.0 側の 500 を先に見れば、すぐに分かる**（ログに例外の文面が出る）。
+
+#### SAML2 の E2E を足した（#275 / #276）
+
+**DDL は変えていないが、種データの `client_id` を変えたので `store/` は作り直す**こと。
+
+**種データの `client_id` を変えたら、必ず作り直す。**
+**`Saml2OAuth2Data.ClientID` は `Users.ClientID` への外部キーを持っている**ので、
+**古い id の利用者が残っていると、新しい id の登録を入れられない。**
+
+```
+INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_ClientID" と競合しています。
+```
+
+**種データは `CreateData`（`GET /Account/Login`）の中で作られる**ので、
+**ここで落ちると `/Account/Login` そのものが落ちる。**
+
+| 症状 | |
+|---|---|
+| **net10.0 版** | `GET /Account/Login` が **HTTP 500** |
+| **net48 版** | **HTTP 302**（`customErrors` が例外をリダイレクトに変える） |
+| **E2E** | **`__RequestVerificationToken` が取れず、サインインを要する全件が落ちる**（実測 416 / 543） |
+
+**「ほぼ全件が落ちる」ときは、まず `/Account/Login` を 1 回叩くこと。**
+**個々のテストを追っても何も分からない**（どれも同じ 1 行で落ちている）。
+
+> **`client_id` の接頭辞の付け方に注意。**
+> **`e2e0tcNN` の `NN` は `TestClient_NN` ではない。**
+> `TestClient2_2` が `e2e0tc22`、`TestClient2_3` が `e2e0tc23`、
+> `TestClient4_2` が `e2e0tc42`、`TestClient4_3` が `e2e0tc43` を使っている。
+> **`TestClient_22` に `e2e0tc22` を取ろうとして衝突した**（#275）。
+> **先に在る方が登録され、こちらは「登録されていない」ことになり、**
+> **SAML の応答が返らないという形で出た。** SAML の分は `e2e0saNN` にしてある。
 
 #### WebAuthn を復活させ、`Users.FIDO2PublicKey` を落とした（#137）
 
@@ -876,12 +1040,47 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer / CIBA） | `Tests/Extended/` |
 | `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/Issues/` |
 | `RT-C<n>.n` | **公開の Issue を持たない項目**の回帰（`RT-C10.1` なら `ANALYSIS-IdP.md` の C-10） | `Tests/Issues/` |
+| `FA-n.n` | FAPI（クライアント登録 ＝ `oauth2_oidc_mode` ごとに通る経路） | `Tests/Fapi/` |
+| `21-n.n` | OAuth 2.1（許されない経路の抑止） | `Tests/OAuth21/` |
+| `SA-n.n` | **SAML2**（Web Browser SSO。#275） | `Tests/Saml/` |
+| `CN-n.n` | **コンテナ配備**（疎通と配備固有。#284） | `Tests/Container/` |
+
+### どのテストが、どのサイトとどのストアを使うか（#284）
+
+**上流が常に `mem` であることと、下流が `-UserStoreType` で切り替わることが、
+別々に書いてあって組み合わせとして読めなかった**ので、1 枚にした。
+
+| 識別子 | サイト | ストア |
+|---|---|---|
+| `SM-n` | ホストの core / netfx | **`-UserStoreType`**（`mem` / `sql` / `ora` / `npg`） |
+| `TC-n.n` | 同上 | 同上 |
+| `EX-n.n` | 同上 | 同上 |
+| `RT-<Issue>.n` / `RT-C<n>.n` | 同上 | 同上 |
+| **`RT-140.n`**（ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**） |
+| `FA-n.n` | ホストの core / netfx | `-UserStoreType` |
+| `21-n.n` | 同上 | 同上 |
+| `SA-n.n` | 同上 | 同上 |
+| **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
+
+**役割分担で言うと、こうなる。**
+
+| | 測るもの |
+|---|---|
+| ホストの core / netfx（`mem` / `sql` / `ora` / `npg`） | **実装**（方言ごとの SQL を含む） |
+| `RT-140.*` | **ID 連携の機能** ＋ **連携キーの永続**（クロス ストア） |
+| **`CN-*`** | **配備の差**（コンテナ特有のもの） |
+
+> **クロス ストアは、ただ通っているだけでない。**
+> **実測（2026/10/08。`-UserStoreType sql`）** : `RT-140.2`〜`.7` が core / netfx ともに OK。
+> 下流の `UserLogins` に **連携キー `(iss, sub)` の行が 2 件**入り、
+> **2 回目はそれを引いて同じ利用者になる**（`RT-140.5`）。
+> **`mem` では静的な辞書で済むところが、`sql` では方言ごとの SQL（`CmnUserStore`）を通る。**
 
 > **段階に分けた Issue は、段階ごとに番号を伸ばす**。
 > 例 : **#272 の段階 1** は `RT-272.1`〜`RT-272.3`で、
 > **段階 2（同意の永続化）はその続き番号になる。**
 
-報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT**）に並ぶ。
+報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT → FA → 21 → SA → CN**）に並ぶ。
 
 **土台から順に並べる。**
 SM が倒れていれば、TC の合否は読む意味がない。
@@ -1057,6 +1256,39 @@ docker compose up -d upstream
 > **実測（#250 の段階 5）** : `FormPost.cshtml` を直した（#252）あと、**上流を作り直さずに**
 > `RT-140.7` を回して落ちた。**下流は新しく、上流だけが古い**という状態で、
 > **「直したはずのものが直っていない」ように見える。**
+
+#### 作り直すと、同意の記録が消える（#280）
+
+**上流は `UserStoreType=mem`** なので、
+**作り直すと同意の記録（#272 の段階 2）も消える**
+（`Sts.ConsentProvider.ConsentGrants` は静的な辞書）。
+
+**この E2E は `prompt=none` で委譲する**ため、
+**記録が無い上流に対しては `consent_required` になる**
+（OIDC Core §3.1.2.6。**IdP の側は仕様どおりである**）。
+
+**実測（2026/10/08。作り直した直後の通し）** : **6 件が落ちた**
+（`RT-140.4` / `.5` / `.7` × core / netfx）。症状は
+`RT-140.4 code が返る / 期待=code あり 実測=**無し**` で、**退行に見える。**
+
+**#280 で、テスト側が前提を整えるようにした**
+（`IdFederationTests.EnsureUpstreamConsentAsync`）。
+
+- **`prompt=none` を外して 1 度だけ叩き、同意画面が出たら「許可」を押す**
+- **記録が在れば同意画面は出ない**ので、何もしない（**余分な往復もしない**）
+- **上流が未サインインならログイン画面が返る**ので、押さない
+  （`RT-140.6` の意味は変わらない）
+
+> **「許可が押せること」は測っていない。** 測るのは ID 連携の一巡である。
+> **整えられなければ「`code` が返らない」として落ちる**ので、
+> **前提の失敗が隠れることはない。**
+
+**実測（#280 の後。同じく作り直した直後）** : `IdFederationTests` は **8 / 8 OK**。
+上流のログでは **`consent_required` が 2 回**（core / netfx の 1 回目）出たあと、
+**同意画面が 2 回描画され**、そのあと `code` が返っている。
+
+**下流の同意（`RT-272` 系）とは別の話である。**
+`TestClient_19` / `TestClient_20` は、**下流の「記録が無い状態」を測るために在る。**
 
 **下流の設定は `test.ps1` が差し込む**（`Set-IdFederationEnv`）。
 

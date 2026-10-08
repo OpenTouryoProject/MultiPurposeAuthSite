@@ -288,6 +288,9 @@
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // 認可エンドポイント
     "OAuth2AuthorizeEndpoint": "/authorize",
+    // SAML2 Assertion の有効期限（分）。#276
+    //   書かなければ OidcIdTokenExpireTimeSpanFromMinutes を使う（従来の振る舞い）。
+    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
     "Saml2RequestEndpoint": "/saml2request",
     // RP からのログアウト（RP-Initiated Logout 1.0。#232）
     //   **既に配備された設定ファイルに無くても動く**（無ければ /end_session を使う）
@@ -332,6 +335,20 @@
     //   **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
     //   例 : /keys（コンテナ）
     "DataProtectionKeyPath": "",
+
+    // 配備で切り替えるもの（#279。net10.0 版だけ）。
+    //   いずれも、書かなければ従来どおりの動作である。
+    //   UseHttpsRedirection          : on で HTTP を HTTPS へリダイレクトする
+    //                                  （ポートも決めること。ASPNETCORE_HTTPS_PORT は**単数**）
+    //   CookieSecurePolicy           : always で Cookie に Secure 属性を必ず付ける
+    //                                  （平文 HTTP の環境で付けるとサインインできなくなる）
+    //   UseForwardedHeaders          : on で X-Forwarded-Proto / -For を取り込む
+    //                                  （前段で TLS を終端する構成。詐称を許すので、アプリを直に叩ける環境では使わない）
+    //   ForwardedHeadersKnownProxies : 信用する前段のアドレス（カンマ区切り。空なら範囲を制限しない）
+    "UseHttpsRedirection": "",
+    "CookieSecurePolicy": "",
+    "UseForwardedHeaders": "",
+    "ForwardedHeadersKnownProxies": "",
     "IsLockedDownTestEndpoints": "false",
     // - test_self_saml : AssertionConsumerService
     "Saml2ResponseEndpoint": "/Account/AssertionConsumerService",

@@ -2,3 +2,9 @@
 *.bat text eol=crlf
 
 # Visual Studio files want to use CRLF by default.
+
+# env_file は LF でなければならない（#281）。
+#   core.autocrlf が true の Windows で CRLF になると、
+#   docker compose が読んだ値の末尾に CR が残る。
+#   パスの末尾に CR が付くと、**そのファイルを使った瞬間に落ちる。**
+*.env text eol=lf

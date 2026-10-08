@@ -3,7 +3,8 @@ rem **DDL を先に流し込む**（コピー忘れで古いスキーマのま�
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp00_CopyInitSql.ps1"
 if errorlevel 1 goto :error
 
-rem **上流 IdP の publish と証明書**（#250 の段階 2）
+rem **IdP コンテナの publish と証明書**（#250 の段階 2）。
+rem   **成果物は 1 つで、上流も下流も同じイメージを使う**（#281）。
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp03_PublishUpstream.ps1"
 if errorlevel 1 goto :error
 
@@ -15,6 +16,10 @@ echo.
 echo  E2E 用の UserStore を起動しました（ポートは +1）。
 echo    SQL Server : 1434 / Oracle : 1522 / PostgreSQL : 5433
 echo  上流 IdP    : https://localhost:44301  （UserStoreType=mem）
+echo  下流 IdP    : https://localhost:44303  （UserStoreType=mem）
+echo.
+echo  **コンテナ 2 つでハイブリッド IdP 構成になっています**（#281 / #284）。
+echo    E2E の CN-* がこの 2 つを測ります。
 echo.
 echo  **Oracle の初回起動は数分かかります。**
 echo    docker compose ps  で healthy になるのを待ってください。

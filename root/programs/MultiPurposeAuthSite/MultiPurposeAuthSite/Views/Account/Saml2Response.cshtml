@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2026/09/28  玄人 幸道         新規（#246 の項目 3）
+    //*  2026/10/07  玄人 幸道         Audience / Recipient / InResponseTo / 期限の照合を出した（#276）
     //**********************************************************************************
 
     **目視で確かめるための画面である。**
@@ -48,7 +49,9 @@
 
 <text>
     ※ SP（このサイトが兼ねているテスト用クライアント）が受け取った SAML2 の応答である。<br />
-    ※ <b>判定は「署名を検証できたこと」と「Issuer がこの IdP と一致すること」の両方</b>で決まる。<br />
+    ※ <b>判定には、署名・Issuer・Audience・Recipient・InResponseTo・RelayState のすべてが入る</b>（#276）。<br />
+    ※ <b>StatusCode と NotOnOrAfter は、署名の検証（Open棟梁）が既に落とす</b>。<br />
+    &nbsp;&nbsp;&nbsp;その場合は、<b>「署名の検証」が ✗ になる</b>ので、<b>上の理由を読むこと</b>。<br />
     ※ アサーションの XML は、下の欄にそのまま出している（<b>字下げのみ整形</b>）。
 </text>
 <br /><br />
@@ -82,6 +85,29 @@ else
     <tr>
         <th>Issuer の一致</th>
         <td><b>@((bool)ViewBag.IssuerMatched ? "✓ 一致" : "✗ 不一致")</b></td>
+    </tr>
+    @*  **照合ごとに出す**（#276）。**期待値を渡していない経路は null** になる。 *@
+    @{
+        bool? audMatched = (bool?)ViewBag.AudienceMatched;
+        bool? rcpMatched = (bool?)ViewBag.RecipientMatched;
+        bool? irtMatched = (bool?)ViewBag.InResponseToMatched;
+        bool? notExpired = (bool?)ViewBag.NotExpired;
+    }
+    <tr>
+        <th>Audience の照合</th>
+        <td><b>@(audMatched == true ? "✓ 自分の ACS URL" : (audMatched == false ? "✗ 別の相手あて" : "（照合していない）"))</b></td>
+    </tr>
+    <tr>
+        <th>Recipient の照合</th>
+        <td><b>@(rcpMatched == true ? "✓ 自分の ACS URL" : (rcpMatched == false ? "✗ 別の宛先" : "（照合していない）"))</b></td>
+    </tr>
+    <tr>
+        <th>InResponseTo の照合</th>
+        <td><b>@(irtMatched == true ? "✓ 送った要求の ID と一致" : (irtMatched == false ? "✗ 送った要求と対応しない" : "（照合していない）"))</b></td>
+    </tr>
+    <tr>
+        <th>有効期限</th>
+        <td><b>@(notExpired == true ? "✓ 期限内" : (notExpired == false ? "✗ 期限切れ" : "（読めなかった）"))</b></td>
     </tr>
     <tr>
         <th>NameID / NameIDFormat</th>

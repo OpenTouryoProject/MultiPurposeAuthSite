@@ -53,7 +53,9 @@
 //*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/04  玄人 幸道         CORSを測る口（Origin付きGET / プリフライト）を追加（#265）
+//*  2026/10/06  玄人 幸道         同意画面の許可・拒否と、同意の取り消しの操作を追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthn の登録・認証の画面操作を追加（#137）
+//*  2026/10/08  玄人 幸道         CookieNames（名前だけ）を追加（#284）
 //**********************************************************************************
 
 using System;
@@ -98,6 +100,33 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>サインイン済みか</summary>
         public bool IsSignedIn { get; private set; }
+
+        /// <summary>
+        /// いま持っている Cookie の名前（#284）。**値は返さない。**
+        /// </summary>
+        /// <remarks>
+        /// **ブラウザが持っている状態そのもの**を見る（`CookieContainer`）。
+        /// **`Set-Cookie` を拾い集めるのでは足りない** —
+        /// **認証 Cookie はサインインの POST の応答で来る**ので、
+        /// その応答を観測していないと漏れる（#284 で踏んだ）。
+        ///
+        /// **値は返さない。** 名前だけで足りる用途（衝突の検出）のために在る。
+        /// </remarks>
+        public IEnumerable<string> CookieNames
+        {
+            get
+            {
+                List<string> names = new List<string>();
+
+                foreach (Cookie cookie in this._handler.CookieContainer.GetCookies(
+                    new Uri(this.Target.BaseUrl)))
+                {
+                    names.Add(cookie.Name);
+                }
+
+                return names;
+            }
+        }
 
         /// <summary>コンストラクタ</summary>
         /// <param name="target">テスト対象</param>

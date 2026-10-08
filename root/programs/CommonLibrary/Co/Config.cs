@@ -55,6 +55,9 @@
 //*  2026/10/03  玄人 幸道         TestUserSuffix を追加（#260）
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins を追加（#265）
 //*  2026/10/06  玄人 幸道         SessionStoreType / SessionStoreConnectionString を追加（#256）
+//*  2026/10/07  玄人 幸道         FIDOServerModeをnet10.0版だけで復活（#137）
+//*  2026/10/07  玄人 幸道         Saml2AssertionExpireTimeSpanFromMinutesを専用キーにした（#276）
+//*  2026/10/07  玄人 幸道         配備で切り替える設定を 4 つ追加（#279）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -947,6 +950,89 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region 配備で切り替えるもの（#279）
+
+        //  **本番でだけ有効にしたい設定を「コメントアウトして置いておく」と、
+        //    環境を移すときにソースを書き換えることになる。**
+        //    Open棟梁 の MVC_Sample に倣い、設定で切り替える形にした（#279 / 上流 #541・#549）。
+        //
+        //  **いずれも net10.0 版だけの設定である。**
+        //    net48 版は `Web.config` の `<httpCookies>` / `<rewrite>` などで行う。
+        //    **`_app.config` にキーを置いていない**のは、`DataProtectionKeyPath`（#251）と同じ理由。
+        //
+        //  **既定値は、いずれも従来どおりの動作**である。
+
+        /// <summary>HTTP を HTTPS へリダイレクトするか（#279）</summary>
+        /// <remarks>
+        /// **既定は off。** 平文 HTTP で動かす環境（疎通確認や、
+        /// TLS を前段のリバース プロキシで終端する構成）でリダイレクトすると、
+        /// **到達できなくなる**ため。TLS を自分で終端するなら `on` にする。
+        ///
+        /// **on にするだけでは足りない。リダイレクト先のポートも要る。**
+        /// 決められないと、ミドルウェアは警告を出すだけで素通りする。
+        /// </remarks>
+        public static bool UseHttpsRedirection
+        {
+            get
+            {
+                return (GetConfigParameter.GetConfigValue("UseHttpsRedirection") ?? "")
+                    .ToLower() == "on";
+            }
+        }
+
+        /// <summary>Cookie に Secure 属性を必ず付けるか（#279）</summary>
+        /// <remarks>
+        /// **設定キーは `CookieSecurePolicy`**（`always` のときだけ true）。
+        ///
+        /// **既定は空＝各 Cookie の設定に従う。**
+        /// **平文 HTTP の環境で `always` にすると、Cookie が送られずサインインできなくなる**
+        /// （AntiForgery の Cookie も返らないので、
+        /// 症状は「サインイン画面は出るが POST が 400」になる）。
+        /// </remarks>
+        public static bool CookieSecurePolicyAlways
+        {
+            get
+            {
+                return (GetConfigParameter.GetConfigValue("CookieSecurePolicy") ?? "")
+                    .ToLower() == "always";
+            }
+        }
+
+        /// <summary>転送ヘッダ（X-Forwarded-Proto / -For）を取り込むか（#279）</summary>
+        /// <remarks>
+        /// **リバース プロキシで TLS を終端すると、アプリから見た接続は HTTP になる。**
+        /// 利用者のブラウザは HTTPS で繋いでいるのに `Request.IsHttps` は false のままで、
+        /// **Secure 属性が付かず、生成する絶対 URL も http になる。**
+        ///
+        /// **既定は off。** 素の HTTP で動かす環境では、
+        /// **転送ヘッダを誰でも付けられる（＝ クライアントが詐称できる）**ため。
+        /// </remarks>
+        public static bool UseForwardedHeaders
+        {
+            get
+            {
+                return (GetConfigParameter.GetConfigValue("UseForwardedHeaders") ?? "")
+                    .ToLower() == "on";
+            }
+        }
+
+        /// <summary>信用する前段のアドレス（#279。カンマ区切り。空なら範囲を制限しない）</summary>
+        /// <remarks>
+        /// **既定ではループバックからの転送しか信用しない。**
+        /// コンテナや Kubernetes では前段が別アドレスになるため、
+        /// **指定しないとヘッダが黙って捨てられ、何も起きない。**
+        /// **「on にしたのに直らない」の原因はほぼこれである。**
+        /// </remarks>
+        public static string ForwardedHeadersKnownProxies
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ForwardedHeadersKnownProxies");
+            }
+        }
+
+        #endregion
+
         #region RequireVerifiedEmailForAccountLinking
 
         /// <summary>
@@ -1352,11 +1438,31 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>
         /// SAML2 Assertionの有効期限（分）
         /// </summary>
+        /// <remarks>
+        /// **専用のキーを読む**（#276）。
+        /// **以前は `OidcIdTokenExpireTimeSpanFromMinutes` を読んでいた**が、
+        /// **この名前のキーはどちらの雛形にも在らなかった**。
+        ///
+        /// **キーが無ければ、従来どおり id_token の値を使う**
+        /// （**既存の配備を壊さないため**）。
+        ///
+        /// > **单位に注意。** `SAML2Bindings.CreateAssertion` の引数は
+        /// > **`double expiresFromSecond`（秒）** である。
+        /// > **渡すときに 60 を掛けること**（`SamlProviders/CmnEndpoints`）。
+        /// </remarks>
         public static double Saml2AssertionExpireTimeSpanFromMinutes
         {
             get
             {
-                return double.Parse(GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes"));
+                string temp = GetConfigParameter.GetConfigValue("Saml2AssertionExpireTimeSpanFromMinutes");
+
+                if (string.IsNullOrEmpty(temp))
+                {
+                    // **従来の振る舞い**（id_token の値を流用）。
+                    temp = GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes");
+                }
+
+                return double.Parse(temp);
             }
         }
 

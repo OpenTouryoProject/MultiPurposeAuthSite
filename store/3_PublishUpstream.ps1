@@ -1,6 +1,10 @@
 ﻿<#
 .SYNOPSIS
-    ハイブリッド IdP の**上流側**コンテナに要るものを用意する（#250 の段階 2）。
+    IdP コンテナに要るものを用意する（#250 の段階 2）。
+
+    **成果物は 1 つで、上流も下流も同じイメージを使う**（#281）。
+    役の違いは docker-compose.yml の設定だけであるので、ここでは分けない。
+    （名前は従来のままにしてある。人と 1_DockerComposeUp.bat が叩くため）
 
 .DESCRIPTION
     ＜何を用意するか＞
@@ -109,3 +113,4 @@ if ($LASTEXITCODE -ne 0)
 Write-Output "  publish しました : app\publish"
 Write-Output ""
 Write-Output "  上流コンテナは https://localhost:44301 で待ち受けます（PathBase 無し）。"
+Write-Output "  下流コンテナ（docker compose up -d downstream）は https://localhost:44303 です。"

@@ -207,6 +207,9 @@ function Get-TrxResults([string]$path)
         #   EX-n.n        拡張仕様（Revocation / Introspection / Device / Hybrid など）
         #   RT-<Issue>.n  個別 Issue の回帰
         #   RT-C<n>.n     **公開の Issue を持たない項目**の回帰（ANALYSIS-IdP.md の番号。TESTING.md 5 節）
+        #   FA-n.n        FAPI（クライアント登録ごとに通る経路）
+        #   21-n.n        OAuth 2.1（許されない経路の抑止）
+        #   SA-n.n        SAML2（Web Browser SSO。#275）
         $tc = ""
         $m = [regex]::Match($stdout, '\[([A-Z0-9]{2}-C?[0-9]+(?:\.[0-9]+)?)\]')
         if ($m.Success) { $tc = $m.Groups[1].Value }
@@ -448,6 +451,8 @@ function Get-IdRank
         "RT"    { return 3 }
         "FA"    { return 4 }   # FAPI（ClientMode ごとの経路。#222）
         "21"    { return 5 }   # OAuth 2.1（許されない経路の抑止。#222）
+        "SA"    { return 6 }   # SAML2（Web Browser SSO。#275）
+        "CN"    { return 7 }   # コンテナ配備（疎通と配備固有。#284）
         default { return 8 }
     }
 }
@@ -470,8 +475,12 @@ function Get-IdPart
 
 # **Obsolete（廃止されたフロー）は、一覧の最後尾に置く（#220）。**
 #   識別子は TC のままなので、名前空間で判る。
+#
+#   **群の番号とぶつからない値にする。**
+#   **#284 で CN を 7 にしたとき、ここが 7 だったために互い違いになり、**
+#   **見出しが 3 回出た**（実測）。
 $ordered = @($rows | Sort-Object `
-    @{ Expression = { if ($_.名前 -like '*.Tests.Obsolete.*') { 7 } else { Get-IdRank $_.TC } } }, `
+    @{ Expression = { if ($_.名前 -like '*.Tests.Obsolete.*') { 10 } else { Get-IdRank $_.TC } } }, `
     @{ Expression = { Get-IdPart $_.TC 0 } }, `
     @{ Expression = { Get-IdPart $_.TC 1 } }, `
     名前)
@@ -621,6 +630,11 @@ if ($UpdateTestCases)
                 "TC"    { "TC. 基本テストケース" }
                 "EX"    { "EX. 拡張仕様" }
                 "RT"    { "RT. 個別 Issue の回帰" }
+                # **FA / 21 / SA は見出しが無く、群の名前がそのまま出ていた**（#275 で足した）。
+                "FA"    { "FA. FAPI（クライアント登録ごとに通る経路）" }
+                "21"    { "21. OAuth 2.1（許されない経路の抑止）" }
+                "SA"    { "SA. SAML2（Web Browser SSO）" }
+                "CN"    { "CN. コンテナ配備（疎通と配備固有）" }
                 default { $group }
             }
 
