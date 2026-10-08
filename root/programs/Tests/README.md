@@ -335,6 +335,30 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 > **一本化を損なうと `MinimumSameSitePolicy` の明示が失われ、`samesite` 属性ごと出なくなる**
 > （実測。「`Lax` に格上げ」ではない）。**ブラウザを使わないと気付けない類の退行**なので固定している。
 
+**`Tests/Container/` は、コンテナ配備を測る**（#284）。
+
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/Container/ContainerTargets.cs` | （基盤） | コンテナをテスト対象にする。**`docker inspect` で実効の環境変数を読み、`publish/appsettings.json` に重ねる**（compose と同じ優先順位）。**建っていなければ Skip** |
+| `Tests/Container/ContainerSmokeTests.cs` | `CN-1` | **疎通**。Discovery の `issuer` が構成と一致すること、**上流と下流で `issuer` が違うこと**（#281）、`jwkcerts` が鍵を返すこと（**マウントが効いている**）、`/Ping` |
+| `Tests/Container/ContainerSignInTests.cs` | `CN-2` | **種データの利用者でサインインできる**（`mem` なので、作り直すたびに作られる） |
+| `Tests/Container/SelfTestLoopbackTests.cs` | `CN-3` | **自己テストの折り返し**（`OAuth2ContainerizatedAuthSvrEPRootURI`。#250）。**下流コンテナで測る** — 上流は `OAuth2ClientEndpointsRootURI` を与えていない |
+| `Tests/Container/CookieIsolationTests.cs` | `CN-4` | **上流と下流の Cookie の名前が 1 つも衝突しないこと**（#255 / #279 / #282 の回帰）。**`CookieContainer` を見る**（`Set-Cookie` を拾うと認証 Cookie が漏れる） |
+| `Tests/Container/HybridFlowTests.cs` | `CN-5` | **コンテナ 2 つでの ID 連携**（下流コンテナ → 上流コンテナ。#281 の目視を機械化）。**2 回目も同じ利用者**になること |
+| `Tests/Container/ContainerErrorTests.cs` | `CN-6` | **配備だから起きる異常系**。`/MultiPurposeAuthSite/...` が 404（**root 配信であること**）、**同意の記録が無いときの `consent_required`**（#280 の裏返し）、未登録の `client_id` |
+
+> **プロトコルとして間違った要求は、ここで測らない。**
+> **ホストの core / netfx で測っている**（`EX-*` / `RT-185` / `RT-186` など）。
+> **コンテナは「同じコードの別の配備」**なので、
+> **測る値打ちがあるのは配備の差だけである。**
+
+> **`CN-6.2` は専用のクライアントを使う**（`IdFederationNoConsent`）。
+> **`CN-5` が同意を記録する**ので、**同じクライアントでは 2 回目から測れない。**
+> **`TestClient_19`（#272 の段階 2）と同じ考え方である。**
+
+> **ID 連携の手順は `Infrastructure/IdFederation` に 1 つだけある**（#284）。
+> **`RT-140.*`（下流 = ホスト）と `CN-5.*`（下流 = コンテナ）が同じ実装を使う。**
+
 **`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
 
 | ファイル | 識別子 | 対象 |

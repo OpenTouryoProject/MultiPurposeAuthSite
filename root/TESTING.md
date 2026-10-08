@@ -168,7 +168,7 @@ docker compose up -d upstream
 |---|---|---|
 | URL | **`https://localhost:44301`** | 雛形が上流として書いている番号 |
 | パス | **root**（`/authorize`） | `UsePathBase` を呼んでいない |
-| ストア | **`mem`** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない |
+| ストア | **`mem`（固定）** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない。**下流は `-UserStoreType` で切り替わるが、上流は常に `mem`**（つまり **`sql` で回すとクロス ストアになる**。5 節の対応表） |
 | 証明書 | **ホストの `dotnet dev-certs`** を書き出したもの | 既に信頼済み。**ブラウザが警告を出さない** |
 | ログ | `store/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
 
@@ -258,14 +258,19 @@ probe_auth_time                                 max_age の判定
 
 ```powershell
 cd store
-.\3_PublishUpstream.ps1          # 成果物は 1 つ。上流も下流も同じイメージ
-docker compose up -d upstream
-docker compose up -d downstream   # ※ profile が付いているので、名指しか --profile hybrid
+.\1_DockerComposeUp.bat    # DB 3 つ ＋ 上流 ＋ 下流をまとめて起動する
 ```
 
-> **`1_DockerComposeUp.bat` では起動しない。**
-> **E2E は下流をホストで動かす**ので、既定の挙動を変えないため
-> （compose の profile `hybrid`）。
+**上流だけ・下流だけを建て直すなら、サービスを名指す。**
+
+```powershell
+.\3_PublishUpstream.ps1          # 成果物は 1 つ。上流も下流も同じイメージ
+docker compose up -d --build upstream downstream
+```
+
+> **#284 で、既定で起動するようにした**（profile を外した）。
+> **`CN-*` がこの 2 つを測る**ので、起動していないとほぼ常に Skip になる —
+> **「成功 0 件を NG にしている」のと同じ理屈で、測られないテストは危ない。**
 
 | | 値 | なぜ |
 |---|---|---|
@@ -1038,12 +1043,44 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `FA-n.n` | FAPI（クライアント登録 ＝ `oauth2_oidc_mode` ごとに通る経路） | `Tests/Fapi/` |
 | `21-n.n` | OAuth 2.1（許されない経路の抑止） | `Tests/OAuth21/` |
 | `SA-n.n` | **SAML2**（Web Browser SSO。#275） | `Tests/Saml/` |
+| `CN-n.n` | **コンテナ配備**（疎通と配備固有。#284） | `Tests/Container/` |
+
+### どのテストが、どのサイトとどのストアを使うか（#284）
+
+**上流が常に `mem` であることと、下流が `-UserStoreType` で切り替わることが、
+別々に書いてあって組み合わせとして読めなかった**ので、1 枚にした。
+
+| 識別子 | サイト | ストア |
+|---|---|---|
+| `SM-n` | ホストの core / netfx | **`-UserStoreType`**（`mem` / `sql` / `ora` / `npg`） |
+| `TC-n.n` | 同上 | 同上 |
+| `EX-n.n` | 同上 | 同上 |
+| `RT-<Issue>.n` / `RT-C<n>.n` | 同上 | 同上 |
+| **`RT-140.n`**（ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**） |
+| `FA-n.n` | ホストの core / netfx | `-UserStoreType` |
+| `21-n.n` | 同上 | 同上 |
+| `SA-n.n` | 同上 | 同上 |
+| **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
+
+**役割分担で言うと、こうなる。**
+
+| | 測るもの |
+|---|---|
+| ホストの core / netfx（`mem` / `sql` / `ora` / `npg`） | **実装**（方言ごとの SQL を含む） |
+| `RT-140.*` | **ID 連携の機能** ＋ **連携キーの永続**（クロス ストア） |
+| **`CN-*`** | **配備の差**（コンテナ特有のもの） |
+
+> **クロス ストアは、ただ通っているだけでない。**
+> **実測（2026/10/08。`-UserStoreType sql`）** : `RT-140.2`〜`.7` が core / netfx ともに OK。
+> 下流の `UserLogins` に **連携キー `(iss, sub)` の行が 2 件**入り、
+> **2 回目はそれを引いて同じ利用者になる**（`RT-140.5`）。
+> **`mem` では静的な辞書で済むところが、`sql` では方言ごとの SQL（`CmnUserStore`）を通る。**
 
 > **段階に分けた Issue は、段階ごとに番号を伸ばす**。
 > 例 : **#272 の段階 1** は `RT-272.1`〜`RT-272.3`で、
 > **段階 2（同意の永続化）はその続き番号になる。**
 
-報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT → FA → 21 → SA**）に並ぶ。
+報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT → FA → 21 → SA → CN**）に並ぶ。
 
 **土台から順に並べる。**
 SM が倒れていれば、TC の合否は読む意味がない。

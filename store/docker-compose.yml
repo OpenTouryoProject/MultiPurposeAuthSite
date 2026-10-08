@@ -1,4 +1,4 @@
-﻿# ##################################################################################################
+# ##################################################################################################
 # E2E テスト用の UserStore（SQL Server / Oracle / PostgreSQL）
 #
 #   **これは E2E 専用である。** 手動確認は LocalServicesOnDocker を使う。
@@ -195,6 +195,16 @@ services:
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__redirect_uri_code=https://localhost:44303/Account/IDFederationRedirectEndPoint
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__client_name=IdFederationDownstreamContainer
+
+      # ---------------------------------------------------------------- 同意を押さないクライアント（#284）
+      #   **CN-6.2（記録が無いときの consent_required）を測るためだけに在る。**
+      #   **どのテストも「許可」を押さない。**
+      #   他のクライアントは CN-5 が同意を記録するため、
+      #   **2 回目から測れなくなる**（TestClient_19 と同じ考え方。#272 の段階 2）。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d4__client_secret=E2E_sECqqmi9kQtMJQYhtUdXf8dirbEcU2F7
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d4__redirect_uri_code=https://noconsent.e2e.example/cb
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d4__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d4__client_name=IdFederationNoConsent
     volumes:
       - ./cert:/https:ro
       - ./keys:/keys
@@ -213,18 +223,15 @@ services:
   #   **上流と同じイメージを、別の設定で建てる。**
   #   これで**コンテナ 2 つだけでハイブリッド IdP 構成が取れる**。
   #
-  #   **既定では起動しない**（profile を付けてある）。
-  #   **E2E は下流をホストで動かす**ので、1_DockerComposeUp.bat の挙動を変えないため。
-  #
-  #     docker compose up -d downstream              サービスを名指しする（profile が有効になる）
-  #     docker compose --profile hybrid up -d        まとめて起動する
+  #   **既定で起動する**（#284 で profile を外した）。
+  #   **CN-* がこのコンテナを測る**ので、
+  #   **起動していないとほぼ常に Skip になる** —
+  #   **「成功 0 件を NG にしている」のと同じ理屈で、測られないテストは危ない。
   #
   #   **手順と目視の見方は root\TESTING.md 1 節。**
   downstream:
     build: ./app
     restart: always
-    profiles:
-      - hybrid
     ports:
       - 44303:8081
     env_file:

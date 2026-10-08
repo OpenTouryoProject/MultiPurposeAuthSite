@@ -16,11 +16,10 @@ echo.
 echo  E2E 用の UserStore を起動しました（ポートは +1）。
 echo    SQL Server : 1434 / Oracle : 1522 / PostgreSQL : 5433
 echo  上流 IdP    : https://localhost:44301  （UserStoreType=mem）
+echo  下流 IdP    : https://localhost:44303  （UserStoreType=mem）
 echo.
-echo  **下流 IdP コンテナは、ここでは起動しません**（#281）。
-echo    E2E は下流をホストで動かすためです。
-echo    コンテナ 2 つでハイブリッド IdP 構成を取るときは、次を実行してください。
-echo      docker compose up -d downstream      （https://localhost:44303）
+echo  **コンテナ 2 つでハイブリッド IdP 構成になっています**（#281 / #284）。
+echo    E2E の CN-* がこの 2 つを測ります。
 echo.
 echo  **Oracle の初回起動は数分かかります。**
 echo    docker compose ps  で healthy になるのを待ってください。

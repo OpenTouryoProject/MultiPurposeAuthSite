@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/10/08  玄人 幸道         環境変数での重ね書きを追加（#284）
 //**********************************************************************************
 
 using System;
@@ -233,6 +234,94 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
 
                 this._clients[client.Name] = attrs;
+            }
+        }
+
+        #endregion
+
+        #region 重ね書き（#284）
+
+        /// <summary>
+        /// 環境変数形式（<c>appSettings__&lt;キー&gt;=&lt;値&gt;</c>）で、読み込んだ設定を重ね書きする。
+        /// </summary>
+        /// <param name="entries"><c>KEY=VALUE</c> の列（<c>docker inspect</c> の <c>.Config.Env</c> そのまま）</param>
+        /// <remarks>
+        /// **コンテナの実効設定は「様式ファイル ＋ compose の環境変数」である**（#284）。
+        /// **ファイルだけ読むと、compose が上書きした分が分からない**
+        /// （クライアントの秘密・`IssuerId`・Cookie 名・エンドポイント）。
+        ///
+        /// **優先順位は compose と同じ** — **環境変数が勝つ**。
+        ///
+        /// | 形 | 行き先 |
+        /// |---|---|
+        /// | `appSettings__&lt;キー&gt;` | appSettings |
+        /// | `appSettings__OAuth2ClientsInformation__&lt;client_id&gt;__&lt;属性&gt;` | クライアント登録 |
+        /// | それ以外（`ASPNETCORE_*` / `sessionState__*` など） | **無視する** |
+        ///
+        /// **読み取った値をコンソールへ出力しないこと**（このクラスの注意書きと同じ）。
+        /// </remarks>
+        public void Overlay(IEnumerable<string> entries)
+        {
+            if (entries == null)
+            {
+                return;
+            }
+
+            const string prefix = "appSettings__";
+            const string clients = "OAuth2ClientsInformation__";
+
+            foreach (string entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry))
+                {
+                    continue;
+                }
+
+                int eq = entry.IndexOf('=');
+
+                if (eq <= 0)
+                {
+                    continue;
+                }
+
+                string name = entry.Substring(0, eq);
+                string value = entry.Substring(eq + 1);
+
+                if (!name.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string key = name.Substring(prefix.Length);
+
+                if (key.StartsWith(clients, StringComparison.OrdinalIgnoreCase))
+                {
+                    // <client_id>__<属性>
+                    string rest = key.Substring(clients.Length);
+                    int sep = rest.IndexOf("__", StringComparison.Ordinal);
+
+                    if (sep <= 0)
+                    {
+                        continue;
+                    }
+
+                    string clientId = rest.Substring(0, sep);
+                    string attribute = rest.Substring(sep + 2);
+
+                    Dictionary<string, string> attrs;
+
+                    if (!this._clients.TryGetValue(clientId, out attrs))
+                    {
+                        attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        this._clients[clientId] = attrs;
+                    }
+
+                    attrs[attribute] = value;
+                }
+                else
+                {
+                    this._appSettings[key] = value;
+                }
             }
         }
 
