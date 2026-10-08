@@ -455,5 +455,140 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("UserNameforSearch", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   ClientIDDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientIDDescription {
+            get {
+                return ResourceManager.GetString("ClientIDDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ClientSecretDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientSecretDescription {
+            get {
+                return ResourceManager.GetString("ClientSecretDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ClientModeDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientModeDescription {
+            get {
+                return ResourceManager.GetString("ClientModeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   RequirePkceDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequirePkceDescription {
+            get {
+                return ResourceManager.GetString("RequirePkceDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   RedirectUriSamlDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RedirectUriSamlDescription {
+            get {
+                return ResourceManager.GetString("RedirectUriSamlDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   RedirectUriCodeDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RedirectUriCodeDescription {
+            get {
+                return ResourceManager.GetString("RedirectUriCodeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   RedirectUriTokenDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RedirectUriTokenDescription {
+            get {
+                return ResourceManager.GetString("RedirectUriTokenDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   PostLogoutRedirectUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string PostLogoutRedirectUriDescription {
+            get {
+                return ResourceManager.GetString("PostLogoutRedirectUriDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   SubjectTypesDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string SubjectTypesDescription {
+            get {
+                return ResourceManager.GetString("SubjectTypesDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   WebOriginsDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string WebOriginsDescription {
+            get {
+                return ResourceManager.GetString("WebOriginsDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   IdTokenSignedResponseAlgDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdTokenSignedResponseAlgDescription {
+            get {
+                return ResourceManager.GetString("IdTokenSignedResponseAlgDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   TokenEndpointAuthSigningAlgDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TokenEndpointAuthSigningAlgDescription {
+            get {
+                return ResourceManager.GetString("TokenEndpointAuthSigningAlgDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   RequestObjectSigningAlgDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequestObjectSigningAlgDescription {
+            get {
+                return ResourceManager.GetString("RequestObjectSigningAlgDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   JwkRsaPublickeyDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string JwkRsaPublickeyDescription {
+            get {
+                return ResourceManager.GetString("JwkRsaPublickeyDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   TlsClientAuthSubjectDnDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TlsClientAuthSubjectDnDescription {
+            get {
+                return ResourceManager.GetString("TlsClientAuthSubjectDnDescription", resourceCulture);
+            }
+        }
     }
 }

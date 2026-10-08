@@ -249,4 +249,49 @@
   <data name="JwkECDsaPublickey" xml:space="preserve">
     <value>JWKのECDSA公開鍵</value>
   </data>
+  <data name="ClientIDDescription" xml:space="preserve">
+    <value>このクライアントの識別子。**この欄では変えられない**（横のボタンで再発行する）。要求の client_id に使う。</value>
+  </data>
+  <data name="ClientSecretDescription" xml:space="preserve">
+    <value>このクライアントの秘密。**この欄では変えられない**（横のボタンで再発行する）。client_secret_basic / client_secret_post で使う。**パブリック クライアントでは使わない。**</value>
+  </data>
+  <data name="ClientModeDescription" xml:space="preserve">
+    <value>このクライアントが通る経路（normal / fapi1 / fapi2）。**FAPI は検査が厳しくなる** — PKCE(S256) や署名が必須になる。登録上の名前は oauth2_oidc_mode。</value>
+  </data>
+  <data name="RequirePkceDescription" xml:space="preserve">
+    <value>このクライアントに PKCE を必須にする。**サーバ全体の設定とは OR で効く**ので、**ここを外しても、全体が必須なら必須のまま。**</value>
+  </data>
+  <data name="RedirectUriSamlDescription" xml:space="preserve">
+    <value>SAML2 のアサーションを返す先（ACS URL）。自己テストは redirect_uri_saml を使う。</value>
+  </data>
+  <data name="RedirectUriCodeDescription" xml:space="preserve">
+    <value>認可コードを返す先。**登録値と 1 文字も違っていてはならない。**</value>
+  </data>
+  <data name="RedirectUriTokenDescription" xml:space="preserve">
+    <value>インプリシット・ハイブリッドでトークンを返す先。**使わないならハイフン（-）を入れる。**</value>
+  </data>
+  <data name="PostLogoutRedirectUriDescription" xml:space="preserve">
+    <value>RP からのログアウト後に戻ってよい URL（/end_session）。**完全一致で照合する。**</value>
+  </data>
+  <data name="SubjectTypesDescription" xml:space="preserve">
+    <value>sub に入れる識別子の種別。public は利用者の識別子、**pairwise はクライアントごとに違う値（PPID）**。</value>
+  </data>
+  <data name="WebOriginsDescription" xml:space="preserve">
+    <value>CORS で許可するオリジン（web_origins）。**空なら redirect_uri から導く。** ブラウザから /token などを叩くときだけ要る。</value>
+  </data>
+  <data name="IdTokenSignedResponseAlgDescription" xml:space="preserve">
+    <value>id_token の署名アルゴリズム。**空なら既定。**</value>
+  </data>
+  <data name="TokenEndpointAuthSigningAlgDescription" xml:space="preserve">
+    <value>client_assertion（private_key_jwt）を**検証するときに許す**署名アルゴリズム。**空なら絞らない。**</value>
+  </data>
+  <data name="RequestObjectSigningAlgDescription" xml:space="preserve">
+    <value>Request Object（JAR）を**検証するときに許す**署名アルゴリズム。**空なら絞らない。**</value>
+  </data>
+  <data name="JwkRsaPublickeyDescription" xml:space="preserve">
+    <value>private_key_jwt や Request Object の署名を検証する RSA 公開鍵（JWK）。</value>
+  </data>
+  <data name="TlsClientAuthSubjectDnDescription" xml:space="preserve">
+    <value>mTLS（tls_client_auth）で照合するクライアント証明書の Subject DN。</value>
+  </data>
 </root>

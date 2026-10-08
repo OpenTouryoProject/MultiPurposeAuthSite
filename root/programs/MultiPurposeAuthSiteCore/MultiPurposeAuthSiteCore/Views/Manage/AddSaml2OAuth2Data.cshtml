@@ -23,6 +23,7 @@
     //*  2026/10/02  玄人 幸道         署名アルゴリズムの入力欄を追加（#129 の段階 2）
     //*  2026/10/03  玄人 幸道         検証する側のalgの入力欄を追加（#262）
     //*  2026/10/04  玄人 幸道         web_originsの入力欄を追加（#266）
+    //*  2026/10/09  玄人 幸道         項目の並びを整え、各項目の説明を出した（#277 の段階 1）
     //**********************************************************************************
 *@
 
@@ -44,6 +45,16 @@
     <h4>@ManageViews.AddSaml2OAuth2DataH4</h4>
     <hr />
     @Html.ValidationSummary("", new { @class = "text-danger" })
+    @*
+        **項目の並びと説明は #277 の段階 1 で整えた。**
+
+        **説明は ViewModel に 1 か所だけ書く**（`[Display(Description = ...)]`）。
+        **net48 版と net10.0 版で View を同じに保つ**ため、
+        取り出し方の違いは `Html.DescriptionFor`（CommonLibrary）が吸収する。
+
+        **並びの理屈** : 識別子 → 経路の決まり方 → 戻り先 → sub と CORS → 署名 → 鍵と証明書。
+        **client_type は対象外**（ViewModel ごとコメント アウトされている。保存もされない）。
+    *@
     <div class="form-group">
         @Html.LabelFor(m => m.ClientID, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
@@ -55,6 +66,7 @@
                     </span>
                 </div>
             </div>
+            <p class="help-block">@Html.DescriptionFor(m => m.ClientID)</p>
         </div>
     </div>
     <div class="form-group">
@@ -68,95 +80,98 @@
                     </span>
                 </div>
             </div>
+            <p class="help-block">@Html.DescriptionFor(m => m.ClientSecret)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ClientMode, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.DropDownListFor(model => model.ClientMode, Model.DdlClientModeItems, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.ClientMode)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.RequirePkce, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.CheckBoxFor(model => model.RequirePkce)
+            <p class="help-block">@Html.DescriptionFor(m => m.RequirePkce)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.RedirectUriSaml, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.TextBoxFor(m => m.RedirectUriSaml, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.RedirectUriSaml)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.RedirectUriCode, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.TextBoxFor(m => m.RedirectUriCode, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.RedirectUriCode)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.RedirectUriToken, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.TextBoxFor(m => m.RedirectUriToken, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.RedirectUriToken)</p>
         </div>
     </div>
-    @* ログアウト後に戻ってよい URL（#232） *@
     <div class="form-group">
         @Html.LabelFor(m => m.PostLogoutRedirectUri, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.TextBoxFor(m => m.PostLogoutRedirectUri, new { @class = "form-control" })
-        </div>
-    </div>
-    <div class="form-group">
-        @Html.LabelFor(m => m.JwkRsaPublickey, new { @class = "col-md-2 control-label" })
-        <div class="col-md-3">
-            @Html.TextBoxFor(m => m.JwkRsaPublickey, new { @class = "form-control" })
-        </div>
-    </div>
-    <div class="form-group">
-        @Html.LabelFor(m => m.TlsClientAuthSubjectDn, new { @class = "col-md-2 control-label" })
-        <div class="col-md-3">
-            @Html.TextBoxFor(m => m.TlsClientAuthSubjectDn, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.PostLogoutRedirectUri)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.SubjectTypes, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.SubjectTypes, Model.DdlSubjectTypesItems, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.SubjectTypes)</p>
         </div>
     </div>
-    @* **署名アルゴリズム**（#129 の段階 2）。access_token と id_token に効く *@
-    <div class="form-group">
-        @Html.LabelFor(m => m.IdTokenSignedResponseAlg, new { @class = "col-md-2 control-label" })
-        <div class="col-md-3">
-            @Html.DropDownListFor(model => model.IdTokenSignedResponseAlg, Model.DdlIdTokenSignedResponseAlgItems, new { @class = "form-control" })
-        </div>
-    </div>
-    @* **CORS で許可するオリジン**（#266）。空なら redirect_uri から導く *@
     <div class="form-group">
         @Html.LabelFor(m => m.WebOrigins, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
             @Html.TextBoxFor(m => m.WebOrigins, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.WebOrigins)</p>
         </div>
     </div>
-    @* **検証する側の署名アルゴリズム**（#262）。空なら絞らない *@
+    <div class="form-group">
+        @Html.LabelFor(m => m.IdTokenSignedResponseAlg, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.DropDownListFor(model => model.IdTokenSignedResponseAlg, Model.DdlIdTokenSignedResponseAlgItems, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.IdTokenSignedResponseAlg)</p>
+        </div>
+    </div>
     <div class="form-group">
         @Html.LabelFor(m => m.TokenEndpointAuthSigningAlg, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.TokenEndpointAuthSigningAlg, Model.DdlTokenEndpointAuthSigningAlgItems, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.TokenEndpointAuthSigningAlg)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.RequestObjectSigningAlg, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.RequestObjectSigningAlg, Model.DdlRequestObjectSigningAlgItems, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.RequestObjectSigningAlg)</p>
         </div>
     </div>
-    @*<div class="form-group">
-        @Html.LabelFor(m => m.ClientType, new { @class = "col-md-2 control-label" })
-        <div class="col-md-3">
-            @Html.DropDownListFor(model => model.ClientType, Model.DdlClientTypeItems, new { @class = "form-control" })
-        </div>
-    </div>*@
     <div class="form-group">
-        @Html.LabelFor(m => m.ClientMode, new { @class = "col-md-2 control-label" })
+        @Html.LabelFor(m => m.JwkRsaPublickey, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
-            @Html.DropDownListFor(model => model.ClientMode, Model.DdlClientModeItems, new { @class = "form-control" })
+            @Html.TextBoxFor(m => m.JwkRsaPublickey, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.JwkRsaPublickey)</p>
         </div>
     </div>
-    @* クライアント単位で PKCE を必須にする（#221）。サーバ全体の設定とは OR で効く。 *@
     <div class="form-group">
-        @Html.LabelFor(m => m.RequirePkce, new { @class = "col-md-2 control-label" })
+        @Html.LabelFor(m => m.TlsClientAuthSubjectDn, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
-            @Html.CheckBoxFor(model => model.RequirePkce)
+            @Html.TextBoxFor(m => m.TlsClientAuthSubjectDn, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.TlsClientAuthSubjectDn)</p>
         </div>
     </div>
     <div class="form-group">

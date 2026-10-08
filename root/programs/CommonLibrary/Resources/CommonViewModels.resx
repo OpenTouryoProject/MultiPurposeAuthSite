@@ -249,4 +249,49 @@
   <data name="UserNameforSearch" xml:space="preserve">
     <value>Search by user name</value>
   </data>
+  <data name="ClientIDDescription" xml:space="preserve">
+    <value>Identifier of this client. Read-only here; use the button to reissue it. Sent as client_id in requests.</value>
+  </data>
+  <data name="ClientSecretDescription" xml:space="preserve">
+    <value>Secret of this client. Read-only here; use the button to reissue it. Used by client_secret_basic / client_secret_post. Not used by public clients.</value>
+  </data>
+  <data name="ClientModeDescription" xml:space="preserve">
+    <value>Which route this client takes (normal / fapi1 / fapi2). FAPI tightens the checks - PKCE(S256) and signatures become mandatory. Stored as oauth2_oidc_mode.</value>
+  </data>
+  <data name="RequirePkceDescription" xml:space="preserve">
+    <value>Require PKCE for this client. It is OR-ed with the server-wide setting, so clearing it here does not disable PKCE when the server requires it.</value>
+  </data>
+  <data name="RedirectUriSamlDescription" xml:space="preserve">
+    <value>Where SAML2 assertions are posted (the ACS URL). The self-test uses redirect_uri_saml.</value>
+  </data>
+  <data name="RedirectUriCodeDescription" xml:space="preserve">
+    <value>Where the authorization code is returned. It must match the registered value exactly - not one character may differ.</value>
+  </data>
+  <data name="RedirectUriTokenDescription" xml:space="preserve">
+    <value>Where tokens are returned for the implicit / hybrid flows. Put a hyphen when the client does not use them.</value>
+  </data>
+  <data name="PostLogoutRedirectUriDescription" xml:space="preserve">
+    <value>Where the RP may be sent back after logout (/end_session). Matched exactly.</value>
+  </data>
+  <data name="SubjectTypesDescription" xml:space="preserve">
+    <value>What goes into sub. public is the user identifier; pairwise is a per-client value (PPID).</value>
+  </data>
+  <data name="WebOriginsDescription" xml:space="preserve">
+    <value>Origins allowed by CORS (web_origins). When empty, they are derived from the redirect_uri. Needed only when a browser calls /token and the like.</value>
+  </data>
+  <data name="IdTokenSignedResponseAlgDescription" xml:space="preserve">
+    <value>Signing algorithm of the id_token. When empty, the default is used.</value>
+  </data>
+  <data name="TokenEndpointAuthSigningAlgDescription" xml:space="preserve">
+    <value>Signing algorithm accepted when verifying a client_assertion (private_key_jwt). When empty, it is not narrowed.</value>
+  </data>
+  <data name="RequestObjectSigningAlgDescription" xml:space="preserve">
+    <value>Signing algorithm accepted when verifying a Request Object (JAR). When empty, it is not narrowed.</value>
+  </data>
+  <data name="JwkRsaPublickeyDescription" xml:space="preserve">
+    <value>RSA public key (JWK) used to verify a private_key_jwt or a Request Object.</value>
+  </data>
+  <data name="TlsClientAuthSubjectDnDescription" xml:space="preserve">
+    <value>Subject DN of the client certificate matched for mTLS (tls_client_auth).</value>
+  </data>
 </root>
