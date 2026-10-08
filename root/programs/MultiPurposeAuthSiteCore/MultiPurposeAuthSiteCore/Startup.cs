@@ -40,6 +40,7 @@
 //*                                転送ヘッダの取り込み、HTTPSリダイレクト、Cookieの
 //*                                Secure属性を設定で切り替え、CookiePolicyをDIに一本化。
 //*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
+//*  2026/10/08  玄人 幸道         AuthCookieName が空のときも接頭辞を掛ける（#283）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -599,7 +600,7 @@ namespace MultiPurposeAuthSite
 
                 // **Identity が使う Cookie すべてに掛ける**（#255）。
                 //   **AuthCookieName で名前を決めた後**に付けたいので、PostConfigure で行う。
-                //   AuthCookieName が空でも、**枠組みの既定名に接頭辞が付く。**
+                //   AuthCookieName が空でも、**枠組みの既定名に接頭辞が付く**（#283 でそうした）。
                 //
                 //   **サインインの Cookie（Application）だけでは足りない。**
                 //   **外部ログイン（External）は ID フェデレーションと外部 IdP の途中で使い**、
@@ -618,7 +619,30 @@ namespace MultiPurposeAuthSite
                     services.PostConfigure<CookieAuthenticationOptions>(
                         scheme, options =>
                         {
-                            options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                            //  **空のときは、枠組みと同じ規則で組み立ててから掛ける**（#283）。
+                            //
+                            //  **こちら側の PostConfigure は、AddIdentity（下の方）より先に登録されている。**
+                            //    IPostConfigureOptions は**登録順に走る**ので、
+                            //    **枠組みが既定名を入れる前にここが走る。**
+                            //
+                            //  **Identity.Application だけが null になる**（実測。#283）。
+                            //    External / TwoFactorUserId は AddIdentity が Configure で名前を入れているが、
+                            //    **Application の名前を決めるのは ConfigureApplicationCookie であり、
+                            //    AuthCookieName が空のときは何も入れない。**
+                            //
+                            //  **null を代入すると CookieBuilder が弾く**ので、
+                            //    **起動後の最初の要求から 500 になっていた**（#283）。
+                            //
+                            //  **「空なら代入しない」では直らない。**
+                            //    **認証 Cookie だけ接頭辞が付かないままになり**、
+                            //    **#255 が防ごうとした奪い合いが、一番困るところで起きる。**
+                            //
+                            //  **net48 版は同じ手当てを入れてある**（App_Start/StartupAuth.cs。#255）。
+                            string baseCookieName = string.IsNullOrEmpty(options.Cookie.Name)
+                                ? CookieAuthenticationDefaults.CookiePrefix + scheme
+                                : options.Cookie.Name;
+
+                            options.Cookie.Name = Config.PrefixCookieName(baseCookieName);
                         });
                 }
             }

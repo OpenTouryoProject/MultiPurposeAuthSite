@@ -217,6 +217,40 @@ docker compose up -d upstream
 > **`log4net` だけは中身（出力先）も Windows のパス**なので、
 > **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
 
+#### 接頭辞を付けた配備を測る（#282 / #283）
+
+**`CookieNamePrefix` を使っている配備の Cookie 名は、通しでは現れない**
+（E2E のサイトは接頭辞を使わない）。**環境変数で渡して測る。**
+
+```powershell
+# **FxContainerization=ON なので、環境変数が設定キーを上書きする**（2 節）
+$env:CookieNamePrefix = 'probe_'
+.\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~CookiePolicyTests"
+```
+
+**起動している間に `Set-Cookie` を見る**（別のプロセスから叩く）。
+**実測（2026/10/08。`AuthCookieName` は空。サインイン後）。**
+
+```
+.probe_AspNetCore.Identity.Application          認証（枠組みの既定名 ＋ 接頭辞。#283）
+.probe_AspNetCore.Antiforgery.…                AntiForgery（#282）
+.probe_AspNetCore.Mvc.CookieTempDataProvider    TempData
+probe_MultiPurposeAuthSiteCoreSession           セッション
+probe_auth_time                                 max_age の判定
+```
+
+| 測ること | 期待 |
+|---|---|
+| `CookieNamePrefix` だけ | **500 にならず、認証 Cookie が `.probe_AspNetCore.Identity.Application`**（#283 より前は **500**） |
+| `CookieNamePrefix` ＋ `AuthCookieName` | **`.probe_MultiPurposeAuthSite`**（従来どおり。コンテナの上流・下流はこれ） |
+| `CookieNamePrefix` なし | **枠組みの既定のまま**（通しがこれ） |
+| net48 版 | **`probe___RequestVerificationToken`**（既定名の先頭に `.` が無いので前に付く） |
+
+> **通しに入れていない。**
+> **接頭辞を使う配備を立てるには、サイトの起動条件を変える必要があり**、
+> **`test.ps1` はサイトを 1 組しか立てない**ためである。
+> **上の手順が、その代わりである。**
+
 #### 下流もコンテナで建てる（#281）
 
 **上流と同じイメージを、別の設定で建てる。**
