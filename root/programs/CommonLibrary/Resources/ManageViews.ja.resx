@@ -480,4 +480,7 @@
   <data name="AddWebAuthnDataResidentCredentialsDescription" xml:space="preserve">
     <value>認証器側に資格情報を保存する（discoverable credential）。**利用者名を入れずにサインインする**形に使う。</value>
   </data>
+  <data name="IndexSaml2AssertionGetButton" xml:space="preserve">
+    <value>SAML2 のアサーションを取る</value>
+  </data>
 </root>

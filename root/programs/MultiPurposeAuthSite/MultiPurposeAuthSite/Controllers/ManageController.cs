@@ -28,6 +28,7 @@
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンのキャッシュをやめた（#271）
 //*  2026/10/06  玄人 幸道         同意の一覧と取り消しを追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthn / MsPass の画面を削除（#137）
+//*  2026/10/09  玄人 幸道         SAML2 のテスト ボタンを追加（#277 の段階 5）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2078,6 +2079,100 @@ namespace MultiPurposeAuthSite.Controllers
 
             // エラー画面
             return View("Error");
+        }
+
+        #endregion
+
+        #region Get SAML2 assertion（#277 の段階 5）
+
+        /// <summary>
+        /// SAML2 アサーションの取得（代表プロファイル : SP-initiated / HTTP-Redirect）
+        /// POST: /Manage/GetSaml2Assertion
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **OAuth2 の `GetOAuth2Token` と同じ形**である（#277）。
+        /// **利用者自身のクライアント登録**で AuthnRequest を組み立て、IdP へ送る。
+        ///
+        /// **結果表示は、自己テストの受け口を共用する** —
+        /// **応答は `/Account/AssertionConsumerService` に返り、`Saml2Response` 画面が出る。**
+        /// **ACS が同じなら、画面も検証（`SelfTestClient.VerifySaml2Response`）もそのまま使える**ので、
+        /// **管理画面用の受け口（`redirect_uri_saml_manage`）は足していない**
+        /// （`test_self_code_manage` が要ったのは、**OAuth2 の結果表示が別の画面**だったため）。
+        ///
+        /// **代表プロファイルを 1 つだけ置く。**
+        /// 4 通りのバインディングの組み合わせは、自己テスト画面にある。
+        ///
+        /// **ACS URL は AuthnRequest に入れない**（自己テストの既定と同じ）。
+        /// **IdP が登録値から解決する**ので、**登録値と食い違わせずに済む**（#276 の照合）。
+        /// </remarks>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
+        public ActionResult GetSaml2Assertion()
+        {
+            if (Config.CanEditSaml2OAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // **利用者自身のクライアント登録**（client_name は利用者名そのもの）。
+                string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+
+                if (!string.IsNullOrEmpty(client_id))
+                {
+                    // Issuer（自己テストと同じ組み立て）
+                    string issuer = "http://" + client_id;
+
+                    // state → RelayState // 記号は入れない。
+                    string state = GetPassword.Generate(10, 0);
+
+                    string id = "";
+                    string queryString = SAML2Client.CreateRedirectRequest(
+                        SAML2Enum.RequestOrResponse.Request,
+                        SAML2Enum.ProtocolBinding.HttpRedirect,
+                        SAML2Enum.NameIDFormat.Unspecified,
+                        issuer, "", state, out id);
+
+                    this.SaveSaml2Params(client_id, state, id);
+
+                    return Redirect(
+                        Config.OAuth2AuthorizationServerEndpointsRootURI
+                        + Config.Saml2RequestEndpoint + "?" + queryString);
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        /// <summary>テスト用にパラメタを保存（#277 の段階 5）</summary>
+        /// <param name="clientId">client_id</param>
+        /// <param name="state">state（RelayState に入る）</param>
+        /// <param name="samlRequestId">AuthnRequest の ID</param>
+        /// <remarks>
+        /// **自己テスト（`HomeController.SaveSaml2Params`）と同じキーに入れる。**
+        /// **受け口が同じ**なので、**同じ場所から読まれる**
+        /// （`LoadRequestParameters` / `LoadTestSamlRequestId`）。
+        ///
+        /// **Session と Cookie の両方に入れる** —
+        /// Session はサイト分割時、Cookie は同一サイト時に読まれる。
+        /// </remarks>
+        private void SaveSaml2Params(string clientId, string state, string samlRequestId)
+        {
+            // client_id → Issuer
+            Session[Const.TestClientId] = clientId;
+            Response.Cookies[Const.TestClientId].Value = clientId;
+
+            // redirect_uri → AssertionConsumerService（**入れない**ので空）
+            Session[Const.TestRedirectUri] = "";
+            Response.Cookies[Const.TestRedirectUri].Value = "";
+
+            // state → RelayState
+            Session[Const.TestState] = state;
+            Response.Cookies[Const.TestState].Value = state;
+
+            // **AuthnRequest の ID**（#276。応答の InResponseTo と照合する）
+            Session[Const.TestSamlRequestId] = samlRequestId;
+            Response.Cookies[Const.TestSamlRequestId].Value = samlRequestId;
         }
 
         #endregion

@@ -21,6 +21,7 @@
     //*  2026/10/01  玄人 幸道         メアドの追加・削除の導線を外した（#151 の段階 3）
     //*  2026/10/06  玄人 幸道         同意の一覧への導線を追加（#272 の段階 2）
     //*  2026/10/07  玄人 幸道         WebAuthnの導線を復活、MsPassを削除（#137）
+    //*  2026/10/09  玄人 幸道         SAML2 のテスト ボタンを追加（#277 の段階 5）
     //**********************************************************************************
 *@
 
@@ -301,6 +302,14 @@
                             @Html.AntiForgeryToken()
                             <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
                             <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn btn-link" />]</text>
+                        }
+                        @*  **SAML2 の代表プロファイルを試す**（#277 の段階 5）。
+                            **結果は自己テストと同じ画面に出る**
+                            （/Account/AssertionConsumerService → Saml2Response）。 *@
+                        using (Html.BeginForm("GetSaml2Assertion", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>[<input type="submit" value="@ManageViews.IndexSaml2AssertionGetButton" class="btn btn-link" />]</text>
                         }
                         using (Html.BeginForm("RemoveSaml2OAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
