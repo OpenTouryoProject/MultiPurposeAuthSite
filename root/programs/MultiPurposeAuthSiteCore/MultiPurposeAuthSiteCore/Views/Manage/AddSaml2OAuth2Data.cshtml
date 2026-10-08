@@ -24,6 +24,7 @@
     //*  2026/10/03  玄人 幸道         検証する側のalgの入力欄を追加（#262）
     //*  2026/10/04  玄人 幸道         web_originsの入力欄を追加（#266）
     //*  2026/10/09  玄人 幸道         項目の並びを整え、各項目の説明を出した（#277 の段階 1）
+    //*  2026/10/09  玄人 幸道         redirect_ の既定値を datalist で選べるようにした（#277 の段階 3）
     //**********************************************************************************
 *@
 
@@ -100,28 +101,68 @@
     <div class="form-group">
         @Html.LabelFor(m => m.RedirectUriSaml, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
-            @Html.TextBoxFor(m => m.RedirectUriSaml, new { @class = "form-control" })
+            @*  **既定値を選べるようにする**（#277 の段階 3）。
+                **`<select>` ではない** — 自由に書けることも必要なので、
+                `<input>` ＋ `<datalist>` の組み合わせにする。
+                **候補は ViewModel が `Const` から引く**（画面とサーバで食い違わせない）。 *@
+            @Html.TextBoxFor(m => m.RedirectUriSaml, new { @class = "form-control", @list = "list-RedirectUriSaml" })
+            <datalist id="list-RedirectUriSaml">
+                @foreach (string candidate in Model.RedirectUriSamlCandidates)
+                {
+                    <option value="@candidate"></option>
+                }
+            </datalist>
             <p class="help-block">@Html.DescriptionFor(m => m.RedirectUriSaml)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.RedirectUriCode, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
-            @Html.TextBoxFor(m => m.RedirectUriCode, new { @class = "form-control" })
+            @*  **既定値を選べるようにする**（#277 の段階 3）。
+                **`<select>` ではない** — 自由に書けることも必要なので、
+                `<input>` ＋ `<datalist>` の組み合わせにする。
+                **候補は ViewModel が `Const` から引く**（画面とサーバで食い違わせない）。 *@
+            @Html.TextBoxFor(m => m.RedirectUriCode, new { @class = "form-control", @list = "list-RedirectUriCode" })
+            <datalist id="list-RedirectUriCode">
+                @foreach (string candidate in Model.RedirectUriCodeCandidates)
+                {
+                    <option value="@candidate"></option>
+                }
+            </datalist>
             <p class="help-block">@Html.DescriptionFor(m => m.RedirectUriCode)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.RedirectUriToken, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
-            @Html.TextBoxFor(m => m.RedirectUriToken, new { @class = "form-control" })
+            @*  **既定値を選べるようにする**（#277 の段階 3）。
+                **`<select>` ではない** — 自由に書けることも必要なので、
+                `<input>` ＋ `<datalist>` の組み合わせにする。
+                **候補は ViewModel が `Const` から引く**（画面とサーバで食い違わせない）。 *@
+            @Html.TextBoxFor(m => m.RedirectUriToken, new { @class = "form-control", @list = "list-RedirectUriToken" })
+            <datalist id="list-RedirectUriToken">
+                @foreach (string candidate in Model.RedirectUriTokenCandidates)
+                {
+                    <option value="@candidate"></option>
+                }
+            </datalist>
             <p class="help-block">@Html.DescriptionFor(m => m.RedirectUriToken)</p>
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.PostLogoutRedirectUri, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
-            @Html.TextBoxFor(m => m.PostLogoutRedirectUri, new { @class = "form-control" })
+            @*  **既定値を選べるようにする**（#277 の段階 3）。
+                **`<select>` ではない** — 自由に書けることも必要なので、
+                `<input>` ＋ `<datalist>` の組み合わせにする。
+                **候補は ViewModel が `Const` から引く**（画面とサーバで食い違わせない）。 *@
+            @Html.TextBoxFor(m => m.PostLogoutRedirectUri, new { @class = "form-control", @list = "list-PostLogoutRedirectUri" })
+            <datalist id="list-PostLogoutRedirectUri">
+                @foreach (string candidate in Model.PostLogoutRedirectUriCandidates)
+                {
+                    <option value="@candidate"></option>
+                }
+            </datalist>
             <p class="help-block">@Html.DescriptionFor(m => m.PostLogoutRedirectUri)</p>
         </div>
     </div>

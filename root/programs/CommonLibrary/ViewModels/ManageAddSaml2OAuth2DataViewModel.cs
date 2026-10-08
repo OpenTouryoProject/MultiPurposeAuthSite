@@ -29,6 +29,7 @@
 //*  2026/10/04  玄人 幸道         web_origins を追加（#266）
 //*  2026/10/04  玄人 幸道         画面の選択肢を直列化しないようにした（#266 で踏んだ）
 //*  2026/10/09  玄人 幸道         各項目の説明を追加（#277 の段階 1）
+//*  2026/10/09  玄人 幸道         redirect_ の候補（datalist）を追加（#277 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -133,6 +134,62 @@ namespace MultiPurposeAuthSite.ViewModels
             ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "tls_client_auth_subject_dn")]
         public string TlsClientAuthSubjectDn { get; set; }
+
+
+        #region redirect_ の候補（#277 の段階 3）
+
+        //  **画面の候補（`<datalist>`）である。** 登録の内容ではない。
+        //    **`[JsonIgnore]` を忘れないこと** — 付けていないと、
+        //    **候補そのものが saml2OAuth2Data に書き込まれる**（#266 で踏んだ）。
+        //
+        //  **値は `Const` から引く。** **画面とサーバで食い違わせない**ため
+        //    （サーバ側は `CheckRedirectUri` / `CmnEndpoints` がこの記号を解決する）。
+        //
+        //  **`redirect_uri_saml` の管理画面用（`redirect_uri_saml_manage`）は、まだ無い。**
+        //    **管理画面に SAML のテスト ボタンを足すとき**（#277 の段階 5）に増える。
+
+        /// <summary>redirect_uri_saml の候補</summary>
+        [JsonIgnore]
+        public List<string> RedirectUriSamlCandidates
+        {
+            get
+            {
+                return new List<string>() { Const.TestSelfSaml };
+            }
+        }
+
+        /// <summary>redirect_uri_code の候補</summary>
+        [JsonIgnore]
+        public List<string> RedirectUriCodeCandidates
+        {
+            get
+            {
+                return new List<string>() { Const.TestSelfCode, Const.TestSelfCodeManage };
+            }
+        }
+
+        /// <summary>redirect_uri_token の候補</summary>
+        [JsonIgnore]
+        public List<string> RedirectUriTokenCandidates
+        {
+            get
+            {
+                // **使わないなら "-" を入れる**（段階 1 の説明と同じ）。
+                return new List<string>() { Const.TestSelfToken, "-" };
+            }
+        }
+
+        /// <summary>post_logout_redirect_uri の候補</summary>
+        [JsonIgnore]
+        public List<string> PostLogoutRedirectUriCandidates
+        {
+            get
+            {
+                return new List<string>() { Const.TestSelfLogout };
+            }
+        }
+
+        #endregion
 
         #region SubjectTypes 
         /// <summary>SubjectTypes</summary>

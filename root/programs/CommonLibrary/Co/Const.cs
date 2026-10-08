@@ -42,6 +42,7 @@
 //*  2026/10/07  玄人 幸道         WebAuthn の RP の表示名を追加（#137）
 //*  2026/10/07  玄人 幸道         SAML2 の AuthnRequest の ID を保存するキーを追加（#276）
 //*  2026/10/07  玄人 幸道         データ保護のアプリケーション名を追加（#279）
+//*  2026/10/09  玄人 幸道         test_self_saml を定数にした（#277 の段階 3）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -140,6 +141,11 @@ namespace MultiPurposeAuthSite.Co
 
         #region RedirectUri
 
+		// サイトごとに URL が違う**（net48, net10.0）ので、定数で登録し、サーバ側で解決
+
+        /// <summary>SAML2のテスト用のRedirectUri（ACS URL。#277 の段階 3 で定数にした）</summary>
+        public const string TestSelfSaml = "test_self_saml";
+		
         /// <summary>codeのテスト用のRedirectUri</summary>
         public const string TestSelfCode = "test_self_code";
 
@@ -147,21 +153,9 @@ namespace MultiPurposeAuthSite.Co
         public const string TestSelfToken = "test_self_token";
 
         /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
-        /// <remarks>
-        /// **サイトごとに URL が違う**（net48 と net10.0 で待ち受けが別）ので、
-        /// 定数で登録し、サーバ側で解決する（test_self_code / test_self_token と同じ考え）。
-        /// </remarks>
         public const string TestSelfLogout = "test_self_logout";
 
         /// <summary>管理画面の自己テスト（GetOAuth2Token）の折り返し先（C-10）</summary>
-        /// <remarks>
-        /// **管理画面の「トークンを取る」は、利用者自身のクライアント登録で認可を要求する。**
-        /// その折り返し先を**登録値として表せる**ようにしたもの。
-        ///
-        /// **以前は `CheckRedirectUri` に「この URL なら登録を確かめずに通す」分岐が在った。**
-        /// **`IsLockedDownTestEndpoints` の対象外で、本番で閉じられなかった**ので、
-        /// **記号を足して通常の照合に載せ、分岐を消した**（`ANALYSIS-IdP.md` の C-10）。
-        /// </remarks>
         public const string TestSelfCodeManage = "test_self_code_manage";
 
         #endregion

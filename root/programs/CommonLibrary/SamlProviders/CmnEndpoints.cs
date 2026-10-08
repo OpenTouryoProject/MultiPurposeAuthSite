@@ -200,7 +200,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             rtnUrl = temp2; // 事前登録の値
 
             // 事前登録されている。
-            if (rtnUrl.ToLower() == "test_self_saml")
+            if (rtnUrl.ToLower() == Const.TestSelfSaml)
             {
                 // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
                 rtnUrl = Config.OAuth2ClientEndpointsRootURI + Config.Saml2ResponseEndpoint;
