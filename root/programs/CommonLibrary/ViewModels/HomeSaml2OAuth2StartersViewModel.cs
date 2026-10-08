@@ -21,6 +21,7 @@
 //*  2026/09/28  玄人 幸道         prompt / max_age を画面から選べるようにした（#246 の項目 3）
 //*  2026/10/06  玄人 幸道         promptの選択肢から「未対応」を外した（#272 の段階 2）
 //*  2026/10/09  玄人 幸道         各オプションの説明を追加（#277 の段階 2）
+//*  2026/10/09  玄人 幸道         NameIDFormat を画面で選べるようにした（#277 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -153,6 +154,43 @@ namespace MultiPurposeAuthSite.ViewModels
                 };
             }
         }
+
+        /// <summary>NameIDFormat（SAML2。画面で選ぶ。#277 の段階 4）</summary>
+        /// <remarks>
+        /// **AuthnRequest の `NameIDPolicy/@Format` に入る**（SAML Core 3.4.1.1）。
+        ///
+        /// | 値 | IdP が返すもの |
+        /// |---|---|
+        /// | `unspecified` | **利用者名**（既定。`SA-3.1`） |
+        /// | `emailAddress` | **メアド**（`SA-3.2`） |
+        /// | `persistent` | **RP ごとに違う値（PPID）**（`SA-3.3`） |
+        ///
+        /// **指定しなければ、IdP 側が `unspecified` に倒す**
+        /// （`CmnEndpoints` : 解析できない値も同じ扱い）。
+        ///
+        /// **`transient` は候補に入れていない。**
+        /// **`GetSubForSAML2` の switch に分岐が無く**（コメント アウトされている）、
+        /// **NameID が空のまま返る**ので、選べるようにすると誤解を招く。
+        /// </remarks>
+        [Display(Name = "NameIdFormat", Description = "NameIdFormatDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        public string NameIdFormat { get; set; }
+
+        /// <summary>NameIDFormatアイテムリスト</summary>
+        public List<SelectListItem> DdlNameIdFormatItems
+        {
+            get
+            {
+                return new List<SelectListItem>()
+                {
+                    new SelectListItem() { Text = "指定しない（IdP は unspecified に倒す）", Value = "" },
+                    new SelectListItem() { Text = "unspecified（利用者名）", Value = "unspecified" },
+                    new SelectListItem() { Text = "emailAddress（メアド）", Value = "emailAddress" },
+                    new SelectListItem() { Text = "persistent（RP ごとの PPID）", Value = "persistent" }
+                };
+            }
+        }
+
         /// <summary>ResponseMode</summary>
         [Display(Name = "ResponseMode", Description = "ResponseModeDescription",
             ResourceType = typeof(Resources.CommonViewModels))]

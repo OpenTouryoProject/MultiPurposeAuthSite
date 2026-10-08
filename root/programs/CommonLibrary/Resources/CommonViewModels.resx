@@ -315,4 +315,10 @@
   <data name="MaxAgeDescription" xml:space="preserve">
     <value>Upper bound of the elapsed time since the last authentication, in seconds. When exceeded, re-authentication is required; with prompt=none it becomes login_required. The OIDC button sends max_age=600 unless specified.</value>
   </data>
+  <data name="NameIdFormat" xml:space="preserve">
+    <value>NameIDFormat</value>
+  </data>
+  <data name="NameIdFormatDescription" xml:space="preserve">
+    <value>Which NameIDPolicy Format the AuthnRequest asks for. unspecified returns the user name, emailAddress the mail address, persistent a per-RP value (PPID). Not specifying it lets the IdP fall back to unspecified. transient is not supported here.</value>
+  </data>
 </root>

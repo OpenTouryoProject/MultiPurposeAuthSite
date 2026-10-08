@@ -315,4 +315,10 @@
   <data name="MaxAgeDescription" xml:space="preserve">
     <value>前回の認証からの経過時間の上限（秒）。**超えていれば再認証を求める**（prompt=none なら login_required）。OIDC のボタンは、指定しなければ max_age=600 を付ける。</value>
   </data>
+  <data name="NameIdFormat" xml:space="preserve">
+    <value>NameIDFormat</value>
+  </data>
+  <data name="NameIdFormatDescription" xml:space="preserve">
+    <value>AuthnRequest で要求する NameIDPolicy の Format。unspecified は利用者名、emailAddress はメアド、**persistent は RP ごとに違う値（PPID）**。**指定しなければ IdP 側が unspecified に倒す。****transient はこの実装では未対応。**</value>
+  </data>
 </root>

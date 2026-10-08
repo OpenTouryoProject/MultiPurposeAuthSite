@@ -30,6 +30,7 @@
     //*  2026/09/29  玄人 幸道         OIDC ボタンが prompt=none を送ることを明記（#247）
     //*  2026/10/06  玄人 幸道         prompt の解説を実態に合わせた（#272）
     //*  2026/10/09  玄人 幸道         各オプションの説明を出した（#277 の段階 2）
+    //*  2026/10/09  玄人 幸道         NameIDFormat を選べるようにした（#277 の段階 4）
     //**********************************************************************************
 *@
 
@@ -59,6 +60,13 @@
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.ClientType, Model.DdlClientTypeItems, new { @class = "form-control" })
                 <p class="help-block">@Html.DescriptionFor(m => m.ClientType)</p>
+            </div>
+            @*  **SAML2 の NameIDFormat**（#277 の段階 4）。
+                **SAML のボタンにしか効かない** — OAuth2 / OIDC の経路では使わない。 *@
+            @Html.LabelFor(m => m.NameIdFormat, new { @class = "col-md-3 control-label" })
+            <div class="col-md-5">
+                @Html.DropDownListFor(model => model.NameIdFormat, Model.DdlNameIdFormatItems, new { @class = "form-control" })
+                <p class="help-block">@Html.DescriptionFor(m => m.NameIdFormat)</p>
             </div>
             @Html.LabelFor(m => m.ResponseMode, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">

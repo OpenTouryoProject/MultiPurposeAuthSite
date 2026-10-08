@@ -653,5 +653,23 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("MaxAgeDescription", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   NameIdFormat に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string NameIdFormat {
+            get {
+                return ResourceManager.GetString("NameIdFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   NameIdFormatDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string NameIdFormatDescription {
+            get {
+                return ResourceManager.GetString("NameIdFormatDescription", resourceCulture);
+            }
+        }
     }
 }

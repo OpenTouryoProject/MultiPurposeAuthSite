@@ -180,24 +180,18 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>認可エンドポイント</summary>
         private string Saml2RequestEndpoint = "";
 
+        /// <summary>NameIDFormat（SAML2。画面で選ぶ。#277 の段階 4）</summary>
+        private string NameIdFormat = "";
+
         /// <summary>AuthnRequest の ID（#276）</summary>
         /// <remarks>**応答の `InResponseTo` と照合する**ために持つ。</remarks>
         private string SamlRequestId = "";
-                
+
         #endregion
 
         #region OAuth2
         /// <summary>認可エンドポイント</summary>
         private string OAuth2AuthorizeEndpoint = "";
-
-        /// <summary>ResponseMode</summary>
-        private string ResponseMode = ""; 
-
-        /// <summary>prompt（画面で選ぶ。#246 の項目 3）</summary>
-        private string Prompt = "";
-
-        /// <summary>max_age（画面で選ぶ。#246 の項目 3）</summary>
-        private string MaxAge = "";
 
         /// <summary>ClientName</summary>
         private string ClientName = "";
@@ -211,11 +205,20 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>nonce</summary>
         private string Nonce = "";
 
+        /// <summary>ResponseMode</summary>
+        private string ResponseMode = ""; 
+
         /// <summary>code_verifier</summary>
         private string CodeVerifier = "";
 
         /// <summary>code_verifier</summary>
         private string CodeChallenge = "";
+
+        /// <summary>prompt（画面で選ぶ。#246 の項目 3）</summary>
+        private string Prompt = "";
+
+        /// <summary>max_age（画面で選ぶ。#246 の項目 3）</summary>
+        private string MaxAge = "";
         #endregion
 
         #endregion
@@ -330,6 +333,30 @@ namespace MultiPurposeAuthSite.Controllers
         #region Assemble
 
         #region AssembleSaml2
+
+        /// <summary>画面で選んだ NameIDFormat を、列挙型へ直す（#277 の段階 4）</summary>
+        /// <returns>SAML2Enum.NameIDFormat</returns>
+        /// <remarks>
+        /// **選ばなければ `Unspecified`**（IdP 側の既定と同じ。`CmnEndpoints`）。
+        /// **知らない値も `Unspecified`** に倒す（画面からは選べないが、念のため）。
+        ///
+        /// **`Transient` は返さない。** `GetSubForSAML2` に分岐が無く、
+        /// **NameID が空のまま返る**ため（画面の候補にも入れていない）。
+        /// </remarks>
+        private SAML2Enum.NameIDFormat ToNameIDFormat()
+        {
+            switch (this.NameIdFormat)
+            {
+                case "emailAddress":
+                    return SAML2Enum.NameIDFormat.EmailAddress;
+
+                case "persistent":
+                    return SAML2Enum.NameIDFormat.Persistent;
+
+                default:
+                    return SAML2Enum.NameIDFormat.Unspecified;
+            }
+        }
         #endregion
 
         #region AssembleOAuth2
@@ -747,6 +774,10 @@ namespace MultiPurposeAuthSite.Controllers
                     this.Prompt = model.Prompt ?? "";
                     this.MaxAge = model.MaxAge ?? "";
 
+                    // **NameIDFormat も、そのまま渡す**（#277 の段階 4）。
+                    //   選ばなければ Unspecified（IdP 側の既定と同じ）。
+                    this.NameIdFormat = model.NameIdFormat ?? "";
+
                     #region Starterの実行
 
                     // **ログアウトは、クライアントの選択に依らない**（#232）。
@@ -960,7 +991,7 @@ namespace MultiPurposeAuthSite.Controllers
             string queryString = SAML2Client.CreateRedirectRequest(
                 SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpRedirect,
-                SAML2Enum.NameIDFormat.Unspecified,
+                this.ToNameIDFormat(),
                 this.Issuer, this.RedirectUri, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
@@ -984,7 +1015,7 @@ namespace MultiPurposeAuthSite.Controllers
             string queryString = SAML2Client.CreateRedirectRequest(
                 SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpPost,
-                SAML2Enum.NameIDFormat.Unspecified,
+                this.ToNameIDFormat(),
                 this.Issuer, this.RedirectUri, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
@@ -1007,7 +1038,7 @@ namespace MultiPurposeAuthSite.Controllers
             string id = "";
             string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpPost,
-                SAML2Enum.NameIDFormat.Unspecified,
+                this.ToNameIDFormat(),
                 this.Issuer, this.RedirectUri, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
@@ -1037,7 +1068,7 @@ namespace MultiPurposeAuthSite.Controllers
             string id = "";
             string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpRedirect,
-                SAML2Enum.NameIDFormat.Unspecified,
+                this.ToNameIDFormat(),
                 this.Issuer, this.RedirectUri, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
