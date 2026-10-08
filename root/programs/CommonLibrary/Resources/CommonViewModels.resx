@@ -294,4 +294,25 @@
   <data name="TlsClientAuthSubjectDnDescription" xml:space="preserve">
     <value>Subject DN of the client certificate matched for mTLS (tls_client_auth).</value>
   </data>
+  <data name="ClarifyRedirectUriDescription" xml:space="preserve">
+    <value>Send redirect_uri explicitly. When cleared, it is omitted - OIDC requires it, so an omission must be rejected.</value>
+  </data>
+  <data name="ClientTypeDescription" xml:space="preserve">
+    <value>Which registered test client to use. It decides the route (normal / require_pkce / device / fapi1 / fapi2 / fapi_ciba / the signed-in user). It is not the OAuth 2.0 client type.</value>
+  </data>
+  <data name="ResponseModeDescription" xml:space="preserve">
+    <value>How the authorization response is returned (query / fragment / form_post / the JARM variants). Not specifying it leaves the default for the response_type.</value>
+  </data>
+  <data name="Prompt" xml:space="preserve">
+    <value>prompt</value>
+  </data>
+  <data name="PromptDescription" xml:space="preserve">
+    <value>Whether the consent screen appears. It applies to every button that goes to the authorization endpoint. none shows no UI - a recorded consent returns a code, otherwise consent_required. Combining none with another value is invalid_request.</value>
+  </data>
+  <data name="MaxAge" xml:space="preserve">
+    <value>max_age</value>
+  </data>
+  <data name="MaxAgeDescription" xml:space="preserve">
+    <value>Upper bound of the elapsed time since the last authentication, in seconds. When exceeded, re-authentication is required; with prompt=none it becomes login_required. The OIDC button sends max_age=600 unless specified.</value>
+  </data>
 </root>

@@ -465,4 +465,16 @@
   <data name="IndexConsentGrantsActionLink" xml:space="preserve">
     <value>Manage</value>
   </data>
+  <data name="AddWebAuthnDataAttestationTypeDescription" xml:space="preserve">
+    <value>How much provenance to ask of the authenticator. none asks for nothing (the default here); indirect / direct receive a statement, which Fido2 verifies.</value>
+  </data>
+  <data name="AddWebAuthnDataAuthenticatorTypeDescription" xml:space="preserve">
+    <value>Which kind of authenticator to use. platform is built into the device (Windows Hello / TPM); cross-platform is external (a security key). Not specified means no restriction.</value>
+  </data>
+  <data name="AddWebAuthnDataUserVerificationDescription" xml:space="preserve">
+    <value>Whether to ask the user to verify themselves (PIN or biometrics). required / preferred / discouraged. The choice on this screen is what goes into the request.</value>
+  </data>
+  <data name="AddWebAuthnDataResidentCredentialsDescription" xml:space="preserve">
+    <value>Store the credential on the authenticator itself (a discoverable credential). It allows signing in without typing a user name.</value>
+  </data>
 </root>

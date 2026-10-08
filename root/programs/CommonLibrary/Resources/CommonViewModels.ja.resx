@@ -294,4 +294,25 @@
   <data name="TlsClientAuthSubjectDnDescription" xml:space="preserve">
     <value>mTLS（tls_client_auth）で照合するクライアント証明書の Subject DN。</value>
   </data>
+  <data name="ClarifyRedirectUriDescription" xml:space="preserve">
+    <value>redirect_uri を明示して送る。**外すと送らない** — OIDC では必須なので、**省略は拒まれるはずであること**を試せる。</value>
+  </data>
+  <data name="ClientTypeDescription" xml:space="preserve">
+    <value>**どのテスト クライアントを使うか**。通る経路が決まる（normal / require_pkce / device / fapi1 / fapi2 / fapi_ciba / ログイン中の利用者）。**OAuth 2.0 のクライアント種別ではない。**</value>
+  </data>
+  <data name="ResponseModeDescription" xml:space="preserve">
+    <value>認可応答の返し方（query / fragment / form_post と、それぞれの JARM 版）。**指定しなければ response_type の既定のまま。**</value>
+  </data>
+  <data name="Prompt" xml:space="preserve">
+    <value>prompt</value>
+  </data>
+  <data name="PromptDescription" xml:space="preserve">
+    <value>同意画面の出方。**認可エンドポイントへ行くボタンすべてに効く。** none は UI を出さず、**同意の記録があれば code、なければ consent_required**。**none を他の値と併記すると invalid_request**。</value>
+  </data>
+  <data name="MaxAge" xml:space="preserve">
+    <value>max_age</value>
+  </data>
+  <data name="MaxAgeDescription" xml:space="preserve">
+    <value>前回の認証からの経過時間の上限（秒）。**超えていれば再認証を求める**（prompt=none なら login_required）。OIDC のボタンは、指定しなければ max_age=600 を付ける。</value>
+  </data>
 </root>

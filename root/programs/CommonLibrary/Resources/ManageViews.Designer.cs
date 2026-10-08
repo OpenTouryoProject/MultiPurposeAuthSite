@@ -1103,5 +1103,41 @@ namespace MultiPurposeAuthSite.Resources {
             }
         }
         
+        /// <summary>
+        ///   AddWebAuthnDataAttestationTypeDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataAttestationTypeDescription {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataAttestationTypeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   AddWebAuthnDataAuthenticatorTypeDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataAuthenticatorTypeDescription {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataAuthenticatorTypeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   AddWebAuthnDataUserVerificationDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataUserVerificationDescription {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataUserVerificationDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   AddWebAuthnDataResidentCredentialsDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataResidentCredentialsDescription {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataResidentCredentialsDescription", resourceCulture);
+            }
+        }
+        
     }
 }

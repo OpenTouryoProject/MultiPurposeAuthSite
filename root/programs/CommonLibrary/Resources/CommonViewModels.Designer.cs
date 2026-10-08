@@ -590,5 +590,68 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("TlsClientAuthSubjectDnDescription", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   ClarifyRedirectUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClarifyRedirectUriDescription {
+            get {
+                return ResourceManager.GetString("ClarifyRedirectUriDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ClientTypeDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientTypeDescription {
+            get {
+                return ResourceManager.GetString("ClientTypeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ResponseModeDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResponseModeDescription {
+            get {
+                return ResourceManager.GetString("ResponseModeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Prompt に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Prompt {
+            get {
+                return ResourceManager.GetString("Prompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   PromptDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string PromptDescription {
+            get {
+                return ResourceManager.GetString("PromptDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   MaxAge に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string MaxAge {
+            get {
+                return ResourceManager.GetString("MaxAge", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   MaxAgeDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string MaxAgeDescription {
+            get {
+                return ResourceManager.GetString("MaxAgeDescription", resourceCulture);
+            }
+        }
     }
 }

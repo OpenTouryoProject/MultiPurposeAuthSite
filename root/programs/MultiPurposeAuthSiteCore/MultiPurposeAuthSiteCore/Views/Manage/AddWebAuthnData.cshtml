@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2019/03/06  西野 大介         新規
+    //*  2026/10/09  玄人 幸道         登録オプションの説明を出した（#277 の段階 2）
     //**********************************************************************************
 *@
 
@@ -51,6 +52,7 @@
                 <option value="indirect">Indirect</option>
                 <option value="direct">Direct</option>
             </select>
+            <p class="help-block">@ManageViews.AddWebAuthnDataAttestationTypeDescription</p>
         </div>
     </div>
     <div class="form-group">
@@ -61,6 +63,7 @@
                 <option value="cross-platform">Cross Platform (Token)</option>
                 <option value="platform">Platform (TPM)</option>
             </select>
+            <p class="help-block">@ManageViews.AddWebAuthnDataAuthenticatorTypeDescription</p>
         </div>
     </div>
     <div class="form-group">
@@ -71,12 +74,14 @@
                 <option selected value="preferred">Preferred</option>
                 <option value="discouraged">Discouraged</option>
             </select>
+            <p class="help-block">@ManageViews.AddWebAuthnDataUserVerificationDescription</p>
         </div>
     </div>
     <div class="form-group">
         <p class="col-md-2 control-label">Resident Credentials</p>
         <div class="col-md-3">
             <input class="form-control" type="checkbox" id="checkbox-residentCredentials" value="residentCredentials" />
+            <p class="help-block">@ManageViews.AddWebAuthnDataResidentCredentialsDescription</p>
         </div>
     </div>
     <div class="form-group">

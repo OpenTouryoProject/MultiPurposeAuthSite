@@ -20,6 +20,7 @@
 //*  2020/12/21  西野 大介         Enum追加対応実施
 //*  2026/09/28  玄人 幸道         prompt / max_age を画面から選べるようにした（#246 の項目 3）
 //*  2026/10/06  玄人 幸道         promptの選択肢から「未対応」を外した（#272 の段階 2）
+//*  2026/10/09  玄人 幸道         各オプションの説明を追加（#277 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -45,7 +46,8 @@ namespace MultiPurposeAuthSite.ViewModels
     public class HomeSaml2OAuth2StartersViewModel : BaseViewModel
     {
         /// <summary>ClarifyRedirectUri</summary>
-        [Display(Name = "ClarifyRedirectUri", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "ClarifyRedirectUri", Description = "ClarifyRedirectUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         public bool ClarifyRedirectUri { get; set; }
 
         /// <summary>
@@ -58,7 +60,8 @@ namespace MultiPurposeAuthSite.ViewModels
         public const string RequirePkceClientType = "require_pkce";
 
         /// <summary>ClientType</summary>
-        [Display(Name = "ClientType", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "ClientType", Description = "ClientTypeDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         public string ClientType { get; set; }
 
         /// <summary>ClientTypeアイテムリスト</summary>
@@ -107,7 +110,8 @@ namespace MultiPurposeAuthSite.ViewModels
         ///
         /// **以前は `none` だけを扱っていた**（他の値は無視。`ANALYSIS-IdP.md` C-3）。
         /// </remarks>
-        [Display(Name = "prompt")]
+        [Display(Name = "Prompt", Description = "PromptDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         public string Prompt { get; set; }
 
         /// <summary>promptアイテムリスト</summary>
@@ -131,7 +135,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **前回の認証からの経過時間の上限。** 超えていれば、OP は再認証を求めるべきもの。
         /// 画面から試せるようにして、**効き方を観測できる**ようにした。
         /// </remarks>
-        [Display(Name = "max_age")]
+        [Display(Name = "MaxAge", Description = "MaxAgeDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         public string MaxAge { get; set; }
 
         /// <summary>max_ageアイテムリスト</summary>
@@ -149,7 +154,8 @@ namespace MultiPurposeAuthSite.ViewModels
             }
         }
         /// <summary>ResponseMode</summary>
-        [Display(Name = "ResponseMode", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "ResponseMode", Description = "ResponseModeDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         public string ResponseMode { get; set; }
 
         /// <summary>ResponseModeアイテムリスト</summary>

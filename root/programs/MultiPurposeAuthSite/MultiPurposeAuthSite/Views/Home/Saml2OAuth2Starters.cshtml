@@ -28,6 +28,7 @@
     //*  2026/09/28  玄人 幸道         SAML2 の 4 つ目の組み合わせを追加し、Hybrid-IdP の記述を直した（#246 の項目 2）
     //*  2026/09/29  玄人 幸道         OIDC ボタンが prompt=none を送ることを明記（#247）
     //*  2026/10/06  玄人 幸道         prompt の解説を実態に合わせた（#272）
+    //*  2026/10/09  玄人 幸道         各オプションの説明を出した（#277 の段階 2）
     //**********************************************************************************
 *@
 
@@ -58,23 +59,28 @@
             @Html.LabelFor(m => m.ClarifyRedirectUri, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">
                 @Html.CheckBoxFor(model => model.ClarifyRedirectUri, new { @class = "form-check-input" })
+                <p class="help-block">@Html.DescriptionFor(m => m.ClarifyRedirectUri)</p>
             </div>
             @Html.LabelFor(m => m.ClientType, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.ClientType, Model.DdlClientTypeItems, new { @class = "form-control" })
+                <p class="help-block">@Html.DescriptionFor(m => m.ClientType)</p>
             </div>
             @Html.LabelFor(m => m.ResponseMode, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.ResponseMode, Model.DdlResponseModeItems, new { @class = "form-control" })
+                <p class="help-block">@Html.DescriptionFor(m => m.ResponseMode)</p>
             </div>
             @* **認可画面（同意）の出方を試すための指定**（#246 の項目 3） *@
             @Html.LabelFor(m => m.Prompt, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.Prompt, Model.DdlPromptItems, new { @class = "form-control" })
+                <p class="help-block">@Html.DescriptionFor(m => m.Prompt)</p>
             </div>
             @Html.LabelFor(m => m.MaxAge, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.MaxAge, Model.DdlMaxAgeItems, new { @class = "form-control" })
+                <p class="help-block">@Html.DescriptionFor(m => m.MaxAge)</p>
             </div>
         </div>
         <text>

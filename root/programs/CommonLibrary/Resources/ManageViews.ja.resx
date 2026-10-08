@@ -468,4 +468,16 @@
   <data name="IndexConsentGrantsActionLink" xml:space="preserve">
     <value>管理</value>
   </data>
+  <data name="AddWebAuthnDataAttestationTypeDescription" xml:space="preserve">
+    <value>認証器の出自をどこまで求めるか。**none は求めない**（この画面の既定）。indirect / direct は証明を受け取り、Fido2 が検証する。</value>
+  </data>
+  <data name="AddWebAuthnDataAuthenticatorTypeDescription" xml:space="preserve">
+    <value>使う認証器の種類。**platform は端末内蔵**（Windows Hello / TPM）、**cross-platform は外付け**（セキュリティ キー）。指定しなければ制限しない。</value>
+  </data>
+  <data name="AddWebAuthnDataUserVerificationDescription" xml:space="preserve">
+    <value>利用者自身の確かめ（PIN ・生体）を求めるか。required / preferred / discouraged。**この画面の選択が、そのまま要求に入る。**</value>
+  </data>
+  <data name="AddWebAuthnDataResidentCredentialsDescription" xml:space="preserve">
+    <value>認証器側に資格情報を保存する（discoverable credential）。**利用者名を入れずにサインインする**形に使う。</value>
+  </data>
 </root>
