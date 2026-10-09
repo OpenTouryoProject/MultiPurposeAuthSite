@@ -5915,7 +5915,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - JSON として読める
 - 利用者名が自分のものである
 - メアドが自分のものである
-- パスワードの控え（PasswordHash）は入っていない
+- PasswordHash は入っていない
+- SecurityStamp は入っていない
+- TotpAuthenticatorKey は入っていない
+- TotpTokens は入っていない
+- DeviceToken は入っていない
 
 ## RT-277.8 GDPR の消去で、個人情報が消え、その利用者ではサインインできなくなる
 

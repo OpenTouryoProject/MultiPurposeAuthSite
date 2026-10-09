@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト ライブラリ部（CommonLibrary）コード分析
 
 対象: `root/programs/CommonLibrary`（**net10.0 / net48 の 2 系統**） / ブランチ: `develop`
-最終更新: 2026-10-09
+最終更新: 2026-10-10
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 「どこに何があるか」「どの規約に従うべきか」「何を壊しやすいか」を記す。
@@ -160,7 +160,27 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   **`RoleManager.Roles` は `IQueryableRoleStore` が無いと例外になる**ので、
   **ロールの管理画面と、利用者へのロール割り当てはこれが前提**である。
 
-### 4.1 UserStore の 4 プロバイダ
+### 4.1 `ApplicationUser` の直列化は allow-list（OptIn）
+
+**`ApplicationUser` を JSON にするのは 1 か所だけ**である
+（GDPR の持ち出し : `ManageController.ReferGdprPersonalData` が返す `user.json`）。
+**復元する経路は無い。**
+
+**この型は `[JsonObject(MemberSerialization.OptIn)]` にしてある。**
+**`[JsonProperty]` を付けたプロパティだけが出る。**
+
+| | |
+|---|---|
+| 出す | `Id` `UserName` `Email` `EmailConfirmed` `PhoneNumber` `PhoneNumberConfirmed` `LockoutEnabled` `AccessFailedCount` `LockoutEndDateUtc` `TwoFactorEnabled` `Roles` `Logins` `Claims` `ClientID` `UnstructuredData` `CreatedDate` `PasswordChangeDate` |
+| 出さない | **`PasswordHash`**（`[JsonIgnore]`）／**`SecurityStamp`**／**`TotpAuthenticatorKey`**（認証器の鍵）／**`TotpTokens`**（リカバリ コード）／**`DeviceToken`**（端末への宛先）／`NormalizedUserName` `NormalizedEmail`（派生値） |
+
+> **既定で出す形（OptOut）にしないこと。**
+> **プロパティを足すたびに、持ち出せる物が黙って増える**からである。
+> **足すときは、それを利用者に渡してよいかを決めてから `[JsonProperty]` を付ける。**
+>
+> **E2E** : `RT-277.7` が、**資格情報の材料が入っていないこと**を名指しで測っている。
+
+### 4.2 UserStore の 4 プロバイダ
 
 `Config.UserStoreType`（`appSettings:UserStoreType`）で切り替わる。
 
@@ -185,7 +205,7 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   `0_CopyInitSql.ps1` が上記 DDL を `store/*/init/` へコピーし、**CRLF を LF に変換**する
   （Linux コンテナの初期化スクリプトが読むため）。
 
-### 4.2 STS 専用モード（機能ロックダウン）
+### 4.3 STS 専用モード（機能ロックダウン）
 
 `Util/Sts/OnlySts` が、次の 3 つが**すべて false のとき**「STS 専用モード」と判定する。
 

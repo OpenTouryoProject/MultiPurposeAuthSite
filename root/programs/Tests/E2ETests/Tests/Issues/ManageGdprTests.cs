@@ -63,6 +63,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// **使い捨ての利用者を、その都度ひとつ作る**（`RT-277.4` 〜 `.6` と同じ流儀）。
     /// **消去は元に戻せない**ので、**テスト利用者を使ってはならない。**
+    ///
+    /// **持ち出せる項目は、`ApplicationUser` の `[JsonProperty]` が決める**（OptIn）。
+    /// **付けなければ出ない**ので、**プロパティを足しても、黙って持ち出せる物は増えない。**
     /// </remarks>
     public class ManageGdprTests : TargetTestBase
     {
@@ -154,14 +157,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.VerifyEqual("メアドが自分のものである",
                             email, ManageGdprTests.Text(json, "Email"));
 
-                        //  **パスワードの控えは持ち出させない。**
-                        //    **`ApplicationUser` をそのまま直列化している**ので、
-                        //    **項目が増えると、黙って持ち出せる物も増える。**
-                        r.Verify("パスワードの控え（PasswordHash）は入っていない",
-                            !ManageGdprTests.Names(json).Contains("PasswordHash"),
-                            "入っていない",
-                            ManageGdprTests.Names(json).Contains("PasswordHash")
-                                ? "**入っている**" : "入っていない");
+                        //  **資格情報の材料は持ち出させない。**
+                        //    **`ApplicationUser` は OptIn で直列化する**ので、
+                        //    **`[JsonProperty]` を付けた物だけが出る。**
+                        //    **足した物が黙って出ることはない**が、
+                        //    **うっかり付けたら出てしまう**ので、名指しで押さえる。
+                        List<string> names = ManageGdprTests.Names(json);
+
+                        foreach (string secret in new string[] {
+                            "PasswordHash", "SecurityStamp",
+                            "TotpAuthenticatorKey", "TotpTokens", "DeviceToken" })
+                        {
+                            r.Verify(secret + " は入っていない",
+                                !names.Contains(secret),
+                                "入っていない",
+                                names.Contains(secret) ? "**入っている**" : "入っていない");
+                        }
                     }
                 }
                 finally

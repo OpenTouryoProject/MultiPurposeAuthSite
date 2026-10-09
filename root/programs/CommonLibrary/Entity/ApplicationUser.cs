@@ -22,6 +22,7 @@
 //*  2026/10/01  玄人 幸道         CreateUser を利用者名とメアドの 2 つを受け取る形にした（#151 の段階 3）
 //*  2026/10/07  玄人 幸道         FIDO2PublicKeyを削除(MsPass専用。WebAuthnはFIDO2Data表。#137)
 //*  2026/10/09  玄人 幸道         Users.PaymentInformation を削除（オンライン決済の取り下げ）
+//*  2026/10/10  玄人 幸道         直列化をOptInにした（GDPRの持ち出しに資格情報を入れない）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -54,6 +55,16 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
     /// 詳細については、http://go.microsoft.com/fwlink/?LinkID=317594 を参照してください。
     /// #・・・上記は Entity Framework の Code First Migrationsを使用する方法なので・・・。
     /// </summary>
+    //  **直列化は「出す物を書いたものだけ」にする**（OptIn）。
+    //    **この型を JSON にするのは、GDPR の持ち出し（`ReferGdprPersonalData`）だけ**である
+    //    （復元する経路は無い）。
+    //
+    //    **既定で出す形（OptOut）だと、プロパティを足すたびに持ち出せる物が黙って増える。**
+    //    **資格情報の材料（認証器の鍵、リカバリ コード、SecurityStamp）を
+    //    利用者が持ち出せるファイルに入れない**ため、**出す物を明示する。**
+    //
+    //    **足すときは、それを利用者に渡してよいかを決めてから `[JsonProperty]` を付けること。**
+    [JsonObject(MemberSerialization.OptIn)]
 #if NETFX
     public class ApplicationUser : IUser<string> // IdentityUser (Entity Frameworkの場合)
 #else
@@ -159,11 +170,13 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <remarks>
         /// GUIDを使用
         /// </remarks>
+        [JsonProperty]
         public string Id { get; set; } = Guid.NewGuid().ToString();
 
         /// <summary>
         /// Gets or sets the user name ( = Email) .
         /// </summary>
+        [JsonProperty]
         public string UserName { get; set; }
 
         /// <summary>
@@ -228,11 +241,13 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>
         /// Gets or sets the email for the user.
         /// </summary>
+        [JsonProperty]
         public string Email { get; set; }
 
         /// <summary>
         /// Gets or sets a value that indicates whether the email is confirmed.
         /// </summary>
+        [JsonProperty]
         public bool EmailConfirmed { get; set; }
 
         /// <summary>
@@ -267,11 +282,13 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>
         /// Gets or sets the phone number for the user.
         /// </summary>
+        [JsonProperty]
         public string PhoneNumber { get; set; }
 
         /// <summary>
         /// Gets or sets the value that indicates whether the phone number is confirmed. The default is false.
         /// </summary>
+        [JsonProperty]
         public bool PhoneNumberConfirmed { get; set; }
 
         #endregion
@@ -285,16 +302,19 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>
         /// Gets or sets a value that indicates whether lockout enabled for this user.
         /// </summary>
+        [JsonProperty]
         public bool LockoutEnabled { get; set; }
 
         /// <summary>
         /// Gets or sets the number of failures for the purposes of lockout.
         /// </summary>
+        [JsonProperty]
         public int AccessFailedCount { get; set; }
 
         /// <summary>
         /// Gets or sets the date time value (in UTC) when lockout ends, any time in the past is considered not locked out.
         /// </summary>
+        [JsonProperty]
         public DateTime? LockoutEndDateUtc { get; set; }
 
         #endregion
@@ -312,6 +332,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>
         /// Gets or sets a value that indicates whether two-factor authentication is enabled for the user.
         /// </summary>
+        [JsonProperty]
         public bool TwoFactorEnabled { get; set; }
 
         #endregion
@@ -323,16 +344,19 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>
         /// Gets the collection of roles for the user.
         /// </summary>
+        [JsonProperty]
         public IList<ApplicationRole> Roles { get; set; }
 
         /// <summary>
         /// Gets the collection of logins for the user.
         /// </summary>
+        [JsonProperty]
         public IList<UserLoginInfo> Logins { get; set; }
 
         /// <summary>
         /// Gets the collection of user claims.
         /// </summary>
+        [JsonProperty]
         public IList<Claim> Claims { get; set; }
 
         #endregion
@@ -343,6 +367,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         #region Properties after Identity 3.
 
         /// <summary>Totp AuthenticatorKey</summary>
+        /// <remarks>**持ち出させない。** **これだけでワンタイム コードを作れる。**</remarks>
         public string TotpAuthenticatorKey { get; set; }
 
         #region Collection
@@ -350,6 +375,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 #if NETFX
 #else
         /// <summary>Totp Tokens</summary>
+        /// <remarks>**持ち出させない。** **リカバリ コードを含む。**</remarks>
         public IList<IdentityUserToken<string>> TotpTokens { get; set; }
 #endif
         #endregion
@@ -364,26 +390,34 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <remarks>
         /// OAuth2関連のClientID
         /// </remarks>
+        [JsonProperty]
         public string ClientID { get; set; } = Guid.NewGuid().ToString("N"); //Guid.NewGuid().ToString();
 
         /// <summary>
         /// 非構造化データ
         /// </summary>
+        [JsonProperty]
         public string UnstructuredData { get; set; } = null;
 
         /// <summary>
         /// DeviceToken 
         /// </summary>
+        /// <remarks>
+        /// **持ち出させない。** **その利用者の端末へ通知を送れる宛先**であり、
+        /// **利用者が知って役に立つものでもない。**
+        /// </remarks>
         public string DeviceToken { get; set; } = null;
 
         /// <summary>
         /// レコード生成日
         /// </summary>
+        [JsonProperty]
         public DateTime CreatedDate { get; set; } = DateTime.Now;
 
         /// <summary>
         /// パスワード更新日
         /// </summary>
+        [JsonProperty]
         public DateTime PasswordChangeDate { get; set; } = DateTime.Now;
 
         #endregion
