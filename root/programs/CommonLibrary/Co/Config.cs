@@ -58,6 +58,7 @@
 //*  2026/10/07  玄人 幸道         FIDOServerModeをnet10.0版だけで復活（#137）
 //*  2026/10/07  玄人 幸道         Saml2AssertionExpireTimeSpanFromMinutesを専用キーにした（#276）
 //*  2026/10/07  玄人 幸道         配備で切り替える設定を 4 つ追加（#279）
+//*  2026/10/09  西野 大介         オンライン決済サービス系処理の削除
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1315,19 +1316,6 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        /// <summary>
-        /// CanEditPayment
-        /// </summary>
-        public static bool CanEditPayment
-        {
-            get
-            {
-                return
-                    Config.EnableStripe
-                    || Config.EnablePAYJP;
-            }
-        }
-
         #endregion
 
         #endregion
@@ -2202,76 +2190,6 @@ namespace MultiPurposeAuthSite.Co
         //}
 
         #endregion
-
-        #endregion
-
-        #endregion
-
-        #endregion
-
-        #region 外部サービス
-
-        #region オンライン決済サービス
-
-        #region Stripe
-
-        /// <summary>EnableStripe</summary>
-        public static bool EnableStripe
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableStripe"));
-            }
-        }
-
-        /// <summary>Stripeのpublicキー</summary>
-        public static string Stripe_PK
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("Stripe_PK");
-            }
-        }
-
-        /// <summary>Stripeのprivateキー</summary>
-        public static string Stripe_SK
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("Stripe_SK");
-            }
-        }
-
-        #endregion
-
-        #region PAY.JP
-
-        /// <summary>EnablePAYJP</summary>
-        public static bool EnablePAYJP
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnablePAYJP"));
-            }
-        }
-
-        /// <summary>PAY.JPのpublicキー</summary>
-        public static string PAYJP_PK
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("PAYJP_PK");
-            }
-        }
-
-        /// <summary>PAY.JPのprivateキー</summary>
-        public static string PAYJP_SK
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("PAYJP_SK");
-            }
-        }
 
         #endregion
 

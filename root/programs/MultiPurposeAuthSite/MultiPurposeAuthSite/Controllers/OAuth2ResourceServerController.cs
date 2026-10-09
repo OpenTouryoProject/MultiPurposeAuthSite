@@ -33,6 +33,7 @@
 //*  2020/02/27  西野 大介         課金エンドポイント（テスト用→解放）
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
+//*  2026/10/09  西野 大介         オンライン決済サービス処理の削除
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -152,53 +153,6 @@ namespace MultiPurposeAuthSite.Controllers
                 await Helper.GetInstance().GetUserInfoAsync((string)dic[OAuth2AndOIDCConst.AccessToken]));
 
             return dic;
-        }
-
-        #endregion
-
-        #endregion
-
-        #region 機能
-
-        #region Chage
-
-        /// <summary>
-        /// 課金エンドポイント
-        /// POST: /ChageToUser
-        /// </summary>
-        /// <param name="formData">
-        /// - currency
-        /// - amount
-        /// </param>
-        /// <returns>string</returns>
-        [HttpPost]
-        public async Task<string> ChageToUser(FormDataCollection formData)
-        {
-            // Claimを取得する。
-            string userName, roles, scopes, ipAddress;
-            MyBaseAsyncApiController.GetClaims(out userName, out roles, out scopes, out ipAddress);
-
-            // ユーザの検索
-            ApplicationUser user = await UserManager.FindByNameAsync(userName);
-
-            if (user != null)
-            {
-                // 変数
-                string currency = formData["currency"];
-                string amount = formData["amount"];
-
-                if (Config.CanEditPayment
-                    && Config.EnableEditingOfUserAttribute)
-                {
-                    // 課金の処理
-                    JObject jobj = await WebAPIHelper.GetInstance()
-                        .ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, currency, amount);
-
-                    return "OK";
-                }
-            }
-
-            return "NG";
         }
 
         #endregion

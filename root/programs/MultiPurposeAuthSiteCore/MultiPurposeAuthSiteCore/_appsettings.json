@@ -49,33 +49,22 @@
     "FxCacheControl": "on",
     // アプリケーションの使用するパラメータ - end
 
-    //InternetProxy設定 (Internet アクセス用、)
+    // Proxy設定
+    // InternetProxy設定 (Internet アクセス用、)
     "UseInternetProxy": "false",
     "InternetProxyURL": "[If necessary, please fill in internal proxy url]",
     "InternetProxyUID": "[If necessary, please fill in user Id for proxy credential]",
     "InternetProxyPWD": "[If necessary, please fill in password for proxy credential]",
-
     // IntranetProxy設定 (Intranet アクセス用、基本falseを想定)
     "UseIntranetProxy": "false",
     "IntranetProxyURL": "",
     "IntranetProxyUID": "",
     "IntranetProxyPWD": "",
-
     // DebugProxy設定 (Fiddler)
     "UseDebugProxy": "false",
     "DebugProxyURL": "http://localhost:8888/",
     "DebugProxyUID": "",
     "DebugProxyPWD": "",
-
-    // オンライン決済サービス
-    // Stripe
-    "EnableStripe": "false",
-    "Stripe_PK": "[If necessary, please fill in this input item like pk_test_xxxxx]",
-    "Stripe_SK": "[If necessary, please fill in this input item like sk_test_xxxxx]",
-    // PAY.JP
-    "EnablePAYJP": "false",
-    "PAYJP_PK": "[If necessary, please fill in this input item like pk_test_xxxxx]",
-    "PAYJP_SK": "[If necessary, please fill in this input item like sk_test_xxxxx]",
 
     // ASP.NET Identity
     // Debugかどうか
@@ -84,28 +73,18 @@
 
     // User store type (mem, sql, ora, npg)
     "UserStoreType": "mem",
-    // **セッションの置き場**（mem, sql, redis。#256）。**net10.0 版だけが読む。**
-    //   net48 版は Web.config の sessionState で選ぶ（InProc / StateServer / SQLServer）。
-    //   **書かなければ mem**（＝ プロセス内。**単一インスタンスなら、これで正しい**）。
-    //   **インスタンスを増やすなら、redis または sql にする。**
-    //   mem は共有されないので、要求が別のインスタンスへ回ると、
-    //   セッションに置いた値（state / nonce / code_verifier、access_token、FIDO2 の
-    //   challenge）が読めず、途中で失敗する。
-    //   **redis は方言に依らない。** UserStoreType が ora / npg でも使える。
-    //   **sql は SQL Server のテーブルが要る**（Sql\sqlserver\Create_SessionCache.sql）。
-    //   Oracle / PostgreSQL 用の実装は標準に無い。
+    // Session store type（mem, sql, redis。#256）。**net10.0 版だけ**
     "SessionStoreType": "mem",
-    // **セッションの置き場の接続文字列**（#256）。**mem なら空のまま。**
-    //   redis : StackExchange.Redis の構成文字列（例 localhost:6379）
-    //   sql   : SQL Server の接続文字列（ConnectionString_SQL と同じでよい）
-    //   **mem 以外で空なら、起動時に落とす**（後で 500 になるよりよい）。
+    // Session store connection string（#256）。**mem なら空のまま。**
     "SessionStoreConnectionString": "",
+
+    // 本サイトでSaltとして機能する値
+    // ・PPID生成に使用するSalt
+    // ・外部ログイン追加時のXSRF防止
+    "SaltParameter": "[Please set a random string for each site.]",
+
     // UserListCount
     "UserListCount": "50",
-
-    // Administrator（システム管理者のアカウント）
-    "AdministratorUID": "[Please fill in this input item.]",
-    "AdministratorPWD": "[Please fill in this input item.]", // PWDのみ、初期化後削除可能
 
     // Notification Provider
     // Smtp
@@ -123,19 +102,23 @@
     // テスト用 : 設定すると、プッシュ通知を FCM に送らず、このディレクトリにファイルとして書く。本番では空のまま
     "FcmOutboxDirectory": "",
 
+    // 約款画面を表示するかどうか
+    "DisplayAgreementScreen": "false",
     // 文面ファイルのフォルダ
     "ContentOfLetterFilePath": "C:/root/files/resource/MultiPurposeAuthSite/Txt",
 
-    // 登録されるTestUserのpassword
+    // Administrator（システム管理者のアカウント）
+    "AdministratorUID": "[Please fill in this input item.]",
+    "AdministratorPWD": "[Please fill in this input item.]", // PWDのみ、初期化後削除可能
+
+    // TestUser
+    // password
     "TestUserPWD": "[password of TestUser]",
-    // テスト利用者の名前に付ける接尾辞（#260）。空なら super_tanaka / tanaka。
-    //   E2E（test.ps1）が、サイトごとに _core / _netfx を与える。
+    // 接尾辞（#260）。E2E（test.ps1）が、サイトごとに _core / _netfx を与える。
     "TestUserSuffix": "",
 
+    // User関連
     "AllowOnlyAlphanumericUserNames": "false",
-    // UserNameがEmailかどうか
-    // 約款画面を表示するかどうか
-    "DisplayAgreementScreen": "false",
     // メアド検証リンクの有効期限 24  時間
     "EmailConfirmationTokenLifespanFromHours": "24",
     // UserNameの編集を許可するかどうか
@@ -149,52 +132,11 @@
     "RequireLowercase": "true",
     "RequireUppercase": "true",
     "StretchCount": "1000",
-    // ユーザ ロックアウト（5 回入力ミスすると、5分ロックアウト
+    // ロックアウト（5 回入力ミスすると、5分ロックアウト
     "UserLockoutEnabledByDefault": "true",
     "DefaultAccountLockoutTimeSpanFromSeconds": "300",
     "MaxFailedAccessAttemptsBeforeLockout": "5",
-    // **認証 Cookie の名前**（#250 の段階 4）。
-    //   **空なら既定のまま**（net10.0 : .AspNetCore.Identity.Application /
-    //   net48 : .AspNet.ApplicationCookie）。
-    //
-    //   **同じホストに 2 つ立てるときだけ指定する。**
-    //   **Cookie のスコープにポートは入らない**ので、localhost:44300（下流）と
-    //   localhost:44301（上流）は Cookie を共有し、**後にサインインした側が
-    //   相手を蹴り出す**（ID フェデレーションは毎回この経路を通る）。
-    // **このサイト自身が書く Cookie の名前に付ける接頭辞**（#255）。
-    //   **空なら従来どおり**（auth_time / re_auth_at）。
-    //   **同じホストに 2 つ立てるときだけ指定する**（Cookie はポートで分かれない）。
-    //   掛かるのは **このサイト自身が書く Cookie** だけで、
-    //   認証は AuthCookieName、セッションは sessionState:SessionCookieName で分ける。
-    // **自分自身を呼ぶときの宛先**（コンテナ配備。#250）。
-    //   **自己テストは「サーバが自分自身を WebAPI で呼ぶ」。**
-    //   宛先は OAuth2AuthorizationServerEndpointsRootURI から組み立てられるが、
-    //   **コンテナの中からは、外向けのホスト名・ポートに届かない。**
-    //   **Helper.GetContainerizatedAuthZServerUri が、この設定で宛先を差し替える**
-    //   （Windows でないときだけ働く。両方空なら差し替えない）。
-    //
-    //   FqdnAndPort : ホスト名とポートだけ差し替える（スキームは元のまま）
-    //   EPRootURI   : スキームごと差し替える（HTTP のループバックにできる）
-    "OAuth2ContainerizatedAuthSvrFqdnAndPort": "",
-    "OAuth2ContainerizatedAuthSvrEPRootURI": "",
-    "CookieNamePrefix": "",
-    "AuthCookieName": "",
-    // Cookie認証チケットの有効期限は2週間 24 * 14 = 336 時間
-    // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
-    //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
-    //   ここは、その導出で拾えないものを足すための口（空白かカンマ区切り）。
-    //   **末尾の「/」は付けない。「*」は書かない**（落とすので許可されない）。
-    "CorsAllowedOrigins": "",
-    "AuthCookieExpiresFromHours": "336",
-    // Cookie認証チケットのSliding（再発行）機能
-    "AuthCookieSlidingExpiration": "true",
-    // 2FA : TwoFactorAuthentication
-    // 必要に応じてユーザが有効にするので初期値は false
-    "TwoFactorEnabled": "false",
-    // 2FA Cookieの有効期限は2週間 24 * 14 = 336 時間
-    "TwoFactorCookieExpiresFromHours": "336",
-    // SecurityStamp（検証間隔は10秒、本番は長めに設定
-    "SecurityStampValidateIntervalFromSeconds": "10",
+    
     // その他、属性の編集を許可するかどうか
     "CanEditEmail": "true",
     "CanEditPhone": "true",
@@ -206,11 +148,33 @@
     //   **net10.0 版だけの設定**（#137）。net48 版にはこのキーが無い。
     //   **mspass（Microsoft Passport）は落とした**（前身 API で、動く環境が無い）。
     "FIDOServerMode": "webauthn",
+    
+    //  Cookie の名前に付ける接頭辞（同じホストに 2 つ立てるときだけ指定
+    "CookieNamePrefix": "",
+    // 認証 Cookie の名前**（#250 の段階 4）空なら既定のまま
+    // net48 : .AspNet.ApplicationCookie, net10.0 : .AspNetCore.Identity.Application
+    "AuthCookieName": "",
+    // Cookie認証チケットの有効期限は2週間 24 * 14 = 336 時間
+    "AuthCookieExpiresFromHours": "336",
+    // Cookie認証チケットのSliding（再発行）機能
+    "AuthCookieSlidingExpiration": "true",
+    // 2FA : TwoFactorAuthentication
+    // 必要に応じてユーザが有効にするので初期値は false
+    "TwoFactorEnabled": "false",
+    // 2FA Cookieの有効期限は2週間 24 * 14 = 336 時間
+    "TwoFactorCookieExpiresFromHours": "336",
+    // SecurityStamp（検証間隔は10秒、本番は長めに設定
+    "SecurityStampValidateIntervalFromSeconds": "10",
 
-    // 本サイトでSaltとして機能する値
-    // ・PPID生成に使用するSalt
-    // ・外部ログイン追加時のXSRF防止
-    "SaltParameter": "[Please set a random string for each site.]",
+    // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
+    //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
+    //   ここは、その導出で拾えないものを足すための口（空白かカンマ区切り）。
+    //   **末尾の「/」は付けない。「*」は書かない**（落とすので許可されない）。
+    "CorsAllowedOrigins": "",
+
+    // コンテナ内で自己テストがバックチャンネルを呼ぶ場合
+    "OAuth2ContainerizatedAuthSvrFqdnAndPort": "", // ホスト名とポートだけ差し替える（スキームは元のまま）
+    "OAuth2ContainerizatedAuthSvrEPRootURI": "",   // スキームごと差し替える（HTTP のループバックにできる）
 
     // 外部ログイン
 
@@ -363,21 +327,15 @@
     "OAuth2ClientsInformation": {
       "67d328bfe8604aae83fb15fa44780d8b": {
         "client_secret": "s_FhjujXG0U6kAD-c4S5ifiKdAgqFoil_UxKuN_Ur50",
+        "client_name": "TestClient",
         "saml_name_id_format": "unspecified",
         "redirect_uri_saml": "test_self_saml",
         "redirect_uri_code": "test_self_code",
         "redirect_uri_token": "test_self_token",
-        // ログアウト後の戻り先（RP-Initiated Logout。#232）。test_self_logout は
-        //   OAuth2ClientEndpointsRootURI + /Home/Index に解決される
         "post_logout_redirect_uri": "test_self_logout",
-        "client_name": "TestClient",
         // "subject_types" は書かない → **既定は public**（OIDC Core 8 章）。
-        // **検証する側の alg は、書かなければ絞らない**（#262）。
-        //   "token_endpoint_auth_signing_alg": "RS256"  … client_assertion を RS256 だけに
-        //   "request_object_signing_alg":      "RS256"  … Request Object を RS256 だけに
-        //   public   : sub = 利用者 ID（既定）
-        //   pairwise : sub = RP ごとに違う値（PPID）
-        //   **利用者名を RP に渡したいなら UserClaimsMapping で preferred_username に**。
+        // "token_endpoint_auth_signing_alg": "RS256"  … client_assertion を RS256 だけに
+        // "request_object_signing_alg":      "RS256"  … Request Object を RS256 だけに
         "jwk_rsa_publickey": "eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ",
         "jwk_ecdsa_publickey": "eyJrdHkiOiJFQyIsImFsZyI6IkVTMjU2IiwiY3J2IjoiUC0yNTYiLCJ4IjoiUUhxUmdNZHdBN0RlbUFMM09yVE1NVU9QczZkdkxMaWd1UVlSVHY4SWFybyIsInkiOiJsNlAyVEVxeng1Z19TMkEzQ1BUYXNTY00zZFM4RHQtS1lCWTNXQ0FSeENFIiwia2lkIjoiMWhPa2thNVJHVGZDbHUyS3JFSEVTcmRHcmlseC1OUzVFT3pWZ1M1Sk12TSJ9"
       },
@@ -431,13 +389,13 @@
       },
       "f374a155909d486a9234693c34e94479": {
         "client_secret": "z54lhkewWPl4hk3eF1WYwvdqt7Fz24jYamLPZFVnWpA",
-        "redirect_uri_code": "http://localhost:3000/RedirectEndpoint",
+        "redirect_uri_code": "http://localhost:5173/RedirectEndpoint",
         "redirect_uri_token": "",
         "client_name": "SPA_Application"
       },
       "40319c0100f94ff3aab3004c8bdb5e52": {
         "client_secret": "m7VUuKLCK1nODl3xrLSoitw1x8N7sike9d5cXWa9_lg",
-        "redirect_uri_code": "http://opentouryo.com/",
+        "redirect_uri_code": "myapp:/oauthredirect",
         "redirect_uri_token": "",
         "client_name": "Native_Application"
       },
@@ -449,8 +407,8 @@
       },
       // 登録の scope で、要求してよいスコープを制限したクライアント（#198、E2E テスト用）。
       // scope は RFC 7591 の client metadata と同じく、スペース区切り。無ければ制限しない。
-      "b1d4641fab1d47c0bcfe33dc8ac09557": {
-        "client_secret": "j2Sq_qfmKjiijjz0eFb__ZofSJkTexltkDymsSqiXfY",
+      "e9d6919296934542a33230fec2ebef31": {
+        "client_secret": "8tjASfcfp4jYqoaauZuILw7D90MzxSEBz9xfO5JZhXc",
         "redirect_uri_code": "http://localhost:12346/",
         "client_name": "TestClient5",
         "scope": "openid profile email"
@@ -473,18 +431,8 @@
     "EnableEditingOfUserAttribute": "true",
     // ユーザ・ロール管理
     "EnableAdministrationOfUsersAndRoles": "true",
-    // IDフェデレーション
-    //   **上流は store/ のコンテナである**（#250 の段階 2〜4）。
-    //   `store\3_PublishUpstream.ps1` → `docker compose up -d upstream` で建つ。
-    //
-    //   **パスに /MultiPurposeAuthSite は付かない。** コンテナは Kestrel で
-    //   **root で配信する**（`UsePathBase` を呼んでいないため）。
-    //   付いていたのは IIS Express の仮想ディレクトリの形で、**上流の実体が無かった。**
-    //
-    //   **Redirect エンドポイントは「自分（下流）」の URL である。**
-    //   VS から動かすと net48 版・net10.0 版とも 44300/MultiPurposeAuthSite なので、
-    //   **上流に登録済みの IdFederation クライアントとそのまま一致する。**
-    //   E2E（44300 の root / 44302）は、環境変数で上書きする。
+    
+    // IDフェデレーション（上流は コンテナ、E2Eは、環境変数で上書き。
     // 認可エンドポイント
     "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
     // Redirectエンドポイント
@@ -550,10 +498,9 @@
 
     // Client-Server共通設定（クライアント側も読む。実装は Open棟梁 の OAuth2AndOIDCParams）
     "JwkSetUri": "/jwkcerts",
-    // Request Object を預ける独自の口（RFC 9101 5.2.1 が認めている任意機能）
+    // Request Object を預ける独自の口（RFC 9101 5.2.1）
     "RequestObjectRegUri": "/ros",
-    // 認可リクエストを先に預ける口（PAR。RFC 9126）（#229）
-    //   /ros が JWT だけを預かるのに対し、こちらはフォームで受け、クライアント認証も行う
+    // 認可リクエストを先に預ける口（PAR：RFC 9126）
     "AuthRequestPushUri": "/par",
 
     // Client側設定
