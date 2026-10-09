@@ -22,6 +22,7 @@
 //*  2026/10/01  玄人 幸道         メアドの追加・削除を引退させ、利用者名の変更と分けた（#151 の段階 3）
 //*  2026/10/02  玄人 幸道         メアドの追加・削除のアクションを削除（#151 の段階 5）
 //*  2026/10/04  玄人 幸道         折り返し先の既定をtest_self_code_manageに（C-10）
+//*  2026/10/09  玄人 幸道         折り返し先の既定をtest_self_codeに戻した
 //*  2026/10/04  玄人 幸道         登録の保存でCORSのキャッシュを捨てる（#266）
 //*  2026/10/06  玄人 幸道         クライアント登録を専用列に保存する（#270）
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンのキャッシュをやめた（#271）
@@ -366,9 +367,7 @@ namespace MultiPurposeAuthSite.Controllers
                         HasSaml2OAuth2Data = hasSaml2OAuth2Data,
                         // WebAuthn（#137）
                         HasFIDO2Data = (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                            && (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count),
-                        // Scopes
-                        Scopes = Const.StandardScopes
+                            && (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count)
                     };
 
                     // 管理画面の表示
@@ -1961,12 +1960,12 @@ namespace MultiPurposeAuthSite.Controllers
                     // 初期
                     model = new ManageAddSaml2OAuth2DataViewModel();
 
-                    // **折り返し先の既定は、管理画面の自己テスト**（C-10）。
-                    //   **この画面の「トークンを取る」は、この値が登録されていないと通らない。**
-                    //   以前は `CheckRedirectUri` が「この URL なら登録を確かめずに通す」形だったが、
-                    //   **本番で閉じられない迂回路**だったので、**記号にして通常の照合に載せた。**
-                    //   **動作確認が済んだら、自分の RP の折り返し先に書き換える。**
-                    model.RedirectUriCode = Const.TestSelfCodeManage;
+                    // **折り返し先の既定は、自己テストの受け口**（`test_self_code`）。
+                    //   **そのまま動作確認でき、済んだら自分の RP の折り返し先に書き換える。**
+                    //
+                    //   **以前は `test_self_code_manage`（管理画面の「トークンを取る」）だった**が、
+                    //   **その画面は廃止されたので、記号ごと落とした。**
+                    model.RedirectUriCode = Const.TestSelfCode;
                 }
 
                 return View(model);
@@ -2441,7 +2440,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 追加の属性
                 user.ClientID = user.Id;
-                user.PaymentInformation = "";
                 user.UnstructuredData = "";
                 //user.CreatedDate = ;
                 //user.PasswordChangeDate = 

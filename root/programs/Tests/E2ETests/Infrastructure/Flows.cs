@@ -43,10 +43,9 @@
 //*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         RS512 で署名する TestClient_8 を追加（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         ES384 / ES512 で署名する TestClient_9 / _10 を追加（#129 の段階 3）
-//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 〜 _13 を追加（#129 の段階 4）
+//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 - _13 を追加（#129 の段階 4）
 //*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
 //*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
-//*  2026/10/04  玄人 幸道         TestClient_15とtest_self_code_manageの解決を追加（C-10）
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
 //*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
 //*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
@@ -232,13 +231,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public const string TestClient_13 = "TestClient_13";
 
         /// <summary>
-        /// TestClient（normal）を写し、**redirect_uri_code を `test_self_code_manage`** にした
+        /// TestClient（normal）を写し、**redirect_uri_code を、このクライアント専用の URI** にした
         /// クライアント（C-10）。**構成ファイルには無い。** 種データが作る（#264）。
         /// </summary>
         /// <remarks>
-        /// **管理画面の自己テスト（`GetOAuth2Token`）の折り返し先を、登録値として表したもの。**
         /// **以前は `CheckRedirectUri` に「この URL なら登録を確かめずに通す」分岐が在った**
-        /// （`ANALYSIS-IdP.md` の C-10）。**記号にして通常の照合に載せ、分岐を消した。**
+        /// （`ANALYSIS-IdP.md` の C-10。管理画面の「トークンを取る」の折り返し先）。
+        /// **その画面は廃止されたが、「例外は無い」ことは測り続ける**ので、
+        /// **このクライアントにだけ登録された URI** を持たせてある。
         /// </remarks>
         public const string TestClient_15 = "TestClient_15";
 
@@ -488,13 +488,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 return client.ToLocalUrl(
                     root + client.Config.Get("OAuth2ImplicitGrantClient_Account"));
-            }
-
-            // 管理画面の自己テストの折り返し先（C-10）。
-            if (value == "test_self_code_manage")
-            {
-                return client.ToLocalUrl(
-                    root + client.Config.Get("OAuth2AuthorizationCodeGrantClient_Manage"));
             }
 
             // ログアウト後の戻り先（#232）。サーバ側は「クライアント側の口 ＋ /Home/Index」。
@@ -848,8 +841,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient_15)
             {
                 // **折り返し先だけを差し替えた**（C-10）。client_secret は写す元のまま。
+                //   **このクライアントにだけ登録されている URI** であることが要点で、
+                //   **実在の口である必要はない**（応答の Location を見るだけ）。
                 sourceName = KnownClients.TestClient;
-                overriddenRedirectUri = Flows.ResolveRedirectUri(client, "test_self_code_manage");
+                overriddenRedirectUri = "https://rtc10.example/cb";
             }
 
             // **client_id は固定値**（#264）。

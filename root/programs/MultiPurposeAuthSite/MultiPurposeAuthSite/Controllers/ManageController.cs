@@ -29,6 +29,8 @@
 //*  2026/10/06  玄人 幸道         同意の一覧と取り消しを追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthn / MsPass の画面を削除（#137）
 //*  2026/10/09  西野 大介         オンライン決済サービス、トークン取得処理の削除
+//*  2026/10/09  玄人 幸道         net10.0 版に合わせて、削除の残りを落とした
+//*  2026/10/09  玄人 幸道         折り返し先の既定をtest_self_codeに戻した
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -108,10 +110,6 @@ namespace MultiPurposeAuthSite.Controllers
             AddPhoneSuccess,
             /// <summary>RemovePhoneSuccess</summary>
             RemovePhoneSuccess,
-            /// <summary>AddPaymentInformationSuccess</summary>
-            AddPaymentInformationSuccess,
-            /// <summary>RemovePaymentInformationSuccess</summary>
-            RemovePaymentInformationSuccess,
             /// <summary>AddUnstructuredDataSuccess</summary>
             AddUnstructuredDataSuccess,
             /// <summary>RemoveUnstructuredDataSuccess</summary>
@@ -203,8 +201,6 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
                 : message == EnumManageMessageId.AddPhoneSuccess ? Resources.ManageController.AddPhoneSuccess
                 : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
-                : message == EnumManageMessageId.AddPaymentInformationSuccess ? Resources.ManageController.AddPaymentInformationSuccess
-                : message == EnumManageMessageId.RemovePaymentInformationSuccess ? Resources.ManageController.RemovePaymentInformationSuccess
                 : message == EnumManageMessageId.AddUnstructuredDataSuccess ? Resources.ManageController.AddUnstructuredDataSuccess
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
                 : message == EnumManageMessageId.AddSaml2OAuth2DataSuccess ? Resources.ManageController.AddSaml2OAuth2DataSuccess
@@ -230,14 +226,10 @@ namespace MultiPurposeAuthSite.Controllers
                     PhoneNumber = user.PhoneNumber,
                     // 2FA
                     TwoFactor = user.TwoFactorEnabled,
-                    // 支払元情報
-                    HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
                     // 非構造化データ
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = hasSaml2OAuth2Data,
-                    // Scopes
-                    Scopes = Const.StandardScopes
+                    HasSaml2OAuth2Data = hasSaml2OAuth2Data
                 };
 
                 // 管理画面の表示
@@ -1690,12 +1682,12 @@ namespace MultiPurposeAuthSite.Controllers
                     // 初期
                     model = new ManageAddSaml2OAuth2DataViewModel();
 
-                    // **折り返し先の既定は、管理画面の自己テスト**（C-10）。
-                    //   **この画面の「トークンを取る」は、この値が登録されていないと通らない。**
-                    //   以前は `CheckRedirectUri` が「この URL なら登録を確かめずに通す」形だったが、
-                    //   **本番で閉じられない迂回路**だったので、**記号にして通常の照合に載せた。**
-                    //   **動作確認が済んだら、自分の RP の折り返し先に書き換える。**
-                    model.RedirectUriCode = Const.TestSelfCodeManage;
+                    // **折り返し先の既定は、自己テストの受け口**（`test_self_code`）。
+                    //   **そのまま動作確認でき、済んだら自分の RP の折り返し先に書き換える。**
+                    //
+                    //   **以前は `test_self_code_manage`（管理画面の「トークンを取る」）だった**が、
+                    //   **その画面は廃止されたので、記号ごと落とした。**
+                    model.RedirectUriCode = Const.TestSelfCode;
                 }
 
                 return View(model);
@@ -1808,153 +1800,6 @@ namespace MultiPurposeAuthSite.Controllers
                 // エラー画面
                 return View("Error");
             }
-        }
-
-        #endregion
-
-        #region Get token
-
-        /// <summary>
-        /// OAuth2アクセストークンの取得
-        /// POST: /Manage/GetOAuth2Token
-        /// </summary>
-        /// <param name="model">ManageIndexViewModel</param>
-        /// <returns>ActionResult</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public ActionResult GetOAuth2Token(ManageIndexViewModel model)
-        {
-            if (Config.CanEditSaml2OAuth2Data
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // OAuth2AuthorizationCodeGrantClientViewModelの検証
-                if (ModelState.IsValid)
-                {
-                    // 認可エンドポイント
-                    string oAuthAuthorizeEndpoint =
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + Config.OAuth2AuthorizeEndpoint;
-
-                    // client_id
-                    string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-
-                    // redirect_uri
-                    string redirect_uri = CustomEncode.UrlEncode2(
-                        Config.OAuth2ClientEndpointsRootURI
-                        + Config.OAuth2AuthorizationCodeGrantClient_Manage);
-
-                    // state (nonce) // 記号は入れない。
-                    string state = GetPassword.Generate(10, 0);
-                    Session["get_oauth2_token_state"] = state;
-
-                    return Redirect(
-                        oAuthAuthorizeEndpoint +
-                        "?client_id=" + client_id +
-                        "&response_type=code" +
-                        "&redirect_uri=" + redirect_uri +
-                        "&scope=" + model.Scopes +
-                        "&state=" + state +
-                        "&response_mode=form_post");
-                }
-            }
-
-            // エラー画面
-            return View("Error");
-        }
-
-        #endregion
-
-        #region Get SAML2 assertion（#277 の段階 5）
-
-        /// <summary>
-        /// SAML2 アサーションの取得（代表プロファイル : SP-initiated / HTTP-Redirect）
-        /// POST: /Manage/GetSaml2Assertion
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        /// <remarks>
-        /// **OAuth2 の `GetOAuth2Token` と同じ形**である（#277）。
-        /// **利用者自身のクライアント登録**で AuthnRequest を組み立て、IdP へ送る。
-        ///
-        /// **結果表示は、自己テストの受け口を共用する** —
-        /// **応答は `/Account/AssertionConsumerService` に返り、`Saml2Response` 画面が出る。**
-        /// **ACS が同じなら、画面も検証（`SelfTestClient.VerifySaml2Response`）もそのまま使える**ので、
-        /// **管理画面用の受け口（`redirect_uri_saml_manage`）は足していない**
-        /// （`test_self_code_manage` が要ったのは、**OAuth2 の結果表示が別の画面**だったため）。
-        ///
-        /// **代表プロファイルを 1 つだけ置く。**
-        /// 4 通りのバインディングの組み合わせは、自己テスト画面にある。
-        ///
-        /// **ACS URL は AuthnRequest に入れない**（自己テストの既定と同じ）。
-        /// **IdP が登録値から解決する**ので、**登録値と食い違わせずに済む**（#276 の照合）。
-        /// </remarks>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public ActionResult GetSaml2Assertion()
-        {
-            if (Config.CanEditSaml2OAuth2Data
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // **利用者自身のクライアント登録**（client_name は利用者名そのもの）。
-                string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-
-                if (!string.IsNullOrEmpty(client_id))
-                {
-                    // Issuer（自己テストと同じ組み立て）
-                    string issuer = "http://" + client_id;
-
-                    // state → RelayState // 記号は入れない。
-                    string state = GetPassword.Generate(10, 0);
-
-                    string id = "";
-                    string queryString = SAML2Client.CreateRedirectRequest(
-                        SAML2Enum.RequestOrResponse.Request,
-                        SAML2Enum.ProtocolBinding.HttpRedirect,
-                        SAML2Enum.NameIDFormat.Unspecified,
-                        issuer, "", state, out id);
-
-                    this.SaveSaml2Params(client_id, state, id);
-
-                    return Redirect(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + Config.Saml2RequestEndpoint + "?" + queryString);
-                }
-            }
-
-            // エラー画面
-            return View("Error");
-        }
-
-        /// <summary>テスト用にパラメタを保存（#277 の段階 5）</summary>
-        /// <param name="clientId">client_id</param>
-        /// <param name="state">state（RelayState に入る）</param>
-        /// <param name="samlRequestId">AuthnRequest の ID</param>
-        /// <remarks>
-        /// **自己テスト（`HomeController.SaveSaml2Params`）と同じキーに入れる。**
-        /// **受け口が同じ**なので、**同じ場所から読まれる**
-        /// （`LoadRequestParameters` / `LoadTestSamlRequestId`）。
-        ///
-        /// **Session と Cookie の両方に入れる** —
-        /// Session はサイト分割時、Cookie は同一サイト時に読まれる。
-        /// </remarks>
-        private void SaveSaml2Params(string clientId, string state, string samlRequestId)
-        {
-            // client_id → Issuer
-            Session[Const.TestClientId] = clientId;
-            Response.Cookies[Const.TestClientId].Value = clientId;
-
-            // redirect_uri → AssertionConsumerService（**入れない**ので空）
-            Session[Const.TestRedirectUri] = "";
-            Response.Cookies[Const.TestRedirectUri].Value = "";
-
-            // state → RelayState
-            Session[Const.TestState] = state;
-            Response.Cookies[Const.TestState].Value = state;
-
-            // **AuthnRequest の ID**（#276。応答の InResponseTo と照合する）
-            Session[Const.TestSamlRequestId] = samlRequestId;
-            Response.Cookies[Const.TestSamlRequestId].Value = samlRequestId;
         }
 
         #endregion
@@ -2110,7 +1955,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 追加の属性
                 user.ClientID = user.Id;
-                user.PaymentInformation = "";
                 user.UnstructuredData = "";
                 //user.CreatedDate = ;
                 //user.PasswordChangeDate = 
@@ -2151,151 +1995,6 @@ namespace MultiPurposeAuthSite.Controllers
             // エラー画面
             return View("Error");
         }
-
-        #endregion
-
-        #region Client (Redirectエンドポイント)
-
-        #region Authorization Codeグラント種別
-
-        /// <summary>
-        /// Authorization Codeグラント種別のClientエンドポイント
-        /// 認可レスポンス（仲介コード）を受け取って処理する。
-        /// ・仲介コードを使用してAccess Token・Refresh Tokenを取得
-        /// </summary>
-        /// <param name="code">仲介コード</param>
-        /// <param name="state">state</param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
-        /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
-        [HttpPost]
-        //[ValidateAntiForgeryToken] // response_mode=form_postで実装しているためハズす。
-        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
-        {
-            if (Config.CanEditSaml2OAuth2Data
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // Tokenエンドポイントにアクセス
-                Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-
-                // 結果を格納する変数。
-                Dictionary<string, string> dic = null;
-                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
-                {
-                    Code = code
-                };
-
-                //  client_Idから、client_secretを取得。
-                string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
-
-                // stateの検証
-                if (state == (string)Session["get_oauth2_token_state"])
-                {
-                    // state正常
-                    Session["get_oauth2_token_state"] = ""; // 誤動作防止
-
-                    #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
-
-                    // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri
-                        = Config.OAuth2ClientEndpointsRootURI
-                        + Config.OAuth2AuthorizationCodeGrantClient_Manage;
-
-                    // Tokenエンドポイントにアクセス
-                    model.Response = await Sts.Helper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
-                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                    #endregion
-
-                    // 余談：OpenID Connectであれば、ここで id_token 検証。
-
-                    // 結果の表示
-                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
-
-                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
-
-                    // 課金処理で使用する。
-                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken;
-                }
-                else
-                {
-                    // state異常
-                }
-
-                // 画面の表示。
-                return View(model);
-            }
-            else
-            {
-                return View("Error");
-            }
-        }
-
-        /// <summary>
-        /// Tokenを使った処理のテストコード
-        /// ・Refresh Tokenを使用してAccess Tokenを更新
-        /// ・Access Tokenを使用してResourceServerのWebAPIにアクセス
-        /// </summary>
-        /// <param name="accessToken"></param>
-        /// <param name="refreshToken"></param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
-        {
-            if (Config.CanEditSaml2OAuth2Data
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // OAuthAuthorizationCodeGrantClientViewModelの検証
-                if (ModelState.IsValid)
-                {
-                    // 結果を格納する変数。
-                    Dictionary<string, string> dic = null;
-
-                    #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
-
-                    Uri tokenEndpointUri = new Uri(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-
-                    // Tokenエンドポイントにアクセス
-
-                    //  client_Idから、client_secretを取得。
-                    string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                    string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
-
-                    model.Response = await Sts.Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
-                        tokenEndpointUri, client_id, client_secret, model.RefreshToken);
-                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                    // 結果の表示
-                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                        CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
-
-                    model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
-
-                    // 課金処理で使用する。
-                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken;
-
-                    #endregion
-                }
-
-                // 画面の表示。
-                ModelState.Clear();
-                return View("OAuth2AuthorizationCodeGrantClient", model);
-            }
-            else
-            {
-                return View("Error");
-            }
-        }
-
-        #endregion
 
         #endregion
 

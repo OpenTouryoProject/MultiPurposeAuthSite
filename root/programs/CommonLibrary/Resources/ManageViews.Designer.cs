@@ -61,33 +61,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add payment information に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddPaymentH4 {
-            get {
-                return ResourceManager.GetString("AddPaymentH4", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Submit に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddPaymentSubmit {
-            get {
-                return ResourceManager.GetString("AddPaymentSubmit", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add payment information に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddPaymentTitle {
-            get {
-                return ResourceManager.GetString("AddPaymentTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Add phone number form に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPhoneNumberH4 {
@@ -462,60 +435,6 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexManageGdprData {
             get {
                 return ResourceManager.GetString("IndexManageGdprData", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Get your OAuth2 access token に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexOAuth2TokenGetButton {
-            get {
-                return ResourceManager.GetString("IndexOAuth2TokenGetButton", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   To charge に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexPaymentButton {
-            get {
-                return ResourceManager.GetString("IndexPaymentButton", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Payment information に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexPaymentInformation {
-            get {
-                return ResourceManager.GetString("IndexPaymentInformation", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add your payment information に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexPaymentInformationAddActionLink {
-            get {
-                return ResourceManager.GetString("IndexPaymentInformationAddActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Change your payment information に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexPaymentInformationChangeActionLink {
-            get {
-                return ResourceManager.GetString("IndexPaymentInformationChangeActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Remove your payment information に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexPaymentInformationRemoveButton {
-            get {
-                return ResourceManager.GetString("IndexPaymentInformationRemoveButton", resourceCulture);
             }
         }
         
@@ -1136,15 +1055,6 @@ namespace MultiPurposeAuthSite.Resources {
         public static string AddWebAuthnDataResidentCredentialsDescription {
             get {
                 return ResourceManager.GetString("AddWebAuthnDataResidentCredentialsDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   IndexSaml2AssertionGetButton に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexSaml2AssertionGetButton {
-            get {
-                return ResourceManager.GetString("IndexSaml2AssertionGetButton", resourceCulture);
             }
         }
         

@@ -492,14 +492,11 @@
     <Content Include="Views\UsersAdmin\Index.cshtml" />
     <Content Include="Views\Web.config" />
     <Content Include="Views\Shared\Lockout.cshtml" />
-    <Content Include="Views\Manage\AddPaymentInformationStripe.cshtml" />
-    <Content Include="Views\Manage\AddPaymentInformationPAYJP.cshtml" />
     <Content Include="Views\Account\VerifyEmailAddress.cshtml" />
     <Content Include="Views\Manage\VerifyEmailAddress.cshtml" />
     <Content Include="Views\Manage\ChangeEmail.cshtml" />
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
-    <Content Include="Views\Manage\OAuth2AuthorizationCodeGrantClient.cshtml" />
     <Content Include="Views\Manage\AddSaml2OAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Home\Saml2OAuth2Starters.cshtml" />

@@ -647,52 +647,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region OAuth2（ResourcesServer）WebAPI
-
-        /// <summary>認可したユーザに課金するWebAPIを呼び出す</summary>
-        /// <param name="accessToken">accessToken</param>
-        /// <param name="currency">通貨</param>
-        /// <param name="amount">料金</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> CallOAuth2ChageToUserWebAPIAsync(
-            string accessToken, string currency, string amount)
-        {
-            // 通信用の変数
-
-            // 課金用のWebAPI
-            Uri webApiEndpointUri = new Uri(
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.ChageToUserWebAPI);
-
-            // コンテナ化サポート
-            webApiEndpointUri = Helper.GetContainerizatedAuthZServerUri(webApiEndpointUri);
-
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = webApiEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers & Content)
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(OAuth2AndOIDCConst.Bearer, accessToken);
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                    { "currency", currency },
-                    { "amount", amount },
-                });
-            httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuth2HttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
-        }
-
-        #endregion
-
         #endregion
 
         #region Credential( → DataProvider)

@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト ライブラリ部（CommonLibrary）コード分析
 
 対象: `root/programs/CommonLibrary`（**net10.0 / net48 の 2 系統**） / ブランチ: `develop`
-最終更新: 2026-09-30
+最終更新: 2026-10-09
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 「どこに何があるか」「どの規約に従うべきか」「何を壊しやすいか」を記す。
@@ -214,7 +214,7 @@ public static bool RequireUniqueEmail
 - `#if NETFX` で `Newtonsoft.Json` / `Microsoft.Extensions.Configuration` を切り替えている。
 - 主な区分（`#region` の並び）: Proxy / IsDebug / UserStore / 事前登録ユーザ / Notification Provider /
   ログイン（ユーザ名・パスワード検証、ロックアウト、Cookie、2FA、外部ログイン）/ SecurityStamp /
-  属性編集の可否 / FIDO / STS（証明書・SAML2・OAuth2）/ 外部サービス（Stripe・PAY.JP）/
+  属性編集の可否 / FIDO / STS（証明書・SAML2・OAuth2）/
   機能ロックダウン / IDフェデレーション。
 
 > **`Config` にプロパティを足したら、`_app.config` と `_appsettings.json`（テンプレート）にも
@@ -232,7 +232,7 @@ public static bool RequireUniqueEmail
 - テンプレート側は `"[Please fill in this input item.]"` などのプレースホルダで、
   外部サービスの有効化フラグはすべて `false`。
 - **実ファイル側には、実在する認証情報が入っている**（管理者アカウント、SMTP、Twilio、
-  Stripe / PAY.JP、外部ログインの ClientSecret、`SaltParameter` など）。
+  外部ログインの ClientSecret、`SaltParameter` など）。
 
 > **エージェントの禁止事項:**
 > - `app.config` / `appsettings.json` の**中身を報告やコミット メッセージに転記しない**。
@@ -469,7 +469,29 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 
 ---
 
-## 13. エージェント向け作業チェックリスト
+## 13. オンライン決済サービスの取り下げ（2026/10/09）
+
+**もともとは SaaS 基盤にしたかった**ので、オンライン決済（Stripe / PAY.JP）を実装していた。
+**現時点では認証基盤に注力する**ことにし、**維持の手間に見合わない**ため取り下げた。
+
+**管理画面の「トークンを取る」（`GetOAuth2Token`）も、同時に落とした。**
+**あれは、管理画面から決済の WebAPI（`/ChageToUser`）を呼ぶためのもの**で、
+**決済が無くなれば、要らない。**
+
+| 落としたもの | |
+|---|---|
+| 設定 | `EnableStripe` / `Stripe_PK` / `Stripe_SK` / `EnablePAYJP` / `PAYJP_PK` / `PAYJP_SK` / `CanEditPayment` / `ChageToUserWebAPI` / `OAuth2AuthorizationCodeGrantClient_Manage` |
+| 口 | `/ChageToUser`（経路登録ごと）／`Manage` の `AddPaymentInformation` `ChargeByPaymentInformation` `RemovePaymentInformation` `GetOAuth2Token` `GetSaml2Assertion` `OAuth2AuthorizationCodeGrantClient` |
+| 呼び出し | `WebAPIHelper` の決済 WebAPI、`Sts.Helper.CallOAuth2ChageToUserWebAPIAsync` |
+| 画面 | `AddPaymentInformationStripe` / `AddPaymentInformationPAYJP` / `Manage/OAuth2AuthorizationCodeGrantClient`、`Manage/Index` の該当ブロック |
+| 利用者属性 | **`Users.PaymentInformation`（列ごと）**。`ApplicationUser` / `CmnUserStore` の INSERT・UPDATE / DDL 3 本 |
+| 記号 | `test_self_code_manage`（`redirect_uri_code` の既定は `test_self_code` に戻した） |
+
+> **既存の DB には列が残る。** **`Create_UserStore.sql` は作り直す前提**なので、
+> **使っている DB からは、手で落とすこと**（`ALTER TABLE ... DROP COLUMN`）。
+> **残っていても動く**（`SELECT *` で読み、INSERT・UPDATE では触らない）。
+
+## 14. エージェント向け作業チェックリスト
 
 - [ ] `AGENTS.md` のポリシー遵守（**git 操作をしない**）
 - [ ] 変更対象が net48 / net10.0 / 両方のどれか判定する

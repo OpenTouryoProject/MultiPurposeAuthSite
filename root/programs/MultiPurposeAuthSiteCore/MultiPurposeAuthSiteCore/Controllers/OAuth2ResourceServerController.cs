@@ -63,8 +63,6 @@ namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuth2ResourceServerのApiController（ライブラリ）</summary>
     //  **CORS はクラスに付けない**（#265）。**口ごとに属性で選ぶ。**
-    //    ChageToUser は**サーバ間で呼ぶ**（Helper.CallOAuth2ChageToUserWebAPIAsync）ので、
-    //    **CORS は要らない。**
     //[ApiController]
     [MyBaseAsyncApiController(httpAuthHeader:
         EnumHttpAuthHeader.None // 認証無くても通すので、

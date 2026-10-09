@@ -76,7 +76,7 @@ mpas_dev.bat（リポジトリ ルート）               隣に clone 済みの
 _appsettings.json  →  コピーして appsettings.json を作り、各自の値を埋める
 ```
 
-**実ファイルには実在の認証情報（管理者アカウント、SMTP、Twilio、Stripe / PAY.JP、
+**実ファイルには実在の認証情報（管理者アカウント、SMTP、Twilio、
 外部ログインの ClientSecret、SaltParameter）が入っている。
 報告・コミット メッセージ・Issue 本文に転記しないこと。**
 設定項目を増やすときは **`_appsettings.json` を直す**（実ファイルへの反映は人が行う）。
@@ -321,7 +321,6 @@ switch (Config.SessionStoreType)
 | `SetDeviceToken` | `/SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` |
 | `TwoFactorPushResult` | `/2fa_result` | `OAuth2Endpoint.TwoFactorPushResult`（#213） |
 | `TestHybridFlow` | `/TestHybridFlowWebAPI` | `OAuth2ResourceServer.TestHybridFlow` |
-| `ChageToUser` | `/ChageToUser` | `OAuth2ResourceServer.ChageToUser` |
 | `default` | `{controller=Home}/{action=Index}/{id?}` | — |
 
 固定パスは `[Route]` 属性で 2 つだけ。

@@ -3974,13 +3974,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                 ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
             }
-            else if (constr.ToLower() == Const.TestSelfCodeManage)
-            {
-                // **管理画面の自己テスト（GetOAuth2Token）の折り返し先**（C-10）。
-                //   **以前は CheckRedirectUri の分岐で、登録を確かめずに通していた。**
-                //   **記号にして、通常の照合に載せた。**
-                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage;
-            }
             else if (constr.ToLower() == Const.TestSelfLogout)
             {
                 // **ログアウト後の戻り先のテスト用**（#232）。

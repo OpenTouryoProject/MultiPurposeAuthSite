@@ -59,6 +59,8 @@
 //*  2026/10/07  玄人 幸道         Saml2AssertionExpireTimeSpanFromMinutesを専用キーにした（#276）
 //*  2026/10/07  玄人 幸道         配備で切り替える設定を 4 つ追加（#279）
 //*  2026/10/09  西野 大介         オンライン決済サービス系処理の削除
+//*  2026/10/09  玄人 幸道         ChageToUserWebAPI（課金の口）の設定を削除
+//*  2026/10/09  玄人 幸道         OAuth2AuthorizationCodeGrantClient_Manage を削除
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1863,21 +1865,6 @@ namespace MultiPurposeAuthSite.Co
 
         #region その他
 
-        #region Token取得用
-
-        /// <summary>
-        /// ManageController.OAuth2AuthorizationCodeGrantClientのRedirectエンドポイント
-        /// </summary>
-        public static string OAuth2AuthorizationCodeGrantClient_Manage
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2AuthorizationCodeGrantClient_Manage");
-            }
-        }
-
-        #endregion
-
         #region WebAPI
 
         /// <summary>
@@ -1888,17 +1875,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("TestHybridFlowWebAPI");
-            }
-        }
-
-        /// <summary>
-        /// ユーザ情報に課金するWebAPI
-        /// </summary>
-        public static string ChageToUserWebAPI
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("ChageToUserWebAPI");
             }
         }
 

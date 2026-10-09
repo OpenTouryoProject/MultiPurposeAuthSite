@@ -188,7 +188,6 @@
     <Compile Include="ViewModels\HomeSaml2OAuth2StartersViewModel.cs" />
     <Compile Include="ViewModels\HtmlHelperExtensions.cs" />
     <Compile Include="ViewModels\ManageAddSaml2OAuth2DataViewModel.cs" />
-    <Compile Include="ViewModels\ManageAddPaymentInformationViewModel.cs" />
     <Compile Include="ViewModels\ManageAddPhoneNumberViewModel.cs" />
     <Compile Include="ViewModels\ManageAddUnstructuredDataViewModel.cs" />
     <Compile Include="ViewModels\ManageChangePasswordViewModel.cs" />

@@ -201,48 +201,6 @@
                 // 外部ログインの変更が許可されていない場合。
             }
 
-            @if (Config.CanEditPayment)
-            {
-                // 支払い元情報の変更が許可されている場合。
-
-                <dt>@ManageViews.IndexPaymentInformation :</dt>
-
-                <dd>
-
-                    @*"Add" and "Charge" or "Remove or Change"*@
-                    @if (!Model.HasPaymentInformation)
-                    {
-                        <text>None</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationAddActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
-                    }
-                    else
-                    {
-                        <text>XXXXXXXXXX</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationChangeActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
-
-                        using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                        {
-                            @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn btn-link" />]</text>
-                        }
-
-                        if (Config.IsDebug)
-                        {
-                            using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                            {
-                                @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn btn-link" />]</text><br />
-                                <text>※ If test the this function, there is needs to obtain the OAuth2 access token beforehand.</text>
-                            }
-                        }
-                    }
-                </dd>
-            }
-            else
-            {
-                // 支払い元情報の変更が許可されていない場合。
-            }
-
             @if (Config.CanEditUnstructuredData)
             {
                 // 非構造化データの変更が許可されていない場合。
@@ -288,20 +246,6 @@
                     {
                         <text>XXXXXXXXXX</text><br />
                         <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexSaml2OAuth2DataChangeActionLink, "AddSaml2OAuth2Data")&nbsp;&nbsp;]</text><br />
-                        using (Html.BeginForm("GetOAuth2Token", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                        {
-                            @Html.AntiForgeryToken()
-                            <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
-                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn btn-link" />]</text>
-                        }
-                        @*  **SAML2 の代表プロファイルを試す**（#277 の段階 5）。
-                            **結果は自己テストと同じ画面に出る**
-                            （/Account/AssertionConsumerService → Saml2Response）。 *@
-                        using (Html.BeginForm("GetSaml2Assertion", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                        {
-                            @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexSaml2AssertionGetButton" class="btn btn-link" />]</text>
-                        }
                         using (Html.BeginForm("RemoveSaml2OAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()

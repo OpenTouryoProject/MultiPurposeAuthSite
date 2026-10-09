@@ -117,15 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="AddPaymentH4" xml:space="preserve">
-    <value>支払元情報の追加フォーム</value>
-  </data>
-  <data name="AddPaymentSubmit" xml:space="preserve">
-    <value>送信</value>
-  </data>
-  <data name="AddPaymentTitle" xml:space="preserve">
-    <value>支払元情報の追加</value>
-  </data>
   <data name="AddPhoneNumberH4" xml:space="preserve">
     <value>電話番号の追加フォーム</value>
   </data>
@@ -156,15 +147,6 @@
   <data name="IndexH4" xml:space="preserve">
     <value>アカウント設定の変更</value>
   </data>
-  <data name="IndexPaymentInformation" xml:space="preserve">
-    <value>支払元情報</value>
-  </data>
-  <data name="IndexPaymentInformationChangeActionLink" xml:space="preserve">
-    <value>支払元情報の変更</value>
-  </data>
-  <data name="IndexPaymentInformationAddActionLink" xml:space="preserve">
-    <value>支払元情報の設定</value>
-  </data>
   <data name="IndexPhoneNumber" xml:space="preserve">
     <value>電話番号</value>
   </data>
@@ -176,9 +158,6 @@
   </data>
   <data name="IndexPhoneNumberRemoveButton" xml:space="preserve">
     <value>電話番号の削除</value>
-  </data>
-  <data name="IndexPaymentInformationRemoveButton" xml:space="preserve">
-    <value>支払元情報の削除</value>
   </data>
   <data name="IndexSetPasswordActionLink" xml:space="preserve">
     <value>パスワードの作成</value>
@@ -249,9 +228,6 @@
   <data name="IndexEmailChangeActionLink" xml:space="preserve">
     <value>E-mailの変更</value>
   </data>
-  <data name="IndexPaymentButton" xml:space="preserve">
-    <value>課金する</value>
-  </data>
   <data name="ChangeEmailH4" xml:space="preserve">
     <value>E-mail変更フォーム</value>
   </data>
@@ -320,9 +296,6 @@
   </data>
   <data name="IndexClientSecretChangeButton" xml:space="preserve">
     <value>client_secretの変更</value>
-  </data>
-  <data name="IndexOAuth2TokenGetButton" xml:space="preserve">
-    <value>OAuth2アクセス トークンの取得</value>
   </data>
   <data name="IndexDeleteGdprPersonalDataButton" xml:space="preserve">
     <value>GDPR 個人情報データ削除</value>
@@ -479,8 +452,5 @@
   </data>
   <data name="AddWebAuthnDataResidentCredentialsDescription" xml:space="preserve">
     <value>認証器側に資格情報を保存する（discoverable credential）。**利用者名を入れずにサインインする**形に使う。</value>
-  </data>
-  <data name="IndexSaml2AssertionGetButton" xml:space="preserve">
-    <value>SAML2 のアサーションを取る</value>
   </data>
 </root>

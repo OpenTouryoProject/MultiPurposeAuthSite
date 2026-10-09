@@ -66,8 +66,6 @@ namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuth2ResourceServerのApiController（ライブラリ）</summary>
     //  **CORS はクラスに付けない。** **口ごとに属性で選ぶ**（net10.0 版の #265 と揃える）。
-    //    ChageToUser は**サーバ間で呼ぶ**（Helper.CallOAuth2ChageToUserWebAPIAsync）ので、
-    //    **CORS は要らない。**
     //  以前はここに origins: "*" ＋ SupportsCredentials = true が付いていた
     //    （**任意のオリジンから、利用者の Cookie を伴った要求が許されていた**）。
     [MyBaseAsyncApiController(httpAuthHeader:

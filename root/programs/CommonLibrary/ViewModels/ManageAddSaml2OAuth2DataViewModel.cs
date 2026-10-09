@@ -164,7 +164,7 @@ namespace MultiPurposeAuthSite.ViewModels
         {
             get
             {
-                return new List<string>() { Const.TestSelfCode, Const.TestSelfCodeManage };
+                return new List<string>() { Const.TestSelfCode };
             }
         }
 

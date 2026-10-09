@@ -250,15 +250,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Payment Information に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string PaymentInformation {
-            get {
-                return ResourceManager.GetString("PaymentInformation", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Phone number に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string PhoneNumber {

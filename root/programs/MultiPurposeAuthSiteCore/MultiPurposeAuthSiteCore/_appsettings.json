@@ -275,8 +275,6 @@
     "OAuth2RevokeTokenEndpoint": "/revoke",
     // /introspect
     "OAuth2IntrospectTokenEndpoint": "/introspect",
-    // 課金処理
-    "ChageToUserWebAPI": "/ChageToUser",
     // プッシュ通知
     "SetDeviceTokenWebAPI": "/SetDeviceToken",
     "TwoFactorPushResultEndpoint": "/2fa_result",
@@ -285,7 +283,6 @@
 
     // Redirectエンドポイント
     // - self_code : Authorization Codeグラント種別
-    "OAuth2AuthorizationCodeGrantClient_Manage": "/Manage/OAuth2AuthorizationCodeGrantClient",
 
     // Client
     // Clientエンドポイント
