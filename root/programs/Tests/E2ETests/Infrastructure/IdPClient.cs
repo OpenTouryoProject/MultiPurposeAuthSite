@@ -527,6 +527,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 (at > 0) ? uid.Substring(0, at) : uid, this.Config.Get("AdministratorPWD"));
         }
 
+        /// <summary>
+        /// 利用者名とパスワードを指定してサインインする。**入れなくても例外にしない**（#277 の段階 7）。
+        /// </summary>
+        /// <param name="userName">利用者名</param>
+        /// <param name="password">パスワード</param>
+        /// <returns>入れたら true</returns>
+        /// <remarks>
+        /// **「入れないこと」を測る**ために要る
+        /// （属性を変えた後に、**古い値では入れない**ことを押さえる）。
+        /// **`SignInAsync` は入れなければ例外にする**ので、そちらでは測れない。
+        /// </remarks>
+        public async Task<bool> TrySignInAsync(string userName, string password)
+        {
+            try
+            {
+                await this.SignInCoreAsync(userName, password);
+
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
         /// <summary>サインインの本体（利用者名とパスワードを指定する）</summary>
         /// <param name="userName">利用者名</param>
         /// <param name="password">パスワード</param>
