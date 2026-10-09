@@ -572,6 +572,35 @@ INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_Cli
 > **先に在る方が登録され、こちらは「登録されていない」ことになり、**
 > **SAML の応答が返らないという形で出た。** SAML の分は `e2e0saNN` にしてある。
 
+#### オンライン決済サービスを取り下げ、`Users.PaymentInformation` を落とした
+
+**DDL が変わったので、`store/` は作り直すこと**
+（`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
+
+| | |
+|---|---|
+| **落とした列** | `Users.PaymentInformation`（3 方言）。**支払元情報（Stripe / PAY.JP の顧客 ID）だった** |
+| **種データ** | **`TestClient_15` の `redirect_uri_code` を、記号 `test_self_code_manage` から実 URL（`https://rtc10.example/cb`）に変えた** |
+
+> **経緯は `programs/CommonLibrary/ANALYSIS.md` の 13 節。**
+> **もともと SaaS 基盤にしたかった**ので決済を実装していたが、
+> **認証基盤に注力する**ことにし、**維持の手間に見合わない**ため取り下げた。
+> **管理画面の「トークンを取る」も同時に落とした**
+> （**決済の WebAPI `/ChageToUser` を呼ぶためのもの**だった）。
+
+**種データは「登録が無ければ入れる（在れば触らない）」**ので、
+**登録値を変えたときは、作り直さないと古い値のままになる。**
+
+> **実測（2026/10/09）** : `mem` と `sql` は 561/0/1 で通ったが、
+> **`npg` だけ `RT-C10.1` が落ちた。**
+> **DB を見ると `TestClient_15` の `redirect_uri_code` が
+> `test_self_code_manage` のまま**だった（`sql` 側は新しい値が入っていた）。
+> **コードの不具合ではなく、作り直していない `store/` の側である。**
+
+**列が残っていても、アプリは動く**（`SELECT *` で読み、INSERT・UPDATE では触らない）。
+**実測 : 列が在る `sql` の DB に対して 561/0/1 で通った。**
+**使っている DB から落とすなら、手で `ALTER TABLE ... DROP COLUMN` する。**
+
 #### WebAuthn を復活させ、`Users.FIDO2PublicKey` を落とした（#137）
 
 **DDL が変わったので、`store/` は作り直すこと**

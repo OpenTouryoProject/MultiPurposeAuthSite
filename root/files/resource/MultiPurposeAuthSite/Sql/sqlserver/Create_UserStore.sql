@@ -33,7 +33,6 @@ CREATE TABLE [Users](              -- Users
     [TotpAuthenticatorKey] [nvarchar](256) NULL,
     -- 追加の情報
     [ClientID] [nvarchar](256) NOT NULL,
-    [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
     [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,

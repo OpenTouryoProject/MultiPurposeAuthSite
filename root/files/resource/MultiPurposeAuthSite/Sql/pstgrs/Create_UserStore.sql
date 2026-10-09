@@ -18,7 +18,6 @@ CREATE TABLE Users(                -- Users
     TotpAuthenticatorKey varchar(256) NULL,
     -- 追加の情報
     ClientID varchar(256) NOT NULL,
-    PaymentInformation varchar(256) NULL,
     UnstructuredData text NULL,
     DeviceToken varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,

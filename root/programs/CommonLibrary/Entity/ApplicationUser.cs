@@ -21,6 +21,7 @@
 //*  2020/02/27  西野 大介         DeviceToken追加(プッシュ通知)
 //*  2026/10/01  玄人 幸道         CreateUser を利用者名とメアドの 2 つを受け取る形にした（#151 の段階 3）
 //*  2026/10/07  玄人 幸道         FIDO2PublicKeyを削除(MsPass専用。WebAuthnはFIDO2Data表。#137)
+//*  2026/10/09  玄人 幸道         Users.PaymentInformation を削除（オンライン決済の取り下げ）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -364,11 +365,6 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// OAuth2関連のClientID
         /// </remarks>
         public string ClientID { get; set; } = Guid.NewGuid().ToString("N"); //Guid.NewGuid().ToString();
-
-        /// <summary>
-        /// ユーザの支払元情報
-        /// </summary>
-        public string PaymentInformation { get; set; } = null;
 
         /// <summary>
         /// 非構造化データ
