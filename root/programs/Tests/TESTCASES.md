@@ -5718,6 +5718,97 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **アカウントの一覧から選ぶ仕組みは持っていない。** 仕様（§3.1.2.1）は「選ばせろ」だが、**この実装は 1 利用者ずつのサインインしか持たない**。**`account_selection_required` を返す道もあった**が、**切り替えの口が画面に在るので、画面を出す方を選んだ。**
 
+## RT-277.1 クライアント登録は client_id → client_secret → 登録 の 3 回押しで入る
+
+| | |
+|---|---|
+| 観点 | **`/Manage/AddSaml2OAuth2Data` は、`client_id` が空のままでは登録できない。****1 回目で「登録」を押しても、黙って何も起きない**（`submit.Add` は `model.ClientID` が空なら素通りする）。**#277 の段階 1・3 で手を入れた画面**なので、**登録の経路そのものを測って残す**（段階 7）。 |
+| 根拠 | #277 / ManageController.AddSaml2OAuth2Data |
+| テスト | `RT27701_クライアント登録は3回押しで入る` |
+
+**手順**
+
+1. 画面を開く
+1. この時点で「登録」を押しても、入らない
+1. client_id を発行する
+1. client_secret を発行する
+1. 登録する
+
+**検証（合否を判定する）**
+
+- client_id は空から始まる
+- 登録されない
+- client_id が入る
+- client_secret が入る
+- client_id は変わらない
+- 登録される
+- 消せる（後片付け）
+
+**補足**
+
+- **エラーも出ない。** 画面が出し直されるだけである。**「押したのに何も起きない」ので、3 回押しだと気付けない。**
+
+## RT-277.2 折り返し先の記号が、画面の候補（datalist）から選べる
+
+| | |
+|---|---|
+| 観点 | **`redirect_uri_*` には記号（`test_self_code` など）を書ける**が、**画面には何も出ておらず、知っている人しか書けなかった**（#277 の段階 3）。**`<input>` ＋ `<datalist>` にして、候補を画面に出した。****新規登録の `redirect_uri_code` の既定も `test_self_code`** である（**以前は `test_self_code_manage`**。管理画面のトークン取得の廃止で戻した）。 |
+| 根拠 | #277 / ManageAddSaml2OAuth2DataViewModel の *Candidates |
+| テスト | `RT27702_折り返し先の候補がdatalistに出る` |
+
+**手順**
+
+1. 入力欄に datalist が結び付いている
+1. 候補の中身
+1. 新規登録の redirect_uri_code の既定
+
+**検証（合否を判定する）**
+
+- RedirectUriSaml に候補が付いている
+- RedirectUriCode に候補が付いている
+- RedirectUriToken に候補が付いている
+- PostLogoutRedirectUri に候補が付いている
+- RedirectUriSaml の候補に test_self_saml が在る
+- RedirectUriCode の候補に test_self_code が在る
+- RedirectUriToken の候補に test_self_token が在る
+- PostLogoutRedirectUri の候補に test_self_logout が在る
+- 既定は test_self_code
+
+**補足**
+
+- **`test_self_code_manage` は削除した。** **管理画面の「トークンを取る」（＝ その記号の行き先）ごと廃止した**ため。
+
+## RT-277.3 WebAuthn の資格情報は、選んだものだけが、選んだ数だけ消える
+
+| | |
+|---|---|
+| 観点 | **画面は同じ名前のチェックボックスを並べる**ので、**選んだ数だけ同名の値が送られる**（`publicKeys=A&publicKeys=B`）。**`string` で受けると先頭の 1 つしか届かない**（`ValueProviderResult.FirstValue`）ので、**複数選んでも 1 件しか消えなかった**（#277 の段階 6）。**`string[]` で受けるように直した。** |
+| 根拠 | #277 / ManageController.RemoveWebAuthnData |
+| テスト | `RT27703_選んだ資格情報だけが選んだ数だけ消える` |
+
+**手順**
+
+1. 一覧を開く（種データが 3 件入っている）
+1. 2 つ選んで削除する
+
+**検証（合否を判定する）**
+
+- 2 件以上ある（前提）
+- 選んだ数だけ減る
+- 選んだものが消えている
+- 選んでいないものは残っている
+
+**観測（判定しない）**
+
+- 登録されている資格情報
+  - **種データが用意したもの**（`FIDO.TestCredentials`）。**認証器が無いと作れない**ので、E2E では作れない。
+- 削除した値
+
+**補足**
+
+- **直す前は、ここで 1 件しか減らなかった。** **2 つ送っても、先頭の 1 つしか届いていなかった**ためである。
+- **描画は測っていない。** **段階 6 のもう一方の不具合**（`class="form-control"` で**チェックの印が描かれない**）は、**ブラウザでなければ見えない。**
+
 ## RT-279.1 SameSite=None を宣言した Cookie が、Cookie ポリシーで格上げされない
 
 | | |

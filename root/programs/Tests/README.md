@@ -214,14 +214,25 @@ OAuth2ClientEndpointsRootURI
 `UserStoreType` の既定は `mem`。テスト ユーザは初回アクセスで作られ、
 再起動で消えるので、テストの前後で状態を掃除する必要が無い。
 
-### 利用者は 2 人いる
+### 利用者は 3 人いる
 
-認証サイトは `IsDebug` のとき、**同じ `TestUserPWD` で 2 人**作る（`AccountController` の `CreateData`）。
+認証サイトは `IsDebug` のとき、**同じ `TestUserPWD` で作る**（`AccountController` の `CreateData`）。
 
 | 利用者 | 使い道 |
 |---|---|
 | `super_tanaka@gmail.com`（`TestEnv.TestUserName`） | 既定。`SignedInClientAsync` が何も指定しなければこちら |
 | `tanaka@gmail.com`（`TestEnv.SecondUserName`） | 「別の利用者」が要るとき（`EX-8.4`）と、「端末が無い利用者」が要るとき（`RT-210.1`） |
+| `webauthn_tanaka@gmail.com`（`TestEnv.WebAuthnUserName`） | **WebAuthn の資格情報を 3 件持つ**（`FIDO.TestCredentials`。#277 の段階 7）。**net10.0 版だけ**作られる |
+
+> **WebAuthn の資格情報は、種データが用意している。**
+> **作れるのは認証器だけ**で、**`navigator.credentials` を呼ぶのはブラウザ**だから、
+> **E2E では 1 件も作れない。** **削除（`RT-277.3`）を測るための前提**である。
+>
+> **消した分は、次のサインインで作り直される**（`CredentialId` を利用者名から決めてある）ので、
+> **繰り返し流せる。** **実測** : 3 件 → 2 件消して 1 件 → サインインし直して 3 件。
+>
+> **テスト利用者（`super_tanaka` / `tanaka`）には付けない。**
+> **`RT-137.1` / `RT-137.2` が「この利用者は認証器を登録していない」ことを前提に書かれている**ため。
 
 別の利用者でサインインするには、利用者名を渡す。
 
@@ -317,6 +328,8 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 | `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `store/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
+| `Tests/Issues/ManageWebAuthnTests.cs` | `RT-277` | **WebAuthn の資格情報の削除**（`/Manage/RemoveWebAuthnData`。#277 の段階 6）。**選んだものだけが、選んだ数だけ消える**こと。**種データの資格情報を使う**（上記）。**描画は測らない**（`class="form-control"` でチェックの印が消えていた件は、ブラウザでなければ見えない）。**net48 版は Skip**（口が無い） |
+| `Tests/Issues/ManageSaml2OAuth2DataTests.cs` | `RT-277` | **管理画面のクライアント登録**（`/Manage/AddSaml2OAuth2Data`。#277 の段階 1・3）。**3 回押さないと登録できない**こと（`client_id` → `client_secret` → 登録。**1 回目で「登録」を押しても黙って何も起きない**）、**折り返し先の候補が `datalist` に出る**こと、**新規登録の `redirect_uri_code` の既定が `test_self_code`** であること。**サインイン中の利用者自身の登録を使い、測り終えたら消す** |
 | `Tests/Issues/WebAuthnTests.cs` | `RT-137` | **WebAuthn**（`Fido2` 4.2.0）。登録・認証の**要求を組み立てる段**（`CredentialCreateOptions` / `AssertionOptions`）、**壊れた入力を封筒に入れて 200 で返すこと**、**challenge を使い回していないこと**。**net48 版には口が無いこと**も測る |
 
 > **WebAuthn（`RT-137`）は、登録と認証そのものを測っていない。**

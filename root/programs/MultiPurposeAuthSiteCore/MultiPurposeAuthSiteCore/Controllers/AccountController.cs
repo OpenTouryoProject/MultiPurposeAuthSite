@@ -59,6 +59,7 @@
 //*  2026/10/06  玄人 幸道         同意を記録し、promptの各値を処理（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthnのサインインをFido2 4.2.0で復活、MsPassを削除（#137）
 //*  2026/10/07  玄人 幸道         SAML2の応答を3分岐にし、SP側の照合に期待値を渡した（#276）
+//*  2026/10/10  玄人 幸道         WebAuthn の資格情報の種データを足した（#277 の段階 7）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4954,6 +4955,41 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
+            #region WebAuthn の資格情報（#277 の段階 7）
+
+            //  **専用の利用者に、資格情報を 3 件持たせる。**
+            //    **資格情報を作れるのは認証器だけ**なので、**E2E では 1 件も作れない。**
+            //    **削除（/Manage/RemoveWebAuthnData）を測るための前提**である（`RT-277.3`）。
+            //
+            //    **テスト利用者（super_tanaka / tanaka）には付けない。**
+            //    **`RT-137.1` / `RT-137.2` が「この利用者は認証器を登録していない」ことを
+            //    前提に書かれている**ため。
+            //
+            //    **何度通っても増えない**（`TestCredentials` が、消えた分だけ作り直す）。
+            if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+            {
+                string webAuthnName = "webauthn_tanaka" + suffix;
+
+                if (await this.UserManager.FindByNameAsync(webAuthnName) == null)
+                {
+                    ApplicationUser user = ApplicationUser.CreateUser(
+                        webAuthnName, webAuthnName + "@gmail.com", true);
+
+                    if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
+                    {
+                        await this.UserManager.AddToRoleAsync(
+                            await this.UserManager.FindByNameAsync(webAuthnName), Const.Role_User);
+                    }
+                }
+
+                if (await this.UserManager.FindByNameAsync(webAuthnName) != null)
+                {
+                    FIDO.TestCredentials.Seed(webAuthnName);
+                }
+            }
+
+            #endregion
+
             // **E2E 専用のクライアント登録**（#264）。
             //   **以前は test.ps1 -Launch が環境変数で差し込んでいた**が、
             //   **net48 版は一覧ごと 1 本の環境変数**で渡すため、**件数に上限があった**
@@ -5014,6 +5050,12 @@ namespace MultiPurposeAuthSite.Controllers
                     // Memory Providerの場合、
                     if (AccountController.HasCreated)
                     {
+                        // **初期化済みでも、テスト用の種はまき直す**（#277 の段階 7）。
+                        //   **E2E が消すものがある**（WebAuthn の資格情報）ので、
+                        //   **DB ストアと同じく「居なければ作る」を毎回通す。**
+                        //   **本番では IsDebug が false なので、CreateTestUsers は即座に戻る。**
+                        await this.CreateTestUsers();
+
                         // 初期化済み。
                         return; // break;
                     }
