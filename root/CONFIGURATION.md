@@ -21,10 +21,22 @@
 
 | ターゲット | 実体 | 雛形 | 行数 |
 |---|---|---|---|
-| net10.0 | `programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json` | `_appsettings.json` | 約 364 |
-| net48 | `programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config` | `_app.config` | 約 390 |
+| net10.0 | `programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json` | `_appsettings.json` | 約 520 |
+| net48 | `programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config` | `_app.config` | 約 480 |
 
 **実体は 2 つとも `.gitignore` 済み。** 実際の資格情報を含むため。
+
+> **4 つは、キーの並びも説明も揃えてある。**
+> **`_appsettings.json` が元**で、そこから
+> `_app.config` / `appsettings.json` / `app.config` へ写す。
+>
+> | | |
+> |---|---|
+> | **値** | **ターゲットごとに違う**（net48 はパスが Windows 形式、URL に仮想パスが付く）ので、**写さない** |
+> | **net48 だけの設定** | `webpages:*` / `PreserveLoginUrl` / `ClientValidationEnabled` / `UnobtrusiveJavaScriptEnabled`。**先頭にまとめてある** |
+> | **net10.0 だけの設定** | `SessionStoreType` / `SessionStoreConnectionString` / `FIDOServerMode` / `DataProtectionKeyPath` / `UseHttpsRedirection` / `CookieSecurePolicy` / `UseForwardedHeaders` / `ForwardedHeadersKnownProxies` / `FxXMLTCDefinition` / `FxXMLTMInProcessDefinition`。**説明ごと `_app.config` には写さない** |
+>
+> **片方だけ直すとズレる。** **並べ替えや説明の加筆は、4 つとも同じ形にすること。**
 
 ```
 /root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config
@@ -908,11 +920,36 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 ```json
 "RsaPfxFilePath":      "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
 "EcdsaPfxFilePath":    "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
+"SpRp_RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 "SpRp_RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Client.pfx",
 "SpRp_ClientCertPfxFilePath": "C:/root/files/resource/X509/SHA256RSAClientCert.pfx"
 ```
 
-`RsaPfx*` はサーバ（トークンの署名）、`SpRp_*` はクライアント側（Request Object の署名、mTLS）。
+| キー | 誰の鍵か | 誰が読むか |
+|---|---|---|
+| `RsaPfx*` / `EcdsaPfx*` / `Ecdsa384Pfx*` / `Ecdsa512Pfx*` | **サーバの秘密鍵**（`*_Server.pfx`） | **サーバだけ。** SAML2 と JWT の署名 |
+| `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` / `SpRp_Ecdsa384CerFilePath` / `SpRp_Ecdsa512CerFilePath` | **サーバの公開鍵**（`*_Server.cer`） | **サーバとクライアントの両方**（下記） |
+| `SpRp_RsaPfx*` / `SpRp_EcdsaPfx*` | **クライアントの秘密鍵**（`*_Client.pfx`） | クライアントだけ。`client_assertion` と Request Object の署名 |
+| `SpRp_ClientCertPfx*` | **クライアント証明書** | クライアントだけ。mTLS |
+
+> **`SpRp_` は「クライアント側」という意味ではない。**
+> Open棟梁 のクライアント用パラメタの接頭辞（`CmnClientParams.Isser` は `SpRp_Isser` を読む）だが、
+> **`*CerFilePath` の 4 本だけは、中身がサーバ自身の証明書**であり、**サーバも読む。**
+> **1 つのキーを、クライアントは「相手の公開鍵」、サーバは「自分の公開鍵」として共有している。**
+
+**サーバ側での読み方は 2 つある。**
+
+| | |
+|---|---|
+| `/jwkcerts` の元 | `CommandLineTools/CreateJwkSetJson` が `.cer` から `JwkSet.json` を作る |
+| 署名検証の控え | `CmnAccessToken.VerifyAccessToken` から `SelectJws`。**`kid` が無い / `JwkSet.json` が無い / その `kid` が載っていない**ときに `.cer` へ落ちる |
+
+**alg と鍵の対応は `CommonLibrary/TokenProviders/SigningKeys.cs` の表が 1 か所で持つ**
+（`alg` に対して `pfx`（署名）と `cer`（検証・JWK Set）を組で持たせてある。#129 の段階 3 / D-9）。
+
+> **実測（2026/10/09）** : 発行されるトークンは `kid` と `jku` を持ち、
+> `JwkSet.json`（RSA 1 本 ＋ EC 3 本）に載っているので、**通常は JWK の経路を通る。**
+> **`.cer` は、鍵リングが欠けたときに落ちる先**として在る。
 
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。

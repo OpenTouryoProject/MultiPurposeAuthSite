@@ -1,8 +1,6 @@
 ﻿{
   // connectionStrings section
   "connectionStrings": {
-    // Encrypt=false : net10.0 は Microsoft.Data.SqlClient で、Encrypt の既定が True。
-    //                 自己署名証明書の SQL Server では、これが無いと接続できない。
     "ConnectionString_SQL": "Data Source=localhost;Initial Catalog=UserStore;User ID=sa;Password=seigi@123;Encrypt=false;",
     "ConnectionString_ODP": "User Id=SCOTT;Password=tiger;Data Source=localhost/FREEPDB1;",
     "ConnectionString_NPS": "HOST=localhost;DATABASE=UserStore;USER ID=postgres;PASSWORD=seigi@123;"
@@ -29,25 +27,15 @@
     "FxXMLTCDefinition": "C:/root/files/resource/XML/TCDefinition.xml",
     // 名前解決定義へのパス
     "FxXMLTMInProcessDefinition": "C:/root/files/resource/XML/TMInProcessDefinition.xml",
-
-    // フレームワークの使用するパラメータ - end
-
-    // 共通部品の使用するパラメータ - start
     // Log4Netのコンフィグファイルへのパス
     "FxLog4NetConfFile": "C:/root/files/resource/Log/SampleLogConf.xml",
     // セッションタイムアウト検出機能のon・off
     "FxSessionTimeOutCheck": "off", // 外部ログイン不具合対応
-    // コンテナ・モードのon・off
-    // ONにすると、設定ファイルより環境変数を優先する（Open棟梁 GetConfigParameter）。
-    // キー名はそのまま環境変数名になる（接頭辞は付かない）。
-    // E2Eテストは、これで待ち受けURLを差し替える。
-    "FxContainerization": "ON",
-    // 共通部品の使用するパラメータ - end
-
-    // アプリケーションの使用するパラメータ - start
+    // ONにするとOpen棟梁 GetConfigParameterで設定ファイルより環境変数を優先。
+    "FxContainerization": "on",
     // キャッシュ制御機能のon・off
     "FxCacheControl": "on",
-    // アプリケーションの使用するパラメータ - end
+    // フレームワークの使用するパラメータ - end
 
     // Proxy設定
     // InternetProxy設定 (Internet アクセス用、)
@@ -73,18 +61,26 @@
 
     // User store type (mem, sql, ora, npg)
     "UserStoreType": "mem",
-    // Session store type（mem, sql, redis。#256）。**net10.0 版だけ**
+    
+    // **net10.0 版だけ**
+    // Session store type (mem, sql, redis)
     "SessionStoreType": "mem",
-    // Session store connection string（#256）。**mem なら空のまま。**
+    // Session store connection string **mem なら空のまま。**
     "SessionStoreConnectionString": "",
+    // DataProtectionKeyPath 鍵の置き場 
+    // 空なら %LOCALAPPDATA%、揮発するコンテナでは : /keys
+    "DataProtectionKeyPath": "",
 
-    // 本サイトでSaltとして機能する値
-    // ・PPID生成に使用するSalt
-    // ・外部ログイン追加時のXSRF防止
-    "SaltParameter": "[Please set a random string for each site.]",
-
-    // UserListCount
-    "UserListCount": "50",
+    // 配備で切り替えるもの（net10.0 版だけ）。
+    
+    // on で HTTP を HTTPS へリダイレクト（ポートも決める。ASPNETCORE_HTTPS_PORT は**単数**）
+    "UseHttpsRedirection": "",
+    // always で Cookie に Secure 属性を必ず付ける（平文 HTTP の環境で付けるとサインインできなくなる）
+    "CookieSecurePolicy": "",
+    // on で X-Forwarded-Proto / -For を取り込む（前段で TLS を終端する構成。詐称を許すので、アプリを直に叩ける環境では使わない）
+    "UseForwardedHeaders": "",
+    // 信用する前段のアドレス（カンマ区切り、空なら範囲を制限しない）
+    "ForwardedHeadersKnownProxies": "",
 
     // Notification Provider
     // Smtp
@@ -102,10 +98,15 @@
     // テスト用 : 設定すると、プッシュ通知を FCM に送らず、このディレクトリにファイルとして書く。本番では空のまま
     "FcmOutboxDirectory": "",
 
+    // UserListCount
+    "UserListCount": "50",
     // 約款画面を表示するかどうか
     "DisplayAgreementScreen": "false",
     // 文面ファイルのフォルダ
     "ContentOfLetterFilePath": "C:/root/files/resource/MultiPurposeAuthSite/Txt",
+
+    // 本サイトでSaltとして機能する値：PPID生成に使用するSalt、外部ログイン追加時のXSRF防止
+    "SaltParameter": "[Please set a random string for each site.]",
 
     // Administrator（システム管理者のアカウント）
     "AdministratorUID": "[Please fill in this input item.]",
@@ -144,10 +145,6 @@
     "CanEditUnstructuredData": "true",
     "CanEditSaml2OAuth2Data": "true",
     "CanUseGdprFunction": "true",
-    // FIDOServerMode: none, webauthn
-    //   **net10.0 版だけの設定**（#137）。net48 版にはこのキーが無い。
-    //   **mspass（Microsoft Passport）は落とした**（前身 API で、動く環境が無い）。
-    "FIDOServerMode": "webauthn",
     
     //  Cookie の名前に付ける接頭辞（同じホストに 2 つ立てるときだけ指定
     "CookieNamePrefix": "",
@@ -165,6 +162,88 @@
     "TwoFactorCookieExpiresFromHours": "336",
     // SecurityStamp（検証間隔は10秒、本番は長めに設定
     "SecurityStampValidateIntervalFromSeconds": "10",
+
+    // FIDOServerMode: none, webauthn
+    //   **net10.0 版だけの設定**（#137）。net48 版にはこのキーが無い。
+    //   **mspass（Microsoft Passport）は落とした**（前身 API で、動く環境が無い）。
+    "FIDOServerMode": "webauthn",
+
+    // STS (SAML2, OAuth2/OIDC, FAPI)
+    "IssuerId": "https://ssoauth.opentouryo.com",
+    "OAuth2AccessTokenExpireTimeSpanFromMinutes": "360",
+    "OAuth2RefreshTokenExpireTimeSpanFromDays": "14",
+    "OidcIdTokenExpireTimeSpanFromMinutes": "30",
+    "DeviceAuthZExpireTimeSpanFromSeconds": "600",
+    "DeviceAuthZPollingIntervalSeconds": "5",
+    "CibaExpireTimeSpanFromSeconds": "600",
+    "CibaPollingIntervalSeconds": "5",
+
+    // Grant Typeの有効・無効
+    "EnableAuthorizationCodeGrantType": "true",
+    "EnableImplicitGrantType": "false",
+    "EnableResourceOwnerPasswordCredentialsGrantType": "false",
+    "EnableClientCredentialsGrantType": "true",
+    "EnableJwtBearerTokenFlowGrantType": "true",
+    "EnableDeviceAuthZGrantType": "true",
+    "EnableCibaGrantType": "true",
+    "EnableRefreshToken": "true",
+
+    "EnableOpenIDConnect": "true",
+    // PKCE を必須にするか（OAuth 2.1 は true）
+    "RequirePkce": "false",
+    // PKCE で S256 だけを受け付けるか（OAuth 2.1 / FAPI は true）
+    "RequirePkceS256": "false",
+
+    // 認可コードの有効期限（秒）（#188。RFC 6749 4.1.2 は 10 分以内を推奨）
+    "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
+    // Request Object（/ros に預けたもの）の有効期限（秒）（#188）
+    "RequestObjectExpireTimeSpanFromSeconds": "300",
+
+    // AuthorizationServerエンドポイント
+    "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
+    // 認可エンドポイント
+    "OAuth2AuthorizeEndpoint": "/authorize",
+    // SAML2 Assertion の有効期限（分）。#276
+    //   書かなければ OidcIdTokenExpireTimeSpanFromMinutes を使う（従来の振る舞い）。
+    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
+    "Saml2RequestEndpoint": "/saml2request",
+    // RP からのログアウト（RP-Initiated Logout 1.0。#232）
+    //   **既に配備された設定ファイルに無くても動く**（無ければ /end_session を使う）
+    "OAuth2EndSessionEndpoint": "/end_session",
+    // Device AuthZ
+    "DeviceAuthZAuthorizeEndpoint": "/device_authz",
+    "DeviceAuthZVerifyEndpoint": "/device_verify",
+    // CIBA
+    "CibaAuthorizeEndpoint": "/ciba_authz",
+    "CibaPushResultEndpoint": "/ciba_result",
+    // Tokenエンドポイント
+    "OAuth2TokenEndpoint": "/token",
+
+    // WebAPI
+    // /userinfo
+    "OAuth2UserInfoEndpoint": "/userinfo",
+    // /revoke
+    "OAuth2RevokeTokenEndpoint": "/revoke",
+    // /introspect
+    "OAuth2IntrospectTokenEndpoint": "/introspect",
+
+    // SAML, JWTの署名に使用する X.509 証明書に関するパラメタ
+    "RsaPfxPassword": "test",
+    "RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
+    "EcdsaPfxPassword": "test",
+    "EcdsaPfxFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
+    // ES384 / ES512 は曲線が alg に紐づくので、鍵が分かれる（#129 の段階 3）
+    "Ecdsa384PfxPassword": "test",
+    "Ecdsa384PfxFilePath": "C:/root/files/resource/X509/SHA384ECDSA.pfx",
+    "Ecdsa512PfxPassword": "test",
+    "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
+    "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
+
+    // プッシュ通知
+    "SetDeviceTokenWebAPI": "/SetDeviceToken",
+    "TwoFactorPushResultEndpoint": "/2fa_result",
+    // HybridFlowのテスト用
+    "TestHybridFlowWebAPI": "/TestHybridFlowWebAPI",
 
     // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
     //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
@@ -202,122 +281,40 @@
     "TwitterAuthenticationClientId": "[If necessary, please fill in ClientId of Twitter Authentication]",
     "TwitterAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Twitter Authentication]",
 
-    // STS (SAML2, OAuth2/OIDC, FAPI)
-    "IssuerId": "https://ssoauth.opentouryo.com",
-    "OAuth2AccessTokenExpireTimeSpanFromMinutes": "360",
-    "OAuth2RefreshTokenExpireTimeSpanFromDays": "14",
-    "OidcIdTokenExpireTimeSpanFromMinutes": "30",
-    "DeviceAuthZExpireTimeSpanFromSeconds": "600",
-    "DeviceAuthZPollingIntervalSeconds": "5",
-    "CibaExpireTimeSpanFromSeconds": "600",
-    "CibaPollingIntervalSeconds": "5",
-    // SAML, JWTの署名に使用する X.509 証明書に関するパラメタ
-    "RsaPfxPassword": "test",
-    "RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
-    "EcdsaPfxPassword": "test",
-    "EcdsaPfxFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
-    // ES384 / ES512 は曲線が alg に紐づくので、鍵が分かれる（#129 の段階 3）
-    "Ecdsa384PfxPassword": "test",
-    "Ecdsa384PfxFilePath": "C:/root/files/resource/X509/SHA384ECDSA.pfx",
-    "Ecdsa512PfxPassword": "test",
-    "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
-    "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
-    // Grant Typeの有効・無効
-    "EnableAuthorizationCodeGrantType": "true",
-    "EnableImplicitGrantType": "false",
-    "EnableResourceOwnerPasswordCredentialsGrantType": "false",
-    "EnableClientCredentialsGrantType": "true",
-    "EnableJwtBearerTokenFlowGrantType": "true",
-    "EnableDeviceAuthZGrantType": "true",
-    "EnableCibaGrantType": "true",
-    "EnableRefreshToken": "true",
+    // IDフェデレーション
+    
+    // 上流は コンテナ、E2Eは、環境変数で上書き。
+    // 認可エンドポイント
+    "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
+    // Redirectエンドポイント
+    "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
+    // Tokenエンドポイント
+    "IdFederationTokenEndpoint": "https://localhost:44301/token",
+    // UserInfoエンドポイント
+    "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
 
-    "EnableOpenIDConnect": "true",
-    // PKCE を必須にするか（#220。true は OAuth 2.1 相当。Device AuthZ / CIBA は対象外）
-    "RequirePkce": "false",
-    // PKCE で S256 だけを受け付けるか（#220。true は OAuth 2.1 / FAPI 相当）
-    //   Discovery の code_challenge_methods_supported は、この値に合わせて広告する（#228）
-    "RequirePkceS256": "false",
+    // 機能のロックダウン（全てfalseでSTS専用モードで動作）
+    // サインアップ
+    "EnableSignupProcess": "true",
+    // ユーザ属性編集
+    "EnableEditingOfUserAttribute": "true",
+    // ユーザ・ロール管理
+    "EnableAdministrationOfUsersAndRoles": "true",
 
-    // Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
-    //   **空なら Discovery に出さない**（任意の項目）
+    // Discovery の service_documentation **空なら Discovery に出さない**（任意の項目）
     "ServiceDocumentation": "",
 
-    // 認可コードの有効期限（秒）（#188。RFC 6749 4.1.2 は 10 分以内を推奨）
-    "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
-    // Request Object（/ros に預けたもの）の有効期限（秒）（#188）
-    "RequestObjectExpireTimeSpanFromSeconds": "300",
-
-    // AuthorizationServerエンドポイント
-    "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
-    // 認可エンドポイント
-    "OAuth2AuthorizeEndpoint": "/authorize",
-    // SAML2 Assertion の有効期限（分）。#276
-    //   書かなければ OidcIdTokenExpireTimeSpanFromMinutes を使う（従来の振る舞い）。
-    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
-    "Saml2RequestEndpoint": "/saml2request",
-    // RP からのログアウト（RP-Initiated Logout 1.0。#232）
-    //   **既に配備された設定ファイルに無くても動く**（無ければ /end_session を使う）
-    "OAuth2EndSessionEndpoint": "/end_session",
-    // Device AuthZ
-    "DeviceAuthZAuthorizeEndpoint": "/device_authz",
-    "DeviceAuthZVerifyEndpoint": "/device_verify",
-    // CIBA
-    "CibaAuthorizeEndpoint": "/ciba_authz",
-    "CibaPushResultEndpoint": "/ciba_result",
-    // Tokenエンドポイント
-    "OAuth2TokenEndpoint": "/token",
-
-    // WebAPI
-    // /userinfo
-    "OAuth2UserInfoEndpoint": "/userinfo",
-    // /revoke
-    "OAuth2RevokeTokenEndpoint": "/revoke",
-    // /introspect
-    "OAuth2IntrospectTokenEndpoint": "/introspect",
-    // プッシュ通知
-    "SetDeviceTokenWebAPI": "/SetDeviceToken",
-    "TwoFactorPushResultEndpoint": "/2fa_result",
-    // HybridFlowのテスト用
-    "TestHybridFlowWebAPI": "/TestHybridFlowWebAPI",
-
-    // Redirectエンドポイント
-    // - self_code : Authorization Codeグラント種別
-
-    // Client
-    // Clientエンドポイント
+    // テスト用Clientエンドポイント
     "OAuth2ClientEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
-    // Redirectエンドポイント
-    // Redirectエンドポイント（テスト用）のロックダウン
-    // **DataProtection の鍵の置き場**（#251。net10.0 版だけで使う）。
-    //   **空なら従来どおり**（%LOCALAPPDATA% 配下。**コンテナでは揮発する**）。
-    //   指定すると、そこに鍵リングを置くので、**再起動でもサインインが切れない。**
-    //   net48 の machineKey と同じ役割だが、**鍵そのものは書かない**（置き場を共有する）。
-    //   **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
-    //   例 : /keys（コンテナ）
-    "DataProtectionKeyPath": "",
-
-    // 配備で切り替えるもの（#279。net10.0 版だけ）。
-    //   いずれも、書かなければ従来どおりの動作である。
-    //   UseHttpsRedirection          : on で HTTP を HTTPS へリダイレクトする
-    //                                  （ポートも決めること。ASPNETCORE_HTTPS_PORT は**単数**）
-    //   CookieSecurePolicy           : always で Cookie に Secure 属性を必ず付ける
-    //                                  （平文 HTTP の環境で付けるとサインインできなくなる）
-    //   UseForwardedHeaders          : on で X-Forwarded-Proto / -For を取り込む
-    //                                  （前段で TLS を終端する構成。詐称を許すので、アプリを直に叩ける環境では使わない）
-    //   ForwardedHeadersKnownProxies : 信用する前段のアドレス（カンマ区切り。空なら範囲を制限しない）
-    "UseHttpsRedirection": "",
-    "CookieSecurePolicy": "",
-    "UseForwardedHeaders": "",
-    "ForwardedHeadersKnownProxies": "",
-    "IsLockedDownTestEndpoints": "false",
     // - test_self_saml : AssertionConsumerService
     "Saml2ResponseEndpoint": "/Account/AssertionConsumerService",
     // - test_self_code : Authorization Codeグラント種別
     "OAuth2AuthorizationCodeGrantClient_Account": "/Account/OAuth2AuthorizationCodeGrantClient",
     // - test_self_token : Implicitグラント種別
     "OAuth2ImplicitGrantClient_Account": "/Account/OAuth2ImplicitGrantClient",
-
+    // Redirectエンドポイント（テスト用）のロックダウン
+    "IsLockedDownTestEndpoints": "false",
+    
     // クライアント識別子 (client_id, client_secret, redirect_uri)
     // このセクションは、CreateClientsIdentity.exeを使用して生成できます。
     // 本稼働前にかならず、以下のclient_id, client_secretを置き換えて下さい。
@@ -421,26 +418,6 @@
       }
     },
 
-    // 機能のロックダウン（全てfalseでSTS専用モードで動作）
-    // サインアップ
-    "EnableSignupProcess": "true",
-    // ユーザ属性編集
-    "EnableEditingOfUserAttribute": "true",
-    // ユーザ・ロール管理
-    "EnableAdministrationOfUsersAndRoles": "true",
-    
-    // IDフェデレーション（上流は コンテナ、E2Eは、環境変数で上書き。
-    // 認可エンドポイント
-    "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
-    // Redirectエンドポイント
-    "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
-    // Tokenエンドポイント
-    "IdFederationTokenEndpoint": "https://localhost:44301/token",
-    // UserInfoエンドポイント
-    "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
-
-    // OAuth2, OIDC認証
-
     // profile / address のクレームの対応付け（#230）
     //   **「どのキーを、どのクレームとして返すか」だけを書く。**
     //   値の在り処は UnstructuredData（JSON）の中のパス（入れ子は「.」で辿る）か、
@@ -493,22 +470,23 @@
     "UserClaimsMapping": {
     },
 
-    // Client-Server共通設定（クライアント側も読む。実装は Open棟梁 の OAuth2AndOIDCParams）
+    // Client-Server共通設定 ----------------------------------------------------------
     "JwkSetUri": "/jwkcerts",
     // Request Object を預ける独自の口（RFC 9101 5.2.1）
     "RequestObjectRegUri": "/ros",
     // 認可リクエストを先に預ける口（PAR：RFC 9126）
     "AuthRequestPushUri": "/par",
-
-    // Client側設定
-    "OAuth2AndOidcClientID": "06d20f595b694114b710c1d85e21bb8e",
-    "OAuth2AndOidcSecret": "ld47EVKDDkxleIup7Z0UQ1rVy_IR4q3lXamyNcrIUEo",
-    "SpRp_Isser": "https://ssoauth.opentouryo.com",
-    // Token検証用
+    // Token検証用（JWKの控えとしても使用）
     "SpRp_RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
     "SpRp_EcdsaCerFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.cer",
     "SpRp_Ecdsa384CerFilePath": "C:/root/files/resource/X509/SHA384ECDSA.cer",
     "SpRp_Ecdsa512CerFilePath": "C:/root/files/resource/X509/SHA521ECDSA.cer",
+    // --------------------------------------------------------------------------------
+    
+    // Client側設定 -------------------------------------------------------------------
+    "OAuth2AndOidcClientID": "06d20f595b694114b710c1d85e21bb8e",
+    "OAuth2AndOidcSecret": "ld47EVKDDkxleIup7Z0UQ1rVy_IR4q3lXamyNcrIUEo",
+    "SpRp_Isser": "https://ssoauth.opentouryo.com",
     // クライアント認証用
     "SpRp_RsaPfxPassword": "test",
     "SpRp_RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Client.pfx",
@@ -517,5 +495,6 @@
     // クライアント証明書
     "SpRp_ClientCertPfxPassword": "test",
     "SpRp_ClientCertPfxFilePath": "C:/root/files/resource/X509/SHA256RSAClientCert.pfx"
+    // --------------------------------------------------------------------------------
   }
 }
