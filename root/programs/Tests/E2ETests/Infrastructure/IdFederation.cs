@@ -121,7 +121,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return origin;
         }
 
-        /// <summary>上流でサインインする（<c>prompt=none</c> の前提）</summary>
+        /// <summary>上流でサインインしておく</summary>
         /// <param name="client">IdPClient（Cookie は下流と同じ入れ物）</param>
         /// <param name="origin">上流の URL</param>
         /// <returns>サインインできたら true</returns>
@@ -160,16 +160,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 || post.StatusCode == HttpStatusCode.SeeOther;
         }
 
-        /// <summary>上流に同意の記録が無ければ、1 度だけ「許可」を押して整える（#280）</summary>
+        /// <summary>上流に同意の記録が無ければ、1 度だけ「許可」を押して整える（#280 / #287）</summary>
         /// <param name="client">IdPClient</param>
-        /// <param name="authorizeUrl">下流が組み立てた認可要求の URL（<c>prompt=none</c> 付き）</param>
+        /// <param name="authorizeUrl">下流が組み立てた認可要求の URL</param>
         /// <returns>押したら true（記録が在った・押せなかったなら false）</returns>
         /// <remarks>
         /// **上流は `UserStoreType=mem` なので、コンテナを作り直すと同意の記録が消える**
         /// （`Sts.ConsentProvider.ConsentGrants` は静的な辞書）。
-        /// **この E2E は `prompt=none` で委譲し、どこでも「許可」を押さない**ため、
-        /// **記録が無い上流に対しては必ず `consent_required` になる**
-        /// （OIDC Core §3.1.2.6。IdP の側は仕様どおりである）。
+        /// **どこでも「許可」を押さない**ため、**記録が無い上流では同意画面で止まる。**
         ///
         /// **それはテストの前提が整っていないだけ**なので、ここで整える。
         /// **`store/` の DBMS や IIS Express と同じ扱い**である。
@@ -178,15 +176,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// そのため、**ここでの成否は判定に出さない**（整えられなければ、
         /// 呼び出し側が「code が返らない」として落ちる）。
         ///
-        /// **`prompt=none` を外して 1 回だけ叩く。**
-        /// 同意画面（`submit.Grant` を持つ）が返ってきたときだけ押す。
+        /// **1 回だけ叩き、同意画面（`submit.Grant` を持つ）が返ってきたときだけ押す。**
         /// **記録が在れば同意画面は出ない**ので、何もせずに戻る。
         /// **上流が未サインインならログイン画面が返る**ので、これも押さない（`RT-140.6`）。
+        ///
+        /// > **`prompt=none` を外す前**（#287 より前）は、**記録が無いと `consent_required` で
+        /// > 終わっていた**（OIDC Core §3.1.2.6。IdP の側は仕様どおり）。
+        /// > **ここで `prompt=none` を落として叩き直していたのは、そのための迂回だった。**
+        /// > **いまは、下流が送る URL がそのまま同意画面に着く。**
         /// </remarks>
         public static async Task<bool> EnsureUpstreamConsentAsync(
             IdPClient client, string authorizeUrl)
         {
-            // **`prompt=none` だけを落とす。** 他のパラメタ（PKCE・state・nonce）は触らない。
+            //  **下流が組み立てた URL をそのまま使う**（#287 で `prompt=none` が無くなった）。
+            //    **念のため落としておく**（戻された場合に、ここが黙って効かなくなるのを避ける）。
             string url = authorizeUrl
                 .Replace("&prompt=none", "")
                 .Replace("?prompt=none&", "?");
@@ -265,7 +268,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             result.AuthorizeUrl = start.Headers.Location.ToString();
 
-            // (3) 上流の /authorize（prompt=none）
+            // (3) 上流の /authorize
             result.AuthorizeResponse = await client.GetAsync(result.AuthorizeUrl);
 
             string authzHtml = await result.AuthorizeResponse.Content.ReadAsStringAsync();

@@ -60,6 +60,7 @@
 //*  2026/10/07  玄人 幸道         WebAuthnのサインインをFido2 4.2.0で復活、MsPassを削除（#137）
 //*  2026/10/07  玄人 幸道         SAML2の応答を3分岐にし、SP側の照合に期待値を渡した（#276）
 //*  2026/10/10  玄人 幸道         WebAuthn の資格情報の種データを足した（#277 の段階 7）
+//*  2026/10/10  玄人 幸道         ID連携からprompt=noneを外し、エラー応答を受け取る（#287）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -495,7 +496,8 @@ namespace MultiPurposeAuthSite.Controllers
                         "&code_challenge="
                             + OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(codeVerifier) +
                         "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256 +
-                        "&login_hint=" + uid + "&prompt=none");
+                        // `prompt=none` も `IsPassive` も送らない（手動の導線ではない）
+                        "&login_hint=" + uid); // + "&prompt=none"); 
                 }
                 else if (submitButtonName == "webauthn_signin"
                     && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
@@ -2183,14 +2185,30 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <param name="code">仲介コード</param>
         /// <param name="state">state</param>
+        /// <param name="iss">issuer（RFC 9207）</param>
+        /// <param name="error">エラー コード（エラー応答のとき）</param>
+        /// <param name="error_description">エラーの説明（同上）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
         [AllowAnonymous]
-        public async Task<ActionResult> IDFederationRedirectEndPoint(string code, string state, string iss)
+        public async Task<ActionResult> IDFederationRedirectEndPoint(
+            string code, string state, string iss,
+            string error, string error_description)
         {
             if (!Config.IsLockedDownTestEndpoints)
             {
+                // エラー応答を受け取る（#287）。
+                if (!string.IsNullOrEmpty(error))
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "The ID federation ended with an error response. (error: {0}, description: {1})",
+                        AccountController.SanitizeForTrace(error),
+                        AccountController.DescribeForTrace(error_description)));
+
+                    return View("Error");
+                }
+
                 // **認可応答の `iss` を検証する**（RFC 9207。#140 の段階 3）。
                 //   **Mix-Up 攻撃への対策**で、OAuth 2.1 が挙げているのはこの応答パラメタである。
                 //   `id_token` の `iss` も照合しているが（IdToken.Verify → SpRp_Isser）、
@@ -2649,6 +2667,23 @@ namespace MultiPurposeAuthSite.Controllers
         private static string DescribeForTrace(string value)
         {
             return string.IsNullOrEmpty(value) ? "(empty)" : ("len=" + value.Length);
+        }
+
+        /// <summary>ログに出してよい形にする（#287）</summary>
+        /// <param name="value">相手から来た短い値（エラー コードなど）</param>
+        /// <returns>改行を落とし、長さを切った値</returns>
+        /// <remarks>
+        /// **値そのものを見たいが、相手の決めた文字列である**という場合に使う。
+        /// **改行を落とす**（**行を割られると、ログの 1 行 1 件が崩れる**）。
+        /// **長さも切る**（エラー コードは短い）。
+        /// </remarks>
+        private static string SanitizeForTrace(string value)
+        {
+            if (string.IsNullOrEmpty(value)) { return "(empty)"; }
+
+            string ret = value.Replace('\r', ' ').Replace('\n', ' ');
+
+            return (64 < ret.Length) ? ret.Substring(0, 64) + "..." : ret;
         }
 
         #endregion

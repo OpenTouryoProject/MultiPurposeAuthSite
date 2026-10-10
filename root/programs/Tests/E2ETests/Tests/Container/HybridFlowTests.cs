@@ -93,7 +93,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                 r.Target(client.Target.DisplayName + "（" + client.Target.BaseUrl
                     + "） ← 上流 " + upstream);
 
-                r.Step("(1) 上流コンテナでサインインしておく（下流は prompt=none で委譲する）");
+                r.Step("(1) 上流コンテナでサインインしておく（この経路の確認を 1 本に絞るため）");
 
                 bool upstreamSignedIn = await IdFederation.SignInUpstreamAsync(client, upstream);
 
@@ -112,10 +112,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                     "上流へリダイレクト",
                     (fed.AuthorizeUrl == null) ? "**リダイレクトしない**" : fed.AuthorizeUrl);
 
-                bool promptNone = (fed.AuthorizeUrl ?? "").Contains("prompt=none");
+                //  **`prompt` は、もう付けない**（#287）。
+                //    **ここはコンテナの中のアプリを測る**ので、
+                //    **イメージが古いと「付いている」になる**（`store\1_DockerComposeUp.bat` で作り直す）。
+                bool prompt = (fed.AuthorizeUrl ?? "").Contains("prompt=");
 
-                r.Verify("prompt=none で要求する（画面を出させない）", promptNone,
-                    "prompt=none", promptNone ? "付いている" : "**付いていない**");
+                r.Verify("prompt は付けない（上流が画面を出してよい）", !prompt,
+                    "prompt なし",
+                    prompt ? "**付いている**（イメージが古い？）" : "付いていない");
 
                 r.Step("(3) 上流が認可応答（form_post）を返す");
 
