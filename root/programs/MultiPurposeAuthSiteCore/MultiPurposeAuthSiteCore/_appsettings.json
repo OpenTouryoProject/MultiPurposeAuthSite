@@ -23,10 +23,6 @@
     "FxXMLSPDefinition": "C:/root/files/resource/XML/SPDefinition.xml",
     // メッセージ定義へのパス
     "FxXMLMSGDefinition": "C:/root/files/resource/XML/MSGDefinition.xml",
-    // トランザクション制御定義へのパス
-    "FxXMLTCDefinition": "C:/root/files/resource/XML/TCDefinition.xml",
-    // 名前解決定義へのパス
-    "FxXMLTMInProcessDefinition": "C:/root/files/resource/XML/TMInProcessDefinition.xml",
     // Log4Netのコンフィグファイルへのパス
     "FxLog4NetConfFile": "C:/root/files/resource/Log/SampleLogConf.xml",
     // セッションタイムアウト検出機能のon・off
@@ -170,13 +166,6 @@
 
     // STS (SAML2, OAuth2/OIDC, FAPI)
     "IssuerId": "https://ssoauth.opentouryo.com",
-    "OAuth2AccessTokenExpireTimeSpanFromMinutes": "360",
-    "OAuth2RefreshTokenExpireTimeSpanFromDays": "14",
-    "OidcIdTokenExpireTimeSpanFromMinutes": "30",
-    "DeviceAuthZExpireTimeSpanFromSeconds": "600",
-    "DeviceAuthZPollingIntervalSeconds": "5",
-    "CibaExpireTimeSpanFromSeconds": "600",
-    "CibaPollingIntervalSeconds": "5",
 
     // Grant Typeの有効・無効
     "EnableAuthorizationCodeGrantType": "true",
@@ -188,27 +177,36 @@
     "EnableCibaGrantType": "true",
     "EnableRefreshToken": "true",
 
+    // OIDC を有効にするか
     "EnableOpenIDConnect": "true",
     // PKCE を必須にするか（OAuth 2.1 は true）
     "RequirePkce": "false",
     // PKCE で S256 だけを受け付けるか（OAuth 2.1 / FAPI は true）
     "RequirePkceS256": "false",
 
-    // 認可コードの有効期限（秒）（#188。RFC 6749 4.1.2 は 10 分以内を推奨）
     "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
-    // Request Object（/ros に預けたもの）の有効期限（秒）（#188）
     "RequestObjectExpireTimeSpanFromSeconds": "300",
+    "OAuth2AccessTokenExpireTimeSpanFromMinutes": "360",
+    "OAuth2RefreshTokenExpireTimeSpanFromDays": "14",
+    "OidcIdTokenExpireTimeSpanFromMinutes": "30",
+    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
+    "DeviceAuthZExpireTimeSpanFromSeconds": "600",
+    "DeviceAuthZPollingIntervalSeconds": "5",
+    "CibaExpireTimeSpanFromSeconds": "600",
+    "CibaPollingIntervalSeconds": "5",
 
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // 認可エンドポイント
     "OAuth2AuthorizeEndpoint": "/authorize",
-    // SAML2 Assertion の有効期限（分）。#276
-    //   書かなければ OidcIdTokenExpireTimeSpanFromMinutes を使う（従来の振る舞い）。
-    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
     "Saml2RequestEndpoint": "/saml2request",
-    // RP からのログアウト（RP-Initiated Logout 1.0。#232）
-    //   **既に配備された設定ファイルに無くても動く**（無ければ /end_session を使う）
+    // Tokenエンドポイント
+    "OAuth2TokenEndpoint": "/token",
+    // その他のエンドポイント
+    "OAuth2UserInfoEndpoint": "/userinfo",
+    "OAuth2RevokeTokenEndpoint": "/revoke",
+    "OAuth2IntrospectTokenEndpoint": "/introspect",
+    // RP-Initiated Logout
     "OAuth2EndSessionEndpoint": "/end_session",
     // Device AuthZ
     "DeviceAuthZAuthorizeEndpoint": "/device_authz",
@@ -216,17 +214,7 @@
     // CIBA
     "CibaAuthorizeEndpoint": "/ciba_authz",
     "CibaPushResultEndpoint": "/ciba_result",
-    // Tokenエンドポイント
-    "OAuth2TokenEndpoint": "/token",
-
-    // WebAPI
-    // /userinfo
-    "OAuth2UserInfoEndpoint": "/userinfo",
-    // /revoke
-    "OAuth2RevokeTokenEndpoint": "/revoke",
-    // /introspect
-    "OAuth2IntrospectTokenEndpoint": "/introspect",
-
+    
     // SAML, JWTの署名に使用する X.509 証明書に関するパラメタ
     "RsaPfxPassword": "test",
     "RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
@@ -282,8 +270,9 @@
     "TwitterAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Twitter Authentication]",
 
     // IDフェデレーション
+    // 既定値はコンテナ、E2Eは、環境変数で上書き。
     
-    // 上流は コンテナ、E2Eは、環境変数で上書き。
+    // 値は、上流の /samlmetadata から引ける。
     // 認可エンドポイント
     "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
     // Redirectエンドポイント
@@ -292,6 +281,16 @@
     "IdFederationTokenEndpoint": "https://localhost:44301/token",
     // UserInfoエンドポイント
     "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
+
+    // 値は、上流の /samlmetadata から引ける。
+    // Requestエンドポイント
+    "IdFederationSaml2RequestEndpoint": "https://localhost:44301/saml2request",
+    // Responseエンドポイント
+    "IdFederationSaml2ResponseEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationAssertionConsumerService",
+    // 期待する上流の Issuer（上流の entityID）
+    "IdFederationSaml2IssuerId": "https://ssoauth.opentouryo.com",
+    // 上流の署名を検証する証明書
+    "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
     // 機能のロックダウン（全てfalseでSTS専用モードで動作）
     // サインアップ

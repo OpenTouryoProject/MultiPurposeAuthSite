@@ -61,6 +61,7 @@
 //*  2026/10/09  西野 大介         オンライン決済サービス系処理の削除
 //*  2026/10/09  玄人 幸道         ChageToUserWebAPI（課金の口）の設定を削除
 //*  2026/10/09  玄人 幸道         OAuth2AuthorizationCodeGrantClient_Manage を削除
+//*  2026/10/10  玄人 幸道         SAML2のID連携の設定を追加（#286の段階1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -2150,67 +2151,13 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region ResourceServer関連
-
-        #region エンドポイント
-
-        ///// <summary>
-        ///// OAuth2のResourceServerのEndpointのRootURI
-        ///// </summary>
-        //public static string OAuth2ResourceServerEndpointsRootURI
-        //{
-        //    get
-        //    {
-        //        return GetConfigParameter.GetConfigValue("OAuth2ResourceServerEndpointsRootURI");
-        //    }
-        //}
-
         #endregion
-
-        #endregion
-
-        #endregion
-
-        #endregion
-
-        #region 機能ロックダウン（STS専用モード）
-
-        /// <summary>
-        /// EnableSignupProcess
-        /// </summary>
-        public static bool EnableSignupProcess
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableSignupProcess"));
-            }
-        }
-
-        /// <summary>
-        /// EnableEditingOfUserAttribute
-        /// </summary>
-        public static bool EnableEditingOfUserAttribute
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableEditingOfUserAttribute"));
-            }
-        }
-
-        /// <summary>
-        /// EnableAdministrationOfUsersAndRoles
-        /// </summary>
-        public static bool EnableAdministrationOfUsersAndRoles
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableAdministrationOfUsersAndRoles"));
-            }
-        }
 
         #endregion
 
         #region IDフェデレーション関連
+
+        #region OIDC
 
         /// <summary>
         /// IDフェデレーション時の認可エンドポイント
@@ -2255,6 +2202,138 @@ namespace MultiPurposeAuthSite.Co
                 return Config.GetRenamedConfigValue("IdFederationUserInfoEndpoint");
             }
         }
+
+        #endregion
+
+        #region SAML2
+
+        //  **上の 4 本は OIDC 用である。** ここは SAML2 用で、別に持つ。
+        //
+        //  **OIDC と SAML2 で、要る設定の数が違う。**
+        //    OIDC は口が 3 つ（authorize / token / userinfo）あり、鍵は discovery から引ける前提。
+        //    SAML2 は口が 1 つ（SSO）で、**鍵と EntityID を設定で与える**（#286）。
+        //
+        //  **1 本でも空なら、SAML2 の ID 連携は無効**（`CanIdFederationBySaml2`）。
+        //    **導線（サインイン画面のボタン）も出さない。**
+        //    **押しても成立しないボタンを出さないため**である。
+
+        /// <summary>
+        /// SAML2のID連携で、AuthnRequestを送る先（上流IdPのSSOの口）
+        /// </summary>
+        /// <remarks>
+        /// **上流の `/samlmetadata` の `SingleSignOnService`（HTTP-Redirect）の値**である。
+        /// </remarks>
+        public static string IdFederationSaml2RequestEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationSaml2RequestEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// SAML2のID連携で、応答（アサーション）を受け取る口（自分のACS）
+        /// </summary>
+        /// <remarks>
+        /// **上流のクライアント登録（`redirect_uri_saml`）に、この値を登録する。**
+        /// **自己テストの ACS（`Saml2ResponseEndpoint`）とは別の口**である
+        /// （あちらは `IsLockedDownTestEndpoints` で閉じる）。
+        /// </remarks>
+        public static string IdFederationSaml2ResponseEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationSaml2ResponseEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// SAML2のID連携で、期待する上流のIssuer（EntityID）
+        /// </summary>
+        /// <remarks>
+        /// **上流の `/samlmetadata` の `entityID` の値**である。
+        /// **OIDC の `SpRp_Isser` に当たるもの**だが、**あちらは Open棟梁 の設定**なので分けてある。
+        /// </remarks>
+        public static string IdFederationSaml2IssuerId
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationSaml2IssuerId");
+            }
+        }
+
+        /// <summary>
+        /// SAML2のID連携で、上流の署名を検証する証明書（.cer のパス）
+        /// </summary>
+        /// <remarks>
+        /// **上流の `/samlmetadata` の `KeyDescriptor use="signing"` の証明書**である。
+        ///
+        /// **`SpRp_RsaCerFilePath` は使えない。**
+        /// **あのキーは、この配備では「自分の証明書」として読まれている**
+        /// （`/samlmetadata` の広告・`JwkSet.json` の素・検証の控え）ので、
+        /// **上流のものに差し替えると、そちらが壊れる**（`CmnSaml2Response` の説明）。
+        /// </remarks>
+        public static string IdFederationSaml2CerFilePath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationSaml2CerFilePath");
+            }
+        }
+
+        /// <summary>SAML2のID連携が有効か（設定が揃っているか）</summary>
+        /// <remarks>
+        /// **4 本すべてが要る。** **1 本でも欠けていれば、導線を出さない。**
+        /// </remarks>
+        public static bool CanIdFederationBySaml2
+        {
+            get
+            {
+                return !string.IsNullOrEmpty(Config.IdFederationSaml2RequestEndpoint)
+                    && !string.IsNullOrEmpty(Config.IdFederationSaml2ResponseEndpoint)
+                    && !string.IsNullOrEmpty(Config.IdFederationSaml2IssuerId)
+                    && !string.IsNullOrEmpty(Config.IdFederationSaml2CerFilePath);
+            }
+        }
+
+        #endregion
+
+        #region 機能ロックダウン（STS専用モード）
+
+        /// <summary>
+        /// EnableSignupProcess
+        /// </summary>
+        public static bool EnableSignupProcess
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableSignupProcess"));
+            }
+        }
+
+        /// <summary>
+        /// EnableEditingOfUserAttribute
+        /// </summary>
+        public static bool EnableEditingOfUserAttribute
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableEditingOfUserAttribute"));
+            }
+        }
+
+        /// <summary>
+        /// EnableAdministrationOfUsersAndRoles
+        /// </summary>
+        public static bool EnableAdministrationOfUsersAndRoles
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableAdministrationOfUsersAndRoles"));
+            }
+        }
+
+        #endregion
 
         #endregion
     }

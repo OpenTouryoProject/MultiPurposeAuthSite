@@ -867,6 +867,65 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
 > **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
 
+#### ID 連携（SAML2）で、上流に繋ぐ設定（#286 の段階 1）
+
+**この IdP が、上流の IdP に対して SP になるときの設定である。**
+**OIDC の `IdFederation*Endpoint`（4 本）とは別に持つ。**
+
+| 設定キー | 雛形の値 | |
+|---|---|---|
+| `IdFederationSaml2RequestEndpoint` | `https://localhost:44301/saml2request` | **`AuthnRequest` を送る先**（上流の SSO の口） |
+| `IdFederationSaml2ResponseEndpoint` | `…/Account/IDFederationAssertionConsumerService` | **応答を受け取る自分の口**（**上流の `redirect_uri_saml` に登録する値**） |
+| `IdFederationSaml2IssuerId` | `https://ssoauth.opentouryo.com` | **期待する上流の Issuer**（EntityID） |
+| `IdFederationSaml2CerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の署名を検証する証明書**（`.cer` のパス） |
+
+**雛形の既定は、OIDC の `IdFederation*Endpoint` と同じ**
+（**上流は `store/` のコンテナ**。`https://localhost:44301`。**E2E は環境変数で上書きする**）。
+
+**1 本でも空なら、SAML2 の ID 連携は無効**である（`Config.CanIdFederationBySaml2`）。
+**押しても成立しない導線を出さない**ため、**サインイン画面のボタンも出さない。**
+
+> **証明書は、開発用の上流が同じ雛形の鍵を使っているので、結果として
+> `SpRp_RsaCerFilePath` と同じファイルを指す**（実測で modulus が一致する）。
+> **値が同じでも、キーは分ける** — **役が違う**ためである（次の節）。
+
+**値の出どころは、上流の `/samlmetadata` である**（実測）。**人が見て書き写す。**
+
+| 設定キー | 上流のメタデータの、どこ |
+|---|---|
+| `IdFederationSaml2RequestEndpoint` | `IDPSSODescriptor` ＞ `SingleSignOnService`（HTTP-Redirect）の `Location` |
+| `IdFederationSaml2IssuerId` | `EntityDescriptor` の `entityID` |
+| `IdFederationSaml2CerFilePath` | `KeyDescriptor use="signing"` ＞ `X509Certificate`（**取り出して `.cer` として置く**） |
+
+> **メタデータから自動で引く仕組みは、まだ無い。**
+> **Open棟梁 の `SAML2Bindings` には `CreateMetadata`（作る側）しか無い。**
+> **また、同梱のメタデータは署名されていない**（実測）ので、**信頼の根拠は TLS だけ**になる。
+> **いまは、配備時に手で置く。**
+
+#### `SpRp_RsaCerFilePath` は、上流の証明書に差し替えられない
+
+**上流の応答（アサーション）の検証鍵として、既存の `SpRp_RsaCerFilePath` は使えない。**
+**このキーは、この配備では「自分の証明書」として 3 か所から読まれている。**
+
+| | `SpRp_RsaCerFilePath` の役 |
+|---|---|
+| SAML2 | **`/samlmetadata` の `KeyDescriptor`**（**自分の証明書を広告する**） |
+| OIDC | **`JwkSet.json`（`/jwkcerts`）の素**（`CreateJwkSetJson` が読む） |
+| 共通 | **署名検証の控え**（`kid` が引けないとき。8 節） |
+| クライアント役 | **相手の公開鍵**（Open棟梁 の `SAML2Client.VerifyResponse` が読む先） |
+
+**上流のものに差し替えると、上の 3 つが同時に壊れる**（**他人の証明書を広告することになる**）。
+**だから `IdFederationSaml2CerFilePath` を別に持つ。**
+
+> **検証の本体は `CommonLibrary/SamlProviders/CmnSaml2Response.cs` にある。**
+> **`SAML2Client.VerifyResponse` を使わず、`SAML2Bindings` を直に呼ぶ**
+> （**あちらは検証鍵を引数に取らない**ため）。
+> **署名検証そのものは `SAML2Bindings.VerifyRedirect` / `VerifyPost`** であり、
+> **`AuthnRequest` の検証と同じもの**である。**実装が 2 本になるわけではない。**
+>
+> **自己テストの SP 役（`SelfTestClient.VerifySaml2Response`）も、同じ本体を使う。**
+> **渡す引数が違うだけ**である（**自分の証明書と、自分の `IssuerId`**）。
+
 #### 署名のない `AuthnRequest` は通る
 
 **`jwk_rsa_publickey` を登録していないクライアントの `AuthnRequest` は、署名が無くても通る**

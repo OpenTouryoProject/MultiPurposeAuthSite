@@ -2508,7 +2508,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="sigAlg">string</param>
         /// <returns>ActionResult（Saml2Response 画面）</returns>
         /// <remarks>
-        /// **検証の本体は `Sts.SelfTestClient.VerifySaml2Response`**（#246 で両アプリから寄せた）。
+        /// **検証の本体は `SamlProviders.CmnSaml2Response.Verify`**
+        /// （#246 で両アプリから寄せ、#286 の段階 1 で鍵と期待 Issuer を引数にした）。
         ///
         /// **アサーションを画面に出す**（#246 の項目 3）。
         /// 以前は `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に移るだけで、
@@ -2551,7 +2552,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   （`SamlProviders/CmnEndpoints`）。
             string acsUrl = Config.OAuth2ClientEndpointsRootURI + Config.Saml2ResponseEndpoint;
 
-            Sts.SelfTestClient.Saml2Result result = Sts.SelfTestClient.VerifySaml2Response(
+            SamlProviders.CmnSaml2Response.Saml2Result result = Sts.SelfTestClient.VerifySaml2Response(
                 samlResponse, queryString, sigAlg, relayState,
                 state_InSessionOrCookie, isGet, acsUrl, this.LoadTestSamlRequestId());
 
