@@ -1359,6 +1359,7 @@ docker compose up -d upstream
 |---|---|
 | `OAuth2AndOidcClientID` / `Secret` | **ターゲットごとに別のクライアント**（`redirect_uri` は 1 件に 1 つのため） |
 | `IdFederationRedirectEndpoint` | そのサイトの URL ＋ `/Account/IDFederationRedirectEndPoint` |
+| **`IdFederationSaml2*`（4 本）** | **SAML2 の ID 連携**（#286 の段階 2）。上流の SSO の口・自分の ACS・期待する上流の Issuer・上流の署名証明書 |
 
 **上流のエンドポイント（`IdFederation{Authorize,Token,UserInfo}Endpoint`）は上書きしない。**
 **構成ファイルの値が、そのままサイトの向き先である。**
@@ -1366,6 +1367,14 @@ docker compose up -d upstream
 
 **上流側のクライアント登録は `store/docker-compose.yml` にある**（`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
 **雛形の `IdFederation` クライアントは手動確認（VS）用**で、`/MultiPurposeAuthSite` 付きのまま残してある。
+
+**SAML2 の ID 連携は、同じクライアントに `redirect_uri_saml` を足して使う**（#286 の段階 2）。
+**上流は `Issuer`（`http://` ＋ `client_id`）で SP を引く**ので、**OIDC と同じ登録で足りる。**
+**返す先は登録値から解決する**ので、**下流の ACS を 1 文字違わず登録すること**（#263 と同じ照合）。
+
+> **実測（2026/10/10。#286 の段階 2）** : **下流コンテナ ⇔ 上流コンテナで一巡した。**
+> **2 度目も同じ利用者**（連携キー `(上流の EntityID, NameID)` で引けている）。
+> **ログに `has signed in with a SAML2 ID federation` が出る。**
 
 **上流は `preferred_username` も返す**（`docker-compose.yml` の `UserClaimsMapping`。#151 の段階 4）。
 **`subject_types` の既定が `public` になり、`sub` は利用者 ID になった**ので、

@@ -62,6 +62,7 @@
 //*  2026/10/09  玄人 幸道         ChageToUserWebAPI（課金の口）の設定を削除
 //*  2026/10/09  玄人 幸道         OAuth2AuthorizationCodeGrantClient_Manage を削除
 //*  2026/10/10  玄人 幸道         SAML2のID連携の設定を追加（#286の段階1）
+//*  2026/10/10  玄人 幸道         ID連携の導線を設定の有無で出す（#286の段階2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -2200,6 +2201,24 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Config.GetRenamedConfigValue("IdFederationUserInfoEndpoint");
+            }
+        }
+
+        /// <summary>OIDCのID連携が有効か（設定が揃っているか）</summary>
+        /// <remarks>
+        /// **4 本すべてが要る。** **1 本でも欠けていれば、導線を出さない**（#286 の段階 2）。
+        ///
+        /// **以前は、サインイン画面に無条件でボタンが出ていた。**
+        /// **口を設定していない配備でも押せた**ので、**押すとエラー画面に着いた。**
+        /// </remarks>
+        public static bool CanIdFederationByOidc
+        {
+            get
+            {
+                return !string.IsNullOrEmpty(Config.IdFederationAuthorizeEndpoint)
+                    && !string.IsNullOrEmpty(Config.IdFederationRedirectEndpoint)
+                    && !string.IsNullOrEmpty(Config.IdFederationTokenEndpoint)
+                    && !string.IsNullOrEmpty(Config.IdFederationUserInfoEndpoint);
             }
         }
 

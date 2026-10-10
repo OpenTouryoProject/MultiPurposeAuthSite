@@ -61,6 +61,7 @@
 //*  2026/10/07  玄人 幸道         SAML2の応答を3分岐にし、SP側の照合に期待値を渡した（#276）
 //*  2026/10/10  玄人 幸道         WebAuthn の資格情報の種データを足した（#277 の段階 7）
 //*  2026/10/10  玄人 幸道         ID連携からprompt=noneを外し、エラー応答を受け取る（#287）
+//*  2026/10/10  玄人 幸道         SAML2のID連携を追加（#286の段階2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -498,6 +499,13 @@ namespace MultiPurposeAuthSite.Controllers
                         "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256 +
                         // `prompt=none` も `IsPassive` も送らない（手動の導線ではない）
                         "&login_hint=" + uid); // + "&prompt=none"); 
+                }
+                else if (submitButtonName == "id_federation_saml2_signin"
+                    && Config.CanIdFederationBySaml2)
+                {
+                    //  **SAML2 の ID 連携**（#286 の段階 2）。
+                    //    **設定が揃っていなければ、ここには来ない**（画面にボタンを出さない）。
+                    return this.StartIdFederationBySaml2();
                 }
                 else if (submitButtonName == "webauthn_signin"
                     && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
@@ -2179,6 +2187,8 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region ID連携 (ID Federation)
 
+        #region OIDC
+
         /// <summary>
         /// IDFederationRedirectEndPoint
         /// OIDC, response_type=code, response_mode=form_post
@@ -2656,6 +2666,322 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View("Error");
         }
+
+        #endregion
+
+        #region SAML2（#286 の段階 2）
+
+        /// <summary>SAML2 の ID 連携を始める（上流へ AuthnRequest を送る）</summary>
+        /// <returns>ActionResult（上流の SSO へのリダイレクト）</returns>
+        /// <remarks>
+        /// **OIDC の ID 連携（`id_federation_signin`）と同じ位置づけ**である。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | 宛先 | `IdFederationSaml2RequestEndpoint`（上流の SSO の口） |
+        /// | `Issuer` | **`http://` ＋ 上流に登録された `client_id`** — **上流はこれで SP を引く**（`CmnEndpoints.VerifySamlRequest`） |
+        /// | `NameIDFormat` | **`EmailAddress`**（#286 の決め事）。**`NameID` をメアドとして受け取る** |
+        /// | ACS URL | **入れない。** **上流が登録値（`redirect_uri_saml`）から解決する**（#276 の照合と食い違わせない） |
+        /// | `RelayState` | **state を入れる。** 応答で照合する |
+        ///
+        /// **`IsPassive` は送らない**（#287 で OIDC の `prompt=none` を外したのと同じ理由）。
+        /// **利用者が押している導線なので、上流が画面を出してよい。**
+        ///
+        /// **サインイン画面の入力値は使わない**（#286 の決め事）。
+        /// **SAML に `login_hint` 相当は無く、独自の方法は作らないと決めてある。**
+        /// </remarks>
+        private ActionResult StartIdFederationBySaml2()
+        {
+            // **上流に登録された client_id**（OIDC の ID 連携と同じものを使う）。
+            string issuer = "http://" + OAuth2AndOIDCParams.ClientID;
+
+            // **RelayState に入れる state**（#140 の段階 3 と同じ 32 文字）。記号は入れない。
+            string state = GetPassword.Generate(32, 0);
+
+            string id = "";
+            string queryString = SAML2Client.CreateRedirectRequest(
+                SAML2Enum.RequestOrResponse.Request,
+                SAML2Enum.ProtocolBinding.HttpRedirect,
+                SAML2Enum.NameIDFormat.EmailAddress,
+                issuer, "", state, out id);
+
+            HttpContext.Session.SetString("id_federation_saml2_state", state);
+
+            // **応答の InResponseTo と照合する**（#276 と同じ）。
+            HttpContext.Session.SetString("id_federation_saml2_request_id", id);
+
+            return Redirect(Config.IdFederationSaml2RequestEndpoint + "?" + queryString);
+        }
+
+        /// <summary>
+        /// IDFederationAssertionConsumerService
+        /// SAML2 の ID 連携で、上流のアサーションを受け取る口
+        /// </summary>
+        /// <param name="samlResponse">SAMLResponse</param>
+        /// <param name="relayState">RelayState（送った state）</param>
+        /// <param name="sigAlg">SigAlg（Redirect Binding のときだけ付く）</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **自己テストの ACS（`AssertionConsumerService`）とは別の口**である。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | 自己テストの ACS | **`IsLockedDownTestEndpoints` で閉じる。** 結果を画面に出すだけ |
+        /// | **この口** | **閉じない**（本番の導線）。**検証できたらサインインさせる** |
+        ///
+        /// **検証の本体は `SamlProviders.CmnSaml2Response.Verify`**（#286 の段階 1）。
+        /// **自己テストと同じ本体に、上流の証明書と EntityID を渡す。**
+        /// </remarks>
+        [AllowAnonymous]
+        public async Task<ActionResult> IDFederationAssertionConsumerService(
+            string samlResponse, string relayState, string sigAlg)
+        {
+            if (!Config.CanIdFederationBySaml2)
+            {
+                // **設定が揃っていない。** **理由を残す**（#253 と同じ方針）。
+                Logging.MyOperationTrace(
+                    "The SAML2 ID federation is not configured. (CanIdFederationBySaml2)");
+
+                return View("Error");
+            }
+
+            bool isGet = (Request.Method.ToLower() == "get");
+            string queryString = "";
+
+            if (isGet)
+            {
+                // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。
+                string rawUrl = Request.GetEncodedUrl();
+                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+            }
+
+            string state = HttpContext.Session.GetString("id_federation_saml2_state");
+            string requestId = HttpContext.Session.GetString("id_federation_saml2_request_id");
+
+            // 誤動作防止（1 度しか使わない）。
+            HttpContext.Session.SetString("id_federation_saml2_state", "");
+            HttpContext.Session.SetString("id_federation_saml2_request_id", "");
+
+            SamlProviders.CmnSaml2Response.Saml2Result result =
+                SamlProviders.CmnSaml2Response.Verify(
+                    samlResponse, queryString, sigAlg, relayState, state, isGet,
+                    Config.IdFederationSaml2ResponseEndpoint, requestId,
+                    Config.IdFederationSaml2CerFilePath, Config.IdFederationSaml2IssuerId);
+
+            if (result.Verdict != "NORMAL_END")
+            {
+                //  **理由を残す**（#253 / #287 と同じ方針）。
+                //    **`Reason` は自分で組み立てた文言**なので、そのまま出してよい。
+                Logging.MyOperationTrace(string.Format(
+                    "The SAML2 ID federation was not accepted. (reason: {0})", result.Reason));
+
+                return View("Error");
+            }
+
+            //  **`NameID` をメアドとして受け取る**（#286 の決め事。`EmailAddress`）。
+            //    **形が違えば受けない** — **メアドでない値をメアドとして扱わないため。**
+            if (result.NameIdFormat != SAML2Enum.NameIDFormat.EmailAddress.ToString()
+                || string.IsNullOrEmpty(result.NameId))
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The SAML2 ID federation needs an emailAddress NameID. (format: {0}, nameId: {1})",
+                    AccountController.SanitizeForTrace(result.NameIdFormat),
+                    AccountController.DescribeForTrace(result.NameId)));
+
+                return View("Error");
+            }
+
+            return await this.SignInByIdFederationSaml2(result.Issuer, result.NameId);
+        }
+
+        /// <summary>検証できたアサーションで、利用者を結び付けてサインインする</summary>
+        /// <param name="idpIssuer">上流の Issuer（EntityID）</param>
+        /// <param name="nameId">NameID（`EmailAddress` なのでメアド）</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **OIDC の ID 連携と同じ形に揃えてある**（#286 の段階 2）。
+        ///
+        /// | | OIDC | SAML2 |
+        /// |---|---|---|
+        /// | 連携キー | `(id_token の iss, sub)` | **`(上流の EntityID, NameID)`** |
+        /// | 利用者の鍵 | メアド | **メアド**（＝ `NameID`） |
+        /// | 新規作成時の名前 | `preferred_username` → メアドの `@` より前 | **メアドの `@` より前**（**相当するものが無い**） |
+        ///
+        /// **`email_verified` に相当するものが無い。**
+        /// **アサーションに `AttributeStatement` が無い**ためである（#286 の段階 4）。
+        /// **そこで `NameIDFormat=emailAddress` の `NameID` を、検証済みとして扱う**
+        /// （**上流が署名して主張した主体の識別子**である。本文のコメント）。
+        ///
+        /// | 結果 | |
+        /// |---|---|
+        /// | **既にメアドで登録のある利用者に結び付ける** | **メアドが一致すれば結ぶ**（OIDC で上流が `email_verified=true` を返したときと同じ扱い） |
+        /// | **新規に作る利用者は `EmailConfirmed = true`** | 同上 |
+        ///
+        /// **段階 4（`AttributeStatement`）で解ける**ので、そこで見直す。
+        /// </remarks>
+        private async Task<ActionResult> SignInByIdFederationSaml2(string idpIssuer, string nameId)
+        {
+            IdentityResult idResult = null;
+
+            // **連携キーは (上流の EntityID, NameID)**。
+            string federationKey = nameId;
+
+            // **`NameIDFormat` が `EmailAddress` なので、`NameID` がメアドである。**
+            string email = nameId;
+            string uid = email;
+            string newUserName = Const.UserNameFromEmail(email);
+
+            //  **上流が「検証済み」と言っているか。**
+            //    **SAML2 には `email_verified` に相当するクレームが無い**
+            //    （アサーションに `AttributeStatement` が無い。#286 の段階 4）。
+            //
+            //    **`NameIDFormat=emailAddress` の `NameID` を、検証済みとして扱う。**
+            //
+            //    | | |
+            //    |---|---|
+            //    | OIDC の `email` | **属性の 1 つ**である。**検証済みかどうかを別に言う必要がある**（`email_verified`） |
+            //    | **SAML2 の `NameID`（`emailAddress`）** | **主体そのものの識別子**である（SAML Core 8.3.2）。**上流が署名して「この主体である」と主張している** |
+            //
+            //    **「未検証」として扱うと、既にメアドで登録のある利用者には永久に結び付けられない。**
+            //    **上流は、証明書と EntityID を設定で指定した相手だけ**であり、
+            //    **その相手の署名した主張を認証に使っている**のだから、
+            //    **同じ主張の中の識別子を信じないのは筋が通らない。**
+            //
+            //    **緩めたくない配備は `RequireVerifiedEmailForAccountLinking` を使う**
+            //    （この値に関わらず、その設定が false なら従来どおり）。
+            string emailVerified = "true";
+
+            Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, nameId);
+            Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
+
+            // 既存の外部ログインを確認する。
+            ApplicationUser user = await UserManager.FindByLoginAsync(idpIssuer, federationKey);
+
+            if (user != null)
+            {
+                // 既存の外部ログインがある場合。
+                idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
+                idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
+                idResult = await UserManager.AddClaimAsync(user, nameClaim);
+
+                await SignInManager.ExternalLoginSignInAsync(
+                    idpIssuer, federationKey,
+                    isPersistent: false, bypassTwoFactor: true);
+
+                this.InitSessionAfterlogin();
+
+                Logging.MyOperationTrace(string.Format(
+                    "{0}({1}) has signed in with a SAML2 ID federation.", user.Id, user.UserName));
+
+                return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+            }
+
+            // サインアップ済みの可能性を探る（**鍵はメアド**）。
+            user = await UserManager.FindByEmailAsync(uid);
+
+            UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
+
+            if (user != null)
+            {
+                // サインアップ済み → 外部ログイン追加だけで済む。
+
+                // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
+                if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
+                        == Sts.AccountLinkCheck.NeedsVerifiedEmail)
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "Rejected linking a SAML2 ID federation login to {0}({1}) "
+                        + "because the assertion did not assert a verified email.",
+                        user.Id, user.UserName));
+
+                    ViewBag.Reason = Resources.AccountViews.ExternalLoginNeedsVerifiedEmail;
+
+                    return View("ExternalLoginFailure");
+                }
+
+                idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+
+                if (idResult.Succeeded)
+                {
+                    idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                }
+
+                if (idResult.Succeeded)
+                {
+                    // 通常のサインイン（外部ログイン「追加」時は SignInAsync を使用する）。
+                    await SignInManager.SignInAsync(user, isPersistent: false);
+
+                    this.InitSessionAfterlogin();
+
+                    Logging.MyOperationTrace(string.Format(
+                        "{0}({1}) has signed in with a SAML2 ID federation.", user.Id, user.UserName));
+
+                    return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                }
+
+                this.AddErrors(idResult);
+            }
+            else
+            {
+                // サインアップ済みでない → 作る。
+                ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
+                ViewBag.LoginProvider = idpIssuer;
+
+                user = ApplicationUser.CreateUser(newUserName, email, true);
+
+                // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
+                user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
+
+                idResult = await UserManager.CreateAsync(user);
+
+                if (idResult.Succeeded)
+                {
+                    await this.UserManager.AddToRoleAsync(user, Const.Role_User);
+                    await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
+
+                    idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+
+                    if (idResult.Succeeded)
+                    {
+                        idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                        idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                    }
+
+                    if (idResult.Succeeded)
+                    {
+                        await SignInManager.SignInAsync(user, isPersistent: false);
+
+                        this.InitSessionAfterlogin();
+
+                        Logging.MyOperationTrace(string.Format(
+                            "{0}({1}) has signed in with a SAML2 ID federation.",
+                            user.Id, user.UserName));
+
+                        return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                    }
+
+                    this.AddErrors(idResult);
+                }
+                else
+                {
+                    this.AddErrors(idResult);
+                }
+            }
+
+            // **ここに来た理由を残す**（#253 と同じ方針）。
+            Logging.MyOperationTrace(
+                "The SAML2 ID federation did not complete. (the error view was returned)");
+
+            return View("Error");
+        }
+
+        #endregion
+
+        #endregion
+
+        #region 共通
 
         /// <summary>値そのものを出さずに、有無と長さだけを表す（#253）</summary>
         /// <param name="value">値</param>

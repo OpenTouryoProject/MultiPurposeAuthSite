@@ -173,10 +173,14 @@ services:
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_code=https://localhost:44300/Account/IDFederationRedirectEndPoint
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__client_name=IdFederationE2ECore
+      #   **SAML2 の ID 連携の ACS**（#286 の段階 2）。**redirect_uri はクライアント 1 件に 1 つ**なので、
+      #   **OIDC の redirect_uri_code と並べて持つ**（口が別なので衝突しない）。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_saml=https://localhost:44300/Account/IDFederationAssertionConsumerService
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_secret=E2E_qP7wE2rT5yU8iO1pA4sD6fG9hJ3kL0zX
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_code=https://localhost:44302/Account/IDFederationRedirectEndPoint
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_name=IdFederationE2ENetFx
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_saml=https://localhost:44302/Account/IDFederationAssertionConsumerService
 
       # ---------------------------------------------------------------- 利用者名を下流へ渡す
       #   **sub では渡せない**（#151 の段階 4 で、既定が public になった ＝ sub は利用者 ID）。
@@ -195,6 +199,7 @@ services:
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__redirect_uri_code=https://localhost:44303/Account/IDFederationRedirectEndPoint
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__client_name=IdFederationDownstreamContainer
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__redirect_uri_saml=https://localhost:44303/Account/IDFederationAssertionConsumerService
 
       # ---------------------------------------------------------------- 同意を押さないクライアント（#284）
       #   **CN-6.2（記録が無いときの consent_required）を測るためだけに在る。**
@@ -298,6 +303,17 @@ services:
       - appSettings__IdFederationUserInfoEndpoint=http://upstream:8080/userinfo
       # **ブラウザが戻る先。** 上流の redirect_uri_code と 1 文字も違ってはならない（#263）。
       - appSettings__IdFederationRedirectEndpoint=https://localhost:44303/Account/IDFederationRedirectEndPoint
+
+      # ---------------------------------------------------------------- SAML2 の ID 連携（#286 の段階 2）
+      #   **SAML2 は、すべてブラウザ経由である**（サーバが呼ぶ口が無い）。
+      #   **だから宛先は、ホストから届く URL だけでよい**（上の token/userinfo のような振り分けが要らない）。
+      #
+      #   **証明書はマウント先のパスで与える**（mpas-common.env と同じ流儀）。
+      - appSettings__IdFederationSaml2RequestEndpoint=https://localhost:44301/saml2request
+      # **ブラウザが戻る先。** 上流の redirect_uri_saml と 1 文字も違ってはならない（#263）。
+      - appSettings__IdFederationSaml2ResponseEndpoint=https://localhost:44303/Account/IDFederationAssertionConsumerService
+      - appSettings__IdFederationSaml2IssuerId=https://ssoauth.opentouryo.com
+      - appSettings__IdFederationSaml2CerFilePath=/resource/X509/SHA256RSA_Server.cer
 
       # ---------------------------------------------------------------- Cookie の名前
       #   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）。

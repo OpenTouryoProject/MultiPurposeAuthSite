@@ -867,7 +867,7 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
 > **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
 
-#### ID 連携（SAML2）で、上流に繋ぐ設定（#286 の段階 1）
+#### ID 連携（SAML2）で、上流に繋ぐ設定（#286 の段階 1 / 段階 2）
 
 **この IdP が、上流の IdP に対して SP になるときの設定である。**
 **OIDC の `IdFederation*Endpoint`（4 本）とは別に持つ。**
@@ -901,6 +901,43 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > **Open棟梁 の `SAML2Bindings` には `CreateMetadata`（作る側）しか無い。**
 > **また、同梱のメタデータは署名されていない**（実測）ので、**信頼の根拠は TLS だけ**になる。
 > **いまは、配備時に手で置く。**
+
+**導線と口**（段階 2）。
+
+| | |
+|---|---|
+| **サインイン画面のボタン** | **設定が揃っているときだけ出す**（`CanIdFederationBySaml2`）。**OIDC 側も同じにした**（`CanIdFederationByOidc`） |
+| **口** | `/Account/IDFederationAssertionConsumerService`（**`IsLockedDownTestEndpoints` で閉じない**。本番の導線） |
+| 自己テストの口 | `/Account/AssertionConsumerService`（**閉じる**。結果を画面に出すだけ） |
+| `AuthnRequest` | `NameIDFormat=emailAddress`、`Issuer` ＝ **`http://` ＋ 上流に登録された `client_id`**、**ACS URL は入れない**（上流が登録値から解決する） |
+| `IsPassive` | **送らない**（#287 で OIDC の `prompt=none` を外したのと同じ理由） |
+| サインイン画面の入力値 | **使わない**（SAML に `login_hint` 相当が無い。#286 の決め事） |
+
+> **上流には、下流の ACS を `redirect_uri_saml` として登録する**こと。
+> **1 文字も違ってはならない**（#263 と同じ照合）。
+> 雛形は `IdFederation` クライアントに登録済みで、`store/docker-compose.yml` は
+> E2E の 3 つの下流（ホスト core / netfx / 下流コンテナ）の分を持っている。
+
+#### `NameIDFormat=emailAddress` の `NameID` は、検証済みのメアドとして扱う（#286 の段階 2）
+
+**SAML2 には `email_verified` に相当するクレームが無い**
+（アサーションに `AttributeStatement` が無い。段階 4 で足す）。
+
+| | |
+|---|---|
+| OIDC の `email` | **属性の 1 つ**である。**検証済みかどうかを別に言う必要がある**（`email_verified`） |
+| **SAML2 の `NameID`（`emailAddress`）** | **主体そのものの識別子**である（SAML Core 8.3.2）。**上流が署名して「この主体である」と主張している** |
+
+**だから、検証済みとして扱う。**
+**そうしないと、既にメアドで登録のある利用者には永久に結び付けられない**
+（**実測** : `super_tanaka` が下流にも居るため、`null` で扱った版では
+`Rejected linking a SAML2 ID federation login to …` で止まった）。
+
+**緩めたくない配備は `RequireVerifiedEmailForAccountLinking` を `false` にする**
+（この判断に関わらず、その設定が優先される）。
+
+> **`NameIDFormat` が `emailAddress` でなければ、受け付けない。**
+> **メアドでない値をメアドとして扱わないため**である（`Persistent` などは段階 4 以降）。
 
 #### `SpRp_RsaCerFilePath` は、上流の証明書に差し替えられない
 

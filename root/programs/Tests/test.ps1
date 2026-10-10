@@ -331,6 +331,15 @@ function Set-IdFederationEnv
 
     # **E2E の下流は root で配信する**（VS の /MultiPurposeAuthSite とは形が違う）
     $env:IdFederationRedirectEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationRedirectEndPoint'
+
+    # **SAML2 の ID 連携**（#286 の段階 2）。
+    #   **上流の SSO の口**と、**自分の ACS**（上流の redirect_uri_saml に登録した値）と、
+    #   **期待する上流の Issuer**と、**上流の署名証明書**。
+    #   **同じ client_id を使う**（上流は Issuer = http://<client_id> で SP を引く）。
+    $env:IdFederationSaml2RequestEndpoint = 'https://localhost:44301/saml2request'
+    $env:IdFederationSaml2ResponseEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationAssertionConsumerService'
+    $env:IdFederationSaml2IssuerId = 'https://ssoauth.opentouryo.com'
+    $env:IdFederationSaml2CerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
 }
 
 function Wait-Site

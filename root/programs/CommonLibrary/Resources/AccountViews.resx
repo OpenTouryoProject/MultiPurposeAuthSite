@@ -180,6 +180,12 @@
   <data name="IdFederationLoginSubmit" xml:space="preserve">
     <value>Login with id federation</value>
   </data>
+  <data name="IdFederationSaml2Login" xml:space="preserve">
+    <value>Id federation login (SAML2)</value>
+  </data>
+  <data name="IdFederationSaml2LoginSubmit" xml:space="preserve">
+    <value>Login with id federation (SAML2)</value>
+  </data>
   <data name="LoginForgotPasswordActionLink" xml:space="preserve">
     <value>Forgot your password ?</value>
   </data>
