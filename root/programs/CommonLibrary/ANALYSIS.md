@@ -498,6 +498,16 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 **あれは、管理画面から決済の WebAPI（`/ChageToUser`）を呼ぶためのもの**で、
 **決済が無くなれば、要らない。**
 
+**管理画面の「SAML2 アサーションを取る」（`GetSaml2Assertion`）も、同時に落とした。**
+**これは決済とは別のもの**である（#277 の段階 5 で足した）。
+**落としたのは、自己テスト画面と重複する**ためである。
+**SAML2 の代表プロファイルは、自己テスト画面に 4 通りのバインディングで在る。**
+**管理画面のボタンは「利用者自身のクライアント登録で流す」点だけが違っていた**が、
+**その差に、画面を 2 つ持つだけの値は無いと判断した。**
+
+> **`redirect_uri_saml` の管理画面用（`redirect_uri_saml_manage`）は、これで要らなくなった。**
+> **受け口を自己テストと共用していた**ので、**もともと足していない。**
+
 | 落としたもの | |
 |---|---|
 | 設定 | `EnableStripe` / `Stripe_PK` / `Stripe_SK` / `EnablePAYJP` / `PAYJP_PK` / `PAYJP_SK` / `CanEditPayment` / `ChageToUserWebAPI` / `OAuth2AuthorizationCodeGrantClient_Manage` |

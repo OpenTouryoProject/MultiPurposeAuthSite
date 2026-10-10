@@ -30,6 +30,7 @@
 //*  2026/10/04  玄人 幸道         画面の選択肢を直列化しないようにした（#266 で踏んだ）
 //*  2026/10/09  玄人 幸道         各項目の説明を追加（#277 の段階 1）
 //*  2026/10/09  玄人 幸道         redirect_ の候補（datalist）を追加（#277 の段階 3）
+//*  2026/10/10  玄人 幸道         管理画面用の候補についての見通しを現状に合わせた（#277）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -145,8 +146,9 @@ namespace MultiPurposeAuthSite.ViewModels
         //  **値は `Const` から引く。** **画面とサーバで食い違わせない**ため
         //    （サーバ側は `CheckRedirectUri` / `CmnEndpoints` がこの記号を解決する）。
         //
-        //  **`redirect_uri_saml` の管理画面用（`redirect_uri_saml_manage`）は、まだ無い。**
-        //    **管理画面に SAML のテスト ボタンを足すとき**（#277 の段階 5）に増える。
+        //  **`redirect_uri_saml` の管理画面用（`redirect_uri_saml_manage`）は、無い。**
+        //    **管理画面の SAML のテスト ボタンは落とした**（自己テスト画面と重複するため。
+        //    `ANALYSIS.md` 13 節）ので、**増える予定も無い。**
 
         /// <summary>redirect_uri_saml の候補</summary>
         [JsonIgnore]
