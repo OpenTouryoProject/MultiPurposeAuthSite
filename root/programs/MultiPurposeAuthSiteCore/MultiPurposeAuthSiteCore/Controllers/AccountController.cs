@@ -62,6 +62,7 @@
 //*  2026/10/10  玄人 幸道         WebAuthn の資格情報の種データを足した（#277 の段階 7）
 //*  2026/10/10  玄人 幸道         ID連携からprompt=noneを外し、エラー応答を受け取る（#287）
 //*  2026/10/10  玄人 幸道         SAML2のID連携を追加（#286の段階2）
+//*  2026/10/11  玄人 幸道         OIDCのID連携も開始とサインインに分けた（#286の段階2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -447,58 +448,9 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else if (submitButtonName == "id_federation_signin")
                 {
-                    // ID連携のサインイン
-
-                    // **入力された値を、そのまま login_hint として上流へ渡す**（#151 の段階 3）。
-                    //   利用者名でもメアドでもよい（上流がどう解釈するかは上流しだい）。
-                    string uid = model.Email;
-
-                    // 認可エンドポイント
-                    string oAuthAuthorizeEndpoint =
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + Config.OAuth2AuthorizeEndpoint;
-
-                    // client_id
-                    string client_id = OAuth2AndOIDCParams.ClientID;
-                    //OAuth2Helper.GetInstance().GetClientIdByName("IdFederation");
-
-                    // state // 記号は入れない。
-                    //   **32 文字にした**（#140 の段階 3）。10 文字では短い。
-                    //   PKCE があるので CSRF は守られるが、**推測しにくい方がよい。**
-                    string state = GetPassword.Generate(32, 0);
-                    HttpContext.Session.SetString("id_federation_signin_state", state);
-
-                    // redirect_uri
-                    string redirect_uri = Config.IdFederationRedirectEndpoint;
-
-                    // nonce // 記号は入れない。
-                    string nonce = GetPassword.Generate(20, 0);
-                    HttpContext.Session.SetString("id_federation_signin_nonce", nonce);
-
-                    // ID連携に必要なscope
-                    string scope = Const.IdFederationScopes;
-
-                    // **PKCE を付ける**（#140 の段階 3）。
-                    //   これまで client_secret だけだった。**OAuth 2.1 は、秘密を持つ
-                    //   クライアントでも PKCE を付けることを求める**（コードの横取りに備える）。
-                    //   相手が PKCE を見ない OP でも、**余分なパラメタとして無視されるだけ**なので壊れない。
-                    string codeVerifier = GetPassword.Base64UrlSecret(50);
-                    HttpContext.Session.SetString("id_federation_signin_verifier", codeVerifier);
-
-                    return Redirect(
-                        Config.IdFederationAuthorizeEndpoint +
-                        "?client_id=" + client_id +
-                        "&response_type=code" +
-                        "&scope=" + scope +
-                        "&state=" + state +
-                        "&nonce=" + nonce +
-                        "&redirect_uri=" + CustomEncode.UrlEncode(redirect_uri) +
-                        "&response_mode=form_post" +
-                        "&code_challenge="
-                            + OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(codeVerifier) +
-                        "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256 +
-                        // `prompt=none` も `IsPassive` も送らない（手動の導線ではない）
-                        "&login_hint=" + uid); // + "&prompt=none"); 
+                    //  **OIDC の ID 連携**（#286 の段階 2 でメソッドに分けた）。
+                    //    **入力された値を、そのまま `login_hint` として上流へ渡す**（#151 の段階 3）。
+                    return this.StartIdFederationByOidc(model.Email);
                 }
                 else if (submitButtonName == "id_federation_saml2_signin"
                     && Config.CanIdFederationBySaml2)
@@ -2189,6 +2141,73 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region OIDC
 
+        /// <summary>OIDC の ID 連携を始める（上流へ認可要求を送る）</summary>
+        /// <param name="uid">サインイン画面に入力された値（`login_hint` にそのまま渡す）</param>
+        /// <returns>ActionResult（上流の認可エンドポイントへのリダイレクト）</returns>
+        /// <remarks>
+        /// **SAML2 側（`StartIdFederationBySaml2`）と同じ位置づけ**である（#286 の段階 2）。
+        /// **以前はサインイン画面の分岐に直書きしていた**ので、
+        /// **2 つの方式を並べて読めなかった。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | 宛先 | `IdFederationAuthorizeEndpoint`（上流の認可エンドポイント） |
+        /// | 応答の受け取り | `response_mode=form_post`（`IdFederationRedirectEndpoint`） |
+        /// | PKCE | **S256 を付ける**（#140 の段階 3） |
+        /// | `prompt` | **付けない**（#287。利用者が押す導線で UI を禁じない） |
+        /// | `login_hint` | **画面の入力値をそのまま渡す**（#151 の段階 3） |
+        /// </remarks>
+        private ActionResult StartIdFederationByOidc(string uid)
+        {
+            //  **入力された値を、そのまま `login_hint` として上流へ渡す**（#151 の段階 3）。
+            //    利用者名でもメアドでもよい（上流がどう解釈するかは上流しだい）。
+            //
+            //  **自分の認可エンドポイントを組み立てていた行は落とした**（#286 の段階 2）。
+            //    **参照されていなかった** — **宛先は上流の方**（`IdFederationAuthorizeEndpoint`）である。
+
+            // client_id
+            string client_id = OAuth2AndOIDCParams.ClientID;
+            //OAuth2Helper.GetInstance().GetClientIdByName("IdFederation");
+
+            // state // 記号は入れない。
+            //   **32 文字にした**（#140 の段階 3）。10 文字では短い。
+            //   PKCE があるので CSRF は守られるが、**推測しにくい方がよい。**
+            string state = GetPassword.Generate(32, 0);
+            HttpContext.Session.SetString("id_federation_signin_state", state);
+
+            // redirect_uri
+            string redirect_uri = Config.IdFederationRedirectEndpoint;
+
+            // nonce // 記号は入れない。
+            string nonce = GetPassword.Generate(20, 0);
+            HttpContext.Session.SetString("id_federation_signin_nonce", nonce);
+
+            // ID連携に必要なscope
+            string scope = Const.IdFederationScopes;
+
+            // **PKCE を付ける**（#140 の段階 3）。
+            //   これまで client_secret だけだった。**OAuth 2.1 は、秘密を持つ
+            //   クライアントでも PKCE を付けることを求める**（コードの横取りに備える）。
+            //   相手が PKCE を見ない OP でも、**余分なパラメタとして無視されるだけ**なので壊れない。
+            string codeVerifier = GetPassword.Base64UrlSecret(50);
+            HttpContext.Session.SetString("id_federation_signin_verifier", codeVerifier);
+
+            return Redirect(
+                Config.IdFederationAuthorizeEndpoint +
+                "?client_id=" + client_id +
+                "&response_type=code" +
+                "&scope=" + scope +
+                "&state=" + state +
+                "&nonce=" + nonce +
+                "&redirect_uri=" + CustomEncode.UrlEncode(redirect_uri) +
+                "&response_mode=form_post" +
+                "&code_challenge="
+                    + OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(codeVerifier) +
+                "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256 +
+                // `prompt=none` も `IsPassive` も送らない（手動の導線ではない）
+                "&login_hint=" + uid); // + "&prompt=none");
+        }
+
         /// <summary>
         /// IDFederationRedirectEndPoint
         /// OIDC, response_type=code, response_mode=form_post
@@ -2361,8 +2380,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #region ユーザの登録・更新
 
-                    IdentityResult idResult = null;
-                    AspNetId.SignInResult siResult = null;
 
                     // クレーム情報（ID情報とe-mail, name情報）を抽出
                     jobj = (JObject)JsonConvert.DeserializeObject(response);
@@ -2389,9 +2406,6 @@ namespace MultiPurposeAuthSite.Controllers
                     //   **JSON の真偽値なので、文字列にしてから渡す**（無ければ null）。
                     string emailVerified = (string)jobj[OAuth2AndOIDCConst.email_verified];
 
-                    Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
-                    Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
-
                     // **/userinfo の sub は、id_token の sub と一致しなければならない**
                     //   （OIDC Core §5.3.2。一致しなければトークンの取り違えを疑う）。
                     if (!string.Equals(name, sub, StringComparison.Ordinal))
@@ -2410,244 +2424,15 @@ namespace MultiPurposeAuthSite.Controllers
                         return View("Error");
                     }
 
-                    // **鍵はメアド**（#151 の段階 3）。
-                    //   以前は RequireUniqueEmail で「メアド」か「上流の識別子」かを選んでいた。
-                    //   **メアドは常に在って一意**なので、鍵はメアドで決まる。
-                    string uid = email;
-
-                    // **新規に作るときの利用者名**（#151 の段階 3・段階 4）。
-                    //   **上流の sub は利用者名ではない**（既定が public ＝ 利用者 ID）。
-                    //   **利用者名は preferred_username で受け取る**
-                    //   （上流が UserClaimsMapping で出す。#151 の段階 1）。
-                    //   **無ければメアドの「@」より前**（利用者名に `@` は禁じている）。
-                    //
-                    //   **sub は見ない**（利用者を指す識別子であって、名前ではない）。
-                    //
-                    //   **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く**（上の uid）。
-                    //   ここで決まるのは、**新規に作るときの名前だけ**である。
+                    //  **`preferred_username` は、ここで取り出して渡す**（#286 の段階 2）。
+                    //    **JSON を読むのは口の側**で、メソッドは値だけを受け取る。
                     string preferredUserName = (string)jobj[Const.PreferredUserNameClaim];
 
-                    string newUserName = Const.IsValidUserName(preferredUserName)
-                        ? preferredUserName : Const.UserNameFromEmail(email);
-
-                    if (!string.IsNullOrWhiteSpace(email)
-                        && !string.IsNullOrWhiteSpace(name))
-                    {
-                        // クレーム情報（e-mail, name情報）を取得できた。
-
-                        // 既存の外部ログインを確認する。
-                        //   **新しい鍵（iss, sub）で引く**（#140 の段階 3）。
-                        ApplicationUser user = await UserManager.FindByLoginAsync(idpIssuer, federationKey);
-
-                        if (user == null && !string.IsNullOrEmpty(legacyKey))
-                        {
-                            // **旧い鍵（"MultiPurposeAuthSite", userid）で引き直す**（下位互換）。
-                            //   見つかったら**新しい鍵を足して移行する**（旧い鍵は消さない。
-                            //   切り戻しできるようにするため）。
-                            user = await UserManager.FindByLoginAsync("MultiPurposeAuthSite", legacyKey);
-
-                            if (user != null)
-                            {
-                                idResult = await UserManager.AddLoginAsync(user,
-                                    new UserLoginInfo(idpIssuer, federationKey, idpIssuer));
-
-                                Logging.MyOperationTrace(string.Format(
-                                    "Migrated the ID federation key of {0}({1}) to (iss, sub).",
-                                    user.Id, user.UserName));
-                            }
-                        }
-
-                        if (user != null)
-                        {
-                            // 既存の外部ログインがある場合。
-
-                            // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
-                            idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
-                            idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                            idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
-                            idResult = await UserManager.AddClaimAsync(user, nameClaim);
-
-                            // SignInAsyncより、ExternalSignInAsyncが適切。
-
-                            //// 通常のサインイン
-                            //await SignInManager.SignInAsync(
-
-                            // 既存の外部ログイン・プロバイダでサインイン
-                            //   **新しい鍵（iss, sub）で**（#140 の段階 3）。
-                            //   旧い鍵しか無かった場合は、上で新しい鍵を足してある。
-                            siResult = await SignInManager.ExternalLoginSignInAsync(
-                                idpIssuer, federationKey,
-                                isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
-
-                            // セッションの初期化
-                            this.InitSessionAfterlogin();
-
-                            // オペレーション・トレース・ログ出力
-                            Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
-
-                            return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
-                        }
-                        else
-                        {
-                            // 既存の外部ログインがない。
-
-                            // AccountControllerで、ユーザーが既に外部ログインしていない場合は、
-                            // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
-
-                            // サインアップ済みの可能性を探る
-                            // **メアドで引く**（#151 の段階 3。鍵がメアドになった）。
-                            user = await UserManager.FindByEmailAsync(uid);
-
-                            if (user != null)
-                            {
-                                // サインアップ済み → 外部ログイン追加だけで済む
-
-                                // **新しい鍵（iss, sub）で登録する**（#140 の段階 3）。
-                                UserLoginInfo externalLoginInfo = new UserLoginInfo(
-                                    idpIssuer, federationKey, idpIssuer);
-
-                                // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
-                                if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
-                                        == Sts.AccountLinkCheck.NeedsVerifiedEmail)
-                                {
-                                    // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
-                                    Logging.MyOperationTrace(string.Format(
-                                        "Rejected linking an ID federation login to {0}({1}) "
-                                        + "because the upstream did not assert email_verified.",
-                                        user.Id, user.UserName));
-
-                                    ViewBag.Reason = Resources.AccountViews.ExternalLoginNeedsVerifiedEmail;
-
-                                    return View("ExternalLoginFailure");
-                                }
-
-                                // 外部ログイン（ = UserLoginInfo ）の追加
-                                // **メアドで引いているので、メアドの一致は自明**（#151 の段階 3）。
-                                //   以前は「鍵が上流の識別子」の場合に備えて、ここで突き合わせていた。
-                                idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
-
-                                // クレーム（emailClaim, nameClaim, etc.）の追加
-                                if (idResult.Succeeded)
-                                {
-                                    idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
-                                    // ・・・
-                                    // ・・・
-                                    // ・・・
-                                }
-
-                                // 上記の結果の確認
-                                if (idResult.Succeeded)
-                                {
-                                    // SignInAsync、ExternalSignInAsync
-                                    // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
-                                    await SignInManager.SignInAsync(
-                                        user,
-                                        isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
-                                                             //rememberBrowser: true); // rememberBrowser は true 固定
-
-                                    // セッションの初期化
-                                    this.InitSessionAfterlogin();
-
-                                    // オペレーション・トレース・ログ出力
-                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
-
-                                    // リダイレクト
-                                    return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
-                                }
-                                else
-                                {
-                                    // 外部ログインの追加に失敗した場合
-
-                                    // 結果のエラー情報を追加
-                                    this.AddErrors(idResult);
-                                }
-                            }
-                            else
-                            {
-                                // サインアップ済みでない → サインアップから行なう。
-                                // If the user does not have an account, then prompt the user to create an account
-                                // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
-                                ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
-                                ViewBag.LoginProvider = "MultiPurposeAuthSite";
-
-                                // 外部ログイン プロバイダのユーザー情報でユーザを作成
-                                // **利用者名とメアドを別に渡す**（#151 の段階 3）。
-                                //   以前は uid を利用者名にしてから、メアドを後で入れ直していた。
-                                user = ApplicationUser.CreateUser(newUserName, email, true);
-
-                                // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
-                                user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
-
-                                // ユーザの新規作成（パスワードは不要）
-                                idResult = await UserManager.CreateAsync(user);
-
-                                // **新しい鍵（iss, sub）で登録する**（#140 の段階 3）。
-                                UserLoginInfo externalLoginInfo = new UserLoginInfo(
-                                    idpIssuer, federationKey, idpIssuer);
-
-                                // 結果の確認
-                                if (idResult.Succeeded)
-                                {
-                                    // ユーザの新規作成が成功した場合
-
-                                    // ロールに追加。
-                                    await this.UserManager.AddToRoleAsync(user, Const.Role_User);
-                                    await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
-
-                                    // 外部ログイン（ = idClaim）の追加
-                                    idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
-
-                                    // クレーム（emailClaim, nameClaim, etc.）の追加
-                                    if (idResult.Succeeded)
-                                    {
-                                        idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                                        idResult = await UserManager.AddClaimAsync(user, nameClaim);
-                                        // ・・・
-                                        // ・・・
-                                        // ・・・
-                                    }
-
-                                    // 結果の確認
-                                    if (idResult.Succeeded)
-                                    {
-                                        // 外部ログインの追加に成功した場合 → サインイン
-
-                                        // SignInAsync、ExternalSignInAsync
-                                        // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
-                                        await SignInManager.SignInAsync(
-                                           user: user,
-                                           isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
-                                                                //rememberBrowser: true); // rememberBrowser は true 固定
-
-                                        // セッションの初期化
-                                        this.InitSessionAfterlogin();
-
-                                        // オペレーション・トレース・ログ出力
-                                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
-
-                                        // リダイレクト
-                                        return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
-                                    }
-                                    else
-                                    {
-                                        // 外部ログインの追加に失敗した場合
-
-                                        // 結果のエラー情報を追加
-                                        this.AddErrors(idResult);
-                                    }
-                                }
-                                else
-                                {
-                                    // ユーザの新規作成が失敗した場合
-
-                                    // 結果のエラー情報を追加
-                                    this.AddErrors(idResult);
-                                } // else処理済
-                            } // else処理済
-                        } // else処理済
-
-                    } // クレーム情報（e-mail, name情報）を取得できなかった。
+                    //  **ここから先は、利用者の結び付けとサインイン**（#286 の段階 2 で分けた）。
+                    //    **SAML2 側と同じ形**である（`SignInByIdFederationSaml2`）。
+                    return await this.SignInByIdFederationOidc(
+                        idpIssuer, federationKey, legacyKey,
+                        email, name, preferredUserName, emailVerified);
 
                     #endregion
                 }
@@ -2658,6 +2443,287 @@ namespace MultiPurposeAuthSite.Controllers
                 Logging.MyOperationTrace(
                     "The ID federation redirect endpoint is locked down. (IsLockedDownTestEndpoints)");
             }
+
+            // **ここに来た理由を残す**（#253）。
+            //   **上で個別のトレースを出していれば、その次の行として出る**（経路の終わりを示す）。
+            //   **出ていなければ、利用者の作成や外部ログインの追加に失敗している。**
+            Logging.MyOperationTrace("The ID federation did not complete. (the error view was returned)");
+
+            return View("Error");
+        }
+
+        /// <summary>検証できた id_token と /userinfo で、利用者を結び付けてサインインする</summary>
+        /// <param name="idpIssuer">上流の Issuer（`id_token` の `iss`）</param>
+        /// <param name="federationKey">連携キー（`id_token` の `sub`）</param>
+        /// <param name="legacyKey">旧い連携キー（`userid`。下位互換のために読む）</param>
+        /// <param name="email">メアド（`/userinfo` の `email`）</param>
+        /// <param name="name">`/userinfo` の `sub`</param>
+        /// <param name="preferredUserName">`preferred_username`（新規作成時の名前に使う）</param>
+        /// <param name="emailVerified">上流が返した `email_verified`</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **SAML2 側（`SignInByIdFederationSaml2`）と同じ位置づけ**である（#286 の段階 2）。
+        /// **以前は `IDFederationRedirectEndPoint` に直書きしていた**ので、
+        /// **「protocol の往復」と「利用者の結び付け」が 1 つのメソッドに混ざっていた。**
+        ///
+        /// | | OIDC（ここ） | SAML2 |
+        /// |---|---|---|
+        /// | 連携キー | `(id_token の iss, sub)` | `(上流の EntityID, NameID)` |
+        /// | 利用者の鍵 | メアド | メアド（＝ `NameID`） |
+        /// | 新規作成時の名前 | `preferred_username` → メアドの `@` より前 | メアドの `@` より前 |
+        /// | 検証済みのメアドか | **上流の `email_verified`** | **`NameIDFormat=emailAddress` を検証済みとして扱う** |
+        ///
+        /// **旧い鍵からの移行は OIDC 側だけに在る**（`legacyKey`。#140 の段階 3）。
+        /// </remarks>
+        private async Task<ActionResult> SignInByIdFederationOidc(
+            string idpIssuer, string federationKey, string legacyKey,
+            string email, string name, string preferredUserName, string emailVerified)
+        {
+            IdentityResult idResult = null;
+            AspNetId.SignInResult siResult = null;
+
+            //  **クレームは、ここで組み立てる**（#286 の段階 2）。
+            //    **口は値を渡すだけ**にして、SAML2 側と同じ形にしてある。
+            Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
+            Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
+
+            // **鍵はメアド**（#151 の段階 3）。
+            //   以前は RequireUniqueEmail で「メアド」か「上流の識別子」かを選んでいた。
+            //   **メアドは常に在って一意**なので、鍵はメアドで決まる。
+            string uid = email;
+
+            // **新規に作るときの利用者名**（#151 の段階 3・段階 4）。
+            //   **上流の sub は利用者名ではない**（既定が public ＝ 利用者 ID）。
+            //   **利用者名は preferred_username で受け取る**
+            //   （上流が UserClaimsMapping で出す。#151 の段階 1）。
+            //   **無ければメアドの「@」より前**（利用者名に `@` は禁じている）。
+            //
+            //   **sub は見ない**（利用者を指す識別子であって、名前ではない）。
+            //
+            //   **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く**（上の uid）。
+            //   ここで決まるのは、**新規に作るときの名前だけ**である。
+
+            string newUserName = Const.IsValidUserName(preferredUserName)
+                ? preferredUserName : Const.UserNameFromEmail(email);
+
+            if (!string.IsNullOrWhiteSpace(email)
+                && !string.IsNullOrWhiteSpace(name))
+            {
+                // クレーム情報（e-mail, name情報）を取得できた。
+
+                // 既存の外部ログインを確認する。
+                //   **新しい鍵（iss, sub）で引く**（#140 の段階 3）。
+                ApplicationUser user = await UserManager.FindByLoginAsync(idpIssuer, federationKey);
+
+                if (user == null && !string.IsNullOrEmpty(legacyKey))
+                {
+                    // **旧い鍵（"MultiPurposeAuthSite", userid）で引き直す**（下位互換）。
+                    //   見つかったら**新しい鍵を足して移行する**（旧い鍵は消さない。
+                    //   切り戻しできるようにするため）。
+                    user = await UserManager.FindByLoginAsync("MultiPurposeAuthSite", legacyKey);
+
+                    if (user != null)
+                    {
+                        idResult = await UserManager.AddLoginAsync(user,
+                            new UserLoginInfo(idpIssuer, federationKey, idpIssuer));
+
+                        Logging.MyOperationTrace(string.Format(
+                            "Migrated the ID federation key of {0}({1}) to (iss, sub).",
+                            user.Id, user.UserName));
+                    }
+                }
+
+                if (user != null)
+                {
+                    // 既存の外部ログインがある場合。
+
+                    // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
+                    idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
+                    idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                    idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
+                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
+
+                    // SignInAsyncより、ExternalSignInAsyncが適切。
+
+                    //// 通常のサインイン
+                    //await SignInManager.SignInAsync(
+
+                    // 既存の外部ログイン・プロバイダでサインイン
+                    //   **新しい鍵（iss, sub）で**（#140 の段階 3）。
+                    //   旧い鍵しか無かった場合は、上で新しい鍵を足してある。
+                    siResult = await SignInManager.ExternalLoginSignInAsync(
+                        idpIssuer, federationKey,
+                        isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
+
+                    // セッションの初期化
+                    this.InitSessionAfterlogin();
+
+                    // オペレーション・トレース・ログ出力
+                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+
+                    return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                }
+                else
+                {
+                    // 既存の外部ログインがない。
+
+                    // AccountControllerで、ユーザーが既に外部ログインしていない場合は、
+                    // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
+
+                    // サインアップ済みの可能性を探る
+                    // **メアドで引く**（#151 の段階 3。鍵がメアドになった）。
+                    user = await UserManager.FindByEmailAsync(uid);
+
+                    if (user != null)
+                    {
+                        // サインアップ済み → 外部ログイン追加だけで済む
+
+                        // **新しい鍵（iss, sub）で登録する**（#140 の段階 3）。
+                        UserLoginInfo externalLoginInfo = new UserLoginInfo(
+                            idpIssuer, federationKey, idpIssuer);
+
+                        // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
+                        if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
+                                == Sts.AccountLinkCheck.NeedsVerifiedEmail)
+                        {
+                            // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
+                            Logging.MyOperationTrace(string.Format(
+                                "Rejected linking an ID federation login to {0}({1}) "
+                                + "because the upstream did not assert email_verified.",
+                                user.Id, user.UserName));
+
+                            ViewBag.Reason = Resources.AccountViews.ExternalLoginNeedsVerifiedEmail;
+
+                            return View("ExternalLoginFailure");
+                        }
+
+                        // 外部ログイン（ = UserLoginInfo ）の追加
+                        // **メアドで引いているので、メアドの一致は自明**（#151 の段階 3）。
+                        //   以前は「鍵が上流の識別子」の場合に備えて、ここで突き合わせていた。
+                        idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+
+                        // クレーム（emailClaim, nameClaim, etc.）の追加
+                        if (idResult.Succeeded)
+                        {
+                            idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                            idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                            // ・・・
+                            // ・・・
+                            // ・・・
+                        }
+
+                        // 上記の結果の確認
+                        if (idResult.Succeeded)
+                        {
+                            // SignInAsync、ExternalSignInAsync
+                            // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                            await SignInManager.SignInAsync(
+                                user,
+                                isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
+                                                     //rememberBrowser: true); // rememberBrowser は true 固定
+
+                            // セッションの初期化
+                            this.InitSessionAfterlogin();
+
+                            // オペレーション・トレース・ログ出力
+                            Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+
+                            // リダイレクト
+                            return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                        }
+                        else
+                        {
+                            // 外部ログインの追加に失敗した場合
+
+                            // 結果のエラー情報を追加
+                            this.AddErrors(idResult);
+                        }
+                    }
+                    else
+                    {
+                        // サインアップ済みでない → サインアップから行なう。
+                        // If the user does not have an account, then prompt the user to create an account
+                        // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
+                        ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
+                        ViewBag.LoginProvider = "MultiPurposeAuthSite";
+
+                        // 外部ログイン プロバイダのユーザー情報でユーザを作成
+                        // **利用者名とメアドを別に渡す**（#151 の段階 3）。
+                        //   以前は uid を利用者名にしてから、メアドを後で入れ直していた。
+                        user = ApplicationUser.CreateUser(newUserName, email, true);
+
+                        // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
+                        user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
+
+                        // ユーザの新規作成（パスワードは不要）
+                        idResult = await UserManager.CreateAsync(user);
+
+                        // **新しい鍵（iss, sub）で登録する**（#140 の段階 3）。
+                        UserLoginInfo externalLoginInfo = new UserLoginInfo(
+                            idpIssuer, federationKey, idpIssuer);
+
+                        // 結果の確認
+                        if (idResult.Succeeded)
+                        {
+                            // ユーザの新規作成が成功した場合
+
+                            // ロールに追加。
+                            await this.UserManager.AddToRoleAsync(user, Const.Role_User);
+                            await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
+
+                            // 外部ログイン（ = idClaim）の追加
+                            idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+
+                            // クレーム（emailClaim, nameClaim, etc.）の追加
+                            if (idResult.Succeeded)
+                            {
+                                idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                                idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                // ・・・
+                                // ・・・
+                                // ・・・
+                            }
+
+                            // 結果の確認
+                            if (idResult.Succeeded)
+                            {
+                                // 外部ログインの追加に成功した場合 → サインイン
+
+                                // SignInAsync、ExternalSignInAsync
+                                // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                                await SignInManager.SignInAsync(
+                                   user: user,
+                                   isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
+                                                        //rememberBrowser: true); // rememberBrowser は true 固定
+
+                                // セッションの初期化
+                                this.InitSessionAfterlogin();
+
+                                // オペレーション・トレース・ログ出力
+                                Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+
+                                // リダイレクト
+                                return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                            }
+                            else
+                            {
+                                // 外部ログインの追加に失敗した場合
+
+                                // 結果のエラー情報を追加
+                                this.AddErrors(idResult);
+                            }
+                        }
+                        else
+                        {
+                            // ユーザの新規作成が失敗した場合
+
+                            // 結果のエラー情報を追加
+                            this.AddErrors(idResult);
+                        } // else処理済
+                    } // else処理済
+                } // else処理済
+
+            } // クレーム情報（e-mail, name情報）を取得できなかった。
 
             // **ここに来た理由を残す**（#253）。
             //   **上で個別のトレースを出していれば、その次の行として出る**（経路の終わりを示す）。
