@@ -330,14 +330,16 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `store/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
 | `Tests/Issues/ManageGdprTests.cs` | `RT-277` | **GDPR 対応**（`/Manage/ManageGdprData`）。**参照**は自分のデータを `user.json`（`application/json`）で返し、**パスワードの控えは入っていない**こと。**消去**は、利用者名・メアドを利用者 id で塗り潰し、**その利用者ではサインインできなくなる**こと（**行は残る**）。**使い捨ての利用者を使う**（消去は元に戻せない） |
 | `Tests/Issues/ManageUserAttributeTests.cs` | `RT-277` | **管理画面での属性変更**（利用者名・パスワード・メアド）。**変えたら、その値で使えること**まで見る（**新しい値で入れて、古い値では入れない**／**元に戻せる**）。**メアドは確認メールを挟む**ので、**押しただけでは変わらない**ことを押さえる。**使い捨ての利用者を `/UsersAdmin` で作り、後片付けで消す**（テスト利用者は使わない） |
-| `Tests/Issues/ManageWebAuthnTests.cs` | `RT-277` | **WebAuthn の資格情報の削除**（`/Manage/RemoveWebAuthnData`。#277 の段階 6）。**選んだものだけが、選んだ数だけ消える**こと。**種データの資格情報を使う**（上記）。**描画は測らない**（`class="form-control"` でチェックの印が消えていた件は、ブラウザでなければ見えない）。**net48 版は Skip**（口が無い） |
+| `Tests/Issues/ManageWebAuthnTests.cs` | `RT-277` | **WebAuthn の資格情報の削除**（`/Manage/RemoveWebAuthnData`。#277 の段階 6）。**選んだものだけが、選んだ数だけ消える**こと。**種データの資格情報を使う**（上記）。**描画は `UI-1.1` で測る**（`class="form-control"` でチェックの印が消えていた件は、**ブラウザでなければ見えない**）。**net48 版は Skip**（口が無い） |
+| `Tests/WebUI/RemoveWebAuthnRenderingTests.cs` | `UI-1` | **ブラウザでしか測れないもの**（#277 の段階 7）。WebAuthn の削除画面で、**チェックを入れたか外したかが見て分かる**こと（入れる前と後の見た目を比べる）。**ブラウザが無ければ Skip する**（下記）。**net48 版は対象外**（口が無い） |
 | `Tests/Issues/ManageSaml2OAuth2DataTests.cs` | `RT-277` | **管理画面のクライアント登録**（`/Manage/AddSaml2OAuth2Data`。#277 の段階 1・3）。**3 回押さないと登録できない**こと（`client_id` → `client_secret` → 登録。**1 回目で「登録」を押しても黙って何も起きない**）、**折り返し先の候補が `datalist` に出る**こと、**新規登録の `redirect_uri_code` の既定が `test_self_code`** であること。**サインイン中の利用者自身の登録を使い、測り終えたら消す** |
 | `Tests/Issues/WebAuthnTests.cs` | `RT-137` | **WebAuthn**（`Fido2` 4.2.0）。登録・認証の**要求を組み立てる段**（`CredentialCreateOptions` / `AssertionOptions`）、**壊れた入力を封筒に入れて 200 で返すこと**、**challenge を使い回していないこと**。**net48 版には口が無いこと**も測る |
 
 > **WebAuthn（`RT-137`）は、登録と認証そのものを測っていない。**
 > **`navigator.credentials` を呼ぶのはブラウザ**なので、
 > **attestation / assertion を作るには仮想認証器（CDP の WebAuthn ドメイン）が要る。**
-> **この基盤は HttpClient だけ**なので、**そこは測らないと決めてある。**
+> **この基盤は、ほぼ HttpClient だけ**なので、**そこは測らないと決めてある。**
+> **描画は `Tests/WebUI`（`UI-n.n`）で測る**（#277 の段階 7）。
 > 測っているのは**サーバ側が要求を組み立てる段と、壊れた入力の扱い**である。
 
 | ファイル | 識別子 | 対象 |
@@ -431,6 +433,17 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 .\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
 ```
 
+**ブラウザで測るもの（`UI-n.n`。`Tests/WebUI/`）は、既定で回る**（#277 の段階 7）。
+**ブラウザが無ければ Skip する**（`bin\Debug\net10.0\playwright.ps1 install chromium`、または Chrome / Edge）。
+**動かしたくなければ `-NoWebUI`。**
+
+**ブラウザには、クライアント証明書を渡している**（`Infrastructure/WebUi.cs`）。
+**`-Launch` は mTLS のために `ClientCertificateMode.AllowCertificate` で起動する**ので、
+**サーバが証明書を要求する。** **HttpClient は空で答えて先に進むが、
+ブラウザは「どれを出すか」を人に選ばせる**ため、**画面の無い Chromium はそこで止まる**
+（**実測** : `goto` が 30 秒で時間切れ。**失敗した要求は 0 件**。
+[`../../TESTING.md`](../../TESTING.md) 5 節）。
+
 **mTLS（`FA-6`）は、net10.0 版だけを測る**（#226）。
 Kestrel は既定でクライアント証明書を要求せず、要求させても自己署名の証明書はチェーンの検証で落ちる。
 そこで `test.ps1 -Launch` が、**テスト専用のフック `Tests/MtlsTestHook`** を `DOTNET_STARTUP_HOOKS` で
@@ -485,6 +498,7 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 | `Html.cs` | リダイレクトしなかったときの画面の要約、form_post のフォームの解析 |
 | `Responses.cs` | 各エンドポイントの応答 |
 | `TargetTestBase.cs` | 両ターゲットに同じテストを流す基底クラス |
+| `WebUi.cs` | **ブラウザ（Playwright）でサイトを触る**。入っているブラウザを探し、無ければ Skip する（#277 の段階 7） |
 
 **テストを足したり変えたりしたら、原本を作り直すこと。**
 

@@ -41,6 +41,7 @@ cd root\programs\Tests
 | `-Url` | net10.0 版（Kestrel）の待ち受け URL。既定 `https://localhost:44300` |
 | `-NetFxUrl` | net48 版（IIS Express）の待ち受け URL。既定 `https://localhost:44302` |
 | `-NoNetFx` | net48 版を起動しない。その分は Skip される |
+| `-NoWebUI` | **ブラウザで測るもの**（`UI-n.n`）を走らせない。**既定は走る**（ブラウザが無ければ Skip） |
 | `-Filter` | `dotnet test` の `--filter` |
 | `-Configuration` | `Debug`（既定）/ `Release` |
 | `-OutputDir` | TRX とログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
@@ -623,7 +624,8 @@ INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_Cli
 
 **`navigator.credentials` を呼ぶのはブラウザである。**
 **attestation / assertion を作るには、仮想認証器（CDP の WebAuthn ドメイン）が要る。**
-**E2E は HttpClient だけなので、ここは測らないと決めてある。**
+**E2E の大半は HttpClient だけなので、ここは測らないと決めてある。**
+**描画は `Tests/WebUI`（`UI-n.n`）で測る**（#277 の段階 7）。
 
 **測っているのは、要求を組み立てる段と、壊れた入力の扱いである。**
 **「通った」の範囲を広く読まないこと。**
@@ -1073,6 +1075,35 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `21-n.n` | OAuth 2.1（許されない経路の抑止） | `Tests/OAuth21/` |
 | `SA-n.n` | **SAML2**（Web Browser SSO。#275） | `Tests/Saml/` |
 | `CN-n.n` | **コンテナ配備**（疎通と配備固有。#284） | `Tests/Container/` |
+| `UI-n.n` | **ブラウザでしか測れないもの**（描画・JavaScript。#277 の段階 7） | `Tests/WebUI/` |
+
+#### `UI-n.n`（ブラウザで測るもの）
+
+| | |
+|---|---|
+| **ここに置くもの** | **ブラウザでしか測れないもの**。**描画**（見て分かるか）、**JavaScript が要る画面**、**ブラウザ側の Cookie の扱い** |
+| **ここに置かないもの** | **HttpClient で測れるもの。** 分野別のフォルダに置く |
+| 駆動 | Playwright for .NET（Chromium → Chrome → Edge の順に、入っているものを使う） |
+| ブラウザが無いとき | **Skip**（`playwright.ps1 install chromium`、または Chrome / Edge を入れる） |
+| 既定 | **走る。** **動かしたくなければ `-NoWebUI`** |
+
+> **なぜ要るか。** **#277 の段階 6 の不具合**
+> （Bootstrap 5 の `.form-control` が `appearance: none` を付け、**チェックの印が描かれなかった**）は、
+> **HttpClient では原理的に見えない。** **値は正しく往復していた。**
+
+**ブラウザには、クライアント証明書を渡している**（`Infrastructure/WebUi.cs`）。
+
+**`test.ps1 -Launch` は、mTLS を測るために
+`ClientCertificateMode.AllowCertificate` で net10.0 版を起動する**（`MtlsTestHook`。#226）。
+**「無くても通す」設定だが、TLS では、サーバが証明書を要求する。**
+**HttpClient は持っていなければ空で答えて先に進むが、
+ブラウザは「どれを出すか」を人に選ばせる**ので、**画面の無い Chromium はそこで止まる。**
+
+> **実測（2026/10/10）** : **`goto` が 30 秒で時間切れ**になり、**失敗した要求は 0 件**。
+> **同じサイトに HttpClient では届いていた**（同じ通しの中の他のテストは全部通る）。
+> **フックを読ませずに起動すると、同じ通しの中で 10 秒で通った**ので、**原因はこれだけである。**
+> **その場で作った自己署名の証明書を渡して解決した**（**サーバは発行元を問わない**ので、
+> **何かを認証しているわけではない**）。**実測 : 同じ通しの中で通る。**
 
 ### どのテストが、どのサイトとどのストアを使うか（#284）
 
@@ -1090,6 +1121,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `21-n.n` | 同上 | 同上 |
 | `SA-n.n` | 同上 | 同上 |
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
+| **`UI-n.n`** | **ホストの core だけ**（net48 版には WebAuthn の口が無い。#137） | `-UserStoreType` |
 
 **役割分担で言うと、こうなる。**
 

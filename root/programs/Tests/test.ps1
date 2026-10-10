@@ -99,6 +99,10 @@
 
     付けなければ、有効期限のテストはケースを作らない（Skip にもならない）。
 
+.PARAMETER NoWebUI
+    ブラウザで測るもの（`Tests/WebUI`。識別子 UI-n.n）を走らせない。
+    既定では走らせる（ブラウザが無ければ Skip する）。
+
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
@@ -140,6 +144,7 @@ param(
     [switch] $NoNetFx,
     [switch] $NetFxMtls,
     [switch] $ShortLifetimes,
+    [switch] $NoWebUI,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
@@ -731,6 +736,15 @@ public static class MpasTestTls
 
     if (-not $ShortLifetimes) {
         $exclude = 'FullyQualifiedName!~LifetimeTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    # **ブラウザで測るもの（UI）を外す**（#277 の段階 7）。
+    #   **既定では走らせる。** **ブラウザが無ければ Skip する**ので、
+    #   **netfx 版やコンテナと同じ流儀**で、測れないことが結果に出る。
+    #   **外す口だけ用意しておく**（ブラウザを動かしたくない場合）。
+    if ($NoWebUI) {
+        $exclude = 'FullyQualifiedName!~Tests.WebUI'
         if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
     }
 

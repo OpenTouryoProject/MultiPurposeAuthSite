@@ -101,6 +101,7 @@ param(
     [switch]$NoNetFx,
     [switch]$NetFxMtls,
     [switch]$ShortLifetimes,
+    [switch]$NoWebUI,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
@@ -158,6 +159,7 @@ if ($Launch)   { $splat.Launch   = $true }
 if ($NoNetFx)  { $splat.NoNetFx  = $true }
 if ($NetFxMtls) { $splat.NetFxMtls = $true }
 if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
+if ($NoWebUI) { $splat.NoWebUI = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }
@@ -210,6 +212,8 @@ function Get-TrxResults([string]$path)
         #   FA-n.n        FAPI（クライアント登録ごとに通る経路）
         #   21-n.n        OAuth 2.1（許されない経路の抑止）
         #   SA-n.n        SAML2（Web Browser SSO。#275）
+        #   CN-n.n        コンテナ配備（#284）
+        #   UI-n.n        ブラウザでしか測れないもの（#277 の段階 7）
         $tc = ""
         $m = [regex]::Match($stdout, '\[([A-Z0-9]{2}-C?[0-9]+(?:\.[0-9]+)?)\]')
         if ($m.Success) { $tc = $m.Groups[1].Value }
@@ -453,7 +457,8 @@ function Get-IdRank
         "21"    { return 5 }   # OAuth 2.1（許されない経路の抑止。#222）
         "SA"    { return 6 }   # SAML2（Web Browser SSO。#275）
         "CN"    { return 7 }   # コンテナ配備（疎通と配備固有。#284）
-        default { return 8 }
+        "UI"    { return 8 }   # ブラウザでしか測れないもの（#277 の段階 7）
+        default { return 9 }
     }
 }
 
@@ -635,6 +640,7 @@ if ($UpdateTestCases)
                 "21"    { "21. OAuth 2.1（許されない経路の抑止）" }
                 "SA"    { "SA. SAML2（Web Browser SSO）" }
                 "CN"    { "CN. コンテナ配備（疎通と配備固有）" }
+                "UI"    { "UI. ブラウザでしか測れないもの（描画・JavaScript）" }
                 default { $group }
             }
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#226 : mTLS の経路を E2E で確かめる）
+//*  2026/10/10  玄人 幸道         PEM で渡す版を追加（#277 の段階 7：ブラウザに渡す）
 //**********************************************************************************
 
 using System;
@@ -120,6 +121,48 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 {
                     return X509CertificateLoader.LoadPkcs12(
                         created.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.UserKeySet);
+                }
+            }
+        }
+
+        /// <summary>自己署名のクライアント証明書を PEM で作る</summary>
+        /// <param name="subjectDn">Subject（"CN=..." の形だけを受け付ける）</param>
+        /// <param name="privateKeyPem">秘密鍵（PKCS#8 の PEM）</param>
+        /// <returns>証明書（PEM）</returns>
+        /// <remarks>
+        /// **ブラウザに渡すためのもの**（`WebUi`。#277 の段階 7）。
+        ///
+        /// **上の `CreateClientCertificate` と別にしてある。**
+        /// **あちらが返す証明書の鍵は書き出せない**
+        /// （`UserKeySet` で読むので、`Export` が
+        /// 「指定された状態で使用するには無効なキーです」で落ちる。**実測**）。
+        /// **PKCS#12 を経由しない**のも意図である
+        /// （**渡す先は Node なので、古い暢号の PKCS#12 を読むとは限らない**）。
+        /// </remarks>
+        public static string CreateClientCertificatePem(string subjectDn, out string privateKeyPem)
+        {
+            if (string.IsNullOrEmpty(subjectDn) || !subjectDn.StartsWith("CN=", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("CN=... の形だけを受け付ける。", nameof(subjectDn));
+            }
+
+            X500DistinguishedNameBuilder builder = new X500DistinguishedNameBuilder();
+            builder.AddCommonName(subjectDn.Substring(3));
+
+            using (RSA rsa = RSA.Create(2048))
+            {
+                CertificateRequest request = new CertificateRequest(
+                    builder.Build(), rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+                request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+                    new OidCollection() { new Oid("1.3.6.1.5.5.7.3.2") }, false)); // clientAuth
+
+                using (X509Certificate2 created = request.CreateSelfSigned(
+                    DateTimeOffset.Now.AddMinutes(-5), DateTimeOffset.Now.AddHours(1)))
+                {
+                    privateKeyPem = rsa.ExportPkcs8PrivateKeyPem();
+
+                    return created.ExportCertificatePem();
                 }
             }
         }
