@@ -208,13 +208,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         }
 
         /// <summary>
-        /// Redirect Binding で返ったクエリ文字列から、SAMLResponse を XML に戻す。
+        /// Redirect Binding のクエリ文字列から、SAMLResponse / SAMLRequest を XML に戻す。
         /// </summary>
         /// <param name="urlOrQuery">URL でもクエリ文字列でもよい</param>
+        /// <param name="name">パラメタの名前（既定は `SAMLResponse`）</param>
         /// <returns>XML（戻せなければ null）</returns>
-        public static string FromRedirectQuery(string urlOrQuery)
+        /// <remarks>
+        /// **`SAMLRequest` も同じ符号化である**（deflate ＋ base64）。
+        /// **下流が送る `AuthnRequest` を読むのに使う**（#286 の段階 3）。
+        /// </remarks>
+        public static string FromRedirectQuery(string urlOrQuery, string name = "SAMLResponse")
         {
-            string value = QueryValue(urlOrQuery, "SAMLResponse");
+            string value = QueryValue(urlOrQuery, name);
 
             if (string.IsNullOrEmpty(value))
             {

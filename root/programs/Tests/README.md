@@ -404,6 +404,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/NameIdFormatTests.cs` | `SA-3` | `NameIDPolicy` の値ごとの `NameID`（`unspecified` / `emailAddress` / **`persistent` は RP ごとに違う PPID**） |
 | `Tests/Saml/SignInFlowTests.cs` | `SA-4` | **未サインイン → サインイン画面 → アサーション**（SP-initiated SSO の本来の形） |
 | `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
+| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）。**上流は `store/` のコンテナ**。**建っていなければ Skip** |
 
 > **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**
 > あちらは**自己テストの画面が目視できる形になっていること**（#246 の項目 3）で、**観点が違う。**
@@ -499,6 +500,7 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 | `Responses.cs` | 各エンドポイントの応答 |
 | `TargetTestBase.cs` | 両ターゲットに同じテストを流す基底クラス |
 | `WebUi.cs` | **ブラウザ（Playwright）でサイトを触る**。入っているブラウザを探し、無ければ Skip する（#277 の段階 7） |
+| `Saml2Federation.cs` | **SAML2 の ID 連携の手順**（#286 の段階 3）。下流を駆動する（OIDC 側の `IdFederation.cs` と同じ流儀）。**上流の応答が「ACS へ」か「上流の画面へ」かを、口の名前で見分ける** |
 
 **テストを足したり変えたりしたら、原本を作り直すこと。**
 

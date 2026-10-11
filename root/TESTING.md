@@ -1121,6 +1121,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `FA-n.n` | ホストの core / netfx | `-UserStoreType` |
 | `21-n.n` | 同上 | 同上 |
 | `SA-n.n` | 同上 | 同上 |
+| **`SA-6.n`**（SAML2 の ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**。`RT-140.n` と同じ） |
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
 | **`UI-n.n`** | **ホストの core だけ**（net48 版には WebAuthn の口が無い。#137） | `-UserStoreType` |
 
@@ -1129,7 +1130,8 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | | 測るもの |
 |---|---|
 | ホストの core / netfx（`mem` / `sql` / `ora` / `npg`） | **実装**（方言ごとの SQL を含む） |
-| `RT-140.*` | **ID 連携の機能** ＋ **連携キーの永続**（クロス ストア） |
+| `RT-140.*` | **ID 連携の機能**（OIDC） ＋ **連携キーの永続**（クロス ストア） |
+| **`SA-6.*`** | **ID 連携の機能**（**SAML2**。#286） |
 | **`CN-*`** | **配備の差**（コンテナ特有のもの） |
 
 > **クロス ストアは、ただ通っているだけでない。**
