@@ -335,12 +335,15 @@ function Set-IdFederationEnv
     # **上流の id_token の検証鍵**（#289 の段階 1）。
     #   **上流は同じ雛形の鍵**なので、値は SAML2 側と同じ証明書になる。
     #   **書かなければ従来どおり**（自分の JWK Set を kid で引く枝に入る）。
+    $env:IdFederationOidcDiscoveryUrl = 'https://localhost:44301/.well-known/openid-configuration'
     $env:IdFederationOidcCerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
 
     # **SAML2 の ID 連携**（#286 の段階 2）。
     #   **上流の SSO の口**と、**自分の ACS**（上流の redirect_uri_saml に登録した値）と、
     #   **期待する上流の Issuer**と、**上流の署名証明書**。
     #   **同じ client_id を使う**（上流は Issuer = http://<client_id> で SP を引く）。
+    #   **メタデータの URL**（#291）。**口と証明書は、ここから引く。**
+    $env:IdFederationSaml2MetadataUrl = 'https://localhost:44301/samlmetadata'
     $env:IdFederationSaml2RequestEndpoint = 'https://localhost:44301/saml2request'
     $env:IdFederationSaml2ResponseEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationAssertionConsumerService'
     $env:IdFederationSaml2IssuerId = 'https://ssoauth.opentouryo.com'

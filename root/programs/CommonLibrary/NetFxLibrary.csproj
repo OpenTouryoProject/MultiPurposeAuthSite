@@ -89,6 +89,8 @@
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="SamlProviders\CmnSaml2Response.cs" />
     <Compile Include="SamlProviders\CmnSamlAttributes.cs" />
+    <Compile Include="SamlProviders\CmnSamlMetadata.cs" />
+    <Compile Include="SamlProviders\IdFederationSaml2Metadata.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\Sts\DataProvider.cs" />
     <Compile Include="Extensions\Sts\Helper.cs" />

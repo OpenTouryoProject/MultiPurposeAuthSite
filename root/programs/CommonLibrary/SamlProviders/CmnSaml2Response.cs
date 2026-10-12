@@ -31,6 +31,7 @@
 //*  2026/10/10  玄人 幸道         新規（#286 の段階 1：鍵と期待Issuerを引数で受ける）
 //*  2026/10/12  玄人 幸道         AttributeStatementを読むようにした（#286 の段階 4）
 //*  2026/10/12  玄人 幸道         SigAlgの固定をやめ、RSAを受ける版に移した（Open棟梁 #604）
+//*  2026/10/13  玄人 幸道         検証鍵にRSAを受けるオーバーロードを足した（#291）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -191,6 +192,43 @@ namespace MultiPurposeAuthSite.SamlProviders
 
         #region 検証
 
+        /// <summary>`.cer` のファイルから、検証鍵（RSA）を作る</summary>
+        /// <param name="cerFilePath">`.cer` のパス（空なら null を返す）</param>
+        /// <returns>RSA（読めなければ null）</returns>
+        /// <remarks>
+        /// **証明書の読み込みはターゲットで分ける**（`Extensions/Sts/Helper.cs` と同じ流儀）。
+        /// **`new X509Certificate2(path)` は net10.0 で旧形式**（SYSLIB0057）であり、
+        /// **`X509CertificateLoader` は net48 に無い。**
+        ///
+        /// **破棄しない。** **`GetRSAPublicKey()` の鍵は証明書に紐づく**ので、
+        /// **先に破棄すると、この後の検証で使えない。**
+        ///
+        /// **読む場所を 1 か所に寄せてある**（#291）。
+        /// **設定の `.cer` を読むのは、ここと、ID 連携の口（メタデータが引けなかったとき）である。**
+        /// </remarks>
+        public static RSA RsaFromCerFile(string cerFilePath)
+        {
+            if (string.IsNullOrEmpty(cerFilePath))
+            {
+                return null;
+            }
+
+            try
+            {
+#if NETFX
+                X509Certificate2 x509 = new X509Certificate2(cerFilePath);
+#else
+                X509Certificate2 x509 = X509CertificateLoader.LoadCertificateFromFile(cerFilePath);
+#endif
+                return x509.GetRSAPublicKey();
+            }
+            catch (Exception)
+            {
+                // **読めない証明書は、鍵が無いものとして扱う。**
+                return null;
+            }
+        }
+
         /// <summary>SAML2 の応答（SAMLResponse）を検証する</summary>
         /// <param name="samlResponse">SAMLResponse（受け取ったまま）</param>
         /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象）</param>
@@ -222,6 +260,39 @@ namespace MultiPurposeAuthSite.SamlProviders
             string relayState, string expectedRelayState, bool isGet,
             string expectedAcsUrl, string expectedInResponseTo,
             string cerFilePath, string expectedIssuer)
+        {
+            //  **証明書を読んで、RSA を受ける版へ委譲する**（#291）。
+            //    **読めなければ、鍵が無いものとして扱う**（下の版が理由を返す）。
+            return CmnSaml2Response.Verify(
+                samlResponse, queryString, sigAlg, relayState, expectedRelayState, isGet,
+                expectedAcsUrl, expectedInResponseTo,
+                CmnSaml2Response.RsaFromCerFile(cerFilePath), expectedIssuer);
+        }
+
+        /// <summary>SAML2 の応答（SAMLResponse）を検証する（検証鍵を RSA で受ける）</summary>
+        /// <param name="samlResponse">SAMLResponse（受け取ったまま）</param>
+        /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象）</param>
+        /// <param name="sigAlg">SigAlg（同上）</param>
+        /// <param name="relayState">RelayState</param>
+        /// <param name="expectedRelayState">送った state（照合する。無ければ空）</param>
+        /// <param name="isGet">GET（Redirect Binding）で受け取ったか</param>
+        /// <param name="expectedAcsUrl">自分の ACS URL（空なら照合しない）</param>
+        /// <param name="expectedInResponseTo">送った AuthnRequest の ID（空なら照合しない）</param>
+        /// <param name="rsa">
+        /// **署名を検証する鍵。**
+        /// **メタデータから引いた証明書**（#291）**や、設定の `.cer`**（上の版）を渡す。
+        /// </param>
+        /// <param name="expectedIssuer">**期待する Issuer**（EntityID）</param>
+        /// <returns>結果</returns>
+        /// <remarks>
+        /// **鍵を「ファイルのパス」ではなく「鍵そのもの」で受ける**（#291）。
+        /// **メタデータから引いた証明書は、ファイルになっていない**ためである。
+        /// </remarks>
+        public static Saml2Result Verify(
+            string samlResponse, string queryString, string sigAlg,
+            string relayState, string expectedRelayState, bool isGet,
+            string expectedAcsUrl, string expectedInResponseTo,
+            RSA rsa, string expectedIssuer)
         {
             Saml2Result ret = new Saml2Result()
             {
@@ -266,7 +337,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                 return ret;
             }
 
-            if (string.IsNullOrEmpty(cerFilePath))
+            if (rsa == null)
             {
                 // **鍵が無ければ検証できない。** **通してはならない。**
                 ret.Reason = "署名を検証する証明書が設定されていない。";
@@ -320,13 +391,6 @@ namespace MultiPurposeAuthSite.SamlProviders
             {
                 // **RSA鍵は引数から**（ここが `SAML2Client.VerifyResponse` との違い）。
                 // **ハッシュは、Redirect なら `SigAlg`、POST なら XML の `SignatureMethod`** が決める。
-#if NETFX
-                X509Certificate2 x509 = new X509Certificate2(cerFilePath);
-#else
-                X509Certificate2 x509 = X509CertificateLoader.LoadCertificateFromFile(cerFilePath);
-#endif
-                RSA rsa = x509.GetRSAPublicKey();
-
                 if (isGet)
                 {
                     // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。

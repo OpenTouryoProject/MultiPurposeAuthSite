@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/12  玄人 幸道         新規（#289 の段階 2）
 //*  2026/10/13  玄人 幸道         汎用部分を DiscoveryJwks に分けた（#289 の段階 2）
+//*  2026/10/13  玄人 幸道         discoveryのURLを設定で与えられるようにした（#289 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -50,8 +51,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// | | この配備での決め方 |
     /// |---|---|
-    /// | **discovery の在り処** | **`IdFederationAuthorizeEndpoint` の基底**（`https://host/authorize` → `https://host`） |
+    /// | **discovery の在り処** | **設定の `IdFederationOidcDiscoveryUrl`** → **`IdFederationAuthorizeEndpoint` の基底**（`https://host/authorize` → `https://host/.well-known/openid-configuration`） |
     /// | **期待する Issuer** | **`SpRp_Isser`**（`CmnClientParams.Isser`。Open棟梁 のクライアント役の設定 ＝ **相手の Issuer**） |
+    ///
+    /// **設定を先に見る**（SAML2 側の `IdFederationSaml2MetadataUrl` と対称）。
+    /// **組み立てでは足りない配備がある** — **パスの下に discovery を置く OP**
+    /// （`https://host/tenant/v2.0/.well-known/openid-configuration`）には、**基底だけでは当たらない。**
     ///
     /// **`iss` そのものから引かない。** **この製品の `IssuerId` は論理名**であり
     /// （雛形は `https://ssoauth.opentouryo.com`）、**待ち受けている URL とは別**だからである
@@ -77,9 +82,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public static async Task<JWS> GetKeyAsync(string idToken)
         {
             return await DiscoveryJwks.GetRsaKeyAsync(
-                DiscoveryJwks.DiscoveryUrlOf(Config.IdFederationAuthorizeEndpoint),
+                IdFederationJwks.DiscoveryUrl(),
                 CmnClientParams.Isser,
                 DiscoveryJwks.KidOf(idToken));
+        }
+
+        /// <summary>
+        /// 上流の discovery の URL を決める（設定 → 口の基底から組み立て）。
+        /// </summary>
+        /// <returns>URL（決まらなければ空）</returns>
+        public static string DiscoveryUrl()
+        {
+            if (!string.IsNullOrEmpty(Config.IdFederationOidcDiscoveryUrl))
+            {
+                return Config.IdFederationOidcDiscoveryUrl;
+            }
+
+            return DiscoveryJwks.DiscoveryUrlOf(Config.IdFederationAuthorizeEndpoint);
         }
     }
 }

@@ -871,6 +871,7 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 
 | 設定キー | 雛形の値 | |
 |---|---|---|
+| `IdFederationOidcDiscoveryUrl` | `https://localhost:44301/.well-known/openid-configuration` | **上流の discovery**。**空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる** |
 | `IdFederationOidcCerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の `id_token` の署名を検証する証明書**（`.cer` のパス）。**空なら従来どおり** |
 
 **書けば、上流の鍵で検証する**（Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601) の版へ、
@@ -902,9 +903,16 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | 2 | **設定の `.cer`**（このキー） | **追随しない**（上流が鍵を替えたら置き直す） |
 | 3 | **渡さない**（従来どおり） | － |
 
-**discovery の在り処は、`IdFederationAuthorizeEndpoint` の基底**である
-（`https://host/authorize` → `https://host/.well-known/openid-configuration`）。
-**設定キーは増やしていない。**
+**discovery の在り処は、設定 → 口の基底から組み立て**の順で決まる。
+
+| 順 | |
+|---|---|
+| 1 | **`IdFederationOidcDiscoveryUrl`**（**SAML2 側の `IdFederationSaml2MetadataUrl` と対称**） |
+| 2 | **`IdFederationAuthorizeEndpoint` の基底**（`https://host/authorize` → `https://host/.well-known/openid-configuration`） |
+
+> **組み立てだけでは足りない配備がある。**
+> **パスの下に discovery を置く OP**（`https://host/tenant/v2.0/.well-known/openid-configuration`）
+> **には、基底だけでは当たらない。** **そのため、設定でも与えられるようにしてある。**
 
 > **`iss` そのものから引かない。** **この製品の `IssuerId` は論理名**であり
 > （雛形は `https://ssoauth.opentouryo.com`）、**待ち受けている URL とは別**である
@@ -936,7 +944,9 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > `SpRp_RsaCerFilePath` と同じファイルを指す**（実測で modulus が一致する）。
 > **値が同じでも、キーは分ける** — **役が違う**ためである（次の節）。
 
-**値の出どころは、上流の `/samlmetadata` である**（実測）。**人が見て書き写す。**
+**値の出どころは、上流の `/samlmetadata` である**（実測）。
+**メタデータの URL を書けば、`SingleSignOnService` と署名証明書は、そこから引く**（#291。下記）。
+**書かなければ、人が見て書き写す。**
 
 | 設定キー | 上流のメタデータの、どこ |
 |---|---|
@@ -944,7 +954,10 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `IdFederationSaml2IssuerId` | `EntityDescriptor` の `entityID` |
 | `IdFederationSaml2CerFilePath` | `KeyDescriptor use="signing"` ＞ `X509Certificate`（**取り出して `.cer` として置く**） |
 
-> **メタデータから自動で引く仕組みは、まだ無い。**
+> **メタデータから引く仕組みは、#291 で入った**（下記）。
+> **以下は、メタデータを使わない（URL を書かない）配備の手順**である。
+>
+> **以前ここには「メタデータから自動で引く仕組みは、まだ無い」と書いてあった。**
 > **Open棟梁 の `SAML2Bindings` には `CreateMetadata`（作る側）しか無い。**
 > **また、同梱のメタデータは署名されていない**（実測）ので、**信頼の根拠は TLS だけ**になる。
 > **いまは、配備時に手で置く。**
@@ -1067,6 +1080,41 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > **設定に `OAuth2AndOidcClientIDs` を列挙する案は採らなかった。**
 > **クライアントを足すたびに設定も直すことになる**うえ、
 > **「どれかのテスト用クライアント宛か」までしか確かめられない。**
+
+#### メタデータ（`/samlmetadata`）から、上流の口と鍵を引く（#291）
+
+| 設定キー | 雛形の値 | |
+|---|---|---|
+| `IdFederationSaml2MetadataUrl` | `https://localhost:44301/samlmetadata` | **上流のメタデータ**（`EntityDescriptor`）。**空なら従来どおり** |
+
+**引くもの**（引けなければ、従来の設定に倒れる）。
+
+| メタデータ | 倒れ先（設定） |
+|---|---|
+| `IDPSSODescriptor` ＞ `SingleSignOnService`（HTTP-Redirect）の `Location` | `IdFederationSaml2RequestEndpoint` |
+| `KeyDescriptor use="signing"` ＞ `X509Certificate` | `IdFederationSaml2CerFilePath` |
+
+**`entityID` は引かない。** **`IdFederationSaml2IssuerId` と照合する**ために使う。
+**一致しなければ、メタデータの値は使わない**
+（**設定の URL を差し替えられた配備で、別の相手の口と鍵を信じないため**）。
+**自分の ACS（`IdFederationSaml2ResponseEndpoint`）も、設定のまま**である。
+
+> **SAML2 には、メタデータの既知のパスが無い**（OIDC の `/.well-known/…` に当たるものが無い）。
+> **だから、OIDC 側（#289）のように口の URL から組み立てる形にはしていない** — **URL を設定で与える。**
+
+> **メタデータは署名されていない**（実測）。**信頼の根拠は TLS と `entityID` の照合だけ**である。
+> **署名されたメタデータを検証する形は、まだ無い**（その鍵をどこから得るかを決める必要がある）。
+
+**導線（サインイン画面のボタン）の出し方も変わった**（`Config.CanIdFederationBySaml2`）。
+
+| | |
+|---|---|
+| **必ず要る** | 自分の ACS（`…ResponseEndpoint`）と、期待する上流の EntityID（`…IssuerId`） |
+| **どちらかで揃っていればよい** | **メタデータの URL** ／ **口（`…RequestEndpoint`）と鍵（`…CerFilePath`）の両方** |
+
+**鍵のロールオーバー中は、`KeyDescriptor` が 2 本並ぶことがある。**
+**いまは最初の 1 本だけを使う**（`KeyInfo` の照合で選ぶ仕組みは、まだ無い）。
+**取り直しの下限は 1 分**（OIDC 側の discovery と同じ）。
 
 #### `SpRp_RsaCerFilePath` は、上流の証明書に差し替えられない
 

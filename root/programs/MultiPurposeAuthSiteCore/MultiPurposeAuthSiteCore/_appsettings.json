@@ -272,7 +272,9 @@
     // IDフェデレーション
     // 既定値はコンテナ、E2Eは、環境変数で上書き。
     
-    // 値は、上流の /samlmetadata から引ける。
+    // 値は、上流の /openid-configuration から引ける。
+    // discovery（空なら IdFederationAuthorizeEndpoint の基底から組み立てる。#289）
+    "IdFederationOidcDiscoveryUrl": "https://localhost:44301/.well-known/openid-configuration",
     // 認可エンドポイント
     "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
     // Redirectエンドポイント
@@ -281,11 +283,13 @@
     "IdFederationTokenEndpoint": "https://localhost:44301/token",
     // UserInfoエンドポイント
     "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
-    // 上流の id_token の署名を検証する証明書（空なら従来どおり。#289）
+    // 上流の署名を検証する証明書
     "IdFederationOidcCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
     // 値は、上流の /samlmetadata から引ける。
-    // Requestエンドポイント
+    // メタデータ（EntityDescriptor）。書けば SSO の口と署名証明書をここから引く（#291）
+    "IdFederationSaml2MetadataUrl": "https://localhost:44301/samlmetadata",
+    // Requestエンドポイント（メタデータから引けなければ、こちらを読む）
     "IdFederationSaml2RequestEndpoint": "https://localhost:44301/saml2request",
     // Responseエンドポイント
     "IdFederationSaml2ResponseEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationAssertionConsumerService",

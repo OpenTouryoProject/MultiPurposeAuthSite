@@ -310,7 +310,10 @@ services:
       #
       #   **証明書はマウント先のパスで与える**（mpas-common.env と同じ流儀）。
       # **上流の id_token の検証鍵**（#289 の段階 1）。コンテナの中のパスである。
+      - appSettings__IdFederationOidcDiscoveryUrl=https://localhost:44301/.well-known/openid-configuration
       - appSettings__IdFederationOidcCerFilePath=/resource/X509/SHA256RSA_Server.cer
+      # **メタデータの URL**（#291）。**口と証明書は、ここから引く。**
+      - appSettings__IdFederationSaml2MetadataUrl=https://localhost:44301/samlmetadata
       - appSettings__IdFederationSaml2RequestEndpoint=https://localhost:44301/saml2request
       # **ブラウザが戻る先。** 上流の redirect_uri_saml と 1 文字も違ってはならない（#263）。
       - appSettings__IdFederationSaml2ResponseEndpoint=https://localhost:44303/Account/IDFederationAssertionConsumerService

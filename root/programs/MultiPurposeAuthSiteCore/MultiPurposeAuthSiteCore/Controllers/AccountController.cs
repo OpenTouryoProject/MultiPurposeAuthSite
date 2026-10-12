@@ -458,7 +458,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     //  **SAML2 の ID 連携**（#286 の段階 2）。
                     //    **設定が揃っていなければ、ここには来ない**（画面にボタンを出さない）。
-                    return this.StartIdFederationBySaml2();
+                    return await this.StartIdFederationBySaml2();
                 }
                 else if (submitButtonName == "webauthn_signin"
                     && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
@@ -2795,7 +2795,7 @@ namespace MultiPurposeAuthSite.Controllers
         ///
         /// | | |
         /// |---|---|
-        /// | 宛先 | `IdFederationSaml2RequestEndpoint`（上流の SSO の口） |
+        /// | 宛先 | **メタデータの `SingleSignOnService`（HTTP-Redirect）** → `IdFederationSaml2RequestEndpoint`（#291） |
         /// | `Issuer` | **`http://` ＋ 上流に登録された `client_id`** — **上流はこれで SP を引く**（`CmnEndpoints.VerifySamlRequest`） |
         /// | `NameIDFormat` | **`EmailAddress`**（#286 の決め事）。**`NameID` をメアドとして受け取る** |
         /// | ACS URL | **入れない。** **上流が登録値（`redirect_uri_saml`）から解決する**（#276 の照合と食い違わせない） |
@@ -2807,8 +2807,21 @@ namespace MultiPurposeAuthSite.Controllers
         /// **サインイン画面の入力値は使わない**（#286 の決め事）。
         /// **SAML に `login_hint` 相当は無く、独自の方法は作らないと決めてある。**
         /// </remarks>
-        private ActionResult StartIdFederationBySaml2()
+        private async Task<ActionResult> StartIdFederationBySaml2()
         {
+            //  **上流の SSO の口は、メタデータ → 設定の順で決める**（#291）。
+            //    **メタデータが引けなければ、設定の値**（従来どおり）。
+            string ssoUrl = await SamlProviders.IdFederationSaml2Metadata.GetSsoUrlAsync();
+
+            if (string.IsNullOrEmpty(ssoUrl))
+            {
+                // **宛先が分からなければ、送れない。** **理由を残す**（#253）。
+                Logging.MyOperationTrace(
+                    "The SAML2 ID federation has no SSO endpoint. (metadata and setting are both empty)");
+
+                return View("Error");
+            }
+
             // **上流に登録された client_id**（OIDC の ID 連携と同じものを使う）。
             string issuer = "http://" + OAuth2AndOIDCParams.ClientID;
 
@@ -2827,7 +2840,7 @@ namespace MultiPurposeAuthSite.Controllers
             // **応答の InResponseTo と照合する**（#276 と同じ）。
             HttpContext.Session.SetString("id_federation_saml2_request_id", id);
 
-            return Redirect(Config.IdFederationSaml2RequestEndpoint + "?" + queryString);
+            return Redirect(ssoUrl + "?" + queryString);
         }
 
         /// <summary>
@@ -2847,7 +2860,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// | **この口** | **閉じない**（本番の導線）。**検証できたらサインインさせる** |
         ///
         /// **検証の本体は `SamlProviders.CmnSaml2Response.Verify`**（#286 の段階 1）。
-        /// **自己テストと同じ本体に、上流の証明書と EntityID を渡す。**
+        /// **自己テストと同じ本体に、上流の鍵と EntityID を渡す。**
+        /// **鍵は、メタデータ → 設定の `.cer` の順で決める**（#291）。
         /// </remarks>
         [AllowAnonymous]
         public async Task<ActionResult> IDFederationAssertionConsumerService(
@@ -2879,11 +2893,14 @@ namespace MultiPurposeAuthSite.Controllers
             HttpContext.Session.SetString("id_federation_saml2_state", "");
             HttpContext.Session.SetString("id_federation_saml2_request_id", "");
 
+            //  **検証鍵は、メタデータ → 設定の `.cer` の順で決める**（#291）。
+            RSA upstreamKey = await SamlProviders.IdFederationSaml2Metadata.GetSigningKeyAsync();
+
             SamlProviders.CmnSaml2Response.Saml2Result result =
                 SamlProviders.CmnSaml2Response.Verify(
                     samlResponse, queryString, sigAlg, relayState, state, isGet,
                     Config.IdFederationSaml2ResponseEndpoint, requestId,
-                    Config.IdFederationSaml2CerFilePath, Config.IdFederationSaml2IssuerId);
+                    upstreamKey, Config.IdFederationSaml2IssuerId);
 
             if (result.Verdict != "NORMAL_END")
             {

@@ -2223,6 +2223,34 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// OIDCのID連携で、上流のdiscovery（OpenID Provider Metadata）のURL
+        /// </summary>
+        /// <remarks>
+        /// **書けば、上流の `jwks_uri` を、ここから引く**（#289 の段階 2）。
+        /// **空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる**
+        /// （`https://host/authorize` → `https://host/.well-known/openid-configuration`）。
+        ///
+        /// **SAML2 側の `IdFederationSaml2MetadataUrl` と対称**である。
+        /// **「相手のメタデータの在り処」は、どちらも設定で与えられる。**
+        ///
+        /// **組み立てでは足りない配備がある。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **パスの下に discovery を置く OP** | `https://host/tenant/v2.0/.well-known/openid-configuration` のような形。**基底だけでは当たらない** |
+        /// | 口とメタデータでホストが違う配備 | 同上 |
+        ///
+        /// **`iss` そのものからは引かない**（`IdFederationOidcCerFilePath` の説明）。
+        /// </remarks>
+        public static string IdFederationOidcDiscoveryUrl
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationOidcDiscoveryUrl");
+            }
+        }
+
+        /// <summary>
         /// OIDCのID連携で、上流の id_token の署名を検証する証明書（.cer のパス）
         /// </summary>
         /// <remarks>
@@ -2314,18 +2342,61 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// SAML2のID連携で、上流のメタデータ（EntityDescriptor）のURL
+        /// </summary>
+        /// <remarks>
+        /// **書けば、上流の SSO の口と署名証明書を、ここから引く**（#291）。
+        /// **空なら従来どおり**（`IdFederationSaml2RequestEndpoint` と
+        /// `IdFederationSaml2CerFilePath` を読む）。**引けなかったときも、そちらに倒れる。**
+        ///
+        /// | メタデータから引くもの | 設定で与える形（従来） |
+        /// |---|---|
+        /// | `SingleSignOnService`（HTTP-Redirect）の `Location` | `IdFederationSaml2RequestEndpoint` |
+        /// | `KeyDescriptor use="signing"` の証明書 | `IdFederationSaml2CerFilePath` |
+        ///
+        /// **`entityID` は引かない。** **`IdFederationSaml2IssuerId` と照合する**ために使う
+        /// （**一致しなければ、メタデータの値を使わない**）。
+        /// **自分の ACS（`IdFederationSaml2ResponseEndpoint`）も、設定のまま**である。
+        ///
+        /// **SAML2 には、メタデータの既知のパスが無い**（OIDC の `/.well-known/…` に当たるものが無い）。
+        /// **だから、OIDC 側（#289）のように口の URL から組み立てる形にはしていない** —
+        /// **URL を設定で与える。**
+        /// </remarks>
+        public static string IdFederationSaml2MetadataUrl
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationSaml2MetadataUrl");
+            }
+        }
+
         /// <summary>SAML2のID連携が有効か（設定が揃っているか）</summary>
         /// <remarks>
-        /// **4 本すべてが要る。** **1 本でも欠けていれば、導線を出さない。**
+        /// **自分の ACS と、期待する上流の EntityID は、必ず要る。**
+        ///
+        /// **上流の口と鍵は、2 通りのどちらかで揃っていればよい**（#291）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **メタデータの URL** | そこから口と鍵を引く |
+        /// | **口（`…RequestEndpoint`）と鍵（`…CerFilePath`）** | 従来の形 |
+        ///
+        /// **どちらも無ければ、導線を出さない**（押しても成立しないため）。
         /// </remarks>
         public static bool CanIdFederationBySaml2
         {
             get
             {
-                return !string.IsNullOrEmpty(Config.IdFederationSaml2RequestEndpoint)
-                    && !string.IsNullOrEmpty(Config.IdFederationSaml2ResponseEndpoint)
-                    && !string.IsNullOrEmpty(Config.IdFederationSaml2IssuerId)
-                    && !string.IsNullOrEmpty(Config.IdFederationSaml2CerFilePath);
+                if (string.IsNullOrEmpty(Config.IdFederationSaml2ResponseEndpoint)
+                    || string.IsNullOrEmpty(Config.IdFederationSaml2IssuerId))
+                {
+                    return false;
+                }
+
+                return !string.IsNullOrEmpty(Config.IdFederationSaml2MetadataUrl)
+                    || (!string.IsNullOrEmpty(Config.IdFederationSaml2RequestEndpoint)
+                        && !string.IsNullOrEmpty(Config.IdFederationSaml2CerFilePath));
             }
         }
 

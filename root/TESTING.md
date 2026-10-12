@@ -1124,6 +1124,18 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | **`SA-6.n`**（SAML2 の ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**。`RT-140.n` と同じ） |
 | `SA-7.n`（アサーションの属性） | ホストの core / netfx | `-UserStoreType`（**上流コンテナは要らない**。自己テストの口で測る） |
 
+> **`SA-6.*` の上流の値は、上流のメタデータから引いている**（#291。`test.ps1` が URL を渡している）。
+> **設定の口（`…RequestEndpoint`）と鍵（`…CerFilePath`）は受け皿**である。
+>
+> **歯抜けの測り方**（実測 2026/10/13。`SA-6.*` の 8 件で測った）。
+>
+> | 壊すもの | 期待する結果 |
+> |---|---|
+> | **設定の口と鍵の両方**を壊す（メタデータは生かす） | **8/8 通る**（**メタデータが使われている**ことの確認） |
+> | **メタデータの URL**を別の `entityID` のサイトに（下流コンテナ） | **8/8 通る**（照合で弾き、設定に倒れる。ログに `The SAML2 metadata entityID did not match the expected entityID.`） |
+> | **メタデータの URL**を届かない口に | **8/8 通る**（ログに `The SAML2 metadata could not be read.`） |
+> | **メタデータと鍵の両方**を壊す | **`SA-6.1` / `SA-6.2` / `SA-6.4` が落ちる**（`SA-6.3` は署名に依存しないので通る） |
+
 > **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `3_PublishUpstream.ps1` → `docker compose up -d --build`）。
 > **実測（Open棟梁 #603 / #604 の取り込み。2026/10/12）** : **複製だけを更新して回すと 20 件が落ちた** — **`SigAlg` の扱い**（`SA-1.1` / `SA-1.3` / `RT-246.4` / `RT-246.7` / `SA-6.*`）と、**自己テストの `aud` の確認**（`RT-246.1` / `RT-246.6` / `RT-232.9`）である。
 > **どちらも「確認するようになった」ことによる失敗**であり、緩む方向ではない。
@@ -1310,7 +1322,9 @@ cd root
 | `RT-140.7` | 連携の認可応答にも **`iss`** が付く（#252 が実経路で効いていること） |
 
 > **上流の `id_token` の検証鍵は、上流の discovery から引いている**（#289 の段階 2）。
-> **設定の `.cer`**（`IdFederationOidcCerFilePath`。`test.ps1` が渡している）**は受け皿**である。
+> **discovery の URL も `test.ps1` が渡している**（`IdFederationOidcDiscoveryUrl`。
+> **空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる**）。
+> **設定の `.cer`**（`IdFederationOidcCerFilePath`）**は受け皿**である。
 >
 > **歯抜けの測り方**（実測 2026/10/12）。
 >
@@ -1320,6 +1334,7 @@ cd root
 > | **discovery の宛先**を別の issuer のサイトに（下流コンテナ） | **通る**（`issuer` 不一致で弾き、`.cer` に倒れる。ログに `The discovery issuer did not match the expected issuer.`） |
 > | **discovery の宛先**を届かない口に | **通る**（ログに `The discovery document could not be read.`） |
 > | **両方**（discovery も `.cer` も壊す） | **`RT-140.4` / `RT-140.5` が落ちる**（**自分の JWK Set に落ちて通ってしまうことが無い**） |
+> | **設定の discovery の URL だけ**を届かない口に（`.cer` も壊す） | **`RT-140.4` / `RT-140.5` が落ちる**（**設定が組み立てより先に見られている**ことの確認。ログに `The discovery document could not be read.`） |
 
 **上流を先に建てておくこと。** 建っていなければ、**この 4 件（×2 ターゲット）だけが Skip される。**
 
