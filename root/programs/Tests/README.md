@@ -404,7 +404,8 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/NameIdFormatTests.cs` | `SA-3` | `NameIDPolicy` の値ごとの `NameID`（`unspecified` / `emailAddress` / **`persistent` は RP ごとに違う PPID**） |
 | `Tests/Saml/SignInFlowTests.cs` | `SA-4` | **未サインイン → サインイン画面 → アサーション**（SP-initiated SSO の本来の形） |
 | `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
-| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）。**上流は `store/` のコンテナ**。**建っていなければ Skip** |
+| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `store/` のコンテナ**。**建っていなければ Skip** |
+| `Tests/Saml/AttributeStatementTests.cs` | `SA-7` | **アサーションの `AttributeStatement`**（#286 の段階 4）。**メアド・利用者名・`email_verified` を属性で返すこと**（`urn:oid:…` ＋ `FriendlyName` ＋ `NameFormat`）／**`persistent` の `NameID` でも属性でメアドが分かること**（段階 4 の目的）。**自己テストの口で測る**ので、上流コンテナは要らない |
 
 > **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**
 > あちらは**自己テストの画面が目視できる形になっていること**（#246 の項目 3）で、**観点が違う。**

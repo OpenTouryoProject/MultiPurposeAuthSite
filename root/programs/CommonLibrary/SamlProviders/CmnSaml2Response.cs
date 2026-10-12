@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#286 の段階 1：鍵と期待Issuerを引数で受ける）
 //*  2026/10/12  玄人 幸道         AttributeStatementを読むようにした（#286 の段階 4）
+//*  2026/10/12  玄人 幸道         SigAlgの固定をやめ、RSAを受ける版に移した（Open棟梁 #604）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -259,11 +260,9 @@ namespace MultiPurposeAuthSite.SamlProviders
                 return ret;
             }
 
-            // **Redirect Binding は RSAwithSHA1 だけを受ける**（従来どおり）。
-            if (isGet && SAML2Const.RSAwithSHA1 != sigAlg)
+            if (isGet && string.IsNullOrEmpty(sigAlg))
             {
-                ret.Reason = "SigAlg が RSAwithSHA1 ではないため、検証していない : "
-                    + (string.IsNullOrEmpty(sigAlg) ? "（無し）" : sigAlg);
+                ret.Reason = "SigAlg が無いため、検証していない。";
                 return ret;
             }
 
@@ -319,14 +318,19 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             try
             {
-                //  **鍵は引数から**（ここが `SAML2Client.VerifyResponse` との違い）。
-                DigitalSignX509 dsX509 = new DigitalSignX509(
-                    cerFilePath, "", HashAlgorithmName.SHA256);
+                // **RSA鍵は引数から**（ここが `SAML2Client.VerifyResponse` との違い）。
+                // **ハッシュは、Redirect なら `SigAlg`、POST なら XML の `SignatureMethod`** が決める。
+#if NETFX
+                X509Certificate2 x509 = new X509Certificate2(cerFilePath);
+#else
+                X509Certificate2 x509 = X509CertificateLoader.LoadCertificateFromFile(cerFilePath);
+#endif
+                RSA rsa = x509.GetRSAPublicKey();
 
                 if (isGet)
                 {
                     // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。
-                    if (SAML2Bindings.VerifyRedirect(queryString, dsX509))
+                    if (SAML2Bindings.VerifyRedirect(queryString, rsa))
                     {
                         verified = SAML2Bindings.VerifyByXPath(
                             samlResponse2, SAML2Enum.SamlSchema.Response, samlNsMgr);
@@ -337,8 +341,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                     // **POST Binding は、XML の中の署名**である。
                     string id = SAML2Bindings.GetIdInResponse(samlResponse2, samlNsMgr);
 
-                    if (SAML2Bindings.VerifyPost(
-                        decodeSaml, id, dsX509.X509Certificate.GetRSAPublicKey()))
+                    if (SAML2Bindings.VerifyPost(decodeSaml, id, rsa))
                     {
                         verified = SAML2Bindings.VerifyByXPath(
                             samlResponse2, SAML2Enum.SamlSchema.Response, samlNsMgr);

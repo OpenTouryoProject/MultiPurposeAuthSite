@@ -1122,6 +1122,11 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `21-n.n` | 同上 | 同上 |
 | `SA-n.n` | 同上 | 同上 |
 | **`SA-6.n`**（SAML2 の ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**。`RT-140.n` と同じ） |
+| `SA-7.n`（アサーションの属性） | ホストの core / netfx | `-UserStoreType`（**上流コンテナは要らない**。自己テストの口で測る） |
+
+> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `3_PublishUpstream.ps1` → `docker compose up -d --build`）。
+> **実測（Open棟梁 #603 / #604 の取り込み。2026/10/12）** : **複製だけを更新して回すと 20 件が落ちた** — **`SigAlg` の扱い**（`SA-1.1` / `SA-1.3` / `RT-246.4` / `RT-246.7` / `SA-6.*`）と、**自己テストの `aud` の確認**（`RT-246.1` / `RT-246.6` / `RT-232.9`）である。
+> **どちらも「確認するようになった」ことによる失敗**であり、緩む方向ではない。
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
 | **`UI-n.n`** | **ホストの core だけ**（net48 版には WebAuthn の口が無い。#137） | `-UserStoreType` |
 
@@ -1132,6 +1137,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | ホストの core / netfx（`mem` / `sql` / `ora` / `npg`） | **実装**（方言ごとの SQL を含む） |
 | `RT-140.*` | **ID 連携の機能**（OIDC） ＋ **連携キーの永続**（クロス ストア） |
 | **`SA-6.*`** | **ID 連携の機能**（**SAML2**。#286） |
+| `SA-7.*` | **アサーションの属性**（#286 の段階 4。**メアド・利用者名・`email_verified`**） |
 | **`CN-*`** | **配備の差**（コンテナ特有のもの） |
 
 > **クロス ストアは、ただ通っているだけでない。**

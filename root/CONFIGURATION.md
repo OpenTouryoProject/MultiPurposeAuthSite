@@ -918,10 +918,45 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > 雛形は `IdFederation` クライアントに登録済みで、`store/docker-compose.yml` は
 > E2E の 3 つの下流（ホスト core / netfx / 下流コンテナ）の分を持っている。
 
+#### アサーションの属性（`AttributeStatement`）で、メアドと利用者名を運ぶ（#286 の段階 4）
+
+**`NameID` だけでは、メアドと利用者名を運べない。**
+**段階 4 で、OIDC 側のクレームに 1 対 1 で対応する属性を出すようにした**
+（`CommonLibrary/SamlProviders/CmnSamlAttributes.cs`）。
+
+| OIDC | SAML2 の `Name` | `FriendlyName` | `NameFormat` |
+|---|---|---|---|
+| `email` | `urn:oid:0.9.2342.19200300.100.1.3` | `mail` | uri |
+| `preferred_username` | `urn:oid:0.9.2342.19200300.100.1.1` | `uid` | uri |
+| `email_verified` | **`email_verified`** | － | **basic** |
+
+**`urn:oid:…` は X.500/LDAP Attribute Profile**（SAML V2.0 の prof-attr-x500）であり、
+**他の IdP（Shibboleth / ADFS など）とも合う。**
+**`email_verified` に相当する標準の属性は無い**ので、**OIDC の名前をそのまま basic で出す。**
+
+**出す側（IdP）は、この 3 つだけを出す。**
+**読む側（SP）は緩い** — **`Name` と `FriendlyName` の両方を鍵にし、別名も見る**
+（`email` / `emailAddress` / ADFS の `http://schemas.xmlsoap.org/…/emailaddress` など）。
+
+**読む側の決め方**（`/Account/IDFederationAssertionConsumerService`）。
+
+| | 順序 |
+|---|---|
+| メアド | **属性（`mail`）** → `emailAddress` の `NameID` |
+| 新規作成時の名前 | **属性（`uid`）** → メアドの `@` より前 |
+| 検証済みのメアドか | **属性（`email_verified`）** → `emailAddress` の `NameID` は検証済みとして扱う（下記） |
+| 連携キー | **`NameID`**（**`Transient` は受けない**。毎回変わる値を鍵にできない。SAML Core 8.3.8） |
+
+> **これで `Persistent`（PPID）の `NameID` を返す上流とも連携できる**（`SA-7.2`）。
+> **段階 3 までは、`NameID` がメアドでなければ繋げなかった。**
+
+> **属性を出さない上流とも、従来どおり繋がる**（`emailAddress` の `NameID` に倒れる）。
+> **既定の挙動は変わらない。**
+
 #### `NameIDFormat=emailAddress` の `NameID` は、検証済みのメアドとして扱う（#286 の段階 2）
 
-**SAML2 には `email_verified` に相当するクレームが無い**
-（アサーションに `AttributeStatement` が無い。段階 4 で足す）。
+**上流が `email_verified` を言わないときの倒し方**である
+（**段階 4 で属性が入ったので、言ってくる上流ではそちらに従う**）。
 
 | | |
 |---|---|
@@ -936,8 +971,55 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 **緩めたくない配備は `RequireVerifiedEmailForAccountLinking` を `false` にする**
 （この判断に関わらず、その設定が優先される）。
 
-> **`NameIDFormat` が `emailAddress` でなければ、受け付けない。**
-> **メアドでない値をメアドとして扱わないため**である（`Persistent` などは段階 4 以降）。
+> **段階 3 までは、`NameIDFormat` が `emailAddress` でなければ受け付けなかった。**
+> **段階 4 では、属性でメアドが分かるなら受け付ける**（上の表）。
+> **属性も無く、`NameID` もメアドでなければ、受け付けない**
+> （**メアドでない値をメアドとして扱わないため**）。
+
+#### Redirect Binding の `SigAlg` は、実際のアルゴリズム（Open棟梁 #604 の追随）
+
+**Open棟梁 [#604](https://github.com/OpenTouryoProject/OpenTouryo/issues/604) で、
+`SigAlg` が実際の署名アルゴリズムになった**（既定の SHA256 なら `rsa-sha256`）。
+**受け手も `SigAlg` を見る**ようになったので、この repo も合わせてある。
+
+| | 変更前 | 変更後 |
+|---|---|---|
+| 出す `SigAlg`（要求・応答とも） | **`rsa-sha1` 固定**（実際の署名は SHA256） | **`rsa-sha256`** |
+| **SP の要求を受けるとき**（`CmnEndpoints.VerifySamlRequest`） | `Rsa_SHA256` 固定で検証 | **`SigAlg` でハッシュを選ぶ**（`RSA` を受ける版。SHA256 / 384 / 512） |
+| **上流の応答を受けるとき**（`CmnSaml2Response`） | **`SigAlg` が `rsa-sha1` のときだけ検証** | **`SigAlg` でハッシュを選ぶ**（同上） |
+
+> **利用者への影響がある。**
+>
+> | | |
+> |---|---|
+> | **旧版の Open棟梁 で署名する SP** | **Redirect Binding の `AuthnRequest` が通らなくなる**（`rsa-sha1` と名乗る SHA256 の署名）。**SP 側で Open棟梁 を更新すること** |
+> | **ID 連携の上流** | **上流も #604 以降であること**（Redirect Binding の場合） |
+> | POST Binding | **影響なし**（ハッシュは XML の `SignatureMethod` が持つ） |
+> | **SHA1 の署名** | **受けない**（`VerifyRedirect` の既定の許可リストは SHA256 / 384 / 512） |
+
+**この repo は `OpenTouryoAssemblies/` の複製を参照している**ので、
+**複製を更新した時点で効く**（`1_BuildAll.ps1 -Libs Force`）。
+
+#### 自己テストの `aud` は、その回の `client_id` で確認する（Open棟梁 #603 の追随）
+
+**Open棟梁 [#603](https://github.com/OpenTouryoProject/OpenTouryo/issues/603) で、
+設定で判定する `IdToken.Verify` / `ResponseObject.Verify` が、
+`JwkSetFilePath` が在る配備（＝この配備）でも `aud` を確認するようになった。**
+
+**自己テストは `OAuth2AndOidcClientID` 以外のクライアントでも回す**ので、
+**設定で判定する版では落ちる。**
+**そこで、[#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601) の版
+（鍵・`iss`・`aud` を渡す）に移した。**
+
+| 渡すもの | 値 |
+|---|---|
+| 鍵（`jws`） | **null**（自分が出したトークンなので、設定の選び方で引ける） |
+| `iss` | **`IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**であり、下流コンテナでは別の値である |
+| `aud` | **その回の `client_id`**（セッション／Cookie に預けてある値） |
+
+> **設定に `OAuth2AndOidcClientIDs` を列挙する案は採らなかった。**
+> **クライアントを足すたびに設定も直すことになる**うえ、
+> **「どれかのテスト用クライアント宛か」までしか確かめられない。**
 
 #### `SpRp_RsaCerFilePath` は、上流の証明書に差し替えられない
 

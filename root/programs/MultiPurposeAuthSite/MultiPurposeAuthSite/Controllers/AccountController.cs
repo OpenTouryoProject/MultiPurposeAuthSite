@@ -2812,7 +2812,6 @@ namespace MultiPurposeAuthSite.Controllers
                     samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
 
                     // VerifySamlRequest
-                    //if (SAML2Const.RSAwithSHA1 == sigAlg) // 無い場合も通るようにする。
                     verified = Saml.CmnEndpoints.VerifySamlRequest(
                         queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
                 }
@@ -4172,22 +4171,6 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // query(.jwt)、form_post(.jwt)のカバレッジ
 
-                    // JARM
-                    if (!string.IsNullOrEmpty(response))
-                    {
-                        // responseObject検証
-                        if (ResponseObject.Verify(response, out JObject responseObject))
-                        {
-                            // OK
-                            code = (string)responseObject[OAuth2AndOIDCConst.code];
-                            state = (string)responseObject[OAuth2AndOIDCConst.state];
-                        }
-                        else
-                        {
-                            // NG
-                        }
-                    }
-
                     // LoadRequestParameters
                     string clientId_InSessionOrCookie = "";
                     string state_InSessionOrCookie = "";
@@ -4200,6 +4183,28 @@ namespace MultiPurposeAuthSite.Controllers
                         out redirect_uri_InSessionOrCookie,
                         out nonce_InSessionOrCookie,
                         out code_verifier_InSessionOrCookie);
+
+                    //    | 渡すもの | 値 |
+                    //    |---|---|
+                    //    | 鍵（`jws`） | **null**（自分が出したトークンなので、設定の選び方で引ける） |
+                    //    | `iss` | **`Config.IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**である |
+                    //    | `aud` | **その回の `client_id`** |
+                    if (!string.IsNullOrEmpty(response))
+                    {
+                        // responseObject検証
+                        if (ResponseObject.Verify(response,
+                            null, Config.IssuerId, clientId_InSessionOrCookie,
+                            out JObject responseObject))
+                        {
+                            // OK
+                            code = (string)responseObject[OAuth2AndOIDCConst.code];
+                            state = (string)responseObject[OAuth2AndOIDCConst.state];
+                        }
+                        else
+                        {
+                            // NG
+                        }
+                    }
 
                     // Tokenエンドポイントにアクセス
                     Uri tokenEndpointUri = new Uri(
@@ -4356,6 +4361,7 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 if (!IdToken.Verify(
                                     model.IdToken, model.AccessToken, code, state,
+                                    null, Config.IssuerId, clientId_InSessionOrCookie,
                                     out out_sub, out string out_nonce, out out_jobj)
                                     && out_nonce == nonce_InSessionOrCookie)
                                 {
@@ -4573,8 +4579,22 @@ namespace MultiPurposeAuthSite.Controllers
                     // JARM
                     if (!string.IsNullOrEmpty(response))
                     {
+                        string clientId_InSessionOrCookie = "";
+                        string state_InSessionOrCookie = "";
+                        string redirect_uri_InSessionOrCookie = "";
+                        string nonce_InSessionOrCookie = "";
+                        string code_verifier_InSessionOrCookie = "";
+                        this.LoadRequestParameters(
+                            out clientId_InSessionOrCookie,
+                            out state_InSessionOrCookie,
+                            out redirect_uri_InSessionOrCookie,
+                            out nonce_InSessionOrCookie,
+                            out code_verifier_InSessionOrCookie);
+
                         // responseObject検証
-                        if (ResponseObject.Verify(response, out JObject responseObject))
+                        if (ResponseObject.Verify(response,
+                            null, Config.IssuerId, clientId_InSessionOrCookie,
+                            out JObject responseObject))
                         {
                             // OK
                             access_token = (string)responseObject[OAuth2AndOIDCConst.AccessToken];
