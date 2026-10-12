@@ -1317,8 +1317,8 @@ cd root
 > | 壊すもの | 期待する結果 |
 > |---|---|
 > | **設定の `.cer` だけ**を別の証明書に | **通る**（**discovery が優先される**ことの確認） |
-> | **discovery の宛先**を別の issuer のサイトに（下流コンテナ） | **通る**（`issuer` 不一致で弾き、`.cer` に倒れる。ログに `did not match the expected issuer`） |
-> | **discovery の宛先**を届かない口に | **通る**（ログに `could not read the upstream discovery`） |
+> | **discovery の宛先**を別の issuer のサイトに（下流コンテナ） | **通る**（`issuer` 不一致で弾き、`.cer` に倒れる。ログに `The discovery issuer did not match the expected issuer.`） |
+> | **discovery の宛先**を届かない口に | **通る**（ログに `The discovery document could not be read.`） |
 > | **両方**（discovery も `.cer` も壊す） | **`RT-140.4` / `RT-140.5` が落ちる**（**自分の JWK Set に落ちて通ってしまうことが無い**） |
 
 **上流を先に建てておくこと。** 建っていなければ、**この 4 件（×2 ターゲット）だけが Skip される。**
