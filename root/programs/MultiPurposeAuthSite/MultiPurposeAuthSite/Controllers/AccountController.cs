@@ -1969,7 +1969,17 @@ namespace MultiPurposeAuthSite.Controllers
                         bool nonceMatched =
                             (nonce == (string)Session["id_federation_signin_nonce"]);
 
-                        if (idTokenVerified && nonceMatched)
+                        //  **`aud` は、呼び出し側で確認する**（#286 の段階 5）。
+                        //    **`IdToken.Verify` は、この配備では `aud` を見ない** —
+                        //    **「自分は認可サーバか」で分岐しており**（`JwkSetFilePath` の有無）、
+                        //    **設定済みの側では `iss` と `exp` だけで通す**（Open棟梁 #601）。
+                        //    **`out jobj` でペイロードが返る**ので、ここで確認できる。
+                        //
+                        //    **期待値は、開始処理が `client_id` に使った値**（自分のクライアント ID）。
+                        bool audMatched =
+                            Sts.IdTokenAudience.Matches(jobj, OAuth2AndOIDCParams.ClientID);
+
+                        if (idTokenVerified && nonceMatched && audMatched)
                         {
                             // id_token検証OK。
                             idTokenPayload = jobj;
@@ -1977,10 +1987,11 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // id_token検証NG。
-                            // **理由を残す**（#253）。署名・クレームの検証と nonce の照合を分けて出す。
+                            // **理由を残す**（#253）。署名・クレームの検証と nonce / aud の照合を分けて出す。
                             Logging.MyOperationTrace(string.Format(
-                                "The id_token of the ID federation was not accepted. (verified: {0}, nonce matched: {1})",
-                                idTokenVerified, nonceMatched));
+                                "The id_token of the ID federation was not accepted. "
+                                    + "(verified: {0}, nonce matched: {1}, aud matched: {2})",
+                                idTokenVerified, nonceMatched, audMatched));
 
                             return View("Error");
                         }

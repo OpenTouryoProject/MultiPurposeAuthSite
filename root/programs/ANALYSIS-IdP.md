@@ -74,7 +74,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | 拡張 | PKCE (RFC 7636) | ✓ | `plain` / `S256` |
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
-| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合。**上流は 1 つだけ**（D-15）。**目視・E2E とも実施済み**（上流は `store/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
+| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合、**`aud` も照合**（C-24 / #286 の段階 5）。**SAML2 でも委譲できる**（#286。`SA-6.*`）。**上流は 1 つだけ**（D-15）。**目視・E2E とも実施済み**（上流は `store/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
 | | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は #213（net10.0）/ #216（net48） |
 
 **未実装**は 5 節にまとめた。
@@ -2579,6 +2579,74 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 > 「別の汎用認証サイトを上流にする」前提で、`IdFederation` クライアントも雛形に登録済み。
 > `-Launch` は既に 2 サイト立てている）。**上流に `EmailConfirmed = false` の利用者を置けば、
 > 拒否側も測れる。** #140 の段階 2 で同じ土台が要るので、そこでまとめて作る。
+
+### C-24. ID 連携で受け取る `id_token` の `aud` を確認していなかった **[Core][NetFx]** — **✅ 修正済み（#286 の段階 5）**
+
+**`IdToken.Verify` は、この配備では `aud` を見ない。**
+
+```csharp
+// OpenTouryo : IdToken.Verify（iss と exp を確認した後）
+if (string.IsNullOrEmpty(OAuth2AndOIDCParams.JwkSetFilePath))
+{
+    // Client側 : aud == ClientID か、ClientIDs に含まれるかを確認する
+}
+else
+{
+    // AuthZ側（検証用カバレッジ
+    // OAuth2 AuthZバージョンの実装で成功   ← aud を確認せずに true
+}
+```
+
+**「自分は認可サーバか」（`JwkSetFilePath` の有無）で分岐している**ため、
+**この配備はクライアント役の経路でも認可サーバ側の枝に入る**
+（`JwkSetFilePath` は認可サーバとして必要な設定である）。
+**残るのは `iss`（`SpRp_Isser`）と `exp` だけ**だった。
+
+**鍵の選び方（`CmnJwtToken.Verify`）と同じ分岐である**
+（Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601)）。
+
+**悪用できる経路ではなかった。** `id_token` は**上流の token エンドポイントから直接受け取る**もので
+（TLS ＋ クライアント認証の back-channel。`code` と交換する）、**利用者が差し込める値ではない。**
+**それでも、確認が 1 つ抜けていた。**
+
+| | ID 連携（OIDC） |
+|---|---|
+| `state` | 照合していた（セッション） |
+| `nonce` | 照合していた（セッション） |
+| PKCE（`code_verifier`） | 送っていた（#140 の段階 3） |
+| 認可応答の `iss`（RFC 9207） | 照合していた（#140 の段階 3 ＝ E-11） |
+| `id_token` の `iss` / `exp` | `IdToken.Verify` が見ていた |
+| **`id_token` の `aud`** | **見ていなかった** |
+
+**SAML2 の ID 連携は `Audience` を照合している**（`CmnSaml2Response` の `expectedAcsUrl`。#276）。
+**OIDC 側だけが抜けていた。**
+
+**対応（#286 の段階 5）。** **判定を `CommonLibrary` に置き**（**`Extensions.Sts.IdTokenAudience`**）、
+**両アプリの `IDFederationRedirectEndPoint` で、`IdToken.Verify` の直後に確認する。**
+
+| | |
+|---|---|
+| 期待値 | **`OAuth2AndOIDCParams.ClientID`**（**開始処理が `client_id` に使った値**と同じもの） |
+| `aud` の形 | **文字列でも配列でもよい**（RFC 7519 4.1.3 / OIDC Core 2）。**配列なら、その中に在ればよい** |
+| 無い / 空 | **通さない**（`aud` は OIDC Core が必須としているクレームである） |
+| `azp` | **見ない。** **上流に 1 つのクライアントとして登録される**ので、`aud` が自分を含むことだけを確認する |
+| 失敗したとき | **エラー画面**。**ログは既存の形に 1 項目足した**（`aud matched`。#253） |
+
+**Open棟梁 側の変更は要らない。** **`IdToken.Verify` が `out JObject` でペイロードを返す**ので、
+**呼び出し側で確認できる**（#601 が入れば、ライブラリ側で確認されるようになる）。
+
+**検証（実測 2026/10/12。net48 / net10.0 の両方）。**
+
+| 見たこと | 結果 |
+|---|---|
+| ビルド | 両系統で エラー 0 / 警告 0 |
+| 既存の E2E（通し） | **583 成功 / 失敗 0 / Skip 2**（退行なし。**上流は `aud` を正しく入れている**） |
+| **歯抜け** : 期待値を別の値に差し替えて流す | **`RT-140.4` / `RT-140.5` が両系統で落ちた**（`RT-140.6` / `RT-140.7` は通ったまま） |
+| そのときのログ | `(verified: True, nonce matched: True, aud matched: False)` — **落ちた理由が 1 行で分かる** |
+
+**歯抜けは、期待値の差し替えで測っている。**
+**上流に「別の宛先の `id_token`」を出させる口が無い**ため
+（`aud` は上流が `client_id` から決める）、**E2E の常設ケースは足していない。**
 
 ---
 

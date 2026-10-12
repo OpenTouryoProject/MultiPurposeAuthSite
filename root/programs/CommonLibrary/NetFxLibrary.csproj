@@ -75,6 +75,7 @@
     <Compile Include="Data\CmnUserStore.cs" />
     <Compile Include="Extensions\Sts\AccountLink.cs" />
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
+    <Compile Include="Extensions\Sts\IdTokenAudience.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
     <Compile Include="Extensions\Sts\SelfTestClient.cs" />
