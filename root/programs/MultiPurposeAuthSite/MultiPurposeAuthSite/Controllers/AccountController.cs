@@ -1965,20 +1965,28 @@ namespace MultiPurposeAuthSite.Controllers
                         string access_token = dic[OAuth2AndOIDCConst.AccessToken];
 
                         // OIDCのID連携で、上流の id_token の署名を検証する鍵
+                        //   1. 上流の discovery → jwks_uri → kid（段階 2。鍵のロールオーバーに追随する）
+                        //   2. 設定の .cer（段階 1。引けなかったときの受け皿）
+                        //   3. 渡さない（従来どおり。自分の JWK Set を kid で引く枝に入る）
                         JWS upstreamKey = null;
 
-                        if (!string.IsNullOrEmpty(Config.IdFederationOidcCerFilePath))
+                        if (!string.IsNullOrEmpty(CmnClientParams.Isser))
                         {
-                            if(!string.IsNullOrEmpty(CmnClientParams.Isser))
+                            // discovery から引く（引けなければ null が返る）。
+                            upstreamKey = await Sts.IdFederationJwks.GetKeyAsync(id_token);
+
+                            if (upstreamKey == null
+                                && !string.IsNullOrEmpty(Config.IdFederationOidcCerFilePath))
                             {
-                            	upstreamKey = new JWS_RS256_X509(Config.IdFederationOidcCerFilePath, "");
+                                // 設定の証明書に倒す。
+                                upstreamKey = new JWS_RS256_X509(Config.IdFederationOidcCerFilePath, "");
                             }
-                            else
-                            {
-                                // **証明書だけ在って `SpRp_Isser` が空**なら、渡せない
-                                //（Open棟梁 #601 の版は `iss` が空なら例外にする）。**理由を残す**（#253）。
-                                Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer (SpRp_Isser).");
-                            }
+                        }
+                        else if (!string.IsNullOrEmpty(Config.IdFederationOidcCerFilePath))
+                        {
+                            // **証明書だけ在って `SpRp_Isser` が空**なら、渡せない
+                            //（Open棟梁 #601 の版は `iss` が空なら例外にする）。**理由を残す**（#253）。
+                            Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer (SpRp_Isser).");
                         }
 
                         // **結果を控えておく**（#253）。**失敗したときに、どちらで落ちたかを残すため。**

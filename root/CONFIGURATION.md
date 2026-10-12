@@ -894,8 +894,25 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 **`CanIdFederationByOidc` には入れていない** — **空でも ID 連携は成立する**ためである
 （SAML2 側の 4 本とは扱いが違う）。
 
-> **上流の discovery（`jwks_uri`）から引く形は、まだ無い**（#289 の段階 2）。
-> **鍵のロールオーバーには追随できない**ので、**上流が鍵を替えたら、この `.cer` を置き直す。**
+**鍵の出どころは 3 段**である（#289 の段階 2 で 1 段目が入った）。
+
+| 順 | 出どころ | ロールオーバー |
+|---|---|---|
+| 1 | **上流の discovery → `jwks_uri` → `kid`** | **追随する**（`kid` が引けなければ取り直す。**取得は 1 分に 1 回まで**） |
+| 2 | **設定の `.cer`**（このキー） | **追随しない**（上流が鍵を替えたら置き直す） |
+| 3 | **渡さない**（従来どおり） | － |
+
+**discovery の在り処は、`IdFederationAuthorizeEndpoint` の基底**である
+（`https://host/authorize` → `https://host/.well-known/openid-configuration`）。
+**設定キーは増やしていない。**
+
+> **`iss` そのものから引かない。** **この製品の `IssuerId` は論理名**であり
+> （雛形は `https://ssoauth.opentouryo.com`）、**待ち受けている URL とは別**である
+> （実測 : 開発・E2E の上流は `https://localhost:44301`）。
+
+**discovery の `issuer` が `SpRp_Isser` と一致しなければ、その鍵は使わない**
+（**設定の URL を差し替えられた配備で、別の発行者の鍵を信じないため**）。
+**引けなければ 2 段目に倒れる**ので、**discovery が落ちていても ID 連携は止まらない。**
 
 #### ID 連携（SAML2）で、上流に繋ぐ設定（#286 の段階 1 / 段階 2）
 
