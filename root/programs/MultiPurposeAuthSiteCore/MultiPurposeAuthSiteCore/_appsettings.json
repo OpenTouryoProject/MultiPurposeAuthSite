@@ -281,6 +281,8 @@
     "IdFederationTokenEndpoint": "https://localhost:44301/token",
     // UserInfoエンドポイント
     "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
+    // 上流の id_token の署名を検証する証明書（空なら従来どおり。#289）
+    "IdFederationOidcCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
     // 値は、上流の /samlmetadata から引ける。
     // Requestエンドポイント

@@ -867,6 +867,36 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
 > **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
 
+#### ID 連携（OIDC）で、上流の `id_token` を検証する鍵（#289 の段階 1）
+
+| 設定キー | 雛形の値 | |
+|---|---|---|
+| `IdFederationOidcCerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の `id_token` の署名を検証する証明書**（`.cer` のパス）。**空なら従来どおり** |
+
+**書けば、上流の鍵で検証する**（Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601) の版へ、
+**鍵・`iss`・`aud` を渡す**）。
+
+| 渡すもの | 値 |
+|---|---|
+| 鍵 | **このキーの `.cer`**（`JWS_RS256_X509`） |
+| `iss` | **`SpRp_Isser`**（Open棟梁 のクライアント役の設定。**相手の Issuer** である） |
+| `aud` | **`OAuth2AndOidcClientID`**（上流に登録した自分の `client_id`） |
+
+**空なら、Open棟梁 が設定から鍵を選ぶ**（従来どおり）。
+**ただし、この配備はそこで「自分の JWK Set を `kid` で引く」枝に入る**
+（`CmnJwtToken.Verify` が「自分は認可サーバか」で分岐するため。Open棟梁 #601）。
+
+> **開発用の上流は同じ雛形の鍵**なので、**`kid` が一致して検証できてしまう。**
+> **鍵の違う OP が相手なら、`kid` が引けず、設定の `.cer` に落ちて失敗する**
+> （**失敗側に倒れる**ので安全性の問題ではないが、**連携できない**）。
+> **このキーを書くのが、その対処である。**
+
+**`CanIdFederationByOidc` には入れていない** — **空でも ID 連携は成立する**ためである
+（SAML2 側の 4 本とは扱いが違う）。
+
+> **上流の discovery（`jwks_uri`）から引く形は、まだ無い**（#289 の段階 2）。
+> **鍵のロールオーバーには追随できない**ので、**上流が鍵を替えたら、この `.cer` を置き直す。**
+
 #### ID 連携（SAML2）で、上流に繋ぐ設定（#286 の段階 1 / 段階 2）
 
 **この IdP が、上流の IdP に対して SP になるときの設定である。**

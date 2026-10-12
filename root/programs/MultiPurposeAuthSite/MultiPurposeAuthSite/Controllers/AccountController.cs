@@ -107,6 +107,7 @@ using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.FastReflection;
 
@@ -1963,9 +1964,40 @@ namespace MultiPurposeAuthSite.Controllers
                         string id_token = dic[OAuth2AndOIDCConst.IDToken];
                         string access_token = dic[OAuth2AndOIDCConst.AccessToken];
 
+                        // OIDCのID連携で、上流の id_token の署名を検証する鍵
+                        JWS upstreamKey = null;
+
+                        if (!string.IsNullOrEmpty(Config.IdFederationOidcCerFilePath))
+                        {
+                            if(!string.IsNullOrEmpty(CmnClientParams.Isser))
+                            {
+                            	upstreamKey = new JWS_RS256_X509(Config.IdFederationOidcCerFilePath, "");
+                            }
+                            else
+                            {
+                                // **証明書だけ在って `SpRp_Isser` が空**なら、渡せない
+                                //（Open棟梁 #601 の版は `iss` が空なら例外にする）。**理由を残す**（#253）。
+                                Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer (SpRp_Isser).");
+                            }
+                        }
+
                         // **結果を控えておく**（#253）。**失敗したときに、どちらで落ちたかを残すため。**
-                        bool idTokenVerified =
-                            IdToken.Verify(id_token, access_token, code, state, out sub, out nonce, out jobj);
+                        bool idTokenVerified = false;
+
+                        if (upstreamKey == null)
+                        {
+                            idTokenVerified = IdToken.Verify(
+                                id_token, access_token, code, state,
+                                out sub, out nonce, out jobj);
+                        }
+                        else
+                        {
+                            idTokenVerified = IdToken.Verify(
+                                id_token, access_token, code, state,
+                                upstreamKey, CmnClientParams.Isser, OAuth2AndOIDCParams.ClientID,
+                                out sub, out nonce, out jobj);
+                        }
+
                         bool nonceMatched =
                             (nonce == (string)Session["id_federation_signin_nonce"]);
 

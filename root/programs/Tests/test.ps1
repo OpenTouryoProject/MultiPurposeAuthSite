@@ -332,6 +332,11 @@ function Set-IdFederationEnv
     # **E2E の下流は root で配信する**（VS の /MultiPurposeAuthSite とは形が違う）
     $env:IdFederationRedirectEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationRedirectEndPoint'
 
+    # **上流の id_token の検証鍵**（#289 の段階 1）。
+    #   **上流は同じ雛形の鍵**なので、値は SAML2 側と同じ証明書になる。
+    #   **書かなければ従来どおり**（自分の JWK Set を kid で引く枝に入る）。
+    $env:IdFederationOidcCerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
+
     # **SAML2 の ID 連携**（#286 の段階 2）。
     #   **上流の SSO の口**と、**自分の ACS**（上流の redirect_uri_saml に登録した値）と、
     #   **期待する上流の Issuer**と、**上流の署名証明書**。

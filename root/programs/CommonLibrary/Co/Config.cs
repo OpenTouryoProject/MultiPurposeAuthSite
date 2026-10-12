@@ -2222,6 +2222,20 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// OIDCのID連携で、上流の id_token の署名を検証する証明書（.cer のパス）
+        /// </summary>
+        /// <remarks>
+        /// **空なら、従来どおり** discovery（`jwks_uri`）から引く形は、#289 の段階 2**。
+        /// </remarks>
+        public static string IdFederationOidcCerFilePath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationOidcCerFilePath");
+            }
+        }
+
         #endregion
 
         #region SAML2

@@ -74,7 +74,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | 拡張 | PKCE (RFC 7636) | ✓ | `plain` / `S256` |
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
-| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合、**`aud` も照合**（C-24 / #286 の段階 5）。**SAML2 でも委譲できる**（#286。`SA-6.*`）。**メアド・利用者名・`email_verified` は、アサーションの属性で運ぶ**（#286 の段階 4。`SA-7.*`）。**上流は 1 つだけ**（D-15）。**目視・E2E とも実施済み**（上流は `store/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
+| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合、**`aud` も照合**（C-24 / #286 の段階 5）。**SAML2 でも委譲できる**（#286。`SA-6.*`）。**上流の `id_token` の検証鍵は、設定で渡せる**（#289 の段階 1。`IdFederationOidcCerFilePath`）。**メアド・利用者名・`email_verified` は、アサーションの属性で運ぶ**（#286 の段階 4。`SA-7.*`）。**上流は 1 つだけ**（D-15）。**目視・E2E とも実施済み**（上流は `store/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
 | | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は #213（net10.0）/ #216（net48） |
 
 **未実装**は 5 節にまとめた。
