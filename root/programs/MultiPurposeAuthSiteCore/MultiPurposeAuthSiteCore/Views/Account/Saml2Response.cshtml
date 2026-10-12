@@ -18,6 +18,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2026/09/28  玄人 幸道         新規（#246 の項目 3）
     //*  2026/10/07  玄人 幸道         Audience / Recipient / InResponseTo / 期限の照合を出した（#276）
+    //*  2026/10/12  玄人 幸道         アサーションの属性を出した（#286 の段階 4）
     //**********************************************************************************
 
     **目視で確かめるための画面である。**
@@ -154,6 +155,53 @@ else
         </td>
     </tr>
 </table>
+
+@*  **アサーションの属性**（#286 の段階 4）。
+    **判定には使わない**（観測）。**何が来たかを目視できるようにする。**
+    **`Name` と `FriendlyName` の両方が鍵**なので、同じ値が 2 行出ることがある。 *@
+<h4>アサーションの属性（AttributeStatement）</h4>
+
+@{ Dictionary<string, string> attributes = (Dictionary<string, string>)ViewBag.Attributes; }
+
+@if (attributes == null || attributes.Count == 0)
+{
+    <div class="alert alert-info">
+        属性は無い（`AttributeStatement` が無い応答。**上流が属性を出さない場合もある**）。
+    </div>
+}
+else
+{
+    <table class="table table-bordered">
+        <tr>
+            <th>Name / FriendlyName</th>
+            <th>値</th>
+        </tr>
+        @*  **変数名を `attribute` にしない。** **Razor が `@attribute` 指令と解釈する**
+            （RZ2005 / RZ1011 になる）。 *@
+        @foreach (KeyValuePair<string, string> attr in attributes)
+        {
+            <tr>
+                <th>@attr.Key</th>
+                <td>@attr.Value</td>
+            </tr>
+        }
+    </table>
+
+    <table class="table table-bordered">
+        <tr>
+            <th>メアド（mail）</th>
+            <td>@(string.IsNullOrEmpty((string)ViewBag.AttrEmail) ? "（無し）" : ViewBag.AttrEmail)</td>
+        </tr>
+        <tr>
+            <th>利用者名（uid）</th>
+            <td>@(string.IsNullOrEmpty((string)ViewBag.AttrUserName) ? "（無し）" : ViewBag.AttrUserName)</td>
+        </tr>
+        <tr>
+            <th>email_verified</th>
+            <td>@(string.IsNullOrEmpty((string)ViewBag.AttrEmailVerified) ? "（言っていない）" : ViewBag.AttrEmailVerified)</td>
+        </tr>
+    </table>
+}
 
 <text>応答の XML（アサーションを含む。署名の要素もそのまま）:</text><br />
 @Html.TextArea("ResponseXml", (string)ViewBag.ResponseXml ?? "",

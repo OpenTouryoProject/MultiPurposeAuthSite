@@ -28,6 +28,7 @@
 //*  2026/09/30  玄人 幸道         PPID を OP だけが戻せる形にした（#140 の段階 2）
 //*  2026/09/30  玄人 幸道         発行した sub を対応表から引き、無ければ記録するようにした（#151 の段階 2）
 //*  2026/10/02  玄人 幸道         subject_types を public / pairwise の 2 つにした（#151 の段階 5）
+//*  2026/10/12  玄人 幸道         SAML2 の属性で使う利用者を返すオーバーロードを足した（#286 の段階 4）
 //**********************************************************************************
 
 #if NETFX
@@ -66,6 +67,25 @@ namespace MultiPurposeAuthSite.Util
         public static string GetSubForSAML2(string iss, string userName, SAML2Enum.NameIDFormat nameIDFormat)
         {
             ApplicationUser user = null;
+            return PPIDExtension.GetSubForSAML2(iss, userName, nameIDFormat, out user);
+        }
+
+        /// <summary>
+        /// userNameから、設定に従ってsubを取得する（利用者も返す）。
+        /// </summary>
+        /// <param name="iss">string</param>
+        /// <param name="userName">string</param>
+        /// <param name="nameIDFormat">SAML2Enum.NameIDFormat</param>
+        /// <param name="user">ApplicationUser（引けなければ null）</param>
+        /// <returns>sub</returns>
+        /// <remarks>
+        /// **アサーションの `AttributeStatement` に利用者の値を入れる**ため（#286 の段階 4）。
+        /// **ここで既に利用者を引いている**ので、**呼び出し側が引き直さずに済む**ようにした。
+        /// </remarks>
+        public static string GetSubForSAML2(
+            string iss, string userName, SAML2Enum.NameIDFormat nameIDFormat,
+            out ApplicationUser user)
+        {
             string sub = PPIDExtension.GetSubForOIDC(iss, userName, out user);
 
             switch (nameIDFormat)

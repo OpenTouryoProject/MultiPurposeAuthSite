@@ -86,6 +86,7 @@
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="SamlProviders\CmnSaml2Response.cs" />
+    <Compile Include="SamlProviders\CmnSamlAttributes.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\Sts\DataProvider.cs" />
     <Compile Include="Extensions\Sts\Helper.cs" />

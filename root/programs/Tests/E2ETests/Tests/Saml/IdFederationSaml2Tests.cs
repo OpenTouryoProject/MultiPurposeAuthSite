@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
+//*  2026/10/12  玄人 幸道         SA-6.4（属性を使う）を足した（#286 の段階 4）
 //**********************************************************************************
 
 using System.Threading.Tasks;
@@ -50,7 +51,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     /// |---|---|---|
     /// | 押すボタン | `id_federation_signin` | **`id_federation_saml2_signin`** |
     /// | 連携キー | `(id_token の iss, sub)` | **`(上流の EntityID, NameID)`** |
-    /// | 利用者の鍵 | メアド | **メアド**（＝ `NameID`。`NameIDFormat=emailAddress`） |
+    /// | 利用者の鍵 | メアド | **メアド**（**属性の `mail`** → `NameID`。段階 4） |
     /// | 検証鍵 | `kid` → ローカルの JWK Set（#601） | **設定の `IdFederationSaml2CerFilePath`** |
     /// | 期待する発行者 | `SpRp_Isser` | **`IdFederationSaml2IssuerId`** |
     ///
@@ -322,6 +323,107 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 r.Observe("上流が返した画面", Html.Describe(fed.SsoBody),
                     "**サインイン画面である**（`IsPassive` を送っていないため、"
                     + "**上流は認証の UI を出せる**）。");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region SA-6.4
+
+        /// <summary>SA-6.4 ID 連携が、アサーションの属性を使う</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **段階 4 で足した経路**である（`CmnSamlAttributes`）。
+        ///
+        /// | | 段階 3 まで | 段階 4 |
+        /// |---|---|---|
+        /// | メアド | `emailAddress` の `NameID` | **属性（`mail`）** → `NameID` |
+        /// | 新規作成時の名前 | メアドの `@` より前 | **属性（`uid`）** → メアドの `@` より前 |
+        /// | 検証済みのメアドか | **`emailAddress` の `NameID` を検証済みとして扱う** | **属性（`email_verified`）** |
+        ///
+        /// **上流が属性を出すこと**は `SA-7.1` が測っている。
+        /// **ここで測るのは、下流がそれを使って成立すること**である。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task SA0604_ID連携がアサーションの属性を使う(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                string upstream = await Saml2Federation.SkipIfNotAvailableAsync(client);
+
+                TestReport r = this.Report("SA-6.4",
+                    "SAML2 の ID 連携が、アサーションの属性（mail / uid / email_verified）を使う",
+                    "**段階 4 で、メアド・利用者名・`email_verified` を属性で運べるようになった**"
+                    + "（#286）。**下流は「属性 → `NameID`」の順でメアドを決める**ので、"
+                    + "**上流が属性を出していれば、そちらが使われる。**"
+                    + "**`email_verified` を上流が言うようになった**ため、"
+                    + "**既存アカウントへの結び付けを、`NameID` の形で代用しなくてよい。**",
+                    "SAML Core 2.7.3.1 / #286 の段階 4");
+
+                r.Target(client.Target.DisplayName + " ← 上流 " + upstream);
+
+                r.Step("(1) 上流でサインインして、ID 連携を 1 回通す");
+
+                bool upstreamSignedIn =
+                    await IdFederation.SignInUpstreamAsync(client, upstream);
+
+                Assert.True(upstreamSignedIn, "前提: 上流にサインインできること");
+
+                Saml2FederationResult fed = await Saml2Federation.FederateAsync(client);
+
+                r.Verify("連携が成立する（サインインさせる）", fed.Authorized,
+                    "リダイレクト",
+                    fed.Authorized ? "した" : "**エラー画面（" + Html.Describe(fed.AcsBody) + "）**");
+
+                Assert.True(fed.Authorized, "前提: 連携が成立すること");
+
+                r.Step("(2) 上流のアサーションに属性が入っている");
+
+                Saml2Response response = Saml2.ReadResponse(fed.ResponseXml);
+
+                Assert.NotNull(response);
+
+                r.Verify("AttributeStatement がある",
+                    response.Attributes != null && response.Attributes.Count != 0,
+                    "ある",
+                    (response.Attributes == null || response.Attributes.Count == 0)
+                        ? "**無い**" : "ある（" + response.Attributes.Count + " 件）");
+
+                string attrEmail = response.Attribute("urn:oid:0.9.2342.19200300.100.1.3");
+                string attrUserName = response.Attribute("urn:oid:0.9.2342.19200300.100.1.1");
+                string attrVerified = response.Attribute("email_verified");
+
+                r.Verify("メアドの属性（mail）がある", !string.IsNullOrEmpty(attrEmail),
+                    "ある", string.IsNullOrEmpty(attrEmail) ? "**無い**" : "ある（値は伏せる）");
+
+                r.Verify("利用者名の属性（uid）がある", !string.IsNullOrEmpty(attrUserName),
+                    "ある", string.IsNullOrEmpty(attrUserName) ? "**無い**" : "ある");
+
+                r.Verify("email_verified の属性が true", attrVerified == "true",
+                    "true", string.IsNullOrEmpty(attrVerified) ? "**無い**" : attrVerified);
+
+                r.Step("(3) 下流は、属性のメアドで利用者を引いている");
+
+                string email = await Saml2Federation.SignedInEmailAsync(client);
+
+                r.VerifyEqual("下流の画面に出るメアドが、属性のメアドと一致",
+                    "一致", (email == attrEmail) ? "一致" : "**不一致**");
+
+                //  **この上流は `NameID` にもメアドを入れる**（`emailAddress` を要求しているため）。
+                //    **どちらを使っても同じ値になる**ので、**ここだけでは出所を切り分けられない。**
+                //    **出所の切り分けは `SA-7.2`**（`persistent` でも属性からメアドが取れる）。
+                r.Observe("NameID と属性のメアドの関係",
+                    (response.NameId == attrEmail) ? "同じ値" : "違う値",
+                    "**この上流は `emailAddress` の `NameID` を返す**ので、**同じ値になる。**"
+                    + "**属性の方を使っていることは `SA-7.2` と合わせて読むこと**"
+                    + "（`persistent` の `NameID` でも属性からメアドが取れる）。");
+
+                r.Note("**`Transient` の `NameID` は受けない**（段階 4）— "
+                    + "**毎回変わる値を連携キーにできない**（SAML Core 8.3.8）。");
 
                 r.Done();
             }

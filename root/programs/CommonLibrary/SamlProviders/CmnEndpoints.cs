@@ -33,7 +33,14 @@
 //*  2026/10/07  玄人 幸道         ACS URL の不一致を登録値へのエラー応答にした（#276）
 //*  2026/10/07  玄人 幸道         アサーションの有効期限の単位を直した（分→秒。#276）
 //*  2026/10/07  玄人 幸道         エラー応答にAssertionを組み込まないようにした（#278）
+//*  2026/10/12  玄人 幸道         アサーションにAttributeStatementを足した（#286 の段階 4）
 //**********************************************************************************
+
+#if NETFX
+using MultiPurposeAuthSite.Entity;
+#else
+//
+#endif
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
@@ -241,7 +248,10 @@ namespace MultiPurposeAuthSite.SamlProviders
                 string id2 = "";
 
                 // nameIDFormat.Valueに合わせて処理（PPID）
-                string sub = PPIDExtension.GetSubForSAML2(iss, identity.Name, nameIDFormat.Value);
+                //  **利用者も受け取る**（#286 の段階 4）。**属性に入れる値を、引き直さずに使う。**
+                ApplicationUser user = null;
+                string sub = PPIDExtension.GetSubForSAML2(
+                    iss, identity.Name, nameIDFormat.Value, out user);
 
                 // SamlAssertionを作成する
                 //  **引数は秒である**（`double expiresFromSecond`。`AddSeconds` される）。
@@ -253,8 +263,18 @@ namespace MultiPurposeAuthSite.SamlProviders
                     sub, nameIDFormat.Value, authnContextClassRef,
                     Config.Saml2AssertionExpireTimeSpanFromMinutes * 60, rtnUrl, out id2);
 
-                // 必要に応じて、identity.Claimsを使用して、様々なクレームを追加できる。
-                //  > Assertion > AttributeStatement > Attribute > AttributeValue
+                //  **メアドと利用者名を属性で返す**（#286 の段階 4）。
+                //    **`NameID` だけでは、メアドと利用者名を運べない。**
+                //    **`Persistent`（PPID）の `NameID` でも、SP が利用者を作れる**ようにする。
+                //    **名前は `CmnSamlAttributes` が持つ**（出す側と読む側で同じ名前を使う）。
+                //
+                //    **署名の前に足すこと。** **署名は応答の全体に対して行う**ので、
+                //    **後から足すと署名が合わなくなる。**
+                if (user != null)
+                {
+                    CmnSamlAttributes.AppendStatement(
+                        samlAssertion, user.Email, user.UserName, user.EmailConfirmed);
+                }
 
                 // ResponseにAssertionを組込
                 XmlNode newNode = samlResponse2.ImportNode( // 御呪い

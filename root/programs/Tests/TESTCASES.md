@@ -6889,6 +6889,97 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 上流が返した画面
   - **サインイン画面である**（`IsPassive` を送っていないため、**上流は認証の UI を出せる**）。
 
+## SA-6.4 SAML2 の ID 連携が、アサーションの属性（mail / uid / email_verified）を使う
+
+| | |
+|---|---|
+| 観点 | **段階 4 で、メアド・利用者名・`email_verified` を属性で運べるようになった**（#286）。**下流は「属性 → `NameID`」の順でメアドを決める**ので、**上流が属性を出していれば、そちらが使われる。****`email_verified` を上流が言うようになった**ため、**既存アカウントへの結び付けを、`NameID` の形で代用しなくてよい。** |
+| 根拠 | SAML Core 2.7.3.1 / #286 の段階 4 |
+| テスト | `SA0604_ID連携がアサーションの属性を使う` |
+
+**手順**
+
+1. 上流でサインインして、ID 連携を 1 回通す
+1. 上流のアサーションに属性が入っている
+1. 下流は、属性のメアドで利用者を引いている
+
+**検証（合否を判定する）**
+
+- 連携が成立する（サインインさせる）
+- AttributeStatement がある
+- メアドの属性（mail）がある
+- 利用者名の属性（uid）がある
+- email_verified の属性が true
+- 下流の画面に出るメアドが、属性のメアドと一致
+
+**観測（判定しない）**
+
+- NameID と属性のメアドの関係
+  - **この上流は `emailAddress` の `NameID` を返す**ので、**同じ値になる。****属性の方を使っていることは `SA-7.2` と合わせて読むこと**（`persistent` の `NameID` でも属性からメアドが取れる）。
+
+**補足**
+
+- **`Transient` の `NameID` は受けない**（段階 4）— **毎回変わる値を連携キーにできない**（SAML Core 8.3.8）。
+
+## SA-7.1 アサーションが、メアド・利用者名・email_verified を属性で返す
+
+| | |
+|---|---|
+| 観点 | **`NameID` だけでは、メアドと利用者名を運べない**（#286 の段階 4）。**OIDC 側のクレームに 1 対 1 で対応させた属性**を出す（`mail` ⇔ `email`、`uid` ⇔ `preferred_username`、`email_verified` ⇔ `email_verified`）。**`urn:oid:…` は X.500/LDAP Attribute Profile** であり、**他の IdP（Shibboleth / ADFS など）とも合う。** |
+| 根拠 | SAML Core 2.7.3.1 / SAML V2.0 prof-attr-x500 / #286 の段階 4 |
+| テスト | `SA0701_アサーションが属性でメアドと利用者名を返す` |
+
+**手順**
+
+1. 名前の付け方（FriendlyName / NameFormat）
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- StatusCode
+- InResponseTo（送った要求の ID）
+- AttributeStatement がある
+- メアドの属性（mail）が、サインインした利用者のメアド
+- 利用者名の属性（uid）が、サインインした利用者名
+- email_verified の属性（種データの利用者は確認済み）
+- メアドの属性に FriendlyName と NameFormat がある
+- メアドの FriendlyName
+- メアドの NameFormat
+- 利用者名の FriendlyName
+- 利用者名の NameFormat
+- email_verified の NameFormat（標準の属性ではないので basic）
+
+**観測（判定しない）**
+
+- 属性の件数
+  - **3 件**（`mail` / `email_verified` / `uid`）。**この E2E は `Name` だけを鍵にする**ので、**製品側（`FriendlyName` も鍵に入れる）より少ない。**
+
+**補足**
+
+- **署名は応答の全体に対して行う**ので、**属性も署名の対象に入っている**（`SA-1.*` が署名を測っている）。
+
+## SA-7.2 NameIDPolicy=persistent でも、属性でメアドと利用者名が分かる
+
+| | |
+|---|---|
+| 観点 | **これが段階 4 の目的である。****`Persistent`（PPID）の `NameID` はメアドではない**ので、**段階 3 までは、その配備と ID 連携できなかった**（`NameID` をメアドとして扱っていた）。**属性が在れば、`NameID` が何であっても利用者を引ける。** |
+| 根拠 | SAML Core 8.3.7 / #286 の段階 4 |
+| テスト | `SA0702_persistentでも属性でメアドが分かる` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- StatusCode
+- InResponseTo（送った要求の ID）
+- NameID の Format が echo される
+- NameID はメアドではない（PPID）
+- それでも、属性のメアドは利用者のメアドである
+- 属性の利用者名も取れる
+
+**補足**
+
+- **下流（SP）側の口は、属性 → `NameID` の順でメアドを決める**（`IDFederationAssertionConsumerService`）。**この要求の形でも ID 連携が成立する**という意味である。**ただし、下流が送る要求は `emailAddress` のまま**なので（#286 の決め事）、**`SA-6.*` はそちらを測っている。**
+
 # CN. コンテナ配備（疎通と配備固有）
 
 ## CN-1.1 コンテナの Discovery が返り、`issuer` が構成の `IssuerId` と一致する

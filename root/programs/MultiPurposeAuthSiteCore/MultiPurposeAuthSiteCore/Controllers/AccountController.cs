@@ -2855,25 +2855,73 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
 
-            //  **`NameID` をメアドとして受け取る**（#286 の決め事。`EmailAddress`）。
-            //    **形が違えば受けない** — **メアドでない値をメアドとして扱わないため。**
-            if (result.NameIdFormat != SAML2Enum.NameIDFormat.EmailAddress.ToString()
-                || string.IsNullOrEmpty(result.NameId))
+            //  **連携キーは `NameID`**（上流の EntityID と組で使う）。
+            //    **`Transient` は受けない**（#286 の段階 4）—
+            //    **毎回変わる値を連携キーにできない**（SAML Core 8.3.8）。
+            if (string.IsNullOrEmpty(result.NameId)
+                || result.NameIdFormat == SAML2Enum.NameIDFormat.Transient.ToString())
             {
                 Logging.MyOperationTrace(string.Format(
-                    "The SAML2 ID federation needs an emailAddress NameID. (format: {0}, nameId: {1})",
+                    "The SAML2 ID federation needs a stable NameID. (format: {0}, nameId: {1})",
                     AccountController.SanitizeForTrace(result.NameIdFormat),
                     AccountController.DescribeForTrace(result.NameId)));
 
                 return View("Error");
             }
 
-            return await this.SignInByIdFederationSaml2(result.Issuer, result.NameId);
+            //  **メアドは、属性 → `NameID` の順で決める**（#286 の段階 4）。
+            //    **属性（`mail`）が在れば、それを使う。**
+            //    **`NameIDFormat` が `emailAddress` 以外でも利用者を作れる**ようになる
+            //    （`Persistent` の `NameID` を返す上流。段階 2 では繋げなかった）。
+            //    **無ければ、従来どおり `emailAddress` の `NameID` をメアドとして扱う。**
+            string email = result.AttrEmail;
+
+            if (string.IsNullOrEmpty(email)
+                && result.NameIdFormat == SAML2Enum.NameIDFormat.EmailAddress.ToString())
+            {
+                email = result.NameId;
+            }
+
+            if (string.IsNullOrEmpty(email))
+            {
+                //  **メアドが分からなければ、利用者を引けない**（鍵はメアド。#151 の段階 3）。
+                //    **属性の数だけを出す**（値は出さない）。
+                Logging.MyOperationTrace(string.Format(
+                    "The SAML2 ID federation could not determine the email. "
+                        + "(format: {0}, attributes: {1})",
+                    AccountController.SanitizeForTrace(result.NameIdFormat),
+                    result.Attributes.Count));
+
+                return View("Error");
+            }
+
+            //  **上流が「検証済み」と言っているか**（#286 の段階 4）。
+            //    **属性（`email_verified`）が在れば、それに従う。**
+            //
+            //    **無ければ、`emailAddress` の `NameID` だけを検証済みとして扱う**
+            //    （**上流が署名して主張した主体の識別子**である。SAML Core 8.3.2。段階 2 の決め事）。
+            //
+            //    **それ以外は空のまま** — **既存アカウントには結ばず**（`AccountLink`）、
+            //    **新規に作る利用者の `EmailConfirmed` も false になる。**
+            string emailVerified = result.AttrEmailVerified;
+
+            if (string.IsNullOrEmpty(emailVerified)
+                && result.NameIdFormat == SAML2Enum.NameIDFormat.EmailAddress.ToString()
+                && email == result.NameId)
+            {
+                emailVerified = "true";
+            }
+
+            return await this.SignInByIdFederationSaml2(
+                result.Issuer, result.NameId, email, result.AttrUserName, emailVerified);
         }
 
         /// <summary>検証できたアサーションで、利用者を結び付けてサインインする</summary>
         /// <param name="idpIssuer">上流の Issuer（EntityID）</param>
-        /// <param name="nameId">NameID（`EmailAddress` なのでメアド）</param>
+        /// <param name="federationKey">連携キー（`NameID`）</param>
+        /// <param name="email">メアド（属性の `mail`、または `emailAddress` の `NameID`）</param>
+        /// <param name="preferredUserName">属性の `uid`（新規作成時の名前に使う。無ければ空）</param>
+        /// <param name="emailVerified">上流が言った `email_verified`（言っていなければ空）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <remarks>
         /// **OIDC の ID 連携と同じ形に揃えてある**（#286 の段階 2）。
@@ -2881,54 +2929,30 @@ namespace MultiPurposeAuthSite.Controllers
         /// | | OIDC | SAML2 |
         /// |---|---|---|
         /// | 連携キー | `(id_token の iss, sub)` | **`(上流の EntityID, NameID)`** |
-        /// | 利用者の鍵 | メアド | **メアド**（＝ `NameID`） |
-        /// | 新規作成時の名前 | `preferred_username` → メアドの `@` より前 | **メアドの `@` より前**（**相当するものが無い**） |
+        /// | 利用者の鍵 | メアド | **メアド**（**属性 → `NameID`**。段階 4） |
+        /// | 新規作成時の名前 | `preferred_username` → メアドの `@` より前 | **属性の `uid`** → メアドの `@` より前（段階 4） |
+        /// | 検証済みのメアドか | 上流の `email_verified` | **属性の `email_verified`** → `emailAddress` の `NameID`（段階 4） |
         ///
-        /// **`email_verified` に相当するものが無い。**
-        /// **アサーションに `AttributeStatement` が無い**ためである（#286 の段階 4）。
-        /// **そこで `NameIDFormat=emailAddress` の `NameID` を、検証済みとして扱う**
-        /// （**上流が署名して主張した主体の識別子**である。本文のコメント）。
-        ///
-        /// | 結果 | |
-        /// |---|---|
-        /// | **既にメアドで登録のある利用者に結び付ける** | **メアドが一致すれば結ぶ**（OIDC で上流が `email_verified=true` を返したときと同じ扱い） |
-        /// | **新規に作る利用者は `EmailConfirmed = true`** | 同上 |
-        ///
-        /// **段階 4（`AttributeStatement`）で解ける**ので、そこで見直す。
+        /// **段階 4 で、3 つとも属性から受け取れるようになった**（`CmnSamlAttributes`）。
+        /// **値を決めるのは、呼び出し側（ACS の口）である**（倒し方をそこに置いてある）。
+        /// **このメソッドは、受け取った値で結び付けるだけ**で、OIDC 側と同じ形になる。
         /// </remarks>
-        private async Task<ActionResult> SignInByIdFederationSaml2(string idpIssuer, string nameId)
+        private async Task<ActionResult> SignInByIdFederationSaml2(
+            string idpIssuer, string federationKey,
+            string email, string preferredUserName, string emailVerified)
         {
             IdentityResult idResult = null;
 
-            // **連携キーは (上流の EntityID, NameID)**。
-            string federationKey = nameId;
-
-            // **`NameIDFormat` が `EmailAddress` なので、`NameID` がメアドである。**
-            string email = nameId;
+            // **鍵はメアド**（#151 の段階 3。OIDC 側と同じ）。
             string uid = email;
-            string newUserName = Const.UserNameFromEmail(email);
 
-            //  **上流が「検証済み」と言っているか。**
-            //    **SAML2 には `email_verified` に相当するクレームが無い**
-            //    （アサーションに `AttributeStatement` が無い。#286 の段階 4）。
-            //
-            //    **`NameIDFormat=emailAddress` の `NameID` を、検証済みとして扱う。**
-            //
-            //    | | |
-            //    |---|---|
-            //    | OIDC の `email` | **属性の 1 つ**である。**検証済みかどうかを別に言う必要がある**（`email_verified`） |
-            //    | **SAML2 の `NameID`（`emailAddress`）** | **主体そのものの識別子**である（SAML Core 8.3.2）。**上流が署名して「この主体である」と主張している** |
-            //
-            //    **「未検証」として扱うと、既にメアドで登録のある利用者には永久に結び付けられない。**
-            //    **上流は、証明書と EntityID を設定で指定した相手だけ**であり、
-            //    **その相手の署名した主張を認証に使っている**のだから、
-            //    **同じ主張の中の識別子を信じないのは筋が通らない。**
-            //
-            //    **緩めたくない配備は `RequireVerifiedEmailForAccountLinking` を使う**
-            //    （この値に関わらず、その設定が false なら従来どおり）。
-            string emailVerified = "true";
+            //  **新規に作るときの名前は、属性の `uid` → メアドの `@` より前**（#286 の段階 4）。
+            //    **OIDC 側の `preferred_username` と同じ扱い**である。
+            //    **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く。**
+            string newUserName = Const.IsValidUserName(preferredUserName)
+                ? preferredUserName : Const.UserNameFromEmail(email);
 
-            Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, nameId);
+            Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, federationKey);
             Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
 
             // 既存の外部ログインを確認する。
@@ -3346,6 +3370,12 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.NameIdFormat = result.NameIdFormat;
             ViewBag.AuthnContextClassRef = result.AuthnContextClassRef;
             ViewBag.ResponseXml = result.ResponseXml;
+
+            //  **アサーションの属性**（#286 の段階 4）。**目視のため**（判定には使わない）。
+            ViewBag.Attributes = result.Attributes;
+            ViewBag.AttrEmail = result.AttrEmail;
+            ViewBag.AttrUserName = result.AttrUserName;
+            ViewBag.AttrEmailVerified = result.AttrEmailVerified;
 
             return View("Saml2Response");
         }

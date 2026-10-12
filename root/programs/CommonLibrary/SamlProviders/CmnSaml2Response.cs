@@ -29,11 +29,13 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#286 の段階 1：鍵と期待Issuerを引数で受ける）
+//*  2026/10/12  玄人 幸道         AttributeStatementを読むようにした（#286 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
 using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -165,6 +167,23 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             /// <summary>応答の XML（字下げして出す。空なら読めなかった）</summary>
             public string ResponseXml { get; set; }
+
+            /// <summary>アサーションの属性（#286 の段階 4。無ければ空の辞書）</summary>
+            /// <remarks>
+            /// **`Name` と `FriendlyName` の両方を鍵に持つ**ので、
+            /// **件数は属性の数より多くなる**（`CmnSamlAttributes.Read`）。
+            /// **画面に並べるためのもの**であり、**値を引くときは下の 3 つを使う。**
+            /// </remarks>
+            public Dictionary<string, string> Attributes { get; set; }
+
+            /// <summary>属性のメアド（無ければ空）</summary>
+            public string AttrEmail { get; set; }
+
+            /// <summary>属性の利用者名（無ければ空。OIDC の `preferred_username` に対応）</summary>
+            public string AttrUserName { get; set; }
+
+            /// <summary>属性の `email_verified`（上流が言っていなければ空）</summary>
+            public string AttrEmailVerified { get; set; }
         }
 
         #endregion
@@ -227,7 +246,11 @@ namespace MultiPurposeAuthSite.SamlProviders
                 StatusCode = "",
                 NameIdFormat = "",
                 AuthnContextClassRef = "",
-                ResponseXml = ""
+                ResponseXml = "",
+                Attributes = new Dictionary<string, string>(),
+                AttrEmail = "",
+                AttrUserName = "",
+                AttrEmailVerified = ""
             };
 
             if (string.IsNullOrEmpty(samlResponse))
@@ -388,6 +411,15 @@ namespace MultiPurposeAuthSite.SamlProviders
 
                 ret.NotExpired = (notOnOrAfter == null)
                     ? (bool?)null : (DateTime.UtcNow <= (DateTime)notOnOrAfter);
+
+                //  **属性を読む**（#286 の段階 4）。
+                //    **署名を検証できた応答からだけ読む**（この分岐の中である）。
+                //    **無くてもエラーにしない** — **属性を出さない IdP も在る**ので、
+                //    **呼び出し側が `NameID` に倒せるようにする。**
+                ret.Attributes = CmnSamlAttributes.Read(samlResponse2, samlNsMgr);
+                ret.AttrEmail = CmnSamlAttributes.GetEmail(ret.Attributes);
+                ret.AttrUserName = CmnSamlAttributes.GetUserName(ret.Attributes);
+                ret.AttrEmailVerified = CmnSamlAttributes.GetEmailVerified(ret.Attributes);
 
                 //  **食い違い・期限切れは、ここで落とす**
                 //    （Open棟梁 の `VerifyResponse` が `false` を返していたのと同じ条件）。
