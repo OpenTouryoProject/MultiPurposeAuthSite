@@ -29,7 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#292 の段階 1）
+//*  2026/10/14  玄人 幸道         user store の登録も読むようにした（#292 の段階 2）
 //**********************************************************************************
+
+using MultiPurposeAuthSite.ViewModels;
 
 using System.Collections.Generic;
 
@@ -189,6 +192,10 @@ namespace MultiPurposeAuthSite.Co
     ///
     /// **空なら、従来の単数キーから 1〜2 件を組み立てる**（`default` / `default_saml2`）。
     /// **既存の配備は、設定を 1 行も書かずに従来どおり動く。**
+    ///
+    /// **user store の登録（`IdFederationUpstreams` 表）も読む**（#292 の段階 2）。
+    /// **順は 設定 → DB** で、**同じ鍵なら設定が勝つ**
+    /// （**クライアント登録と同じ流儀**。`Helper` が構成ファイル → `Saml2OAuth2Data` の順に見る）。
     /// </remarks>
     public static class IdFederationUpstreams
     {
@@ -265,7 +272,7 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>設定の全行（protocol も使えるかも問わない）</summary>
         /// <returns>上流の列</returns>
-        private static List<IdFederationUpstream> All()
+        private static List<IdFederationUpstream> FromConfig()
         {
             List<IdFederationUpstream> ret = new List<IdFederationUpstream>();
 
@@ -287,6 +294,66 @@ namespace MultiPurposeAuthSite.Co
             ret.Add(IdFederationUpstreams.FromLegacySaml2());
 
             return ret;
+        }
+
+        /// <summary>設定の全行 ＋ user store の全行（#292 の段階 2）</summary>
+        /// <returns>上流の列</returns>
+        /// <remarks>
+        /// **順は 設定 → DB。** **同じ鍵なら設定が勝つ**
+        /// （**設定ファイルで固定した配備が、DB の行で黙って変わらない**ようにする）。
+        ///
+        /// **DB が使えないときは、設定だけで動く。**
+        /// **`mem` の配備でも読める**（プロセス内の辞書）。
+        /// </remarks>
+        private static List<IdFederationUpstream> All()
+        {
+            List<IdFederationUpstream> ret = IdFederationUpstreams.FromConfig();
+
+            foreach (IdFederationUpstreamViewModel row
+                in Extensions.Sts.IdFederationUpstreamProvider.GetAll())
+            {
+                if (row == null || string.IsNullOrEmpty(row.UpstreamKey))
+                {
+                    continue;
+                }
+
+                if (ret.Exists(u => u.Key == row.UpstreamKey))
+                {
+                    // **設定が勝つ**（DB の行は足さない）。
+                    continue;
+                }
+
+                ret.Add(IdFederationUpstreams.FromStore(row));
+            }
+
+            return ret;
+        }
+
+        /// <summary>user store の 1 行から作る（#292 の段階 2）</summary>
+        /// <param name="row">IdFederationUpstreamViewModel</param>
+        /// <returns>上流</returns>
+        private static IdFederationUpstream FromStore(IdFederationUpstreamViewModel row)
+        {
+            return new IdFederationUpstream()
+            {
+                Key = row.UpstreamKey,
+                DisplayName = row.DisplayName,
+                Protocol = (row.Protocol != null
+                    && row.Protocol.ToLower() == IdFederationUpstream.Saml2)
+                        ? IdFederationUpstream.Saml2 : IdFederationUpstream.Oidc,
+                Enabled = row.Enabled,
+                Issuer = row.Issuer,
+                ClientId = row.ClientID,
+                ClientSecret = row.ClientSecret,
+                DiscoveryUrl = row.DiscoveryUrl,
+                JwkSetUri = row.JwkSetUri,
+                MetadataUrl = row.MetadataUrl,
+                CerFilePath = row.CerFilePath,
+                AuthorizeEndpoint = row.AuthorizeEndpoint,
+                TokenEndpoint = row.TokenEndpoint,
+                UserInfoEndpoint = row.UserInfoEndpoint,
+                SsoEndpoint = row.SsoEndpoint
+            };
         }
 
         /// <summary>設定の 1 行から作る</summary>

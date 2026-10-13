@@ -291,6 +291,42 @@ docker compose up -d --build upstream downstream
 > **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
 > **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
 
+##### 上流の登録を DB と管理画面で扱う（`RT-292.*`。#292 の段階 2）
+
+**設定ファイルを書き換えずに上流を増やせること**を測る。
+
+| | 測ること |
+|---|---|
+| **`RT-292.1`** | **管理画面で、足して・直して・消せる**（`/IdFederationAdmin`） |
+| **`RT-292.2`** | **user store に足した上流が、サインイン画面の導線に出る**（**設定の行も残る**） |
+| **`RT-292.3`** | **管理者（`SystemAdmin`）でなければ開かない** |
+
+**ストアは 4 通りとも測った**（実測 2026/10/14）。
+
+| ストア | 結果 |
+|---|---|
+| `mem`（既定の通し） | **6 / 6**（core / netfx） |
+| `sql`（SQL Server） | **6 / 6** |
+| `ora`（Oracle） | **6 / 6** |
+| `npg`（PostgreSQL） | **3 / 3**（**netfx は PostgreSQL を使えないので Skip**。従来どおり） |
+
+> **表を足したら、DB を作り直すこと。**
+> **PostgreSQL と Oracle は、初期化スクリプトを「最初の 1 回」しか流さない** —
+> **コンテナを起動し直しても、足した表は増えない**（実測）。
+>
+> ```powershell
+> cd store
+> .\0_CopyInitSql.ps1                      # repo の DDL を init に流し込む
+> docker compose rm -sfv postgres oracle    # **作り直す**（sqlserver は毎回流れる）
+> docker compose up -d postgres oracle
+> ```
+
+> **製品コードで歯抜けを測るときは、先に `1_BuildAll.ps1` を回すこと。**
+> **net48 版は IIS Express が「ビルド済みの出力」を配信する**ので、
+> **ビルドせずに `test.ps1` を回すと、古い実装のまま通ってしまう**
+> （実測 : `Co.IdFederationUpstreams` から DB の読み出しを外したとき、
+> **core だけ落ち、netfx は通った**。`dotnet run` は起動時に作り直す）。
+
 ##### 2 つ目の上流コンテナ（`upstream2`。#292 の段階 1）
 
 **上流が n 件になったことを測るために在る**（`CN-5.4` 〜 `CN-5.6`）。

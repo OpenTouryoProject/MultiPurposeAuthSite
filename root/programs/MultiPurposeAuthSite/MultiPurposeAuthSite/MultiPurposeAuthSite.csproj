@@ -274,6 +274,7 @@
     <Compile Include="Controllers\OAuth2ResourceServerController.cs" />
     <Compile Include="Controllers\PingController.cs" />
     <Compile Include="Controllers\RolesAdminController.cs" />
+    <Compile Include="Controllers\IdFederationAdminController.cs" />
     <Compile Include="Controllers\UsersAdminController.cs" />
     <Compile Include="App_Start\StartupAuth.cs" />
     <Compile Include="Global.asax.cs">
@@ -485,6 +486,10 @@
     <Content Include="Views\RolesAdmin\Details.cshtml" />
     <Content Include="Views\RolesAdmin\Edit.cshtml" />
     <Content Include="Views\RolesAdmin\Index.cshtml" />
+    <Content Include="Views\IdFederationAdmin\_Form.cshtml" />
+    <Content Include="Views\IdFederationAdmin\Create.cshtml" />
+    <Content Include="Views\IdFederationAdmin\Edit.cshtml" />
+    <Content Include="Views\IdFederationAdmin\Index.cshtml" />
     <Content Include="Views\UsersAdmin\Create.cshtml" />
     <Content Include="Views\UsersAdmin\Delete.cshtml" />
     <Content Include="Views\UsersAdmin\Details.cshtml" />

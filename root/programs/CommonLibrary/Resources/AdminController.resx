@@ -120,6 +120,9 @@
   <data name="AddSuccess" xml:space="preserve">
     <value>Add is succeeded.</value>
   </data>
+  <data name="IdFederationKeyAlreadyExists" xml:space="preserve">
+    <value>The key is already used.</value>
+  </data>
   <data name="DeleteSuccess" xml:space="preserve">
     <value>Delete is succeeded.</value>
   </data>

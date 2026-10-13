@@ -78,6 +78,7 @@
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
     <Compile Include="Extensions\Sts\DiscoveryJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationJwks.cs" />
+    <Compile Include="Extensions\Sts\IdFederationUpstreamProvider.cs" />
     <Compile Include="Extensions\Sts\IdTokenAudience.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
@@ -195,6 +196,7 @@
     <Compile Include="ViewModels\ErrorViewModel.cs" />
     <Compile Include="ViewModels\HomeSaml2OAuth2StartersViewModel.cs" />
     <Compile Include="ViewModels\HtmlHelperExtensions.cs" />
+    <Compile Include="ViewModels\IdFederationUpstreamViewModel.cs" />
     <Compile Include="ViewModels\ManageAddSaml2OAuth2DataViewModel.cs" />
     <Compile Include="ViewModels\ManageAddPhoneNumberViewModel.cs" />
     <Compile Include="ViewModels\ManageAddUnstructuredDataViewModel.cs" />

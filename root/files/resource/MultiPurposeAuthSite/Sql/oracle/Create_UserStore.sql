@@ -138,6 +138,27 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 
+CREATE TABLE "IdFederationUpstreams"(   -- ID 連携の上流 IdP の登録（#292 の段階 2）
+    -- **設定（appSettings の IdFederationUpstreams）と同じ項目**を持つ。
+    --   **UpstreamKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    "UpstreamKey" NVARCHAR2(128) NOT NULL,   -- PK
+    "DisplayName" NVARCHAR2(256) NULL,
+    "Protocol" NVARCHAR2(16) NOT NULL,       -- oidc / saml2
+    "Enabled" NUMBER(3) NOT NULL,            -- 真は -1（Users の bool 列と同じ）
+    "Issuer" NVARCHAR2(256) NULL,
+    "ClientID" NVARCHAR2(256) NULL,
+    "ClientSecret" NVARCHAR2(256) NULL,      -- **平文。Saml2OAuth2Data と同じ扱い**
+    "DiscoveryUrl" NVARCHAR2(512) NULL,
+    "JwkSetUri" NVARCHAR2(512) NULL,
+    "MetadataUrl" NVARCHAR2(512) NULL,
+    "CerFilePath" NVARCHAR2(512) NULL,
+    "AuthorizeEndpoint" NVARCHAR2(512) NULL,
+    "TokenEndpoint" NVARCHAR2(512) NULL,
+    "UserInfoEndpoint" NVARCHAR2(512) NULL,
+    "SsoEndpoint" NVARCHAR2(512) NULL,
+    CONSTRAINT "PK.IdFederationUpstreams" PRIMARY KEY ("UpstreamKey")
+);
+
 CREATE TABLE "FIDO2Data"(
     "PublicKeyId" NVARCHAR2(256) NOT NULL,   -- PK
     "UserName" NVARCHAR2(256) NOT NULL,      -- Value

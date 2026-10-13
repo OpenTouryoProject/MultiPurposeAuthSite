@@ -998,6 +998,27 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **押したときに送る `submitButtonName` も同じ**である。
 > **どの上流かは、別の欄（`IdpKey`）で送る** — **空なら先頭の 1 件。**
 
+##### user store にも置ける（#292 の段階 2）
+
+**同じ項目を、DB の `IdFederationUpstreams` 表にも置ける。**
+**管理画面（`/IdFederationAdmin`）から足せる**ので、**設定ファイルを書き換えずに増やせる。**
+
+| | |
+|---|---|
+| **読む順** | **設定 → user store。** **同じ鍵なら設定が勝つ**（設定で固定した配備が、行で黙って変わらない） |
+| **画面が編む範囲** | **user store の行だけ**（設定ファイルの行は、画面に出ない） |
+| 認可 | **`UsersAdmin` / `RolesAdmin` と同じ**（`EnableAdministrationOfUsersAndRoles` ＋ `SystemAdmin`） |
+| 置き場 | **`UsersAdmin` の隣**（**上流の登録は配備全体のもの**で、`Manage/AddSaml2OAuth2Data`（自分のクライアント登録）とは所有者が違う） |
+| DDL | **3 方言 ＋ `mem`**（`root/files/resource/MultiPurposeAuthSite/Sql/*/Create_UserStore.sql`） |
+
+**列は設定の属性と同じ**で、**`UpstreamKey` が設定の「鍵」に当たる**
+（`Key` は方言の予約語なので避けた）。
+
+> **`ClientSecret` は平文で入る**（`Saml2OAuth2Data.ClientSecret` と同じ扱い）。
+> **上流へ送る値なので、元に戻せる形でなければならず、ハッシュは取れない。**
+> **表に入る秘密をまとめて暗号化するかは、この Issue の外**である
+> （**下流クライアントの `client_secret` も平文**なので、片方だけ変えると不揃いになる）。
+
 **上流が n 件になると、「2 つの IdP から来た同じ人」が現れる。**
 **この製品は、検証済みのメアドで既存アカウントに結ぶ**（アカウント リンク）。
 

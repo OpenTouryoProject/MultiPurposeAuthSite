@@ -164,6 +164,29 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+CREATE TABLE [IdFederationUpstreams](   -- ID 連携の上流 IdP の登録（#292 の段階 2）
+    -- **設定（appSettings の IdFederationUpstreams）と同じ項目**を持つ。
+    --   **設定 → DB の順に見て、両方使う**（クライアント登録と同じ流儀）。
+    --   **UpstreamKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    [UpstreamKey] [nvarchar](128) NOT NULL,   -- PK
+    [DisplayName] [nvarchar](256) NULL,       -- 画面に出す名前（空なら鍵）
+    [Protocol] [nvarchar](16) NOT NULL,       -- oidc / saml2
+    [Enabled] [bit] NOT NULL,
+    [Issuer] [nvarchar](256) NULL,            -- 期待する iss（OIDC）/ entityID（SAML2）
+    [ClientID] [nvarchar](256) NULL,          -- 上流に登録された自分の client_id
+    [ClientSecret] [nvarchar](256) NULL,      -- 同上（**平文。Saml2OAuth2Data と同じ扱い**）
+    [DiscoveryUrl] [nvarchar](512) NULL,      -- Const.MaxLengthOfUri
+    [JwkSetUri] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
+    [MetadataUrl] [nvarchar](512) NULL,       -- Const.MaxLengthOfUri
+    [CerFilePath] [nvarchar](512) NULL,       -- 倒れ先の証明書（パス）
+    [AuthorizeEndpoint] [nvarchar](512) NULL, -- Const.MaxLengthOfUri
+    [TokenEndpoint] [nvarchar](512) NULL,     -- Const.MaxLengthOfUri
+    [UserInfoEndpoint] [nvarchar](512) NULL,  -- Const.MaxLengthOfUri
+    [SsoEndpoint] [nvarchar](512) NULL,       -- Const.MaxLengthOfUri
+    CONSTRAINT [PK.IdFederationUpstreams] PRIMARY KEY NONCLUSTERED ([UpstreamKey] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [FIDO2Data](
     [PublicKeyId] [nvarchar](256) NOT NULL,  -- PK, base64url
     [UserName] [nvarchar](256) NOT NULL,     -- Value
