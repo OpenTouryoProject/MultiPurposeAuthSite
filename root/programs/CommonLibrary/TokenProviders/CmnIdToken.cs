@@ -240,7 +240,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 JsonConvert.DeserializeObject<Dictionary<string, string>>(cerJwkString);
 
                             jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
-                            jwsES256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+                            jwsES256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.JwkSetEndpoint;
 
                             // Create
                             // Nested JWT : JWSをJWEで暗号化する。

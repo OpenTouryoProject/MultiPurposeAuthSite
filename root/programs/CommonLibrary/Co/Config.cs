@@ -2161,6 +2161,34 @@ namespace MultiPurposeAuthSite.Co
         #region OIDC
 
         /// <summary>
+        /// OIDCのID連携で、上流のdiscovery（OpenID Provider Metadata）のURL
+        /// </summary>
+        /// <remarks>
+        /// **書けば、上流の `jwks_uri` を、ここから引く**（#289 の段階 2）。
+        /// **空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる**
+        /// （`https://host/authorize` → `https://host/.well-known/openid-configuration`）。
+        ///
+        /// **SAML2 側の `IdFederationSaml2MetadataUrl` と対称**である。
+        /// **「相手のメタデータの在り処」は、どちらも設定で与えられる。**
+        ///
+        /// **組み立てでは足りない配備がある。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **パスの下に discovery を置く OP** | `https://host/tenant/v2.0/.well-known/openid-configuration` のような形。**基底だけでは当たらない** |
+        /// | 口とメタデータでホストが違う配備 | 同上 |
+        ///
+        /// **`iss` そのものからは引かない**（`IdFederationOidcCerFilePath` の説明）。
+        /// </remarks>
+        public static string IdFederationOidcDiscoveryUrl
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationOidcDiscoveryUrl");
+            }
+        }
+
+        /// <summary>
         /// IDフェデレーション時の認可エンドポイント
         /// </summary>
         public static string IdFederationAuthorizeEndpoint
@@ -2223,30 +2251,36 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// OIDCのID連携で、上流のdiscovery（OpenID Provider Metadata）のURL
+        /// この認可サーバのJWK Setの口（/jwkcerts のパス）
         /// </summary>
         /// <remarks>
-        /// **書けば、上流の `jwks_uri` を、ここから引く**（#289 の段階 2）。
-        /// **空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる**
-        /// （`https://host/authorize` → `https://host/.well-known/openid-configuration`）。
+        /// **サーバ役の設定である**（#290）。
         ///
-        /// **SAML2 側の `IdFederationSaml2MetadataUrl` と対称**である。
-        /// **「相手のメタデータの在り処」は、どちらも設定で与えられる。**
-        ///
-        /// **組み立てでは足りない配備がある。**
-        ///
-        /// | | |
+        /// | 読む所 | 何に使うか |
         /// |---|---|
-        /// | **パスの下に discovery を置く OP** | `https://host/tenant/v2.0/.well-known/openid-configuration` のような形。**基底だけでは当たらない** |
-        /// | 口とメタデータでホストが違う配備 | 同上 |
+        /// | `Startup` / `WebApiConfig` | **自分の口のルート登録** |
+        /// | `CmnIdToken` / `CmnAccessToken` / `CmnResponseObject` | **発行するトークンの `jku`** |
+        /// | `TokenProviders.CmnEndpoints` | **discovery の `jwks_uri`** |
         ///
-        /// **`iss` そのものからは引かない**（`IdFederationOidcCerFilePath` の説明）。
+        /// **空なら `JwkSetUri` を読む**（従来どおり。**既存の配備はそのまま動く**）。
+        ///
+        /// > **`JwkSetUri` は Open棟梁 のクライアント役の設定**であり、
+        /// > **意味は「相手の JWK Set の URL」**である
+        /// > （[OpenTouryo#602](https://github.com/OpenTouryoProject/OpenTouryo/issues/602) で確かめた）。
+        /// > **このリポジトリが「自分の口」として流用していた**ので、分けた。
+        /// >
+        /// > **相乗りしていると、クライアント役の経路が成立しない** —
+        /// > **`JwkSetStore` は `JwkSetUri` を `new Uri(...)` に渡す**ので、
+        /// > **相対パス（`/jwkcerts`）では立たない。**
         /// </remarks>
-        public static string IdFederationOidcDiscoveryUrl
+        public static string JwkSetEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("IdFederationOidcDiscoveryUrl");
+                string ownValue = GetConfigParameter.GetConfigValue("JwkSetEndpoint");
+
+                return string.IsNullOrEmpty(ownValue)
+                    ? OAuth2AndOIDCParams.JwkSetUri : ownValue;
             }
         }
 
@@ -2267,6 +2301,35 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region SAML2
+
+        /// <summary>
+        /// SAML2のID連携で、上流のメタデータ（EntityDescriptor）のURL
+        /// </summary>
+        /// <remarks>
+        /// **書けば、上流の SSO の口と署名証明書を、ここから引く**（#291）。
+        /// **空なら従来どおり**（`IdFederationSaml2RequestEndpoint` と
+        /// `IdFederationSaml2CerFilePath` を読む）。**引けなかったときも、そちらに倒れる。**
+        ///
+        /// | メタデータから引くもの | 設定で与える形（従来） |
+        /// |---|---|
+        /// | `SingleSignOnService`（HTTP-Redirect）の `Location` | `IdFederationSaml2RequestEndpoint` |
+        /// | `KeyDescriptor use="signing"` の証明書 | `IdFederationSaml2CerFilePath` |
+        ///
+        /// **`entityID` は引かない。** **`IdFederationSaml2IssuerId` と照合する**ために使う
+        /// （**一致しなければ、メタデータの値を使わない**）。
+        /// **自分の ACS（`IdFederationSaml2ResponseEndpoint`）も、設定のまま**である。
+        ///
+        /// **SAML2 には、メタデータの既知のパスが無い**（OIDC の `/.well-known/…` に当たるものが無い）。
+        /// **だから、OIDC 側（#289）のように口の URL から組み立てる形にはしていない** —
+        /// **URL を設定で与える。**
+        /// </remarks>
+        public static string IdFederationSaml2MetadataUrl
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationSaml2MetadataUrl");
+            }
+        }
 
         //  **上の 4 本は OIDC 用である。** ここは SAML2 用で、別に持つ。
         //
@@ -2339,35 +2402,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("IdFederationSaml2CerFilePath");
-            }
-        }
-
-        /// <summary>
-        /// SAML2のID連携で、上流のメタデータ（EntityDescriptor）のURL
-        /// </summary>
-        /// <remarks>
-        /// **書けば、上流の SSO の口と署名証明書を、ここから引く**（#291）。
-        /// **空なら従来どおり**（`IdFederationSaml2RequestEndpoint` と
-        /// `IdFederationSaml2CerFilePath` を読む）。**引けなかったときも、そちらに倒れる。**
-        ///
-        /// | メタデータから引くもの | 設定で与える形（従来） |
-        /// |---|---|
-        /// | `SingleSignOnService`（HTTP-Redirect）の `Location` | `IdFederationSaml2RequestEndpoint` |
-        /// | `KeyDescriptor use="signing"` の証明書 | `IdFederationSaml2CerFilePath` |
-        ///
-        /// **`entityID` は引かない。** **`IdFederationSaml2IssuerId` と照合する**ために使う
-        /// （**一致しなければ、メタデータの値を使わない**）。
-        /// **自分の ACS（`IdFederationSaml2ResponseEndpoint`）も、設定のまま**である。
-        ///
-        /// **SAML2 には、メタデータの既知のパスが無い**（OIDC の `/.well-known/…` に当たるものが無い）。
-        /// **だから、OIDC 側（#289）のように口の URL から組み立てる形にはしていない** —
-        /// **URL を設定で与える。**
-        /// </remarks>
-        public static string IdFederationSaml2MetadataUrl
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("IdFederationSaml2MetadataUrl");
             }
         }
 

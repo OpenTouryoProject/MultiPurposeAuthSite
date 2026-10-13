@@ -1206,9 +1206,43 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `SpRp_ClientCertPfx*` | **クライアント証明書** | クライアントだけ。mTLS |
 
 > **`SpRp_` は「クライアント側」という意味ではない。**
-> Open棟梁 のクライアント用パラメタの接頭辞（`CmnClientParams.Isser` は `SpRp_Isser` を読む）だが、
-> **`*CerFilePath` の 4 本だけは、中身がサーバ自身の証明書**であり、**サーバも読む。**
-> **1 つのキーを、クライアントは「相手の公開鍵」、サーバは「自分の公開鍵」として共有している。**
+> Open棟梁 のクライアント用パラメタの接頭辞（`CmnClientParams.Isser` は `SpRp_Isser` を読む）であり、
+> **意味は「相手（OP / IdP）の値」**である
+> （[OpenTouryo#602](https://github.com/OpenTouryoProject/OpenTouryo/issues/602) で読み手を確かめた）。
+
+#### サーバ役の「自分の値」は、自前のキーで持つ（#290）
+
+**以前は、`*CerFilePath` の 4 本と `JwkSetUri` を、サーバ役が「自分の値」として流用していた。**
+**1 つのキーに「自分の値」と「相手の値」が相乗りしていた**ので、**自前のキーに分けた。**
+
+| 自前のキー（サーバ役） | 旧いキー（相手の値。空のときに読む） | 何か |
+|---|---|---|
+| `RsaCerFilePath` | `SpRp_RsaCerFilePath` | **自分の署名鍵（`RsaPfxFilePath`）の対** |
+| `EcdsaCerFilePath` | `SpRp_EcdsaCerFilePath` | 同上（ES256） |
+| `Ecdsa384CerFilePath` | `SpRp_Ecdsa384CerFilePath` | 同上（ES384） |
+| `Ecdsa512CerFilePath` | `SpRp_Ecdsa512CerFilePath` | 同上（ES512） |
+| `JwkSetEndpoint` | `JwkSetUri` | **自分の `/jwkcerts` のパス**（ルート登録・`jku`・discovery の `jwks_uri`） |
+
+**自前のキーが空なら、旧いキーを読む**（**既存の配備はそのまま動く**）。
+**雛形には自前のキーを書いてある。**
+
+> **`JwkSetUri` の相乗りは、クライアント役の経路を壊していた。**
+> **Open棟梁 の `JwkSetStore` は `JwkSetUri` を `new Uri(...)` に渡す**ので、
+> **自分の口を表す相対パス（`/jwkcerts`）では立たない。**
+> **分けたので、`JwkSetUri` は本来の意味（相手の JWK Set の URL）で使える。**
+
+> **`SpRp_*CerFilePath` も、本来の意味（相手の公開鍵）で使える。**
+> **ID 連携の上流の証明書は、専用のキーで持っている**
+> （`IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath`。#286 / #289）。
+
+**実測（2026/10/13。`CommandLineTools/CreateJwkSetJson` が読む値を出す）。**
+
+| 設定 | 使われた `.cer` |
+|---|---|
+| 自前のキー（`RsaCerFilePath`）に `*_Client.cer` ／ 旧いキーは `*_Server.cer` | **`*_Client.cer`**（`kid` も変わる） |
+| 自前のキーを空 ／ 旧いキーは `*_Server.cer` | **`*_Server.cer`** |
+
+**`.cer` の読み方は、従来どおり 2 つ**（次の表）。
 
 **サーバ側での読み方は 2 つある。**
 

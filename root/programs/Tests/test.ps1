@@ -510,7 +510,18 @@ try {
         #   **client_id は固定値**で、**E2E の `KnownClients.SeededClientIds` と揃えてある。**
         #   そのため、**テストへ渡す環境変数（`MPAS_<名前>`）も要らない。**
 
-        # **有効期限のテスト（#188）は、寿命をごく短くして測る。**
+        # **サーバ役の「自分の値」を、自前のキーで渡す**（#290）。
+    #   **雛形には入れてあるが、実体の appsettings.json / app.config には無い**ことがある
+    #   （設定は人が移す）。**E2E では自前のキーの経路を測りたい**ので、ここで渡す。
+    #   **空にすれば、旧いキー（SpRp_*CerFilePath / JwkSetUri）へ倒れる**（下位互換）。
+    #   **両サイトで同じ値**なので、起動の前に 1 度置けばよい。
+    $env:JwkSetEndpoint = '/jwkcerts'
+    $env:RsaCerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
+    $env:EcdsaCerFilePath = 'C:/root/files/resource/X509/SHA256ECDSA_Server.cer'
+    $env:Ecdsa384CerFilePath = 'C:/root/files/resource/X509/SHA384ECDSA.cer'
+    $env:Ecdsa512CerFilePath = 'C:/root/files/resource/X509/SHA521ECDSA.cer'
+
+    # **有効期限のテスト（#188）は、寿命をごく短くして測る。**
         #   既定（認可コード 600 秒 / Request Object 300 秒 / refresh_token 14 日）を待つのは現実的でない。
         #   **他のテストは落ちるので、-Filter と併せて使う。**
         if ($ShortLifetimes) {

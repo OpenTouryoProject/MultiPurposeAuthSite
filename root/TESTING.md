@@ -1124,6 +1124,18 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | **`SA-6.n`**（SAML2 の ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**。`RT-140.n` と同じ） |
 | `SA-7.n`（アサーションの属性） | ホストの core / netfx | `-UserStoreType`（**上流コンテナは要らない**。自己テストの口で測る） |
 
+> **サーバ役の「自分の値」は、`test.ps1` が自前のキーで渡している**（#290。
+> `JwkSetEndpoint` / `RsaCerFilePath` ほか）。
+> **コンテナ（`store/`）は渡していない**ので、**旧いキー（`JwkSetUri` / `SpRp_*CerFilePath`）へ倒れる経路**を通る。
+> **ホストで自前のキー、コンテナで倒れ先**の両方が、通しで測られている。
+>
+> **歯抜けの測り方**（実測 2026/10/13）。
+>
+> | 壊すもの | 期待する結果 |
+> |---|---|
+> | **自前の `JwkSetEndpoint`** を `/jwkcerts_probe` に（旧いキーは `/jwkcerts`） | **`/jwkcerts` を直に引くテストが落ちる**（`RT-129.3`〜`.7` と `RT-265.1`。**自前のキーが route と `jwks_uri` を決めている**ことの確認） |
+> | **自前のキーを空にし、旧い `JwkSetUri`** を `/jwkcerts_legacy_probe` に | **同じテストが落ちる**（**倒れ先が旧いキー**であることの確認） |
+
 > **`SA-6.*` の上流の値は、上流のメタデータから引いている**（#291。`test.ps1` が URL を渡している）。
 > **設定の口（`…RequestEndpoint`）と鍵（`…CerFilePath`）は受け皿**である。
 >
