@@ -892,6 +892,19 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 
 > **SAML2 は要求にも応答にも署名が在り、OIDC は応答だけ**である。
 
+> **E2E では、上流だけ別の RSA 鍵を使う**（#293 の段階 1）。
+> **`store/docker-compose.yml` の upstream が `RsaPfxFilePath` / `SpRp_RsaCerFilePath` /
+> `JwkSetFilePath` を `*_Upstream` に向けている。**
+>
+> | | 公開している RSA の `kid`（実測 2026/10/13） |
+> |---|---|
+> | 上流（44301） | `ZB2dUcdK9F7wPQ38…`（`SHA256RSA_Upstream.cer`） |
+> | 下流（44303） | `W8YPrSZDTP6XB0VT…`（`SHA256RSA_Server.cer`） |
+>
+> **以前は同じ鍵だった**ので、**(3) の検証鍵を (4) の鍵と取り違えても通ってしまっていた。**
+> **分けたので、取り違えると落ちる**（`TESTING.md` の歯抜け）。
+> **EC の 3 本は共有のまま**（RSA だけを分けた）。
+
 > **(2) の署名は、上流が検証していない**（実測）。
 > **雛形の `IdFederation` クライアントにも、`store/` の E2E のクライアントにも
 > `jwk_rsa_publickey` を登録していない**ので、

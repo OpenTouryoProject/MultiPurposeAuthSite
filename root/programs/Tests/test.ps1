@@ -333,10 +333,10 @@ function Set-IdFederationEnv
     $env:IdFederationRedirectEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationRedirectEndPoint'
 
     # **上流の id_token の検証鍵**（#289 の段階 1）。
-    #   **上流は同じ雛形の鍵**なので、値は SAML2 側と同じ証明書になる。
-    #   **書かなければ従来どおり**（自分の JWK Set を kid で引く枝に入る）。
+    #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す。**
+    #   **通常は discovery から引く**ので、これは引けなかったときの倒れ先である。
     $env:IdFederationOidcDiscoveryUrl = 'https://localhost:44301/.well-known/openid-configuration'
-    $env:IdFederationOidcCerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
+    $env:IdFederationOidcCerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
 
     # **SAML2 の ID 連携**（#286 の段階 2）。
     #   **上流の SSO の口**と、**自分の ACS**（上流の redirect_uri_saml に登録した値）と、
@@ -347,7 +347,7 @@ function Set-IdFederationEnv
     $env:IdFederationSaml2RequestEndpoint = 'https://localhost:44301/saml2request'
     $env:IdFederationSaml2ResponseEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationAssertionConsumerService'
     $env:IdFederationSaml2IssuerId = 'https://ssoauth.opentouryo.com'
-    $env:IdFederationSaml2CerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
+    $env:IdFederationSaml2CerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
 }
 
 function Wait-Site

@@ -1326,6 +1326,23 @@ cd root
 | `RT-140.6` | **上流が未サインインなら成立しない**（**上流がサインイン画面を出し、`code` は返らない**） |
 | `RT-140.7` | 連携の認可応答にも **`iss`** が付く（#252 が実経路で効いていること） |
 
+> **上流は、下流と別の RSA 鍵を使う**（#293 の段階 1）。
+> **`store/docker-compose.yml` の upstream が `*_Upstream.pfx` / `.cer` と
+> `JwkSet_Upstream.json` に向けている**（**EC の 3 本は共有**）。
+>
+> | | 公開している RSA の `kid`（実測 2026/10/13） |
+> |---|---|
+> | 上流（44301） | `ZB2dUcdK9F7wPQ38…` |
+> | 下流（44303） | `W8YPrSZDTP6XB0VT…` |
+>
+> **鍵を作り直すときは `root/files/resource/X509/GenRsaCertForUpstreamByOpenSSL.bat`**、
+> **その後に上流用の JwkSet を作り直す**（`CreateJwkSetJson` を上流の設定で 1 回）。
+>
+> **歯抜け（鍵が本当に分かれているか）** : **メタデータ / discovery を落とし、
+> (3) の倒れ先を「下流自身の証明書」に向ける**と、
+> **`RT-140.4` / `.5` と `SA-6.1` / `.2` / `.4` が落ちる**（**16 件中 10 件**。実測 2026/10/13）。
+> **鍵が同じだった頃は、この取り違えが通っていた。**
+
 > **上流の `id_token` の検証鍵は、上流の discovery から引いている**（#289 の段階 2）。
 > **discovery の URL も `test.ps1` が渡している**（`IdFederationOidcDiscoveryUrl`。
 > **空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる**）。

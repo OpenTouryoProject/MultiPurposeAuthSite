@@ -103,6 +103,20 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTPS_PORTS=8081
+
+      # ---------------------------------------------------------------- 署名鍵（#293 の段階 1）
+      #   **上流だけ、別の RSA 鍵を使う。**
+      #   **既定（mpas-common.env）は `*_Server.pfx`** なので、
+      #   **ここを上書きしないと、上流と下流が同じ鍵になる**（実測で同じだった）。
+      #
+      #   **同じ鍵だと、(3)（上流 → 下流の応答）の検証鍵を取り違えても通ってしまう。**
+      #   **下流は (3) の鍵を、上流のメタデータ / discovery から引く**（#289 / #291）ので、
+      #   **ここを替えるだけでよい**（下流は倒れ先だけ上流の .cer に向けてある）。
+      #
+      #   **JwkSet も別に持つ**（`kid` が変わるため）。**EC の 3 本は共有のまま**（RSA だけを分けた）。
+      - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Upstream.pfx
+      - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
+      - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet_Upstream.json
       # **ホストの開発用証明書を書き出したもの**（3_PublishUpstream.ps1 が用意する）。
       #   既に信頼されているので、**自己テストでブラウザが警告を出さない。**
       - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
@@ -311,14 +325,16 @@ services:
       #   **証明書はマウント先のパスで与える**（mpas-common.env と同じ流儀）。
       # **上流の id_token の検証鍵**（#289 の段階 1）。コンテナの中のパスである。
       - appSettings__IdFederationOidcDiscoveryUrl=https://localhost:44301/.well-known/openid-configuration
-      - appSettings__IdFederationOidcCerFilePath=/resource/X509/SHA256RSA_Server.cer
+      #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す**（倒れ先）。
+      - appSettings__IdFederationOidcCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
       # **メタデータの URL**（#291）。**口と証明書は、ここから引く。**
       - appSettings__IdFederationSaml2MetadataUrl=https://localhost:44301/samlmetadata
       - appSettings__IdFederationSaml2RequestEndpoint=https://localhost:44301/saml2request
       # **ブラウザが戻る先。** 上流の redirect_uri_saml と 1 文字も違ってはならない（#263）。
       - appSettings__IdFederationSaml2ResponseEndpoint=https://localhost:44303/Account/IDFederationAssertionConsumerService
       - appSettings__IdFederationSaml2IssuerId=https://ssoauth.opentouryo.com
-      - appSettings__IdFederationSaml2CerFilePath=/resource/X509/SHA256RSA_Server.cer
+      #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す**（倒れ先）。
+      - appSettings__IdFederationSaml2CerFilePath=/resource/X509/SHA256RSA_Upstream.cer
 
       # ---------------------------------------------------------------- Cookie の名前
       #   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）。
