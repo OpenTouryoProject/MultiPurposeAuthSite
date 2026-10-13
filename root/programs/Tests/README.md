@@ -361,7 +361,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Container/ContainerSignInTests.cs` | `CN-2` | **種データの利用者でサインインできる**（`mem` なので、作り直すたびに作られる） |
 | `Tests/Container/SelfTestLoopbackTests.cs` | `CN-3` | **自己テストの折り返し**（`OAuth2ContainerizatedAuthSvrEPRootURI`。#250）。**下流コンテナで測る** — 上流は `OAuth2ClientEndpointsRootURI` を与えていない |
 | `Tests/Container/CookieIsolationTests.cs` | `CN-4` | **上流と下流の Cookie の名前が 1 つも衝突しないこと**（#255 / #279 / #282 の回帰）。**`CookieContainer` を見る**（`Set-Cookie` を拾うと認証 Cookie が漏れる） |
-| `Tests/Container/HybridFlowTests.cs` | `CN-5` | **コンテナ 2 つでの ID 連携**（下流コンテナ → 上流コンテナ。#281 の目視を機械化）。**2 回目も同じ利用者**になること |
+| `Tests/Container/HybridFlowTests.cs` | `CN-5` | **コンテナ 2 つでの ID 連携**（下流コンテナ → 上流コンテナ。#281 の目視を機械化）。**2 回目も同じ利用者**になること。**`CN-5.3` は SAML2 の連携**（#293 の段階 3。**上流が (2) を検証し、下流が (3) を上流の鍵で検証していなければ通らない**） |
 | `Tests/Container/ContainerErrorTests.cs` | `CN-6` | **配備だから起きる異常系**。`/MultiPurposeAuthSite/...` が 404（**root 配信であること**）、**同意の記録が無いときの `consent_required`**（#280 の裏返し）、未登録の `client_id` |
 
 > **プロトコルとして間違った要求は、ここで測らない。**

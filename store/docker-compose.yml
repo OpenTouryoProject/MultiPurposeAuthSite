@@ -325,16 +325,36 @@ services:
       - appSettings__IdFederationRedirectEndpoint=https://localhost:44303/Account/IDFederationRedirectEndPoint
 
       # ---------------------------------------------------------------- SAML2 の ID 連携（#286 の段階 2）
-      #   **SAML2 は、すべてブラウザ経由である**（サーバが呼ぶ口が無い）。
-      #   **だから宛先は、ホストから届く URL だけでよい**（上の token/userinfo のような振り分けが要らない）。
+      #   **SAML2 のやり取り自体は、すべてブラウザ経由である**（token / userinfo のような口が無い）。
+      #   **だから宛先（SSO / ACS）は、ホストから届く URL でよい。**
+      #
+      #   **ただし、鍵を引くのはサーバである**（メタデータ / JWK Set。#289 / #291）。
+      #   **そこだけは、コンテナの中から届く宛先が要る**（下の「上流の鍵を引く先」）。
       #
       #   **証明書はマウント先のパスで与える**（mpas-common.env と同じ流儀）。
-      # **上流の id_token の検証鍵**（#289 の段階 1）。コンテナの中のパスである。
+      # ---------------------------------------------------------------- 上流の鍵を引く先
+      #   **これはサーバが呼ぶ**（ブラウザは通らない）ので、
+      #   **宛先はコンテナの中から届くもの**でなければならない —
+      #   **`https://localhost:44301` には届かない**（待ち受けは 8080 / 8081。#250 で実測）。
+      #   **token / userinfo と同じ振り分けである**（上の IdFederation*Endpoint）。
+      #
+      #   **届かないままだと、倒れ先（下の .cer）しか測れない。**
+      #   **実測で「could not be read」だった**ので、コンテナの中の宛先に直した（#293 の段階 3）。
+      #
+      #   **JwkSetUri を直接与える**（#290）。**discovery の jwks_uri は
+      #   上流が自分の公開 URL（https://localhost:44301）で書く**ので、
+      #   **discovery は読めても、その先の jwks_uri に届かない。**
+      - appSettings__IdFederationJwkSetUri=http://upstream:8080/jwkcerts
+      #   **discovery はホストから見た URL のまま**（手動確認と揃える）。
+      #   **コンテナの中からは届かない**ので、**この配備では使われない** —
+      #   **上の IdFederationJwkSetUri が優先する**（#290 の順番）。
       - appSettings__IdFederationOidcDiscoveryUrl=https://localhost:44301/.well-known/openid-configuration
       #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す**（倒れ先）。
       - appSettings__IdFederationOidcCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
       # **メタデータの URL**（#291）。**口と証明書は、ここから引く。**
-      - appSettings__IdFederationSaml2MetadataUrl=https://localhost:44301/samlmetadata
+      #   **メタデータが書く SSO の口は、上流の公開 URL（https://localhost:44301/saml2request）**
+      #   なので、**コンテナの中の宛先で引いても、ブラウザが行く先は正しい。**
+      - appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
       - appSettings__IdFederationSaml2RequestEndpoint=https://localhost:44301/saml2request
       # **ブラウザが戻る先。** 上流の redirect_uri_saml と 1 文字も違ってはならない（#263）。
       - appSettings__IdFederationSaml2ResponseEndpoint=https://localhost:44303/Account/IDFederationAssertionConsumerService

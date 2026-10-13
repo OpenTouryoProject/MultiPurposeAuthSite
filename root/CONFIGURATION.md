@@ -1191,6 +1191,41 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 **いまは最初の 1 本だけを使う**（`KeyInfo` の照合で選ぶ仕組みは、まだ無い）。
 **取り直しの下限は 1 分**（OIDC 側の discovery と同じ）。
 
+##### 鍵を引く宛先は「サーバが呼ぶ先」である（#293 の段階 3）
+
+**メタデータ（`IdFederationSaml2MetadataUrl`）と JWK Set（`IdFederationJwkSetUri`）を引くのは、
+サーバである。** **ブラウザが行く先（SSO / ACS / `authorize`）とは、分けて考えること。**
+
+| | 誰が呼ぶか | 宛先 |
+|---|---|---|
+| SSO（`…Saml2RequestEndpoint`）／ ACS ／ `authorize` | **ブラウザ** | **ブラウザから届く URL** |
+| **メタデータ ／ JWK Set ／ discovery** | **サーバ** | **サーバから届く宛先**（`token` / `userinfo` と同じ） |
+
+**コンテナに入れた配備で、ここを取り違えていた**（実測 2026/10/13）。
+**下流コンテナから `https://localhost:44301/samlmetadata` には届かない**
+（公開ポートはホスト側のもので、コンテナの中の待ち受けは 8080 / 8081）。
+**ログは `The SAML2 metadata could not be read. (empty response)`** で、
+**一巡は通っていた** — **通っていたのは倒れ先（設定の `.cer`）である。**
+
+> **倒れ先が在ると、引けていないことは落ちて教えてくれない。**
+> **引けたかどうかはログで確かめる**
+> （`The SAML2 metadata was read.` / `The JWK Set was read from the configured URL.`）。
+
+**メタデータが書く SSO の口は、上流の公開 URL である**
+（`OAuth2AuthorizationServerEndpointsRootURI` から作る。要求の `Host` では作らない）。
+**だから、サーバから届く宛先でメタデータを引いても、ブラウザが行く先は正しい。**
+
+> **discovery の `jwks_uri` も同じ理屈で、上流の公開 URL になる。**
+> **discovery は読めても、その先の `jwks_uri` に届かない**ことがある。
+> **その配備では `IdFederationJwkSetUri` を直接与える**（#290 の順番で、これが最も先に見られる）。
+
+**例**（`store/docker-compose.yml` の下流コンテナ）。
+
+```
+appSettings__IdFederationJwkSetUri=http://upstream:8080/jwkcerts
+appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
+```
+
 #### なぜ (3) の鍵を `SpRp_RsaCerFilePath` にできないか
 
 **(3)（上流 → 下流の応答）の検証鍵として、`SpRp_RsaCerFilePath` は使えない。**

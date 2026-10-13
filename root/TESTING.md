@@ -280,6 +280,7 @@ docker compose up -d --build upstream downstream
 | `SpRp_Isser` | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
 | `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
 | `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
+| `IdFederationJwkSetUri` / `IdFederationSaml2MetadataUrl` | **`http://upstream:8080/...`**（#293 の段階 3） | **鍵を引くのもサーバである。** **`https://localhost:44301` には届かない** |
 | 鍵の置き場 / ログ | `store/keys-downstream` / `store/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
 
 **どのコンテナにも要る設定は `store/mpas-common.env` に 1 か所だけ置いてある**
@@ -288,6 +289,43 @@ docker compose up -d --build upstream downstream
 
 > **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
 > **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
+
+##### SAML2 の ID 連携も、コンテナ 2 つで測る（`CN-5.3`。#293 の段階 3）
+
+**`CN-5.1` / `CN-5.2` は OIDC である。** **SAML2 の脚は `CN-5.3` で初めてコンテナを通る。**
+
+**`SA-6.*` とは、測っている配備が違う。**
+
+| | 下流 | 設定の出どころ |
+|---|---|---|
+| `SA-6.*` | **ホスト**（Kestrel / IIS Express） | `test.ps1` の環境変数 |
+| **`CN-5.3`** | **コンテナ** | **compose の環境変数** |
+
+> **鍵を引く宛先を間違えると、倒れ先しか測れない。**
+> **`IdFederationSaml2MetadataUrl` / `IdFederationJwkSetUri` はサーバが呼ぶ**ので、
+> **`https://localhost:44301` ではコンテナの中から届かない**（待ち受けは 8080 / 8081）。
+>
+> **実測（2026/10/13。直す前）** : 下流コンテナのログに
+> `The SAML2 metadata could not be read. (empty response)` /
+> `The discovery document could not be read. (empty response)`。
+> **一巡は通っていたが、通っていたのは設定の `.cer`（倒れ先）である。**
+>
+> **直した後** : `The SAML2 metadata was read. (sso: found, signing certificates: 1)` /
+> `The JWK Set was read from the configured URL.`
+>
+> **メタデータが書く SSO の口は、上流の公開 URL**（`https://localhost:44301/saml2request`。
+> `OAuth2AuthorizationServerEndpointsRootURI` から作る）なので、
+> **コンテナの中の宛先で引いても、ブラウザが行く先は正しい。**
+
+**歯抜け（実測 2026/10/13。どちらも `CN-5.3` だけが落ち、`CN-5.1` / `CN-5.2` は通ったまま）。**
+
+| 壊すもの | 落ちる所 |
+|---|---|
+| 上流に登録した `jwk_rsa_publickey`（下流コンテナの分）を**別の鍵に** | **`StatusCode` が `Requester`**（**上流が (2) を検証している**。#293 の段階 2） |
+| **メタデータを届かない宛先に戻し、倒れ先の `.cer` を下流自身の証明書に** | **ACS がエラー画面**（**(3) は上流の鍵でなければ検証できない**。#293 の段階 1） |
+
+> **`CN-5.1` / `CN-5.2` が通ったままなのが正しい。**
+> **OIDC の (2) には署名が無く、(3) の鍵は `IdFederationJwkSetUri` から引いている。**
 
 ##### 目視の手順（実測 2026/10/08）
 
