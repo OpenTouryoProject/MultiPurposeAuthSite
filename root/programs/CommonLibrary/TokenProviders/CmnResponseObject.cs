@@ -99,7 +99,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.JwkSetEndpoint;
+            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             // Create
             return jwsRS256.Create(

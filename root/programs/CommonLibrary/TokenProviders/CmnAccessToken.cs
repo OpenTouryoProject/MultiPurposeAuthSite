@@ -118,8 +118,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             JObject jwk = key.JwkFromPfx();
             string kid = (string)jwk[JwtConst.kid];
-            //  **自分の口**（#290。`JwkSetUri` は相手の値を置くキーである）。
-            string jku = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.JwkSetEndpoint;
+            string jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             if (key.IsRsa)
             {

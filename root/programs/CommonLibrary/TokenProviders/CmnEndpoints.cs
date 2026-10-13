@@ -402,9 +402,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             // **認可応答に iss を付けることを広告する**（RFC 9207 §3。#231）
             OpenIDConfig.Add("authorization_response_iss_parameter_supported", true);
 
-            //  **自分の口**（#290）。
             OpenIDConfig.Add("jwks_uri",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.JwkSetEndpoint);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
 
             #endregion
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#289 の段階 2。IdFederationJwks から汎用部分を分けた）
+//*  2026/10/13  玄人 幸道         JWK SetのURLから直に引く口を足した（#290）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Log;
@@ -148,23 +149,39 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 jwk = DiscoveryJwks.PickFromCache(discoveryUrl, kid, out bool dummy);
             }
 
-            if (jwk == null)
+            return DiscoveryJwks.ToJws(jwk);
+        }
+
+        /// <summary>
+        /// `kid` に対応する RSA の署名鍵を、JWK Set の URL から直に引く。
+        /// </summary>
+        /// <param name="jwkSetUrl">相手の JWK Set の URL</param>
+        /// <param name="kid">トークンのヘッダの `kid`</param>
+        /// <returns>検証鍵（引けなければ null）</returns>
+        /// <remarks>
+        /// **discovery を読まない。** **`issuer` の照合も無い。**
+        /// **信頼の根拠は、この URL を設定した人である。**
+        /// **`issuer` と結び付けたいなら `GetRsaKeyAsync`（discovery 経由）を使う。**
+        ///
+        /// **キャッシュと取り直しの下限は、discovery 経由と同じ**（鍵は URL）。
+        /// </remarks>
+        public static async Task<JWS> GetRsaKeyFromJwkSetAsync(string jwkSetUrl, string kid)
+        {
+            if (string.IsNullOrEmpty(jwkSetUrl) || string.IsNullOrEmpty(kid))
             {
                 return null;
             }
 
-            try
-            {
-                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter();
-                return new JWS_RS256_Param(rpkc.JwkToParam(jwk));
-            }
-            catch (Exception ex)
-            {
-                Logging.MyOperationTrace(string.Format(
-                    "The JWK of the kid could not be read. ({0})", ex.GetType().Name));
+            JObject jwk = DiscoveryJwks.PickFromCache(jwkSetUrl, kid, out bool canRefetch);
 
-                return null;
+            if (jwk == null && canRefetch)
+            {
+                //  **引けなければ取り直す**（鍵のロールオーバー）。
+                await DiscoveryJwks.FetchJwkSetAsync(jwkSetUrl);
+                jwk = DiscoveryJwks.PickFromCache(jwkSetUrl, kid, out bool dummy);
             }
+
+            return DiscoveryJwks.ToJws(jwk);
         }
 
         /// <summary>
@@ -239,6 +256,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region private
 
+        /// <summary>JWK から検証鍵（RSA）を作る</summary>
+        /// <param name="jwk">JWK（null なら null を返す）</param>
+        /// <returns>JWS（作れなければ null）</returns>
+        private static JWS ToJws(JObject jwk)
+        {
+            if (jwk == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter();
+                return new JWS_RS256_Param(rpkc.JwkToParam(jwk));
+            }
+            catch (Exception ex)
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The JWK of the kid could not be read. ({0})", ex.GetType().Name));
+
+                return null;
+            }
+        }
+
         /// <summary>キャッシュから `kid` の JWK を引く</summary>
         /// <param name="discoveryUrl">discovery の URL</param>
         /// <param name="kid">kid</param>
@@ -298,6 +339,43 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return null;
+        }
+
+        /// <summary>JWK Set を取ってキャッシュする（URL を直に指している場合）</summary>
+        /// <param name="jwkSetUrl">JWK Set の URL</param>
+        /// <returns>Task</returns>
+        /// <remarks>**失敗しても例外にしない。** **理由はログに残す**（#253 と同じ方針）。</remarks>
+        private static async Task FetchJwkSetAsync(string jwkSetUrl)
+        {
+            try
+            {
+                string jwkSet = await OAuth2AndOIDCClient.GetJwkSetAsync(new Uri(jwkSetUrl));
+
+                if (string.IsNullOrEmpty(jwkSet))
+                {
+                    Logging.MyOperationTrace("The JWK Set could not be read. (empty response)");
+
+                    return;
+                }
+
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(jwkSet);
+
+                lock (DiscoveryJwks._lock)
+                {
+                    DiscoveryJwks._cache[jwkSetUrl] = new Entry()
+                    {
+                        JwkSet = jobj,
+                        FetchedAt = DateTime.UtcNow
+                    };
+                }
+
+                Logging.MyOperationTrace("The JWK Set was read from the configured URL.");
+            }
+            catch (Exception ex)
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The JWK Set could not be read. ({0})", ex.GetType().Name));
+            }
         }
 
         /// <summary>discovery を読み、`jwks_uri` から JWK Set を取ってキャッシュする</summary>

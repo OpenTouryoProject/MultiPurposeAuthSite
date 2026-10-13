@@ -226,13 +226,6 @@
     "Ecdsa512PfxPassword": "test",
     "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
     "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
-    // 上の *.pfx の対になる *.cer（サーバ役の値。空なら SpRp_*CerFilePath を読む。#290）
-    "RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
-    "EcdsaCerFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.cer",
-    "Ecdsa384CerFilePath": "C:/root/files/resource/X509/SHA384ECDSA.cer",
-    "Ecdsa512CerFilePath": "C:/root/files/resource/X509/SHA521ECDSA.cer",
-    // 自分の JWK Set の口（サーバ役の値。空なら JwkSetUri を読む。#290）
-    "JwkSetEndpoint": "/jwkcerts",
 
     // プッシュ通知
     "SetDeviceTokenWebAPI": "/SetDeviceToken",
@@ -280,6 +273,8 @@
     // 既定値はコンテナ、E2Eは、環境変数で上書き。
     
     // 値は、上流の /openid-configuration から引ける。
+    // 上流の JWK Set（書けば discovery を読まない。#290）
+    "IdFederationJwkSetUri": "",
     // discovery（空なら IdFederationAuthorizeEndpoint の基底から組み立てる。#289）
     "IdFederationOidcDiscoveryUrl": "https://localhost:44301/.well-known/openid-configuration",
     // 認可エンドポイント

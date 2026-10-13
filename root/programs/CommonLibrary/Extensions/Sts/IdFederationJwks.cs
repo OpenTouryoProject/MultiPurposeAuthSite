@@ -31,6 +31,7 @@
 //*  2026/10/12  玄人 幸道         新規（#289 の段階 2）
 //*  2026/10/13  玄人 幸道         汎用部分を DiscoveryJwks に分けた（#289 の段階 2）
 //*  2026/10/13  玄人 幸道         discoveryのURLを設定で与えられるようにした（#289 の段階 2）
+//*  2026/10/13  玄人 幸道         上流のJWK SetのURLを直に指せるようにした（#290）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -51,6 +52,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// | | この配備での決め方 |
     /// |---|---|
+    /// | **上流の JWK Set** | **設定の `IdFederationJwkSetUri`**（書いてあれば、discovery を読まない。#290） |
     /// | **discovery の在り処** | **設定の `IdFederationOidcDiscoveryUrl`** → **`IdFederationAuthorizeEndpoint` の基底**（`https://host/authorize` → `https://host/.well-known/openid-configuration`） |
     /// | **期待する Issuer** | **`SpRp_Isser`**（`CmnClientParams.Isser`。Open棟梁 のクライアント役の設定 ＝ **相手の Issuer**） |
     ///
@@ -81,10 +83,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>検証鍵（引けなければ null）</returns>
         public static async Task<JWS> GetKeyAsync(string idToken)
         {
-            return await DiscoveryJwks.GetRsaKeyAsync(
-                IdFederationJwks.DiscoveryUrl(),
-                CmnClientParams.Isser,
-                DiscoveryJwks.KidOf(idToken));
+            string kid = DiscoveryJwks.KidOf(idToken);
+
+            if (!string.IsNullOrEmpty(Config.IdFederationJwkSetUri))
+            {
+                // 専用設定から引く
+                return await DiscoveryJwks.GetRsaKeyFromJwkSetAsync(
+                    Config.IdFederationJwkSetUri, kid);
+            }
+            else
+            {
+                // Discovery経由で引く
+                return await DiscoveryJwks.GetRsaKeyAsync(
+                    IdFederationJwks.DiscoveryUrl(), CmnClientParams.Isser, kid);
+            }
         }
 
         /// <summary>
@@ -95,10 +107,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             if (!string.IsNullOrEmpty(Config.IdFederationOidcDiscoveryUrl))
             {
+                // 専用設定から引く
                 return Config.IdFederationOidcDiscoveryUrl;
             }
-
-            return DiscoveryJwks.DiscoveryUrlOf(Config.IdFederationAuthorizeEndpoint);
+            else
+            {
+                // Discovery経由で引く
+                return DiscoveryJwks.DiscoveryUrlOf(Config.IdFederationAuthorizeEndpoint);
+            }
         }
     }
 }

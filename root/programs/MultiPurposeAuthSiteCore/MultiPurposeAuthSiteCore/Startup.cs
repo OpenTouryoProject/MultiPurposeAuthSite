@@ -309,7 +309,7 @@ namespace MultiPurposeAuthSite
 
                 endpoints.MapControllerRoute(
                     name: "JwksUri",
-                    pattern: Config.JwkSetEndpoint.Substring(1), // 先頭の[/]を削除,
+                    pattern: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" });
 
                 endpoints.MapControllerRoute(

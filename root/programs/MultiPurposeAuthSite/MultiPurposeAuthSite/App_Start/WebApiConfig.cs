@@ -105,7 +105,7 @@ namespace MultiPurposeAuthSite
 
             config.Routes.MapHttpRoute(
                 name: "JwksUri",
-                routeTemplate: Config.JwkSetEndpoint.Substring(1), // 先頭の[/]を削除
+                routeTemplate: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" }
             );
 

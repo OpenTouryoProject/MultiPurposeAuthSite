@@ -855,7 +855,7 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `Saml2RequestEndpoint` | `/saml2request` | **IdP の口**（SSO）。メタデータの `SingleSignOnService` にこの値が出る |
 | `Saml2ResponseEndpoint` | `/Account/AssertionConsumerService` | **自己テストの SP の口**（`redirect_uri_saml` を `test_self_saml` で登録したときの展開先） |
 | `Saml2AssertionExpireTimeSpanFromMinutes` | `30`（**分**） | **アサーションの有効期限**（#276）。**書かなければ `OidcIdTokenExpireTimeSpanFromMinutes` を使う**（従来の振る舞い） |
-| `RsaPfxFilePath` | — | **応答の署名鍵**。メタデータの `KeyDescriptor` に、対応する証明書（`RsaCerFilePath`）が出る |
+| `RsaPfxFilePath` | — | **応答の署名鍵**。メタデータの `KeyDescriptor` に、対応する証明書（`SpRp_RsaCerFilePath`）が出る |
 
 クライアントの登録（`OAuth2ClientsInformation` または管理画面）側は次の 2 つ。
 
@@ -871,6 +871,7 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 
 | 設定キー | 雛形の値 | |
 |---|---|---|
+| `IdFederationJwkSetUri` | （空） | **上流の JWK Set の URL**。**書けば discovery を読まない**（#290） |
 | `IdFederationOidcDiscoveryUrl` | `https://localhost:44301/.well-known/openid-configuration` | **上流の discovery**。**空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる** |
 | `IdFederationOidcCerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の `id_token` の署名を検証する証明書**（`.cer` のパス）。**空なら従来どおり** |
 
@@ -895,13 +896,16 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 **`CanIdFederationByOidc` には入れていない** — **空でも ID 連携は成立する**ためである
 （SAML2 側の 4 本とは扱いが違う）。
 
-**鍵の出どころは 3 段**である（#289 の段階 2 で 1 段目が入った）。
+**鍵の出どころは 4 段**である。
 
 | 順 | 出どころ | ロールオーバー |
 |---|---|---|
-| 1 | **上流の discovery → `jwks_uri` → `kid`** | **追随する**（`kid` が引けなければ取り直す。**取得は 1 分に 1 回まで**） |
-| 2 | **設定の `.cer`**（このキー） | **追随しない**（上流が鍵を替えたら置き直す） |
-| 3 | **渡さない**（従来どおり） | － |
+| 1 | **設定の `IdFederationJwkSetUri`**（上流の JWK Set を直に指す。#290） | **追随する**（`kid` が引けなければ取り直す）。**`issuer` の照合は無い** |
+| 2 | **上流の discovery → `jwks_uri` → `kid`**（#289 の段階 2） | **追随する**。**`issuer` を照合する** |
+| 3 | **設定の `.cer`**（`IdFederationOidcCerFilePath`） | **追随しない**（上流が鍵を替えたら置き直す） |
+| 4 | **渡さない**（従来どおり） | － |
+
+**取得は、1 と 2 のどちらも 1 分に 1 回まで**（`kid` が引けないときだけ取り直す）。
 
 **discovery の在り処は、設定 → 口の基底から組み立て**の順で決まる。
 
@@ -1210,41 +1214,35 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > **意味は「相手（OP / IdP）の値」**である
 > （[OpenTouryo#602](https://github.com/OpenTouryoProject/OpenTouryo/issues/602) で読み手を確かめた）。
 
-#### サーバ役の「自分の値」は、自前のキーで持つ（#290）
+#### 「この配備の値」と「相手の値」の分け方（#290）
 
-**以前は、`*CerFilePath` の 4 本と `JwkSetUri` を、サーバ役が「自分の値」として流用していた。**
-**1 つのキーに「自分の値」と「相手の値」が相乗りしていた**ので、**自前のキーに分けた。**
+**1 つの規則で揃えてある。**
 
-| 自前のキー（サーバ役） | 旧いキー（相手の値。空のときに読む） | 何か |
+| | 置き場 | 例 |
 |---|---|---|
-| `RsaCerFilePath` | `SpRp_RsaCerFilePath` | **自分の署名鍵（`RsaPfxFilePath`）の対** |
-| `EcdsaCerFilePath` | `SpRp_EcdsaCerFilePath` | 同上（ES256） |
-| `Ecdsa384CerFilePath` | `SpRp_Ecdsa384CerFilePath` | 同上（ES384） |
-| `Ecdsa512CerFilePath` | `SpRp_Ecdsa512CerFilePath` | 同上（ES512） |
-| `JwkSetEndpoint` | `JwkSetUri` | **自分の `/jwkcerts` のパス**（ルート登録・`jku`・discovery の `jwks_uri`） |
+| **この配備の値**（**自分の役でも、相手が自分のときでも読む**） | **共通設定のまま**（`Client-Server共通設定` の節） | `JwkSetUri`（**自分の `/jwkcerts` のパス**）／`SpRp_*CerFilePath`（**この配備の証明書**） |
+| **相手（上流 IdP）の値** | **`IdFederation*` のキー**（**相手ごとの値**） | `IdFederationJwkSetUri` / `IdFederationOidcDiscoveryUrl` / `IdFederationOidcCerFilePath` / `IdFederationSaml2*` |
 
-**自前のキーが空なら、旧いキーを読む**（**既存の配備はそのまま動く**）。
-**雛形には自前のキーを書いてある。**
+> **以前は「サーバ役の自分の値」を別のキーに分ける案を採っていた**
+> （`JwkSetEndpoint` / `RsaCerFilePath` など）。
+> **やめた。** **同じ意味のキーが 2 本になるだけ**だったためである。
+>
+> **`JwkSetUri` も `SpRp_*CerFilePath` も、雛形では `Client-Server共通設定` の節に在る。**
+> **「この配備の JWK Set の口」「この配備の証明書」**であり、
+> **サーバ役が自分の値として読んでよい。**
+>
+> **本当に足りなかったのは「上流（相手）の値」**であり、
+> **それは `IdFederation*` のキーが持つ**（#286 / #289 / #291 で揃えた）。
 
-> **`JwkSetUri` の相乗りは、クライアント役の経路を壊していた。**
-> **Open棟梁 の `JwkSetStore` は `JwkSetUri` を `new Uri(...)` に渡す**ので、
-> **自分の口を表す相対パス（`/jwkcerts`）では立たない。**
-> **分けたので、`JwkSetUri` は本来の意味（相手の JWK Set の URL）で使える。**
+**この規則で、相乗りは解けている。**
 
-> **`SpRp_*CerFilePath` も、本来の意味（相手の公開鍵）で使える。**
-> **ID 連携の上流の証明書は、専用のキーで持っている**
-> （`IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath`。#286 / #289）。
-
-**実測（2026/10/13。`CommandLineTools/CreateJwkSetJson` が読む値を出す）。**
-
-| 設定 | 使われた `.cer` |
+| 以前の困りごと | いまの形 |
 |---|---|
-| 自前のキー（`RsaCerFilePath`）に `*_Client.cer` ／ 旧いキーは `*_Server.cer` | **`*_Client.cer`**（`kid` も変わる） |
-| 自前のキーを空 ／ 旧いキーは `*_Server.cer` | **`*_Server.cer`** |
+| **上流の証明書に差し替えられない**（`SpRp_RsaCerFilePath` は自分の証明書として読まれる） | **差し替えない。** 上流の証明書は `IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath` |
+| **上流の JWK Set を取りに行けない**（`JwkSetUri` は相対パスで、`new Uri(...)` に渡せない） | **`IdFederationJwkSetUri`**（または discovery の `jwks_uri`）から引く。**`JwkSetStore` の経路は通らない** |
+| **期待する上流の Issuer が 1 つしか無い**（`SpRp_Isser`） | **SAML2 は `IdFederationSaml2IssuerId`。** **OIDC は `SpRp_Isser` のまま**（**上流が 1 つなら足りる**。n 件は #292） |
 
-**`.cer` の読み方は、従来どおり 2 つ**（次の表）。
-
-**サーバ側での読み方は 2 つある。**
+**サーバ側での読み方は 2 つある。****サーバ側での読み方は 2 つある。**
 
 | | |
 |---|---|

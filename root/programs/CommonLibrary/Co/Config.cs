@@ -2251,36 +2251,31 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// この認可サーバのJWK Setの口（/jwkcerts のパス）
+        /// OIDCのID連携で、上流のJWK SetのURL
         /// </summary>
         /// <remarks>
-        /// **サーバ役の設定である**（#290）。
+        /// **書けば、ここから直に引く**（discovery を読まない）。
+        /// **空なら discovery の `jwks_uri` から引く**（`IdFederationOidcDiscoveryUrl`。#289 の段階 2）。
         ///
-        /// | 読む所 | 何に使うか |
-        /// |---|---|
-        /// | `Startup` / `WebApiConfig` | **自分の口のルート登録** |
-        /// | `CmnIdToken` / `CmnAccessToken` / `CmnResponseObject` | **発行するトークンの `jku`** |
-        /// | `TokenProviders.CmnEndpoints` | **discovery の `jwks_uri`** |
+        /// | 順 | 鍵の出どころ | |
+        /// |---|---|---|
+        /// | 1 | **このキー**（上流の JWK Set） | **discovery を出さない OP でも、`kid` で引ける** |
+        /// | 2 | discovery → `jwks_uri` → `kid` | **ロールオーバーに追随する** |
+        /// | 3 | 設定の `.cer`（`IdFederationOidcCerFilePath`） | 1 本。倒れ先 |
         ///
-        /// **空なら `JwkSetUri` を読む**（従来どおり。**既存の配備はそのまま動く**）。
+        /// **`JwkSetUri` とは役が違う。**
+        /// **`JwkSetUri` は「この配備の JWK Set の口」**（クライアント・サーバの共通設定）であり、
+        /// **自分の `/jwkcerts` のパスとして読む**（ルート登録・`jku`・discovery の `jwks_uri`）。
+        /// **上流（相手）の JWK Set は別の値**なので、このキーで持つ。
         ///
-        /// > **`JwkSetUri` は Open棟梁 のクライアント役の設定**であり、
-        /// > **意味は「相手の JWK Set の URL」**である
-        /// > （[OpenTouryo#602](https://github.com/OpenTouryoProject/OpenTouryo/issues/602) で確かめた）。
-        /// > **このリポジトリが「自分の口」として流用していた**ので、分けた。
-        /// >
-        /// > **相乗りしていると、クライアント役の経路が成立しない** —
-        /// > **`JwkSetStore` は `JwkSetUri` を `new Uri(...)` に渡す**ので、
-        /// > **相対パス（`/jwkcerts`）では立たない。**
+        /// > **信頼の根拠は、このキーを書いた人である**（discovery のような `issuer` の照合が無い）。
+        /// > **`issuer` と結び付けたいなら、discovery（2 番目）を使うこと。**
         /// </remarks>
-        public static string JwkSetEndpoint
+        public static string IdFederationJwkSetUri
         {
             get
             {
-                string ownValue = GetConfigParameter.GetConfigValue("JwkSetEndpoint");
-
-                return string.IsNullOrEmpty(ownValue)
-                    ? OAuth2AndOIDCParams.JwkSetUri : ownValue;
+                return GetConfigParameter.GetConfigValue("IdFederationJwkSetUri");
             }
         }
 
