@@ -244,6 +244,72 @@ services:
       timeout: 5s
       retries: 30
 
+  # ------------------------------------------------------------------ 2 つ目の上流 IdP（#292 の段階 1）
+  #   **上流が n 件になったことを測るために在る。**
+  #   **1 つ目（upstream）と、鍵も issuer も違う**ので、
+  #   **「鍵の違う OP と連携できる」ことが、ここで初めて測れる**（#289 の完了コメントの限界）。
+  #
+  #   **イメージは同じ**（3 コンテナとも `./app`）。**違うのは設定だけである。**
+  upstream2:
+    build: ./app
+    restart: always
+    ports:
+      - 44304:8081
+    env_file:
+      - ./mpas-common.env
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTPS_PORTS=8081
+      - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+      - Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
+
+      # ---------------------------------------------------------------- 署名鍵（#292 の段階 1）
+      #   **1 つ目の上流とも、下流とも違う鍵**である（`CN-1.5` が 3 つとも違うことを見る）。
+      - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Upstream2.pfx
+      - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Upstream2.cer
+      - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet_Upstream2.json
+
+      - appSettings__UserStoreType=mem
+      # **自分の URL**（口はポートで分ける）
+      - appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:44304
+      - appSettings__DataProtectionKeyPath=/keys
+      - appSettings__IsLockedDownTestEndpoints=false
+      - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
+
+      # **名乗る iss を、1 つ目の上流とも下流とも分ける**（#281 と同じ理由）。
+      #   **連携キーは `(iss, sub)`** なので、**これが違えば別の利用者**になる（`CN-5.6`）。
+      - appSettings__IssuerId=https://upstream2.ssoauth.opentouryo.com
+
+      # **Cookie の名前を 3 つで分ける**（ポートでは分かれない。RFC 6265 §8.5）
+      - appSettings__AuthCookieName=.MultiPurposeAuthSite
+      - appSettings__CookieNamePrefix=upstream2_
+      - sessionState__SessionCookieName=MultiPurposeAuthSiteSession
+
+      # **利用者名を下流へ渡す**（1 つ目の上流と同じ。#151 の段階 4）
+      - appSettings__UserClaimsMapping__preferred_username=user:UserName
+
+      # ---------------------------------------------------------------- 下流コンテナ用のクライアント
+      #   **折り返し口は下流の 1 本**（#292 の段階 1 で決めた）。
+      #   **上流ごとに別のクライアントになる**（登録する側が別のサイトなので）。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d9__client_secret=E2E_9ZqaH3JcvlzJyoYP0ir97LRRaI1k5A4a
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d9__redirect_uri_code=https://localhost:44303/Account/IDFederationRedirectEndPoint
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d9__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d9__client_name=IdFederationDownstreamContainer2
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d9__redirect_uri_saml=https://localhost:44303/Account/IDFederationAssertionConsumerService
+      # **AuthnRequest の署名を検証する鍵**（#293 の段階 2。値は *_Client.cer の JWK）。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d9__jwk_rsa_publickey=eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ
+    volumes:
+      - ./cert:/https:ro
+      # **鍵の置き場とログは、上流 1・下流と分ける**（#279 / #281 と同じ理由）
+      - ./keys-upstream2:/keys
+      - C:/root/files/resource:/resource:ro
+      - ./logs-upstream2:/app/logs
+    healthcheck:
+      test: ["CMD", "dotnet", "--info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
   # ------------------------------------------------------------------ 下流の IdP（#281）
   #   **上流と同じイメージを、別の設定で建てる。**
   #   これで**コンテナ 2 つだけでハイブリッド IdP 構成が取れる**。
@@ -361,6 +427,55 @@ services:
       - appSettings__IdFederationSaml2IssuerId=https://ssoauth.opentouryo.com
       #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す**（倒れ先）。
       - appSettings__IdFederationSaml2CerFilePath=/resource/X509/SHA256RSA_Upstream.cer
+
+      # ---------------------------------------------------------------- 上流の登録（n 件。#292 の段階 1）
+      #   **これが在れば、上の IdFederation* / SpRp_Isser / OAuth2AndOidc* より優先する。**
+      #   **上の単数キーは、互換のために残してある**（この設定を外せば、1 件の配備に戻る）。
+      #
+      #   **相手ごとの値だけを並べる**（#290 のルール）。
+      #   **折り返し口（IdFederationRedirectEndpoint / …Saml2ResponseEndpoint）は共通設定のまま**で、
+      #   **どの上流にも同じ 1 本を登録してある**（#263 の事故を増やさない）。
+      #
+      #   **鍵とメタデータを引く宛先は、コンテナの中から届くもの**（#293 の段階 3 の教訓）。
+      #   **ブラウザが行く先（authorize / SSO）は、ホストから届く URL。**
+
+      # 1 つ目の上流（44301）
+      - appSettings__IdFederationUpstreams__upstream1__display_name=Upstream 1 (OIDC)
+      - appSettings__IdFederationUpstreams__upstream1__protocol=oidc
+      - appSettings__IdFederationUpstreams__upstream1__issuer=https://ssoauth.opentouryo.com
+      - appSettings__IdFederationUpstreams__upstream1__client_id=e2e1c0de0000000000000000000000d3
+      - appSettings__IdFederationUpstreams__upstream1__client_secret=E2E_o9ztLGV4XVAJbpwJSb6jCJXwmifm5Dra
+      - appSettings__IdFederationUpstreams__upstream1__jwk_set_uri=http://upstream:8080/jwkcerts
+      - appSettings__IdFederationUpstreams__upstream1__cer_file_path=/resource/X509/SHA256RSA_Upstream.cer
+      - appSettings__IdFederationUpstreams__upstream1__authorize_endpoint=https://localhost:44301/authorize
+      - appSettings__IdFederationUpstreams__upstream1__token_endpoint=http://upstream:8080/token
+      - appSettings__IdFederationUpstreams__upstream1__userinfo_endpoint=http://upstream:8080/userinfo
+      - appSettings__IdFederationUpstreams__upstream1_saml2__display_name=Upstream 1 (SAML2)
+      - appSettings__IdFederationUpstreams__upstream1_saml2__protocol=saml2
+      - appSettings__IdFederationUpstreams__upstream1_saml2__issuer=https://ssoauth.opentouryo.com
+      - appSettings__IdFederationUpstreams__upstream1_saml2__client_id=e2e1c0de0000000000000000000000d3
+      - appSettings__IdFederationUpstreams__upstream1_saml2__metadata_url=http://upstream:8080/samlmetadata
+      - appSettings__IdFederationUpstreams__upstream1_saml2__sso_endpoint=https://localhost:44301/saml2request
+      - appSettings__IdFederationUpstreams__upstream1_saml2__cer_file_path=/resource/X509/SHA256RSA_Upstream.cer
+
+      # 2 つ目の上流（44304。**鍵も issuer も違う**）
+      - appSettings__IdFederationUpstreams__upstream2__display_name=Upstream 2 (OIDC)
+      - appSettings__IdFederationUpstreams__upstream2__protocol=oidc
+      - appSettings__IdFederationUpstreams__upstream2__issuer=https://upstream2.ssoauth.opentouryo.com
+      - appSettings__IdFederationUpstreams__upstream2__client_id=e2e1c0de0000000000000000000000d9
+      - appSettings__IdFederationUpstreams__upstream2__client_secret=E2E_9ZqaH3JcvlzJyoYP0ir97LRRaI1k5A4a
+      - appSettings__IdFederationUpstreams__upstream2__jwk_set_uri=http://upstream2:8080/jwkcerts
+      - appSettings__IdFederationUpstreams__upstream2__cer_file_path=/resource/X509/SHA256RSA_Upstream2.cer
+      - appSettings__IdFederationUpstreams__upstream2__authorize_endpoint=https://localhost:44304/authorize
+      - appSettings__IdFederationUpstreams__upstream2__token_endpoint=http://upstream2:8080/token
+      - appSettings__IdFederationUpstreams__upstream2__userinfo_endpoint=http://upstream2:8080/userinfo
+      - appSettings__IdFederationUpstreams__upstream2_saml2__display_name=Upstream 2 (SAML2)
+      - appSettings__IdFederationUpstreams__upstream2_saml2__protocol=saml2
+      - appSettings__IdFederationUpstreams__upstream2_saml2__issuer=https://upstream2.ssoauth.opentouryo.com
+      - appSettings__IdFederationUpstreams__upstream2_saml2__client_id=e2e1c0de0000000000000000000000d9
+      - appSettings__IdFederationUpstreams__upstream2_saml2__metadata_url=http://upstream2:8080/samlmetadata
+      - appSettings__IdFederationUpstreams__upstream2_saml2__sso_endpoint=https://localhost:44304/saml2request
+      - appSettings__IdFederationUpstreams__upstream2_saml2__cer_file_path=/resource/X509/SHA256RSA_Upstream2.cer
 
       # ---------------------------------------------------------------- Cookie の名前
       #   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）。

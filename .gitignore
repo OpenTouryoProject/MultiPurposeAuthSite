@@ -324,3 +324,7 @@ __pycache__/
 # 下流 IdP コンテナの生成物（#281。上流とは別の置き場にする）
 /store/keys-downstream/
 /store/logs-downstream/
+
+# 2 つ目の上流 IdP コンテナの生成物（#292 の段階 1）
+/store/keys-upstream2/
+/store/logs-upstream2/

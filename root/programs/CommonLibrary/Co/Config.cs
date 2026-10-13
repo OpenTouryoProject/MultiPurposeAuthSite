@@ -2158,6 +2158,51 @@ namespace MultiPurposeAuthSite.Co
 
         #region IDフェデレーション関連
 
+        #region 上流の登録（n 件。#292 の段階 1）
+
+        /// <summary>
+        /// ID 連携の上流 IdP の登録（n 件）
+        /// </summary>
+        /// <remarks>
+        /// **読み方は `OAuth2ClientsInformation` と同じ**（net48 は JSON 文字列、net10.0 は節）。
+        /// **値はすべて文字列**で、**鍵 → 属性の辞書**である。
+        ///
+        /// **解釈と、従来の単数キーとの互換は <see cref="IdFederationUpstreams"/> が持つ。**
+        /// **ここは「設定を読むだけ」**にしてある（`Config` に判断を増やさない）。
+        ///
+        /// **空なら、従来の単数キーから 1〜2 件が組み立てられる**ので、
+        /// **既存の配備は、このキーを書かなくても従来どおり動く。**
+        /// </remarks>
+        public static Dictionary<string, Dictionary<string, string>> IdFederationUpstreams
+        {
+            get
+            {
+#if NETFX
+                string json = GetConfigParameter.GetConfigValue("IdFederationUpstreams");
+
+                if (string.IsNullOrEmpty(json))
+                {
+                    return null;
+                }
+
+                return JsonConvert.DeserializeObject<
+                    Dictionary<string, Dictionary<string, string>>>(json);
+#else
+                IConfigurationSection section = GetConfigParameter
+                    .GetAnyConfigSection("appSettings:IdFederationUpstreams");
+
+                if (section == null)
+                {
+                    return null;
+                }
+
+                return section.Get<Dictionary<string, Dictionary<string, string>>>();
+#endif
+            }
+        }
+
+        #endregion
+
         #region OIDC
 
         /// <summary>

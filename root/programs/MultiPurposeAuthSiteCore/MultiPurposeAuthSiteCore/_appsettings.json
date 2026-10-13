@@ -300,6 +300,38 @@
     // 上流の署名を検証する証明書
     "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
+    // 上流 IdP の登録（n 件。#292 の段階 1）
+    //   **書けば、上の IdFederation* / SpRp_Isser / OAuth2AndOidcClientID より優先する。**
+    //   **空なら、上の単数キーから 1 件が組み立てられる**（従来どおり）。
+    //
+    //   **鍵は短い識別子**（画面の導線の値・Session に控える値・ログに出る値）。
+    //   **protocol は oidc / saml2。** **enabled は空なら有効。**
+    //   **issuer は、期待する iss（OIDC）/ entityID（SAML2）** — **メタデータの照合に使う。**
+    //   **折り返し口（IdFederationRedirectEndpoint / …Saml2ResponseEndpoint）は共通設定のまま**
+    //   （**自分の URL なので相手ごとに変わらない**。全ての上流に同じ 1 本を登録する）。
+    //
+    //   "IdFederationUpstreams": {
+    //     "upstream1": {
+    //       "display_name": "Upstream IdP (OIDC)", "protocol": "oidc", "enabled": "true",
+    //       "issuer": "https://ssoauth.opentouryo.com",
+    //       "client_id": "06d20f595b694114b710c1d85e21bb8e", "client_secret": "...",
+    //       "discovery_url": "https://localhost:44301/.well-known/openid-configuration",
+    //       "jwk_set_uri": "", "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+    //       "authorize_endpoint": "https://localhost:44301/authorize",
+    //       "token_endpoint": "https://localhost:44301/token",
+    //       "userinfo_endpoint": "https://localhost:44301/userinfo"
+    //     },
+    //     "upstream1_saml2": {
+    //       "display_name": "Upstream IdP (SAML2)", "protocol": "saml2",
+    //       "issuer": "https://ssoauth.opentouryo.com",
+    //       "client_id": "06d20f595b694114b710c1d85e21bb8e",
+    //       "metadata_url": "https://localhost:44301/samlmetadata",
+    //       "sso_endpoint": "https://localhost:44301/saml2request",
+    //       "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer"
+    //     }
+    //   },
+    "IdFederationUpstreams": {},
+
     // 機能のロックダウン（全てfalseでSTS専用モードで動作）
     // サインアップ
     "EnableSignupProcess": "true",

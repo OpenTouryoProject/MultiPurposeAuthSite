@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
 //*  2026/10/13  玄人 幸道         SSO へ行く部分を FollowSsoAsync に切り出した（#293 の段階 4）
+//*  2026/10/13  玄人 幸道         どの上流か（idpKey）を渡せるようにした（#292 の段階 1）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -113,9 +114,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **`IdPClient` は `CookieContainer` を 1 つ持つ**ので、
         /// **上流・下流の Cookie を同時に持つ**（ブラウザと同じ状態）。
         /// </remarks>
-        public static async Task<Saml2FederationResult> FederateAsync(IdPClient client)
+        public static async Task<Saml2FederationResult> FederateAsync(
+            IdPClient client, string idpKey = "")
         {
-            Saml2FederationResult result = await Saml2Federation.StartAsync(client);
+            Saml2FederationResult result = await Saml2Federation.StartAsync(client, idpKey);
 
             if (string.IsNullOrEmpty(result.SsoUrl))
             {
@@ -132,7 +134,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **`FederateAsync` の (1) と (2) である。**
         /// **要求を細工してから投げる側から呼べるように、切り出してある**（#293 の段階 4）。
         /// </remarks>
-        public static async Task<Saml2FederationResult> StartAsync(IdPClient client)
+        public static async Task<Saml2FederationResult> StartAsync(
+            IdPClient client, string idpKey = "")
         {
             Saml2FederationResult result = new Saml2FederationResult();
 
@@ -161,7 +164,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     { "Email", "" },
                     { "Password", "" },
                     { "RememberMe", "false" },
-                    { "submitButtonName", "id_federation_saml2_signin" }
+                    { "submitButtonName", "id_federation_saml2_signin" },
+                    //  **どの上流へ委譲するか**（#292 の段階 1。空なら既定）。
+                    { "IdpKey", idpKey }
                 });
 
             if (start.Headers.Location == null)

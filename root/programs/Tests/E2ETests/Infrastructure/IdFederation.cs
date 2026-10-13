@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/08  玄人 幸道         IdFederationTests から移した（#284）
+//*  2026/10/13  玄人 幸道         どの上流か（idpKey）を渡せるようにした（#292 の段階 1）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -236,7 +237,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="downstreamUserName">下流の画面に入れる利用者名</param>
         /// <returns>FederationResult</returns>
         public static async Task<FederationResult> FederateAsync(
-            IdPClient client, string downstreamUserName)
+            IdPClient client, string downstreamUserName, string idpKey = "")
         {
             FederationResult result = new FederationResult();
 
@@ -258,7 +259,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     { "Email", downstreamUserName },
                     { "Password", "" },
                     { "RememberMe", "false" },
-                    { "submitButtonName", "id_federation_signin" }
+                    { "submitButtonName", "id_federation_signin" },
+                    //  **どの上流へ委譲するか**（#292 の段階 1）。
+                    //    **空なら既定（先頭の 1 件）** — **従来の押し方と同じ結果になる。**
+                    { "IdpKey", idpKey }
                 });
 
             if (start.Headers.Location == null)

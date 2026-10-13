@@ -317,14 +317,21 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     //  **OIDC の ID 連携**（#286 の段階 2 でメソッドに分けた）。
                     //    **入力された値を、そのまま `login_hint` として上流へ渡す**（#151 の段階 3）。
-                    return this.StartIdFederationByOidc(model.Email);
+                    //
+                    //  **どの上流へ委譲するかは `IdpKey`**（#292 の段階 1）。
+                    //    **空なら既定（先頭の 1 件）** — **従来の押し方と同じ結果になる。**
+                    return this.StartIdFederationByOidc(
+                        model.Email,
+                        IdFederationUpstreams.GetOrDefault(
+                            model.IdpKey, IdFederationUpstream.Oidc));
                 }
-                else if (submitButtonName == "id_federation_saml2_signin"
-                    && Config.CanIdFederationBySaml2)
+                else if (submitButtonName == "id_federation_saml2_signin")
                 {
                     //  **SAML2 の ID 連携**（#286 の段階 2）。
-                    //    **設定が揃っていなければ、ここには来ない**（画面にボタンを出さない）。
-                    return await this.StartIdFederationBySaml2();
+                    //    **押しても成立しない上流は、画面に出ていない**（`IsUsable`）。
+                    return await this.StartIdFederationBySaml2(
+                        IdFederationUpstreams.GetOrDefault(
+                            model.IdpKey, IdFederationUpstream.Saml2));
                 }
                 else
                 {
@@ -1792,23 +1799,36 @@ namespace MultiPurposeAuthSite.Controllers
         /// | `prompt` | **付けない**（#287。利用者が押す導線で UI を禁じない） |
         /// | `login_hint` | **画面の入力値をそのまま渡す**（#151 の段階 3） |
         /// </remarks>
-        private ActionResult StartIdFederationByOidc(string uid)
+        private ActionResult StartIdFederationByOidc(string uid, IdFederationUpstream upstream)
         {
+            if (upstream == null)
+            {
+                //  **指定された上流が引けない**（登録が無い・無効・値が足りない）。
+                //    **理由を残す**（#253）。
+                Logging.MyOperationTrace(
+                    "The OIDC ID federation has no usable upstream. (IdFederationUpstreams)");
+
+                return View("Error");
+            }
+
             //  **入力された値を、そのまま `login_hint` として上流へ渡す**（#151 の段階 3）。
             //    利用者名でもメアドでもよい（上流がどう解釈するかは上流しだい）。
             //
             //  **自分の認可エンドポイントを組み立てていた行は落とした**（#286 の段階 2）。
             //    **参照されていなかった** — **宛先は上流の方**（`IdFederationAuthorizeEndpoint`）である。
 
-            // client_id
-            string client_id = OAuth2AndOIDCParams.ClientID;
-            //OAuth2Helper.GetInstance().GetClientIdByName("IdFederation");
+            //  **client_id は、その上流に登録された自分の値**（#292 の段階 1）。
+            string client_id = upstream.ClientId;
 
             // state // 記号は入れない。
             //   **32 文字にした**（#140 の段階 3）。10 文字では短い。
             //   PKCE があるので CSRF は守られるが、**推測しにくい方がよい。**
             string state = GetPassword.Generate(32, 0);
             Session["id_federation_signin_state"] = state;
+
+            //  **どの上流へ送ったかを控える**（#292 の段階 1）。
+            //    **折り返し口は 1 本**なので、**戻ってきた側はこれで相手を引く。**
+            Session["id_federation_signin_upstream"] = upstream.Key;
 
             // redirect_uri
             string redirect_uri = Config.IdFederationRedirectEndpoint;
@@ -1828,7 +1848,7 @@ namespace MultiPurposeAuthSite.Controllers
             Session["id_federation_signin_verifier"] = codeVerifier;
 
             return Redirect(
-                Config.IdFederationAuthorizeEndpoint +
+                upstream.AuthorizeEndpoint +
                 "?client_id=" + client_id +
                 "&response_type=code" +
                 "&scope=" + scope +
@@ -1862,6 +1882,24 @@ namespace MultiPurposeAuthSite.Controllers
         {
             if (!Config.IsLockedDownTestEndpoints)
             {
+                //  **どの上流から戻ってきたか**（#292 の段階 1）。
+                //    **開始処理が Session に控えた鍵**で引く（折り返し口は 1 本）。
+                //    **Session が切れていれば、既定の上流** — **1 件の配備では従来どおり。**
+                IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
+                    (string)Session["id_federation_signin_upstream"],
+                    IdFederationUpstream.Oidc);
+
+                Session["id_federation_signin_upstream"] = ""; // 誤動作防止
+
+                if (upstream == null)
+                {
+                    // **相手が分からなければ、検証できない。** **理由を残す**（#253）。
+                    Logging.MyOperationTrace(
+                        "The OIDC ID federation could not resolve the upstream. (IdFederationUpstreams)");
+
+                    return View("Error");
+                }
+
                 // エラー応答を受け取る（#287）
                 if (!string.IsNullOrEmpty(error))
                 {
@@ -1881,7 +1919,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **来なければ通す。** RFC 9207 を実装していない OP があるため
                 //   （この IdP 自身は #231 で出すようになった）。
                 if (!string.IsNullOrEmpty(iss)
-                    && !string.Equals(iss, CmnClientParams.Isser, StringComparison.Ordinal))
+                    && !string.Equals(iss, upstream.Issuer, StringComparison.Ordinal))
                 {
                     Logging.MyOperationTrace(
                         "The iss of the authorization response did not match the expected issuer.");
@@ -1897,11 +1935,9 @@ namespace MultiPurposeAuthSite.Controllers
                     Code = code
                 };
 
-                //  client_Idから、client_secretを取得。
-                string client_id = OAuth2AndOIDCParams.ClientID;
-                //OAuth2Helper.GetInstance().GetClientIdByName("IdFederation");
-                string client_secret = OAuth2AndOIDCParams.ClientSecret;
-                //OAuth2Helper.GetInstance().GetClientSecret(client_id);
+                //  **その上流に登録された、自分の client_id / client_secret**（#292 の段階 1）。
+                string client_id = upstream.ClientId;
+                string client_secret = upstream.ClientSecret;
 
                 // **合わないときに理由を残す**（#253）。
                 //   **この分岐には else が無く、末尾の View("Error") に落ちるだけだった**ので、
@@ -1940,7 +1976,7 @@ namespace MultiPurposeAuthSite.Controllers
                     Session["id_federation_signin_verifier"] = ""; // 誤動作防止
 
                     model.Response = await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
-                            new Uri(Config.IdFederationTokenEndpoint),
+                            new Uri(upstream.TokenEndpoint),
                             client_id, client_secret, redirect_uri, code, codeVerifier);
 
                     #endregion
@@ -1970,23 +2006,23 @@ namespace MultiPurposeAuthSite.Controllers
                         //   3. 渡さない（従来どおり。自分の JWK Set を kid で引く枝に入る）
                         JWS upstreamKey = null;
 
-                        if (!string.IsNullOrEmpty(CmnClientParams.Isser))
+                        if (!string.IsNullOrEmpty(upstream.Issuer))
                         {
                             // discovery から引く（引けなければ null が返る）。
-                            upstreamKey = await Sts.IdFederationJwks.GetKeyAsync(id_token);
+                            upstreamKey = await Sts.IdFederationJwks.GetKeyAsync(id_token, upstream);
 
                             if (upstreamKey == null
-                                && !string.IsNullOrEmpty(Config.IdFederationOidcCerFilePath))
+                                && !string.IsNullOrEmpty(upstream.CerFilePath))
                             {
                                 // 設定の証明書に倒す。
-                                upstreamKey = new JWS_RS256_X509(Config.IdFederationOidcCerFilePath, "");
+                                upstreamKey = new JWS_RS256_X509(upstream.CerFilePath, "");
                             }
                         }
-                        else if (!string.IsNullOrEmpty(Config.IdFederationOidcCerFilePath))
+                        else if (!string.IsNullOrEmpty(upstream.CerFilePath))
                         {
-                            // **証明書だけ在って `SpRp_Isser` が空**なら、渡せない
+                            // **証明書だけ在って期待する `iss` が空**なら、渡せない
                             //（Open棟梁 #601 の版は `iss` が空なら例外にする）。**理由を残す**（#253）。
-                            Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer (SpRp_Isser).");
+                            Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer.");
                         }
 
                         // **結果を控えておく**（#253）。**失敗したときに、どちらで落ちたかを残すため。**
@@ -2002,7 +2038,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             idTokenVerified = IdToken.Verify(
                                 id_token, access_token, code, state,
-                                upstreamKey, CmnClientParams.Isser, OAuth2AndOIDCParams.ClientID,
+                                upstreamKey, upstream.Issuer, upstream.ClientId,
                                 out sub, out nonce, out jobj);
                         }
 
@@ -2017,7 +2053,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //
                         //    **期待値は、開始処理が `client_id` に使った値**（自分のクライアント ID）。
                         bool audMatched =
-                            Sts.IdTokenAudience.Matches(jobj, OAuth2AndOIDCParams.ClientID);
+                            Sts.IdTokenAudience.Matches(jobj, upstream.ClientId);
 
                         if (idTokenVerified && nonceMatched && audMatched)
                         {
@@ -2059,7 +2095,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //   ID フェデレーションの相手は**他の IdP** なので、通すと宛先が変わって壊れる。
                     //   （Helper.GetUserInfoAsync は URI を引数に取らず、常に自分の /userinfo を向く）
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
-                        new Uri(Config.IdFederationUserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
+                        new Uri(upstream.UserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
 
                     #region ユーザの登録・更新
@@ -2441,11 +2477,20 @@ namespace MultiPurposeAuthSite.Controllers
         /// **`IsPassive` は送らない**（#287 で OIDC の `prompt=none` を外したのと同じ理由）。
         /// **サインイン画面の入力値は使わない**（#286 の決め事。`login_hint` 相当が無い）。
         /// </remarks>
-        private async Task<ActionResult> StartIdFederationBySaml2()
+        private async Task<ActionResult> StartIdFederationBySaml2(IdFederationUpstream upstream)
         {
+            if (upstream == null)
+            {
+                //  **指定された上流が引けない**（#292 の段階 1）。**理由を残す**（#253）。
+                Logging.MyOperationTrace(
+                    "The SAML2 ID federation has no usable upstream. (IdFederationUpstreams)");
+
+                return View("Error");
+            }
+
             //  **上流の SSO の口は、メタデータ → 設定の順で決める**（#291）。
             //    **メタデータが引けなければ、設定の値**（従来どおり）。
-            string ssoUrl = await SamlProviders.IdFederationSaml2Metadata.GetSsoUrlAsync();
+            string ssoUrl = await SamlProviders.IdFederationSaml2Metadata.GetSsoUrlAsync(upstream);
 
             if (string.IsNullOrEmpty(ssoUrl))
             {
@@ -2457,7 +2502,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // **上流に登録された client_id**（OIDC の ID 連携と同じものを使う）。
-            string issuer = "http://" + OAuth2AndOIDCParams.ClientID;
+            string issuer = "http://" + upstream.ClientId;
 
             // **RelayState に入れる state**（#140 の段階 3 と同じ 32 文字）。記号は入れない。
             string state = GetPassword.Generate(32, 0);
@@ -2470,6 +2515,9 @@ namespace MultiPurposeAuthSite.Controllers
                 issuer, "", state, out id);
 
             Session["id_federation_saml2_state"] = state;
+
+            //  **どの上流へ送ったかを控える**（#292 の段階 1。ACS は 1 本）。
+            Session["id_federation_saml2_upstream"] = upstream.Key;
 
             // **応答の InResponseTo と照合する**（#276 と同じ）。
             Session["id_federation_saml2_request_id"] = id;
@@ -2501,11 +2549,18 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> IDFederationAssertionConsumerService(
             string samlResponse, string relayState, string sigAlg)
         {
-            if (!Config.CanIdFederationBySaml2)
+            //  **どの上流から戻ってきたか**（#292 の段階 1）。
+            //    **開始処理が Session に控えた鍵**で引く（ACS は 1 本）。
+            IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
+                (string)Session["id_federation_saml2_upstream"], IdFederationUpstream.Saml2);
+
+            Session["id_federation_saml2_upstream"] = ""; // 誤動作防止
+
+            if (upstream == null)
             {
                 // **設定が揃っていない。** **理由を残す**（#253 と同じ方針）。
                 Logging.MyOperationTrace(
-                    "The SAML2 ID federation is not configured. (CanIdFederationBySaml2)");
+                    "The SAML2 ID federation has no usable upstream. (IdFederationUpstreams)");
 
                 return View("Error");
             }
@@ -2528,13 +2583,14 @@ namespace MultiPurposeAuthSite.Controllers
             Session["id_federation_saml2_request_id"] = "";
 
             //  **検証鍵は、メタデータ → 設定の `.cer` の順で決める**（#291）。
-            RSA upstreamKey = await SamlProviders.IdFederationSaml2Metadata.GetSigningKeyAsync();
+            RSA upstreamKey =
+                await SamlProviders.IdFederationSaml2Metadata.GetSigningKeyAsync(upstream);
 
             SamlProviders.CmnSaml2Response.Saml2Result result =
                 SamlProviders.CmnSaml2Response.Verify(
                     samlResponse, queryString, sigAlg, relayState, state, isGet,
                     Config.IdFederationSaml2ResponseEndpoint, requestId,
-                    upstreamKey, Config.IdFederationSaml2IssuerId);
+                    upstreamKey, upstream.Issuer);
 
             if (result.Verdict != "NORMAL_END")
             {

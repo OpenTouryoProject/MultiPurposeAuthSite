@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#291。CmnSamlMetadata から設定の読み方を分けた）
+//*  2026/10/13  玄人 幸道         上流n件から読めるようにした（#292 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -54,9 +55,12 @@ namespace MultiPurposeAuthSite.SamlProviders
     ///
     /// | | この配備での決め方 |
     /// |---|---|
-    /// | **メタデータの在り処** | **`IdFederationSaml2MetadataUrl`**（**SAML2 には既知のパスが無い**ので、組み立てはしない） |
-    /// | **期待する EntityID** | **`IdFederationSaml2IssuerId`**（一致しなければ、メタデータの値を使わない） |
-    /// | 倒れ先 | **`IdFederationSaml2RequestEndpoint`（口）** と **`IdFederationSaml2CerFilePath`（鍵）** |
+    /// | **メタデータの在り処** | **上流の登録の `metadata_url`**（**SAML2 には既知のパスが無い**ので、組み立てはしない） |
+    /// | **期待する EntityID** | **上流の登録の `issuer`**（一致しなければ、メタデータの値を使わない） |
+    /// | 倒れ先 | **`sso_endpoint`（口）** と **`cer_file_path`（鍵）** |
+    ///
+    /// **上流の登録は n 件**（#292 の段階 1。`IdFederationUpstreams`）。
+    /// **登録が無ければ、従来の単数キーから 1 件が組み立てられる。**
     ///
     /// **両アプリの `AccountController` に同文で置かない**ため、`CommonLibrary` に在る
     /// （**OIDC の ID 連携が両アプリに同文で在る**のと、同じ重複を増やさない。#286 の段階 1）。
@@ -73,15 +77,32 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// </remarks>
         public static async Task<string> GetSsoUrlAsync()
         {
+            //  **上流を指定しない呼び出しは、既定の上流**（従来どおり。#292 の段階 1）。
+            return await IdFederationSaml2Metadata.GetSsoUrlAsync(
+                IdFederationUpstreams.GetOrDefault("", IdFederationUpstream.Saml2));
+        }
+
+        /// <summary>
+        /// **その上流**の SSO の口を決める（メタデータ → 設定。#292 の段階 1）。
+        /// </summary>
+        /// <param name="upstream">上流の登録</param>
+        /// <returns>SSO の URL（分からなければ空）</returns>
+        public static async Task<string> GetSsoUrlAsync(IdFederationUpstream upstream)
+        {
+            if (upstream == null)
+            {
+                return "";
+            }
+
             CmnSamlMetadata.Metadata metadata = await CmnSamlMetadata.GetAsync(
-                Config.IdFederationSaml2MetadataUrl, Config.IdFederationSaml2IssuerId);
+                upstream.MetadataUrl, upstream.Issuer);
 
             if (metadata != null && !string.IsNullOrEmpty(metadata.SsoRedirectLocation))
             {
                 return metadata.SsoRedirectLocation;
             }
 
-            return Config.IdFederationSaml2RequestEndpoint;
+            return upstream.SsoEndpoint;
         }
 
         /// <summary>
@@ -94,8 +115,25 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// </remarks>
         public static async Task<RSA> GetSigningKeyAsync()
         {
+            //  **上流を指定しない呼び出しは、既定の上流**（従来どおり。#292 の段階 1）。
+            return await IdFederationSaml2Metadata.GetSigningKeyAsync(
+                IdFederationUpstreams.GetOrDefault("", IdFederationUpstream.Saml2));
+        }
+
+        /// <summary>
+        /// **その上流**の署名を検証する鍵を決める（メタデータ → 設定。#292 の段階 1）。
+        /// </summary>
+        /// <param name="upstream">上流の登録</param>
+        /// <returns>RSA（分からなければ null）</returns>
+        public static async Task<RSA> GetSigningKeyAsync(IdFederationUpstream upstream)
+        {
+            if (upstream == null)
+            {
+                return null;
+            }
+
             CmnSamlMetadata.Metadata metadata = await CmnSamlMetadata.GetAsync(
-                Config.IdFederationSaml2MetadataUrl, Config.IdFederationSaml2IssuerId);
+                upstream.MetadataUrl, upstream.Issuer);
 
             RSA rsa = CmnSamlMetadata.FirstSigningKey(metadata);
 
@@ -105,7 +143,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             }
 
             //  **設定の `.cer` を読む**（読み込みは `CmnSaml2Response` の 1 か所に寄せてある）。
-            return CmnSaml2Response.RsaFromCerFile(Config.IdFederationSaml2CerFilePath);
+            return CmnSaml2Response.RsaFromCerFile(upstream.CerFilePath);
         }
     }
 }

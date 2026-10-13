@@ -32,6 +32,7 @@
 //*  2026/10/13  玄人 幸道         汎用部分を DiscoveryJwks に分けた（#289 の段階 2）
 //*  2026/10/13  玄人 幸道         discoveryのURLを設定で与えられるようにした（#289 の段階 2）
 //*  2026/10/13  玄人 幸道         上流のJWK SetのURLを直に指せるようにした（#290）
+//*  2026/10/13  玄人 幸道         上流n件から読めるようにした（#292 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -54,7 +55,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// |---|---|
     /// | **上流の JWK Set** | **設定の `IdFederationJwkSetUri`**（書いてあれば、discovery を読まない。#290） |
     /// | **discovery の在り処** | **設定の `IdFederationOidcDiscoveryUrl`** → **`IdFederationAuthorizeEndpoint` の基底**（`https://host/authorize` → `https://host/.well-known/openid-configuration`） |
-    /// | **期待する Issuer** | **`SpRp_Isser`**（`CmnClientParams.Isser`。Open棟梁 のクライアント役の設定 ＝ **相手の Issuer**） |
+    /// | **期待する Issuer** | **上流の登録の `issuer`**（#292 の段階 1。**登録が無ければ `SpRp_Isser`**） |
     ///
     /// **設定を先に見る**（SAML2 側の `IdFederationSaml2MetadataUrl` と対称）。
     /// **組み立てでは足りない配備がある** — **パスの下に discovery を置く OP**
@@ -83,19 +84,38 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>検証鍵（引けなければ null）</returns>
         public static async Task<JWS> GetKeyAsync(string idToken)
         {
+            //  **上流を指定しない呼び出しは、既定の上流**（従来どおり。#292 の段階 1）。
+            return await IdFederationJwks.GetKeyAsync(
+                idToken,
+                IdFederationUpstreams.GetOrDefault("", IdFederationUpstream.Oidc));
+        }
+
+        /// <summary>
+        /// `id_token` の `kid` に対応する、**その上流**の鍵を返す（#292 の段階 1）。
+        /// </summary>
+        /// <param name="idToken">上流から受け取った `id_token`</param>
+        /// <param name="upstream">上流の登録（null なら引けない）</param>
+        /// <returns>検証鍵（引けなければ null）</returns>
+        public static async Task<JWS> GetKeyAsync(string idToken, IdFederationUpstream upstream)
+        {
+            if (upstream == null || string.IsNullOrEmpty(upstream.Issuer))
+            {
+                //  **期待する Issuer が無ければ引かない**（照合できない相手を信じない）。
+                return null;
+            }
+
             string kid = DiscoveryJwks.KidOf(idToken);
 
-            if (!string.IsNullOrEmpty(Config.IdFederationJwkSetUri))
+            if (!string.IsNullOrEmpty(upstream.JwkSetUri))
             {
                 // 専用設定から引く
-                return await DiscoveryJwks.GetRsaKeyFromJwkSetAsync(
-                    Config.IdFederationJwkSetUri, kid);
+                return await DiscoveryJwks.GetRsaKeyFromJwkSetAsync(upstream.JwkSetUri, kid);
             }
             else
             {
                 // Discovery経由で引く
                 return await DiscoveryJwks.GetRsaKeyAsync(
-                    IdFederationJwks.DiscoveryUrl(), CmnClientParams.Isser, kid);
+                    IdFederationJwks.DiscoveryUrl(upstream), upstream.Issuer, kid);
             }
         }
 
@@ -105,15 +125,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>URL（決まらなければ空）</returns>
         public static string DiscoveryUrl()
         {
-            if (!string.IsNullOrEmpty(Config.IdFederationOidcDiscoveryUrl))
+            return IdFederationJwks.DiscoveryUrl(
+                IdFederationUpstreams.GetOrDefault("", IdFederationUpstream.Oidc));
+        }
+
+        /// <summary>
+        /// **その上流**の discovery の URL を決める（設定 → 口の基底から組み立て）。
+        /// </summary>
+        /// <param name="upstream">上流の登録</param>
+        /// <returns>URL（決まらなければ空）</returns>
+        public static string DiscoveryUrl(IdFederationUpstream upstream)
+        {
+            if (upstream == null)
+            {
+                return "";
+            }
+
+            if (!string.IsNullOrEmpty(upstream.DiscoveryUrl))
             {
                 // 専用設定から引く
-                return Config.IdFederationOidcDiscoveryUrl;
+                return upstream.DiscoveryUrl;
             }
             else
             {
-                // Discovery経由で引く
-                return DiscoveryJwks.DiscoveryUrlOf(Config.IdFederationAuthorizeEndpoint);
+                // 口の基底から組み立てる
+                return DiscoveryJwks.DiscoveryUrlOf(upstream.AuthorizeEndpoint);
             }
         }
     }

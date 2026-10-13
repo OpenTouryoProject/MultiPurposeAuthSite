@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/08  玄人 幸道         新規（#284）
 //*  2026/10/13  玄人 幸道         CN-1.5（署名鍵が分かれている）を足した（#293 の段階 4）
+//*  2026/10/13  玄人 幸道         CN-1.5を3コンテナに広げた（#292 の段階 1）
 //**********************************************************************************
 
 using System.Net;
@@ -204,7 +205,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
             }
         }
 
-        /// <summary>CN-1.5 上流と下流の署名鍵が違う</summary>
+        /// <summary>CN-1.5 上流と下流の署名鍵が違う（3 コンテナとも違う）</summary>
         /// <returns>Task</returns>
         /// <remarks>
         /// **ハイブリッド構成の脚ごとに鍵が分かれていること**（#293 の段階 1）。
@@ -233,9 +234,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                     + "`*_Upstream` に向けている**ので、**その上書きが効いていなければ同じになる。**",
                     "#293 の段階 1");
 
-                r.Target("上流コンテナ ＋ 下流コンテナ");
+                r.Target("上流コンテナ ＋ 下流コンテナ ＋ 2 つ目の上流コンテナ");
 
-                r.Step("(1) 両方の jwkcerts から、RSA の kid を読む");
+                r.Step("(1) それぞれの jwkcerts から、RSA の kid を読む");
 
                 string upKid = await ContainerSmokeTests.RsaKidAsync(up);
                 string downKid = await ContainerSmokeTests.RsaKidAsync(down);
@@ -251,6 +252,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
                 r.Verify("kid が違う", upKid != downKid,
                     "違う", (upKid == downKid) ? "**同じ（" + upKid + "）**" : "違う");
+
+                //  **2 つ目の上流も別の鍵である**（#292 の段階 1）。
+                //    **建っていなければ測らない**（上流 2 つ目は `CN-5.4` 以降で使う）。
+                string upstream2Kid = await ContainerSmokeTests.Upstream2RsaKidAsync();
+
+                if (string.IsNullOrEmpty(upstream2Kid))
+                {
+                    r.Observe("2 つ目の上流の RSA kid", "(建っていない)",
+                        "**`upstream2` は `CN-5.4` 以降で使う**（#292 の段階 1）。"
+                        + "**建てるなら `docker compose up -d upstream2`。**");
+                }
+                else
+                {
+                    r.Verify("2 つ目の上流の kid も違う",
+                        upstream2Kid != upKid && upstream2Kid != downKid,
+                        "違う",
+                        (upstream2Kid == upKid || upstream2Kid == downKid)
+                            ? "**他と同じ（" + upstream2Kid + "）**" : "違う");
+                }
 
                 r.Step("(2) 両方の samlmetadata から、署名証明書を読む");
 
@@ -277,7 +297,43 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                 r.Observe("下流の RSA kid", downKid,
                     "**既定（`JwkSet.json`）のまま**である。");
 
+                r.Observe("2 つ目の上流の RSA kid",
+                    string.IsNullOrEmpty(upstream2Kid) ? "(建っていない)" : upstream2Kid,
+                    "**`JwkSet_Upstream2.json` が出どころ**である（#292 の段階 1）。");
+
                 r.Done();
+            }
+        }
+
+        /// <summary>2 つ目の上流の RSA の kid を読む（建っていなければ空）</summary>
+        /// <returns>kid（建っていなければ空）</returns>
+        /// <remarks>
+        /// **建っていないことで落とさない**（#292 の段階 1）。
+        /// **`CN-1.5` の本題は「上流 1 と下流が別の鍵であること」**であり、
+        /// **2 つ目の上流は、在れば測る。**
+        /// </remarks>
+        private static async Task<string> Upstream2RsaKidAsync()
+        {
+            TargetInfo target = null;
+
+            try
+            {
+                target = ContainerTargets.Target(ContainerTargets.Upstream2Key);
+            }
+            catch (Xunit.SkipException)
+            {
+                // **建っていない**（`ContainerTargets.Target` は Skip を投げる）。
+                return "";
+            }
+
+            if (!target.IsReachable())
+            {
+                return "";
+            }
+
+            using (IdPClient client = new IdPClient(target))
+            {
+                return await ContainerSmokeTests.RsaKidAsync(client);
             }
         }
 

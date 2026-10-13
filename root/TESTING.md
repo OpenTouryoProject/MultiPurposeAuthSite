@@ -195,6 +195,7 @@ docker compose up -d upstream
 | **44301** | **上流コンテナ**（雛形が上流として書いている番号） |
 | **44302** | 下流（net48）。IIS Express |
 | **44303** | **下流コンテナ用に空けてある**（#281） |
+| **44304** | **2 つ目の上流コンテナ**（#292 の段階 1。**上流が n 件になったことを測る**） |
 
 > **ポートを分けても Cookie は分かれない。**
 > **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
@@ -290,6 +291,38 @@ docker compose up -d --build upstream downstream
 > **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
 > **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
 
+##### 2 つ目の上流コンテナ（`upstream2`。#292 の段階 1）
+
+**上流が n 件になったことを測るために在る**（`CN-5.4` 〜 `CN-5.6`）。
+
+| | 値 | なぜ |
+|---|---|---|
+| URL | **`https://localhost:44304`** | 口はポートで分ける |
+| `IssuerId` | **`https://upstream2.ssoauth.opentouryo.com`** | **3 つの IdP が同じ `iss` を名乗らない**ようにする |
+| 署名鍵 | **`SHA256RSA_Upstream2.*` ＋ `JwkSet_Upstream2.json`** | **上流 1 とも下流とも別の鍵**（`CN-1.5` が 3 つとも違うことを見る） |
+| `CookieNamePrefix` | **`upstream2_`** | Cookie はポートで分かれない（RFC 6265 §8.5） |
+| 鍵・ログの置き場 | `store/keys-upstream2` / `store/logs-upstream2` | 他と分ける（#279） |
+
+**下流コンテナには、上流 2 件が登録してある**（`IdFederationUpstreams__upstream1*` / `__upstream2*`）。
+**鍵とメタデータを引く宛先は、コンテナの中から届くもの**（`http://upstream2:8080/...`。#293 の段階 3）。
+**ブラウザが行く先（`authorize` / SSO）は、ホストから届く URL**（`https://localhost:44304/...`）。
+
+**鍵を作るとき**（`root/files/resource/X509` で実行する）。
+
+```
+GenRsaCertForUpstreamByOpenSSL.bat Upstream2
+```
+
+**その後、上流 2 用の JwkSet を作り直す**（`CommandLineTools/CreateJwkSetJson` を、
+`SpRp_RsaCerFilePath` ＝ `SHA256RSA_Upstream2.cer` / `JwkSetFilePath` ＝ `JwkSet_Upstream2.json`
+の設定で 1 回）。**`C:\root\files\resource` にも配置する**（コンテナはそこをマウントする）。
+
+> **`.bat` は CRLF でなければならない**（`.gitattributes` の `*.bat text eol=crlf`）。
+> **LF だと cmd が行を割り、`set` / `if` が働かない**（実測。#292 の段階 1 で直した）。
+>
+> **UTF-8 の日本語の `rem` 行は、CP932 のコンソールで「認識されていません」と出ることがある。**
+> **既存の `GenClientCertByOpenSSL.bat` も同じ**（実測）。**鍵の生成そのものには影響しない。**
+
 ##### SAML2 の ID 連携も、コンテナ 2 つで測る（`CN-5.3`。#293 の段階 3）
 
 **`CN-5.1` / `CN-5.2` は OIDC である。** **SAML2 の脚は `CN-5.3` で初めてコンテナを通る。**
@@ -326,6 +359,29 @@ docker compose up -d --build upstream downstream
 
 > **`CN-5.1` / `CN-5.2` が通ったままなのが正しい。**
 > **OIDC の (2) には署名が無く、(3) の鍵は `IdFederationJwkSetUri` から引いている。**
+
+##### 上流が n 件（`CN-5.4` 〜 `CN-5.6`。#292 の段階 1）
+
+**下流コンテナに上流 2 件を登録し、2 つ目を指して連携する。**
+**どちらへ行くかは、画面の導線が送る `IdpKey`**（空なら先頭の 1 件 ＝ 従来の押し方）。
+
+| | 測ること |
+|---|---|
+| **`CN-5.4`** | **2 つ目の上流（鍵も `issuer` も違う OP）と OIDC で連携できる**。**「鍵の違う OP と連携できる」ことは、ここで初めて測れる**（#289 の完了コメントの限界） |
+| **`CN-5.5`** | **同じことを SAML2 で**（`entityID` の照合も相手ごと） |
+| **`CN-5.6`** | **上流が違っても、同じ（検証済みの）メアドなら同じ下流の利用者になる**（アカウント リンク。#140 の段階 1・3） |
+
+> **`CN-5.6` は、上流ごとに別の `IdPClient`（別の Cookie の入れ物）で測る。**
+> **1 つの入れ物で続けると、上流 1 のサインインが残り、
+> 上流 2 の連携が失敗しても「同じ利用者」に見えてしまう**（**歯抜けで実測**。直した）。
+
+**歯抜け**（実測 2026/10/13。**compose の `IdFederationUpstreams__upstream2__*` を壊す**）。
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| `issuer` を上流 1 の値に | **`CN-5.4` / `CN-5.6` が落ちる**（`id_token` の `iss` が合わず、サインインできない）。**`CN-5.5` は通ったまま**（SAML2 は別の行） |
+| `client_id` を上流 1 の値に | **`CN-5.4` / `CN-5.6` が落ちる**（**上流 2 に未登録**なので `code` が返らない）。**`CN-5.5` は通ったまま** |
+| `IdpKey` を送らない | **上流 1 へ行く**（既定の選び方。**`CN-5.1` がその経路**である） |
 
 ##### 目視の手順（実測 2026/10/08）
 

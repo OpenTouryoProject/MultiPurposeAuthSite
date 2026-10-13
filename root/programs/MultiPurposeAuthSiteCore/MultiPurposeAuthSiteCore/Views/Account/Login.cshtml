@@ -19,6 +19,7 @@
     //*  2017/04/24  西野 大介         新規
     //*  2026/10/01  玄人 幸道         入力欄を「利用者名またはメアド」にした（#151 の段階 3）
     //*  2026/10/07  玄人 幸道         WebAuthnの導線を復活、MsPassを削除（#137）
+    //*  2026/10/13  玄人 幸道         ID 連携の導線を上流の登録ごとに出した（#292 の段階 1）
     //**********************************************************************************
 *@
 
@@ -93,6 +94,9 @@
                 @Html.HiddenFor(m => m.Fido2Data)
 
                 <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
+                @*  **どの上流 IdP へ委譲するか**（#292 の段階 1）。
+                    **空なら既定**（先頭の 1 件）なので、**送ってこない要求も従来どおり通る。** *@
+                @Html.HiddenFor(m => m.IdpKey)
             }
         </section>
     </div>
@@ -111,23 +115,54 @@
 
         @*  **ID フェデレーションの導線は、設定が揃っているときだけ出す**（#286 の段階 2）。
             **押しても成立しないボタンを出さない**ため。
-            **以前は無条件に出ていた**ので、口を設定していない配備でも押せた。 *@
-        @if (Config.CanIdFederationByOidc)
+            **以前は無条件に出ていた**ので、口を設定していない配備でも押せた。
+
+            **上流は n 件**（#292 の段階 1）。**登録 1 件につきボタン 1 つ**を出す。
+            **登録が無ければ、従来の単数キーから 1 件が組み立てられる**ので、
+            **1 件の配備の見た目は変わらない**（id もラベルも従来どおり）。 *@
+        @{
+            List<IdFederationUpstream> oidcUpstreams =
+                IdFederationUpstreams.List(IdFederationUpstream.Oidc);
+            List<IdFederationUpstream> saml2Upstreams =
+                IdFederationUpstreams.List(IdFederationUpstream.Saml2);
+        }
+        @if (0 < oidcUpstreams.Count)
         {
             <div class="sample-box-1">
                 @*ここにIDフェデレーションを実装*@
                 @AccountViews.IdFederationLogin
                 <section>
-                    <button id="id_federation_signin" name="submitButton" value="id_federation_signin" type="button" class="btn btn-primary">@AccountViews.IdFederationLoginSubmit</button>
+                    @for (int i = 0; i < oidcUpstreams.Count; i++)
+                    {
+                        @*  **1 件目の id は従来どおり**（既存の導線・E2E・UI テストが引いている）。
+                            **2 件目からは鍵を付ける。** **相手は data 属性で送る**ので、
+                            **`submitButtonName` の値は 1 件でも n 件でも同じ**である。 *@
+                        <button id="@(i == 0 ? "id_federation_signin" : "id_federation_signin_" + oidcUpstreams[i].Key)"
+                                name="submitButton" value="id_federation_signin"
+                                data-idp-key="@oidcUpstreams[i].Key"
+                                type="button" class="btn btn-primary id_federation_button">
+                            @(oidcUpstreams.Count == 1
+                                ? AccountViews.IdFederationLoginSubmit : oidcUpstreams[i].Label)
+                        </button>
+                    }
                 </section>
             </div>
         }
-        @if (Config.CanIdFederationBySaml2)
+        @if (0 < saml2Upstreams.Count)
         {
             <div class="sample-box-1">
                 @AccountViews.IdFederationSaml2Login
                 <section>
-                    <button id="id_federation_saml2_signin" name="submitButton" value="id_federation_saml2_signin" type="button" class="btn btn-primary">@AccountViews.IdFederationSaml2LoginSubmit</button>
+                    @for (int i = 0; i < saml2Upstreams.Count; i++)
+                    {
+                        <button id="@(i == 0 ? "id_federation_saml2_signin" : "id_federation_saml2_signin_" + saml2Upstreams[i].Key)"
+                                name="submitButton" value="id_federation_saml2_signin"
+                                data-idp-key="@saml2Upstreams[i].Key"
+                                type="button" class="btn btn-primary id_federation_button">
+                            @(saml2Upstreams.Count == 1
+                                ? AccountViews.IdFederationSaml2LoginSubmit : saml2Upstreams[i].Label)
+                        </button>
+                    }
                 </section>
             </div>
         }
@@ -185,9 +220,15 @@
     <script>
         // Id federationLogin
         $(function () {
-            $("#id_federation_signin").on("click", function () {
+            //  **ID 連携のボタンは、OIDC も SAML2 も、1 件でも n 件でも同じ扱い**（#292 の段階 1）。
+            //    **class で束ねる。** **id で束ねていた頃は、SAML2 のボタンに
+            //    ハンドラが付いておらず、ブラウザでは押しても何も起きなかった**
+            //    （E2E はフォームを直接 POST するので、気付けなかった）。
+            $(".id_federation_button").on("click", function () {
                 // button name
                 $("#submitButtonName").val(this.value);
+                // **どの上流か**（空なら既定）
+                $("#IdpKey").val($(this).data("idp-key"));
                 // submit
                 $("#LoginForm").submit();
             });

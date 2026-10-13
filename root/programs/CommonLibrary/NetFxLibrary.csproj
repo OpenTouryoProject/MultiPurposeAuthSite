@@ -67,6 +67,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Co\Config.cs" />
+    <Compile Include="Co\IdFederationUpstreams.cs" />
     <Compile Include="Co\Const.cs" />
     <Compile Include="Co\ProductionCheck.cs" />
     <Compile Include="Data\CmnStore.cs" />

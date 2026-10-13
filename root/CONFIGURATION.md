@@ -927,6 +927,88 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | **どう解いたか** | **(3) の鍵を、呼び出し側から渡せるようにした**（Open棟梁 [#600](https://github.com/OpenTouryoProject/OpenTouryo/issues/600) / [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601)） |
 | **渡す値の置き場** | **`IdFederation*` のキー**（#286 / #289 / #291）。**共通設定（`SpRp_*` / `JwkSetUri`）は触らない**（#290。8 節） |
 
+#### 上流 IdP を n 件登録する — `IdFederationUpstreams`（#292 の段階 1）
+
+**上流は n 件登録できる。** **1 件につき、画面の導線（ボタン）が 1 つ出る。**
+
+| 設定キー | |
+|---|---|
+| **`IdFederationUpstreams`** | **鍵 → 属性の辞書**（`OAuth2ClientsInformation` と同じ流儀。net48 は JSON 文字列 1 本、net10.0 は節） |
+
+**鍵は短い識別子**である。**導線が送る値・Session に控える値・ログに出る値**になる。
+
+| 属性 | | OIDC | SAML2 |
+|---|---|---|---|
+| `display_name` | 画面に出す名前（空なら鍵） | ○ | ○ |
+| `protocol` | **`oidc` / `saml2`**（空なら `oidc`） | ○ | ○ |
+| `enabled` | **空なら有効**（`false` で無効） | ○ | ○ |
+| **`issuer`** | **期待する `iss`（OIDC）/ `entityID`（SAML2）** — **メタデータ・discovery の照合に使う** | ○ | ○ |
+| **`client_id`** | **上流に登録された、自分の `client_id`**（**SAML2 でも要る** — SP の `Issuer` は `http://<client_id>`） | ○ | ○ |
+| `client_secret` | 同上 | ○ | － |
+| `discovery_url` | 上流の discovery（空なら `authorize_endpoint` の基底から組み立て） | ○ | － |
+| `jwk_set_uri` | 上流の JWK Set（**書けば discovery を読まない**。#290） | ○ | － |
+| `metadata_url` | 上流のメタデータ（#291） | － | ○ |
+| `cer_file_path` | 上流の署名証明書（**倒れ先**） | ○ | ○ |
+| `authorize_endpoint` / `token_endpoint` / `userinfo_endpoint` | 上流の口 | ○ | － |
+| `sso_endpoint` | 上流の SSO の口（**倒れ先**。メタデータが先） | － | ○ |
+
+```jsonc
+"IdFederationUpstreams": {
+  "upstream1": {
+    "display_name": "Upstream IdP (OIDC)", "protocol": "oidc", "enabled": "true",
+    "issuer": "https://ssoauth.opentouryo.com",
+    "client_id": "...", "client_secret": "...",
+    "discovery_url": "https://localhost:44301/.well-known/openid-configuration",
+    "jwk_set_uri": "", "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+    "authorize_endpoint": "https://localhost:44301/authorize",
+    "token_endpoint": "https://localhost:44301/token",
+    "userinfo_endpoint": "https://localhost:44301/userinfo"
+  },
+  "upstream1_saml2": {
+    "display_name": "Upstream IdP (SAML2)", "protocol": "saml2",
+    "issuer": "https://ssoauth.opentouryo.com", "client_id": "...",
+    "metadata_url": "https://localhost:44301/samlmetadata",
+    "sso_endpoint": "https://localhost:44301/saml2request",
+    "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer"
+  }
+}
+```
+
+**折り返し口は、共通設定のまま**である（#290 の規則）。
+
+| | 置き場 | なぜ |
+|---|---|---|
+| **相手ごとの値** | **`IdFederationUpstreams` の各行** | 相手が n 件になれば n 件要る |
+| **折り返し口**（`IdFederationRedirectEndpoint` / `IdFederationSaml2ResponseEndpoint`） | **共通設定** | **自分の URL なので、相手ごとに変わらない。** **全ての上流に、同じ 1 本を登録する**（#263。1 文字も違ってはならない） |
+| 自分の署名鍵 | 共通設定（`SpRp_RsaPfxFilePath` ほか） | **相手ごとに分けるには Open棟梁 側に口が要る**（`SAML2Client.CreateRedirectRequest` に鍵の引数が無い） |
+
+> **どの上流から戻ってきたかは、Session で引く**（開始処理が鍵を控える）。
+> **口を相手ごとに分ける案は採らなかった** — **登録値が増え、`redirect_uri` の取り違えが起きやすい。**
+
+**従来の単数キーは、そのまま動く。**
+
+| | |
+|---|---|
+| **`IdFederationUpstreams` が空** | **従来のキーから 1〜2 件を組み立てる**（鍵は `default` / `default_saml2`） |
+| 組み立てに使う値 | OIDC : `SpRp_Isser` / `OAuth2AndOidcClientID` / `OAuth2AndOidcSecret` / `IdFederationOidcDiscoveryUrl` / `IdFederationJwkSetUri` / `IdFederationOidcCerFilePath` / `IdFederation{Authorize,Token,UserInfo}Endpoint`<br>SAML2 : `IdFederationSaml2IssuerId` / `OAuth2AndOidcClientID` / `IdFederationSaml2MetadataUrl` / `IdFederationSaml2RequestEndpoint` / `IdFederationSaml2CerFilePath` |
+| **書いたときの優先** | **`IdFederationUpstreams` が勝つ**（従来のキーは読まれない） |
+
+> **1 件の配備は、見た目も POST も変わらない。**
+> **1 件目のボタンの `id` は従来どおり**（`id_federation_signin` / `id_federation_saml2_signin`）、
+> **押したときに送る `submitButtonName` も同じ**である。
+> **どの上流かは、別の欄（`IdpKey`）で送る** — **空なら先頭の 1 件。**
+
+**上流が n 件になると、「2 つの IdP から来た同じ人」が現れる。**
+**この製品は、検証済みのメアドで既存アカウントに結ぶ**（アカウント リンク）。
+
+| 順 | 引き方 | |
+|---|---|---|
+| 1 | **連携キー `(iss, sub)`** | **上流ごとに別の行**（`UserLogins`） |
+| 2 | **メアド** | **引けたら、その利用者に `(iss, sub)` を足す** |
+
+**守りは「メアドが検証済みであること」**である（#140 の段階 1。`Sts.AccountLink`）。
+**測定は `CN-5.6`**（#292 の段階 1）。
+
 #### (3) の検証鍵 — OIDC（#289 / #290）
 
 **上流の `id_token`（＝ (3)）の署名を検証する鍵である。**
@@ -1358,9 +1440,9 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 |---|---|
 | **上流の証明書に差し替えられない**（`SpRp_RsaCerFilePath` は自分の証明書として読まれる） | **差し替えない。** 上流の証明書は `IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath` |
 | **上流の JWK Set を取りに行けない**（`JwkSetUri` は相対パスで、`new Uri(...)` に渡せない） | **`IdFederationJwkSetUri`**（または discovery の `jwks_uri`）から引く。**`JwkSetStore` の経路は通らない** |
-| **期待する上流の Issuer が 1 つしか無い**（`SpRp_Isser`） | **SAML2 は `IdFederationSaml2IssuerId`。** **OIDC は `SpRp_Isser` のまま**（**上流が 1 つなら足りる**。n 件は #292） |
+| **期待する上流の Issuer が 1 つしか無い**（`SpRp_Isser`） | **上流ごとに持てる**（#292 の段階 1。`IdFederationUpstreams` の `issuer`）。**登録が無ければ、従来どおり SAML2 は `IdFederationSaml2IssuerId`、OIDC は `SpRp_Isser`** |
 
-**サーバ側での読み方は 2 つある。****サーバ側での読み方は 2 つある。**
+**サーバ側での読み方は 2 つある。**
 
 | | |
 |---|---|
