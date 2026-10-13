@@ -21,6 +21,7 @@
     //*  2026/10/02  玄人 幸道         UsersAdmin / RolesAdmin のメニューを有効にした（#258）
     //*  2026/10/02  玄人 幸道         管理画面の導線を EnableAdministrationOfUsersAndRoles でも出し分けた（#258）
     //*  2026/10/07  玄人 幸道         msWebauthn.js の読み込みを削除（#137）
+    //*  2026/10/14  玄人 幸道         IdFederationAdmin のメニューを足した（#292 の段階 2）
     //**********************************************************************************
 *@
 @* マスタ・ページに相当 *@
@@ -129,6 +130,9 @@ else
                         </li>
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("IdFederationAdmin Screen", "Index", "IdFederationAdmin", null, new { style = "color:peachpuff" })
                         </li>
     }
 }
