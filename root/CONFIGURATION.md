@@ -867,7 +867,54 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
 > **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
 
-#### ID 連携（OIDC）で、上流の `id_token` を検証する鍵（#289 の段階 1）
+#### ID 連携の 4 つの脚（#286 / #289 / #290 / #291）
+
+**ID 連携では、この IdP が真ん中に立つ。** **下流 IdP（＝この配備）と呼ぶ。**
+
+```
+SPRP→(1)→下流IdP→(2)→上流IdP
+SPRP←(4)←下流IdP←(3)←上流IdP
+```
+
+| 脚 | 何が流れるか | 署名する側 | 検証する側 | 検証鍵（設定） |
+|---|---|---|---|---|
+| **(1)** | **SPRP の要求**（`AuthnRequest` / 認可要求） | SPRP | **下流 IdP** | **クライアント登録の `jwk_rsa_publickey`**（**相手ごと**） |
+| **(2)** | **下流 IdP の要求**（`AuthnRequest` / 認可要求） | **下流 IdP** | 上流 IdP | **上流に登録した自分の公開鍵**（上流側の設定） |
+| **(3)** | **上流 IdP の応答**（アサーション / `id_token`） | 上流 IdP | **下流 IdP** | **`IdFederation*`**（下の 2 節） |
+| **(4)** | **下流 IdP の応答**（アサーション / `id_token`） | **下流 IdP** | SPRP | **この配備の証明書**（`/samlmetadata` / `/jwkcerts` で広告する） |
+
+**protocol で、署名する脚が違う。**
+
+| | (1) 要求 | (2) 要求 | (3) 応答 | (4) 応答 |
+|---|---|---|---|---|
+| **SAML2** | **署名する**（SP が署名し、**下流は登録値で検証**） | **署名する**（`SpRp_RsaPfxFilePath` ＝ `*_Client.pfx`） | **署名する** | **署名する**（`RsaPfxFilePath` ＝ `*_Server.pfx`） |
+| **OIDC** | **しない**（`client_secret` ＋ PKCE。**`client_assertion` / Request Object を使う登録だけ、同じ `jwk_rsa_publickey` で検証**） | **しない**（`client_secret_post` ＋ PKCE） | **署名する**（`id_token`） | **署名する**（`id_token` / JARM） |
+
+> **SAML2 は要求にも応答にも署名が在り、OIDC は応答だけ**である。
+
+> **(2) の署名は、上流が検証していない**（実測）。
+> **雛形の `IdFederation` クライアントにも、`store/` の E2E のクライアントにも
+> `jwk_rsa_publickey` を登録していない**ので、
+> **上流は「鍵がない場合は、通す」経路に入る**（`CmnEndpoints.VerifySamlRequest`）。
+> **相互運用では、上流に自分の公開鍵を登録してもらうこと。**
+
+**問題だったのは (3) である。**
+
+**(3) の検証鍵を、Open棟梁 は設定から 1 本だけ選んでいた**
+（`SAML2Client.VerifyResponse` / `CmnJwtToken.Verify`）。
+**その 1 本（`SpRp_*CerFilePath`）は、この配備では (4) で広告する自分の証明書**でもある。
+
+| | |
+|---|---|
+| **分けられなかった理由** | **上流の証明書に差し替えると、(4) が壊れる**（**他人の証明書を広告することになる**） |
+| **どう解いたか** | **(3) の鍵を、呼び出し側から渡せるようにした**（Open棟梁 [#600](https://github.com/OpenTouryoProject/OpenTouryo/issues/600) / [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601)） |
+| **渡す値の置き場** | **`IdFederation*` のキー**（#286 / #289 / #291）。**共通設定（`SpRp_*` / `JwkSetUri`）は触らない**（#290。8 節） |
+
+#### (3) の検証鍵 — OIDC（#289 / #290）
+
+**上流の `id_token`（＝ (3)）の署名を検証する鍵である。**
+**OIDC は応答にだけ署名が在る**ので、**OIDC の ID 連携で要る鍵は、これだけ**である
+（**(2) は署名しない** — `client_secret_post` ＋ PKCE）。
 
 | 設定キー | 雛形の値 | |
 |---|---|---|
@@ -875,12 +922,12 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `IdFederationOidcDiscoveryUrl` | `https://localhost:44301/.well-known/openid-configuration` | **上流の discovery**。**空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる** |
 | `IdFederationOidcCerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の `id_token` の署名を検証する証明書**（`.cer` のパス）。**空なら従来どおり** |
 
-**書けば、上流の鍵で検証する**（Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601) の版へ、
+**どれかを書けば、上流の鍵で検証する**（Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601) の版へ、
 **鍵・`iss`・`aud` を渡す**）。
 
 | 渡すもの | 値 |
 |---|---|
-| 鍵 | **このキーの `.cer`**（`JWS_RS256_X509`） |
+| 鍵 | **上の 3 本から決める**（下の「鍵の出どころは 4 段」） |
 | `iss` | **`SpRp_Isser`**（Open棟梁 のクライアント役の設定。**相手の Issuer** である） |
 | `aud` | **`OAuth2AndOidcClientID`**（上流に登録した自分の `client_id`） |
 
@@ -926,10 +973,17 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 （**設定の URL を差し替えられた配備で、別の発行者の鍵を信じないため**）。
 **引けなければ 2 段目に倒れる**ので、**discovery が落ちていても ID 連携は止まらない。**
 
-#### ID 連携（SAML2）で、上流に繋ぐ設定（#286 の段階 1 / 段階 2）
+#### (2) の宛先と (3) の検証鍵 — SAML2（#286 の段階 1 / 段階 2）
 
 **この IdP が、上流の IdP に対して SP になるときの設定である。**
 **OIDC の `IdFederation*Endpoint`（4 本）とは別に持つ。**
+
+**SAML2 は要求にも署名が在る**ので、**(2) の宛先（上流の SSO）と、自分の署名鍵**も要る。
+
+| 脚 | 使う値 |
+|---|---|
+| **(2)** 送る要求 | 宛先は `IdFederationSaml2RequestEndpoint`（またはメタデータの `SingleSignOnService`）。**署名鍵は `SpRp_RsaPfxFilePath`**（Open棟梁 の `SAML2Client.CreateRedirectRequest` が読む） |
+| **(3)** 受ける応答 | 検証鍵は `IdFederationSaml2CerFilePath`（またはメタデータの `KeyDescriptor`）。**期待する Issuer は `IdFederationSaml2IssuerId`** |
 
 | 設定キー | 雛形の値 | |
 |---|---|---|
@@ -1120,24 +1174,29 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 **いまは最初の 1 本だけを使う**（`KeyInfo` の照合で選ぶ仕組みは、まだ無い）。
 **取り直しの下限は 1 分**（OIDC 側の discovery と同じ）。
 
-#### `SpRp_RsaCerFilePath` は、上流の証明書に差し替えられない
+#### なぜ (3) の鍵を `SpRp_RsaCerFilePath` にできないか
 
-**上流の応答（アサーション）の検証鍵として、既存の `SpRp_RsaCerFilePath` は使えない。**
-**このキーは、この配備では「自分の証明書」として 3 か所から読まれている。**
+**(3)（上流 → 下流の応答）の検証鍵として、`SpRp_RsaCerFilePath` は使えない。**
+**このキーは、この配備では「自分の証明書」として読まれている**（**(4) の側**）。
 
-| | `SpRp_RsaCerFilePath` の役 |
-|---|---|
-| SAML2 | **`/samlmetadata` の `KeyDescriptor`**（**自分の証明書を広告する**） |
-| OIDC | **`JwkSet.json`（`/jwkcerts`）の素**（`CreateJwkSetJson` が読む） |
-| 共通 | **署名検証の控え**（`kid` が引けないとき。8 節） |
-| クライアント役 | **相手の公開鍵**（Open棟梁 の `SAML2Client.VerifyResponse` が読む先） |
+| | `SpRp_RsaCerFilePath` の役 | どの脚か |
+|---|---|---|
+| SAML2 | **`/samlmetadata` の `KeyDescriptor`**（**自分の証明書を広告する**） | **(4)** |
+| OIDC | **`JwkSet.json`（`/jwkcerts`）の素**（`CreateJwkSetJson` が読む） | **(4)** |
+| 共通 | **署名検証の控え**（`kid` が引けないとき。8 節） | (3) / (4) |
+| クライアント役 | **相手の公開鍵**（Open棟梁 の `SAML2Client.VerifyResponse` が読む先） | **(3)** |
 
-**上流のものに差し替えると、上の 3 つが同時に壊れる**（**他人の証明書を広告することになる**）。
-**だから `IdFederationSaml2CerFilePath` を別に持つ。**
+**1 つのキーが、(3) の検証鍵と (4) の広告鍵を兼ねている。**
+**上流のものに差し替えると、(4) が壊れる**（**他人の証明書を広告することになる**）。
+
+**だから (3) の鍵は、別のキーで持つ** — `IdFederationSaml2CerFilePath`（SAML2）／
+`IdFederationJwkSetUri` ・ `IdFederationOidcDiscoveryUrl` ・ `IdFederationOidcCerFilePath`（OIDC）。
 
 > **検証の本体は `CommonLibrary/SamlProviders/CmnSaml2Response.cs` にある。**
-> **`SAML2Client.VerifyResponse` を使わず、`SAML2Bindings` を直に呼ぶ**
-> （**あちらは検証鍵を引数に取らない**ため）。
+> **`SAML2Client.VerifyResponse` を使わず、`SAML2Bindings` を直に呼ぶ。**
+> **以前は「あちらが検証鍵を引数に取らない」ためだったが、
+> Open棟梁 #600 で鍵を渡せるようになった。**
+> **いまも写しを使っているのは、`Reason`（落ちた理由）を画面と E2E が見ている**ためである。
 > **署名検証そのものは `SAML2Bindings.VerifyRedirect` / `VerifyPost`** であり、
 > **`AuthnRequest` の検証と同じもの**である。**実装が 2 本になるわけではない。**
 >
