@@ -190,11 +190,15 @@ services:
       #   **SAML2 の ID 連携の ACS**（#286 の段階 2）。**redirect_uri はクライアント 1 件に 1 つ**なので、
       #   **OIDC の redirect_uri_code と並べて持つ**（口が別なので衝突しない）。
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_saml=https://localhost:44300/Account/IDFederationAssertionConsumerService
+      # **AuthnRequest の署名を検証する鍵**（#293 の段階 2。値は *_Client.cer の JWK）。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__jwk_rsa_publickey=eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_secret=E2E_qP7wE2rT5yU8iO1pA4sD6fG9hJ3kL0zX
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_code=https://localhost:44302/Account/IDFederationRedirectEndPoint
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_name=IdFederationE2ENetFx
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_saml=https://localhost:44302/Account/IDFederationAssertionConsumerService
+      # **AuthnRequest の署名を検証する鍵**（#293 の段階 2。値は *_Client.cer の JWK）。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__jwk_rsa_publickey=eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ
 
       # ---------------------------------------------------------------- 利用者名を下流へ渡す
       #   **sub では渡せない**（#151 の段階 4 で、既定が public になった ＝ sub は利用者 ID）。
@@ -214,6 +218,8 @@ services:
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__client_name=IdFederationDownstreamContainer
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__redirect_uri_saml=https://localhost:44303/Account/IDFederationAssertionConsumerService
+      # **AuthnRequest の署名を検証する鍵**（#293 の段階 2。値は *_Client.cer の JWK）。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d3__jwk_rsa_publickey=eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ
 
       # ---------------------------------------------------------------- 同意を押さないクライアント（#284）
       #   **CN-6.2（記録が無いときの consent_required）を測るためだけに在る。**
