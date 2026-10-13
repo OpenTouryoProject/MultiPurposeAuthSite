@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
+//*  2026/10/13  玄人 幸道         SSO へ行く部分を FollowSsoAsync に切り出した（#293 の段階 4）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -114,6 +115,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public static async Task<Saml2FederationResult> FederateAsync(IdPClient client)
         {
+            Saml2FederationResult result = await Saml2Federation.StartAsync(client);
+
+            if (string.IsNullOrEmpty(result.SsoUrl))
+            {
+                return result;
+            }
+
+            return await Saml2Federation.FollowSsoAsync(client, result.SsoUrl, result);
+        }
+
+        /// <summary>下流で「SAML2 の ID 連携」を押し、上流へ行く手前で止める</summary>
+        /// <param name="client">IdPClient（下流）</param>
+        /// <returns>結果（`SsoUrl` まで）</returns>
+        /// <remarks>
+        /// **`FederateAsync` の (1) と (2) である。**
+        /// **要求を細工してから投げる側から呼べるように、切り出してある**（#293 の段階 4）。
+        /// </remarks>
+        public static async Task<Saml2FederationResult> StartAsync(IdPClient client)
+        {
             Saml2FederationResult result = new Saml2FederationResult();
 
             // (1) 下流のサインイン画面
@@ -150,6 +170,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             result.SsoUrl = start.Headers.Location.ToString();
+
+            return result;
+        }
+
+        /// <summary>上流の SSO へ行き、戻ってきた応答を下流の ACS に渡す</summary>
+        /// <param name="client">IdPClient（下流）</param>
+        /// <param name="ssoUrl">上流の SSO の URL（`SAMLRequest` を含む）</param>
+        /// <param name="result">詰める入れ物（null なら作る）</param>
+        /// <returns>結果</returns>
+        /// <remarks>
+        /// **`FederateAsync` の (3) と (4) である。**
+        /// **要求を細工して投げる側から呼べるように、切り出してある**（#293 の段階 4）。
+        /// </remarks>
+        public static async Task<Saml2FederationResult> FollowSsoAsync(
+            IdPClient client, string ssoUrl, Saml2FederationResult result = null)
+        {
+            result = result ?? new Saml2FederationResult();
+            result.SsoUrl = ssoUrl;
 
             //  (3) 上流の SSO（**ブラウザが行く先**）。
             //

@@ -357,7 +357,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | ファイル | 識別子 | 対象 |
 |---|---|---|
 | `Tests/Container/ContainerTargets.cs` | （基盤） | コンテナをテスト対象にする。**`docker inspect` で実効の環境変数を読み、`publish/appsettings.json` に重ねる**（compose と同じ優先順位）。**建っていなければ Skip** |
-| `Tests/Container/ContainerSmokeTests.cs` | `CN-1` | **疎通**。Discovery の `issuer` が構成と一致すること、**上流と下流で `issuer` が違うこと**（#281）、`jwkcerts` が鍵を返すこと（**マウントが効いている**）、`/Ping` |
+| `Tests/Container/ContainerSmokeTests.cs` | `CN-1` | **疎通**。Discovery の `issuer` が構成と一致すること、**上流と下流で `issuer` が違うこと**（#281）、`jwkcerts` が鍵を返すこと（**マウントが効いている**）、`/Ping`、**上流と下流の署名鍵が違うこと**（`CN-1.5`。#293 の段階 1 の回帰） |
 | `Tests/Container/ContainerSignInTests.cs` | `CN-2` | **種データの利用者でサインインできる**（`mem` なので、作り直すたびに作られる） |
 | `Tests/Container/SelfTestLoopbackTests.cs` | `CN-3` | **自己テストの折り返し**（`OAuth2ContainerizatedAuthSvrEPRootURI`。#250）。**下流コンテナで測る** — 上流は `OAuth2ClientEndpointsRootURI` を与えていない |
 | `Tests/Container/CookieIsolationTests.cs` | `CN-4` | **上流と下流の Cookie の名前が 1 つも衝突しないこと**（#255 / #279 / #282 の回帰）。**`CookieContainer` を見る**（`Set-Cookie` を拾うと認証 Cookie が漏れる） |
@@ -404,7 +404,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/NameIdFormatTests.cs` | `SA-3` | `NameIDPolicy` の値ごとの `NameID`（`unspecified` / `emailAddress` / **`persistent` は RP ごとに違う PPID**） |
 | `Tests/Saml/SignInFlowTests.cs` | `SA-4` | **未サインイン → サインイン画面 → アサーション**（SP-initiated SSO の本来の形） |
 | `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
-| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `store/` のコンテナ**。**建っていなければ Skip** |
+| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `store/` のコンテナ**。**建っていなければ Skip**。**`SA-6.5` は、署名を壊した `AuthnRequest` を上流が弾くこと**（#293 の段階 4。(2) の検証が効いていること） |
 | `Tests/Saml/AttributeStatementTests.cs` | `SA-7` | **アサーションの `AttributeStatement`**（#286 の段階 4）。**メアド・利用者名・`email_verified` を属性で返すこと**（`urn:oid:…` ＋ `FriendlyName` ＋ `NameFormat`）／**`persistent` の `NameID` でも属性でメアドが分かること**（段階 4 の目的）。**自己テストの口で測る**ので、上流コンテナは要らない |
 
 > **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
 //*  2026/10/12  玄人 幸道         SA-6.4（属性を使う）を足した（#286 の段階 4）
+//*  2026/10/13  玄人 幸道         SA-6.5（署名を壊した要求）を足した（#293 の段階 4）
 //**********************************************************************************
 
 using System.Threading.Tasks;
@@ -52,7 +53,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     /// | 押すボタン | `id_federation_signin` | **`id_federation_saml2_signin`** |
     /// | 連携キー | `(id_token の iss, sub)` | **`(上流の EntityID, NameID)`** |
     /// | 利用者の鍵 | メアド | **メアド**（**属性の `mail`** → `NameID`。段階 4） |
-    /// | 検証鍵 | `kid` → ローカルの JWK Set（#601） | **設定の `IdFederationSaml2CerFilePath`** |
+    /// | 検証鍵 | `kid` → 上流の JWK Set（#290） | **上流のメタデータ**（#291。倒れ先が設定の `IdFederationSaml2CerFilePath`） |
     /// | 期待する発行者 | `SpRp_Isser` | **`IdFederationSaml2IssuerId`** |
     ///
     /// **上流に、下流の ACS を `redirect_uri_saml` として登録してある**
@@ -424,6 +425,122 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 r.Note("**`Transient` の `NameID` は受けない**（段階 4）— "
                     + "**毎回変わる値を連携キーにできない**（SAML Core 8.3.8）。");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region SA-6.5
+
+        /// <summary>SA-6.5 署名を壊した AuthnRequest は、上流が弾く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **(2)（下流 → 上流の `AuthnRequest`）の署名が、本当に検証されていること**を測る
+        /// （#293 の段階 2 を常設のケースにしたもの。段階 4）。
+        ///
+        /// **歯抜けを、配備を壊さずに測る。**
+        /// **上流の登録鍵を差し替える**手は、**`store/docker-compose.yml` を書き換えて
+        /// コンテナを作り直す**ことになり、通しには入れられない。
+        /// **ここでは、製品が署名した本物の要求の、署名だけを 1 バイト変える。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **通れば** | **検証されていない**（`jwk_rsa_publickey` の登録が外れた、など） |
+        /// | **`Requester` で返れば** | **検証されている** |
+        ///
+        /// **`SA-5.4` は「鍵を登録したクライアントの、署名の無い要求」**である。
+        /// **ここは「署名が在るが、合わない要求」**で、**検証の計算そのものを通る。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task SA0605_署名を壊したAuthnRequestを上流が弾く(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                string upstream = await Saml2Federation.SkipIfNotAvailableAsync(client);
+
+                TestReport r = this.Report("SA-6.5",
+                    "署名を壊した AuthnRequest は、上流が弾く",
+                    "**(2)（下流 → 上流の `AuthnRequest`）の署名が検証されていること**（#293 の段階 2）。"
+                    + "**上流に `jwk_rsa_publickey` を登録していなければ、`VerifySamlRequest` は"
+                    + "「鍵がない場合は、通す」経路に入る**ので、"
+                    + "**壊した署名でも通ってしまう** — **それを落とすのがこのケースである。**"
+                    + "**製品が署名した本物の要求の、署名だけを 1 バイト変えて送る**ので、"
+                    + "**配備を壊さずに歯抜けが測れる**（段階 4）。",
+                    "SAML 2.0 Bindings 3.4.4.1 / #275 / #293 の段階 2");
+
+                r.Target(client.Target.DisplayName + " → 上流 " + upstream);
+
+                r.Step("(1) 上流でサインインしておく（署名の検証まで進ませるため）");
+
+                Assert.True(await IdFederation.SignInUpstreamAsync(client, upstream),
+                    "前提: 上流にサインインできること");
+
+                r.Step("(2) 下流に、本物の AuthnRequest を作らせる（送る手前で止める）");
+
+                Saml2FederationResult start = await Saml2Federation.StartAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(start.SsoUrl), "前提: 上流へ送られること");
+
+                string sigAlg = Saml2.QueryValue(start.SsoUrl, "SigAlg");
+                string signature = Saml2.QueryValue(start.SsoUrl, "Signature");
+
+                r.Verify("下流は AuthnRequest に署名している",
+                    !string.IsNullOrEmpty(signature),
+                    "Signature あり（値は伏せる）",
+                    string.IsNullOrEmpty(signature) ? "**無い**" : "あり");
+
+                Assert.False(string.IsNullOrEmpty(signature), "前提: 署名が載っていること");
+
+                r.Observe("SigAlg", sigAlg,
+                    "**実際に使ったアルゴリズム**（Open棟梁 #604 の追随）。");
+
+                r.Step("(3) 署名だけを 1 バイト変えて送る");
+
+                byte[] raw = System.Convert.FromBase64String(signature);
+
+                //  **先頭の 1 バイトを反転する。** **長さも符号化も変えない**ので、
+                //    **「署名が合わない」以外の違いが入らない。**
+                raw[0] = (byte)(raw[0] ^ 0xFF);
+
+                string tampered = Saml2.ReplaceQueryValue(
+                    start.SsoUrl, "Signature", System.Convert.ToBase64String(raw));
+
+                r.Verify("壊したのは署名だけである",
+                    Saml2.QueryValue(tampered, "SAMLRequest")
+                        == Saml2.QueryValue(start.SsoUrl, "SAMLRequest")
+                    && Saml2.QueryValue(tampered, "SigAlg") == sigAlg,
+                    "SAMLRequest と SigAlg は元のまま", "元のまま");
+
+                Saml2FederationResult broken =
+                    await Saml2Federation.FollowSsoAsync(client, tampered);
+
+                r.Step("(4) 上流が弾く");
+
+                Saml2Response response = Saml2.ReadResponse(broken.ResponseXml);
+
+                r.Verify("上流が応答を返す（画面で止まらない）", response != null,
+                    "応答が返る",
+                    (response == null)
+                        ? "**応答が無い**（着いた先 " + broken.LandedOn + "）" : "返った");
+
+                Assert.NotNull(response);
+
+                r.VerifyEqual("StatusCode", Saml2.StatusRequester, response.StatusCode);
+
+                r.Verify("エラー応答に Assertion を入れない（#278）", !response.HasAssertion,
+                    "入れない", response.HasAssertion ? "**入っている**" : "入れていない");
+
+                r.Verify("下流にサインインさせない", !broken.Authorized,
+                    "サインインしない",
+                    broken.Authorized ? "**サインインした**" : "しなかった");
+
+                r.Note("**このケースが通らなくなったら、まず登録を見ること**"
+                    + "（`store/docker-compose.yml` の `jwk_rsa_publickey`）。"
+                    + "**鍵が無いと「通す」ので、`Success` が返って落ちる。**");
 
                 r.Done();
             }

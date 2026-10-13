@@ -275,6 +275,45 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return null;
         }
 
+        /// <summary>クエリ文字列の 1 つの値を差し替える（#293 の段階 4）</summary>
+        /// <param name="urlOrQuery">URL でもクエリ文字列でもよい</param>
+        /// <param name="name">名前</param>
+        /// <param name="value">新しい値（符号化していない値）</param>
+        /// <returns>差し替えた URL / クエリ文字列（その名前が無ければ、そのまま返す）</returns>
+        /// <remarks>
+        /// **他のパラメタは 1 文字も触らない。**
+        /// **Redirect Binding の署名は「受け取った符号のまま」で計算される**
+        /// （SAML 2.0 Bindings 3.4.4.1）ので、**組み直すと、壊していない所まで変わる。**
+        /// </remarks>
+        public static string ReplaceQueryValue(string urlOrQuery, string name, string value)
+        {
+            if (string.IsNullOrEmpty(urlOrQuery))
+            {
+                return urlOrQuery;
+            }
+
+            int q = urlOrQuery.IndexOf('?');
+            string head = (q < 0) ? "" : urlOrQuery.Substring(0, q + 1);
+            string[] pairs = ((q < 0) ? urlOrQuery : urlOrQuery.Substring(q + 1)).Split('&');
+
+            for (int i = 0; i < pairs.Length; i++)
+            {
+                int eq = pairs[i].IndexOf('=');
+
+                if (eq < 0)
+                {
+                    continue;
+                }
+
+                if (Uri.UnescapeDataString(pairs[i].Substring(0, eq)) == name)
+                {
+                    pairs[i] = pairs[i].Substring(0, eq + 1) + Uri.EscapeDataString(value);
+                }
+            }
+
+            return head + string.Join("&", pairs);
+        }
+
         /// <summary>応答の XML から、よく見る値を読む（#275）</summary>
         /// <param name="xml">XML</param>
         /// <returns>Saml2Response（読めなければ null）</returns>
