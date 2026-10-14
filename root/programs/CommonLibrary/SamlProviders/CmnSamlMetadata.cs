@@ -32,6 +32,7 @@
 //*  2026/10/13  玄人 幸道         設定の読み方をIdFederationSaml2Metadataへ分けた（#291）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
 
 using System;
@@ -42,6 +43,7 @@ using System.Threading.Tasks;
 using System.Xml;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.Security;
 
 /// <summary>MultiPurposeAuthSite.SamlProviders</summary>
 namespace MultiPurposeAuthSite.SamlProviders
@@ -186,28 +188,207 @@ namespace MultiPurposeAuthSite.SamlProviders
             return await CmnSamlMetadata.FetchAsync(metadataUrl, expectedEntityId);
         }
 
+        #region この配備のメタデータを作る（#292 の段階 3）
+
+        /// <summary>
+        /// この配備の `/samlmetadata` を作る。
+        /// </summary>
+        /// <returns>メタデータ（XmlDocument）</returns>
+        /// <remarks>
+        /// **両アプリの `/samlmetadata` が、これを呼ぶ**
+        /// （**同じ組み立てが 2 か所に在った**ので 1 か所にした。#292 の段階 3）。
+        ///
+        /// **署名証明書は 1 本だけでは足りない。**
+        /// **鍵を替えた瞬間に、キャッシュを持つ SP が検証できなくなる**ためで、
+        /// **`PreviousSigningCerFilePaths` に書いた分を並べて広告する。**
+        ///
+        /// | 広告する順 | 出どころ |
+        /// |---|---|
+        /// | 1 本目 | **いま署名に使っている鍵の証明書**（`SpRp_RsaCerFilePath`） |
+        /// | 2 本目以降 | **`PreviousSigningCerFilePaths`**（空白かカンマ区切り） |
+        /// </remarks>
+        public static XmlDocument CreateForThisDeployment()
+        {
+            string saml2RequestEndpoint =
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
+
+            XmlDocument metadata = SAML2Bindings.CreateMetadata(
+                Config.IssuerId,
+                PrivacyEnhancedMail.GetBase64StringFromPemFilePath(
+                    CmnClientParams.RsaCerFilePath,
+                    PrivacyEnhancedMail.RFC7468Label.Certificate),
+                new SAML2Enum.NameIDFormat[]
+                {
+                    SAML2Enum.NameIDFormat.Unspecified,
+                    SAML2Enum.NameIDFormat.EmailAddress,
+                    SAML2Enum.NameIDFormat.Persistent//,
+                    //SAML2Enum.NameIDFormat.Transient
+                },
+                saml2RequestEndpoint,
+                saml2RequestEndpoint);
+
+            CmnSamlMetadata.AppendPreviousSigningKeyDescriptors(metadata);
+
+            return metadata;
+        }
+
+        /// <summary>
+        /// 退役させる途中の署名証明書を、`KeyDescriptor` として並べる（#292 の段階 3）。
+        /// </summary>
+        /// <param name="metadata">`SAML2Bindings.CreateMetadata` の戻り</param>
+        /// <remarks>
+        /// **`SAML2Bindings.CreateMetadata` は証明書を 1 本しか受けない**ので、
+        /// **出来上がった XML に足す**（Open棟梁 側に複数渡せる口が無い）。
+        ///
+        /// **1 本目（署名用）の `KeyDescriptor` を複製し、証明書だけ差し替える。**
+        /// **読めない・書いていないものは、黙って飛ばす**
+        /// （**メタデータが出せなくなる方が困る**ため。理由はログに残す）。
+        /// </remarks>
+        public static void AppendPreviousSigningKeyDescriptors(XmlDocument metadata)
+        {
+            string paths = Config.PreviousSigningCerFilePaths;
+
+            if (metadata == null || string.IsNullOrEmpty(paths))
+            {
+                return;
+            }
+
+            //  **1 本目の KeyDescriptor（use="signing"）を複製元にする。**
+            //    **局所名で引く**（名前空間の接頭辞は、出す側が決める）。
+            XmlNode signing = metadata.SelectSingleNode(
+                "//*[local-name()='KeyDescriptor'][@use='signing']");
+
+            if (signing == null || signing.ParentNode == null)
+            {
+                Logging.MyOperationTrace(
+                    "The SAML2 metadata had no signing KeyDescriptor to clone.");
+
+                return;
+            }
+
+            int added = 0;
+
+            foreach (string path in paths.Split(
+                new char[] { ' ', ',', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string base64 = "";
+
+                try
+                {
+                    base64 = PrivacyEnhancedMail.GetBase64StringFromPemFilePath(
+                        path, PrivacyEnhancedMail.RFC7468Label.Certificate);
+                }
+                catch (Exception ex)
+                {
+                    //  **読めない 1 本で、メタデータ全体を落とさない。**
+                    Logging.MyOperationTrace(string.Format(
+                        "A previous signing certificate could not be read. ({0})",
+                        ex.GetType().Name));
+
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(base64))
+                {
+                    continue;
+                }
+
+                XmlNode clone = signing.CloneNode(true);
+
+                XmlNode cert = clone.SelectSingleNode(
+                    ".//*[local-name()='X509Certificate']");
+
+                if (cert == null)
+                {
+                    continue;
+                }
+
+                cert.InnerText = base64;
+
+                //  **1 本目の後ろに並べる**（**いまの鍵が先**）。
+                signing.ParentNode.InsertAfter(clone, signing);
+
+                added++;
+            }
+
+            if (0 < added)
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The SAML2 metadata advertises previous signing certificates. (count: {0})",
+                    added));
+            }
+        }
+
+        #endregion
+
         /// <summary>
         /// 署名用の証明書から、検証鍵（RSA）を作る。
         /// </summary>
         /// <param name="metadata">`GetAsync` の戻り</param>
         /// <returns>RSA（作れなければ null）</returns>
         /// <remarks>
-        /// **最初の 1 本だけを使う。**
-        /// **ロールオーバー中に 2 本並ぶ**ことはあるが、
-        /// **どちらで検証するかを選ぶ仕組み（`KeyInfo` の照合）は、まだ無い。**
+        /// **最初の 1 本だけを返す**（従来の呼び出しのため）。
+        /// **ロールオーバー中は 2 本以上並ぶ**ので、**全部試す側は `SigningKeys`** を使う
+        /// （#292 の段階 3）。
         /// </remarks>
         public static RSA FirstSigningKey(Metadata metadata)
         {
+            List<RSA> keys = CmnSamlMetadata.SigningKeys(metadata);
+
+            return (keys.Count == 0) ? null : keys[0];
+        }
+
+        /// <summary>
+        /// 署名用の証明書から、検証鍵（RSA）を**全部**作る（#292 の段階 3）。
+        /// </summary>
+        /// <param name="metadata">`GetAsync` の戻り</param>
+        /// <returns>RSA の列（1 本も作れなければ空）</returns>
+        /// <remarks>
+        /// **ロールオーバー中は `KeyDescriptor` が 2 本以上並ぶ。**
+        /// **どれで署名されたかは、応答からは分からない**
+        /// （**SAML2 の署名に `kid` に当たるものが無い** — `KeyInfo` は任意で、
+        /// **相手が入れていなければ選べない**）。
+        /// **だから「全部試す」**（#291 の残件はこれで閉じる）。
+        ///
+        /// **順は、メタデータに並んでいる順**である。
+        /// </remarks>
+        public static List<RSA> SigningKeys(Metadata metadata)
+        {
+            List<RSA> keys = new List<RSA>();
+
             if (metadata == null
                 || metadata.SigningCertificates == null
                 || metadata.SigningCertificates.Count == 0)
+            {
+                return keys;
+            }
+
+            foreach (string base64 in metadata.SigningCertificates)
+            {
+                RSA rsa = CmnSamlMetadata.ToRsa(base64);
+
+                if (rsa != null)
+                {
+                    keys.Add(rsa);
+                }
+            }
+
+            return keys;
+        }
+
+        /// <summary>証明書（base64）から RSA を作る（作れなければ null）</summary>
+        /// <param name="base64">証明書（base64）</param>
+        /// <returns>RSA</returns>
+        private static RSA ToRsa(string base64)
+        {
+            if (string.IsNullOrEmpty(base64))
             {
                 return null;
             }
 
             try
             {
-                byte[] der = Convert.FromBase64String(metadata.SigningCertificates[0]);
+                byte[] der = Convert.FromBase64String(base64);
 
                 //  **証明書の読み込みはターゲットで分ける**（`CmnSaml2Response` と同じ）。
                 //    `new X509Certificate2(byte[])` は net10.0 で旧形式（SYSLIB0057）、

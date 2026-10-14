@@ -2583,14 +2583,16 @@ namespace MultiPurposeAuthSite.Controllers
             Session["id_federation_saml2_request_id"] = "";
 
             //  **検証鍵は、メタデータ → 設定の `.cer` の順で決める**（#291）。
-            RSA upstreamKey =
-                await SamlProviders.IdFederationSaml2Metadata.GetSigningKeyAsync(upstream);
+            //    **ロールオーバー中は 2 本以上並ぶ**ので、**全部渡して試させる**（#292 の段階 3）
+            //    （SAML2 の署名には `kid` に当たるものが無く、選べない）。
+            List<RSA> upstreamKeys =
+                await SamlProviders.IdFederationSaml2Metadata.GetSigningKeysAsync(upstream);
 
             SamlProviders.CmnSaml2Response.Saml2Result result =
                 SamlProviders.CmnSaml2Response.Verify(
                     samlResponse, queryString, sigAlg, relayState, state, isGet,
                     Config.IdFederationSaml2ResponseEndpoint, requestId,
-                    upstreamKey, upstream.Issuer);
+                    upstreamKeys, upstream.Issuer);
 
             if (result.Verdict != "NORMAL_END")
             {

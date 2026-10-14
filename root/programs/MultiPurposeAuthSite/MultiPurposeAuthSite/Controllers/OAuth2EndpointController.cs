@@ -1253,24 +1253,10 @@ namespace MultiPurposeAuthSite.Controllers
         [MpasPublicDocsCors]   // samlmetadata（公開情報）
         public HttpResponseMessage SamlMetadata()
         {
-            // XmlWriterSettingsを指定して、可読性の高いXMLを返す。
-            string saml2RequestEndpoint = 
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
-
-            XmlDocument samlMetadata = SAML2Bindings.CreateMetadata(
-                Config.IssuerId,
-                PrivacyEnhancedMail.GetBase64StringFromPemFilePath(
-                    CmnClientParams.RsaCerFilePath,
-                    PrivacyEnhancedMail.RFC7468Label.Certificate),
-                new SAML2Enum.NameIDFormat[]
-                {
-                    SAML2Enum.NameIDFormat.Unspecified,
-                    SAML2Enum.NameIDFormat.EmailAddress,
-                    SAML2Enum.NameIDFormat.Persistent//,
-                    //SAML2Enum.NameIDFormat.Transient
-                },
-                saml2RequestEndpoint,
-                saml2RequestEndpoint);
+            //  **組み立ては `CmnSamlMetadata` に 1 か所だけ置いてある**（#292 の段階 3）。
+            //    **両アプリに同文で在った**ので寄せた。
+            //    **退役前の署名証明書も並べて広告する**（`PreviousSigningCerFilePaths`）。
+            XmlDocument samlMetadata = SamlProviders.CmnSamlMetadata.CreateForThisDeployment();
 
             return new HttpResponseMessage()
             {

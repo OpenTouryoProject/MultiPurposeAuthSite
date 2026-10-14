@@ -30,10 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#291。CmnSamlMetadata から設定の読み方を分けた）
 //*  2026/10/13  玄人 幸道         上流n件から読めるようにした（#292 の段階 1）
+//*  2026/10/14  玄人 幸道         鍵を全部集める版を足した（#292 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 
@@ -118,6 +120,46 @@ namespace MultiPurposeAuthSite.SamlProviders
             //  **上流を指定しない呼び出しは、既定の上流**（従来どおり。#292 の段階 1）。
             return await IdFederationSaml2Metadata.GetSigningKeyAsync(
                 IdFederationUpstreams.GetOrDefault("", IdFederationUpstream.Saml2));
+        }
+
+        /// <summary>
+        /// **その上流**の署名を検証する鍵を、**全部**集める（#292 の段階 3）。
+        /// </summary>
+        /// <param name="upstream">上流の登録</param>
+        /// <returns>RSA の列（1 本も無ければ空）</returns>
+        /// <remarks>
+        /// **順は メタデータの並び → 設定の `.cer`** である。
+        ///
+        /// **ロールオーバー中は、メタデータに 2 本以上並ぶ。**
+        /// **SAML2 の署名には `kid` に当たるものが無い**ので、**受け取る側は全部試す**
+        /// （`CmnSaml2Response.Verify` の鍵の列を受ける版）。
+        ///
+        /// **設定の `.cer` は、いつでも最後の受け皿**である
+        /// （**メタデータが引けない配備**のため。#291）。
+        /// </remarks>
+        public static async Task<List<RSA>> GetSigningKeysAsync(IdFederationUpstream upstream)
+        {
+            List<RSA> keys = new List<RSA>();
+
+            if (upstream == null)
+            {
+                return keys;
+            }
+
+            CmnSamlMetadata.Metadata metadata = await CmnSamlMetadata.GetAsync(
+                upstream.MetadataUrl, upstream.Issuer);
+
+            keys.AddRange(CmnSamlMetadata.SigningKeys(metadata));
+
+            //  **設定の `.cer` も足す**（**メタデータから引けた鍵の後ろ**）。
+            RSA fromFile = CmnSaml2Response.RsaFromCerFile(upstream.CerFilePath);
+
+            if (fromFile != null)
+            {
+                keys.Add(fromFile);
+            }
+
+            return keys;
         }
 
         /// <summary>

@@ -348,6 +348,11 @@ function Set-IdFederationEnv
     $env:IdFederationSaml2ResponseEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationAssertionConsumerService'
     $env:IdFederationSaml2IssuerId = 'https://ssoauth.opentouryo.com'
     $env:IdFederationSaml2CerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
+
+    # **退役させる途中の署名証明書**（#292 の段階 3）。
+    #   **/samlmetadata が 2 本広告する状態を作る**（`SA-2.2` が、それを測る）。
+    #   **値は「いま署名に使っていない証明書」**でよい（広告するだけなので）。
+    $env:PreviousSigningCerFilePaths = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
 }
 
 function Wait-Site

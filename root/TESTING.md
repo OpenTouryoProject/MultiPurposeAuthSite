@@ -291,6 +291,31 @@ docker compose up -d --build upstream downstream
 > **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
 > **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
 
+##### 鍵の入れ替え（ロールオーバー。`SA-2.2` / `SA-6.6`。#292 の段階 3）
+
+| | 測ること |
+|---|---|
+| **`SA-2.2`** | **`/samlmetadata` が、退役前の証明書も並べて広告する**（`PreviousSigningCerFilePaths`） |
+| **`SA-6.6`** | **上流が 2 本広告していても、SAML2 の ID 連携ができる**（**受け取る側は全部試す**） |
+
+**設定は E2E にも渡してある。**
+
+| | |
+|---|---|
+| ホスト（core / netfx） | `test.ps1` が `PreviousSigningCerFilePaths` を渡す（**2 本広告する状態**を作る） |
+| 上流コンテナ | `store/docker-compose.yml` の `PreviousSigningCerFilePaths`（`*_Server.cer`） |
+| 上流コンテナの **JWK Set** | **RSA が 2 本**（`JwkSet_Upstream.json`。**新旧を並べた状態**） |
+
+**歯抜け（実測 2026/10/14）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| **上流の広告の 1 本目を「署名に使っていない証明書」にする**（`SpRp_RsaCerFilePath` と `PreviousSigningCerFilePaths` を入れ替える） | **`SA-6.*` は 12 / 12 通る**。**下流のログに `The SAML2 response was verified with key #2.`** が出る（**1 本目で失敗し、2 本目で検証した**ことの証拠） |
+| 上流の JWK Set を 1 本に戻す | **`RT-140.*` は通る**（`kid` で選ぶので、本数には依らない） |
+
+> **「通った」だけでは、どの鍵で通ったか分からない。**
+> **ログの `verified with key #N` を見ること**（**2 本目以降で通ったときだけ出る**）。
+
 ##### 上流の登録を DB と管理画面で扱う（`RT-292.*`。#292 の段階 2）
 
 **設定ファイルを書き換えずに上流を増やせること**を測る。

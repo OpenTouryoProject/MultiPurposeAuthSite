@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
+//*  2026/10/14  玄人 幸道         SA-2.2（退役前の証明書）を足した（#292 の段階 3）
 //**********************************************************************************
 
 using System.Net.Http;
@@ -237,5 +238,105 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 r.Done();
             }
         }
+
+        #region SA-2.2
+
+        /// <summary>SA-2.2 メタデータは、退役させる途中の署名証明書も並べて広告する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **鍵の入れ替え（ロールオーバー）に要る**（#292 の段階 3）。
+        ///
+        /// **SP はメタデータをキャッシュする。**
+        /// **1 本しか広告していないと、鍵を替えた瞬間に SP が検証できなくなる。**
+        ///
+        /// **`PreviousSigningCerFilePaths` に書いた分を、`KeyDescriptor` として並べる**
+        /// （**いまの鍵が 1 本目**）。**空なら 1 本だけ**（従来どおり）。
+        ///
+        /// **`SAML2Bindings.CreateMetadata` は証明書を 1 本しか受けない**ので、
+        /// **出来上がった XML に足している**（`CmnSamlMetadata.AppendPreviousSigningKeyDescriptors`）。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task SA0202_メタデータが退役前の証明書も広告する(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("SA-2.2",
+                    "メタデータは、退役させる途中の署名証明書も並べて広告する",
+                    "**鍵を入れ替えられること**（#292 の段階 3）。"
+                    + "**SP はメタデータをキャッシュする**ので、"
+                    + "**1 本だけ広告していると、替えた瞬間に検証できなくなる。**"
+                    + "**2 本並べておけば、SP がどちらでも検証できる**"
+                    + "（**受け取る側は全部試す**。`CmnSaml2Response` の鍵の列を受ける版）。",
+                    "SAML 2.0 Metadata 2.4.1.1 / #292 の段階 3");
+
+                r.Target("GET /samlmetadata");
+
+                r.Step("(1) メタデータを引く");
+
+                HttpResponseMessage res = await client.GetAsync("/samlmetadata");
+                string xml = await res.Content.ReadAsStringAsync();
+
+                r.VerifyEqual("HTTP 200", "200", ((int)res.StatusCode).ToString());
+
+                XmlDocument doc = new XmlDocument();
+                bool parsed = true;
+
+                try
+                {
+                    doc.LoadXml(xml);
+                }
+                catch
+                {
+                    parsed = false;
+                }
+
+                r.Verify("XML として読める", parsed, "読める", parsed ? "読めた" : "**読めない**");
+
+                Assert.True(parsed, "前提: メタデータが XML であること");
+
+                r.Step("(2) 署名用の KeyDescriptor の本数を見る");
+
+                XmlNodeList keys = doc.SelectNodes(
+                    "//*[local-name()='KeyDescriptor'][@use='signing']"
+                    + "//*[local-name()='X509Certificate']");
+
+                int count = (keys == null) ? 0 : keys.Count;
+
+                //  **設定が在る配備では 2 本以上**（`test.ps1` が渡している）。
+                //    **空の配備では 1 本**（雛形の既定）。**どちらでも 1 本以上は在る。**
+                r.Verify("1 本以上ある", 0 < count, "1 本以上", count + " 本");
+
+                Assert.True(0 < count, "前提: 署名証明書が広告されていること");
+
+                bool hasPrevious = 1 < count;
+
+                r.Verify("退役前の証明書も並ぶ（設定が在れば）", hasPrevious,
+                    "2 本以上",
+                    hasPrevious ? count + " 本"
+                        : "**1 本だけ**（PreviousSigningCerFilePaths を確認）");
+
+                r.Step("(3) 1 本目は、いま署名に使っている証明書である");
+
+                //  **1 本目は `SpRp_RsaCerFilePath`**（`CreateMetadata` が入れる）。
+                //    **順が入れ替わると、キャッシュを持つ SP の挙動が変わる**ので、見ておく。
+                string first = (0 < count) ? keys[0].InnerText.Trim() : "";
+                string second = (1 < count) ? keys[1].InnerText.Trim() : "";
+
+                r.Verify("1 本目と 2 本目は別の証明書である",
+                    !hasPrevious || first != second,
+                    "別のもの",
+                    (hasPrevious && first == second) ? "**同じものが 2 本**" : "別のもの");
+
+                r.Observe("広告している署名証明書の本数", count.ToString(),
+                    "**`PreviousSigningCerFilePaths` に書いた分だけ増える**"
+                    + "（区切りは空白かカンマ）。");
+
+                r.Done();
+            }
+        }
+
+        #endregion
     }
 }

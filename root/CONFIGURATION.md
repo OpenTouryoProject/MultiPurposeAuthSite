@@ -1290,8 +1290,8 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | **必ず要る** | 自分の ACS（`…ResponseEndpoint`）と、期待する上流の EntityID（`…IssuerId`） |
 | **どちらかで揃っていればよい** | **メタデータの URL** ／ **口（`…RequestEndpoint`）と鍵（`…CerFilePath`）の両方** |
 
-**鍵のロールオーバー中は、`KeyDescriptor` が 2 本並ぶことがある。**
-**いまは最初の 1 本だけを使う**（`KeyInfo` の照合で選ぶ仕組みは、まだ無い）。
+**鍵のロールオーバー中は、`KeyDescriptor` が 2 本以上並ぶことがある。**
+**全部試す**（#292 の段階 3。**`SAML2` の署名には `kid` に当たるものが無い**ので、選べない）。
 **取り直しの下限は 1 分**（OIDC 側の discovery と同じ）。
 
 ##### 鍵を引く宛先は「サーバが呼ぶ先」である（#293 の段階 3）
@@ -1328,6 +1328,46 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 appSettings__IdFederationJwkSetUri=http://upstream:8080/jwkcerts
 appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 ```
+
+#### 鍵の入れ替え（ロールオーバー。#292 の段階 3）
+
+**署名鍵は、いつか替える。** **替えている途中は、新旧 2 本が世の中に在る。**
+**出す側は 2 本広告し、受け取る側は 2 本試す** — **どちらも要る。**
+
+##### 出す側（この配備の鍵）
+
+| | 広告する所 | 新旧 2 本を並べる方法 |
+|---|---|---|
+| **OIDC** | `/jwkcerts`（`JwkSetFilePath`） | **`JwkSet.json` に並べる。** `CommandLineTools/CreateJwkSetJson` は**追記しかしない**ので、**新しい `.cer` で 1 回回せば 2 本になる**（**退役した鍵は手で消す**） |
+| **SAML2** | `/samlmetadata` の `KeyDescriptor` | **`PreviousSigningCerFilePaths`**（空白かカンマ区切り）。**`SAML2Bindings.CreateMetadata` は 1 本しか受けない**ので、**出来上がった XML に足している** |
+
+**順番**（どちらの方式でも同じ）。
+
+| 順 | すること | なぜ |
+|---|---|---|
+| 1 | **新しい証明書を広告に足す**（署名はまだ古い鍵） | **相手のキャッシュに、新しい鍵を先に配る** |
+| 2 | 相手のキャッシュが切れるのを待つ | **SAML2 のメタデータも OIDC の JWK Set も、相手がキャッシュする** |
+| 3 | **署名鍵を入れ替える**（`RsaPfxFilePath` / `SpRp_RsaCerFilePath`） | ここで初めて、新しい鍵の署名が出る |
+| 4 | **古い証明書を広告から外す** | 退役。**`JwkSet.json` は手で消す。** SAML2 は設定から外す |
+
+> **OIDC は `kid` で選べる**（`id_token` のヘッダに入る）。
+> **SAML2 は選べない** — **署名に `kid` に当たるものが無い**（`KeyInfo` は任意）。
+> **だから SAML2 の受け取り側は、広告されている鍵を順に試す。**
+
+##### 受け取る側（相手の鍵）
+
+| | 引き方 |
+|---|---|
+| **OIDC** | **`kid` で引く**（`IdFederationJwkSetUri` / discovery の `jwks_uri`）。**JWK Set に 2 本在っても、合う 1 本を選ぶ** |
+| **SAML2** | **メタデータの `KeyDescriptor` を順に全部試す** → **引けなければ設定の `.cer`**（最後の受け皿） |
+
+**実測**（2026/10/14）。
+
+| 測ったこと | 結果 |
+|---|---|
+| 上流の `/jwkcerts` に **RSA 2 本**（新旧） | **OIDC の ID 連携は通る**（`kid` で選べている。`RT-140.*` / `CN-5.*` の 31 件） |
+| 上流の `/samlmetadata` に **2 本** | **SAML2 の ID 連携は通る**（`SA-6.6`） |
+| **1 本目を「署名に使っていない証明書」にした** | **2 本目で検証して通る**（ログに `The SAML2 response was verified with key #2.`） |
 
 #### なぜ (3) の鍵を `SpRp_RsaCerFilePath` にできないか
 

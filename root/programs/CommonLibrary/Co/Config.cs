@@ -2156,6 +2156,41 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region 鍵のロールオーバー（#292 の段階 3）
+
+        /// <summary>
+        /// 退役させる途中の署名証明書（`/samlmetadata` に並べて広告する）
+        /// </summary>
+        /// <remarks>
+        /// **鍵の入れ替え（ロールオーバー）に要る**（#292 の段階 3）。
+        ///
+        /// **SAML2 のメタデータは、署名証明書を広告する。**
+        /// **1 本しか広告していないと、鍵を替えた瞬間に、SP は検証できなくなる**
+        /// （**SP はメタデータをキャッシュする**ので、こちらが替えたことを知らない）。
+        ///
+        /// | 順 | |
+        /// |---|---|
+        /// | 1 | **新しい鍵で署名する前に**、ここに**新しい証明書**を書いて広告する |
+        /// | 2 | SP のキャッシュが切れたら、**署名鍵を入れ替える**（`RsaPfxFilePath` / `SpRp_RsaCerFilePath`） |
+        /// | 3 | **古い証明書**をここに書き（新しい方は共通設定が広告する）、SP が追随したら消す |
+        ///
+        /// **区切りは空白かカンマ**（`CorsAllowedOrigins` と同じ流儀）。**値はファイルのパス。**
+        /// **空なら、広告するのは 1 本だけ**（従来どおり）。
+        ///
+        /// **OIDC 側は、この設定を使わない。**
+        /// **`JwkSet.json` に新旧を並べられる**（`CreateJwkSetJson` は追記しかしない）ので、
+        /// **`/jwkcerts` は `kid` で選べる形になっている。**
+        /// </remarks>
+        public static string PreviousSigningCerFilePaths
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("PreviousSigningCerFilePaths");
+            }
+        }
+
+        #endregion
+
         #region IDフェデレーション関連
 
         #region 上流の登録（n 件。#292 の段階 1）

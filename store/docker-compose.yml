@@ -117,6 +117,12 @@ services:
       - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Upstream.pfx
       - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
       - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet_Upstream.json
+
+      # ---------------------------------------------------------------- 鍵の入れ替え（#292 の段階 3）
+      #   **メタデータに 2 本並べて広告する**（**いまの鍵 ＋ 退役させる途中の鍵**）。
+      #   **SP はメタデータをキャッシュする**ので、**1 本だけでは替えた瞬間に検証できなくなる。**
+      #   **ここは「以前この配備が使っていた鍵」**（*_Server.cer）を指している。
+      - appSettings__PreviousSigningCerFilePaths=/resource/X509/SHA256RSA_Server.cer
       # **ホストの開発用証明書を書き出したもの**（3_PublishUpstream.ps1 が用意する）。
       #   既に信頼されているので、**自己テストでブラウザが警告を出さない。**
       - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx

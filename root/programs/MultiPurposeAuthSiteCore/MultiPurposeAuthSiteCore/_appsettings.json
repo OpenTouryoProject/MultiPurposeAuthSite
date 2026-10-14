@@ -300,6 +300,13 @@
     // 上流の署名を検証する証明書
     "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
+    // 退役させる途中の署名証明書（#292 の段階 3）
+    //   **/samlmetadata に並べて広告する。** **空なら 1 本だけ**（従来どおり）。
+    //   **鍵を替える前に、新しい証明書をここに書いて広告する** → SP のキャッシュが切れたら
+    //   **署名鍵を入れ替える**（RsaPfxFilePath / SpRp_RsaCerFilePath）→ **古い方をここに書く。**
+    //   **区切りは空白かカンマ。** OIDC 側は JwkSet.json に新旧を並べる（この設定は使わない）。
+    "PreviousSigningCerFilePaths": "",
+
     // 上流 IdP の登録（n 件。#292 の段階 1）
     //   **書けば、上の IdFederation* / SpRp_Isser / OAuth2AndOidcClientID より優先する。**
     //   **空なら、上の単数キーから 1 件が組み立てられる**（従来どおり）。

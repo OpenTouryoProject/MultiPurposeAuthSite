@@ -31,9 +31,11 @@
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
 //*  2026/10/12  玄人 幸道         SA-6.4（属性を使う）を足した（#286 の段階 4）
 //*  2026/10/13  玄人 幸道         SA-6.5（署名を壊した要求）を足した（#293 の段階 4）
+//*  2026/10/14  玄人 幸道         SA-6.6（上流の証明書が2本）を足した（#292 の段階 3）
 //**********************************************************************************
 
 using System.Threading.Tasks;
+using System.Xml;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 
@@ -541,6 +543,116 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 r.Note("**このケースが通らなくなったら、まず登録を見ること**"
                     + "（`store/docker-compose.yml` の `jwk_rsa_publickey`）。"
                     + "**鍵が無いと「通す」ので、`Success` が返って落ちる。**");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region SA-6.6
+
+        /// <summary>SA-6.6 上流が署名証明書を 2 本広告していても、連携できる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **#291 の残件を閉じたことの確認**である（#292 の段階 3）。
+        ///
+        /// **以前は、メタデータの最初の 1 本しか使っていなかった。**
+        /// **ロールオーバー中は 2 本以上並ぶ**ので、**最初の 1 本で署名していなければ落ちていた。**
+        ///
+        /// **SAML2 の署名には `kid` に当たるものが無い**
+        /// （`KeyInfo` は任意で、相手が入れていなければ選べない）ので、**全部試す。**
+        ///
+        /// **上流コンテナは 2 本広告している**（`store/docker-compose.yml` の
+        /// `PreviousSigningCerFilePaths`）。**1 本目が、いま署名に使っている鍵**である。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task SA0606_上流が証明書を2本広告していても連携できる(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                string upstream = await Saml2Federation.SkipIfNotAvailableAsync(client);
+
+                TestReport r = this.Report("SA-6.6",
+                    "上流が署名証明書を 2 本広告していても、SAML2 の ID 連携ができる",
+                    "**鍵の入れ替え中の上流と連携できること**（#292 の段階 3。#291 の残件）。"
+                    + "**メタデータに `KeyDescriptor` が 2 本以上並ぶ**とき、"
+                    + "**どれで署名されたかは応答から分からない**"
+                    + "（**SAML2 の署名に `kid` に当たるものが無い**）。"
+                    + "**だから受け取る側は全部試す** — "
+                    + "**最初の 1 本しか見ていなかった頃は、ここで落ちていた。**",
+                    "SAML 2.0 Metadata 2.4.1.1 / #291 / #292 の段階 3");
+
+                r.Target(client.Target.DisplayName + " ← 上流 " + upstream);
+
+                r.Step("(1) 上流のメタデータが、2 本広告していることを見る");
+
+                string metadataUrl = client.Config.Get("IdFederationSaml2MetadataUrl");
+
+                Skip.If(string.IsNullOrEmpty(metadataUrl),
+                    "IdFederationSaml2MetadataUrl が構成ファイルにありません（#291）。");
+
+                string xml = await client.GetStringAsync(metadataUrl);
+
+                XmlDocument doc = new XmlDocument();
+                bool parsed = true;
+
+                try
+                {
+                    doc.LoadXml(xml ?? "");
+                }
+                catch
+                {
+                    parsed = false;
+                }
+
+                Skip.IfNot(parsed, "上流のメタデータを読めません（" + metadataUrl + "）。");
+
+                XmlNodeList certs = doc.SelectNodes(
+                    "//*[local-name()='KeyDescriptor'][@use='signing']"
+                    + "//*[local-name()='X509Certificate']");
+
+                int count = (certs == null) ? 0 : certs.Count;
+
+                Skip.If(count < 2,
+                    "上流が署名証明書を 1 本しか広告していません"
+                    + "（compose の PreviousSigningCerFilePaths を確認。#292 の段階 3）。");
+
+                r.Verify("上流は 2 本以上広告している", 1 < count, "2 本以上", count + " 本");
+
+                r.Step("(2) 上流でサインインして、連携する");
+
+                Assert.True(await IdFederation.SignInUpstreamAsync(client, upstream),
+                    "前提: 上流にサインインできること");
+
+                Saml2FederationResult fed = await Saml2Federation.FederateAsync(client);
+
+                Saml2Response response = Saml2.ReadResponse(fed.ResponseXml);
+
+                r.Verify("応答が読める", response != null,
+                    "読める", (response == null) ? "**読めない**" : "読める");
+
+                Assert.NotNull(response);
+
+                r.VerifyEqual("StatusCode が Success", Saml2.StatusSuccess, response.StatusCode);
+
+                r.Step("(3) 署名を検証して、サインインできている");
+
+                r.Verify("ACS がサインインさせる（リダイレクトする）", fed.Authorized,
+                    "リダイレクト",
+                    fed.Authorized
+                        ? "した" : "**エラー画面（" + Html.Describe(fed.AcsBody) + "）**");
+
+                bool signedIn = await Saml2Federation.IsSignedInAsync(client);
+
+                r.Verify("下流にサインインできている", signedIn,
+                    "/Manage/Index が開く", signedIn ? "開いた" : "**開かない**");
+
+                r.Note("**鍵の順が入れ替わっても通る**ことは、歯抜けで測った"
+                    + "（上流の 1 本目を「署名に使っていない証明書」にすると、"
+                    + "**2 本目で検証して通る**。`TESTING.md`）。");
 
                 r.Done();
             }

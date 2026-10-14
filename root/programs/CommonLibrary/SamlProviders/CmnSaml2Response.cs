@@ -32,9 +32,11 @@
 //*  2026/10/12  玄人 幸道         AttributeStatementを読むようにした（#286 の段階 4）
 //*  2026/10/12  玄人 幸道         SigAlgの固定をやめ、RSAを受ける版に移した（Open棟梁 #604）
 //*  2026/10/13  玄人 幸道         検証鍵にRSAを受けるオーバーロードを足した（#291）
+//*  2026/10/14  玄人 幸道         鍵の列を受ける版を足した（#292 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Log;
 
 using System;
 using System.Collections.Generic;
@@ -288,6 +290,79 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// **鍵を「ファイルのパス」ではなく「鍵そのもの」で受ける**（#291）。
         /// **メタデータから引いた証明書は、ファイルになっていない**ためである。
         /// </remarks>
+        public static Saml2Result Verify(
+            string samlResponse, string queryString, string sigAlg,
+            string relayState, string expectedRelayState, bool isGet,
+            string expectedAcsUrl, string expectedInResponseTo,
+            IEnumerable<RSA> rsaKeys, string expectedIssuer)
+        {
+            //  **鍵が複数あるときは、通るものが在るまで試す**（#292 の段階 3）。
+            //    **SAML2 の署名には `kid` に当たるものが無い**ので、
+            //    **どれで署名されたかは応答から分からない**
+            //    （`KeyInfo` は任意で、相手が入れていなければ選べない）。
+            //
+            //  **最後の結果を返す。** **1 本も通らなければ、最後の理由が残る。**
+            Saml2Result last = null;
+            int tried = 0;
+
+            if (rsaKeys != null)
+            {
+                foreach (RSA rsa in rsaKeys)
+                {
+                    if (rsa == null)
+                    {
+                        continue;
+                    }
+
+                    tried++;
+
+                    last = CmnSaml2Response.Verify(
+                        samlResponse, queryString, sigAlg, relayState, expectedRelayState,
+                        isGet, expectedAcsUrl, expectedInResponseTo, rsa, expectedIssuer);
+
+                    if (last.SignatureVerified)
+                    {
+                        //  **署名が通った鍵の結果を返す**（他の確認も、その結果に入っている）。
+                        if (1 < tried)
+                        {
+                            Logging.MyOperationTrace(string.Format(
+                                "The SAML2 response was verified with key #{0}.", tried));
+                        }
+
+                        return last;
+                    }
+                }
+            }
+
+            if (last == null)
+            {
+                //  **鍵が 1 本も無い**（メタデータも設定も空）。**通してはならない。**
+                return CmnSaml2Response.Verify(
+                    samlResponse, queryString, sigAlg, relayState, expectedRelayState,
+                    isGet, expectedAcsUrl, expectedInResponseTo, (RSA)null, expectedIssuer);
+            }
+
+            if (1 < tried)
+            {
+                //  **全部試して通らなかった**ことを、理由に残す（#253）。
+                last.Reason = last.Reason + "（鍵 " + tried + " 本を試した）";
+            }
+
+            return last;
+        }
+
+        /// <summary>SAML2 の応答（SAMLResponse）を検証する（検証鍵を RSA で受ける）</summary>
+        /// <param name="samlResponse">SAMLResponse（受け取ったまま）</param>
+        /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象）</param>
+        /// <param name="sigAlg">SigAlg（同上）</param>
+        /// <param name="relayState">RelayState</param>
+        /// <param name="expectedRelayState">送った state（照合する。無ければ空）</param>
+        /// <param name="isGet">GET（Redirect Binding）で受け取ったか</param>
+        /// <param name="expectedAcsUrl">自分の ACS URL（空なら照合しない）</param>
+        /// <param name="expectedInResponseTo">送った AuthnRequest の ID（空なら照合しない）</param>
+        /// <param name="rsa">署名を検証する鍵（1 本）</param>
+        /// <param name="expectedIssuer">**期待する Issuer**（EntityID）</param>
+        /// <returns>結果</returns>
         public static Saml2Result Verify(
             string samlResponse, string queryString, string sigAlg,
             string relayState, string expectedRelayState, bool isGet,
