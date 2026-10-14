@@ -31,6 +31,7 @@
 //*  2026/10/09  西野 大介         オンライン決済サービス、トークン取得処理の削除
 //*  2026/10/09  玄人 幸道         net10.0 版に合わせて、削除の残りを落とした
 //*  2026/10/09  玄人 幸道         折り返し先の既定をtest_self_codeに戻した
+//*  2026/10/14  玄人 幸道         GDPR削除を物理削除に（DBストアなら CASCADE で関連明細も消える。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1934,49 +1935,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                #region データ消去
-                // 既定の属性
-                //user.Id = "";
-                user.UserName = user.Id;
-                user.PasswordHash = "";
-                user.Email = user.Id + "@yyy.com";
-                user.EmailConfirmed = false;
-                user.PhoneNumber = user.Id;
-                user.PhoneNumberConfirmed = false;
-                user.AccessFailedCount = 0;
-                user.LockoutEnabled = false;
-                user.LockoutEndDateUtc = DateTime.MaxValue;
-                //user.SecurityStamp = user.SecurityStamp;
-                user.TwoFactorEnabled = false;
-                // Collection
-                //user.Roles = null;
-                //user.Logins = null;
-                //user.Claims = null;
+                // 物理削除 DBストアなら `ON DELETE CASCADE` で関連明細も消える。
+                IdentityResult result = await UserManager.DeleteAsync(user);
 
-                // 追加の属性
-                user.ClientID = user.Id;
-                user.UnstructuredData = "";
-                //user.CreatedDate = ;
-                //user.PasswordChangeDate = 
-                #endregion
-
-                // ユーザ・データの削除
-                IdentityResult result = null;
-                
-                foreach (UserLoginInfo l in user.Logins)
-                {
-                    result = await UserManager.RemoveLoginAsync(user.Id, l);
-                }
-                user.Logins = null;
-                
-                foreach (Claim c in user.Claims)
-                {
-                    result = await UserManager.RemoveClaimAsync(user.Id, c);
-                }
-                user.Claims = null;
-
-                result = await UserManager.UpdateAsync(user);
-                
                 if (result.Succeeded)
                 {
                     // サインアウト（Cookieの削除）

@@ -174,6 +174,12 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
 | 出す | `Id` `UserName` `Email` `EmailConfirmed` `PhoneNumber` `PhoneNumberConfirmed` `LockoutEnabled` `AccessFailedCount` `LockoutEndDateUtc` `TwoFactorEnabled` `Roles` `Logins` `Claims` `ClientID` `UnstructuredData` `CreatedDate` `PasswordChangeDate` |
 | 出さない | **`PasswordHash`**（`[JsonIgnore]`）／**`SecurityStamp`**／**`TotpAuthenticatorKey`**（認証器の鍵）／**`TotpTokens`**（リカバリ コード）／**`DeviceToken`**（端末への宛先）／`NormalizedUserName` `NormalizedEmail`（派生値） |
 
+> **消去（`DeleteGdprPersonalData`）は、行ごと消す**（#299）。
+> **以前は属性を潰す実装**で、**`TotpAuthenticatorKey` / `TotpTokens` / `DeviceToken`**
+> **（= ここで「出さない」と決めた値）は、潰す対象にも入っていなかった。**
+> **行ごと消せば、この手の抜けは起こらない。**
+> **外部キーが `ON DELETE CASCADE` なので、子の行も落ちる。**
+
 > **既定で出す形（OptOut）にしないこと。**
 > **プロパティを足すたびに、持ち出せる物が黙って増える**からである。
 > **足すときは、それを利用者に渡してよいかを決めてから `[JsonProperty]` を付ける。**

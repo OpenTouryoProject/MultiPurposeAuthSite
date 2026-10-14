@@ -394,6 +394,64 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **これで「暗号化して保管し、読むときに戻している」ことが測れている** —
 > **暗号化していなければ、外しても往復してしまう。**
 
+##### GDPR の消去は、行ごと消す（`RT-277.8`。#299）
+
+**消去（`POST /Manage/DeleteGdprPersonalData`）は、利用者の行ごと消す**
+（`UserManager.DeleteAsync`。**#299 でそう改めた**）。
+**子の行は外部キー（`ON DELETE CASCADE`）が落とす** — `UserRoles` / `UserLogins` /
+`UserClaims` / `TotpTokens` / `FIDO2Data` / `ConsentGrant` / `SubjectIdentifier` /
+**`Saml2OAuth2Data`（その利用者が登録したクライアント）**。
+
+> **以前は属性を潰す実装だった**（利用者名・メアドを利用者 id で塗り潰す）。
+> **潰す対象の `Users.UserName` / `Users.ClientID` は、どちらも外部キーの参照先**であり、
+> **`ON UPDATE` の指定は 3 方言とも 1 本も無い**（= NO ACTION）。
+>
+> **実測（SQL Server。トランザクションを張って試し、ロールバックした）。**
+>
+> | 試した `UPDATE` | 結果 |
+> |---|---|
+> | `UPDATE Users SET UserName = Id`（WebAuthn の資格情報を持つ利用者） | **`FK.FIDO2Data.Users_UserName` で弾かれる** |
+> | `UPDATE Users SET ClientID = Id`（クライアントを登録した利用者） | **`FK.Saml2OAuth2Data.Users_ClientID` で弾かれる** |
+>
+> **例外は握られる**（`CmnUserStore.Update`。[#300](https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues/300)）ので、
+> **画面は成功に見えて、1 列も消えていなかった。**
+> **`ON UPDATE CASCADE` で逃げる道も無い**（**Oracle に `ON UPDATE` 節が無い**）。
+>
+> **Oracle では、資格情報も登録も無い利用者でさえ消去が落ちていた**
+> （`LockoutEndDateUtc` に `DateTime.MaxValue` を入れていて `ORA-01841`）。
+> **これも #299 で直した**（`null` ＝ この製品の既定値）。
+
+**`RT-277.8` は、消される側に 3 つ持たせてから消す。**
+
+| 持たせるもの | なぜ |
+|---|---|
+| 属性データ（`UnstructuredData`） | **潰す対象**だった値 |
+| **クライアント登録**（`/Manage/AddSaml2OAuth2Data`） | **以前はこれが在ると消去が FK で弾かれた**。**ロールは `Admin`**（この画面は `SystemAdmin` か `Admin` でなければ開かない） |
+| ロール（`Admin`） | **`UserRoles` も cascade で落ちる**ことの確認 |
+
+**見るのは 3 つ**（**別々のことを見ている**）。
+
+| | |
+|---|---|
+| **サインインできない** | **行が無くても、属性が潰れていても成り立つ**（以前の実装では `EmailConfirmed = false` が効いていた。実測） |
+| **一覧に元の利用者名・メアドが出ない** | 潰す実装でも成り立つ |
+| **一覧に利用者 id も出ない** | **行ごと消えたときだけ**成り立つ（**潰す実装では、id の名前で残っていた**） |
+
+**ストアは 4 通りとも測った**（実測 2026/10/14）。
+
+| ストア | 結果 |
+|---|---|
+| `mem`（既定の通し） | **通し 612 / 失敗 0 / Skip 2** |
+| `sql`（SQL Server） | **通し 612 / 失敗 0 / Skip 2** |
+| `ora`（Oracle） | **`RT-277.*` ＋ WebAuthn の削除 ＋ クライアント登録で 11 / 11**（netfx 1 件は Skip） |
+| `npg`（PostgreSQL） | **2 / 2**（netfx は Skip） |
+
+> **`mem` ストアには外部キーが無い。**
+> **`CmnUserStore.Delete` が消すのは、利用者・ロールの対応・`sub` の対応表だけ**なので、
+> **WebAuthn の資格情報は画面の側で消している**（`FIDO.DataProvider.DeleteByUser`）。
+> **同意の記録とクライアント登録は、`mem` では残る**（**プロセスを畳めば消える**ストアである）。
+> **DB ストアでは cascade が全部落とす。**
+
 ##### 連携キーの幅（`UserLogins`。#292）
 
 **上流が n 件になったので、`LoginProvider` / `ProviderKey` を 512 / 256 に広げた**

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
+//*  2026/10/14  玄人 幸道         消去を物理削除に合わせた（#299）
 //**********************************************************************************
 
 using System;
@@ -203,13 +204,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string id = null;
 
                 TestReport r = this.Report("RT-277.8",
-                    "GDPR の消去で、個人情報が消え、その利用者ではサインインできなくなる",
-                    "**消去は、行を消すのではない。**"
-                    + "**利用者名・メアド・電話番号を利用者 id で塗り潰し、"
-                    + "パスワードの控えを空にし、外部ログインとクレームを外す。**"
-                    + "**属性データ（`UnstructuredData`）も空にする。**"
-                    + "**結果として、その利用者ではもうサインインできない。**",
-                    "#277 / ManageController.DeleteGdprPersonalData");
+                    "GDPR の消去で、利用者の行ごと消え、その利用者ではサインインできなくなる",
+                    "**消去は、行ごと消す**（#299 でそう改めた）。"
+                    + "**`Users` の行と、外部キー（`ON DELETE CASCADE`）で落ちる子**"
+                    + "（ロール・外部ログイン・クレーム・2 要素認証のトークン・"
+                    + "WebAuthn の資格情報・同意の記録・`sub` の対応表・"
+                    + "**その利用者が登録したクライアント**）**が消える。**"
+                    + "**以前は属性を潰す実装**だったが、"
+                    + "**潰す対象（`Users.UserName` / `ClientID`）が外部キーの参照先**で、"
+                    + "**WebAuthn を使う人とクライアントを登録した人は、消去が DB に弾かれていた**"
+                    + "（例外は握られるので画面は成功に見えた。#300）。",
+                    "#277 / #299 / ManageController.DeleteGdprPersonalData");
 
                 r.Target("POST /Manage/DeleteGdprPersonalData（利用者 " + name + "）");
 
@@ -217,10 +222,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 try
                 {
-                    r.Step("(1) 使い捨ての利用者を作って、属性データを入れる");
+                    r.Step("(1) 使い捨ての利用者を作って、属性データとクライアント登録を入れる");
 
+                    //  **ロールは Admin**（#299）。
+                    //    **クライアント登録の画面（`/Manage/AddSaml2OAuth2Data`）は
+                    //    `SystemAdmin` か `Admin` でなければ開かない**ため。
+                    //    **消去はロール（`UserRoles`）も cascade で落とす。**
                     Assert.True(ManageGdprTests.IsRedirect(
-                        await UsersAdmin.CreateAsync(admin, name, email, "User")),
+                        await UsersAdmin.CreateAsync(admin, name, email, "Admin")),
                         "前提: 利用者を作れること");
 
                     id = UsersAdmin.FindId(
@@ -240,6 +249,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                                 { "UnstructuredData1", "rt27708" },
                                 { "UnstructuredData2", "rt27708" }
                             });
+
+                        //  **クライアントを 1 件登録させる**（#299）。
+                        //    **これが在ると、以前の実装では消去が DB に弾かれていた**
+                        //    （`Saml2OAuth2Data.ClientID` → `Users.ClientID` の外部キー。
+                        //    **潰す実装では `UPDATE` が通らない**）。
+                        string clientId = await ManageClientRegistration.RegisterAsync(user);
+
+                        r.Verify("クライアントを登録できている（前提）",
+                            !string.IsNullOrEmpty(clientId),
+                            "登録できる",
+                            string.IsNullOrEmpty(clientId) ? "**登録できない**" : "登録できた");
 
                         string index = await user.GetStringAsync("/Manage/Index");
 
@@ -278,7 +298,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.Verify("メアドでも入れない", !byEmail,
                         "入れない", byEmail ? "**入れてしまう**" : "入れない");
 
-                    r.Step("(5) 管理画面の一覧からも、元の利用者名が消えている");
+                    r.Step("(5) 管理画面の一覧から、その利用者が消えている");
 
                     string list = await (await UsersAdmin.IndexAsync(admin))
                         .Content.ReadAsStringAsync();
@@ -292,19 +312,36 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         !(list ?? "").Contains(email),
                         "出ない", (list ?? "").Contains(email) ? "**出る**" : "出ない");
 
-                    r.Note("**行そのものは残る。** **利用者名は利用者 id に置き換わる**ので、"
-                        + "**一覧には id の名前で出る。** 後片付けは、その名前で消している。");
+                    //  **行ごと消えたこと**を見る（#299）。
+                    //    **以前は行が残り、利用者名が利用者 id に置き換わっていた**ので、
+                    //    **id の名前で一覧に出ていた。**
+                    r.Verify("利用者 id も一覧に出ない（行ごと消えている）",
+                        !(list ?? "").Contains(id),
+                        "出ない", (list ?? "").Contains(id) ? "**出る（行が残っている）**" : "出ない");
 
-                    r.Note("**「入れない」を作っているのは、消去の 1 行ではない。**"
-                        + "**実測** : 利用者名・メアド・パスワードの控え・ロックアウトの期限を"
-                        + "**どれも消さないようにしても、やはり入れなかった** — "
-                        + "**`EmailConfirmed = false`** が効いている"
-                        + "（サインインは `IsEmailConfirmedAsync` を見る）。"
-                        + "**退行をいちばん早く捕まえるのは、(5) の一覧の確認**である。");
+                    r.Note("**行ごと消える**（#299）。"
+                        + "**以前は属性を潰すだけだった**ので、**一覧には利用者 id の名前で残っていた。**"
+                        + "**`Users` への外部キーは 8 本すべて `ON DELETE CASCADE`** なので、"
+                        + "**子の行は DB が落とす**（`mem` では WebAuthn の資格情報だけ、"
+                        + "画面の側で消している）。");
+
+                    r.Note("**クライアントを登録した利用者で測っている**（#299）。"
+                        + "**`Saml2OAuth2Data.ClientID` は `Users.ClientID` を参照している**ので、"
+                        + "**以前の「`ClientID` を利用者 id で潰す」実装では、"
+                        + "`UPDATE` が外部キーで弾かれ、消去が丸ごと失敗していた**"
+                        + "（例外は握られ、画面は成功に見えた。#300）。"
+                        + "**行ごと消す形では、cascade で登録も落ちる。**");
+
+                    r.Note("**この 3 つは、別々のことを見ている。**"
+                        + "**サインインできないこと**は、**行が無くても、属性が潰れていても成り立つ**"
+                        + "（以前の実装では `EmailConfirmed = false` が効いていた。実測）。"
+                        + "**行ごと消えたかどうかは、利用者 id が一覧に出ないこと**で分かる。");
                 }
                 finally
                 {
-                    // **消去の後は、利用者名が id になっている**ので、そちらで消す。
+                    //  **消去が通れば、行はもう無い**（#299 で物理削除にした）。
+                    //    **落ちた回のため**に、両方の名前で消しておく
+                    //    （**以前の実装では、利用者名が利用者 id に置き換わっていた**）。
                     if (!string.IsNullOrEmpty(id))
                     {
                         await UsersAdmin.DeleteByUserNameAsync(admin, id);

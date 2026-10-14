@@ -1580,7 +1580,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 | **https が必要** | WebAuthn は安全なコンテキストしか走らない（`localhost` は例外） |
 | **セッションに challenge を置く** | 複数インスタンスなら `SessionStoreType` を `mem` 以外にする（#256。置くのは `fido2.CredentialCreateOptions` / `fido2.AssertionOptions`） |
 | **保存先は `FIDO2Data` 表** | `UserStoreType` が `mem` ならプロセス内の辞書に入るので、**再起動で消える** |
-| **利用者を消すと、資格情報も消す** | `FIDO2Data` は `UserName` で持っており、**`Users` への外部キーが無い**。GDPR の削除（`/Manage/DeleteGdprPersonalData`）が明示的に消す |
+| **利用者を消すと、資格情報も消す** | `FIDO2Data` は `UserName` で持っている。**DB ストアでは外部キー**（`FK.FIDO2Data.Users_UserName`。`ON DELETE CASCADE`）**が落とす**。**`mem` には外部キーが無い**ので、**GDPR の削除（`/Manage/DeleteGdprPersonalData`）が明示的に消す**（#299） |
 
 ---
 

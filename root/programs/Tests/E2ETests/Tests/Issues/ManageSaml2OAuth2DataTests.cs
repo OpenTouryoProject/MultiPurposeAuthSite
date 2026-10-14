@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/09  玄人 幸道         新規（#277 の段階 7）
 //*  2026/10/14  玄人 幸道         RT-297.1（秘密の往復）を足した（#297）
+//*  2026/10/14  玄人 幸道         フォームの拾い方を共有ヘルパへ出した（#299）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -259,43 +260,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// </remarks>
         private static Dictionary<string, string> Harvest(string html)
         {
-            Dictionary<string, string> form = new Dictionary<string, string>();
-
-            foreach (Match m in Regex.Matches(html ?? "", "<input\\b[^>]*>"))
-            {
-                string tag = m.Value;
-                Match name = Regex.Match(tag, "name=\"(?<name>[^\"]+)\"");
-
-                if (!name.Success) { continue; }
-                if (Regex.IsMatch(tag, "type=\"submit\"")) { continue; }
-                if (Regex.IsMatch(tag, "type=\"(checkbox|radio)\"")
-                    && !Regex.IsMatch(tag, "\\bchecked\\b")) { continue; }
-
-                Match value = Regex.Match(tag, "value=\"(?<value>[^\"]*)\"");
-
-                form[name.Groups["name"].Value] = value.Success
-                    ? System.Net.WebUtility.HtmlDecode(value.Groups["value"].Value) : "";
-            }
-
-            foreach (Match m in Regex.Matches(html ?? "",
-                "<select\\b[^>]*name=\"(?<name>[^\"]+)\"[^>]*>(?<body>.*?)</select>",
-                RegexOptions.Singleline))
-            {
-                string body = m.Groups["body"].Value;
-                Match selected = Regex.Match(body, "value=\"(?<value>[^\"]*)\"[^>]*\\bselected\\b");
-                Match first = Regex.Match(body, "value=\"(?<value>[^\"]*)\"");
-
-                if (selected.Success)
-                {
-                    form[m.Groups["name"].Value] = selected.Groups["value"].Value;
-                }
-                else if (first.Success)
-                {
-                    form[m.Groups["name"].Value] = first.Groups["value"].Value;
-                }
-            }
-
-            return form;
+            //  **実体は Infrastructure に在る**（#299 で共有に出した）。
+            //    **`RT-277.8` も「登録が在る利用者」を作るのに使う。**
+            return ManageClientRegistration.Harvest(html);
         }
 
         /// <summary>datalist の中身を返す</summary>
@@ -317,7 +284,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <returns>値</returns>
         private static string Value(Dictionary<string, string> form, string name)
         {
-            return form.ContainsKey(name) ? form[name] : null;
+            return ManageClientRegistration.Value(form, name);
         }
 
         /// <summary>ボタンを 1 つ押して、返ってきた画面を返す</summary>

@@ -30,6 +30,7 @@
 //*  2026/10/07  玄人 幸道         WebAuthnの登録・削除をFido2 4.2.0で復活、MsPassを削除（#137）
 //*  2026/10/09  玄人 幸道         WebAuthn の削除を複数選択に対応（#277 の段階 6）
 //*  2026/10/09  西野 大介         オンライン決済サービス、トークン取得処理の削除
+//*  2026/10/14  玄人 幸道         GDPR削除を物理削除に（DBストアなら CASCADE で関連明細も消える。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2419,54 +2420,11 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの検索
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
-                #region データ消去
-                // 既定の属性
-                //user.Id = "";
-                user.UserName = user.Id;
-                user.PasswordHash = "";
-                user.Email = user.Id + "@yyy.com";
-                user.EmailConfirmed = false;
-                user.PhoneNumber = user.Id;
-                user.PhoneNumberConfirmed = false;
-                user.AccessFailedCount = 0;
-                user.LockoutEnabled = false;
-                user.LockoutEndDateUtc = DateTime.MaxValue;
-                //user.SecurityStamp = user.SecurityStamp;
-                user.TwoFactorEnabled = false;
-                // Collection
-                //user.Roles = null;
-                //user.Logins = null;
-                //user.Claims = null;
-
-                // 追加の属性
-                user.ClientID = user.Id;
-                user.UnstructuredData = "";
-                //user.CreatedDate = ;
-                //user.PasswordChangeDate = 
-                #endregion
-
-                // **WebAuthn の資格情報を消す**（#137）。
-                //   **FIDO2Data は UserName で持っており、Users への外部キーが無い。**
-                //   **放っておくと行が残り、同じ利用者名で登録し直した人が
-                //   前の利用者の認証器でサインインできてしまう。**
+                // **WebAuthnを消す ※ `mem` ストアでログインできないように対策
                 FIDO.DataProvider.DeleteByUser(user.UserName);
 
-                // ユーザ・データの削除
-                IdentityResult result = null;
-
-                foreach (UserLoginInfo l in user.Logins)
-                {
-                    result = await UserManager.RemoveLoginAsync(user, l.LoginProvider, l.ProviderKey);
-                }
-                user.Logins = null;
-
-                foreach (Claim c in user.Claims)
-                {
-                    result = await UserManager.RemoveClaimAsync(user, c);
-                }
-                user.Claims = null;
-
-                result = await UserManager.UpdateAsync(user);
+                // 物理削除 DBストアなら `ON DELETE CASCADE` で関連明細も消える。
+                IdentityResult result = await UserManager.DeleteAsync(user);
 
                 if (result.Succeeded)
                 {
