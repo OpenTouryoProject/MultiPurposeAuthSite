@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#292 の段階 1）
 //*  2026/10/14  玄人 幸道         user store の登録も読むようにした（#292 の段階 2）
+//*  2026/10/14  玄人 幸道         署名鍵を上流ごとに持てるようにした（#292 の段階 4-a）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -115,6 +116,34 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>上流の SSO の口（SAML2。倒れ先）</summary>
         public string SsoEndpoint { get; set; }
+
+        /// <summary>
+        /// この上流へ送る `AuthnRequest` に署名する鍵（`.pfx` のパス。SAML2）
+        /// </summary>
+        /// <remarks>
+        /// **空なら、共通設定の `SpRp_RsaPfxFilePath`**（従来どおり。**相手が 1 件なら、それで足りる**）。
+        ///
+        /// **相手ごとに分けたい配備がある**（#292 の論点）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **上流が「この SP の公開鍵はこれ」と指定してくる** | **相手ごとに別の鍵で署名する必要がある** |
+        /// | **相手ごとに鍵を替えて、片方だけロールオーバーしたい** | 同上 |
+        ///
+        /// **Open棟梁 [#606](https://github.com/OpenTouryoProject/OpenTouryo/issues/606) で、
+        /// `SAML2Client.CreateRedirectRequest` に鍵を渡せるようになった**ので、こちらで持てる。
+        ///
+        /// **「自分の鍵」だが、どれを使うかは相手ごとに決まる**ので、**この行が持つ**
+        /// （#290 の規則の例外ではない — **決めるのは相手との関係**である）。
+        /// </remarks>
+        public string SigningPfxFilePath { get; set; }
+
+        /// <summary>上記 `.pfx` のパスワード（SAML2）</summary>
+        /// <remarks>
+        /// **空なら、共通設定の `SpRp_RsaPfxPassword`**。
+        /// **`SigningPfxFilePath` を書いたときだけ読む。**
+        /// </remarks>
+        public string SigningPfxPassword { get; set; }
 
         /// <summary>画面に出す名前（空なら鍵）</summary>
         public string Label
@@ -352,7 +381,10 @@ namespace MultiPurposeAuthSite.Co
                 AuthorizeEndpoint = row.AuthorizeEndpoint,
                 TokenEndpoint = row.TokenEndpoint,
                 UserInfoEndpoint = row.UserInfoEndpoint,
-                SsoEndpoint = row.SsoEndpoint
+                SsoEndpoint = row.SsoEndpoint,
+                //  **DB の列は、段階 4-b で足す。** いまは設定の行だけが持つ。
+                SigningPfxFilePath = "",
+                SigningPfxPassword = ""
             };
         }
 
@@ -381,7 +413,11 @@ namespace MultiPurposeAuthSite.Co
                 AuthorizeEndpoint = IdFederationUpstreams.Value(attributes, "authorize_endpoint"),
                 TokenEndpoint = IdFederationUpstreams.Value(attributes, "token_endpoint"),
                 UserInfoEndpoint = IdFederationUpstreams.Value(attributes, "userinfo_endpoint"),
-                SsoEndpoint = IdFederationUpstreams.Value(attributes, "sso_endpoint")
+                SsoEndpoint = IdFederationUpstreams.Value(attributes, "sso_endpoint"),
+                SigningPfxFilePath =
+                    IdFederationUpstreams.Value(attributes, "signing_pfx_file_path"),
+                SigningPfxPassword =
+                    IdFederationUpstreams.Value(attributes, "signing_pfx_password")
             };
         }
 

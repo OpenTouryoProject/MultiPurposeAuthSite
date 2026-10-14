@@ -487,6 +487,11 @@ services:
       - appSettings__IdFederationUpstreams__upstream2_saml2__metadata_url=http://upstream2:8080/samlmetadata
       - appSettings__IdFederationUpstreams__upstream2_saml2__sso_endpoint=https://localhost:44304/saml2request
       - appSettings__IdFederationUpstreams__upstream2_saml2__cer_file_path=/resource/X509/SHA256RSA_Upstream2.cer
+      # **この上流へ送る AuthnRequest に署名する鍵**（#292 の段階 4-a）。
+      #   **値は共通設定と同じ鍵**（*_Client.pfx）だが、**明示指定の経路を通すために書いてある**
+      #   （**上流 2 に登録した jwk_rsa_publickey は、この鍵の公開鍵**である）。
+      #   **別の鍵を指すと、上流が AuthnRequest を弾く**（歯抜け。root/TESTING.md）。
+      - appSettings__IdFederationUpstreams__upstream2_saml2__signing_pfx_file_path=/resource/X509/SHA256RSA_Client.pfx
 
       # ---------------------------------------------------------------- Cookie の名前
       #   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）。

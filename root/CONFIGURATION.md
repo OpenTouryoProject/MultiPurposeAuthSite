@@ -1016,6 +1016,8 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | `cer_file_path` | 上流の署名証明書（**倒れ先**） | ○ | ○ |
 | `authorize_endpoint` / `token_endpoint` / `userinfo_endpoint` | 上流の口 | ○ | － |
 | `sso_endpoint` | 上流の SSO の口（**倒れ先**。メタデータが先） | － | ○ |
+| **`signing_pfx_file_path`** | **この上流へ送る `AuthnRequest` に署名する鍵**（#292 の段階 4-a。**空なら共通設定**） | － | ○ |
+| `signing_pfx_password` | 上記 `.pfx` のパスワード（**空なら共通設定**） | － | ○ |
 
 ```jsonc
 "IdFederationUpstreams": {
@@ -1045,7 +1047,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 |---|---|---|
 | **相手ごとの値** | **`IdFederationUpstreams` の各行** | 相手が n 件になれば n 件要る |
 | **折り返し口**（`IdFederationRedirectEndpoint` / `IdFederationSaml2ResponseEndpoint`） | **共通設定** | **自分の URL なので、相手ごとに変わらない。** **全ての上流に、同じ 1 本を登録する**（#263。1 文字も違ってはならない） |
-| 自分の署名鍵 | 共通設定（`SpRp_RsaPfxFilePath` ほか） | **相手ごとに分けるには Open棟梁 側に口が要る**（`SAML2Client.CreateRedirectRequest` に鍵の引数が無い） |
+| 自分の署名鍵 | **(1) の署名は共通設定**（`SpRp_RsaPfxFilePath` ほか）。**(2) は上流ごとに替えられる**（`signing_pfx_file_path`。#292 の段階 4-a） | **Open棟梁 [#606](https://github.com/OpenTouryoProject/OpenTouryo/issues/606) で鍵を渡せるようになった**ので、相手ごとに持てる |
 
 > **どの上流から戻ってきたかは、Session で引く**（開始処理が鍵を控える）。
 > **口を相手ごとに分ける案は採らなかった** — **登録値が増え、`redirect_uri` の取り違えが起きやすい。**
@@ -1418,6 +1420,22 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 > **OIDC は `kid` で選べる**（`id_token` のヘッダに入る）。
 > **SAML2 は選べない** — **署名に `kid` に当たるものが無い**（`KeyInfo` は任意）。
 > **だから SAML2 の受け取り側は、広告されている鍵を順に試す。**
+
+##### (2) の署名鍵は、上流ごとに替えられる（#292 の段階 4-a）
+
+**上流が「この SP の公開鍵はこれ」と指定してくる配備**のために在る。
+
+| | 鍵 |
+|---|---|
+| 行に **`signing_pfx_file_path`** が在る | **その `.pfx`**（パスワードは `signing_pfx_password`。**空なら共通設定のパスワード**） |
+| 空 | **共通設定**（`SpRp_RsaPfxFilePath`）。**従来どおり** |
+
+**組み立ては `SamlProviders.IdFederationSaml2Request` の 1 か所**である
+（**両アプリの `AccountController` に同文で置かない**）。
+**鍵が読めなければ、共通設定に倒れる**（**設定の誤りで連携の口を死なせない**。理由はログに残す）。
+
+> **(1)（SPRP → この IdP）の署名鍵は共通設定のまま**である。
+> **あちらは「この配備がクライアントとして名乗る鍵」**で、**相手ごとに替える話は出ていない。**
 
 ##### 受け取る側（相手の鍵）
 

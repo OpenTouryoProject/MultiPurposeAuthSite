@@ -2501,18 +2501,16 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
 
-            // **上流に登録された client_id**（OIDC の ID 連携と同じものを使う）。
-            string issuer = "http://" + upstream.ClientId;
-
             // **RelayState に入れる state**（#140 の段階 3 と同じ 32 文字）。記号は入れない。
             string state = GetPassword.Generate(32, 0);
 
+            //  **要求の組み立ては `IdFederationSaml2Request` に 1 か所だけ置いてある**
+            //    （#292 の段階 4-a。**両アプリに同文で置かない**）。
+            //    **署名鍵は、行に `signing_pfx_file_path` が在れば、その鍵**
+            //    （無ければ共通設定。Open棟梁 #606 の口で渡している）。
             string id = "";
-            string queryString = SAML2Client.CreateRedirectRequest(
-                SAML2Enum.RequestOrResponse.Request,
-                SAML2Enum.ProtocolBinding.HttpRedirect,
-                SAML2Enum.NameIDFormat.EmailAddress,
-                issuer, "", state, out id);
+            string queryString = SamlProviders.IdFederationSaml2Request.CreateRedirectRequest(
+                upstream, state, out id);
 
             Session["id_federation_saml2_state"] = state;
 
