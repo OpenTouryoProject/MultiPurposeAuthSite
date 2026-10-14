@@ -119,7 +119,7 @@ CREATE TABLE "CustomizedConfirmation"(
 
 CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
-    "ClientSecret" NVARCHAR2(256) NULL,
+    "ClientSecret" NVARCHAR2(512) NULL,      -- 暗号文が入る（#297）
     "RedirectUriSaml" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
     "RedirectUriCode" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
     "RedirectUriToken" NVARCHAR2(512) NULL,          -- Const.MaxLengthOfUri
@@ -147,7 +147,7 @@ CREATE TABLE "IdFederationUpstreams"(   -- ID 連携の上流 IdP の登録（#2
     "Enabled" NUMBER(3) NOT NULL,            -- 真は -1（Users の bool 列と同じ）
     "Issuer" NVARCHAR2(256) NULL,
     "ClientID" NVARCHAR2(256) NULL,
-    "ClientSecret" NVARCHAR2(256) NULL,      -- **平文。Saml2OAuth2Data と同じ扱い**
+    "ClientSecret" NVARCHAR2(512) NULL,      -- **暗号文が入る**（#297）
     "DiscoveryUrl" NVARCHAR2(512) NULL,
     "JwkSetUri" NVARCHAR2(512) NULL,
     "MetadataUrl" NVARCHAR2(512) NULL,

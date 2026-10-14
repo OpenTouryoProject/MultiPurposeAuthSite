@@ -300,6 +300,14 @@
     // 上流の署名を検証する証明書
     "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
+    // user store に入る秘密を暗号化する鍵（#297）
+    //   **空なら暗号化しない**（平文のまま入る ＝ 従来どおり）。
+    //   **対象は `Saml2OAuth2Data.ClientSecret` と `IdFederationUpstreams.ClientSecret`。**
+    //   **どちらも上流へ送る・画面で再表示する**ので、**ハッシュではなく対称鍵で暗号化する。**
+    //   **設定ファイルの秘密は平文のまま**である（ここで守るのは「DB を見られたとき」）。
+    //   **本番では、ここに直接書かないこと**（環境変数・秘密の管理機構から渡す）。
+    "UserStoreSecretPassword": "",
+
     // 退役させる途中の署名証明書（#292 の段階 3）
     //   **/samlmetadata に並べて広告する。** **空なら 1 本だけ**（従来どおり）。
     //   **鍵を替える前に、新しい証明書をここに書いて広告する** → SP のキャッシュが切れたら

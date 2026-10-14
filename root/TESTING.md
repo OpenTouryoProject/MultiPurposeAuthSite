@@ -291,6 +291,40 @@ docker compose up -d --build upstream downstream
 > **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
 > **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
 
+##### user store の秘密を暗号化した状態で測る（`RT-297.*`。#297）
+
+**既定の通しは「暗号化した状態」で回している**（`test.ps1` が `UserStoreSecretPassword` を渡す）。
+
+| | 測ること |
+|---|---|
+| **`RT-297.1`** | **クライアント登録の `client_secret` が往復する**（発行 → 登録 → 画面を開き直すと同じ値） |
+| **`RT-297.2`** | **上流の登録の `client_secret` が往復する**（`/IdFederationAdmin`） |
+
+**どちらも「暗号文がそのまま画面に出ていないこと」も見る。**
+
+**DB に平文が残っていないことは、SELECT して確かめる**（**E2E からは DB を見ない** — 9 節）。
+
+```powershell
+# SQL Server（store/ のコンテナ）
+docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+  -Q "SELECT TOP 4 LEFT(ClientSecret, 24), LEN(ClientSecret) FROM Saml2OAuth2Data WHERE ClientSecret IS NOT NULL"
+```
+
+**実測（2026/10/14）** : **`enc:v1:…`（115 文字）**。
+**`enc:v1:` で始まらない 4 行は、空文字**（public クライアント。暗号化の対象にならない）。
+
+> **表を足した・列を広げたら、DB を作り直すこと**（上の #292 の段階 2 と同じ）。
+> **`ClientSecret` は 512 に広げた**ので、**古い DB では溢れる。**
+
+> **暗号化すると、通しが遅くなる。**
+> **実測（2026/10/14。同じ機械で 612 件の通し）。**
+>
+> | | 時間 |
+> |---|---|
+> | 暗号化の前 | **137 秒** |
+> | 暗号化（鍵のキャッシュ**なし**） | **922 秒**（**6.7 倍**。PBKDF2 10 万回 × 読み出しの回数） |
+> | 暗号化（鍵のキャッシュ**あり**） | **196 秒**（**＋43%**。行ごとに 1 回だけ導く） |
+
 ##### 鍵の入れ替え（ロールオーバー。`SA-2.2` / `SA-6.6`。#292 の段階 3）
 
 | | 測ること |
@@ -1260,6 +1294,15 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 > **フックを読ませずに起動すると、同じ通しの中で 10 秒で通った**ので、**原因はこれだけである。**
 > **その場で作った自己署名の証明書を渡して解決した**（**サーバは発行元を問わない**ので、
 > **何かを認証しているわけではない**）。**実測 : 同じ通しの中で通る。**
+
+> **`test.ps1` を続けて何度も回すと、net48 版（IIS Express）の起動が失敗することがある**
+> （`net48 版が起動できませんでした（終了コード ）`。**実測 2026/10/14**）。
+> **`iisexpress.exe` の残りを落として、少し間を置くと通る。**
+> **同じ構成を手で起動すると落ちない**ので、**起動の間隔の問題**である。
+>
+> ```powershell
+> Get-Process iisexpress -ErrorAction SilentlyContinue | Stop-Process -Force
+> ```
 
 > **それでも、まれに同じ時間切れが出る**（実測 2026/10/13。通し 1 回で `UI-1.1` が 30 秒で時間切れ）。
 > **単体では 14 秒で通り、次の通しでも通った**（593 成功 / 失敗 0）。

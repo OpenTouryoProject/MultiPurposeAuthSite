@@ -2156,6 +2156,40 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region user store の秘密（#297）
+
+        /// <summary>
+        /// user store に入る秘密を暗号化する鍵（パスワード）
+        /// </summary>
+        /// <remarks>
+        /// **空なら暗号化しない**（平文のまま入る ＝ 従来どおり）。
+        ///
+        /// **対象は「元に戻せる形でなければならない秘密」**である（#297）。
+        ///
+        /// | 表 | 列 |
+        /// |---|---|
+        /// | `Saml2OAuth2Data` | `ClientSecret`（**クライアント認証で照合し、画面で再表示する**） |
+        /// | `IdFederationUpstreams` | `ClientSecret`（**上流へ送る**） |
+        ///
+        /// **`DataProtectionKeyPath`（#251）とは別物**である
+        /// （あちらは Cookie とトークンの保護で、**枠組みが使う**）。
+        ///
+        /// **設定ファイルの秘密は平文のまま**である。
+        /// **ここで守るのは「DB を見られたとき」**であり、
+        /// **設定ファイルを見られたら、この鍵も読める**（そこはファイルの権限で守る）。
+        ///
+        /// **本番では、設定ファイルに直接書かないこと**（環境変数・秘密の管理機構から渡す）。
+        /// </remarks>
+        public static string UserStoreSecretPassword
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("UserStoreSecretPassword");
+            }
+        }
+
+        #endregion
+
         #region 鍵のロールオーバー（#292 の段階 3）
 
         /// <summary>

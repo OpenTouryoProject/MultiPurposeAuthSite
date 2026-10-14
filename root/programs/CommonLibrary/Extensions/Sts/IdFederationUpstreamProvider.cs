@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
+//*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -247,6 +248,38 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return prm;
         }
 
+        /// <summary>保管する形にする（秘密を暗号化する。#297）</summary>
+        /// <param name="model">IdFederationUpstreamViewModel</param>
+        /// <returns>複製（元のモデルは書き換えない）</returns>
+        /// <remarks>
+        /// **呼ばれた側のモデルを書き換えない**（画面が持っている値が暗号文になると、
+        /// **そのまま再表示されてしまう**）。
+        /// </remarks>
+        private static IdFederationUpstreamViewModel Protect(IdFederationUpstreamViewModel model)
+        {
+            IdFederationUpstreamViewModel copy = IdFederationUpstreamProvider.Copy(model);
+
+            if (copy != null)
+            {
+                copy.ClientSecret = SecretProtector.Protect(copy.ClientSecret);
+            }
+
+            return copy;
+        }
+
+        /// <summary>使う形にする（秘密を復号する。#297）</summary>
+        /// <param name="model">IdFederationUpstreamViewModel</param>
+        /// <returns>同じインスタンス（null なら null）</returns>
+        private static IdFederationUpstreamViewModel Unprotect(IdFederationUpstreamViewModel model)
+        {
+            if (model != null)
+            {
+                model.ClientSecret = SecretProtector.Unprotect(model.ClientSecret);
+            }
+
+            return model;
+        }
+
         /// <summary>モデルを複製する（Memory Provider 用）</summary>
         /// <param name="model">IdFederationUpstreamViewModel</param>
         /// <returns>複製</returns>
@@ -290,6 +323,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="model">IdFederationUpstreamViewModel</param>
         public static void Create(IdFederationUpstreamViewModel model)
         {
+            //  **秘密は暗号化して保管する**（#297。**鍵が空なら平文のまま**）。
+            model = IdFederationUpstreamProvider.Protect(model);
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -364,7 +400,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     break;
             }
 
-            return model;
+            //  **使う形に戻す**（#297）。
+            return IdFederationUpstreamProvider.Unprotect(model);
         }
 
         #endregion
@@ -407,6 +444,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     break;
             }
 
+            //  **使う形に戻す**（#297）。
+            for (int i = 0; i < all.Count; i++)
+            {
+                all[i] = IdFederationUpstreamProvider.Unprotect(all[i]);
+            }
+
             //  **鍵の順に並べる**（画面の並びが実行ごとに変わらないように）。
             return all.OrderBy(m => m.UpstreamKey, StringComparer.Ordinal).ToList();
         }
@@ -419,6 +462,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="model">IdFederationUpstreamViewModel</param>
         public static void Update(IdFederationUpstreamViewModel model)
         {
+            //  **秘密は暗号化して保管する**（#297）。
+            model = IdFederationUpstreamProvider.Protect(model);
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:

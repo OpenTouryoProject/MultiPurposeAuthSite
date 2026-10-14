@@ -434,6 +434,11 @@ services:
       #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す**（倒れ先）。
       - appSettings__IdFederationSaml2CerFilePath=/resource/X509/SHA256RSA_Upstream.cer
 
+      # **user store の秘密を暗号化する鍵**（#297）。
+      #   **下流コンテナは、管理画面から足した上流の `client_secret` を DB に持つ**
+      #   （`mem` なのでプロセス内の辞書）。**暗号化した状態で測る。**
+      - appSettings__UserStoreSecretPassword=E2E_SecretBox_8rJ2vQ5mZ1xK
+
       # ---------------------------------------------------------------- 上流の登録（n 件。#292 の段階 1）
       #   **これが在れば、上の IdFederation* / SpRp_Isser / OAuth2AndOidc* より優先する。**
       #   **上の単数キーは、互換のために残してある**（この設定を外せば、1 件の配備に戻る）。

@@ -349,6 +349,11 @@ function Set-IdFederationEnv
     $env:IdFederationSaml2IssuerId = 'https://ssoauth.opentouryo.com'
     $env:IdFederationSaml2CerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
 
+    # **user store の秘密を暗号化する鍵**（#297）。
+    #   **既定の通しを「暗号化した状態」で回す**（`RT-297.*` が、その往復を測る）。
+    #   **値はテスト用**で、**出力しない**（他の秘密と同じ扱い。`TESTING.md` 9 節）。
+    $env:UserStoreSecretPassword = 'E2E_SecretBox_8rJ2vQ5mZ1xK'
+
     # **退役させる途中の署名証明書**（#292 の段階 3）。
     #   **/samlmetadata が 2 本広告する状態を作る**（`SA-2.2` が、それを測る）。
     #   **値は「いま署名に使っていない証明書」**でよい（広告するだけなので）。

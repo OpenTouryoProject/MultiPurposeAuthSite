@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
+//*  2026/10/14  玄人 幸道         RT-297.2（秘密の往復）を足した（#297）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -71,6 +72,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         /// <summary>この一巡で使う鍵（**他のテストと混ざらない名前**にする）</summary>
         private const string TestKey = "e2e_rt292_saml2";
+
+        /// <summary>RT-297.2 で使う鍵（**他のテストと混ざらない名前**にする）</summary>
+        private const string SecretKey = "e2e_rt297_oidc";
 
         #region RT-292.1
 
@@ -308,11 +312,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         [MemberData(nameof(AllTargets))]
         public async Task RT29203_管理者でなければ上流の管理画面は開かない(string targetKey)
         {
+            //  **管理者と、そうでない利用者を、別の Cookie の入れ物で測る**。
+            //    **1 つの入れ物で入り直す形にしていたが、
+            //    入り直しが失敗したときに「開けた」と出てしまう**（実測。sql ストアの通しで踏んだ）。
+            using (IdPClient admin = this.Client(targetKey))
             using (IdPClient client = this.Client(targetKey))
             {
                 //  **まず管理者で開けることを確かめる**（画面が閉じている配備では Skip）。
-                await client.SignInAsAdministratorAsync();
-                await IdFederationAdmin.SkipIfLockedDownAsync(client);
+                await admin.SignInAsAdministratorAsync();
+                await IdFederationAdmin.SkipIfLockedDownAsync(admin);
 
                 TestReport r = this.Report("RT-292.3",
                     "管理者でなければ、上流 IdP の管理画面は開かない",
@@ -324,9 +332,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Target("GET /IdFederationAdmin（テスト利用者でサインイン）");
 
-                r.Step("(1) テスト利用者で入り直す");
+                r.Step("(1) テスト利用者でサインインする（管理者とは別の入れ物）");
 
-                await client.SignInAsync(force: true);
+                await client.SignInAsync();
+
+                //  **本当にテスト利用者で入れているか**を先に見る
+                //    （**入れていなければ、この後の「開かない」は何も測っていない**）。
+                bool signedIn = client.IsSignedIn;
+
+                r.Verify("テスト利用者でサインインできている", signedIn,
+                    "サインインしている", signedIn ? "している" : "**していない**");
+
+                Assert.True(signedIn, "前提: テスト利用者でサインインできること");
 
                 r.Step("(2) 一覧を開く");
 
@@ -345,6 +362,103 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Done();
             }
         }
+
+        #region RT-297.2
+
+        /// <summary>RT-297.2 上流の登録の client_secret が、暗号化しても往復する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **上流の `client_secret` は、上流へ送る値**である（`/token` のクライアント認証）。
+        /// **必ず平文に戻せなければならない**（#297）。
+        ///
+        /// **`RT-297.1`（クライアント登録）と対**である。
+        /// **表が 2 つあり、どちらも同じ扱いにした**ので、**両方を測る。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29702_上流の登録の秘密が暗号化しても往復する(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                await client.SignInAsAdministratorAsync();
+
+                string index = await IdFederationAdmin.SkipIfLockedDownAsync(client);
+
+                TestReport r = this.Report("RT-297.2",
+                    "上流の登録の `client_secret` が、暗号化しても往復する",
+                    "**上流の `client_secret` は上流へ送る値**（`/token` のクライアント認証）なので、"
+                    + "**必ず平文に戻せなければならない**（#297）。"
+                    + "**保存して読み直したときに同じ値が出ること**を測る — "
+                    + "**ここが崩れると、上流と連携できなくなる。**",
+                    "#297 / #292 の段階 2");
+
+                r.Target("POST /IdFederationAdmin/Create → GET /IdFederationAdmin/Edit");
+
+                if (IdFederationAdmin.Contains(index, IdFederationAdminTests.SecretKey))
+                {
+                    await IdFederationAdmin.DeleteAsync(client, IdFederationAdminTests.SecretKey);
+                }
+
+                r.Step("(1) client_secret 付きで足す");
+
+                //  **値はテストの中だけで使う**（**構成ファイルの秘密ではない**）。
+                string secret = "E2E_rt297_" + Saml2.NewId().Replace("_", "");
+
+                HttpResponseMessage create = await IdFederationAdmin.CreateAsync(
+                    client, IdFederationAdminTests.SecretKey, "oidc",
+                    "E2E RT-297 Upstream", "https://rt297.e2e.example",
+                    new Dictionary<string, string>()
+                    {
+                        { "ClientID", "e2e0rt297000000000000000000000z2" },
+                        { "ClientSecret", secret },
+                        { "AuthorizeEndpoint", "https://rt297.e2e.example/authorize" },
+                        { "TokenEndpoint", "https://rt297.e2e.example/token" },
+                        { "UserInfoEndpoint", "https://rt297.e2e.example/userinfo" }
+                    });
+
+                bool created = create.StatusCode == HttpStatusCode.Found
+                    || create.StatusCode == HttpStatusCode.Redirect
+                    || create.StatusCode == HttpStatusCode.SeeOther;
+
+                r.Verify("追加できる", created,
+                    "リダイレクト", created ? "した" : "**しない（" + create.StatusCode + "）**");
+
+                Assert.True(created, "前提: 追加できること");
+
+                r.Step("(2) 編集画面を開くと、同じ client_secret が出る");
+
+                string edit = await (await IdFederationAdmin.EditAsync(
+                    client, IdFederationAdminTests.SecretKey)).Content.ReadAsStringAsync();
+
+                string reloaded = Html.FieldValue(edit, "ClientSecret");
+
+                r.Verify("入れた値と同じである", reloaded == secret,
+                    "同じ（値は伏せる）",
+                    (reloaded == secret) ? "同じだった"
+                        : (string.IsNullOrEmpty(reloaded)
+                            ? "**空になった**（復号できていない）" : "**別の値**"));
+
+                r.Verify("暗号文がそのまま出ていない",
+                    !(reloaded ?? "").StartsWith("enc:"),
+                    "平文", (reloaded ?? "").StartsWith("enc:") ? "**暗号文のまま**" : "平文");
+
+                r.Step("(3) 後片付け");
+
+                bool deleted = await IdFederationAdmin.DeleteAsync(
+                    client, IdFederationAdminTests.SecretKey);
+
+                r.Verify("消せる", deleted, "消える", deleted ? "消えた" : "**残った**");
+
+                r.Note("**DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して"
+                    + "確かめる（手順は `TESTING.md`）。**E2E からは DB を見ない**"
+                    + "（テストに接続文字列を持たせない。`TESTING.md` 9 節）。");
+
+                r.Done();
+            }
+        }
+
+        #endregion
 
         #endregion
     }

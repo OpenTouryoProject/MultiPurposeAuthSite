@@ -82,6 +82,7 @@
     <Compile Include="Extensions\Sts\IdTokenAudience.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
+    <Compile Include="Extensions\Sts\SecretProtector.cs" />
     <Compile Include="Extensions\Sts\SelfTestClient.cs" />
     <Compile Include="Extensions\Sts\ConsentProvider.cs" />
     <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />

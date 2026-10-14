@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/09  玄人 幸道         新規（#277 の段階 7）
+//*  2026/10/14  玄人 幸道         RT-297.1（秘密の往復）を足した（#297）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -375,6 +376,113 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "__RequestVerificationToken", token.Groups["value"].Value }
                 });
         }
+
+        #region RT-297.1
+
+        /// <summary>RT-297.1 クライアント登録の client_secret が、暗号化しても往復する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **user store に入る秘密を暗号化した**（#297）。
+        /// **`client_secret` は「元に戻せる形」でなければならない** —
+        /// **クライアント認証で照合し、画面で再表示する**ためである。
+        ///
+        /// **だから、保存して読み直したときに、同じ値が出なければならない。**
+        /// **暗号化して保管し、使うときに復号する**（`Sts.SecretProtector`）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | 鍵が在る配備 | **DB には暗号文**（`enc:v1:…`）。**画面には平文** |
+        /// | 鍵が空の配備 | **平文のまま**（従来どおり） |
+        ///
+        /// **E2E は鍵を設定した状態で回している**（`test.ps1` の `UserStoreSecretPassword`）。
+        /// **DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して確かめる
+        /// （手順は `TESTING.md`）。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29701_クライアント登録の秘密が暗号化しても往復する(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                //  **画面が閉じている配備では測れない**（`CanEditSaml2OAuth2Data` ほか）。
+                string opened = await client.GetStringAsync("/Manage/AddSaml2OAuth2Data");
+
+                Skip.IfNot(Html.HasField(opened, "ClientSecret"),
+                    "クライアント登録の画面が開きません"
+                    + "（CanEditSaml2OAuth2Data / EnableEditingOfUserAttribute を確認）。");
+
+                TestReport r = this.Report("RT-297.1",
+                    "クライアント登録の `client_secret` が、暗号化しても往復する",
+                    "**user store の秘密を暗号化した**（#297）。"
+                    + "**`client_secret` は上流へ送る・画面で再表示する**ので、"
+                    + "**元に戻せる形でなければならない**（ハッシュは取れない）。"
+                    + "**保存して読み直したときに同じ値が出ること**を測る — "
+                    + "**ここが崩れると、クライアント認証が通らなくなる。**",
+                    "#297 / #270");
+
+                r.Target("POST /Manage/AddSaml2OAuth2Data（登録 → 読み直し）");
+
+                //  **前の回の残りを消しておく**（落ちた回の後始末）。
+                await ManageSaml2OAuth2DataTests.RemoveRegistrationAsync(client);
+
+                r.Step("(1) client_id と client_secret を発行して、登録する");
+
+                Dictionary<string, string> form = ManageSaml2OAuth2DataTests.Harvest(opened);
+
+                form = ManageSaml2OAuth2DataTests.Harvest(
+                    await PostAsync(client, form, "submit.ClientID"));
+
+                form = ManageSaml2OAuth2DataTests.Harvest(
+                    await PostAsync(client, form, "submit.ClientSecret"));
+
+                string secret = Value(form, "ClientSecret");
+
+                r.Verify("client_secret が入る", !string.IsNullOrEmpty(secret),
+                    "空でない", string.IsNullOrEmpty(secret) ? "**空のまま**" : "入った（値は伏せる）");
+
+                Assert.False(string.IsNullOrEmpty(secret), "前提: client_secret が発行されること");
+
+                await PostAsync(client, form, "submit.Add");
+
+                bool registered = await ManageSaml2OAuth2DataTests.IsRegisteredAsync(client);
+
+                r.Verify("登録される", registered,
+                    "登録される", registered ? "登録された" : "**登録されない**");
+
+                Assert.True(registered, "前提: 登録できること");
+
+                r.Step("(2) 画面を開き直すと、同じ client_secret が出る");
+
+                //  **ここが往復である。**
+                //    **保存で暗号化し、読み出しで復号している**（`Sts.SecretProtector`）。
+                //    **復号できていなければ、空か、別の値になる。**
+                string reloaded = Html.FieldValue(
+                    await client.GetStringAsync("/Manage/AddSaml2OAuth2Data"), "ClientSecret");
+
+                r.Verify("発行した値と同じである", reloaded == secret,
+                    "同じ（値は伏せる）",
+                    (reloaded == secret) ? "同じだった"
+                        : (string.IsNullOrEmpty(reloaded)
+                            ? "**空になった**（復号できていない）" : "**別の値**"));
+
+                r.Verify("暗号文がそのまま出ていない",
+                    !(reloaded ?? "").StartsWith("enc:"),
+                    "平文", (reloaded ?? "").StartsWith("enc:") ? "**暗号文のまま**" : "平文");
+
+                r.Step("(3) 後片付け");
+
+                await ManageSaml2OAuth2DataTests.RemoveRegistrationAsync(client);
+
+                bool removed = !await ManageSaml2OAuth2DataTests.IsRegisteredAsync(client);
+
+                r.Verify("消せる", removed, "消える", removed ? "消えた" : "**残った**");
+
+                r.Done();
+            }
+        }
+
+        #endregion
 
         #endregion
     }

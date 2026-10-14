@@ -144,7 +144,7 @@ CREATE TABLE [CustomizedConfirmation](
 
 CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
-    [ClientSecret] [nvarchar](256) NULL,
+    [ClientSecret] [nvarchar](512) NULL,        -- 暗号文が入る（#297）
     [RedirectUriSaml] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
     [RedirectUriCode] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
     [RedirectUriToken] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
@@ -174,7 +174,7 @@ CREATE TABLE [IdFederationUpstreams](   -- ID 連携の上流 IdP の登録（#2
     [Enabled] [bit] NOT NULL,
     [Issuer] [nvarchar](256) NULL,            -- 期待する iss（OIDC）/ entityID（SAML2）
     [ClientID] [nvarchar](256) NULL,          -- 上流に登録された自分の client_id
-    [ClientSecret] [nvarchar](256) NULL,      -- 同上（**平文。Saml2OAuth2Data と同じ扱い**）
+    [ClientSecret] [nvarchar](512) NULL,      -- 同上（**暗号文が入る**。#297）
     [DiscoveryUrl] [nvarchar](512) NULL,      -- Const.MaxLengthOfUri
     [JwkSetUri] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
     [MetadataUrl] [nvarchar](512) NULL,       -- Const.MaxLengthOfUri
