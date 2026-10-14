@@ -32,6 +32,7 @@
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2026/10/04  玄人 幸道         GetAll を追加（#266）
 //*  2026/10/06  玄人 幸道         JSON 1 列から専用列に切り出した（#270）
+//*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -259,6 +260,41 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return prm;
         }
 
+        /// <summary>保管する形にする（秘密を暗号化する。#297）</summary>
+        /// <param name="clientID">string</param>
+        /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
+        /// <returns>複製（元のモデルは書き換えない）</returns>
+        /// <remarks>
+        /// **呼ばれた側のモデルを書き換えない**（画面が持っている値が暗号文になると、
+        /// **そのまま再表示されてしまう**）。
+        /// </remarks>
+        private static ManageAddSaml2OAuth2DataViewModel Protect(
+            string clientID, ManageAddSaml2OAuth2DataViewModel model)
+        {
+            ManageAddSaml2OAuth2DataViewModel copy = DataProvider.Copy(clientID, model);
+
+            if (copy != null)
+            {
+                copy.ClientSecret = SecretProtector.Protect(copy.ClientSecret);
+            }
+
+            return copy;
+        }
+
+        /// <summary>使う形にする（秘密を復号する。#297）</summary>
+        /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
+        /// <returns>同じインスタンス（null なら null）</returns>
+        private static ManageAddSaml2OAuth2DataViewModel Unprotect(
+            ManageAddSaml2OAuth2DataViewModel model)
+        {
+            if (model != null)
+            {
+                model.ClientSecret = SecretProtector.Unprotect(model.ClientSecret);
+            }
+
+            return model;
+        }
+
         /// <summary>モデルを複製する（Memory Provider 用）</summary>
         /// <param name="clientID">string</param>
         /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
@@ -307,6 +343,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
         public static void Create(string clientID, ManageAddSaml2OAuth2DataViewModel model)
         {
+            //  **秘密は暗号化して保管する**（#297。**鍵が空なら平文のまま**）。
+            model = DataProvider.Protect(clientID, model);
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -378,7 +417,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     break;
             }
 
-            return model;
+            //  **使う形に戻す**（#297）。
+            return DataProvider.Unprotect(model);
         }
 
         #endregion
@@ -430,6 +470,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     break;
             }
 
+            //  **使う形に戻す**（#297。**public クライアントの判定に使う**ので、ここも戻す）。
+            for (int i = 0; i < all.Count; i++)
+            {
+                all[i] = DataProvider.Unprotect(all[i]);
+            }
+
             return all;
         }
 
@@ -442,6 +488,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
         public static void Update(string clientID, ManageAddSaml2OAuth2DataViewModel model)
         {
+            //  **秘密は暗号化して保管する**（#297）。
+            model = DataProvider.Protect(clientID, model);
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:

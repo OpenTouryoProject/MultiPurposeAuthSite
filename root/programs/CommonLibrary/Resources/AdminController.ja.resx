@@ -120,6 +120,9 @@
   <data name="AddSuccess" xml:space="preserve">
     <value>追加に成功しました。</value>
   </data>
+  <data name="IdFederationKeyAlreadyExists" xml:space="preserve">
+    <value>その鍵は既に使われています。</value>
+  </data>
   <data name="DeleteSuccess" xml:space="preserve">
     <value>削除に成功しました。</value>
   </data>

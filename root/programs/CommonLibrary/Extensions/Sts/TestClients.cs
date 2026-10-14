@@ -35,6 +35,7 @@
 //*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
 //*  2026/10/06  玄人 幸道         同意を記録しないTestClient_19を追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22を追加（鍵なし。#275）
+//*  2026/10/09  玄人 幸道         TestClient_15 の折り返し先を、記号から実 URL に変えた（C-10）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -337,14 +338,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
-                // **管理画面の自己テストの折り返し先を登録したもの**（C-10）。
-                //   **記号が解決され、通常の照合で通ること**を測る（`RT-C10.1`）。
-                //   以前は `CheckRedirectUri` の分岐が、**登録を確かめずにこの URL を通していた。**
+                // **「このクライアントにだけ登録されている折り返し先」**（C-10）。
+                //   **他のクライアントが、この URI を宛先にできないこと**を測る（`RT-C10.1`）。
+                //   以前は `CheckRedirectUri` に、**登録を確かめずに通す URL** が在った
+                //   （管理画面の「トークンを取る」の折り返し先）。
+                //   **その画面は廃止されたが、「例外は無い」ことは測り続ける。**
                 ClientName = "TestClient_15", ClientId = "e2e0tc15000000000000000000000000",
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "redirect_uri_code", Co.Const.TestSelfCodeManage }
+                    { "redirect_uri_code", "https://rtc10.example/cb" }
                 }
             },
             new Entry()

@@ -33,7 +33,15 @@
 //*  2026/10/07  玄人 幸道         ACS URL の不一致を登録値へのエラー応答にした（#276）
 //*  2026/10/07  玄人 幸道         アサーションの有効期限の単位を直した（分→秒。#276）
 //*  2026/10/07  玄人 幸道         エラー応答にAssertionを組み込まないようにした（#278）
+//*  2026/10/12  玄人 幸道         アサーションにAttributeStatementを足した（#286 の段階 4）
+//*  2026/10/12  玄人 幸道         Redirectの検証をRSAを受ける版に移した（Open棟梁 #604）
 //**********************************************************************************
+
+#if NETFX
+using MultiPurposeAuthSite.Entity;
+#else
+//
+#endif
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
@@ -61,12 +69,12 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="inResponseTo">out string</param>
         /// <param name="samlRequest2">XmlDocument</param>
         /// <param name="samlNsMgr">XmlNamespaceManager</param>
-        /// <returns></returns>
+        /// <returns>検証できたか</returns>
+        /// <remarks>`SigAlg` で選ぶのでハッシュ引数は落とした</remarks>
         public static bool VerifySamlRequest(
             string queryString, string decodeSaml,
             out string iss, out string inResponseTo,
-            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr,
-            EnumDigitalSignAlgorithm? enumDigitalSignAlgorithm = null) // 既定値の変更 Rsa_SHA1 → Rsa_SHA256
+            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
         {
             bool verified = false;
 
@@ -99,10 +107,9 @@ namespace MultiPurposeAuthSite.SamlProviders
                 if (!string.IsNullOrEmpty(queryString))
                 {
                     // VerifyRedirect
-                    EnumDigitalSignAlgorithm dSigAlg = enumDigitalSignAlgorithm ?? EnumDigitalSignAlgorithm.Rsa_SHA256; // Rsa_SHA1
-                    DigitalSignParam dsParam = new DigitalSignParam(rpkc.JwkToParam(pubKey), dSigAlg); 
-                    
-                    if (SAML2Bindings.VerifyRedirect(queryString, dsParam))
+                    RSA rsaForRedirect = rpkc.JwkToProvider(pubKey);
+
+                    if (SAML2Bindings.VerifyRedirect(queryString, rsaForRedirect))
                     {
                         // XSDスキーマによる検証
                         // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
@@ -200,7 +207,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             rtnUrl = temp2; // 事前登録の値
 
             // 事前登録されている。
-            if (rtnUrl.ToLower() == "test_self_saml")
+            if (rtnUrl.ToLower() == Const.TestSelfSaml)
             {
                 // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
                 rtnUrl = Config.OAuth2ClientEndpointsRootURI + Config.Saml2ResponseEndpoint;
@@ -227,34 +234,30 @@ namespace MultiPurposeAuthSite.SamlProviders
                 Config.IssuerId, rtnUrl, inResponseTo, statusCode, out id1);
 
             //  **Assertion は、成功のときだけ組み込む**（#278）。
-            //    **以前は statusCode に関わらず常に繋いでいた**ので、
-            //    **エラー応答にも、利用者の NameID を含むアサーションが入っていた。**
-            //    **認証が成立していないのに、認証の主張を返していた**
-            //    （SAML 2.0 Core 3.2.2 / 4.1.4.2 のとおり、エラー応答は Status だけで正当）。
-            //
-            //    **sub の算出も、この中に入れている。**
-            //    `PPIDExtension.GetSubForSAML2` は**利用者を引く**ので、
-            //    **サインインしていない状態では落ちる**（`EmailAddress` で `user.Email`）。
-            //    **エラー応答では要らない値である。**
+            //  **sub の算出もエラー応答では要らない値。**
             if (statusCode == SAML2Enum.StatusCode.Success)
             {
                 string id2 = "";
 
                 // nameIDFormat.Valueに合わせて処理（PPID）
-                string sub = PPIDExtension.GetSubForSAML2(iss, identity.Name, nameIDFormat.Value);
+                //  **利用者も受け取る**（#286 の段階 4）。**属性に入れる値を、引き直さずに使う。**
+                ApplicationUser user = null;
+                string sub = PPIDExtension.GetSubForSAML2(
+                    iss, identity.Name, nameIDFormat.Value, out user);
 
                 // SamlAssertionを作成する
-                //  **引数は秒である**（`double expiresFromSecond`。`AddSeconds` される）。
-                //    **以前は分の値をそのまま渡していた**ので、
-                //    **「30 分」のつもりが「30 秒」になっていた**（#276）。
-                //    **E2E では見えない**（SAML の往復は 1 秒ほどで終わるため）。
                 XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
                     inResponseTo, Config.IssuerId,
                     sub, nameIDFormat.Value, authnContextClassRef,
                     Config.Saml2AssertionExpireTimeSpanFromMinutes * 60, rtnUrl, out id2);
 
-                // 必要に応じて、identity.Claimsを使用して、様々なクレームを追加できる。
-                //  > Assertion > AttributeStatement > Attribute > AttributeValue
+                // **メアドと利用者名を属性で返す**（#286 の段階 4）。
+                // **署名の前に足すこと。** **後から足すと署名が合わなくなる。**
+                if (user != null)
+                {
+                    CmnSamlAttributes.AppendStatement(
+                        samlAssertion, user.Email, user.UserName, user.EmailConfirmed);
+                }
 
                 // ResponseにAssertionを組込
                 XmlNode newNode = samlResponse2.ImportNode( // 御呪い

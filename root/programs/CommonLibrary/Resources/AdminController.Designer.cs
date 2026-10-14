@@ -68,6 +68,15 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("AddSuccess", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   The key is already used. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdFederationKeyAlreadyExists {
+            get {
+                return ResourceManager.GetString("IdFederationKeyAlreadyExists", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Delete is succeeded. に類似しているローカライズされた文字列を検索します。

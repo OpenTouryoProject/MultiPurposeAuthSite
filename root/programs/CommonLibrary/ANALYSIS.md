@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト ライブラリ部（CommonLibrary）コード分析
 
 対象: `root/programs/CommonLibrary`（**net10.0 / net48 の 2 系統**） / ブランチ: `develop`
-最終更新: 2026-09-30
+最終更新: 2026-10-10
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 「どこに何があるか」「どの規約に従うべきか」「何を壊しやすいか」を記す。
@@ -160,7 +160,59 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   **`RoleManager.Roles` は `IQueryableRoleStore` が無いと例外になる**ので、
   **ロールの管理画面と、利用者へのロール割り当てはこれが前提**である。
 
-### 4.1 UserStore の 4 プロバイダ
+### 4.0 user store の例外 — 書き込みは握らない（#300）
+
+**`CmnUserStore` / `CmnRoleStore` は、`catch` して `SQLTRACE` に書き、正常に戻っていた。**
+
+| | いま |
+|---|---|
+| **書き込み**（`Create` / `Update` / `Delete` / `Add*` / `Remove*`。**16 か所**） | **投げ直す**（ログに書いた後で `throw;`） |
+| 読み取り（`Find*` / `Get*`。**12 か所**） | **握って既定値を返す**（従来どおり） |
+
+**書き込みを握ると、`IdentityResult` が成功になる。**
+**画面はリダイレクトし、データは変わらない** — **「静かに失敗する」。**
+
+**実例が 2 件出た。**
+
+| | |
+|---|---|
+| **GDPR の消去が Oracle で効かない**（#299） | `LockoutEndDateUtc` に `DateTime.MaxValue` を入れて `ORA-01841`。**画面は成功に見えていた** |
+| **PostgreSQL でクレームが 1 件も保存されない**（#300 で判明） | `AddClaim` の `INSERT` が**列 5 つに値 4 つ**（`42601`）。**構文の誤りなので 1 度も成功し得ない** |
+
+**後者は、握るのを止めた途端に 6 件のテストが落ちて見つかった**
+（`RT-140.*` / `SA-6.*`。**ID 連携がクレームを保存する経路**）。
+**握っていた間は、通しが緑のまま「保存されていなかった」。**
+
+> **`INSERT` の列数と値の数は、機械的に見られる。**
+> **全コードを走査して、食い違っていたのはこの 1 か所だけだった**（実測）。
+
+### 4.1 `ApplicationUser` の直列化は allow-list（OptIn）
+
+**`ApplicationUser` を JSON にするのは 1 か所だけ**である
+（GDPR の持ち出し : `ManageController.ReferGdprPersonalData` が返す `user.json`）。
+**復元する経路は無い。**
+
+**この型は `[JsonObject(MemberSerialization.OptIn)]` にしてある。**
+**`[JsonProperty]` を付けたプロパティだけが出る。**
+
+| | |
+|---|---|
+| 出す | `Id` `UserName` `Email` `EmailConfirmed` `PhoneNumber` `PhoneNumberConfirmed` `LockoutEnabled` `AccessFailedCount` `LockoutEndDateUtc` `TwoFactorEnabled` `Roles` `Logins` `Claims` `ClientID` `UnstructuredData` `CreatedDate` `PasswordChangeDate` |
+| 出さない | **`PasswordHash`**（`[JsonIgnore]`）／**`SecurityStamp`**／**`TotpAuthenticatorKey`**（認証器の鍵）／**`TotpTokens`**（リカバリ コード）／**`DeviceToken`**（端末への宛先）／`NormalizedUserName` `NormalizedEmail`（派生値） |
+
+> **消去（`DeleteGdprPersonalData`）は、行ごと消す**（#299）。
+> **以前は属性を潰す実装**で、**`TotpAuthenticatorKey` / `TotpTokens` / `DeviceToken`**
+> **（= ここで「出さない」と決めた値）は、潰す対象にも入っていなかった。**
+> **行ごと消せば、この手の抜けは起こらない。**
+> **外部キーが `ON DELETE CASCADE` なので、子の行も落ちる。**
+
+> **既定で出す形（OptOut）にしないこと。**
+> **プロパティを足すたびに、持ち出せる物が黙って増える**からである。
+> **足すときは、それを利用者に渡してよいかを決めてから `[JsonProperty]` を付ける。**
+>
+> **E2E** : `RT-277.7` が、**資格情報の材料が入っていないこと**を名指しで測っている。
+
+### 4.2 UserStore の 4 プロバイダ
 
 `Config.UserStoreType`（`appSettings:UserStoreType`）で切り替わる。
 
@@ -185,7 +237,7 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   `0_CopyInitSql.ps1` が上記 DDL を `store/*/init/` へコピーし、**CRLF を LF に変換**する
   （Linux コンテナの初期化スクリプトが読むため）。
 
-### 4.2 STS 専用モード（機能ロックダウン）
+### 4.3 STS 専用モード（機能ロックダウン）
 
 `Util/Sts/OnlySts` が、次の 3 つが**すべて false のとき**「STS 専用モード」と判定する。
 
@@ -214,7 +266,7 @@ public static bool RequireUniqueEmail
 - `#if NETFX` で `Newtonsoft.Json` / `Microsoft.Extensions.Configuration` を切り替えている。
 - 主な区分（`#region` の並び）: Proxy / IsDebug / UserStore / 事前登録ユーザ / Notification Provider /
   ログイン（ユーザ名・パスワード検証、ロックアウト、Cookie、2FA、外部ログイン）/ SecurityStamp /
-  属性編集の可否 / FIDO / STS（証明書・SAML2・OAuth2）/ 外部サービス（Stripe・PAY.JP）/
+  属性編集の可否 / FIDO / STS（証明書・SAML2・OAuth2）/
   機能ロックダウン / IDフェデレーション。
 
 > **`Config` にプロパティを足したら、`_app.config` と `_appsettings.json`（テンプレート）にも
@@ -232,7 +284,7 @@ public static bool RequireUniqueEmail
 - テンプレート側は `"[Please fill in this input item.]"` などのプレースホルダで、
   外部サービスの有効化フラグはすべて `false`。
 - **実ファイル側には、実在する認証情報が入っている**（管理者アカウント、SMTP、Twilio、
-  Stripe / PAY.JP、外部ログインの ClientSecret、`SaltParameter` など）。
+  外部ログインの ClientSecret、`SaltParameter` など）。
 
 > **エージェントの禁止事項:**
 > - `app.config` / `appsettings.json` の**中身を報告やコミット メッセージに転記しない**。
@@ -469,7 +521,39 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 
 ---
 
-## 13. エージェント向け作業チェックリスト
+## 13. オンライン決済サービスの取り下げ（2026/10/09）
+
+**もともとは SaaS 基盤にしたかった**ので、オンライン決済（Stripe / PAY.JP）を実装していた。
+**現時点では認証基盤に注力する**ことにし、**維持の手間に見合わない**ため取り下げた。
+
+**管理画面の「トークンを取る」（`GetOAuth2Token`）も、同時に落とした。**
+**あれは、管理画面から決済の WebAPI（`/ChageToUser`）を呼ぶためのもの**で、
+**決済が無くなれば、要らない。**
+
+**管理画面の「SAML2 アサーションを取る」（`GetSaml2Assertion`）も、同時に落とした。**
+**これは決済とは別のもの**である（#277 の段階 5 で足した）。
+**落としたのは、自己テスト画面と重複する**ためである。
+**SAML2 の代表プロファイルは、自己テスト画面に 4 通りのバインディングで在る。**
+**管理画面のボタンは「利用者自身のクライアント登録で流す」点だけが違っていた**が、
+**その差に、画面を 2 つ持つだけの値は無いと判断した。**
+
+> **`redirect_uri_saml` の管理画面用（`redirect_uri_saml_manage`）は、これで要らなくなった。**
+> **受け口を自己テストと共用していた**ので、**もともと足していない。**
+
+| 落としたもの | |
+|---|---|
+| 設定 | `EnableStripe` / `Stripe_PK` / `Stripe_SK` / `EnablePAYJP` / `PAYJP_PK` / `PAYJP_SK` / `CanEditPayment` / `ChageToUserWebAPI` / `OAuth2AuthorizationCodeGrantClient_Manage` |
+| 口 | `/ChageToUser`（経路登録ごと）／`Manage` の `AddPaymentInformation` `ChargeByPaymentInformation` `RemovePaymentInformation` `GetOAuth2Token` `GetSaml2Assertion` `OAuth2AuthorizationCodeGrantClient` |
+| 呼び出し | `WebAPIHelper` の決済 WebAPI、`Sts.Helper.CallOAuth2ChageToUserWebAPIAsync` |
+| 画面 | `AddPaymentInformationStripe` / `AddPaymentInformationPAYJP` / `Manage/OAuth2AuthorizationCodeGrantClient`、`Manage/Index` の該当ブロック |
+| 利用者属性 | **`Users.PaymentInformation`（列ごと）**。`ApplicationUser` / `CmnUserStore` の INSERT・UPDATE / DDL 3 本 |
+| 記号 | `test_self_code_manage`（`redirect_uri_code` の既定は `test_self_code` に戻した） |
+
+> **既存の DB には列が残る。** **`Create_UserStore.sql` は作り直す前提**なので、
+> **使っている DB からは、手で落とすこと**（`ALTER TABLE ... DROP COLUMN`）。
+> **残っていても動く**（`SELECT *` で読み、INSERT・UPDATE では触らない）。
+
+## 14. エージェント向け作業チェックリスト
 
 - [ ] `AGENTS.md` のポリシー遵守（**git 操作をしない**）
 - [ ] 変更対象が net48 / net10.0 / 両方のどれか判定する

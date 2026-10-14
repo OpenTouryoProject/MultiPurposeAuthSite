@@ -18,6 +18,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2019/03/15  西野 大介         新規
     //*  2026/10/07  玄人 幸道         残っていた MsPass / Fido2NetLib の痕跡を落とした（#137）
+    //*  2026/10/09  玄人 幸道         重複した id を外し、チェックボックスを見えるようにした（#277 の段階 6）
     //**********************************************************************************
 *@
 
@@ -39,15 +40,33 @@
     <h4>@ManageViews.RemoveWebAuthnDataH4</h4>
     <hr />
     @Html.ValidationSummary("", new { @class = "text-danger" })
+    @*  **チェックボックスに form-control を付けない**（#277 の段階 6）。
+
+        **Bootstrap 5 の `.form-control` は `appearance: none` を付ける**ので、
+        **チェックボックスに与えると、標準の描画が消える。**
+        **入れても外しても同じ空の箱に見える**ため、
+        **選んだつもりで選んでいなくても、画面からは分からない。**
+        **実測 : 5.1.0 で `appearance: none` 、幅 160px × 高さ 15px の箱になる。**
+
+        **`form-check` / `form-check-input` が、この版のチェックボックス用の類である。**
+
+        **id は一つずつ別に振る**— **同じ id が並ぶのは不正な HTML** であり、
+        **label と結べないと、PublicKeyId の文字列を押しても選べない。**
+
+        **name は同じでよい** — 選んだ数だけ同名の値が送られ、配列で受ける。 *@
+    int index = 0;
     foreach (string item in ViewBag.ExistingPubCredDescriptorId)
     {
+        string checkBoxId = "publicKeys_" + index;
+        index++;
+
         <div class="form-group">
             <p class="col-md-2 control-label">PublicKeyId</p>
-            <div class="col-md-1">
-                <input class="form-control" type="checkbox" id="publicKeys" name="publicKeys"
-                       value="@item" />
+            <div class="col-md-10 form-check">
+                <input class="form-check-input" type="checkbox"
+                       id="@checkBoxId" name="publicKeys" value="@item" />
+                <label class="form-check-label" for="@checkBoxId">@item</label>
             </div>
-            @item
         </div>
     }
     <div class="form-group">

@@ -183,9 +183,6 @@
   <data name="Password" xml:space="preserve">
     <value>Password</value>
   </data>
-  <data name="PaymentInformation" xml:space="preserve">
-    <value>Payment Information</value>
-  </data>
   <data name="PhoneNumber" xml:space="preserve">
     <value>Phone number</value>
   </data>
@@ -248,5 +245,77 @@
   </data>
   <data name="UserNameforSearch" xml:space="preserve">
     <value>Search by user name</value>
+  </data>
+  <data name="ClientIDDescription" xml:space="preserve">
+    <value>Identifier of this client. Read-only here; use the button to reissue it. Sent as client_id in requests.</value>
+  </data>
+  <data name="ClientSecretDescription" xml:space="preserve">
+    <value>Secret of this client. Read-only here; use the button to reissue it. Used by client_secret_basic / client_secret_post. Not used by public clients.</value>
+  </data>
+  <data name="ClientModeDescription" xml:space="preserve">
+    <value>Which route this client takes (normal / fapi1 / fapi2). FAPI tightens the checks - PKCE(S256) and signatures become mandatory. Stored as oauth2_oidc_mode.</value>
+  </data>
+  <data name="RequirePkceDescription" xml:space="preserve">
+    <value>Require PKCE for this client. It is OR-ed with the server-wide setting, so clearing it here does not disable PKCE when the server requires it.</value>
+  </data>
+  <data name="RedirectUriSamlDescription" xml:space="preserve">
+    <value>Where SAML2 assertions are posted (the ACS URL). The self-test uses redirect_uri_saml.</value>
+  </data>
+  <data name="RedirectUriCodeDescription" xml:space="preserve">
+    <value>Where the authorization code is returned. It must match the registered value exactly - not one character may differ.</value>
+  </data>
+  <data name="RedirectUriTokenDescription" xml:space="preserve">
+    <value>Where tokens are returned for the implicit / hybrid flows. Put a hyphen when the client does not use them.</value>
+  </data>
+  <data name="PostLogoutRedirectUriDescription" xml:space="preserve">
+    <value>Where the RP may be sent back after logout (/end_session). Matched exactly.</value>
+  </data>
+  <data name="SubjectTypesDescription" xml:space="preserve">
+    <value>What goes into sub. public is the user identifier; pairwise is a per-client value (PPID).</value>
+  </data>
+  <data name="WebOriginsDescription" xml:space="preserve">
+    <value>Origins allowed by CORS (web_origins). When empty, they are derived from the redirect_uri. Needed only when a browser calls /token and the like.</value>
+  </data>
+  <data name="IdTokenSignedResponseAlgDescription" xml:space="preserve">
+    <value>Signing algorithm of the id_token. When empty, the default is used.</value>
+  </data>
+  <data name="TokenEndpointAuthSigningAlgDescription" xml:space="preserve">
+    <value>Signing algorithm accepted when verifying a client_assertion (private_key_jwt). When empty, it is not narrowed.</value>
+  </data>
+  <data name="RequestObjectSigningAlgDescription" xml:space="preserve">
+    <value>Signing algorithm accepted when verifying a Request Object (JAR). When empty, it is not narrowed.</value>
+  </data>
+  <data name="JwkRsaPublickeyDescription" xml:space="preserve">
+    <value>RSA public key (JWK) used to verify a private_key_jwt or a Request Object.</value>
+  </data>
+  <data name="TlsClientAuthSubjectDnDescription" xml:space="preserve">
+    <value>Subject DN of the client certificate matched for mTLS (tls_client_auth).</value>
+  </data>
+  <data name="ClarifyRedirectUriDescription" xml:space="preserve">
+    <value>Send redirect_uri explicitly. When cleared, it is omitted - OIDC requires it, so an omission must be rejected.</value>
+  </data>
+  <data name="ClientTypeDescription" xml:space="preserve">
+    <value>Which registered test client to use. It decides the route (normal / require_pkce / device / fapi1 / fapi2 / fapi_ciba / the signed-in user). It is not the OAuth 2.0 client type.</value>
+  </data>
+  <data name="ResponseModeDescription" xml:space="preserve">
+    <value>How the authorization response is returned (query / fragment / form_post / the JARM variants). Not specifying it leaves the default for the response_type.</value>
+  </data>
+  <data name="Prompt" xml:space="preserve">
+    <value>prompt</value>
+  </data>
+  <data name="PromptDescription" xml:space="preserve">
+    <value>Whether the consent screen appears. It applies to every button that goes to the authorization endpoint. none shows no UI - a recorded consent returns a code, otherwise consent_required. Combining none with another value is invalid_request.</value>
+  </data>
+  <data name="MaxAge" xml:space="preserve">
+    <value>max_age</value>
+  </data>
+  <data name="MaxAgeDescription" xml:space="preserve">
+    <value>Upper bound of the elapsed time since the last authentication, in seconds. When exceeded, re-authentication is required; with prompt=none it becomes login_required. The OIDC button sends max_age=600 unless specified.</value>
+  </data>
+  <data name="NameIdFormat" xml:space="preserve">
+    <value>NameIDFormat</value>
+  </data>
+  <data name="NameIdFormatDescription" xml:space="preserve">
+    <value>Which NameIDPolicy Format the AuthnRequest asks for. unspecified returns the user name, emailAddress the mail address, persistent a per-RP value (PPID). Not specifying it lets the IdP fall back to unspecified. transient is not supported here.</value>
   </data>
 </root>

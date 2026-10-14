@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/28  玄人 幸道         新規（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         4 つ目のバインディングの組み合わせ（RT-246.7）を追加（#246 の項目 2）
+//*  2026/10/12  玄人 幸道         SigAlgの期待値をrsa-sha256にした（Open棟梁 #604）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -100,8 +101,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 // **Redirect Binding は、署名がクエリ文字列に付く**ので、XML に署名の要素は無い。
                 Saml2AssertionTests.VerifyScreen(r, html, "Redirect（GET", expectXmlSignature: false);
 
-                r.Note("**Redirect Binding は、クエリ文字列そのものが署名の対象**である"
-                    + "（`SigAlg` が `RSAwithSHA1` のときだけ検証する。従来どおり）。");
+                r.Note("**Redirect Binding は、クエリ文字列そのものが署名の対象**である。"
+                    + "**`SigAlg` は実際のアルゴリズム**（既定は `rsa-sha256`）であり、"
+                    + "**受け手はそれでハッシュを選ぶ**（Open棟梁 #604）。"
+                    + "**以前は `rsa-sha1` 固定で、受け手も `rsa-sha1` だけを受けていた。**");
 
                 r.Done();
             }
@@ -317,9 +320,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             else
             {
                 // **Redirect Binding : 署名はクエリ文字列に付く**ので、XML には無いのが正しい。
+                //   **`SigAlg` は実際のアルゴリズム**になった（Open棟梁 #604。既定は SHA256）。
+                //   **以前は `rsa-sha1` 固定**だったので、ここも `rsa-sha1` を見ていた。
+                bool hasSigAlg = html.Contains("rsa-sha256");
+
                 r.Verify("SigAlg が画面に出る（署名はクエリ文字列に付く）",
-                    html.Contains("rsa-sha1"),
-                    "SigAlg が出る", html.Contains("rsa-sha1") ? "出ている" : "**出ていない**");
+                    hasSigAlg,
+                    "rsa-sha256 が出る",
+                    hasSigAlg
+                        ? "出ている"
+                        : (html.Contains("rsa-sha1")
+                            ? "**rsa-sha1 が出ている（Open棟梁 が古い）**" : "**出ていない**"));
 
                 r.Observe("XML の中の署名", hasSignature ? "ある" : "無い",
                     "**Redirect Binding では、署名は XML ではなくクエリ文字列に付く**"

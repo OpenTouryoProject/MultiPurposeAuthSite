@@ -58,6 +58,16 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>ReturnUrl</summary>
         public string ReturnUrl { get; set; }
 
+        /// <summary>どの上流 IdP へ委譲するか（ID 連携。#292 の段階 1）</summary>
+        /// <remarks>
+        /// **`IdFederationUpstreams` の鍵**である。
+        /// **空なら、その protocol の既定（先頭の 1 件）** — **従来の押し方と同じ結果になる。**
+        ///
+        /// **画面は hidden で送る。** **押したボタンが `submitButtonName`、相手がこれ**であり、
+        /// **`submitButtonName` の値は変えていない**（既存の導線・テストを壊さないため）。
+        /// </remarks>
+        public string IdpKey { get; set; }
+
         #region FIDO2
         /// <summary>Fido2Data</summary>
         public string Fido2Data { get; set; }

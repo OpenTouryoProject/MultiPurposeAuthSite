@@ -23,7 +23,6 @@ CREATE TABLE "Users"(              -- Users
     "TotpAuthenticatorKey" NVARCHAR2(256) NULL,
     -- 追加の情報
     "ClientID" NVARCHAR2(256) NOT NULL,
-    "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NCLOB NULL,
     "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
@@ -46,8 +45,14 @@ CREATE TABLE "UserRoles"(          -- 関連エンティティ (Users *--- UserR
 
 CREATE TABLE "UserLogins"(       -- Users ---* UserLogins
     "UserId" NVARCHAR2(38) NOT NULL,           -- PK
-    "LoginProvider" NVARCHAR2(128) NOT NULL,   -- *PK
-    "ProviderKey" NVARCHAR2(128) NOT NULL,     -- *PK
+    -- **連携キーの幅**（#292。上流が n 件になると、長い値を踏む確率が上がる）。
+    --   LoginProvider : **相手の `iss` / entityID**（URI なので Const.MaxLengthOfUri と同じ 512）
+    --   ProviderKey   : **相手の `sub` / NameID**（`sub` は 255 文字以内、persistent な
+    --                   NameID は 256 文字以内と決まっている）
+    --   **PK は 3 列で (38 + 512 + 256) * 2 = 1612 バイト**になる。
+    --   **SQL Server 2016 以降が前提**（索引キーは 1700 バイトまで。2014 以前は 900）。
+    "LoginProvider" NVARCHAR2(512) NOT NULL,   -- *PK
+    "ProviderKey" NVARCHAR2(256) NOT NULL,     -- *PK
     CONSTRAINT "PK.UserLogins" PRIMARY KEY ("UserId", "LoginProvider", "ProviderKey")
 );
 
@@ -120,7 +125,7 @@ CREATE TABLE "CustomizedConfirmation"(
 
 CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
-    "ClientSecret" NVARCHAR2(256) NULL,
+    "ClientSecret" NVARCHAR2(512) NULL,      -- 暗号文が入る（#297）
     "RedirectUriSaml" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
     "RedirectUriCode" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
     "RedirectUriToken" NVARCHAR2(512) NULL,          -- Const.MaxLengthOfUri
@@ -137,6 +142,30 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "RequirePkce" NUMBER(3) NOT NULL,                -- 真は -1（Users の bool 列と同じ）
     "ClientName" NVARCHAR2(256) NULL,                -- Users.UserName と同じ幅
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
+);
+
+CREATE TABLE "IdFederationUpstreams"(   -- ID 連携の上流 IdP の登録（#292 の段階 2）
+    -- **設定（appSettings の IdFederationUpstreams）と同じ項目**を持つ。
+    --   **UpstreamKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    "UpstreamKey" NVARCHAR2(128) NOT NULL,   -- PK
+    "DisplayName" NVARCHAR2(256) NULL,
+    "Protocol" NVARCHAR2(16) NOT NULL,       -- oidc / saml2
+    "Enabled" NUMBER(3) NOT NULL,            -- 真は -1（Users の bool 列と同じ）
+    "Issuer" NVARCHAR2(256) NULL,
+    "ClientID" NVARCHAR2(256) NULL,
+    "ClientSecret" NVARCHAR2(512) NULL,      -- **暗号文が入る**（#297）
+    "DiscoveryUrl" NVARCHAR2(512) NULL,
+    "JwkSetUri" NVARCHAR2(512) NULL,
+    "MetadataUrl" NVARCHAR2(512) NULL,
+    "CerFilePath" NVARCHAR2(512) NULL,
+    "AuthorizeEndpoint" NVARCHAR2(512) NULL,
+    "TokenEndpoint" NVARCHAR2(512) NULL,
+    "UserInfoEndpoint" NVARCHAR2(512) NULL,
+    "SsoEndpoint" NVARCHAR2(512) NULL,
+    -- **この上流へ送る AuthnRequest に署名する鍵**（#292 の段階 4-b）。空なら共通設定。
+    "SigningPfxFilePath" NVARCHAR2(512) NULL,
+    "SigningPfxPassword" NVARCHAR2(512) NULL,  -- 暗号文が入る（#297）
+    CONSTRAINT "PK.IdFederationUpstreams" PRIMARY KEY ("UpstreamKey")
 );
 
 CREATE TABLE "FIDO2Data"(

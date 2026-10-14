@@ -214,14 +214,25 @@ OAuth2ClientEndpointsRootURI
 `UserStoreType` の既定は `mem`。テスト ユーザは初回アクセスで作られ、
 再起動で消えるので、テストの前後で状態を掃除する必要が無い。
 
-### 利用者は 2 人いる
+### 利用者は 3 人いる
 
-認証サイトは `IsDebug` のとき、**同じ `TestUserPWD` で 2 人**作る（`AccountController` の `CreateData`）。
+認証サイトは `IsDebug` のとき、**同じ `TestUserPWD` で作る**（`AccountController` の `CreateData`）。
 
 | 利用者 | 使い道 |
 |---|---|
 | `super_tanaka@gmail.com`（`TestEnv.TestUserName`） | 既定。`SignedInClientAsync` が何も指定しなければこちら |
 | `tanaka@gmail.com`（`TestEnv.SecondUserName`） | 「別の利用者」が要るとき（`EX-8.4`）と、「端末が無い利用者」が要るとき（`RT-210.1`） |
+| `webauthn_tanaka@gmail.com`（`TestEnv.WebAuthnUserName`） | **WebAuthn の資格情報を 3 件持つ**（`FIDO.TestCredentials`。#277 の段階 7）。**net10.0 版だけ**作られる |
+
+> **WebAuthn の資格情報は、種データが用意している。**
+> **作れるのは認証器だけ**で、**`navigator.credentials` を呼ぶのはブラウザ**だから、
+> **E2E では 1 件も作れない。** **削除（`RT-277.3`）を測るための前提**である。
+>
+> **消した分は、次のサインインで作り直される**（`CredentialId` を利用者名から決めてある）ので、
+> **繰り返し流せる。** **実測** : 3 件 → 2 件消して 1 件 → サインインし直して 3 件。
+>
+> **テスト利用者（`super_tanaka` / `tanaka`）には付けない。**
+> **`RT-137.1` / `RT-137.2` が「この利用者は認証器を登録していない」ことを前提に書かれている**ため。
 
 別の利用者でサインインするには、利用者名を渡す。
 
@@ -317,12 +328,19 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 | `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `store/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
+| `Tests/Issues/ManageGdprTests.cs` | `RT-277` | **GDPR 対応**（`/Manage/ManageGdprData`）。**参照**は自分のデータを `user.json`（`application/json`）で返し、**パスワードの控えは入っていない**こと。**消去**は、**利用者の行ごと消える**こと（#299。子の行は外部キーの cascade が落とす）と、**その利用者ではサインインできなくなる**こと。**属性データ・クライアント登録・ロールを持たせてから消す**（**登録が在ると、以前の実装では消去が外部キーで弾かれた**）。**使い捨ての利用者を使う**（消去は元に戻せない）。**4 ストアで測る** |
+| `Tests/Issues/ManageUserAttributeTests.cs` | `RT-277` | **管理画面での属性変更**（利用者名・パスワード・メアド）。**変えたら、その値で使えること**まで見る（**新しい値で入れて、古い値では入れない**／**元に戻せる**）。**メアドは確認メールを挟む**ので、**押しただけでは変わらない**ことを押さえる。**使い捨ての利用者を `/UsersAdmin` で作り、後片付けで消す**（テスト利用者は使わない） |
+| `Tests/Issues/ManageWebAuthnTests.cs` | `RT-277` | **WebAuthn の資格情報の削除**（`/Manage/RemoveWebAuthnData`。#277 の段階 6）。**選んだものだけが、選んだ数だけ消える**こと。**種データの資格情報を使う**（上記）。**描画は `UI-1.1` で測る**（`class="form-control"` でチェックの印が消えていた件は、**ブラウザでなければ見えない**）。**net48 版は Skip**（口が無い） |
+| `Tests/WebUI/RemoveWebAuthnRenderingTests.cs` | `UI-1` | **ブラウザでしか測れないもの**（#277 の段階 7）。WebAuthn の削除画面で、**チェックを入れたか外したかが見て分かる**こと（入れる前と後の見た目を比べる）。**ブラウザが無ければ Skip する**（下記）。**net48 版は対象外**（口が無い） |
+| `Tests/Issues/ManageSaml2OAuth2DataTests.cs` | `RT-277` | **管理画面のクライアント登録**（`/Manage/AddSaml2OAuth2Data`。#277 の段階 1・3）。**3 回押さないと登録できない**こと（`client_id` → `client_secret` → 登録。**1 回目で「登録」を押しても黙って何も起きない**）、**折り返し先の候補が `datalist` に出る**こと、**新規登録の `redirect_uri_code` の既定が `test_self_code`** であること。**サインイン中の利用者自身の登録を使い、測り終えたら消す**。**`RT-297.1` は、クライアント登録の `client_secret` が暗号化しても往復すること**（#297。**発行 → 登録 → 読み直し**） |
+| `Tests/Issues/IdFederationAdminTests.cs` | `RT-292` | **上流 IdP の登録を、user store と管理画面で扱う**（`/IdFederationAdmin`。#292 の段階 2）。**足して・直して・消せること**／**足した上流がサインイン画面の導線に出ること**（**設定 → user store の順に読む**）／**`SystemAdmin` でなければ開かないこと**。**4 つのストアで測った**（`mem` / `sql` / `ora` / `npg`）。**`RT-297.2` は、上流の登録の `client_secret` が暗号化しても往復すること**（#297）。**`RT-292.4` は、上流ごとの署名鍵（`.pfx` のパスとパスワード）が往復すること**（#292 の段階 4-b。**パスワードは暗号化して保管する**） |
 | `Tests/Issues/WebAuthnTests.cs` | `RT-137` | **WebAuthn**（`Fido2` 4.2.0）。登録・認証の**要求を組み立てる段**（`CredentialCreateOptions` / `AssertionOptions`）、**壊れた入力を封筒に入れて 200 で返すこと**、**challenge を使い回していないこと**。**net48 版には口が無いこと**も測る |
 
 > **WebAuthn（`RT-137`）は、登録と認証そのものを測っていない。**
 > **`navigator.credentials` を呼ぶのはブラウザ**なので、
 > **attestation / assertion を作るには仮想認証器（CDP の WebAuthn ドメイン）が要る。**
-> **この基盤は HttpClient だけ**なので、**そこは測らないと決めてある。**
+> **この基盤は、ほぼ HttpClient だけ**なので、**そこは測らないと決めてある。**
+> **描画は `Tests/WebUI`（`UI-n.n`）で測る**（#277 の段階 7）。
 > 測っているのは**サーバ側が要求を組み立てる段と、壊れた入力の扱い**である。
 
 | ファイル | 識別子 | 対象 |
@@ -340,11 +358,11 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | ファイル | 識別子 | 対象 |
 |---|---|---|
 | `Tests/Container/ContainerTargets.cs` | （基盤） | コンテナをテスト対象にする。**`docker inspect` で実効の環境変数を読み、`publish/appsettings.json` に重ねる**（compose と同じ優先順位）。**建っていなければ Skip** |
-| `Tests/Container/ContainerSmokeTests.cs` | `CN-1` | **疎通**。Discovery の `issuer` が構成と一致すること、**上流と下流で `issuer` が違うこと**（#281）、`jwkcerts` が鍵を返すこと（**マウントが効いている**）、`/Ping` |
+| `Tests/Container/ContainerSmokeTests.cs` | `CN-1` | **疎通**。Discovery の `issuer` が構成と一致すること、**上流と下流で `issuer` が違うこと**（#281）、`jwkcerts` が鍵を返すこと（**マウントが効いている**）、`/Ping`、**上流と下流の署名鍵が違うこと**（`CN-1.5`。#293 の段階 1 の回帰。**2 つ目の上流が建っていれば、3 つとも違うことを見る**。#292 の段階 1） |
 | `Tests/Container/ContainerSignInTests.cs` | `CN-2` | **種データの利用者でサインインできる**（`mem` なので、作り直すたびに作られる） |
 | `Tests/Container/SelfTestLoopbackTests.cs` | `CN-3` | **自己テストの折り返し**（`OAuth2ContainerizatedAuthSvrEPRootURI`。#250）。**下流コンテナで測る** — 上流は `OAuth2ClientEndpointsRootURI` を与えていない |
 | `Tests/Container/CookieIsolationTests.cs` | `CN-4` | **上流と下流の Cookie の名前が 1 つも衝突しないこと**（#255 / #279 / #282 の回帰）。**`CookieContainer` を見る**（`Set-Cookie` を拾うと認証 Cookie が漏れる） |
-| `Tests/Container/HybridFlowTests.cs` | `CN-5` | **コンテナ 2 つでの ID 連携**（下流コンテナ → 上流コンテナ。#281 の目視を機械化）。**2 回目も同じ利用者**になること |
+| `Tests/Container/HybridFlowTests.cs` | `CN-5` | **コンテナ 2 つでの ID 連携**（下流コンテナ → 上流コンテナ。#281 の目視を機械化）。**2 回目も同じ利用者**になること。**`CN-5.3` は SAML2 の連携**（#293 の段階 3。**上流が (2) を検証し、下流が (3) を上流の鍵で検証していなければ通らない**）。**`CN-5.4` 〜 `CN-5.6` は上流 2 件**（#292 の段階 1。**鍵も `issuer` も違う OP と連携できること**／アカウント リンク） |
 | `Tests/Container/ContainerErrorTests.cs` | `CN-6` | **配備だから起きる異常系**。`/MultiPurposeAuthSite/...` が 404（**root 配信であること**）、**同意の記録が無いときの `consent_required`**（#280 の裏返し）、未登録の `client_id` |
 
 > **プロトコルとして間違った要求は、ここで測らない。**
@@ -383,10 +401,12 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | ファイル | 識別子 | 対象 |
 |---|---|---|
 | `Tests/Saml/WebSsoBindingTests.cs` | `SA-1` | **4 通りのバインディング**（要求・応答それぞれ Redirect / POST）。**SP 側の照合**（`Audience` / `Recipient` / `InResponseTo` / `RelayState`）と、**アサーションの有効期限の幅**（#276） |
-| `Tests/Saml/MetadataTests.cs` | `SA-2` | `/samlmetadata`（`entityID` が Discovery の `issuer` と一致・署名用の証明書・`NameIDFormat` 3 種・SSO の口 2 件・CORS） |
+| `Tests/Saml/MetadataTests.cs` | `SA-2` | `/samlmetadata`（`entityID` が Discovery の `issuer` と一致・署名用の証明書・`NameIDFormat` 3 種・SSO の口 2 件・CORS） **`SA-2.2` は、退役前の署名証明書も並べて広告すること**（#292 の段階 3。鍵の入れ替えに要る） |
 | `Tests/Saml/NameIdFormatTests.cs` | `SA-3` | `NameIDPolicy` の値ごとの `NameID`（`unspecified` / `emailAddress` / **`persistent` は RP ごとに違う PPID**） |
 | `Tests/Saml/SignInFlowTests.cs` | `SA-4` | **未サインイン → サインイン画面 → アサーション**（SP-initiated SSO の本来の形） |
 | `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
+| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `store/` のコンテナ**。**建っていなければ Skip**。**`SA-6.5` は、署名を壊した `AuthnRequest` を上流が弾くこと**（#293 の段階 4。(2) の検証が効いていること）。**`SA-6.6` は、上流が証明書を 2 本広告していても連携できること**（#292 の段階 3。**受け取る側は全部試す**） |
+| `Tests/Saml/AttributeStatementTests.cs` | `SA-7` | **アサーションの `AttributeStatement`**（#286 の段階 4）。**メアド・利用者名・`email_verified` を属性で返すこと**（`urn:oid:…` ＋ `FriendlyName` ＋ `NameFormat`）／**`persistent` の `NameID` でも属性でメアドが分かること**（段階 4 の目的）。**自己テストの口で測る**ので、上流コンテナは要らない |
 
 > **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**
 > あちらは**自己テストの画面が目視できる形になっていること**（#246 の項目 3）で、**観点が違う。**
@@ -415,6 +435,17 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 ```powershell
 .\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
 ```
+
+**ブラウザで測るもの（`UI-n.n`。`Tests/WebUI/`）は、既定で回る**（#277 の段階 7）。
+**ブラウザが無ければ Skip する**（`bin\Debug\net10.0\playwright.ps1 install chromium`、または Chrome / Edge）。
+**動かしたくなければ `-NoWebUI`。**
+
+**ブラウザには、クライアント証明書を渡している**（`Infrastructure/WebUi.cs`）。
+**`-Launch` は mTLS のために `ClientCertificateMode.AllowCertificate` で起動する**ので、
+**サーバが証明書を要求する。** **HttpClient は空で答えて先に進むが、
+ブラウザは「どれを出すか」を人に選ばせる**ため、**画面の無い Chromium はそこで止まる**
+（**実測** : `goto` が 30 秒で時間切れ。**失敗した要求は 0 件**。
+[`../../TESTING.md`](../../TESTING.md) 5 節）。
 
 **mTLS（`FA-6`）は、net10.0 版だけを測る**（#226）。
 Kestrel は既定でクライアント証明書を要求せず、要求させても自己署名の証明書はチェーンの検証で落ちる。
@@ -470,6 +501,8 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 | `Html.cs` | リダイレクトしなかったときの画面の要約、form_post のフォームの解析 |
 | `Responses.cs` | 各エンドポイントの応答 |
 | `TargetTestBase.cs` | 両ターゲットに同じテストを流す基底クラス |
+| `WebUi.cs` | **ブラウザ（Playwright）でサイトを触る**。入っているブラウザを探し、無ければ Skip する（#277 の段階 7） |
+| `Saml2Federation.cs` | **SAML2 の ID 連携の手順**（#286 の段階 3）。下流を駆動する（OIDC 側の `IdFederation.cs` と同じ流儀）。**上流の応答が「ACS へ」か「上流の画面へ」かを、口の名前で見分ける** |
 
 **テストを足したり変えたりしたら、原本を作り直すこと。**
 

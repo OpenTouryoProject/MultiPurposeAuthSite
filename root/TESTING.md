@@ -41,6 +41,7 @@ cd root\programs\Tests
 | `-Url` | net10.0 版（Kestrel）の待ち受け URL。既定 `https://localhost:44300` |
 | `-NetFxUrl` | net48 版（IIS Express）の待ち受け URL。既定 `https://localhost:44302` |
 | `-NoNetFx` | net48 版を起動しない。その分は Skip される |
+| `-NoWebUI` | **ブラウザで測るもの**（`UI-n.n`）を走らせない。**既定は走る**（ブラウザが無ければ Skip） |
 | `-Filter` | `dotnet test` の `--filter` |
 | `-Configuration` | `Debug`（既定）/ `Release` |
 | `-OutputDir` | TRX とログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
@@ -194,6 +195,7 @@ docker compose up -d upstream
 | **44301** | **上流コンテナ**（雛形が上流として書いている番号） |
 | **44302** | 下流（net48）。IIS Express |
 | **44303** | **下流コンテナ用に空けてある**（#281） |
+| **44304** | **2 つ目の上流コンテナ**（#292 の段階 1。**上流が n 件になったことを測る**） |
 
 > **ポートを分けても Cookie は分かれない。**
 > **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
@@ -279,6 +281,7 @@ docker compose up -d --build upstream downstream
 | `SpRp_Isser` | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
 | `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
 | `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
+| `IdFederationJwkSetUri` / `IdFederationSaml2MetadataUrl` | **`http://upstream:8080/...`**（#293 の段階 3） | **鍵を引くのもサーバである。** **`https://localhost:44301` には届かない** |
 | 鍵の置き場 / ログ | `store/keys-downstream` / `store/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
 
 **どのコンテナにも要る設定は `store/mpas-common.env` に 1 か所だけ置いてある**
@@ -287,6 +290,363 @@ docker compose up -d --build upstream downstream
 
 > **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
 > **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
+
+##### user store の秘密を暗号化した状態で測る（`RT-297.*`。#297）
+
+**既定の通しは「暗号化した状態」で回している**（`test.ps1` が `UserStoreSecretPassword` を渡す）。
+
+| | 測ること |
+|---|---|
+| **`RT-297.1`** | **クライアント登録の `client_secret` が往復する**（発行 → 登録 → 画面を開き直すと同じ値） |
+| **`RT-297.2`** | **上流の登録の `client_secret` が往復する**（`/IdFederationAdmin`） |
+
+**どちらも「暗号文がそのまま画面に出ていないこと」も見る。**
+
+**DB に平文が残っていないことは、SELECT して確かめる**（**E2E からは DB を見ない** — 9 節）。
+
+```powershell
+# SQL Server（store/ のコンテナ）
+docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+  -Q "SELECT TOP 4 LEFT(ClientSecret, 24), LEN(ClientSecret) FROM Saml2OAuth2Data WHERE ClientSecret IS NOT NULL"
+```
+
+**実測（2026/10/14）** : **`enc:v1:…`（115 文字）**。
+**`enc:v1:` で始まらない 4 行は、空文字**（public クライアント。暗号化の対象にならない）。
+
+> **表を足した・列を広げたら、DB を作り直すこと**（上の #292 の段階 2 と同じ）。
+> **`ClientSecret` は 512 に広げた**ので、**古い DB では溢れる。**
+
+> **暗号化すると、通しが遅くなる。**
+> **実測（2026/10/14。同じ機械で 612 件の通し）。**
+>
+> | | 時間 |
+> |---|---|
+> | 暗号化の前 | **137 秒** |
+> | 暗号化（鍵のキャッシュ**なし**） | **922 秒**（**6.7 倍**。PBKDF2 10 万回 × 読み出しの回数） |
+> | 暗号化（鍵のキャッシュ**あり**） | **196 秒**（**＋43%**。行ごとに 1 回だけ導く） |
+
+##### 鍵の入れ替え（ロールオーバー。`SA-2.2` / `SA-6.6`。#292 の段階 3）
+
+| | 測ること |
+|---|---|
+| **`SA-2.2`** | **`/samlmetadata` が、退役前の証明書も並べて広告する**（`PreviousSigningCerFilePaths`） |
+| **`SA-6.6`** | **上流が 2 本広告していても、SAML2 の ID 連携ができる**（**受け取る側は全部試す**） |
+
+**設定は E2E にも渡してある。**
+
+| | |
+|---|---|
+| ホスト（core / netfx） | `test.ps1` が `PreviousSigningCerFilePaths` を渡す（**2 本広告する状態**を作る） |
+| 上流コンテナ | `store/docker-compose.yml` の `PreviousSigningCerFilePaths`（`*_Server.cer`） |
+| 上流コンテナの **JWK Set** | **RSA が 2 本**（`JwkSet_Upstream.json`。**新旧を並べた状態**） |
+
+**歯抜け（実測 2026/10/14）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| **上流の広告の 1 本目を「署名に使っていない証明書」にする**（`SpRp_RsaCerFilePath` と `PreviousSigningCerFilePaths` を入れ替える） | **`SA-6.*` は 12 / 12 通る**。**下流のログに `The SAML2 response was verified with key #2.`** が出る（**1 本目で失敗し、2 本目で検証した**ことの証拠） |
+| 上流の JWK Set を 1 本に戻す | **`RT-140.*` は通る**（`kid` で選ぶので、本数には依らない） |
+
+> **「通った」だけでは、どの鍵で通ったか分からない。**
+> **ログの `verified with key #N` を見ること**（**2 本目以降で通ったときだけ出る**）。
+
+##### 上流の登録を DB と管理画面で扱う（`RT-292.*`。#292 の段階 2）
+
+**設定ファイルを書き換えずに上流を増やせること**を測る。
+
+| | 測ること |
+|---|---|
+| **`RT-292.1`** | **管理画面で、足して・直して・消せる**（`/IdFederationAdmin`） |
+| **`RT-292.2`** | **user store に足した上流が、サインイン画面の導線に出る**（**設定の行も残る**） |
+| **`RT-292.3`** | **管理者（`SystemAdmin`）でなければ開かない** |
+| **`RT-292.4`** | **上流ごとの署名鍵（`.pfx` のパスとパスワード）が往復する**（#292 の段階 4-b。**パスワードは暗号化して保管する**ので、**平文に戻ること**を見る） |
+
+**ストアは 4 通りとも測った**（実測 2026/10/14。`RT-292.4` を足した後）。
+
+| ストア | 結果 |
+|---|---|
+| `mem`（既定の通し） | **8 / 8**（core / netfx） |
+| `sql`（SQL Server） | **10 / 10**（`RT-297.2` を含む） |
+| `ora`（Oracle） | **10 / 10** |
+| `npg`（PostgreSQL） | **5 / 5**（**netfx は PostgreSQL を使えないので Skip**。従来どおり） |
+
+> **`RT-292.4` が測るのは、入れ物（表・辞書）と画面である。**
+> **DB の行の鍵で実際に署名するところまでは測っていない** —
+> **配備の `.pfx` のパスワードをテストに持たせない**ためである（9 節）。
+> **指定した鍵で署名していることは、`CN-5.5`（設定の行）とその歯抜けで測っている。**
+
+**暗号文で入っていることは、SELECT して確かめた**（実測 2026/10/14。`-UserStoreType sql`）。
+**`RT-292.4` は行を消して戻す**ので、**後片付けだけを止めて 1 行残し、見てから消した。**
+
+```powershell
+docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+  -Q "SELECT LEFT(SigningPfxPassword, 12), LEN(SigningPfxPassword) FROM IdFederationUpstreams"
+```
+
+**`enc:v1:…`（115 文字）** — **`SigningPfxFilePath` は平文**（**パスは秘密ではない**）。
+
+**歯抜け（実測 2026/10/14）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| `IdFederationUpstreamProvider.Unprotect` から **`SigningPfxPassword` の行を外す** | **`RT-292.4` だけが落ちる**（core / netfx とも。**パスワードが平文に戻る / 実測 = 別の値**）。**他の 8 件は通ったまま** |
+
+> **これで「暗号化して保管し、読むときに戻している」ことが測れている** —
+> **暗号化していなければ、外しても往復してしまう。**
+
+##### 書き込みの失敗を握らなくした（#300）
+
+**user store の層は、例外を握って正常に戻っていた**（`catch` → `SQLTRACE` に書く → 何事も無く戻る）。
+**書き込みでそれをやると `IdentityResult` は成功**になり、**画面はリダイレクトし、データは変わらない。**
+**書き込みの 16 か所だけ、投げ直すようにした**（読み取りは従来どおり握る）。
+
+**これで、隠れていた不具合が 1 件出た。**
+
+| | |
+|---|---|
+| どこ | `CmnUserStore.AddClaim` の **PostgreSQL の `INSERT`** |
+| 何が | **列を 5 つ挙げて値を 4 つ渡していた**（`id` は `serial` なので挙げてはいけない） |
+| DB の答え | **`42601: INSERT has more target columns than expressions`**（**構文の誤りなので、1 度も成功し得ない**） |
+| 影響 | **PostgreSQL では、利用者のクレームが 1 件も保存されていなかった**（ID 連携が運ぶメアド・利用者名の属性を含む） |
+| いま | **直した。** `userclaims` は **2 件**入っている（ID 連携の通しの後。実測） |
+
+**握るのを止めたから出た**ことが、**両方の向きで測れている**（実測 2026/10/15。`npg` の通し）。
+
+| 実装 | `INSERT` の誤り | 結果 |
+|---|---|---|
+| **握る**（従来） | **在る** | **322 / 失敗 0**（**緑。クレームは保存されていない**） |
+| **投げ直す**（#300） | **在る** | **6 件が落ちる**（`RT-140.4` / `.5`、`SA-6.1` / `.2` / `.4` / `.6`。**ID 連携の経路**） |
+| **投げ直す**（#300） | **直した** | **322 / 失敗 0**（**緑。クレームが保存される**） |
+
+**4 ストアで測った**（実測 2026/10/15）。
+
+| ストア | 通し |
+|---|---|
+| `mem` | **612 / 失敗 0 / Skip 2** |
+| `sql`（SQL Server） | **612 / 失敗 0 / Skip 2** |
+| `ora`（Oracle） | **612 / 失敗 0 / Skip 2** |
+| `npg`（PostgreSQL） | **322 / 失敗 0 / Skip 292**（netfx は従来どおり Skip） |
+
+> **読み取りを握るのは、そのままにした。**
+> **「居ない」と区別が付かない**のは確かだが、**Skip や「居ない」で成り立っている経路**
+> （種データの作成など）が在り、**1 件ずつ意味を決める必要がある。**
+
+> **`StopUserStoreException` は、以前から投げ直していた**
+> （`Logging.MySQLLogForEx` の中。**STS 専用の配備で user store を止める**ための例外）。
+> **今回入れた `throw;` は、その後ろに置いてある。**
+
+##### コンテナの `mem` ストアは、回を重ねると溜まる
+
+**実測（2026/10/15）** : **1 日に通しを 8 回ほど回した後、`CN-5.4` / `CN-5.5` が落ちた**
+（**2 つ目の上流との連携で、下流がサインインさせない**）。
+**`docker compose restart upstream upstream2 downstream` で元に戻った**（23 / 23）。
+
+> **コンテナは公開済みのイメージで動く**ので、**手元の修正とは無関係**である
+> （**それが切り分けになる** — **コンテナだけが落ちるなら、まず溜まりを疑う**）。
+
+##### GDPR の消去は、行ごと消す（`RT-277.8`。#299）
+
+**消去（`POST /Manage/DeleteGdprPersonalData`）は、利用者の行ごと消す**
+（`UserManager.DeleteAsync`。**#299 でそう改めた**）。
+**子の行は外部キー（`ON DELETE CASCADE`）が落とす** — `UserRoles` / `UserLogins` /
+`UserClaims` / `TotpTokens` / `FIDO2Data` / `ConsentGrant` / `SubjectIdentifier` /
+**`Saml2OAuth2Data`（その利用者が登録したクライアント）**。
+
+> **以前は属性を潰す実装だった**（利用者名・メアドを利用者 id で塗り潰す）。
+> **潰す対象の `Users.UserName` / `Users.ClientID` は、どちらも外部キーの参照先**であり、
+> **`ON UPDATE` の指定は 3 方言とも 1 本も無い**（= NO ACTION）。
+>
+> **実測（SQL Server。トランザクションを張って試し、ロールバックした）。**
+>
+> | 試した `UPDATE` | 結果 |
+> |---|---|
+> | `UPDATE Users SET UserName = Id`（WebAuthn の資格情報を持つ利用者） | **`FK.FIDO2Data.Users_UserName` で弾かれる** |
+> | `UPDATE Users SET ClientID = Id`（クライアントを登録した利用者） | **`FK.Saml2OAuth2Data.Users_ClientID` で弾かれる** |
+>
+> **例外は握られる**（`CmnUserStore.Update`。[#300](https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues/300)）ので、
+> **画面は成功に見えて、1 列も消えていなかった。**
+> **`ON UPDATE CASCADE` で逃げる道も無い**（**Oracle に `ON UPDATE` 節が無い**）。
+>
+> **Oracle では、資格情報も登録も無い利用者でさえ消去が落ちていた**
+> （`LockoutEndDateUtc` に `DateTime.MaxValue` を入れていて `ORA-01841`）。
+> **これも #299 で直した**（`null` ＝ この製品の既定値）。
+
+**`RT-277.8` は、消される側に 3 つ持たせてから消す。**
+
+| 持たせるもの | なぜ |
+|---|---|
+| 属性データ（`UnstructuredData`） | **潰す対象**だった値 |
+| **クライアント登録**（`/Manage/AddSaml2OAuth2Data`） | **以前はこれが在ると消去が FK で弾かれた**。**ロールは `Admin`**（この画面は `SystemAdmin` か `Admin` でなければ開かない） |
+| ロール（`Admin`） | **`UserRoles` も cascade で落ちる**ことの確認 |
+
+**見るのは 3 つ**（**別々のことを見ている**）。
+
+| | |
+|---|---|
+| **サインインできない** | **行が無くても、属性が潰れていても成り立つ**（以前の実装では `EmailConfirmed = false` が効いていた。実測） |
+| **一覧に元の利用者名・メアドが出ない** | 潰す実装でも成り立つ |
+| **一覧に利用者 id も出ない** | **行ごと消えたときだけ**成り立つ（**潰す実装では、id の名前で残っていた**） |
+
+**ストアは 4 通りとも測った**（実測 2026/10/14）。
+
+| ストア | 結果 |
+|---|---|
+| `mem`（既定の通し） | **通し 612 / 失敗 0 / Skip 2** |
+| `sql`（SQL Server） | **通し 612 / 失敗 0 / Skip 2** |
+| `ora`（Oracle） | **`RT-277.*` ＋ WebAuthn の削除 ＋ クライアント登録で 11 / 11**（netfx 1 件は Skip） |
+| `npg`（PostgreSQL） | **2 / 2**（netfx は Skip） |
+
+> **`mem` ストアには外部キーが無い。**
+> **`CmnUserStore.Delete` が消すのは、利用者・ロールの対応・`sub` の対応表だけ**なので、
+> **WebAuthn の資格情報は画面の側で消している**（`FIDO.DataProvider.DeleteByUser`）。
+> **同意の記録とクライアント登録は、`mem` では残る**（**プロセスを畳めば消える**ストアである）。
+> **DB ストアでは cascade が全部落とす。**
+
+##### 連携キーの幅（`UserLogins`。#292）
+
+**上流が n 件になったので、`LoginProvider` / `ProviderKey` を 512 / 256 に広げた**
+（経緯と `ALTER` は [`CONFIGURATION.md`](CONFIGURATION.md) 7 節）。
+
+**E2E では測れない。** **長い `iss` / entityID を名乗る上流が、この仕掛けに無い**ためである
+（コンテナの上流は `mem` ストアなので、表の幅を通らない）。
+**代わりに、3 方言の境界を実機で測った**（実測 2026/10/14）。
+
+| 方言 | 512 / 256 | 513 文字 |
+|---|---|---|
+| SQL Server | **入る** | **弾かれる**（「文字列またはバイナリ データは切り捨てられます」） |
+| Oracle | **入る** | **弾かれる**（`ORA-12899`） |
+| PostgreSQL | **入る** | **弾かれる**（`value too long for type character varying(512)`） |
+
+**測ったあとの行は消してある**（`Users` への FK が在るので、既存の利用者の行に挿した）。
+
+> **到達性の記憶を読み直していた**（テスト基盤。`TestEnv.IsReachable`）。
+> **並行して走る別のテストが、再試行のために `null` に戻している**ことがあり、
+> **`npg` の通しで netfx の 2 件が Skip にならず
+> `Nullable object must have a value` で落ちていた**（実測）。**false を返すように直した。**
+
+> **表を足したら、DB を作り直すこと。**
+> **PostgreSQL と Oracle は、初期化スクリプトを「最初の 1 回」しか流さない** —
+> **コンテナを起動し直しても、足した表は増えない**（実測）。
+>
+> ```powershell
+> cd store
+> .\0_CopyInitSql.ps1                      # repo の DDL を init に流し込む
+> docker compose rm -sfv postgres oracle    # **作り直す**（sqlserver は毎回流れる）
+> docker compose up -d postgres oracle
+> ```
+
+> **製品コードで歯抜けを測るときは、先に `1_BuildAll.ps1` を回すこと。**
+> **net48 版は IIS Express が「ビルド済みの出力」を配信する**ので、
+> **ビルドせずに `test.ps1` を回すと、古い実装のまま通ってしまう**
+> （実測 : `Co.IdFederationUpstreams` から DB の読み出しを外したとき、
+> **core だけ落ち、netfx は通った**。`dotnet run` は起動時に作り直す）。
+
+##### 2 つ目の上流コンテナ（`upstream2`。#292 の段階 1）
+
+**上流が n 件になったことを測るために在る**（`CN-5.4` 〜 `CN-5.6`）。
+
+| | 値 | なぜ |
+|---|---|---|
+| URL | **`https://localhost:44304`** | 口はポートで分ける |
+| `IssuerId` | **`https://upstream2.ssoauth.opentouryo.com`** | **3 つの IdP が同じ `iss` を名乗らない**ようにする |
+| 署名鍵 | **`SHA256RSA_Upstream2.*` ＋ `JwkSet_Upstream2.json`** | **上流 1 とも下流とも別の鍵**（`CN-1.5` が 3 つとも違うことを見る） |
+| `CookieNamePrefix` | **`upstream2_`** | Cookie はポートで分かれない（RFC 6265 §8.5） |
+| 鍵・ログの置き場 | `store/keys-upstream2` / `store/logs-upstream2` | 他と分ける（#279） |
+
+**下流コンテナには、上流 2 件が登録してある**（`IdFederationUpstreams__upstream1*` / `__upstream2*`）。
+**鍵とメタデータを引く宛先は、コンテナの中から届くもの**（`http://upstream2:8080/...`。#293 の段階 3）。
+**ブラウザが行く先（`authorize` / SSO）は、ホストから届く URL**（`https://localhost:44304/...`）。
+
+**鍵を作るとき**（`root/files/resource/X509` で実行する）。
+
+```
+GenRsaCertForUpstreamByOpenSSL.bat Upstream2
+```
+
+**その後、上流 2 用の JwkSet を作り直す**（`CommandLineTools/CreateJwkSetJson` を、
+`SpRp_RsaCerFilePath` ＝ `SHA256RSA_Upstream2.cer` / `JwkSetFilePath` ＝ `JwkSet_Upstream2.json`
+の設定で 1 回）。**`C:\root\files\resource` にも配置する**（コンテナはそこをマウントする）。
+
+> **`.bat` は CRLF でなければならない**（`.gitattributes` の `*.bat text eol=crlf`）。
+> **LF だと cmd が行を割り、`set` / `if` が働かない**（実測。#292 の段階 1 で直した）。
+>
+> **UTF-8 の日本語の `rem` 行は、CP932 のコンソールで「認識されていません」と出ることがある。**
+> **既存の `GenClientCertByOpenSSL.bat` も同じ**（実測）。**鍵の生成そのものには影響しない。**
+
+##### SAML2 の ID 連携も、コンテナ 2 つで測る（`CN-5.3`。#293 の段階 3）
+
+**`CN-5.1` / `CN-5.2` は OIDC である。** **SAML2 の脚は `CN-5.3` で初めてコンテナを通る。**
+
+**`SA-6.*` とは、測っている配備が違う。**
+
+| | 下流 | 設定の出どころ |
+|---|---|---|
+| `SA-6.*` | **ホスト**（Kestrel / IIS Express） | `test.ps1` の環境変数 |
+| **`CN-5.3`** | **コンテナ** | **compose の環境変数** |
+
+> **鍵を引く宛先を間違えると、倒れ先しか測れない。**
+> **`IdFederationSaml2MetadataUrl` / `IdFederationJwkSetUri` はサーバが呼ぶ**ので、
+> **`https://localhost:44301` ではコンテナの中から届かない**（待ち受けは 8080 / 8081）。
+>
+> **実測（2026/10/13。直す前）** : 下流コンテナのログに
+> `The SAML2 metadata could not be read. (empty response)` /
+> `The discovery document could not be read. (empty response)`。
+> **一巡は通っていたが、通っていたのは設定の `.cer`（倒れ先）である。**
+>
+> **直した後** : `The SAML2 metadata was read. (sso: found, signing certificates: 1)` /
+> `The JWK Set was read from the configured URL.`
+>
+> **メタデータが書く SSO の口は、上流の公開 URL**（`https://localhost:44301/saml2request`。
+> `OAuth2AuthorizationServerEndpointsRootURI` から作る）なので、
+> **コンテナの中の宛先で引いても、ブラウザが行く先は正しい。**
+
+**歯抜け（実測 2026/10/13。どちらも `CN-5.3` だけが落ち、`CN-5.1` / `CN-5.2` は通ったまま）。**
+
+| 壊すもの | 落ちる所 |
+|---|---|
+| 上流に登録した `jwk_rsa_publickey`（下流コンテナの分）を**別の鍵に** | **`StatusCode` が `Requester`**（**上流が (2) を検証している**。#293 の段階 2） |
+| **メタデータを届かない宛先に戻し、倒れ先の `.cer` を下流自身の証明書に** | **ACS がエラー画面**（**(3) は上流の鍵でなければ検証できない**。#293 の段階 1） |
+
+> **`CN-5.1` / `CN-5.2` が通ったままなのが正しい。**
+> **OIDC の (2) には署名が無く、(3) の鍵は `IdFederationJwkSetUri` から引いている。**
+
+##### (2) の署名鍵を上流ごとに指定する（#292 の段階 4-a）
+
+**`store/docker-compose.yml` の下流コンテナは、上流 2（SAML2）の行に
+`signing_pfx_file_path` を書いてある**（**値は共通設定と同じ `*_Client.pfx`** だが、
+**明示指定の経路を通すため**である）。
+
+**歯抜け（実測 2026/10/14）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| **上流 2 の `signing_pfx_file_path` を別の鍵に**（`*_Upstream.pfx`） | **`CN-5.5` だけが落ちる**（`StatusCode` が **`Requester`** ＝ **上流が登録鍵で (2) を検証して弾いた**）。**`CN-5.3`（上流 1。共通設定の鍵）と他の 4 件は通ったまま** |
+
+> **「通った」だけでは、指定した鍵で署名したかが分からない。**
+> **別の鍵を指すと落ちること**で、**行の値が効いていること**を確かめている。
+
+##### 上流が n 件（`CN-5.4` 〜 `CN-5.6`。#292 の段階 1）
+
+**下流コンテナに上流 2 件を登録し、2 つ目を指して連携する。**
+**どちらへ行くかは、画面の導線が送る `IdpKey`**（空なら先頭の 1 件 ＝ 従来の押し方）。
+
+| | 測ること |
+|---|---|
+| **`CN-5.4`** | **2 つ目の上流（鍵も `issuer` も違う OP）と OIDC で連携できる**。**「鍵の違う OP と連携できる」ことは、ここで初めて測れる**（#289 の完了コメントの限界） |
+| **`CN-5.5`** | **同じことを SAML2 で**（`entityID` の照合も相手ごと） |
+| **`CN-5.6`** | **上流が違っても、同じ（検証済みの）メアドなら同じ下流の利用者になる**（アカウント リンク。#140 の段階 1・3） |
+
+> **`CN-5.6` は、上流ごとに別の `IdPClient`（別の Cookie の入れ物）で測る。**
+> **1 つの入れ物で続けると、上流 1 のサインインが残り、
+> 上流 2 の連携が失敗しても「同じ利用者」に見えてしまう**（**歯抜けで実測**。直した）。
+
+**歯抜け**（実測 2026/10/13。**compose の `IdFederationUpstreams__upstream2__*` を壊す**）。
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| `issuer` を上流 1 の値に | **`CN-5.4` / `CN-5.6` が落ちる**（`id_token` の `iss` が合わず、サインインできない）。**`CN-5.5` は通ったまま**（SAML2 は別の行） |
+| `client_id` を上流 1 の値に | **`CN-5.4` / `CN-5.6` が落ちる**（**上流 2 に未登録**なので `code` が返らない）。**`CN-5.5` は通ったまま** |
+| `IdpKey` を送らない | **上流 1 へ行く**（既定の選び方。**`CN-5.1` がその経路**である） |
 
 ##### 目視の手順（実測 2026/10/08）
 
@@ -297,8 +657,8 @@ docker compose up -d --build upstream downstream
 | 1. 両方の Discovery | **`issuer` が違う**（`https://ssoauth.opentouryo.com` / `https://downstream.ssoauth.opentouryo.com`） |
 | 2. 下流の `jwkcerts` | **鍵が 4 つ**（マウントした署名鍵まで読めている） |
 | 3. 上流でサインイン | HTTP 302 |
-| 4. 下流で「ID 連携でサインイン」 | 上流の `/authorize` へリダイレクト（`prompt=none`） |
-| 5. 1 回目 | **`consent_required`**（#280 と同じ。同意を 1 度整える）→ `code` |
+| 4. 下流で「ID 連携でサインイン」 | 上流の `/authorize` へリダイレクト |
+| 5. 1 回目 | **同意画面**（#280 と同じ。同意を 1 度整える）→ `code` |
 | 6. 下流へ戻す | `/Manage/Index` が **HTTP 200**（サインインできた） |
 | 7. 2 回目 | **同じ利用者**（`super_tanaka`）。連携キーが `(iss, sub)` であること |
 | 8. Cookie | **上流・下流が並んだ**（下記） |
@@ -475,6 +835,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 | `Flows.EnsureConsentAsync` | **`prompt=none` を自分で送るテスト**が先に呼ぶ口 |
 | `RT-247.1` | 観測点を「同意画面まで進む」から**「再びサインインへ送られない」**へ（記録が在ると同意画面を飛ばすため） |
 | `HomeController`（自己テスト） | **OIDC のボタンの固定の `prompt=none` を外した**。付けたままだと**記録が無い配備で初回に必ず `consent_required`** になる |
+| `AccountController`（**ID 連携**） | **このときは見落としていた。** **#287 で外した**（同じ理由。**利用者が押す導線で UI を禁じていた**） |
 | `RT-247.1` の手順 4 | **URL の形だけを見る**（辿らない）。**辿ると再認証が起き、手順 5 が測れなくなる** |
 
 > **順序で結果が変わるのが一番危い。**
@@ -572,6 +933,35 @@ INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_Cli
 > **先に在る方が登録され、こちらは「登録されていない」ことになり、**
 > **SAML の応答が返らないという形で出た。** SAML の分は `e2e0saNN` にしてある。
 
+#### オンライン決済サービスを取り下げ、`Users.PaymentInformation` を落とした
+
+**DDL が変わったので、`store/` は作り直すこと**
+（`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
+
+| | |
+|---|---|
+| **落とした列** | `Users.PaymentInformation`（3 方言）。**支払元情報（Stripe / PAY.JP の顧客 ID）だった** |
+| **種データ** | **`TestClient_15` の `redirect_uri_code` を、記号 `test_self_code_manage` から実 URL（`https://rtc10.example/cb`）に変えた** |
+
+> **経緯は `programs/CommonLibrary/ANALYSIS.md` の 13 節。**
+> **もともと SaaS 基盤にしたかった**ので決済を実装していたが、
+> **認証基盤に注力する**ことにし、**維持の手間に見合わない**ため取り下げた。
+> **管理画面の「トークンを取る」も同時に落とした**
+> （**決済の WebAPI `/ChageToUser` を呼ぶためのもの**だった）。
+
+**種データは「登録が無ければ入れる（在れば触らない）」**ので、
+**登録値を変えたときは、作り直さないと古い値のままになる。**
+
+> **実測（2026/10/09）** : `mem` と `sql` は 561/0/1 で通ったが、
+> **`npg` だけ `RT-C10.1` が落ちた。**
+> **DB を見ると `TestClient_15` の `redirect_uri_code` が
+> `test_self_code_manage` のまま**だった（`sql` 側は新しい値が入っていた）。
+> **コードの不具合ではなく、作り直していない `store/` の側である。**
+
+**列が残っていても、アプリは動く**（`SELECT *` で読み、INSERT・UPDATE では触らない）。
+**実測 : 列が在る `sql` の DB に対して 561/0/1 で通った。**
+**使っている DB から落とすなら、手で `ALTER TABLE ... DROP COLUMN` する。**
+
 #### WebAuthn を復活させ、`Users.FIDO2PublicKey` を落とした（#137）
 
 **DDL が変わったので、`store/` は作り直すこと**
@@ -594,7 +984,8 @@ INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_Cli
 
 **`navigator.credentials` を呼ぶのはブラウザである。**
 **attestation / assertion を作るには、仮想認証器（CDP の WebAuthn ドメイン）が要る。**
-**E2E は HttpClient だけなので、ここは測らないと決めてある。**
+**E2E の大半は HttpClient だけなので、ここは測らないと決めてある。**
+**描画は `Tests/WebUI`（`UI-n.n`）で測る**（#277 の段階 7）。
 
 **測っているのは、要求を組み立てる段と、壊れた入力の扱いである。**
 **「通った」の範囲を広く読まないこと。**
@@ -1044,6 +1435,49 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `21-n.n` | OAuth 2.1（許されない経路の抑止） | `Tests/OAuth21/` |
 | `SA-n.n` | **SAML2**（Web Browser SSO。#275） | `Tests/Saml/` |
 | `CN-n.n` | **コンテナ配備**（疎通と配備固有。#284） | `Tests/Container/` |
+| `UI-n.n` | **ブラウザでしか測れないもの**（描画・JavaScript。#277 の段階 7） | `Tests/WebUI/` |
+
+#### `UI-n.n`（ブラウザで測るもの）
+
+| | |
+|---|---|
+| **ここに置くもの** | **ブラウザでしか測れないもの**。**描画**（見て分かるか）、**JavaScript が要る画面**、**ブラウザ側の Cookie の扱い** |
+| **ここに置かないもの** | **HttpClient で測れるもの。** 分野別のフォルダに置く |
+| 駆動 | Playwright for .NET（Chromium → Chrome → Edge の順に、入っているものを使う） |
+| ブラウザが無いとき | **Skip**（`playwright.ps1 install chromium`、または Chrome / Edge を入れる） |
+| 既定 | **走る。** **動かしたくなければ `-NoWebUI`** |
+
+> **なぜ要るか。** **#277 の段階 6 の不具合**
+> （Bootstrap 5 の `.form-control` が `appearance: none` を付け、**チェックの印が描かれなかった**）は、
+> **HttpClient では原理的に見えない。** **値は正しく往復していた。**
+
+**ブラウザには、クライアント証明書を渡している**（`Infrastructure/WebUi.cs`）。
+
+**`test.ps1 -Launch` は、mTLS を測るために
+`ClientCertificateMode.AllowCertificate` で net10.0 版を起動する**（`MtlsTestHook`。#226）。
+**「無くても通す」設定だが、TLS では、サーバが証明書を要求する。**
+**HttpClient は持っていなければ空で答えて先に進むが、
+ブラウザは「どれを出すか」を人に選ばせる**ので、**画面の無い Chromium はそこで止まる。**
+
+> **実測（2026/10/10）** : **`goto` が 30 秒で時間切れ**になり、**失敗した要求は 0 件**。
+> **同じサイトに HttpClient では届いていた**（同じ通しの中の他のテストは全部通る）。
+> **フックを読ませずに起動すると、同じ通しの中で 10 秒で通った**ので、**原因はこれだけである。**
+> **その場で作った自己署名の証明書を渡して解決した**（**サーバは発行元を問わない**ので、
+> **何かを認証しているわけではない**）。**実測 : 同じ通しの中で通る。**
+
+> **`test.ps1` を続けて何度も回すと、net48 版（IIS Express）の起動が失敗することがある**
+> （`net48 版が起動できませんでした（終了コード ）`。**実測 2026/10/14**）。
+> **`iisexpress.exe` の残りを落として、少し間を置くと通る。**
+> **同じ構成を手で起動すると落ちない**ので、**起動の間隔の問題**である。
+>
+> ```powershell
+> Get-Process iisexpress -ErrorAction SilentlyContinue | Stop-Process -Force
+> ```
+
+> **それでも、まれに同じ時間切れが出る**（実測 2026/10/13。通し 1 回で `UI-1.1` が 30 秒で時間切れ）。
+> **単体では 14 秒で通り、次の通しでも通った**（593 成功 / 失敗 0）。
+> **続けて落ちるのでなければ、退行ではない** — **ただし「落ちたから退行ではない」とは読まないこと。**
+> **単体で回し、通しをもう 1 度回して、2 回とも通ることを見てから先へ進む。**
 
 ### どのテストが、どのサイトとどのストアを使うか（#284）
 
@@ -1060,14 +1494,40 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `FA-n.n` | ホストの core / netfx | `-UserStoreType` |
 | `21-n.n` | 同上 | 同上 |
 | `SA-n.n` | 同上 | 同上 |
+| **`SA-6.n`**（SAML2 の ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**。`RT-140.n` と同じ） |
+| `SA-7.n`（アサーションの属性） | ホストの core / netfx | `-UserStoreType`（**上流コンテナは要らない**。自己テストの口で測る） |
+
+> **「この配備の値」は共通設定のまま**である（#290。`JwkSetUri` / `SpRp_*CerFilePath`）。
+> **上流（相手）の値だけが `IdFederation*` のキー**に在る
+> （`IdFederationJwkSetUri` / `IdFederationOidcDiscoveryUrl` / `IdFederationOidcCerFilePath` ほか）。
+> **`test.ps1` が渡しているのも、その `IdFederation*` だけ**である。
+
+> **`SA-6.*` の上流の値は、上流のメタデータから引いている**（#291。`test.ps1` が URL を渡している）。
+> **設定の口（`…RequestEndpoint`）と鍵（`…CerFilePath`）は受け皿**である。
+>
+> **歯抜けの測り方**（実測 2026/10/13。`SA-6.*` の 8 件で測った）。
+>
+> | 壊すもの | 期待する結果 |
+> |---|---|
+> | **設定の口と鍵の両方**を壊す（メタデータは生かす） | **8/8 通る**（**メタデータが使われている**ことの確認） |
+> | **メタデータの URL**を別の `entityID` のサイトに（下流コンテナ） | **8/8 通る**（照合で弾き、設定に倒れる。ログに `The SAML2 metadata entityID did not match the expected entityID.`） |
+> | **メタデータの URL**を届かない口に | **8/8 通る**（ログに `The SAML2 metadata could not be read.`） |
+> | **メタデータと鍵の両方**を壊す | **`SA-6.1` / `SA-6.2` / `SA-6.4` が落ちる**（`SA-6.3` は署名に依存しないので通る） |
+
+> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `3_PublishUpstream.ps1` → `docker compose up -d --build`）。
+> **実測（Open棟梁 #603 / #604 の取り込み。2026/10/12）** : **複製だけを更新して回すと 20 件が落ちた** — **`SigAlg` の扱い**（`SA-1.1` / `SA-1.3` / `RT-246.4` / `RT-246.7` / `SA-6.*`）と、**自己テストの `aud` の確認**（`RT-246.1` / `RT-246.6` / `RT-232.9`）である。
+> **どちらも「確認するようになった」ことによる失敗**であり、緩む方向ではない。
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
+| **`UI-n.n`** | **ホストの core だけ**（net48 版には WebAuthn の口が無い。#137） | `-UserStoreType` |
 
 **役割分担で言うと、こうなる。**
 
 | | 測るもの |
 |---|---|
 | ホストの core / netfx（`mem` / `sql` / `ora` / `npg`） | **実装**（方言ごとの SQL を含む） |
-| `RT-140.*` | **ID 連携の機能** ＋ **連携キーの永続**（クロス ストア） |
+| `RT-140.*` | **ID 連携の機能**（OIDC） ＋ **連携キーの永続**（クロス ストア） |
+| **`SA-6.*`** | **ID 連携の機能**（**SAML2**。#286） |
+| `SA-7.*` | **アサーションの属性**（#286 の段階 4。**メアド・利用者名・`email_verified`**） |
 | **`CN-*`** | **配備の差**（コンテナ特有のもの） |
 
 > **クロス ストアは、ただ通っているだけでない。**
@@ -1234,10 +1694,82 @@ cd root
 
 | | |
 |---|---|
-| `RT-140.4` | 連携でサインインできる（**PKCE(S256)** と **`prompt=none`** を付けて要求していることも見る） |
+| `RT-140.4` | 連携でサインインできる（**PKCE(S256)** を付け、**`prompt` を付けない**ことも見る。#287） |
 | `RT-140.5` | **二度目の連携でも同じ利用者**になる（連携キーが `(iss, sub)` であること） |
-| `RT-140.6` | **上流が未サインインなら成立しない**（`prompt=none` の意味） |
+| `RT-140.6` | **上流が未サインインなら成立しない**（**上流がサインイン画面を出し、`code` は返らない**） |
 | `RT-140.7` | 連携の認可応答にも **`iss`** が付く（#252 が実経路で効いていること） |
+
+> **上流は、下流と別の RSA 鍵を使う**（#293 の段階 1）。
+> **`store/docker-compose.yml` の upstream が `*_Upstream.pfx` / `.cer` と
+> `JwkSet_Upstream.json` に向けている**（**EC の 3 本は共有**）。
+>
+> | | 公開している RSA の `kid`（実測 2026/10/13） |
+> |---|---|
+> | 上流（44301） | `ZB2dUcdK9F7wPQ38…` |
+> | 下流（44303） | `W8YPrSZDTP6XB0VT…` |
+>
+> **鍵を作り直すときは `root/files/resource/X509/GenRsaCertForUpstreamByOpenSSL.bat`**、
+> **その後に上流用の JwkSet を作り直す**（`CreateJwkSetJson` を上流の設定で 1 回）。
+>
+> **歯抜け（鍵が本当に分かれているか）** : **メタデータ / discovery を落とし、
+> (3) の倒れ先を「下流自身の証明書」に向ける**と、
+> **`RT-140.4` / `.5` と `SA-6.1` / `.2` / `.4` が落ちる**（**16 件中 10 件**。実測 2026/10/13）。
+> **鍵が同じだった頃は、この取り違えが通っていた。**
+>
+> **上流は (2)（下流が送る `AuthnRequest`）の署名も検証する**（#293 の段階 2）。
+> **`store/docker-compose.yml` の E2E クライアント 3 件に `jwk_rsa_publickey` を登録してある**
+> （値は `*_Client.cer` の JWK）。
+>
+> **歯抜け（署名が検証されているか）** : **登録鍵を別の鍵に差し替える**と、
+> **`SA-6.1` / `.2` / `.4` が落ち、`RT-140.*` は通ったまま**になる
+> （**16 件中 6 件が失敗**。実測 2026/10/13）。
+> **OIDC の (2) には署名が無い**ので、**SAML 側だけが落ちるのが正しい。**
+
+##### 歯抜けのうち 2 つは、常設のケースにした（#293 の段階 4）
+
+**歯抜けは、本来「人が壊して確かめる手順」である。**
+**配備を壊さずに測れるものは、通しに入れた方がよい** — **手順は、やらなければ測られない。**
+
+| | ケース | 何が落ちたら気付けるか |
+|---|---|---|
+| **(2) の署名の検証** | **`SA-6.5`** | **上流の `jwk_rsa_publickey` の登録**（外れると「鍵がない場合は、通す」に入る） |
+| **脚ごとの鍵の分離** | **`CN-1.5`** | **上流コンテナの `RsaPfxFilePath` / `JwkSetFilePath` の上書き**（外れると上流と下流が同じ鍵になる） |
+
+**`SA-6.5` は、配備を壊さない。**
+**製品が署名した本物の `AuthnRequest` の、署名だけを 1 バイト反転して送る**
+（`Saml2.ReplaceQueryValue`。**`SAMLRequest` と `SigAlg` は 1 文字も触らない**）。
+
+**どちらも「落ちることを確かめてから」入れた**（**制御実験**。実測 2026/10/13）。
+
+| 外したもの | 結果 |
+|---|---|
+| 上流の `jwk_rsa_publickey`（ホストの E2E クライアント 2 件） | **`SA-6.5` が core / netfx とも失敗**（`Requester` の所が **`Success`**） |
+| 上流コンテナの `*_Upstream` への上書き 3 件 | **`CN-1.5` が失敗**（`kid が違う` の所が **同じ `W8YPrSZD…`**） |
+
+> **落ちることを見ていないケースは、歯抜けの代わりにならない。**
+> **「通っている」だけでは、測れていないのと区別が付かない。**
+
+**手順のまま残すもの**（**配備を壊さないと測れない**）。
+
+| | なぜ常設にしないか |
+|---|---|
+| **(3) の検証鍵の取り違え**（メタデータ / discovery を落とし、鍵を下流自身の証明書に） | **下流の設定を書き換える**ことになる（`test.ps1` / compose の環境変数）。**通しの中では替えられない** |
+| **メタデータ / discovery の優先順**（設定の `.cer` だけを壊す、など） | 同上。**倒れ先に落ちて通る**ことを見る測り方なので、**合否では表せない** |
+
+> **上流の `id_token` の検証鍵は、上流の discovery から引いている**（#289 の段階 2）。
+> **discovery の URL も `test.ps1` が渡している**（`IdFederationOidcDiscoveryUrl`。
+> **空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる**）。
+> **設定の `.cer`**（`IdFederationOidcCerFilePath`）**は受け皿**である。
+>
+> **歯抜けの測り方**（実測 2026/10/12）。
+>
+> | 壊すもの | 期待する結果 |
+> |---|---|
+> | **設定の `.cer` だけ**を別の証明書に | **通る**（**discovery が優先される**ことの確認） |
+> | **discovery の宛先**を別の issuer のサイトに（下流コンテナ） | **通る**（`issuer` 不一致で弾き、`.cer` に倒れる。ログに `The discovery issuer did not match the expected issuer.`） |
+> | **discovery の宛先**を届かない口に | **通る**（ログに `The discovery document could not be read.`） |
+> | **両方**（discovery も `.cer` も壊す） | **`RT-140.4` / `RT-140.5` が落ちる**（**自分の JWK Set に落ちて通ってしまうことが無い**） |
+> | **設定の discovery の URL だけ**を届かない口に（`.cer` も壊す） | **`RT-140.4` / `RT-140.5` が落ちる**（**設定が組み立てより先に見られている**ことの確認。ログに `The discovery document could not be read.`） |
 
 **上流を先に建てておくこと。** 建っていなければ、**この 4 件（×2 ターゲット）だけが Skip される。**
 
@@ -1263,9 +1795,10 @@ docker compose up -d upstream
 **作り直すと同意の記録（#272 の段階 2）も消える**
 （`Sts.ConsentProvider.ConsentGrants` は静的な辞書）。
 
-**この E2E は `prompt=none` で委譲する**ため、
-**記録が無い上流に対しては `consent_required` になる**
-（OIDC Core §3.1.2.6。**IdP の側は仕様どおりである**）。
+**記録が無い上流では、同意画面で止まる**（**どこでも「許可」を押さないため**）。
+
+> **`prompt=none` を外す前**（#287 より前）は、**`consent_required` で終わっていた**
+> （OIDC Core §3.1.2.6。**IdP の側は仕様どおりである**）。
 
 **実測（2026/10/08。作り直した直後の通し）** : **6 件が落ちた**
 （`RT-140.4` / `.5` / `.7` × core / netfx）。症状は
@@ -1274,7 +1807,7 @@ docker compose up -d upstream
 **#280 で、テスト側が前提を整えるようにした**
 （`IdFederationTests.EnsureUpstreamConsentAsync`）。
 
-- **`prompt=none` を外して 1 度だけ叩き、同意画面が出たら「許可」を押す**
+- **1 度だけ叩き、同意画面が出たら「許可」を押す**
 - **記録が在れば同意画面は出ない**ので、何もしない（**余分な往復もしない**）
 - **上流が未サインインならログイン画面が返る**ので、押さない
   （`RT-140.6` の意味は変わらない）
@@ -1296,6 +1829,7 @@ docker compose up -d upstream
 |---|---|
 | `OAuth2AndOidcClientID` / `Secret` | **ターゲットごとに別のクライアント**（`redirect_uri` は 1 件に 1 つのため） |
 | `IdFederationRedirectEndpoint` | そのサイトの URL ＋ `/Account/IDFederationRedirectEndPoint` |
+| **`IdFederationSaml2*`（4 本）** | **SAML2 の ID 連携**（#286 の段階 2）。上流の SSO の口・自分の ACS・期待する上流の Issuer・上流の署名証明書 |
 
 **上流のエンドポイント（`IdFederation{Authorize,Token,UserInfo}Endpoint`）は上書きしない。**
 **構成ファイルの値が、そのままサイトの向き先である。**
@@ -1303,6 +1837,14 @@ docker compose up -d upstream
 
 **上流側のクライアント登録は `store/docker-compose.yml` にある**（`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
 **雛形の `IdFederation` クライアントは手動確認（VS）用**で、`/MultiPurposeAuthSite` 付きのまま残してある。
+
+**SAML2 の ID 連携は、同じクライアントに `redirect_uri_saml` を足して使う**（#286 の段階 2）。
+**上流は `Issuer`（`http://` ＋ `client_id`）で SP を引く**ので、**OIDC と同じ登録で足りる。**
+**返す先は登録値から解決する**ので、**下流の ACS を 1 文字違わず登録すること**（#263 と同じ照合）。
+
+> **実測（2026/10/10。#286 の段階 2）** : **下流コンテナ ⇔ 上流コンテナで一巡した。**
+> **2 度目も同じ利用者**（連携キー `(上流の EntityID, NameID)` で引けている）。
+> **ログに `has signed in with a SAML2 ID federation` が出る。**
 
 **上流は `preferred_username` も返す**（`docker-compose.yml` の `UserClaimsMapping`。#151 の段階 4）。
 **`subject_types` の既定が `public` になり、`sub` は利用者 ID になった**ので、
@@ -1334,7 +1876,8 @@ docker compose up -d upstream
    ```
 
 2. **上流でサインインしておく。** `https://localhost:44301/Account/Login`
-   **`prompt=none` で連携するので、先に上流のセッションが要る**（無いと `login_required`）。
+   **先にセッションを作っておくと、確かめたい経路だけを通せる。**
+   **無くても構わない**（**上流がサインイン画面を出す**。#287 で `prompt=none` を外した）。
 
 3. **下流を VS から動かす**（net48 版 / net10.0 版のどちらでも）。
    **どちらも `https://localhost:44300/MultiPurposeAuthSite` で待ち受ける**ので、

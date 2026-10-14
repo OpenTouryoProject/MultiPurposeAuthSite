@@ -214,6 +214,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this._http.PostAsync(this.Absolute(pathOrUrl), new FormUrlEncodedContent(items));
         }
 
+        /// <summary>POST（同じ名前を複数送る）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="form">組の並び</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **同じ名前のチェックボックスを並べる画面**（`/Manage/RemoveWebAuthnData`）は、
+        /// **選んだ数だけ同名の値を送る**ので、辞書では表せない（#277 の段階 7）。
+        /// </remarks>
+        public Task<HttpResponseMessage> PostFormAsync(
+            string pathOrUrl, IEnumerable<KeyValuePair<string, string>> form)
+        {
+            return this._http.PostAsync(this.Absolute(pathOrUrl), new FormUrlEncodedContent(form));
+        }
+
         /// <summary>
         /// 本文をそのままPOSTする（PARエンドポイントは text/plain で JWS を受ける）。
         /// </summary>
@@ -511,6 +525,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             await this.SignInCoreAsync(
                 (at > 0) ? uid.Substring(0, at) : uid, this.Config.Get("AdministratorPWD"));
+        }
+
+        /// <summary>
+        /// 利用者名とパスワードを指定してサインインする。**入れなくても例外にしない**（#277 の段階 7）。
+        /// </summary>
+        /// <param name="userName">利用者名</param>
+        /// <param name="password">パスワード</param>
+        /// <returns>入れたら true</returns>
+        /// <remarks>
+        /// **「入れないこと」を測る**ために要る
+        /// （属性を変えた後に、**古い値では入れない**ことを押さえる）。
+        /// **`SignInAsync` は入れなければ例外にする**ので、そちらでは測れない。
+        /// </remarks>
+        public async Task<bool> TrySignInAsync(string userName, string password)
+        {
+            try
+            {
+                await this.SignInCoreAsync(userName, password);
+
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
         }
 
         /// <summary>サインインの本体（利用者名とパスワードを指定する）</summary>

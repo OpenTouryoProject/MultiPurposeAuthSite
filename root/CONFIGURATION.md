@@ -21,10 +21,22 @@
 
 | ターゲット | 実体 | 雛形 | 行数 |
 |---|---|---|---|
-| net10.0 | `programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json` | `_appsettings.json` | 約 364 |
-| net48 | `programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config` | `_app.config` | 約 390 |
+| net10.0 | `programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json` | `_appsettings.json` | 約 520 |
+| net48 | `programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config` | `_app.config` | 約 480 |
 
 **実体は 2 つとも `.gitignore` 済み。** 実際の資格情報を含むため。
+
+> **4 つは、キーの並びも説明も揃えてある。**
+> **`_appsettings.json` が元**で、そこから
+> `_app.config` / `appsettings.json` / `app.config` へ写す。
+>
+> | | |
+> |---|---|
+> | **値** | **ターゲットごとに違う**（net48 はパスが Windows 形式、URL に仮想パスが付く）ので、**写さない** |
+> | **net48 だけの設定** | `webpages:*` / `PreserveLoginUrl` / `ClientValidationEnabled` / `UnobtrusiveJavaScriptEnabled`。**先頭にまとめてある** |
+> | **net10.0 だけの設定** | `SessionStoreType` / `SessionStoreConnectionString` / `FIDOServerMode` / `DataProtectionKeyPath` / `UseHttpsRedirection` / `CookieSecurePolicy` / `UseForwardedHeaders` / `ForwardedHeadersKnownProxies` / `FxXMLTCDefinition` / `FxXMLTMInProcessDefinition`。**説明ごと `_app.config` には写さない** |
+>
+> **片方だけ直すとズレる。** **並べ替えや説明の加筆は、4 つとも同じ形にすること。**
 
 ```
 /root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config
@@ -449,24 +461,20 @@ OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に
 test_self_code        → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Account
 test_self_token       → OAuth2ClientEndpointsRootURI + OAuth2ImplicitGrantClient_Account
 test_self_logout      → OAuth2ClientEndpointsRootURI + /Home/Index（post_logout_redirect_uri 用。#232）
-test_self_code_manage → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Manage
 ```
-
-**`test_self_code_manage` は、管理画面の「トークンを取る」用**である（C-10）。
-
-`/Manage/Index` の「トークンを取る」（`GetOAuth2Token`）は、
-**サインイン中の利用者自身のクライアント登録**で認可を要求する。
-**その折り返し先が、この記号である。**
 
 | | |
 |---|---|
-| **新規登録** | `redirect_uri_code` の**既定がこの値**になっている。そのまま動作確認できる |
+| **新規登録** | `redirect_uri_code` の**既定が `test_self_code`** になっている。そのまま動作確認できる |
 | **動作確認の後** | **自分の RP の折り返し先に書き換える**（クライアント 1 件に `redirect_uri_code` は 1 つ） |
-| **既存の登録** | **この値でなければ、このボタンは通らない**（`invalid_request`）。画面で登録し直す |
 
-> **以前は、この URL だけ「登録を確かめずに通す」分岐が `CheckRedirectUri` に在った**（C-10）。
-> **`IsLockedDownTestEndpoints` の対象外で、本番で閉じられなかった**ので、
-> **記号にして通常の照合に載せ、分岐を消した。** **例外は無い。**
+> **`test_self_code_manage` という記号も在った**（C-10）。
+> **管理画面の「トークンを取る」の折り返し先**で、**新規登録の既定**でもあった。
+> **その画面は廃止された**ので、**記号ごと落とし、既定を `test_self_code` に戻した。**
+>
+> **その前には、この URL だけ「登録を確かめずに通す」分岐が `CheckRedirectUri` に在った**（C-10）。
+> **`IsLockedDownTestEndpoints` の対象外で、本番で閉じられなかった**ので、分岐を消した。
+> **分岐が無いことは、いまも `RT-C10.1` が測っている。** **例外は無い。**
 
 **`OAuth2AuthorizationServerEndpointsRootURI` ではなく `OAuth2ClientEndpointsRootURI` を使う。**
 既定では同じ値だが、変えるときは両方見ること。
@@ -676,6 +684,72 @@ http で動かすと認可エンドポイントがエラー画面になる。
 E2E テストは、**実行時にアプリ自身の構成ファイルから読み出す。**
 テスト コードにもテスト設定にも、秘密は書かない（[`TESTING.md`](TESTING.md) 9 節）。
 
+### user store に入る秘密を暗号化する — `UserStoreSecretPassword`（#297）
+
+**DB に入る `client_secret` を、暗号化して保管できる。**
+
+| 設定キー | |
+|---|---|
+| **`UserStoreSecretPassword`** | **暗号化する鍵（パスワード）。** **空なら暗号化しない**（平文のまま ＝ 従来どおり） |
+
+**対象は 3 列**である（**どれも「元に戻せる形」でなければならない**）。
+
+| 表 | 列 | なぜ戻せる形が要るか |
+|---|---|---|
+| `Saml2OAuth2Data` | `ClientSecret` | **クライアント認証で照合し、管理画面で再表示する** |
+| `IdFederationUpstreams` | `ClientSecret` | **上流へ送る**（`/token` のクライアント認証） |
+| `IdFederationUpstreams` | **`SigningPfxPassword`** | **`.pfx` を開くために使う**（#292 の段階 4-b） |
+
+**だからハッシュは取れない。** **対称鍵で暗号化する。**
+
+| | |
+|---|---|
+| 暗号 | **AES-CBC（PKCS7）** ＋ **PBKDF2(SHA-256, 10 万回)** |
+| 形 | **`enc:v1:` ＋ base64(salt 16 ＋ IV 16 ＋ 暗号文)** |
+| salt / IV | **1 件ごとに作る**（**同じ秘密でも、毎回違う暗号文になる**） |
+| 印 | **先頭の `enc:v1:`**（**暗号文か平文かを、見れば分かる**） |
+| 実装 | `Extensions/Sts/SecretProtector`。**保存と読み出しの境目は Provider の 2 か所だけ** |
+
+**実測（2026/10/14。SQL Server）** : `Saml2OAuth2Data.ClientSecret` は
+**`enc:v1:…`（115 文字）**で入っている（**平文に見える 4 行は空文字** ＝ public クライアント）。
+
+> **列は 512 に広げた**（3 方言とも）。**暗号文は平文より長くなる。**
+
+> **Open棟梁 の `SymmetricCryptography` は使っていない。**
+>
+> **最初は使おうとして、`EncryptString` がスタック オーバーフローでプロセスを落とした**
+> （Open棟梁 [#608](https://github.com/OpenTouryoProject/OpenTouryo/issues/608)。
+> **複製の更新で直っている**ことは実測で確かめた）。
+>
+> **直った後も、こちらで組んだ形を残している。** **理由は暗号の形である。**
+>
+> | | `SymmetricCryptography`（実測 2026/10/14） | **この実装** |
+> |---|---|---|
+> | salt / IV | **持たない**（**同じ平文が毎回同じ暗号文**になる） | **1 件ごとに作る** |
+> | 同じ秘密を使う登録 | **暗号文が一致するので、外から分かる** | **分からない** |
+>
+> **標準 API（`Aes` ＋ `Rfc2898DeriveBytes`）で組んでいる**（net48 / net10.0 とも同じ形。
+> **鍵の導出だけ `#if NETFX` で分ける** — net48 に `Rfc2898DeriveBytes.Pbkdf2`（静的）が無い）。
+
+> **導いた鍵はキャッシュする**（`salt` ごと）。
+> **`client_secret` はクライアント認証のたびに読む**ので、
+> **キャッシュが無いと 1 回ごとに 10 万回の導出が走る** —
+> **実測で E2E の通しが 137 秒 → 922 秒**になった。
+
+**この設定で守れるのは「DB を見られたとき」である。**
+
+| | |
+|---|---|
+| 守れる | **DB だけを見られたとき**（行をそのまま読んでも、秘密は読めない） |
+| **守れない** | **設定ファイルを見られたとき**（**この鍵も、そこに在る**）。**ファイルの権限で守る** |
+
+**本番では、この鍵を設定ファイルに直接書かないこと**（環境変数・秘密の管理機構から渡す）。
+
+> **既存の平文の行の移行は、この Issue では扱っていない**（#297 の決め事）。
+> **印が無い値は、そのまま返す**ので、**鍵を後から設定した配備では、
+> 書き直した行から順に暗号文になる。**
+> **まとめて変換する道具は、別途である。**
+
 ## 7. `UserStoreType`
 
 ```json
@@ -754,6 +828,45 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 >
 > **利用者は `/Manage/ConsentGrants` から取り消せる。**
 > **発行済みのトークンは失効しない**（そちらは `/revoke`。RFC 7009）。
+
+> **ID 連携の連携キーの幅を広げた**（#292）。
+>
+> | 列 | 以前 | いま | 入る値 |
+> |---|---|---|---|
+> | `UserLogins.LoginProvider` | 128 | **512** | **相手の `iss` / entityID**（URI なので `Const.MaxLengthOfUri` と同じ） |
+> | `UserLogins.ProviderKey` | 128 | **256** | **相手の `sub` / `NameID`**（`sub` は 255 文字以内、persistent な `NameID` は 256 文字以内と決まっている） |
+>
+> **上流が n 件になると、長い値を踏む確率が上がる**（#292）。
+> **溢れたときに切り詰めはしない** — **連携のサインインが `INSERT` で落ちる。**
+>
+> **既存のデータベースは、`Create_UserStore.sql` を流し直すか、列を広げる。**
+> **SQL Server は PK を落としてから広げ、張り直す**（他の 2 つは `MODIFY` / `TYPE` だけでよい）。
+>
+> ```sql
+> -- SQL Server
+> ALTER TABLE [UserLogins] DROP CONSTRAINT [PK.UserLogins];
+> ALTER TABLE [UserLogins] ALTER COLUMN [LoginProvider] [nvarchar](512) NOT NULL;
+> ALTER TABLE [UserLogins] ALTER COLUMN [ProviderKey] [nvarchar](256) NOT NULL;
+> ALTER TABLE [UserLogins] ADD CONSTRAINT [PK.UserLogins] PRIMARY KEY NONCLUSTERED
+>     ([UserId] ASC, [LoginProvider] ASC, [ProviderKey] ASC);
+>
+> -- Oracle
+> ALTER TABLE "UserLogins" MODIFY ("LoginProvider" NVARCHAR2(512), "ProviderKey" NVARCHAR2(256));
+>
+> -- PostgreSQL
+> ALTER TABLE userlogins ALTER COLUMN loginprovider TYPE varchar(512);
+> ALTER TABLE userlogins ALTER COLUMN providerkey   TYPE varchar(256);
+> ```
+>
+> **PK は 3 列で (38 + 512 + 256) × 2 = 1612 バイト**になる。
+> **SQL Server 2016 以降が前提**である（索引キーの上限が 1700 バイト）。
+> **2014 以前の上限は 900 バイト**なので、**この定義は上限を超える**
+> （可変長の列なので、作成は警告で通り、**長い値を入れたときに失敗する**）。
+> **2014 以前では未検証**である。**実機で測ったのは 2022**（`store/` のコンテナ）。
+>
+> **Oracle・PostgreSQL は、既定の設定のまま収まる**
+> （Oracle は `db_block_size` 8192 で索引キーが約 6398 バイトまで、
+> PostgreSQL の btree は約 2704 バイトまで）。
 
 **3 つの DDL がミラーかどうかは、機械的に確かめられる。**
 
@@ -847,7 +960,7 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `Saml2RequestEndpoint` | `/saml2request` | **IdP の口**（SSO）。メタデータの `SingleSignOnService` にこの値が出る |
 | `Saml2ResponseEndpoint` | `/Account/AssertionConsumerService` | **自己テストの SP の口**（`redirect_uri_saml` を `test_self_saml` で登録したときの展開先） |
 | `Saml2AssertionExpireTimeSpanFromMinutes` | `30`（**分**） | **アサーションの有効期限**（#276）。**書かなければ `OidcIdTokenExpireTimeSpanFromMinutes` を使う**（従来の振る舞い） |
-| `RsaPfxFilePath` | — | **応答の署名鍵**。メタデータの `KeyDescriptor` に、対応する証明書（`RsaCerFilePath`）が出る |
+| `RsaPfxFilePath` | — | **応答の署名鍵**。メタデータの `KeyDescriptor` に、対応する証明書（`SpRp_RsaCerFilePath`）が出る |
 
 クライアントの登録（`OAuth2ClientsInformation` または管理画面）側は次の 2 つ。
 
@@ -858,6 +971,563 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 
 > `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
 > **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
+
+#### ID 連携の 4 つの脚（#286 / #289 / #290 / #291）
+
+**ID 連携では、この IdP が真ん中に立つ。** **下流 IdP（＝この配備）と呼ぶ。**
+
+```
+SPRP→(1)→下流IdP→(2)→上流IdP
+SPRP←(4)←下流IdP←(3)←上流IdP
+```
+
+| 脚 | 何が流れるか | 署名する側 | 検証する側 | 検証鍵（設定） |
+|---|---|---|---|---|
+| **(1)** | **SPRP の要求**（`AuthnRequest` / 認可要求） | SPRP | **下流 IdP** | **クライアント登録の `jwk_rsa_publickey`**（**相手ごと**） |
+| **(2)** | **下流 IdP の要求**（`AuthnRequest` / 認可要求） | **下流 IdP** | 上流 IdP | **上流に登録した自分の公開鍵**（上流側の設定） |
+| **(3)** | **上流 IdP の応答**（アサーション / `id_token`） | 上流 IdP | **下流 IdP** | **`IdFederation*`**（下の 2 節） |
+| **(4)** | **下流 IdP の応答**（アサーション / `id_token`） | **下流 IdP** | SPRP | **この配備の証明書**（`/samlmetadata` / `/jwkcerts` で広告する） |
+
+**protocol で、署名する脚が違う。**
+
+| | (1) 要求 | (2) 要求 | (3) 応答 | (4) 応答 |
+|---|---|---|---|---|
+| **SAML2** | **署名する**（SP が署名し、**下流は登録値で検証**） | **署名する**（`SpRp_RsaPfxFilePath` ＝ `*_Client.pfx`） | **署名する** | **署名する**（`RsaPfxFilePath` ＝ `*_Server.pfx`） |
+| **OIDC** | **しない**（`client_secret` ＋ PKCE。**`client_assertion` / Request Object を使う登録だけ、同じ `jwk_rsa_publickey` で検証**） | **しない**（`client_secret_post` ＋ PKCE） | **署名する**（`id_token`） | **署名する**（`id_token` / JARM） |
+
+> **SAML2 は要求にも応答にも署名が在り、OIDC は応答だけ**である。
+
+> **E2E では、上流だけ別の RSA 鍵を使う**（#293 の段階 1）。
+> **`store/docker-compose.yml` の upstream が `RsaPfxFilePath` / `SpRp_RsaCerFilePath` /
+> `JwkSetFilePath` を `*_Upstream` に向けている。**
+>
+> | | 公開している RSA の `kid`（実測 2026/10/13） |
+> |---|---|
+> | 上流（44301） | `ZB2dUcdK9F7wPQ38…`（`SHA256RSA_Upstream.cer`） |
+> | 下流（44303） | `W8YPrSZDTP6XB0VT…`（`SHA256RSA_Server.cer`） |
+>
+> **以前は同じ鍵だった**ので、**(3) の検証鍵を (4) の鍵と取り違えても通ってしまっていた。**
+> **分けたので、取り違えると落ちる**（`TESTING.md` の歯抜け）。
+> **EC の 3 本は共有のまま**（RSA だけを分けた）。
+
+> **(2) の署名も、上流が検証する**（#293 の段階 2）。
+> **雛形の `IdFederation` クライアントと、`store/` の E2E のクライアント 3 件に
+> `jwk_rsa_publickey` を登録した**（値は **`*_Client.cer` の JWK** ＝ 下流が (2) の署名に使う鍵の対）。
+>
+> **以前は登録していなかったので、上流は「鍵がない場合は、通す」経路に入り、
+> 署名が検証されていなかった**（`CmnEndpoints.VerifySamlRequest`）。
+>
+> **相互運用では、上流に自分の公開鍵を登録してもらうこと。**
+> **OIDC の (2) には署名が無い**ので、この登録は SAML2 のためである。
+
+**問題だったのは (3) である。**
+
+**(3) の検証鍵を、Open棟梁 は設定から 1 本だけ選んでいた**
+（`SAML2Client.VerifyResponse` / `CmnJwtToken.Verify`）。
+**その 1 本（`SpRp_*CerFilePath`）は、この配備では (4) で広告する自分の証明書**でもある。
+
+| | |
+|---|---|
+| **分けられなかった理由** | **上流の証明書に差し替えると、(4) が壊れる**（**他人の証明書を広告することになる**） |
+| **どう解いたか** | **(3) の鍵を、呼び出し側から渡せるようにした**（Open棟梁 [#600](https://github.com/OpenTouryoProject/OpenTouryo/issues/600) / [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601)） |
+| **渡す値の置き場** | **`IdFederation*` のキー**（#286 / #289 / #291）。**共通設定（`SpRp_*` / `JwkSetUri`）は触らない**（#290。8 節） |
+
+#### 上流 IdP を n 件登録する — `IdFederationUpstreams`（#292 の段階 1）
+
+**上流は n 件登録できる。** **1 件につき、画面の導線（ボタン）が 1 つ出る。**
+
+| 設定キー | |
+|---|---|
+| **`IdFederationUpstreams`** | **鍵 → 属性の辞書**（`OAuth2ClientsInformation` と同じ流儀。net48 は JSON 文字列 1 本、net10.0 は節） |
+
+**鍵は短い識別子**である。**導線が送る値・Session に控える値・ログに出る値**になる。
+
+| 属性 | | OIDC | SAML2 |
+|---|---|---|---|
+| `display_name` | 画面に出す名前（空なら鍵） | ○ | ○ |
+| `protocol` | **`oidc` / `saml2`**（空なら `oidc`） | ○ | ○ |
+| `enabled` | **空なら有効**（`false` で無効） | ○ | ○ |
+| **`issuer`** | **期待する `iss`（OIDC）/ `entityID`（SAML2）** — **メタデータ・discovery の照合に使う** | ○ | ○ |
+| **`client_id`** | **上流に登録された、自分の `client_id`**（**SAML2 でも要る** — SP の `Issuer` は `http://<client_id>`） | ○ | ○ |
+| `client_secret` | 同上 | ○ | － |
+| `discovery_url` | 上流の discovery（空なら `authorize_endpoint` の基底から組み立て） | ○ | － |
+| `jwk_set_uri` | 上流の JWK Set（**書けば discovery を読まない**。#290） | ○ | － |
+| `metadata_url` | 上流のメタデータ（#291） | － | ○ |
+| `cer_file_path` | 上流の署名証明書（**倒れ先**） | ○ | ○ |
+| `authorize_endpoint` / `token_endpoint` / `userinfo_endpoint` | 上流の口 | ○ | － |
+| `sso_endpoint` | 上流の SSO の口（**倒れ先**。メタデータが先） | － | ○ |
+| **`signing_pfx_file_path`** | **この上流へ送る `AuthnRequest` に署名する鍵**（#292 の段階 4-a。**空なら共通設定**） | － | ○ |
+| `signing_pfx_password` | 上記 `.pfx` のパスワード（**空なら共通設定**。**DB では暗号化して保管する**。#297） | － | ○ |
+
+```jsonc
+"IdFederationUpstreams": {
+  "upstream1": {
+    "display_name": "Upstream IdP (OIDC)", "protocol": "oidc", "enabled": "true",
+    "issuer": "https://ssoauth.opentouryo.com",
+    "client_id": "...", "client_secret": "...",
+    "discovery_url": "https://localhost:44301/.well-known/openid-configuration",
+    "jwk_set_uri": "", "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+    "authorize_endpoint": "https://localhost:44301/authorize",
+    "token_endpoint": "https://localhost:44301/token",
+    "userinfo_endpoint": "https://localhost:44301/userinfo"
+  },
+  "upstream1_saml2": {
+    "display_name": "Upstream IdP (SAML2)", "protocol": "saml2",
+    "issuer": "https://ssoauth.opentouryo.com", "client_id": "...",
+    "metadata_url": "https://localhost:44301/samlmetadata",
+    "sso_endpoint": "https://localhost:44301/saml2request",
+    "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer"
+  }
+}
+```
+
+**折り返し口は、共通設定のまま**である（#290 の規則）。
+
+| | 置き場 | なぜ |
+|---|---|---|
+| **相手ごとの値** | **`IdFederationUpstreams` の各行** | 相手が n 件になれば n 件要る |
+| **折り返し口**（`IdFederationRedirectEndpoint` / `IdFederationSaml2ResponseEndpoint`） | **共通設定** | **自分の URL なので、相手ごとに変わらない。** **全ての上流に、同じ 1 本を登録する**（#263。1 文字も違ってはならない） |
+| 自分の署名鍵 | **(1) の署名は共通設定**（`SpRp_RsaPfxFilePath` ほか）。**(2) は上流ごとに替えられる**（`signing_pfx_file_path`。#292 の段階 4-a・4-b。**設定でも DB でもよい**） | **Open棟梁 [#606](https://github.com/OpenTouryoProject/OpenTouryo/issues/606) で鍵を渡せるようになった**ので、相手ごとに持てる |
+
+> **どの上流から戻ってきたかは、Session で引く**（開始処理が鍵を控える）。
+> **口を相手ごとに分ける案は採らなかった** — **登録値が増え、`redirect_uri` の取り違えが起きやすい。**
+
+**従来の単数キーは、そのまま動く。**
+
+| | |
+|---|---|
+| **`IdFederationUpstreams` が空** | **従来のキーから 1〜2 件を組み立てる**（鍵は `default` / `default_saml2`） |
+| 組み立てに使う値 | OIDC : `SpRp_Isser` / `OAuth2AndOidcClientID` / `OAuth2AndOidcSecret` / `IdFederationOidcDiscoveryUrl` / `IdFederationJwkSetUri` / `IdFederationOidcCerFilePath` / `IdFederation{Authorize,Token,UserInfo}Endpoint`<br>SAML2 : `IdFederationSaml2IssuerId` / `OAuth2AndOidcClientID` / `IdFederationSaml2MetadataUrl` / `IdFederationSaml2RequestEndpoint` / `IdFederationSaml2CerFilePath` |
+| **書いたときの優先** | **`IdFederationUpstreams` が勝つ**（従来のキーは読まれない） |
+
+> **1 件の配備は、見た目も POST も変わらない。**
+> **1 件目のボタンの `id` は従来どおり**（`id_federation_signin` / `id_federation_saml2_signin`）、
+> **押したときに送る `submitButtonName` も同じ**である。
+> **どの上流かは、別の欄（`IdpKey`）で送る** — **空なら先頭の 1 件。**
+
+##### user store にも置ける（#292 の段階 2）
+
+**同じ項目を、DB の `IdFederationUpstreams` 表にも置ける。**
+**管理画面（`/IdFederationAdmin`）から足せる**ので、**設定ファイルを書き換えずに増やせる。**
+
+| | |
+|---|---|
+| **読む順** | **設定 → user store。** **同じ鍵なら設定が勝つ**（設定で固定した配備が、行で黙って変わらない） |
+| **画面が編む範囲** | **user store の行だけ**（設定ファイルの行は、画面に出ない） |
+| 認可 | **`UsersAdmin` / `RolesAdmin` と同じ**（`EnableAdministrationOfUsersAndRoles` ＋ `SystemAdmin`） |
+| 置き場 | **`UsersAdmin` の隣**（**上流の登録は配備全体のもの**で、`Manage/AddSaml2OAuth2Data`（自分のクライアント登録）とは所有者が違う） |
+| DDL | **3 方言 ＋ `mem`**（`root/files/resource/MultiPurposeAuthSite/Sql/*/Create_UserStore.sql`） |
+
+**列は設定の属性と同じ**で、**`UpstreamKey` が設定の「鍵」に当たる**
+（`Key` は方言の予約語なので避けた）。
+
+**秘密の列は、暗号化して保管する**（#297。`UserStoreSecretPassword`。上の 6 節）。
+**`ClientSecret` と `SigningPfxPassword` が対象**で、**どちらも読むときに平文へ戻す**
+（**上流へ送る値・`.pfx` を開く値なので、ハッシュは取れない**）。
+
+> **`SigningPfxFilePath` / `SigningPfxPassword` は、段階 4-b で足した列**である
+> （**設定の行の `signing_pfx_file_path` / `signing_pfx_password` と同じもの**）。
+> **列を足したので、古い DB では落ちる** — **作り直すこと**（`TESTING.md`）。
+
+**上流が n 件になると、「2 つの IdP から来た同じ人」が現れる。**
+**この製品は、検証済みのメアドで既存アカウントに結ぶ**（アカウント リンク）。
+
+| 順 | 引き方 | |
+|---|---|---|
+| 1 | **連携キー `(iss, sub)`** | **上流ごとに別の行**（`UserLogins`） |
+| 2 | **メアド** | **引けたら、その利用者に `(iss, sub)` を足す** |
+
+**守りは「メアドが検証済みであること」**である（#140 の段階 1。`Sts.AccountLink`）。
+**測定は `CN-5.6`**（#292 の段階 1）。
+
+#### (3) の検証鍵 — OIDC（#289 / #290）
+
+**上流の `id_token`（＝ (3)）の署名を検証する鍵である。**
+**OIDC は応答にだけ署名が在る**ので、**OIDC の ID 連携で要る鍵は、これだけ**である
+（**(2) は署名しない** — `client_secret_post` ＋ PKCE）。
+
+| 設定キー | 雛形の値 | |
+|---|---|---|
+| `IdFederationJwkSetUri` | （空） | **上流の JWK Set の URL**。**書けば discovery を読まない**（#290） |
+| `IdFederationOidcDiscoveryUrl` | `https://localhost:44301/.well-known/openid-configuration` | **上流の discovery**。**空なら `IdFederationAuthorizeEndpoint` の基底から組み立てる** |
+| `IdFederationOidcCerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の `id_token` の署名を検証する証明書**（`.cer` のパス）。**空なら従来どおり** |
+
+**どれかを書けば、上流の鍵で検証する**（Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601) の版へ、
+**鍵・`iss`・`aud` を渡す**）。
+
+| 渡すもの | 値 |
+|---|---|
+| 鍵 | **上の 3 本から決める**（下の「鍵の出どころは 4 段」） |
+| `iss` | **`SpRp_Isser`**（Open棟梁 のクライアント役の設定。**相手の Issuer** である） |
+| `aud` | **`OAuth2AndOidcClientID`**（上流に登録した自分の `client_id`） |
+
+**空なら、Open棟梁 が設定から鍵を選ぶ**（従来どおり）。
+**ただし、この配備はそこで「自分の JWK Set を `kid` で引く」枝に入る**
+（`CmnJwtToken.Verify` が「自分は認可サーバか」で分岐するため。Open棟梁 #601）。
+
+> **開発用の上流は同じ雛形の鍵**なので、**`kid` が一致して検証できてしまう。**
+> **鍵の違う OP が相手なら、`kid` が引けず、設定の `.cer` に落ちて失敗する**
+> （**失敗側に倒れる**ので安全性の問題ではないが、**連携できない**）。
+> **このキーを書くのが、その対処である。**
+
+**`CanIdFederationByOidc` には入れていない** — **空でも ID 連携は成立する**ためである
+（SAML2 側の 4 本とは扱いが違う）。
+
+**鍵の出どころは 4 段**である。
+
+| 順 | 出どころ | ロールオーバー |
+|---|---|---|
+| 1 | **設定の `IdFederationJwkSetUri`**（上流の JWK Set を直に指す。#290） | **追随する**（`kid` が引けなければ取り直す）。**`issuer` の照合は無い** |
+| 2 | **上流の discovery → `jwks_uri` → `kid`**（#289 の段階 2） | **追随する**。**`issuer` を照合する** |
+| 3 | **設定の `.cer`**（`IdFederationOidcCerFilePath`） | **追随しない**（上流が鍵を替えたら置き直す） |
+| 4 | **渡さない**（従来どおり） | － |
+
+**取得は、1 と 2 のどちらも 1 分に 1 回まで**（`kid` が引けないときだけ取り直す）。
+
+**discovery の在り処は、設定 → 口の基底から組み立て**の順で決まる。
+
+| 順 | |
+|---|---|
+| 1 | **`IdFederationOidcDiscoveryUrl`**（**SAML2 側の `IdFederationSaml2MetadataUrl` と対称**） |
+| 2 | **`IdFederationAuthorizeEndpoint` の基底**（`https://host/authorize` → `https://host/.well-known/openid-configuration`） |
+
+> **組み立てだけでは足りない配備がある。**
+> **パスの下に discovery を置く OP**（`https://host/tenant/v2.0/.well-known/openid-configuration`）
+> **には、基底だけでは当たらない。** **そのため、設定でも与えられるようにしてある。**
+
+> **`iss` そのものから引かない。** **この製品の `IssuerId` は論理名**であり
+> （雛形は `https://ssoauth.opentouryo.com`）、**待ち受けている URL とは別**である
+> （実測 : 開発・E2E の上流は `https://localhost:44301`）。
+
+**discovery の `issuer` が `SpRp_Isser` と一致しなければ、その鍵は使わない**
+（**設定の URL を差し替えられた配備で、別の発行者の鍵を信じないため**）。
+**引けなければ 2 段目に倒れる**ので、**discovery が落ちていても ID 連携は止まらない。**
+
+#### (2) の宛先と (3) の検証鍵 — SAML2（#286 の段階 1 / 段階 2）
+
+**この IdP が、上流の IdP に対して SP になるときの設定である。**
+**OIDC の `IdFederation*Endpoint`（4 本）とは別に持つ。**
+
+**SAML2 は要求にも署名が在る**ので、**(2) の宛先（上流の SSO）と、自分の署名鍵**も要る。
+
+| 脚 | 使う値 |
+|---|---|
+| **(2)** 送る要求 | 宛先は `IdFederationSaml2RequestEndpoint`（またはメタデータの `SingleSignOnService`）。**署名鍵は `SpRp_RsaPfxFilePath`**（Open棟梁 の `SAML2Client.CreateRedirectRequest` が読む） |
+| **(3)** 受ける応答 | 検証鍵は `IdFederationSaml2CerFilePath`（またはメタデータの `KeyDescriptor`）。**期待する Issuer は `IdFederationSaml2IssuerId`** |
+
+| 設定キー | 雛形の値 | |
+|---|---|---|
+| `IdFederationSaml2RequestEndpoint` | `https://localhost:44301/saml2request` | **`AuthnRequest` を送る先**（上流の SSO の口） |
+| `IdFederationSaml2ResponseEndpoint` | `…/Account/IDFederationAssertionConsumerService` | **応答を受け取る自分の口**（**上流の `redirect_uri_saml` に登録する値**） |
+| `IdFederationSaml2IssuerId` | `https://ssoauth.opentouryo.com` | **期待する上流の Issuer**（EntityID） |
+| `IdFederationSaml2CerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の署名を検証する証明書**（`.cer` のパス） |
+
+**雛形の既定は、OIDC の `IdFederation*Endpoint` と同じ**
+（**上流は `store/` のコンテナ**。`https://localhost:44301`。**E2E は環境変数で上書きする**）。
+
+**1 本でも空なら、SAML2 の ID 連携は無効**である（`Config.CanIdFederationBySaml2`）。
+**押しても成立しない導線を出さない**ため、**サインイン画面のボタンも出さない。**
+
+> **証明書は、開発用の上流が同じ雛形の鍵を使っているので、結果として
+> `SpRp_RsaCerFilePath` と同じファイルを指す**（実測で modulus が一致する）。
+> **値が同じでも、キーは分ける** — **役が違う**ためである（次の節）。
+
+**値の出どころは、上流の `/samlmetadata` である**（実測）。
+**メタデータの URL を書けば、`SingleSignOnService` と署名証明書は、そこから引く**（#291。下記）。
+**書かなければ、人が見て書き写す。**
+
+| 設定キー | 上流のメタデータの、どこ |
+|---|---|
+| `IdFederationSaml2RequestEndpoint` | `IDPSSODescriptor` ＞ `SingleSignOnService`（HTTP-Redirect）の `Location` |
+| `IdFederationSaml2IssuerId` | `EntityDescriptor` の `entityID` |
+| `IdFederationSaml2CerFilePath` | `KeyDescriptor use="signing"` ＞ `X509Certificate`（**取り出して `.cer` として置く**） |
+
+> **メタデータから引く仕組みは、#291 で入った**（下記）。
+> **以下は、メタデータを使わない（URL を書かない）配備の手順**である。
+>
+> **以前ここには「メタデータから自動で引く仕組みは、まだ無い」と書いてあった。**
+> **Open棟梁 の `SAML2Bindings` には `CreateMetadata`（作る側）しか無い。**
+> **また、同梱のメタデータは署名されていない**（実測）ので、**信頼の根拠は TLS だけ**になる。
+> **いまは、配備時に手で置く。**
+
+**導線と口**（段階 2）。
+
+| | |
+|---|---|
+| **サインイン画面のボタン** | **設定が揃っているときだけ出す**（`CanIdFederationBySaml2`）。**OIDC 側も同じにした**（`CanIdFederationByOidc`） |
+| **口** | `/Account/IDFederationAssertionConsumerService`（**`IsLockedDownTestEndpoints` で閉じない**。本番の導線） |
+| 自己テストの口 | `/Account/AssertionConsumerService`（**閉じる**。結果を画面に出すだけ） |
+| `AuthnRequest` | `NameIDFormat=emailAddress`、`Issuer` ＝ **`http://` ＋ 上流に登録された `client_id`**、**ACS URL は入れない**（上流が登録値から解決する） |
+| `IsPassive` | **送らない**（#287 で OIDC の `prompt=none` を外したのと同じ理由） |
+| サインイン画面の入力値 | **使わない**（SAML に `login_hint` 相当が無い。#286 の決め事） |
+
+> **上流には、下流の ACS を `redirect_uri_saml` として登録する**こと。
+> **1 文字も違ってはならない**（#263 と同じ照合）。
+> 雛形は `IdFederation` クライアントに登録済みで、`store/docker-compose.yml` は
+> E2E の 3 つの下流（ホスト core / netfx / 下流コンテナ）の分を持っている。
+
+#### アサーションの属性（`AttributeStatement`）で、メアドと利用者名を運ぶ（#286 の段階 4）
+
+**`NameID` だけでは、メアドと利用者名を運べない。**
+**段階 4 で、OIDC 側のクレームに 1 対 1 で対応する属性を出すようにした**
+（`CommonLibrary/SamlProviders/CmnSamlAttributes.cs`）。
+
+| OIDC | SAML2 の `Name` | `FriendlyName` | `NameFormat` |
+|---|---|---|---|
+| `email` | `urn:oid:0.9.2342.19200300.100.1.3` | `mail` | uri |
+| `preferred_username` | `urn:oid:0.9.2342.19200300.100.1.1` | `uid` | uri |
+| `email_verified` | **`email_verified`** | － | **basic** |
+
+**`urn:oid:…` は X.500/LDAP Attribute Profile**（SAML V2.0 の prof-attr-x500）であり、
+**他の IdP（Shibboleth / ADFS など）とも合う。**
+**`email_verified` に相当する標準の属性は無い**ので、**OIDC の名前をそのまま basic で出す。**
+
+**出す側（IdP）は、この 3 つだけを出す。**
+**読む側（SP）は緩い** — **`Name` と `FriendlyName` の両方を鍵にし、別名も見る**
+（`email` / `emailAddress` / ADFS の `http://schemas.xmlsoap.org/…/emailaddress` など）。
+
+**読む側の決め方**（`/Account/IDFederationAssertionConsumerService`）。
+
+| | 順序 |
+|---|---|
+| メアド | **属性（`mail`）** → `emailAddress` の `NameID` |
+| 新規作成時の名前 | **属性（`uid`）** → メアドの `@` より前 |
+| 検証済みのメアドか | **属性（`email_verified`）** → `emailAddress` の `NameID` は検証済みとして扱う（下記） |
+| 連携キー | **`NameID`**（**`Transient` は受けない**。毎回変わる値を鍵にできない。SAML Core 8.3.8） |
+
+> **これで `Persistent`（PPID）の `NameID` を返す上流とも連携できる**（`SA-7.2`）。
+> **段階 3 までは、`NameID` がメアドでなければ繋げなかった。**
+
+> **属性を出さない上流とも、従来どおり繋がる**（`emailAddress` の `NameID` に倒れる）。
+> **既定の挙動は変わらない。**
+
+#### `NameIDFormat=emailAddress` の `NameID` は、検証済みのメアドとして扱う（#286 の段階 2）
+
+**上流が `email_verified` を言わないときの倒し方**である
+（**段階 4 で属性が入ったので、言ってくる上流ではそちらに従う**）。
+
+| | |
+|---|---|
+| OIDC の `email` | **属性の 1 つ**である。**検証済みかどうかを別に言う必要がある**（`email_verified`） |
+| **SAML2 の `NameID`（`emailAddress`）** | **主体そのものの識別子**である（SAML Core 8.3.2）。**上流が署名して「この主体である」と主張している** |
+
+**だから、検証済みとして扱う。**
+**そうしないと、既にメアドで登録のある利用者には永久に結び付けられない**
+（**実測** : `super_tanaka` が下流にも居るため、`null` で扱った版では
+`Rejected linking a SAML2 ID federation login to …` で止まった）。
+
+**緩めたくない配備は `RequireVerifiedEmailForAccountLinking` を `false` にする**
+（この判断に関わらず、その設定が優先される）。
+
+> **段階 3 までは、`NameIDFormat` が `emailAddress` でなければ受け付けなかった。**
+> **段階 4 では、属性でメアドが分かるなら受け付ける**（上の表）。
+> **属性も無く、`NameID` もメアドでなければ、受け付けない**
+> （**メアドでない値をメアドとして扱わないため**）。
+
+#### Redirect Binding の `SigAlg` は、実際のアルゴリズム（Open棟梁 #604 の追随）
+
+**Open棟梁 [#604](https://github.com/OpenTouryoProject/OpenTouryo/issues/604) で、
+`SigAlg` が実際の署名アルゴリズムになった**（既定の SHA256 なら `rsa-sha256`）。
+**受け手も `SigAlg` を見る**ようになったので、この repo も合わせてある。
+
+| | 変更前 | 変更後 |
+|---|---|---|
+| 出す `SigAlg`（要求・応答とも） | **`rsa-sha1` 固定**（実際の署名は SHA256） | **`rsa-sha256`** |
+| **SP の要求を受けるとき**（`CmnEndpoints.VerifySamlRequest`） | `Rsa_SHA256` 固定で検証 | **`SigAlg` でハッシュを選ぶ**（`RSA` を受ける版。SHA256 / 384 / 512） |
+| **上流の応答を受けるとき**（`CmnSaml2Response`） | **`SigAlg` が `rsa-sha1` のときだけ検証** | **`SigAlg` でハッシュを選ぶ**（同上） |
+
+> **利用者への影響がある。**
+>
+> | | |
+> |---|---|
+> | **旧版の Open棟梁 で署名する SP** | **Redirect Binding の `AuthnRequest` が通らなくなる**（`rsa-sha1` と名乗る SHA256 の署名）。**SP 側で Open棟梁 を更新すること** |
+> | **ID 連携の上流** | **上流も #604 以降であること**（Redirect Binding の場合） |
+> | POST Binding | **影響なし**（ハッシュは XML の `SignatureMethod` が持つ） |
+> | **SHA1 の署名** | **受けない**（`VerifyRedirect` の既定の許可リストは SHA256 / 384 / 512） |
+
+**この repo は `OpenTouryoAssemblies/` の複製を参照している**ので、
+**複製を更新した時点で効く**（`1_BuildAll.ps1 -Libs Force`）。
+
+#### 自己テストの `aud` は、その回の `client_id` で確認する（Open棟梁 #603 の追随）
+
+**Open棟梁 [#603](https://github.com/OpenTouryoProject/OpenTouryo/issues/603) で、
+設定で判定する `IdToken.Verify` / `ResponseObject.Verify` が、
+`JwkSetFilePath` が在る配備（＝この配備）でも `aud` を確認するようになった。**
+
+**自己テストは `OAuth2AndOidcClientID` 以外のクライアントでも回す**ので、
+**設定で判定する版では落ちる。**
+**そこで、[#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601) の版
+（鍵・`iss`・`aud` を渡す）に移した。**
+
+| 渡すもの | 値 |
+|---|---|
+| 鍵（`jws`） | **null**（自分が出したトークンなので、設定の選び方で引ける） |
+| `iss` | **`IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**であり、下流コンテナでは別の値である |
+| `aud` | **その回の `client_id`**（セッション／Cookie に預けてある値） |
+
+> **設定に `OAuth2AndOidcClientIDs` を列挙する案は採らなかった。**
+> **クライアントを足すたびに設定も直すことになる**うえ、
+> **「どれかのテスト用クライアント宛か」までしか確かめられない。**
+
+#### メタデータ（`/samlmetadata`）から、上流の口と鍵を引く（#291）
+
+| 設定キー | 雛形の値 | |
+|---|---|---|
+| `IdFederationSaml2MetadataUrl` | `https://localhost:44301/samlmetadata` | **上流のメタデータ**（`EntityDescriptor`）。**空なら従来どおり** |
+
+**引くもの**（引けなければ、従来の設定に倒れる）。
+
+| メタデータ | 倒れ先（設定） |
+|---|---|
+| `IDPSSODescriptor` ＞ `SingleSignOnService`（HTTP-Redirect）の `Location` | `IdFederationSaml2RequestEndpoint` |
+| `KeyDescriptor use="signing"` ＞ `X509Certificate` | `IdFederationSaml2CerFilePath` |
+
+**`entityID` は引かない。** **`IdFederationSaml2IssuerId` と照合する**ために使う。
+**一致しなければ、メタデータの値は使わない**
+（**設定の URL を差し替えられた配備で、別の相手の口と鍵を信じないため**）。
+**自分の ACS（`IdFederationSaml2ResponseEndpoint`）も、設定のまま**である。
+
+> **SAML2 には、メタデータの既知のパスが無い**（OIDC の `/.well-known/…` に当たるものが無い）。
+> **だから、OIDC 側（#289）のように口の URL から組み立てる形にはしていない** — **URL を設定で与える。**
+
+> **メタデータは署名されていない**（実測）。**信頼の根拠は TLS と `entityID` の照合だけ**である。
+> **署名されたメタデータを検証する形は、まだ無い**（その鍵をどこから得るかを決める必要がある）。
+
+**導線（サインイン画面のボタン）の出し方も変わった**（`Config.CanIdFederationBySaml2`）。
+
+| | |
+|---|---|
+| **必ず要る** | 自分の ACS（`…ResponseEndpoint`）と、期待する上流の EntityID（`…IssuerId`） |
+| **どちらかで揃っていればよい** | **メタデータの URL** ／ **口（`…RequestEndpoint`）と鍵（`…CerFilePath`）の両方** |
+
+**鍵のロールオーバー中は、`KeyDescriptor` が 2 本以上並ぶことがある。**
+**全部試す**（#292 の段階 3。**`SAML2` の署名には `kid` に当たるものが無い**ので、選べない）。
+**取り直しの下限は 1 分**（OIDC 側の discovery と同じ）。
+
+##### 鍵を引く宛先は「サーバが呼ぶ先」である（#293 の段階 3）
+
+**メタデータ（`IdFederationSaml2MetadataUrl`）と JWK Set（`IdFederationJwkSetUri`）を引くのは、
+サーバである。** **ブラウザが行く先（SSO / ACS / `authorize`）とは、分けて考えること。**
+
+| | 誰が呼ぶか | 宛先 |
+|---|---|---|
+| SSO（`…Saml2RequestEndpoint`）／ ACS ／ `authorize` | **ブラウザ** | **ブラウザから届く URL** |
+| **メタデータ ／ JWK Set ／ discovery** | **サーバ** | **サーバから届く宛先**（`token` / `userinfo` と同じ） |
+
+**コンテナに入れた配備で、ここを取り違えていた**（実測 2026/10/13）。
+**下流コンテナから `https://localhost:44301/samlmetadata` には届かない**
+（公開ポートはホスト側のもので、コンテナの中の待ち受けは 8080 / 8081）。
+**ログは `The SAML2 metadata could not be read. (empty response)`** で、
+**一巡は通っていた** — **通っていたのは倒れ先（設定の `.cer`）である。**
+
+> **倒れ先が在ると、引けていないことは落ちて教えてくれない。**
+> **引けたかどうかはログで確かめる**
+> （`The SAML2 metadata was read.` / `The JWK Set was read from the configured URL.`）。
+
+**メタデータが書く SSO の口は、上流の公開 URL である**
+（`OAuth2AuthorizationServerEndpointsRootURI` から作る。要求の `Host` では作らない）。
+**だから、サーバから届く宛先でメタデータを引いても、ブラウザが行く先は正しい。**
+
+> **discovery の `jwks_uri` も同じ理屈で、上流の公開 URL になる。**
+> **discovery は読めても、その先の `jwks_uri` に届かない**ことがある。
+> **その配備では `IdFederationJwkSetUri` を直接与える**（#290 の順番で、これが最も先に見られる）。
+
+**例**（`store/docker-compose.yml` の下流コンテナ）。
+
+```
+appSettings__IdFederationJwkSetUri=http://upstream:8080/jwkcerts
+appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
+```
+
+#### 鍵の入れ替え（ロールオーバー。#292 の段階 3）
+
+**署名鍵は、いつか替える。** **替えている途中は、新旧 2 本が世の中に在る。**
+**出す側は 2 本広告し、受け取る側は 2 本試す** — **どちらも要る。**
+
+##### 出す側（この配備の鍵）
+
+| | 広告する所 | 新旧 2 本を並べる方法 |
+|---|---|---|
+| **OIDC** | `/jwkcerts`（`JwkSetFilePath`） | **`JwkSet.json` に並べる。** `CommandLineTools/CreateJwkSetJson` は**追記しかしない**ので、**新しい `.cer` で 1 回回せば 2 本になる**（**退役した鍵は手で消す**） |
+| **SAML2** | `/samlmetadata` の `KeyDescriptor` | **`PreviousSigningCerFilePaths`**（空白かカンマ区切り）。**`SAML2Bindings.CreateMetadata` は 1 本しか受けない**ので、**出来上がった XML に足している** |
+
+**順番**（どちらの方式でも同じ）。
+
+| 順 | すること | なぜ |
+|---|---|---|
+| 1 | **新しい証明書を広告に足す**（署名はまだ古い鍵） | **相手のキャッシュに、新しい鍵を先に配る** |
+| 2 | 相手のキャッシュが切れるのを待つ | **SAML2 のメタデータも OIDC の JWK Set も、相手がキャッシュする** |
+| 3 | **署名鍵を入れ替える**（`RsaPfxFilePath` / `SpRp_RsaCerFilePath`） | ここで初めて、新しい鍵の署名が出る |
+| 4 | **古い証明書を広告から外す** | 退役。**`JwkSet.json` は手で消す。** SAML2 は設定から外す |
+
+> **OIDC は `kid` で選べる**（`id_token` のヘッダに入る）。
+> **SAML2 は選べない** — **署名に `kid` に当たるものが無い**（`KeyInfo` は任意）。
+> **だから SAML2 の受け取り側は、広告されている鍵を順に試す。**
+
+##### (2) の署名鍵は、上流ごとに替えられる（#292 の段階 4-a）
+
+**上流が「この SP の公開鍵はこれ」と指定してくる配備**のために在る。
+
+| | 鍵 |
+|---|---|
+| 行に **`signing_pfx_file_path`** が在る | **その `.pfx`**（パスワードは `signing_pfx_password`。**空なら共通設定のパスワード**） |
+| 空 | **共通設定**（`SpRp_RsaPfxFilePath`）。**従来どおり** |
+
+**「行」は、設定でも user store でもよい**（#292 の段階 4-b）。
+**`IdFederationUpstreams` 表に `SigningPfxFilePath` / `SigningPfxPassword` の列が在り、
+管理画面（`/IdFederationAdmin`）から入れられる。**
+**パスワードは暗号化して保管する**（#297 の対象。`ClientSecret` と同じ）。
+
+**組み立ては `SamlProviders.IdFederationSaml2Request` の 1 か所**である
+（**両アプリの `AccountController` に同文で置かない**）。
+**鍵が読めなければ、共通設定に倒れる**（**設定の誤りで連携の口を死なせない**。理由はログに残す）。
+
+> **(1)（SPRP → この IdP）の署名鍵は共通設定のまま**である。
+> **あちらは「この配備がクライアントとして名乗る鍵」**で、**相手ごとに替える話は出ていない。**
+
+##### 受け取る側（相手の鍵）
+
+| | 引き方 |
+|---|---|
+| **OIDC** | **`kid` で引く**（`IdFederationJwkSetUri` / discovery の `jwks_uri`）。**JWK Set に 2 本在っても、合う 1 本を選ぶ** |
+| **SAML2** | **メタデータの `KeyDescriptor` を順に全部試す** → **引けなければ設定の `.cer`**（最後の受け皿） |
+
+**実測**（2026/10/14）。
+
+| 測ったこと | 結果 |
+|---|---|
+| 上流の `/jwkcerts` に **RSA 2 本**（新旧） | **OIDC の ID 連携は通る**（`kid` で選べている。`RT-140.*` / `CN-5.*` の 31 件） |
+| 上流の `/samlmetadata` に **2 本** | **SAML2 の ID 連携は通る**（`SA-6.6`） |
+| **1 本目を「署名に使っていない証明書」にした** | **2 本目で検証して通る**（ログに `The SAML2 response was verified with key #2.`） |
+
+#### なぜ (3) の鍵を `SpRp_RsaCerFilePath` にできないか
+
+**(3)（上流 → 下流の応答）の検証鍵として、`SpRp_RsaCerFilePath` は使えない。**
+**このキーは、この配備では「自分の証明書」として読まれている**（**(4) の側**）。
+
+| | `SpRp_RsaCerFilePath` の役 | どの脚か |
+|---|---|---|
+| SAML2 | **`/samlmetadata` の `KeyDescriptor`**（**自分の証明書を広告する**） | **(4)** |
+| OIDC | **`JwkSet.json`（`/jwkcerts`）の素**（`CreateJwkSetJson` が読む） | **(4)** |
+| 共通 | **署名検証の控え**（`kid` が引けないとき。8 節） | (3) / (4) |
+| クライアント役 | **相手の公開鍵**（Open棟梁 の `SAML2Client.VerifyResponse` が読む先） | **(3)** |
+
+**1 つのキーが、(3) の検証鍵と (4) の広告鍵を兼ねている。**
+**上流のものに差し替えると、(4) が壊れる**（**他人の証明書を広告することになる**）。
+
+**だから (3) の鍵は、別のキーで持つ** — `IdFederationSaml2CerFilePath`（SAML2）／
+`IdFederationJwkSetUri` ・ `IdFederationOidcDiscoveryUrl` ・ `IdFederationOidcCerFilePath`（OIDC）。
+
+> **検証の本体は `CommonLibrary/SamlProviders/CmnSaml2Response.cs` にある。**
+> **`SAML2Client.VerifyResponse` を使わず、`SAML2Bindings` を直に呼ぶ。**
+> **以前は「あちらが検証鍵を引数に取らない」ためだったが、
+> Open棟梁 #600 で鍵を渡せるようになった。**
+> **いまも写しを使っているのは、`Reason`（落ちた理由）を画面と E2E が見ている**ためである。
+> **署名検証そのものは `SAML2Bindings.VerifyRedirect` / `VerifyPost`** であり、
+> **`AuthnRequest` の検証と同じもの**である。**実装が 2 本になるわけではない。**
+>
+> **自己テストの SP 役（`SelfTestClient.VerifySaml2Response`）も、同じ本体を使う。**
+> **渡す引数が違うだけ**である（**自分の証明書と、自分の `IssuerId`**）。
 
 #### 署名のない `AuthnRequest` は通る
 
@@ -878,6 +1548,13 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 > **メタデータは `WantAuthnRequestsSigned="true"` を固定で出している**（Open棟梁 の雛形）。
 > **鍵を登録していない配備では、広告と振る舞いが揃っていない。**
 > 測定は `SA-2.1`（広告）と `SA-5.4`（登録した場合に効くこと）。
+
+> **「登録すれば検証される」ことは `SA-6.5` が測っている**（#293 の段階 4）。
+> **製品が署名した本物の `AuthnRequest` の、署名だけを 1 バイト変えて送り**、
+> **`Requester` で返ることを見る。**
+>
+> **登録を外すと、このケースは `Success` になって落ちる**（実測。「鍵がない場合は、通す」）。
+> **つまり、登録が外れたことにも気付ける。**
 
 ---
 
@@ -903,7 +1580,7 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | **https が必要** | WebAuthn は安全なコンテキストしか走らない（`localhost` は例外） |
 | **セッションに challenge を置く** | 複数インスタンスなら `SessionStoreType` を `mem` 以外にする（#256。置くのは `fido2.CredentialCreateOptions` / `fido2.AssertionOptions`） |
 | **保存先は `FIDO2Data` 表** | `UserStoreType` が `mem` ならプロセス内の辞書に入るので、**再起動で消える** |
-| **利用者を消すと、資格情報も消す** | `FIDO2Data` は `UserName` で持っており、**`Users` への外部キーが無い**。GDPR の削除（`/Manage/DeleteGdprPersonalData`）が明示的に消す |
+| **利用者を消すと、資格情報も消す** | `FIDO2Data` は `UserName` で持っている。**DB ストアでは外部キー**（`FK.FIDO2Data.Users_UserName`。`ON DELETE CASCADE`）**が落とす**。**`mem` には外部キーが無い**ので、**GDPR の削除（`/Manage/DeleteGdprPersonalData`）が明示的に消す**（#299） |
 
 ---
 
@@ -912,11 +1589,64 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 ```json
 "RsaPfxFilePath":      "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
 "EcdsaPfxFilePath":    "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
+"SpRp_RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 "SpRp_RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Client.pfx",
 "SpRp_ClientCertPfxFilePath": "C:/root/files/resource/X509/SHA256RSAClientCert.pfx"
 ```
 
-`RsaPfx*` はサーバ（トークンの署名）、`SpRp_*` はクライアント側（Request Object の署名、mTLS）。
+| キー | 誰の鍵か | 誰が読むか |
+|---|---|---|
+| `RsaPfx*` / `EcdsaPfx*` / `Ecdsa384Pfx*` / `Ecdsa512Pfx*` | **サーバの秘密鍵**（`*_Server.pfx`） | **サーバだけ。** SAML2 と JWT の署名 |
+| `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` / `SpRp_Ecdsa384CerFilePath` / `SpRp_Ecdsa512CerFilePath` | **サーバの公開鍵**（`*_Server.cer`） | **サーバとクライアントの両方**（下記） |
+| `SpRp_RsaPfx*` / `SpRp_EcdsaPfx*` | **クライアントの秘密鍵**（`*_Client.pfx`） | クライアントだけ。`client_assertion` と Request Object の署名 |
+| `SpRp_ClientCertPfx*` | **クライアント証明書** | クライアントだけ。mTLS |
+
+> **`SpRp_` は「クライアント側」という意味ではない。**
+> Open棟梁 のクライアント用パラメタの接頭辞（`CmnClientParams.Isser` は `SpRp_Isser` を読む）であり、
+> **意味は「相手（OP / IdP）の値」**である
+> （[OpenTouryo#602](https://github.com/OpenTouryoProject/OpenTouryo/issues/602) で読み手を確かめた）。
+
+#### 「この配備の値」と「相手の値」の分け方（#290）
+
+**1 つの規則で揃えてある。**
+
+| | 置き場 | 例 |
+|---|---|---|
+| **この配備の値**（**自分の役でも、相手が自分のときでも読む**） | **共通設定のまま**（`Client-Server共通設定` の節） | `JwkSetUri`（**自分の `/jwkcerts` のパス**）／`SpRp_*CerFilePath`（**この配備の証明書**） |
+| **相手（上流 IdP）の値** | **`IdFederation*` のキー**（**相手ごとの値**） | `IdFederationJwkSetUri` / `IdFederationOidcDiscoveryUrl` / `IdFederationOidcCerFilePath` / `IdFederationSaml2*` |
+
+> **以前は「サーバ役の自分の値」を別のキーに分ける案を採っていた**
+> （`JwkSetEndpoint` / `RsaCerFilePath` など）。
+> **やめた。** **同じ意味のキーが 2 本になるだけ**だったためである。
+>
+> **`JwkSetUri` も `SpRp_*CerFilePath` も、雛形では `Client-Server共通設定` の節に在る。**
+> **「この配備の JWK Set の口」「この配備の証明書」**であり、
+> **サーバ役が自分の値として読んでよい。**
+>
+> **本当に足りなかったのは「上流（相手）の値」**であり、
+> **それは `IdFederation*` のキーが持つ**（#286 / #289 / #291 で揃えた）。
+
+**この規則で、相乗りは解けている。**
+
+| 以前の困りごと | いまの形 |
+|---|---|
+| **上流の証明書に差し替えられない**（`SpRp_RsaCerFilePath` は自分の証明書として読まれる） | **差し替えない。** 上流の証明書は `IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath` |
+| **上流の JWK Set を取りに行けない**（`JwkSetUri` は相対パスで、`new Uri(...)` に渡せない） | **`IdFederationJwkSetUri`**（または discovery の `jwks_uri`）から引く。**`JwkSetStore` の経路は通らない** |
+| **期待する上流の Issuer が 1 つしか無い**（`SpRp_Isser`） | **上流ごとに持てる**（#292 の段階 1。`IdFederationUpstreams` の `issuer`）。**登録が無ければ、従来どおり SAML2 は `IdFederationSaml2IssuerId`、OIDC は `SpRp_Isser`** |
+
+**サーバ側での読み方は 2 つある。**
+
+| | |
+|---|---|
+| `/jwkcerts` の元 | `CommandLineTools/CreateJwkSetJson` が `.cer` から `JwkSet.json` を作る |
+| 署名検証の控え | `CmnAccessToken.VerifyAccessToken` から `SelectJws`。**`kid` が無い / `JwkSet.json` が無い / その `kid` が載っていない**ときに `.cer` へ落ちる |
+
+**alg と鍵の対応は `CommonLibrary/TokenProviders/SigningKeys.cs` の表が 1 か所で持つ**
+（`alg` に対して `pfx`（署名）と `cer`（検証・JWK Set）を組で持たせてある。#129 の段階 3 / D-9）。
+
+> **実測（2026/10/09）** : 発行されるトークンは `kid` と `jku` を持ち、
+> `JwkSet.json`（RSA 1 本 ＋ EC 3 本）に載っているので、**通常は JWK の経路を通る。**
+> **`.cer` は、鍵リングが欠けたときに落ちる先**として在る。
 
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。

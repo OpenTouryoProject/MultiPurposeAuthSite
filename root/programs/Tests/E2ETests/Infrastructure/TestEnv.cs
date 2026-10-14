@@ -35,6 +35,7 @@
 //*  2026/10/04  玄人 幸道         到達性のプローブを数回試す（#266。DBストアで踏んだ）
 //*  2026/10/04  玄人 幸道         種データを作らせる口をここへ移した（#264）
 //*  2026/10/06  玄人 幸道         構成ファイルのクライアントの同意を先に通す（#272 の段階 2）
+//*  2026/10/14  玄人 幸道         到達性の記憶を読み直さない（並行したときに落ちていた）
 //**********************************************************************************
 
 using System;
@@ -206,7 +207,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
             }
 
-            return this._reachable.Value;
+            //  **記憶を読み直さない。**
+            //    **並行して走る別のテストが、再試行のために null に戻している**
+            //    ことがあり、`.Value` が
+            //    `Nullable object must have a value` で落ちた（実測。`npg` の通しで
+            //    **netfx の 2 件が Skip にならず失敗した**）。
+            //    **3 回とも届かなかった**のがここなので、false を返す。
+            return false;
         }
 
         /// <summary>プローブの試行回数（#266）</summary>
@@ -497,6 +504,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>2 人目のテスト ユーザ名の土台（接尾辞を付ける前）</summary>
         private const string SecondUserBase = "tanaka";
 
+        /// <summary>WebAuthn の資格情報を持つ利用者の素（#277 の段階 7）</summary>
+        private const string WebAuthnUserBase = "webauthn_tanaka";
+
         /// <summary>`MPAS_TESTUSER` による上書き（両ターゲットに効く）</summary>
         private static string _testUserOverride = null;
 
@@ -543,6 +553,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static string SecondUserName(string targetKey)
         {
             return SecondUserBase + Suffix(targetKey);
+        }
+
+        /// <summary>
+        /// WebAuthn の資格情報を持つ利用者（#277 の段階 7）。
+        /// </summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>利用者名</returns>
+        /// <remarks>
+        /// **種データが、この利用者にだけ資格情報を 3 件付ける**
+        /// （`FIDO.TestCredentials`。**net10.0 版だけ**）。
+        ///
+        /// **テスト ユーザに付けないのは**、
+        /// **`RT-137.1` / `RT-137.2` が「この利用者は認証器を登録していない」ことを
+        /// 前提に書かれている**ためである。
+        /// </remarks>
+        public static string WebAuthnUserName(string targetKey)
+        {
+            return WebAuthnUserBase + Suffix(targetKey);
         }
 
         /// <summary>上流（ID フェデレーションの IdP）のテスト ユーザ名</summary>

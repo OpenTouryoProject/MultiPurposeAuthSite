@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/04  西野 大介         新規
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
+//*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -53,6 +54,10 @@ using Dapper;
 namespace MultiPurposeAuthSite.Data
 {
     /// <summary>BaseRoleStore</summary>
+    /// <remarks>
+    /// **例外の扱いは `CmnUserStore` と同じ**（#300）。
+    /// **書き込みは握らず投げ直し、読み取りは握って既定値を返す。**
+    /// </remarks>
     internal class CmnRoleStore : CmnStore
     {
         #region IRoleStore
@@ -125,7 +130,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -465,7 +472,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -594,7 +603,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;

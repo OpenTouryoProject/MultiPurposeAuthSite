@@ -28,6 +28,10 @@
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンのキャッシュをやめた（#271）
 //*  2026/10/06  玄人 幸道         同意の一覧と取り消しを追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthn / MsPass の画面を削除（#137）
+//*  2026/10/09  西野 大介         オンライン決済サービス、トークン取得処理の削除
+//*  2026/10/09  玄人 幸道         net10.0 版に合わせて、削除の残りを落とした
+//*  2026/10/09  玄人 幸道         折り返し先の既定をtest_self_codeに戻した
+//*  2026/10/14  玄人 幸道         GDPR削除を物理削除に（DBストアなら CASCADE で関連明細も消える。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -107,10 +111,6 @@ namespace MultiPurposeAuthSite.Controllers
             AddPhoneSuccess,
             /// <summary>RemovePhoneSuccess</summary>
             RemovePhoneSuccess,
-            /// <summary>AddPaymentInformationSuccess</summary>
-            AddPaymentInformationSuccess,
-            /// <summary>RemovePaymentInformationSuccess</summary>
-            RemovePaymentInformationSuccess,
             /// <summary>AddUnstructuredDataSuccess</summary>
             AddUnstructuredDataSuccess,
             /// <summary>RemoveUnstructuredDataSuccess</summary>
@@ -202,8 +202,6 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
                 : message == EnumManageMessageId.AddPhoneSuccess ? Resources.ManageController.AddPhoneSuccess
                 : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
-                : message == EnumManageMessageId.AddPaymentInformationSuccess ? Resources.ManageController.AddPaymentInformationSuccess
-                : message == EnumManageMessageId.RemovePaymentInformationSuccess ? Resources.ManageController.RemovePaymentInformationSuccess
                 : message == EnumManageMessageId.AddUnstructuredDataSuccess ? Resources.ManageController.AddUnstructuredDataSuccess
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
                 : message == EnumManageMessageId.AddSaml2OAuth2DataSuccess ? Resources.ManageController.AddSaml2OAuth2DataSuccess
@@ -229,14 +227,10 @@ namespace MultiPurposeAuthSite.Controllers
                     PhoneNumber = user.PhoneNumber,
                     // 2FA
                     TwoFactor = user.TwoFactorEnabled,
-                    // 支払元情報
-                    HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
                     // 非構造化データ
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = hasSaml2OAuth2Data,
-                    // Scopes
-                    Scopes = Const.StandardScopes
+                    HasSaml2OAuth2Data = hasSaml2OAuth2Data
                 };
 
                 // 管理画面の表示
@@ -1485,224 +1479,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Payment Information
-
-        #region Create
-
-        /// <summary>
-        /// 支払元情報の追加画面（初期表示）
-        /// GET: /Manage/AddPaymentInformation
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        public ActionResult AddPaymentInformation()
-        {
-            if (Config.CanEditPayment
-                && Config.EnableEditingOfUserAttribute)
-            {
-                if (Config.EnableStripe)
-                {
-                    ViewBag.PublishableKey = Config.Stripe_PK;
-                    return View("AddPaymentInformationStripe");
-                }
-                else if (Config.EnablePAYJP)
-                {
-                    ViewBag.PublishableKey = Config.PAYJP_PK;
-                    return View("AddPaymentInformationPAYJP");
-                }
-                else
-                {
-                    throw new NotSupportedException("Payment service is not enabled.");
-                }
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-
-        /// <summary>
-        /// 支払元情報の追加画面（支払元情報設定）
-        /// POST: /Manage/AddPaymentInformation
-        /// </summary>
-        /// <param name="model">ManageAddPaymentInformationViewModel</param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddPaymentInformation(ManageAddPaymentInformationViewModel model)
-        {
-            if (Config.CanEditPayment
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ManageAddPaymentInformationViewModelの検証
-                if (ModelState.IsValid)
-                {
-                    // ManageAddPaymentInformationViewModelの検証に成功
-
-                    // ユーザの検索
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                    if (user != null)
-                    {
-                        // ユーザを取得できた。
-
-                        // TokenからClientIDに変換する。
-                        JObject jobj = await WebAPIHelper.GetInstance().CreateaOnlinePaymentCustomerAsync(user.Email, model.PaymentInformation);
-
-                        // 支払元情報（ClientID）の設定
-                        user.PaymentInformation = (string)jobj["id"];
-                        // ユーザーの保存
-                        IdentityResult result = await UserManager.UpdateAsync(user);
-
-                        // 結果の確認
-                        if (result.Succeeded)
-                        {
-                            // 成功
-
-                            // 再ログイン
-                            await this.ReSignInAsync();
-
-                            // Index - SetPasswordSuccess
-                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddPaymentInformationSuccess });
-                        }
-                        else
-                        {
-                            // 失敗
-                            this.AddErrors(result);
-                        }
-                    }
-                    else
-                    {
-                        // ユーザを取得できなかった。
-                    }
-                }
-                else
-                {
-                    // ManageAddPaymentInformationViewModelの検証に失敗
-                }
-
-                // 再表示
-                if (Config.EnableStripe)
-                {
-                    ViewBag.PublishableKey = Config.Stripe_PK;
-                    return View("AddPaymentInformationStripe");
-                }
-                else if (Config.EnablePAYJP)
-                {
-                    ViewBag.PublishableKey = Config.PAYJP_PK;
-                    return View("AddPaymentInformationPAYJP");
-                }
-                else
-                {
-                    throw new NotSupportedException("Payment service is not enabled.");
-                }
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-
-        #endregion
-
-        #region Charge
-
-        /// <summary>
-        /// 課金
-        /// POST: /Manage/ChargeByPaymentInformation
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> ChargeByPaymentInformation()
-        {
-            if (Config.CanEditPayment
-                && Config.EnableEditingOfUserAttribute
-                && Config.IsDebug)
-            {
-                string access_token = (string)Session[OAuth2AndOIDCConst.AccessToken];
-
-                if (!string.IsNullOrEmpty(access_token)) {
-                    // 課金のテスト処理
-                    string ret = await Sts.Helper.GetInstance().
-                        CallOAuth2ChageToUserWebAPIAsync(access_token, "jpy", "1000");
-
-                    if (ret == "\"OK\"")
-                    {
-                        // 元の画面に戻る
-                        return RedirectToAction("Index");
-                    }
-                    else { }
-                }
-                else { }
-            }
-            else { }
-
-            // エラー画面
-            return View("Error");
-        }
-
-        #endregion
-
-        #region Delete
-
-        /// <summary>
-        /// 支払元情報の削除
-        /// POST: /Manage/RemovePaymentInformation
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemovePaymentInformation()
-        {
-            if (Config.CanEditPayment
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                // 支払元情報のクリア
-                user.PaymentInformation = "";
-                // ユーザーの保存
-                IdentityResult result = await UserManager.UpdateAsync(user);
-
-                // 結果の確認
-                if (result.Succeeded)
-                {
-                    // 支払元情報 削除の成功
-
-                    // 再ログイン
-                    if (await this.ReSignInAsync())
-                    {
-                        // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemovePaymentInformationSuccess });
-                    }
-                    else
-                    {
-                        // 再ログインに失敗
-                    }
-                }
-                else
-                {
-                    // 支払元情報 削除の失敗
-                }
-
-                // Index - Error
-                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-
-        #endregion
-
-        #endregion
-
         #region Unstructured Data
 
         #region Create
@@ -1907,12 +1683,12 @@ namespace MultiPurposeAuthSite.Controllers
                     // 初期
                     model = new ManageAddSaml2OAuth2DataViewModel();
 
-                    // **折り返し先の既定は、管理画面の自己テスト**（C-10）。
-                    //   **この画面の「トークンを取る」は、この値が登録されていないと通らない。**
-                    //   以前は `CheckRedirectUri` が「この URL なら登録を確かめずに通す」形だったが、
-                    //   **本番で閉じられない迂回路**だったので、**記号にして通常の照合に載せた。**
-                    //   **動作確認が済んだら、自分の RP の折り返し先に書き換える。**
-                    model.RedirectUriCode = Const.TestSelfCodeManage;
+                    // **折り返し先の既定は、自己テストの受け口**（`test_self_code`）。
+                    //   **そのまま動作確認でき、済んだら自分の RP の折り返し先に書き換える。**
+                    //
+                    //   **以前は `test_self_code_manage`（管理画面の「トークンを取る」）だった**が、
+                    //   **その画面は廃止されたので、記号ごと落とした。**
+                    model.RedirectUriCode = Const.TestSelfCode;
                 }
 
                 return View(model);
@@ -2025,59 +1801,6 @@ namespace MultiPurposeAuthSite.Controllers
                 // エラー画面
                 return View("Error");
             }
-        }
-
-        #endregion
-
-        #region Get token
-
-        /// <summary>
-        /// OAuth2アクセストークンの取得
-        /// POST: /Manage/GetOAuth2Token
-        /// </summary>
-        /// <param name="model">ManageIndexViewModel</param>
-        /// <returns>ActionResult</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public ActionResult GetOAuth2Token(ManageIndexViewModel model)
-        {
-            if (Config.CanEditSaml2OAuth2Data
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // OAuth2AuthorizationCodeGrantClientViewModelの検証
-                if (ModelState.IsValid)
-                {
-                    // 認可エンドポイント
-                    string oAuthAuthorizeEndpoint =
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + Config.OAuth2AuthorizeEndpoint;
-
-                    // client_id
-                    string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-
-                    // redirect_uri
-                    string redirect_uri = CustomEncode.UrlEncode2(
-                        Config.OAuth2ClientEndpointsRootURI
-                        + Config.OAuth2AuthorizationCodeGrantClient_Manage);
-
-                    // state (nonce) // 記号は入れない。
-                    string state = GetPassword.Generate(10, 0);
-                    Session["get_oauth2_token_state"] = state;
-
-                    return Redirect(
-                        oAuthAuthorizeEndpoint +
-                        "?client_id=" + client_id +
-                        "&response_type=code" +
-                        "&redirect_uri=" + redirect_uri +
-                        "&scope=" + model.Scopes +
-                        "&state=" + state +
-                        "&response_mode=form_post");
-                }
-            }
-
-            // エラー画面
-            return View("Error");
         }
 
         #endregion
@@ -2212,50 +1935,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                #region データ消去
-                // 既定の属性
-                //user.Id = "";
-                user.UserName = user.Id;
-                user.PasswordHash = "";
-                user.Email = user.Id + "@yyy.com";
-                user.EmailConfirmed = false;
-                user.PhoneNumber = user.Id;
-                user.PhoneNumberConfirmed = false;
-                user.AccessFailedCount = 0;
-                user.LockoutEnabled = false;
-                user.LockoutEndDateUtc = DateTime.MaxValue;
-                //user.SecurityStamp = user.SecurityStamp;
-                user.TwoFactorEnabled = false;
-                // Collection
-                //user.Roles = null;
-                //user.Logins = null;
-                //user.Claims = null;
+                // 物理削除 DBストアなら `ON DELETE CASCADE` で関連明細も消える。
+                IdentityResult result = await UserManager.DeleteAsync(user);
 
-                // 追加の属性
-                user.ClientID = user.Id;
-                user.PaymentInformation = "";
-                user.UnstructuredData = "";
-                //user.CreatedDate = ;
-                //user.PasswordChangeDate = 
-                #endregion
-
-                // ユーザ・データの削除
-                IdentityResult result = null;
-                
-                foreach (UserLoginInfo l in user.Logins)
-                {
-                    result = await UserManager.RemoveLoginAsync(user.Id, l);
-                }
-                user.Logins = null;
-                
-                foreach (Claim c in user.Claims)
-                {
-                    result = await UserManager.RemoveClaimAsync(user.Id, c);
-                }
-                user.Claims = null;
-
-                result = await UserManager.UpdateAsync(user);
-                
                 if (result.Succeeded)
                 {
                     // サインアウト（Cookieの削除）
@@ -2274,151 +1956,6 @@ namespace MultiPurposeAuthSite.Controllers
             // エラー画面
             return View("Error");
         }
-
-        #endregion
-
-        #region Client (Redirectエンドポイント)
-
-        #region Authorization Codeグラント種別
-
-        /// <summary>
-        /// Authorization Codeグラント種別のClientエンドポイント
-        /// 認可レスポンス（仲介コード）を受け取って処理する。
-        /// ・仲介コードを使用してAccess Token・Refresh Tokenを取得
-        /// </summary>
-        /// <param name="code">仲介コード</param>
-        /// <param name="state">state</param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
-        /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
-        [HttpPost]
-        //[ValidateAntiForgeryToken] // response_mode=form_postで実装しているためハズす。
-        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
-        {
-            if (Config.CanEditSaml2OAuth2Data
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // Tokenエンドポイントにアクセス
-                Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-
-                // 結果を格納する変数。
-                Dictionary<string, string> dic = null;
-                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
-                {
-                    Code = code
-                };
-
-                //  client_Idから、client_secretを取得。
-                string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
-
-                // stateの検証
-                if (state == (string)Session["get_oauth2_token_state"])
-                {
-                    // state正常
-                    Session["get_oauth2_token_state"] = ""; // 誤動作防止
-
-                    #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
-
-                    // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri
-                        = Config.OAuth2ClientEndpointsRootURI
-                        + Config.OAuth2AuthorizationCodeGrantClient_Manage;
-
-                    // Tokenエンドポイントにアクセス
-                    model.Response = await Sts.Helper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
-                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                    #endregion
-
-                    // 余談：OpenID Connectであれば、ここで id_token 検証。
-
-                    // 結果の表示
-                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
-
-                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
-
-                    // 課金処理で使用する。
-                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken;
-                }
-                else
-                {
-                    // state異常
-                }
-
-                // 画面の表示。
-                return View(model);
-            }
-            else
-            {
-                return View("Error");
-            }
-        }
-
-        /// <summary>
-        /// Tokenを使った処理のテストコード
-        /// ・Refresh Tokenを使用してAccess Tokenを更新
-        /// ・Access Tokenを使用してResourceServerのWebAPIにアクセス
-        /// </summary>
-        /// <param name="accessToken"></param>
-        /// <param name="refreshToken"></param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
-        {
-            if (Config.CanEditSaml2OAuth2Data
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // OAuthAuthorizationCodeGrantClientViewModelの検証
-                if (ModelState.IsValid)
-                {
-                    // 結果を格納する変数。
-                    Dictionary<string, string> dic = null;
-
-                    #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
-
-                    Uri tokenEndpointUri = new Uri(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-
-                    // Tokenエンドポイントにアクセス
-
-                    //  client_Idから、client_secretを取得。
-                    string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                    string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
-
-                    model.Response = await Sts.Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
-                        tokenEndpointUri, client_id, client_secret, model.RefreshToken);
-                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                    // 結果の表示
-                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                        CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
-
-                    model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
-
-                    // 課金処理で使用する。
-                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken;
-
-                    #endregion
-                }
-
-                // 画面の表示。
-                ModelState.Clear();
-                return View("OAuth2AuthorizationCodeGrantClient", model);
-            }
-            else
-            {
-                return View("Error");
-            }
-        }
-
-        #endregion
 
         #endregion
 

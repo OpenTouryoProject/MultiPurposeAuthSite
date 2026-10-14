@@ -180,6 +180,12 @@
   <data name="IdFederationLoginSubmit" xml:space="preserve">
     <value>ID連携でログインする。</value>
   </data>
+  <data name="IdFederationSaml2Login" xml:space="preserve">
+    <value>ID連携ログイン（SAML2）</value>
+  </data>
+  <data name="IdFederationSaml2LoginSubmit" xml:space="preserve">
+    <value>SAML2のID連携でログインする。</value>
+  </data>
   <data name="LoginForgotPasswordActionLink" xml:space="preserve">
     <value>パスワードを忘れた場合。</value>
   </data>

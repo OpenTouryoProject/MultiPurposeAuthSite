@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
+//*  2026/10/11  玄人 幸道         FromRedirectQuery でSAMLRequestも読めるようにした（#286 の段階 3）
+//*  2026/10/12  玄人 幸道         アサーションの属性を読むようにした（#286 の段階 4）
 //**********************************************************************************
 
 using System;
@@ -208,13 +210,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         }
 
         /// <summary>
-        /// Redirect Binding で返ったクエリ文字列から、SAMLResponse を XML に戻す。
+        /// Redirect Binding のクエリ文字列から、SAMLResponse / SAMLRequest を XML に戻す。
         /// </summary>
         /// <param name="urlOrQuery">URL でもクエリ文字列でもよい</param>
+        /// <param name="name">パラメタの名前（既定は `SAMLResponse`）</param>
         /// <returns>XML（戻せなければ null）</returns>
-        public static string FromRedirectQuery(string urlOrQuery)
+        /// <remarks>
+        /// **`SAMLRequest` も同じ符号化である**（deflate ＋ base64）。
+        /// **下流が送る `AuthnRequest` を読むのに使う**（#286 の段階 3）。
+        /// </remarks>
+        public static string FromRedirectQuery(string urlOrQuery, string name = "SAMLResponse")
         {
-            string value = QueryValue(urlOrQuery, "SAMLResponse");
+            string value = QueryValue(urlOrQuery, name);
 
             if (string.IsNullOrEmpty(value))
             {
@@ -268,6 +275,45 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return null;
         }
 
+        /// <summary>クエリ文字列の 1 つの値を差し替える（#293 の段階 4）</summary>
+        /// <param name="urlOrQuery">URL でもクエリ文字列でもよい</param>
+        /// <param name="name">名前</param>
+        /// <param name="value">新しい値（符号化していない値）</param>
+        /// <returns>差し替えた URL / クエリ文字列（その名前が無ければ、そのまま返す）</returns>
+        /// <remarks>
+        /// **他のパラメタは 1 文字も触らない。**
+        /// **Redirect Binding の署名は「受け取った符号のまま」で計算される**
+        /// （SAML 2.0 Bindings 3.4.4.1）ので、**組み直すと、壊していない所まで変わる。**
+        /// </remarks>
+        public static string ReplaceQueryValue(string urlOrQuery, string name, string value)
+        {
+            if (string.IsNullOrEmpty(urlOrQuery))
+            {
+                return urlOrQuery;
+            }
+
+            int q = urlOrQuery.IndexOf('?');
+            string head = (q < 0) ? "" : urlOrQuery.Substring(0, q + 1);
+            string[] pairs = ((q < 0) ? urlOrQuery : urlOrQuery.Substring(q + 1)).Split('&');
+
+            for (int i = 0; i < pairs.Length; i++)
+            {
+                int eq = pairs[i].IndexOf('=');
+
+                if (eq < 0)
+                {
+                    continue;
+                }
+
+                if (Uri.UnescapeDataString(pairs[i].Substring(0, eq)) == name)
+                {
+                    pairs[i] = pairs[i].Substring(0, eq + 1) + Uri.EscapeDataString(value);
+                }
+            }
+
+            return head + string.Join("&", pairs);
+        }
+
         /// <summary>応答の XML から、よく見る値を読む（#275）</summary>
         /// <param name="xml">XML</param>
         /// <returns>Saml2Response（読めなければ null）</returns>
@@ -314,8 +360,118 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     "/samlp:Response/saml:Assertion/saml:Conditions", "NotOnOrAfter"),
                 HasAssertion = (doc.SelectSingleNode(
                     "/samlp:Response/saml:Assertion", ns) != null),
-                HasSignature = (doc.SelectSingleNode("//*[local-name()='SignatureValue']") != null)
+                HasSignature = (doc.SelectSingleNode("//*[local-name()='SignatureValue']") != null),
+                Attributes = Saml2.ReadAttributes(doc, ns)
             };
+        }
+
+        /// <summary>
+        /// アサーションの `AttributeStatement` を読む（#286 の段階 4）。
+        /// </summary>
+        /// <param name="doc">応答の XmlDocument</param>
+        /// <param name="ns">XmlNamespaceManager</param>
+        /// <returns>
+        /// 属性（鍵は `Name`。値は最初の `AttributeValue`）。
+        /// **無ければ空の辞書**（null は返さない）。
+        /// </returns>
+        /// <remarks>
+        /// **`Name` だけを鍵にする**（`FriendlyName` は別に持つ）。
+        /// **出す側が何を名乗っているかを測る**ので、
+        /// **製品側（`CmnSamlAttributes.Read`）のような別名の解決はしない。**
+        /// </remarks>
+        private static Dictionary<string, string> ReadAttributes(
+            XmlDocument doc, XmlNamespaceManager ns)
+        {
+            Dictionary<string, string> ret = new Dictionary<string, string>();
+
+            XmlNodeList attributes = doc.SelectNodes(
+                "/samlp:Response/saml:Assertion/saml:AttributeStatement/saml:Attribute", ns);
+
+            if (attributes == null)
+            {
+                return ret;
+            }
+
+            foreach (XmlNode attr in attributes)
+            {
+                string name = Saml2.NodeAttr(attr, "Name");
+                XmlNode value = attr.SelectSingleNode("saml:AttributeValue", ns);
+
+                if (string.IsNullOrEmpty(name) || value == null || ret.ContainsKey(name))
+                {
+                    continue;
+                }
+
+                ret.Add(name, value.InnerText);
+            }
+
+            return ret;
+        }
+
+        /// <summary>
+        /// アサーションの属性の `FriendlyName` と `NameFormat` を読む（#286 の段階 4）。
+        /// </summary>
+        /// <param name="xml">応答の XML</param>
+        /// <param name="name">属性の `Name`</param>
+        /// <param name="friendlyName">out FriendlyName（無ければ空）</param>
+        /// <param name="nameFormat">out NameFormat（同上）</param>
+        /// <returns>その `Name` の属性が在れば true</returns>
+        public static bool TryReadAttributeNames(
+            string xml, string name, out string friendlyName, out string nameFormat)
+        {
+            friendlyName = "";
+            nameFormat = "";
+
+            if (string.IsNullOrEmpty(xml))
+            {
+                return false;
+            }
+
+            XmlDocument doc = new XmlDocument();
+            doc.PreserveWhitespace = false;
+
+            try
+            {
+                doc.LoadXml(xml);
+            }
+            catch
+            {
+                return false;
+            }
+
+            XmlNamespaceManager ns = new XmlNamespaceManager(doc.NameTable);
+            ns.AddNamespace("samlp", UrnProtocol);
+            ns.AddNamespace("saml", UrnAssertion);
+
+            XmlNode attr = doc.SelectSingleNode(
+                "/samlp:Response/saml:Assertion/saml:AttributeStatement"
+                + "/saml:Attribute[@Name='" + name + "']", ns);
+
+            if (attr == null)
+            {
+                return false;
+            }
+
+            friendlyName = Saml2.NodeAttr(attr, "FriendlyName");
+            nameFormat = Saml2.NodeAttr(attr, "NameFormat");
+
+            return true;
+        }
+
+        /// <summary>XML の属性値を読む（無ければ空）</summary>
+        /// <param name="node">XmlNode</param>
+        /// <param name="name">属性の名前</param>
+        /// <returns>値</returns>
+        private static string NodeAttr(XmlNode node, string name)
+        {
+            if (node == null || node.Attributes == null)
+            {
+                return "";
+            }
+
+            XmlNode attr = node.Attributes[name];
+
+            return (attr == null) ? "" : attr.Value;
         }
 
         #endregion
@@ -441,6 +597,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>XML の中に署名（SignatureValue）があるか</summary>
         public bool HasSignature { get; set; }
+
+        /// <summary>アサーションの属性（#286 の段階 4。鍵は `Name`。無ければ空）</summary>
+        public Dictionary<string, string> Attributes { get; set; }
+
+        /// <summary>属性を 1 つ読む（無ければ空）</summary>
+        /// <param name="name">属性の `Name`</param>
+        /// <returns>値</returns>
+        public string Attribute(string name)
+        {
+            if (this.Attributes == null)
+            {
+                return "";
+            }
+
+            string value = "";
+
+            return this.Attributes.TryGetValue(name, out value) ? value : "";
+        }
 
         /// <summary>成功の応答か</summary>
         public bool IsSuccess

@@ -126,15 +126,6 @@
   <data name="AddSaml2OAuth2DataTitle" xml:space="preserve">
     <value>Add Saml2 and OAuth2 data</value>
   </data>
-  <data name="AddPaymentH4" xml:space="preserve">
-    <value>Add payment information</value>
-  </data>
-  <data name="AddPaymentSubmit" xml:space="preserve">
-    <value>Submit</value>
-  </data>
-  <data name="AddPaymentTitle" xml:space="preserve">
-    <value>Add payment information</value>
-  </data>
   <data name="AddPhoneNumberH4" xml:space="preserve">
     <value>Add phone number form</value>
   </data>
@@ -263,24 +254,6 @@
   </data>
   <data name="IndexSaml2OAuth2DataRemoveButton" xml:space="preserve">
     <value>Remove your Saml2 and OAuth2 data</value>
-  </data>
-  <data name="IndexOAuth2TokenGetButton" xml:space="preserve">
-    <value>Get your OAuth2 access token</value>
-  </data>
-  <data name="IndexPaymentButton" xml:space="preserve">
-    <value>To charge</value>
-  </data>
-  <data name="IndexPaymentInformation" xml:space="preserve">
-    <value>Payment information</value>
-  </data>
-  <data name="IndexPaymentInformationAddActionLink" xml:space="preserve">
-    <value>Add your payment information</value>
-  </data>
-  <data name="IndexPaymentInformationChangeActionLink" xml:space="preserve">
-    <value>Change your payment information</value>
-  </data>
-  <data name="IndexPaymentInformationRemoveButton" xml:space="preserve">
-    <value>Remove your payment information</value>
   </data>
   <data name="IndexPhoneNumber" xml:space="preserve">
     <value>Phone number</value>
@@ -464,5 +437,17 @@
   </data>
   <data name="IndexConsentGrantsActionLink" xml:space="preserve">
     <value>Manage</value>
+  </data>
+  <data name="AddWebAuthnDataAttestationTypeDescription" xml:space="preserve">
+    <value>How much provenance to ask of the authenticator. none asks for nothing (the default here); indirect / direct receive a statement, which Fido2 verifies.</value>
+  </data>
+  <data name="AddWebAuthnDataAuthenticatorTypeDescription" xml:space="preserve">
+    <value>Which kind of authenticator to use. platform is built into the device (Windows Hello / TPM); cross-platform is external (a security key). Not specified means no restriction.</value>
+  </data>
+  <data name="AddWebAuthnDataUserVerificationDescription" xml:space="preserve">
+    <value>Whether to ask the user to verify themselves (PIN or biometrics). required / preferred / discouraged. The choice on this screen is what goes into the request.</value>
+  </data>
+  <data name="AddWebAuthnDataResidentCredentialsDescription" xml:space="preserve">
+    <value>Store the credential on the authenticator itself (a discoverable credential). It allows signing in without typing a user name.</value>
   </data>
 </root>

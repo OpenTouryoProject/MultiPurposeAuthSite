@@ -99,6 +99,10 @@
 
     付けなければ、有効期限のテストはケースを作らない（Skip にもならない）。
 
+.PARAMETER NoWebUI
+    ブラウザで測るもの（`Tests/WebUI`。識別子 UI-n.n）を走らせない。
+    既定では走らせる（ブラウザが無ければ Skip する）。
+
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
@@ -140,6 +144,7 @@ param(
     [switch] $NoNetFx,
     [switch] $NetFxMtls,
     [switch] $ShortLifetimes,
+    [switch] $NoWebUI,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
@@ -326,6 +331,33 @@ function Set-IdFederationEnv
 
     # **E2E の下流は root で配信する**（VS の /MultiPurposeAuthSite とは形が違う）
     $env:IdFederationRedirectEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationRedirectEndPoint'
+
+    # **上流の id_token の検証鍵**（#289 の段階 1）。
+    #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す。**
+    #   **通常は discovery から引く**ので、これは引けなかったときの倒れ先である。
+    $env:IdFederationOidcDiscoveryUrl = 'https://localhost:44301/.well-known/openid-configuration'
+    $env:IdFederationOidcCerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
+
+    # **SAML2 の ID 連携**（#286 の段階 2）。
+    #   **上流の SSO の口**と、**自分の ACS**（上流の redirect_uri_saml に登録した値）と、
+    #   **期待する上流の Issuer**と、**上流の署名証明書**。
+    #   **同じ client_id を使う**（上流は Issuer = http://<client_id> で SP を引く）。
+    #   **メタデータの URL**（#291）。**口と証明書は、ここから引く。**
+    $env:IdFederationSaml2MetadataUrl = 'https://localhost:44301/samlmetadata'
+    $env:IdFederationSaml2RequestEndpoint = 'https://localhost:44301/saml2request'
+    $env:IdFederationSaml2ResponseEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationAssertionConsumerService'
+    $env:IdFederationSaml2IssuerId = 'https://ssoauth.opentouryo.com'
+    $env:IdFederationSaml2CerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
+
+    # **user store の秘密を暗号化する鍵**（#297）。
+    #   **既定の通しを「暗号化した状態」で回す**（`RT-297.*` が、その往復を測る）。
+    #   **値はテスト用**で、**出力しない**（他の秘密と同じ扱い。`TESTING.md` 9 節）。
+    $env:UserStoreSecretPassword = 'E2E_SecretBox_8rJ2vQ5mZ1xK'
+
+    # **退役させる途中の署名証明書**（#292 の段階 3）。
+    #   **/samlmetadata が 2 本広告する状態を作る**（`SA-2.2` が、それを測る）。
+    #   **値は「いま署名に使っていない証明書」**でよい（広告するだけなので）。
+    $env:PreviousSigningCerFilePaths = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
 }
 
 function Wait-Site
@@ -731,6 +763,15 @@ public static class MpasTestTls
 
     if (-not $ShortLifetimes) {
         $exclude = 'FullyQualifiedName!~LifetimeTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    # **ブラウザで測るもの（UI）を外す**（#277 の段階 7）。
+    #   **既定では走らせる。** **ブラウザが無ければ Skip する**ので、
+    #   **netfx 版やコンテナと同じ流儀**で、測れないことが結果に出る。
+    #   **外す口だけ用意しておく**（ブラウザを動かしたくない場合）。
+    if ($NoWebUI) {
+        $exclude = 'FullyQualifiedName!~Tests.WebUI'
         if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
     }
 

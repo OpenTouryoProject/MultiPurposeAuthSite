@@ -1,0 +1,80 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Index
+    //* クラス日本語名  ：ID 連携の上流 IdP の一覧（管理画面）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.ViewModels
+
+@model IEnumerable<IdFederationUpstreamViewModel>
+
+@{
+    ViewBag.Title = "ID Federation Upstreams";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<p class="text-success">@ViewBag.StatusMessage</p>
+
+@*  **この画面が編むのは user store の行だけ**である（#292 の段階 2）。
+    **設定ファイル（appSettings の IdFederationUpstreams）の行は、ここには出ない。**
+    **同じ鍵なら設定が勝つ**ので、**設定に在る鍵を足しても使われない。** *@
+<p>
+    @Html.ActionLink("Create", "Create")
+</p>
+
+<table class="table">
+    <tr>
+        <th>Key</th>
+        <th>DisplayName</th>
+        <th>Protocol</th>
+        <th>Enabled</th>
+        <th>Issuer</th>
+        <th></th>
+    </tr>
+    @foreach (IdFederationUpstreamViewModel upstream in Model)
+    {
+        <tr>
+            <td>@upstream.UpstreamKey</td>
+            <td>@upstream.DisplayName</td>
+            <td>@upstream.Protocol</td>
+            <td>@upstream.Enabled</td>
+            <td>@upstream.Issuer</td>
+            <td>
+                @Html.ActionLink("Edit", "Edit", new { key = upstream.UpstreamKey })
+                @using (Html.BeginForm("Delete", "IdFederationAdmin", FormMethod.Post,
+                    new { style = "display:inline", onsubmit = "Fx_OnSubmit();" }))
+                {
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="key" value="@upstream.UpstreamKey" />
+                    <button type="submit" class="btn btn-link">Delete</button>
+                }
+            </td>
+        </tr>
+    }
+</table>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

@@ -250,6 +250,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Id federation login (SAML2) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdFederationSaml2Login {
+            get {
+                return ResourceManager.GetString("IdFederationSaml2Login", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Login with id federation (SAML2) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdFederationSaml2LoginSubmit {
+            get {
+                return ResourceManager.GetString("IdFederationSaml2LoginSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Forgot your password ? に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string LoginForgotPasswordActionLink {

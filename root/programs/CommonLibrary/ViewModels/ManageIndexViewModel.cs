@@ -56,9 +56,6 @@ namespace MultiPurposeAuthSite.ViewModels
         public bool TwoFactorTOTP { get; set; }
 #endif
 
-        /// <summary>HasPaymentInformation（支払元情報の有無）</summary>
-        public bool HasPaymentInformation { get; set; }
-
         /// <summary>HasUnstructuredData（非構造化データの有無）</summary>
         public bool HasUnstructuredData { get; set; }
 
@@ -68,7 +65,5 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>HasFIDO2Data</summary>
         public bool HasFIDO2Data { get; set; }
 
-        /// <summary>Scopes</summary>
-        public string Scopes { get; set; }
     }
 }

@@ -66,12 +66,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// **上流には「同意の記録」という前提がある**（#280）。
     /// **上流は `UserStoreType=mem` なので、コンテナを作り直すと記録が消える。**
-    /// **この E2E は `prompt=none` で委譲する**ので、
-    /// **記録が無い上流に対しては `consent_required` になる**
-    /// （OIDC Core §3.1.2.6。#272 の段階 2。**IdP の側は仕様どおり**）。
     ///
-    /// **それは前提が整っていないだけ**なので、
-    /// `EnsureUpstreamConsentAsync` で整える。**測るのは ID 連携の一巡である。**
+    /// **`prompt=none` を外した**（#287）ので、**記録が無ければ上流は同意画面を出す。**
+    /// **`EnsureUpstreamConsentAsync` が、それを 1 度だけ押して整える。**
+    /// **測るのは ID 連携の一巡である。**
+    ///
+    /// > **外す前は `consent_required` で終わっていた**
+    /// > （OIDC Core §3.1.2.6。#272 の段階 2。**IdP の側は仕様どおり**）。
     /// </remarks>
     public class IdFederationTests : TargetTestBase
     {
@@ -103,7 +104,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Target(client.Target.DisplayName + " ← 上流 " + upstream);
 
-                r.Step("(1) 上流でサインインしておく（下流は prompt=none で委譲する）");
+                r.Step("(1) 上流でサインインしておく（この経路の確認を 1 本に絞るため）");
 
                 bool upstreamSignedIn =
                     await IdFederation.SignInUpstreamAsync(client, upstream);
@@ -127,10 +128,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("PKCE(S256) を付けて要求する", pkce,
                     "code_challenge_method=S256", pkce ? "付いている" : "**付いていない**");
 
-                bool promptNone = (fed.AuthorizeUrl ?? "").Contains("prompt=none");
+                //  **`prompt=none` は、もう付けない**（#287）。
+                //    **付いていないことを測る**（戻したら気付くように）。
+                bool promptNone = (fed.AuthorizeUrl ?? "").Contains("prompt=");
 
-                r.Verify("prompt=none で要求する（画面を出させない）", promptNone,
-                    "prompt=none", promptNone ? "付いている" : "**付いていない**");
+                r.Verify("prompt は付けない（上流が画面を出してよい）", !promptNone,
+                    "prompt なし", promptNone ? "**付いている**" : "付いていない");
 
                 r.Step("(3) 上流が認可応答（form_post）を返す");
 
@@ -244,7 +247,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         /// <remarks>
-        /// **下流は `prompt=none` で委譲する**ので、**上流が「黙って」認証できるときだけ通る。**
+        /// **上流にセッションが無ければ、上流はサインイン画面を出す**（#287 で `prompt=none` を外した）。
+        /// **そこを通らないかぎり `code` は返らない。**
         ///
         /// **上流は `login_required` を `redirect_uri` へ返す**（#254 で直した。OIDC Core §3.1.2.6）。
         /// **直す前はログイン画面を出していた**が、**どちらでも「下流はサインインしない」**ので、
@@ -260,11 +264,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 TestReport r = this.Report("RT-140.6",
                     "上流にセッションが無ければ、ID 連携は成立しない",
-                    "**下流は prompt=none で委譲する。** 上流が黙って認証できないときに"
-                    + "**勝手にサインインさせてしまっては、委譲の意味が無い。**"
-                    + "**上流が画面を出すか login_required を返すかは #254 の論点**で、"
-                    + "**どちらでも下流はサインインしない。**",
-                    "OIDC Core §3.1.2.1 / §3.1.2.6 / #140 / #254");
+                    "**下流は、上流の認証結果を受け取るだけ**である。"
+                    + "**上流が認証していないのにサインインさせてしまっては、委譲の意味が無い。**"
+                    + "**`prompt=none` を外したので、上流はサインイン画面を出す**（#287）。"
+                    + "**そこで認証されるまで `code` は返らない**ので、**下流はサインインしない。**"
+                    + "**外す前は `login_required` で終わっていた**（#254）が、"
+                    + "**どちらでも下流はサインインしない**という点は変わらない。",
+                    "OIDC Core §3.1.2.1 / §3.1.2.6 / #140 / #254 / #287");
 
                 r.Target(client.Target.DisplayName + " ← 上流 " + upstream + "（未サインイン）");
 

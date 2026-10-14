@@ -90,6 +90,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             private readonly string _pfxPasswordKey;
 
             /// <summary>設定キー名（検証に使う *.cer のパス）</summary>
+            /// <remarks>
+            /// **`SpRp_*CerFilePath` を読む。**
+            /// **あれは「この配備の証明書」**であり、**クライアント・サーバの共通設定**である
+            /// （雛形の節も `Client-Server共通設定`）。**自分の証明書として読んでよい**（#290）。
+            ///
+            /// **相手（上流）の証明書は、別のキーで持つ**
+            /// （`IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath`。#286 / #289）。
+            /// </remarks>
             private readonly string _cerFilePathKey;
 
             /// <summary>EC の曲線とダイジェスト（RSA のときは未使用）</summary>

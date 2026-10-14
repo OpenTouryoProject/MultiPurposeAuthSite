@@ -36,6 +36,8 @@
 //*  2026/10/01  玄人 幸道         管理者の作成で、利用者名とメアドを別に渡すようにした（#151 の段階 3）
 //*  2026/10/02  玄人 幸道         ロール名を正規化名で突き合わせる（ora / npg で付かなかった）（#257 で判明）
 //*  2026/10/07  玄人 幸道         Users.FIDO2PublicKey（MsPass専用）を削除（#137）
+//*  2026/10/09  玄人 幸道         Users.PaymentInformation を削除（オンライン決済の取り下げ）
+//*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -72,6 +74,26 @@ using Dapper;
 namespace MultiPurposeAuthSite.Data
 {
     /// <summary>BaseUserStore</summary>
+    /// <remarks>
+    /// **例外の扱い**（#300）。
+    ///
+    /// | | |
+    /// |---|---|
+    /// | **書き込み**（`Create` / `Update` / `Delete` / `Add*` / `Remove*`） | **握らない。** **ログに書いてから投げ直す** |
+    /// | 読み取り（`Find*` / `Get*`） | **握って既定値を返す**（従来どおり。**「居ない」と同じ扱い**になる） |
+    ///
+    /// **以前は書き込みも握っていた。**
+    /// **`IdentityResult` は成功になり、画面はリダイレクトし、データは変わらない** —
+    /// **「静かに失敗する」**状態だった。
+    /// **実例**（#299） : **GDPR の消去が Oracle で落ちていた**のに、**画面は成功に見えていた。**
+    ///
+    /// **`StopUserStoreException` は、以前から投げ直している**
+    /// （`Logging.MySQLLogForEx` の中。**STS 専用の配備で user store を止める**ための例外）。
+    ///
+    /// **読み取りを握るのを止めるかは、この Issue の外**である。
+    /// **Skip や「居ない」で成り立っている経路**（種データの作成など）が在るため、
+    /// **1 件ずつ意味を決める必要がある。**
+    /// </remarks>
     internal class CmnUserStore : CmnStore
     {
         #region ロール名の突き合わせに使う列
@@ -158,12 +180,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Id], [UserName], [NormalizedUserName], [PasswordHash], " +
                                         "    [Email], [NormalizedEmail], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], [TotpAuthenticatorKey], " +
-                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
+                                        "    [ClientID], [UnstructuredData], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @ClientID, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
 
@@ -174,12 +196,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Id\", \"UserName\", \"NormalizedUserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"NormalizedEmail\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", \"TotpAuthenticatorKey\", " +
-                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
+                                        "    \"ClientID\", \"UnstructuredData\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :NormalizedUserName, :PasswordHash, " +
                                         "        :Email, :NormalizedEmail, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, :TotpAuthenticatorKey, " +
-                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
+                                        "        :ClientID, :UnstructuredData, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -198,7 +220,6 @@ namespace MultiPurposeAuthSite.Data
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
                                             TotpAuthenticatorKey = user.TotpAuthenticatorKey,
                                             ClientID = user.ClientID,
-                                            PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
                                             DeviceToken = user.DeviceToken,
                                             CreatedDate = user.CreatedDate,
@@ -214,12 +235,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"id\", \"username\", \"normalizedusername\", \"passwordhash\", " +
                                         "    \"email\", \"normalizedemail\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
                                         "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", \"totpauthenticatorkey\", " +
-                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
+                                        "    \"clientid\", \"unstructureddata\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @ClientID, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
                             }
@@ -235,7 +256,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -680,7 +703,7 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Email] = @Email, [NormalizedEmail] = @NormalizedEmail, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
                                         "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
                                         "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
-                                        "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, " + 
+                                        "    [ClientID] = @ClientID, [UnstructuredData] = @UnstructuredData, " + 
                                         "    [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
                                         "WHERE [Id] = @Id", user);
 
@@ -694,7 +717,7 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Email\" = :Email, \"NormalizedEmail\" = :NormalizedEmail, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
                                         "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
                                         "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
-                                        "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, " +
+                                        "    \"ClientID\" = :ClientID, \"UnstructuredData\" = :UnstructuredData, " +
                                         "    \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
                                         "WHERE \"Id\" = :Id",
                                         new // 拡張メソッドで対策できる。
@@ -715,7 +738,6 @@ namespace MultiPurposeAuthSite.Data
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
                                             TotpAuthenticatorKey = user.TotpAuthenticatorKey,
                                             ClientID = user.ClientID,
-                                            PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
                                             DeviceToken = user.DeviceToken,
                                             //CreatedDate = user.CreatedDate,
@@ -732,7 +754,7 @@ namespace MultiPurposeAuthSite.Data
                                        "    \"email\" = @Email, \"normalizedemail\" = @NormalizedEmail, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
                                        "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
                                        "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
-                                       "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, " +
+                                       "    \"clientid\" = @ClientID, \"unstructureddata\" = @UnstructuredData, " +
                                        "    \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
                                        "WHERE \"id\" = @Id", user);
 
@@ -755,7 +777,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -970,7 +994,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -1080,7 +1106,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -1555,7 +1583,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -1789,7 +1819,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2185,7 +2217,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2402,7 +2436,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2467,8 +2503,13 @@ namespace MultiPurposeAuthSite.Data
 
                                 case EnumUserStoreType.PostgreSQL:
 
+                                    //  **id は書かない**（#300 で判明）。
+                                    //    **`serial`**（自動連番）なので、**列に挙げると値が 1 つ足りない。**
+                                    //    **PostgreSQL が `42601: INSERT has more target columns than
+                                    //    expressions` を返していたが、握っていたので表に出なかった** —
+                                    //    **クレームが 1 件も保存されていなかった**（ID 連携が属性を保存できない）。
                                     cnn.Execute(
-                                        "INSERT INTO \"userclaims\" (\"id\", \"userid\", \"issuer\", \"claimtype\", \"claimvalue\") " +
+                                        "INSERT INTO \"userclaims\" (\"userid\", \"issuer\", \"claimtype\", \"claimvalue\") " +
                                         "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
 
@@ -2481,7 +2522,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2577,7 +2620,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2688,7 +2733,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2886,7 +2933,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2958,7 +3007,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;

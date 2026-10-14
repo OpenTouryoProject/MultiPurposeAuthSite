@@ -177,12 +177,6 @@ namespace MultiPurposeAuthSite
                 );
             }
 
-            config.Routes.MapHttpRoute(
-                name: "ChageToUser",
-                routeTemplate: Config.ChageToUserWebAPI.Substring(1), // 先頭の[/]を削除
-                defaults: new { controller = "OAuth2ResourceServer", action = "ChageToUser" }
-            );
-
             #endregion
 
             //// トレース機能を有効化します。

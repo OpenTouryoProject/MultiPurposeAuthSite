@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2026/09/30  玄人 幸道         Twitter のアカウント情報の取得を削除（#249）
+//*  2026/10/09  西野 大介         オンライン決済サービス系処理の削除
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -271,137 +272,6 @@ namespace MultiPurposeAuthSite.Network
             //httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
             //return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
         //}
-
-        #endregion
-
-        #region OnlinePaymentWebAPI
-
-        /// <summary>CreateaOnlinePaymentCustomerAsync</summary>
-        /// <param name="email">email</param>
-        /// <param name="token">token</param>
-        /// <returns></returns>
-        public async Task<JObject> CreateaOnlinePaymentCustomerAsync(string email, string token)
-        {
-            // URL
-            string secretKey = "";
-            Uri webApiEndpointUri = null;
-
-            if (Config.EnableStripe)
-            {
-                webApiEndpointUri = new Uri("https://api.stripe.com/v1/customers");
-                secretKey = Config.Stripe_SK + ":";
-            }
-            else if (Config.EnablePAYJP)
-            {
-                webApiEndpointUri = new Uri("https://api.pay.jp/v1/customers");
-                secretKey = Config.PAYJP_SK + ":"; // 「:」はUID:PWDの「:」
-            }
-            else
-            {
-                throw new NotSupportedException("Payment service is not enabled.");
-            }
-
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = webApiEndpointUri
-            };
-
-            // HttpRequestMessage (Headers)
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                OAuth2AndOIDCConst.Basic,
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(secretKey, CustomEncode.us_ascii)));
-
-            if (Config.EnableStripe)
-            {
-                httpRequestMessage.Content = new FormUrlEncodedContent(
-                    new Dictionary<string, string>
-                    {
-                        { OAuth2AndOIDCConst.Scope_Email, email },
-                        { "source", token }
-                    });
-            }
-            else if (Config.EnablePAYJP)
-            {
-                httpRequestMessage.Content = new FormUrlEncodedContent(
-                    new Dictionary<string, string>
-                    {
-                        { OAuth2AndOIDCConst.Scope_Email, email },
-                        { "card", token }
-                    });
-            }
-            else
-            {
-                throw new NotSupportedException("Payment service is not enabled.");
-            }
-
-            httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
-
-            // HttpResponseMessage
-            httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
-            return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
-        }
-
-        /// <summary>ChargeToOnlinePaymentCustomersAsync</summary>
-        /// <param name="customerId">customerId</param>
-        /// <param name="currency">currency(jpy, etc.)</param>
-        /// <param name="amount">amount</param>
-        /// <returns>JObject</returns>
-        public async Task<JObject> ChargeToOnlinePaymentCustomersAsync(string customerId, string currency, string amount)
-        {
-            // URL
-            string secretKey = "";
-            Uri webApiEndpointUri = null;
-
-            if (Config.EnableStripe)
-            {
-                webApiEndpointUri = new Uri("https://api.stripe.com/v1/charges");
-                secretKey = Config.Stripe_SK;
-            }
-            else if (Config.EnablePAYJP)
-            {
-                webApiEndpointUri = new Uri("https://api.pay.jp/v1/charges");
-                secretKey = Config.PAYJP_SK + ":"; // 「:」はUID:PWDの「:」
-            }
-            else
-            {
-                throw new NotSupportedException("Payment service is not enabled.");
-            }
-
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = webApiEndpointUri
-            };
-
-            // HttpRequestMessage (Headers)
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                OAuth2AndOIDCConst.Basic,
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(secretKey, CustomEncode.us_ascii)));
-
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                    { "amount", amount },
-                    { "currency", currency },
-                    { "customer", customerId }
-                });
-            httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
-
-            // HttpResponseMessage
-            httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
-            return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
-        }
 
         #endregion
 

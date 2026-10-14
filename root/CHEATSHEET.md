@@ -44,6 +44,17 @@ cd root
 
 **`-Filter` と併せて使う**（寿命が短いので他のテストは落ちる）。**`-UpdateTestCases` は付けない**（原本が壊れる）。
 
+### ブラウザで測るもの（`UI-n.n`）だけを回す
+
+```powershell
+cd root\programs\Tests
+.\test.ps1 -Launch -NoNetFx -Filter "FullyQualifiedName~Tests.WebUI"
+```
+
+**既定の通しにも入っている**（**ブラウザが無ければ Skip** する。動かしたくなければ `-NoWebUI`）。
+**ブラウザの入れ方** : `bin\Debug\net10.0\playwright.ps1 install chromium`、または Chrome / Edge。
+詳細 → [`TESTING.md`](TESTING.md) 5 節「`UI-n.n`（ブラウザで測るもの）」
+
 ### mTLS（`FA-6`）を net48 版でも回す
 
 ```powershell

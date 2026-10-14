@@ -123,9 +123,6 @@
   <data name="AddSaml2OAuth2DataSuccess" xml:space="preserve">
     <value>Saml2, OAuth2データが追加されました。</value>
   </data>
-  <data name="AddPaymentInformationSuccess" xml:space="preserve">
-    <value>支払元情報が追加されました。</value>
-  </data>
   <data name="AddPhoneSuccess" xml:space="preserve">
     <value>電話番号が追加されました。</value>
   </data>
@@ -164,9 +161,6 @@
   </data>
   <data name="RemoveSaml2OAuth2DataSuccess" xml:space="preserve">
     <value>Saml2, OAuth2データが削除されました。</value>
-  </data>
-  <data name="RemovePaymentInformationSuccess" xml:space="preserve">
-    <value>支払元情報が削除されました。</value>
   </data>
   <data name="RemovePhoneSuccess" xml:space="preserve">
     <value>電話番号が削除されました。</value>

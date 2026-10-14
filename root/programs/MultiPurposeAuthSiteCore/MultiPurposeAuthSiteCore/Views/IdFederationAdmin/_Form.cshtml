@@ -1,0 +1,145 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：_Form
+    //* クラス日本語名  ：ID 連携の上流 IdP の入力欄（追加・編集で共用）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
+    //*  2026/10/14  玄人 幸道         署名鍵の入力欄を足した（#292 の段階 4-b）
+    //**********************************************************************************
+*@
+
+@model IdFederationUpstreamViewModel
+
+@*  **追加と編集で同じ欄**なので、1 か所に置く（**片方だけ直す事故を避ける**）。
+    **項目は設定（appSettings の IdFederationUpstreams）と同じ**である。 *@
+<div class="form-group">
+    @Html.LabelFor(m => m.Protocol, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.DropDownListFor(m => m.Protocol, new List<SelectListItem>()
+        {
+            new SelectListItem() { Text = "oidc", Value = "oidc" },
+            new SelectListItem() { Text = "saml2", Value = "saml2" }
+        }, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Protocol, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.Enabled, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.CheckBoxFor(m => m.Enabled)
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.DisplayName, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.DisplayName, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.DisplayName, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.Issuer, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.Issuer, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Issuer, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.ClientID, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.ClientID, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.ClientID, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.ClientSecret, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.ClientSecret, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.ClientSecret, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.DiscoveryUrl, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.DiscoveryUrl, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.DiscoveryUrl, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.JwkSetUri, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.JwkSetUri, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.JwkSetUri, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.MetadataUrl, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.MetadataUrl, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.MetadataUrl, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.CerFilePath, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.CerFilePath, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.CerFilePath, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.AuthorizeEndpoint, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.AuthorizeEndpoint, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.AuthorizeEndpoint, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.TokenEndpoint, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.TokenEndpoint, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.TokenEndpoint, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.UserInfoEndpoint, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.UserInfoEndpoint, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.UserInfoEndpoint, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.SsoEndpoint, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.SsoEndpoint, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.SsoEndpoint, "", new { @class = "text-danger" })
+    </div>
+</div>
+
+@*  **この上流へ送る AuthnRequest に署名する鍵**（SAML2。#292 の段階 4-b）。
+    **空なら共通設定**（SpRp_RsaPfxFilePath / SpRp_RsaPfxPassword）。 *@
+<div class="form-group">
+    @Html.LabelFor(m => m.SigningPfxFilePath, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.SigningPfxFilePath, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.SigningPfxFilePath, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.SigningPfxPassword, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.SigningPfxPassword, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.SigningPfxPassword, "", new { @class = "text-danger" })
+    </div>
+</div>

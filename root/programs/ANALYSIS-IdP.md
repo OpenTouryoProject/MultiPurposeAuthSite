@@ -74,7 +74,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | 拡張 | PKCE (RFC 7636) | ✓ | `plain` / `S256` |
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
-| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合。**上流は 1 つだけ**（D-15）。**目視・E2E とも実施済み**（上流は `store/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
+| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合、**`aud` も照合**（C-24 / #286 の段階 5）。**SAML2 でも委譲できる**（#286。`SA-6.*`）。**上流の SSO の口と署名証明書は、上流のメタデータから引く**（#291。**引けなければ設定**）。**上流の `id_token` の検証鍵は、上流の discovery（`jwks_uri`）から `kid` で引く**（#289 の段階 2）。**引けなければ設定の `.cer`**（段階 1。`IdFederationOidcCerFilePath`）。**メアド・利用者名・`email_verified` は、アサーションの属性で運ぶ**（#286 の段階 4。`SA-7.*`）。**上流は n 件**（#292 の段階 1・2。**設定 ＋ user store**。**管理画面は `/IdFederationAdmin`**。D-15）。**(2) の署名鍵は上流ごとに替えられる**（#292 の段階 4-a・4-b）。**目視・E2E とも実施済み**（上流は `store/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
 | | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は #213（net10.0）/ #216（net48） |
 
 **未実装**は 5 節にまとめた。
@@ -1393,8 +1393,9 @@ string.Format("?code={0}&state={1}", code, state)
 - **値が空のパラメタは付けない。** `state` は**要求に含まれたときだけ**返す（RFC 6749 §4.1.2）
 - **認可応答は、成功も失敗も全てここを通る**（`BuildRedirectUrl` の呼び出し元は両アプリで多数）
 
-> **`"&state=" + state` の連結は、まだ 4 か所に残っている**
-> （両アプリの `AccountController` の ID 連携と、`ManageController` の `GetOAuth2Token`）。
+> **`"&state=" + state` の連結は、まだ 2 か所に残っている**
+> （両アプリの `AccountController` の ID 連携。
+> **`ManageController` の `GetOAuth2Token` は、管理画面のトークン取得ごと削除された**）。
 > **こちらは「この実装が RP として送る認可要求」で、`state` は自分で作っている**
 > （`GetPassword.Generate(32, 0)` / `(10, 0)`。**記号を入れない**）。
 > **C-6 が問題にしていた「クライアントから来た値を、そのまま応答に連結する」経路ではない。**
@@ -1975,6 +1976,17 @@ if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
 
 **管理画面の「トークンを取る」（`GetOAuth2Token`）は、利用者自身のクライアント登録で認可を要求する。**
 **その折り返し先を登録値として表せるようにした**ので、**通常の照合に載り、分岐が要らなくなった。**
+
+> **管理画面の「トークンを取る」は、その後に削除された。**
+> **この画面は、管理画面からオンライン決済の WebAPI（`/ChageToUser`）を呼ぶためのもの**で、
+> **決済そのものを落としたので、要らなくなった**（下の「オンライン決済サービスの取り下げ」）。
+>
+> **分岐を消したこと（この項の本体）は、そのまま効いている。**
+> **記号 `test_self_code_manage` も落とし、新規登録の既定は `test_self_code` に戻した。**
+>
+> **`RT-C10.1` は残してある。** 測る中身を**「他のクライアントに登録されている URI は使えない」**
+> に建て直した（**消した分岐が許していたのは、この形**である）。
+> **`TC-1.3`（誰にも登録されていない URI）とは別の形**なので、両方要る。
 
 - **E2E** : **`RT-C10.1`**（**登録していないクライアントは、この折り返し先では認可コードを得られない。
   登録しているクライアントは得られる**）。
@@ -2568,6 +2580,81 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 > `-Launch` は既に 2 サイト立てている）。**上流に `EmailConfirmed = false` の利用者を置けば、
 > 拒否側も測れる。** #140 の段階 2 で同じ土台が要るので、そこでまとめて作る。
 
+### C-24. ID 連携で受け取る `id_token` の `aud` を確認していなかった **[Core][NetFx]** — **✅ 修正済み（#286 の段階 5）**
+
+**`IdToken.Verify` は、この配備では `aud` を見ない。**
+
+```csharp
+// OpenTouryo : IdToken.Verify（iss と exp を確認した後）
+if (string.IsNullOrEmpty(OAuth2AndOIDCParams.JwkSetFilePath))
+{
+    // Client側 : aud == ClientID か、ClientIDs に含まれるかを確認する
+}
+else
+{
+    // AuthZ側（検証用カバレッジ
+    // OAuth2 AuthZバージョンの実装で成功   ← aud を確認せずに true
+}
+```
+
+**「自分は認可サーバか」（`JwkSetFilePath` の有無）で分岐している**ため、
+**この配備はクライアント役の経路でも認可サーバ側の枝に入る**
+（`JwkSetFilePath` は認可サーバとして必要な設定である）。
+**残るのは `iss`（`SpRp_Isser`）と `exp` だけ**だった。
+
+**鍵の選び方（`CmnJwtToken.Verify`）と同じ分岐である**
+（Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601)）。
+
+**悪用できる経路ではなかった。** `id_token` は**上流の token エンドポイントから直接受け取る**もので
+（TLS ＋ クライアント認証の back-channel。`code` と交換する）、**利用者が差し込める値ではない。**
+**それでも、確認が 1 つ抜けていた。**
+
+| | ID 連携（OIDC） |
+|---|---|
+| `state` | 照合していた（セッション） |
+| `nonce` | 照合していた（セッション） |
+| PKCE（`code_verifier`） | 送っていた（#140 の段階 3） |
+| 認可応答の `iss`（RFC 9207） | 照合していた（#140 の段階 3 ＝ E-11） |
+| `id_token` の `iss` / `exp` | `IdToken.Verify` が見ていた |
+| **`id_token` の `aud`** | **見ていなかった** |
+
+**SAML2 の ID 連携は `Audience` を照合している**（`CmnSaml2Response` の `expectedAcsUrl`。#276）。
+**OIDC 側だけが抜けていた。**
+
+**対応（#286 の段階 5）。** **判定を `CommonLibrary` に置き**（**`Extensions.Sts.IdTokenAudience`**）、
+**両アプリの `IDFederationRedirectEndPoint` で、`IdToken.Verify` の直後に確認する。**
+
+| | |
+|---|---|
+| 期待値 | **`OAuth2AndOIDCParams.ClientID`**（**開始処理が `client_id` に使った値**と同じもの） |
+| `aud` の形 | **文字列でも配列でもよい**（RFC 7519 4.1.3 / OIDC Core 2）。**配列なら、その中に在ればよい** |
+| 無い / 空 | **通さない**（`aud` は OIDC Core が必須としているクレームである） |
+| `azp` | **見ない。** **上流に 1 つのクライアントとして登録される**ので、`aud` が自分を含むことだけを確認する |
+| 失敗したとき | **エラー画面**。**ログは既存の形に 1 項目足した**（`aud matched`。#253） |
+
+**Open棟梁 側の変更は要らない。** **`IdToken.Verify` が `out JObject` でペイロードを返す**ので、
+**呼び出し側で確認できる。**
+
+> **その後、ライブラリ側でも確認されるようになった**
+> （[OpenTouryo#603](https://github.com/OpenTouryoProject/OpenTouryo/issues/603)。
+> **設定で判定する版も、`aud` が `OAuth2AndOidcClientID` / `OAuth2AndOidcClientIDs` を含むことを見る**）。
+> **この項の確認は残してある** — **「その回のクライアント宛か」を厳密に見ており**
+> （ライブラリ側は「設定のどれかのクライアント宛か」）、
+> **落ちた理由がログの 1 行で分かる**（`aud matched`）ためである。
+
+**検証（実測 2026/10/12。net48 / net10.0 の両方）。**
+
+| 見たこと | 結果 |
+|---|---|
+| ビルド | 両系統で エラー 0 / 警告 0 |
+| 既存の E2E（通し） | **583 成功 / 失敗 0 / Skip 2**（退行なし。**上流は `aud` を正しく入れている**） |
+| **歯抜け** : 期待値を別の値に差し替えて流す | **`RT-140.4` / `RT-140.5` が両系統で落ちた**（`RT-140.6` / `RT-140.7` は通ったまま） |
+| そのときのログ | `(verified: True, nonce matched: True, aud matched: False)` — **落ちた理由が 1 行で分かる** |
+
+**歯抜けは、期待値の差し替えで測っている。**
+**上流に「別の宛先の `id_token`」を出させる口が無い**ため
+（`aud` は上流が `client_id` から決める）、**E2E の常設ケースは足していない。**
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -2584,7 +2671,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった。**標準クレームのサンプルを持たせた**（#261）。`IsDebug` のとき **2 人目のテスト利用者に OIDC Core 5.1 の形で仕込み**、雛形には対応付けのサンプルを コメントで置いた（`RT-261.1`）。**画面は変えていない**（入れ物の中身は導入する側が決める方針を保つ）。あわせて**クレームの型を JSON のまま返すよう直した**（`updated_at` は数値。以前は文字列。#184 と同種） |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | **✅ 解けた（#129 の段階 3）。** **alg → 鍵の対応を `SigningKeys` の表 1 か所に寄せ**、**`CreateJwkSetJson` がその表を回して `jwkcerts` を作る**ようにした（ソース参照）。**JWK Set は追記式**なので、**新しい鍵を先に載せ、RP のキャッシュが切れてから署名に切り替えられる**（手順は `CONFIGURATION.md`）。**広告と鍵が揃っていることは `RT-129.6` で測る** | **無停止で替えられるようになった**（残り : 旧い `kid` を外すのは手作業） |
-| D-15 | **ID フェデレーションの上流が 1 つだけ** | `Config.IdFederation{Authorize,Token,UserInfo,Redirect}Endpoint` の 1 組しか持てない。**#140 の段階 3 で連携キーを `(iss, sub)` にしたので、複数を持てる下地はできた**（`UserLogins` は issuer ごとに行を持てる）。残るのは**設定の形と、どの上流へ飛ばすかの画面**。**`SpRp_Isser`（期待する issuer）も 1 つしか持てない**ので、そこも合わせて要る | 複数の IdP と連携できない |
+| D-15 | **ID フェデレーションの上流が 1 つだけ**（✅ 解けた。#292 の段階 1・2） | **設定 `IdFederationUpstreams` で n 件登録でき、導線も n 個出る**（`CN-5.4` 〜 `CN-5.6` で実測）。**同じものを user store（`IdFederationUpstreams` 表。DDL は 3 方言）にも置け、管理画面（`/IdFederationAdmin`）から足せる**（#292 の段階 2。`RT-292.*`）。**読む順は 設定 → DB で、同じ鍵なら設定が勝つ。****相手ごとの値（`issuer` / `client_id` / 口 / 鍵 / メタデータ）は、その行が持つ。****折り返し口は共通設定のまま**（自分の URL なので相手ごとに変わらない） | **(2) の署名鍵は上流ごとに替えられる**（#292 の段階 4-a・4-b。Open棟梁 #606 の追随。`signing_pfx_file_path`。**設定でも DB でもよく、管理画面から入れられる**。`RT-292.4`）。**`client_secret` の暗号化は解けた**（#297。`UserStoreSecretPassword`）。**鍵の入れ替え（ロールオーバー）は、段階 3 で解けた**（出す側は 2 本広告し、受け取る側は 2 本試す。`SA-2.2` / `SA-6.6`）。**連携キーの幅も広げた**（`UserLogins.LoginProvider` 512 / `ProviderKey` 256。**上流が n 件になると長い値を踏む確率が上がる**ため。**SQL Server 2016 以降が前提**になった） |
 | D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **✅ 解けた（#151 の段階 2）。** **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、**秘密を替えても発行済みの値は動かない**（表から引くため）。以前は導出していたので替えられなかった（A-14） | **漏洩時に替えられるようになった** |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |

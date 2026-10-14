@@ -33,7 +33,6 @@ CREATE TABLE [Users](              -- Users
     [TotpAuthenticatorKey] [nvarchar](256) NULL,
     -- 追加の情報
     [ClientID] [nvarchar](256) NOT NULL,
-    [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
     [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
@@ -61,8 +60,14 @@ CREATE TABLE [UserRoles](          -- 関連エンティティ (Users *--- UserR
 
 CREATE TABLE [UserLogins](       -- Users ---* UserLogins
     [UserId] [nvarchar](38) NOT NULL,          -- PK
-    [LoginProvider] [nvarchar](128) NOT NULL,  -- *PK
-    [ProviderKey] [nvarchar](128) NOT NULL,    -- *PK
+    -- **連携キーの幅**（#292。上流が n 件になると、長い値を踏む確率が上がる）。
+    --   LoginProvider : **相手の `iss` / entityID**（URI なので Const.MaxLengthOfUri と同じ 512）
+    --   ProviderKey   : **相手の `sub` / NameID**（`sub` は 255 文字以内、persistent な
+    --                   NameID は 256 文字以内と決まっている）
+    --   **PK は 3 列で (38 + 512 + 256) * 2 = 1612 バイト**になる。
+    --   **SQL Server 2016 以降が前提**（索引キーは 1700 バイトまで。2014 以前は 900）。
+    [LoginProvider] [nvarchar](512) NOT NULL,  -- *PK
+    [ProviderKey] [nvarchar](256) NOT NULL,    -- *PK
     CONSTRAINT [PK.UserLogins] PRIMARY KEY NONCLUSTERED (
         [UserId] ASC,
         [LoginProvider] ASC,
@@ -145,7 +150,7 @@ CREATE TABLE [CustomizedConfirmation](
 
 CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
-    [ClientSecret] [nvarchar](256) NULL,
+    [ClientSecret] [nvarchar](512) NULL,        -- 暗号文が入る（#297）
     [RedirectUriSaml] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
     [RedirectUriCode] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
     [RedirectUriToken] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
@@ -162,6 +167,32 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [RequirePkce] [bit] NOT NULL,
     [ClientName] [nvarchar](256) NULL,               -- Users.UserName と同じ幅
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+CREATE TABLE [IdFederationUpstreams](   -- ID 連携の上流 IdP の登録（#292 の段階 2）
+    -- **設定（appSettings の IdFederationUpstreams）と同じ項目**を持つ。
+    --   **設定 → DB の順に見て、両方使う**（クライアント登録と同じ流儀）。
+    --   **UpstreamKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    [UpstreamKey] [nvarchar](128) NOT NULL,   -- PK
+    [DisplayName] [nvarchar](256) NULL,       -- 画面に出す名前（空なら鍵）
+    [Protocol] [nvarchar](16) NOT NULL,       -- oidc / saml2
+    [Enabled] [bit] NOT NULL,
+    [Issuer] [nvarchar](256) NULL,            -- 期待する iss（OIDC）/ entityID（SAML2）
+    [ClientID] [nvarchar](256) NULL,          -- 上流に登録された自分の client_id
+    [ClientSecret] [nvarchar](512) NULL,      -- 同上（**暗号文が入る**。#297）
+    [DiscoveryUrl] [nvarchar](512) NULL,      -- Const.MaxLengthOfUri
+    [JwkSetUri] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
+    [MetadataUrl] [nvarchar](512) NULL,       -- Const.MaxLengthOfUri
+    [CerFilePath] [nvarchar](512) NULL,       -- 倒れ先の証明書（パス）
+    [AuthorizeEndpoint] [nvarchar](512) NULL, -- Const.MaxLengthOfUri
+    [TokenEndpoint] [nvarchar](512) NULL,     -- Const.MaxLengthOfUri
+    [UserInfoEndpoint] [nvarchar](512) NULL,  -- Const.MaxLengthOfUri
+    [SsoEndpoint] [nvarchar](512) NULL,       -- Const.MaxLengthOfUri
+    -- **この上流へ送る AuthnRequest に署名する鍵**（#292 の段階 4-b）。空なら共通設定。
+    [SigningPfxFilePath] [nvarchar](512) NULL,
+    [SigningPfxPassword] [nvarchar](512) NULL,  -- 暗号文が入る（#297）
+    CONSTRAINT [PK.IdFederationUpstreams] PRIMARY KEY NONCLUSTERED ([UpstreamKey] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 

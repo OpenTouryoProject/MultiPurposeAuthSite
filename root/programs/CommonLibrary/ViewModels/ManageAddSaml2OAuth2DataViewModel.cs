@@ -28,6 +28,9 @@
 //*  2026/10/03  玄人 幸道         検証する側のalgの登録項目を追加（#262）
 //*  2026/10/04  玄人 幸道         web_origins を追加（#266）
 //*  2026/10/04  玄人 幸道         画面の選択肢を直列化しないようにした（#266 で踏んだ）
+//*  2026/10/09  玄人 幸道         各項目の説明を追加（#277 の段階 1）
+//*  2026/10/09  玄人 幸道         redirect_ の候補（datalist）を追加（#277 の段階 3）
+//*  2026/10/10  玄人 幸道         管理画面用の候補についての見通しを現状に合わせた（#277）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -53,19 +56,22 @@ namespace MultiPurposeAuthSite.ViewModels
     public class ManageAddSaml2OAuth2DataViewModel : BaseViewModel
     {
         /// <summary>ClientID</summary>
-        [Display(Name = "ClientID", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "ClientID", Description = "ClientIDDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         // [StringLength( // ユーザ入力でないので不要
         [JsonIgnore] // これはJsonConvertしない。
         public string ClientID { get; set; }
 
         /// <summary>ClientSecret</summary>
-        [Display(Name = "ClientSecret", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "ClientSecret", Description = "ClientSecretDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         // [StringLength( // ユーザ入力でないので不要
         [JsonProperty(PropertyName = "client_secret")]
         public string ClientSecret { get; set; }
 
         /// <summary>RedirectUriSaml</summary>
-        [Display(Name = "RedirectUriSaml", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "RedirectUriSaml", Description = "RedirectUriSamlDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
             Const.MaxLengthOfUri,
@@ -75,7 +81,8 @@ namespace MultiPurposeAuthSite.ViewModels
         public string RedirectUriSaml { get; set; }
 
         /// <summary>RedirectUriCode</summary>
-        [Display(Name = "RedirectUriCode", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "RedirectUriCode", Description = "RedirectUriCodeDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
             Const.MaxLengthOfUri,
@@ -85,7 +92,8 @@ namespace MultiPurposeAuthSite.ViewModels
         public string RedirectUriCode { get; set; }
 
         /// <summary>RedirectUriToken</summary>
-        [Display(Name = "RedirectUriToken", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "RedirectUriToken", Description = "RedirectUriTokenDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
             Const.MaxLengthOfUri,
@@ -100,7 +108,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// 仕様は配列だが、既存の redirect_uri_* と同じく **1 本**で持つ。
         /// **登録が無ければ、ログアウト後に RP へは戻さない。**
         /// </remarks>
-        [Display(Name = "PostLogoutRedirectUri", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "PostLogoutRedirectUri", Description = "PostLogoutRedirectUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
             Const.MaxLengthOfUri,
@@ -110,7 +119,8 @@ namespace MultiPurposeAuthSite.ViewModels
         public string PostLogoutRedirectUri { get; set; }
 
         /// <summary>JwkRsaPublickey</summary>
-        [Display(Name = "JwkRsaPublickey", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "JwkRsaPublickey", Description = "JwkRsaPublickeyDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "jwk_rsa_publickey")]
         public string JwkRsaPublickey { get; set; }
 
@@ -121,13 +131,72 @@ namespace MultiPurposeAuthSite.ViewModels
         
 
         /// <summary>TlsClientAuthSubjectDn</summary>
-        [Display(Name = "TlsClientAuthSubjectDn", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "TlsClientAuthSubjectDn", Description = "TlsClientAuthSubjectDnDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "tls_client_auth_subject_dn")]
         public string TlsClientAuthSubjectDn { get; set; }
 
+
+        #region redirect_ の候補（#277 の段階 3）
+
+        //  **画面の候補（`<datalist>`）である。** 登録の内容ではない。
+        //    **`[JsonIgnore]` を忘れないこと** — 付けていないと、
+        //    **候補そのものが saml2OAuth2Data に書き込まれる**（#266 で踏んだ）。
+        //
+        //  **値は `Const` から引く。** **画面とサーバで食い違わせない**ため
+        //    （サーバ側は `CheckRedirectUri` / `CmnEndpoints` がこの記号を解決する）。
+        //
+        //  **`redirect_uri_saml` の管理画面用（`redirect_uri_saml_manage`）は、無い。**
+        //    **管理画面の SAML のテスト ボタンは落とした**（自己テスト画面と重複するため。
+        //    `ANALYSIS.md` 13 節）ので、**増える予定も無い。**
+
+        /// <summary>redirect_uri_saml の候補</summary>
+        [JsonIgnore]
+        public List<string> RedirectUriSamlCandidates
+        {
+            get
+            {
+                return new List<string>() { Const.TestSelfSaml };
+            }
+        }
+
+        /// <summary>redirect_uri_code の候補</summary>
+        [JsonIgnore]
+        public List<string> RedirectUriCodeCandidates
+        {
+            get
+            {
+                return new List<string>() { Const.TestSelfCode };
+            }
+        }
+
+        /// <summary>redirect_uri_token の候補</summary>
+        [JsonIgnore]
+        public List<string> RedirectUriTokenCandidates
+        {
+            get
+            {
+                // **使わないなら "-" を入れる**（段階 1 の説明と同じ）。
+                return new List<string>() { Const.TestSelfToken, "-" };
+            }
+        }
+
+        /// <summary>post_logout_redirect_uri の候補</summary>
+        [JsonIgnore]
+        public List<string> PostLogoutRedirectUriCandidates
+        {
+            get
+            {
+                return new List<string>() { Const.TestSelfLogout };
+            }
+        }
+
+        #endregion
+
         #region SubjectTypes 
         /// <summary>SubjectTypes</summary>
-        [Display(Name = "SubjectTypes", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "SubjectTypes", Description = "SubjectTypesDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "subject_types")]
         public string SubjectTypes { get; set; }
 
@@ -166,7 +235,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **そのクライアントに発行する access_token と id_token の署名 alg**（#129 の段階 2）。
         /// **空なら `RS256`**（＝ 従来どおり）。
         /// </remarks>
-        [Display(Name = "IdTokenSignedResponseAlg", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "IdTokenSignedResponseAlg", Description = "IdTokenSignedResponseAlgDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "id_token_signed_response_alg")]
         public string IdTokenSignedResponseAlg { get; set; }
 
@@ -218,7 +288,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
         /// **`*` は書かない**（オリジンとして扱えない値は落ちる）。
         /// </remarks>
-        [Display(Name = "WebOrigins", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "WebOrigins", Description = "WebOriginsDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
@@ -235,7 +306,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **`client_assertion`（`private_key_jwt`）を、この alg だけに絞る**（#262）。
         /// **空なら絞らない**（登録された鍵で順に試す ＝ 従来どおり）。
         /// </remarks>
-        [Display(Name = "TokenEndpointAuthSigningAlg", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "TokenEndpointAuthSigningAlg", Description = "TokenEndpointAuthSigningAlgDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "token_endpoint_auth_signing_alg")]
         public string TokenEndpointAuthSigningAlg { get; set; }
 
@@ -267,7 +339,8 @@ namespace MultiPurposeAuthSite.ViewModels
         ///
         /// **CIBA の `request` は対象外**である（`ES256` 固定で、仕様でも別の登録項目）。
         /// </remarks>
-        [Display(Name = "RequestObjectSigningAlg", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "RequestObjectSigningAlg", Description = "RequestObjectSigningAlgDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "request_object_signing_alg")]
         public string RequestObjectSigningAlg { get; set; }
 
@@ -342,7 +415,8 @@ namespace MultiPurposeAuthSite.ViewModels
 
         #region ClientMode
         /// <summary>ClientMode</summary>
-        [Display(Name = "ClientMode", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "ClientMode", Description = "ClientModeDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "oauth2_oidc_mode")]
         public string ClientMode { get; set; }
 
@@ -382,7 +456,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **保存済みの登録には、この項目が無い。** JSON に無ければ既定値の false になるので、
         /// 従来どおりの動作が続く。
         /// </remarks>
-        [Display(Name = "RequirePkce", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "RequirePkce", Description = "RequirePkceDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "require_pkce")]
         public bool RequirePkce { get; set; }
         #endregion

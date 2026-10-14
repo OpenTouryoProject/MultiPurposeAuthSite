@@ -381,11 +381,6 @@ namespace MultiPurposeAuthSite
                         pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
                         defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
                 }
-
-                endpoints.MapControllerRoute(
-                    name: "ChageToUser",
-                    pattern: Config.ChageToUserWebAPI.Substring(1), // 先頭の[/]を削除,
-                    defaults: new { controller = "OAuth2ResourceServer", action = "ChageToUser" });
                 #endregion
 
                 endpoints.MapControllerRoute(

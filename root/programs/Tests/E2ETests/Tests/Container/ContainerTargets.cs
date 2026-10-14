@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/08  玄人 幸道         新規（#284）
+//*  2026/10/13  玄人 幸道         2つ目の上流コンテナを足した（#292 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -74,6 +75,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
         /// <summary>下流コンテナのキー</summary>
         public const string DownstreamKey = "downstream";
+
+        /// <summary>2 つ目の上流コンテナのキー（#292 の段階 1）</summary>
+        /// <remarks>
+        /// **`BothContainers` には入れない。**
+        /// **入れると既存の `CN-*` が 1.5 倍になり、その大半は同じコードの再計測**になる
+        /// （**測る値打ちがあるのは「上流が n 件」の部分だけ**である）。
+        /// </remarks>
+        public const string Upstream2Key = "upstream2";
 
         /// <summary>compose のプロジェクト名（`store/` ディレクトリの名前）</summary>
         private const string ComposeProject = "store";
@@ -199,8 +208,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
             TargetInfo target = new TargetInfo()
             {
                 Key = key,
-                DisplayName = (key == ContainerTargets.UpstreamKey)
-                    ? "上流コンテナ" : "下流コンテナ",
+                DisplayName = ContainerTargets.DisplayNameOf(key),
                 Enabled = true,
                 // **コンテナは接尾辞を使わない**（自分のストアを持つ。#260 と同じ考え方）。
                 TestUserSuffix = "",
@@ -212,6 +220,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
             target.Config.Overlay(env);
 
             return target;
+        }
+
+        /// <summary>画面・報告に出す名前</summary>
+        /// <param name="key">upstream / upstream2 / downstream</param>
+        /// <returns>名前</returns>
+        private static string DisplayNameOf(string key)
+        {
+            if (key == ContainerTargets.UpstreamKey)
+            {
+                return "上流コンテナ";
+            }
+
+            if (key == ContainerTargets.Upstream2Key)
+            {
+                return "2 つ目の上流コンテナ";
+            }
+
+            return "下流コンテナ";
         }
 
         /// <summary>compose のラベルから、コンテナ名を引く</summary>
