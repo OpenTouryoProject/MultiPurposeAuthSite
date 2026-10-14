@@ -116,5 +116,20 @@ namespace MultiPurposeAuthSite.ViewModels
         [StringLength(512)]
         [Display(Name = "SsoEndpoint")]
         public string SsoEndpoint { get; set; }
+
+        /// <summary>この上流へ送る `AuthnRequest` に署名する鍵（`.pfx` のパス。SAML2）</summary>
+        /// <remarks>**空なら共通設定**（`SpRp_RsaPfxFilePath`）。#292 の段階 4-b。</remarks>
+        [StringLength(512)]
+        [Display(Name = "SigningPfxFilePath")]
+        public string SigningPfxFilePath { get; set; }
+
+        /// <summary>上記 `.pfx` のパスワード</summary>
+        /// <remarks>
+        /// **空なら共通設定**（`SpRp_RsaPfxPassword`）。
+        /// **DB では暗号化して保管する**（#297。`ClientSecret` と同じ扱い）。
+        /// </remarks>
+        [StringLength(256)]
+        [Display(Name = "SigningPfxPassword")]
+        public string SigningPfxPassword { get; set; }
     }
 }

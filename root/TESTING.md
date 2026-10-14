@@ -359,15 +359,40 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 | **`RT-292.1`** | **管理画面で、足して・直して・消せる**（`/IdFederationAdmin`） |
 | **`RT-292.2`** | **user store に足した上流が、サインイン画面の導線に出る**（**設定の行も残る**） |
 | **`RT-292.3`** | **管理者（`SystemAdmin`）でなければ開かない** |
+| **`RT-292.4`** | **上流ごとの署名鍵（`.pfx` のパスとパスワード）が往復する**（#292 の段階 4-b。**パスワードは暗号化して保管する**ので、**平文に戻ること**を見る） |
 
-**ストアは 4 通りとも測った**（実測 2026/10/14）。
+**ストアは 4 通りとも測った**（実測 2026/10/14。`RT-292.4` を足した後）。
 
 | ストア | 結果 |
 |---|---|
-| `mem`（既定の通し） | **6 / 6**（core / netfx） |
-| `sql`（SQL Server） | **6 / 6** |
-| `ora`（Oracle） | **6 / 6** |
-| `npg`（PostgreSQL） | **3 / 3**（**netfx は PostgreSQL を使えないので Skip**。従来どおり） |
+| `mem`（既定の通し） | **8 / 8**（core / netfx） |
+| `sql`（SQL Server） | **10 / 10**（`RT-297.2` を含む） |
+| `ora`（Oracle） | **10 / 10** |
+| `npg`（PostgreSQL） | **5 / 5**（**netfx は PostgreSQL を使えないので Skip**。従来どおり） |
+
+> **`RT-292.4` が測るのは、入れ物（表・辞書）と画面である。**
+> **DB の行の鍵で実際に署名するところまでは測っていない** —
+> **配備の `.pfx` のパスワードをテストに持たせない**ためである（9 節）。
+> **指定した鍵で署名していることは、`CN-5.5`（設定の行）とその歯抜けで測っている。**
+
+**暗号文で入っていることは、SELECT して確かめた**（実測 2026/10/14。`-UserStoreType sql`）。
+**`RT-292.4` は行を消して戻す**ので、**後片付けだけを止めて 1 行残し、見てから消した。**
+
+```powershell
+docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+  -Q "SELECT LEFT(SigningPfxPassword, 12), LEN(SigningPfxPassword) FROM IdFederationUpstreams"
+```
+
+**`enc:v1:…`（115 文字）** — **`SigningPfxFilePath` は平文**（**パスは秘密ではない**）。
+
+**歯抜け（実測 2026/10/14）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| `IdFederationUpstreamProvider.Unprotect` から **`SigningPfxPassword` の行を外す** | **`RT-292.4` だけが落ちる**（core / netfx とも。**パスワードが平文に戻る / 実測 = 別の値**）。**他の 8 件は通ったまま** |
+
+> **これで「暗号化して保管し、読むときに戻している」ことが測れている** —
+> **暗号化していなければ、外しても往復してしまう。**
 
 > **表を足したら、DB を作り直すこと。**
 > **PostgreSQL と Oracle は、初期化スクリプトを「最初の 1 回」しか流さない** —

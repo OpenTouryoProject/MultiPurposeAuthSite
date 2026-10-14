@@ -692,12 +692,13 @@ E2E テストは、**実行時にアプリ自身の構成ファイルから読�
 |---|---|
 | **`UserStoreSecretPassword`** | **暗号化する鍵（パスワード）。** **空なら暗号化しない**（平文のまま ＝ 従来どおり） |
 
-**対象は 2 列**である（**どちらも「元に戻せる形」でなければならない**）。
+**対象は 3 列**である（**どれも「元に戻せる形」でなければならない**）。
 
 | 表 | 列 | なぜ戻せる形が要るか |
 |---|---|---|
 | `Saml2OAuth2Data` | `ClientSecret` | **クライアント認証で照合し、管理画面で再表示する** |
 | `IdFederationUpstreams` | `ClientSecret` | **上流へ送る**（`/token` のクライアント認証） |
+| `IdFederationUpstreams` | **`SigningPfxPassword`** | **`.pfx` を開くために使う**（#292 の段階 4-b） |
 
 **だからハッシュは取れない。** **対称鍵で暗号化する。**
 
@@ -1017,7 +1018,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | `authorize_endpoint` / `token_endpoint` / `userinfo_endpoint` | 上流の口 | ○ | － |
 | `sso_endpoint` | 上流の SSO の口（**倒れ先**。メタデータが先） | － | ○ |
 | **`signing_pfx_file_path`** | **この上流へ送る `AuthnRequest` に署名する鍵**（#292 の段階 4-a。**空なら共通設定**） | － | ○ |
-| `signing_pfx_password` | 上記 `.pfx` のパスワード（**空なら共通設定**） | － | ○ |
+| `signing_pfx_password` | 上記 `.pfx` のパスワード（**空なら共通設定**。**DB では暗号化して保管する**。#297） | － | ○ |
 
 ```jsonc
 "IdFederationUpstreams": {
@@ -1047,7 +1048,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 |---|---|---|
 | **相手ごとの値** | **`IdFederationUpstreams` の各行** | 相手が n 件になれば n 件要る |
 | **折り返し口**（`IdFederationRedirectEndpoint` / `IdFederationSaml2ResponseEndpoint`） | **共通設定** | **自分の URL なので、相手ごとに変わらない。** **全ての上流に、同じ 1 本を登録する**（#263。1 文字も違ってはならない） |
-| 自分の署名鍵 | **(1) の署名は共通設定**（`SpRp_RsaPfxFilePath` ほか）。**(2) は上流ごとに替えられる**（`signing_pfx_file_path`。#292 の段階 4-a） | **Open棟梁 [#606](https://github.com/OpenTouryoProject/OpenTouryo/issues/606) で鍵を渡せるようになった**ので、相手ごとに持てる |
+| 自分の署名鍵 | **(1) の署名は共通設定**（`SpRp_RsaPfxFilePath` ほか）。**(2) は上流ごとに替えられる**（`signing_pfx_file_path`。#292 の段階 4-a・4-b。**設定でも DB でもよい**） | **Open棟梁 [#606](https://github.com/OpenTouryoProject/OpenTouryo/issues/606) で鍵を渡せるようになった**ので、相手ごとに持てる |
 
 > **どの上流から戻ってきたかは、Session で引く**（開始処理が鍵を控える）。
 > **口を相手ごとに分ける案は採らなかった** — **登録値が増え、`redirect_uri` の取り違えが起きやすい。**
@@ -1081,10 +1082,13 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 **列は設定の属性と同じ**で、**`UpstreamKey` が設定の「鍵」に当たる**
 （`Key` は方言の予約語なので避けた）。
 
-> **`ClientSecret` は平文で入る**（`Saml2OAuth2Data.ClientSecret` と同じ扱い）。
-> **上流へ送る値なので、元に戻せる形でなければならず、ハッシュは取れない。**
-> **表に入る秘密をまとめて暗号化するかは、この Issue の外**である
-> （**下流クライアントの `client_secret` も平文**なので、片方だけ変えると不揃いになる）。
+**秘密の列は、暗号化して保管する**（#297。`UserStoreSecretPassword`。上の 6 節）。
+**`ClientSecret` と `SigningPfxPassword` が対象**で、**どちらも読むときに平文へ戻す**
+（**上流へ送る値・`.pfx` を開く値なので、ハッシュは取れない**）。
+
+> **`SigningPfxFilePath` / `SigningPfxPassword` は、段階 4-b で足した列**である
+> （**設定の行の `signing_pfx_file_path` / `signing_pfx_password` と同じもの**）。
+> **列を足したので、古い DB では落ちる** — **作り直すこと**（`TESTING.md`）。
 
 **上流が n 件になると、「2 つの IdP から来た同じ人」が現れる。**
 **この製品は、検証済みのメアドで既存アカウントに結ぶ**（アカウント リンク）。
@@ -1429,6 +1433,11 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 |---|---|
 | 行に **`signing_pfx_file_path`** が在る | **その `.pfx`**（パスワードは `signing_pfx_password`。**空なら共通設定のパスワード**） |
 | 空 | **共通設定**（`SpRp_RsaPfxFilePath`）。**従来どおり** |
+
+**「行」は、設定でも user store でもよい**（#292 の段階 4-b）。
+**`IdFederationUpstreams` 表に `SigningPfxFilePath` / `SigningPfxPassword` の列が在り、
+管理画面（`/IdFederationAdmin`）から入れられる。**
+**パスワードは暗号化して保管する**（#297 の対象。`ClientSecret` と同じ）。
 
 **組み立ては `SamlProviders.IdFederationSaml2Request` の 1 か所**である
 （**両アプリの `AccountController` に同文で置かない**）。

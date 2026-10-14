@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
 //*  2026/10/14  玄人 幸道         RT-297.2（秘密の往復）を足した（#297）
+//*  2026/10/14  玄人 幸道         RT-292.4（署名鍵の往復）を足した（#292 の段階 4-b）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -75,6 +76,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         /// <summary>RT-297.2 で使う鍵（**他のテストと混ざらない名前**にする）</summary>
         private const string SecretKey = "e2e_rt297_oidc";
+
+        /// <summary>RT-292.4 で使う鍵（**他のテストと混ざらない名前**にする）</summary>
+        private const string SigningKey = "e2e_rt292b_saml2";
 
         #region RT-292.1
 
@@ -453,6 +457,122 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Note("**DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して"
                     + "確かめる（手順は `TESTING.md`）。**E2E からは DB を見ない**"
                     + "（テストに接続文字列を持たせない。`TESTING.md` 9 節）。");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-292.4
+
+        /// <summary>RT-292.4 上流ごとの署名鍵が、user store でも往復する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **段階 4-a で、(2)（下流 → 上流の要求）の署名鍵を、設定の行で指定できるようにした。**
+        /// **段階 4-b は、同じものを user store にも置けるようにしたもの**である。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | `SigningPfxFilePath` | **そのまま往復する**（パス） |
+        /// | `SigningPfxPassword` | **暗号化して保管し、読むときに戻す**（#297 の対象。`ClientSecret` と同じ） |
+        ///
+        /// **指定した鍵で署名していることは、`CN-5.5`（コンテナ。設定の行）で測っている。**
+        /// **ここで測るのは、入れ物（表と画面）を通しても値が壊れないこと**である。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29204_上流ごとの署名鍵がuser_storeでも往復する(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                await client.SignInAsAdministratorAsync();
+
+                string index = await IdFederationAdmin.SkipIfLockedDownAsync(client);
+
+                TestReport r = this.Report("RT-292.4",
+                    "上流ごとの署名鍵（`.pfx`）が、user store でも往復する",
+                    "**(2) の署名鍵を、上流ごとに替えられるようにした**（#292 の段階 4-a）。"
+                    + "**段階 4-b は、それを DB と画面からも扱えるようにしたもの**である。"
+                    + "**`.pfx` のパスワードは暗号化して保管する**（#297）ので、"
+                    + "**読み直したときに平文に戻ること**を測る — "
+                    + "**戻らなければ `.pfx` を開けず、黙って共通設定に倒れる。**",
+                    "#292 の段階 4-b / #297");
+
+                r.Target("POST /IdFederationAdmin/Create → GET /IdFederationAdmin/Edit");
+
+                if (IdFederationAdmin.Contains(index, IdFederationAdminTests.SigningKey))
+                {
+                    await IdFederationAdmin.DeleteAsync(client, IdFederationAdminTests.SigningKey);
+                }
+
+                r.Step("(1) 署名鍵付きで足す");
+
+                //  **パスワードはテストの中だけの値**
+                //    （**配備の `.pfx` のパスワードをテストに持たせない**。`TESTING.md` 9 節）。
+                string pfxPassword = "E2E_rt292b_" + Saml2.NewId().Replace("_", "");
+                const string pfxPath = "C:/root/files/resource/X509/SHA256RSA_Client.pfx";
+
+                HttpResponseMessage create = await IdFederationAdmin.CreateAsync(
+                    client, IdFederationAdminTests.SigningKey, "saml2",
+                    "E2E RT-292 Signing", "https://rt292b.e2e.example",
+                    new Dictionary<string, string>()
+                    {
+                        { "ClientID", "e2e0rt292b00000000000000000000z3" },
+                        { "MetadataUrl", "https://rt292b.e2e.example/samlmetadata" },
+                        { "SsoEndpoint", "https://rt292b.e2e.example/saml2request" },
+                        { "CerFilePath", "C:/root/files/resource/X509/SHA256RSA_Server.cer" },
+                        { "SigningPfxFilePath", pfxPath },
+                        { "SigningPfxPassword", pfxPassword }
+                    });
+
+                bool created = create.StatusCode == HttpStatusCode.Found
+                    || create.StatusCode == HttpStatusCode.Redirect
+                    || create.StatusCode == HttpStatusCode.SeeOther;
+
+                r.Verify("追加できる", created,
+                    "リダイレクト",
+                    created ? "した" : "**しない（" + create.StatusCode + "）**");
+
+                Assert.True(created, "前提: 追加できること");
+
+                r.Step("(2) 編集画面を開くと、同じ値が出る");
+
+                string edit = await (await IdFederationAdmin.EditAsync(
+                    client, IdFederationAdminTests.SigningKey)).Content.ReadAsStringAsync();
+
+                string reloadedPath = Html.FieldValue(edit, "SigningPfxFilePath");
+                string reloadedPassword = Html.FieldValue(edit, "SigningPfxPassword");
+
+                r.Verify("`.pfx` のパスが往復する", reloadedPath == pfxPath,
+                    pfxPath,
+                    (reloadedPath == pfxPath) ? "同じだった"
+                        : "**" + (string.IsNullOrEmpty(reloadedPath) ? "空" : "別の値") + "**");
+
+                r.Verify("パスワードが平文に戻る", reloadedPassword == pfxPassword,
+                    "同じ（値は伏せる）",
+                    (reloadedPassword == pfxPassword) ? "同じだった"
+                        : (string.IsNullOrEmpty(reloadedPassword)
+                            ? "**空になった**（復号できていない）" : "**別の値**"));
+
+                r.Verify("暗号文がそのまま出ていない",
+                    !(reloadedPassword ?? "").StartsWith("enc:"),
+                    "平文",
+                    (reloadedPassword ?? "").StartsWith("enc:") ? "**暗号文のまま**" : "平文");
+
+                r.Step("(3) 後片付け");
+
+                bool deleted = await IdFederationAdmin.DeleteAsync(
+                    client, IdFederationAdminTests.SigningKey);
+
+                r.Verify("消せる", deleted, "消える", deleted ? "消えた" : "**残った**");
+
+                r.Note("**このケースが測るのは、入れ物（表・辞書）と画面である。**"
+                    + "**DB の行の鍵で実際に署名するところまでは測っていない** — "
+                    + "**配備の `.pfx` のパスワードをテストに持たせない**ためである"
+                    + "（`TESTING.md` 9 節）。**指定した鍵で署名していることは、"
+                    + "`CN-5.5`（コンテナ。設定の行）とその歯抜けで測っている。**");
 
                 r.Done();
             }

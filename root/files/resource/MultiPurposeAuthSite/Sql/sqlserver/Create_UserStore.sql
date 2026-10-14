@@ -183,6 +183,9 @@ CREATE TABLE [IdFederationUpstreams](   -- ID 連携の上流 IdP の登録（#2
     [TokenEndpoint] [nvarchar](512) NULL,     -- Const.MaxLengthOfUri
     [UserInfoEndpoint] [nvarchar](512) NULL,  -- Const.MaxLengthOfUri
     [SsoEndpoint] [nvarchar](512) NULL,       -- Const.MaxLengthOfUri
+    -- **この上流へ送る AuthnRequest に署名する鍵**（#292 の段階 4-b）。空なら共通設定。
+    [SigningPfxFilePath] [nvarchar](512) NULL,
+    [SigningPfxPassword] [nvarchar](512) NULL,  -- 暗号文が入る（#297）
     CONSTRAINT [PK.IdFederationUpstreams] PRIMARY KEY NONCLUSTERED ([UpstreamKey] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

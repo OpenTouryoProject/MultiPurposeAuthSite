@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
 //*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
+//*  2026/10/14  玄人 幸道         署名鍵の列を足した（#292 の段階 4-b）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -95,7 +96,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             "AuthorizeEndpoint",
             "TokenEndpoint",
             "UserInfoEndpoint",
-            "SsoEndpoint"
+            "SsoEndpoint",
+            "SigningPfxFilePath",
+            "SigningPfxPassword"
         };
 
         /// <summary>列の並びを、方言の書き方で並べる</summary>
@@ -235,6 +238,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("TokenEndpoint", model.TokenEndpoint);
             prm.Add("UserInfoEndpoint", model.UserInfoEndpoint);
             prm.Add("SsoEndpoint", model.SsoEndpoint);
+            prm.Add("SigningPfxFilePath", model.SigningPfxFilePath);
+            prm.Add("SigningPfxPassword", model.SigningPfxPassword);
 
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
@@ -261,7 +266,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (copy != null)
             {
+                //  **秘密は 2 つある**（#292 の段階 4-b で `.pfx` のパスワードが増えた）。
                 copy.ClientSecret = SecretProtector.Protect(copy.ClientSecret);
+                copy.SigningPfxPassword = SecretProtector.Protect(copy.SigningPfxPassword);
             }
 
             return copy;
@@ -275,6 +282,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (model != null)
             {
                 model.ClientSecret = SecretProtector.Unprotect(model.ClientSecret);
+                model.SigningPfxPassword = SecretProtector.Unprotect(model.SigningPfxPassword);
             }
 
             return model;
@@ -311,7 +319,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 AuthorizeEndpoint = model.AuthorizeEndpoint,
                 TokenEndpoint = model.TokenEndpoint,
                 UserInfoEndpoint = model.UserInfoEndpoint,
-                SsoEndpoint = model.SsoEndpoint
+                SsoEndpoint = model.SsoEndpoint,
+                SigningPfxFilePath = model.SigningPfxFilePath,
+                SigningPfxPassword = model.SigningPfxPassword
             };
         }
 

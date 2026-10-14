@@ -156,6 +156,9 @@ CREATE TABLE "IdFederationUpstreams"(   -- ID 連携の上流 IdP の登録（#2
     "TokenEndpoint" NVARCHAR2(512) NULL,
     "UserInfoEndpoint" NVARCHAR2(512) NULL,
     "SsoEndpoint" NVARCHAR2(512) NULL,
+    -- **この上流へ送る AuthnRequest に署名する鍵**（#292 の段階 4-b）。空なら共通設定。
+    "SigningPfxFilePath" NVARCHAR2(512) NULL,
+    "SigningPfxPassword" NVARCHAR2(512) NULL,  -- 暗号文が入る（#297）
     CONSTRAINT "PK.IdFederationUpstreams" PRIMARY KEY ("UpstreamKey")
 );
 

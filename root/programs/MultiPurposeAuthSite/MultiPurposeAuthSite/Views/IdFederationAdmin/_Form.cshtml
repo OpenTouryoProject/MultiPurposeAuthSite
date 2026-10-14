@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
+    //*  2026/10/14  玄人 幸道         署名鍵の入力欄を足した（#292 の段階 4-b）
     //**********************************************************************************
 *@
 
@@ -125,5 +126,22 @@
     <div class="col-md-9">
         @Html.TextBoxFor(m => m.SsoEndpoint, new { @class = "form-control" })
         @Html.ValidationMessageFor(m => m.SsoEndpoint, "", new { @class = "text-danger" })
+    </div>
+</div>
+
+@*  **この上流へ送る AuthnRequest に署名する鍵**（SAML2。#292 の段階 4-b）。
+    **空なら共通設定**（SpRp_RsaPfxFilePath / SpRp_RsaPfxPassword）。 *@
+<div class="form-group">
+    @Html.LabelFor(m => m.SigningPfxFilePath, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.SigningPfxFilePath, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.SigningPfxFilePath, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.SigningPfxPassword, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.SigningPfxPassword, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.SigningPfxPassword, "", new { @class = "text-danger" })
     </div>
 </div>

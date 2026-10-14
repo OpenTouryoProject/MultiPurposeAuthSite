@@ -31,6 +31,7 @@
 //*  2026/10/13  玄人 幸道         新規（#292 の段階 1）
 //*  2026/10/14  玄人 幸道         user store の登録も読むようにした（#292 の段階 2）
 //*  2026/10/14  玄人 幸道         署名鍵を上流ごとに持てるようにした（#292 の段階 4-a）
+//*  2026/10/14  玄人 幸道         署名鍵をuser storeからも読むようにした（#292 の段階 4-b）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -382,9 +383,8 @@ namespace MultiPurposeAuthSite.Co
                 TokenEndpoint = row.TokenEndpoint,
                 UserInfoEndpoint = row.UserInfoEndpoint,
                 SsoEndpoint = row.SsoEndpoint,
-                //  **DB の列は、段階 4-b で足す。** いまは設定の行だけが持つ。
-                SigningPfxFilePath = "",
-                SigningPfxPassword = ""
+                SigningPfxFilePath = row.SigningPfxFilePath,
+                SigningPfxPassword = row.SigningPfxPassword
             };
         }
 
