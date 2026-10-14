@@ -37,6 +37,7 @@
 //*  2026/10/02  玄人 幸道         ロール名を正規化名で突き合わせる（ora / npg で付かなかった）（#257 で判明）
 //*  2026/10/07  玄人 幸道         Users.FIDO2PublicKey（MsPass専用）を削除（#137）
 //*  2026/10/09  玄人 幸道         Users.PaymentInformation を削除（オンライン決済の取り下げ）
+//*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -73,6 +74,26 @@ using Dapper;
 namespace MultiPurposeAuthSite.Data
 {
     /// <summary>BaseUserStore</summary>
+    /// <remarks>
+    /// **例外の扱い**（#300）。
+    ///
+    /// | | |
+    /// |---|---|
+    /// | **書き込み**（`Create` / `Update` / `Delete` / `Add*` / `Remove*`） | **握らない。** **ログに書いてから投げ直す** |
+    /// | 読み取り（`Find*` / `Get*`） | **握って既定値を返す**（従来どおり。**「居ない」と同じ扱い**になる） |
+    ///
+    /// **以前は書き込みも握っていた。**
+    /// **`IdentityResult` は成功になり、画面はリダイレクトし、データは変わらない** —
+    /// **「静かに失敗する」**状態だった。
+    /// **実例**（#299） : **GDPR の消去が Oracle で落ちていた**のに、**画面は成功に見えていた。**
+    ///
+    /// **`StopUserStoreException` は、以前から投げ直している**
+    /// （`Logging.MySQLLogForEx` の中。**STS 専用の配備で user store を止める**ための例外）。
+    ///
+    /// **読み取りを握るのを止めるかは、この Issue の外**である。
+    /// **Skip や「居ない」で成り立っている経路**（種データの作成など）が在るため、
+    /// **1 件ずつ意味を決める必要がある。**
+    /// </remarks>
     internal class CmnUserStore : CmnStore
     {
         #region ロール名の突き合わせに使う列
@@ -235,7 +256,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -754,7 +777,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -969,7 +994,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -1079,7 +1106,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -1554,7 +1583,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -1788,7 +1819,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2184,7 +2217,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2401,7 +2436,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2466,8 +2503,13 @@ namespace MultiPurposeAuthSite.Data
 
                                 case EnumUserStoreType.PostgreSQL:
 
+                                    //  **id は書かない**（#300 で判明）。
+                                    //    **`serial`**（自動連番）なので、**列に挙げると値が 1 つ足りない。**
+                                    //    **PostgreSQL が `42601: INSERT has more target columns than
+                                    //    expressions` を返していたが、握っていたので表に出なかった** —
+                                    //    **クレームが 1 件も保存されていなかった**（ID 連携が属性を保存できない）。
                                     cnn.Execute(
-                                        "INSERT INTO \"userclaims\" (\"id\", \"userid\", \"issuer\", \"claimtype\", \"claimvalue\") " +
+                                        "INSERT INTO \"userclaims\" (\"userid\", \"issuer\", \"claimtype\", \"claimvalue\") " +
                                         "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
 
@@ -2480,7 +2522,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2576,7 +2620,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2687,7 +2733,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2885,7 +2933,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;
@@ -2957,7 +3007,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return;

@@ -160,6 +160,32 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   **`RoleManager.Roles` は `IQueryableRoleStore` が無いと例外になる**ので、
   **ロールの管理画面と、利用者へのロール割り当てはこれが前提**である。
 
+### 4.0 user store の例外 — 書き込みは握らない（#300）
+
+**`CmnUserStore` / `CmnRoleStore` は、`catch` して `SQLTRACE` に書き、正常に戻っていた。**
+
+| | いま |
+|---|---|
+| **書き込み**（`Create` / `Update` / `Delete` / `Add*` / `Remove*`。**16 か所**） | **投げ直す**（ログに書いた後で `throw;`） |
+| 読み取り（`Find*` / `Get*`。**12 か所**） | **握って既定値を返す**（従来どおり） |
+
+**書き込みを握ると、`IdentityResult` が成功になる。**
+**画面はリダイレクトし、データは変わらない** — **「静かに失敗する」。**
+
+**実例が 2 件出た。**
+
+| | |
+|---|---|
+| **GDPR の消去が Oracle で効かない**（#299） | `LockoutEndDateUtc` に `DateTime.MaxValue` を入れて `ORA-01841`。**画面は成功に見えていた** |
+| **PostgreSQL でクレームが 1 件も保存されない**（#300 で判明） | `AddClaim` の `INSERT` が**列 5 つに値 4 つ**（`42601`）。**構文の誤りなので 1 度も成功し得ない** |
+
+**後者は、握るのを止めた途端に 6 件のテストが落ちて見つかった**
+（`RT-140.*` / `SA-6.*`。**ID 連携がクレームを保存する経路**）。
+**握っていた間は、通しが緑のまま「保存されていなかった」。**
+
+> **`INSERT` の列数と値の数は、機械的に見られる。**
+> **全コードを走査して、食い違っていたのはこの 1 か所だけだった**（実測）。
+
 ### 4.1 `ApplicationUser` の直列化は allow-list（OptIn）
 
 **`ApplicationUser` を JSON にするのは 1 か所だけ**である
