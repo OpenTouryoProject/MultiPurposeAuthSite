@@ -829,6 +829,45 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 > **利用者は `/Manage/ConsentGrants` から取り消せる。**
 > **発行済みのトークンは失効しない**（そちらは `/revoke`。RFC 7009）。
 
+> **ID 連携の連携キーの幅を広げた**（#292）。
+>
+> | 列 | 以前 | いま | 入る値 |
+> |---|---|---|---|
+> | `UserLogins.LoginProvider` | 128 | **512** | **相手の `iss` / entityID**（URI なので `Const.MaxLengthOfUri` と同じ） |
+> | `UserLogins.ProviderKey` | 128 | **256** | **相手の `sub` / `NameID`**（`sub` は 255 文字以内、persistent な `NameID` は 256 文字以内と決まっている） |
+>
+> **上流が n 件になると、長い値を踏む確率が上がる**（#292）。
+> **溢れたときに切り詰めはしない** — **連携のサインインが `INSERT` で落ちる。**
+>
+> **既存のデータベースは、`Create_UserStore.sql` を流し直すか、列を広げる。**
+> **SQL Server は PK を落としてから広げ、張り直す**（他の 2 つは `MODIFY` / `TYPE` だけでよい）。
+>
+> ```sql
+> -- SQL Server
+> ALTER TABLE [UserLogins] DROP CONSTRAINT [PK.UserLogins];
+> ALTER TABLE [UserLogins] ALTER COLUMN [LoginProvider] [nvarchar](512) NOT NULL;
+> ALTER TABLE [UserLogins] ALTER COLUMN [ProviderKey] [nvarchar](256) NOT NULL;
+> ALTER TABLE [UserLogins] ADD CONSTRAINT [PK.UserLogins] PRIMARY KEY NONCLUSTERED
+>     ([UserId] ASC, [LoginProvider] ASC, [ProviderKey] ASC);
+>
+> -- Oracle
+> ALTER TABLE "UserLogins" MODIFY ("LoginProvider" NVARCHAR2(512), "ProviderKey" NVARCHAR2(256));
+>
+> -- PostgreSQL
+> ALTER TABLE userlogins ALTER COLUMN loginprovider TYPE varchar(512);
+> ALTER TABLE userlogins ALTER COLUMN providerkey   TYPE varchar(256);
+> ```
+>
+> **PK は 3 列で (38 + 512 + 256) × 2 = 1612 バイト**になる。
+> **SQL Server 2016 以降が前提**である（索引キーの上限が 1700 バイト）。
+> **2014 以前の上限は 900 バイト**なので、**この定義は上限を超える**
+> （可変長の列なので、作成は警告で通り、**長い値を入れたときに失敗する**）。
+> **2014 以前では未検証**である。**実機で測ったのは 2022**（`store/` のコンテナ）。
+>
+> **Oracle・PostgreSQL は、既定の設定のまま収まる**
+> （Oracle は `db_block_size` 8192 で索引キーが約 6398 バイトまで、
+> PostgreSQL の btree は約 2704 バイトまで）。
+
 **3 つの DDL がミラーかどうかは、機械的に確かめられる。**
 
 ```powershell

@@ -394,6 +394,28 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **これで「暗号化して保管し、読むときに戻している」ことが測れている** —
 > **暗号化していなければ、外しても往復してしまう。**
 
+##### 連携キーの幅（`UserLogins`。#292）
+
+**上流が n 件になったので、`LoginProvider` / `ProviderKey` を 512 / 256 に広げた**
+（経緯と `ALTER` は [`CONFIGURATION.md`](CONFIGURATION.md) 7 節）。
+
+**E2E では測れない。** **長い `iss` / entityID を名乗る上流が、この仕掛けに無い**ためである
+（コンテナの上流は `mem` ストアなので、表の幅を通らない）。
+**代わりに、3 方言の境界を実機で測った**（実測 2026/10/14）。
+
+| 方言 | 512 / 256 | 513 文字 |
+|---|---|---|
+| SQL Server | **入る** | **弾かれる**（「文字列またはバイナリ データは切り捨てられます」） |
+| Oracle | **入る** | **弾かれる**（`ORA-12899`） |
+| PostgreSQL | **入る** | **弾かれる**（`value too long for type character varying(512)`） |
+
+**測ったあとの行は消してある**（`Users` への FK が在るので、既存の利用者の行に挿した）。
+
+> **到達性の記憶を読み直していた**（テスト基盤。`TestEnv.IsReachable`）。
+> **並行して走る別のテストが、再試行のために `null` に戻している**ことがあり、
+> **`npg` の通しで netfx の 2 件が Skip にならず
+> `Nullable object must have a value` で落ちていた**（実測）。**false を返すように直した。**
+
 > **表を足したら、DB を作り直すこと。**
 > **PostgreSQL と Oracle は、初期化スクリプトを「最初の 1 回」しか流さない** —
 > **コンテナを起動し直しても、足した表は増えない**（実測）。

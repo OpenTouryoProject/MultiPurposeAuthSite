@@ -45,8 +45,14 @@ CREATE TABLE "UserRoles"(          -- 関連エンティティ (Users *--- UserR
 
 CREATE TABLE "UserLogins"(       -- Users ---* UserLogins
     "UserId" NVARCHAR2(38) NOT NULL,           -- PK
-    "LoginProvider" NVARCHAR2(128) NOT NULL,   -- *PK
-    "ProviderKey" NVARCHAR2(128) NOT NULL,     -- *PK
+    -- **連携キーの幅**（#292。上流が n 件になると、長い値を踏む確率が上がる）。
+    --   LoginProvider : **相手の `iss` / entityID**（URI なので Const.MaxLengthOfUri と同じ 512）
+    --   ProviderKey   : **相手の `sub` / NameID**（`sub` は 255 文字以内、persistent な
+    --                   NameID は 256 文字以内と決まっている）
+    --   **PK は 3 列で (38 + 512 + 256) * 2 = 1612 バイト**になる。
+    --   **SQL Server 2016 以降が前提**（索引キーは 1700 バイトまで。2014 以前は 900）。
+    "LoginProvider" NVARCHAR2(512) NOT NULL,   -- *PK
+    "ProviderKey" NVARCHAR2(256) NOT NULL,     -- *PK
     CONSTRAINT "PK.UserLogins" PRIMARY KEY ("UserId", "LoginProvider", "ProviderKey")
 );
 
