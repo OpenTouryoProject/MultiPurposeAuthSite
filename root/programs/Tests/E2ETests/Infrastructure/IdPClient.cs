@@ -56,6 +56,7 @@
 //*  2026/10/06  玄人 幸道         同意画面の許可・拒否と、同意の取り消しの操作を追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthn の登録・認証の画面操作を追加（#137）
 //*  2026/10/08  玄人 幸道         CookieNames（名前だけ）を追加（#284）
+//*  2026/10/16  玄人 幸道         ヘッダを付けて GET する口を足した（#303）
 //**********************************************************************************
 
 using System;
@@ -191,6 +192,32 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<HttpResponseMessage> GetAsync(string pathOrUrl)
         {
             return this._http.GetAsync(this.Absolute(pathOrUrl));
+        }
+
+        /// <summary>ヘッダを付けて GET する（#303。`If-None-Match` を送るため）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="headers">足すヘッダ（値が空の項目は送らない）</param>
+        /// <returns>応答</returns>
+        public Task<HttpResponseMessage> GetAsync(
+            string pathOrUrl, IDictionary<string, string> headers)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Get, this.Absolute(pathOrUrl));
+
+            if (headers != null)
+            {
+                foreach (KeyValuePair<string, string> h in headers)
+                {
+                    if (!string.IsNullOrEmpty(h.Value))
+                    {
+                        //  **検証を通さずに足す**（`If-None-Match` のような、
+                        //    形式の厳しいヘッダをそのまま送るため）。
+                        req.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    }
+                }
+            }
+
+            return this._http.SendAsync(req);
         }
 
         /// <summary>POST（application/x-www-form-urlencoded）</summary>

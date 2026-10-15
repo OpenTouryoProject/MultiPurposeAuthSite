@@ -603,7 +603,8 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 ## 10. 落とし穴 / 既知の不整合
 
 1. **`10_MultiPurposeAuthSiteCore.bat` が存在しない `RestoreLib1/2.bat` を呼ぶ**（9 節）。
-2. **`log4net` 3.2.0 に既知の脆弱性**（9.1 節）。Open棟梁側は 3.3.0 で、版が割れている。
+2. ~~**`log4net` 3.2.0 に既知の脆弱性**（9.1 節）。Open棟梁側は 3.3.0 で、版が割れている。~~
+   **✅ 解消した**（9.1 節）。**3.3.0 に上げ、`NU1902` と版の割れの両方が消えた。**
 3. **`C:\` 直下配置が前提**（2.2 節）。`appsettings.json` は絶対パスを直書きしている。
 4. **`/MultiPurposeAuthSite` 仮想パス前提**（2.5 節）。
    ~~Cookie の `LoginPath` などが直書き。~~

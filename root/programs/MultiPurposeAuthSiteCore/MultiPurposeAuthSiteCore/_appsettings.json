@@ -226,6 +226,11 @@
     "Ecdsa512PfxPassword": "test",
     "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
     "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
+    // **/jwkcerts の Cache-Control: public, max-age=（秒）**（#303。E-7）。
+    //   **0（または未設定）なら no-store**（従来どおり）。
+    //   **鍵を入れ替える周期より短くすること**（入れ替え直後は、この秒数の間だけ
+    //   古い鍵を見る相手が居る。出す側は新旧 2 本を広告する。#291 / #292 の段階 3）。
+    "JwkSetCacheMaxAgeSeconds": "300",
 
     // プッシュ通知
     "SetDeviceTokenWebAPI": "/SetDeviceToken",

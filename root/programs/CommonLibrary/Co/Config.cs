@@ -2190,6 +2190,46 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region /jwkcerts のキャッシュ（#303。E-7）
+
+        /// <summary>
+        /// `/jwkcerts` の応答に付ける `Cache-Control: public, max-age=` の秒数
+        /// </summary>
+        /// <remarks>
+        /// **`/jwkcerts` は、トークンを検証する相手が必ず読む口**である。
+        /// **内容は鍵を入れ替えるまで変わらない**ので、**持ち回らせてよい。**
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **`no-store`**（**従来どおり**。毎回取りに来る） |
+        /// | 正の秒数 | **`public, max-age=<秒>`** ＋ `ETag`（`If-None-Match` に `304`） |
+        ///
+        /// **鍵を入れ替えた直後は、この秒数の間だけ古い鍵を見る相手が居る。**
+        /// **出す側は新旧 2 本を広告する**作りにしてある（#291 / #292 の段階 3）ので、
+        /// **入れ替えの最中も検証は通る。** **入れ替えの周期より短くすること。**
+        ///
+        /// **サーバ側で覚える分は、この値に関係なく効く**
+        /// （`Extensions/Sts/JwkSetDocument`。**ファイルの更新を見て読み直す**）。
+        /// </remarks>
+        public static int JwkSetCacheMaxAgeSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("JwkSetCacheMaxAgeSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定なら 0**（従来どおり `no-store`）。
+                    return 0;
+                }
+
+                int seconds = 0;
+                return int.TryParse(value, out seconds) ? seconds : 0;
+            }
+        }
+
+        #endregion
+
         #region 鍵のロールオーバー（#292 の段階 3）
 
         /// <summary>

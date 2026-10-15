@@ -354,6 +354,11 @@ function Set-IdFederationEnv
     #   **値はテスト用**で、**出力しない**（他の秘密と同じ扱い。`TESTING.md` 9 節）。
     $env:UserStoreSecretPassword = 'E2E_SecretBox_8rJ2vQ5mZ1xK'
 
+    # **/jwkcerts のキャッシュ**（#303。E-7）。
+    #   **既定の通しを「キャッシュ有効」で回す**（`RT-303.1` が Cache-Control / ETag / 304 を測る）。
+    #   **短くしてある**（鍵を入れ替える周期より短いこと。`CONFIGURATION.md`）。
+    $env:JwkSetCacheMaxAgeSeconds = '300'
+
     # **退役させる途中の署名証明書**（#292 の段階 3）。
     #   **/samlmetadata が 2 本広告する状態を作る**（`SA-2.2` が、それを測る）。
     #   **値は「いま署名に使っていない証明書」**でよい（広告するだけなので）。

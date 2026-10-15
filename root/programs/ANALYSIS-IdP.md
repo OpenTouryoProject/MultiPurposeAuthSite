@@ -50,8 +50,8 @@
 | **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**） |
 | **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199） |
 | **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った） |
-| **D. 機能不足** | **7 件 残り** : **D-1-2**（Front / Back-Channel Logout）／**D-3**（DPoP）／**D-4**（DCR）／**D-8**（複数 `redirect_uri`）／**D-11**（`/token` の `scope`）／**D-13**（レート制限）／**D-14**（適合性テスト） |
-| **E. 品質** | **5 件 残り** : **E-1**（Minimal Hosting）／**E-4**（Shift_JIS の 2 ファイル）／**E-5**（log4net の既知の脆弱性）／**E-7**（`/jwkcerts` のキャッシュ）／**E-8**（Controller の切り出し）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
+| **D. 機能不足** | **6 件 残り** : **D-1-2**（Front / Back-Channel Logout）／**D-3**（DPoP）／**D-4**（DCR）／**D-8**（複数 `redirect_uri`）／**D-13**（レート制限）／**D-14**（適合性テスト） |
+| **E. 品質** | **3 件 残り** : **E-1**（Minimal Hosting）／**E-4**（Shift_JIS の 2 ファイル）／**E-8**（Controller の切り出し）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
 **7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
 **残っているものは フェーズ 4・5（機能の追加と土台）に寄っている。**
@@ -2694,7 +2694,7 @@ else
 | D-15 | **ID フェデレーションの上流が 1 つだけ**（✅ 解けた。#292 の段階 1・2） | **設定 `IdFederationUpstreams` で n 件登録でき、導線も n 個出る**（`CN-5.4` 〜 `CN-5.6` で実測）。**同じものを user store（`IdFederationUpstreams` 表。DDL は 3 方言）にも置け、管理画面（`/IdFederationAdmin`）から足せる**（#292 の段階 2。`RT-292.*`）。**読む順は 設定 → DB で、同じ鍵なら設定が勝つ。****相手ごとの値（`issuer` / `client_id` / 口 / 鍵 / メタデータ）は、その行が持つ。****折り返し口は共通設定のまま**（自分の URL なので相手ごとに変わらない） | **(2) の署名鍵は上流ごとに替えられる**（#292 の段階 4-a・4-b。Open棟梁 #606 の追随。`signing_pfx_file_path`。**設定でも DB でもよく、管理画面から入れられる**。`RT-292.4`）。**`client_secret` の暗号化は解けた**（#297。`UserStoreSecretPassword`）。**鍵の入れ替え（ロールオーバー）は、段階 3 で解けた**（出す側は 2 本広告し、受け取る側は 2 本試す。`SA-2.2` / `SA-6.6`）。**連携キーの幅も広げた**（`UserLogins.LoginProvider` 512 / `ProviderKey` 256。**上流が n 件になると長い値を踏む確率が上がる**ため。**SQL Server 2016 以降が前提**になった） |
 | D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **✅ 解けた（#151 の段階 2）。** **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、**秘密を替えても発行済みの値は動かない**（表から引くため）。以前は導出していたので替えられなかった（A-14） | **漏洩時に替えられるようになった** |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | **✅ 解けた（#302）。** **access_token は `typ: at+jwt`**（段階 2。Open棟梁 #611 の追随）、**`jku` は出さない**（段階 1）。**受ける側も期待値を明示する** — `VerifyAccessToken` は `at+jwt`、`id_token_hint` の `VerifySignature` は `JWT`。**`RT-302.1`** で access_token / id_token / JARM の 3 つを測る | **トークン取り違え（token confusion）を型で見分けられるようになった。** **`jku` の SSRF も解けた** |
-| D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
+| D-11 | 応答の `scope` | **✅ 返している**（`CmnEndpoints.CreateAccessTokenResponse`。**#198 でスコープを絞るようにしたときに、同時に入った**）。**発行したスコープを空白区切りで返す** — **要求と違うことがあるので必須**（RFC 6749 §5.1）。**測定は `RT-198.*`**（「トークン応答の `scope` が、発行したスコープと一致する」） | **解けた。** 要求と付与が違っても RP が判別できる |
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
 | D-13 | レート制限 / ブルートフォース対策 | 未実装（`/token` `/device_authz` `/ciba_authz` とも無制限） | user_code・client_secret への総当たりが可能 |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
@@ -2709,9 +2709,9 @@ else
 | E-2 | **✅ 修正済み（#256）**。`AddDistributedMemoryCache()` 固定をやめ、**`SessionStoreType`（`mem` / `sql` / `redis`）で選べるようにした**（`UserStoreType` と同じ流儀）。**既定は `mem`**（キーを書かなければも `mem`。既存の配備は従来どおり）。**単一インスタンスならそれが正しい**ので、**雛形を `redis` にはしない**（[`TESTING.md`](../TESTING.md) 1 節の「既定は `mem`」と同じ理由）。**セッションには途中の状態が載っている** — ID 連携の `state` / `nonce` / `code_verifier`、管理画面の `access_token`、FIDO2 の challenge、自己テスト画面の値（**実測 14 キー・46 か所。net10.0 版**）。`mem` のまま増やすと、要求が別のインスタンスへ回った時にそれらが読めず、**途中で失敗する**。**Cookie へ寄せる案（案 B）は採らなかった**（量と、`access_token` を Cookie に置きたくないため）。**`sql` は `Create_SessionCache.sql`**（`dotnet sql-cache create` と同じスキーマ。スキーマ名・表名は `Const` に置き、設定キーにしない）。**Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、**3 方言が揃わない唯一の設定**であり、それらのストアでは `redis` を使う。**`mem` 以外で接続文字列が空なら、`ConfigureServices` で落とす**（`IDistributedCache` は遅延で落ちるため、放っておくと「画面が 500 を返すだけ」になる）。**DataProtection の方は C-13 / #251 で済んでいる**（`DataProtectionKeyPath`）。**検証は通し × 3 通り ＋ ストア側の件数**（[`TESTING.md`](../TESTING.md) 1 節） |
 | E-3 | ✅ **CORS の 3 重定義を片付けた**（C-9 / #265）。既定のポリシーを置かず、口ごとに属性で選ぶ。`AllowAllOrigins` は自己テスト用の口だけが使う |
 | E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
-| E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
+| E-5 | **✅ 解消済み**。`log4net` を **3.2.0 → 3.3.0** に上げた（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節。**`NU1902` は解消**し、**版の割れ（実行時の `FileNotFoundException`）も直った**）。**net48 側は `OpenTouryoAssemblies` の 3.3.0 を使う**ので、元から対象外 |
 | E-6 | **✅ Deny ボタンは入れた（#272 の段階 2）**。認可画面で拒否でき、**`access_denied` を `redirect_uri` へ返す**（RFC 6749 §4.1.2.1。`RT-272.6`）。**拒否は記録しない**。残るのは **scope が生の識別子のまま**であること |
-| E-7 | `/jwkcerts` は毎回ファイルを読む（キャッシュ・`Cache-Control` なし） |
+| E-7 | **✅ 解けた（#303）。** **ファイルの更新だけを見て覚える**（`Extensions/Sts/JwkSetDocument`）。**`ETag` を常に付け、`If-None-Match` に `304`**。**`Cache-Control` は `JwkSetCacheMaxAgeSeconds`**（0 なら `no-store` ＝ 従来どおり）。**鍵の入れ替えに追随する**（`RT-303.2`） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
 | E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
 | E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |

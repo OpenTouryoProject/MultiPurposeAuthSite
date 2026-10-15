@@ -74,6 +74,7 @@
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（#237）
 //*  2026/10/01  玄人 幸道         CIBA の認可コードに、sub ではなく利用者名を入れるようにした（#151 の段階 4）
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
+//*  2026/10/16  玄人 幸道         /jwkcerts を覚えて返す（Cache-Control / ETag / 304）（#303）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -104,6 +105,7 @@ using System.Web.Http.Cors;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
+using System.Net.Http.Headers;   // ETag / Cache-Control（#303）
 
 using Microsoft.AspNet.Identity.Owin;
 
@@ -1106,17 +1108,63 @@ namespace MultiPurposeAuthSite.Controllers
         /// GET: /jwkcerts
         /// </summary>
         /// <returns>HttpResponseMessage</returns>
+        /// <remarks>
+        /// **覚えて返す**（#303。E-7）。**要求ごとにファイルを開いて読んでいた。**
+        /// **内容は鍵を入れ替えるまで変わらない**ので、
+        /// **ファイルの更新を見て、変わっていなければ覚えている分を返す**
+        /// （`Extensions/Sts/JwkSetDocument`）。
+        ///
+        /// **`Cache-Control` と `ETag` も付ける。**
+        /// **`JwkSetCacheMaxAgeSeconds` が 0（既定）なら `no-store`** ＝ 従来どおり。
+        /// **`If-None-Match` が一致すれば `304`**（本文を送らない）。
+        /// </remarks>
         [HttpGet]
         [MpasPublicDocsCors]   // jwkcerts（公開情報）
         public HttpResponseMessage JwksUri()
         {
-            return new HttpResponseMessage()
+            string body = Sts.JwkSetDocument.Get(out string etag);
+            int maxAge = Sts.JwkSetDocument.MaxAgeSeconds;
+
+            EntityTagHeaderValue tag = new EntityTagHeaderValue(etag);
+
+            //  **同じものを持っている相手には、本文を送らない**（`304`）。
+            foreach (EntityTagHeaderValue candidate in this.Request.Headers.IfNoneMatch)
             {
-                Content = new JsonContent(
-                    ResourceLoader.LoadAsString(
-                        OAuth2AndOIDCParams.JwkSetFilePath,
-                        Encoding.GetEncoding(CustomEncode.UTF_8)))
+                if (candidate.Tag == etag)
+                {
+                    HttpResponseMessage notModified =
+                        new HttpResponseMessage(HttpStatusCode.NotModified);
+
+                    notModified.Headers.ETag = tag;
+                    JwksUriCache(notModified, maxAge);
+
+                    return notModified;
+                }
+            }
+
+            HttpResponseMessage res = new HttpResponseMessage()
+            {
+                Content = new JsonContent(body)
             };
+
+            res.Headers.ETag = tag;
+            JwksUriCache(res, maxAge);
+
+            return res;
+        }
+
+        /// <summary>`/jwkcerts` の `Cache-Control` を付ける（#303）</summary>
+        /// <param name="res">HttpResponseMessage</param>
+        /// <param name="maxAge">秒数（0 なら no-store）</param>
+        private static void JwksUriCache(HttpResponseMessage res, int maxAge)
+        {
+            res.Headers.CacheControl = (0 < maxAge)
+                ? new CacheControlHeaderValue()
+                {
+                    Public = true,
+                    MaxAge = TimeSpan.FromSeconds(maxAge)
+                }
+                : new CacheControlHeaderValue() { NoStore = true };
         }
 
         #endregion

@@ -79,6 +79,7 @@
     <Compile Include="Extensions\Sts\DiscoveryJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationUpstreamProvider.cs" />
+    <Compile Include="Extensions\Sts\JwkSetDocument.cs" />
     <Compile Include="Extensions\Sts\IdTokenAudience.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />

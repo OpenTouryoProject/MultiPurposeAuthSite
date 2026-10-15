@@ -75,6 +75,7 @@
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（#237）
 //*  2026/10/01  玄人 幸道         CIBA の認可コードに、sub ではなく利用者名を入れるようにした（#151 の段階 4）
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にした（#265）
+//*  2026/10/16  玄人 幸道         /jwkcerts を覚えて返す（Cache-Control / ETag / 304）（#303）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -1135,16 +1136,46 @@ namespace MultiPurposeAuthSite.Controllers
         /// JWK Set documentを返すWebAPI
         /// GET: /jwkcerts
         /// </summary>
-        /// <returns>ContentResult</returns>
+        /// <returns>IActionResult</returns>
+        /// <remarks>
+        /// **覚えて返す**（#303。E-7）。**要求ごとにファイルを開いて読んでいた。**
+        /// **内容は鍵を入れ替えるまで変わらない**ので、
+        /// **ファイルの更新を見て、変わっていなければ覚えている分を返す**
+        /// （`Extensions/Sts/JwkSetDocument`）。
+        ///
+        /// **`Cache-Control` と `ETag` も付ける。**
+        /// **`JwkSetCacheMaxAgeSeconds` が 0（既定）なら `no-store`** ＝ 従来どおり。
+        /// **`If-None-Match` が一致すれば `304`**（本文を送らない）。
+        /// </remarks>
         [HttpGet]
         [EnableCors(Const.CorsPolicyPublicDocs)]   // jwkcerts（公開情報。#265）
-        public ContentResult JwksUri()
+        public IActionResult JwksUri()
         {
-            return this.Content(
-                ResourceLoader.LoadAsString(
-                    OAuth2AndOIDCParams.JwkSetFilePath,
-                    Encoding.GetEncoding(CustomEncode.UTF_8))
-                    , "application/json");
+            string body = Sts.JwkSetDocument.Get(out string etag);
+            int maxAge = Sts.JwkSetDocument.MaxAgeSeconds;
+
+            IHeaderDictionary headers = MyHttpContext.Current.Response.Headers;
+
+            headers["ETag"] = etag;
+            headers["Cache-Control"] = (0 < maxAge)
+                ? "public, max-age=" + maxAge.ToString() : "no-store";
+
+            //  **同じものを持っている相手には、本文を送らない**（`304`）。
+            //    **`If-None-Match` は、複数の ETag をカンマ区切りで送れる**（RFC 9110 §13.1.2）。
+            string ifNoneMatch = MyHttpContext.Current.Request.Headers["If-None-Match"];
+
+            if (!string.IsNullOrEmpty(ifNoneMatch))
+            {
+                foreach (string candidate in ifNoneMatch.Split(','))
+                {
+                    if (candidate.Trim() == etag)
+                    {
+                        return this.StatusCode(304);
+                    }
+                }
+            }
+
+            return this.Content(body, "application/json");
         }
 
         #endregion
