@@ -6141,23 +6141,18 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - access_token のヘッダに `jku` が無い
 - access_token のヘッダに `kid` が在る
+- access_token の `typ`
 - id_token のヘッダに `jku` が無い
 - id_token のヘッダに `kid` が在る
+- id_token の `typ`
 - JARM の response のヘッダに `jku` が無い
 - JARM の response のヘッダに `kid` が在る
-
-**観測（判定しない）**
-
-- access_token の `typ`
-  - **`at+jwt` にするのは #302 の段階 2**（Open棟梁 #611 待ち）。
-- id_token の `typ`
-  - **`at+jwt` にするのは #302 の段階 2**（Open棟梁 #611 待ち）。
 - JARM の response の `typ`
-  - **`at+jwt` にするのは #302 の段階 2**（Open棟梁 #611 待ち）。
 
 **補足**
 
-- **`typ` は、まだ `JWT` のまま**である（上の観測）。**`at+jwt`（RFC 9068 §2.1）にするには Open棟梁 側の口が要る** — **`JWS_Header.typ` が `readonly`** で、**`Verify` が `typ == "JWT"` を要求する**（Open棟梁 #611。#302 の段階 2）。
+- **`typ` は、出す側と受ける側の両方で効いている。****受ける側**（`CmnAccessToken.VerifyAccessToken`）**は `at+jwt` を期待する**ので、**access_token に `JWT` が付いていると、トークンを使う経路が全部落ちる** — **このケースだけでなく、通し全体が落ちる**のが歯抜けの形である（`TESTING.md`）。
+- **配備のとき、発行済みの access_token は検証に通らなくなる**（`typ` が `JWT` のため）。**有効期限が切れるまでの間だけ**で、**`refresh_token` で取り直せば新しい `typ` になる**（`RefreshTokenProvider` は JWS ではない）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

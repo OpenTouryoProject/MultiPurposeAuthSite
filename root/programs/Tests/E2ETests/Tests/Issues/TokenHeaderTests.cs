@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/15  玄人 幸道         新規（#302 の段階 1。jku を出さない）
+//*  2026/10/16  玄人 幸道         typ を検証に格上げ（#302 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -54,10 +55,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **消しても、他のテストは落ちない**（**検証は `kid` で引いている**）ので、
     /// **「消えたこと」を測るのはこのケースだけ**である。
     ///
-    /// **`typ` は、まだ `JWT` のまま。**
-    /// **`at+jwt`（RFC 9068 §2.1）にするには Open棟梁 側の口が要る**
-    /// （`JWS_Header.typ` が `readonly`、`Verify` が `typ == "JWT"` を要求。
-    /// Open棟梁 #611。#302 の段階 2）。**ここでは観測だけして、期待値は固定しない。**
+    /// **`typ` は、トークンの種類で違う**（#302 の段階 2。Open棟梁 #611 の追随）。
+    ///
+    /// | トークン | `typ` | |
+    /// |---|---|---|
+    /// | access_token | **`at+jwt`** | RFC 9068 §2.1 |
+    /// | id_token | `JWT` | OIDC Core（**access_token と見分けるため、こちらは変えない**） |
+    /// | JARM の `response` | `JWT` | JARM |
+    ///
+    /// **受け取る側も、期待する `typ` を指定している**
+    /// （`CmnAccessToken.VerifyAccessToken` は `at+jwt`、`VerifySignature`（`id_token_hint`）は `JWT`）。
+    /// **出す側と受ける側が噛み合っていないと、通し全体が落ちる** — それが歯抜けの形である。
     /// </remarks>
     public class TokenHeaderTests : TargetTestBase
     {
@@ -102,8 +110,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 Assert.False(string.IsNullOrEmpty(token.IdToken),
                     "前提: id_token が返ること");
 
-                this.VerifyHeader(r, "access_token", token.AccessToken);
-                this.VerifyHeader(r, "id_token", token.IdToken);
+                //  **access_token だけが `at+jwt`**（#302 の段階 2。RFC 9068 §2.1）。
+                this.VerifyHeader(r, "access_token", token.AccessToken, "at+jwt");
+                this.VerifyHeader(r, "id_token", token.IdToken, "JWT");
 
                 r.Step("(2) JARM（`response_mode=query.jwt`）の応答も見る");
 
@@ -121,13 +130,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 }
                 else
                 {
-                    this.VerifyHeader(r, "JARM の response", responseJwt);
+                    this.VerifyHeader(r, "JARM の response", responseJwt, "JWT");
                 }
 
-                r.Note("**`typ` は、まだ `JWT` のまま**である（上の観測）。"
-                    + "**`at+jwt`（RFC 9068 §2.1）にするには Open棟梁 側の口が要る** — "
-                    + "**`JWS_Header.typ` が `readonly`** で、"
-                    + "**`Verify` が `typ == \"JWT\"` を要求する**（Open棟梁 #611。#302 の段階 2）。");
+                r.Note("**`typ` は、出す側と受ける側の両方で効いている。**"
+                    + "**受ける側**（`CmnAccessToken.VerifyAccessToken`）**は `at+jwt` を期待する**ので、"
+                    + "**access_token に `JWT` が付いていると、トークンを使う経路が全部落ちる** — "
+                    + "**このケースだけでなく、通し全体が落ちる**のが歯抜けの形である（`TESTING.md`）。");
+
+                r.Note("**配備のとき、発行済みの access_token は検証に通らなくなる**"
+                    + "（`typ` が `JWT` のため）。**有効期限が切れるまでの間だけ**で、"
+                    + "**`refresh_token` で取り直せば新しい `typ` になる**（`RefreshTokenProvider` は JWS ではない）。");
 
                 r.Done();
             }
@@ -137,16 +150,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region 補助
 
-        /// <summary>ヘッダを測る（jku が無い / kid が在る / typ は観測）</summary>
+        /// <summary>ヘッダを測る（jku が無い / kid が在る / typ が期待どおり）</summary>
         /// <param name="r">TestReport</param>
         /// <param name="name">トークンの名前（報告に出す）</param>
         /// <param name="jwt">JWT</param>
-        private void VerifyHeader(TestReport r, string name, string jwt)
+        /// <param name="expectedTyp">期待する typ</param>
+        private void VerifyHeader(TestReport r, string name, string jwt, string expectedTyp)
         {
             JsonElement header = Jwt.Header(jwt);
 
             bool hasJku = Jwt.Has(header, "jku");
             bool hasKid = Jwt.Has(header, "kid");
+            string typ = Jwt.String(header, "typ");
 
             r.Verify(name + " のヘッダに `jku` が無い", !hasJku,
                 "無い", hasJku ? "**在る（" + Jwt.String(header, "jku") + "）**" : "無い");
@@ -154,8 +169,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             r.Verify(name + " のヘッダに `kid` が在る", hasKid,
                 "在る", hasKid ? "在る" : "**無い（鍵を引けない）**");
 
-            r.Observe(name + " の `typ`", Jwt.String(header, "typ"),
-                "**`at+jwt` にするのは #302 の段階 2**（Open棟梁 #611 待ち）。");
+            //  **`typ` は、トークンの種類で違う**（#302 の段階 2）。
+            //    **access_token は `at+jwt`**（RFC 9068 §2.1）、**id_token と JARM は `JWT`**。
+            r.VerifyEqual(name + " の `typ`", expectedTyp, typ);
         }
 
         #endregion

@@ -45,6 +45,7 @@
 //*  2026/10/02  玄人 幸道         署名する鍵の選択を SelectJwsForSigning に切り出した（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         alg と鍵の対応を SigningKeys の表に寄せた（#129 の段階 3 / D-9）
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
+//*  2026/10/16  玄人 幸道         typ を at+jwt にし、検証で期待値を明示（#302 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -87,7 +88,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region SelectJwsForSigning
 
-        /// <summary>署名に使う JWS を選ぶ（kid まで入れて返す）</summary>
+        /// <summary>署名に使う JWS を選ぶ（kid / typ まで入れて返す）</summary>
         /// <param name="alg">alg（SupportedAlgs のいずれか）</param>
         /// <returns>JWS</returns>
         /// <remarks>
@@ -127,13 +128,20 @@ namespace MultiPurposeAuthSite.TokenProviders
             //    **鍵は `kid` ＋ discovery の `jwks_uri` で引く**のが標準の経路である
             //    （この製品の検証は `CmnAccessToken.SelectJws` が `kid` で `JwkSet.json` を引く。
             //    Open棟梁 も `jku` を「非推奨」「廃止」と注記して読んでいない）。
+            //  **`typ` は `at+jwt`**（#302 の段階 2。RFC 9068 §2.1）。
+            //    **トークンの取り違え（token confusion）を防ぐ型**である
+            //    （**id_token / Request Object / JARM は `JWT` のまま** — あちらは別の型）。
+            //    **Open棟梁 [#611](https://github.com/OpenTouryoProject/OpenTouryo/issues/611) で
+            //    署名の前に `typ` を設定できるようになった。** それまでは `readonly` だった。
             if (key.IsRsa)
             {
                 ((JWS_RSA)jws).JWSHeader.kid = kid;
+                ((JWS_RSA)jws).JWSHeader.typ = JwtConst.AT_JWT;
             }
             else
             {
                 ((JWS_ECDSA)jws).JWSHeader.kid = kid;
+                ((JWS_ECDSA)jws).JWSHeader.typ = JwtConst.AT_JWT;
             }
 
             return jws;
@@ -668,7 +676,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             JWS jws = CmnAccessToken.SelectJws(jwt);
 
-            return jws != null && jws.Verify(jwt);
+            //  **こちらは `id_token` なので `JWT` を期待する**（#302 の段階 2）。
+            //    **`id_token_hint` に access_token を渡されても、ここで落ちる。**
+            return jws != null && jws.Verify(jwt, JwtConst.JWT);
         }
 
         /// <summary>Verify</summary>
@@ -761,8 +771,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // 検証（鍵の選択は SelectJws に切り出した。#232）
                 JWS jws = CmnAccessToken.SelectJws(jwt);
 
+                //  **`typ` は `at+jwt` を期待する**（#302 の段階 2。RFC 9068 §4）。
+                //    **リソース サーバは、access_token 以外の JWT を受け取ったら拒否する。**
+                //    **id_token や Request Object が流れ込んでも、ここで落ちる。**
+                //    **Open棟梁 の既定（引数なしの `Verify`）は照合しない**ので、
+                //    **期待値は呼ぶ側が決める**（Open棟梁 #611 の決め事）。
                 // jwsが決まらなかった場合（kid無し、ヘッダ破損など）は検証失敗（#185）。
-                if (jws != null && jws.Verify(jwt))
+                if (jws != null && jws.Verify(jwt, JwtConst.AT_JWT))
                 {
                     // 検証できた。
 

@@ -1655,6 +1655,20 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 > （**この製品も Open棟梁 も、検証では `jku` を読んでいない**）。
 > **測定は `RT-302.1`**（access_token / id_token / JARM の 3 つを見る）。
 
+> **`typ` は、トークンの種類で違う**（#302 の段階 2。RFC 9068 §2.1）。
+>
+> | トークン | `typ` |
+> |---|---|
+> | **access_token** | **`at+jwt`** |
+> | id_token / JARM の応答 / Request Object | `JWT` |
+>
+> **受ける側も期待値を見る** — **`/userinfo` やリソース サーバは `at+jwt` 以外を拒否する**
+> （RFC 9068 §4）。**`id_token_hint` は `JWT` を期待する**ので、
+> **access_token を渡しても通らない**（取り違えの防止）。
+>
+> **配備したとき、発行済みの access_token は検証に通らなくなる**（`typ` が `JWT` のため）。
+> **有効期限が切れるまでの間だけ**で、**`refresh_token` で取り直せば新しい `typ` になる。**
+
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
 

@@ -403,17 +403,35 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 |---|---|
 | **`jku` が無い** | access_token / id_token / **JARM の `response`** の 3 つ |
 | **`kid` が在る** | 同上（**鍵を引く手掛かりはこちら**） |
-| `typ` | **観測だけ**（いまは `"JWT"`。`at+jwt` は Open棟梁 #611 待ち） |
+| **`typ` が種類どおり** | **access_token は `at+jwt`**（RFC 9068 §2.1）、**id_token と JARM は `JWT`**（#302 の段階 2） |
 
-> **他のテストでは代わりにならない。**
+> **`jku` は、他のテストでは代わりにならない。**
 > **検証は `kid` で引いている**ので、**`jku` を消しても付けても、他のケースは通る**
 > （**だからこのケースが要る**）。
+> **`typ` は逆で、噛み合っていないと通し全体が落ちる**（下の歯抜け）。
 
-**歯抜け（実測 2026/10/15）。**
+**歯抜け（実測）。**
 
 | 壊すもの | 期待する結果 |
 |---|---|
-| `CmnAccessToken.SelectJwsForSigning` に **`jku` を戻す** | **`RT-302.1` だけが落ちる**（core / netfx とも。**実測値まで出る** : `在る（https://localhost:44300/jwkcerts）`）。**同時に回した `EX-6.*` / `TC-*` の 18 件は通ったまま** |
+| `CmnAccessToken.SelectJwsForSigning` に **`jku` を戻す**（2026/10/15） | **`RT-302.1` だけが落ちる**（core / netfx とも。**実測値まで出る** : `在る（https://localhost:44300/jwkcerts）`）。**同時に回した `EX-6.*` / `TC-*` の 18 件は通ったまま** |
+| **出す側だけ `typ` を `JWT` に戻す**（受ける側は `at+jwt` を期待したまま。2026/10/16） | **75 件が落ちる**（`/userinfo` が `invalid_token`、`/introspect` が `active=false`、CIBA の端末登録が 401 …）。**access_token を使う経路が全部**落ちる ＝ **出す側と受ける側が噛み合っていることの証拠** |
+
+**受ける側が期待する `typ`。**
+
+| 検証する口 | 期待 | |
+|---|---|---|
+| `CmnAccessToken.VerifyAccessToken` | **`at+jwt`** | `/userinfo`・リソース サーバ・`/introspect`・`/revoke` が通る道 |
+| `CmnAccessToken.VerifySignature` | `JWT` | **`id_token_hint`**（RP-Initiated Logout）。**access_token を渡されたら落ちる** |
+
+> **Open棟梁 の既定（引数なしの `Verify`）は `typ` を照合しない**（Open棟梁 #611 の決め事）。
+> **期待値は呼ぶ側が決める** — **ライブラリは、来た JWT が access_token か id_token かを知り得ない。**
+
+> **配備のとき、発行済みの access_token は検証に通らなくなる**（`typ` が `JWT` のため）。
+> **有効期限が切れるまでの間だけ**で、**`refresh_token` で取り直せば新しい `typ` になる**
+> （`refresh_token` は JWS ではなく `RefreshTokenProvider` が持つ）。
+> **コンテナ（`store/`）は公開済みのイメージで動く**ので、**作り直すまでは `JWT` のまま**である
+> （**上流・下流とも自分で出して自分で検証する**ので、混在していても通る）。
 
 ##### 書き込みの失敗を握らなくした（#300）
 
