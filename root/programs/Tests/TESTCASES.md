@@ -6124,6 +6124,41 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して確かめる（手順は `TESTING.md`）。**E2E からは DB を見ない**（テストに接続文字列を持たせない。`TESTING.md` 9 節）。
 
+## RT-302.1 発行するトークンのヘッダに `jku` を入れず、`kid` で鍵を引けるようにする
+
+| | |
+|---|---|
+| 観点 | **`jku` は、検証する側に「ヘッダに書かれた URL を取りに行く」動作を誘う。****鍵の出どころを発行者が自由に指し示せる**ことになり、**検証側の SSRF を誘発しうる**（`ANALYSIS-IdP.md` の D-10）。**標準の経路は `kid` ＋ discovery の `jwks_uri`** である。**消しても他のテストは落ちない**（検証は `kid` で引く）ので、**ここだけが「消えたこと」を測る。** |
+| 根拠 | RFC 9068 §2.1 / #302 の段階 1 / D-10 |
+| テスト | `RT30201_トークンのヘッダにjkuを入れない` |
+
+**手順**
+
+1. 認可コード フローで access_token と id_token を取る
+1. JARM（`response_mode=query.jwt`）の応答も見る
+
+**検証（合否を判定する）**
+
+- access_token のヘッダに `jku` が無い
+- access_token のヘッダに `kid` が在る
+- id_token のヘッダに `jku` が無い
+- id_token のヘッダに `kid` が在る
+- JARM の response のヘッダに `jku` が無い
+- JARM の response のヘッダに `kid` が在る
+
+**観測（判定しない）**
+
+- access_token の `typ`
+  - **`at+jwt` にするのは #302 の段階 2**（Open棟梁 #611 待ち）。
+- id_token の `typ`
+  - **`at+jwt` にするのは #302 の段階 2**（Open棟梁 #611 待ち）。
+- JARM の response の `typ`
+  - **`at+jwt` にするのは #302 の段階 2**（Open棟梁 #611 待ち）。
+
+**補足**
+
+- **`typ` は、まだ `JWT` のまま**である（上の観測）。**`at+jwt`（RFC 9068 §2.1）にするには Open棟梁 側の口が要る** — **`JWS_Header.typ` が `readonly`** で、**`Verify` が `typ == "JWT"` を要求する**（Open棟梁 #611。#302 の段階 2）。
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

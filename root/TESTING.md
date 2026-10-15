@@ -394,6 +394,27 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **これで「暗号化して保管し、読むときに戻している」ことが測れている** —
 > **暗号化していなければ、外しても往復してしまう。**
 
+##### 発行するトークンのヘッダ（`RT-302.1`。#302 の段階 1）
+
+**`jku` は出さない**（`ANALYSIS-IdP.md` の D-10。経緯は
+[`CONFIGURATION.md`](CONFIGURATION.md) 「署名鍵」の節）。
+
+| 見るもの | |
+|---|---|
+| **`jku` が無い** | access_token / id_token / **JARM の `response`** の 3 つ |
+| **`kid` が在る** | 同上（**鍵を引く手掛かりはこちら**） |
+| `typ` | **観測だけ**（いまは `"JWT"`。`at+jwt` は Open棟梁 #611 待ち） |
+
+> **他のテストでは代わりにならない。**
+> **検証は `kid` で引いている**ので、**`jku` を消しても付けても、他のケースは通る**
+> （**だからこのケースが要る**）。
+
+**歯抜け（実測 2026/10/15）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| `CmnAccessToken.SelectJwsForSigning` に **`jku` を戻す** | **`RT-302.1` だけが落ちる**（core / netfx とも。**実測値まで出る** : `在る（https://localhost:44300/jwkcerts）`）。**同時に回した `EX-6.*` / `TC-*` の 18 件は通ったまま** |
+
 ##### 書き込みの失敗を握らなくした（#300）
 
 **user store の層は、例外を握って正常に戻っていた**（`catch` → `SQLTRACE` に書く → 何事も無く戻る）。

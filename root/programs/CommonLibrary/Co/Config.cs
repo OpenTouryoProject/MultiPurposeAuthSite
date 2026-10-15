@@ -2379,7 +2379,8 @@ namespace MultiPurposeAuthSite.Co
         ///
         /// **`JwkSetUri` とは役が違う。**
         /// **`JwkSetUri` は「この配備の JWK Set の口」**（クライアント・サーバの共通設定）であり、
-        /// **自分の `/jwkcerts` のパスとして読む**（ルート登録・`jku`・discovery の `jwks_uri`）。
+        /// **自分の `/jwkcerts` のパスとして読む**（ルート登録・discovery の `jwks_uri`）。
+        /// **`jku` には使わない**（#302 で、ヘッダに `jku` を入れるのをやめた）。
         /// **上流（相手）の JWK Set は別の値**なので、このキーで持つ。
         ///
         /// > **信頼の根拠は、このキーを書いた人である**（discovery のような `issuer` の照合が無い）。

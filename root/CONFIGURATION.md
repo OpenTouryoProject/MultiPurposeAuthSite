@@ -1644,9 +1644,16 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 **alg と鍵の対応は `CommonLibrary/TokenProviders/SigningKeys.cs` の表が 1 か所で持つ**
 （`alg` に対して `pfx`（署名）と `cer`（検証・JWK Set）を組で持たせてある。#129 の段階 3 / D-9）。
 
-> **実測（2026/10/09）** : 発行されるトークンは `kid` と `jku` を持ち、
+> **実測（2026/10/15）** : 発行されるトークンは **`kid` を持ち**（**`jku` は持たない**。#302）、
 > `JwkSet.json`（RSA 1 本 ＋ EC 3 本）に載っているので、**通常は JWK の経路を通る。**
 > **`.cer` は、鍵リングが欠けたときに落ちる先**として在る。
+>
+> **`jku`（ヘッダに書く JWK Set の URL）は、入れない**（#302 の段階 1。`ANALYSIS-IdP.md` の D-10）。
+> **ヘッダに鍵の在り処を書くと、検証する側はその URL を取りに行く** —
+> **出どころを発行者が自由に指し示せる**ので、**検証側の SSRF を誘発しうる。**
+> **鍵は `kid` ＋ discovery の `jwks_uri` で引く**のが標準の経路である
+> （**この製品も Open棟梁 も、検証では `jku` を読んでいない**）。
+> **測定は `RT-302.1`**（access_token / id_token / JARM の 3 つを見る）。
 
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。

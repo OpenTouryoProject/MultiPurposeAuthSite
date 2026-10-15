@@ -44,6 +44,7 @@
 //*  2026/10/02  玄人 幸道         RS384 / RS512 を発行・検証できるようにした（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         署名する鍵の選択を SelectJwsForSigning に切り出した（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         alg と鍵の対応を SigningKeys の表に寄せた（#129 の段階 3 / D-9）
+//*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -86,7 +87,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region SelectJwsForSigning
 
-        /// <summary>署名に使う JWS を選ぶ（kid / jku まで入れて返す）</summary>
+        /// <summary>署名に使う JWS を選ぶ（kid まで入れて返す）</summary>
         /// <param name="alg">alg（SupportedAlgs のいずれか）</param>
         /// <returns>JWS</returns>
         /// <remarks>
@@ -118,17 +119,21 @@ namespace MultiPurposeAuthSite.TokenProviders
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             JObject jwk = key.JwkFromPfx();
             string kid = (string)jwk[JwtConst.kid];
-            string jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
+            //  **`jku` は入れない**（#302。RFC 9068 / D-10）。
+            //    **ヘッダに「鍵の在り処」を書くと、検証する側はその URL を取りに行く。**
+            //    **出どころを発行者が自由に指し示せる**ことになり、
+            //    **検証側の SSRF を誘発しうる。**
+            //    **鍵は `kid` ＋ discovery の `jwks_uri` で引く**のが標準の経路である
+            //    （この製品の検証は `CmnAccessToken.SelectJws` が `kid` で `JwkSet.json` を引く。
+            //    Open棟梁 も `jku` を「非推奨」「廃止」と注記して読んでいない）。
             if (key.IsRsa)
             {
                 ((JWS_RSA)jws).JWSHeader.kid = kid;
-                ((JWS_RSA)jws).JWSHeader.jku = jku;
             }
             else
             {
                 ((JWS_ECDSA)jws).JWSHeader.kid = kid;
-                ((JWS_ECDSA)jws).JWSHeader.jku = jku;
             }
 
             return jws;

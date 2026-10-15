@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/06/26  西野 大介         新規
 //*  2026/09/11  玄人 幸道         exp を NumericDate（JSON の数値）で出すよう修正（#201）
+//*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -98,8 +99,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
 
+            //  **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             // Create
             return jwsRS256.Create(

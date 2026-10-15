@@ -35,6 +35,7 @@
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/10/02  玄人 幸道         RS384 / RS512 でも署名できるようにした（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         署名する鍵を SigningKeys の表から引く（#129 の段階 3 / D-9）
+//*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -198,18 +199,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                             JWS jws = key.CreateJwsFromPfx();
 
-                            // **jku / kid は access_token から写す**（鍵が同じなので同じ値になる）。
-                            if (!string.IsNullOrEmpty(jwsHeader.jku)
-                            && !string.IsNullOrEmpty(jwsHeader.kid))
+                            // **kid は access_token から写す**（鍵が同じなので同じ値になる）。
+                            //   **`jku` は写さない**（#302。もう付けていない。RFC 9068 / D-10）。
+                            if (!string.IsNullOrEmpty(jwsHeader.kid))
                             {
                                 if (key.IsRsa)
                                 {
-                                    ((JWS_RSA)jws).JWSHeader.jku = jwsHeader.jku;
                                     ((JWS_RSA)jws).JWSHeader.kid = jwsHeader.kid;
                                 }
                                 else
                                 {
-                                    ((JWS_ECDSA)jws).JWSHeader.jku = jwsHeader.jku;
                                     ((JWS_ECDSA)jws).JWSHeader.kid = jwsHeader.kid;
                                 }
                             }
@@ -239,8 +238,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             Dictionary<string, string> jwk =
                                 JsonConvert.DeserializeObject<Dictionary<string, string>>(cerJwkString);
 
+                            //  **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
                             jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
-                            jwsES256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
                             // Create
                             // Nested JWT : JWSをJWEで暗号化する。
