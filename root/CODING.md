@@ -222,6 +222,41 @@ cmd.exe はバッチを**バイト オフセットで読み進める**ため、�
 | `z_Common.bat` / `0_ExecAllBat.bat` / `10_*.bat` / `2_DeleteFile.bat` | **無し** |
 | `1_DeleteDir.bat` / `z_Common2.bat` / `3_BuildLibsAtOtherRepos*.bat` | 有り（コメントのみ） |
 
+## 4.1 ソースの符号化は UTF-8（#304）
+
+**`.cs` / `.cshtml` は UTF-8 ＋ BOM ＋ CRLF** である（`.md` は BOM ＋ LF、`.env` は LF、
+`*.bat` は CRLF。`.gitattributes`）。
+
+**BOM 無しで日本語を書くと、組む機械によって化ける。**
+**Roslyn / Razor は、BOM 無しのソースをまず UTF-8 として読み、
+失敗したら ANSI コード ページで読み直す** —
+**日本語 Windows（932）では通り、そうでない機械では化ける。**
+
+**機械的に確かめられる。**
+
+```powershell
+# UTF-8 として読めないファイルを探す（bat 以外は 0 件が正。bat は 4 節）
+$utf8 = New-Object System.Text.UTF8Encoding $false, $true   # 2 つ目が throwOnInvalidBytes
+Get-ChildItem root -Recurse -File -Include *.cs,*.cshtml,*.json,*.config,*.md,*.ps1,*.sql,*.resx,*.csproj,*.bat |
+  Where-Object { $_.FullName -notmatch '\\(bin|obj|packages|OpenTouryoAssemblies)\\' } |
+  ForEach-Object {
+    $f = $_                                                 # catch の中の $_ はエラーなので、控える
+    try { $utf8.GetString([IO.File]::ReadAllBytes($f.FullName)) | Out-Null }
+    catch { $f.FullName }
+  }
+```
+
+> **`[System.Text.Encoding]::UTF8` では見つからない。**
+> **既定のデコーダは、壊れたバイトを U+FFFD に置き換えて例外を投げない。**
+> **`UTF8Encoding` を `throwOnInvalidBytes = $true` で作ること。**
+>
+> **`catch` の中の `$_` は、ファイルではなくエラー レコード**である。
+> **先に控えないと、何も出ない**（**書いたまま動かすと「0 件」に見える**）。
+
+> **実測（2026/10/16）** : **535 件中 4 件が cp932**だった（#304 で 3 件を直した。
+> 残る 1 件は `root/programs/z_Common2.bat` で、**bat は 4 節のとおり ASCII 化が筋**である）。
+> **上のコマンドを実行して、その 1 件だけが出ることを確かめてある。**
+
 ## 5. ps1 ファイル
 
 **Windows PowerShell 5.1 と PowerShell 7 の両方で動くこと。**
