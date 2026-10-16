@@ -320,28 +320,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <summary>登録を消す（前提を揃える・後片付け）</summary>
         /// <param name="client">IdPClient</param>
         /// <returns>Task</returns>
-        private static async Task RemoveRegistrationAsync(IdPClient client)
+        private static Task RemoveRegistrationAsync(IdPClient client)
         {
-            string html = await client.GetStringAsync("/Manage/Index");
-
-            if (!(html ?? "").Contains("RemoveSaml2OAuth2Data"))
-            {
-                return;
-            }
-
-            Match token = Regex.Match(html,
-                "name=\"__RequestVerificationToken\"[^>]*value=\"(?<value>[^\"]+)\"");
-
-            if (!token.Success)
-            {
-                return;
-            }
-
-            await client.PostFormAsync("/Manage/RemoveSaml2OAuth2Data",
-                new Dictionary<string, string>()
-                {
-                    { "__RequestVerificationToken", token.Groups["value"].Value }
-                });
+            //  **実体は Infrastructure に在る**（#305 の段階 2 で共有に出した）。
+            return ManageClientRegistration.RemoveAsync(client);
         }
 
         #region RT-297.1

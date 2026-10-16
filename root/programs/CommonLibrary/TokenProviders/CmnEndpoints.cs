@@ -119,6 +119,7 @@
 //*  2026/10/06  玄人 幸道         promptを空白区切りの集合として扱う（#272 の段階 1）
 //*  2026/10/06  玄人 幸道         promptのlogin/consent/select_accountの値を追加（#272 の段階 2）
 //*  2026/10/16  玄人 幸道         ポーリングが速すぎたら slow_down を返す（#305 の段階 1）
+//*  2026/10/16  玄人 幸道         クライアント認証の失敗を数える（#305 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4459,6 +4460,19 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             proof = ClientModePolicy.Proof.None;
 
+            //  **続けて失敗しているクライアントは、断る**（#305 の段階 2）。
+            //    **断っている間は、正しい資格情報でも通さない** — それがロックアウトである。
+            //    **応答は従来と同じ `invalid_client`**（**断っていることを教えない**）。
+            string failureKey = AuthFailureProvider.ClientKey(client_id);
+
+            if (AuthFailureProvider.IsLockedOut(failureKey))
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The client authentication of {0} was refused. (too many failures)", client_id));
+
+                return false;
+            }
+
             // client_id & client_secret
             if (!string.IsNullOrEmpty(client_id))
             {
@@ -4470,6 +4484,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         proof = ClientModePolicy.Proof.ClientSecret;
                         x509 = null; // client_secretがあった場合、x509を無効化
+
+                        //  **成功したら、数えた分は消す**（連続した失敗だけを数える）。
+                        AuthFailureProvider.Clear(failureKey);
+
                         return true;
                     }
                 }
@@ -4480,10 +4498,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
                     {
                         proof = ClientModePolicy.Proof.Mtls;
+
+                        AuthFailureProvider.Clear(failureKey);
+
                         return true;
                     }
                 }
             }
+
+            //  **失敗を 1 回数える**（#305 の段階 2）。
+            //    **`client_id` が空のときは数えない**（鍵にならない）。
+            AuthFailureProvider.Record(failureKey);
 
             return false;
         }

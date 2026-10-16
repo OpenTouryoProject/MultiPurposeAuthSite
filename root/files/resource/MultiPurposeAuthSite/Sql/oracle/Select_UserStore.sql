@@ -13,6 +13,7 @@ SELECT * FROM "Saml2OAuth2Data";
 SELECT * FROM "FIDO2Data";
 SELECT * FROM "DeviceAuthZData";
 SELECT * FROM "CibaData";
+SELECT * FROM "AuthFailure";
 SELECT * FROM "OAuth2Revocation";
 SELECT * FROM "IssuedToken";
 SELECT * FROM "RequestObject";

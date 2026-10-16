@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#299。RT-277.1 の私的ヘルパを共有に出した）
+//*  2026/10/16  玄人 幸道         client_secret も返す口を足した（#305 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -141,6 +142,34 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return (html ?? "").Contains("RemoveSaml2OAuth2Data");
         }
 
+        /// <summary>登録を消す（前提を揃える・後片付け）</summary>
+        /// <param name="client">IdPClient（その利用者でサインイン済み）</param>
+        /// <returns>Task</returns>
+        /// <remarks>**登録が無ければ何もしない。**</remarks>
+        public static async Task RemoveAsync(IdPClient client)
+        {
+            string html = await client.GetStringAsync("/Manage/Index");
+
+            if (!(html ?? "").Contains("RemoveSaml2OAuth2Data"))
+            {
+                return;
+            }
+
+            Match token = Regex.Match(html,
+                "name=\"__RequestVerificationToken\"[^>]*value=\"(?<value>[^\"]+)\"");
+
+            if (!token.Success)
+            {
+                return;
+            }
+
+            await client.PostFormAsync("/Manage/RemoveSaml2OAuth2Data",
+                new Dictionary<string, string>()
+                {
+                    { "__RequestVerificationToken", token.Groups["value"].Value }
+                });
+        }
+
         /// <summary>サインイン済みの利用者に、クライアントを 1 件登録する</summary>
         /// <param name="client">IdPClient（その利用者でサインイン済み）</param>
         /// <returns>発行された client_id（登録できなければ空）</returns>
@@ -150,6 +179,26 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public static async Task<string> RegisterAsync(IdPClient client)
         {
+            (string ClientId, string ClientSecret) registered =
+                await ManageClientRegistration.RegisterWithSecretAsync(client);
+
+            return registered.ClientId;
+        }
+
+        /// <summary>サインイン済みの利用者に、クライアントを 1 件登録する（秘密も返す）</summary>
+        /// <param name="client">IdPClient（その利用者でサインイン済み）</param>
+        /// <returns>発行された client_id と client_secret（登録できなければ client_id は空）</returns>
+        /// <remarks>
+        /// **3 回押しの順に送る**（`submit.ClientID` → `submit.ClientSecret` → `submit.Add`）。
+        /// **`client_id` と `client_secret` は画面が発行する。**
+        /// **秘密は報告に出さない**（`TESTING.md` 9 節）。
+        /// **`async` に `out` は付けられない**ので、組で返す（`RegisterDeviceAsync` と同じ形）。
+        /// </remarks>
+        public static async Task<(string ClientId, string ClientSecret)> RegisterWithSecretAsync(
+            IdPClient client)
+        {
+            string clientSecret = "";
+
             Dictionary<string, string> form = ManageClientRegistration.Harvest(
                 await client.GetStringAsync("/Manage/AddSaml2OAuth2Data"));
 
@@ -161,9 +210,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             form = ManageClientRegistration.Harvest(
                 await ManageClientRegistration.PostAsync(client, form, "submit.ClientSecret"));
 
+            clientSecret = ManageClientRegistration.Value(form, "ClientSecret") ?? "";
+
             await ManageClientRegistration.PostAsync(client, form, "submit.Add");
 
-            return (await ManageClientRegistration.IsRegisteredAsync(client)) ? clientId : "";
+            bool registered = await ManageClientRegistration.IsRegisteredAsync(client);
+
+            //　タプル：(clientId, clientSecret) or ("", clientSecret)を返す。
+            return (registered ? clientId : "", clientSecret);
         }
     }
 }

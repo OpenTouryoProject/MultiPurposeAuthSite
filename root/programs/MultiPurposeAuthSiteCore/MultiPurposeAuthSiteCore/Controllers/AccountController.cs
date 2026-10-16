@@ -63,6 +63,7 @@
 //*  2026/10/10  玄人 幸道         ID連携からprompt=noneを外し、エラー応答を受け取る（#287）
 //*  2026/10/10  玄人 幸道         SAML2のID連携を追加（#286の段階2）
 //*  2026/10/11  玄人 幸道         OIDCのID連携も開始とサインインに分けた（#286の段階2）
+//*  2026/10/16  玄人 幸道         user_code の投入の失敗を数える（#305 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -5181,7 +5182,29 @@ namespace MultiPurposeAuthSite.Controllers
             if (formData != null)
             {
                 string userCode = formData[OAuth2AndOIDCConst.user_code];
-                ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(userCode, User.Identity.Name, formData.ContainsKey("allow"));
+                string failureKey = Sts.AuthFailureProvider.DeviceVerifyKey(User.Identity.Name);
+
+                //  **続けて間違えている利用者は、断る**（#305 の段階 2。RFC 8628 §5.2）。
+                //    **間違えた `user_code` では、どの要求を狙ったか分からない**ので、
+                //    **投入した人で数える。**
+                //    **断っている間は、正しい `user_code` でも通さない。**
+                if (Sts.AuthFailureProvider.IsLockedOut(failureKey))
+                {
+                    ViewBag.ReceiveResult = false;
+                }
+                else
+                {
+                    ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(userCode, User.Identity.Name, formData.ContainsKey("allow"));
+
+                    if (ViewBag.ReceiveResult)
+                    {
+                        Sts.AuthFailureProvider.Clear(failureKey);
+                    }
+                    else
+                    {
+                        Sts.AuthFailureProvider.Record(failureKey);
+                    }
+                }
             }
             
             return View("DeviceAuthZVerify");

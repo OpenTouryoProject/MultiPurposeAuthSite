@@ -1615,6 +1615,61 @@ namespace MultiPurposeAuthSite.Co
         /// **未設定なら true**（**仕様どおりの振る舞い**）。
         /// **false にすると従来どおり**、`authorization_pending` を返し続ける。
         /// </remarks>
+        /// <summary>
+        /// 認証の失敗を、この回数で断る（#305 の段階 2）
+        /// </summary>
+        /// <remarks>
+        /// **クライアント認証（`client_secret` / `private_key_jwt`）と、
+        /// `user_code` の投入**の失敗を数える（`Extensions/Sts/AuthFailureProvider`）。
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **数えない**（従来どおり） |
+        /// | 正の回数（雛形は 5） | **連続してこの回数失敗したら、`AuthFailureLockoutSeconds` の間断る** |
+        ///
+        /// **断っている間は、正しい資格情報でも通さない**（ロックアウトの意味）。
+        /// **成功したら回数は消える。**
+        ///
+        /// **利用者のパスワードは、ASP.NET Identity 側で既に数えている**
+        /// （`MaxFailedAccessAttemptsBeforeLockout`）。**こちらは別の口である。**
+        /// </remarks>
+        public static int AuthFailureMaxAttempts
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureMaxAttempts");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は 0**（数えない。従来どおり）。
+                    return 0;
+                }
+
+                int attempts = 0;
+                return int.TryParse(value, out attempts) ? attempts : 0;
+            }
+        }
+
+        /// <summary>
+        /// 認証の失敗が上限に達したとき、断る長さ（秒。#305 の段階 2）
+        /// </summary>
+        /// <remarks>**未設定は 300 秒**（5 分）。</remarks>
+        public static int AuthFailureLockoutSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureLockoutSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 300;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 300;
+            }
+        }
+
         public static bool EnablePollingSlowDown
         {
             get

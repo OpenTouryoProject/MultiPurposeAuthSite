@@ -1672,6 +1672,74 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
 
+#### 認証の失敗を数える — `AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds`（#305 の段階 2）
+
+**総当たりを「回数」で止める。**
+
+| 設定 | |
+|---|---|
+| **`AuthFailureMaxAttempts`** | **連続してこの回数失敗したら断る**（雛形は **5**。**0（未設定）なら数えない** ＝ 従来どおり） |
+| **`AuthFailureLockoutSeconds`** | **断る長さ**（雛形は **300** 秒。未設定も 300） |
+
+| 鍵 | 何の失敗か |
+|---|---|
+| **`client:<client_id>`** | **クライアント認証**（`client_secret` / `private_key_jwt` / mTLS） |
+| **`device_verify:<利用者>`** | **`user_code` の投入**（RFC 8628 §5.2） |
+
+**置き場は `AuthFailure` 表**（`Extensions/Sts/AuthFailureProvider`。`mem` では辞書）。
+**表に持つので、インスタンスを増やしても効く。**
+
+| | |
+|---|---|
+| **成功したら消す** | **連続した失敗だけを数える**（ASP.NET Identity のロックアウトと同じ考え） |
+| **断っている間** | **正しい資格情報でも通さない** — それがロックアウトである |
+| 応答 | **従来どおり `invalid_client`**（**断っていることは教えない**） |
+| 期限が切れたら | **また同じ回数だけ試せる**（回数は 0 に戻す） |
+
+> **利用者のパスワードは、ASP.NET Identity 側で既に数えている**
+> （`MaxFailedAccessAttemptsBeforeLockout` / `DefaultAccountLockoutTimeSpanFromSeconds`）。
+> **こちらは別の口である**（クライアント認証と `user_code`）。
+
+> **`user_code` は「投入した人」で数える。**
+> **間違えた `user_code` では、どの要求を狙ったか分からない**ためである
+> （RFC 8628 §5.2 が求めるのは、**投入の制限**である）。
+
+> **既存のデータベースには表が要る**（#305 の段階 2）。
+> **`Create_UserStore.sql` を流し直す**か、**表を 1 つ足す。**
+>
+> ```sql
+> -- SQL Server
+> CREATE TABLE [AuthFailure](
+>     [FailureKey] [nvarchar](256) NOT NULL,
+>     [FailedCount] [int] NOT NULL,
+>     [LockoutEndAt] [bigint] NULL,
+>     CONSTRAINT [PK.AuthFailure] PRIMARY KEY NONCLUSTERED ([FailureKey] ASC)
+> )
+>
+> -- Oracle
+> CREATE TABLE "AuthFailure"(
+>     "FailureKey" NVARCHAR2(256) NOT NULL,
+>     "FailedCount" NUMBER(10) NOT NULL,
+>     "LockoutEndAt" NUMBER(19) NULL,
+>     CONSTRAINT "PK.AuthFailure" PRIMARY KEY ("FailureKey")
+> );
+>
+> -- PostgreSQL
+> CREATE TABLE AuthFailure(
+>     FailureKey varchar(256) NOT NULL,
+>     FailedCount int NOT NULL,
+>     LockoutEndAt bigint NULL,
+>     CONSTRAINT PK_AuthFailure PRIMARY KEY (FailureKey)
+> );
+> ```
+>
+> **表が無いと、クライアント認証で落ちる**（数える設定のときだけ）。
+> **`AuthFailureMaxAttempts` を 0 にすれば、表を読まない。**
+
+> **数える設定では、`/token` 1 回につき表を 2 回触る**
+> （**断っているかの `SELECT`** ＋ **成功したときの `DELETE`**）。
+> **`AuthFailureMaxAttempts` が 0 のときは、どちらも走らない。**
+
 #### ポーリングの間隔 — `EnablePollingSlowDown`（#305 の段階 1）
 
 **Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**

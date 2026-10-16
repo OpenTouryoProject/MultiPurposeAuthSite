@@ -74,6 +74,7 @@
     <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
     <Compile Include="Data\CmnUserStore.cs" />
+    <Compile Include="Extensions\Sts\AuthFailureProvider.cs" />
     <Compile Include="Extensions\Sts\AccountLink.cs" />
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
     <Compile Include="Extensions\Sts\DiscoveryJwks.cs" />

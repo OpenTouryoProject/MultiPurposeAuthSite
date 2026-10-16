@@ -198,6 +198,13 @@
     //   **未設定は true**（RFC 8628 §3.5 / CIBA §11 のとおり）。
     //   **false にすると従来どおり** authorization_pending を返し続ける。
     "EnablePollingSlowDown": "true",
+    // **認証の失敗を数えて、一定回数で一定時間断る**（#305 の段階 2）。
+    //   **0（または未設定）なら数えない**（従来どおり）。
+    //   **クライアント認証**（client_secret / private_key_jwt）と
+    //   **user_code の投入**が対象（利用者のパスワードは
+    //   MaxFailedAccessAttemptsBeforeLockout 側で既に数えている）。
+    "AuthFailureMaxAttempts": "5",
+    "AuthFailureLockoutSeconds": "300",
 
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",

@@ -210,6 +210,17 @@ CREATE TABLE "CibaData"(
     CONSTRAINT "PK.CibaData" PRIMARY KEY ("Id")
 );
 
+-- **認証の失敗を数える**（#305 の段階 2）。
+--   **何に対する失敗か**は鍵の接頭辞で分ける（`client:<client_id>` / `device_verify:<利用者>`）。
+--   **一定回数で一定時間断る**（`AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds`）。
+--   **成功したら消す。** **表に持つ**ので、インスタンスを増やしても効く。
+CREATE TABLE "AuthFailure"(
+    "FailureKey" NVARCHAR2(256) NOT NULL,   -- PK
+    "FailedCount" NUMBER(10) NOT NULL,      -- 連続して失敗した回数
+    "LockoutEndAt" NUMBER(19) NULL,         -- 断る期限（UNIX時刻）
+    CONSTRAINT "PK.AuthFailure" PRIMARY KEY ("FailureKey")
+);
+
 CREATE TABLE "OAuth2Revocation"(
     "Jti" NVARCHAR2(38) NOT NULL,            -- PK, guid
     "CreatedDate" DATE NOT NULL,
