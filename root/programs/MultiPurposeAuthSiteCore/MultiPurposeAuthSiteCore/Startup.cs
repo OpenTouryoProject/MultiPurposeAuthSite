@@ -41,6 +41,7 @@
 //*                                Secure属性を設定で切り替え、CookiePolicyをDIに一本化。
 //*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
 //*  2026/10/08  玄人 幸道         AuthCookieName が空のときも接頭辞を掛ける（#283）
+//*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -48,6 +49,7 @@ using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Notifications;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;   // RateLimitProvider（#305 の段階 3）
 
 using System;
 using System.IO;
@@ -209,6 +211,61 @@ namespace MultiPurposeAuthSite
             {
                 app.UseHttpsRedirection();
             }
+
+            // **口ごとのレート制限**（#305 の段階 3）。
+            // （**net48 版は `Global.asax` の `BeginRequest` から同じものを呼ぶ**。
+            //   **組み込みのレート制限ミドルウェアを使うと、両アプリで振る舞いが分かれる**）。
+            app.Use(async (context, next) =>
+            {
+                string path = context.Request.Path.Value;
+
+                // 1. 判定対象外のスキップ（アーリーリターン）
+                // 機能がオフ、対象外のパスのリクエストの場合
+                if (!Sts.RateLimitProvider.Enabled
+                    || !Sts.RateLimitProvider.IsLimitedPath(path))
+                {
+                    await next();
+                    return;
+                }
+
+                // 2. client_idの抽出（RFC 6749 §2.3.1）に則った優先順位で
+                // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
+                // **`ReadFormAsync` の結果は要求に残る**ので、後のモデル バインドは読み直さない。
+                string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+                    context.Request.Headers["Authorization"]);
+
+                if (string.IsNullOrEmpty(clientId))
+                {
+                    if ((context.Request.ContentType ?? "").StartsWith(
+                        "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // 優先度 2: フォームデータ（client_secret_post 等）から取得
+                        clientId = (await context.Request.ReadFormAsync())["client_id"];
+                    }
+                    else
+                    {
+                        // 優先度 3: クエリ文字列から取得
+                        clientId = context.Request.Query["client_id"];
+                    }
+                }
+
+                // 3. レート制限チェックの実行（パス、client_id、IPアドレス）
+                int? retryAfter = Sts.RateLimitProvider.Check(path, clientId,
+                    (context.Connection.RemoteIpAddress == null)
+                        ? "" : context.Connection.RemoteIpAddress.ToString());
+
+                // 4. 制限超過時のレスポンス処理（429 応答）
+                if (retryAfter.HasValue)
+                {
+                    //  **429 ＋ `Retry-After`**（RFC 6585 §4）。**本体は返さない。**
+                    context.Response.StatusCode = 429;
+                    context.Response.Headers["Retry-After"] = retryAfter.Value.ToString();
+
+                    return;
+                }
+
+                await next();
+            });
 
             // HttpContextのマイグレーション用
             app._UseHttpContextAccessor();

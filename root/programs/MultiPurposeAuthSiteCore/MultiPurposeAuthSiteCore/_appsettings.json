@@ -206,6 +206,16 @@
     "AuthFailureMaxAttempts": "5",
     "AuthFailureLockoutSeconds": "300",
 
+    // **口ごとのレート制限**（#305 の段階 3）。
+    //   **窓の中の要求の回数を数え、超えた分に 429（Retry-After）を返す。**
+    //   **0（または未設定）なら制限しない**（従来どおり）。
+    //   **client_id ごと**（洪水を起こしたクライアントだけを止める）と
+    //   **送信元アドレスごと**（client_id を毎回変えても効く）の 2 つを数える。
+    //   **プロセスの中に覚える**ので、**インスタンスを増やすとその数だけ緩くなる。**
+    "RateLimitPerClientPermits": "120",
+    "RateLimitPerIpPermits": "600",
+    "RateLimitWindowSeconds": "60",
+
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // 認可エンドポイント

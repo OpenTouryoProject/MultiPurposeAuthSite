@@ -59,8 +59,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **使い捨ての利用者とクライアントで測る。**
     /// **共用のテスト利用者やクライアントを断ると、並行して走る他のテストが落ちる。**
     ///
-    /// **既定の通しは、短い設定で回る**（`test.ps1` が
-    /// `AuthFailureMaxAttempts=3` / `AuthFailureLockoutSeconds=5` を渡す）。
+    /// **既定の通しは、`test.ps1` が `AuthFailureMaxAttempts=20` /
+    /// `AuthFailureLockoutSeconds=5` を渡して回る**
+    /// （**上限を低くすると、負の経路のケースが共用のクライアントを断ってしまう**。`TESTING.md`）。
     /// **数えない配備（0）では Skip する。**
     /// </remarks>
     public class AuthFailureLockoutTests : TargetTestBase
@@ -182,11 +183,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         [MemberData(nameof(AllTargets))]
         public async Task RT30504_クライアント認証を続けて失敗すると断られる(string targetKey)
         {
-            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            using (IdPClient admin = this.Client(targetKey))
             {
-                int max = AuthFailureLockoutTests.SettingOf(client, "AuthFailureMaxAttempts", 0);
+                int max = AuthFailureLockoutTests.SettingOf(admin, "AuthFailureMaxAttempts", 0);
                 int lockoutSeconds = AuthFailureLockoutTests.SettingOf(
-                    client, "AuthFailureLockoutSeconds", 300);
+                    admin, "AuthFailureLockoutSeconds", 300);
 
                 Skip.If(max <= 0, "AuthFailureMaxAttempts が 0（数えない配備）です。");
                 Skip.If(30 < lockoutSeconds,
@@ -201,62 +202,86 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**断っていること自体は教えない。**",
                     "#305 の段階 2 / RFC 6749 §5.2（invalid_client）");
 
-                r.Target("POST /revoke（使い捨てのクライアント登録。上限 " + max
+                r.Target("POST /revoke（使い捨ての利用者のクライアント登録。上限 " + max
                     + " 回 / " + lockoutSeconds + " 秒）");
 
-                r.Step("(1) 使い捨てのクライアントを登録する（共用のものを断らないため）");
+                r.Step("(1) 使い捨ての利用者を作り、その利用者でクライアントを登録する");
 
-                (string ClientId, string ClientSecret) registered =
-                    await ManageClientRegistration.RegisterWithSecretAsync(client);
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
 
-                string clientId = registered.ClientId;
-                string secret = registered.ClientSecret;
+                string name = "e2e_rt3054_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string email = name + "@example.com";
+                string password = admin.Config.Get("TestUserPWD");
 
-                Assert.False(string.IsNullOrEmpty(clientId), "前提: クライアントを登録できること");
-                Assert.False(string.IsNullOrEmpty(secret), "前提: client_secret が発行されること");
+                //  **ロールは Admin**（#299 と同じ事情）。
+                //    **クライアント登録の画面（`/Manage/AddSaml2OAuth2Data`）は
+                //    `SystemAdmin` か `Admin` でなければ開かない。**
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, email, "Admin")),
+                    "前提: 利用者を作れること");
 
                 try
                 {
-                    r.Step("(2) 正しい秘密なら通る（断る前の確認）");
-
-                    JsonResponse before = await AuthFailureLockoutTests.RevokeAsync(
-                        client, clientId, secret);
-
-                    r.VerifyEqual("HTTP 200", "200", ((int)before.StatusCode).ToString());
-
-                    r.Step("(3) 間違った秘密で " + max + " 回失敗する");
-
-                    for (int i = 0; i < max; i++)
+                    using (IdPClient client = this.Client(targetKey))
                     {
-                        JsonResponse wrong = await AuthFailureLockoutTests.RevokeAsync(
-                            client, clientId, "wrong-secret-" + i.ToString());
+                        Assert.True(await client.TrySignInAsync(name, password),
+                            "前提: 使い捨ての利用者でサインインできること");
 
-                        r.VerifyEqual("invalid_client（" + (i + 1) + " 回目）",
-                            "invalid_client", wrong.Error);
+                        (string ClientId, string ClientSecret) registered =
+                            await ManageClientRegistration.RegisterWithSecretAsync(client);
+
+                        string clientId = registered.ClientId;
+                        string secret = registered.ClientSecret;
+
+                        Assert.False(string.IsNullOrEmpty(clientId), "前提: クライアントを登録できること");
+                        Assert.False(string.IsNullOrEmpty(secret), "前提: client_secret が発行されること");
+
+                        r.Step("(2) 正しい秘密なら通る（断る前の確認）");
+
+                        JsonResponse before = await AuthFailureLockoutTests.RevokeAsync(
+                            client, clientId, secret);
+
+                        r.VerifyEqual("HTTP 200", "200", ((int)before.StatusCode).ToString());
+
+                        r.Step("(3) 間違った秘密で " + max + " 回失敗する");
+
+                        for (int i = 0; i < max; i++)
+                        {
+                            JsonResponse wrong = await AuthFailureLockoutTests.RevokeAsync(
+                                client, clientId, "wrong-secret-" + i.ToString());
+
+                            r.VerifyEqual("invalid_client（" + (i + 1) + " 回目）",
+                                "invalid_client", wrong.Error);
+                        }
+
+                        r.Step("(4) 正しい秘密でも断られる");
+
+                        JsonResponse duringLockout = await AuthFailureLockoutTests.RevokeAsync(
+                            client, clientId, secret);
+
+                        r.VerifyEqual("正しい秘密でも invalid_client", "invalid_client", duringLockout.Error);
+
+                        r.Step("(5) " + lockoutSeconds + " ＋ 1 秒待つと、また通る");
+
+                        await Task.Delay(TimeSpan.FromSeconds(lockoutSeconds + 1));
+
+                        JsonResponse afterLockout = await AuthFailureLockoutTests.RevokeAsync(
+                            client, clientId, secret);
+
+                        r.VerifyEqual("待てば HTTP 200", "200", ((int)afterLockout.StatusCode).ToString());
+
+                        r.Note("**断りは `client_id` ごと**である。"
+                            + "**他のクライアントは影響を受けない。** "
+                            + "**使い捨ての利用者で登録している** — "
+                            + "**クライアント登録は 1 人 1 件**なので、"
+                            + "**共用の利用者で登録すると、`RT-277.1` と登録を奪い合う**"
+                            + "（実測で踏んだ。`TESTING.md`）。");
                     }
-
-                    r.Step("(4) 正しい秘密でも断られる");
-
-                    JsonResponse duringLockout = await AuthFailureLockoutTests.RevokeAsync(
-                        client, clientId, secret);
-
-                    r.VerifyEqual("正しい秘密でも invalid_client", "invalid_client", duringLockout.Error);
-
-                    r.Step("(5) " + lockoutSeconds + " ＋ 1 秒待つと、また通る");
-
-                    await Task.Delay(TimeSpan.FromSeconds(lockoutSeconds + 1));
-
-                    JsonResponse afterLockout = await AuthFailureLockoutTests.RevokeAsync(
-                        client, clientId, secret);
-
-                    r.VerifyEqual("待てば HTTP 200", "200", ((int)afterLockout.StatusCode).ToString());
-
-                    r.Note("**断りは `client_id` ごと**である。"
-                        + "**他のクライアントは影響を受けない**（このケースは使い捨ての登録で測っている）。");
                 }
                 finally
                 {
-                    await ManageClientRegistration.RemoveAsync(client);
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
                 }
 
                 r.Done();

@@ -368,6 +368,28 @@ function Set-IdFederationEnv
     $env:AuthFailureMaxAttempts = '20'
     $env:AuthFailureLockoutSeconds = '5'
 
+    # **口ごとのレート制限**（#305 の段階 3）。
+    #   **クライアントごとの上限は高くしてある**（`RT-305.5` は、この回数を超えるまで叩く）。
+    #   **低くすると通しが壊れる** — **共用のクライアントで多数のケースが同じ口を叩く**ため。
+    #   **窓は短く**（テストは次の窓まで待つ）。
+    #   **送信元ごとの上限は切ってある（0）** — **通しの全ケースが 127.0.0.1 を共有する**ので、
+    #   有効にすると無関係なケースが 429 を受ける。**こちらは `RT-305.6` を単独で回して測る**
+    #   （`TESTING.md`）。
+    $env:RateLimitPerClientPermits = '300'
+    $env:RateLimitWindowSeconds = '20'
+
+    # **送信元ごとの上限だけは、呼ぶ側が先に入れていたら尊重する。**
+    #   **`RT-305.6` を単独で回して測るため**である（`TESTING.md`）。
+    #
+    #     $env:RateLimitPerIpPermits = '50'
+    #     .\2_RunAllTests.ps1 -Launch -Filter RateLimitTests
+    #
+    #   **通し（何も入れていないとき）は 0 ＝ 制限しない。**
+    if (-not $env:RateLimitPerIpPermits)
+    {
+        $env:RateLimitPerIpPermits = '0'
+    }
+
     # **退役させる途中の署名証明書**（#292 の段階 3）。
     #   **/samlmetadata が 2 本広告する状態を作る**（`SA-2.2` が、それを測る）。
     #   **値は「いま署名に使っていない証明書」**でよい（広告するだけなので）。

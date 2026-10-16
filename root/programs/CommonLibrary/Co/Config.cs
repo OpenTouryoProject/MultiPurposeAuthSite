@@ -63,6 +63,7 @@
 //*  2026/10/09  玄人 幸道         OAuth2AuthorizationCodeGrantClient_Manage を削除
 //*  2026/10/10  玄人 幸道         SAML2のID連携の設定を追加（#286の段階1）
 //*  2026/10/10  玄人 幸道         ID連携の導線を設定の有無で出す（#286の段階2）
+//*  2026/10/16  玄人 幸道         slow_down・失敗回数・レート制限の設定を追加（#305）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1602,20 +1603,6 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// ポーリングが速すぎるときに `slow_down` を返すか（#305 の段階 1）
-        /// </summary>
-        /// <remarks>
-        /// **Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**
-        /// **間隔は `interval`**（`DeviceAuthZPollingIntervalSeconds` /
-        /// `CibaPollingIntervalSeconds`）**で伝えてあるが、守らなくても何も起きなかった。**
-        ///
-        /// **true なら、前回から `interval` 未満で来た要求に `slow_down` を返す**
-        /// （RFC 8628 §3.5 / CIBA §11。**クライアントは間隔を 5 秒伸ばす**）。
-        ///
-        /// **未設定なら true**（**仕様どおりの振る舞い**）。
-        /// **false にすると従来どおり**、`authorization_pending` を返し続ける。
-        /// </remarks>
-        /// <summary>
         /// 認証の失敗を、この回数で断る（#305 の段階 2）
         /// </summary>
         /// <remarks>
@@ -1670,6 +1657,111 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// 口ごとのレート制限 : クライアント 1 つあたりの上限（#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **`client_id` が分かる要求を、`client_id` ごとに数える**
+        /// （`Extensions/Sts/RateLimitProvider`）。**窓は `RateLimitWindowSeconds`。**
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **制限しない**（従来どおり） |
+        /// | 正の回数（雛形は 120） | **窓の中でこの回数を超えた要求に `429`**（`Retry-After` 付き） |
+        ///
+        /// **数えるのは口ごと**である（`/token` の洪水で `/revoke` が止まらない）。
+        /// **段階 2 は「失敗の回数」、ここは「要求の回数」**（成否を問わない）。
+        /// </remarks>
+        public static int RateLimitPerClientPermits
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitPerClientPermits");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は 0**（制限しない。従来どおり）。
+                    return 0;
+                }
+
+                int permits = 0;
+                return int.TryParse(value, out permits) ? permits : 0;
+            }
+        }
+
+        /// <summary>
+        /// 口ごとのレート制限 : 送信元 1 つあたりの上限（#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **`client_id` が分からない要求**（`/jwkcerts` の読み出しなど）**と、**
+        /// **`client_id` が分かる要求の両方**を、**送信元アドレスごとに数える。**
+        /// **`client_id` を毎回変えて `client_id` ごとの上限を避ける**攻撃に、これが効く。
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **制限しない**（従来どおり） |
+        /// | 正の回数（雛形は 600） | **窓の中でこの回数を超えた要求に `429`** |
+        ///
+        /// **リバース プロキシの後ろでは、見えるアドレスはプロキシのものになる。**
+        /// **net10.0 版は `UseForwardedHeaders`**（設定キーも同名。`ForwardedHeadersKnownProxies` と併せて使う）**で元に戻せるが、**
+        /// **net48 版は戻さない**（`Request.UserHostAddress` をそのまま使う）。
+        /// **プロキシの後ろに置く配備では、プロキシ側で制限する方が確かである。**
+        /// </remarks>
+        public static int RateLimitPerIpPermits
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitPerIpPermits");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 0;
+                }
+
+                int permits = 0;
+                return int.TryParse(value, out permits) ? permits : 0;
+            }
+        }
+
+        /// <summary>
+        /// 口ごとのレート制限 : 数える窓の長さ（秒。#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **未設定は 60 秒。**
+        /// **窓は固定窓**（`UNIX 時刻 / 窓` で切る。窓が変わると回数は 0 に戻る）。
+        /// **窓の境目では、瞬間的に上限の 2 倍まで通り得る**
+        /// （固定窓の性質。**滑る窓にするほどの精度は、ここでは要らない**）。
+        /// </remarks>
+        public static int RateLimitWindowSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitWindowSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 60;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 60;
+            }
+        }
+
+        /// <summary>
+        /// ポーリングが速すぎるときに `slow_down` を返すか（#305 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**
+        /// **間隔は `interval`**（`DeviceAuthZPollingIntervalSeconds` /
+        /// `CibaPollingIntervalSeconds`）**で伝えてあるが、守らなくても何も起きなかった。**
+        ///
+        /// **true なら、前回から `interval` 未満で来た要求に `slow_down` を返す**
+        /// （RFC 8628 §3.5 / CIBA §11。**クライアントは間隔を 5 秒伸ばす**）。
+        ///
+        /// **未設定なら true**（**仕様どおりの振る舞い**）。
+        /// **false にすると従来どおり**、`authorization_pending` を返し続ける。
+        /// </remarks>
         public static bool EnablePollingSlowDown
         {
             get

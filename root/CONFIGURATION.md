@@ -1672,6 +1672,71 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
 
+#### 口ごとのレート制限 — `RateLimitPerClientPermits` / `RateLimitPerIpPermits` / `RateLimitWindowSeconds`（#305 の段階 3）
+
+**段階 2 は「失敗の回数」、ここは「要求の回数」**である（**成否を問わない**）。
+**成功する要求を浴びせる形の負荷は、段階 2 では止まらない。**
+
+| 設定 | |
+|---|---|
+| **`RateLimitPerClientPermits`** | **`client_id` 1 つあたりの上限**（雛形は **120**。**0（未設定）なら制限しない**） |
+| **`RateLimitPerIpPermits`** | **送信元アドレス 1 つあたりの上限**（雛形は **600**。同上） |
+| **`RateLimitWindowSeconds`** | **数える窓の長さ**（雛形は **60** 秒。未設定も 60） |
+
+**数える単位は「口 × 鍵」**である。
+
+| | |
+|---|---|
+| **口ごと** | **`/token` の洪水で `/revoke` は止まらない** |
+| **鍵は 2 つ** | **`client_id` ごと**（洪水を起こしたクライアントだけを止める）と、**送信元ごと** |
+| **両方を数える** | **`client_id` が分かる要求は、送信元の方でも数える** — **`client_id` を毎回変えて上限を避ける**攻撃に、これが効く |
+| 断るとき | **`429` ＋ `Retry-After`**（RFC 6585 §4。**本体は返さない**） |
+
+**制限する口**（**ここに無い口は制限しない**）。
+
+| 口 | 設定キー |
+|---|---|
+| `/token` | `OAuth2TokenEndpoint` |
+| `/revoke` | `OAuth2RevokeTokenEndpoint` |
+| `/introspect` | `OAuth2IntrospectTokenEndpoint` |
+| `/device_authz` | `DeviceAuthZAuthorizeEndpoint` |
+| `/device_verify` | `DeviceAuthZVerifyEndpoint` |
+| `/ciba_authz` | `CibaAuthorizeEndpoint` |
+| `/par` | `AuthRequestPushUri` |
+| `/jwkcerts` | `JwkSetUri` |
+
+> **`client_id` は、まず `Authorization: Basic` から読む**（RFC 6749 §2.3.1）。
+> **無ければ本体**（`client_secret_post`）**か、クエリから拾う。**
+> **どこにも無ければ、送信元アドレスだけで数える。**
+
+> **`429` は OAuth のエラー応答にしていない。**
+> **段階 1 の `slow_down` はプロトコルの層の話**（RFC 8628 §3.5）で、
+> **こちらは HTTP の層の話**である（`/token` のエラー符号は RFC 6749 §5.2 で閉じている）。
+
+**作りは、両アプリで同じ判断にしてある**（`Extensions/Sts/RateLimitProvider`）。
+
+| | |
+|---|---|
+| net10.0 | `Startup.Configure` の `app.Use(...)`（**静的ファイルやセッションより前**） |
+| net48 | `Global.asax` の `Application_OnBeginRequest` |
+
+> **net10.0 には組み込みのレート制限ミドルウェアが在る**（`Microsoft.AspNetCore.RateLimiting`）**が、使っていない。**
+> **net48 には組み込みが無く、別々に作ると振る舞いが分かれる** —
+> **E2E は両方に同じテストを流す**ので、**判定は 1 か所に置いた。**
+
+**限界**（**知っておく必要がある**）。
+
+| | |
+|---|---|
+| **プロセスの中に覚える** | **インスタンスを増やすと、その数だけ緩くなる**（段階 2 は表に持たせたが、**ここは要求ごとに触るので表には置かない**） |
+| **固定窓** | **窓の境目では、瞬間的に上限の 2 倍まで通り得る**（滑る窓にはしていない） |
+| **プロキシの後ろ** | **見える送信元はプロキシのものになる。** net10.0 版は **`UseForwardedHeaders`**（＋ `ForwardedHeadersKnownProxies`）で元に戻せるが、**net48 版は戻さない。** **プロキシの後ろに置く配備では、プロキシ側で制限する方が確かである** |
+
+> **閾値の決め方は運用の判断である。**
+> **ポーリングは `interval` を守っても 1 分に 12 回**（`interval` が 5 秒のとき）なので、
+> **雛形の 120 回 / 60 秒は、正しいクライアント 10 本分に当たる。**
+> **足りなければ上げる。** **0 にすれば、従来どおり無制限である。**
+
 #### 認証の失敗を数える — `AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds`（#305 の段階 2）
 
 **総当たりを「回数」で止める。**

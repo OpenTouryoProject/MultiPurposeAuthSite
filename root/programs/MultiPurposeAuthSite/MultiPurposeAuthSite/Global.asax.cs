@@ -23,6 +23,7 @@
 //*  2026/09/30  玄人 幸道         OAuth2AndOIDCClient の HttpClient を初期化（#250 の段階 4）
 //*  2026/10/07  玄人 幸道         /Fido2/ 専用のセッション有効化を削除（#137）
 //*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
+//*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
 //**********************************************************************************
 
 // System
@@ -33,6 +34,7 @@ using System.Web.Helpers;   // AntiForgeryConfig（#282）
 using System.Web.SessionState;
 
 using MultiPurposeAuthSite.Co;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;   // RateLimitProvider（#305 の段階 3）
 
 // OpenTouryo
 using Touryo.Infrastructure.Framework.Authentication;
@@ -222,8 +224,78 @@ namespace MultiPurposeAuthSite
         /// <summary>
         /// ① リクエスト処理を開始する前に発生
         /// </summary>
+        /// <remarks>
+        /// （**net10.0 版は `Startup.Configure` の `app.Use(...)` から同じものを呼ぶ**。
+        ///   **net48 には組み込みのレート制限が無いが、別々に作ると振る舞いが分かれる**）。
+        /// </remarks>
         void Application_OnBeginRequest(object sender, EventArgs e)
-        {   
+        {
+            // 1. 判定対象外のスキップ（アーリーリターン）
+            // 機能がオフ、対象外のパスのリクエストの場合
+            if (!Sts.RateLimitProvider.Enabled)
+            {
+                return;
+            }
+
+            //  **アプリからの相対パスにする**（仮想パスに置いた配備でも突き合わせられるように）。
+            string path = this.Request.Url.AbsolutePath;
+            string appPath = this.Request.ApplicationPath;
+
+            if (!string.IsNullOrEmpty(appPath) && appPath != "/"
+                && path.StartsWith(appPath, StringComparison.OrdinalIgnoreCase))
+            {
+                path = path.Substring(appPath.Length);
+            }
+
+            if (!Sts.RateLimitProvider.IsLimitedPath(path))
+            {
+                return;
+            }
+
+            // 2. client_idの抽出（RFC 6749 §2.3.1）に則った優先順位で
+            // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
+            string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+                this.Request.Headers["Authorization"]);
+
+            if (string.IsNullOrEmpty(clientId))
+            {
+                try
+                {
+                    //  **本体（`client_secret_post`）か、クエリから拾う。**
+                    if ((this.Request.ContentType ?? "").StartsWith(
+                        "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // 優先度 2: フォームデータ（client_secret_post 等）から取得
+                        clientId = this.Request.Form["client_id"];
+                    }
+                    else
+                    {
+                        // 優先度 3: クエリ文字列から取得
+                        clientId = this.Request.QueryString["client_id"];
+                    }
+                }
+                catch
+                {
+                    clientId = "";
+                }
+            }
+
+            // 3. レート制限チェックの実行（パス、client_id、IPアドレス）
+            int? retryAfter = Sts.RateLimitProvider.Check(
+                path, clientId, this.Request.UserHostAddress);
+
+            // 4. 制限超過時のレスポンス処理（429 応答）
+            if (retryAfter.HasValue)
+            {
+                //  **429 ＋ `Retry-After`**（RFC 6585 §4）。**本体は返さない。**
+                //    **IIS の独自エラー ページに差し替えさせない**（`TrySkipIisCustomErrors`）。
+                this.Response.StatusCode = 429;
+                this.Response.AddHeader("Retry-After", retryAfter.Value.ToString());
+                this.Response.TrySkipIisCustomErrors = true;
+                this.Response.SuppressContent = true;
+
+                this.CompleteRequest();
+            }
         }
 
         /// <summary>
