@@ -363,6 +363,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region ReceiveTokenReq
 
+        /// <summary>前回から interval 未満なら true（= slow_down）</summary>
+        /// <param name="lastPolledAt">前回の UNIX 時刻（無ければ null）</param>
+        /// <returns>速すぎれば true</returns>
+        /// <remarks>
+        /// **判定そのものは `PollingThrottle`**（CIBA と同じものを使う）。
+        /// **ここは「どの interval を使うか」だけ**を決める。
+        /// </remarks>
+        private static bool ThrottlePolling(long? lastPolledAt)
+        {
+            return PollingThrottle.TooFast(
+                lastPolledAt, Config.DeviceAuthZPollingIntervalSeconds);
+        }
+
         /// <summary>ReceiveTokenReq</summary>
         /// <param name="deviceCode">string</param>
         /// <param name="authZCode">string</param>
@@ -412,10 +425,41 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 // retVal
                                 retVal = true;
                             }
+
+                            //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                            //    **記録は辞書の中**（`lastPolled`。**無ければ初回**）。
+                            if (states == OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                            {
+                                long? last = null;
+                                string lastPolled = dic.ContainsKey("lastPolled") ? dic["lastPolled"] : "";
+
+                                long parsed = 0;
+                                if (!string.IsNullOrEmpty(lastPolled) && long.TryParse(lastPolled, out parsed))
+                                {
+                                    last = parsed;
+                                }
+
+                                bool tooFast = PollingThrottle.TooFast(
+                                    last, Config.DeviceAuthZPollingIntervalSeconds);
+
+                                dic["lastPolled"] = PollingThrottle.NowUnixSeconds().ToString();
+                                DeviceAuthZProvider.DeviceAuthZData[deviceCode] =
+                                    JsonConvert.SerializeObject(dic);
+
+                                if (tooFast)
+                                {
+                                    states = OAuth2AndOIDCEnum.DeviceAuthZState.slow_down;
+                                    //  **コードは渡さない**（まだ承認されていない）。
+                                    authZCode = "";
+                                    retVal = false;
+                                }
+                            }
                         }
 
-                        // 削除（pendingのケースを除いて）
-                        if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                        //  **削除（pending と slow_down のケースを除いて）。**
+                        //    **slow_down はまだ pending** なので、消してはいけない（#305 の段階 1）。
+                        if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending
+                            && states != OAuth2AndOIDCEnum.DeviceAuthZState.slow_down)
                         {
                             DeviceAuthZProvider.DeviceAuthZData.TryRemove(deviceCode, out temp);
                         }
@@ -437,7 +481,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     // 参照
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT [AuthReqExp], [AuthZCode], [Result]"
+                                        "SELECT [AuthReqExp], [AuthZCode], [Result], [LastPolledAt]"
                                         + " FROM [DeviceAuthZData]"
                                         + " WHERE [DeviceCode] = @DeviceCode",
                                         new { DeviceCode = deviceCode });
@@ -469,8 +513,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         }
                                     }
 
-                                    // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                                    //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                                    if (states == OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                                    {
+                                        if (DeviceAuthZProvider.ThrottlePolling(
+                                            (dyn.LastPolledAt == null) ? (long?)null : (long)dyn.LastPolledAt))
+                                        {
+                                            states = OAuth2AndOIDCEnum.DeviceAuthZState.slow_down;
+                                            authZCode = "";
+                                            retVal = false;
+                                        }
+
+                                        cnn.Execute(
+                                            "UPDATE [DeviceAuthZData] SET [LastPolledAt] = @LastPolledAt" +
+                                            " WHERE [DeviceCode] = @DeviceCode",
+                                            new
+                                            {
+                                                DeviceCode = deviceCode,
+                                                LastPolledAt = PollingThrottle.NowUnixSeconds()
+                                            });
+                                    }
+
+                                    //  **削除（pending と slow_down のケースを除いて）。**
+                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending
+                                        && states != OAuth2AndOIDCEnum.DeviceAuthZState.slow_down)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM [DeviceAuthZData]" +
@@ -484,7 +550,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     // 参照
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\""
+                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\", \"LastPolledAt\""
                                         + " FROM \"DeviceAuthZData\""
                                         + " WHERE \"DeviceCode\" = :DeviceCode",
                                         new { DeviceCode = deviceCode });
@@ -523,8 +589,32 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         }
                                     }
 
-                                    // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                                    //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                                    //    **Oracle の NUMBER は decimal で返る**ので、Convert を通す。
+                                    if (states == OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                                    {
+                                        if (DeviceAuthZProvider.ThrottlePolling(
+                                            (dyn.LastPolledAt == null)
+                                                ? (long?)null : Convert.ToInt64(dyn.LastPolledAt)))
+                                        {
+                                            states = OAuth2AndOIDCEnum.DeviceAuthZState.slow_down;
+                                            authZCode = "";
+                                            retVal = false;
+                                        }
+
+                                        cnn.Execute(
+                                            "UPDATE \"DeviceAuthZData\" SET \"LastPolledAt\" = :LastPolledAt" +
+                                            " WHERE \"DeviceCode\" = :DeviceCode",
+                                            new
+                                            {
+                                                DeviceCode = deviceCode,
+                                                LastPolledAt = PollingThrottle.NowUnixSeconds()
+                                            });
+                                    }
+
+                                    //  **削除（pending と slow_down のケースを除いて）。**
+                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending
+                                        && states != OAuth2AndOIDCEnum.DeviceAuthZState.slow_down)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"DeviceAuthZData\"" +
@@ -538,7 +628,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     // 参照
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"authreqexp\", \"authzcode\", \"result\""
+                                        "SELECT \"authreqexp\", \"authzcode\", \"result\", \"lastpolledat\""
                                         + " FROM \"deviceauthzdata\""
                                         + " WHERE \"devicecode\" = @DeviceCode",
                                         new { DeviceCode = deviceCode });
@@ -570,8 +660,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         }
                                     }
 
-                                    // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                                    //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                                    if (states == OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
+                                    {
+                                        if (DeviceAuthZProvider.ThrottlePolling(
+                                            (dyn.lastpolledat == null)
+                                                ? (long?)null : (long)dyn.lastpolledat))
+                                        {
+                                            states = OAuth2AndOIDCEnum.DeviceAuthZState.slow_down;
+                                            authZCode = "";
+                                            retVal = false;
+                                        }
+
+                                        cnn.Execute(
+                                            "UPDATE \"deviceauthzdata\" SET \"lastpolledat\" = @LastPolledAt" +
+                                            " WHERE \"devicecode\" = @DeviceCode",
+                                            new
+                                            {
+                                                DeviceCode = deviceCode,
+                                                LastPolledAt = PollingThrottle.NowUnixSeconds()
+                                            });
+                                    }
+
+                                    //  **削除（pending と slow_down のケースを除いて）。**
+                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending
+                                        && states != OAuth2AndOIDCEnum.DeviceAuthZState.slow_down)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"deviceauthzdata\"" +

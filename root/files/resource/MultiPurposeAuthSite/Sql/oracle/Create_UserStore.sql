@@ -186,6 +186,10 @@ CREATE TABLE "DeviceAuthZData"(
     "TempData" NVARCHAR2(256) NULL,              -- TempData
     "AuthZCode" NVARCHAR2(64) NULL,              -- AuthZCode
     "Result" NUMBER(3) NULL,                     -- Result of Verify
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    "LastPolledAt" NUMBER(19) NULL,
     CONSTRAINT "PK.DeviceAuthZData" PRIMARY KEY ("Id")
 );
 
@@ -199,6 +203,10 @@ CREATE TABLE "CibaData"(
     "UnstructuredData" NCLOB NULL,     -- binding_message, user_code, etc.
     "Result" NUMBER(3) NULL,                     -- Result of CIBA
     "UserId" NVARCHAR2(128) NULL,                -- 承認する利用者 (Users.Id)
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    "LastPolledAt" NUMBER(19) NULL,
     CONSTRAINT "PK.CibaData" PRIMARY KEY ("Id")
 );
 

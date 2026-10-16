@@ -194,6 +194,10 @@
     "DeviceAuthZPollingIntervalSeconds": "5",
     "CibaExpireTimeSpanFromSeconds": "600",
     "CibaPollingIntervalSeconds": "5",
+    // **ポーリングが interval より速いとき slow_down を返すか**（#305 の段階 1）。
+    //   **未設定は true**（RFC 8628 §3.5 / CIBA §11 のとおり）。
+    //   **false にすると従来どおり** authorization_pending を返し続ける。
+    "EnablePollingSlowDown": "true",
 
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",

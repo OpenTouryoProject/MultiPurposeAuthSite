@@ -212,6 +212,10 @@ CREATE TABLE [DeviceAuthZData](
     [TempData] [nvarchar](256) NULL,                     -- TempData
     [AuthZCode] [nvarchar](64) NULL,                     -- AuthZCode
     [Result] [bit] NULL,                                 -- Result of Verify
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    [LastPolledAt] [bigint] NULL,
     CONSTRAINT [PK.DeviceAuthZData] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
@@ -225,6 +229,10 @@ CREATE TABLE [CibaData](
     [UnstructuredData] [nvarchar](max) NULL,             -- binding_message, user_code, etc.
     [Result] [bit] NULL,                                 -- Result of CIBA
     [UserId] [nvarchar](128) NULL,                       -- 承認する利用者 (Users.Id)
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    [LastPolledAt] [bigint] NULL,
     CONSTRAINT [PK.CibaData] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

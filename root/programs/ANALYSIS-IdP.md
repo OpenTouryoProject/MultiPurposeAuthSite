@@ -2696,7 +2696,7 @@ else
 | D-10 | **`typ: at+jwt`（RFC 9068）** | **✅ 解けた（#302）。** **access_token は `typ: at+jwt`**（段階 2。Open棟梁 #611 の追随）、**`jku` は出さない**（段階 1）。**受ける側も期待値を明示する** — `VerifyAccessToken` は `at+jwt`、`id_token_hint` の `VerifySignature` は `JWT`。**`RT-302.1`** で access_token / id_token / JARM の 3 つを測る | **トークン取り違え（token confusion）を型で見分けられるようになった。** **`jku` の SSRF も解けた** |
 | D-11 | 応答の `scope` | **✅ 返している**（`CmnEndpoints.CreateAccessTokenResponse`。**#198 でスコープを絞るようにしたときに、同時に入った**）。**発行したスコープを空白区切りで返す** — **要求と違うことがあるので必須**（RFC 6749 §5.1）。**測定は `RT-198.*`**（「トークン応答の `scope` が、発行したスコープと一致する」） | **解けた。** 要求と付与が違っても RP が判別できる |
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
-| D-13 | レート制限 / ブルートフォース対策 | 未実装（`/token` `/device_authz` `/ciba_authz` とも無制限） | user_code・client_secret への総当たりが可能 |
+| D-13 | **レート制限 / ブルートフォース対策**（#305） | **段階 1 は入れた** : **ポーリングが `interval` より速ければ `slow_down`**（RFC 8628 §3.5 / CIBA §11。`LastPolledAt` を表に持つ。`RT-305.*`）。**残り** : **段階 2**（`user_code` とクライアント認証の失敗回数）／**段階 3**（口ごとのレート制限。**net48 に組み込みが無く、両アプリで作りが分かれる**） | **`/token` を叩き続けられる**のは変わらない（段階 3）。**`user_code` の総当たりも、回数では止めていない**（段階 2） |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
 
 ---

@@ -1601,6 +1601,37 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// ポーリングが速すぎるときに `slow_down` を返すか（#305 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**
+        /// **間隔は `interval`**（`DeviceAuthZPollingIntervalSeconds` /
+        /// `CibaPollingIntervalSeconds`）**で伝えてあるが、守らなくても何も起きなかった。**
+        ///
+        /// **true なら、前回から `interval` 未満で来た要求に `slow_down` を返す**
+        /// （RFC 8628 §3.5 / CIBA §11。**クライアントは間隔を 5 秒伸ばす**）。
+        ///
+        /// **未設定なら true**（**仕様どおりの振る舞い**）。
+        /// **false にすると従来どおり**、`authorization_pending` を返し続ける。
+        /// </remarks>
+        public static bool EnablePollingSlowDown
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("EnablePollingSlowDown");
+
+                //  **未設定は true**（仕様どおり）。**false と書いたときだけ止める。**
+                if (string.IsNullOrEmpty(value))
+                {
+                    return true;
+                }
+
+                bool enabled = true;
+                return bool.TryParse(value, out enabled) ? enabled : true;
+            }
+        }
+
         #endregion
 
         #endregion

@@ -118,6 +118,7 @@
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンをキャッシュしないようにした（#271）
 //*  2026/10/06  玄人 幸道         promptを空白区切りの集合として扱う（#272 の段階 1）
 //*  2026/10/06  玄人 幸道         promptのlogin/consent/select_accountの値を追加（#272 の段階 2）
+//*  2026/10/16  玄人 幸道         ポーリングが速すぎたら slow_down を返す（#305 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3492,12 +3493,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                     switch (deviceState)
                     {
                         case OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending:
-
-                            // このケースだけ、slow_downを検討する（どうやって？）。
-
-                            //if() err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.slow_down.ToStringByEmit());
-                            //else
                             err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending.ToStringByEmit());
+                            break;
+
+                        case OAuth2AndOIDCEnum.DeviceAuthZState.slow_down:
+
+                            //  **速すぎるポーリング**（#305 の段階 1。RFC 8628 §3.5）。
+                            //    **まだ承認されていない**（pending と同じ状態）が、
+                            //    **間隔を伸ばさせる**ために別の値を返す
+                            //    （クライアントは interval を 5 秒伸ばす）。
+                            //    **判定は `DeviceAuthZProvider`**（`LastPolledAt` を見る）。
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.slow_down.ToStringByEmit());
                             break;
 
                         case OAuth2AndOIDCEnum.DeviceAuthZState.access_denied:
@@ -3657,12 +3663,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                         switch (cibaState)
                         {
                             case OAuth2AndOIDCEnum.CibaState.authorization_pending:
-                                
-                                // このケースだけ、slow_downを検討する（どうやって？）。
-
-                                //if() err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.slow_down.ToStringByEmit());
-                                //else
                                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit());
+                                break;
+
+                            case OAuth2AndOIDCEnum.CibaState.slow_down:
+
+                                //  **速すぎるポーリング**（#305 の段階 1。CIBA §11）。
+                                //    **判定は `CibaProvider`**（`LastPolledAt` を見る）。
+                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.slow_down.ToStringByEmit());
                                 break;
 
                             default:

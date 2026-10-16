@@ -1672,6 +1672,46 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
 
+#### ポーリングの間隔 — `EnablePollingSlowDown`（#305 の段階 1）
+
+**Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**
+**間隔は `interval` で伝えてある**（`DeviceAuthZPollingIntervalSeconds` /
+`CibaPollingIntervalSeconds`。どちらも雛形は **5 秒**）**が、守らなくても何も起きなかった。**
+
+| 値 | 振る舞い |
+|---|---|
+| **`true`（未設定も同じ）** | **前回から `interval` 未満で来た要求に `slow_down`**（RFC 8628 §3.5 / CIBA §11） |
+| `false` | **従来どおり**（`authorization_pending` を返し続ける） |
+
+**判定に使うのは「最後にポーリングされた時刻」だけ**である
+（`DeviceAuthZData` / `CibaData` の **`LastPolledAt`**。UNIX 時刻）。
+
+| | |
+|---|---|
+| **初回** | **`slow_down` にしない**（`LastPolledAt` が無い） |
+| **`interval` ちょうど** | **許す**（**ちょうどで断ると、正しいクライアントが詰まる**） |
+| **`slow_down` のとき** | **要求は消さない**（まだ承認待ち）。**待ってから叩けば `authorization_pending` に戻る** |
+| 置き場 | **表に持つ**ので、**インスタンスを増やしても効く**（プロセス内に覚えると、別のインスタンスへ投げれば抜けられる） |
+
+> **既存のデータベースには列が要る**（#305 の段階 1）。
+> **`Create_UserStore.sql` を流し直す**か、**`ALTER` で足す。**
+>
+> ```sql
+> -- SQL Server
+> ALTER TABLE [DeviceAuthZData] ADD [LastPolledAt] [bigint] NULL;
+> ALTER TABLE [CibaData]        ADD [LastPolledAt] [bigint] NULL;
+>
+> -- Oracle
+> ALTER TABLE "DeviceAuthZData" ADD ("LastPolledAt" NUMBER(19) NULL);
+> ALTER TABLE "CibaData"        ADD ("LastPolledAt" NUMBER(19) NULL);
+>
+> -- PostgreSQL
+> ALTER TABLE deviceauthzdata ADD COLUMN lastpolledat bigint NULL;
+> ALTER TABLE cibadata        ADD COLUMN lastpolledat bigint NULL;
+> ```
+>
+> **列が無いと、ポーリングの SELECT が落ちる。**
+
 #### `/jwkcerts` のキャッシュ — `JwkSetCacheMaxAgeSeconds`（#303）
 
 **この口は、トークンを検証する相手が必ず読む。**

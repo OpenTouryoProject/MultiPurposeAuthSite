@@ -394,6 +394,43 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **これで「暗号化して保管し、読むときに戻している」ことが測れている** —
 > **暗号化していなければ、外しても往復してしまう。**
 
+##### ポーリングの間隔（`RT-305.*`。#305 の段階 1）
+
+**既定の通しは「`slow_down` 有効」で回る**（雛形の `EnablePollingSlowDown` が `true`、
+`interval` は 5 秒）。
+
+| | 測ること |
+|---|---|
+| **`RT-305.1`** | **Device** : 1 回目は `authorization_pending`／**続けて叩くと `slow_down`**／**`interval` ＋ 1 秒待つと `authorization_pending` に戻る**（= 要求を消していない） |
+| **`RT-305.2`** | **CIBA** : 同じ 3 段（**認証デバイスの登録が前提**なので、`EX-8.*` と同じ段取りを踏む） |
+
+> **`PollingSlowDownTests` は、CIBA 系と同じ collection に入れてある。**
+> **`Users.DeviceToken` は 1 つの列**なので、**並行して書くと互いの宛先を壊す**
+> （実測 : **`RT-233.1` が「別の宛先」で落ちた**）。
+> **`[Collection(CibaTests.DeviceCollection)]` を付けて直列化した。**
+
+**歯抜け（実測 2026/10/16）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| `PollingThrottle.TooFast` が **常に false** を返すようにする（= 従来の振る舞い） | **`RT-305.1` / `RT-305.2` の 4 件だけが落ちる**（「`slow_down` を返す / 実測 = `authorization_pending`」）。**同時に回した Device / CIBA の 23 件は通ったまま** |
+
+**ストアは 4 通りとも測った**（実測 2026/10/16。**列を足したので DB は作り直し**）。
+
+| ストア | 結果 |
+|---|---|
+| `mem`（既定の通し） | **通し 624 / 失敗 0 / Skip 2** |
+| `sql`（SQL Server） | **49 / 49**（`RT-305.*` ＋ Device / CIBA の一式） |
+| `ora`（Oracle） | **27 / 27** |
+| `npg`（PostgreSQL） | **13 / 13**（netfx は従来どおり Skip） |
+
+> **SQL Server は、再起動では DDL が流れないことがある**（実測）。
+> **`UserStore` が出来ていなければ、初期化スクリプトを手で叩く。**
+>
+> ```powershell
+> docker exec store-sqlserver-1 bash /init/0_start-up.sh
+> ```
+
 ##### `/jwkcerts` のキャッシュ（`RT-303.*`。#303）
 
 **既定の通しは「キャッシュ有効」で回る**（`test.ps1` が **`JwkSetCacheMaxAgeSeconds=300`** を渡す）。

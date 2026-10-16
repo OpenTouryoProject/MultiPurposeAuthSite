@@ -6204,6 +6204,61 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 本文も新しい（末尾が変わっている）
 - `ETag` が 1 回目と同じ
 
+## RT-305.1 Device Authorization Grant : `interval` より短い間隔のポーリングに `slow_down` を返す
+
+| | |
+|---|---|
+| 観点 | **機器は `interval` を守る義務があるが、守らなくても何も起きなかった**（`ANALYSIS-IdP.md` の D-13。**コードにも「slow_down を検討する」とコメントだけ残っていた**）。**叩き続けられると、`/token` が総当たりの的になる。****`slow_down` は、仕様が用意した断り方**である。 |
+| 根拠 | RFC 8628 §3.5（slow_down）/ #305 の段階 1 |
+| テスト | `RT30501_Deviceの速すぎるポーリングはslow_down` |
+
+**手順**
+
+1. 機器 : POST /device_authz で device_code を得る
+1. 1 回目のポーリング（初回は slow_down にしない）
+1. 続けて 2 回目（間隔を守っていない）
+1. interval ＋ 1 秒待ってから、3 回目
+
+**検証（合否を判定する）**
+
+- authorization_pending を返す
+- slow_down を返す
+- トークンは発行しない
+- authorization_pending に戻る（要求は生きている）
+
+**観測（判定しない）**
+
+- 応答の interval
+  - **機器はこの秒数だけ待つ**（RFC 8628 §3.2）。
+
+**補足**
+
+- **`slow_down` で要求を消していない**ことが、(4) で分かる。**消していたら `invalid_grant` か `expired_token` になる。**
+
+## RT-305.2 CIBA : `interval` より短い間隔のポーリングに `slow_down` を返す
+
+| | |
+|---|---|
+| 観点 | **CIBA も、クライアントが `/token` を繰り返し叩く。****Device と同じ判定**（`LastPolledAt`）で、**同じ断り方**をする。 |
+| 根拠 | CIBA Core §11（slow_down）/ #305 の段階 1 |
+| テスト | `RT30502_CIBAの速すぎるポーリングはslow_down` |
+
+**手順**
+
+1. ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）
+1. クライアント : CIBA の認証リクエストを送る
+1. 1 回目のポーリング（初回は slow_down にしない）
+1. 続けて 2 回目（間隔を守っていない）
+1. interval ＋ 1 秒待ってから、3 回目
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- authorization_pending を返す
+- slow_down を返す
+- authorization_pending に戻る（要求は生きている）
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
