@@ -39,6 +39,11 @@
     mem 以外のときに使う接続文字列（test.ps1 に渡す）。
     省略した場合は、test.ps1 が環境変数から読む。
 
+.PARAMETER NoStoreContainer
+    store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
+    既定では、接続文字列が store\ のポートを指していれば、
+    その DB だけをテストの間だけ起動する。詳細は test.ps1 の説明を参照。
+
 .PARAMETER Url
     net10.0 版が待ち受ける URL（test.ps1 に渡す。既定 https://localhost:44300）。
 
@@ -96,6 +101,7 @@ param(
     [ValidateSet('mem', 'sql', 'ora', 'npg')]
     [string]$UserStoreType = 'mem',
     [string]$ConnectionString,
+    [switch]$NoStoreContainer,
     [string]$Url = 'https://localhost:44300',
     [string]$NetFxUrl = 'https://localhost:44302',
     [switch]$NoNetFx,
@@ -165,6 +171,7 @@ if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }
 if ($UserStoreType)    { $splat.UserStoreType    = $UserStoreType }
 if ($ConnectionString) { $splat.ConnectionString = $ConnectionString }
+if ($NoStoreContainer) { $splat.NoStoreContainer = $true }
 
 Write-Host "=== E2ETests ===" -ForegroundColor Cyan
 if (-not $Launch)

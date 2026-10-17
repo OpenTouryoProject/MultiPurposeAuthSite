@@ -69,6 +69,20 @@
     -UserStoreType が mem 以外のときに使う接続文字列。
     省略した場合は、上記の環境変数から読む。
 
+.PARAMETER NoStoreContainer
+    **store\ の DB コンテナを、起動も停止もしない。**
+
+    既定では、-UserStoreType が mem 以外のとき、**接続文字列が store\ の
+    ポート（1434 / 1522 / 5433）を指していれば、その DB コンテナを起動し、
+    終わったら停止する**（3 つ同時に起動するとメモリを使い切るため。
+    store\docker-compose.yml の「メモリの節約」）。
+
+    **自分が起動したものだけを止める。** 既に起動していれば、そのまま残す。
+
+    **接続文字列が store\ のポートを指していなければ、何もしない**
+    （手動確認の LocalServicesOnDocker は既定ポートなので、自動で対象外になる）。
+    このスイッチは、それでも触らせたくないときに使う。
+
 .PARAMETER Launch
     net10.0 版と net48 版を起動してからテストする。
 
@@ -139,6 +153,7 @@ param(
     [ValidateSet('mem', 'sql', 'ora', 'npg')]
     [string] $UserStoreType = 'mem',
     [string] $ConnectionString,
+    [switch] $NoStoreContainer,
     [string] $Url = 'https://localhost:44300',
     [string] $NetFxUrl = 'https://localhost:44302',
     [switch] $NoNetFx,
@@ -172,20 +187,202 @@ if (-not $LogDir) {
 }
 
 # ------------------------------------------------------------------
+# store\ の DB コンテナ（#305 の後）
+# ------------------------------------------------------------------
+# **DB を 3 つ同時に起動すると、Docker の VM がメモリを使い切って固まることがある。**
+#   **使うストアの DB だけを、テストの間だけ起動する**
+#   （store\docker-compose.yml の「メモリの節約」。方針は LocalServicesOnDocker の CHEATSHEET）。
+#
+# **自分が起動したものだけを止める。** **人が自分で上げていた DB は、そのまま残す。**
+#
+# **対象かどうかは、接続文字列のポートで決める**（store\ は +1 にしてある）。
+#   **既定ポート（＝ 手動確認の LocalServicesOnDocker）なら、触らない。**
+
+$script:StoreDir = Join-Path `
+    (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'store'
+
+function Get-StorePortFromConnStr
+{
+    param([string] $UserStoreType, [string] $ConnStr)
+
+    if (-not $ConnStr) { return $null }
+
+    #  **方言ごとに書き方が違う。**
+    #    sql : Data Source=localhost,1434
+    #    ora : Data Source=localhost:1522/FREEPDB1
+    #    npg : PORT=5433
+    switch ($UserStoreType)
+    {
+        'sql' { if ($ConnStr -match 'Data\s*Source\s*=\s*[^;,]+,\s*(\d+)') { return [int] $Matches[1] } }
+        'ora' { if ($ConnStr -match 'Data\s*Source\s*=\s*[^;:]+:\s*(\d+)')  { return [int] $Matches[1] } }
+        'npg' { if ($ConnStr -match '(?i)(^|;)\s*PORT\s*=\s*(\d+)')         { return [int] $Matches[2] } }
+    }
+
+    return $null
+}
+
+function Test-StorePort
+{
+    param([int] $Port)
+
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $async  = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        $opened = $async.AsyncWaitHandle.WaitOne(1000)
+
+        if ($opened) { $client.EndConnect($async) }
+
+        $client.Close()
+        return $opened
+    }
+    catch {
+        return $false
+    }
+}
+
+function Invoke-StoreDocker
+{
+    param([Parameter(ValueFromRemainingArguments = $true)] [string[]] $DockerArgs)
+
+    #  **store\ で実行する。** compose のプロジェクト名をフォルダ名（store）に合わせるため。
+    #  **profiles が付いたサービスは、名前を明示すれば起動できる**（--profile は要らない）。
+    Push-Location $script:StoreDir
+    try {
+        return (& docker @DockerArgs 2>&1 | Out-String)
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Start-StoreContainer
+{
+    param([string] $Service, [int] $Port, [string] $Name)
+
+    if (Test-StorePort -Port $Port) {
+        Write-Host ("  {0} は既に起動しています（このテストでは止めません）。" -f $Name) -ForegroundColor Yellow
+        return $false
+    }
+
+    Write-Host ("  {0} のコンテナを起動します（docker compose up -d {1}）..." -f $Name, $Service) `
+        -ForegroundColor Cyan
+
+    #  **起動した時刻を控える**（ログを「ここから後」だけ見るため）。
+    #    **docker compose logs は、再起動をまたいで前回の分も残る** —
+    #    **前回の "done." を見て即座に先へ進んでしまった**（実測で踏んだ）。
+    #    **2 秒戻す**のは、ホストとデーモンの時計のずれを見込んで。
+    $script:StoreSince = (Get-Date).ToUniversalTime().AddSeconds(-2).ToString('yyyy-MM-ddTHH:mm:ssZ')
+
+    $out = Invoke-StoreDocker 'compose' 'up' '-d' $Service
+
+    if ($LASTEXITCODE -ne 0) {
+        throw ("DB コンテナの起動に失敗しました（{0}）。`n{1}" -f $Service, $out)
+    }
+
+    return $true
+}
+
+function Wait-Store
+{
+    param([string] $Service, [int] $Port, [string] $Name,
+          [string] $Since, [int] $TimeoutSeconds = 900)
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    Write-Host ("  {0} が使えるようになるのを待ちます..." -f $Name) -ForegroundColor Cyan
+
+    while ((Get-Date) -lt $deadline) {
+
+        switch ($Service)
+        {
+            'oracle' {
+                #  **healthcheck を見る**（compose の healthcheck は oracle にだけ在る）。
+                #    **ポートが開いても、DB はまだ初期化中のことがある。初回は数分かかる。**
+                $id = (Invoke-StoreDocker 'compose' 'ps' '-q' $Service).Trim()
+
+                if ($id) {
+                    $health = (& docker inspect $id --format '{{.State.Health.Status}}' 2>&1 | Out-String).Trim()
+
+                    if ($health -eq 'healthy')   { Write-Host '    使えます。' -ForegroundColor Green; return }
+                    if ($health -eq 'unhealthy') { throw ("{0} が unhealthy になりました。" -f $Name) }
+                }
+            }
+
+            'sqlserver' {
+                #  **ポートが開いただけでは足りない。**
+                #    **init/0_start-up.sh は sqlservr と並行に走る**ので、
+                #    **DDL が流れ終わる前にテストを始めると落ちる。**
+                #    **しかも 1_Create_UserStore.sql は破壊的で、起動の度に
+                #    UserStore を DROP して作り直す** — **待たないと、サイトの初期化と衝突する。**
+                #
+                #  **ログは「起動した時刻から後」だけを見る**（$Since）。
+                #    **docker compose logs は再起動をまたいで残る**ので、
+                #    **全部を見ると前回の "done." で通ってしまう**（実測で踏んだ）。
+                #    **自分で起動していないとき（$Since が空）は、ポートだけを見る。**
+                if (Test-StorePort -Port $Port) {
+
+                    if (-not $Since) {
+                        Write-Host '    使えます（既に起動していたので、ログは見ません）。' -ForegroundColor Green
+                        return
+                    }
+
+                    $log = Invoke-StoreDocker 'compose' 'logs' '--since' $Since $Service
+
+                    if ($log -match 'done\.') { Write-Host '    使えます。' -ForegroundColor Green; return }
+                    if ($log -match 'did not accept logins') {
+                        throw ("{0} がログインを受け付けませんでした。" -f $Name)
+                    }
+                }
+            }
+
+            default {
+                #  **postgres は、初期化 SQL が終わってから外の接続を受ける**
+                #    （公式イメージの entrypoint が、初期化中は Unix ソケットだけで動かす）。
+                #    **ポートが開けば、DDL は流れ終わっている。**
+                if (Test-StorePort -Port $Port) { Write-Host '    使えます。' -ForegroundColor Green; return }
+            }
+        }
+
+        Start-Sleep -Seconds 5
+    }
+
+    throw ("{0} が {1} 秒以内に使える状態になりませんでした。" -f $Name, $TimeoutSeconds)
+}
+
+function Stop-StoreContainer
+{
+    param([string] $Service, [string] $Name)
+
+    Write-Host ("  {0} のコンテナを停止します（docker compose stop {1}）..." -f $Name, $Service) `
+        -ForegroundColor Cyan
+
+    $null = Invoke-StoreDocker 'compose' 'stop' $Service
+}
+
+# ------------------------------------------------------------------
 # UserStore の切り替え（#207）
 # ------------------------------------------------------------------
 # 設定ファイルは書き換えない。**環境変数で上書きする**（FxContainerization=ON）。
 # キー名がそのまま環境変数名になるので、ConnectionString_* を直接渡せる。
 #
 # **接続文字列の既定値は持たない。** 引数か環境変数で受ける。
+#
+# **Service / Port は store\docker-compose.yml のもの**（#305 の後）。
+#   **接続文字列がこのポートを指していれば、その DB コンテナを都度 起動・停止する。**
+#   **指していなければ触らない**（手動確認の LocalServicesOnDocker は既定ポート）。
 $storeKeys = @{
-    'sql' = @{ Key = 'ConnectionString_SQL'; Env = 'MPAS_CONNSTR_SQL'; Name = 'SQL Server' }
-    'ora' = @{ Key = 'ConnectionString_ODP'; Env = 'MPAS_CONNSTR_ODP'; Name = 'Oracle' }
-    'npg' = @{ Key = 'ConnectionString_NPS'; Env = 'MPAS_CONNSTR_NPS'; Name = 'PostgreSQL' }
+    'sql' = @{ Key = 'ConnectionString_SQL'; Env = 'MPAS_CONNSTR_SQL'; Name = 'SQL Server'; Service = 'sqlserver'; Port = 1434 }
+    'ora' = @{ Key = 'ConnectionString_ODP'; Env = 'MPAS_CONNSTR_ODP'; Name = 'Oracle';     Service = 'oracle';    Port = 1522 }
+    'npg' = @{ Key = 'ConnectionString_NPS'; Env = 'MPAS_CONNSTR_NPS'; Name = 'PostgreSQL'; Service = 'postgres';  Port = 5433 }
 }
 
 $storeConnKey = $null
 $storeConnStr = $null
+
+# **都度 起動・停止する DB コンテナ**（#305 の後。mem のときと、対象外のときは $null）。
+$storeService = $null
+$storePort    = $null
+$storeStarted = $false
 
 if ($UserStoreType -ne 'mem') {
 
@@ -206,6 +403,28 @@ if ($UserStoreType -ne 'mem') {
 
     Write-Host ("UserStore : {0}（{1}）" -f $UserStoreType, $info.Name) -ForegroundColor Cyan
     Write-Host ("  接続文字列は {0} として渡します（内容は表示しません）。" -f $storeConnKey)
+
+    # **store\ の DB コンテナを、都度 起動・停止するか**（#305 の後）。
+    #   **接続文字列から読めたポートが store\ のものなら、対象にする。**
+    #   **読めない（＝ 既定ポート）/ 違う番号なら、別の DBMS を指している**ので触らない。
+    if (-not $NoStoreContainer) {
+
+        $foundPort = Get-StorePortFromConnStr -UserStoreType $UserStoreType -ConnStr $storeConnStr
+
+        if ($foundPort -eq $info.Port) {
+            $storeService = $info.Service
+            $storePort    = $info.Port
+            Write-Host ('  DB コンテナ : {0}（ポート {1}）を、このテストの間だけ起動します。' -f $storeService, $storePort) -ForegroundColor Cyan
+        }
+        elseif ($null -eq $foundPort) {
+            Write-Host '  接続文字列にポートがありません（既定ポート）。' -ForegroundColor Yellow
+            Write-Host '    store\ の DB ではないと判断し、コンテナは触りません。' -ForegroundColor Yellow
+        }
+        else {
+            Write-Host ('  接続文字列のポートは {0} で、store\ の {1} ではありません。' -f $foundPort, $info.Port) -ForegroundColor Yellow
+            Write-Host '    コンテナは触りません。' -ForegroundColor Yellow
+        }
+    }
 
     # **net48 は PostgreSQL を選べない。** Npgsql の参照が #if NETCORE で囲まれている。
     if ($UserStoreType -eq 'npg' -and -not $NoNetFx) {
@@ -573,6 +792,18 @@ catch {
 }
 
 try {
+
+    # **使うストアの DB コンテナを、テストの間だけ起動する**（#305 の後）。
+    #   **自分が起動したものだけを、finally で止める。**
+    if ($storeService) {
+        $storeStarted = Start-StoreContainer -Service $storeService -Port $storePort -Name $info.Name
+
+        #  **自分で起動したときだけ、ログを「その時刻から後」で見る。**
+        $since = if ($storeStarted) { $script:StoreSince } else { $null }
+
+        Wait-Store -Service $storeService -Port $storePort -Name $info.Name -Since $since
+    }
+
     if ($Launch) {
 
         New-Item -ItemType Directory -Force $LogDir | Out-Null
@@ -885,6 +1116,12 @@ finally {
             Write-Host 'サイトを停止します...' -ForegroundColor Cyan
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
         }
+    }
+
+    # **自分が起動した DB コンテナだけを止める**（#305 の後）。
+    #   **既に起動していたものは、そのまま残す。**
+    if ($storeStarted -and $storeService) {
+        Stop-StoreContainer -Service $storeService -Name $storeService
     }
 
     if ($Launch) {

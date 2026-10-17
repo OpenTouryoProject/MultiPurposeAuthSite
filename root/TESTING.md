@@ -77,7 +77,32 @@ cd store
 .\2_DockerComposeDown.bat    # -v 付き。作り直せるように残さない
 ```
 
-**DB は `1_DockerComposeUp.bat` では起動しない。** **使う 1 つだけを、名前を指定して起動する。**
+**DB は `1_DockerComposeUp.bat` では起動しない。**
+**`2_RunAllTests.ps1` が、使う 1 つだけを、その実行の間だけ起動する。**
+
+```powershell
+$env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;...'
+.\2_RunAllTests.ps1 -Launch -UserStoreType sql    # 起動 → 待機 → テスト → 停止
+```
+
+| | |
+|---|---|
+| **対象の決め方** | **接続文字列から読めたポートが `store/` のもの（1434 / 1522 / 5433）なら、その DB を扱う** |
+| **触らないとき** | **ポートが読めない**（＝ 既定ポート。手動確認の LocalServicesOnDocker）**や、別の番号のとき** |
+| **停めるのは自分が起動したときだけ** | **先に人が起動していた DB は、そのまま残す** |
+| **切る口** | **`-NoStoreContainer`**（別ホストの DB を指すときなど） |
+
+> **1 回に 1 ストアである**（`-UserStoreType` は単数）。
+> **複数のストアを回したいときは、呼ぶ側でループする** —
+> **`test.ps1` が自己完結しているので、ループすれば DB 毎に起動・停止になる。**
+>
+> ```powershell
+> foreach ($st in @('sql','ora','npg')) {
+>     .\2_RunAllTests.ps1 -Launch -UserStoreType $st -Filter "..."
+> }
+> ```
+
+**手で起動したいときは、名前を指定する。**
 
 ```powershell
 docker compose up -d sqlserver     # sql で回すとき（1434）
@@ -86,6 +111,19 @@ docker compose up -d postgres      # npg で回すとき（5433）
 
 docker compose stop sqlserver      # 使い終わったら止める
 ```
+
+> **`sqlserver` は、起動の度に `UserStore` を作り直す。**
+> **`init/1_Create_UserStore.sql` の先頭が `DROP DATABASE` ＋ `CREATE DATABASE`** で、
+> **`init/0_start-up.sh` はコンテナ起動の度に走る**ためである。
+> **前回のデータは残らない**（E2E はサイトが初回のサインインで種データを作るので、これで良い）。
+> **`oracle` と `postgres` は、再起動では流れない**
+> （`oracle` は初回作成時だけ、`postgres` はデータが空のときだけ）。
+>
+> **このため、`sqlserver` の待機は「ポートが開いた」では足りない** —
+> **DDL が流れ終わるまで待つ**（`0_start-up.sh` が `done.` を出す）。
+> **その際、ログは「起動した時刻から後」だけを見る**（`--since`）—
+> **`docker compose logs` は再起動をまたいで残る**ので、
+> **全部を見ると前回の `done.` で通ってしまう**（実測で躏んだ）。
 
 > **同時に 2 つ以上を起動しないこと。** **E2E は 1 回に 1 つのストアしか使わない。**
 > **3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある**
@@ -109,9 +147,14 @@ docker compose stop sqlserver      # 使い終わったら止める
 > |---|---|---|
 > | `sqlserver` | 300 MB | **766.6 MiB** |
 > | `postgres` | 128 MB | **46.1 MiB** |
+> | `oracle` | 変更しない（SGA 1536M / PGA 512M） | **2.342 GiB** |
+>
+> **`oracle` が圧倒的に重い。** **これ 1 つで、他の 2 つの合計の 3 倍近く使う** —
+> **「使わない間は止める」が、ここでは一番効く。**
 
 > **Oracle の SGA は小さくしない。** **小さくしすぎると DB が起動しなくなる。**
-> **23ai Free は製品の制限で SGA ＋ PGA が 2GB まで。**
+> **23ai Free は製品の制限で SGA ＋ PGA が 2GB まで**
+> （**実測** : `sga_target` **1536M** ＋ `pga_aggregate_target` **512M** = ちょうど 2GB）。
 > **メモリを空けたいときは、使わない間は止めること。**
 
 > **`restart` は、`store/` のすべてのサービスで `"no"` にしてある**
