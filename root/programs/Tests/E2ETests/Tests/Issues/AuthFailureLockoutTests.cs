@@ -611,7 +611,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// **`on` と比べる** — **`Config.UseForwardedHeaders` がそうしている**ため。
         /// **`true` では効かない**（#279 の設定は `on` / `off`。
         /// **他の真偽設定は `true` / `false` なので、ここを混じると
-        /// 「黙って何も起きない」**。実測で躏んだ）。
+        /// 「黙って何も起きない」**。実測で踏んだ）。
         /// **判定を `Config` 側とずらすと、Skip すべきときに走って落ちる。**
         /// </remarks>
         private static bool IsOn(IdPClient client, string key)

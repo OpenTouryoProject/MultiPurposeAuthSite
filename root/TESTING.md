@@ -114,7 +114,7 @@ $env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;...'
 > **先に人が起動していた場合に止めないことも、別に測った。**
 
 > **net48 を測るときは `aspnet_state` を忘れない**（下の「前提」の節）。
-> **止まっていると netfx の全要求が HTTP 500 になり、ストアの問題に見える** — **実測で躏んだ。**
+> **止まっていると netfx の全要求が HTTP 500 になり、ストアの問題に見える** — **実測で踏んだ。**
 
 **手で起動したいときは、名前を指定する。**
 
@@ -137,7 +137,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 > **DDL が流れ終わるまで待つ**（`0_start-up.sh` が `done.` を出す）。
 > **その際、ログは「起動した時刻から後」だけを見る**（`--since`）—
 > **`docker compose logs` は再起動をまたいで残る**ので、
-> **全部を見ると前回の `done.` で通ってしまう**（実測で躏んだ）。
+> **全部を見ると前回の `done.` で通ってしまう**（実測で踏んだ）。
 
 > **同時に 2 つ以上を起動しないこと。** **E2E は 1 回に 1 つのストアしか使わない。**
 > **3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある**
@@ -174,7 +174,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 > **`restart` は、`store/` のすべてのサービスで `"no"` にしてある**
 > （DB の 3 つと IdP の 3 つ。**以前は `always`**）。
 > **Docker エンジンを起動した拍子に、6 つとも一斉に復帰してメモリを食い切るのを防ぐ**
-> （**実測で躏んだ** : Docker を起動しただけで 6 つとも起きていた）。
+> （**実測で踏んだ** : Docker を起動しただけで 6 つとも起きていた）。
 > **起動は、いつでも明示的に行う**（`up -d` / `start`）。
 >
 > **以前の `always` で作られたコンテナは、古い設定のままである。**
@@ -534,7 +534,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 
 > **値は `on` である。** **`true` では効かない**
 > （`Config.UseForwardedHeaders` が `on` と比べている。`CONFIGURATION.md` 7 節）。
-> **実測で躏んだ** : **`true` を渡して、ミドルウェアがそもそも入らず、
+> **実測で踏んだ** : **`true` を渡して、ミドルウェアがそもそも入らず、
 > 転送ヘッダが無視されて `RT-305.7` の (4) が 401 になった**。
 > **「黙って何も起きない」形で落ちる**ので、気付きにくい。
 >
@@ -2699,8 +2699,42 @@ E2ETests OK    220    0    1 146.7
 ```powershell
 Get-Service aspnet_state          # Stopped なら
 Start-Service aspnet_state        # 管理者権限が要る
-Set-Service aspnet_state -StartupType Automatic   # 毎回やりたくないなら
 ```
+
+##### 毎回起動しなくて済むようにする
+
+**スタートアップは既定で「手動」である。**
+**OS を再起動すると止まる**ので、**net48 版を測る環境では「自動」にしておくと楽である。**
+
+**管理者権限の PowerShell で、次の 2 行。**
+
+```powershell
+Set-Service aspnet_state -StartupType Automatic   # 次回以降は OS の起動と同時に上がる
+Start-Service aspnet_state                        # いますぐ上げる
+```
+
+**管理者権限でないシェルからやるときは、昇格を起こす。**
+**`net start aspnet_state` も `Start-Service` も、昇格していなければ断られる**
+（「システム エラー 5。アクセスが拒否されました。」/ `Cannot open 'aspnet_state' service`。**実測で踏んだ**）。
+
+```powershell
+# UAC の確認が出るので、画面で承認する
+Start-Process powershell -Verb RunAs -ArgumentList `
+    '-NoProfile','-Command','Set-Service aspnet_state -StartupType Automatic; Start-Service aspnet_state'
+```
+
+**入ったかを確かめる**（昇格は要らない）。
+
+```powershell
+Get-Service aspnet_state | Select-Object Name, Status, StartType
+#   Status = Running / StartType = Automatic なら良い
+```
+
+> **自動にしてもメモリの負担は小さい**
+> （セッションを持たなければ数 MB。**DB のコンテナとは桁が違う** — 1 節「メモリの抑え方」）。
+
+> **net48 版を測らないなら、上げなくてよい。**
+> **`-NoNetFx` で回せば、その分は Skip になるだけである。**
 
 **見分け方。** **`/.well-known/openid-configuration` は 200 を返すのに、`/Account/Login` が 500** になる。
 **Web API の口はセッションを使わないが、画面は使う**ためである。

@@ -633,7 +633,7 @@ function Set-IdFederationEnv
     #     .\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RT30507"
     #
     #   **値は `on` である**（`Config.UseForwardedHeaders` は `on` と比べる。
-    #   **`true` では効かず、しかも黙って何も起きない** — 実測で躏んだ）。
+    #   **`true` では効かず、しかも黙って何も起きない** — 実測で踏んだ）。
     #   **`::1` も挙げる**（`localhost` は IPv6 に解決し得る。
     #   **前段として信用しないアドレスからの転送ヘッダは、黙って捨てられる**）。
     #   **通し（何も入れていないとき）は off** ＝ 接続元をそのまま使う。
