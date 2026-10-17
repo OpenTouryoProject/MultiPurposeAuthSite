@@ -2677,6 +2677,56 @@ else
 
 ---
 
+### C-25. mTLS で、登録が空のときに空の Subject DN が一致していた **[Lib]** — **✅ 修正済み（#305 の段階 4）**
+
+**クライアント認証の mTLS の分岐が、登録値を確かめずに突き合わせていた。**
+
+```csharp
+// 修正前
+if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+```
+
+**`GetTlsClientAuthSubjectDn` は、登録が見つからなければ `""` を返す**
+（`tls_client_auth_subject_dn` を登録していないクライアントと、未登録の `client_id` が該当する）。
+**`X509Certificate2.Subject` は、Subject DN が空の証明書では `""` になる**
+（RFC 5280 は `subjectAltName` が在る場合に空の Subject を認めている）。
+
+**両方が `""` で一致し、クライアント認証が通った。**
+
+| | |
+|---|---|
+| **`client_secret` 側は起きない** | **前段に `!string.IsNullOrEmpty(client_secret)` が在る**（空の秘密では、この分岐に入らない） |
+| **通った後** | `/revoke` / `/introspect` は**互換版の入口**で `CheckClientMode` を通らないため、**クライアント認証だけで決まる**。`/token` は `ClientModePolicy` の `Flow.ClientCredentials` × `Proof.Any` → `normal` に当たる |
+
+**発火の前提**（**雛形の配備では成立しない**）。
+
+| | |
+|---|---|
+| **サーバがクライアント証明書を要求する設定になっていること** | **雛形のままでは要求しない**（#226 で実測。`CONFIGURATION.md` 7 節） |
+| TLS 層がその証明書を受け付けること | 信頼の設定次第 |
+| 対象の `client_id` に Subject DN が登録されていないこと | **`fapi2` 以外は通常登録していない** |
+
+**登録が空なら通さないようにした。**
+
+```csharp
+// 修正後
+string registeredDn = Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id);
+
+if (!string.IsNullOrEmpty(registeredDn)
+    && x509.Subject == registeredDn)
+```
+
+**E2E の常設ケースは足していない。**
+**空の Subject DN を持つ証明書を、TLS 層に受け付けさせる仕掛けが要る**ためである
+（`Tests/MtlsTestHook` は**発行元を問わずに受け付ける**が、**証明書そのものは用意が要る**）。
+**C-24 と同じく、ここは読み取りで見つけたものである。**
+
+> **段階 4 の本題（送信元を鍵に混ぜる）で `ClientAuthentication` を読み直したときに気付いた。**
+> **`AuthFailureProvider.Record` を「登録されているクライアントのときだけ」に絞る**作業で、
+> **登録の有無を見る必要が出たため、同じ関数の照合も見直した。**
+
+---
+
 ## 5. D. 最新の IdP として不足している機能
 
 | # | 仕様 | 状況 | 影響 |
@@ -2769,6 +2819,7 @@ else
 | ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251 ／ ✅ **E-2 セッションの置き場を選べるように** #256（`SessionStoreType`） |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
+| ✅ **C-25 mTLS で、登録が空のときに空の Subject DN が一致していた** #305 の段階 4 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 
