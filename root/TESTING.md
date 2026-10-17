@@ -412,7 +412,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 **`RT-305.7` は単独で回して測る。**
 
 ```powershell
-$env:UseForwardedHeaders = 'true'
+$env:UseForwardedHeaders = 'on'
 $env:ForwardedHeadersKnownProxies = '127.0.0.1,::1'
 
 .\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RT30507"
@@ -425,11 +425,16 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **原本が、この 1 件だけに置き換わる**（`RT-305.6` と同じ事情）。
 > **`RT-305.7` は `TESTCASES.md`（原本）に載らない** — **通しでは Skip される**ため。
 
+> **値は `on` である。** **`true` では効かない**
+> （`Config.UseForwardedHeaders` が `on` と比べている。`CONFIGURATION.md` 7 節）。
+> **実測で躏んだ** : **`true` を渡して、ミドルウェアがそもそも入らず、
+> 転送ヘッダが無視されて `RT-305.7` の (4) が 401 になった**。
+> **「黙って何も起きない」形で落ちる**ので、気付きにくい。
+>
 > **`::1` も挙げておくこと。**
-> **`localhost` は Windows では IPv6 ループバックに解決される**ので、
-> **サイトから見た接続元が `127.0.0.1` ではなく `::1` になり得る。**
-> **前段として信用していないアドレスからの `X-Forwarded-For` は、黙って無視される** —
-> **「何も起きない」形で落ちる**ので、気付きにくい（TBD-known-proxies）。
+> **`localhost` は IPv6 ループバックに解決され得る**ので、
+> **サイトから見た接続元が `127.0.0.1` ではないことがある** —
+> **前段として信用していないアドレスからの `X-Forwarded-For` は、黙って無視される。**
 
 > **`ForwardedHeadersKnownProxies` を省くと、この測定自体は通ってしまう**が、
 > **それは「クライアントが送信元を詐称できる」状態**である。
@@ -450,24 +455,42 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 
 **歯抜け（実測 2026/10/17）。**
 
-| 壊すもの | 期待する結果 |
+| 壊すもの | 結果 |
 |---|---|
-| `AuthFailureProvider.ClientKey` から **送信元を外す**（= 段階 2 の鍵に戻す） | TBD-歯抜け-7 |
-| `CmnEndpoints.RecordUserAccessFailed` を **何もしない**ようにする（= 段階 3 までの振る舞い） | TBD-歯抜け-8 |
+| `AuthFailureProvider.ClientKey` から **送信元を外す**（= 段階 2 の鍵に戻す） | **`RT-305.7` の 1 件だけが落ちた**（core。「別の送信元は HTTP 200 / 実測 = 401」）。**同時に回した `RT-305.3` / `RT-305.4` / `RT-305.8` の 6 件は通ったまま** |
+| ROPC で **パスワードの失敗を数えない**ようにする（`IncrementAccessFailedCount` を呼ばない。= 段階 3 までの振る舞い） | **`RT-305.8` の 2 件だけが落ちた**（「正しいパスワードでもトークンが出ない / 実測 = **出てしまった（断りが効いていない）**」）。**`RT-305.3` / `RT-305.4` / `RT-305.7` の 5 件は通ったまま** |
+
+> **1 件目を戻したことも、2 件目の回で確かめている**（`RT-305.7` が成功に戻った）。
 
 **実測（2026/10/17）。**
 
 | | 結果 |
 |---|---|
-| `mem`（既定の通し） | TBD-通し |
-| **`RT-305.7`**（単独。転送ヘッダを取り込む） | TBD-RT7 |
-| **`RT-305.8`**（通しに含まれる） | TBD-RT8 |
-| `sql`（SQL Server） | TBD-sql |
+| `mem`（既定の通し） | **636 件 / 成功 630 / 失敗 0 / Skip 6**（原本 **326 件**。**Skip は従来の 2 件 ＋ `RT-305.6` の 2 件 ＋ `RT-305.7` の 2 件**） |
+| **`RT-305.7`**（単独。転送ヘッダを取り込む） | **core 成功 / netfx Skip**。**20 回失敗した送信元は正しい秘密でも断られ、別の送信元は同じ `client_id` で 200** |
+| **`RT-305.8`**（通しに含まれる） | **core・netfx とも成功** |
+| `sql`（SQL Server） | **10 件 / 成功 9 / 失敗 0 / Skip 1**（`RT-305.3` / `.4` / `.7` / `.8` ＋ `RT-277.1`。**`RT-305.7` の netfx だけ Skip**） |
 
-> **`ora` / `npg` は回していない。**
-> **段階 4 で表も SQL の形も増えていない** — **変わったのは鍵の文字列と、掃除の `DELETE` 1 本**である。
-> **掃除の `DELETE` は方言ごとに書いた**（`WhereExpired`）ので、
-> **`sql` で通ることを確かめた**（**`ora` / `npg` の文は、既存の `WhereKey` と同じ作り**）。
+> **`RT-305.8` が `sql` で通ることには意味がある** —
+> **この経路は `Users` 表に書く**（`AccessFailedCount` / `LockoutEndDateUtc` を `CmnUserStore.Update` で）。
+> **`mem` では辞書なので、書き込みの方言は測れない。**
+
+**掃除の `DELETE` は 3 方言とも測った**（実測 2026/10/17）。
+
+**そのままでは測れない。** **`PruneInterval` が 100 で、しかも `PruneExpired` は例外を握る**ので、
+**方言の誤りがあっても「黙って掃除されないだけ」になる**
+（**ph2 で npg の `INSERT` に別名を書いて落ちたのと同じ型の誤り**が、今度は静かに通ってしまう）。
+
+**`PruneInterval` を 1 にし、`catch` で投げ直すようにして**測った（計測後に戻した）。
+
+| ストア | 結果 |
+|---|---|
+| `sql`（SQL Server） | **8 件 / 成功 7 / 失敗 0 / Skip 1** |
+| `ora`（Oracle） | **8 件 / 成功 7 / 失敗 0 / Skip 1** |
+| `npg`（PostgreSQL） | **8 件 / 成功 4 / 失敗 0 / Skip 4**（netfx は従来どおり起動しない） |
+
+> **段階 4 で表も列も増えていない。** **増えたのは、この `DELETE` 1 本だけ**である
+> （鍵の文字列は長くなるが、`nvarchar(256)` に収まる）。
 
 ##### 口ごとのレート制限（`RT-305.5` / `RT-305.6`。#305 の段階 3）
 

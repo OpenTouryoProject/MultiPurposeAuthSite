@@ -339,8 +339,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "net48 版は X-Forwarded-For を取り込まないので、送信元を変えて測れません。");
 
                 //  **取り込みが有効でなければ、送信元は 127.0.0.1 のままで、鍵が分かれない。**
-                Skip.If(!AuthFailureLockoutTests.BoolSettingOf(admin, "UseForwardedHeaders"),
-                    "UseForwardedHeaders が有効ではありません"
+                Skip.If(!AuthFailureLockoutTests.IsOn(admin, "UseForwardedHeaders"),
+                    "UseForwardedHeaders が on ではありません"
                     + "（単独で回す手順は TESTING.md）。");
 
                 TestReport r = this.Report("RT-305.7",
@@ -603,11 +603,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             return int.TryParse(value ?? "", out parsed) ? parsed : fallback;
         }
 
-        /// <summary>この配備の設定値（真偽。環境変数が構成ファイルより強い）</summary>
+        /// <summary>この配備で `on` になっているか（環境変数が構成ファイルより強い）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="key">設定キー</param>
-        /// <returns>真なら true（読めなければ false）</returns>
-        private static bool BoolSettingOf(IdPClient client, string key)
+        /// <returns>`on` なら true（読めなければ false）</returns>
+        /// <remarks>
+        /// **`on` と比べる** — **`Config.UseForwardedHeaders` がそうしている**ため。
+        /// **`true` では効かない**（#279 の設定は `on` / `off`。
+        /// **他の真偽設定は `true` / `false` なので、ここを混じると
+        /// 「黙って何も起きない」**。実測で躏んだ）。
+        /// **判定を `Config` 側とずらすと、Skip すべきときに走って落ちる。**
+        /// </remarks>
+        private static bool IsOn(IdPClient client, string key)
         {
             string value = Environment.GetEnvironmentVariable(key);
 
@@ -616,7 +623,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 value = client.Config.Get(key);
             }
 
-            return string.Equals(value ?? "", "true", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(value ?? "", "on", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>`/revoke` を、指定の資格情報で叩く</summary>

@@ -409,14 +409,18 @@ function Set-IdFederationEnv
     #   **通しの全ケースは 127.0.0.1 を共有する**ので、
     #   **送信元を変えるには `X-Forwarded-For` を取り込ませるしかない。**
     #
-    #     $env:UseForwardedHeaders = 'true'
+    #     $env:UseForwardedHeaders = 'on'
     #     $env:ForwardedHeadersKnownProxies = '127.0.0.1'
     #     .\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RT30507"
     #
+    #   **値は `on` である**（`Config.UseForwardedHeaders` は `on` と比べる。
+    #   **`true` では効かず、しかも黙って何も起きない** — 実測で躏んだ）。
+    #   **`::1` も挙げる**（`localhost` は IPv6 に解決し得る。
+    #   **前段として信用しないアドレスからの転送ヘッダは、黙って捨てられる**）。
     #   **通し（何も入れていないとき）は off** ＝ 接続元をそのまま使う。
     if (-not $env:UseForwardedHeaders)
     {
-        $env:UseForwardedHeaders = 'false'
+        $env:UseForwardedHeaders = 'off'
     }
 
     # **退役させる途中の署名証明書**（#292 の段階 3）。
