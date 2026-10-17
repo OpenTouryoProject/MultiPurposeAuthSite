@@ -2328,26 +2328,42 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             valid_redirect_uri = "";
 
+            //  **事前登録は n 件ある**（#306）。**全件を読み、要素ごとに定数値を解決する。**
+            //    **登録は空白区切りの 1 つの文字列**（設定ファイルでも DB の列でも同じ形）。
+            string[] preRegisteredUris = Helper.GetInstance().GetClientsRedirectUris(client_id, response_type);
+
+            for (int i = 0; i < preRegisteredUris.Length; i++)
+            {
+                // 定数値は変換する（test_self_code など）。
+                preRegisteredUris[i] = CmnEndpoints.GetRedirectUriFromConstr(preRegisteredUris[i]) ?? "";
+            }
+
             // redirect_uriのチェック
             if (string.IsNullOrEmpty(redirect_uri))
             {
                 // redirect_uriの指定が無い。
 
-                // クライアント識別子に対応する事前登録したredirect_uriを取得する。
-                redirect_uri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
-
-                if (!string.IsNullOrEmpty(redirect_uri))
+                if (preRegisteredUris.Length == 1)
                 {
-                    // 事前登録されている。
-                    // 定数値は変換する。
-                    valid_redirect_uri = CmnEndpoints.GetRedirectUriFromConstr(redirect_uri);
+                    //  **1 件だけ登録されている。** **それを使う**（従来どおり）。
+                    valid_redirect_uri = preRegisteredUris[0];
                     return true;
                 }
-                else
+                else if (preRegisteredUris.Length == 0)
                 {
                     // 事前登録されていない。
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.redirect_uri_NotRegistered;
+                    return false;
+                }
+                else
+                {
+                    //  **2 件以上登録されている**（#306）。
+                    //    **どれを使うべきか決められない**ので、**要求で指定させる。**
+                    //    RFC 6749 §3.1.2.3 : **複数登録しているなら、要求に redirect_uri を含めること。**
+                    //    **1 件だけの配備では、従来どおり省略できる**（上の分岐）。
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "redirect_uri is required because multiple redirect_uris are registered.";
                     return false;
                 }
             }
@@ -2361,15 +2377,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   **`test_self_code_manage` を記号にして登録値で表せるようにし、分岐を消した。**
                 //   **例外は無い。**
                 {
-                    // クライアント識別子に対応する事前登録したredirect_uri
-                    string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
-
-                    // 定数値は変換する。
-                    preRegisteredUri = CmnEndpoints.GetRedirectUriFromConstr(preRegisteredUri);
-
-                    //if (redirect_uri.StartsWith(preRegisteredUri))
-                    if (preRegisteredUri == null) preRegisteredUri = ""; // null対策
-
                     // **単純文字列比較**（#263）。**大文字小文字を区別する。**
                     //   RFC 6749 §3.1.2.3 は RFC 3986 §6.2.1（Simple String Comparison）を指しており、
                     //   **正規化せず、1 文字ずつ比べること**を求めている（OIDC Core §3.1.2.1 も exact match）。
@@ -2377,19 +2384,24 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //   **仕様が「正規化しない比較」と言っているので、そこも揃っていなければ通さない。**
                     //   以前は `ToLower()` 同士で比べていたため、**パスの大文字小文字だけが違う値でも通っていた**
                     //   （`post_logout_redirect_uri` の方は #232 の時点から Ordinal で比べている）。
-                    if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
+                    //
+                    //  **n 件のときは、どれか 1 つと完全一致すればよい**（#306）。
+                    //    **前方一致にはしない。** **登録の 1 本が、別の登録の接頭辞になっていても、
+                    //    それぞれ別の値として扱う。**
+                    foreach (string preRegisteredUri in preRegisteredUris)
                     {
-                        // 完全一致する場合。
-                        valid_redirect_uri = redirect_uri;
-                        return true;
+                        if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
+                        {
+                            // 完全一致する場合。
+                            valid_redirect_uri = redirect_uri;
+                            return true;
+                        }
                     }
-                    else
-                    {
-                        // 完全一致しない場合。
-                        err = OAuth2AndOIDCConst.invalid_request;
-                        errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri;
-                        return false;
-                    }
+
+                    // どれとも完全一致しない場合。
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri;
+                    return false;
                 }
             }
         }

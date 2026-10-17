@@ -126,8 +126,8 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     ClientID varchar(256) NOT NULL,          -- PK
     ClientSecret varchar(512) NULL,          -- 暗号文が入る（#297）
     RedirectUriSaml varchar(512) NULL,               -- Const.MaxLengthOfUri
-    RedirectUriCode varchar(512) NULL,               -- Const.MaxLengthOfUri
-    RedirectUriToken varchar(512) NULL,              -- Const.MaxLengthOfUri
+    RedirectUriCode varchar(2000) NULL,              -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
+    RedirectUriToken varchar(2000) NULL,             -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
     PostLogoutRedirectUri varchar(512) NULL,         -- Const.MaxLengthOfUri
     WebOrigins text NULL,                            -- 空白・カンマ区切りの列挙
     JwkRsaPublickey text NULL,

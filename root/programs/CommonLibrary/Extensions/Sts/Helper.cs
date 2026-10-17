@@ -697,21 +697,56 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region GetClientsRedirectUri
 
-        /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
+        /// <summary>登録された redirect_uri の 1 本目を取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
-        /// <returns>redirect_uri</returns>
+        /// <returns>redirect_uri（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **登録は n 件になった**（#306）。**ここは 1 本目を返す。**
+        /// **照合には使わないこと** — **照合は `GetClientsRedirectUris`**（全件）を使う。
+        /// **画面に 1 本だけ出したい所**（自己テストの画面）**のために残してある。**
+        /// </remarks>
         public string GetClientsRedirectUri(string client_id, string response_type)
         {
             return this.GetClientsRedirectUri(client_id, response_type, out bool isResourceOwner);
         }
 
-        /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
+        /// <summary>登録された redirect_uri の 1 本目を取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
         /// <param name="isResourceOwner">bool</param>
-        /// <returns>redirect_uri</returns>
+        /// <returns>redirect_uri（登録が無ければ空）</returns>
         public string GetClientsRedirectUri(string client_id, string response_type, out bool isResourceOwner)
+        {
+            string[] uris = Helper.SplitUriList(
+                this.GetClientsRedirectUriList(client_id, response_type, out isResourceOwner));
+
+            return (0 < uris.Length) ? uris[0] : "";
+        }
+
+        /// <summary>登録された redirect_uri を全件取得する（#306）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">response_type</param>
+        /// <returns>redirect_uri の並び（登録が無ければ 0 件）</returns>
+        /// <remarks>
+        /// **1 つのクライアントに n 件登録できる**（#306）。
+        /// **登録は空白区切りの 1 つの文字列**で、**設定ファイルでも DB の列でも同じ形**である。
+        ///
+        /// **照合は、この全件に対して行う**（`CmnEndpoints.CheckRedirectUri`）。
+        /// **定数値の解決は呼び出し側**（要素ごとに `GetRedirectUriFromConstr` を通す）。
+        /// </remarks>
+        public string[] GetClientsRedirectUris(string client_id, string response_type)
+        {
+            return Helper.SplitUriList(
+                this.GetClientsRedirectUriList(client_id, response_type, out bool isResourceOwner));
+        }
+
+        /// <summary>登録された redirect_uri を、登録されたままの形で取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">response_type</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>空白区切りの列挙（登録が無ければ空）</returns>
+        private string GetClientsRedirectUriList(string client_id, string response_type, out bool isResourceOwner)
         {
             isResourceOwner = false;
             client_id = client_id ?? "";
@@ -776,6 +811,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return "";
+        }
+
+        /// <summary>空白区切りの列挙を分解する（#306）</summary>
+        /// <param name="value">空白区切りの列挙</param>
+        /// <returns>要素の並び（空なら 0 件）</returns>
+        /// <remarks>
+        /// **区切りは空白である。**
+        /// **URI に空白は入らない**（RFC 3986 §2。入れるなら `%20` に符号化される）ので、
+        /// **曖昧にならない。**
+        ///
+        /// **カンマは区切りにしない** — **URI に入り得る**
+        /// （RFC 3986 §2.2 の `sub-delims` に `,` が含まれる）。
+        /// **`scope` が空白区切り**（RFC 6749 §3.3）なのと同じ流儀である。
+        ///
+        /// **1 本だけの登録は、1 件の列挙として読める** — **既存の配備はそのまま動く。**
+        /// </remarks>
+        public static string[] SplitUriList(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return new string[0];
+            }
+
+            //  **空白（半角・全角・タブ・改行）で切り、空の要素は捨てる。**
+            return value.Split(
+                new char[] { ' ', '\t', '\r', '\n', '\u3000' },
+                StringSplitOptions.RemoveEmptyEntries);
         }
 
         #endregion

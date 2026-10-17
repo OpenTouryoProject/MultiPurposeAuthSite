@@ -152,8 +152,8 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
     [ClientSecret] [nvarchar](512) NULL,        -- 暗号文が入る（#297）
     [RedirectUriSaml] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
-    [RedirectUriCode] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
-    [RedirectUriToken] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
+    [RedirectUriCode] [nvarchar](2000) NULL,         -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
+    [RedirectUriToken] [nvarchar](2000) NULL,        -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
     [PostLogoutRedirectUri] [nvarchar](512) NULL,    -- Const.MaxLengthOfUri
     [WebOrigins] [nvarchar](max) NULL,               -- 空白・カンマ区切りの列挙
     [JwkRsaPublickey] [nvarchar](max) NULL,

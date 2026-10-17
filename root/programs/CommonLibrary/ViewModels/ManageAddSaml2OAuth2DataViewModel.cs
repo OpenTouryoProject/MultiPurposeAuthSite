@@ -84,8 +84,9 @@ namespace MultiPurposeAuthSite.ViewModels
         [Display(Name = "RedirectUriCode", Description = "RedirectUriCodeDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
+        //  **n 件を空白区切りで入れられる**（#306）。**上限は列挙用のもの。**
         [StringLength(
-            Const.MaxLengthOfUri,
+            Const.MaxLengthOfUriList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_code")]
@@ -95,8 +96,9 @@ namespace MultiPurposeAuthSite.ViewModels
         [Display(Name = "RedirectUriToken", Description = "RedirectUriTokenDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
+        //  **n 件を空白区切りで入れられる**（#306）。
         [StringLength(
-            Const.MaxLengthOfUri,
+            Const.MaxLengthOfUriList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_token")]
@@ -290,8 +292,10 @@ namespace MultiPurposeAuthSite.ViewModels
         /// </remarks>
         [Display(Name = "WebOrigins", Description = "WebOriginsDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
+        //  **元から列挙だが、上限が 1 本ぶんのままだった**（#306 で揃えた）。
+        //    **列は NCLOB / text / nvarchar(max) なので、DDL は変えていない。**
         [StringLength(
-            Const.MaxLengthOfUri,
+            Const.MaxLengthOfUriList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "web_origins")]

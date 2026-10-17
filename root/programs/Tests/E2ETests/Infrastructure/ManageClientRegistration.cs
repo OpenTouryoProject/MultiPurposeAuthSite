@@ -194,8 +194,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **秘密は報告に出さない**（`TESTING.md` 9 節）。
         /// **`async` に `out` は付けられない**ので、組で返す（`RegisterDeviceAsync` と同じ形）。
         /// </remarks>
-        public static async Task<(string ClientId, string ClientSecret)> RegisterWithSecretAsync(
+        public static Task<(string ClientId, string ClientSecret)> RegisterWithSecretAsync(
             IdPClient client)
+        {
+            return ManageClientRegistration.RegisterWithSecretAsync(client, null);
+        }
+
+        /// <summary>クライアントを登録し、client_id と client_secret を得る（項目を差し込める。#306）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="fields">最後の「追加」の直前に差し込む項目（null なら画面のまま）</param>
+        /// <returns>発行された client_id と client_secret（登録できなければ client_id は空）</returns>
+        /// <remarks>
+        /// **`redirect_uri_code` などを登録するために使う**（#306 は n 件を測る）。
+        /// **画面から拾ったフォームの値を上書きする**だけなので、
+        /// **画面が出していない項目は差し込めない。**
+        /// </remarks>
+        public static async Task<(string ClientId, string ClientSecret)> RegisterWithSecretAsync(
+            IdPClient client, IDictionary<string, string> fields)
         {
             string clientSecret = "";
 
@@ -211,6 +226,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 await ManageClientRegistration.PostAsync(client, form, "submit.ClientSecret"));
 
             clientSecret = ManageClientRegistration.Value(form, "ClientSecret") ?? "";
+
+            //  **「追加」の直前に差し込む**（#306）。
+            //    **画面が出している項目の値を、そのまま置き換える。**
+            if (fields != null)
+            {
+                foreach (KeyValuePair<string, string> item in fields)
+                {
+                    form[item.Key] = item.Value;
+                }
+            }
 
             await ManageClientRegistration.PostAsync(client, form, "submit.Add");
 

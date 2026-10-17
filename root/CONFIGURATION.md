@@ -176,6 +176,62 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 **`client_id` は環境ごとに違う。** `CommandLineTools` の `CreateClientsIdentity.exe` で生成する。
 このため、**コードやテストに `client_id` を直書きしない。** `client_name` から引くこと。
 
+### `redirect_uri` は 1 クライアントに n 件登録できる（#306）
+
+**`redirect_uri_code` / `redirect_uri_token` は、空白区切りで複数書ける。**
+
+```json
+"redirect_uri_code": "https://rp.example.com/callback https://localhost:5001/callback"
+```
+
+| | |
+|---|---|
+| **何に効くか** | **開発・ステージング・本番を 1 つの `client_id` で共存**させられる。**Web とモバイルのカスタム スキーム**（`com.example.app:/oauth2redirect`）**も 1 件で扱える** |
+| **区切りは空白** | **URI に空白は入らない**（RFC 3986 §2。入れるなら `%20`）ので曖昧にならない。**カンマは使わない** — **`sub-delims` に含まれ、URI に入り得る**（同 §2.2）。**`scope` が空白区切り**（RFC 6749 §3.3）なのと同じ流儀 |
+| **照合** | **要求の `redirect_uri` が、登録のいずれかと完全一致**すればよい（`Ordinal`。**前方一致にはしない**。#263 / C-10） |
+| **管理画面** | **1 行の入力のまま**（空白で区切って入れる） |
+| **DB** | **`Saml2OAuth2Data` の列幅が 2000 文字**（`Const.MaxLengthOfUriList`）。**列は増やしていない** |
+
+**要求で `redirect_uri` を省略できるかは、登録の件数で決まる。**
+
+| 登録の件数 | 要求で省略したとき |
+|---|---|
+| **1 件** | **その 1 件を使う**（**従来どおり**。既存の配備・既存の RP はそのまま動く） |
+| **2 件以上** | **`invalid_request`** — **どれを使うべきか決められない。****RFC 6749 §3.1.2.3 は、複数登録しているなら要求に含めること**としている |
+| 0 件 | **`invalid_request`**（従来どおり。未登録） |
+
+> **1 本から 2 本に増やした時点で、その RP は `redirect_uri` を送る必要がある。**
+> **多くの RP は既に送っている**（OIDC Core §3.1.2.1 は常に必須としている）。
+
+> **記号**（`test_self_code` など。下の「折り返し先の記号」）**は要素ごとに解決される。**
+> **記号と絶対 URL を混ぜて並べてよい。**
+
+> **既存のデータベースには列幅の変更が要る**（#306）。
+> **`Create_UserStore.sql` を流し直す**か、**`ALTER` で広げる。**
+>
+> ```sql
+> -- SQL Server
+> ALTER TABLE [Saml2OAuth2Data] ALTER COLUMN [RedirectUriCode]  [nvarchar](2000) NULL
+> ALTER TABLE [Saml2OAuth2Data] ALTER COLUMN [RedirectUriToken] [nvarchar](2000) NULL
+>
+> -- Oracle
+> ALTER TABLE "Saml2OAuth2Data" MODIFY ("RedirectUriCode" NVARCHAR2(2000));
+> ALTER TABLE "Saml2OAuth2Data" MODIFY ("RedirectUriToken" NVARCHAR2(2000));
+>
+> -- PostgreSQL
+> ALTER TABLE Saml2OAuth2Data ALTER COLUMN RedirectUriCode  TYPE varchar(2000);
+> ALTER TABLE Saml2OAuth2Data ALTER COLUMN RedirectUriToken TYPE varchar(2000);
+> ```
+>
+> **広げないままでも、1 本だけの登録は従来どおり入る**（512 文字まで）。
+
+> **`post_logout_redirect_uri` と `redirect_uri_saml`（ACS）は 1 本のまま**である。
+> **同じ形の課題だが、別の論点を持つ**（ACS は「返す先は常に登録値」。#276）ので、
+> **#306 では触っていない。**
+
+> **`web_origins`（#265）は、元から空白・カンマ区切りの列挙**である。
+> **入力の上限だけが 1 本ぶんのままだった**ので、#306 で列挙用に揃えた（列は元から無制限）。
+
 ### `subject_types` — `sub` に何を入れるか
 
 | 値 | `sub` | |
@@ -466,7 +522,7 @@ test_self_logout      → OAuth2ClientEndpointsRootURI + /Home/Index（post_logo
 | | |
 |---|---|
 | **新規登録** | `redirect_uri_code` の**既定が `test_self_code`** になっている。そのまま動作確認できる |
-| **動作確認の後** | **自分の RP の折り返し先に書き換える**（クライアント 1 件に `redirect_uri_code` は 1 つ） |
+| **動作確認の後** | **自分の RP の折り返し先に書き換える**（**空白区切りで n 件書ける**。#306。4 節） |
 
 > **`test_self_code_manage` という記号も在った**（C-10）。
 > **管理画面の「トークンを取る」の折り返し先**で、**新規登録の既定**でもあった。

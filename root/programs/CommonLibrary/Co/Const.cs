@@ -59,6 +59,18 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>UriのMaxLength</summary>
         public const int MaxLengthOfUri = 512;
 
+        /// <summary>Uriの列挙のMaxLength（#306）</summary>
+        /// <remarks>
+        /// **空白区切りで複数の URI を持つ項目**（`redirect_uri_code` /
+        /// `redirect_uri_token` / `web_origins`）**の上限。**
+        ///
+        /// **2000 にしてあるのは、Oracle の `NVARCHAR2` の上限**である
+        /// （2000 文字 ＝ 4000 バイト）。**3 方言とも同じ幅に揃えられる。**
+        /// **`WebOrigins` のように LOB（NCLOB / text）にはしていない** —
+        /// **URI を数本並べるのに LOB は要らない。**
+        /// </remarks>
+        public const int MaxLengthOfUriList = 2000;
+
         /// <summary>ClientNameのMaxLength</summary>
         public const int MaxLengthOfClientName = 64;
 
