@@ -1606,7 +1606,7 @@ namespace MultiPurposeAuthSite.Co
         /// 認証の失敗を、この回数で断る（#305 の段階 2）
         /// </summary>
         /// <remarks>
-        /// **クライアント認証（`client_secret` / `private_key_jwt`）と、
+        /// **クライアント認証（`client_secret` / mTLS）と、
         /// `user_code` の投入**の失敗を数える（`Extensions/Sts/AuthFailureProvider`）。
         ///
         /// | 値 | |
@@ -1617,8 +1617,11 @@ namespace MultiPurposeAuthSite.Co
         /// **断っている間は、正しい資格情報でも通さない**（ロックアウトの意味）。
         /// **成功したら回数は消える。**
         ///
-        /// **利用者のパスワードは、ASP.NET Identity 側で既に数えている**
+        /// **利用者のパスワードは、ASP.NET Identity 側で数えている**
         /// （`MaxFailedAccessAttemptsBeforeLockout`）。**こちらは別の口である。**
+        ///
+        /// **数えるのは「クライアント ＋ 送信元」ごと**である（#305 の段階 4）。
+        /// **`client_id` だけで数えると、誰でもそのクライアントを止められる。**
         /// </remarks>
         public static int AuthFailureMaxAttempts
         {
@@ -1654,6 +1657,38 @@ namespace MultiPurposeAuthSite.Co
 
                 int seconds = 0;
                 return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 300;
+            }
+        }
+
+        /// <summary>
+        /// 数えた分を、いつまで覚えているか（秒。#305 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **最後の失敗からこの時間が過ぎると、数えた分は忘れる**
+        /// （**間隔を空けた失敗が、いつまでも積み上がらない**）。
+        /// **行の寿命もこれで決まる** — **期限の過ぎた行は掃除される**
+        /// （`AuthFailureProvider.PruneExpired`）。
+        ///
+        /// **未設定は `AuthFailureLockoutSeconds` と同じ**（雛形では 300 秒）。
+        ///
+        /// **`AuthFailureMaxAttempts` 回を試すのに掛かる時間より、長くすること。**
+        /// **短いと、数が積まれる前に忘れるので、いつまでも断らない。**
+        /// </remarks>
+        public static int AuthFailureWindowSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureWindowSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は、断る長さと同じ。**
+                    return Config.AuthFailureLockoutSeconds;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds)
+                    ? seconds : Config.AuthFailureLockoutSeconds;
             }
         }
 

@@ -340,6 +340,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return await ToJsonResponseAsync(res);
         }
 
+        /// <summary>ヘッダを付けて、JSONを返すエンドポイントをPOSTする</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="headers">足すヘッダ（値が空の項目は送らない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **`X-Forwarded-For` を送るため**（#305 の段階 4）。
+        /// **送信元ごとの数えを、1 台のホストから測る**のに使う（`RT-305.7`）。
+        /// **net10.0 版が `UseForwardedHeaders` を有効にしている配備でだけ効く。**
+        /// </remarks>
+        public async Task<JsonResponse> PostJsonAsync(
+            string pathOrUrl, IDictionary<string, string> form,
+            IDictionary<string, string> headers)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Post, this.Absolute(pathOrUrl));
+
+            // 値が null の項目は送らない（PostFormAsync と同じ）。
+            List<KeyValuePair<string, string>> items = new List<KeyValuePair<string, string>>();
+
+            foreach (KeyValuePair<string, string> item in form)
+            {
+                if (item.Value != null)
+                {
+                    items.Add(item);
+                }
+            }
+
+            req.Content = new FormUrlEncodedContent(items);
+
+            if (headers != null)
+            {
+                foreach (KeyValuePair<string, string> h in headers)
+                {
+                    if (!string.IsNullOrEmpty(h.Value))
+                    {
+                        //  **検証を通さずに足す**（`GetAsync` のヘッダ版と同じ）。
+                        req.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    }
+                }
+            }
+
+            HttpResponseMessage res = await this._http.SendAsync(req);
+
+            return await ToJsonResponseAsync(res);
+        }
+
         /// <summary>
         /// JSONを返すエンドポイントに、client_secret_basic（Authorization ヘッダ）で POST する。
         /// client_id / client_secret はフォームに入れない。

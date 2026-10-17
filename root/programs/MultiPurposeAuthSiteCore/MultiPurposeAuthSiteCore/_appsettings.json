@@ -205,6 +205,10 @@
     //   MaxFailedAccessAttemptsBeforeLockout 側で既に数えている）。
     "AuthFailureMaxAttempts": "5",
     "AuthFailureLockoutSeconds": "300",
+    //   **数えた分を覚えている長さ**（#305 の段階 4）。
+    //     **未設定なら AuthFailureLockoutSeconds と同じ。**
+    //     **行の寿命もこれで決まる**（期限の過ぎた行は掃除される）。
+    "AuthFailureWindowSeconds": "300",
 
     // **口ごとのレート制限**（#305 の段階 3）。
     //   **窓の中の要求の回数を数え、超えた分に 429（Retry-After）を返す。**

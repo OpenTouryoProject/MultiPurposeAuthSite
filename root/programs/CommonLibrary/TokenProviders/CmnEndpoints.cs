@@ -3033,6 +3033,32 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
+        /// <remarks>
+        /// **このグラントは、利用者のパスワードを `/token` に流す**（RFC 6749 §4.3）。
+        /// **雛形の既定では無効**（`EnableResourceOwnerPasswordCredentialsGrantType`）。
+        ///
+        /// **パスワードの失敗を数える**（#305 の段階 4）。
+        ///
+        /// **段階 4 より前は、ここだけ数えていなかった。**
+        /// **`VerifyHashedPassword` を直に呼んでいて、`SignInManager` を通らない**ため、
+        /// **画面のサインインのロックアウトが効かず、何回でも試せた**
+        /// （クライアント認証の失敗は数えていたが、**それはクライアントの秘密の話**であって、
+        /// **同じ `client_id` の下で利用者名を変えながら試す経路は止まらなかった**）。
+        ///
+        /// **画面のサインインと同じ数えに合流させた** —
+        /// `MaxFailedAccessAttemptsBeforeLockout` /
+        /// `DefaultAccountLockoutTimeSpanFromSeconds` /
+        /// `UserLockoutEnabledByDefault`（`Users` 表の `AccessFailedCount` と
+        /// `LockoutEndDateUtc`）。**別の数えを作らない** —
+        /// **口を変えれば回数が戻る、という抜けを作らないため。**
+        ///
+        /// **応答は、どの場合も `access_denied` のまま。**
+        /// **「利用者が居ない」「パスワードが違う」「断っている」を区別させない**
+        /// （`TC-4.2` が、この区別が付かないことを測っている）。
+        ///
+        /// **利用者名が見つからないときは数えられない**（鍵が無い）。
+        /// **利用者名を変えながら試す経路は、口ごとのレート制限が頭を打つ**（段階 3）。
+        /// </remarks>
         public static bool GrantResourceOwnerCredentials(
             string grant_type, string client_id,
             string client_secret, string clientAssertion, X509Certificate2 x509,
@@ -3087,6 +3113,19 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     if (user != null)
                     {
+                        //  **断っている間は、正しいパスワードでも通さない**（#305 の段階 4）。
+                        //    **画面のサインインと同じ数え**（ASP.NET Identity のロックアウト）。
+                        //    **応答は誤パスワードと同じ `access_denied`**
+                        //    （**断っていること自体を教えない**）。
+                        if (CmnEndpoints.IsUserLockedOut(user))
+                        {
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
+                            err.Add(OAuth2AndOIDCConst.error_description,
+                                Resources.ApplicationOAuthBearerTokenProvider.access_denied);
+
+                            return false;
+                        }
+
                         // ユーザーが見つかった場合。
 #if NETFX
                         PasswordVerificationResult pvRet = (new CustomPasswordHasher()).VerifyHashedPassword(user.PasswordHash, password);
@@ -3095,6 +3134,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 #endif
                         if (pvRet.HasFlag(PasswordVerificationResult.Success))
                         {
+                            //  **成功したので、数えた分は消す**（#305 の段階 4）。
+                            CmnEndpoints.ResetUserAccessFailed(user);
+
                             // ClaimsIdentityにClaimを追加する。
                             ClaimsIdentity identity = new ClaimsIdentity(OAuth2AndOIDCConst.Bearer);
 
@@ -3124,6 +3166,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         }
                         else
                         {
+                            //  **失敗を 1 回数える**（#305 の段階 4）。
+                            //    **上限に達したら、一定時間断る。**
+                            CmnEndpoints.RecordUserAccessFailed(user);
+
                             // パスワードが一致しない場合。
                             err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
                             err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.access_denied);
@@ -4463,6 +4509,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             //  **続けて失敗しているクライアントは、断る**（#305 の段階 2）。
             //    **断っている間は、正しい資格情報でも通さない** — それがロックアウトである。
             //    **応答は従来と同じ `invalid_client`**（**断っていることを教えない**）。
+            //
+            //  **鍵は「クライアント ＋ 送信元」**（#305 の段階 4）。
+            //    **断るのは、失敗を重ねた送信元だけ**である。
             string failureKey = AuthFailureProvider.ClientKey(client_id);
 
             if (AuthFailureProvider.IsLockedOut(failureKey))
@@ -4480,7 +4529,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（client_secret）を行なう。
-                    if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
+                    string registeredSecret = Helper.GetInstance().GetClientSecret(client_id);
+
+                    //  **登録が空なら通さない**（#305 の段階 4。**空と空の一致を作らない**）。
+                    if (!string.IsNullOrEmpty(registeredSecret)
+                        && client_secret == registeredSecret)
                     {
                         proof = ClientModePolicy.Proof.ClientSecret;
                         x509 = null; // client_secretがあった場合、x509を無効化
@@ -4495,7 +4548,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（X509Certificate2）を行なう。
-                    if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                    string registeredDn = Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id);
+
+                    //  **登録が空なら通さない**（#305 の段階 4）。
+                    //    **以前は、登録の無い `client_id` に Subject が空の証明書を出すと、
+                    //    空と空が一致して通った**（`/revoke` / `/introspect` は
+                    //    この後の登録種別の判定を通らないので、そこで落ちない）。
+                    if (!string.IsNullOrEmpty(registeredDn)
+                        && x509.Subject == registeredDn)
                     {
                         proof = ClientModePolicy.Proof.Mtls;
 
@@ -4508,7 +4568,17 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             //  **失敗を 1 回数える**（#305 の段階 2）。
             //    **`client_id` が空のときは数えない**（鍵にならない）。
-            AuthFailureProvider.Record(failureKey);
+            //
+            //  **登録されていない `client_id` では数えない**（#305 の段階 4）。
+            //    **要求の `client_id` をそのまま鍵にして行を作ると、
+            //    誰でも `AuthFailure` 表を好きなだけ太らせられる。**
+            //    **登録の有無は `GetClientName` で見る**
+            //    （`DeviceAuthZClientAuthentication` と同じ見方）。
+            if (!string.IsNullOrEmpty(client_id)
+                && !string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id)))
+            {
+                AuthFailureProvider.Record(failureKey);
+            }
 
             return false;
         }
@@ -4694,6 +4764,94 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region Private
+
+        #region 利用者のロックアウト
+
+        /// <summary>この配備で、利用者のロックアウトを使うか</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>使うなら true</returns>
+        /// <remarks>
+        /// **画面のサインインと同じ条件で判定する**（#305 の段階 4）。
+        /// **`UserLockoutEnabledByDefault` が false の配備では、何もしない**
+        /// （`SignInManager.PasswordSignInAsync` に渡している値と同じ）。
+        /// </remarks>
+        private static bool UserLockoutEnabled(ApplicationUser user)
+        {
+            return Config.UserLockoutEnabledByDefault
+                && 0 < Config.MaxFailedAccessAttemptsBeforeLockout
+                && CmnUserStore.GetLockoutEnabled(user);
+        }
+
+        /// <summary>いま、この利用者を断っているか</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>断っていれば true</returns>
+        private static bool IsUserLockedOut(ApplicationUser user)
+        {
+            if (!CmnEndpoints.UserLockoutEnabled(user))
+            {
+                return false;
+            }
+
+            DateTimeOffset? lockoutEnd = CmnUserStore.GetLockoutEndDate(user);
+
+            return lockoutEnd.HasValue && DateTimeOffset.UtcNow < lockoutEnd.Value;
+        }
+
+        /// <summary>パスワードの失敗を 1 回数える（上限に達したら断り始める）</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <remarks>
+        /// **`UserManager.AccessFailedAsync` と同じ段取り**にしてある
+        /// （**上限に達したら期限を入れ、回数は 0 に戻す**）。
+        /// **`CmnUserStore` の設定子は、物に書かない**ので、**`Update` で書く。**
+        /// </remarks>
+        private static void RecordUserAccessFailed(ApplicationUser user)
+        {
+            if (!CmnEndpoints.UserLockoutEnabled(user))
+            {
+                return;
+            }
+
+            int count = CmnUserStore.IncrementAccessFailedCount(user);
+
+            if (Config.MaxFailedAccessAttemptsBeforeLockout <= count)
+            {
+                CmnUserStore.SetLockoutEndDate(user,
+                    DateTimeOffset.UtcNow.Add(Config.DefaultAccountLockoutTimeSpanFromSeconds));
+
+                CmnUserStore.ResetAccessFailedCount(user);
+
+                //  **断り始めた 1 回だけ、ログに残す。**
+                Logging.MyOperationTrace(string.Format(
+                    "{0}({1}) was locked out. (too many password failures at the token endpoint)",
+                    user.Id, user.UserName));
+            }
+
+            CmnUserStore.Update(user);
+        }
+
+        /// <summary>成功したので、数えた分を消す</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <remarks>**書くことが無ければ、書かない**（成功のたびに UPDATE を撃たない）。</remarks>
+        private static void ResetUserAccessFailed(ApplicationUser user)
+        {
+            if (!CmnEndpoints.UserLockoutEnabled(user))
+            {
+                return;
+            }
+
+            if (CmnUserStore.GetAccessFailedCount(user) == 0
+                && !CmnUserStore.GetLockoutEndDate(user).HasValue)
+            {
+                return;
+            }
+
+            CmnUserStore.ResetAccessFailedCount(user);
+            CmnUserStore.SetLockoutEndDate(user, null);
+
+            CmnUserStore.Update(user);
+        }
+
+        #endregion
 
         #region CheckClientMode
 

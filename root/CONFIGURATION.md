@@ -1731,13 +1731,14 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 | **プロセスの中に覚える** | **インスタンスを増やすと、その数だけ緩くなる**（段階 2 は表に持たせたが、**ここは要求ごとに触るので表には置かない**） |
 | **固定窓** | **窓の境目では、瞬間的に上限の 2 倍まで通り得る**（滑る窓にはしていない） |
 | **プロキシの後ろ** | **見える送信元はプロキシのものになる。** net10.0 版は **`UseForwardedHeaders`**（＋ `ForwardedHeadersKnownProxies`）で元に戻せるが、**net48 版は戻さない。** **プロキシの後ろに置く配備では、プロキシ側で制限する方が確かである** |
+| **鍵の粒度は、利用者の数に追随しない** | **同じ `client_id` の下に利用者が多数いる配備では、`RateLimitPerClientPermits` を「その全員分の正常な流量」に合わせる**ことになる — **すると、その `client_id` を騙る相手に対しては、それだけ緩くなる。** **送信元ごとの上限で補う形だが、これも万能ではない** : **public クライアント**（SPA・モバイル）**なら送信元は利用者ごとに分かれる**が、**NAT やキャリア・企業プロキシの背後は束**になる。**confidential クライアント**（サーバサイドの Web アプリ）**は、`/token` を自分のサーバ数本から呼ぶ**ので、**送信元も束になる** — **この場合、どちらの鍵も「利用者ごと」にはならない。** **利用者ごとの総当たりは、段階 2・段階 4 の「失敗の回数」で止める**（次の節） |
 
 > **閾値の決め方は運用の判断である。**
 > **ポーリングは `interval` を守っても 1 分に 12 回**（`interval` が 5 秒のとき）なので、
 > **雛形の 120 回 / 60 秒は、正しいクライアント 10 本分に当たる。**
 > **足りなければ上げる。** **0 にすれば、従来どおり無制限である。**
 
-#### 認証の失敗を数える — `AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds`（#305 の段階 2）
+#### 認証の失敗を数える — `AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds` / `AuthFailureWindowSeconds`（#305 の段階 2・段階 4）
 
 **総当たりを「回数」で止める。**
 
@@ -1745,14 +1746,17 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 |---|---|
 | **`AuthFailureMaxAttempts`** | **連続してこの回数失敗したら断る**（雛形は **5**。**0（未設定）なら数えない** ＝ 従来どおり） |
 | **`AuthFailureLockoutSeconds`** | **断る長さ**（雛形は **300** 秒。未設定も 300） |
+| **`AuthFailureWindowSeconds`** | **数えた分を覚えている長さ**（雛形は **300** 秒。**未設定は `AuthFailureLockoutSeconds` と同じ**。段階 4） |
 
 | 鍵 | 何の失敗か |
 |---|---|
-| **`client:<client_id>`** | **クライアント認証**（`client_secret` / `private_key_jwt` / mTLS） |
+| **`client:<client_id>` ＋ `ip:<送信元>`** | **クライアント認証**（`client_secret` / mTLS） |
 | **`device_verify:<利用者>`** | **`user_code` の投入**（RFC 8628 §5.2） |
+| **`Users` 表の `AccessFailedCount`** | **利用者のパスワード**（**画面のサインイン**と、**`/token` の `grant_type=password`**。段階 4） |
 
 **置き場は `AuthFailure` 表**（`Extensions/Sts/AuthFailureProvider`。`mem` では辞書）。
 **表に持つので、インスタンスを増やしても効く。**
+**利用者のパスワードだけは `Users` 表**（ASP.NET Identity の数え）。
 
 | | |
 |---|---|
@@ -1760,10 +1764,75 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 | **断っている間** | **正しい資格情報でも通さない** — それがロックアウトである |
 | 応答 | **従来どおり `invalid_client`**（**断っていることは教えない**） |
 | 期限が切れたら | **また同じ回数だけ試せる**（回数は 0 に戻す） |
+| **間隔を空けた失敗は積まれない** | **最後の失敗から `AuthFailureWindowSeconds` 経つと、数えた分は忘れる**（段階 4） |
 
-> **利用者のパスワードは、ASP.NET Identity 側で既に数えている**
-> （`MaxFailedAccessAttemptsBeforeLockout` / `DefaultAccountLockoutTimeSpanFromSeconds`）。
-> **こちらは別の口である**（クライアント認証と `user_code`）。
+##### 数えるのは「クライアント ＋ 送信元」である（段階 4）
+
+**段階 2 は `client_id` だけで数えていた。**
+**これは、ロックアウトそのものが妨害の手段になる形だった。**
+
+| | |
+|---|---|
+| **`client_id` は外から見える** | **authorize の URL に載る**（秘密ではない） |
+| **失敗は誰でも起こせる** | **間違った `client_secret` を上限まで送るだけ**でよい |
+| **止まるのは全員** | **同じ `client_id` の利用者が多数いる配備では、被害がその人数分になる。** **`/token` だけでなく `/revoke` `/introspect` `/device_authz` も同じクライアント認証を通る**ので、**そのクライアントの口が全部止まる** |
+
+**段階 4 で、送信元を鍵に混ぜた。**
+**断るのは失敗を重ねた送信元だけで、正しい秘密を持つ他の送信元は通ったままである**
+（`RT-305.7` が、それを測っている）。
+
+> **多数の送信元から分散して試す経路は、ここでは止まらない**（各送信元が上限まで試せる）。
+> **その頭を打つのは、口ごとのレート制限である**（段階 3。前の節）。
+> **「回数」と「流量」は、別々に要る** — **これが両方を入れた理由である。**
+
+> **プロキシの後ろでは、送信元がプロキシのものになる**ので、**鍵が分かれない**
+> （段階 3 の限界と同じ）。**net10.0 版は `UseForwardedHeaders` で元に戻せる。**
+>
+> **そのときは `ForwardedHeadersKnownProxies` を必ず指定すること。**
+> **指定しないと、クライアントが `X-Forwarded-For` を詐称して鍵を変えられる** —
+> **送信元ごとの数えも、送信元ごとのレート制限も、意味を失う。**
+
+> **`private_key_jwt` の失敗は数えていない。**
+> **署名を当てることはできない**ので、回数で止める意味が無い
+> （**数えると、アサーションの `iss` を騙るだけで、そのクライアントの枠を汚せる**）。
+
+##### 行は、期限が切れたら消える（段階 4）
+
+**鍵に送信元が入るので、行の数は「クライアント × 送信元」になる。**
+**放っておくと増えるだけなので、2 つ手当てがある。**
+
+| | |
+|---|---|
+| **登録の無い `client_id` では数えない** | **要求の `client_id` をそのまま鍵にして行を作ると、誰でも表を好きなだけ太らせられる**（登録の有無は `GetClientName` で見る） |
+| **期限の切れた行を消す** | **どの行も期限を持つ**ようにした（**断る期限**か、**数えた分の寿命**）。**期限が過ぎた行は意味を持たない**ので、**書き込み 100 回に 1 回、まとめて `DELETE` する**（要求ごとには撃たない） |
+
+##### `/token` の `grant_type=password` も数える（段階 4）
+
+**この口だけ、パスワードの失敗を数えていなかった。**
+**`SignInManager` を通らず `VerifyHashedPassword` を直に呼んでいた**ため、
+**画面のサインインのロックアウトが効かなかった**（`CmnEndpoints.GrantResourceOwnerCredentials`）。
+
+**段階 4 で、画面と同じ数えに合流させた。**
+
+| | |
+|---|---|
+| 設定 | **`MaxFailedAccessAttemptsBeforeLockout` / `DefaultAccountLockoutTimeSpanFromSeconds` / `UserLockoutEnabledByDefault`**（**画面と同じ**。新しい設定を増やしていない） |
+| 置き場 | **`Users` 表**（`AccessFailedCount` / `LockoutEndDateUtc`） |
+| 応答 | **どの場合も `access_denied`** — **「利用者が居ない」「パスワードが違う」「断っている」を区別させない** |
+
+> **別の数えを作らなかったのは、口を変えれば回数が戻る、という抜けを作らないため**である。
+> **画面で 3 回間違えて `/token` で 3 回間違えたら、合わせて 6 回**になる。
+
+> **ROPC は雛形の既定で無効**（`EnableResourceOwnerPasswordCredentialsGrantType`）。
+> **有効にしている配備にだけ効く話である。**
+
+> **利用者名が見つからないときは数えられない**（鍵が無い）。
+> **利用者名を変えながら試す経路は、口ごとのレート制限で頭を打つ**（段階 3）。
+
+> **利用者のロックアウトも、ASP.NET Identity の形のまま「利用者ごと」である** —
+> **利用者名を知っていれば、その人を一定時間止められる。**
+> **これは画面のサインインが元から持っている性質**で、段階 4 で変えていない
+> （`UserLockoutEnabledByDefault` を `false` にすれば、どちらも数えなくなる）。
 
 > **`user_code` は「投入した人」で数える。**
 > **間違えた `user_code` では、どの要求を狙ったか分からない**ためである
@@ -1800,10 +1869,17 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 >
 > **表が無いと、クライアント認証で落ちる**（数える設定のときだけ）。
 > **`AuthFailureMaxAttempts` を 0 にすれば、表を読まない。**
+>
+> **段階 4 で列は変えていない**（鍵が長くなるだけで、`nvarchar(256)` に収まる）。
+> **段階 2 の表をそのまま使える。**
 
 > **数える設定では、`/token` 1 回につき表を 2 回触る**
 > （**断っているかの `SELECT`** ＋ **成功したときの `DELETE`**）。
 > **`AuthFailureMaxAttempts` が 0 のときは、どちらも走らない。**
+>
+> **失敗したときは、さらに書き込みが 1 回**（`UPDATE`。無ければ `INSERT`）、
+> **その 100 回に 1 回だけ、掃除の `DELETE` が 1 回**（段階 4）。
+> **掃除は失敗しても認証を落とさない**（次の機会に消せばよい）。
 
 #### ポーリングの間隔 — `EnablePollingSlowDown`（#305 の段階 1）
 

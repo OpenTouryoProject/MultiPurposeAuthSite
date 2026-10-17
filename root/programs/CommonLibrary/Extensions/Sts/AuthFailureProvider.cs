@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 2）
+//*  2026/10/17  玄人 幸道         送信元を鍵に混ぜ、行に寿命を入れた（#305 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -37,6 +38,12 @@ using MultiPurposeAuthSite.Data;
 using System;
 using System.Collections.Concurrent;
 using System.Data;
+
+#if NETFX
+using System.Web;
+#else
+using Touryo.Infrastructure.Framework.StdMigration;
+#endif
 
 using Dapper;
 
@@ -51,13 +58,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// | 鍵 | 何の失敗か |
     /// |---|---|
-    /// | **`client:<client_id>`** | **クライアント認証**（`client_secret` / `private_key_jwt`） |
+    /// | **`client:<client_id>` ＋ `ip:<送信元>`** | **クライアント認証**（`client_secret` / mTLS） |
     /// | **`device_verify:<利用者>`** | **`user_code` の投入**（RFC 8628 §5.2） |
     ///
     /// | 設定 | |
     /// |---|---|
     /// | `AuthFailureMaxAttempts` | **この回数で断る**（**0 なら数えない** ＝ 従来どおり） |
     /// | `AuthFailureLockoutSeconds` | **断る長さ**（秒） |
+    /// | `AuthFailureWindowSeconds` | **数えた分を覚えている長さ**（秒。段階 4） |
     ///
     /// **成功したら消す**（連続した失敗だけを数える。ASP.NET Identity のロックアウトと同じ考え）。
     /// **表に持つ**ので、**インスタンスを増やしても効く。**
@@ -66,7 +74,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// **それが「効いている」ことの見え方**である（`RT-305.3` / `RT-305.4`）。
     ///
     /// **サインインのロックアウトとは別**である（あちらは ASP.NET Identity の
-    /// `MaxFailedAccessAttemptsBeforeLockout`。**利用者のパスワード**が対象）。
+    /// `MaxFailedAccessAttemptsBeforeLockout`。**利用者のパスワード**が対象。
+    /// **`/token` の `grant_type=password` も、段階 4 でそちらに合流させた**）。
+    ///
+    /// **段階 4 で変えたこと。**
+    ///
+    /// | | |
+    /// |---|---|
+    /// | **送信元を鍵に混ぜた** | **断るのは、その送信元だけ**になった（`ClientKey`）。**段階 2 は `client_id` だけで数えていたので、誰でもそのクライアントを止められた** |
+    /// | **行に寿命を入れた** | **どの行も `LockoutEndAt` を持つ**ようにし、**期限の切れた行を掃除する**（`PruneExpired`）。**古い失敗は数に積まれない** |
+    /// | **登録の無いクライアントでは数えない** | **要求の `client_id` で行を作らせない**（`CmnEndpoints.ClientAuthentication`） |
+    ///
+    /// **多数の送信元から分散して試す経路は、ここでは止まらない。**
+    /// **口ごとのレート制限が、その頭を打つ**（段階 3 の `RateLimitProvider`）。
     /// </remarks>
     public class AuthFailureProvider
     {
@@ -90,10 +110,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
-            long? lockoutEndAt = AuthFailureProvider.Get(key).Item2;
+            Tuple<int, long?> current = AuthFailureProvider.Get(key);
 
-            return lockoutEndAt.HasValue
-                && AuthFailureProvider.NowUnixSeconds() < lockoutEndAt.Value;
+            //  **回数が 0 で、期限が未来なら、断っている**（#305 の段階 4）。
+            //    **回数が正のときの期限は「数えた分の寿命」**であって、**断る期限ではない。**
+            //    **上限に達したときだけ回数を 0 に戻す**ので、この 2 つは混ざらない。
+            return current.Item1 == 0
+                && current.Item2.HasValue
+                && AuthFailureProvider.NowUnixSeconds() < current.Item2.Value;
         }
 
         /// <summary>失敗を 1 回数える（上限に達したら断り始める）</summary>
@@ -106,23 +130,46 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
+            long now = AuthFailureProvider.NowUnixSeconds();
             Tuple<int, long?> current = AuthFailureProvider.Get(key);
-            int count = current.Item1 + 1;
-            long? lockoutEndAt = current.Item2;
+
+            //  **断っている間は、数え直さない**（#305 の段階 4）。
+            //    **呼ぶ側は先に `IsLockedOut` を見ている**が、**見ない呼び出しが増えたときに、
+            //    ここで期限を上書きして断りを解いてしまわないようにする。**
+            if (current.Item1 == 0 && current.Item2.HasValue && now < current.Item2.Value)
+            {
+                return true;
+            }
+
+            //  **期限が切れていたら、数えた分は忘れる**（#305 の段階 4）。
+            //    **断っていた期限でも、数えの寿命でも、同じ扱いでよい** —
+            //    **どちらも「やり直し」である。**
+            int count = (current.Item2.HasValue && current.Item2.Value <= now)
+                ? 0 : current.Item1;
+
+            count++;
+
+            long lockoutEndAt = 0;
 
             if (Config.AuthFailureMaxAttempts <= count)
             {
                 //  **上限に達した。** **断る期限を入れ、回数を 0 に戻す**
                 //    （**期限が切れたら、また同じ回数だけ試せる**）。
-                lockoutEndAt = AuthFailureProvider.NowUnixSeconds()
-                    + Config.AuthFailureLockoutSeconds;
+                lockoutEndAt = now + Config.AuthFailureLockoutSeconds;
                 count = 0;
+            }
+            else
+            {
+                //  **まだ断らない。** **期限は「数えた分の寿命」として入れる**（#305 の段階 4）。
+                //    **これで、どの行も期限を持つ**ので、**期限の切れた行をまとめて消せる。**
+                //    **間隔を空けた失敗は数に積まれない** — `AuthFailureWindowSeconds` がその猶予。
+                lockoutEndAt = now + Config.AuthFailureWindowSeconds;
             }
 
             AuthFailureProvider.Save(key, count, lockoutEndAt);
 
-            return lockoutEndAt.HasValue
-                && AuthFailureProvider.NowUnixSeconds() < lockoutEndAt.Value;
+            //  **回数が 0 に戻っていれば、いま断り始めた。**
+            return count == 0;
         }
 
         /// <summary>成功したので消す</summary>
@@ -265,6 +312,85 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                     break;
             }
+
+            //  **ついでに、期限の切れた行を掃除する**（#305 の段階 4）。
+            AuthFailureProvider.PruneExpired();
+        }
+
+        #endregion
+
+        #region 掃除
+
+        /// <summary>掃除を、書き込み何回に 1 回やるか</summary>
+        private const int PruneInterval = 100;
+
+        /// <summary>書き込んだ回数（掃除の間隔を決めるため）</summary>
+        private static int SaveCount = 0;
+
+        /// <summary>期限の切れた行を掃除する</summary>
+        /// <remarks>
+        /// **行は放っておくと増える**（#305 の段階 4）。
+        /// **鍵に送信元が入るので、行は「クライアント × 送信元」の数**になる。
+        /// **成功すれば消える**（`Clear`）が、**一度も成功しない送信元の行は残る。**
+        ///
+        /// **どの行も期限を持つ**ようにしたので、**期限の過ぎた行は意味を持たない** —
+        /// **まとめて消せる。**
+        ///
+        /// **書き込み `PruneInterval` 回に 1 回だけ**行う（**要求ごとに DELETE を撃たない**）。
+        /// **掃除に失敗しても、認証は続ける**（次の機会に消せばよい）。
+        /// </remarks>
+        private static void PruneExpired()
+        {
+            //  **間隔を空ける。**
+            if (0 != (System.Threading.Interlocked.Increment(
+                ref AuthFailureProvider.SaveCount) % AuthFailureProvider.PruneInterval))
+            {
+                return;
+            }
+
+            long now = AuthFailureProvider.NowUnixSeconds();
+
+            try
+            {
+                switch (Config.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+
+                        foreach (string key in AuthFailureProvider.Failures.Keys)
+                        {
+                            Tuple<int, long?> value = null;
+
+                            if (AuthFailureProvider.Failures.TryGetValue(key, out value)
+                                && value.Item2.HasValue && value.Item2.Value <= now)
+                            {
+                                Tuple<int, long?> temp = null;
+                                AuthFailureProvider.Failures.TryRemove(key, out temp);
+                            }
+                        }
+
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            cnn.Execute(
+                                "DELETE FROM " + AuthFailureProvider.TableName()
+                                + AuthFailureProvider.WhereExpired(),
+                                new { Now = now });
+                        }
+
+                        break;
+                }
+            }
+            catch
+            {
+                //  **掃除は、落ちても構わない。**
+            }
         }
 
         #endregion
@@ -342,6 +468,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
         }
 
+        /// <summary>期限の切れた行の条件句</summary>
+        /// <remarks>**期限が無い行は消さない**（段階 2 が書いた行。次の失敗で期限が入る）。</remarks>
+        private static string WhereExpired()
+        {
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    return " WHERE [LockoutEndAt] IS NOT NULL AND [LockoutEndAt] <= @Now";
+                case EnumUserStoreType.ODPManagedDriver:
+                    return " WHERE \"LockoutEndAt\" IS NOT NULL AND \"LockoutEndAt\" <= :Now";
+                default:
+                    return " WHERE \"lockoutendat\" IS NOT NULL AND \"lockoutendat\" <= @Now";
+            }
+        }
+
         /// <summary>鍵の条件句</summary>
         private static string WhereKey()
         {
@@ -360,12 +501,86 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region 鍵の作り方
 
-        /// <summary>クライアント認証の鍵</summary>
+        /// <summary>クライアント認証の鍵（クライアント ＋ 送信元）</summary>
         /// <param name="clientId">client_id</param>
         /// <returns>鍵（client_id が空なら空）</returns>
+        /// <remarks>
+        /// **送信元を鍵に混ぜる**（#305 の段階 4）。
+        ///
+        /// **段階 2 は `client:<client_id>` だけだった。**
+        /// **`client_id` は authorize の URL に載る、外から見える値**なので、
+        /// **誰でも、間違った秘密を上限まで送るだけで、そのクライアントを止められた。**
+        /// **同じ `client_id` の利用者が多数いる配備では、被害がその人数分になる**
+        /// （**ロックアウトが、そのまま妨害の手段になる**）。
+        ///
+        /// **送信元ごとに数えれば、断るのはその送信元だけ**になる。
+        /// **正しい秘密を持つ他の送信元は、通ったままである。**
+        ///
+        /// **送信元が取れないときは `client:<client_id>` だけ**になる（段階 2 と同じ）。
+        /// </remarks>
         public static string ClientKey(string clientId)
         {
-            return string.IsNullOrEmpty(clientId) ? "" : ("client:" + clientId);
+            if (string.IsNullOrEmpty(clientId))
+            {
+                return "";
+            }
+
+            string ip = AuthFailureProvider.SourceIp();
+
+            return AuthFailureProvider.Truncate(string.IsNullOrEmpty(ip)
+                ? ("client:" + clientId)
+                : ("client:" + clientId + "|ip:" + ip));
+        }
+
+        /// <summary>いまの要求の送信元（取れなければ空）</summary>
+        /// <returns>送信元のアドレス</returns>
+        /// <remarks>
+        /// **既存の流儀に合わせる**（`CmnUserStore` の `HttpContext.Current` /
+        /// `MyHttpContext.Current`）。**引数で引き回さない** —
+        /// **クライアント認証は `/token` `/revoke` `/introspect` ほか多くの口から通る**ため。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | net10.0 版 | **`UseForwardedHeaders` を通した後の値**（`Startup` の先頭で取り込む。**設定が off なら接続元そのまま**） |
+        /// | net48 版 | **`Request.UserHostAddress` そのまま**（転送ヘッダを戻さない） |
+        ///
+        /// **プロキシの後ろで `UseForwardedHeaders` を使うなら、
+        /// `ForwardedHeadersKnownProxies` を必ず指定すること。**
+        /// **指定しないと、クライアントが `X-Forwarded-For` を詐称でき、鍵を変えられる。**
+        ///
+        /// **取れなければ空を返す**（要求の外から呼ばれたときのため）。
+        /// </remarks>
+        private static string SourceIp()
+        {
+            try
+            {
+#if NETFX
+                HttpContext context = HttpContext.Current;
+
+                return (context == null || context.Request == null)
+                    ? "" : (context.Request.UserHostAddress ?? "");
+#else
+                Microsoft.AspNetCore.Http.HttpContext context = MyHttpContext.Current;
+
+                return (context == null || context.Connection == null
+                    || context.Connection.RemoteIpAddress == null)
+                    ? "" : context.Connection.RemoteIpAddress.ToString();
+#endif
+            }
+            catch
+            {
+                //  **送信元が取れないこと自体で、認証を落とさない。**
+                return "";
+            }
+        }
+
+        /// <summary>鍵の長さを、列の幅に収める</summary>
+        /// <param name="key">鍵</param>
+        /// <returns>収めた鍵</returns>
+        /// <remarks>**`FailureKey` は 256 文字**（`Create_UserStore.sql`）。</remarks>
+        private static string Truncate(string key)
+        {
+            return (key.Length <= 256) ? key : key.Substring(0, 256);
         }
 
         /// <summary>`user_code` の投入の鍵（投入した利用者ごと）</summary>
@@ -374,10 +589,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// **間違えた `user_code` では、どの要求を狙ったか分からない。**
         /// **だから「投入した人」で数える**（RFC 8628 §5.2 が求めるのは、投入の制限である）。
+        ///
+        /// **ここには送信元を混ぜない**（#305 の段階 4）。
+        /// **投入はサインイン済みの画面から行う**ので、
+        /// **その人以外が、この数を増やせない** — **妨害の手段にならない。**
         /// </remarks>
         public static string DeviceVerifyKey(string userName)
         {
-            return string.IsNullOrEmpty(userName) ? "" : ("device_verify:" + userName);
+            return string.IsNullOrEmpty(userName)
+                ? "" : AuthFailureProvider.Truncate("device_verify:" + userName);
         }
 
         #endregion

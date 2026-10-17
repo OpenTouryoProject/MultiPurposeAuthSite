@@ -368,6 +368,20 @@ function Set-IdFederationEnv
     $env:AuthFailureMaxAttempts = '20'
     $env:AuthFailureLockoutSeconds = '5'
 
+    # **数えた分の寿命**（#305 の段階 4）。
+    #   **上限まで叩くのに掛かる時間より、長くすること** —
+    #   **短いと、数が積まれる前に忘れるので、いつまでも断らない。**
+    #   **断る長さ（5 秒）とは別**である。
+    $env:AuthFailureWindowSeconds = '60'
+
+    # **利用者のロックアウト**（#305 の段階 4 で `/token` の
+    #   `grant_type=password` も、この数えに合流した）。
+    #   **上限を高くしてある** — **負の経路のケースが、共用のテスト利用者で
+    #   意図的にパスワードを間違える**（`TC-4.2`）ため。
+    #   **断る長さは短く**（`RT-305.8` が解除まで待つ）。
+    $env:MaxFailedAccessAttemptsBeforeLockout = '20'
+    $env:DefaultAccountLockoutTimeSpanFromSeconds = '5'
+
     # **口ごとのレート制限**（#305 の段階 3）。
     #   **クライアントごとの上限は高くしてある**（`RT-305.5` は、この回数を超えるまで叩く）。
     #   **低くすると通しが壊れる** — **共用のクライアントで多数のケースが同じ口を叩く**ため。
@@ -388,6 +402,21 @@ function Set-IdFederationEnv
     if (-not $env:RateLimitPerIpPermits)
     {
         $env:RateLimitPerIpPermits = '0'
+    }
+
+    # **転送ヘッダの取り込みも、呼ぶ側が先に入れていたら尊重する。**
+    #   **`RT-305.7`（断りが送信元ごとに分かれる）を単独で回して測るため**である。
+    #   **通しの全ケースは 127.0.0.1 を共有する**ので、
+    #   **送信元を変えるには `X-Forwarded-For` を取り込ませるしかない。**
+    #
+    #     $env:UseForwardedHeaders = 'true'
+    #     $env:ForwardedHeadersKnownProxies = '127.0.0.1'
+    #     .\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RT30507"
+    #
+    #   **通し（何も入れていないとき）は off** ＝ 接続元をそのまま使う。
+    if (-not $env:UseForwardedHeaders)
+    {
+        $env:UseForwardedHeaders = 'false'
     }
 
     # **退役させる途中の署名証明書**（#292 の段階 3）。

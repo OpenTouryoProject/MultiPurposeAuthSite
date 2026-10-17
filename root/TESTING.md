@@ -394,6 +394,81 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **これで「暗号化して保管し、読むときに戻している」ことが測れている** —
 > **暗号化していなければ、外しても往復してしまう。**
 
+##### 断りを送信元ごとにし、`/token` のパスワードも数える（`RT-305.7` / `RT-305.8`。#305 の段階 4）
+
+| | 測ること |
+|---|---|
+| **`RT-305.7`** | **クライアント認証の断りが、失敗を重ねた送信元だけに効く** — **別の送信元は、同じ `client_id` でも通る**／**待てば元の送信元も通る** |
+| **`RT-305.8`** | **`/token` の `grant_type=password` を上限まで間違えると、正しいパスワードでも `access_denied`**／**待てば `access_token` が出る** |
+
+**`RT-305.7` は、`X-Forwarded-For` で送信元を名乗って測る。**
+**E2E は 1 台のホストから回る**ので、**送信元を変える手が他に無い。**
+
+| | |
+|---|---|
+| **net10.0 版だけ** | **net48 版は転送ヘッダを戻さない**（`Request.UserHostAddress` そのまま） |
+| **既定の通しでは Skip** | **通しは `UseForwardedHeaders` を off で回る**ので、**どの回も送信元が 127.0.0.1 になり、鍵が分かれない** |
+
+**`RT-305.7` は単独で回して測る。**
+
+```powershell
+$env:UseForwardedHeaders = 'true'
+$env:ForwardedHeadersKnownProxies = '127.0.0.1,::1'
+
+.\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RT30507"
+
+Remove-Item Env:UseForwardedHeaders
+Remove-Item Env:ForwardedHeadersKnownProxies
+```
+
+> **この単独の回しに `-UpdateTestCases` を付けないこと。**
+> **原本が、この 1 件だけに置き換わる**（`RT-305.6` と同じ事情）。
+> **`RT-305.7` は `TESTCASES.md`（原本）に載らない** — **通しでは Skip される**ため。
+
+> **`::1` も挙げておくこと。**
+> **`localhost` は Windows では IPv6 ループバックに解決される**ので、
+> **サイトから見た接続元が `127.0.0.1` ではなく `::1` になり得る。**
+> **前段として信用していないアドレスからの `X-Forwarded-For` は、黙って無視される** —
+> **「何も起きない」形で落ちる**ので、気付きにくい（TBD-known-proxies）。
+
+> **`ForwardedHeadersKnownProxies` を省くと、この測定自体は通ってしまう**が、
+> **それは「クライアントが送信元を詐称できる」状態**である。
+> **本番では必ず指定すること**（`CONFIGURATION.md`）。
+
+**`RT-305.8` は、使い捨ての利用者で測る**（`UsersAdmin` で作って消す）。
+**クライアント認証は、どの回も正しい秘密で通す** —
+**測るのは利用者のパスワードの数え**であって、`client:` の数えではない。
+
+> **`test.ps1` が `MaxFailedAccessAttemptsBeforeLockout=20` / `DefaultAccountLockoutTimeSpanFromSeconds=5` を渡して回る。**
+> **上限を高くしてあるのは、`TC-4.2` が共用のテスト利用者で意図的にパスワードを間違える**ためである
+> （**雛形の 5 回では、そこで枠を使ってしまう**）。**本番の既定は 5 回 / 300 秒。**
+
+> **`AuthFailureWindowSeconds=60` も渡している**（段階 4）。
+> **これは「数えた分の寿命」**で、**上限まで叩くのに掛かる時間より長くないと、
+> 数が積まれる前に忘れてしまう** — **`RT-305.3` / `.4` / `.7` が断りに届かなくなる。**
+> **断る長さ（5 秒）とは別の設定**である。
+
+**歯抜け（実測 2026/10/17）。**
+
+| 壊すもの | 期待する結果 |
+|---|---|
+| `AuthFailureProvider.ClientKey` から **送信元を外す**（= 段階 2 の鍵に戻す） | TBD-歯抜け-7 |
+| `CmnEndpoints.RecordUserAccessFailed` を **何もしない**ようにする（= 段階 3 までの振る舞い） | TBD-歯抜け-8 |
+
+**実測（2026/10/17）。**
+
+| | 結果 |
+|---|---|
+| `mem`（既定の通し） | TBD-通し |
+| **`RT-305.7`**（単独。転送ヘッダを取り込む） | TBD-RT7 |
+| **`RT-305.8`**（通しに含まれる） | TBD-RT8 |
+| `sql`（SQL Server） | TBD-sql |
+
+> **`ora` / `npg` は回していない。**
+> **段階 4 で表も SQL の形も増えていない** — **変わったのは鍵の文字列と、掃除の `DELETE` 1 本**である。
+> **掃除の `DELETE` は方言ごとに書いた**（`WhereExpired`）ので、
+> **`sql` で通ることを確かめた**（**`ora` / `npg` の文は、既存の `WhereKey` と同じ作り**）。
+
 ##### 口ごとのレート制限（`RT-305.5` / `RT-305.6`。#305 の段階 3）
 
 | | 測ること |
@@ -473,7 +548,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 | | 測ること |
 |---|---|
 | **`RT-305.3`** | **`user_code` を上限まで間違えると、正しい `user_code` でも通らない**／**待てば通る** |
-| **`RT-305.4`** | **クライアント認証を上限まで失敗すると、正しい秘密でも `invalid_client`**／**待てば 200** |
+| **`RT-305.4`** | **クライアント認証を上限まで失敗すると、正しい秘密でも `invalid_client`**／**待てば 200**（**鍵は段階 4 で「クライアント ＋ 送信元」になった**。**このケースは 1 つの送信元から測るので、振る舞いは変わらない**） |
 
 **どちらも使い捨ての利用者で測る**（`UsersAdmin` で作って消す）。
 **`RT-305.4` は、その利用者でクライアントを 1 件登録する**（`/Manage/AddSaml2OAuth2Data`。**ロールは `Admin`**）。
