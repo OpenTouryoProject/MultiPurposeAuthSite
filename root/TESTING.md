@@ -69,13 +69,63 @@ $env:MPAS_CONNSTR_SQL = '...'
 
 #### E2E 用の DBMS は `store/` で立てる（#250 の段階 1）
 
-**このリポジトリの `store/` が、3 方言をまとめて立てる**（SQL Server / Oracle / PostgreSQL）。
+**このリポジトリの `store/` が、3 方言を定義している**（SQL Server / Oracle / PostgreSQL）。
 
 ```powershell
 cd store
-.\1_DockerComposeUp.bat      # DDL を流し込んでから起動する
+.\1_DockerComposeUp.bat      # DDL を流し込んでから、IdP のコンテナだけを起動する
 .\2_DockerComposeDown.bat    # -v 付き。作り直せるように残さない
 ```
+
+**DB は `1_DockerComposeUp.bat` では起動しない。** **使う 1 つだけを、名前を指定して起動する。**
+
+```powershell
+docker compose up -d sqlserver     # sql で回すとき（1434）
+docker compose up -d oracle        # ora で回すとき（1522）
+docker compose up -d postgres      # npg で回すとき（5433）
+
+docker compose stop sqlserver      # 使い終わったら止める
+```
+
+> **同時に 2 つ以上を起動しないこと。** **E2E は 1 回に 1 つのストアしか使わない。**
+> **3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある**
+> （方針は LocalServicesOnDocker の `CHEATSHEET.md` に倣った）。
+
+**メモリの抑え方**（`store/docker-compose.yml` の頭に同じ表が在る）。
+
+| サービス | パラメタ | 既定 | 変える変数 |
+|---|---|---|---|
+| `sqlserver` | `max server memory (MB)`（`sqlserver/init/0_start-up.sh` が起動の度に設定） | **300** | `SQLSERVER_BUFFER_POOL_MB` |
+| `postgres` | `shared_buffers`（起動オプション `-c`） | **128** | `POSTGRES_BUFFER_POOL_MB` |
+| `oracle` | **変更しない** | — | — |
+
+> **効くのは `sqlserver`** — **イメージ本来の既定は上限なし**で、**VM のメモリに比例して大きく使う。**
+> **128 未満は設定できない**（SQL Server の制限）。
+> **バッファプール等の上限**なので、**プロセス全体はこれより大きくなる。**
+>
+> **実測 2026/10/17**（コンテナ 1 つだけを起動して `docker stats`）。
+>
+> | | 設定 | 実使用 |
+> |---|---|---|
+> | `sqlserver` | 300 MB | **766.6 MiB** |
+> | `postgres` | 128 MB | **46.1 MiB** |
+
+> **Oracle の SGA は小さくしない。** **小さくしすぎると DB が起動しなくなる。**
+> **23ai Free は製品の制限で SGA ＋ PGA が 2GB まで。**
+> **メモリを空けたいときは、使わない間は止めること。**
+
+> **`restart` は、`store/` のすべてのサービスで `"no"` にしてある**
+> （DB の 3 つと IdP の 3 つ。**以前は `always`**）。
+> **Docker エンジンを起動した拍子に、6 つとも一斉に復帰してメモリを食い切るのを防ぐ**
+> （**実測で躏んだ** : Docker を起動しただけで 6 つとも起きていた）。
+> **起動は、いつでも明示的に行う**（`up -d` / `start`）。
+>
+> **以前の `always` で作られたコンテナは、古い設定のままである。**
+> **`down` で消す**か、**`docker update --restart=no <コンテナ名>` で変える。**
+> **`update` ならデータを壊さない** — **Oracle は `down` で消すと、次の起動で再作成に数分かかる。**
+
+> **`2_DockerComposeDown.bat` は profiles を 3 つとも並べている。**
+> **並べないと DB が `down` の対象から外れ、コンテナが残る**（実測で確かめた）。**`--remove-orphans` では消えない。**
 
 **ポートは +1 にしてある。**
 
