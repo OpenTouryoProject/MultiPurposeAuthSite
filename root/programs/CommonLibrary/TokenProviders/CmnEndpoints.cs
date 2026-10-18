@@ -120,6 +120,7 @@
 //*  2026/10/06  玄人 幸道         promptのlogin/consent/select_accountの値を追加（#272 の段階 2）
 //*  2026/10/16  玄人 幸道         ポーリングが速すぎたら slow_down を返す（#305 の段階 1）
 //*  2026/10/16  玄人 幸道         クライアント認証の失敗を数える（#305 の段階 2）
+//*  2026/10/18  玄人 幸道         登録の grant_types / response_types を効かせ、registration_endpoint を広告（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -410,6 +411,19 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region OAuth2拡張
+
+            #region Dynamic Client Registration（#307 の段階 1）
+
+            //  **動的クライアント登録を開けた配備だけ広告する**
+            //    （OIDC Discovery §3 の `registration_endpoint` / RFC 7591 §3）。
+            //    **閉じている配備では口そのものが張られていない**ので、広告してはならない。
+            if (Config.EnableDynamicClientRegistration)
+            {
+                OpenIDConfig.Add("registration_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.DcrRegistrationEndpoint);
+            }
+
+            #endregion
 
             #region Revocation
             OpenIDConfig.Add("revocation_endpoint",
@@ -787,6 +801,23 @@ namespace MultiPurposeAuthSite.TokenProviders
                 redirect_uri, client_id, response_type,
                 out valid_redirect_uri, ref err, ref errDescription))
             {
+                #region 登録の response_types（#307 の段階 1）
+
+                // **登録で許された `response_type` か**（RFC 7591 §2 の `response_types`）。
+                //   **`ClientModePolicy` の手前に 1 段置く** —
+                //   **登録が「`code` だけ」と言っているのに認可サーバが他も通すのでは、**
+                //   **登録の意味が無い。**
+                //   **登録が無ければ絞らない**（既存の登録を壊さないため。#198 と同じ倒し方）。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                if (!CmnEndpoints.CheckClientResponseType(client_id, response_type))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This response_type is not registered for this client.";
+                    return false;
+                }
+
+                #endregion
+
                 #region 登録種別（#224 の段階 2）
 
                 // **この response_type の経路を、登録種別で使えるか。**
@@ -914,6 +945,132 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return types.Length == 1 ? ClientModePolicy.Flow.AuthorizationCode : ClientModePolicy.Flow.Hybrid;
+        }
+
+        #endregion
+
+        #region 登録の grant_types / response_types（#307 の段階 1）
+
+        /// <summary>登録された response_types に、この response_type が入っているか</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">要求の response_type</param>
+        /// <returns>通してよいなら true</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `response_types`。**
+        /// **登録が無ければ絞らない**（既存の登録を壊さないため）。
+        ///
+        /// **比較は「要素の集合」として行う** — **`code id_token` と `id_token code` は同じ**
+        /// （OAuth 2.0 Multiple Response Types §4 : 順序は意味を持たない。#254 と同じ扱い）。
+        /// </remarks>
+        private static bool CheckClientResponseType(string client_id, string response_type)
+        {
+            List<string> permitted = Helper.GetInstance().GetClientResponseTypes(client_id);
+
+            if (permitted == null)
+            {
+                // **登録が無い（列が空）** ＝ 絞らない。
+                return true;
+            }
+
+            foreach (string registered in permitted)
+            {
+                if (CmnEndpoints.IsSameResponseType(registered, response_type))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>2 つの response_type が、同じ組み合わせか</summary>
+        /// <param name="a">response_type</param>
+        /// <param name="b">response_type</param>
+        /// <returns>同じなら true</returns>
+        /// <remarks>**空白で切った要素の集合として比べる**（順序は意味を持たない）。</remarks>
+        private static bool IsSameResponseType(string a, string b)
+        {
+            string[] x = (a ?? "").ToLower().Split(
+                new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] y = (b ?? "").ToLower().Split(
+                new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+            return x.Length == y.Length && x.All(t => y.Contains(t));
+        }
+
+        /// <summary>登録された grant_types に、この経路が入っているか</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="flow">経路</param>
+        /// <returns>通してよいなら true</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `grant_types`。**
+        /// **`ClientModePolicy` の手前に 1 段置く**（#307 の段階 1）。
+        /// **登録が無ければ絞らない**（既存の登録を壊さないため）。
+        ///
+        /// **`ClientModePolicy` との役割の違い** :
+        ///
+        /// | | 何を見るか |
+        /// |---|---|
+        /// | **この関数** | **そのクライアントが、その経路を登録したか**（RP の申告） |
+        /// | `ClientModePolicy` | **その登録種別（normal / fapi1 / fapi2…）に、その経路と証明を許すか**（AS の方針） |
+        /// </remarks>
+        private static bool CheckClientGrantType(string client_id, ClientModePolicy.Flow flow)
+        {
+            List<string> permitted = Helper.GetInstance().GetClientGrantTypes(client_id);
+
+            if (permitted == null)
+            {
+                // **登録が無い（列が空）** ＝ 絞らない。
+                return true;
+            }
+
+            string grantType = CmnEndpoints.GrantTypeOfFlow(flow);
+
+            return grantType == null || permitted.Contains(grantType);
+        }
+
+        /// <summary>経路から、RFC 7591 §2 の grant_types の値を引く</summary>
+        /// <param name="flow">経路</param>
+        /// <returns>grant_type の値（表に無ければ null ＝ 絞らない）</returns>
+        /// <remarks>
+        /// **認可エンドポイントで発行する経路（Implicit / Hybrid）は `implicit`**
+        /// （RFC 7591 §2 : `response_types` の `token` には `grant_types` の `implicit` が対応する）。
+        /// **Hybrid は `authorization_code` と `implicit` の両方を要する** ので、
+        /// **その 2 つを `response_types` 側で突き合わせる**（この関数は代表の 1 つを返す）。
+        /// </remarks>
+        private static string GrantTypeOfFlow(ClientModePolicy.Flow flow)
+        {
+            switch (flow)
+            {
+                case ClientModePolicy.Flow.AuthorizationCode:
+                    return OAuth2AndOIDCConst.AuthorizationCodeGrantType;
+
+                case ClientModePolicy.Flow.Implicit:
+                case ClientModePolicy.Flow.Hybrid:
+                    return OAuth2AndOIDCConst.ImplicitGrantType;
+
+                case ClientModePolicy.Flow.RefreshToken:
+                    return OAuth2AndOIDCConst.RefreshTokenGrantType;
+
+                case ClientModePolicy.Flow.ResourceOwnerPassword:
+                    return OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType;
+
+                case ClientModePolicy.Flow.ClientCredentials:
+                    return OAuth2AndOIDCConst.ClientCredentialsGrantType;
+
+                case ClientModePolicy.Flow.JwtBearer:
+                    return OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType;
+
+                case ClientModePolicy.Flow.Ciba:
+                    return OAuth2AndOIDCConst.CibaGrantType;
+
+                case ClientModePolicy.Flow.DeviceAuthZ:
+                    return OAuth2AndOIDCConst.DeviceAuthZGrantType;
+
+                default:
+                    // **表に無い経路は絞らない**（新しい経路を足したときに、黙って塞がないため）。
+                    return null;
+            }
         }
 
         #endregion
@@ -1925,6 +2082,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
+                // **登録で許されたグラントか**（RFC 7591 §2 の `grant_types`。#307 の段階 1）。
+                //   **ここでも見る** — **利用者にプッシュ通知を届ける前に断る**ため
+                //   （下の `MayUse` と同じ理屈）。**登録が無ければ絞らない。**
+                if (!CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.Ciba))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This grant_type is not registered for this client.";
+                    return false;
+                }
+
                 // **登録種別で CIBA を使えるか（#224 の段階 2）。**
                 //   以前はトークンの時点（GrantCiba）で初めて拒否していたため、
                 //   利用者にプッシュ通知が届き、承認させた後で失敗していた。
@@ -2853,9 +3020,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // refresh_token
                     // **登録種別で refresh_token の経路を使えないなら、発行しない**（#224 の段階 2）。
                     //   以前は発行していたが、使うと必ず拒否された（受け取ったのに使えない資格情報）。
+                    //   **登録で `refresh_token` を申告していないクライアントにも、発行しない**
+                    //     （RFC 7591 §2 の `grant_types`。#307 の段階 1。**登録が無ければ絞らない**）。
                     string refresh_token = "";
                     if (Config.EnableRefreshToken
-                        && ClientModePolicy.MayUse(clientMode, ClientModePolicy.Flow.RefreshToken))
+                        && ClientModePolicy.MayUse(clientMode, ClientModePolicy.Flow.RefreshToken)
+                        && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
                         refresh_token = RefreshTokenProvider.Create(tokenPayload);
                     }
@@ -3155,14 +3325,34 @@ namespace MultiPurposeAuthSite.TokenProviders
                             // Name Claimを追加
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
-                            // ClaimsIdentityに、その他、所定のClaimを追加する。
                             // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
-                            identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
+                            List<string> issuedScopes = new List<string>(
+                                Helper.FilterSupportedScopes(scopes.Split(' '), client_id));
+
+                            //  **クライアント登録の管理 API 専用のトークンは、scope も期限も絞る**
+                            //    （#307 の段階 1）。
+                            //
+                            //  **他の scope と混ぜない** — **登録を作れる権限を持ったトークンが、**
+                            //    **利用者の属性を読む用途でも使い回されると、寿命を短くした意味が薄れる。**
+                            //    **要求に `client_registration` が入っていたら、それ 1 本のトークンにする。**
+                            //
+                            //  **この scope は、登録に明記したクライアントにしか付かない**
+                            //    （`Helper.FilterSupportedScopes`）。
+                            TimeSpan expires = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes;
+
+                            if (issuedScopes.Contains(Const.ScopeClientRegistration))
+                            {
+                                issuedScopes = new List<string>() { Const.ScopeClientRegistration };
+                                expires = Config.DcrAccessTokenExpireTimeSpanFromSeconds;
+                            }
+
+                            // ClaimsIdentityに、その他、所定のClaimを追加する。
+                            identity = Helper.AddClaim(identity, client_id, issuedScopes, null, "");
 
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
                             	client_id, identity.Name, identity.Claims,
-                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                                DateTimeOffset.Now.Add(expires),
                                 // **登録された署名 alg で署名する**（#129 の段階 2）
                                 Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
@@ -3526,10 +3716,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // refresh_token
                     // **登録種別で refresh_token の経路を使えないなら、発行しない**（#224 の段階 2）。
                     //   device の登録は refresh_token の経路を使えない（normal の登録は従来どおり発行する）。
+                    //   **登録で `refresh_token` を申告していないクライアントにも、発行しない**
+                    //     （RFC 7591 §2 の `grant_types`。#307 の段階 1。**登録が無ければ絞らない**）。
                     string refresh_token = "";
                     if (Config.EnableRefreshToken
                         && ClientModePolicy.MayUse(
-                            Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.RefreshToken))
+                            Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.RefreshToken)
+                        && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
                         refresh_token = RefreshTokenProvider.Create(tokenPayload);
                     }
@@ -4638,6 +4831,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         public static bool IsDeviceAuthZAllowed(string client_id)
         {
+            // **登録で許されたグラントか**（RFC 7591 §2 の `grant_types`。#307 の段階 1）。
+            //   **利用者に user_code を打ち込ませる前に断る**（登録が無ければ絞らない）。
+            if (!CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.DeviceAuthZ))
+            {
+                return false;
+            }
+
             // 表の「Device AuthZ → normal / device」の行で判定する（#224 の段階 1）。
             //   この行は証明を問わないので、MayUse で足りる。既知でない登録値は拒否（段階 2）。
             return ClientModePolicy.MayUse(
@@ -4915,6 +5115,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
                 err.Add(OAuth2AndOIDCConst.error_description,
                     "The registered id_token_signed_response_alg is not supported.");
+                return false;
+            }
+
+            // **登録で許されたグラントか**（RFC 7591 §2 の `grant_types`。#307 の段階 1）。
+            //   **`ClientModePolicy` の手前で絞る。**
+            //   **登録が無ければ絞らない**（既存の登録を壊さないため）。
+            //   RFC 6749 §5.2 : 認証済みのクライアントに許されていないグラントは unauthorized_client。
+            if (!CmnEndpoints.CheckClientGrantType(client_id, flow))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "This grant_type is not registered for this client.");
                 return false;
             }
 

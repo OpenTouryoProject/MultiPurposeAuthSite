@@ -33,6 +33,7 @@
 //*  2026/10/04  玄人 幸道         GetAll を追加（#266）
 //*  2026/10/06  玄人 幸道         JSON 1 列から専用列に切り出した（#270）
 //*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
+//*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの列を追加（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -87,7 +88,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>列の並び（#270）</summary>
         /// <remarks>
-        /// **1 か所で持つ。** 17 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
+        /// **1 か所で持つ。** 28 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
         /// **手で書き並べると、必ずどれかが取り残される**
         /// （この Issue が直そうとしているのが、まさにその種の食い違いである）。
         ///
@@ -112,7 +113,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             "RequestObjectSigningAlg",
             "ClientMode",
             "RequirePkce",
-            "ClientName"
+            "ClientName",
+            //  **RFC 7591 §2 のクライアント メタデータ**（#307 の段階 1）。
+            //    **末尾に足す。** **既存のデータベースは `ALTER … ADD` で足せる**ので、
+            //    **作り直した `CREATE` と物理的な並びも揃う。**
+            "Scopes",
+            "GrantTypes",
+            "ResponseTypes",
+            "JwksUri",
+            "ClientUri",
+            "LogoUri",
+            "TosUri",
+            "PolicyUri",
+            "Contacts",
+            "SoftwareId",
+            "SoftwareVersion"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -248,6 +263,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("ClientMode", model.ClientMode);
             prm.Add("ClientName", model.ClientName);
 
+            //  **RFC 7591 §2 のクライアント メタデータ**（#307 の段階 1）。
+            prm.Add("Scopes", model.Scopes);
+            prm.Add("GrantTypes", model.GrantTypes);
+            prm.Add("ResponseTypes", model.ResponseTypes);
+            prm.Add("JwksUri", model.JwksUri);
+            prm.Add("ClientUri", model.ClientUri);
+            prm.Add("LogoUri", model.LogoUri);
+            prm.Add("TosUri", model.TosUri);
+            prm.Add("PolicyUri", model.PolicyUri);
+            prm.Add("Contacts", model.Contacts);
+            prm.Add("SoftwareId", model.SoftwareId);
+            prm.Add("SoftwareVersion", model.SoftwareVersion);
+
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
                 prm.Add("RequirePkce", model.RequirePkce ? -1 : 0);
@@ -330,7 +358,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 RequestObjectSigningAlg = model.RequestObjectSigningAlg,
                 ClientMode = model.ClientMode,
                 RequirePkce = model.RequirePkce,
-                ClientName = model.ClientName
+                ClientName = model.ClientName,
+                //  **RFC 7591 §2 のクライアント メタデータ**（#307 の段階 1）。
+                Scopes = model.Scopes,
+                GrantTypes = model.GrantTypes,
+                ResponseTypes = model.ResponseTypes,
+                JwksUri = model.JwksUri,
+                ClientUri = model.ClientUri,
+                LogoUri = model.LogoUri,
+                TosUri = model.TosUri,
+                PolicyUri = model.PolicyUri,
+                Contacts = model.Contacts,
+                SoftwareId = model.SoftwareId,
+                SoftwareVersion = model.SoftwareVersion
             };
         }
 

@@ -662,5 +662,203 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("NameIdFormatDescription", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Allowed scopes (scope) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Scopes {
+            get {
+                return ResourceManager.GetString("Scopes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ScopesDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ScopesDescription {
+            get {
+                return ResourceManager.GetString("ScopesDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Allowed grants (grant_types) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string GrantTypes {
+            get {
+                return ResourceManager.GetString("GrantTypes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   GrantTypesDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string GrantTypesDescription {
+            get {
+                return ResourceManager.GetString("GrantTypesDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Allowed response types (response_types) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResponseTypes {
+            get {
+                return ResourceManager.GetString("ResponseTypes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ResponseTypesDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResponseTypesDescription {
+            get {
+                return ResourceManager.GetString("ResponseTypesDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   JWK Set URL (jwks_uri) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string JwksUri {
+            get {
+                return ResourceManager.GetString("JwksUri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   JwksUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string JwksUriDescription {
+            get {
+                return ResourceManager.GetString("JwksUriDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Home page (client_uri) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientUri {
+            get {
+                return ResourceManager.GetString("ClientUri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ClientUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientUriDescription {
+            get {
+                return ResourceManager.GetString("ClientUriDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Logo (logo_uri) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogoUri {
+            get {
+                return ResourceManager.GetString("LogoUri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   LogoUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogoUriDescription {
+            get {
+                return ResourceManager.GetString("LogoUriDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Terms of service (tos_uri) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TosUri {
+            get {
+                return ResourceManager.GetString("TosUri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   TosUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TosUriDescription {
+            get {
+                return ResourceManager.GetString("TosUriDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Privacy policy (policy_uri) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string PolicyUri {
+            get {
+                return ResourceManager.GetString("PolicyUri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   PolicyUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string PolicyUriDescription {
+            get {
+                return ResourceManager.GetString("PolicyUriDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Contacts (contacts) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Contacts {
+            get {
+                return ResourceManager.GetString("Contacts", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ContactsDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ContactsDescription {
+            get {
+                return ResourceManager.GetString("ContactsDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Software identifier (software_id) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string SoftwareId {
+            get {
+                return ResourceManager.GetString("SoftwareId", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   SoftwareIdDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string SoftwareIdDescription {
+            get {
+                return ResourceManager.GetString("SoftwareIdDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Software version (software_version) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string SoftwareVersion {
+            get {
+                return ResourceManager.GetString("SoftwareVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   SoftwareVersionDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string SoftwareVersionDescription {
+            get {
+                return ResourceManager.GetString("SoftwareVersionDescription", resourceCulture);
+            }
+        }
     }
 }

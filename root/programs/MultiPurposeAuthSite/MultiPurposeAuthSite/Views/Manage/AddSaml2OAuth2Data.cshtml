@@ -25,6 +25,7 @@
     //*  2026/10/04  玄人 幸道         web_originsの入力欄を追加（#266）
     //*  2026/10/09  玄人 幸道         項目の並びを整え、各項目の説明を出した（#277 の段階 1）
     //*  2026/10/09  玄人 幸道         redirect_ の既定値を datalist で選べるようにした（#277 の段階 3）
+    //*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの入力欄を追加（#307 の段階 1）
     //**********************************************************************************
 *@
 
@@ -218,6 +219,92 @@
         <div class="col-md-3">
             @Html.TextBoxFor(m => m.TlsClientAuthSubjectDn, new { @class = "form-control" })
             <p class="help-block">@Html.DescriptionFor(m => m.TlsClientAuthSubjectDn)</p>
+        </div>
+    </div>
+    @*
+        **RFC 7591 §2 のクライアント メタデータ**（#307 の段階 1）。
+
+        **画面にも出す。** **登録の内容**であり、
+        **画面と WebAPI（動的登録）で、持てる項目をずらさない**ため。
+
+        **効くのは上の 3 つだけ**（`scope` / `grant_types` / `response_types`）。
+        **残りは保存して返すだけ**である。**空なら絞らない。**
+    *@
+    <div class="form-group">
+        @Html.LabelFor(m => m.Scopes, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.Scopes, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.Scopes)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.GrantTypes, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.GrantTypes, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.GrantTypes)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ResponseTypes, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.ResponseTypes, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.ResponseTypes)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.JwksUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.JwksUri, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.JwksUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ClientUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.ClientUri, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.ClientUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.LogoUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.LogoUri, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.LogoUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.TosUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.TosUri, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.TosUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.PolicyUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.PolicyUri, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.PolicyUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.Contacts, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.Contacts, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.Contacts)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.SoftwareId, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.SoftwareId, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.SoftwareId)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.SoftwareVersion, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.SoftwareVersion, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.SoftwareVersion)</p>
         </div>
     </div>
     <div class="form-group">

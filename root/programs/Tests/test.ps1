@@ -884,6 +884,10 @@ public static class MpasTestTls
         #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
         $env:EnableImplicitGrantType = 'true'
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
+        # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1）。**
+        #   雛形の既定は無効（口そのものを張らない）だが、**テストでは有効にして起動する。**
+        #   無効なままだと registration_endpoint が広告されず、RT-307.* が Skip になる。
+        $env:EnableDynamicClientRegistration = 'true'
 
         # **テスト利用者をサイトごとに分ける**（#260）。
         #   2 つのサイトを同時に立てるので、DB ストアでは 1 つの DB を共有する。
@@ -995,6 +999,8 @@ public static class MpasTestTls
             #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
             $env:EnableImplicitGrantType = 'true'
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
+            # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1。上の net10.0 側と同じ理由）**
+            $env:EnableDynamicClientRegistration = 'true'
 
             # **テスト利用者をサイトごとに分ける**（#260。上の net10.0 側と同じ理由）
             $env:TestUserSuffix = $script:TestUserSuffixNetFx

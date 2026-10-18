@@ -42,6 +42,7 @@
 //*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
 //*  2026/10/08  玄人 幸道         AuthCookieName が空のときも接頭辞を掛ける（#283）
 //*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -437,6 +438,17 @@ namespace MultiPurposeAuthSite
                         name: "TestHybridFlow",
                         pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
                         defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
+                }
+
+                // **動的クライアント登録**（RFC 7591。#307 の段階 1）。
+                //   **開けた配備にだけ、口を張る。** **閉じている配備では 404 になる**
+                //   （`IsLockedDownTestEndpoints` とは別のキーである。**これは本番で使う口**）。
+                if (Config.EnableDynamicClientRegistration)
+                {
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistration",
+                        pattern: Config.DcrRegistrationEndpoint.Substring(1), // 先頭の[/]を削除,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "Register" });
                 }
                 #endregion
 

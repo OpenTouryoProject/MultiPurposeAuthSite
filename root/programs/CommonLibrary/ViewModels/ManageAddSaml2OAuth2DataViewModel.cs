@@ -31,6 +31,7 @@
 //*  2026/10/09  玄人 幸道         各項目の説明を追加（#277 の段階 1）
 //*  2026/10/09  玄人 幸道         redirect_ の候補（datalist）を追加（#277 の段階 3）
 //*  2026/10/10  玄人 幸道         管理画面用の候補についての見通しを現状に合わせた（#277）
+//*  2026/10/18  玄人 幸道         RFC 7591 §2 のクライアント メタデータを追加（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -474,5 +475,188 @@ namespace MultiPurposeAuthSite.ViewModels
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = OAuth2AndOIDCConst.sub)]
         public string ClientName { get; set; }
+
+        #region RFC 7591 §2 のクライアント メタデータ（#307 の段階 1）
+
+        //  **RFC 7591 §2 の登録項目を、専用の列で持つ**（#307 の段階 1）。
+        //
+        //  **宣言の順は、`DataProvider.Columns` の並びと同じに保つこと**（#270 の約束）。
+        //    **末尾に足している**ので、**既存のデータベースは `ALTER … ADD` で
+        //    物理的な並びも同じになる**（作り直した `CREATE` と食い違わない）。
+        //
+        //  **「効かせる」のは 3 つだけ**（`Scopes` / `GrantTypes` / `ResponseTypes`）。
+        //    **残りは保存して返すだけ**である（**仕様が振る舞いを定めていない**か、
+        //    **引く実装がまだ無い**）。
+
+        /// <summary>Scopes（RFC 7591 §2 の scope）</summary>
+        /// <remarks>
+        /// **このクライアントが要求してよい scope**（空白区切り。#198）。
+        /// **空なら絞らない**（**既存の登録を壊さないため**）。
+        ///
+        /// **`Helper.GetClientScopes` が、構成ファイルに続いてこの列も見る**（#307 の段階 1）。
+        /// **以前は構成ファイルだけを見ており、画面から登録したクライアントには
+        /// 「クライアントごとの絞り」が効いていなかった。**
+        ///
+        /// > **`Const.ScopeClientRegistration` だけは、倒し方が逆である** —
+        /// > **ここに明記していなければ出さない**（`Helper.FilterSupportedScopes`）。
+        /// </remarks>
+        [Display(Name = "Scopes", Description = "ScopesDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfScopeList,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "scope")]
+        public string Scopes { get; set; }
+
+        /// <summary>GrantTypes（RFC 7591 §2 の grant_types）</summary>
+        /// <remarks>
+        /// **このクライアントが使ってよいグラント**（空白区切り）。
+        /// **空なら絞らない**（従来どおり `ClientModePolicy` と配備ぜんたいの設定で決まる）。
+        ///
+        /// **`CmnEndpoints.CheckClientGrantType` が、`ClientModePolicy` の手前で絞る**
+        /// （#307 の段階 1）。**保存して返すだけにはしない** —
+        /// **登録が「`authorization_code` だけ」と言っているのに
+        /// 認可サーバが他も通すのでは、登録の意味が無い。**
+        ///
+        /// **動的登録（DCR）で登録するときは、RFC 7591 §2 の既定
+        /// （`authorization_code`）を書き込む**（**空のままにはしない**）。
+        /// </remarks>
+        [Display(Name = "GrantTypes", Description = "GrantTypesDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfTypeList,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "grant_types")]
+        public string GrantTypes { get; set; }
+
+        /// <summary>ResponseTypes（RFC 7591 §2 の response_types）</summary>
+        /// <remarks>
+        /// **このクライアントが使ってよい `response_type`**（空白区切り）。
+        /// **空なら絞らない。**
+        ///
+        /// **要素の中の空白は、そのままでは持てない**（区切りと区別が付かない）。
+        /// **`code id_token` のような組み合わせは `+` で繋いで 1 要素にする**
+        /// （`code+id_token`）。**比較のときに空白へ戻す。**
+        ///
+        /// **絞りは認可エンドポイント**（`CmnEndpoints.CheckAuthZEndpoint`）**で効く** —
+        /// **利用者を操作させる前に断る**ため。
+        /// </remarks>
+        [Display(Name = "ResponseTypes", Description = "ResponseTypesDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfTypeList,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "response_types")]
+        public string ResponseTypes { get; set; }
+
+        /// <summary>JwksUri（RFC 7591 §2 の jwks_uri）</summary>
+        /// <remarks>
+        /// **列は在るが、動的登録では段階 1 では受け付けない**（`invalid_client_metadata`）。
+        ///
+        /// **鍵をこの URL から引く実装が無い** — **クライアントの鍵は
+        /// `JwkRsaPublickey` / `JwkECDsaPublickey` の列から読んでいる。**
+        /// **受け取って無視すると、`private_key_jwt`（#239）や
+        /// Request Object（JAR）の検証が黙って通らなくなる。**
+        ///
+        /// **列を先に足すのは、DDL を 2 度変えないため。**
+        /// **受け付けるのは、鍵を引く実装と一緒に（段階 3）。**
+        /// </remarks>
+        [Display(Name = "JwksUri", Description = "JwksUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "jwks_uri")]
+        public string JwksUri { get; set; }
+
+        /// <summary>ClientUri（RFC 7591 §2 の client_uri）</summary>
+        /// <remarks>**保存して返すだけ**（仕様が振る舞いを定めていない。表示用）。</remarks>
+        [Display(Name = "ClientUri", Description = "ClientUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "client_uri")]
+        public string ClientUri { get; set; }
+
+        /// <summary>LogoUri（RFC 7591 §2 の logo_uri）</summary>
+        /// <remarks>**保存して返すだけ。**</remarks>
+        [Display(Name = "LogoUri", Description = "LogoUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "logo_uri")]
+        public string LogoUri { get; set; }
+
+        /// <summary>TosUri（RFC 7591 §2 の tos_uri）</summary>
+        /// <remarks>**保存して返すだけ。**</remarks>
+        [Display(Name = "TosUri", Description = "TosUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "tos_uri")]
+        public string TosUri { get; set; }
+
+        /// <summary>PolicyUri（RFC 7591 §2 の policy_uri）</summary>
+        /// <remarks>**保存して返すだけ。**</remarks>
+        [Display(Name = "PolicyUri", Description = "PolicyUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "policy_uri")]
+        public string PolicyUri { get; set; }
+
+        /// <summary>Contacts（RFC 7591 §2 の contacts）</summary>
+        /// <remarks>
+        /// **保存して返すだけ**（連絡先。空白区切り）。
+        /// **仕様は配列だが、他の列挙と同じく空白区切りの 1 つの文字列で持つ**（#306 と同じ形）。
+        /// </remarks>
+        [Display(Name = "Contacts", Description = "ContactsDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfContacts,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "contacts")]
+        public string Contacts { get; set; }
+
+        /// <summary>SoftwareId（RFC 7591 §2 の software_id）</summary>
+        /// <remarks>
+        /// **保存して返すだけ。**
+        /// **同じソフトウェアの、どの配備でも同じ値**（RFC 7591 §2）。
+        /// **`client_id` とは別物**である。
+        /// </remarks>
+        [Display(Name = "SoftwareId", Description = "SoftwareIdDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfSoftwareId,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "software_id")]
+        public string SoftwareId { get; set; }
+
+        /// <summary>SoftwareVersion（RFC 7591 §2 の software_version）</summary>
+        /// <remarks>**保存して返すだけ。**</remarks>
+        [Display(Name = "SoftwareVersion", Description = "SoftwareVersionDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfSoftwareVersion,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "software_version")]
+        public string SoftwareVersion { get; set; }
+
+        #endregion
     }
 }

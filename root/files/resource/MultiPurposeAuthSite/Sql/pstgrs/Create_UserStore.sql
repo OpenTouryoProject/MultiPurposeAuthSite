@@ -140,6 +140,18 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     ClientMode varchar(32) NULL,                     -- oauth2_oidc_mode
     RequirePkce boolean NOT NULL,
     ClientName varchar(256) NULL,                    -- Users.UserName と同じ幅
+    -- RFC 7591 §2 のクライアント メタデータ（#307 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    Scopes varchar(2000) NULL,                       -- Const.MaxLengthOfScopeList（空白区切りの列挙）
+    GrantTypes varchar(256) NULL,                    -- Const.MaxLengthOfTypeList（空白区切りの列挙）
+    ResponseTypes varchar(256) NULL,                 -- Const.MaxLengthOfTypeList（空白区切り。要素内の空白は「+」）
+    JwksUri varchar(512) NULL,                       -- Const.MaxLengthOfUri（段階 1 では動的登録で受け付けない）
+    ClientUri varchar(512) NULL,                     -- Const.MaxLengthOfUri
+    LogoUri varchar(512) NULL,                       -- Const.MaxLengthOfUri
+    TosUri varchar(512) NULL,                        -- Const.MaxLengthOfUri
+    PolicyUri varchar(512) NULL,                     -- Const.MaxLengthOfUri
+    Contacts varchar(2000) NULL,                     -- Const.MaxLengthOfContacts（空白区切りの列挙）
+    SoftwareId varchar(256) NULL,                    -- Const.MaxLengthOfSoftwareId
+    SoftwareVersion varchar(64) NULL,                -- Const.MaxLengthOfSoftwareVersion
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

@@ -637,6 +637,215 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
 > **公開情報の口は全開なので、この一覧を引かない。**
 
+### 動的クライアント登録（RFC 7591）— `EnableDynamicClientRegistration`（#307 の段階 1）
+
+**クライアント登録を WebAPI で行う。** **既定は無効**で、**開けると `/register` が出来る。**
+
+```jsonc
+// net10.0（appsettings.json）
+"EnableDynamicClientRegistration": "false",   // **既定は false**（口そのものを張らない）
+"DcrRegistrationEndpoint": "/register",       // 未設定・空なら /register
+"DcrAccessTokenExpireTimeSpanFromSeconds": "300"  // 未設定・0 以下なら 300 秒
+```
+
+```xml
+<!-- net48（app.config） -->
+<add key="EnableDynamicClientRegistration" value="false" />
+<add key="DcrRegistrationEndpoint" value="/register" />
+<add key="DcrAccessTokenExpireTimeSpanFromSeconds" value="300" />
+```
+
+| | |
+|---|---|
+| **無効のとき** | **経路を張らない**（`404`）。**Discovery に `registration_endpoint` を出さない**。**専用 scope も広告しない** |
+| **有効のとき** | `POST <DcrRegistrationEndpoint>` が開き、**Discovery に `registration_endpoint` が載る** |
+
+**`IsLockedDownTestEndpoints` の対象ではない** — **これは本番で使う口**である。
+**テスト用の口（`/TestHybridFlowWebAPI` ほか）とは別に、このキーで開閉する。**
+
+#### 叩くには、専用 scope のアクセス トークンが要る
+
+**この口は Bearer で守られている**（`/userinfo` と同じ形）。
+**`client_registration` という専用の scope を持つトークンだけが通る**（無ければ `403`）。
+
+```
+POST /token
+grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
+&username=<登録の所有者>&password=<パスワード>&scope=client_registration
+```
+
+| | |
+|---|---|
+| **なぜ ROPC なのか** | **所有者をトークンの `sub` から決める**ため。**この配備は `Users.ClientID` で所有者を持つ**ので、**利用者の居ない `client_credentials` では「誰の登録か」を表せない** |
+| **ROPC も既定で無効** | **`EnableResourceOwnerPasswordCredentialsGrantType` を併せて開ける**こと（OAuth 2.1 で外れたグラントなので、既定は無効のまま） |
+| **トークンは絞られる** | **scope は `client_registration` 1 本だけ**になり（他を一緒に要求しても外す）、**有効期限は `DcrAccessTokenExpireTimeSpanFromSeconds`**（配備ぜんたいの 360 分ではない） |
+
+> **専用 scope は、登録に明記したクライアントにしか出さない。**
+> **他の scope の「登録が無ければ制限しない」とは、逆の倒し方である** —
+> **登録を作れる強い権限なので、既定で持たせてはならない。**
+>
+> **配るのは、構成ファイル（`OAuth2ClientsInformation` の `scope`）か**
+> **管理画面（`/Manage/AddSaml2OAuth2Data` の `scope`）からだけ。**
+> **動的登録で `client_registration` を登録しようとすると `invalid_client_metadata` で断る**
+> （**自分と同じ強さの権限を、自分で配らせない**）。
+
+#### 1 利用者 1 クライアント
+
+**所有者は `Users.ClientID`** なので、**1 人が持てる登録は 1 件**である。
+**2 件目の登録は `403` ＋ `access_denied`** で断る。
+
+| | |
+|---|---|
+| 仕様 | **RFC 7591 は「1 つの主体が n 件登録できること」を求めていない** — §3.2.1 は「AS は要求されたメタデータを拒否・置換してよい」、§5 は「重複した登録が疑わしいときは拒否すべき」 |
+| 誤りの形 | **§3.2.2 の 4 つはメタデータの誤り用**で、**ポリシーによる断りに当てはまるものが無い。** **一般の誤りは「`400` unless otherwise specified」**なので、**`403` は禁じられていない** |
+| 更新 | **`POST` は upsert ではない。** **更新は RFC 7592 の `PUT`（段階 2）で行う** |
+
+> **管理 API を叩くクライアントの持ち主と、登録される利用者は別人にすること。**
+> **同じ人だと、その人は既に 1 件持っている**ので、**2 件目として断られる。**
+
+#### 受け付けるメタデータ（RFC 7591 §2）
+
+```
+POST /register
+Authorization: Bearer <client_registration の AT>
+Content-Type: application/json
+
+{ "redirect_uris": ["https://rp.example.com/cb"], "scope": "openid email" }
+```
+
+| メタデータ | 扱い |
+|---|---|
+| **`redirect_uris`**（必須） | **絶対 URI で、フラグメント禁止**（RFC 6749 §3.1.2）。**ワイルドカードは受けない。** **`code` を使う登録は `redirect_uri_code`、`token` / `id_token` を使う登録は `redirect_uri_token` の列に入る**（両方使うなら両方に） |
+| **`grant_types`** | **既定は `authorization_code`**（§2）。**この配備が広告しているものだけ** |
+| **`response_types`** | **既定は `code`**。**`code` を使うなら `authorization_code`、`token` / `id_token` を使うなら `implicit` が要る**（§2 の対応） |
+| `scope` | **`scopes_supported` の範囲内**。**`client_registration` は断る** |
+| `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
+| `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
+| **`token_endpoint_auth_method`** | **`client_secret_basic` / `client_secret_post` だけ。** **`private_key_jwt` / `tls_client_auth` は鍵か DN の登録を要する**ので、段階 1 では断る |
+| **`jwks` / `jwks_uri`** | **断る**（`invalid_client_metadata`）。**鍵をそこから引く実装が無い** — **受け取って無視すると、`private_key_jwt` や Request Object の検証が黙って通らなくなる**（段階 3 で足す） |
+| **`software_statement`** | **断る**（`unapproved_software_statement`）。**黙って無視してはならない** — クライアントは「主張した内容で登録された」と考える（段階 3） |
+| **`client_name`** | **受け取っても無視する**（§3.2.1 が認めている）。**`ClientName` の列は利用者名**であり、**`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない** |
+| 上記以外 | **無視する**（§3.2.1） |
+
+**応答は `201 Created`**（§3.2.1）。`client_id` / `client_secret` /
+`client_id_issued_at` / `client_secret_expires_at`（**`0` ＝ 期限なし**）と、
+**登録された内容**を返す。
+
+| 誤り | 状態 |
+|---|---|
+| メタデータの不備 | **`400`** ＋ `invalid_redirect_uri` / `invalid_client_metadata` / `unapproved_software_statement`（§3.2.2） |
+| トークンが無い・無効 | **`401`** ＋ `WWW-Authenticate: Bearer`（RFC 6750 §3.1） |
+| scope が足りない | **`403`** ＋ `insufficient_scope` |
+| **2 件目の登録** | **`403`** ＋ `access_denied` |
+| 無効の配備 | **`404`**（口が無い） |
+
+**レート制限の対象**である（#305 の段階 3。口の名前は `register`）。
+**誰がいつ登録したかはオペレーション ログに残る**（`client_secret` は書かない）。
+
+#### 登録した `scope` / `grant_types` / `response_types` は、実際に効く（#307 の段階 1）
+
+**保存して返すだけにはしていない。**
+**登録が「`code` だけ」と言っているのに認可サーバが他も通すのでは、登録の意味が無い。**
+
+| 登録 | どこで効くか |
+|---|---|
+| **`scope`** | **トークンを出すとき**（`Helper.FilterSupportedScopes`）。**範囲外は外して発行する**（断らない。RFC 6749 §3.3） |
+| **`response_types`** | **認可エンドポイント**（`CmnEndpoints.CheckAuthZEndpoint`）。**利用者を操作させる前に `unauthorized_client` で断る** |
+| **`grant_types`** | **トークン エンドポイント**（`CmnEndpoints.CheckClientMode` の手前）。`unauthorized_client` |
+
+> **`ClientModePolicy`（`oauth2_oidc_mode`）とは役割が違う。**
+>
+> | | 何を見るか |
+> |---|---|
+> | **`grant_types` / `response_types`** | **そのクライアントが、その経路を登録したか**（RP の申告） |
+> | `ClientModePolicy` | **その登録種別（normal / fapi1 / fapi2…）に、その経路と証明を許すか**（AS の方針） |
+
+**列が空なら絞らない。** **既存の登録はこの列を持たない**ので、
+**RFC 7591 §2 の既定（`authorization_code` / `code`）を当てはめてはならない** —
+**当てはめると「`code` 以外が通らなくなる」破壊になる。**
+**既定を書き込むのは、動的登録で作るときだけ**である。
+
+> **`scope` の絞りは、これまで構成ファイルのクライアントにしか効いていなかった。**
+> **`Helper.GetClientScopes` が構成ファイル（`OAuth2ClientsInformation`）だけを見ていた**ため、
+> **DB に登録したクライアント（管理画面・動的登録）は「登録が無い」扱いになり、**
+> **#198 の後半（クライアントごとの絞り）が一切効いていなかった**
+> （`scopes_supported` の絞りだけが効いていた）。**#307 の段階 1 で、DB も見るようにした。**
+
+#### DDL — `Saml2OAuth2Data` に 11 列足す（#307 の段階 1）
+
+**既存の列は変えていない**ので、**既存のデータベースは `ALTER` で足りる**（流し直しも可）。
+**末尾に足してある**ので、**`ALTER … ADD` と作り直した `CREATE` で、物理的な並びも揃う。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD
+    [Scopes] [nvarchar](2000) NULL,
+    [GrantTypes] [nvarchar](256) NULL,
+    [ResponseTypes] [nvarchar](256) NULL,
+    [JwksUri] [nvarchar](512) NULL,
+    [ClientUri] [nvarchar](512) NULL,
+    [LogoUri] [nvarchar](512) NULL,
+    [TosUri] [nvarchar](512) NULL,
+    [PolicyUri] [nvarchar](512) NULL,
+    [Contacts] [nvarchar](2000) NULL,
+    [SoftwareId] [nvarchar](256) NULL,
+    [SoftwareVersion] [nvarchar](64) NULL
+```
+
+```sql
+-- Oracle（1 文で複数列を足せる）
+ALTER TABLE "Saml2OAuth2Data" ADD (
+    "Scopes" NVARCHAR2(2000) NULL,
+    "GrantTypes" NVARCHAR2(256) NULL,
+    "ResponseTypes" NVARCHAR2(256) NULL,
+    "JwksUri" NVARCHAR2(512) NULL,
+    "ClientUri" NVARCHAR2(512) NULL,
+    "LogoUri" NVARCHAR2(512) NULL,
+    "TosUri" NVARCHAR2(512) NULL,
+    "PolicyUri" NVARCHAR2(512) NULL,
+    "Contacts" NVARCHAR2(2000) NULL,
+    "SoftwareId" NVARCHAR2(256) NULL,
+    "SoftwareVersion" NVARCHAR2(64) NULL
+);
+```
+
+```sql
+-- PostgreSQL（引用符なしなので、識別子は小文字に畳まれる）
+ALTER TABLE Saml2OAuth2Data
+    ADD COLUMN Scopes varchar(2000) NULL,
+    ADD COLUMN GrantTypes varchar(256) NULL,
+    ADD COLUMN ResponseTypes varchar(256) NULL,
+    ADD COLUMN JwksUri varchar(512) NULL,
+    ADD COLUMN ClientUri varchar(512) NULL,
+    ADD COLUMN LogoUri varchar(512) NULL,
+    ADD COLUMN TosUri varchar(512) NULL,
+    ADD COLUMN PolicyUri varchar(512) NULL,
+    ADD COLUMN Contacts varchar(2000) NULL,
+    ADD COLUMN SoftwareId varchar(256) NULL,
+    ADD COLUMN SoftwareVersion varchar(64) NULL;
+```
+
+**幅は既存の流儀に合わせてある** — URI は **512**（`Const.MaxLengthOfUri`）、
+空白区切りの列挙は **2000**（Oracle の `NVARCHAR2` の上限。#306 と同じ理由）、
+`grant_types` / `response_types` は **256**（既知の値しか入らない）。
+
+**`response_types` は、要素の中の空白を `+` にして入れる**
+（`code id_token` → `code+id_token`）。**空白は区切りだから**である。
+**比較のときに空白へ戻す。**
+
+**画面（`/Manage/AddSaml2OAuth2Data`）にも、この 11 項目が出る** —
+**登録の内容であり、画面と WebAPI で持てる項目をずらさない**ため。
+
+#### まだ出来ないこと（段階 2 以降）
+
+| | いつ |
+|---|---|
+| **RFC 7592**（`GET` / `PUT` / `DELETE` ＋ `registration_access_token` / `registration_client_uri`） | 段階 2 |
+| **`jwks` / `jwks_uri`**（鍵を URL から引く） | 段階 3 |
+| **`software_statement`**（署名付きの主張） | 段階 3 |
+| **`client_credentials` 経路**／**1 利用者 n クライアント**（DDL） | 段階 3 |
+| OIDC DCR §2 の残り（`application_type` / ログアウトの URI など） | D-1-2 と併せて |
+
 ## 5. ルート URI と、自己テストの折り返し（重要）
 
 ```

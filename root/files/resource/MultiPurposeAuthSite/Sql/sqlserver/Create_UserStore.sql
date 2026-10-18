@@ -166,6 +166,18 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientMode] [nvarchar](32) NULL,                -- oauth2_oidc_mode
     [RequirePkce] [bit] NOT NULL,
     [ClientName] [nvarchar](256) NULL,               -- Users.UserName と同じ幅
+    -- RFC 7591 §2 のクライアント メタデータ（#307 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    [Scopes] [nvarchar](2000) NULL,                  -- Const.MaxLengthOfScopeList（空白区切りの列挙）
+    [GrantTypes] [nvarchar](256) NULL,               -- Const.MaxLengthOfTypeList（空白区切りの列挙）
+    [ResponseTypes] [nvarchar](256) NULL,            -- Const.MaxLengthOfTypeList（空白区切り。要素内の空白は「+」）
+    [JwksUri] [nvarchar](512) NULL,                  -- Const.MaxLengthOfUri（段階 1 では動的登録で受け付けない）
+    [ClientUri] [nvarchar](512) NULL,                -- Const.MaxLengthOfUri
+    [LogoUri] [nvarchar](512) NULL,                  -- Const.MaxLengthOfUri
+    [TosUri] [nvarchar](512) NULL,                   -- Const.MaxLengthOfUri
+    [PolicyUri] [nvarchar](512) NULL,                -- Const.MaxLengthOfUri
+    [Contacts] [nvarchar](2000) NULL,                -- Const.MaxLengthOfContacts（空白区切りの列挙）
+    [SoftwareId] [nvarchar](256) NULL,               -- Const.MaxLengthOfSoftwareId
+    [SoftwareVersion] [nvarchar](64) NULL,           -- Const.MaxLengthOfSoftwareVersion
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

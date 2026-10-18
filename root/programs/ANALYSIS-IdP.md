@@ -50,7 +50,7 @@
 | **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**） |
 | **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199） |
 | **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った） |
-| **D. 機能不足** | **4 件 残り** : **D-1-2**（Front / Back-Channel Logout）／**D-3**（DPoP）／**D-4**（DCR）／**D-14**（適合性テスト） |
+| **D. 機能不足** | **4 件 残り** : **D-1-2**（Front / Back-Channel Logout）／**D-3**（DPoP）／**D-4**（DCR。**段階 1 は ✅ #307**。残りは RFC 7592 と n クライアント）／**D-14**（適合性テスト） |
 | **E. 品質** | **2 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
 **7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
@@ -63,7 +63,7 @@
 | 応答形式（`expires_in` / `error` / JSON 型）が仕様から外れている | **✅ A で片付いた**（#182 / #184 / #187 / #196 / #200 / #201） |
 | 異常系がほぼ全て未実装で 500 になる | **✅ B で片付いた**（#185 / #199） |
 | 有効期限が一切検証されていない | **✅ C-4 / C-5 / C-11**（#188 / #229） |
-| **PAR / DPoP / RP-Initiated Logout / DCR / OAuth 2.1** が未対応 | **PAR は ✅ #229**、**RP-Initiated Logout は ✅ #232**（**Front / Back-Channel は D-1-2 で残る**）、**OAuth 2.1 は ✅ #220**。**残るのは DPoP（D-3）と DCR（D-4）** |
+| **PAR / DPoP / RP-Initiated Logout / DCR / OAuth 2.1** が未対応 | **PAR は ✅ #229**、**RP-Initiated Logout は ✅ #232**（**Front / Back-Channel は D-1-2 で残る**）、**OAuth 2.1 は ✅ #220**。**残るのは DPoP（D-3）と、DCR の段階 2 以降（D-4。**登録の `POST` は ✅ #307**）** |
 
 **見出しの ✅ 修正済み / ⚠️ 誤検出 で個別に追える**（7 節も参照）。
 
@@ -88,6 +88,7 @@
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
 | | `/end_session`（RP-Initiated Logout） | ✓ | #232。Front-Channel / Back-Channel は未実装（5 節 D-1） |
+| | `/register`（Dynamic Client Registration） | ✓ | #307 の段階 1。**既定は無効**（`EnableDynamicClientRegistration`）。**RFC 7592 の管理は未実装**（5 節 D-4） |
 | | `.well-known/openid-configuration` | ✓ | 不足あり（3 節） |
 | | `/ros`（Request Object 登録） | ✓ | **PAR ではない独自仕様** |
 | | `samlmetadata` / SAML2 IdP | ✓ | |
@@ -669,7 +670,7 @@ CIBA クライアントはこのキーを見つけられない。
 | 10 | **変えない**（#151 に委ねる） → **✅ #151 の段階 4〜5 で解決** | 独自値は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）だった。広告だけ直すと、実際の `sub` とズレる。**段階 4 で既定を `public` に変え、段階 5 で独自値を廃止した**ので、**いまの広告は `public` / `pairwise` の 2 つ**＝実装どおりである | `RT-151.1` / `RT-151.2` |
 | 11 | **変えない**（D-2＝#229 に委ねる） | `request_object_endpoint` は FAPI1 の Request Object（JAR）の置き場所を示す独自拡張。**名前だけ PAR に寄せると、中身が PAR でないのに PAR と読まれる** | — |
 | 13 | **別 Issue（#230）**（`profile` / `address` のクレームは未実装。D-7） | 広告だけ足すと嘘になる | — |
-| 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、#129 と関連） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
+| 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、**#307 の段階 1 で広告するようになった**） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
 
 > **`request_object_endpoint`（`/ros`）と PAR（RFC 9126）の差**（D-2）。
 > `/ros` は Request Object の署名だけで受け付け、応答の `exp` は空文字、`request_uri` は使い切りにしていない。
@@ -2735,7 +2736,7 @@ if (!string.IsNullOrEmpty(registeredDn)
 | D-1-2 | Front-Channel / Back-Channel Logout / Session Management | 未実装。**#232 の範囲外**（別の仕様。`sid` クレームと RP 側の口の登録が要る） | **OP が他の RP へログアウトを伝えられない。** RP-Initiated Logout で消えるのは OP のセッションだけ |
 | D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。`/ros` は **RFC 9101 §5.2.1 の任意機能**として残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
-| D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
+| D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | **段階 1 は ✅ 実装済み（#307）。** **`registration_endpoint` を新設**（`POST`。既定は無効で、`EnableDynamicClientRegistration` で開ける）。**認可は ROPC で取る専用 scope（`client_registration`）のアクセス トークン**で、**scope も有効期限も絞られる。****所有者はトークンの `sub` の利用者**で、**1 利用者 1 クライアント**（2 件目は `403` ＋ `access_denied`）。**RFC 7591 §2 のメタデータを `Saml2OAuth2Data` の 11 列として持ち**、**`scope` / `grant_types` / `response_types` は実際に効かせる**（空なら絞らない。`RT-307.1` 〜 `.8`）。**Discovery に `registration_endpoint`** | **クライアントを CI / IaC から作れるようになった**（再デプロイが要らない）。**残り** : **RFC 7592**（`GET` / `PUT` / `DELETE` ＋ `registration_access_token`。段階 2）、**`jwks` / `jwks_uri` と `software_statement`**（段階 3）、**1 利用者 n クライアント**（段階 3。DDL）。**あわせて穴が 1 つ閉じた** — **`Helper.GetClientScopes` が構成ファイルだけを見ていたため、DB に登録したクライアントには #198 の「クライアントごとの `scope` の絞り」が効いていなかった** |
 | D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）／**✅ 修正済み（#252）**。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`）。**`form_post` だけ抜けていた**（`iss` は `BuildRedirectUrl` が付けており、**URL を組まない `form_post` はそこを通らない**）。**View で出すようにした**（`RT-231.5` / `RT-231.6`） | Mix-Up 攻撃への対策 |
 | D-6 | **同意（consent）の永続化** | **✅ 実装済み（#272 の段階 2）**。`ConsentGrant` 表（DDL 3 方言）。**粒度は（利用者, クライアント）で 1 行、scope は集合として足し込む**。管理画面から取り消せる | C-3 の根本原因だった。これで `prompt=none` を仕様どおり扱える |
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった。**標準クレームのサンプルを持たせた**（#261）。`IsDebug` のとき **2 人目のテスト利用者に OIDC Core 5.1 の形で仕込み**、雛形には対応付けのサンプルを コメントで置いた（`RT-261.1`）。**画面は変えていない**（入れ物の中身は導入する側が決める方針を保つ）。あわせて**クレームの型を JSON のまま返すよう直した**（`updated_at` は数値。以前は文字列。#184 と同種） |
@@ -2838,7 +2839,7 @@ if (!string.IsNullOrEmpty(registeredDn)
 |---|
 | D-1 RP-Initiated Logout（＋ Front-Channel / Back-Channel） |
 | D-3 DPoP |
-| D-4 Dynamic Client Registration |
+| **D-4 Dynamic Client Registration**（**段階 1 は ✅ #307**。`POST /register` ＋ 専用 scope ＋ RFC 7591 §2 の列。**残りは RFC 7592 と n クライアント**） |
 | D-7 `profile` / `address` クレーム |
 | ✅ **D-8 複数 `redirect_uri`**（**#306**。空白区切りで n 件。照合は全件と完全一致。省略できるのは 1 件のときだけ） |
 | ✅ **D-9 鍵ローテーション**（alg → 鍵の表に寄せ、`jwkcerts` をその表から作る）**#129 の段階 3** |

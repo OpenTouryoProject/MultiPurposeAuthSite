@@ -1,0 +1,918 @@
+//**********************************************************************************
+//* Copyright (C) 2026 Hitachi Solutions,Ltd.
+//**********************************************************************************
+
+#region Apache License
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+#endregion
+
+//**********************************************************************************
+//* クラス名        ：ClientRegistrationTests
+//* クラス日本語名  ：RT-307 動的クライアント登録（RFC 7591）
+//*
+//* 作成日時        ：－
+//* 作成者          ：－
+//* 更新履歴        ：－
+//*
+//*  日時        更新者            内容
+//*  ----------  ----------------  -------------------------------------------------
+//*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
+//**********************************************************************************
+
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
+
+using Xunit;
+using Xunit.Abstractions;
+
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
+{
+    /// <summary>
+    /// RT-307. **動的クライアント登録**（RFC 7591 / #307 の段階 1）。
+    /// </summary>
+    /// <remarks>
+    /// **以前はクライアント登録に WebUI しか無かった**（`ANALYSIS-IdP.md` の D-4）。
+    /// **API が無いので、CI や IaC からクライアントを作れなかった。**
+    ///
+    /// **段階 1 の形** : **ROPC で専用 scope（`client_registration`）の
+    /// アクセス トークンを取り**、**それを Bearer に付けて `registration_endpoint` へ `POST` する。**
+    /// **所有者は、そのトークンの `sub` の利用者**で、**1 利用者 1 クライアント**である。
+    ///
+    /// | | 測ること |
+    /// |---|---|
+    /// | **`RT-307.1`** | **登録でき、返った資格情報で実際に認可コードが取れる** |
+    /// | **`RT-307.2`** | **トークンが無ければ 401／scope が足りなければ 403** |
+    /// | **`RT-307.3`** | **2 件目の登録は `403` ＋ `access_denied`** |
+    /// | **`RT-307.4`** | **メタデータの誤りは `400`**（`jwks_uri` / `redirect_uris` 無し / 対応しない組み合わせ） |
+    /// | **`RT-307.5`** | **専用トークンは scope も有効期限も絞られている** |
+    /// | **`RT-307.6`** | **登録した `response_types` が効く** |
+    /// | **`RT-307.7`** | **登録した `grant_types` が効く** |
+    /// | **`RT-307.8`** | **登録した `scope` が効く**（DB に登録したクライアントでも） |
+    ///
+    /// **使い捨ての利用者を 2 人使う。** **クライアント登録は 1 人 1 件**なので、
+    /// **管理 API を叩くクライアントの持ち主（A）と、登録される側（B）を分けないと、
+    /// B の登録が「2 件目」になって断られる。**
+    ///
+    /// **Discovery に `registration_endpoint` が載ることは `RT-189.*`（`DiscoveryTests`）ではなく、
+    /// ここで測る** — **広告は `EnableDynamicClientRegistration` で出入りする**ので、
+    /// **既定の配備の Discovery には載らない。**
+    /// </remarks>
+    public class ClientRegistrationTests : TargetTestBase
+    {
+        /// <summary>コンストラクタ</summary>
+        /// <param name="output">ITestOutputHelper</param>
+        public ClientRegistrationTests(ITestOutputHelper output) : base(output)
+        {
+        }
+
+        /// <summary>登録する折り返し先</summary>
+        private const string UriA = "https://localhost:44300/e2e/rt307/a";
+
+        /// <summary>登録する折り返し先（2 本目）</summary>
+        private const string UriB = "https://localhost:44300/e2e/rt307/b";
+
+        #region RT-307.1
+
+        /// <summary>RT-307.1 登録でき、返った資格情報で認可コードが取れる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30701_登録でき返った資格情報で認可コードが取れる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.1",
+                    "`registration_endpoint` で登録でき、返った `client_id` / `client_secret` で"
+                    + "実際に認可コードが取れる",
+                    "**登録が「本当に効いている」ことまで測る。**"
+                    + "**201 と `client_id` が返るだけでは、使える登録になったとは言えない** — "
+                    + "**`redirect_uri` が正しい列に入っていなければ、認可要求が通らない。**",
+                    "RFC 7591 §3.1 / §3.2.1（201 Created）/ OIDC DCR 1.0 §2 / #307");
+
+                r.Target("POST " + "registration_endpoint" + "（専用 scope の AT を Bearer に付ける）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) redirect_uris を 2 本登録する");
+
+                    JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata(UriA, UriB));
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)res.StatusCode).ToString());
+
+                    string clientId = res.String("client_id");
+                    string clientSecret = res.String("client_secret");
+
+                    r.Verify("client_id が返る", !string.IsNullOrEmpty(clientId),
+                        "返る", string.IsNullOrEmpty(clientId) ? "**返らない**" : "返った");
+
+                    r.Verify("client_secret が返る", !string.IsNullOrEmpty(clientSecret),
+                        "返る", string.IsNullOrEmpty(clientSecret) ? "**返らない**" : "返った（値は出さない）");
+
+                    r.Verify("client_id_issued_at が返る",
+                        res.IsJson && res.Json.TryGetProperty(
+                            "client_id_issued_at", out JsonElement _),
+                        "返る", res.IsJson ? "—" : "**JSON ではない**");
+
+                    r.VerifyEqual("client_secret_expires_at は 0（期限なし）", "0",
+                        (res.IsJson && res.Json.TryGetProperty(
+                            "client_secret_expires_at", out JsonElement exp))
+                            ? exp.ToString() : "（無い）");
+
+                    r.VerifyEqual("grant_types の既定は authorization_code", "True",
+                        res.ArrayContains("grant_types", "authorization_code").ToString());
+
+                    r.VerifyEqual("response_types の既定は code", "True",
+                        res.ArrayContains("response_types", "code").ToString());
+
+                    r.VerifyEqual("redirect_uris に 1 本目が入る", "True",
+                        res.ArrayContains("redirect_uris", UriA).ToString());
+
+                    r.VerifyEqual("redirect_uris に 2 本目が入る", "True",
+                        res.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.Step("(2) 返った資格情報で、認可コードを取る");
+
+                    ClientRegistration registered = new ClientRegistration()
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUri = UriA
+                    };
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, registered, "openid email", "state-307", "nonce-307", UriA);
+
+                    r.Verify("code が返る", !string.IsNullOrEmpty(authz.Code),
+                        "返る", string.IsNullOrEmpty(authz.Code)
+                            ? "**返らない（error=" + (authz.Error ?? "なし") + "）**" : "返った");
+
+                    r.Note("**`client_name` は登録しても無視する**（RFC 7591 §3.2.1 が認めている）— "
+                        + "**`ClientName` の列は利用者名であり、"
+                        + "`Helper.GetClientName` が「登録が在るか」の判定に使っている。** "
+                        + "**応答にも入れない**（利用者名を漏らさないため）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.2
+
+        /// <summary>RT-307.2 トークンが無ければ 401、scope が足りなければ 403</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30702_トークンが無ければ401scopeが足りなければ403(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.2",
+                    "トークンが無ければ `401`、scope が足りなければ `403` ＋ `insufficient_scope`",
+                    "**この口は、クライアント登録を作れる。**"
+                    + "**誰でも叩けてはならないし、普通のアクセス トークンでも叩けてはならない。**"
+                    + "**専用 scope（`client_registration`）は、登録に明記したクライアントにしか出さない** — "
+                    + "**他の scope の「登録が無ければ制限しない」とは逆の倒し方である。**",
+                    "RFC 6750 §3.1（invalid_token / insufficient_scope）/ #307");
+
+                r.Target("POST registration_endpoint（トークン無し／scope 違いのトークン）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) Bearer を付けずに叩く");
+
+                    JsonResponse none = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, null, DynamicClientRegistration.Metadata(UriA));
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)none.StatusCode).ToString());
+
+                    r.Verify("WWW-Authenticate: Bearer が付く",
+                        (none.Header("WWW-Authenticate") ?? "").StartsWith("Bearer"),
+                        "付く", none.Header("WWW-Authenticate") ?? "**付かない**");
+
+                    r.Step("(2) 出来合いでない（偽の）トークンで叩く");
+
+                    JsonResponse bad = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, "not-a-token", DynamicClientRegistration.Metadata(UriA));
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)bad.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_token",
+                        "invalid_token", bad.String("error") ?? "（無い）");
+
+                    r.Step("(3) 専用 scope を持たないトークンで叩く");
+
+                    //  **同じクライアントで、専用 scope を要求せずに取る。**
+                    //    **登録には `client_registration` だけを許しているので、**
+                    //    **他の scope を頼むと scope が 1 つも付かないトークンになる。**
+                    JsonResponse other = await DynamicClientRegistration.TokenAsync(
+                        client, ctx.ApiClientId, ctx.ApiClientSecret,
+                        ctx.OwnerName, ctx.Password, "openid email");
+
+                    string otherToken = other.String("access_token");
+
+                    Assert.False(string.IsNullOrEmpty(otherToken),
+                        "前提: scope 違いのトークンが取れること");
+
+                    JsonResponse insufficient = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, otherToken, DynamicClientRegistration.Metadata(UriA));
+
+                    r.VerifyEqual("HTTP の状態は 403", "403",
+                        ((int)insufficient.StatusCode).ToString());
+
+                    r.VerifyEqual("error は insufficient_scope",
+                        "insufficient_scope", insufficient.String("error") ?? "（無い）");
+
+                    r.Note("**`client_registration` は、登録に明記していなければ出さない。** "
+                        + "**「登録が無ければ制限しない」を当てはめると、"
+                        + "`scope` を登録していない既存のクライアントが全て、"
+                        + "ROPC で登録を作れることになる。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.3
+
+        /// <summary>RT-307.3 2 件目の登録は 403 ＋ access_denied</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30703_2件目の登録は403になる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.3",
+                    "2 件目の登録は `403` ＋ `access_denied` になる（1 利用者 1 クライアント）",
+                    "**この配備は `Users.ClientID` で所有者を持つ**ので、**1 利用者 1 クライアント**である。"
+                    + "**RFC 7591 は「1 つの主体が n 件登録できること」を求めていない** — "
+                    + "**§3.2.1 は AS が要求を拒否・置換してよいとし、"
+                    + "§5 は重複した登録が疑わしいときは拒否すべきとしている。**"
+                    + "**§3.2.2 の 4 つはメタデータの誤り用**なので、**ポリシーによる断りには "
+                    + "RFC 6749 の `access_denied` を使う**（一般の誤りは 400 だが、"
+                    + "**`unless otherwise specified` なので 403 は禁じられていない**）。",
+                    "RFC 7591 §3.2.1 / §5 / RFC 6749 §4.1.2.1 / §5.2 / #307");
+
+                r.Target("POST registration_endpoint（同じ利用者で 2 回）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 1 件目は登録できる");
+
+                    JsonResponse first = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, DynamicClientRegistration.Metadata(UriA));
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)first.StatusCode).ToString());
+
+                    r.Step("(2) 同じトークンで 2 件目を登録しようとする");
+
+                    JsonResponse second = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, DynamicClientRegistration.Metadata(UriB));
+
+                    r.VerifyEqual("HTTP の状態は 403", "403", ((int)second.StatusCode).ToString());
+
+                    r.VerifyEqual("error は access_denied",
+                        "access_denied", second.String("error") ?? "（無い）");
+
+                    r.Step("(3) 1 件目の登録は壊れていない");
+
+                    ClientRegistration registered = new ClientRegistration()
+                    {
+                        ClientId = first.String("client_id"),
+                        ClientSecret = first.String("client_secret"),
+                        RedirectUri = UriA
+                    };
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, registered, "openid email", "state-dup", "nonce-dup", UriA);
+
+                    r.Verify("1 件目で、まだ code が取れる", !string.IsNullOrEmpty(authz.Code),
+                        "取れる", string.IsNullOrEmpty(authz.Code)
+                            ? "**取れない（2 件目の要求で壊れた）**" : "取れた");
+
+                    r.Note("**`POST` を upsert にはしていない。** "
+                        + "**`client_secret` を作り直すか据え置くかの判断が常について回り、"
+                        + "間違えると既存の RP が止まる。** "
+                        + "**更新は RFC 7592 の `PUT`（段階 2）で行う。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.4
+
+        /// <summary>RT-307.4 メタデータの誤りは 400</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30704_メタデータの誤りは400になる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.4",
+                    "メタデータの誤りは `400`（`invalid_redirect_uri` / `invalid_client_metadata`）",
+                    "**知らないメタデータは無視してよい**（RFC 7591 §3.2.1）が、"
+                    + "**無視すると黙って弱くなるものは断る。**"
+                    + "**`jwks_uri` を受け取って無視すると、`private_key_jwt`（#239）や "
+                    + "Request Object（JAR）の検証が、登録したつもりの鍵で通らなくなる** — "
+                    + "**鍵をこの URL から引く実装が、まだ無い**（段階 3）。",
+                    "RFC 7591 §3.2.1 / §3.2.2 / RFC 6749 §3.1.2 / #307");
+
+                r.Target("POST registration_endpoint（誤ったメタデータ）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) redirect_uris が無い");
+
+                    JsonResponse noUri = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, "{}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)noUri.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_redirect_uri",
+                        "invalid_redirect_uri", noUri.String("error") ?? "（無い）");
+
+                    r.Step("(2) redirect_uri にフラグメントが付いている");
+
+                    JsonResponse fragment = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata(UriA + "#x"));
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)fragment.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_redirect_uri",
+                        "invalid_redirect_uri", fragment.String("error") ?? "（無い）");
+
+                    r.Step("(3) 相対 URI は通らない");
+
+                    JsonResponse relative = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata("/e2e/rt307/relative"));
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)relative.StatusCode).ToString());
+
+                    r.Step("(4) jwks_uri は受け付けない（段階 1）");
+
+                    JsonResponse jwksUri = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"jwks_uri\":\"https://localhost:44300/e2e/rt307/jwks\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)jwksUri.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata",
+                        "invalid_client_metadata", jwksUri.String("error") ?? "（無い）");
+
+                    r.Step("(5) software_statement は受け付けない（段階 3）");
+
+                    JsonResponse statement = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"software_statement\":\"eyJ.eyJ.sig\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)statement.StatusCode).ToString());
+
+                    r.VerifyEqual("error は unapproved_software_statement",
+                        "unapproved_software_statement", statement.String("error") ?? "（無い）");
+
+                    r.Step("(6) response_types と grant_types が噛み合っていない");
+
+                    JsonResponse mismatch = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"response_types\":[\"code\"],"
+                        + "\"grant_types\":[\"refresh_token\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)mismatch.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata",
+                        "invalid_client_metadata", mismatch.String("error") ?? "（無い）");
+
+                    r.Step("(7) 専用 scope は、動的登録では付けられない");
+
+                    JsonResponse escalate = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"" + DynamicClientRegistration.Scope + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)escalate.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata",
+                        "invalid_client_metadata", escalate.String("error") ?? "（無い）");
+
+                    r.Note("**自分と同じ強さの scope を、自分で配らせない。** "
+                        + "**`client_registration` を動的登録で付けられるようにすると、"
+                        + "権限を際限なく増やせる。** "
+                        + "**配るのは、管理画面か構成ファイルからだけ**にしてある。");
+
+                    r.Step("(8) どの誤りでも、登録は作られていない");
+
+                    JsonResponse ok = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, DynamicClientRegistration.Metadata(UriA));
+
+                    r.VerifyEqual("この後で、正しい要求は 201 になる",
+                        "201", ((int)ok.StatusCode).ToString());
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.5
+
+        /// <summary>RT-307.5 専用トークンは scope も有効期限も絞られている</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30705_専用トークンはscopeも有効期限も絞られている(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.5",
+                    "管理 API 専用のアクセス トークンは、scope も有効期限も絞られている",
+                    "**配備ぜんたいの `OAuth2AccessTokenExpireTimeSpanFromMinutes`（既定 360 分）では長すぎる** — "
+                    + "**この口は、人の操作より CI から叩く想定**で、長く持たせる理由が無い。"
+                    + "**scope も混ぜない** — **登録を作れる権限を持ったトークンが、"
+                    + "利用者の属性を読む用途でも使い回されると、寿命を短くした意味が薄れる。**",
+                    "RFC 6749 §3.3 / #307");
+
+                r.Target("POST /token（grant_type=password、scope=client_registration）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 専用 scope を、他の scope と一緒に要求する");
+
+                    JsonResponse res = await DynamicClientRegistration.TokenAsync(
+                        client, ctx.ApiClientId, ctx.ApiClientSecret,
+                        ctx.OwnerName, ctx.Password,
+                        "openid email " + DynamicClientRegistration.Scope);
+
+                    string accessToken = res.String("access_token");
+
+                    Assert.False(string.IsNullOrEmpty(accessToken),
+                        "前提: アクセス トークンが取れること");
+
+                    JsonElement payload = Jwt.Payload(accessToken);
+                    List<string> scopes = Jwt.Strings(payload, "scopes");
+
+                    r.VerifyEqual("scope は専用の 1 本だけ",
+                        DynamicClientRegistration.Scope, string.Join(" ", scopes));
+
+                    r.Step("(2) 有効期限が、配備ぜんたいの値より短い");
+
+                    long iat = long.Parse(Jwt.String(payload, "iat"));
+                    long exp = long.Parse(Jwt.String(payload, "exp"));
+                    long lifetime = exp - iat;
+
+                    r.Observe("exp - iat（秒）", lifetime.ToString());
+
+                    r.Verify("1 時間より短い", lifetime < 3600,
+                        "短い", lifetime.ToString() + " 秒");
+
+                    r.Note("**既定は 300 秒**（`DcrAccessTokenExpireTimeSpanFromSeconds`。"
+                        + "**未設定・0 以下なら既定値に倒す**）。"
+                        + "**ここで値そのものを突き合わせないのは、配備で変えられる設定だから**である。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.6
+
+        /// <summary>RT-307.6 登録した response_types が効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30706_登録したresponse_typesが効く(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.6",
+                    "登録した `response_types` が、認可エンドポイントで効く",
+                    "**保存して返すだけにはしない。**"
+                    + "**登録が「`code` だけ」と言っているのに認可サーバが `token` も通すのでは、"
+                    + "登録の意味が無い。**"
+                    + "**絞りは認可エンドポイントで効く** — **利用者を操作させる前に断る**ため。"
+                    + "**`ClientModePolicy`（登録種別で、その経路を許すか）の手前に 1 段置いてある。**",
+                    "RFC 7591 §2（response_types）/ RFC 6749 §4.1.2.1（unauthorized_client）/ #307");
+
+                r.Target("GET /authorize（登録に無い response_type）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    //  **管理画面で登録したクライアントで測る。**
+                    //    **`redirect_uri` の照合が先に効く**（#187。誤りを RP へ返せるようにするため）ので、
+                    //    **`redirect_uri_token` の列が空のクライアントでは `invalid_request` になり、**
+                    //    **`response_types` の絞りまで届かない。**
+                    //    **`WithDcrAsync` が、両方の列を登録し、`response_types` を `code` だけにしてある。**
+
+                    r.Step("(1) 登録した response_type（code）は通る");
+
+                    AuthZResponse code = await client.AuthorizeAndGrantAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "response_type", "code" },
+                            { "client_id", ctx.ApiClientId },
+                            { "scope", "openid" },
+                            { "state", "state-ok" },
+                            { "nonce", "nonce-ok" },
+                            { "redirect_uri", UriA }
+                        });
+
+                    r.Verify("code が返る", !string.IsNullOrEmpty(code.Code),
+                        "返る", string.IsNullOrEmpty(code.Code)
+                            ? "**返らない（error=" + (code.Error ?? "なし") + "）**" : "返った");
+
+                    r.Step("(2) 登録に無い response_type（token）は断られる");
+
+                    AuthZResponse implicitFlow = await client.AuthorizeAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "response_type", "token" },
+                            { "client_id", ctx.ApiClientId },
+                            { "scope", "openid" },
+                            { "state", "state-ng" },
+                            { "nonce", "nonce-ng" },
+                            { "redirect_uri", UriB }
+                        });
+
+                    r.VerifyEqual("error は unauthorized_client",
+                        "unauthorized_client", implicitFlow.Get("error") ?? "（無い）");
+
+                    r.Observe("error_description",
+                        implicitFlow.Get("error_description") ?? "（無い）");
+
+                    r.Note("**列が空なら絞らない**（#198 と同じ倒し方）。"
+                        + "**既存の登録はこの列を持たないので、"
+                        + "RFC 7591 §2 の既定（`code`）を当てはめてはならない** — "
+                        + "**当てはめると「`code` 以外が通らなくなる」破壊になる。** "
+                        + "**既定を書き込むのは、動的登録で作るときだけ。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.7
+
+        /// <summary>RT-307.7 登録した grant_types が効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30707_登録したgrant_typesが効く(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.7",
+                    "登録した `grant_types` が、トークン エンドポイントで効く",
+                    "**`grant_types` と `response_types` は別物である。**"
+                    + "**認可エンドポイントは `response_types` を見る**が、"
+                    + "**どのグラントでトークンを出すかは `grant_types` で決まる。**"
+                    + "**`ClientModePolicy`（登録種別 × 証明）の手前に 1 段置いてある** — "
+                    + "**`ClientModePolicy` は AS の方針、`grant_types` は RP の申告**であり、"
+                    + "**役割が違う。**",
+                    "RFC 7591 §2（grant_types）/ RFC 6749 §5.2（unauthorized_client）/ #307");
+
+                r.Target("POST /token（登録に無い grant_type）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    //  **`WithDcrAsync` の管理 API 用クライアントは、`grant_types` に
+                    //    `password` だけを登録してある**（ROPC で使うため）。
+                    //    **`authorization_code` は登録していない。**
+
+                    r.Step("(1) 認可コードは取れる（認可エンドポイントは grant_types を見ない）");
+
+                    AuthZResponse code = await client.AuthorizeAndGrantAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "response_type", "code" },
+                            { "client_id", ctx.ApiClientId },
+                            { "scope", "openid" },
+                            { "state", "state-gt" },
+                            { "nonce", "nonce-gt" },
+                            { "redirect_uri", UriA }
+                        });
+
+                    r.Verify("code が返る", !string.IsNullOrEmpty(code.Code),
+                        "返る", string.IsNullOrEmpty(code.Code)
+                            ? "**返らない（error=" + (code.Error ?? "なし") + "）**" : "返った");
+
+                    r.Step("(2) その code の交換は、unauthorized_client で断られる");
+
+                    JsonResponse exchanged = await client.TokenAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "grant_type", "authorization_code" },
+                            { "code", code.Code },
+                            { "client_id", ctx.ApiClientId },
+                            { "client_secret", ctx.ApiClientSecret },
+                            { "redirect_uri", UriA }
+                        });
+
+                    r.Verify("access_token を返さない",
+                        string.IsNullOrEmpty(exchanged.String("access_token")),
+                        "返さない", string.IsNullOrEmpty(exchanged.String("access_token"))
+                            ? "返さなかった" : "**返してしまった**");
+
+                    r.VerifyEqual("error は unauthorized_client",
+                        "unauthorized_client", exchanged.String("error") ?? "（無い）");
+
+                    r.Observe("error_description", exchanged.String("error_description") ?? "（無い）");
+
+                    r.Step("(3) 登録した grant_type（password）は通る");
+
+                    JsonResponse ropc = await DynamicClientRegistration.TokenAsync(
+                        client, ctx.ApiClientId, ctx.ApiClientSecret,
+                        ctx.OwnerName, ctx.Password);
+
+                    r.Verify("access_token が返る",
+                        !string.IsNullOrEmpty(ropc.String("access_token")),
+                        "返る", string.IsNullOrEmpty(ropc.String("access_token"))
+                            ? "**返らない（error=" + (ropc.String("error") ?? "なし") + "）**" : "返った");
+
+                    r.Note("**列が空なら絞らない。** "
+                        + "**通しの大半が、この経路（列を持たない既存の登録）で回っている。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.8
+
+        /// <summary>RT-307.8 登録した scope が効く（DB に登録したクライアントでも）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30708_登録したscopeが効く(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.8",
+                    "登録した `scope` が、DB に登録したクライアントでも効く",
+                    "**これまで、クライアントごとの `scope` の絞りは"
+                    + "構成ファイルのクライアントにしか効いていなかった** — "
+                    + "**`Helper.GetClientScopes` が構成ファイル（`OAuth2ClientsInformation`）"
+                    + "だけを見ていたため、DB に登録したクライアントは「登録が無い」扱いになり、"
+                    + "#198 の後半（クライアントごとの絞り）が一切効かなかった**"
+                    + "（`scopes_supported` の絞りだけが効いていた）。"
+                    + "**#307 の段階 1 で `Scopes` の列を足し、DB も見るようにした。**",
+                    "RFC 7591 §2（scope）/ RFC 6749 §3.3 / #198 / #307");
+
+                r.Target("POST /token（登録に無い scope を要求する）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) scope を openid だけにして登録する");
+
+                    JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"response_types\":[\"code\"],"
+                        + "\"grant_types\":[\"authorization_code\"],"
+                        + "\"scope\":\"openid\"}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)res.StatusCode).ToString());
+
+                    r.VerifyEqual("応答の scope は openid", "openid", res.String("scope") ?? "（無い）");
+
+                    ClientRegistration registered = new ClientRegistration()
+                    {
+                        ClientId = res.String("client_id"),
+                        ClientSecret = res.String("client_secret"),
+                        RedirectUri = UriA
+                    };
+
+                    r.Step("(2) 登録に無い scope（email）も一緒に要求する");
+
+                    AuthZResponse withEmail = await Flows.AuthorizeCodeAsync(
+                        client, registered, "openid email", "state-sc", "nonce-sc", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(withEmail.Code),
+                        "前提: openid email を要求しても認可コードが取れること");
+
+                    JsonResponse tokenWithEmail = await Flows.ExchangeCodeAsync(
+                        client, registered, withEmail.Code, UriA);
+
+                    string accessToken = tokenWithEmail.String("access_token");
+
+                    Assert.False(string.IsNullOrEmpty(accessToken),
+                        "前提: アクセス トークンが取れること"
+                        + "（error=" + (tokenWithEmail.String("error") ?? "なし") + "）");
+
+                    List<string> scopes = Jwt.Strings(Jwt.Payload(accessToken), "scopes");
+
+                    r.Observe("トークンに載った scope", string.Join(" ", scopes));
+
+                    r.VerifyEqual("登録した openid は載る", "True",
+                        scopes.Contains("openid").ToString());
+
+                    r.VerifyEqual("登録に無い email は載らない", "False",
+                        scopes.Contains("email").ToString());
+
+                    r.Note("**断る（`invalid_scope`）のではなく、外す** — "
+                        + "**RFC 6749 §3.3 : 認可サーバは、要求されたスコープの"
+                        + "一部または全部を無視してよい**（#198 と同じ倒し方）。 "
+                        + "**列が空なら絞らない。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region 補助
+
+        /// <summary>管理 API を叩くための前提（使い捨ての利用者 2 人ぶん）</summary>
+        private sealed class DcrContext
+        {
+            /// <summary>管理 API を叩くクライアントの client_id（利用者 A が持つ）</summary>
+            public string ApiClientId { get; set; }
+
+            /// <summary>その client_secret（出力しないこと）</summary>
+            public string ApiClientSecret { get; set; }
+
+            /// <summary>登録の所有者になる利用者（B）の名前</summary>
+            public string OwnerName { get; set; }
+
+            /// <summary>その パスワード（出力しないこと）</summary>
+            public string Password { get; set; }
+        }
+
+        /// <summary>
+        /// 使い捨ての利用者 2 人で、動的登録を叩ける状態を作って渡す
+        /// </summary>
+        /// <param name="admin">管理者のクライアント</param>
+        /// <param name="targetKey">core / netfx</param>
+        /// <param name="body">測る本体（client / endpoint / access_token / 前提）</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **利用者を 2 人使う。**
+        ///
+        /// | | 役 |
+        /// |---|---|
+        /// | **A** | **管理 API を叩くクライアントの持ち主。** 画面から、`scope` に専用 scope だけを登録する |
+        /// | **B** | **登録の所有者。** ROPC の `username` / `password` で本人になる |
+        ///
+        /// **分けないと、B の登録が「2 件目」になって断られる**
+        /// （**クライアント登録は 1 人 1 件**で、A が既に 1 件持っているため）。
+        ///
+        /// **A のクライアントは画面から登録する** — **動的登録では専用 scope を付けられない**
+        /// （`RT-307.4` の (7)）。**配るのは、管理画面か構成ファイルからだけ**である。
+        ///
+        /// **終わったら両方の利用者を消す**（登録も一緒に消える）。
+        /// </remarks>
+        private async Task WithDcrAsync(
+            IdPClient admin, string targetKey,
+            Func<IdPClient, string, string, DcrContext, Task> body)
+        {
+            await admin.SignInAsAdministratorAsync();
+            await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+            //  **ROPC と動的登録の両方が開いている配備でしか測れない。**
+            await Flows.SkipIfGrantTypeNotSupportedAsync(admin, "password");
+            string endpoint = await DynamicClientRegistration.SkipIfNotSupportedAsync(admin);
+
+            string suffix = Guid.NewGuid().ToString("N").Substring(0, 8);
+            string apiOwner = "e2e_rt307_api_" + suffix;
+            string owner = "e2e_rt307_own_" + suffix;
+            string password = admin.Config.Get("TestUserPWD");
+
+            Assert.True(ClientRegistrationTests.IsRedirect(await UsersAdmin.CreateAsync(
+                admin, apiOwner, apiOwner + "@example.com", "Admin")),
+                "前提: 管理 API 用の利用者を作れること");
+
+            try
+            {
+                Assert.True(ClientRegistrationTests.IsRedirect(await UsersAdmin.CreateAsync(
+                    admin, owner, owner + "@example.com", "User")),
+                    "前提: 登録の所有者になる利用者を作れること");
+
+                try
+                {
+                    DcrContext ctx = new DcrContext()
+                    {
+                        OwnerName = owner,
+                        Password = password
+                    };
+
+                    //  **A で、管理 API を叩くクライアントを登録する**（専用 scope 付き）。
+                    using (IdPClient apiClient = this.Client(targetKey))
+                    {
+                        Assert.True(await apiClient.TrySignInAsync(apiOwner, password),
+                            "前提: 管理 API 用の利用者でサインインできること");
+
+                        (string ClientId, string ClientSecret) registered =
+                            await ManageClientRegistration.RegisterWithSecretAsync(apiClient,
+                                new Dictionary<string, string>()
+                                {
+                                    { "Scopes", DynamicClientRegistration.Scope },
+
+                                    //  **`RT-307.6` が、`response_types` の絞りをここで測る。**
+                                    //    **`redirect_uri` の照合が先に効く**ので、
+                                    //    **両方の列に登録しておく必要がある。**
+                                    { "RedirectUriCode", UriA },
+                                    { "RedirectUriToken", UriB },
+                                    { "ResponseTypes", "code" },
+
+                                    //  **`RT-307.7` が、`grant_types` の絞りをここで測る。**
+                                    //    **`password` だけを登録する**（ROPC で使う）。
+                                    //    **`authorization_code` は登録しない。**
+                                    { "GrantTypes", "password" }
+                                });
+
+                        Assert.False(string.IsNullOrEmpty(registered.ClientId),
+                            "前提: 管理 API 用のクライアントを登録できること");
+
+                        ctx.ApiClientId = registered.ClientId;
+                        ctx.ApiClientSecret = registered.ClientSecret;
+                    }
+
+                    //  **B の資格で、専用 scope のアクセス トークンを取る。**
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        JsonResponse token = await DynamicClientRegistration.TokenAsync(
+                            client, ctx.ApiClientId, ctx.ApiClientSecret, owner, password);
+
+                        string accessToken = token.String("access_token");
+
+                        Assert.False(string.IsNullOrEmpty(accessToken),
+                            "前提: 専用 scope のアクセス トークンが取れること"
+                            + "（error=" + (token.String("error") ?? "なし") + "）");
+
+                        //  **B でサインインしておく**（認可エンドポイントを通るテストがある）。
+                        Assert.True(await client.TrySignInAsync(owner, password),
+                            "前提: 所有者の利用者でサインインできること");
+
+                        await body(client, endpoint, accessToken, ctx);
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, owner);
+                }
+            }
+            finally
+            {
+                await UsersAdmin.DeleteByUserNameAsync(admin, apiOwner);
+            }
+        }
+
+        /// <summary>リダイレクトか（UsersAdmin の作成が成功したか）</summary>
+        /// <param name="res">応答</param>
+        /// <returns>リダイレクトなら true</returns>
+        private static bool IsRedirect(System.Net.Http.HttpResponseMessage res)
+        {
+            return res.StatusCode == HttpStatusCode.Found
+                || res.StatusCode == HttpStatusCode.Redirect
+                || res.StatusCode == HttpStatusCode.SeeOther;
+        }
+
+        #endregion
+    }
+}

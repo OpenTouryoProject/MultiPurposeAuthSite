@@ -22,6 +22,7 @@
 //*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
 //*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -174,6 +175,18 @@ namespace MultiPurposeAuthSite
                     name: "TestHybridFlow",
                     routeTemplate: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除
                     defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" }
+                );
+            }
+
+            // **動的クライアント登録**（RFC 7591。#307 の段階 1）。
+            //   **開けた配備にだけ、口を張る。** **閉じている配備では 404 になる**
+            //   （`IsLockedDownTestEndpoints` とは別のキーである。**これは本番で使う口**）。
+            if (Config.EnableDynamicClientRegistration)
+            {
+                config.Routes.MapHttpRoute(
+                    name: "ClientRegistration",
+                    routeTemplate: Config.DcrRegistrationEndpoint.Substring(1), // 先頭の[/]を削除
+                    defaults: new { controller = "OAuth2ResourceServer", action = "Register" }
                 );
             }
 

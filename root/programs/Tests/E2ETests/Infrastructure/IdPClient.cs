@@ -57,6 +57,7 @@
 //*  2026/10/07  玄人 幸道         WebAuthn の登録・認証の画面操作を追加（#137）
 //*  2026/10/08  玄人 幸道         CookieNames（名前だけ）を追加（#284）
 //*  2026/10/16  玄人 幸道         ヘッダを付けて GET する口を足した（#303）
+//*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -265,6 +266,39 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             StringContent content = new StringContent(body, Encoding.UTF8, "text/plain");
             HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
+
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>
+        /// JSON の本文を、Authorization ヘッダを付けて POST する（#307 の段階 1）
+        /// </summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="json">本文（JSON の文字列。null なら本文を付けない）</param>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **動的クライアント登録（RFC 7591 §3.1）は `application/json` を受ける。**
+        /// **フォームではない**ので、`PostJsonWithAuthorizationAsync`（フォームを送る口）
+        /// とは別に用意してある。
+        /// </remarks>
+        public async Task<JsonResponse> PostJsonBodyWithAuthorizationAsync(
+            string pathOrUrl, string json, string authorization)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Post, this.Absolute(pathOrUrl));
+
+            if (json != null)
+            {
+                req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            }
+
+            if (authorization != null)
+            {
+                req.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
+
+            HttpResponseMessage res = await this._http.SendAsync(req);
 
             return await ToJsonResponseAsync(res);
         }

@@ -34,6 +34,7 @@
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
 //*  2026/10/09  西野 大介         オンライン決済サービス処理の削除
+//*  2026/10/18  玄人 幸道         動的クライアント登録の口を追加（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -43,10 +44,15 @@ using MultiPurposeAuthSite.Network;
 
 using MultiPurposeAuthSite.Extensions.Sts;
 
+using Token = MultiPurposeAuthSite.TokenProviders;
+
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
+using System.Net;
+using System.Net.Http;
 using System.Web;
 using System.Web.Http;
 using System.Web.Http.Cors;
@@ -154,6 +160,107 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
+
+        #endregion
+
+        #region Dynamic Client Registration（#307 の段階 1）
+
+        /// <summary>
+        /// 動的クライアント登録（RFC 7591 §3.1）
+        /// POST: /register
+        /// </summary>
+        /// <returns>成功は 201、誤りは 400 / 401 / 403（RFC 7591 §3.2）</returns>
+        /// <remarks>
+        /// **判定と保存は `ClientRegistrationProvider`**（CommonLibrary）**に置いてある** —
+        /// **net48 版と net10.0 版で振る舞いを食い違わせないため。**
+        /// **ここは「HTTP の口」だけ**である。
+        ///
+        /// **この口は、`EnableDynamicClientRegistration` が true の配備にしか張られない**
+        /// （`WebApiConfig` の経路）。**本番で使う口**なので、
+        /// **`IsLockedDownTestEndpoints` の対象ではない。**
+        ///
+        /// **CORS は開けない** — **サーバ間で叩く口**であり、
+        /// **ブラウザから `client_secret` を受け取らせる必要が無い。**
+        /// </remarks>
+        [HttpPost]
+        public async Task<IHttpActionResult> Register()
+        {
+            // **client_secret を返すので、キャッシュに残さない**（#218 と同じ理由）。
+            this.SetNoStore();
+
+            //  **要求の本体**（RFC 7591 §3.1 : `application/json`）。
+            string body = await this.Request.Content.ReadAsStringAsync();
+
+            //  **Bearer トークン**（RFC 6750 §2.1）。
+            if (!AuthenticationHeader.GetCredentials(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken))
+            {
+                // **トークンが無い**（RFC 6750 §3.1 : エラー コードを付けない）。
+                return this.RegistrationError(401, null);
+            }
+
+            ClaimsIdentity identity = null;
+
+            //  **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 §3）。
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject _, out ClaimsIdentity verified)
+                && Token.CmnAccessToken.VerifyCertificateBinding(
+                    verified, this.Request.GetClientCertificate()))
+            {
+                identity = verified;
+            }
+
+            int status = ClientRegistrationProvider.Register(
+                body, identity, out Dictionary<string, object> ret,
+                out Dictionary<string, string> err);
+
+            if (status == 201)
+            {
+                return this.ResponseMessage(
+                    this.Request.CreateResponse(HttpStatusCode.Created, ret));
+            }
+
+            return this.RegistrationError(status, err);
+        }
+
+        /// <summary>登録の失敗の応答を作る</summary>
+        /// <param name="status">HTTP の状態（400 / 401 / 403 / 404）</param>
+        /// <param name="err">error / error_description を持つ辞書（無ければ null）</param>
+        /// <returns>IHttpActionResult</returns>
+        /// <remarks>
+        /// **401 / 403 には `WWW-Authenticate: Bearer` を付ける**（RFC 6750 §3）。
+        /// **本文は RFC 7591 §3.2.2 の形**（`error` / `error_description`）である。
+        /// </remarks>
+        private IHttpActionResult RegistrationError(int status, Dictionary<string, string> err)
+        {
+            HttpResponseMessage res = (err == null)
+                ? this.Request.CreateResponse((HttpStatusCode)status)
+                : this.Request.CreateResponse((HttpStatusCode)status, err);
+
+            if (status == 401 || status == 403)
+            {
+                res.Headers.WwwAuthenticate.Add(
+                    new System.Net.Http.Headers.AuthenticationHeaderValue(
+                        "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter("register", err)));
+            }
+
+            return this.ResponseMessage(res);
+        }
+
+        /// <summary>
+        /// トークンを含む応答が、キャッシュに残らないようにする（#218 と同じ）
+        /// </summary>
+        /// <remarks>
+        /// **System.Web の Response.Cache を使う。** ヘッダを直接書いても、
+        /// ASP.NET のキャッシュ モジュールに上書きされることがあるため。
+        /// </remarks>
+        private void SetNoStore()
+        {
+            HttpResponse response = HttpContext.Current.Response;
+
+            response.Cache.SetCacheability(HttpCacheability.NoCache);
+            response.Cache.SetNoStore();
+        }
 
         #endregion
     }

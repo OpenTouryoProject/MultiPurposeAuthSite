@@ -141,6 +141,18 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "ClientMode" NVARCHAR2(32) NULL,                 -- oauth2_oidc_mode
     "RequirePkce" NUMBER(3) NOT NULL,                -- 真は -1（Users の bool 列と同じ）
     "ClientName" NVARCHAR2(256) NULL,                -- Users.UserName と同じ幅
+    -- RFC 7591 §2 のクライアント メタデータ（#307 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    "Scopes" NVARCHAR2(2000) NULL,                   -- Const.MaxLengthOfScopeList（空白区切りの列挙）
+    "GrantTypes" NVARCHAR2(256) NULL,                -- Const.MaxLengthOfTypeList（空白区切りの列挙）
+    "ResponseTypes" NVARCHAR2(256) NULL,             -- Const.MaxLengthOfTypeList（空白区切り。要素内の空白は「+」）
+    "JwksUri" NVARCHAR2(512) NULL,                   -- Const.MaxLengthOfUri（段階 1 では動的登録で受け付けない）
+    "ClientUri" NVARCHAR2(512) NULL,                 -- Const.MaxLengthOfUri
+    "LogoUri" NVARCHAR2(512) NULL,                   -- Const.MaxLengthOfUri
+    "TosUri" NVARCHAR2(512) NULL,                    -- Const.MaxLengthOfUri
+    "PolicyUri" NVARCHAR2(512) NULL,                 -- Const.MaxLengthOfUri
+    "Contacts" NVARCHAR2(2000) NULL,                 -- Const.MaxLengthOfContacts（空白区切りの列挙）
+    "SoftwareId" NVARCHAR2(256) NULL,                -- Const.MaxLengthOfSoftwareId
+    "SoftwareVersion" NVARCHAR2(64) NULL,            -- Const.MaxLengthOfSoftwareVersion
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 

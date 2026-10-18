@@ -51,6 +51,7 @@
 //*  2026/10/04  玄人 幸道         CORSのオリジン導出のため、publicクライアントのredirect_uriを返す口を追加（#265）
 //*  2026/10/04  玄人 幸道         web_originsと画面登録ぶんを返す口を追加（#266）
 //*  2026/10/06  玄人 幸道         クライアント登録を専用列から読む（#270）
+//*  2026/10/18  玄人 幸道         scope をDBからも読み、grant_types / response_types を追加（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1192,7 +1193,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// RFC 7591 2 の client metadata の scope と同じく、スペース区切りで登録する（#198）。
         /// 空文字列を登録した場合は、空の一覧（＝ どのスコープも許さない）になる。
-        /// saml2OAuth2Data（管理画面で登録したクライアント）には、まだこの項目が無いので制限しない。
+        ///
+        /// **saml2OAuth2Data（管理画面・動的登録で作ったクライアント）の `Scopes` 列も見る**（#307 の段階 1）。
+        /// **以前は構成ファイルだけを見ていた** ので、
+        /// **DB に登録したクライアントは「登録が無い」扱いになり、**
+        /// **#198 の「クライアントごとの絞り」が一切効いていなかった**
+        /// （`scopes_supported` の絞りだけが効いていた）。
+        ///
+        /// **列が空なら、従来どおり制限しない** — **既存の登録を壊さないため。**
         /// </remarks>
         public List<string> GetClientScopes(string client_id)
         {
@@ -1205,22 +1213,136 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 if (dic.ContainsKey("scope") && dic["scope"] != null)
                 {
-                    List<string> ret = new List<string>();
+                    return Helper.ToDistinctList(dic["scope"]);
+                }
 
-                    foreach (string s in dic["scope"].Split(' '))
-                    {
-                        if (!string.IsNullOrEmpty(s) && !ret.Contains(s))
-                        {
-                            ret.Add(s);
-                        }
-                    }
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（従来どおり）。
+                return null;
+            }
 
-                    return ret;
+            // saml2OAuth2Dataを検索（#307 の段階 1）
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null && !string.IsNullOrWhiteSpace(model.Scopes))
+            {
+                return Helper.ToDistinctList(model.Scopes);
+            }
+
+            // 登録が無い
+            return null;
+        }
+
+        #endregion
+
+        #region Client GrantTypes / ResponseTypes（#307 の段階 1）
+
+        /// <summary>client_id から、使ってよいグラント（登録の grant_types）を取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>グラントの一覧（登録が無ければ null ＝ 制限しない）</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `grant_types`。** **空白区切りで登録する**（`scope` と同じ流儀）。
+        ///
+        /// **空（未登録）なら制限しない** — **既存の登録を壊さないため。**
+        /// **RFC 7591 §2 の既定（`authorization_code`）を、既存の登録に当てはめてはならない**
+        /// （既存のクライアントはこの列を持たないので、当てはめると
+        /// **`authorization_code` 以外が通らなくなる**という破壊になる）。
+        /// **既定を書き込むのは、動的登録で作るときだけ**である。
+        /// </remarks>
+        public List<string> GetClientGrantTypes(string client_id)
+        {
+            return this.GetClientTypeList(client_id, "grant_types", false);
+        }
+
+        /// <summary>client_id から、使ってよい response_type（登録の response_types）を取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>response_type の一覧（登録が無ければ null ＝ 制限しない）</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `response_types`。**
+        ///
+        /// **要素の中の空白は、そのままでは持てない**（区切りと区別が付かない）ので、
+        /// **`code id_token` のような組み合わせは `code+id_token` と書く。**
+        /// **ここで空白へ戻してから返す**（突き合わせる相手は、要求の `response_type` である）。
+        /// </remarks>
+        public List<string> GetClientResponseTypes(string client_id)
+        {
+            return this.GetClientTypeList(client_id, "response_types", true);
+        }
+
+        /// <summary>登録の列挙（grant_types / response_types）を読む</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="key">構成ファイルのキー（grant_types / response_types）</param>
+        /// <param name="unescapeSpace">要素の中の「+」を空白に戻すか</param>
+        /// <returns>一覧（登録が無ければ null ＝ 制限しない）</returns>
+        /// <remarks>
+        /// **構成ファイル → saml2OAuth2Data の順に見る**（他の `Get*` と同じ）。
+        /// **読み出しの入口を 1 か所に保つ**ため、2 つの項目で共用している。
+        /// </remarks>
+        private List<string> GetClientTypeList(string client_id, string key, bool unescapeSpace)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey(key) && !string.IsNullOrWhiteSpace(dic[key]))
+                {
+                    return Helper.ToDistinctList(dic[key], unescapeSpace);
+                }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る。**
+                return null;
+            }
+
+            // saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
+            {
+                string value = (key == "grant_types") ? model.GrantTypes : model.ResponseTypes;
+
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return Helper.ToDistinctList(value, unescapeSpace);
                 }
             }
 
             // 登録が無い
             return null;
+        }
+
+        /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
+        /// <param name="value">登録値</param>
+        /// <returns>一覧</returns>
+        public static List<string> ToDistinctList(string value)
+        {
+            return Helper.ToDistinctList(value, false);
+        }
+
+        /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
+        /// <param name="value">登録値</param>
+        /// <param name="unescapeSpace">要素の中の「+」を空白に戻すか</param>
+        /// <returns>一覧</returns>
+        /// <remarks>
+        /// **切り方は `SplitUriList` と同じ**（半角・全角の空白・タブ・改行。空の要素は捨てる）。
+        /// **`scope` が空白区切り**（RFC 6749 §3.3）**なのと同じ流儀**である。
+        /// </remarks>
+        public static List<string> ToDistinctList(string value, bool unescapeSpace)
+        {
+            List<string> ret = new List<string>();
+
+            foreach (string s in Helper.SplitUriList(value))
+            {
+                string item = unescapeSpace ? s.Replace("+", " ") : s;
+
+                if (!ret.Contains(item))
+                {
+                    ret.Add(item);
+                }
+            }
+
+            return ret;
         }
 
         #endregion
@@ -1666,6 +1788,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 scopes.Add(OAuth2AndOIDCConst.Scope_Openid);
             }
 
+            //  **クライアント登録の管理 API 専用の scope は、動的登録を開けた配備だけ**
+            //    （#307 の段階 1）。**閉じている配備では、広告も発行もしない。**
+            if (Config.EnableDynamicClientRegistration)
+            {
+                scopes.Add(Const.ScopeClientRegistration);
+            }
+
             return scopes;
         }
 
@@ -1712,6 +1841,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// scopes_supported での絞り込み（#198 の前半）に加え、
         /// クライアントの登録に scope があれば、その範囲にも収める（#198 の後半）。
         /// 登録が無いクライアントは、既存の登録を壊さないよう、ここでは制限しない。
+        ///
+        /// **`Const.ScopeClientRegistration`（クライアント登録の管理 API）だけは、倒し方が逆**
+        /// （#307 の段階 1）。**登録に明記していなければ出さない。**
+        ///
+        /// | | 倒し方 |
+        /// |---|---|
+        /// | 普通の scope | **登録が無ければ制限しない**（従来どおり） |
+        /// | **`client_registration`** | **登録に明記していなければ出さない** |
+        ///
+        /// **理由** : **この scope は「クライアント登録を作れる」権限**である。
+        /// **「登録が無ければ制限しない」を当てはめると、**
+        /// **`scope` を登録していない既存のクライアントが全て、**
+        /// **ROPC で登録を作れることになる。**
         /// </remarks>
         public static IEnumerable<string> FilterSupportedScopes(IEnumerable<string> scopes, string client_id)
         {
@@ -1720,7 +1862,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (string s in Helper.FilterSupportedScopes(scopes))
             {
-                if (permitted == null || permitted.Contains(s))
+                if (s == Const.ScopeClientRegistration)
+                {
+                    //  **明記されているときだけ通す**（#307 の段階 1）。
+                    if (permitted != null && permitted.Contains(s))
+                    {
+                        ret.Add(s);
+                    }
+                }
+                else if (permitted == null || permitted.Contains(s))
                 {
                     ret.Add(s);
                 }

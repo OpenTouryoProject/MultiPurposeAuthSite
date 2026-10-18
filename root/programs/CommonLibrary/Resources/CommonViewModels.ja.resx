@@ -318,4 +318,70 @@
   <data name="NameIdFormatDescription" xml:space="preserve">
     <value>AuthnRequest で要求する NameIDPolicy の Format。unspecified は利用者名、emailAddress はメアド、**persistent は RP ごとに違う値（PPID）**。**指定しなければ IdP 側が unspecified に倒す。****transient はこの実装では未対応。**</value>
   </data>
+  <data name="Scopes" xml:space="preserve">
+    <value>許すスコープ（scope）</value>
+  </data>
+  <data name="ScopesDescription" xml:space="preserve">
+    <value>このクライアントが要求してよい scope（空白区切り）。**空なら絞らない**（scopes_supported の絞りだけが効く）。</value>
+  </data>
+  <data name="GrantTypes" xml:space="preserve">
+    <value>許すグラント（grant_types）</value>
+  </data>
+  <data name="GrantTypesDescription" xml:space="preserve">
+    <value>このクライアントが使ってよいグラント（空白区切り。authorization_code / implicit / password / client_credentials / refresh_token と urn: のもの）。**空なら絞らない。**</value>
+  </data>
+  <data name="ResponseTypes" xml:space="preserve">
+    <value>許す response_type（response_types）</value>
+  </data>
+  <data name="ResponseTypesDescription" xml:space="preserve">
+    <value>このクライアントが使ってよい response_type（空白区切り）。**組み合わせは「+」で繋ぐ**（code+id_token）— 空白は区切りだから。**空なら絞らない。**</value>
+  </data>
+  <data name="JwksUri" xml:space="preserve">
+    <value>JWK Set の URL（jwks_uri）</value>
+  </data>
+  <data name="JwksUriDescription" xml:space="preserve">
+    <value>クライアントが鍵を公開している URL。**まだ使っていない** — 鍵は登録された JWK の列から読む。**動的登録では、この値を断る。**</value>
+  </data>
+  <data name="ClientUri" xml:space="preserve">
+    <value>ホーム ページ（client_uri）</value>
+  </data>
+  <data name="ClientUriDescription" xml:space="preserve">
+    <value>このクライアントのホーム ページ。**保存して、登録のとおり返すだけ**（振る舞いは変わらない）。</value>
+  </data>
+  <data name="LogoUri" xml:space="preserve">
+    <value>ロゴ（logo_uri）</value>
+  </data>
+  <data name="LogoUriDescription" xml:space="preserve">
+    <value>このクライアントのロゴ。**保存して、登録のとおり返すだけ。**</value>
+  </data>
+  <data name="TosUri" xml:space="preserve">
+    <value>利用規約（tos_uri）</value>
+  </data>
+  <data name="TosUriDescription" xml:space="preserve">
+    <value>このクライアントの利用規約。**保存して、登録のとおり返すだけ。**</value>
+  </data>
+  <data name="PolicyUri" xml:space="preserve">
+    <value>プライバシー ポリシー（policy_uri）</value>
+  </data>
+  <data name="PolicyUriDescription" xml:space="preserve">
+    <value>このクライアントのプライバシー ポリシー。**保存して、登録のとおり返すだけ。**</value>
+  </data>
+  <data name="Contacts" xml:space="preserve">
+    <value>連絡先（contacts）</value>
+  </data>
+  <data name="ContactsDescription" xml:space="preserve">
+    <value>このクライアントについての連絡先（メアド。空白区切り）。**保存して、登録のとおり返すだけ。**</value>
+  </data>
+  <data name="SoftwareId" xml:space="preserve">
+    <value>ソフトウェアの識別子（software_id）</value>
+  </data>
+  <data name="SoftwareIdDescription" xml:space="preserve">
+    <value>このクライアントの元になっているソフトウェアの識別子。**同じソフトウェアのどの配備でも同じ値**で、**client_id とは別物。**</value>
+  </data>
+  <data name="SoftwareVersion" xml:space="preserve">
+    <value>ソフトウェアの版（software_version）</value>
+  </data>
+  <data name="SoftwareVersionDescription" xml:space="preserve">
+    <value>このクライアントの元になっているソフトウェアの版。**保存して、登録のとおり返すだけ。**</value>
+  </data>
 </root>

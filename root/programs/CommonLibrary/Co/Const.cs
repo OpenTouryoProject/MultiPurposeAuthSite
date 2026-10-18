@@ -44,6 +44,7 @@
 //*  2026/10/07  玄人 幸道         データ保護のアプリケーション名を追加（#279）
 //*  2026/10/09  玄人 幸道         test_self_saml を定数にした（#277 の段階 3）
 //*  2026/10/09  玄人 幸道         test_self_code_manage を削除（管理画面のトークン取得の廃止に伴う）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の scope と、登録項目の上限を追加（#307 の段階 1）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -82,6 +83,36 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>PasswordのMaxLength</summary>
         public const int MaxLengthOfPassword = 100;
+
+        /// <summary>scope の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **RFC 7591 §2 の `scope`**（空白区切りの列挙）**の上限。**
+        /// **`MaxLengthOfUriList` と同じ 2000**（Oracle の `NVARCHAR2` の上限）だが、
+        /// **URI の列挙ではない**ので、別の定数にしてある。
+        /// </remarks>
+        public const int MaxLengthOfScopeList = 2000;
+
+        /// <summary>grant_types / response_types の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **RFC 7591 §2 の `grant_types` / `response_types`**（空白区切りの列挙）**の上限。**
+        /// **既知の値しか入らない**（`authorization_code` / `implicit` / `password` /
+        /// `client_credentials` / `refresh_token` / `urn:…:jwt-bearer` / `urn:…:device_code` /
+        /// `urn:…:ciba`、`code` / `token` / `id_token` の組み合わせ）ので、
+        /// **全部並べても 256 に収まる。**
+        /// </remarks>
+        public const int MaxLengthOfTypeList = 256;
+
+        /// <summary>contacts（連絡先）の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>**RFC 7591 §2 の `contacts`**（空白区切りのメール アドレスの列挙）。</remarks>
+        public const int MaxLengthOfContacts = 2000;
+
+        /// <summary>software_id の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>**RFC 7591 §2 の `software_id`**（UUID を想定しているが、縛られていない）。</remarks>
+        public const int MaxLengthOfSoftwareId = 256;
+
+        /// <summary>software_version の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>**RFC 7591 §2 の `software_version`**（形は仕様が定めていない）。</remarks>
+        public const int MaxLengthOfSoftwareVersion = 64;
 
         #endregion
 
@@ -147,6 +178,26 @@ namespace MultiPurposeAuthSite.Co
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address;
+
+        #endregion
+
+        #region Dynamic Client Registration（#307 の段階 1）
+
+        /// <summary>クライアント登録の管理 API 専用の scope（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **この scope を持つアクセス トークンだけが、`registration_endpoint` を叩ける。**
+        ///
+        /// **仕様が定めた名前ではない**（RFC 7591 §3.1 の initial access token は、
+        /// **どう取るかを定めていない**）。**この配備が決めた値**である。
+        ///
+        /// **広告するのは、動的登録を開けた配備だけ**（`Helper.GetScopesSupported`）。
+        ///
+        /// > **この scope は、登録に明記したクライアントにしか出さない**
+        /// > （`Helper.FilterSupportedScopes`）。
+        /// > **他の scope の「登録が無ければ制限しない」とは、逆の倒し方である** —
+        /// > **登録を作れる強い権限なので、既定で持たせてはならない。**
+        /// </remarks>
+        public const string ScopeClientRegistration = "client_registration";
 
         #endregion
 

@@ -237,7 +237,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
 
 ## TC-1.5 アクセス トークンの exp と expires_in が整合する
 
@@ -3097,7 +3097,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
 
 ## RT-198.2 password : scopes_supported に無いスコープを発行しない
 
@@ -3119,7 +3119,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
 
 ## RT-198.3 クライアントの登録（scope）の範囲に収める : client_credentials
 
@@ -3142,7 +3142,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
 
 ## RT-198.4 クライアントの登録（scope）の範囲に収める : 認可コード フロー
 
@@ -6491,6 +6491,237 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **1 件だけ登録している配備は、従来どおり省略できる。** **この分岐は件数で決まる** — **設定は増えていない。**
+
+## RT-307.1 `registration_endpoint` で登録でき、返った `client_id` / `client_secret` で実際に認可コードが取れる
+
+| | |
+|---|---|
+| 観点 | **登録が「本当に効いている」ことまで測る。****201 と `client_id` が返るだけでは、使える登録になったとは言えない** — **`redirect_uri` が正しい列に入っていなければ、認可要求が通らない。** |
+| 根拠 | RFC 7591 §3.1 / §3.2.1（201 Created）/ OIDC DCR 1.0 §2 / #307 |
+| テスト | `RT30701_登録でき返った資格情報で認可コードが取れる` |
+
+**手順**
+
+1. redirect_uris を 2 本登録する
+1. 返った資格情報で、認可コードを取る
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- client_id が返る
+- client_secret が返る
+- client_id_issued_at が返る
+- client_secret_expires_at は 0（期限なし）
+- grant_types の既定は authorization_code
+- response_types の既定は code
+- redirect_uris に 1 本目が入る
+- redirect_uris に 2 本目が入る
+- code が返る
+
+**補足**
+
+- **`client_name` は登録しても無視する**（RFC 7591 §3.2.1 が認めている）— **`ClientName` の列は利用者名であり、`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない**（利用者名を漏らさないため）。
+
+## RT-307.2 トークンが無ければ `401`、scope が足りなければ `403` ＋ `insufficient_scope`
+
+| | |
+|---|---|
+| 観点 | **この口は、クライアント登録を作れる。****誰でも叩けてはならないし、普通のアクセス トークンでも叩けてはならない。****専用 scope（`client_registration`）は、登録に明記したクライアントにしか出さない** — **他の scope の「登録が無ければ制限しない」とは逆の倒し方である。** |
+| 根拠 | RFC 6750 §3.1（invalid_token / insufficient_scope）/ #307 |
+| テスト | `RT30702_トークンが無ければ401scopeが足りなければ403` |
+
+**手順**
+
+1. Bearer を付けずに叩く
+1. 出来合いでない（偽の）トークンで叩く
+1. 専用 scope を持たないトークンで叩く
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 401
+- WWW-Authenticate: Bearer が付く
+- HTTP の状態は 401
+- error は invalid_token
+- HTTP の状態は 403
+- error は insufficient_scope
+
+**補足**
+
+- **`client_registration` は、登録に明記していなければ出さない。** **「登録が無ければ制限しない」を当てはめると、`scope` を登録していない既存のクライアントが全て、ROPC で登録を作れることになる。**
+
+## RT-307.3 2 件目の登録は `403` ＋ `access_denied` になる（1 利用者 1 クライアント）
+
+| | |
+|---|---|
+| 観点 | **この配備は `Users.ClientID` で所有者を持つ**ので、**1 利用者 1 クライアント**である。**RFC 7591 は「1 つの主体が n 件登録できること」を求めていない** — **§3.2.1 は AS が要求を拒否・置換してよいとし、§5 は重複した登録が疑わしいときは拒否すべきとしている。****§3.2.2 の 4 つはメタデータの誤り用**なので、**ポリシーによる断りには RFC 6749 の `access_denied` を使う**（一般の誤りは 400 だが、**`unless otherwise specified` なので 403 は禁じられていない**）。 |
+| 根拠 | RFC 7591 §3.2.1 / §5 / RFC 6749 §4.1.2.1 / §5.2 / #307 |
+| テスト | `RT30703_2件目の登録は403になる` |
+
+**手順**
+
+1. 1 件目は登録できる
+1. 同じトークンで 2 件目を登録しようとする
+1. 1 件目の登録は壊れていない
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- HTTP の状態は 403
+- error は access_denied
+- 1 件目で、まだ code が取れる
+
+**補足**
+
+- **`POST` を upsert にはしていない。** **`client_secret` を作り直すか据え置くかの判断が常について回り、間違えると既存の RP が止まる。** **更新は RFC 7592 の `PUT`（段階 2）で行う。**
+
+## RT-307.4 メタデータの誤りは `400`（`invalid_redirect_uri` / `invalid_client_metadata`）
+
+| | |
+|---|---|
+| 観点 | **知らないメタデータは無視してよい**（RFC 7591 §3.2.1）が、**無視すると黙って弱くなるものは断る。****`jwks_uri` を受け取って無視すると、`private_key_jwt`（#239）や Request Object（JAR）の検証が、登録したつもりの鍵で通らなくなる** — **鍵をこの URL から引く実装が、まだ無い**（段階 3）。 |
+| 根拠 | RFC 7591 §3.2.1 / §3.2.2 / RFC 6749 §3.1.2 / #307 |
+| テスト | `RT30704_メタデータの誤りは400になる` |
+
+**手順**
+
+1. redirect_uris が無い
+1. redirect_uri にフラグメントが付いている
+1. 相対 URI は通らない
+1. jwks_uri は受け付けない（段階 1）
+1. software_statement は受け付けない（段階 3）
+1. response_types と grant_types が噛み合っていない
+1. 専用 scope は、動的登録では付けられない
+1. どの誤りでも、登録は作られていない
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400
+- error は invalid_redirect_uri
+- HTTP の状態は 400
+- error は invalid_redirect_uri
+- HTTP の状態は 400
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- HTTP の状態は 400
+- error は unapproved_software_statement
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- この後で、正しい要求は 201 になる
+
+**補足**
+
+- **自分と同じ強さの scope を、自分で配らせない。** **`client_registration` を動的登録で付けられるようにすると、権限を際限なく増やせる。** **配るのは、管理画面か構成ファイルからだけ**にしてある。
+
+## RT-307.5 管理 API 専用のアクセス トークンは、scope も有効期限も絞られている
+
+| | |
+|---|---|
+| 観点 | **配備ぜんたいの `OAuth2AccessTokenExpireTimeSpanFromMinutes`（既定 360 分）では長すぎる** — **この口は、人の操作より CI から叩く想定**で、長く持たせる理由が無い。**scope も混ぜない** — **登録を作れる権限を持ったトークンが、利用者の属性を読む用途でも使い回されると、寿命を短くした意味が薄れる。** |
+| 根拠 | RFC 6749 §3.3 / #307 |
+| テスト | `RT30705_専用トークンはscopeも有効期限も絞られている` |
+
+**手順**
+
+1. 専用 scope を、他の scope と一緒に要求する
+1. 有効期限が、配備ぜんたいの値より短い
+
+**検証（合否を判定する）**
+
+- scope は専用の 1 本だけ
+- 1 時間より短い
+
+**観測（判定しない）**
+
+- exp - iat（秒）
+
+**補足**
+
+- **既定は 300 秒**（`DcrAccessTokenExpireTimeSpanFromSeconds`。**未設定・0 以下なら既定値に倒す**）。**ここで値そのものを突き合わせないのは、配備で変えられる設定だから**である。
+
+## RT-307.6 登録した `response_types` が、認可エンドポイントで効く
+
+| | |
+|---|---|
+| 観点 | **保存して返すだけにはしない。****登録が「`code` だけ」と言っているのに認可サーバが `token` も通すのでは、登録の意味が無い。****絞りは認可エンドポイントで効く** — **利用者を操作させる前に断る**ため。**`ClientModePolicy`（登録種別で、その経路を許すか）の手前に 1 段置いてある。** |
+| 根拠 | RFC 7591 §2（response_types）/ RFC 6749 §4.1.2.1（unauthorized_client）/ #307 |
+| テスト | `RT30706_登録したresponse_typesが効く` |
+
+**手順**
+
+1. 登録した response_type（code）は通る
+1. 登録に無い response_type（token）は断られる
+
+**検証（合否を判定する）**
+
+- code が返る
+- error は unauthorized_client
+
+**観測（判定しない）**
+
+- error_description
+
+**補足**
+
+- **列が空なら絞らない**（#198 と同じ倒し方）。**既存の登録はこの列を持たないので、RFC 7591 §2 の既定（`code`）を当てはめてはならない** — **当てはめると「`code` 以外が通らなくなる」破壊になる。** **既定を書き込むのは、動的登録で作るときだけ。**
+
+## RT-307.7 登録した `grant_types` が、トークン エンドポイントで効く
+
+| | |
+|---|---|
+| 観点 | **`grant_types` と `response_types` は別物である。****認可エンドポイントは `response_types` を見る**が、**どのグラントでトークンを出すかは `grant_types` で決まる。****`ClientModePolicy`（登録種別 × 証明）の手前に 1 段置いてある** — **`ClientModePolicy` は AS の方針、`grant_types` は RP の申告**であり、**役割が違う。** |
+| 根拠 | RFC 7591 §2（grant_types）/ RFC 6749 §5.2（unauthorized_client）/ #307 |
+| テスト | `RT30707_登録したgrant_typesが効く` |
+
+**手順**
+
+1. 認可コードは取れる（認可エンドポイントは grant_types を見ない）
+1. その code の交換は、unauthorized_client で断られる
+1. 登録した grant_type（password）は通る
+
+**検証（合否を判定する）**
+
+- code が返る
+- access_token を返さない
+- error は unauthorized_client
+- access_token が返る
+
+**観測（判定しない）**
+
+- error_description
+
+**補足**
+
+- **列が空なら絞らない。** **通しの大半が、この経路（列を持たない既存の登録）で回っている。**
+
+## RT-307.8 登録した `scope` が、DB に登録したクライアントでも効く
+
+| | |
+|---|---|
+| 観点 | **これまで、クライアントごとの `scope` の絞りは構成ファイルのクライアントにしか効いていなかった** — **`Helper.GetClientScopes` が構成ファイル（`OAuth2ClientsInformation`）だけを見ていたため、DB に登録したクライアントは「登録が無い」扱いになり、#198 の後半（クライアントごとの絞り）が一切効かなかった**（`scopes_supported` の絞りだけが効いていた）。**#307 の段階 1 で `Scopes` の列を足し、DB も見るようにした。** |
+| 根拠 | RFC 7591 §2（scope）/ RFC 6749 §3.3 / #198 / #307 |
+| テスト | `RT30708_登録したscopeが効く` |
+
+**手順**
+
+1. scope を openid だけにして登録する
+1. 登録に無い scope（email）も一緒に要求する
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答の scope は openid
+- 登録した openid は載る
+- 登録に無い email は載らない
+
+**観測（判定しない）**
+
+- トークンに載った scope
+
+**補足**
+
+- **断る（`invalid_scope`）のではなく、外す** — **RFC 6749 §3.3 : 認可サーバは、要求されたスコープの一部または全部を無視してよい**（#198 と同じ倒し方）。 **列が空なら絞らない。**
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

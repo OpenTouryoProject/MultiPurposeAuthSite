@@ -64,6 +64,7 @@
 //*  2026/10/10  玄人 幸道         SAML2のID連携の設定を追加（#286の段階1）
 //*  2026/10/10  玄人 幸道         ID連携の導線を設定の有無で出す（#286の段階2）
 //*  2026/10/16  玄人 幸道         slow_down・失敗回数・レート制限の設定を追加（#305）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の設定を追加（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1501,6 +1502,37 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// クライアント登録の管理 API 専用のアクセス トークンの有効期限（秒）（#307 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **`Const.ScopeClientRegistration` を要求したときだけ、この期限で出す。**
+        /// **配備ぜんたいの `OAuth2AccessTokenExpireTimeSpanFromMinutes`（既定 360 分）では長すぎる** —
+        /// **この口は、人の操作より CI から叩く想定**で、長く持たせる理由が無い。
+        ///
+        /// **未設定・空なら既定値（300 秒）に倒す**（**既存の配備にはこのキーが無い**）。
+        /// **倒れ先を読む先例は `Saml2AssertionExpireTimeSpanFromMinutes`**（#276）。
+        ///
+        /// > **0 以下を書いたときも既定値に倒す。**
+        /// > **0 は「発行した瞬間に切れるトークン」であり、設定の誤りとしか考えられない。**
+        /// </remarks>
+        public static TimeSpan DcrAccessTokenExpireTimeSpanFromSeconds
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue(
+                    "DcrAccessTokenExpireTimeSpanFromSeconds");
+
+                if (!int.TryParse(temp, out int seconds) || seconds <= 0)
+                {
+                    //  **既定値**（キーが無い配備でも動く）。
+                    seconds = 300;
+                }
+
+                return TimeSpan.FromSeconds(seconds);
+            }
+        }
+
+        /// <summary>
         /// OAuth2の認可コードの有効期限（秒）（#188）
         /// </summary>
         /// <remarks>
@@ -1903,6 +1935,29 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>動的クライアント登録（RFC 7591）を開けるか（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **既定は false**（**口そのものを張らない**）。
+        ///
+        /// **`Convert.ToBoolean` ではなく `bool.TryParse` で読む** —
+        /// **既存の配備にはこのキーが無く、`Convert.ToBoolean("")` は例外になる**
+        /// （`EnableOpenIDConnect` などの既存キーは、どちらの雛形にも在る）。
+        ///
+        /// **この口は `IsLockedDownTestEndpoints` の対象ではない**
+        /// （**本番で使う口**であり、テスト用の口とは別に、このキーで開閉する）。
+        /// </remarks>
+        public static bool EnableDynamicClientRegistration
+        {
+            get
+            {
+                bool.TryParse(
+                    GetConfigParameter.GetConfigValue("EnableDynamicClientRegistration"),
+                    out bool enable);
+
+                return enable;
+            }
+        }
+
         #endregion
 
         #region エンドポイント 
@@ -2040,6 +2095,24 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region WebAPI
+
+        /// <summary>
+        /// 動的クライアント登録のエンドポイント（RFC 7591 / OIDC Discovery §3 の registration_endpoint）（#307 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **`EnableDynamicClientRegistration` が false なら、この口は張らない。**
+        /// **未設定・空なら `/register` に倒す**（**既存の配備にはこのキーが無い**）。
+        /// **広告（Discovery）も、張ったときだけ行う。**
+        /// </remarks>
+        public static string DcrRegistrationEndpoint
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue("DcrRegistrationEndpoint");
+
+                return string.IsNullOrEmpty(temp) ? "/register" : temp;
+            }
+        }
 
         /// <summary>
         /// OAuth2/OIDCのUserInfoエンドポイント 

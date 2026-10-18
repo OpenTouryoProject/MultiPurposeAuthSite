@@ -318,4 +318,70 @@
   <data name="NameIdFormatDescription" xml:space="preserve">
     <value>Which NameIDPolicy Format the AuthnRequest asks for. unspecified returns the user name, emailAddress the mail address, persistent a per-RP value (PPID). Not specifying it lets the IdP fall back to unspecified. transient is not supported here.</value>
   </data>
+  <data name="Scopes" xml:space="preserve">
+    <value>Allowed scopes (scope)</value>
+  </data>
+  <data name="ScopesDescription" xml:space="preserve">
+    <value>Scopes this client may ask for, separated by spaces. When empty, they are not narrowed - only scopes_supported applies.</value>
+  </data>
+  <data name="GrantTypes" xml:space="preserve">
+    <value>Allowed grants (grant_types)</value>
+  </data>
+  <data name="GrantTypesDescription" xml:space="preserve">
+    <value>Grants this client may use, separated by spaces (authorization_code / implicit / password / client_credentials / refresh_token and the urn: ones). When empty, they are not narrowed.</value>
+  </data>
+  <data name="ResponseTypes" xml:space="preserve">
+    <value>Allowed response types (response_types)</value>
+  </data>
+  <data name="ResponseTypesDescription" xml:space="preserve">
+    <value>response_type values this client may use, separated by spaces. Join a combination with a plus sign (code+id_token) because a space is the separator. When empty, they are not narrowed.</value>
+  </data>
+  <data name="JwksUri" xml:space="preserve">
+    <value>JWK Set URL (jwks_uri)</value>
+  </data>
+  <data name="JwksUriDescription" xml:space="preserve">
+    <value>Where the client publishes its keys. Not used yet - keys are read from the registered JWK columns, and the dynamic client registration rejects this value.</value>
+  </data>
+  <data name="ClientUri" xml:space="preserve">
+    <value>Home page (client_uri)</value>
+  </data>
+  <data name="ClientUriDescription" xml:space="preserve">
+    <value>Home page of this client. Stored and returned as registered; it does not change any behaviour.</value>
+  </data>
+  <data name="LogoUri" xml:space="preserve">
+    <value>Logo (logo_uri)</value>
+  </data>
+  <data name="LogoUriDescription" xml:space="preserve">
+    <value>Logo of this client. Stored and returned as registered.</value>
+  </data>
+  <data name="TosUri" xml:space="preserve">
+    <value>Terms of service (tos_uri)</value>
+  </data>
+  <data name="TosUriDescription" xml:space="preserve">
+    <value>Terms of service of this client. Stored and returned as registered.</value>
+  </data>
+  <data name="PolicyUri" xml:space="preserve">
+    <value>Privacy policy (policy_uri)</value>
+  </data>
+  <data name="PolicyUriDescription" xml:space="preserve">
+    <value>Privacy policy of this client. Stored and returned as registered.</value>
+  </data>
+  <data name="Contacts" xml:space="preserve">
+    <value>Contacts (contacts)</value>
+  </data>
+  <data name="ContactsDescription" xml:space="preserve">
+    <value>Mail addresses to contact about this client, separated by spaces. Stored and returned as registered.</value>
+  </data>
+  <data name="SoftwareId" xml:space="preserve">
+    <value>Software identifier (software_id)</value>
+  </data>
+  <data name="SoftwareIdDescription" xml:space="preserve">
+    <value>Identifier of the software behind this client. It is the same value across every deployment of that software, and is not the client_id.</value>
+  </data>
+  <data name="SoftwareVersion" xml:space="preserve">
+    <value>Software version (software_version)</value>
+  </data>
+  <data name="SoftwareVersionDescription" xml:space="preserve">
+    <value>Version of the software behind this client. Stored and returned as registered.</value>
+  </data>
 </root>

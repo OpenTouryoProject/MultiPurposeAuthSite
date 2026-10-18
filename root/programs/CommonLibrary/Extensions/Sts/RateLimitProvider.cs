@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 3）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の口を対象に足した（#307 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -150,6 +151,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         RateLimitProvider.Add(map, Config.CibaAuthorizeEndpoint, "ciba_authz");
                         RateLimitProvider.Add(map, OAuth2AndOIDCParams.AuthRequestPushUri, "par");
                         RateLimitProvider.Add(map, OAuth2AndOIDCParams.JwkSetUri, "jwkcerts");
+
+                        //  **動的クライアント登録**（#307 の段階 1）。
+                        //    **開けていない配備でも表には入る**（口が無ければ、そもそも来ない）。
+                        RateLimitProvider.Add(map, Config.DcrRegistrationEndpoint, "register");
 
                         RateLimitProvider.endpoints = map;
                     }
