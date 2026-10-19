@@ -462,6 +462,19 @@ $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWe
 # 生の SslStream は 5.1 でも 1.2 / 1.3 の両方で成功するので、
 # **TLS そのものの問題ではない。**
 # 版差の原因を追うより、それぞれで通ることを確認した方法を使う。
+# **software_statement の発行者（#307 の段階 4）。**
+#   **E2E は、この iss で statement に署名する**（RT-307.18 〜 .21）。
+#   **署名鍵は SpRp_RsaPfxFilePath**（JwsSigner.SignRS256）なので、
+#   **サイトには、その対の .cer を「発行者の検証鍵」として渡す。**
+#
+#   **雛形の既定は空**（＝ software_statement を受け付けない）なので、
+#   **テストでは、ここで渡して有効にする。**
+#   **渡さないと RT-307.18 〜 .21 は Skip になる**（-Launch でないときも同じ）。
+$script:SoftwareStatementIssuerKey = 'e2e_vendor'
+$script:SoftwareStatementIssuer    = 'https://vendor.opentouryo.com'
+$script:SoftwareStatementCer       = 'C:/root/files/resource/X509/SHA256RSA_Client.cer'
+$script:SoftwareStatementAlg       = 'RS256'
+
 # **テストで使うクレームの対応付け（#230）。**
 #   キーはクレーム名（address.<副フィールド> と書くと address オブジェクトを組み立てる）、
 #   値は UnstructuredData の中のキー（usd1 / usd2 は /Manage/AddUnstructuredData で入れられる）
@@ -888,6 +901,16 @@ public static class MpasTestTls
         #   雛形の既定は無効（口そのものを張らない）だが、**テストでは有効にして起動する。**
         #   無効なままだと registration_endpoint が広告されず、RT-307.* が Skip になる。
         $env:EnableDynamicClientRegistration = 'true'
+        # **software_statement の発行者も渡す（#307 の段階 4）。**
+        #   **net10.0 は「節」として読む**ので、appSettings__<キー>__<鍵>__<属性> で足す
+        #   （UserClaimsMapping と同じ事情）。
+        $ssPrefix = 'Env:\appSettings__SoftwareStatementIssuers__' `
+            + $script:SoftwareStatementIssuerKey + '__'
+        Set-Item -Path ($ssPrefix + 'display_name')  -Value 'E2E Test Vendor'
+        Set-Item -Path ($ssPrefix + 'enabled')       -Value 'true'
+        Set-Item -Path ($ssPrefix + 'issuer')        -Value $script:SoftwareStatementIssuer
+        Set-Item -Path ($ssPrefix + 'cer_file_path') -Value $script:SoftwareStatementCer
+        Set-Item -Path ($ssPrefix + 'alg')           -Value $script:SoftwareStatementAlg
 
         # **テスト利用者をサイトごとに分ける**（#260）。
         #   2 つのサイトを同時に立てるので、DB ストアでは 1 つの DB を共有する。
@@ -1001,6 +1024,14 @@ public static class MpasTestTls
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
             # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1。上の net10.0 側と同じ理由）**
             $env:EnableDynamicClientRegistration = 'true'
+            # **software_statement の発行者も渡す（#307 の段階 4。net48 は 1 本の JSON 文字列）**
+            #   **1 行で組む** — **XML の属性値と同じ事情**で、改行を入れる形にしない。
+            $env:SoftwareStatementIssuers = (
+                '{"' + $script:SoftwareStatementIssuerKey + '":{' +
+                '"display_name":"E2E Test Vendor","enabled":"true",' +
+                '"issuer":"' + $script:SoftwareStatementIssuer + '",' +
+                '"cer_file_path":"' + $script:SoftwareStatementCer + '",' +
+                '"alg":"' + $script:SoftwareStatementAlg + '"}}')
 
             # **テスト利用者をサイトごとに分ける**（#260。上の net10.0 側と同じ理由）
             $env:TestUserSuffix = $script:TestUserSuffixNetFx
@@ -1038,6 +1069,11 @@ public static class MpasTestTls
             $env:MPAS_NETFX_TESTUSER_SUFFIX = $script:TestUserSuffixNetFx
             if ($NetFxMtls) { $env:MPAS_NETFX_MTLS = 'true' }   # FA-6 を net48 版でも回す（#226）
         }
+
+        # **RT-307.18 〜 .21 を回してよい**（#307 の段階 4）。
+        #   **期待する iss をテストへ渡す** — **サイトへ渡した値と、必ず同じ値を使う。**
+        #   **渡していなければ、テスト側は Skip する**（MtlsTests.SkipIfNoMtls と同じ作法）。
+        $env:MPAS_SOFTWARE_STATEMENT_ISS = $script:SoftwareStatementIssuer
 
         if ($ShortLifetimes) {
             Remove-Item Env:\OAuth2AuthorizationCodeExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue

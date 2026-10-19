@@ -31,6 +31,7 @@
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592 の GET / PUT / DELETE）を追加（#307 の段階 2）
 //*  2026/10/19  玄人 幸道         jwks / DN / token_endpoint_auth_method を受ける（#307 の段階 3）
+//*  2026/10/20  玄人 幸道         software_statement を検証して受ける（#307 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -104,9 +105,26 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// **登録された方法は `CmnEndpoints.AllowsAuthMethod` が効かせる** —
     /// **明示が無ければ、秘密ベースの 2 つだけ**（**強い方法は明示が要る**）。
     ///
-    /// **段階 4 以降で足すもの** : `software_statement`、`jwks_uri`（**別 Issue**。
+    /// **段階 4 で出来ること**（**署名付きの主張を受ける**）。
+    ///
+    /// | | |
+    /// |---|---|
+    /// | `software_statement` | **信頼する発行者が署名した JWT**（RFC 7591 §2.3）。**検証して、主張を本文へ重ねる** |
+    /// | 優先順位 | **statement が勝つ**（§2.3 は MUST）。**食い違っても断らず、ログに残す** |
+    /// | 信頼の決め | **設定の `SoftwareStatementIssuers`**（**発行者ごとに 1 件**。**クライアントごとではない**） |
+    /// | `RequireSoftwareStatement` | **true なら、statement の無い登録を断る**（**`PUT` にも効く**） |
+    ///
+    /// **statement は、2 つの専用トークンを置き換えない。**
+    /// **あれは認可、これは内容の保証**である（`SoftwareStatementProvider` の remarks）。
+    /// **statement はソフトウェアに同梱されて配布される ＝ 秘密ではない**ので、
+    /// **認可の代わりにはならない。**
+    ///
+    /// **保管しない。** **応答にも返さない**（§3.2.1 で任意）。
+    /// **＝ この段階で列は増えていない**（既存の配備に `ALTER` が要らない）。
+    ///
+    /// **段階 5 以降で足すもの** : `jwks_uri`（**別 Issue**。
     /// クライアント認証の経路が同期である）、`client_credentials` 経路、
-    /// 1 利用者 n クライアント。
+    /// 1 利用者 n クライアント、**発行者ごとに許す範囲を絞ること**。
     /// </remarks>
     public static class ClientRegistrationProvider
     {
@@ -121,7 +139,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <summary>RFC 7591 §3.2.2 : メタデータが不正</summary>
         public const string invalid_client_metadata = "invalid_client_metadata";
 
+        /// <summary>RFC 7591 §3.2.2 : software_statement が壊れている（#307 の段階 4）</summary>
+        /// <remarks>
+        /// **JWT として読めない・署名が合わない・`iss` が無い・`exp` が切れている**とき。
+        /// **「中身は読めたが、信頼していない」のは <see cref="unapproved_software_statement"/>** である。
+        /// </remarks>
+        public const string invalid_software_statement = "invalid_software_statement";
+
         /// <summary>RFC 7591 §3.2.2 : software_statement を受け付けない</summary>
+        /// <remarks>
+        /// **その発行者を信頼していない**とき（§3.2.2 の
+        /// "not approved for use by this authorization server"）。
+        /// **信頼する発行者を 1 件も設定していない配備では、常にこれ**である（従来どおり）。
+        /// </remarks>
         public const string unapproved_software_statement = "unapproved_software_statement";
 
         /// <summary>RFC 6750 §3.1 : トークンの scope が足りない</summary>
@@ -673,7 +703,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// **知らないメタデータは無視する**（RFC 7591 §3.2.1 が認めている）。
         /// **ただし、無視すると黙って弱くなるものは断る**（`jwks` / `jwks_uri` /
-        /// `software_statement` / `token_endpoint_auth_method`）。
+        /// `token_endpoint_auth_method`）。
+        ///
+        /// **`software_statement` は、一番先に見る**（#307 の段階 4）。
+        /// **主張を本文へ重ねてから、以降の検査にかける** —
+        /// **statement が主張した値も、同じ検査を通る**
+        /// （**署名が付いていても、この配備が扱えない値は通さない**）。
         /// </remarks>
         private static bool Validate(
             JObject metadata, ManageAddSaml2OAuth2DataViewModel model,
@@ -685,16 +720,48 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             grantTypes = null;
             responseTypes = null;
 
-            #region まだ受け付けないもの
+            #region software_statement（RFC 7591 §2.3 / §3.1.1。#307 の段階 4）
 
-            //  **`software_statement`（署名付きの主張）は段階 4。**
-            //    **黙って無視してはならない** — **クライアントは「主張した内容で登録された」と考える。**
-            if (ClientRegistrationProvider.Has(metadata, "software_statement"))
+            //  **署名付きの添え状を検証し、主張されたメタデータを本文へ重ねる。**
+            //    **statement が勝つ**（§2.3 は MUST）。**以降の検査は、重ねた後の値で行う。**
+            //
+            //  **`POST` も `PUT` も、ここを通る**（**検査は 1 か所**）。
+            //    **黙って無視してはならない** — **クライアントは「主張した内容で
+            //    登録された」と考える。**
+            SoftwareStatementProvider.Result statement =
+                SoftwareStatementProvider.Apply(metadata, out description);
+
+            if (statement == SoftwareStatementProvider.Result.Invalid)
             {
-                code = ClientRegistrationProvider.unapproved_software_statement;
-                description = "This deployment does not accept a software_statement yet.";
+                code = ClientRegistrationProvider.invalid_software_statement;
                 return false;
             }
+
+            if (statement == SoftwareStatementProvider.Result.Unapproved)
+            {
+                code = ClientRegistrationProvider.unapproved_software_statement;
+                return false;
+            }
+
+            //  **statement を必須にしている配備では、添えていない登録を断る**（段階 4 の決定）。
+            //
+            //  **`PUT` にも効く。** **効かせないと、`PUT` で statement を省いて
+            //    「主張されていた値」を自分の値に書き換えられる**
+            //    （**statement は保管しないので、省かれたことしか分からない**）。
+            //
+            //  **コードは `invalid_client_metadata`**（上で設定済み）。
+            //    **提示されていないものを「approved でない」とは言えない** —
+            //    **必須の項目が無い**のだから、メタデータの不備である。
+            if (statement == SoftwareStatementProvider.Result.None
+                && Config.RequireSoftwareStatement)
+            {
+                description = "This deployment requires a software_statement.";
+                return false;
+            }
+
+            #endregion
+
+            #region まだ受け付けないもの
 
             //  **`jwks_uri`（鍵を URL から引く）は受け付けない**（**別 Issue**）。
             //

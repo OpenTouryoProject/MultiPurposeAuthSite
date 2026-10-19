@@ -31,6 +31,7 @@
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）のケースを追加（#307 の段階 2）
 //*  2026/10/19  玄人 幸道         クライアント認証の方法のケースを追加（#307 の段階 3）
+//*  2026/10/20  玄人 幸道         software_statement のケースを追加（#307 の段階 4）
 //**********************************************************************************
 
 using System;
@@ -78,6 +79,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-307.15`** | **`tls_client_auth` で登録でき、その証明書で認証できる**（**既定は core だけ**） |
     /// | **`RT-307.16`** | **方法と鍵の誤りは、登録の時点で `400`** |
     /// | **`RT-307.17`** | **`PUT` で方法を省くと秘密に戻るが、鍵は消えない** |
+    /// | **`RT-307.18`** | **`software_statement` で登録でき、主張が本文（plain JSON）に勝つ** |
+    /// | **`RT-307.19`** | **壊れた statement は `400` ＋ `invalid_software_statement`** |
+    /// | **`RT-307.20`** | **知らない発行者は `400` ＋ `unapproved_software_statement`** |
+    /// | **`RT-307.21`** | **`PUT` でも statement が効き、省くと本文が通る** |
     ///
     /// **段階 2 は RFC 7592**（`registration_client_uri` ＝ `…/register/{client_id}`）。
     /// **管理のトークンは、登録の応答で 1 回だけ返る**（**こちらはハッシュしか持たない**）。
@@ -91,6 +96,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// `tls_client_auth` は #226）で、**動的登録だけが断っていた。**
     /// **登録された方法は認証でも効く** — **明示が無ければ秘密ベースの 2 つだけ**で、
     /// **鍵や DN を登録しただけでは、その方法では通らない。**
+    ///
+    /// **段階 4 は `software_statement`**（RFC 7591 §2.3）。
+    /// **信頼する発行者が署名した JWT を受け、主張を本文へ重ねる**（**statement が勝つ**）。
+    ///
+    /// | | |
+    /// |---|---|
+    /// | **鍵は「発行者ごと」** | **クライアントごとではない**（クライアント自身の鍵は段階 3 の `jwks`） |
+    /// | 設定 | **`SoftwareStatementIssuers`**（`iss` / `.cer` / `alg`）。**1 件も無ければ受け付けない** |
+    /// | **認可は別** | **statement は 2 つの専用トークンを置き換えない**（**同梱されて配布される ＝ 秘密ではない**） |
+    /// | 保管 | **しない。** 応答にも返さない（§3.2.1 で任意）。**＝ 列は増えていない** |
+    ///
+    /// **E2E は、`SpRp_RsaPfxFilePath` で statement に署名する。**
+    /// **サイトには、その対の `.cer` を「発行者の検証鍵」として渡す**（`test.ps1` が渡す）。
+    /// **渡っていない配備では、`RT-307.18` 〜 `.21` は Skip する。**
     ///
     /// **Discovery に `registration_endpoint` が載ることは `RT-189.*`（`DiscoveryTests`）ではなく、
     /// ここで測る** — **広告は `EnableDynamicClientRegistration` で出入りする**ので、
@@ -415,7 +434,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.VerifyEqual("error は invalid_client_metadata",
                         "invalid_client_metadata", jwksUri.String("error") ?? "（無い）");
 
-                    r.Step("(5) software_statement は受け付けない（段階 4）");
+                    r.Step("(5) 壊れた software_statement は受け付けない（段階 4）");
 
                     JsonResponse statement = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token,
@@ -424,8 +443,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.VerifyEqual("HTTP の状態は 400", "400", ((int)statement.StatusCode).ToString());
 
-                    r.VerifyEqual("error は unapproved_software_statement",
-                        "unapproved_software_statement", statement.String("error") ?? "（無い）");
+                    //  **期待するコードは、配備に依る**（#307 の段階 4）。
+                    //    **信頼する発行者を設定していれば「壊れている」**
+                    //    （`invalid_software_statement`。この値は JWT として読めない）。
+                    //    **1 件も設定していなければ「信頼していない」**
+                    //    （`unapproved_software_statement`。**従来どおり**）。
+                    //  **どちらでも `400` で、登録は作られない** — それがこのケースの観点である。
+                    string expectedStatementError =
+                        string.IsNullOrEmpty(ClientRegistrationTests.SoftwareStatementIssuer())
+                            ? "unapproved_software_statement" : "invalid_software_statement";
+
+                    r.VerifyEqual("error は " + expectedStatementError,
+                        expectedStatementError, statement.String("error") ?? "（無い）");
 
                     r.Step("(6) response_types と grant_types が噛み合っていない");
 
@@ -1789,6 +1818,362 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         }
 
         #endregion
+
+        #region RT-307.18
+
+        /// <summary>RT-307.18 software_statement で登録でき、主張が本文に勝つ</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30718_software_statementで登録でき主張が本文に勝つ(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.18",
+                    "署名付きの `software_statement` で登録でき、**主張した値が本文（plain JSON）に勝つ**",
+                    "**これが機能の要点である。** **ベンダは security に効く項目を statement で固定し**、"
+                    + "**配置ごとに変わる項目は本文に書かせる。** "
+                    + "**配置側が折り返し先を勝手な所に書き換えても、statement が上書きして効かない。** "
+                    + "**201 が返るだけでは足りない** — **どちらの値で登録されたかを、"
+                    + "実際の認可要求で確かめる。**",
+                    "RFC 7591 §2.3（MUST take precedence）/ §3.1.1 / #307 の段階 4");
+
+                r.Target("POST /register（本文は B、statement は A を主張する）");
+
+                ClientRegistrationTests.SkipIfNoSoftwareStatement();
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 本文は redirect_uris = B、statement は A を主張する");
+
+                    Dictionary<string, object> claims =
+                        ClientRegistrationTests.StatementClaims();
+
+                    claims.Add("redirect_uris", new string[] { UriA });
+
+                    string statement = JwsSigner.SignRS256(client, claims);
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriB + "\"],"
+                        + "\"scope\":\"openid\","
+                        + "\"software_statement\":\"" + statement + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString());
+
+                    r.VerifyEqual("redirect_uris は A（statement が勝つ）", "True",
+                        created.ArrayContains("redirect_uris", UriA).ToString());
+
+                    r.VerifyEqual("redirect_uris に B は入らない", "False",
+                        created.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.Step("(2) statement だけに在る項目は、そのまま使われる");
+
+                    r.VerifyEqual("software_id が入る",
+                        ClientRegistrationTests.SoftwareId,
+                        created.String("software_id") ?? "（無い）");
+
+                    r.Step("(3) 本文だけに在る項目も、そのまま使われる");
+
+                    r.VerifyEqual("scope は本文の値", "openid",
+                        created.String("scope") ?? "（無い）");
+
+                    r.Step("(4) software_statement 自身は、応答に出ない（保管しない）");
+
+                    r.VerifyEqual("software_statement は返らない", "False",
+                        (created.IsJson
+                            && created.Json.TryGetProperty("software_statement", out JsonElement _))
+                                .ToString());
+
+                    r.Step("(5) 主張された折り返し先（A）で、実際に認可コードが取れる");
+
+                    ClientRegistration reg = new ClientRegistration()
+                    {
+                        ClientId = created.String("client_id"),
+                        ClientSecret = created.String("client_secret"),
+                        RedirectUri = UriA
+                    };
+
+                    AuthZResponse allowed = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid", "state-ss", "nonce-ss", UriA);
+
+                    r.Verify("A では認可コードが返る", !string.IsNullOrEmpty(allowed.Code),
+                        "返る", string.IsNullOrEmpty(allowed.Code)
+                            ? "**返らない**（error=" + (allowed.Error ?? "なし") + "）" : "返った");
+
+                    r.Step("(6) 本文に書いた折り返し先（B）では、通らない");
+
+                    AuthZResponse refused = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid", "state-ss2", "nonce-ss2", UriB);
+
+                    r.Verify("B では認可コードが返らない", string.IsNullOrEmpty(refused.Code),
+                        "返らない", string.IsNullOrEmpty(refused.Code)
+                            ? "返らなかった（error=" + (refused.Error ?? "なし") + "）"
+                            : "**返ってしまった**");
+
+                    r.Note("**食い違っても断らない。** **statement を採り、オペレーション ログに残す**"
+                        + "（§2.3 が優先順位を MUST で定めているため）。"
+                        + "**上書きされた項目の名前だけを残し、値は書かない。**");
+
+                    r.Note("**statement は認可ではない。** "
+                        + "**この登録でも、専用 scope のアクセス トークンは要る**"
+                        + "（**statement はソフトウェアに同梱されて配布される ＝ 秘密ではない**）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.19
+
+        /// <summary>RT-307.19 壊れた software_statement は 400 ＋ invalid_software_statement</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30719_壊れたsoftware_statementは400(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.19",
+                    "壊れた `software_statement` は `400` ＋ `invalid_software_statement`",
+                    "**「読めたが信頼していない」のと「壊れている」のを分ける**（§3.2.2 の 2 つのコード）。"
+                    + "**黙って無視してはならない** — "
+                    + "**クライアントは「主張した内容で登録された」と考える。**",
+                    "RFC 7591 §2.3 / §3.2.2（invalid_software_statement）/ #307 の段階 4");
+
+                r.Target("POST /register（statement を 5 通りに壊す）");
+
+                ClientRegistrationTests.SkipIfNoSoftwareStatement();
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) JWT ではない値");
+
+                    await this.VerifyStatementErrorAsync(r, client, endpoint, token,
+                        "eyJ.eyJ.sig", "invalid_software_statement",
+                        "3 つに分かれていても、Base64URL の JSON でなければ読めない");
+
+                    r.Step("(2) 署名が合わない（最後の 1 文字を変える）");
+
+                    string signed = JwsSigner.SignRS256(
+                        client, ClientRegistrationTests.StatementClaims());
+
+                    await this.VerifyStatementErrorAsync(r, client, endpoint, token,
+                        ClientRegistrationTests.Tamper(signed), "invalid_software_statement",
+                        "発行者の証明書で検証して落ちる");
+
+                    r.Step("(3) iss が無い（§2.3 は必須）");
+
+                    Dictionary<string, object> noIss =
+                        ClientRegistrationTests.StatementClaims();
+
+                    noIss.Remove("iss");
+
+                    await this.VerifyStatementErrorAsync(r, client, endpoint, token,
+                        JwsSigner.SignRS256(client, noIss), "invalid_software_statement",
+                        "iss が無いと、どの発行者の鍵で検証するかが決まらない");
+
+                    r.Step("(4) exp が切れている");
+
+                    Dictionary<string, object> expired =
+                        ClientRegistrationTests.StatementClaims();
+
+                    expired.Add("exp", DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 60);
+
+                    await this.VerifyStatementErrorAsync(r, client, endpoint, token,
+                        JwsSigner.SignRS256(client, expired), "invalid_software_statement",
+                        "exp は任意だが、在るなら効かせる（切れた保証を使わせない）");
+
+                    r.Step("(5) aud が、この認可サーバではない");
+
+                    Dictionary<string, object> otherAud =
+                        ClientRegistrationTests.StatementClaims();
+
+                    otherAud.Add("aud", "https://other-as.example.com");
+
+                    await this.VerifyStatementErrorAsync(r, client, endpoint, token,
+                        JwsSigner.SignRS256(client, otherAud), "invalid_software_statement",
+                        "他の認可サーバ向けの statement を、ここで使い回させない");
+
+                    r.Note("**`aud` の扱いは、仕様が定めていない。** "
+                        + "**在るときだけ `IssuerId` と照合する**（無い statement は通る）。"
+                        + "**在るのに見ないと、他の AS へ出した保証がそのまま通る。**");
+
+                    r.Note("**`iat` / `nbf` は見ない**（段階 4 の決定）。"
+                        + "**`exp` が在れば、それで足りる。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.20
+
+        /// <summary>RT-307.20 知らない発行者は 400 ＋ unapproved_software_statement</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30720_知らない発行者は400(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.20",
+                    "**知らない発行者**の `software_statement` は `400` ＋ `unapproved_software_statement`",
+                    "**署名が正しいことと、信頼していることは別である。** "
+                    + "**鍵は「発行者ごと」に設定で登録する** — "
+                    + "**設定に無い `iss` は、署名が通る鍵で作られていても受けない。**",
+                    "RFC 7591 §3.2.2（unapproved_software_statement）/ #307 の段階 4");
+
+                r.Target("POST /register（iss だけを、設定に無い値にする）");
+
+                ClientRegistrationTests.SkipIfNoSoftwareStatement();
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 同じ鍵で署名し、iss だけを設定に無い値にする");
+
+                    Dictionary<string, object> claims =
+                        ClientRegistrationTests.StatementClaims();
+
+                    claims["iss"] = "https://unknown-vendor.example.com";
+
+                    await this.VerifyStatementErrorAsync(r, client, endpoint, token,
+                        JwsSigner.SignRS256(client, claims), "unapproved_software_statement",
+                        "署名は通る鍵だが、その iss を信頼していない");
+
+                    r.Note("**信頼する発行者を 1 件も設定していない配備では、"
+                        + "どの statement もこれになる**（**従来どおり**）。"
+                        + "**段階 4 の設定を書いていない配備の振る舞いは、変わっていない。**");
+
+                    r.Note("**認可の判定（401 / 403）が先である。** "
+                        + "**認可されていない相手には、自分の statement が信頼されているかを教えない** — "
+                        + "**信頼一覧の中身を、外から探らせないため。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.21
+
+        /// <summary>RT-307.21 PUT でも software_statement が効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30721_PUTでもsoftware_statementが効く(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.21",
+                    "`PUT`（RFC 7592）でも `software_statement` が効き、**省くと本文が通る**",
+                    "**検査は `Validate` の 1 か所**なので、**`POST` と `PUT` で同じ判定になる。**"
+                    + "**省いたときの振る舞いまで測る** — "
+                    + "**statement を保管しない**決めの帰結であり、"
+                    + "**`RequireSoftwareStatement` で閉じる穴**だからである。",
+                    "RFC 7592 §2.2（全置換）/ RFC 7591 §2.3 / #307 の段階 4");
+
+                r.Target("POST /register → PUT（statement 付き）→ PUT（statement なし）");
+
+                ClientRegistrationTests.SkipIfNoSoftwareStatement();
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) statement（A を主張）で登録する");
+
+                    Dictionary<string, object> claims =
+                        ClientRegistrationTests.StatementClaims();
+
+                    claims.Add("redirect_uris", new string[] { UriA });
+
+                    string statement = JwsSigner.SignRS256(client, claims);
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid\","
+                        + "\"software_statement\":\"" + statement + "\"}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    r.Step("(2) PUT の本文は B、statement は A を主張する → A のまま");
+
+                    JsonResponse withStatement = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        "{\"client_id\":\"" + clientId + "\","
+                        + "\"redirect_uris\":[\"" + UriB + "\"],"
+                        + "\"scope\":\"openid\","
+                        + "\"software_statement\":\"" + statement + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 200", "200",
+                        ((int)withStatement.StatusCode).ToString());
+
+                    r.VerifyEqual("redirect_uris は A のまま（statement が勝つ）", "True",
+                        withStatement.ArrayContains("redirect_uris", UriA).ToString());
+
+                    r.VerifyEqual("B にはならない", "False",
+                        withStatement.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.Step("(3) 壊れた statement を添えた PUT は 400（登録は変わらない）");
+
+                    JsonResponse broken = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        "{\"client_id\":\"" + clientId + "\","
+                        + "\"redirect_uris\":[\"" + UriB + "\"],"
+                        + "\"software_statement\":\"" + ClientRegistrationTests.Tamper(statement)
+                        + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)broken.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_software_statement",
+                        "invalid_software_statement", broken.String("error") ?? "（無い）");
+
+                    JsonResponse unchanged = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("登録は変わっていない（A のまま）", "True",
+                        unchanged.ArrayContains("redirect_uris", UriA).ToString());
+
+                    r.Step("(4) statement を省いた PUT は、本文が通る（全置換）");
+
+                    JsonResponse withoutStatement = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        DynamicClientRegistration.UpdateMetadata(clientId, "openid", UriB));
+
+                    r.VerifyEqual("HTTP の状態は 200", "200",
+                        ((int)withoutStatement.StatusCode).ToString());
+
+                    r.VerifyEqual("redirect_uris は B になる", "True",
+                        withoutStatement.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.Note("**(4) は仕様どおりである**（RFC 7592 §2.2 は全置換で、"
+                        + "**`software_statement` を省いた要求は「statement 無しの登録」**）。"
+                        + "**statement を保管しない**決め（§3.2.1 で任意）の帰結でもある。");
+
+                    r.Note("**閉じたい配備は `RequireSoftwareStatement` を true にする** — "
+                        + "**`PUT` にも効く**ので、**statement を毎回添えないと `400`** になる。"
+                        + "**この E2E は false の配備で測っている**"
+                        + "（**true にすると既存の `RT-307.*` が全部落ちる**ため）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
         #region 補助
 
         /// <summary>管理 API を叩くための前提（使い捨ての利用者 2 人ぶん）</summary>
@@ -1977,6 +2362,100 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
             r.VerifyEqual("error は invalid_client_metadata",
                 "invalid_client_metadata", res.String("error") ?? "（無い）");
+
+            r.Observe("error_description", res.String("error_description") ?? "（無い）");
+        }
+
+        /// <summary>statement の `software_id`（#307 の段階 4）</summary>
+        private const string SoftwareId = "e2e-rt307-software";
+
+        /// <summary>
+        /// `software_statement` の発行者（`test.ps1` が渡す。無ければ空）（#307 の段階 4）
+        /// </summary>
+        /// <returns>iss</returns>
+        /// <remarks>
+        /// **サイトへ渡した値と、必ず同じ値を使う** —
+        /// **テスト側で別に持つと、設定を替えたときに食い違う。**
+        /// **`MtlsTests.SkipIfNoMtls` と同じ作法**（しるしの環境変数で判定する）。
+        /// </remarks>
+        private static string SoftwareStatementIssuer()
+        {
+            return Environment.GetEnvironmentVariable("MPAS_SOFTWARE_STATEMENT_ISS") ?? "";
+        }
+
+        /// <summary>発行者が設定されていない配備では Skip する（#307 の段階 4）</summary>
+        private static void SkipIfNoSoftwareStatement()
+        {
+            Skip.If(string.IsNullOrEmpty(ClientRegistrationTests.SoftwareStatementIssuer()),
+                "この配備は software_statement の発行者を設定していません"
+                + "（test.ps1 -Launch が、SpRp_RsaPfxFilePath と対の .cer を渡す。#307 の段階 4）。");
+        }
+
+        /// <summary>statement の最小のクレーム（#307 の段階 4）</summary>
+        /// <returns>クレーム</returns>
+        /// <remarks>
+        /// **`iss` は必須**（RFC 7591 §2.3）。**`exp` / `aud` は入れない**
+        /// （**任意**であり、**入れないときに通ること**も測る）。
+        /// **`software_id` / `software_version` は、statement だけが主張する項目**として使う。
+        /// </remarks>
+        private static Dictionary<string, object> StatementClaims()
+        {
+            return new Dictionary<string, object>()
+            {
+                { "iss", ClientRegistrationTests.SoftwareStatementIssuer() },
+                { "jti", Guid.NewGuid().ToString("N") },
+                { "iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+                { "software_id", ClientRegistrationTests.SoftwareId },
+                { "software_version", "1.0.0" }
+            };
+        }
+
+        /// <summary>署名を 1 文字だけ変える（#307 の段階 4）</summary>
+        /// <param name="jws">JWS（コンパクト形式）</param>
+        /// <returns>署名が合わなくなった JWS</returns>
+        /// <remarks>
+        /// **形は壊さない**（3 つに分かれたまま、Base64URL のまま）。
+        /// **「読めるが、署名が合わない」**ことだけを作る。
+        ///
+        /// > **変えるのは、署名の 1 文字目である。**
+        /// > **末尾では壊れない** — **RS256 の署名は 256 バイト ＝ Base64URL で 342 文字**で、
+        /// > **2048 ビットを 6 ビットずつに切ると 341 文字 ＋ 2 ビット**になる。
+        /// > **最後の 1 文字が持つ実データは 2 ビットだけ**で、**残り 4 ビットは詰め物**なので、
+        /// > **そこを変えても、復号したバイト列は同じ**になる（最初はそれで取り逃していた）。
+        /// </remarks>
+        private static string Tamper(string jws)
+        {
+            int at = jws.LastIndexOf('.');
+            char first = jws[at + 1];
+
+            return jws.Substring(0, at + 1)
+                + ((first == 'A') ? 'B' : 'A')
+                + jws.Substring(at + 2);
+        }
+
+        /// <summary>statement の誤りで、登録が断られることを確かめる（#307 の段階 4）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="client">IdPClient</param>
+        /// <param name="endpoint">registration_endpoint</param>
+        /// <param name="token">専用 scope のアクセス トークン</param>
+        /// <param name="statement">送る software_statement</param>
+        /// <param name="expectedError">期待する error</param>
+        /// <param name="why">読み手向けの理由</param>
+        /// <returns>Task</returns>
+        private async Task VerifyStatementErrorAsync(
+            TestReport r, IdPClient client, string endpoint, string token,
+            string statement, string expectedError, string why)
+        {
+            JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                client, endpoint, token,
+                "{\"redirect_uris\":[\"" + UriA + "\"],"
+                + "\"software_statement\":\"" + statement + "\"}");
+
+            r.VerifyEqual("HTTP の状態は 400（" + why + "）",
+                "400", ((int)res.StatusCode).ToString());
+
+            r.VerifyEqual("error は " + expectedError,
+                expectedError, res.String("error") ?? "（無い）");
 
             r.Observe("error_description", res.String("error_description") ?? "（無い）");
         }

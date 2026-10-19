@@ -637,7 +637,7 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
 > **公開情報の口は全開なので、この一覧を引かない。**
 
-### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1・2・3）
+### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1〜4）
 
 **クライアント登録を WebAPI で行う。** **既定は無効**で、**開けると `/register` が出来る。**
 
@@ -726,7 +726,7 @@ Content-Type: application/json
 | **`tls_client_auth_subject_dn`** | **受け付ける**（段階 3。RFC 8705 §2.1.2）。**照合は完全一致** |
 | **`token_endpoint_auth_signing_alg`** | **受け付ける**（段階 3）。**`RS256` / `ES256`**。**空なら絞らない**（#262） |
 | **`jwks_uri`** | **断る**（`invalid_client_metadata`）。**鍵を URL から引く実装が無い** — **クライアント認証の経路が同期**で、取得を差し込めない（**別 Issue**）。**受け取って無視すると、`private_key_jwt` が黙って通らなくなる** |
-| **`software_statement`** | **断る**（`unapproved_software_statement`）。**黙って無視してはならない** — クライアントは「主張した内容で登録された」と考える（段階 4） |
+| **`software_statement`** | **受け付ける**（段階 4）。**信頼する発行者が署名した JWT**で、**主張した値は本文（plain JSON）に勝つ**。**信頼する発行者を 1 件も設定していなければ断る**（`unapproved_software_statement`。従来どおり）。**下の「`software_statement`」** |
 | **`client_name`** | **受け取っても無視する**（§3.2.1 が認めている）。**`ClientName` の列は利用者名**であり、**`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない** |
 | 上記以外 | **無視する**（§3.2.1） |
 
@@ -736,7 +736,7 @@ Content-Type: application/json
 
 | 誤り | 状態 |
 |---|---|
-| メタデータの不備 | **`400`** ＋ `invalid_redirect_uri` / `invalid_client_metadata` / `unapproved_software_statement`（§3.2.2） |
+| メタデータの不備 | **`400`** ＋ `invalid_redirect_uri` / `invalid_client_metadata` / **`invalid_software_statement`** / `unapproved_software_statement`（§3.2.2） |
 | トークンが無い・無効 | **`401`** ＋ `WWW-Authenticate: Bearer`（RFC 6750 §3.1） |
 | scope が足りない | **`403`** ＋ `insufficient_scope` |
 | **2 件目の登録** | **`403`** ＋ `access_denied` |
@@ -1067,12 +1067,167 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN TokenEndpointAuthMethod varchar(32) NULL;
 **パスに `client_id` が入る**ので、**前方一致で見る。**
 **管理の洪水で、登録そのものを止めないため**である。
 
-#### まだ出来ないこと（段階 4 以降）
+#### `software_statement` — 署名付きの主張を受ける（#307 の段階 4）
+
+**クライアントの登録内容を、信頼する発行者が署名した JWT で保証させる**（RFC 7591 §2.3）。
+
+```jsonc
+// net10.0（appsettings.json）
+"SoftwareStatementIssuers": {
+  "vendor1": {
+    "display_name": "Vendor 1",            // ログに出す名前（空なら鍵）
+    "enabled": "true",                      // 空・未設定は true
+    "issuer": "https://vendor.opentouryo.com",  // **期待する iss**（完全一致）
+    "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Client.cer",
+    "alg": "RS256"                          // **ヘッダの alg と照合する**（空なら RS256）
+  }
+},
+"RequireSoftwareStatement": "false"          // **既定は false**
+```
+
+```xml
+<!-- net48（app.config。OAuth2ClientsInformation と同じく 1 本の JSON 文字列） -->
+<add key="SoftwareStatementIssuers" value='{"vendor1":{"issuer":"https://vendor.opentouryo.com","cer_file_path":"C:/root/files/resource/X509/SHA256RSA_Client.cer","alg":"RS256"}}' />
+<add key="RequireSoftwareStatement" value="false" />
+```
+
+##### 鍵は「発行者ごと」である。クライアントごとではない
+
+**ここで一番取り違えやすい所**である。
+
+| | 誰の鍵か | 件数 | どこに登録するか |
+|---|---|---|---|
+| **`jwks`** / **`tls_client_auth_subject_dn`**（段階 3） | **そのクライアント自身** | **クライアントごとに 1 件** | **`Saml2OAuth2Data` の列**（動的登録 / 管理画面） |
+| **`cer_file_path`**（段階 4） | **主張を書いた側** — **ソフトウェアの発行元、またはエコシステムの名簿** | **発行者ごとに 1 件**（配備全体で数件） | **設定ファイル** |
+
+**`software_statement` は 1 つのソフトウェアに 1 枚配られ、その全ての配置が同じものを提示する**
+（RFC 7591 §2 の `software_id` は「全インスタンスで同じ値」）。
+**だから、登録されるクライアントが 100 件になっても、検証鍵は発行者 1 件につき 1 つで足りる。**
+
+```
+ベンダー（または名簿）が 1 回署名  →  ソフトウェアに同梱される
+                                        → A 社の配置が POST /register に添えて出す
+                                        → B 社の配置も、同じ statement を出す
+```
+
+**設定ファイルに置いているのは、件数が数件で、増減が稀だから**である
+（**提携先が増えたときだけ**）。**管理画面は用意していない** —
+**`.cer` をファイルとして受け取る仕掛けが別途要り**、
+**配備全体の信頼の決めなので、1 利用者の持ち物でもない。**
+**ID 連携の上流が設定 →（#292 の段階 2 で）DB ＋ 管理画面へ移ったのと同じ道**は通せるが、
+**それは DDL ＋ 両アプリの画面**である（別段階）。
+
+##### 主張は、本文（plain JSON）に勝つ
+
+**`software_statement` は、要求の本文の中に入れる「署名済みの JWT 1 本」**である。
+**同じ項目が 2 か所に現れ得る。**
+
+```jsonc
+POST /register
+{
+  "redirect_uris": ["https://attacker.example.com/cb"],  // plain JSON（誰でも書ける）
+  "scope":         "openid email",                        // plain JSON
+  "software_statement": "eyJhbGciOi..."                   // 署名済み。中に redirect_uris が在る
+}
+```
+
+| 項目 | どこに在るか | 入る値 |
+|---|---|---|
+| **`redirect_uris`** | **両方** | **statement の値**（**statement が勝つ**。§2.3 は **MUST**） |
+| `scope` | 本文だけ | **そのまま使う** |
+| `software_id` / `software_version` | statement だけ | **そのまま使う** |
+| `iss` / `aud` / `exp` / `nbf` / `iat` / `jti` | statement の **JWT のクレーム** | **メタデータとして扱わない**（検証に使うだけ） |
+
+**これが機能の要点**である — **ベンダは security に効く項目（折り返し先・`grant_types`・
+認証方法）を statement で固定し**、**配置ごとに変わる項目は本文に書かせる。**
+**配置側が折り返し先を勝手な所に書き換えても、statement が上書きして効かない。**
+
+**食い違っても断らない。** **statement を採り、オペレーション ログに残す**
+（**上書きした項目の名前だけ。値は書かない**）。**優先順位を仕様が MUST で定めている**ためである。
+
+**`software_statement` 自身は、保管しない。** **応答にも返さない**（§3.2.1 で任意）。
+**＝ この段階で列は増えていない**（**既存の配備に `ALTER` が要らない**）。
+
+##### 断り方（RFC 7591 §3.2.2）
+
+**順に見る。** **1 番目が先なのは、既存の配備の振る舞いを変えないため**である。
+
+| 順 | 見るもの | 誤り |
+|---|---|---|
+| 1 | **信頼する発行者が 0 件**（段階 4 の設定を書いていない） | **`unapproved_software_statement`**（**従来どおり**） |
+| 2 | JWT として読めない・署名の部分が無い | `invalid_software_statement` |
+| 3 | **`iss` が無い**（§2.3 は必須） | `invalid_software_statement` |
+| 4 | **`iss` が信頼一覧に無い** | **`unapproved_software_statement`** |
+| 5 | ヘッダの `alg` が、登録された `alg` と違う | `invalid_software_statement` |
+| 6 | **署名が合わない** | `invalid_software_statement` |
+| 7 | **`exp` が切れている**（**在るときだけ**見る） | `invalid_software_statement` |
+| 8 | **`aud` が `IssuerId` でない**（**在るときだけ**見る） | `invalid_software_statement` |
+
+> **`aud` の扱いは、仕様が定めていない。** **在るときだけ照合する。**
+> **在るのに見ないと、他の認可サーバへ出した保証が、そのまま通る。**
+> **`iat` / `nbf` は見ない**（`exp` が在れば足りる）。
+
+**主張されたメタデータも、重ねた後に同じ検査を通る** —
+**署名が付いていても、この配備が扱えない値は通らない**（`invalid_client_metadata`）。
+**`client_registration` scope の自己付与も、statement 経由では通らない。**
+
+##### 2 つの専用トークンとは、役が違う
+
+**statement は、どちらのトークンも置き換えない。**
+
+| 問い | 答えるもの |
+|---|---|
+| **登録を作ってよいか** | **`client_registration` scope のアクセス トークン**（段階 1） |
+| **その登録を直してよいか** | **`registration_access_token`**（段階 2） |
+| **書かれている内容を信じてよいか** | **`software_statement`**（段階 4） |
+| **認証のときに本人か** | **`token_endpoint_auth_method`**（段階 3） |
+
+**statement はソフトウェアに同梱されて配布される ＝ 秘密ではない。**
+**認可の代わりに使うと、そのソフトを持っている人は誰でも登録できる口になる。**
+**RFC 7591 §1.2 の「アクセス トークンを要らない開いた登録口」は、この配備では採らない。**
+
+**判定の順は「認可が先、内容は後」**である。
+
+```
+404 → 401（AT）→ 403（scope / 2 件目）→ 400（メタデータ。ここで statement を見る）→ 201
+```
+
+**認可されていない相手に、自分の statement が信頼されているかを教えない** —
+**信頼一覧の中身を、外から探らせないため**である。
+
+##### `RequireSoftwareStatement` — 審査を通したソフトウェアだけ登録させる
+
+**`true` にすると、statement の無い登録を断る**（`400` ＋ `invalid_client_metadata`）。
+**`POST /register` と `PUT`（RFC 7592）の両方に効く。**
+
+> **`PUT` に効かせるのが要点である。**
+> **statement を保管していない**ので、**`PUT` で省かれたら「主張されていた値」を思い出せない。**
+> **効かせないと、`PUT` の本文で自分の値に書き換えられる**（§2.2 は全置換）。
+
+| 値 | |
+|---|---|
+| **`false`（既定）** | **従来どおり。** 添えれば効き、添えなくても登録できる |
+| **`true`** | **毎回添えること。** **`PUT` でも毎回**（省くと `400`） |
+
+**信頼する発行者を 1 件も書かずに `true` にすると、動的登録は通らなくなる**
+（**必須なのに、どの statement も approved にならない**）。
+
+##### 気をつける所
+
+| | |
+|---|---|
+| **`.cer` が読めないとき** | **`unapproved_software_statement`** に倒す（**statement が壊れている訳ではない**）。**理由はオペレーション ログに残る** |
+| **`alg` を間違えて書くと、全部断られる** | **ヘッダと照合する**ので、**発行者が `ES256` で署名しているのに `RS256` と書けば通らない。** **`alg` を外から選ばせない**ための形である |
+| **`iss` は完全一致** | 前方一致・部分一致は見ない。**末尾の `/` の有無でも違う値**である |
+| **鍵の入れ替え（ロールオーバー）は、この段階では出来ない** | **引くのは `iss` が一致する最初の行だけ**なので、**同じ `iss` の行を 2 つ書いても、新旧を並べて試すことはしない。** **入れ替えるときは、発行者に新しい鍵で署名し直してもらい、行を差し替える**（**その間、古い statement は通らない**）。**新旧を並べたいなら、`Find` を「一致する全ての行で試す」に変える必要がある** — **段階 5 以降の話**である |
+| **`jwks_uri` のように URL から引く形は無い** | **登録の口は同期**で、取得を差し込めない（`jwks_uri` を断っているのと同じ理由。**別 Issue**） |
+#### まだ出来ないこと（段階 5 以降）
 
 | | いつ |
 |---|---|
-| **`software_statement`**（署名付きの主張） | **段階 4**（信頼する発行者と検証鍵の設定が要る） |
 | **`client_credentials` 経路**／**1 利用者 n クライアント**（DDL ＋ 画面） | **段階 5**（**器と画面の変更**。所有者の持ち方を変える） |
+| **発行者ごとに許す範囲を絞る**（この発行者は `openid` だけ、など） | **段階 5 以降**（**いまは「信じるか、信じないか」の 2 択**） |
+| **発行者の鍵の入れ替え**（新旧を並べて試す）／**発行者の登録を DB ＋ 管理画面へ** | **段階 5 以降**（`IdFederationUpstreams` が #292 の段階 2 で通った道） |
 | **`jwks_uri`**（鍵を URL から引く） | **別 Issue**（**クライアント認証の経路を非同期にする**。`/token` ほか全ての口から同期で呼ばれている） |
 | OIDC DCR §2 の残り（`application_type` / ログアウトの URI など） | D-1-2 と併せて |
 

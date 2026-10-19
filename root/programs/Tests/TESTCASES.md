@@ -6593,7 +6593,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. redirect_uri にフラグメントが付いている
 1. 相対 URI は通らない
 1. jwks_uri は受け付けない（段階 3 でも。別 Issue）
-1. software_statement は受け付けない（段階 4）
+1. 壊れた software_statement は受け付けない（段階 4）
 1. response_types と grant_types が噛み合っていない
 1. 専用 scope は、動的登録では付けられない
 1. どの誤りでも、登録は作られていない
@@ -6608,7 +6608,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP の状態は 400
 - error は invalid_client_metadata
 - HTTP の状態は 400
-- error は unapproved_software_statement
+- error は invalid_software_statement
 - HTTP の状態は 400
 - error は invalid_client_metadata
 - HTTP の状態は 400
@@ -7028,6 +7028,138 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **省略で方法が戻るのは、§2.2 のとおり**である。**ただし「方法だけ戻って、鍵が残る」状態になる** — **鍵は使われなくなるだけで、害は無い**（**認証に使えるのは、登録された方法だけ**）。
+
+## RT-307.18 署名付きの `software_statement` で登録でき、**主張した値が本文（plain JSON）に勝つ**
+
+| | |
+|---|---|
+| 観点 | **これが機能の要点である。** **ベンダは security に効く項目を statement で固定し**、**配置ごとに変わる項目は本文に書かせる。** **配置側が折り返し先を勝手な所に書き換えても、statement が上書きして効かない。** **201 が返るだけでは足りない** — **どちらの値で登録されたかを、実際の認可要求で確かめる。** |
+| 根拠 | RFC 7591 §2.3（MUST take precedence）/ §3.1.1 / #307 の段階 4 |
+| テスト | `RT30718_software_statementで登録でき主張が本文に勝つ` |
+
+**手順**
+
+1. 本文は redirect_uris = B、statement は A を主張する
+1. statement だけに在る項目は、そのまま使われる
+1. 本文だけに在る項目も、そのまま使われる
+1. software_statement 自身は、応答に出ない（保管しない）
+1. 主張された折り返し先（A）で、実際に認可コードが取れる
+1. 本文に書いた折り返し先（B）では、通らない
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- redirect_uris は A（statement が勝つ）
+- redirect_uris に B は入らない
+- software_id が入る
+- scope は本文の値
+- software_statement は返らない
+- A では認可コードが返る
+- B では認可コードが返らない
+
+**補足**
+
+- **食い違っても断らない。** **statement を採り、オペレーション ログに残す**（§2.3 が優先順位を MUST で定めているため）。**上書きされた項目の名前だけを残し、値は書かない。**
+- **statement は認可ではない。** **この登録でも、専用 scope のアクセス トークンは要る**（**statement はソフトウェアに同梱されて配布される ＝ 秘密ではない**）。
+
+## RT-307.19 壊れた `software_statement` は `400` ＋ `invalid_software_statement`
+
+| | |
+|---|---|
+| 観点 | **「読めたが信頼していない」のと「壊れている」のを分ける**（§3.2.2 の 2 つのコード）。**黙って無視してはならない** — **クライアントは「主張した内容で登録された」と考える。** |
+| 根拠 | RFC 7591 §2.3 / §3.2.2（invalid_software_statement）/ #307 の段階 4 |
+| テスト | `RT30719_壊れたsoftware_statementは400` |
+
+**手順**
+
+1. JWT ではない値
+1. 署名が合わない（最後の 1 文字を変える）
+1. iss が無い（§2.3 は必須）
+1. exp が切れている
+1. aud が、この認可サーバではない
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400（3 つに分かれていても、Base64URL の JSON でなければ読めない）
+- error は invalid_software_statement
+- HTTP の状態は 400（発行者の証明書で検証して落ちる）
+- error は invalid_software_statement
+- HTTP の状態は 400（iss が無いと、どの発行者の鍵で検証するかが決まらない）
+- error は invalid_software_statement
+- HTTP の状態は 400（exp は任意だが、在るなら効かせる（切れた保証を使わせない））
+- error は invalid_software_statement
+- HTTP の状態は 400（他の認可サーバ向けの statement を、ここで使い回させない）
+- error は invalid_software_statement
+
+**観測（判定しない）**
+
+- error_description
+- error_description
+- error_description
+- error_description
+- error_description
+
+**補足**
+
+- **`aud` の扱いは、仕様が定めていない。** **在るときだけ `IssuerId` と照合する**（無い statement は通る）。**在るのに見ないと、他の AS へ出した保証がそのまま通る。**
+- **`iat` / `nbf` は見ない**（段階 4 の決定）。**`exp` が在れば、それで足りる。**
+
+## RT-307.20 **知らない発行者**の `software_statement` は `400` ＋ `unapproved_software_statement`
+
+| | |
+|---|---|
+| 観点 | **署名が正しいことと、信頼していることは別である。** **鍵は「発行者ごと」に設定で登録する** — **設定に無い `iss` は、署名が通る鍵で作られていても受けない。** |
+| 根拠 | RFC 7591 §3.2.2（unapproved_software_statement）/ #307 の段階 4 |
+| テスト | `RT30720_知らない発行者は400` |
+
+**手順**
+
+1. 同じ鍵で署名し、iss だけを設定に無い値にする
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400（署名は通る鍵だが、その iss を信頼していない）
+- error は unapproved_software_statement
+
+**観測（判定しない）**
+
+- error_description
+
+**補足**
+
+- **信頼する発行者を 1 件も設定していない配備では、どの statement もこれになる**（**従来どおり**）。**段階 4 の設定を書いていない配備の振る舞いは、変わっていない。**
+- **認可の判定（401 / 403）が先である。** **認可されていない相手には、自分の statement が信頼されているかを教えない** — **信頼一覧の中身を、外から探らせないため。**
+
+## RT-307.21 `PUT`（RFC 7592）でも `software_statement` が効き、**省くと本文が通る**
+
+| | |
+|---|---|
+| 観点 | **検査は `Validate` の 1 か所**なので、**`POST` と `PUT` で同じ判定になる。****省いたときの振る舞いまで測る** — **statement を保管しない**決めの帰結であり、**`RequireSoftwareStatement` で閉じる穴**だからである。 |
+| 根拠 | RFC 7592 §2.2（全置換）/ RFC 7591 §2.3 / #307 の段階 4 |
+| テスト | `RT30721_PUTでもsoftware_statementが効く` |
+
+**手順**
+
+1. statement（A を主張）で登録する
+1. PUT の本文は B、statement は A を主張する → A のまま
+1. 壊れた statement を添えた PUT は 400（登録は変わらない）
+1. statement を省いた PUT は、本文が通る（全置換）
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 200
+- redirect_uris は A のまま（statement が勝つ）
+- B にはならない
+- HTTP の状態は 400
+- error は invalid_software_statement
+- 登録は変わっていない（A のまま）
+- HTTP の状態は 200
+- redirect_uris は B になる
+
+**補足**
+
+- **(4) は仕様どおりである**（RFC 7592 §2.2 は全置換で、**`software_statement` を省いた要求は「statement 無しの登録」**）。**statement を保管しない**決め（§3.2.1 で任意）の帰結でもある。
+- **閉じたい配備は `RequireSoftwareStatement` を true にする** — **`PUT` にも効く**ので、**statement を毎回添えないと `400`** になる。**この E2E は false の配備で測っている**（**true にすると既存の `RT-307.*` が全部落ちる**ため）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

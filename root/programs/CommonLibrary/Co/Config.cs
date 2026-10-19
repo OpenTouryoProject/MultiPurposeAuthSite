@@ -65,6 +65,7 @@
 //*  2026/10/10  玄人 幸道         ID連携の導線を設定の有無で出す（#286の段階2）
 //*  2026/10/16  玄人 幸道         slow_down・失敗回数・レート制限の設定を追加（#305）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の設定を追加（#307 の段階 1）
+//*  2026/10/20  玄人 幸道         software_statement の設定を追加（#307 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1955,6 +1956,81 @@ namespace MultiPurposeAuthSite.Co
                     out bool enable);
 
                 return enable;
+            }
+        }
+
+        /// <summary>
+        /// `software_statement`（RFC 7591 §2.3）の発行者の登録（n 件。#307 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **読み方は `OAuth2ClientsInformation` / `IdFederationUpstreams` と同じ**
+        /// （net48 は JSON 文字列、net10.0 は節）。**値はすべて文字列**で、
+        /// **鍵 → 属性の辞書**である。
+        ///
+        /// **解釈は <see cref="SoftwareStatementIssuers"/> が持つ。**
+        /// **ここは「設定を読むだけ」**にしてある（`Config` に判断を増やさない）。
+        ///
+        /// **空なら、`software_statement` は受け付けない**
+        /// （**従来どおり `unapproved_software_statement`**）。
+        /// **既存の配備は、このキーを書かなくても従来どおり動く。**
+        ///
+        /// **「発行者ごと」である。** **クライアントごとではない**
+        /// （クライアント自身の鍵は `Saml2OAuth2Data` の列。段階 3）。
+        /// </remarks>
+        public static Dictionary<string, Dictionary<string, string>> SoftwareStatementIssuers
+        {
+            get
+            {
+#if NETFX
+                string json = GetConfigParameter.GetConfigValue("SoftwareStatementIssuers");
+
+                if (string.IsNullOrEmpty(json))
+                {
+                    return null;
+                }
+
+                return JsonConvert.DeserializeObject<
+                    Dictionary<string, Dictionary<string, string>>>(json);
+#else
+                IConfigurationSection section = GetConfigParameter
+                    .GetAnyConfigSection("appSettings:SoftwareStatementIssuers");
+
+                if (section == null)
+                {
+                    return null;
+                }
+
+                return section.Get<Dictionary<string, Dictionary<string, string>>>();
+#endif
+            }
+        }
+
+        /// <summary>
+        /// 動的クライアント登録に `software_statement` を必須とするか（#307 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **既定は false**（**従来どおり、添えなくても登録できる**）。
+        ///
+        /// **true にすると、「審査を通したソフトウェアだけ登録させる」配備になる。**
+        /// **`POST /register` と `PUT`（RFC 7592）の両方に効く。**
+        ///
+        /// > **`PUT` にも効かせるのが要点である。**
+        /// > **効かせないと、`PUT` で statement を省いて
+        /// > 「主張されていた値」を自分の値に書き換えられる**
+        /// > （**statement は保管しないので、省かれたことしか分からない**）。
+        ///
+        /// **信頼する発行者（`SoftwareStatementIssuers`）を 1 件も書かずに true にすると、
+        /// 動的登録は通らなくなる**（**必須なのに、どの statement も approved にならない**）。
+        /// </remarks>
+        public static bool RequireSoftwareStatement
+        {
+            get
+            {
+                bool.TryParse(
+                    GetConfigParameter.GetConfigValue("RequireSoftwareStatement"),
+                    out bool require);
+
+                return require;
             }
         }
 

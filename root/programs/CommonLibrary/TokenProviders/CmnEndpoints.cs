@@ -122,6 +122,7 @@
 //*  2026/10/16  玄人 幸道         クライアント認証の失敗を数える（#305 の段階 2）
 //*  2026/10/18  玄人 幸道         登録の grant_types / response_types を効かせ、registration_endpoint を広告（#307 の段階 1）
 //*  2026/10/19  玄人 幸道         登録された token_endpoint_auth_method で絞る（#307 の段階 3）
+//*  2026/10/20  玄人 幸道         TryReadJwtAlg を公開（software_statement の検証で使う。#307 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2464,7 +2465,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>JWT のヘッダから alg を読む（読めなければ null）（#262）</summary>
         /// <param name="jwt">JWS（コンパクト形式）</param>
         /// <returns>alg（読めなければ null）</returns>
-        private static string TryReadJwtAlg(string jwt)
+        /// <remarks>
+        /// **`TryReadJwtPayload` と対の、純粋な読み取り**である。
+        /// **`software_statement` の検証でも使う**ので公開した（#307 の段階 4）。
+        /// </remarks>
+        public static string TryReadJwtAlg(string jwt)
         {
             if (string.IsNullOrEmpty(jwt))
             {
