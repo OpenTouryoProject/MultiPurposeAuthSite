@@ -51,6 +51,7 @@
 //*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
 //*  2026/10/06  玄人 幸道         prompt=noneを付けず、同意画面を通すようにした（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22とACS URLを追加（#275）
+//*  2026/10/19  玄人 幸道         private_key_jwtのTestClient_24を追加（#307 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -284,6 +285,30 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>SAML2 の PPID を RP ごとに比べるための 2 つ目（#275）</summary>
         public const string TestClient_22 = "TestClient_22";
 
+        /// <summary>
+        /// TestClient（normal）を写し、**`token_endpoint_auth_method` を `private_key_jwt`**
+        /// にしたクライアント（#307 の段階 3）。
+        /// </summary>
+        /// <remarks>
+        /// **段階 3 で、登録された方法を認証で効かせるようにした**ので、
+        /// **1 つのクライアントが「秘密でも鍵でも通る」ことはできない。**
+        /// **`TestClient` は秘密で認証する**ため、**鍵で認証する分はこちらで測る。**
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </remarks>
+        public const string TestClient_24 = "TestClient_24";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**`token_endpoint_auth_signing_alg` を `RS256` に絞り、
+        /// `token_endpoint_auth_method` を `private_key_jwt`** にしたクライアント（#307 の段階 3）。
+        /// </summary>
+        /// <remarks>
+        /// **`RT-262.1` が使う。** **`TestClient_8` とは分けてある** —
+        /// **`RT-129.3` があちらを `client_secret` で使う**ので、
+        /// **「1 クライアントは 1 方法」と両立しない。**
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </remarks>
+        public const string TestClient_25 = "TestClient_25";
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -335,6 +360,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
                 { KnownClients.TestClient2_3, "e2e0tc23000000000000000000000000" },
                 { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
+                { KnownClients.TestClient_24, "e2e0tc24000000000000000000000000" },
+                { KnownClients.TestClient_25, "e2e0tc25000000000000000000000000" },
                 { KnownClients.TestClient_9,  "e2e0tc09000000000000000000000000" },
                 { KnownClients.TestClient_10, "e2e0tc10000000000000000000000000" },
                 { KnownClients.TestClient_11, "e2e0tc11000000000000000000000000" },
@@ -814,6 +841,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 // **2000 文字を超える登録**（#269）。**client_secret は空**（public）。
                 sourceName = KnownClients.TestClient;
                 overriddenSecret = "";
+            }
+            else if (clientName == KnownClients.TestClient_25)
+            {
+                // **alg を絞った `private_key_jwt` のクライアント**（#307 の段階 3）。
+                //   **client_secret は写す元のまま**だが、**秘密では認証できない。**
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_24)
+            {
+                // **`token_endpoint_auth_method` を `private_key_jwt` にした**（#307 の段階 3）。
+                //   **client_secret は写す元のまま**だが、**秘密では認証できない**
+                //   （**登録された方法でなければ通さない**）。**鍵は写す元と同じ。**
+                sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_20)
             {

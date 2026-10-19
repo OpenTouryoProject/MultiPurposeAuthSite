@@ -46,6 +46,7 @@
 //*  2026/10/09  玄人 幸道         test_self_code_manage を削除（管理画面のトークン取得の廃止に伴う）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の scope と、登録項目の上限を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         registration_access_token のハッシュの上限を追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method の上限を追加（#307 の段階 3）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -121,6 +122,15 @@ namespace MultiPurposeAuthSite.Co
         /// **SHA-256 を base64 にすると 44 文字**だが、**別のハッシュに替えても入るように 128** とした。
         /// </remarks>
         public const int MaxLengthOfTokenHash = 128;
+
+        /// <summary>token_endpoint_auth_method の MaxLength（#307 の段階 3）</summary>
+        /// <remarks>
+        /// **RFC 7591 §2 の `token_endpoint_auth_method`**（**値は 1 つ**）。
+        /// **いちばん長い既知の値が `client_secret_basic`（19 文字）**なので、**32 で足りる**。
+        /// **既知でない値は拒否する**（`CmnEndpoints.AllowsAuthMethod`）ので、
+        /// **長い値を保管する必要が無い。**
+        /// </remarks>
+        public const int MaxLengthOfAuthMethod = 32;
 
         #endregion
 

@@ -35,6 +35,7 @@
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-197）
 //*  2026/09/22  玄人 幸道         RT-197.2 の期待するエラー コードを unauthorized_client に改めた（#224 の段階 2）
 //*  2026/09/24  玄人 幸道         RT-188.4（request_uri は使い切り）を追加（#188 の段階 2）
+//*  2026/10/19  玄人 幸道         RT-197.2 の誤りを invalid_client に改めた（#307 の段階 3）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -152,9 +153,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "access_token を返さない",
                     token.AccessToken == null ? "返さなかった" : "**返してしまった**");
 
-                // 登録種別で許されていないグラントは unauthorized_client（RFC 6749 §5.2。#224 の段階 2 で改めた）
-                r.VerifyEqual("unauthorized_client で拒否される",
-                    "unauthorized_client", token.Error);
+                //  **クライアント認証の失敗なので invalid_client**（RFC 6749 §5.2）。
+                //
+                //  **#307 の段階 3 で、断る段が早くなった。**
+                //    **以前は `client_secret` で認証が通り**、**その先の登録種別の判定で
+                //    `unauthorized_client`** になっていた。
+                //    **いまは `TestClient2` が `token_endpoint_auth_method=private_key_jwt` を
+                //    登録している**ので、**`client_secret` では認証そのものが通らない。**
+                //
+                //  **断ることは変わっていない**（検証 2 のとおりトークンは出ない）。
+                //    **変わったのは誤りのコードだけ**であり、
+                //    **仕様としては、こちらの方が正しい**（認証の失敗は `invalid_client`）。
+                r.VerifyEqual("invalid_client で拒否される",
+                    "invalid_client", token.Error);
+
+                r.Note("**#307 の段階 3 より前は `unauthorized_client` だった** — "
+                    + "**`client_secret` で認証が通った後、登録種別の判定で断っていた。**"
+                    + "**いま断るのはクライアント認証**（**登録された方法が `private_key_jwt`**）なので、"
+                    + "**`RT-197.2` の観点（FAPI2 では秘密だけでトークンが出ない）は、より早い段で守られている。**");
 
                 r.Done();
             }

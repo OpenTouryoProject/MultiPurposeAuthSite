@@ -121,6 +121,7 @@
 //*  2026/10/16  玄人 幸道         ポーリングが速すぎたら slow_down を返す（#305 の段階 1）
 //*  2026/10/16  玄人 幸道         クライアント認証の失敗を数える（#305 の段階 2）
 //*  2026/10/18  玄人 幸道         登録の grant_types / response_types を効かせ、registration_endpoint を広告（#307 の段階 1）
+//*  2026/10/19  玄人 幸道         登録された token_endpoint_auth_method で絞る（#307 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -200,12 +201,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("response_modes_supported", response_modes_supported);
 
             #region token
-            OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit(),
-                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
-                OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
-            });
+            // **一覧は 1 か所から作る**（#262 と同じ考え方。#307 の段階 3 で揃えた）。
+            //   **広告・登録値の検証・画面の選択肢**が、同じ `TokenEndpointAuthMethods` を見る。
+            OpenIDConfig.Add("token_endpoint_auth_methods_supported",
+                new List<string>(CmnEndpoints.TokenEndpointAuthMethods));
 
             // **ES256 も通る**（#129 の段階 2）。
             //   `client_assertion` の検証で、**登録された RSA / ECDSA の公開鍵を順に試す**
@@ -1376,6 +1375,27 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
         }
 
+        /// <summary>公開鍵（JWK）を、登録する形（Base64URL）にする（#307 の段階 3）</summary>
+        /// <param name="jwk">JWK（1 本。JWK Set ではない）</param>
+        /// <returns>登録する値（Base64URL の JWK）</returns>
+        /// <remarks>
+        /// **`DecodeRegisteredJwk` の逆である。** **形の知識を 1 か所に置くため、ここに並べた。**
+        /// **列が持つのは「JWK 1 本を Base64URL にしたもの」**で、**JWK Set ではない**
+        /// （`jwk_rsa_publickey` / `jwk_ecdsa_publickey` の 2 列に分かれている）。
+        /// **余白を入れない**（`Formatting.None`）。
+        /// </remarks>
+        public static string EncodeRegisteredJwk(JObject jwk)
+        {
+            if (jwk == null)
+            {
+                return "";
+            }
+
+            return CustomEncode.ToBase64UrlString(
+                CustomEncode.StringToByte(
+                    jwk.ToString(Formatting.None), CustomEncode.us_ascii));
+        }
+
         /// <summary>登録された公開鍵（Base64URL の JWK）を復号する（無ければ空）</summary>
         /// <param name="base64UrlJwk">登録された値</param>
         /// <returns>JWK の JSON（無ければ空）</returns>
@@ -2308,6 +2328,103 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             JwtConst.RS256
         };
+
+        #endregion
+
+        #region 登録されたクライアント認証の方法（#307 の段階 3）
+
+        /// <summary>この配備が扱う `token_endpoint_auth_method`（#307 の段階 3）</summary>
+        /// <remarks>
+        /// **この一覧が、広告（`token_endpoint_auth_methods_supported`）と、
+        /// 登録値の検証（`AllowsAuthMethod` / 動的登録）と、画面の選択肢を決める。**
+        ///
+        /// **4 つとも、検証する側は実装済みである**
+        /// （秘密は `ClientAuthentication`、`private_key_jwt` は #239 / #129 の段階 2、
+        /// `tls_client_auth` は #226）。
+        /// </remarks>
+        public static readonly string[] TokenEndpointAuthMethods = new string[]
+        {
+            OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
+            OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit(),
+            OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
+            OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
+        };
+
+        /// <summary>この証明で、このクライアントを通してよいか（#307 の段階 3）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="proof">実際に示された証明</param>
+        /// <returns>通してよければ true</returns>
+        /// <remarks>
+        /// **登録された `token_endpoint_auth_method` と、実際の証明を突き合わせる。**
+        ///
+        /// | 登録 | 通す証明 |
+        /// |---|---|
+        /// | **空**（未登録） | **`ClientSecret` だけ**（＝ `client_secret_basic` / `client_secret_post` を暗黙に許す） |
+        /// | `client_secret_basic` / `client_secret_post` | **`ClientSecret`** |
+        /// | **`private_key_jwt`** | **`PrivateKeyJwt`** |
+        /// | **`tls_client_auth`** | **`Mtls`** |
+        /// | **既知でない値** | **通さない**（登録の誤り。#224 の段階 2 と同じ方針） |
+        ///
+        /// **つまり「強い方法は明示が要る」。** **鍵や DN を登録しただけでは、その方法では通らない。**
+        /// **以前は「登録されている資格のどれかで通る」**作りだったため、
+        /// **登録で求めた強さが効かなかった。**
+        ///
+        /// **`client_secret_basic` と `client_secret_post` は区別しない。**
+        /// **どちらで来たかを、この層は知らない**（口が `client_id` ＋ `client_secret` に
+        /// 正規化して渡す）。**どちらを登録しても、両方が通る。**
+        ///
+        /// **断ったときは、運用のログに残す** — **資格情報は合っていたのに通らない**ので、
+        /// **残さないと配備側で原因が分からない。** **秘密そのものは書かない。**
+        ///
+        /// **呼ぶのは「資格情報が合った後」である。** 失敗の数え（#305 の段階 2）は
+        /// 従来どおり呼び出し側で行われる（**方法の違いも、認証の失敗として数える**）。
+        /// </remarks>
+        private static bool AllowsAuthMethod(string client_id, ClientModePolicy.Proof proof)
+        {
+            string registered = Helper.GetInstance().GetTokenEndpointAuthMethod(client_id);
+
+            bool allowed;
+
+            if (string.IsNullOrEmpty(registered))
+            {
+                // **明示が無ければ、秘密ベースの 2 つだけ**（#307 の段階 3 の決定）。
+                allowed = (proof == ClientModePolicy.Proof.ClientSecret);
+            }
+            else if (Array.IndexOf(CmnEndpoints.TokenEndpointAuthMethods, registered) < 0)
+            {
+                // **既知でない値が登録されている**（設定の誤り）。
+                allowed = false;
+            }
+            else if (registered == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit())
+            {
+                allowed = (proof == ClientModePolicy.Proof.PrivateKeyJwt);
+            }
+            else if (registered == OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit())
+            {
+                allowed = (proof == ClientModePolicy.Proof.Mtls);
+            }
+            else
+            {
+                // client_secret_basic / client_secret_post
+                allowed = (proof == ClientModePolicy.Proof.ClientSecret);
+            }
+
+            if (!allowed)
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The client authentication of {0} was refused. "
+                    + "(the registered token_endpoint_auth_method is \"{1}\", but the client proved \"{2}\")",
+                    client_id,
+                    string.IsNullOrEmpty(registered) ? "(none)" : registered,
+                    proof.ToString()));
+            }
+
+            return allowed;
+        }
+
+        #endregion
+
+        #region 検証する側の alg（#262。続き）
 
         /// <summary>登録された alg で絞ってよいか（#262）</summary>
         /// <param name="registeredAlg">登録された alg（null / 空 なら絞らない）</param>
@@ -4737,8 +4854,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string registeredSecret = Helper.GetInstance().GetClientSecret(client_id);
 
                     //  **登録が空なら通さない**（#305 の段階 4。**空と空の一致を作らない**）。
+                    //  **登録された方法でなければ通さない**（#307 の段階 3）。
+                    //    **明示が無ければ、秘密ベースの 2 つを暗黙に許す。**
                     if (!string.IsNullOrEmpty(registeredSecret)
-                        && client_secret == registeredSecret)
+                        && client_secret == registeredSecret
+                        && CmnEndpoints.AllowsAuthMethod(
+                            client_id, ClientModePolicy.Proof.ClientSecret))
                     {
                         proof = ClientModePolicy.Proof.ClientSecret;
                         x509 = null; // client_secretがあった場合、x509を無効化
@@ -4759,8 +4880,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //    **以前は、登録の無い `client_id` に Subject が空の証明書を出すと、
                     //    空と空が一致して通った**（`/revoke` / `/introspect` は
                     //    この後の登録種別の判定を通らないので、そこで落ちない）。
+                    //  **登録された方法でなければ通さない**（#307 の段階 3）。
+                    //    **`tls_client_auth` の明示が要る** — **DN を登録しただけでは通らない。**
                     if (!string.IsNullOrEmpty(registeredDn)
-                        && x509.Subject == registeredDn)
+                        && x509.Subject == registeredDn
+                        && CmnEndpoints.AllowsAuthMethod(
+                            client_id, ClientModePolicy.Proof.Mtls))
                     {
                         proof = ClientModePolicy.Proof.Mtls;
 
@@ -4867,9 +4992,24 @@ namespace MultiPurposeAuthSite.TokenProviders
             // コンフィデンシャル クライアントは認証必須
             // - client_secretを登録済み
             // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
+            // - **公開鍵を登録済み**（private_key_jwt のみのクライアント）（#307 の段階 3）
             // - x509を提示してきた
+            //
+            //  **鍵の登録を数えていなかった**（#307 の段階 3 で閉じた）。
+            //    **秘密も DN も無く、鍵だけを登録したクライアント**は、
+            //    **ここで「パブリック クライアント」とみなされ、`client_id` の確認だけで通っていた。**
+            //    **`IsDeviceAuthZAllowed` のコメントが警戒しているのと同じこと**が、
+            //    **逆向き（強い方法を登録した側）で起きていた。**
+            //
+            //  **この口は `client_assertion` を読んでいない**（RFC 8628 の `/device_authz` /
+            //    `/token`。両アプリの呼び出しに引数が無い）ので、
+            //    **鍵だけのクライアントは、ここで認証に失敗して断られる** — **出さない側に転ぶ。**
+            //    **デバイス フローを使うなら、秘密ベースの方法を登録すること**
+            //    （**動的登録は、その組み合わせを登録の時点で断る**）。
             if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
                 || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetJwkRsaPublickey(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetJwkECDsaPublickey(client_id))
                 || x509 != null)
             {
                 return CmnEndpoints.ClientAuthentication(
@@ -4954,7 +5094,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
-                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
+                        //
+                        //  **登録された方法でなければ通さない**（#307 の段階 3）。
+                        //    **`private_key_jwt` の明示が要る** — **鍵を登録しただけでは通らない。**
+                        //    **`client_id` はアサーションの `iss`**（RFC 7523 §3）なので、それで引く。
+                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint
+                            && CmnEndpoints.AllowsAuthMethod(
+                                iss, ClientModePolicy.Proof.PrivateKeyJwt))
                         {
                             proof = ClientModePolicy.Proof.PrivateKeyJwt;
                             client_id = iss;

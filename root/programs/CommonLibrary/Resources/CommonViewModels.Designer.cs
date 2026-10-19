@@ -860,5 +860,23 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("SoftwareVersionDescription", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Client authentication method (token_endpoint_auth_method) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TokenEndpointAuthMethod {
+            get {
+                return ResourceManager.GetString("TokenEndpointAuthMethod", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   TokenEndpointAuthMethodDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TokenEndpointAuthMethodDescription {
+            get {
+                return ResourceManager.GetString("TokenEndpointAuthMethodDescription", resourceCulture);
+            }
+        }
     }
 }

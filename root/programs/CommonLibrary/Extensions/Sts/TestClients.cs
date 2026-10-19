@@ -36,6 +36,7 @@
 //*  2026/10/06  玄人 幸道         同意を記録しないTestClient_19を追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22を追加（鍵なし。#275）
 //*  2026/10/09  玄人 幸道         TestClient_15 の折り返し先を、記号から実 URL に変えた（C-10）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method を写し、TestClient_24 を追加（#307 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -128,12 +129,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **`private_key_jwt` で認証する normal のクライアント**（#307 の段階 3）。
+                //
+                //   **`TestClient` では測れなくなった。** **段階 3 で、登録された
+                //   `token_endpoint_auth_method` を認証で効かせるようにしたため**、
+                //   **1 つのクライアントが「秘密でも鍵でも通る」ことはできない。**
+                //   **`TestClient` は秘密で認証する**（ほぼ全てのテストがそう使う）ので、
+                //   **鍵で認証する分は、こちらで測る**（`RT-239.1` 〜 `.4` / `RT-129.1`）。
+                //
+                //   **写し元は `TestClient`** なので、**RSA と EC の公開鍵を両方持つ**
+                //   （`RT-129.1` が ES256 を測れる）。**alg は絞らない。**
+                ClientName = "TestClient_24", ClientId = "e2e0tc24000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "token_endpoint_auth_method", "private_key_jwt" }
+                }
+            },
+            new Entry()
+            {
                 // **mTLS（FA-6）で使う。** Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
+                //   **方法も明示する**（#307 の段階 3）。**DN を登録しただけでは通らない。**
                 ClientName = "TestClient2_2", ClientId = "e2e0tc22000000000000000000000000",
                 ClientMode = "fapi2", SourceName = "TestClient2",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "tls_client_auth_subject_dn", "CN=mpas-e2e-mtls-client" }
+                    { "tls_client_auth_subject_dn", "CN=mpas-e2e-mtls-client" },
+                    { "token_endpoint_auth_method", "tls_client_auth" }
                 }
             },
             new Entry()
@@ -142,7 +164,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "fapi_1", SourceName = "TestClient2",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "tls_client_auth_subject_dn", "CN=mpas-e2e-mtls-client" }
+                    { "tls_client_auth_subject_dn", "CN=mpas-e2e-mtls-client" },
+                    { "token_endpoint_auth_method", "tls_client_auth" }
                 }
             },
 
@@ -159,6 +182,25 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     { "id_token_signed_response_alg", JwtConst.RS512 },
                     { "token_endpoint_auth_signing_alg", JwtConst.RS256 }
+                }
+            },
+            new Entry()
+            {
+                // **受ける alg を絞った、`private_key_jwt` のクライアント**（#307 の段階 3）。
+                //
+                //   **`RT-262.1` は、ここで測る。** **`TestClient_8` とは分けた** —
+                //   **`RT-129.3` が `TestClient_8` を `client_secret` で使う**ので、
+                //   **段階 3 の「1 クライアントは 1 方法」と両立しない。**
+                //
+                //   **以前は 1 件に相乗りしていた**（**net48 が一覧ごと 1 本の環境変数で受け、
+                //   件数に上限があったため**）。**#264 で種データをサーバ側に寄せた**ので、
+                //   **1 件ずつ別の行になり、上限は無い。**
+                ClientName = "TestClient_25", ClientId = "e2e0tc25000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "token_endpoint_auth_signing_alg", JwtConst.RS256 },
+                    { "token_endpoint_auth_method", "private_key_jwt" }
                 }
             },
             new Entry()
@@ -435,6 +477,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 TlsClientAuthSubjectDn = helper.GetTlsClientAuthSubjectDn(sourceId),
 
+                // **クライアント認証の方法ごと写す**（#307 の段階 3）。
+                //   **写さないと、写し先が「明示なし ＝ 秘密ベース」に落ちる** —
+                //   **写し元が `private_key_jwt` でも、鍵では通らなくなる。**
+                TokenEndpointAuthMethod = helper.GetTokenEndpointAuthMethod(sourceId),
+
                 // **oauth2_oidc_mode は、写さず表の値を使う**（登録種別を変えるのが目的のため）。
                 ClientMode = entry.ClientMode
             };
@@ -502,6 +549,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case "token_endpoint_auth_signing_alg":
                     model.TokenEndpointAuthSigningAlg = value;
+                    break;
+
+                case "token_endpoint_auth_method":
+                    model.TokenEndpointAuthMethod = value;
                     break;
 
                 case "request_object_signing_alg":

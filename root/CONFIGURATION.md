@@ -637,7 +637,7 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
 > **公開情報の口は全開なので、この一覧を引かない。**
 
-### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1・2）
+### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1・2・3）
 
 **クライアント登録を WebAPI で行う。** **既定は無効**で、**開けると `/register` が出来る。**
 
@@ -721,9 +721,12 @@ Content-Type: application/json
 | `scope` | **`scopes_supported` の範囲内**。**`client_registration` は断る** |
 | `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
 | `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
-| **`token_endpoint_auth_method`** | **`client_secret_basic` / `client_secret_post` だけ。** **`private_key_jwt` / `tls_client_auth` は鍵か DN の登録を要する**ので、段階 1 では断る |
-| **`jwks` / `jwks_uri`** | **断る**（`invalid_client_metadata`）。**鍵をそこから引く実装が無い** — **受け取って無視すると、`private_key_jwt` や Request Object の検証が黙って通らなくなる**（段階 3 で足す） |
-| **`software_statement`** | **断る**（`unapproved_software_statement`）。**黙って無視してはならない** — クライアントは「主張した内容で登録された」と考える（段階 3） |
+| **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
+| **`jwks`** | **受け付ける**（段階 3）。**RSA 1 本 ＋ EC 1 本まで**（列が 1 本ずつ）。**同じ種類が 2 本来たら断る** |
+| **`tls_client_auth_subject_dn`** | **受け付ける**（段階 3。RFC 8705 §2.1.2）。**照合は完全一致** |
+| **`token_endpoint_auth_signing_alg`** | **受け付ける**（段階 3）。**`RS256` / `ES256`**。**空なら絞らない**（#262） |
+| **`jwks_uri`** | **断る**（`invalid_client_metadata`）。**鍵を URL から引く実装が無い** — **クライアント認証の経路が同期**で、取得を差し込めない（**別 Issue**）。**受け取って無視すると、`private_key_jwt` が黙って通らなくなる** |
+| **`software_statement`** | **断る**（`unapproved_software_statement`）。**黙って無視してはならない** — クライアントは「主張した内容で登録された」と考える（段階 4） |
 | **`client_name`** | **受け取っても無視する**（§3.2.1 が認めている）。**`ClientName` の列は利用者名**であり、**`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない** |
 | 上記以外 | **無視する**（§3.2.1） |
 
@@ -770,6 +773,65 @@ Content-Type: application/json
 > **DB に登録したクライアント（管理画面・動的登録）は「登録が無い」扱いになり、**
 > **#198 の後半（クライアントごとの絞り）が一切効いていなかった**
 > （`scopes_supported` の絞りだけが効いていた）。**#307 の段階 1 で、DB も見るようにした。**
+
+#### クライアント認証の方法 — `token_endpoint_auth_method`（#307 の段階 3）
+
+**このクライアントが自分を証明する方法**である（RFC 7591 §2。**値は 1 つ**）。
+**登録された方法でなければ、認証を通さない。**
+
+| 登録 | 通る証明 |
+|---|---|
+| **空**（未登録） | **`client_secret_basic` と `client_secret_post`**（**暗黙に許す**） |
+| `client_secret_basic` / `client_secret_post` | 同じ（**明示しても変わらない**） |
+| **`private_key_jwt`** | **`client_assertion` だけ**（**秘密では通らない**） |
+| **`tls_client_auth`** | **クライアント証明書だけ**（同じ） |
+| **既知でない値** | **通さない**（登録の誤り。#224 の段階 2 と同じ方針） |
+
+> **つまり「強い方法は明示が要る」。**
+> **鍵や DN を登録しただけでは、その方法では通らない。**
+> **以前は「登録されている資格のどれかで通る」**作りだったので、
+> **鍵を登録しても秘密でも入れた** ＝ **登録で求めた強さが効かなかった。**
+
+**効く口**は、`/token`（認可コード・`refresh_token`・`client_credentials` ほか）・
+`/par`・`/revoke`・`/introspect`・`/ciba_authz` である
+（**クライアント認証を行う所すべて**）。
+
+| 効かない所 | なぜ |
+|---|---|
+| **SAML2 の `AuthnRequest` の署名検証** | **クライアント認証ではない**（登録された鍵を、別の用途で使っている） |
+| **Request Object（JAR）の署名検証** | 同じ（`request_object_signing_alg` の側） |
+| **JWT Bearer の認可グラント**（RFC 7523 §2.1） | **自前で署名を検証する経路**で、クライアント認証を通らない |
+| **秘密を持たないクライアント**（public ＋ PKCE） | **認証しない**（RFC 6749 §3.2.1）。**扱いは変えていない** |
+
+##### :warning: 既存の配備は、設定に 1 行足す必要がある
+
+**`private_key_jwt` や mTLS を使っているクライアントは、方法を明記しないと認証できなくなる。**
+**構成ファイル（`OAuth2ClientsInformation`）にも、項目を足した。**
+
+```jsonc
+"6336f8ff137044c4a30bbbdcd6c2cf5b": {
+  "client_name": "TestClient2",
+  "oauth2_oidc_mode": "fapi2",
+  "token_endpoint_auth_method": "private_key_jwt",   // ← 足す（段階 3）
+  "jwk_rsa_publickey": "..."
+}
+```
+
+**管理画面から登録したクライアント**（`Saml2OAuth2Data`）は、
+**`/Manage/AddSaml2OAuth2Data` の「クライアント認証の方法」で選ぶ。**
+
+> **雛形（`_appsettings.json` / `_app.config`）は直してある**ので、
+> **新しく作る配備では、そのまま動く。**
+
+##### 気をつける所
+
+| | |
+|---|---|
+| **`client_secret_basic` と `client_secret_post` は区別しない** | **どちらで来たかを、認証の層は知らない**（口が同じ形に正規化して渡す）。**どちらを登録しても、両方が通る** |
+| **`client_secret` は、方法に関わらず発行する** | **秘密しか使えない口が在る**ため（**デバイス フローは `client_assertion` を読まない**）。**登録した方法以外では通らない**ので、**秘密が在っても弱くならない** |
+| **`device_code` ＋ `private_key_jwt` は登録できない** | **RFC 8628 の口が `client_assertion` を読まない**ので、**永久に認証できない登録になる。** **`tls_client_auth` は通る**（証明書は口に渡っている） |
+| **`PUT` で方法を省くと、秘密ベースに戻る** | **§2.2 のとおり**（省略は削除要求）。**ただし鍵と DN は持ち越す** — **管理画面から入れた鍵を消してはならない。** **方法を明記するなら、材料も毎回送ること** |
+| **`jwks` は RSA 1 本 ＋ EC 1 本まで** | **列が 1 本ずつ**だから。**同じ種類が 2 本来たら断る** — **先頭を採ると、もう一方の鍵で署名したときに失敗する** |
 
 #### DDL — `Saml2OAuth2Data` に 11 列足す（#307 の段階 1）
 
@@ -976,20 +1038,42 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN RegistrationAccessToken varchar(128) NULL
 **暗号化（`SecretProtector`。#297）はしない** — **照合しかしない**ので、**元に戻す必要が無い。**
 **画面には出さない。**
 
+##### DDL — `Saml2OAuth2Data` に 1 列足す（#307 の段階 3）
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD
+    [TokenEndpointAuthMethod] [nvarchar](32) NULL
+```
+
+```sql
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("TokenEndpointAuthMethod" NVARCHAR2(32) NULL);
+```
+
+```sql
+-- PostgreSQL（引用符なしなので、識別子は小文字に畳まれる）
+ALTER TABLE Saml2OAuth2Data ADD COLUMN TokenEndpointAuthMethod varchar(32) NULL;
+```
+
+**空は「明示なし」**＝ **`client_secret_basic` / `client_secret_post` を暗黙に許す**
+（上の「クライアント認証の方法」）。**既存の行は空のまま**でよい —
+**秘密で認証しているクライアントは、そのまま動く。**
+**`private_key_jwt` / mTLS のクライアントだけ、値を入れること。**
+
 ##### レート制限（#305 の段階 3）
 
 **管理 API は、登録そのものとは別のバケツで数える**（口の名前 `register_mgmt`）。
 **パスに `client_id` が入る**ので、**前方一致で見る。**
 **管理の洪水で、登録そのものを止めないため**である。
 
-#### まだ出来ないこと（段階 3 以降）
+#### まだ出来ないこと（段階 4 以降）
 
 | | いつ |
 |---|---|
-| **`jwks` / `jwks_uri`**（鍵を URL から引く） | 段階 3 |
-| **`software_statement`**（署名付きの主張） | 段階 3 |
-| **鍵や DN の登録を要する `token_endpoint_auth_method`**（`private_key_jwt` / `tls_client_auth`） | 段階 3 |
-| **`client_credentials` 経路**／**1 利用者 n クライアント**（DDL） | 段階 3 |
+| **`software_statement`**（署名付きの主張） | **段階 4**（信頼する発行者と検証鍵の設定が要る） |
+| **`client_credentials` 経路**／**1 利用者 n クライアント**（DDL ＋ 画面） | **段階 5**（**器と画面の変更**。所有者の持ち方を変える） |
+| **`jwks_uri`**（鍵を URL から引く） | **別 Issue**（**クライアント認証の経路を非同期にする**。`/token` ほか全ての口から同期で呼ばれている） |
 | OIDC DCR §2 の残り（`application_type` / ログアウトの URI など） | D-1-2 と併せて |
 
 ## 5. ルート URI と、自己テストの折り返し（重要）

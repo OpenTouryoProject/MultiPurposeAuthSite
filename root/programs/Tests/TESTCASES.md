@@ -3001,7 +3001,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - request_uri 経路で認可コードが発行される
 - トークンを発行しない
-- unauthorized_client で拒否される
+- invalid_client で拒否される
+
+**補足**
+
+- **#307 の段階 3 より前は `unauthorized_client` だった** — **`client_secret` で認証が通った後、登録種別の判定で断っていた。****いま断るのはクライアント認証**（**登録された方法が `private_key_jwt`**）なので、**`RT-197.2` の観点（FAPI2 では秘密だけでトークンが出ない）は、より早い段で守られている。**
 
 ## RT-197.3 自前で署名した Request Object でも、認可コードが発行される
 
@@ -4291,7 +4295,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. 認可コード フローで refresh_token を得る（client_secret で交換）
+1. 認可コード フローで refresh_token を得る（交換も client_assertion）
 1. client_secret を送らず、client_assertion で更新する
 
 **検証（合否を判定する）**
@@ -4313,7 +4317,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. トークンを得る
+1. トークンを得る（交換も client_assertion）
 1. client_assertion で POST /revoke
 1. 失効したことを確かめる（/userinfo が 401）
 
@@ -4332,7 +4336,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. トークンを得る
+1. トークンを得る（交換も client_assertion）
 1. client_assertion で POST /introspect
 
 **検証（合否を判定する）**
@@ -5344,7 +5348,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 1. 登録した alg（RS256）の client_assertion は通る
 1. 絞った alg と違う ES256 の client_assertion は通らない
-1. （対照）絞っていないクライアントは、ES256 でも通る
+1. （対照）alg を絞っていないクライアントは、ES256 でも通る
 
 **検証（合否を判定する）**
 
@@ -5355,6 +5359,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **絞るのは「受ける側」だけ**である。**発行する側（`id_token_signed_response_alg`）は #129 の段階 2 で入っており、別の項目。**
+- **`token_endpoint_auth_signing_alg` と `token_endpoint_auth_method` は別物。****方法（#307 の段階 3）は「何で認証するか」**、**alg（#262）は「`private_key_jwt` のとき、どの署名を受けるか」**である。**どちらの対照も `private_key_jwt` のクライアントで測る。**
 - **`request_object_signing_alg` も同じ形で足した**（#262）。**ただし、受ける集合が `RS256` だけ**なので（上流の `RequestObject.Verify` が RS256 固定）、**いまは書ける値が 1 つしか無く、絞っても結果が変わらない。****受ける alg を増やすのは「広げる側」の話**で、#262 では扱っていない。
 
 ## RT-265.1 公開情報は全開、ブラウザから叩く口は登録から導いたオリジンだけ、/revoke と /introspect には CORS を付けない
@@ -6587,8 +6592,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. redirect_uris が無い
 1. redirect_uri にフラグメントが付いている
 1. 相対 URI は通らない
-1. jwks_uri は受け付けない（段階 1）
-1. software_statement は受け付けない（段階 3）
+1. jwks_uri は受け付けない（段階 3 でも。別 Issue）
+1. software_statement は受け付けない（段階 4）
 1. response_types と grant_types が噛み合っていない
 1. 専用 scope は、動的登録では付けられない
 1. どの誤りでも、登録は作られていない
@@ -6895,6 +6900,135 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **読み取り専用の 4 つ**（`registration_access_token` / `registration_client_uri` / `client_id_issued_at` / `client_secret_expires_at`）**は、入っていても無視する** — **§2.2 は「入れるな」と書くが、断ると 「`GET` して直して返す」が成り立たない。**
 
+## RT-307.14 token_endpoint_auth_method=private_key_jwt と jwks を登録すると、その鍵の client_assertion で認証でき、client_secret では認証できない
+
+| | |
+|---|---|
+| 観点 | **段階 1・2 は、秘密ベースの 2 つしか登録できなかった**（`jwks` は断っていた）。**強い認証方法を使う配備では、API で作ったクライアントを、管理画面で直す手作業が残っていた。****検証する側は #239 / #129 の段階 2 で実装済み**なので、**段階 3 で足したのは「登録を受けて列に入れる」ところだけ**である。**登録された方法は、認証でも効く** — **鍵を登録したクライアントは、秘密では通らない。** |
+| 根拠 | RFC 7591 §2 / RFC 7523 §2.2 / RFC 7592 §3 / #307 の段階 3 |
+| テスト | `RT30714_private_key_jwtで登録するとその鍵で認証できる` |
+
+**手順**
+
+1. jwks（RSA 1 本）と token_endpoint_auth_method=private_key_jwt で登録する
+1. 登録した鍵の client_assertion で、認可コードを交換する
+1. （対照）同じクライアントを client_secret で交換すると、通らない
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答の token_endpoint_auth_method は private_key_jwt
+- 応答に jwks が返る（登録した鍵）
+- client_secret も返る（方法に関わらず発行する）
+- HTTP の状態は 200
+- access_token が返る
+- HTTP の状態は 401
+- エラーは invalid_client
+
+**補足**
+
+- **登録された方法でなければ通さない**（段階 3）。**以前は「登録されている資格のどれかで通る」**作りだったので、**鍵を登録しても、秘密でも入れた** ＝ **登録で求めた強さが効かなかった。**
+- **`client_secret_basic` と `client_secret_post` は区別しない** — **どちらで来たかを、この層は知らない**（口が同じ形に正規化して渡す）。
+
+## RT-307.15 token_endpoint_auth_method=tls_client_auth と tls_client_auth_subject_dn を登録すると、その証明書で認証できる
+
+| | |
+|---|---|
+| 観点 | **照合は `x509.Subject` との完全一致**である（RFC 8705 §2.1）。**検証する側は #226 で実装済み**で、**#305 の段階 4 で「登録が空なら通さない」まで入っている。****段階 3 で足したのは、動的登録から DN を登録できるようにしたところだけ。** |
+| 根拠 | RFC 8705 §2.1 / §2.1.2 / RFC 7591 §2 / #307 の段階 3 |
+| テスト | `RT30715_tls_client_authで登録するとその証明書で認証できる` |
+
+**手順**
+
+1. tls_client_auth と Subject DN を登録する
+1. Subject が一致する証明書を添えて交換する（client_secret は送らない）
+1. （対照）Subject が違う証明書では、通らない
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答の token_endpoint_auth_method は tls_client_auth
+- 応答に tls_client_auth_subject_dn が返る
+- access_token が返る
+- access_token は返らない
+
+**補足**
+
+- **DN は 1 文字も違ってはならない**（`#263` の `redirect_uri` と同じ厳しさ）。**`tls_client_auth` を登録すると、RFC 8705 §3 の「証明書に縛られたアクセス トークン」も効く**（既存の振る舞い）。
+
+## RT-307.16 認証できない登録は作らせない（材料が無い・鍵が多い・知らない方法・jwks_uri）
+
+| | |
+|---|---|
+| 観点 | **黙って作ると、クライアントは「登録した方法で認証できる」と考えるが、永久に通らない。** **どれも「無視すると黙って弱くなる／壊れる」もの**なので、**登録の時点で断る**（RFC 7591 §3.2.2 : `invalid_client_metadata`）。 |
+| 根拠 | RFC 7591 §2 / §3.2.2 / RFC 7517 §5 / RFC 8705 §2.1.2 / #307 の段階 3 |
+| テスト | `RT30716_方法と鍵の誤りは登録の時点で断る` |
+
+**手順**
+
+1. private_key_jwt なのに jwks が無い
+1. tls_client_auth なのに tls_client_auth_subject_dn が無い
+1. 知らない token_endpoint_auth_method
+1. jwks に RSA が 2 本
+1. jwks_uri（鍵を URL から引く）は、受け付けない
+1. device_code グラント × private_key_jwt
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400（鍵が無ければ、その方法では認証できない）
+- error は invalid_client_metadata
+- HTTP の状態は 400（DN が無ければ、照合する相手が無い）
+- error は invalid_client_metadata
+- HTTP の状態は 400（広告していない方法（既知でない値は拒否する。#224 の段階 2 と同じ方針））
+- error は invalid_client_metadata
+- HTTP の状態は 400（列は RSA 1 本しか持てない。先頭を採ると、もう一方の鍵で署名したときに失敗する）
+- error は invalid_client_metadata
+- HTTP の状態は 400（クライアント認証の経路が同期なので、取得を差し込めない（別 Issue））
+- error は invalid_client_metadata
+- HTTP の状態は 400（RFC 8628 の口は client_assertion を読まないので、永久に認証できない）
+- error は invalid_client_metadata
+
+**観測（判定しない）**
+
+- error_description
+- error_description
+- error_description
+- error_description
+- error_description
+- error_description
+
+**補足**
+
+- **`jwks` と `jwks_uri` を同時に送ることも断る**（RFC 7591 §2 は、どちらか一方としている）。**ここでは `jwks_uri` を単独で送って断られることだけを測った。**
+
+## RT-307.17 PUT で token_endpoint_auth_method を省くと秘密ベースに戻り、jwks は持ち越される
+
+| | |
+|---|---|
+| 観点 | **`PUT` は全置換**（§2.2 : 省いた項目は「消す要求」）。**方法は、その規則どおり省略で消える** ＝ **秘密ベースに戻る。****鍵と DN だけは持ち越す** — **管理画面から入れた鍵を、`PUT` で消してはならない**（段階 2 の「動的登録で設定できない列」と同じ考え方）。**方法を明記するなら、材料も毎回送ること**（材料が無ければ `400`）。 |
+| 根拠 | RFC 7592 §2.2 / §3 / #307 の段階 3 |
+| テスト | `RT30717_PUTで方法を省くと秘密に戻るが鍵は消えない` |
+
+**手順**
+
+1. private_key_jwt ＋ jwks で登録する
+1. 方法と jwks を省いて PUT する（redirect_uris と client_id だけ）
+1. GET で読み直しても、同じである
+1. 秘密ベースに戻ったので、client_secret で交換できる
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 200
+- token_endpoint_auth_method は client_secret_basic に戻る
+- jwks は残っている（省いても消さない）
+- GET も client_secret_basic
+- GET でも jwks が返る
+- access_token が返る
+
+**補足**
+
+- **省略で方法が戻るのは、§2.2 のとおり**である。**ただし「方法だけ戻って、鍵が残る」状態になる** — **鍵は使われなくなるだけで、害は無い**（**認証に使えるのは、登録された方法だけ**）。
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -7049,18 +7183,20 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 1. 対照 : device / normal の登録は、開始できる
 1. fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される
+1. fapi2（TestClient2）は、クライアント認証の段で断られる
 
 **検証（合否を判定する）**
 
 - TestClient3 は device_code を得る
 - MVC_Sample は device_code を得る
 - TestClient1 は unauthorized_client（400）
-- TestClient2 は unauthorized_client（400）
 - TestClient4 は unauthorized_client（400）
+- TestClient2 は invalid_client（401）
 
 **補足**
 
 - **client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。
+- **`TestClient1` / `TestClient4` は方法を明示していない**ので、**`client_secret` で認証が通り、登録種別の判定まで進む**（`unauthorized_client`）。**どちらの道でも、このグラントは使えない。**
 - **トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、この E2E では単独で測っていない。
 
 ## FA-5.1 CIBA を normal 登録のクライアントで使うと、開始（/ciba_authz）で unauthorized_client になる

@@ -53,6 +53,7 @@
 //*  2026/10/06  玄人 幸道         クライアント登録を専用列から読む（#270）
 //*  2026/10/18  玄人 幸道         scope をDBからも読み、grant_types / response_types を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         クライアント登録の有無を返す口を追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method を引く口を追加（#307 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1506,7 +1507,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetTokenEndpointAuthSigningAlg(string client_id)
         {
-            return this.GetVerifyingAlg(client_id, "token_endpoint_auth_signing_alg",
+            return this.GetRegisteredValue(client_id, "token_endpoint_auth_signing_alg",
                 model => model.TokenEndpointAuthSigningAlg);
         }
 
@@ -1524,20 +1525,45 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetRequestObjectSigningAlg(string client_id)
         {
-            return this.GetVerifyingAlg(client_id, "request_object_signing_alg",
+            return this.GetRegisteredValue(client_id, "request_object_signing_alg",
                 model => model.RequestObjectSigningAlg);
         }
 
-        /// <summary>検証する側の alg を、登録から引く（#262）</summary>
+        #endregion
+
+        #region token_endpoint_auth_method
+
+        /// <summary>client_id から token_endpoint_auth_method を取得する（#307 の段階 3）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>方法（**登録が無ければ null** ＝ 秘密ベースの 2 つ）</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `token_endpoint_auth_method`。**
+        /// **登録が無い（null / 空）なら `client_secret_basic` / `client_secret_post` を暗黙に許す**
+        /// （**既存の登録を壊さないため**ではなく、**強い方法は明示を要する**という決定による。
+        /// #307 の段階 3）。
+        ///
+        /// **既知でない値は、使う側（`CmnEndpoints.AllowsAuthMethod`）が拒否する**
+        /// （#224 の段階 2 と同じ方針。「一番厳しいものに倒す」はしない）。
+        /// 受ける集合は `CmnEndpoints.TokenEndpointAuthMethods`。
+        /// </remarks>
+        public string GetTokenEndpointAuthMethod(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, "token_endpoint_auth_method",
+                model => model.TokenEndpointAuthMethod);
+        }
+
+        /// <summary>登録された値を引く（構成ファイル → saml2OAuth2Data。#262）</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="key">*.config の項目名</param>
         /// <param name="fromModel">画面登録（saml2OAuth2Data）から取り出す式</param>
-        /// <returns>alg（登録が無ければ null）</returns>
+        /// <returns>登録値（登録が無ければ null）</returns>
         /// <remarks>
-        /// **2 つの項目で同じ引き方になる**ので、1 か所にまとめた。
+        /// **同じ引き方をする項目が複数ある**ので、1 か所にまとめた
+        /// （`token_endpoint_auth_signing_alg` / `request_object_signing_alg` /
+        /// **`token_endpoint_auth_method`**（#307 の段階 3））。
         /// **`GetIdTokenSignedResponseAlg` と違い、既定値を持たない**（null ＝ 絞らない）。
         /// </remarks>
-        private string GetVerifyingAlg(string client_id, string key,
+        private string GetRegisteredValue(string client_id, string key,
             Func<ManageAddSaml2OAuth2DataViewModel, string> fromModel)
         {
             client_id = client_id ?? "";

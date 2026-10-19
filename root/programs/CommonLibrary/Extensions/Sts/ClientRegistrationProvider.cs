@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592 の GET / PUT / DELETE）を追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         jwks / DN / token_endpoint_auth_method を受ける（#307 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -56,6 +57,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Security.Pwd;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
@@ -82,14 +84,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | 認可 | **`registration_access_token`**（**登録の応答で 1 回だけ返す**。**その 1 件だけに効く**） |
     /// | `GET` | **登録を読む**（§2.1）。**`client_secret` は返さない** |
     /// | `PUT` | **全置換**（§2.2）。**`client_id` は一致必須**、**`client_secret` を入れるなら一致必須** |
-    /// | `DELETE` | **消す**（§2.3）。**`204`**。**同意も落とし、`Users.ClientID` を空にする** |
+    /// | `DELETE` | **消す**（§2.3）。**`204`**。**同意も落とす**（**`Users.ClientID` は空にしない**。一意制約） |
     ///
     /// **専用 scope のアクセス トークン（段階 1）では、管理 API を叩けない** —
     /// **作る権限と、直す権限は別物**である（§2 : クライアントは
     /// `registration_access_token` を使うこと）。
     ///
-    /// **段階 3 で足すもの** : `software_statement`、`jwks` / `jwks_uri`、
-    /// `client_credentials` 経路、1 利用者 n クライアント。
+    /// **段階 3 で出来ること**（**クライアント認証の方法を、API から登録できる**）。
+    ///
+    /// | | |
+    /// |---|---|
+    /// | `token_endpoint_auth_method` | **4 つとも登録できる**（**保管して、認証で効かせる**） |
+    /// | `jwks` | **`private_key_jwt` の公開鍵**（**RSA 1 本 ＋ EC 1 本まで**） |
+    /// | `tls_client_auth_subject_dn` | **mTLS の Subject DN**（RFC 8705 §2.1.2） |
+    /// | `token_endpoint_auth_signing_alg` | **`client_assertion` の alg を絞る**（#262 の列） |
+    ///
+    /// **`client_secret` は、方法に関わらず発行する**（段階 3 の決定）。
+    /// **デバイス フローのように、秘密しか使えない口が在る**ためである。
+    /// **登録された方法は `CmnEndpoints.AllowsAuthMethod` が効かせる** —
+    /// **明示が無ければ、秘密ベースの 2 つだけ**（**強い方法は明示が要る**）。
+    ///
+    /// **段階 4 以降で足すもの** : `software_statement`、`jwks_uri`（**別 Issue**。
+    /// クライアント認証の経路が同期である）、`client_credentials` 経路、
+    /// 1 利用者 n クライアント。
     /// </remarks>
     public static class ClientRegistrationProvider
     {
@@ -356,11 +373,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | | 列 |
         /// |---|---|
         /// | **要求から作り直す**（**省いたら消える**） | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` |
-        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `WebOrigins` / `Jwk*` / `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` / `RequestObjectSigningAlg`） |
+        /// | **要求から作り直す**（**段階 3**） | `TokenEndpointAuthMethod`（**省いたら、秘密ベースに戻る**） |
+        /// | **要求に在れば置き換え、無ければ持ち越す**（**段階 3**） | `Jwk*` / `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` |
+        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `WebOrigins` / `JwksUri` / `RequestObjectSigningAlg`） |
         ///
         /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
         /// > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
         /// > **管理画面から入れた値を、`PUT` で消してはならない。**
+        ///
+        /// > **鍵と DN は「省いたら消える」にしていない**（段階 3）。
+        /// > **管理画面から入れた鍵を、`PUT` で消してはならない**のが理由である。
+        /// > **`private_key_jwt` / `tls_client_auth` を明記するなら、材料も毎回送ること**
+        /// > （**材料が無ければ `400`**。**認証できない登録を作らない**）。
         ///
         /// **気をつける所**（文書にも書いた）。
         ///
@@ -475,12 +499,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             model.RedirectUriSaml = current.RedirectUriSaml;
             model.PostLogoutRedirectUri = current.PostLogoutRedirectUri;
             model.WebOrigins = current.WebOrigins;
-            model.JwkRsaPublickey = current.JwkRsaPublickey;
-            model.JwkECDsaPublickey = current.JwkECDsaPublickey;
             model.JwksUri = current.JwksUri;
-            model.TlsClientAuthSubjectDn = current.TlsClientAuthSubjectDn;
-            model.TokenEndpointAuthSigningAlg = current.TokenEndpointAuthSigningAlg;
             model.RequestObjectSigningAlg = current.RequestObjectSigningAlg;
+
+            //  **鍵・DN・alg は、要求に在れば `Validate` が入れている**（#307 の段階 3）。
+            //    **無ければ持ち越す** — **管理画面から入れた鍵を、`PUT` で消してはならない。**
+            //    **`private_key_jwt` / `tls_client_auth` を明記したなら、
+            //    材料が無い要求は `Validate` が `400` で断っている**ので、
+            //    **ここで持ち越しても「方法だけ在って材料が無い」にはならない。**
+            model.JwkRsaPublickey = string.IsNullOrEmpty(model.JwkRsaPublickey)
+                ? current.JwkRsaPublickey : model.JwkRsaPublickey;
+            model.JwkECDsaPublickey = string.IsNullOrEmpty(model.JwkECDsaPublickey)
+                ? current.JwkECDsaPublickey : model.JwkECDsaPublickey;
+            model.TlsClientAuthSubjectDn = string.IsNullOrEmpty(model.TlsClientAuthSubjectDn)
+                ? current.TlsClientAuthSubjectDn : model.TlsClientAuthSubjectDn;
+            model.TokenEndpointAuthSigningAlg = string.IsNullOrEmpty(model.TokenEndpointAuthSigningAlg)
+                ? current.TokenEndpointAuthSigningAlg : model.TokenEndpointAuthSigningAlg;
 
             DataProvider.Update(client_id, model);
 
@@ -651,9 +685,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             grantTypes = null;
             responseTypes = null;
 
-            #region 段階 1 では受け付けないもの
+            #region まだ受け付けないもの
 
-            //  **`software_statement`（署名付きの主張）は段階 3。**
+            //  **`software_statement`（署名付きの主張）は段階 4。**
             //    **黙って無視してはならない** — **クライアントは「主張した内容で登録された」と考える。**
             if (ClientRegistrationProvider.Has(metadata, "software_statement"))
             {
@@ -662,30 +696,112 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
-            //  **`jwks` / `jwks_uri` は段階 3。**
-            //    **鍵を引く実装が無い**（クライアントの鍵は `JwkRsaPublickey` /
-            //    `JwkECDsaPublickey` の列から読んでいる）。
-            //    **受け取って無視すると、`private_key_jwt`（#239）や
-            //    Request Object（JAR）の検証が黙って通らなくなる。**
-            if (ClientRegistrationProvider.Has(metadata, "jwks")
-                || ClientRegistrationProvider.Has(metadata, "jwks_uri"))
+            //  **`jwks_uri`（鍵を URL から引く）は受け付けない**（**別 Issue**）。
+            //
+            //  **クライアント認証の経路が同期である。**
+            //    `CmnEndpoints.ClientAuthentication` は `static bool` で、
+            //    **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の
+            //    全部から同期で呼ばれる。** **取得は非同期**（`DiscoveryJwks`）なので、
+            //    **同期から待つとデッドロックの形になる**（net48 の同期コンテキスト）。
+            //
+            //  **登録の時点で 1 回引いて列に焼く**こともできるが、
+            //    **`jwks_uri` の存在理由（鍵の入れ替え）が消える**ので、
+            //    **「対応した」と言えない。**
+            //
+            //  **受け取って無視すると、`private_key_jwt` が黙って通らなくなる**ので、断る。
+            //    **`jwks` は受け付ける**（下）。
+            if (ClientRegistrationProvider.Has(metadata, "jwks_uri"))
             {
-                description = "This deployment does not accept jwks / jwks_uri yet.";
+                description = "This deployment does not accept jwks_uri. Use jwks instead.";
                 return false;
             }
 
-            //  **クライアント認証の方法は、秘密ベースの 2 つだけ**（段階 1）。
-            //    **`private_key_jwt` / `tls_client_auth` は、鍵か DN の登録を要する**ので、
-            //    **受け取って無視すると、登録したつもりの方法で認証できない。**
+            #endregion
+
+            #region クライアント認証の方法と、その材料（#307 の段階 3）
+
+            //  **方法は 1 つ**（RFC 7591 §2）。**既知でない値は拒否する**
+            //    （#224 の段階 2 と同じ方針。「一番厳しいものに倒す」はしない）。
+            //
+            //  **空（省略）は `client_secret_basic` / `client_secret_post`**（RFC 7591 §2 の既定）。
+            //    **列も空のまま**にして、**`AllowsAuthMethod` が暗黙に許す。**
             string authMethod = ClientRegistrationProvider.GetString(
                 metadata, "token_endpoint_auth_method");
 
             if (!string.IsNullOrEmpty(authMethod)
-                && authMethod != OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
-                && authMethod != OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit())
+                && Array.IndexOf(CmnEndpoints.TokenEndpointAuthMethods, authMethod) < 0)
             {
-                description = "This deployment accepts only "
-                    + "client_secret_basic / client_secret_post as token_endpoint_auth_method.";
+                description = string.Format(
+                    "The token_endpoint_auth_method ({0}) is not supported by this deployment.",
+                    authMethod);
+                return false;
+            }
+
+            model.TokenEndpointAuthMethod = authMethod;
+
+            //  **`jwks`（RFC 7517 §5 の JWK Set）を、鍵の 2 列に移す。**
+            //    **列は「JWK 1 本」**なので、**RSA 1 本 ＋ EC 1 本まで**である。
+            if (ClientRegistrationProvider.Has(metadata, "jwks"))
+            {
+                if (!ClientRegistrationProvider.ParseJwks(
+                    metadata, model, out description))
+                {
+                    return false;
+                }
+            }
+
+            //  **mTLS の Subject DN**（RFC 8705 §2.1.2）。
+            //    **照合は `x509.Subject` との完全一致**である（`CmnEndpoints.ClientAuthentication`）。
+            string subjectDn = ClientRegistrationProvider.GetString(
+                metadata, "tls_client_auth_subject_dn");
+
+            if (!string.IsNullOrEmpty(subjectDn))
+            {
+                //  **列の幅と同じ**（`TlsClientAuthSubjectDn` は 512）。
+                if (Const.MaxLengthOfUri < subjectDn.Length)
+                {
+                    description = "The tls_client_auth_subject_dn is too long.";
+                    return false;
+                }
+
+                model.TlsClientAuthSubjectDn = subjectDn;
+            }
+
+            //  **`client_assertion` の alg を絞る**（#262 の列。OIDC Registration 1.0 §2）。
+            //    **空なら絞らない**（登録された鍵で順に試す ＝ 従来どおり）。
+            string authSigningAlg = ClientRegistrationProvider.GetString(
+                metadata, "token_endpoint_auth_signing_alg");
+
+            if (!string.IsNullOrEmpty(authSigningAlg))
+            {
+                if (Array.IndexOf(
+                    CmnEndpoints.TokenEndpointAuthSigningAlgs, authSigningAlg) < 0)
+                {
+                    description = string.Format(
+                        "The token_endpoint_auth_signing_alg ({0}) is not supported "
+                        + "by this deployment.", authSigningAlg);
+                    return false;
+                }
+
+                model.TokenEndpointAuthSigningAlg = authSigningAlg;
+            }
+
+            //  **方法に必要な材料が無ければ、登録を断る**（**認証できない登録を作らない**）。
+            //    **黙って作ると、クライアントは「登録した方法で認証できる」と考えるが、
+            //    永久に通らない。** **`PUT` でも同じ**（材料は毎回送ること）。
+            if (authMethod == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit()
+                && string.IsNullOrEmpty(model.JwkRsaPublickey)
+                && string.IsNullOrEmpty(model.JwkECDsaPublickey))
+            {
+                description = "The token_endpoint_auth_method private_key_jwt requires jwks.";
+                return false;
+            }
+
+            if (authMethod == OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
+                && string.IsNullOrEmpty(model.TlsClientAuthSubjectDn))
+            {
+                description = "The token_endpoint_auth_method tls_client_auth requires "
+                    + "tls_client_auth_subject_dn.";
                 return false;
             }
 
@@ -770,6 +886,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 || Const.MaxLengthOfTypeList < model.ResponseTypes.Length)
             {
                 description = "The grant_types / response_types are too long.";
+                return false;
+            }
+
+            //  **デバイス フロー × `private_key_jwt` は断る**（#307 の段階 3）。
+            //    **RFC 8628 の口（`/device_authz` と `/token`）は `client_assertion` を
+            //    読んでいない**（両アプリの呼び出しに引数が無い）ので、
+            //    **その組み合わせでは、永久に認証できない。**
+            //    **`tls_client_auth` は通る**（証明書は口に渡っている）。
+            if (model.TokenEndpointAuthMethod
+                    == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit()
+                && grantTypes.Contains(OAuth2AndOIDCConst.DeviceAuthZGrantType))
+            {
+                description = "The device_code grant_type cannot be used with "
+                    + "the token_endpoint_auth_method private_key_jwt in this deployment.";
                 return false;
             }
 
@@ -1268,6 +1398,147 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return diff == 0;
         }
 
+        /// <summary>`jwks` を読んで、鍵の 2 列に入れる（#307 の段階 3）</summary>
+        /// <param name="metadata">要求の JSON</param>
+        /// <param name="model">保存する形（入出力）</param>
+        /// <param name="description">誤りの説明（出力）</param>
+        /// <returns>通してよいなら true</returns>
+        /// <remarks>
+        /// **列は「JWK 1 本を Base64URL にしたもの」が 2 本**
+        /// （`JwkRsaPublickey` / `JwkECDsaPublickey`）。**JWK Set は持てない。**
+        /// **`CmnEndpoints.ClientAuthentication` が、この 2 本を順に試す**（#129 の段階 2）。
+        ///
+        /// **断る形**（**どれも「黙って落とすと、後で認証に失敗する」もの**）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | `keys` が無い・空・配列でない | RFC 7517 §5 |
+        /// | **同じ `kty` が 2 本以上** | **列が 1 本しか持てない。** 先頭を採ると、**もう一方の鍵で署名したときに失敗する** |
+        /// | **`RSA` / `EC` 以外の `kty`** | **この実装が検証できない**（`JwtAssertion.Verify` が `kty` で RSA / EC を選ぶ） |
+        /// | **`use` が `sig` でない** | **クライアント認証に使う鍵である**（暗号用を黙って受けない。RFC 7517 §4.2） |
+        /// </remarks>
+        private static bool ParseJwks(JObject metadata,
+            ManageAddSaml2OAuth2DataViewModel model, out string description)
+        {
+            description = "";
+
+            JToken jwks = metadata["jwks"];
+
+            if (jwks.Type != JTokenType.Object)
+            {
+                description = "The jwks must be a JSON object (RFC 7517 Section 5).";
+                return false;
+            }
+
+            JToken keys = jwks[JwtConst.keys];
+
+            if (keys == null || keys.Type != JTokenType.Array || !keys.Any())
+            {
+                description = "The jwks must have a non-empty keys array "
+                    + "(RFC 7517 Section 5).";
+                return false;
+            }
+
+            foreach (JToken key in keys)
+            {
+                if (key.Type != JTokenType.Object)
+                {
+                    description = "Each key in the jwks must be a JSON object.";
+                    return false;
+                }
+
+                JObject jwk = (JObject)key;
+
+                //  **署名の検証に使う鍵だけを受ける**（RFC 7517 §4.2。`use` は任意）。
+                string use = (string)jwk["use"];
+
+                if (!string.IsNullOrEmpty(use) && use != "sig")
+                {
+                    description = "This deployment uses the jwks for client authentication, "
+                        + "so each key must have use=sig (or no use).";
+                    return false;
+                }
+
+                string kty = (string)jwk[JwtConst.kty];
+                string encoded = CmnEndpoints.EncodeRegisteredJwk(jwk);
+
+                if (kty == JwtConst.RSA)
+                {
+                    if (!string.IsNullOrEmpty(model.JwkRsaPublickey))
+                    {
+                        description = "This deployment stores one RSA key per client, "
+                            + "so the jwks must not have two RSA keys.";
+                        return false;
+                    }
+
+                    model.JwkRsaPublickey = encoded;
+                }
+                else if (kty == JwtConst.EC)
+                {
+                    if (!string.IsNullOrEmpty(model.JwkECDsaPublickey))
+                    {
+                        description = "This deployment stores one EC key per client, "
+                            + "so the jwks must not have two EC keys.";
+                        return false;
+                    }
+
+                    model.JwkECDsaPublickey = encoded;
+                }
+                else
+                {
+                    description = string.Format(
+                        "The key type ({0}) is not supported by this deployment. "
+                        + "Use RSA or EC.", kty);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>登録された鍵を `jwks` にして返す（無ければ null）（#307 の段階 3）</summary>
+        /// <param name="model">登録</param>
+        /// <returns>JWK Set（鍵が 1 本も無ければ null）</returns>
+        /// <remarks>
+        /// **`ParseJwks` の逆である。** **列に在る鍵だけを `keys` に並べる。**
+        /// **壊れた登録値は、黙って飛ばす**（**応答を 500 にしない**。
+        /// **登録の時点で形は確かめている**ので、ここに来るのは運用で壊した値である）。
+        /// </remarks>
+        private static JObject BuildJwks(ManageAddSaml2OAuth2DataViewModel model)
+        {
+            JArray keys = new JArray();
+
+            foreach (string registered in new string[]
+                { model.JwkRsaPublickey, model.JwkECDsaPublickey })
+            {
+                string json = CmnEndpoints.DecodeRegisteredJwk(registered);
+
+                if (string.IsNullOrEmpty(json))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    keys.Add(JsonConvert.DeserializeObject<JObject>(json));
+                }
+                catch (JsonException)
+                {
+                    // 登録の値が壊れている（運用の誤り）。
+                }
+            }
+
+            if (!keys.Any())
+            {
+                return null;
+            }
+
+            JObject jwks = new JObject();
+            jwks.Add(JwtConst.keys, keys);
+
+            return jwks;
+        }
+
         /// <summary>この登録の `registration_client_uri`（RFC 7592 §3）</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>絶対 URI</returns>
@@ -1325,9 +1596,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **`response_types` は、要素の中の空白を「+」にして保管している**（段階 1）。
             ret.Add("response_types", Helper.ToDistinctList(model.ResponseTypes, true));
 
-            //  **`token_endpoint_auth_method` は、秘密ベースの 2 つだけ**（段階 1）。
+            //  **登録された `token_endpoint_auth_method` を返す**（#307 の段階 3）。
+            //    **空（明示なし）は `client_secret_basic`** — **RFC 7591 §2 の既定**であり、
+            //    **実際に通る方法**でもある（`CmnEndpoints.AllowsAuthMethod`）。
             ret.Add("token_endpoint_auth_method",
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit());
+                string.IsNullOrEmpty(model.TokenEndpointAuthMethod)
+                    ? OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
+                    : model.TokenEndpointAuthMethod);
 
             //  **`client_secret` に期限は設けていない** — **0 は「期限なし」**（RFC 7591 §3.2.1）。
             ret.Add("client_secret_expires_at", 0);
@@ -1342,6 +1617,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ClientRegistrationProvider.AddIfNotEmpty(ret, "subject_type", model.SubjectTypes);
             ClientRegistrationProvider.AddIfNotEmpty(
                 ret, "id_token_signed_response_alg", model.IdTokenSignedResponseAlg);
+            ClientRegistrationProvider.AddIfNotEmpty(
+                ret, "tls_client_auth_subject_dn", model.TlsClientAuthSubjectDn);
+            ClientRegistrationProvider.AddIfNotEmpty(
+                ret, "token_endpoint_auth_signing_alg", model.TokenEndpointAuthSigningAlg);
+
+            //  **登録された鍵を `jwks` に戻して返す**（#307 の段階 3）。
+            //    **列は 2 本に分かれている**ので、**在るものだけを `keys` に並べる。**
+            JObject jwks = ClientRegistrationProvider.BuildJwks(model);
+
+            if (jwks != null)
+            {
+                ret.Add("jwks", jwks);
+            }
 
             if (!string.IsNullOrEmpty(model.Contacts))
             {

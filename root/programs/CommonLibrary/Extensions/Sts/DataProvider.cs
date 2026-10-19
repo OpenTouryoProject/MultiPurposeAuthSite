@@ -35,6 +35,7 @@
 //*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
 //*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの列を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         registration_access_token のハッシュの列を追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method の列を追加（#307 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -89,7 +90,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>列の並び（#270）</summary>
         /// <remarks>
-        /// **1 か所で持つ。** 29 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
+        /// **1 か所で持つ。** 30 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
         /// **手で書き並べると、必ずどれかが取り残される**
         /// （この Issue が直そうとしているのが、まさにその種の食い違いである）。
         ///
@@ -130,7 +131,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             "SoftwareId",
             "SoftwareVersion",
             //  **RFC 7592 の管理 API 用**（#307 の段階 2）。**ハッシュが入る。**
-            "RegistrationAccessToken"
+            "RegistrationAccessToken",
+            //  **クライアント認証の方法**（#307 の段階 3）。**空なら秘密ベースの 2 つ。**
+            "TokenEndpointAuthMethod"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -280,6 +283,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("SoftwareVersion", model.SoftwareVersion);
             prm.Add("RegistrationAccessToken", model.RegistrationAccessToken);
 
+            //  **クライアント認証の方法**（#307 の段階 3）。
+            prm.Add("TokenEndpointAuthMethod", model.TokenEndpointAuthMethod);
+
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
                 prm.Add("RequirePkce", model.RequirePkce ? -1 : 0);
@@ -375,7 +381,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Contacts = model.Contacts,
                 SoftwareId = model.SoftwareId,
                 SoftwareVersion = model.SoftwareVersion,
-                RegistrationAccessToken = model.RegistrationAccessToken
+                RegistrationAccessToken = model.RegistrationAccessToken,
+                //  **クライアント認証の方法**（#307 の段階 3）。
+                TokenEndpointAuthMethod = model.TokenEndpointAuthMethod
             };
         }
 

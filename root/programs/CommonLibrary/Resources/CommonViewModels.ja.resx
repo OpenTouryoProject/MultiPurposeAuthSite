@@ -384,4 +384,10 @@
   <data name="SoftwareVersionDescription" xml:space="preserve">
     <value>このクライアントの元になっているソフトウェアの版。**保存して、登録のとおり返すだけ。**</value>
   </data>
+  <data name="TokenEndpointAuthMethod" xml:space="preserve">
+    <value>クライアント認証の方法（token_endpoint_auth_method）</value>
+  </data>
+  <data name="TokenEndpointAuthMethodDescription" xml:space="preserve">
+    <value>このクライアントが**自分を証明する方法**。**空なら client_secret_basic と client_secret_post を許す。** **private_key_jwt と tls_client_auth は、ここで選ぶこと** — **鍵や DN を登録しただけでは通らない。**</value>
+  </data>
 </root>

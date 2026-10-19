@@ -30,15 +30,18 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）のケースを追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         クライアント認証の方法のケースを追加（#307 の段階 3）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
+using MultiPurposeAuthSite.Tests.E2E.Tests.Fapi;
 
 using Xunit;
 using Xunit.Abstractions;
@@ -71,6 +74,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-307.11`** | **`DELETE` で消え、既に出ているトークンも通らなくなり、登録し直せる** |
     /// | **`RT-307.12`** | **管理 API は `registration_access_token` 以外では叩けない** |
     /// | **`RT-307.13`** | **`PUT` の誤りは `400`**（**登録は変わらない**） |
+    /// | **`RT-307.14`** | **`private_key_jwt` で登録でき、その鍵で認証できる**（**秘密では通らない**） |
+    /// | **`RT-307.15`** | **`tls_client_auth` で登録でき、その証明書で認証できる**（**既定は core だけ**） |
+    /// | **`RT-307.16`** | **方法と鍵の誤りは、登録の時点で `400`** |
+    /// | **`RT-307.17`** | **`PUT` で方法を省くと秘密に戻るが、鍵は消えない** |
     ///
     /// **段階 2 は RFC 7592**（`registration_client_uri` ＝ `…/register/{client_id}`）。
     /// **管理のトークンは、登録の応答で 1 回だけ返る**（**こちらはハッシュしか持たない**）。
@@ -78,6 +85,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **使い捨ての利用者を 2 人使う。** **クライアント登録は 1 人 1 件**なので、
     /// **管理 API を叩くクライアントの持ち主（A）と、登録される側（B）を分けないと、
     /// B の登録が「2 件目」になって断られる。**
+    ///
+    /// **段階 3 は、クライアント認証の方法**（`token_endpoint_auth_method`）。
+    /// **検証する側は実装済み**（`private_key_jwt` は #239 / #129 の段階 2、
+    /// `tls_client_auth` は #226）で、**動的登録だけが断っていた。**
+    /// **登録された方法は認証でも効く** — **明示が無ければ秘密ベースの 2 つだけ**で、
+    /// **鍵や DN を登録しただけでは、その方法では通らない。**
     ///
     /// **Discovery に `registration_endpoint` が載ることは `RT-189.*`（`DiscoveryTests`）ではなく、
     /// ここで測る** — **広告は `EnableDynamicClientRegistration` で出入りする**ので、
@@ -390,7 +403,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.VerifyEqual("HTTP の状態は 400", "400", ((int)relative.StatusCode).ToString());
 
-                    r.Step("(4) jwks_uri は受け付けない（段階 1）");
+                    r.Step("(4) jwks_uri は受け付けない（段階 3 でも。別 Issue）");
 
                     JsonResponse jwksUri = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token,
@@ -402,7 +415,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.VerifyEqual("error は invalid_client_metadata",
                         "invalid_client_metadata", jwksUri.String("error") ?? "（無い）");
 
-                    r.Step("(5) software_statement は受け付けない（段階 3）");
+                    r.Step("(5) software_statement は受け付けない（段階 4）");
 
                     JsonResponse statement = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token,
@@ -1357,6 +1370,425 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+
+        #region RT-307.14
+
+        /// <summary>RT-307.14 private_key_jwt で登録すると、その鍵で認証できる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30714_private_key_jwtで登録するとその鍵で認証できる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.14",
+                    "token_endpoint_auth_method=private_key_jwt と jwks を登録すると、"
+                    + "その鍵の client_assertion で認証でき、client_secret では認証できない",
+                    "**段階 1・2 は、秘密ベースの 2 つしか登録できなかった**"
+                    + "（`jwks` は断っていた）。**強い認証方法を使う配備では、"
+                    + "API で作ったクライアントを、管理画面で直す手作業が残っていた。**"
+                    + "**検証する側は #239 / #129 の段階 2 で実装済み**なので、"
+                    + "**段階 3 で足したのは「登録を受けて列に入れる」ところだけ**である。"
+                    + "**登録された方法は、認証でも効く** — "
+                    + "**鍵を登録したクライアントは、秘密では通らない。**",
+                    "RFC 7591 §2 / RFC 7523 §2.2 / RFC 7592 §3 / #307 の段階 3");
+
+                r.Target("POST /register（jwks ＋ token_endpoint_auth_method）→ POST /token");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) jwks（RSA 1 本）と token_endpoint_auth_method=private_key_jwt で登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid email\","
+                        + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                        + "\"jwks\":{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + "]}}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString());
+
+                    string clientId = created.String("client_id");
+                    string clientSecret = created.String("client_secret");
+
+                    Assert.False(string.IsNullOrEmpty(clientId), "前提: client_id が返ること");
+
+                    r.VerifyEqual("応答の token_endpoint_auth_method は private_key_jwt",
+                        "private_key_jwt", created.String("token_endpoint_auth_method") ?? "（無い）");
+
+                    r.VerifyEqual("応答に jwks が返る（登録した鍵）", "True",
+                        (created.IsJson && created.Json.TryGetProperty("jwks", out JsonElement _))
+                            .ToString());
+
+                    //  **一律発行である**（段階 3 の決定）。**秘密しか使えない口が在る**ため
+                    //    （RFC 8628 のデバイス フローは `client_assertion` を読まない）。
+                    r.VerifyEqual("client_secret も返る（方法に関わらず発行する）", "True",
+                        (!string.IsNullOrEmpty(clientSecret)).ToString());
+
+                    ClientRegistration reg = new ClientRegistration()
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUri = UriA
+                    };
+
+                    r.Step("(2) 登録した鍵の client_assertion で、認可コードを交換する");
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid email", "state-pkj", "nonce-pkj", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(authz.Code),
+                        "前提: 認可コードが取れること（error=" + (authz.Error ?? "なし") + "）");
+
+                    JsonResponse byAssertion = await client.TokenAsync(
+                        ClientRegistrationTests.WithClientAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "grant_type", "authorization_code" },
+                                { "code", authz.Code },
+                                { "redirect_uri", UriA }
+                            }));
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)byAssertion.StatusCode).ToString());
+
+                    r.Verify("access_token が返る", !string.IsNullOrEmpty(byAssertion.AccessToken),
+                        "返る", string.IsNullOrEmpty(byAssertion.AccessToken)
+                            ? "**返らない**（" + byAssertion.ToString() + "）" : "返った（値は伏せる）");
+
+                    r.Step("(3)（対照）同じクライアントを client_secret で交換すると、通らない");
+
+                    AuthZResponse again = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid email", "state-sec", "nonce-sec", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(again.Code),
+                        "前提: 2 本目の認可コードが取れること");
+
+                    JsonResponse bySecret = await Flows.ExchangeCodeAsync(
+                        client, reg, again.Code, UriA);
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)bySecret.StatusCode).ToString());
+
+                    r.VerifyEqual("エラーは invalid_client", "invalid_client",
+                        bySecret.String("error") ?? "（無い）");
+
+                    r.Note("**登録された方法でなければ通さない**（段階 3）。"
+                        + "**以前は「登録されている資格のどれかで通る」**作りだったので、"
+                        + "**鍵を登録しても、秘密でも入れた** ＝ **登録で求めた強さが効かなかった。**");
+
+                    r.Note("**`client_secret_basic` と `client_secret_post` は区別しない** — "
+                        + "**どちらで来たかを、この層は知らない**（口が同じ形に正規化して渡す）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.15
+
+        /// <summary>RT-307.15 tls_client_auth で登録すると、その証明書で認証できる</summary>
+        /// <param name="targetKey">core（-NetFxMtls のときは netfx も）</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **既定では net10.0 版だけを測る**（`MtlsTests` と同じ前提）。
+        /// **net48 版（IIS Express）は、テスト用 CA の手当てが要る**ので、
+        /// **`-NetFxMtls` を付けたときだけケースを作る。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(MtlsTests.MtlsTargets), MemberType = typeof(MtlsTests))]
+        public async Task RT30715_tls_client_authで登録するとその証明書で認証できる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                MtlsTests.SkipIfNoMtls(admin.Target);
+
+                TestReport r = this.Report("RT-307.15",
+                    "token_endpoint_auth_method=tls_client_auth と "
+                    + "tls_client_auth_subject_dn を登録すると、その証明書で認証できる",
+                    "**照合は `x509.Subject` との完全一致**である（RFC 8705 §2.1）。"
+                    + "**検証する側は #226 で実装済み**で、**#305 の段階 4 で"
+                    + "「登録が空なら通さない」まで入っている。**"
+                    + "**段階 3 で足したのは、動的登録から DN を登録できるようにしたところだけ。**",
+                    "RFC 8705 §2.1 / §2.1.2 / RFC 7591 §2 / #307 の段階 3");
+
+                r.Target("POST /register（tls_client_auth_subject_dn）→ POST /token（証明書つき）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    string dn = "CN=mpas-e2e-rt307-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+                    r.Step("(1) tls_client_auth と Subject DN を登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid\","
+                        + "\"token_endpoint_auth_method\":\"tls_client_auth\","
+                        + "\"tls_client_auth_subject_dn\":\"" + dn + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString());
+
+                    string clientId = created.String("client_id");
+
+                    Assert.False(string.IsNullOrEmpty(clientId), "前提: client_id が返ること");
+
+                    r.VerifyEqual("応答の token_endpoint_auth_method は tls_client_auth",
+                        "tls_client_auth", created.String("token_endpoint_auth_method") ?? "（無い）");
+
+                    r.VerifyEqual("応答に tls_client_auth_subject_dn が返る",
+                        dn, created.String("tls_client_auth_subject_dn") ?? "（無い）");
+
+                    ClientRegistration reg = new ClientRegistration()
+                    {
+                        ClientId = clientId,
+                        ClientSecret = created.String("client_secret"),
+                        RedirectUri = UriA
+                    };
+
+                    r.Step("(2) Subject が一致する証明書を添えて交換する（client_secret は送らない）");
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid", "state-mtls", "nonce-mtls", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(authz.Code),
+                        "前提: 認可コードが取れること（error=" + (authz.Error ?? "なし") + "）");
+
+                    JsonResponse matched;
+
+                    using (X509Certificate2 cert = TestCertificate.ForTarget(client.Target, dn))
+                    {
+                        matched = await client.TokenWithCertificateAsync(
+                            new Dictionary<string, string>()
+                            {
+                                { "grant_type", "authorization_code" },
+                                { "code", authz.Code },
+                                { "client_id", clientId },
+                                { "redirect_uri", UriA }
+                            }, cert);
+                    }
+
+                    r.Verify("access_token が返る", !string.IsNullOrEmpty(matched.AccessToken),
+                        "返る", string.IsNullOrEmpty(matched.AccessToken)
+                            ? "**返らない**（" + matched.ToString() + "）" : "返った（値は伏せる）");
+
+                    r.Step("(3)（対照）Subject が違う証明書では、通らない");
+
+                    AuthZResponse again = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid", "state-other", "nonce-other", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(again.Code),
+                        "前提: 2 本目の認可コードが取れること");
+
+                    JsonResponse other;
+
+                    using (X509Certificate2 cert = TestCertificate.ForTarget(
+                        client.Target, MtlsTests.OtherSubjectDn))
+                    {
+                        other = await client.TokenWithCertificateAsync(
+                            new Dictionary<string, string>()
+                            {
+                                { "grant_type", "authorization_code" },
+                                { "code", again.Code },
+                                { "client_id", clientId },
+                                { "redirect_uri", UriA }
+                            }, cert);
+                    }
+
+                    r.Verify("access_token は返らない", string.IsNullOrEmpty(other.AccessToken),
+                        "返らない", string.IsNullOrEmpty(other.AccessToken)
+                            ? "返らない（HTTP " + (int)other.StatusCode
+                                + " / error=" + (other.String("error") ?? "なし") + "）"
+                            : "**返った**");
+
+                    r.Note("**DN は 1 文字も違ってはならない**（`#263` の `redirect_uri` と同じ厳しさ）。"
+                        + "**`tls_client_auth` を登録すると、RFC 8705 §3 の"
+                        + "「証明書に縛られたアクセス トークン」も効く**（既存の振る舞い）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.16
+
+        /// <summary>RT-307.16 方法と鍵の誤りは、登録の時点で断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30716_方法と鍵の誤りは登録の時点で断る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.16",
+                    "認証できない登録は作らせない（材料が無い・鍵が多い・知らない方法・jwks_uri）",
+                    "**黙って作ると、クライアントは「登録した方法で認証できる」と考えるが、"
+                    + "永久に通らない。** **どれも「無視すると黙って弱くなる／壊れる」もの**なので、"
+                    + "**登録の時点で断る**（RFC 7591 §3.2.2 : `invalid_client_metadata`）。",
+                    "RFC 7591 §2 / §3.2.2 / RFC 7517 §5 / RFC 8705 §2.1.2 / #307 の段階 3");
+
+                r.Target("POST /register（誤ったメタデータ）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    string head = "{\"redirect_uris\":[\"" + UriA + "\"],";
+                    string rsaJwk = JwsSigner.PublicRsaJwk(client);
+
+                    r.Step("(1) private_key_jwt なのに jwks が無い");
+
+                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
+                        head + "\"token_endpoint_auth_method\":\"private_key_jwt\"}",
+                        "鍵が無ければ、その方法では認証できない");
+
+                    r.Step("(2) tls_client_auth なのに tls_client_auth_subject_dn が無い");
+
+                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
+                        head + "\"token_endpoint_auth_method\":\"tls_client_auth\"}",
+                        "DN が無ければ、照合する相手が無い");
+
+                    r.Step("(3) 知らない token_endpoint_auth_method");
+
+                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
+                        head + "\"token_endpoint_auth_method\":\"client_secret_jwt\"}",
+                        "広告していない方法（既知でない値は拒否する。#224 の段階 2 と同じ方針）");
+
+                    r.Step("(4) jwks に RSA が 2 本");
+
+                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
+                        head + "\"jwks\":{\"keys\":[" + rsaJwk + "," + rsaJwk + "]}}",
+                        "列は RSA 1 本しか持てない。先頭を採ると、もう一方の鍵で署名したときに失敗する");
+
+                    r.Step("(5) jwks_uri（鍵を URL から引く）は、受け付けない");
+
+                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
+                        head + "\"jwks_uri\":\"https://rp.example/jwks.json\"}",
+                        "クライアント認証の経路が同期なので、取得を差し込めない（別 Issue）");
+
+                    r.Step("(6) device_code グラント × private_key_jwt");
+
+                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
+                        head + "\"grant_types\":[\"urn:ietf:params:oauth:grant-type:device_code\"],"
+                        + "\"response_types\":[],"
+                        + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                        + "\"jwks\":{\"keys\":[" + rsaJwk + "]}}",
+                        "RFC 8628 の口は client_assertion を読まないので、永久に認証できない");
+
+                    r.Note("**`jwks` と `jwks_uri` を同時に送ることも断る**"
+                        + "（RFC 7591 §2 は、どちらか一方としている）。"
+                        + "**ここでは `jwks_uri` を単独で送って断られることだけを測った。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.17
+
+        /// <summary>RT-307.17 PUT で方法を省くと秘密に戻るが、鍵は消えない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30717_PUTで方法を省くと秘密に戻るが鍵は消えない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.17",
+                    "PUT で token_endpoint_auth_method を省くと秘密ベースに戻り、jwks は持ち越される",
+                    "**`PUT` は全置換**（§2.2 : 省いた項目は「消す要求」）。"
+                    + "**方法は、その規則どおり省略で消える** ＝ **秘密ベースに戻る。**"
+                    + "**鍵と DN だけは持ち越す** — **管理画面から入れた鍵を、"
+                    + "`PUT` で消してはならない**（段階 2 の「動的登録で設定できない列」と同じ考え方）。"
+                    + "**方法を明記するなら、材料も毎回送ること**（材料が無ければ `400`）。",
+                    "RFC 7592 §2.2 / §3 / #307 の段階 3");
+
+                r.Target("POST /register → PUT（方法と jwks を省く）→ GET");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) private_key_jwt ＋ jwks で登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid\","
+                        + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                        + "\"jwks\":{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + "]}}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string clientSecret = created.String("client_secret");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    r.Step("(2) 方法と jwks を省いて PUT する（redirect_uris と client_id だけ）");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        DynamicClientRegistration.UpdateMetadata(clientId, "openid", UriA));
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)updated.StatusCode).ToString());
+
+                    r.VerifyEqual("token_endpoint_auth_method は client_secret_basic に戻る",
+                        "client_secret_basic",
+                        updated.String("token_endpoint_auth_method") ?? "（無い）");
+
+                    r.VerifyEqual("jwks は残っている（省いても消さない）", "True",
+                        (updated.IsJson && updated.Json.TryGetProperty("jwks", out JsonElement _))
+                            .ToString());
+
+                    r.Step("(3) GET で読み直しても、同じである");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("GET も client_secret_basic", "client_secret_basic",
+                        read.String("token_endpoint_auth_method") ?? "（無い）");
+
+                    r.VerifyEqual("GET でも jwks が返る", "True",
+                        (read.IsJson && read.Json.TryGetProperty("jwks", out JsonElement _))
+                            .ToString());
+
+                    r.Step("(4) 秘密ベースに戻ったので、client_secret で交換できる");
+
+                    ClientRegistration reg = new ClientRegistration()
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUri = UriA
+                    };
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid", "state-back", "nonce-back", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(authz.Code),
+                        "前提: 認可コードが取れること（error=" + (authz.Error ?? "なし") + "）");
+
+                    JsonResponse exchanged = await Flows.ExchangeCodeAsync(
+                        client, reg, authz.Code, UriA);
+
+                    r.Verify("access_token が返る", !string.IsNullOrEmpty(exchanged.AccessToken),
+                        "返る", string.IsNullOrEmpty(exchanged.AccessToken)
+                            ? "**返らない**（" + exchanged.ToString() + "）" : "返った（値は伏せる）");
+
+                    r.Note("**省略で方法が戻るのは、§2.2 のとおり**である。"
+                        + "**ただし「方法だけ戻って、鍵が残る」状態になる** — "
+                        + "**鍵は使われなくなるだけで、害は無い**"
+                        + "（**認証に使えるのは、登録された方法だけ**）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
         #region 補助
 
         /// <summary>管理 API を叩くための前提（使い捨ての利用者 2 人ぶん）</summary>
@@ -1492,6 +1924,61 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 await UsersAdmin.DeleteByUserNameAsync(admin, apiOwner);
             }
+        }
+
+        /// <summary>client_assertion だけを添えたフォームを作る（#307 の段階 3）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="items">フォームの中身</param>
+        /// <returns>フォーム</returns>
+        /// <remarks>
+        /// **署名鍵は、登録した `jwks` と対になる構成ファイルの鍵**
+        /// （`SpRp_RsaPfxFilePath`）。**`aud` は、この実装が求めるトークン エンドポイント。**
+        /// </remarks>
+        private static Dictionary<string, string> WithClientAssertion(
+            IdPClient client, string clientId, IDictionary<string, string> items)
+        {
+            long now = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            Dictionary<string, object> payload = new Dictionary<string, object>()
+            {
+                { "iss", clientId },
+                { "sub", clientId },
+                { "aud", client.Target.BaseUrl + "/token" },
+                { "jti", System.Guid.NewGuid().ToString("N") },
+                { "iat", now },
+                { "exp", now + 300 }
+            };
+
+            return new Dictionary<string, string>(items)
+            {
+                { "client_assertion", JwsSigner.SignRS256(client, payload) },
+                { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" }
+            };
+        }
+
+        /// <summary>登録が `400` ＋ `invalid_client_metadata` で断られることを確かめる</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="client">IdPClient</param>
+        /// <param name="endpoint">registration_endpoint</param>
+        /// <param name="token">専用 scope のアクセス トークン</param>
+        /// <param name="metadata">送るメタデータ</param>
+        /// <param name="why">読み手向けの理由</param>
+        /// <returns>Task</returns>
+        private async Task VerifyRegistrationErrorAsync(
+            TestReport r, IdPClient client, string endpoint, string token,
+            string metadata, string why)
+        {
+            JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                client, endpoint, token, metadata);
+
+            r.VerifyEqual("HTTP の状態は 400（" + why + "）",
+                "400", ((int)res.StatusCode).ToString());
+
+            r.VerifyEqual("error は invalid_client_metadata",
+                "invalid_client_metadata", res.String("error") ?? "（無い）");
+
+            r.Observe("error_description", res.String("error_description") ?? "（無い）");
         }
 
         /// <summary>リダイレクトか（UsersAdmin の作成が成功したか）</summary>

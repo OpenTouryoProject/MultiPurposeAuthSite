@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/11  玄人 幸道         新規（RequestObjectBuilder と JwtBearerAssertion に重複していた署名を集約）
 //*  2026/09/11  玄人 幸道         ES256 の署名（CIBA の認証リクエスト用）を追加（#196）
+//*  2026/10/19  玄人 幸道         公開鍵の JWK を作る口を追加（#307 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -103,6 +104,83 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 byte[] signature = ecdsa.SignData(Encoding.UTF8.GetBytes(signingInput), HashAlgorithmName.SHA256);
 
                 return signingInput + "." + Base64Url.Encode(signature);
+            }
+        }
+
+        /// <summary>署名鍵（RSA）の**公開鍵**を JWK にする（#307 の段階 3）</summary>
+        /// <param name="client">IdPClient（鍵の場所を構成ファイルから読む）</param>
+        /// <returns>JWK（JSON の文字列。1 本）</returns>
+        /// <remarks>
+        /// **動的登録の `jwks` に載せるために使う。**
+        /// **秘密鍵は出さない**（`n` と `e` だけ）。
+        /// **`kid` は RFC 7638 の指紋**（鍵から作るので、サーバの登録値と同じ値になる）。
+        /// </remarks>
+        public static string PublicRsaJwk(IdPClient client)
+        {
+            using (X509Certificate2 cert = LoadCertificate(
+                client, "SpRp_RsaPfxFilePath", "SpRp_RsaPfxPassword"))
+            using (RSA rsa = cert.GetRSAPublicKey())
+            {
+                if (rsa == null)
+                {
+                    throw new InvalidOperationException(
+                        "RSAの公開鍵を取り出せませんでした: " + client.Config.Get("SpRp_RsaPfxFilePath"));
+                }
+
+                RSAParameters p = rsa.ExportParameters(false);
+
+                string n = Base64Url.Encode(p.Modulus);
+                string e = Base64Url.Encode(p.Exponent);
+
+                //  **RFC 7638 : 必須の項目だけを、辞書順の JSON にして SHA-256 する。**
+                string kid = JwsSigner.Thumbprint(
+                    "{\"e\":\"" + e + "\",\"kty\":\"RSA\",\"n\":\"" + n + "\"}");
+
+                return "{\"kty\":\"RSA\",\"alg\":\"RS256\",\"use\":\"sig\","
+                    + "\"n\":\"" + n + "\",\"e\":\"" + e + "\",\"kid\":\"" + kid + "\"}";
+            }
+        }
+
+        /// <summary>署名鍵（ECDSA）の**公開鍵**を JWK にする（#307 の段階 3）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <returns>JWK（JSON の文字列。1 本）</returns>
+        /// <remarks>**曲線は P-256**（この鍵は ES256 用）。</remarks>
+        public static string PublicEcJwk(IdPClient client)
+        {
+            using (X509Certificate2 cert = LoadCertificate(
+                client, "SpRp_EcdsaPfxFilePath", "SpRp_EcdsaPfxPassword"))
+            using (ECDsa ecdsa = cert.GetECDsaPublicKey())
+            {
+                if (ecdsa == null)
+                {
+                    throw new InvalidOperationException(
+                        "ECDSAの公開鍵を取り出せませんでした: "
+                        + client.Config.Get("SpRp_EcdsaPfxFilePath"));
+                }
+
+                ECParameters p = ecdsa.ExportParameters(false);
+
+                string x = Base64Url.Encode(p.Q.X);
+                string y = Base64Url.Encode(p.Q.Y);
+
+                string kid = JwsSigner.Thumbprint(
+                    "{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"" + x
+                    + "\",\"y\":\"" + y + "\"}");
+
+                return "{\"kty\":\"EC\",\"alg\":\"ES256\",\"use\":\"sig\","
+                    + "\"crv\":\"P-256\",\"x\":\"" + x + "\",\"y\":\"" + y
+                    + "\",\"kid\":\"" + kid + "\"}";
+            }
+        }
+
+        /// <summary>JWK の指紋（RFC 7638）</summary>
+        /// <param name="canonical">必須の項目だけを辞書順に並べた JSON</param>
+        /// <returns>BASE64URL(SHA-256(JSON))</returns>
+        private static string Thumbprint(string canonical)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                return Base64Url.Encode(sha256.ComputeHash(Encoding.UTF8.GetBytes(canonical)));
             }
         }
 

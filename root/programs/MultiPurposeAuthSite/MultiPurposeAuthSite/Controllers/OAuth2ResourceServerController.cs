@@ -293,7 +293,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>成功は 204（本体なし）、誤りは 401 / 404</returns>
         /// <remarks>
         /// **`204 No Content`**（§2.3 の MUST）。**本体は付けない。**
-        /// **消すと、同じ利用者が登録し直せる**（`Users.ClientID` を空にする）。
+        /// **消すと、同じ利用者が登録し直せる**（**`Users.ClientID` は空にしない**。
+        /// 一意制約に当たるため。**登録の行が無ければ、`Register` が通す**）。
         /// </remarks>
         [HttpDelete]
         public IHttpActionResult DeleteClient(string client_id)

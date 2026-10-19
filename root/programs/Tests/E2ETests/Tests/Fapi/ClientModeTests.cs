@@ -37,6 +37,7 @@
 //*  2026/09/22  玄人 幸道         FA-2.1 の注記を、mTLS の通る側（FA-6.1）に合わせた（#226）
 //*  2026/09/26  玄人 幸道         FA-1.2 を、refresh_token を「非対称の証明でだけ使える」に改めた（#239 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/19  玄人 幸道         FA-4.1 の fapi2 を、認証の段で断られる形に改めた（#307 の段階 3）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -598,7 +599,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 r.Step("(2) fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される");
 
                 foreach (string name in new string[]
-                    { KnownClients.TestClient1, KnownClients.TestClient2, KnownClients.TestClient4 })
+                    { KnownClients.TestClient1, KnownClients.TestClient4 })
                 {
                     JsonResponse start = await ClientModeTests.StartDeviceAuthZAsync(
                         client, Flows.Registration(client, name));
@@ -612,6 +613,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Note("**client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、"
                     + "**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。");
+
+                r.Step("(3) fapi2（TestClient2）は、クライアント認証の段で断られる");
+
+                //  **#307 の段階 3 で、断る段が早くなった。**
+                //    **`TestClient2` は `token_endpoint_auth_method=private_key_jwt` を登録している**
+                //    （fapi2 は秘密ベースの認証を認めないので、それが正しい登録である）。
+                //    **この口は `client_assertion` を読まない**（RFC 8628）ので、
+                //    **`client_secret` では認証そのものが通らない。**
+                //
+                //  **断ることは変わっていない。** **変わったのは誤りのコードだけ**であり、
+                //    **仕様としては、こちらの方が正しい**（認証の失敗は `invalid_client`）。
+                {
+                    JsonResponse start = await ClientModeTests.StartDeviceAuthZAsync(
+                        client, Flows.Registration(client, KnownClients.TestClient2));
+
+                    r.Verify(KnownClients.TestClient2 + " は invalid_client（401）",
+                        start.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                            && start.Error == "invalid_client",
+                        "401 / invalid_client",
+                        (int)start.StatusCode + " / " + (start.Error ?? "（無し）"));
+                }
+
+                r.Note("**`TestClient1` / `TestClient4` は方法を明示していない**ので、"
+                    + "**`client_secret` で認証が通り、登録種別の判定まで進む**（`unauthorized_client`）。"
+                    + "**どちらの道でも、このグラントは使えない。**");
 
                 r.Note("**トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、"
                     + "この E2E では単独で測っていない。");

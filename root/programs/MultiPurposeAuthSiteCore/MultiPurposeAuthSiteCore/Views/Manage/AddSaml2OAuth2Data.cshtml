@@ -189,6 +189,13 @@
         </div>
     </div>
     <div class="form-group">
+        @Html.LabelFor(m => m.TokenEndpointAuthMethod, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.DropDownListFor(model => model.TokenEndpointAuthMethod, Model.DdlTokenEndpointAuthMethodItems, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.TokenEndpointAuthMethod)</p>
+        </div>
+    </div>
+    <div class="form-group">
         @Html.LabelFor(m => m.TokenEndpointAuthSigningAlg, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.TokenEndpointAuthSigningAlg, Model.DdlTokenEndpointAuthSigningAlgItems, new { @class = "form-control" })

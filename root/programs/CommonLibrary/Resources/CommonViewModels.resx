@@ -384,4 +384,10 @@
   <data name="SoftwareVersionDescription" xml:space="preserve">
     <value>Version of the software behind this client. Stored and returned as registered.</value>
   </data>
+  <data name="TokenEndpointAuthMethod" xml:space="preserve">
+    <value>Client authentication method (token_endpoint_auth_method)</value>
+  </data>
+  <data name="TokenEndpointAuthMethodDescription" xml:space="preserve">
+    <value>How this client authenticates itself. When empty, client_secret_basic and client_secret_post are allowed. private_key_jwt and tls_client_auth must be selected here; registering a key or a DN alone is not enough.</value>
+  </data>
 </root>

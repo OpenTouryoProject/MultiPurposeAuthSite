@@ -33,6 +33,7 @@
 //*  2026/10/10  玄人 幸道         管理画面用の候補についての見通しを現状に合わせた（#277）
 //*  2026/10/18  玄人 幸道         RFC 7591 §2 のクライアント メタデータを追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         registration_access_token のハッシュの列を追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method の列を追加（#307 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -681,6 +682,62 @@ namespace MultiPurposeAuthSite.ViewModels
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "registration_access_token_hash")]
         public string RegistrationAccessToken { get; set; }
+
+        #endregion
+
+        #region token_endpoint_auth_method（#307 の段階 3）
+
+        /// <summary>TokenEndpointAuthMethod（RFC 7591 §2 の token_endpoint_auth_method）</summary>
+        /// <remarks>
+        /// **このクライアントが、クライアント認証に使う方法**（**値は 1 つ**）。
+        ///
+        /// | 登録 | 通る方法 |
+        /// |---|---|
+        /// | **空**（未登録） | **`client_secret_basic` と `client_secret_post`**（**暗黙に許す**） |
+        /// | `client_secret_basic` / `client_secret_post` | 同上（**明示しても同じ**） |
+        /// | **`private_key_jwt`** | **`client_assertion` だけ**（**秘密では通らない**） |
+        /// | **`tls_client_auth`** | **クライアント証明書だけ**（同上） |
+        ///
+        /// **つまり「強い方法は明示が要る」**（#307 の段階 3 の決定）。
+        /// **判定は `CmnEndpoints.AllowsAuthMethod`** で、
+        /// **`/token` / `/par` / `/revoke` / `/introspect` / `/ciba_authz` /
+        /// `refresh_token` の全部に効く。**
+        ///
+        /// **`client_secret` は、方法に関わらず発行する**（段階 3 の決定）。
+        /// **デバイス フローのように、秘密しか使えない口が在る**ためである
+        /// （RFC 8628 の口は `client_assertion` を読んでいない）。
+        /// </remarks>
+        [Display(Name = "TokenEndpointAuthMethod", Description = "TokenEndpointAuthMethodDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(Const.MaxLengthOfAuthMethod)]
+        [JsonProperty(PropertyName = "token_endpoint_auth_method")]
+        public string TokenEndpointAuthMethod { get; set; }
+
+        /// <summary>TokenEndpointAuthMethod アイテムリスト</summary>
+        /// <remarks>
+        /// **一覧は `CmnEndpoints.TokenEndpointAuthMethods` が持つ**（広告もそこから作る）。
+        /// **先頭は空**（＝ 明示しない ＝ 秘密ベースの 2 つ）である。
+        /// </remarks>
+        // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
+        [JsonIgnore]
+        public List<SelectListItem> DdlTokenEndpointAuthMethodItems
+        {
+            get
+            {
+                List<SelectListItem> items = new List<SelectListItem>()
+                {
+                    // **空 ＝ 明示しない**（秘密ベースの 2 つを暗黙に許す）。
+                    new SelectListItem() { Text = "（明示しない ＝ client_secret_basic / client_secret_post）", Value = "" }
+                };
+
+                foreach (string method in TokenProviders.CmnEndpoints.TokenEndpointAuthMethods)
+                {
+                    items.Add(new SelectListItem() { Text = method, Value = method });
+                }
+
+                return items;
+            }
+        }
 
         #endregion
     }
