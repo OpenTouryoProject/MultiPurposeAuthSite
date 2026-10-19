@@ -637,7 +637,7 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
 > **公開情報の口は全開なので、この一覧を引かない。**
 
-### 動的クライアント登録（RFC 7591）— `EnableDynamicClientRegistration`（#307 の段階 1）
+### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1・2）
 
 **クライアント登録を WebAPI で行う。** **既定は無効**で、**開けると `/register` が出来る。**
 
@@ -836,13 +836,159 @@ ALTER TABLE Saml2OAuth2Data
 **画面（`/Manage/AddSaml2OAuth2Data`）にも、この 11 項目が出る** —
 **登録の内容であり、画面と WebAPI で持てる項目をずらさない**ため。
 
-#### まだ出来ないこと（段階 2 以降）
+#### 管理 API（RFC 7592）— `GET` / `PUT` / `DELETE`（#307 の段階 2）
+
+**登録の応答に、管理の口とその鍵が入る**（RFC 7592 §3 で、**どちらも REQUIRED**）。
+
+| | |
+|---|---|
+| **`registration_client_uri`** | **`…/register/{client_id}`**（絶対 URI）。**サーバが渡す** — **クライアントに組み立てさせない**（Appendix B） |
+| **`registration_access_token`** | **その 1 件だけに効く Bearer トークン。** **返るのは、この 1 回だけ**（**保管しているのはハッシュ**なので、**再表示できない**） |
+
+**3 つの口**（どれも `Authorization: Bearer <registration_access_token>`）。
+
+| | |
+|---|---|
+| **`GET`** | **登録の全体を返す**（`200`）。**`client_secret` は返さない** |
+| **`PUT`** | **全置換**（`200`）。**`client_id` は必須・一致必須。** **`client_secret` を入れるなら一致必須**（**自分で決めさせない**） |
+| **`DELETE`** | **`204`（本体なし）。** **同意も落とす**（**`Users.ClientID` は空にしない。下の節**）。**同じ利用者が登録し直せる** |
+
+**専用 scope（`client_registration`）のアクセス トークンでは叩けない** —
+**作る権限と、直す権限は別物**である（§2 : クライアントは `registration_access_token` を使うこと）。
+
+```bash
+# 読む
+curl -X GET  "https://localhost:44300/MultiPurposeAuthSite/register/<client_id>" \
+     -H "Authorization: Bearer <registration_access_token>"
+
+# 直す（全置換。client_id を入れること）
+curl -X PUT  "https://localhost:44300/MultiPurposeAuthSite/register/<client_id>" \
+     -H "Authorization: Bearer <registration_access_token>" \
+     -H "Content-Type: application/json" \
+     -d '{"client_id":"<client_id>","redirect_uris":["https://rp.example/cb"],"scope":"openid"}'
+
+# 消す
+curl -X DELETE "https://localhost:44300/MultiPurposeAuthSite/register/<client_id>" \
+     -H "Authorization: Bearer <registration_access_token>"
+```
+
+##### 誤りの形
+
+| 何が起きたか | 返すもの |
+|---|---|
+| **トークンが無い・偽・他の登録のもの・知らない `client_id`** | **`401` ＋ `invalid_token`**（§2.1 〜 §2.3 の MUST）。**`404` にしない** — **「在るが触れない」と「無い」を、外から区別させない** |
+| `client_id` が無い / 一致しない、`client_secret` が一致しない、**専用 scope の自己付与**、`scope` が未対応 | **`400` ＋ `invalid_client_metadata`** |
+| `redirect_uris` が無い・形が不正 | **`400` ＋ `invalid_redirect_uri`** |
+| 本体が JSON でない | **`400` ＋ `invalid_request`** |
+| **この配備で動的登録を開けていない** | **`404`**（**口そのものを張らない**） |
+
+##### `PUT` は全置換である（いちばん間違えやすい所）
+
+**§2.2 : クライアントは、返された全てのメタデータを入れること。省いた項目は「消す要求」として扱われる。**
+**差分更新（`PATCH`）は仕様に無い** ので、**`GET` で読んで、直して返す**のが前提である。
+
+| | 列 |
+|---|---|
+| **要求から作り直す**（**省いたら消える**） | `redirect_uris` / `scope` / `grant_types` / `response_types` / `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` / `subject_type` / `id_token_signed_response_alg` |
+| **持ち越す**（**要求では変えられない**） | `client_id` / `client_secret` / `ClientName`（所有者の利用者名）/ `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `WebOrigins` / `Jwk*` / `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` / `RequestObjectSigningAlg`） |
+
+> **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
+> **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
+> **管理画面から入れた値を、`PUT` で消してはならない。**
+
+**気をつける所が 3 つある。**
+
+| | |
+|---|---|
+| **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**省略は「狭める」ではなく「広がる」**（この配備が支える `scope` 全部になる）。**`client_registration` だけは、明記しても断る** |
+| **`redirect_uris` は省けない** | **OIDC DCR 1.0 §2 で REQUIRED**。省いたら `400` なので、**うっかり全消しは起こらない** |
+| **`grant_types` / `response_types` を省くと、狭まる** | **RFC 7591 §2 の既定**（`authorization_code` / `code`）**が書かれる。** `refresh_token` や `implicit` は、**書かなければ消える** |
+
+**読み取り専用の 4 つ**（`registration_access_token` / `registration_client_uri` /
+`client_id_issued_at` / `client_secret_expires_at`）**は、入っていても無視する。**
+**§2.2 は「入れるな」と書くが、断ると「`GET` して直して返す」が成り立たない。**
+
+##### トークンは回さない
+
+**§5 / A.1 は「読み出し・更新のときに新しいトークンを出してよい」（MAY）としているが、回さない。**
+**回すと、どちらが有効か取り違えた RP が、管理できなくなる。**
+**`GET` / `PUT` の応答では、提示されたトークンをそのまま返す**
+（**こちらはハッシュしか持たない**ので、**こうでなければ §3 の REQUIRED を満たせない**）。
+
+**`client_id_issued_at` は `GET` / `PUT` では返さない** — **保管していない**
+（RFC 7591 §3.2.1 で任意）。**発行時の `201` だけが返す。**
+
+##### 管理画面との噛み合い
+
+| | |
+|---|---|
+| **画面の保存では、トークンを持ち越す** | **画面の保存は行を丸ごと上書きする**ので、**持ち越さないと消える**（RP が管理 API を使えなくなる）。**画面には出さない** |
+| **画面で `client_id` を作り直すと、管理 API では触れなくなる** | **別のクライアントになる**ので、**そのトークンは、もう効いてはならない** |
+| **画面で作った登録・段階 1 で作った登録には、トークンが無い** | **この口では触れない**（`401`）。**所有者は、画面で自分の 1 件を編集・削除できる**（`/Manage/AddSaml2OAuth2Data`） |
+
+##### 削除したクライアントのトークン（✅ 修正済み。#307 の段階 2）
+
+**`DELETE` で登録を消すと、そのクライアントのアクセス トークンも、その場で通らなくなる**
+（RFC 7592 §2.3 : 削除したら、そのクライアントのトークンを無効にすべき）。
+
+> **以前は通っていた** — **アクセス トークンの検証にある「クライアントがまだ在るか」の確認が、
+> 効いていなかった**（`Helper.GetClientSecret` は**未登録でも空文字を返す**ので、
+> `!= null` の判定が常に真だった）。**`Helper.HasClient` で「行が在るか」を見るようにした。**
+> **画面の `RemoveSaml2OAuth2Data` でも、設定からの撤去でも、同じように止まる。**
+
+**限界** : **外部のリソース サーバが、自前で JWT を検証する場合は止まらない**
+（**鍵と `exp` だけで通る**ため。**`/revoke` と同じ限界**である）。
+**この IdP の検証を通る口（`/userinfo` ほか）では止まる。**
+
+##### `DELETE` と `Users.ClientID`
+
+**`Users.ClientID` は空にしない。**
+
+| | |
+|---|---|
+| なぜ | **`Users.ClientID` は NOT NULL で、一意索引（`ClientIDIndex`）が張られている** — **空にすると 2 人目で一意制約に当たる。** **`Saml2OAuth2Data.ClientID` から `Users.ClientID` への外部キー**も在る |
+| 既存の作り | **管理画面の `RemoveSaml2OAuth2Data` も、同じ理由で空にしていない**（「一意制約エラーになるので」というコメントが残っている） |
+| それでも登録し直せる理由 | **段階 1 の `Register` は「`Users.ClientID` が在っても、その登録の行が無ければ通す」** — **宙に浮いた `client_id` を許容し、作り直しのときに掃除する** |
+
+> **`mem` では制約が無いので、空にしても通ってしまう。**
+> **`sql` で `DELETE` が `500` になって分かった**（#307 の段階 2 の実測）。
+> **`RT-307.11` と `RT-307.12` が、DB ストアの通しで捕まえた。**
+
+##### DDL — `Saml2OAuth2Data` に 1 列足す（#307 の段階 2）
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD
+    [RegistrationAccessToken] [nvarchar](128) NULL
+```
+
+```sql
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("RegistrationAccessToken" NVARCHAR2(128) NULL);
+```
+
+```sql
+-- PostgreSQL（引用符なしなので、識別子は小文字に畳まれる）
+ALTER TABLE Saml2OAuth2Data ADD COLUMN RegistrationAccessToken varchar(128) NULL;
+```
+
+**入るのはハッシュ**（SHA-256 を base64 にすると 44 文字。**替えても入るように 128**）。
+**暗号化（`SecretProtector`。#297）はしない** — **照合しかしない**ので、**元に戻す必要が無い。**
+**画面には出さない。**
+
+##### レート制限（#305 の段階 3）
+
+**管理 API は、登録そのものとは別のバケツで数える**（口の名前 `register_mgmt`）。
+**パスに `client_id` が入る**ので、**前方一致で見る。**
+**管理の洪水で、登録そのものを止めないため**である。
+
+#### まだ出来ないこと（段階 3 以降）
 
 | | いつ |
 |---|---|
-| **RFC 7592**（`GET` / `PUT` / `DELETE` ＋ `registration_access_token` / `registration_client_uri`） | 段階 2 |
 | **`jwks` / `jwks_uri`**（鍵を URL から引く） | 段階 3 |
 | **`software_statement`**（署名付きの主張） | 段階 3 |
+| **鍵や DN の登録を要する `token_endpoint_auth_method`**（`private_key_jwt` / `tls_client_auth`） | 段階 3 |
 | **`client_credentials` 経路**／**1 利用者 n クライアント**（DDL） | 段階 3 |
 | OIDC DCR §2 の残り（`application_type` / ログアウトの URI など） | D-1-2 と併せて |
 

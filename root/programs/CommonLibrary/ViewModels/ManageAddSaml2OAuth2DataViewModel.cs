@@ -32,6 +32,7 @@
 //*  2026/10/09  玄人 幸道         redirect_ の候補（datalist）を追加（#277 の段階 3）
 //*  2026/10/10  玄人 幸道         管理画面用の候補についての見通しを現状に合わせた（#277）
 //*  2026/10/18  玄人 幸道         RFC 7591 §2 のクライアント メタデータを追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         registration_access_token のハッシュの列を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -656,6 +657,30 @@ namespace MultiPurposeAuthSite.ViewModels
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "software_version")]
         public string SoftwareVersion { get; set; }
+
+        #endregion
+
+        #region 管理 API（RFC 7592。#307 の段階 2）
+
+        /// <summary>RegistrationAccessToken（**ハッシュが入る**。RFC 7592 §2）</summary>
+        /// <remarks>
+        /// **`registration_client_uri`（`…/register/{client_id}`）への
+        /// `GET` / `PUT` / `DELETE` を許す、その 1 件だけのトークン**である。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **入るもの** | **ハッシュ**（`ClientRegistrationProvider.Hash`）。**平文は登録の応答で 1 回だけ返す** |
+        /// | **画面** | **出さない** — **照合にしか使わない**（再表示できない） |
+        /// | **画面の保存** | **消えないように持ち越す**（`ManageController`。**行を丸ごと上書きする**ため） |
+        ///
+        /// **暗号化（`SecretProtector`）はしない** — **ハッシュであり、元に戻す必要が無い。**
+        /// </remarks>
+        [StringLength(
+            Const.MaxLengthOfTokenHash,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "registration_access_token_hash")]
+        public string RegistrationAccessToken { get; set; }
 
         #endregion
     }

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 3）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を対象に足した（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）を別の口として数える（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -341,8 +342,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             string endpoint = null;
-            return RateLimitProvider.Endpoints.TryGetValue(normalized, out endpoint)
-                ? endpoint : null;
+
+            if (RateLimitProvider.Endpoints.TryGetValue(normalized, out endpoint))
+            {
+                return endpoint;
+            }
+
+            //  **動的クライアント登録の管理 API**（RFC 7592。#307 の段階 2）。
+            //    **パスに `client_id` が入る**（`/register/{client_id}`）ので、
+            //    **表に置けない** — **前方一致で見る。**
+            //
+            //  **登録そのものとは別のバケツにする**（`register` ではなく `register_mgmt`）—
+            //    **管理の洪水で、登録そのものを止めないため**
+            //    （#305 の「口の名前が、数える単位」）。
+            if (Config.EnableDynamicClientRegistration)
+            {
+                string register = RateLimitProvider.Normalize(Config.DcrRegistrationEndpoint);
+
+                if (!string.IsNullOrEmpty(register)
+                    && normalized.StartsWith(register + "/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "register_mgmt";
+                }
+            }
+
+            return null;
         }
 
         /// <summary>1 つの鍵で数えて、超えていれば待つ秒数を返す</summary>

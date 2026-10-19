@@ -52,6 +52,7 @@
 //*  2026/10/04  玄人 幸道         web_originsと画面登録ぶんを返す口を追加（#266）
 //*  2026/10/06  玄人 幸道         クライアント登録を専用列から読む（#270）
 //*  2026/10/18  玄人 幸道         scope をDBからも読み、grant_types / response_types を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         クライアント登録の有無を返す口を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -692,6 +693,40 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return "";
+        }
+
+        #endregion
+
+        #region HasClient
+
+        /// <summary>client_id の登録が在るか（#307 の段階 2）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>登録が在れば true</returns>
+        /// <remarks>
+        /// **「クライアントがまだ在るか」を確かめるための口**である
+        /// （**アクセス トークンの検証が使う**。`CmnAccessToken.VerifyAccessToken`）。
+        ///
+        /// > **以前は `GetClientSecret(aud) != null` で確かめていたが、効いていなかった** —
+        /// > **`GetClientSecret` は、未登録の `client_id` でも `""` を返す**（`null` ではない）。
+        /// > **そのため、登録を消しても、既に発行されたアクセス トークンが
+        /// > 期限切れまで通っていた**（#307 の段階 2 で修正）。
+        ///
+        /// **「秘密が空でないか」で判定してはならない** —
+        /// **秘密を持たないクライアント**（PKCE だけの public クライアント）**のトークンまで止まる。**
+        /// **見るのは「行が在るか」**である。
+        /// </remarks>
+        public bool HasClient(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                return true;
+            }
+
+            // saml2OAuth2Dataを検索
+            return DataProvider.Get(client_id) != null;
         }
 
         #endregion

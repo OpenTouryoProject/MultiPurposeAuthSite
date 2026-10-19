@@ -153,6 +153,8 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "Contacts" NVARCHAR2(2000) NULL,                 -- Const.MaxLengthOfContacts（空白区切りの列挙）
     "SoftwareId" NVARCHAR2(256) NULL,                -- Const.MaxLengthOfSoftwareId
     "SoftwareVersion" NVARCHAR2(64) NULL,            -- Const.MaxLengthOfSoftwareVersion
+    -- RFC 7592 の管理 API（#307 の段階 2）。末尾に足してある（ALTER … ADD で揃う）
+    "RegistrationAccessToken" NVARCHAR2(128) NULL,   -- Const.MaxLengthOfTokenHash（ハッシュが入る）
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 

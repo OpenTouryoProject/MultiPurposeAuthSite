@@ -35,6 +35,7 @@
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
 //*  2026/10/09  西野 大介         オンライン決済サービス処理の削除
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の口を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -163,7 +164,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Dynamic Client Registration（#307 の段階 1）
+        #region Dynamic Client Registration（#307 の段階 1 / 段階 2）
 
         /// <summary>
         /// 動的クライアント登録（RFC 7591 §3.1）
@@ -221,6 +222,108 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             return this.RegistrationError(status, err);
+        }
+
+        /// <summary>
+        /// 登録を読む（RFC 7592 §2.1）
+        /// GET: /register/{client_id}
+        /// </summary>
+        /// <param name="client_id">client_id（`registration_client_uri` の末尾）</param>
+        /// <returns>成功は 200、誤りは 401 / 404</returns>
+        /// <remarks>
+        /// **叩けるのは `registration_access_token` だけ**である（RFC 7592 §2）。
+        /// **段階 1 の専用 scope のアクセス トークンでは叩けない** —
+        /// **作る権限と、直す権限は別物**である。
+        ///
+        /// **知らない `client_id` も、他人のトークンも `401`**（§2.1 の MUST。**`404` にしない**）。
+        /// </remarks>
+        [HttpGet]
+        public IHttpActionResult ReadClient(string client_id)
+        {
+            this.SetNoStore();
+
+            int status = ClientRegistrationProvider.Read(
+                client_id, this.GetRegistrationAccessToken(),
+                out Dictionary<string, object> ret, out Dictionary<string, string> err);
+
+            if (status == 200)
+            {
+                return this.ResponseMessage(
+                    this.Request.CreateResponse(HttpStatusCode.OK, ret));
+            }
+
+            return this.RegistrationError(status, err);
+        }
+
+        /// <summary>
+        /// 登録を直す（RFC 7592 §2.2。**全置換**）
+        /// PUT: /register/{client_id}
+        /// </summary>
+        /// <param name="client_id">client_id（`registration_client_uri` の末尾）</param>
+        /// <returns>成功は 200、誤りは 400 / 401 / 404</returns>
+        /// <remarks>
+        /// **全置換である**（§2.2）。**省いた項目は消える**ので、
+        /// **`GET` で読んで、直して返す**のが前提である（**差分更新は仕様に無い**）。
+        /// </remarks>
+        [HttpPut]
+        public async Task<IHttpActionResult> UpdateClient(string client_id)
+        {
+            this.SetNoStore();
+
+            string body = await this.Request.Content.ReadAsStringAsync();
+
+            int status = ClientRegistrationProvider.Update(
+                client_id, body, this.GetRegistrationAccessToken(),
+                out Dictionary<string, object> ret, out Dictionary<string, string> err);
+
+            if (status == 200)
+            {
+                return this.ResponseMessage(
+                    this.Request.CreateResponse(HttpStatusCode.OK, ret));
+            }
+
+            return this.RegistrationError(status, err);
+        }
+
+        /// <summary>
+        /// 登録を消す（RFC 7592 §2.3）
+        /// DELETE: /register/{client_id}
+        /// </summary>
+        /// <param name="client_id">client_id（`registration_client_uri` の末尾）</param>
+        /// <returns>成功は 204（本体なし）、誤りは 401 / 404</returns>
+        /// <remarks>
+        /// **`204 No Content`**（§2.3 の MUST）。**本体は付けない。**
+        /// **消すと、同じ利用者が登録し直せる**（`Users.ClientID` を空にする）。
+        /// </remarks>
+        [HttpDelete]
+        public IHttpActionResult DeleteClient(string client_id)
+        {
+            this.SetNoStore();
+
+            int status = ClientRegistrationProvider.Delete(
+                client_id, this.GetRegistrationAccessToken(),
+                out Dictionary<string, string> err);
+
+            if (status == 204)
+            {
+                return this.ResponseMessage(
+                    this.Request.CreateResponse(HttpStatusCode.NoContent));
+            }
+
+            return this.RegistrationError(status, err);
+        }
+
+        /// <summary>registration_access_token を取り出す（RFC 6750 §2.1）</summary>
+        /// <returns>トークン（無ければ null。出力しないこと）</returns>
+        /// <remarks>
+        /// **検証はしない** — **JWT ではなく、登録の行に突き合わせるトークン**である
+        /// （`ClientRegistrationProvider` が照合する）。
+        /// </remarks>
+        private string GetRegistrationAccessToken()
+        {
+            return AuthenticationHeader.GetCredentials(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken) ? bearerToken : null;
         }
 
         /// <summary>登録の失敗の応答を作る</summary>

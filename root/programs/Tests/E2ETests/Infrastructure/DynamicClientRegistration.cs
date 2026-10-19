@@ -29,9 +29,11 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の口を足した（#307 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -131,5 +133,87 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             return "{\"redirect_uris\":" + JsonSerializer.Serialize(redirectUris) + "}";
         }
+
+        #region 管理 API（RFC 7592。#307 の段階 2）
+
+        /// <summary>登録を読む（RFC 7592 §2.1）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="registrationClientUri">registration_client_uri（登録の応答で返る）</param>
+        /// <param name="registrationAccessToken">registration_access_token（null なら付けない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **`registration_client_uri` は絶対 URL で返る**（RFC 7592 Appendix B）。
+        /// **コンテナ化・配備で host が変わる**ので、**このホストへ向け直す**（`ToLocalUrl`）。
+        /// </remarks>
+        public static Task<JsonResponse> ReadAsync(
+            IdPClient client, string registrationClientUri, string registrationAccessToken)
+        {
+            return client.SendJsonBodyWithAuthorizationAsync(
+                HttpMethod.Get, client.ToLocalUrl(registrationClientUri), null,
+                DynamicClientRegistration.Bearer(registrationAccessToken));
+        }
+
+        /// <summary>登録を直す（RFC 7592 §2.2。**全置換**）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="registrationClientUri">registration_client_uri</param>
+        /// <param name="registrationAccessToken">registration_access_token（null なら付けない）</param>
+        /// <param name="metadata">クライアント メタデータ（**`client_id` を入れること**）</param>
+        /// <returns>JsonResponse</returns>
+        public static Task<JsonResponse> UpdateAsync(
+            IdPClient client, string registrationClientUri,
+            string registrationAccessToken, string metadata)
+        {
+            return client.SendJsonBodyWithAuthorizationAsync(
+                HttpMethod.Put, client.ToLocalUrl(registrationClientUri), metadata,
+                DynamicClientRegistration.Bearer(registrationAccessToken));
+        }
+
+        /// <summary>登録を消す（RFC 7592 §2.3）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="registrationClientUri">registration_client_uri</param>
+        /// <param name="registrationAccessToken">registration_access_token（null なら付けない）</param>
+        /// <returns>JsonResponse</returns>
+        public static Task<JsonResponse> DeleteAsync(
+            IdPClient client, string registrationClientUri, string registrationAccessToken)
+        {
+            return client.SendJsonBodyWithAuthorizationAsync(
+                HttpMethod.Delete, client.ToLocalUrl(registrationClientUri), null,
+                DynamicClientRegistration.Bearer(registrationAccessToken));
+        }
+
+        /// <summary>Authorization ヘッダの値にする</summary>
+        /// <param name="token">トークン（null なら null）</param>
+        /// <returns>`Bearer …`（出力しないこと）</returns>
+        private static string Bearer(string token)
+        {
+            return (token == null) ? null : "Bearer " + token;
+        }
+
+        /// <summary>全置換する `PUT` のメタデータを作る</summary>
+        /// <param name="clientId">client_id（**`PUT` では必須・一致必須**）</param>
+        /// <param name="scope">scope（空なら入れない）</param>
+        /// <param name="redirectUris">折り返し先</param>
+        /// <returns>JSON の文字列</returns>
+        /// <remarks>
+        /// **全置換なので、残したい項目も全て入れる**（RFC 7592 §2.2）。
+        /// </remarks>
+        public static string UpdateMetadata(
+            string clientId, string scope, params string[] redirectUris)
+        {
+            Dictionary<string, object> metadata = new Dictionary<string, object>()
+            {
+                { "client_id", clientId },
+                { "redirect_uris", redirectUris }
+            };
+
+            if (!string.IsNullOrEmpty(scope))
+            {
+                metadata.Add("scope", scope);
+            }
+
+            return JsonSerializer.Serialize(metadata);
+        }
+
+        #endregion
     }
 }

@@ -58,6 +58,7 @@
 //*  2026/10/08  玄人 幸道         CookieNames（名前だけ）を追加（#284）
 //*  2026/10/16  玄人 幸道         ヘッダを付けて GET する口を足した（#303）
 //*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         メソッドを選んで JSON を送る口にした（#307 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -282,11 +283,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **フォームではない**ので、`PostJsonWithAuthorizationAsync`（フォームを送る口）
         /// とは別に用意してある。
         /// </remarks>
-        public async Task<JsonResponse> PostJsonBodyWithAuthorizationAsync(
+        public Task<JsonResponse> PostJsonBodyWithAuthorizationAsync(
             string pathOrUrl, string json, string authorization)
         {
-            HttpRequestMessage req = new HttpRequestMessage(
-                HttpMethod.Post, this.Absolute(pathOrUrl));
+            return this.SendJsonBodyWithAuthorizationAsync(
+                HttpMethod.Post, pathOrUrl, json, authorization);
+        }
+
+        /// <summary>
+        /// メソッドを選んで、JSON の本文と Authorization ヘッダを付けて送る（#307 の段階 2）
+        /// </summary>
+        /// <param name="method">HTTP メソッド（GET / PUT / DELETE / POST）</param>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="json">本文（JSON の文字列。null なら本文を付けない）</param>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **クライアント登録の管理 API（RFC 7592）は、同じ URL を
+        /// `GET` / `PUT` / `DELETE` で叩く。**
+        /// **`HttpClient` の `GetAsync` / `PutAsync` では Authorization を付けられない**ので、
+        /// **要求を組み立てて送る。**
+        /// </remarks>
+        public async Task<JsonResponse> SendJsonBodyWithAuthorizationAsync(
+            HttpMethod method, string pathOrUrl, string json, string authorization)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(method, this.Absolute(pathOrUrl));
 
             if (json != null)
             {

@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：ClientRegistrationTests
-//* クラス日本語名  ：RT-307 動的クライアント登録（RFC 7591）
+//* クラス日本語名  ：RT-307 動的クライアント登録（RFC 7591 / 7592）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）のケースを追加（#307 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -45,7 +46,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-307. **動的クライアント登録**（RFC 7591 / #307 の段階 1）。
+    /// RT-307. **動的クライアント登録**（RFC 7591 / 7592。#307 の段階 1 と段階 2）。
     /// </summary>
     /// <remarks>
     /// **以前はクライアント登録に WebUI しか無かった**（`ANALYSIS-IdP.md` の D-4）。
@@ -65,6 +66,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-307.6`** | **登録した `response_types` が効く** |
     /// | **`RT-307.7`** | **登録した `grant_types` が効く** |
     /// | **`RT-307.8`** | **登録した `scope` が効く**（DB に登録したクライアントでも） |
+    /// | **`RT-307.9`** | **`GET` で登録を読める**（`client_secret` は返さない） |
+    /// | **`RT-307.10`** | **`PUT` で全置換でき、置換が実際に効く** |
+    /// | **`RT-307.11`** | **`DELETE` で消え、既に出ているトークンも通らなくなり、登録し直せる** |
+    /// | **`RT-307.12`** | **管理 API は `registration_access_token` 以外では叩けない** |
+    /// | **`RT-307.13`** | **`PUT` の誤りは `400`**（**登録は変わらない**） |
+    ///
+    /// **段階 2 は RFC 7592**（`registration_client_uri` ＝ `…/register/{client_id}`）。
+    /// **管理のトークンは、登録の応答で 1 回だけ返る**（**こちらはハッシュしか持たない**）。
     ///
     /// **使い捨ての利用者を 2 人使う。** **クライアント登録は 1 人 1 件**なので、
     /// **管理 API を叩くクライアントの持ち主（A）と、登録される側（B）を分けないと、
@@ -758,6 +767,588 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         + "**RFC 6749 §3.3 : 認可サーバは、要求されたスコープの"
                         + "一部または全部を無視してよい**（#198 と同じ倒し方）。 "
                         + "**列が空なら絞らない。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.9
+
+        /// <summary>RT-307.9 登録を読める（RFC 7592 §2.1）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30709_登録を読める(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.9",
+                    "`registration_client_uri` を `GET` すると、登録の全体が返る",
+                    "**登録の応答は 1 回しか返らない** — "
+                    + "**RP が自分の登録を確かめる口が無いと、"
+                    + "「登録したつもりの値」と「実際に登録された値」の食い違いに気付けない**"
+                    + "（**RFC 7591 §3.2.1 は、サーバが値を拒否・置換してよい**としている）。"
+                    + "**`client_secret` は返さない** — **トークンが漏れても、秘密は漏らさない。**",
+                    "RFC 7592 §2.1 / §3 / #307 の段階 2");
+
+                r.Target("GET registration_client_uri（registration_access_token を Bearer に付ける）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 登録する（応答に管理の口と、その鍵が入る）");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid email\"}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString());
+
+                    string clientId = created.String("client_id");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    r.Verify("registration_access_token が返る（§3 で REQUIRED）",
+                        !string.IsNullOrEmpty(registrationAccessToken),
+                        "返る", string.IsNullOrEmpty(registrationAccessToken)
+                            ? "**返らない**" : "返った（値は出さない）");
+
+                    r.Verify("registration_client_uri が返る（§3 で REQUIRED）",
+                        !string.IsNullOrEmpty(registrationClientUri),
+                        "返る", registrationClientUri ?? "**返らない**");
+
+                    r.Verify("registration_client_uri は client_id で終わる（絶対 URI）",
+                        registrationClientUri != null
+                            && registrationClientUri.EndsWith("/" + clientId),
+                        "終わる", (registrationClientUri == null)
+                            ? "**返らない**"
+                            : (registrationClientUri.EndsWith("/" + clientId)
+                                ? "終わっている" : "**終わっていない**"));
+
+                    r.Step("(2) その口を読む");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)read.StatusCode).ToString());
+
+                    r.VerifyEqual("client_id は変わらない（§2.1 の MUST）",
+                        clientId, read.String("client_id") ?? "（無い）");
+
+                    r.VerifyEqual("redirect_uris が返る", "True",
+                        read.ArrayContains("redirect_uris", UriA).ToString());
+
+                    r.VerifyEqual("scope が返る", "openid email",
+                        read.String("scope") ?? "（無い）");
+
+                    r.VerifyEqual("grant_types が返る", "True",
+                        read.ArrayContains("grant_types", "authorization_code").ToString());
+
+                    r.VerifyEqual("registration_client_uri が返る（§3 で REQUIRED）",
+                        registrationClientUri, read.String("registration_client_uri") ?? "（無い）");
+
+                    r.VerifyEqual("registration_access_token が返る（§3 で REQUIRED）",
+                        "True",
+                        (read.String("registration_access_token")
+                            == registrationAccessToken).ToString());
+
+                    r.Verify("client_secret は返らない",
+                        string.IsNullOrEmpty(read.String("client_secret")),
+                        "返らない", string.IsNullOrEmpty(read.String("client_secret"))
+                            ? "返らない" : "**返った**");
+
+                    r.Note("**提示されたトークンを、そのまま返している** — "
+                        + "**保管しているのはハッシュ**なので、**こうでなければ §3 の "
+                        + "REQUIRED を満たせない。** **トークンは回さない**（§5 / A.1 は MAY）— "
+                        + "**回すと、どちらが有効か取り違えた RP が、管理できなくなる。**");
+
+                    r.Note("**`client_id_issued_at` は `GET` では返さない** — "
+                        + "**保管していない**（§3.2.1 で任意）。**発行時の `201` だけが返す。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.10
+
+        /// <summary>RT-307.10 PUT で全置換でき、置換が実際に効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30710_PUTで全置換でき置換が実際に効く(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.10",
+                    "`PUT` で登録を置き換えられ、**新しい値が実際に効く**",
+                    "**`200` と新しい値が返るだけでは、効いたことにならない** — "
+                    + "**古い `redirect_uri` が通り続けたら、置換できていない。**"
+                    + "**全置換である**（§2.2 : 省いた項目は消える）ことも、ここで測る。",
+                    "RFC 7592 §2.2 / RFC 6749 §3.1.2.3 / #307 の段階 2");
+
+                r.Target("PUT registration_client_uri（全置換）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) redirect_uris = A、scope = openid email で登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid email\"}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string clientSecret = created.String("client_secret");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    r.Step("(2) redirect_uris = B、scope = openid に置き換える");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        DynamicClientRegistration.UpdateMetadata(clientId, "openid", UriB));
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)updated.StatusCode).ToString());
+
+                    r.VerifyEqual("redirect_uris が B になる", "True",
+                        updated.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.VerifyEqual("redirect_uris から A が消える", "False",
+                        updated.ArrayContains("redirect_uris", UriA).ToString());
+
+                    r.VerifyEqual("scope が openid になる", "openid",
+                        updated.String("scope") ?? "（無い）");
+
+                    r.Step("(3) 新しい redirect_uri（B）で認可コードが取れる");
+
+                    ClientRegistration withB = new ClientRegistration()
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUri = UriB
+                    };
+
+                    AuthZResponse authzB = await Flows.AuthorizeCodeAsync(
+                        client, withB, "openid email", "state-put", "nonce-put", UriB);
+
+                    r.Verify("code が返る", !string.IsNullOrEmpty(authzB.Code),
+                        "返る", string.IsNullOrEmpty(authzB.Code)
+                            ? "**返らない（error=" + (authzB.Error ?? "なし") + "）**" : "返った");
+
+                    r.Step("(4) 古い redirect_uri（A）は、もう通らない");
+
+                    ClientRegistration withA = new ClientRegistration()
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUri = UriA
+                    };
+
+                    AuthZResponse authzA = await Flows.AuthorizeCodeAsync(
+                        client, withA, "openid", "state-old", "nonce-old", UriA);
+
+                    r.Observe("error", authzA.Error ?? "（無い）");
+
+                    r.Verify("code は返らない", string.IsNullOrEmpty(authzA.Code),
+                        "返らない", string.IsNullOrEmpty(authzA.Code)
+                            ? "返らない" : "**返った**");
+
+                    r.Step("(5) 置換で外した scope（email）は、トークンに載らない");
+
+                    JsonResponse exchanged = await Flows.ExchangeCodeAsync(
+                        client, withB, authzB.Code, UriB);
+
+                    string accessToken = exchanged.String("access_token");
+
+                    Assert.False(string.IsNullOrEmpty(accessToken),
+                        "前提: アクセス トークンが取れること"
+                        + "（error=" + (exchanged.String("error") ?? "なし") + "）");
+
+                    List<string> scopes = Jwt.Strings(Jwt.Payload(accessToken), "scopes");
+
+                    r.Observe("トークンに載った scope", string.Join(" ", scopes));
+
+                    r.VerifyEqual("置換で残した openid は載る", "True",
+                        scopes.Contains("openid").ToString());
+
+                    r.VerifyEqual("置換で外した email は載らない", "False",
+                        scopes.Contains("email").ToString());
+
+                    r.Note("**`scope` を省くと、絞りが消える**（**列が空 ＝ 絞らない**。段階 1 の決め）— "
+                        + "**§2.2 の「省略は削除要求」に従うと、そうなる。**"
+                        + "**`client_registration` だけは、明記しても断る**（自己昇格の禁止）。");
+
+                    r.Note("**`redirect_uris` は省けない**（OIDC DCR 1.0 §2 で必須）ので、"
+                        + "**うっかり全消しにはならない**（`RT-307.13` の (4) が、それを測る）。"
+                        + "**`grant_types` / `response_types` を省くと、"
+                        + "RFC 7591 §2 の既定（`authorization_code` / `code`）に戻る** ＝ **狭まる。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.11
+
+        /// <summary>RT-307.11 DELETE できて、同じ利用者が登録し直せる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30711_DELETEできて登録し直せる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.11",
+                    "`DELETE` で登録が消え、**既に出ているアクセス トークンも通らなくなり**、"
+                    + "**同じ利用者が登録し直せる**",
+                    "**消えたクライアントのトークンが期限まで通ると、払い下げの意味が無い**"
+                    + "（RFC 7592 §2.3 : 削除したら、そのクライアントのトークンを無効にすべき）。"
+                    + "**`VerifyAccessToken` の「クライアントがまだ在るか」の確認は、"
+                    + "効いていなかった** — **`GetClientSecret` は未登録でも `\"\"` を返す**ので、"
+                    + "**`!= null` が常に真**だった（**#307 の段階 2 で `Helper.HasClient` にした**）。"
+                    + "**1 利用者 1 クライアント**なので、**消せないと登録し直せない**ことも測る。",
+                    "RFC 7592 §2.3 / §5 / #307 の段階 2");
+
+                r.Target("DELETE registration_client_uri");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 登録して、そのクライアントのアクセス トークンを取る");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata(UriA));
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    ClientRegistration registered = new ClientRegistration()
+                    {
+                        ClientId = created.String("client_id"),
+                        ClientSecret = created.String("client_secret"),
+                        RedirectUri = UriA
+                    };
+
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, registered, "openid email", "state-del", "nonce-del", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが取れること");
+
+                    JsonResponse exchanged = await Flows.ExchangeCodeAsync(
+                        client, registered, authz.Code, UriA);
+
+                    string accessToken = exchanged.String("access_token");
+
+                    Assert.False(string.IsNullOrEmpty(accessToken),
+                        "前提: アクセス トークンが取れること");
+
+                    JsonResponse before = await client.UserInfoWithAuthorizationAsync(
+                        "Bearer " + accessToken);
+
+                    r.VerifyEqual("消す前は /userinfo が 200", "200",
+                        ((int)before.StatusCode).ToString());
+
+                    r.Step("(2) 消す");
+
+                    JsonResponse deleted = await DynamicClientRegistration.DeleteAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 204（§2.3 の MUST）", "204",
+                        ((int)deleted.StatusCode).ToString());
+
+                    r.Verify("本体は空", string.IsNullOrEmpty(deleted.Body),
+                        "空", string.IsNullOrEmpty(deleted.Body) ? "空" : "**空でない**");
+
+                    r.Step("(3) 既に出ていたアクセス トークンが、もう通らない");
+
+                    JsonResponse after = await client.UserInfoWithAuthorizationAsync(
+                        "Bearer " + accessToken);
+
+                    r.VerifyEqual("/userinfo は 401", "401", ((int)after.StatusCode).ToString());
+
+                    r.Step("(4) 2 回目の GET は 401（払い下げたトークンは無効。§5）");
+
+                    JsonResponse readAgain = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)readAgain.StatusCode).ToString());
+
+                    r.Step("(5) 消えたクライアントでは、認可コードも取れない");
+
+                    AuthZResponse authzAfter = await Flows.AuthorizeCodeAsync(
+                        client, registered, "openid", "state-gone", "nonce-gone", UriA);
+
+                    r.Verify("code は返らない", string.IsNullOrEmpty(authzAfter.Code),
+                        "返らない", string.IsNullOrEmpty(authzAfter.Code)
+                            ? "返らない（error=" + (authzAfter.Error ?? "なし") + "）" : "**返った**");
+
+                    r.Step("(6) 同じ利用者が、登録し直せる（403 にならない）");
+
+                    JsonResponse again = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata(UriB));
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)again.StatusCode).ToString());
+
+                    r.Note("**`Users.ClientID` は空にしない** — "
+                        + "**NOT NULL ＋ 一意索引（`ClientIDIndex`）で、"
+                        + "`Saml2OAuth2Data` からの外部キーも在る**ため"
+                        + "（**管理画面の削除も、同じ理由で空にしていない**）。 "
+                        + "**それでも登録し直せるのは、段階 1 の `Register` が"
+                        + "「登録の行が無ければ通す」から**である。"
+                        + "**同意は落とす**（`ConsentProvider.Revoke`）。");
+
+                    r.Note("**`mem` では制約が無いので、空にしても通ってしまう** — "
+                        + "**`sql` で `DELETE` が `500` になって分かった**"
+                        + "（**この (6) と `RT-307.12` の (6) が、それを捕まえた**）。");
+
+                    r.Note("**外部のリソース サーバが、自前で JWT を検証する場合は止まらない** — "
+                        + "**鍵と `exp` だけで通るため**（`/revoke` と同じ限界）。"
+                        + "**この IdP の検証を通る口（`/userinfo` ほか）では止まる。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.12
+
+        /// <summary>RT-307.12 管理 API の守り（トークンが違えば 401）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30712_管理APIの守り(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.12",
+                    "管理 API は、**`registration_access_token` 以外では叩けない**",
+                    "**作る権限と、直す権限は別物である**（§2 : クライアントは "
+                    + "`registration_access_token` を使うこと）。"
+                    + "**段階 1 の専用 scope のアクセス トークンで管理まで出来てしまうと、"
+                    + "「作った人」が「他の誰かの登録」を触れる形に近づく。**"
+                    + "**知らない `client_id` も `401` にする** — "
+                    + "**`404` と撃ち分けると、「在るが触れない」ことが外から分かる。**",
+                    "RFC 7592 §2.1 / §5 / RFC 6750 §3.1 / #307 の段階 2");
+
+                r.Target("GET registration_client_uri（トークンを変えて叩く）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata(UriA));
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    r.Step("(2) トークンを付けずに読む");
+
+                    JsonResponse none = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, null);
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)none.StatusCode).ToString());
+
+                    r.VerifyEqual("WWW-Authenticate が付く（RFC 6750 §3）", "True",
+                        (none.Header("WWW-Authenticate") != null).ToString());
+
+                    r.Step("(3) 偽のトークンで読む");
+
+                    JsonResponse fake = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, "not-a-registration-access-token");
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)fake.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_token", "invalid_token",
+                        fake.String("error") ?? "（無い）");
+
+                    r.Step("(4) 段階 1 の専用 scope のアクセス トークンでは読めない");
+
+                    JsonResponse withScopeToken = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, token);
+
+                    r.VerifyEqual("HTTP の状態は 401", "401",
+                        ((int)withScopeToken.StatusCode).ToString());
+
+                    r.Step("(5) 知らない client_id は 401（404 ではない）");
+
+                    string unknownUri = registrationClientUri.Substring(
+                        0, registrationClientUri.LastIndexOf('/') + 1)
+                        + Guid.NewGuid().ToString("N");
+
+                    JsonResponse unknown = await DynamicClientRegistration.ReadAsync(
+                        client, unknownUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)unknown.StatusCode).ToString());
+
+                    r.Step("(6) 別の登録のトークンでは触れない");
+
+                    //  **1 利用者 1 クライアント**なので、**消してから作り直して 2 つ目を得る。**
+                    Assert.Equal(204, (int)(await DynamicClientRegistration.DeleteAsync(
+                        client, registrationClientUri, registrationAccessToken)).StatusCode);
+
+                    JsonResponse other = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata(UriB));
+
+                    Assert.Equal(201, (int)other.StatusCode);
+
+                    JsonResponse crossed = await DynamicClientRegistration.ReadAsync(
+                        client, other.String("registration_client_uri"), registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 401", "401", ((int)crossed.StatusCode).ToString());
+
+                    r.Note("**管理画面で作った登録・段階 1 で作った登録には、"
+                        + "`registration_access_token` が無い** — "
+                        + "**それらは、この口では触れない**（`401`）。"
+                        + "**所有者は、管理画面で自分の 1 件を編集・削除できる。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.13
+
+        /// <summary>RT-307.13 PUT の誤りは 400 で、登録は変わらない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30713_PUTの誤りは400で登録は変わらない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.13",
+                    "`PUT` のメタデータの誤りは `400` で、**登録は変わらない**",
+                    "**全置換の口である**ことが、そのまま危うさになる — "
+                    + "**誤った要求が中途まで適用されると、動いていた登録が壊れる。**"
+                    + "**`client_id` の一致**（§2.2 の MUST）と"
+                    + "**`client_secret` を自分で決めさせない**（同）ことも、ここで測る。",
+                    "RFC 7592 §2.2 / RFC 7591 §3.2.2 / #307 の段階 2");
+
+                r.Target("PUT registration_client_uri（誤ったメタデータ）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) redirect_uris = A、scope = openid で登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],\"scope\":\"openid\"}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    r.Step("(2) client_id を入れない");
+
+                    JsonResponse noClientId = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        "{\"redirect_uris\":[\"" + UriB + "\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400",
+                        ((int)noClientId.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata", "invalid_client_metadata",
+                        noClientId.String("error") ?? "（無い）");
+
+                    r.Step("(3) 別の client_id を入れる");
+
+                    JsonResponse wrongClientId = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        DynamicClientRegistration.UpdateMetadata(
+                            Guid.NewGuid().ToString("N"), "openid", UriB));
+
+                    r.VerifyEqual("HTTP の状態は 400", "400",
+                        ((int)wrongClientId.StatusCode).ToString());
+
+                    r.Step("(4) redirect_uris を入れない（§2.2 の「省略は削除」でも、必須は必須）");
+
+                    JsonResponse noRedirectUris = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        "{\"client_id\":\"" + clientId + "\",\"scope\":\"openid\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400",
+                        ((int)noRedirectUris.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_redirect_uri", "invalid_redirect_uri",
+                        noRedirectUris.String("error") ?? "（無い）");
+
+                    r.Step("(5) 違う client_secret を入れる");
+
+                    JsonResponse wrongSecret = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        "{\"client_id\":\"" + clientId + "\","
+                        + "\"client_secret\":\"not-the-current-secret\","
+                        + "\"redirect_uris\":[\"" + UriB + "\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400",
+                        ((int)wrongSecret.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata", "invalid_client_metadata",
+                        wrongSecret.String("error") ?? "（無い）");
+
+                    r.Step("(6) 専用 scope を、自分に付けようとする");
+
+                    JsonResponse selfGrant = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        DynamicClientRegistration.UpdateMetadata(
+                            clientId, "openid " + DynamicClientRegistration.Scope, UriA));
+
+                    r.VerifyEqual("HTTP の状態は 400", "400",
+                        ((int)selfGrant.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata", "invalid_client_metadata",
+                        selfGrant.String("error") ?? "（無い）");
+
+                    r.Step("(7) どの誤りでも、登録は変わっていない");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)read.StatusCode).ToString());
+
+                    r.VerifyEqual("redirect_uris は A のまま", "True",
+                        read.ArrayContains("redirect_uris", UriA).ToString());
+
+                    r.VerifyEqual("redirect_uris に B は入っていない", "False",
+                        read.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.VerifyEqual("scope は openid のまま", "openid",
+                        read.String("scope") ?? "（無い）");
+
+                    r.Note("**読み取り専用の 4 つ**（`registration_access_token` / "
+                        + "`registration_client_uri` / `client_id_issued_at` / "
+                        + "`client_secret_expires_at`）**は、入っていても無視する** — "
+                        + "**§2.2 は「入れるな」と書くが、断ると "
+                        + "「`GET` して直して返す」が成り立たない。**");
                 });
 
                 r.Done();

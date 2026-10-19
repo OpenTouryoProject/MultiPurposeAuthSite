@@ -46,6 +46,7 @@
 //*  2026/10/02  玄人 幸道         alg と鍵の対応を SigningKeys の表に寄せた（#129 の段階 3 / D-9）
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //*  2026/10/16  玄人 幸道         typ を at+jwt にし、検証で期待値を明示（#302 の段階 2）
+//*  2026/10/18  玄人 幸道         クライアントの登録が在るかの確認を効かせた（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -791,8 +792,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (datetime == null)
                     {
                         // iss, expの検証
+                        //  **クライアントの登録が、まだ在ること**（#307 の段階 2）。
+                        //    **撤去されたクライアントのトークンを、期限まで通してはならない**
+                        //    （RFC 7592 §2.3 : 削除したら、そのクライアントのトークンを無効にすべき）。
+                        //
+                        //  **以前は `GetClientSecret(aud) != null` だったが、効いていなかった** —
+                        //    **`GetClientSecret` は、未登録でも `""` を返す**ので、**常に真**だった。
+                        //    **`IsNullOrEmpty` にもしない** — **秘密を持たない public クライアントが止まる。**
                         if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == Config.IssuerId
-                            && Helper.GetInstance().GetClientSecret((string)tokenClaimSet[OAuth2AndOIDCConst.aud]) != null
+                            && Helper.GetInstance().HasClient((string)tokenClaimSet[OAuth2AndOIDCConst.aud])
                             // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったのでToStringで渡す
                             // （文字列で発行された過去のTokenも、そのまま通る）。
                             && CmnJwtToken.VerifyExp(tokenClaimSet[OAuth2AndOIDCConst.exp].ToString()))

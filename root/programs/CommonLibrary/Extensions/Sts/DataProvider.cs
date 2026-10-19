@@ -34,6 +34,7 @@
 //*  2026/10/06  玄人 幸道         JSON 1 列から専用列に切り出した（#270）
 //*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
 //*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの列を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         registration_access_token のハッシュの列を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -88,7 +89,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>列の並び（#270）</summary>
         /// <remarks>
-        /// **1 か所で持つ。** 28 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
+        /// **1 か所で持つ。** 29 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
         /// **手で書き並べると、必ずどれかが取り残される**
         /// （この Issue が直そうとしているのが、まさにその種の食い違いである）。
         ///
@@ -127,7 +128,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             "PolicyUri",
             "Contacts",
             "SoftwareId",
-            "SoftwareVersion"
+            "SoftwareVersion",
+            //  **RFC 7592 の管理 API 用**（#307 の段階 2）。**ハッシュが入る。**
+            "RegistrationAccessToken"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -275,6 +278,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("Contacts", model.Contacts);
             prm.Add("SoftwareId", model.SoftwareId);
             prm.Add("SoftwareVersion", model.SoftwareVersion);
+            prm.Add("RegistrationAccessToken", model.RegistrationAccessToken);
 
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
@@ -370,7 +374,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 PolicyUri = model.PolicyUri,
                 Contacts = model.Contacts,
                 SoftwareId = model.SoftwareId,
-                SoftwareVersion = model.SoftwareVersion
+                SoftwareVersion = model.SoftwareVersion,
+                RegistrationAccessToken = model.RegistrationAccessToken
             };
         }
 

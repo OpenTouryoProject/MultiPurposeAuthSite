@@ -43,6 +43,7 @@
 //*  2026/10/08  玄人 幸道         AuthCookieName が空のときも接頭辞を掛ける（#283）
 //*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の経路を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -449,6 +450,29 @@ namespace MultiPurposeAuthSite
                         name: "ClientRegistration",
                         pattern: Config.DcrRegistrationEndpoint.Substring(1), // 先頭の[/]を削除,
                         defaults: new { controller = "OAuth2ResourceServer", action = "Register" });
+
+                    //  **管理 API**（RFC 7592。#307 の段階 2）。
+                    //    **同じ URL（`…/register/{client_id}`）に 3 つの口**が在る。
+                    //    **メソッドの振り分けは、動作に付けた `[HttpGet]` /
+                    //    `[HttpPut]` / `[HttpDelete]` が決める**
+                    //    （**Core は、メソッドに合う終点を選ぶ**ので、経路は 3 本でよい）。
+                    string managementPattern =
+                        Config.DcrRegistrationEndpoint.Substring(1) + "/{client_id}";
+
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistrationRead",
+                        pattern: managementPattern,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "ReadClient" });
+
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistrationUpdate",
+                        pattern: managementPattern,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "UpdateClient" });
+
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistrationDelete",
+                        pattern: managementPattern,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "DeleteClient" });
                 }
                 #endregion
 

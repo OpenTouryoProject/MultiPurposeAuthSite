@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592 の GET / PUT / DELETE）を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -47,6 +48,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -58,7 +61,7 @@ using Touryo.Infrastructure.Public.Security.Pwd;
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
-    /// 動的クライアント登録（RFC 7591 の登録要求）
+    /// 動的クライアント登録（RFC 7591 の登録、RFC 7592 の管理）
     /// </summary>
     /// <remarks>
     /// **口（WebAPI）は両アプリの `OAuth2ResourceServerController` に在るが、
@@ -72,8 +75,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | 所有者 | **トークンの `sub` の利用者。** **1 利用者 1 クライアント**（2 件目は `403` ＋ `access_denied`） |
     /// | 器 | **既存の `Saml2OAuth2Data`**（`DataProvider`）。**RFC 7591 §2 の列は #307 の段階 1 で足した** |
     ///
-    /// **段階 2 で足すもの** : RFC 7592（`GET` / `PUT` / `DELETE`）と
-    /// `registration_access_token` / `registration_client_uri`。
+    /// **段階 2 で出来ること**（RFC 7592。`registration_client_uri` ＝ `…/register/{client_id}`）。
+    ///
+    /// | | |
+    /// |---|---|
+    /// | 認可 | **`registration_access_token`**（**登録の応答で 1 回だけ返す**。**その 1 件だけに効く**） |
+    /// | `GET` | **登録を読む**（§2.1）。**`client_secret` は返さない** |
+    /// | `PUT` | **全置換**（§2.2）。**`client_id` は一致必須**、**`client_secret` を入れるなら一致必須** |
+    /// | `DELETE` | **消す**（§2.3）。**`204`**。**同意も落とし、`Users.ClientID` を空にする** |
+    ///
+    /// **専用 scope のアクセス トークン（段階 1）では、管理 API を叩けない** —
+    /// **作る権限と、直す権限は別物**である（§2 : クライアントは
+    /// `registration_access_token` を使うこと）。
     ///
     /// **段階 3 で足すもの** : `software_statement`、`jwks` / `jwks_uri`、
     /// `client_credentials` 経路、1 利用者 n クライアント。
@@ -219,8 +232,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             ManageAddSaml2OAuth2DataViewModel model = new ManageAddSaml2OAuth2DataViewModel();
 
+            //  **`grant_types` / `response_types` は、応答では `model` の列から読む**
+            //    （**`POST` / `GET` / `PUT` で同じ形にするため**。#307 の段階 2）。
             if (!ClientRegistrationProvider.Validate(metadata, model, out string code,
-                out string description, out List<string> grantTypes, out List<string> responseTypes))
+                out string description, out _, out _))
             {
                 err.Add(OAuth2AndOIDCConst.error, code);
                 err.Add(OAuth2AndOIDCConst.error_description, description);
@@ -235,8 +250,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string client_id = Guid.NewGuid().ToString("N");
             string client_secret = GetPassword.Base64UrlSecret(32);
 
+            //  **管理 API のトークン**（RFC 7592 §2。#307 の段階 2）。
+            //    **平文は、この応答で 1 回だけ返す。** **保管するのはハッシュ**である。
+            string registrationAccessToken = ClientRegistrationProvider.GenerateToken();
+
             model.ClientID = client_id;
             model.ClientSecret = client_secret;
+            model.RegistrationAccessToken =
+                ClientRegistrationProvider.Hash(registrationAccessToken);
 
             //  **`ClientName` は、要求の `client_name` ではなく利用者名である。**
             //    **`Helper.GetClientName` / `GetClientIdByName` が、この列を
@@ -266,48 +287,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
-            #region 応答（RFC 7591 §3.2.1）
+            #region 応答（RFC 7591 §3.2.1 / RFC 7592 §3）
 
-            ret = new Dictionary<string, object>();
+            //  **登録の全体を返す**（§3.2.1）。
+            //    **形は `GET` / `PUT` と同じ**にする（**RFC 7592 §3 の
+            //    「クライアント情報の応答」が、3 つの口で共通**である）。
+            ret = ClientRegistrationProvider.BuildClientInformation(
+                client_id, model, registrationAccessToken);
 
-            ret.Add(OAuth2AndOIDCConst.client_id, client_id);
+            //  **秘密を返すのは、この口だけ**（`GET` / `PUT` では返さない。#307 の段階 2 の決定）。
             ret.Add("client_secret", client_secret);
 
             //  **発行した時刻**（エポック秒）。
+            //    **保管していない**ので、**`GET` / `PUT` では返さない**（§3.2.1 で任意）。
             ret.Add("client_id_issued_at", (long)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-
-            //  **`client_secret` に期限は設けていない** — **0 は「期限なし」**（RFC 7591 §3.2.1）。
-            ret.Add("client_secret_expires_at", 0);
-
-            //  **登録された内容を返す**（§3.2.1 : 登録の全体を返すこと）。
-            //    **`client_name` は返さない** — **保存しているのは利用者名**であり、
-            //    **要求された値でもない**（返すと、利用者名を漏らすことにもなる）。
-            ret.Add("redirect_uris", ClientRegistrationProvider.ToArray(
-                string.IsNullOrEmpty(model.RedirectUriCode)
-                    ? model.RedirectUriToken : model.RedirectUriCode));
-
-            ret.Add("grant_types", grantTypes);
-            ret.Add("response_types", responseTypes);
-
-            //  **`token_endpoint_auth_method` は、段階 1 では秘密ベースの 2 つだけ。**
-            ret.Add("token_endpoint_auth_method",
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit());
-
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "scope", model.Scopes);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "client_uri", model.ClientUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "logo_uri", model.LogoUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "tos_uri", model.TosUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "policy_uri", model.PolicyUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "software_id", model.SoftwareId);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "software_version", model.SoftwareVersion);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "subject_type", model.SubjectTypes);
-            ClientRegistrationProvider.AddIfNotEmpty(
-                ret, "id_token_signed_response_alg", model.IdTokenSignedResponseAlg);
-
-            if (!string.IsNullOrEmpty(model.Contacts))
-            {
-                ret.Add("contacts", ClientRegistrationProvider.ToArray(model.Contacts));
-            }
 
             return 201;
 
@@ -316,6 +309,323 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+
+        #region 管理 API（RFC 7592）
+
+        /// <summary>読む（RFC 7592 §2.1）</summary>
+        /// <param name="client_id">client_id（`registration_client_uri` の末尾）</param>
+        /// <param name="bearerToken">提示された registration_access_token</param>
+        /// <param name="ret">応答（成功したときだけ）</param>
+        /// <param name="err">誤り（失敗したときだけ）</param>
+        /// <returns>HTTP の状態（200 / 401 / 404）</returns>
+        /// <remarks>
+        /// **`client_secret` は返さない**（#307 の段階 2 の決定。RFC 7592 §3 では任意）。
+        /// **トークンが漏れても、秘密は漏らさない。** **所有者は管理画面で再表示できる。**
+        /// </remarks>
+        public static int Read(
+            string client_id, string bearerToken,
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+
+            int status = ClientRegistrationProvider.Authorize(
+                client_id, bearerToken,
+                out ManageAddSaml2OAuth2DataViewModel model, out err);
+
+            if (status != 0)
+            {
+                return status;
+            }
+
+            ret = ClientRegistrationProvider.BuildClientInformation(client_id, model, bearerToken);
+
+            return 200;
+        }
+
+        /// <summary>直す（RFC 7592 §2.2）</summary>
+        /// <param name="client_id">client_id（`registration_client_uri` の末尾）</param>
+        /// <param name="requestBody">要求の本体（JSON）</param>
+        /// <param name="bearerToken">提示された registration_access_token</param>
+        /// <param name="ret">応答（成功したときだけ）</param>
+        /// <param name="err">誤り（失敗したときだけ）</param>
+        /// <returns>HTTP の状態（200 / 400 / 401 / 404）</returns>
+        /// <remarks>
+        /// **全置換である**（§2.2 : クライアントは、返された全てのメタデータを入れること。
+        /// **省いた項目は「消す要求」として扱われる**）。**差分更新（`PATCH`）は仕様に無い。**
+        ///
+        /// | | 列 |
+        /// |---|---|
+        /// | **要求から作り直す**（**省いたら消える**） | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` |
+        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `WebOrigins` / `Jwk*` / `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` / `RequestObjectSigningAlg`） |
+        ///
+        /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
+        /// > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
+        /// > **管理画面から入れた値を、`PUT` で消してはならない。**
+        ///
+        /// **気をつける所**（文書にも書いた）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**`client_registration` だけは、明記しても断る** |
+        /// | **`redirect_uris` は省けない** | OIDC DCR 1.0 §2 で必須。**うっかり全消しにはならない** |
+        /// | **`grant_types` / `response_types` を省くと狭まる** | **RFC 7591 §2 の既定**（`authorization_code` / `code`）が書かれる |
+        /// </remarks>
+        public static int Update(
+            string client_id, string requestBody, string bearerToken,
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+
+            int status = ClientRegistrationProvider.Authorize(
+                client_id, bearerToken,
+                out ManageAddSaml2OAuth2DataViewModel current, out err);
+
+            if (status != 0)
+            {
+                return status;
+            }
+
+            #region メタデータ（RFC 7592 §2.2）
+
+            JObject metadata = null;
+
+            try
+            {
+                metadata = string.IsNullOrWhiteSpace(requestBody)
+                    ? null : JsonConvert.DeserializeObject<JObject>(requestBody);
+            }
+            catch (JsonException)
+            {
+                metadata = null;
+            }
+
+            if (metadata == null)
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The request body must be a JSON object.");
+                return 400;
+            }
+
+            //  **`client_id` は必須で、一致していなければならない**（§2.2 の MUST）。
+            //    **URL と本文が食い違う要求は、取り違えである。**
+            string requestedClientId = ClientRegistrationProvider.GetString(
+                metadata, OAuth2AndOIDCConst.client_id);
+
+            if (requestedClientId != client_id)
+            {
+                err.Add(OAuth2AndOIDCConst.error, ClientRegistrationProvider.invalid_client_metadata);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The client_id must be present and match the client_id of this registration.");
+                return 400;
+            }
+
+            //  **`client_secret` を入れてきたなら、現行と一致していなければならない**（§2.2 の MUST）。
+            //    **自分で秘密を決めさせてはならない**（§2.2 : the client MUST NOT be allowed to
+            //    set its own secret）。**この口では秘密を作り直さない**（段階 2 の決定）。
+            if (ClientRegistrationProvider.Has(metadata, "client_secret"))
+            {
+                string requestedSecret = ClientRegistrationProvider.GetString(
+                    metadata, "client_secret");
+
+                if (!ClientRegistrationProvider.FixedTimeEquals(requestedSecret, current.ClientSecret))
+                {
+                    err.Add(OAuth2AndOIDCConst.error,
+                        ClientRegistrationProvider.invalid_client_metadata);
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "The client_secret does not match the current client_secret.");
+                    return 400;
+                }
+            }
+
+            //  **読み取り専用の 4 つは無視する**（§2.2 は「入れるな」と書くが、
+            //    **`GET` の出力をそのまま戻せる方が実用的**である。**ここで断ると
+            //    「読んで直して返す」が成り立たない**）。
+            //    `registration_access_token` / `registration_client_uri` /
+            //    `client_id_issued_at` / `client_secret_expires_at`
+
+            ManageAddSaml2OAuth2DataViewModel model = new ManageAddSaml2OAuth2DataViewModel();
+
+            if (!ClientRegistrationProvider.Validate(metadata, model, out string code,
+                out string description, out List<string> _, out List<string> __))
+            {
+                err.Add(OAuth2AndOIDCConst.error, code);
+                err.Add(OAuth2AndOIDCConst.error_description, description);
+                return 400;
+            }
+
+            #endregion
+
+            #region 保存（持ち越す列を、現行から移す）
+
+            model.ClientID = client_id;
+            model.ClientSecret = current.ClientSecret;
+            model.ClientName = current.ClientName;
+            model.RequirePkce = current.RequirePkce;
+            model.RegistrationAccessToken = current.RegistrationAccessToken;
+
+            //  **登録種別は変えない** — **`Validate` は `normal` を入れる**が、
+            //    **管理画面で FAPI の登録にしてあるものを、`PUT` で下げてはならない。**
+            if (!string.IsNullOrEmpty(current.ClientMode))
+            {
+                model.ClientMode = current.ClientMode;
+            }
+
+            //  **動的登録では設定できない列**（管理画面から入れた値）。
+            model.RedirectUriSaml = current.RedirectUriSaml;
+            model.PostLogoutRedirectUri = current.PostLogoutRedirectUri;
+            model.WebOrigins = current.WebOrigins;
+            model.JwkRsaPublickey = current.JwkRsaPublickey;
+            model.JwkECDsaPublickey = current.JwkECDsaPublickey;
+            model.JwksUri = current.JwksUri;
+            model.TlsClientAuthSubjectDn = current.TlsClientAuthSubjectDn;
+            model.TokenEndpointAuthSigningAlg = current.TokenEndpointAuthSigningAlg;
+            model.RequestObjectSigningAlg = current.RequestObjectSigningAlg;
+
+            DataProvider.Update(client_id, model);
+
+            // オペレーション・トレース・ログ出力
+            //   **誰がいつ直したかを残す。** **秘密もトークンも書かない。**
+            Logging.MyOperationTrace(string.Format(
+                "The client {0} was updated by the dynamic client registration management.",
+                client_id));
+
+            #endregion
+
+            ret = ClientRegistrationProvider.BuildClientInformation(client_id, model, bearerToken);
+
+            return 200;
+        }
+
+        /// <summary>消す（RFC 7592 §2.3）</summary>
+        /// <param name="client_id">client_id（`registration_client_uri` の末尾）</param>
+        /// <param name="bearerToken">提示された registration_access_token</param>
+        /// <param name="err">誤り（失敗したときだけ）</param>
+        /// <returns>HTTP の状態（204 / 401 / 404）</returns>
+        /// <remarks>
+        /// **成功は `204`（本体なし）**（§2.3 の MUST）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **消える** | **登録の行**／**同意**（`ConsentProvider.Revoke`）／**`registration_access_token`**（**行が無くなるので、2 回目の要求は `401`**。§5） |
+        /// | **残る** | **`Users.ClientID`**（**宙に浮いた値として残る**。**一意制約があるので空にできない**。**次の登録で掃除される**） |
+        /// | **使えなくなる** | **既に発行されたアクセス トークン**（**登録が無くなると `Helper.HasClient` が false になる**。#307 の段階 2）／**リフレッシュ トークン**（**クライアント認証が通らない**） |
+        ///
+        /// **所有者は `ClientName` から引く**（**この列には所有者の利用者名が入っている**。段階 1 の決め）。
+        /// **`registration_access_token` には利用者が入っていない**ので、**この経路しかない。**
+        ///
+        /// **`Users.ClientID` は空にしない**（**一意制約と外部キーに当たる**。下の注）。
+        /// **それでも同じ利用者が登録し直せる** —
+        /// **段階 1 の `Register` が「登録の行が無ければ通す」**ため
+        /// （**1 利用者 1 クライアントの縛りは解ける**）。
+        /// </remarks>
+        public static int Delete(
+            string client_id, string bearerToken, out Dictionary<string, string> err)
+        {
+            int status = ClientRegistrationProvider.Authorize(
+                client_id, bearerToken,
+                out ManageAddSaml2OAuth2DataViewModel model, out err);
+
+            if (status != 0)
+            {
+                return status;
+            }
+
+            //  **所有者を引く**（同意の取り消しと、`Users.ClientID` の後始末に要る）。
+            ApplicationUser user = string.IsNullOrEmpty(model.ClientName)
+                ? null : CmnUserStore.FindByName(model.ClientName);
+
+            if (user != null && user.ClientID == client_id)
+            {
+                //  **同意を落とす**（§2.3 : 払い下げたクライアントへの許可を残さない）。
+                ConsentProvider.Revoke(user.Id, client_id);
+            }
+
+            //  **`Users.ClientID` は空にしない。**
+            //
+            //  **`Users.ClientID` は NOT NULL で、一意索引が張られている**
+            //    （`ClientIDIndex`）。**空にすると、2 人目で一意制約に当たる。**
+            //    **`Saml2OAuth2Data.ClientID` から `Users.ClientID` への
+            //    外部キー**も在るので、**行が残っているうちは空にできない。**
+            //    **管理画面の `RemoveSaml2OAuth2Data` も、同じ理由で空にしていない**
+            //    （「一意制約エラーになるので」というコメントが残っている）。
+            //
+            //  **それでも登録し直せる** — **段階 1 の `Register` は
+            //    「`Users.ClientID` が在っても、その登録の行が無ければ通す」**
+            //    （宙に浮いた `client_id` を許容し、作り直しのときに掃除する）。
+            //
+            //  **`mem` では制約が無いので通ってしまう。**
+            //    **`sql` で `DELETE` が 500 になって分かった**（#307 の段階 2 の実測）。
+
+            DataProvider.Delete(client_id);
+
+            // オペレーション・トレース・ログ出力
+            Logging.MyOperationTrace(string.Format(
+                "The client {0} was deleted by the dynamic client registration management.",
+                client_id));
+
+            return 204;
+        }
+
+        /// <summary>管理 API の認可（RFC 7592 §2）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="bearerToken">提示された registration_access_token</param>
+        /// <param name="model">登録（成功したときだけ）</param>
+        /// <param name="err">誤り（失敗したときだけ）</param>
+        /// <returns>通ってよければ 0、駄目なら HTTP の状態</returns>
+        /// <remarks>
+        /// **知らない `client_id` も、他人のトークンも `401`** である（§2.1 〜 §2.3 の MUST）。
+        /// **`404` にしてはならない** — **「在るが触れない」と「無い」を、外から区別させない。**
+        ///
+        /// **`registration_access_token` を持たない登録**（**管理画面で作ったもの**や、
+        /// **段階 1 で作ったもの**）**は、この口では触れない**（`401`）。
+        /// **管理画面から直す**（所有者は、画面で自分の 1 件を編集・削除できる）。
+        /// </remarks>
+        private static int Authorize(
+            string client_id, string bearerToken,
+            out ManageAddSaml2OAuth2DataViewModel model, out Dictionary<string, string> err)
+        {
+            model = null;
+            err = new Dictionary<string, string>();
+
+            //  **開けていない配備では、口そのものが張られていない**（念のための番）。
+            if (!Config.EnableDynamicClientRegistration)
+            {
+                return 404;
+            }
+
+            if (string.IsNullOrEmpty(bearerToken) || string.IsNullOrEmpty(client_id))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The registration access token is not valid.");
+                return 401;
+            }
+
+            ManageAddSaml2OAuth2DataViewModel registration = DataProvider.Get(client_id);
+
+            //  **登録が無い**（消された・そもそも無い）。
+            //  **登録に `registration_access_token` が無い**（画面で作った登録）。
+            //  **ハッシュが一致しない**（他人のトークン・偽のトークン）。
+            //    **どれも同じ応答にする**（**どれだったかを教えない**）。
+            if (registration == null
+                || string.IsNullOrEmpty(registration.RegistrationAccessToken)
+                || !ClientRegistrationProvider.FixedTimeEquals(
+                    ClientRegistrationProvider.Hash(bearerToken),
+                    registration.RegistrationAccessToken))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The registration access token is not valid.");
+                return 401;
+            }
+
+            model = registration;
+
+            return 0;
+        }
+
+        #endregion
         #region メタデータの検査
 
         /// <summary>要求のメタデータを検査して、保存する形にする</summary>
@@ -896,5 +1206,157 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         }
 
         #endregion
+        #region 管理 API のトークンと、応答の形（RFC 7592。#307 の段階 2）
+
+        /// <summary>registration_access_token を作る</summary>
+        /// <returns>トークン（**平文。登録の応答で 1 回だけ返す**）</returns>
+        /// <remarks>
+        /// **`client_secret` と同じ作り方**（**256 bit の乱数**）。
+        /// **JWT にしていない** — **期限が必ず付き、切れたら管理できなくなる。**
+        /// **RFC 7592 は、クライアントの一生もののトークンを前提にしている**（§2 / A.1）。
+        /// </remarks>
+        private static string GenerateToken()
+        {
+            return GetPassword.Base64UrlSecret(32);
+        }
+
+        /// <summary>保管する形にする（ハッシュ）</summary>
+        /// <param name="token">トークン（平文）</param>
+        /// <returns>ハッシュ（base64）</returns>
+        /// <remarks>
+        /// **暗号化（`SecretProtector`）ではなくハッシュである** —
+        /// **照合しかしない**（**再表示する口が無い**）ので、**元に戻せる必要が無い。**
+        /// **トークンは 256 bit の乱数**なので、**鍵の導出（PBKDF2）は要らない。**
+        /// </remarks>
+        private static string Hash(string token)
+        {
+            if (string.IsNullOrEmpty(token))
+            {
+                return "";
+            }
+
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                return Convert.ToBase64String(
+                    sha256.ComputeHash(Encoding.UTF8.GetBytes(token)));
+            }
+        }
+
+        /// <summary>突き合わせる（長さが違えば false。時間で漏らさない）</summary>
+        /// <param name="a">値</param>
+        /// <param name="b">値</param>
+        /// <returns>同じなら true</returns>
+        /// <remarks>
+        /// **先頭から 1 文字ずつ比べて、違った所で止めてはならない** —
+        /// **掛かった時間から、どこまで合っていたかが分かる。**
+        /// **最後まで数えてから返す。**
+        /// </remarks>
+        private static bool FixedTimeEquals(string a, string b)
+        {
+            if (a == null || b == null || a.Length != b.Length)
+            {
+                return false;
+            }
+
+            int diff = 0;
+
+            for (int i = 0; i < a.Length; i++)
+            {
+                diff |= a[i] ^ b[i];
+            }
+
+            return diff == 0;
+        }
+
+        /// <summary>この登録の `registration_client_uri`（RFC 7592 §3）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>絶対 URI</returns>
+        /// <remarks>
+        /// **絶対 URI で返す**（RFC 7592 Appendix B :
+        /// **サーバが URL を渡すこと。クライアントに組み立てさせない**）。
+        /// </remarks>
+        private static string RegistrationClientUri(string client_id)
+        {
+            return Config.OAuth2AuthorizationServerEndpointsRootURI
+                + Config.DcrRegistrationEndpoint + "/" + client_id;
+        }
+
+        /// <summary>クライアント情報の応答を作る（RFC 7592 §3）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="model">登録</param>
+        /// <param name="registrationAccessToken">registration_access_token（平文）</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **3 つの口（`POST` / `GET` / `PUT`）で同じ形**である（RFC 7592 §3）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **必ず入れる** | `client_id` / `redirect_uris` / `grant_types` / `response_types` / `token_endpoint_auth_method` / **`registration_access_token`** / **`registration_client_uri`**（**後の 2 つは §3 で REQUIRED**） |
+        /// | **入れない** | **`client_secret`**（**`POST` だけが、呼ぶ側で足す**）／**`client_name`**（**保存しているのは利用者名**で、要求された値でもない。**返すと利用者名を漏らす**）／**`client_id_issued_at`**（**保管していない**。§3.2.1 で任意） |
+        ///
+        /// **`registration_access_token` は、提示されたものをそのまま返す** —
+        /// **こちらはハッシュしか持たない**ので、**これで §3 の REQUIRED を満たす。**
+        /// **回さない**（§5 / A.1 の MAY。**回すと、取り違えた RP が管理できなくなる**）。
+        /// </remarks>
+        private static Dictionary<string, object> BuildClientInformation(
+            string client_id, ManageAddSaml2OAuth2DataViewModel model,
+            string registrationAccessToken)
+        {
+            Dictionary<string, object> ret = new Dictionary<string, object>();
+
+            ret.Add(OAuth2AndOIDCConst.client_id, client_id);
+
+            //  **列は `response_type` で分かれている**ので、**両方を合わせて返す**
+            //    （**同じ値が入っている**ことが多い。Hybrid の登録では両方に入れている）。
+            List<string> redirectUris = Helper.ToDistinctList(model.RedirectUriCode);
+
+            foreach (string redirectUri in Helper.ToDistinctList(model.RedirectUriToken))
+            {
+                if (!redirectUris.Contains(redirectUri))
+                {
+                    redirectUris.Add(redirectUri);
+                }
+            }
+
+            ret.Add("redirect_uris", redirectUris);
+
+            ret.Add("grant_types", Helper.ToDistinctList(model.GrantTypes));
+
+            //  **`response_types` は、要素の中の空白を「+」にして保管している**（段階 1）。
+            ret.Add("response_types", Helper.ToDistinctList(model.ResponseTypes, true));
+
+            //  **`token_endpoint_auth_method` は、秘密ベースの 2 つだけ**（段階 1）。
+            ret.Add("token_endpoint_auth_method",
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit());
+
+            //  **`client_secret` に期限は設けていない** — **0 は「期限なし」**（RFC 7591 §3.2.1）。
+            ret.Add("client_secret_expires_at", 0);
+
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "scope", model.Scopes);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "client_uri", model.ClientUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "logo_uri", model.LogoUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "tos_uri", model.TosUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "policy_uri", model.PolicyUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "software_id", model.SoftwareId);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "software_version", model.SoftwareVersion);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "subject_type", model.SubjectTypes);
+            ClientRegistrationProvider.AddIfNotEmpty(
+                ret, "id_token_signed_response_alg", model.IdTokenSignedResponseAlg);
+
+            if (!string.IsNullOrEmpty(model.Contacts))
+            {
+                ret.Add("contacts", ClientRegistrationProvider.ToArray(model.Contacts));
+            }
+
+            //  **RFC 7592 §3 : どちらも REQUIRED**（**管理の口と、その鍵**）。
+            ret.Add("registration_access_token", registrationAccessToken);
+            ret.Add("registration_client_uri",
+                ClientRegistrationProvider.RegistrationClientUri(client_id));
+
+            return ret;
+        }
+
+        #endregion
+
     }
 }

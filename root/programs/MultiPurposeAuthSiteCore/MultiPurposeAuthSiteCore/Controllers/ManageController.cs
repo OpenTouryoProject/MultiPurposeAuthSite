@@ -31,6 +31,7 @@
 //*  2026/10/09  玄人 幸道         WebAuthn の削除を複数選択に対応（#277 の段階 6）
 //*  2026/10/09  西野 大介         オンライン決済サービス、トークン取得処理の削除
 //*  2026/10/14  玄人 幸道         GDPR削除を物理削除に（DBストアなら CASCADE で関連明細も消える。
+//*  2026/10/18  玄人 幸道         画面の保存で registration_access_token を消さない（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2019,6 +2020,25 @@ namespace MultiPurposeAuthSite.Controllers
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
+
+                                //  **registration_access_token のハッシュを持ち越す**
+                                //    （RFC 7592。#307 の段階 2）。
+                                //    **画面の保存は、行を丸ごと上書きする**ので、
+                                //    **持ち越さないと消える** —
+                                //    **動的登録した RP が、管理 API を使えなくなる。**
+                                //    **画面には出さない**（照合にしか使わない値である）。
+                                //
+                                //  **client_id を作り直した場合は、持ち越さない**
+                                //    （下の分岐。**別のクライアントになる**ので、
+                                //      **そのトークンは、もう効いてはならない**）。
+                                ManageAddSaml2OAuth2DataViewModel current
+                                    = Sts.DataProvider.Get(user.ClientID);
+
+                                if (current != null)
+                                {
+                                    model.RegistrationAccessToken = current.RegistrationAccessToken;
+                                }
+
                                 Sts.DataProvider.Update(user.ClientID, model);
 
                                 // 再ログイン

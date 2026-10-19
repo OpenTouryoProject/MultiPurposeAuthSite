@@ -45,6 +45,7 @@
 //*  2026/10/09  玄人 幸道         test_self_saml を定数にした（#277 の段階 3）
 //*  2026/10/09  玄人 幸道         test_self_code_manage を削除（管理画面のトークン取得の廃止に伴う）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の scope と、登録項目の上限を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         registration_access_token のハッシュの上限を追加（#307 の段階 2）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -113,6 +114,13 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>software_version の MaxLength（#307 の段階 1）</summary>
         /// <remarks>**RFC 7591 §2 の `software_version`**（形は仕様が定めていない）。</remarks>
         public const int MaxLengthOfSoftwareVersion = 64;
+
+        /// <summary>registration_access_token のハッシュの MaxLength（#307 の段階 2）</summary>
+        /// <remarks>
+        /// **保管するのはハッシュである**（**平文は、登録の応答で 1 回だけ返す**）。
+        /// **SHA-256 を base64 にすると 44 文字**だが、**別のハッシュに替えても入るように 128** とした。
+        /// </remarks>
+        public const int MaxLengthOfTokenHash = 128;
 
         #endregion
 
