@@ -407,6 +407,23 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **読めないパスでは例外になる**ので、**呼ぶ側が受けること**
         /// （**設定の誤りを、黙って「検証できた」にしないため**）。
         /// </remarks>
+        public static JWS CreateJwsFromCer(string alg, string cerFilePath)
+        {
+            string path = cerFilePath;
+
+            if (alg == JwtConst.RS256) { return new JWS_RS256_X509(path, ""); }
+            if (alg == JwtConst.RS384) { return new JWS_RS384_X509(path, ""); }
+            if (alg == JwtConst.RS512) { return new JWS_RS512_X509(path, ""); }
+            if (alg == JwtConst.PS256) { return new JWS_PS256_X509(path, ""); }
+            if (alg == JwtConst.PS384) { return new JWS_PS384_X509(path, ""); }
+            if (alg == JwtConst.PS512) { return new JWS_PS512_X509(path, ""); }
+            if (alg == JwtConst.ES256) { return new JWS_ES256_X509(path, ""); }
+            if (alg == JwtConst.ES384) { return new JWS_ES384_X509(path, ""); }
+            if (alg == JwtConst.ES512) { return new JWS_ES512_X509(path, ""); }
+
+            return null;
+        }
+
         /// <summary>検証する JWS を作る（RSA の公開鍵パラメタから）</summary>
         /// <param name="alg">alg</param>
         /// <param name="param">公開鍵のパラメタ</param>
@@ -449,23 +466,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (alg == JwtConst.ES256) { return new JWS_ES256_Param(param, false); }
             if (alg == JwtConst.ES384) { return new JWS_ES384_Param(param, false); }
             if (alg == JwtConst.ES512) { return new JWS_ES512_Param(param, false); }
-
-            return null;
-        }
-
-        public static JWS CreateJwsFromCer(string alg, string cerFilePath)
-        {
-            string path = cerFilePath;
-
-            if (alg == JwtConst.RS256) { return new JWS_RS256_X509(path, ""); }
-            if (alg == JwtConst.RS384) { return new JWS_RS384_X509(path, ""); }
-            if (alg == JwtConst.RS512) { return new JWS_RS512_X509(path, ""); }
-            if (alg == JwtConst.PS256) { return new JWS_PS256_X509(path, ""); }
-            if (alg == JwtConst.PS384) { return new JWS_PS384_X509(path, ""); }
-            if (alg == JwtConst.PS512) { return new JWS_PS512_X509(path, ""); }
-            if (alg == JwtConst.ES256) { return new JWS_ES256_X509(path, ""); }
-            if (alg == JwtConst.ES384) { return new JWS_ES384_X509(path, ""); }
-            if (alg == JwtConst.ES512) { return new JWS_ES512_X509(path, ""); }
 
             return null;
         }
