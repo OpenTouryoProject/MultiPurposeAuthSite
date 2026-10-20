@@ -249,6 +249,45 @@
   <data name="IndexSaml2OAuth2DataAddActionLink" xml:space="preserve">
     <value>Add your Saml2 and OAuth2 data</value>
   </data>
+  <data name="IndexSaml2OAuth2DataListActionLink" xml:space="preserve">
+    <value>Manage your client registrations</value>
+  </data>
+  <data name="IndexSaml2OAuth2DataCountFormat" xml:space="preserve">
+    <value>{0} registration(s)</value>
+  </data>
+  <data name="Saml2OAuth2DataListTitle" xml:space="preserve">
+    <value>Your client registrations</value>
+  </data>
+  <data name="Saml2OAuth2DataListNone" xml:space="preserve">
+    <value>No client has been registered.</value>
+  </data>
+  <data name="Saml2OAuth2DataListClientID" xml:space="preserve">
+    <value>client_id</value>
+  </data>
+  <data name="Saml2OAuth2DataListClientMode" xml:space="preserve">
+    <value>Mode</value>
+  </data>
+  <data name="Saml2OAuth2DataListRedirectUriCode" xml:space="preserve">
+    <value>redirect_uri (code)</value>
+  </data>
+  <data name="Saml2OAuth2DataListSource" xml:space="preserve">
+    <value>Registered by</value>
+  </data>
+  <data name="Saml2OAuth2DataListSourceDynamic" xml:space="preserve">
+    <value>Dynamic registration</value>
+  </data>
+  <data name="Saml2OAuth2DataListSourceScreen" xml:space="preserve">
+    <value>This screen</value>
+  </data>
+  <data name="Saml2OAuth2DataListAddActionLink" xml:space="preserve">
+    <value>Register a new client</value>
+  </data>
+  <data name="Saml2OAuth2DataListEditActionLink" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Saml2OAuth2DataListRemoveButton" xml:space="preserve">
+    <value>Remove</value>
+  </data>
   <data name="IndexSaml2OAuth2DataChangeActionLink" xml:space="preserve">
     <value>Change your Saml2 and OAuth2 data</value>
   </data>

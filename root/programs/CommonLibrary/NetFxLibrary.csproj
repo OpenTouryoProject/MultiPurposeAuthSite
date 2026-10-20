@@ -214,6 +214,7 @@
     <Compile Include="ViewModels\ManageConfigureTwoFactorViewModel.cs" />
     <Compile Include="ViewModels\ManageEmailViewModel.cs" />
     <Compile Include="ViewModels\ManageConsentGrantsViewModel.cs" />
+    <Compile Include="ViewModels\ManageSaml2OAuth2DataListViewModel.cs" />
     <Compile Include="ViewModels\ManageIndexViewModel.cs" />
     <Compile Include="ViewModels\ManageLoginsViewModel.cs" />
     <Compile Include="ViewModels\ManageSetPasswordViewModel.cs" />

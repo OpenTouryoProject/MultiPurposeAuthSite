@@ -31,6 +31,7 @@
 //*  2026/10/09  玄人 幸道         新規（#277 の段階 7）
 //*  2026/10/14  玄人 幸道         RT-297.1（秘密の往復）を足した（#297）
 //*  2026/10/14  玄人 幸道         フォームの拾い方を共有ヘルパへ出した（#299）
+//*  2026/10/20  玄人 幸道         RT-277.9〜.11（一覧）を足した（#307 の段階 5-a-2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -309,12 +310,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <summary>登録が在るか（管理画面の表示で見る）</summary>
         /// <param name="client">IdPClient</param>
         /// <returns>在れば true</returns>
-        private static async Task<bool> IsRegisteredAsync(IdPClient client)
+        private static Task<bool> IsRegisteredAsync(IdPClient client)
         {
-            string html = await client.GetStringAsync("/Manage/Index");
-
-            // **登録が在るときだけ「削除」のフォームが出る。**
-            return (html ?? "").Contains("RemoveSaml2OAuth2Data");
+            //  **実体は Infrastructure に在る**（#307 の段階 5-a-2 で一覧の画面に向け直した）。
+            //    **以前は `/Manage/Index` に「削除」のフォームが在るかで見ていた。**
+            return ManageClientRegistration.IsRegisteredAsync(client);
         }
 
         /// <summary>登録を消す（前提を揃える・後片付け）</summary>
@@ -325,6 +325,375 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             //  **実体は Infrastructure に在る**（#305 の段階 2 で共有に出した）。
             return ManageClientRegistration.RemoveAsync(client);
         }
+
+        #region RT-277.9
+
+        /// <summary>RT-277.9 一覧に n 件出て、別々に編集できる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **1 利用者 n クライアント**（#307 の段階 5-a-1）を、**画面の側から測る。**
+        ///
+        /// **段階 5-a-1 の時点では、画面は「所有者の先頭 1 件」だけを扱っていた** —
+        /// **2 件目を保存すると、古い行を消していた**（画面が 1 件を前提にしていたため）。
+        /// **段階 5-a-2 で一覧にしたので、消さずに並ぶ。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27709_一覧にn件出て別々に編集できる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                string opened = await client.GetStringAsync("/Manage/AddSaml2OAuth2Data");
+
+                Skip.IfNot(Html.HasField(opened, "ClientSecret"),
+                    "クライアント登録の画面が開きません"
+                    + "（CanEditSaml2OAuth2Data / EnableEditingOfUserAttribute を確認）。");
+
+                TestReport r = this.Report("RT-277.9",
+                    "管理画面の一覧に n 件出て、**別々に編集できる**",
+                    "**1 利用者 n クライアント**になった（#307 の段階 5-a-1）が、"
+                    + "**画面は「所有者の先頭 1 件」しか扱えなかった** — "
+                    + "**2 件目は、動的登録で作れても画面に出てこなかった。**"
+                    + "**段階 5-a-2 で一覧にした**ので、"
+                    + "**並ぶこと・どれを編集するか指せること・取り違えないこと**を測る。",
+                    "#307 の段階 5-a-2 / ManageController.Saml2OAuth2DataList");
+
+                r.Target("GET /Manage/Saml2OAuth2DataList");
+
+                //  **前の回の残りを消しておく**（落ちた回の後始末）。
+                await ManageSaml2OAuth2DataTests.RemoveRegistrationAsync(client);
+
+                r.Step("(1) 画面から 2 件登録する");
+
+                string first = await ManageClientRegistration.RegisterAsync(client);
+                string second = await ManageClientRegistration.RegisterAsync(client);
+
+                r.Verify("1 件目が登録できる", !string.IsNullOrEmpty(first),
+                    "登録できる", string.IsNullOrEmpty(first) ? "**登録できない**" : first);
+
+                r.Verify("2 件目も登録できる", !string.IsNullOrEmpty(second),
+                    "登録できる", string.IsNullOrEmpty(second) ? "**登録できない**" : second);
+
+                r.Verify("別の client_id である", first != second,
+                    "違う", (first == second) ? "**同じ**" : "違う");
+
+                r.Note("**段階 5-a-2 より前は、2 件目の保存で 1 件目が消えていた** — "
+                    + "**画面が 1 件だけを扱うために、古い行を消していた**ためである。");
+
+                r.Step("(2) 一覧に 2 件とも出る");
+
+                List<string> listed = await ManageClientRegistration.ListAsync(client);
+
+                r.VerifyEqual("一覧は 2 件", "2", listed.Count.ToString());
+
+                r.Verify("1 件目が出る", listed.Contains(first),
+                    "出る", listed.Contains(first) ? "出た" : "**出ない**");
+
+                r.Verify("2 件目が出る", listed.Contains(second),
+                    "出る", listed.Contains(second) ? "出た" : "**出ない**");
+
+                r.Step("(3) 並びは client_id の昇順");
+
+                List<string> sorted = new List<string>(listed);
+                sorted.Sort(System.StringComparer.Ordinal);
+
+                r.Verify("昇順である",
+                    string.Join(",", listed) == string.Join(",", sorted),
+                    "昇順", (string.Join(",", listed) == string.Join(",", sorted))
+                        ? "昇順だった" : "**並びが違う**");
+
+                r.Note("**並びを決めたのは段階 5-a-2**（`DataProvider.GetByOwner` の `ORDER BY`）。"
+                    + "**`mem` も方言 3 つも同じ順**にしてある — "
+                    + "**決めていないと、一覧の行が毎回入れ替わる。**");
+
+                r.Step("(4) 2 件目を指して編集の画面を開く");
+
+                string edit = await ManageClientRegistration.OpenEditAsync(client, second);
+
+                r.VerifyEqual("その client_id が出る", second,
+                    Html.FieldValue(edit, "ClientID") ?? "（無い）");
+
+                r.VerifyEqual("編集中の印が付く", "1",
+                    Html.FieldValue(edit, "Editing") ?? "（無い）");
+
+                r.Verify("client_id を作り直すボタンは出ない",
+                    !edit.Contains("submit.ClientID"),
+                    "出ない", edit.Contains("submit.ClientID") ? "**出る**" : "出ない");
+
+                r.Note("**作り直すと別のクライアントになり、更新ではなく新規の登録になる。**"
+                    + "**`registration_access_token` も引き継げない**ので、"
+                    + "**動的登録で作られた行は、管理 API（RFC 7592）から触れなくなる。**");
+
+                r.Step("(5) 2 件目だけを直しても、1 件目は変わらない");
+
+                Dictionary<string, string> form = ManageClientRegistration.Harvest(edit);
+
+                form["RedirectUriCode"] = "https://localhost:44305/edited";
+
+                await ManageClientRegistration.PostAsync(client, form, "submit.Add");
+
+                string reopenedSecond = await ManageClientRegistration.OpenEditAsync(client, second);
+                string reopenedFirst = await ManageClientRegistration.OpenEditAsync(client, first);
+
+                r.VerifyEqual("2 件目は直った", "https://localhost:44305/edited",
+                    Html.FieldValue(reopenedSecond, "RedirectUriCode") ?? "（無い）");
+
+                r.Verify("1 件目は変わっていない",
+                    (Html.FieldValue(reopenedFirst, "RedirectUriCode") ?? "")
+                        != "https://localhost:44305/edited",
+                    "変わらない",
+                    ((Html.FieldValue(reopenedFirst, "RedirectUriCode") ?? "")
+                        == "https://localhost:44305/edited")
+                        ? "**1 件目まで直った**" : "変わらなかった");
+
+                r.VerifyEqual("一覧は 2 件のまま", "2",
+                    (await ManageClientRegistration.ListAsync(client)).Count.ToString());
+
+                r.Step("(6) 後片付け");
+
+                await ManageSaml2OAuth2DataTests.RemoveRegistrationAsync(client);
+
+                r.VerifyEqual("全部消える", "0",
+                    (await ManageClientRegistration.ListAsync(client)).Count.ToString());
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-277.10
+
+        /// <summary>RT-277.10 他人の client_id は、画面から触れない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **一覧から `clientId` を受けるようにした**（#307 の段階 5-a-2）ので、
+        /// **書き換えて送られたときに、他人の登録を読み書きできてはならない。**
+        ///
+        /// **使い捨ての利用者に、本物の登録を 1 件作らせて測る。**
+        ///
+        /// **最初は「種データのクライアント」で測ろうとして、失敗した**（実測）。
+        /// **あれは構成ファイル発で、`Saml2OAuth2Data` に行が無い** —
+        /// **所有者を照合しない歯抜けを入れても、行が無いので null になり、
+        /// 1 件も落ちなかった。** **「他人の行」は、本当に行が在る物でなければ測れない。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27710_他人のclient_idは画面から触れない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                string opened = await client.GetStringAsync("/Manage/AddSaml2OAuth2Data");
+
+                Skip.IfNot(Html.HasField(opened, "ClientSecret"),
+                    "クライアント登録の画面が開きません"
+                    + "（CanEditSaml2OAuth2Data / EnableEditingOfUserAttribute を確認）。");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                TestReport r = this.Report("RT-277.10",
+                    "**他人の `client_id` は、画面から編集も削除もできない**",
+                    "**一覧から `clientId` を受ける**ようにした（#307 の段階 5-a-2）。"
+                    + "**URL もフォームも書き換えられる**ので、**所有者の照合はサーバ側で行う。**"
+                    + "**動的登録の側は `registration_access_token` で守っている**（RFC 7592 §2）が、"
+                    + "**画面の側は「サインインしている利用者が所有者か」だけが頼り**である。",
+                    "#307 の段階 5-a-2 / DataProvider.GetByOwnerAndClientID");
+
+                r.Target("GET /Manage/AddSaml2OAuth2Data?clientId=（他人の client_id）");
+
+                await ManageSaml2OAuth2DataTests.RemoveRegistrationAsync(client);
+
+                //  **使い捨ての利用者を作り、その人に 1 件登録させる。**
+                //    **ロールは `Admin`** — **この画面は `SystemAdmin` か `Admin` でなければ開かない。**
+                string name = "e2e_rt27704_"
+                    + System.Guid.NewGuid().ToString("N").Substring(0, 8);
+
+                await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "Admin");
+
+                try
+                {
+                    string othersId = null;
+
+                    using (IdPClient other = this.Client(targetKey))
+                    {
+                        Assert.True(
+                            await other.TrySignInAsync(name, admin.Config.Get("TestUserPWD")),
+                            "前提: 使い捨ての利用者でサインインできること");
+
+                        othersId = await ManageClientRegistration.RegisterAsync(other);
+
+                        Assert.False(string.IsNullOrEmpty(othersId),
+                            "前提: 他人の登録を作れること");
+                    }
+
+                    r.Step("(1) 他人の client_id を指して、編集の画面を開く");
+
+                    string denied = await ManageClientRegistration.OpenEditAsync(client, othersId);
+
+                    r.Verify("編集の画面にならない",
+                        !Html.HasField(denied, "ClientSecret"),
+                        "ならない", Html.HasField(denied, "ClientSecret")
+                            ? "**開いてしまった**" : "エラー画面になった");
+
+                    r.Verify("その client_id が画面に出ない",
+                        !(denied ?? "").Contains(othersId),
+                        "出ない", (denied ?? "").Contains(othersId)
+                            ? "**出てしまった**" : "出ない");
+
+                    r.Step("(2) 自分の一覧にも出ない");
+
+                    List<string> mine = await ManageClientRegistration.ListAsync(client);
+
+                    r.Verify("一覧に他人の登録が出ない", !mine.Contains(othersId),
+                        "出ない", mine.Contains(othersId) ? "**出てしまった**" : "出ない");
+
+                    r.VerifyEqual("自分の一覧は 0 件", "0", mine.Count.ToString());
+
+                    r.Step("(3) 在りもしない client_id でも、同じように断る");
+
+                    string unknown = await ManageClientRegistration.OpenEditAsync(
+                        client, "ffffffffffffffffffffffffffffffff");
+
+                    r.Verify("編集の画面にならない",
+                        !Html.HasField(unknown, "ClientSecret"),
+                        "ならない", Html.HasField(unknown, "ClientSecret")
+                            ? "**開いてしまった**" : "エラー画面になった");
+
+                    r.Note("**「在るが自分の物でない」と「無い」を撃ち分けない** — "
+                        + "**他人の `client_id` を当てられたかどうかを、外から分からせない**ためである"
+                        + "（**動的登録の `404` と同じ倒し方**。RFC 7592 §2.1）。");
+
+                    r.Step("(4) 削除も通らない（他人の登録は残る）");
+
+                    //  **一覧に無い行は、ヘルパでは送れない**ので、直に送る。
+                    string list = await client.GetStringAsync("/Manage/Saml2OAuth2DataList");
+
+                    await client.PostFormAsync("/Manage/RemoveSaml2OAuth2Data",
+                        new Dictionary<string, string>()
+                        {
+                            { "__RequestVerificationToken", Html.Antiforgery(list) },
+                            { "clientId", othersId }
+                        });
+
+                    using (IdPClient other = this.Client(targetKey))
+                    {
+                        Assert.True(
+                            await other.TrySignInAsync(name, admin.Config.Get("TestUserPWD")),
+                            "前提: 使い捨ての利用者でサインインできること");
+
+                        List<string> theirs = await ManageClientRegistration.ListAsync(other);
+
+                        r.Verify("他人の登録は残っている", theirs.Contains(othersId),
+                            "残る", theirs.Contains(othersId) ? "残った" : "**消えてしまった**");
+                    }
+
+                    r.Done();
+                }
+                finally
+                {
+                    //  **利用者を消すと、その人の登録も消える**
+                    //    （`OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`。段階 5-a-1）。
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+            }
+        }
+
+        #endregion
+
+        #region RT-277.11
+
+        /// <summary>RT-277.11 一覧から 1 件だけ消せる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27711_一覧から1件だけ消せる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                string opened = await client.GetStringAsync("/Manage/AddSaml2OAuth2Data");
+
+                Skip.IfNot(Html.HasField(opened, "ClientSecret"),
+                    "クライアント登録の画面が開きません"
+                    + "（CanEditSaml2OAuth2Data / EnableEditingOfUserAttribute を確認）。");
+
+                TestReport r = this.Report("RT-277.11",
+                    "一覧から **1 件だけ**消せる（残りは残る）",
+                    "**削除は一覧の行から行う**ようにした（#307 の段階 5-a-2）。"
+                    + "**段階 5-a-1 までは「所有者の先頭 1 件」を黙って消していた** — "
+                    + "**n 件になると、どれが消えるのか押す側に分からない。**"
+                    + "**行から `clientId` を渡す**ので、**指した 1 件だけが消える。**",
+                    "#307 の段階 5-a-2 / ManageController.RemoveSaml2OAuth2Data");
+
+                r.Target("POST /Manage/RemoveSaml2OAuth2Data（clientId を渡す）");
+
+                await ManageSaml2OAuth2DataTests.RemoveRegistrationAsync(client);
+
+                r.Step("(1) 2 件登録する");
+
+                await ManageClientRegistration.RegisterAsync(client);
+                await ManageClientRegistration.RegisterAsync(client);
+
+                List<string> listed = await ManageClientRegistration.ListAsync(client);
+
+                r.VerifyEqual("一覧は 2 件", "2", listed.Count.ToString());
+
+                Assert.Equal(2, listed.Count);
+
+                //  **消すのは「一覧の 2 行目」**（**1 行目ではない**）。
+                //    **`clientId` を見ない歯抜けは「所有者の先頭 1 件」を消す**ので、
+                //    **先頭を消す形で測ると、たまたま一致して気付けない**
+                //    （**登録した順と、`client_id` の昇順は別物**である。実測で踏んだ）。
+                string keep = listed[0];
+                string target = listed[1];
+
+                r.Step("(2) 一覧の 2 行目だけを消す");
+
+                bool sent = await ManageClientRegistration.RemoveOneAsync(client, target);
+
+                r.Verify("一覧の行から送れた", sent,
+                    "送れた", sent ? "送れた" : "**その行が無い**");
+
+                List<string> remained = await ManageClientRegistration.ListAsync(client);
+
+                r.VerifyEqual("一覧は 1 件になる", "1", remained.Count.ToString());
+
+                r.Verify("残っているのは 1 行目",
+                    remained.Count == 1 && remained[0] == keep,
+                    keep, (remained.Count == 1) ? remained[0] : "**件数が違う**");
+
+                r.Step("(3) 残った 1 行目は、まだ編集できる");
+
+                string edit = await ManageClientRegistration.OpenEditAsync(client, keep);
+
+                r.VerifyEqual("編集の画面が開く", keep,
+                    Html.FieldValue(edit, "ClientID") ?? "（無い）");
+
+                r.Step("(4) 消した行は、もう開けない");
+
+                string gone = await ManageClientRegistration.OpenEditAsync(client, target);
+
+                r.Verify("編集の画面にならない",
+                    !Html.HasField(gone, "ClientSecret"),
+                    "ならない", Html.HasField(gone, "ClientSecret")
+                        ? "**開いてしまった**" : "エラー画面になった");
+
+                r.Step("(5) 後片付け");
+
+                await ManageSaml2OAuth2DataTests.RemoveRegistrationAsync(client);
+
+                r.VerifyEqual("全部消える", "0",
+                    (await ManageClientRegistration.ListAsync(client)).Count.ToString());
+
+                r.Done();
+            }
+        }
+
+        #endregion
 
         #region RT-297.1
 
@@ -386,11 +755,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     await PostAsync(client, form, "submit.ClientSecret"));
 
                 string secret = Value(form, "ClientSecret");
+                string clientId = Value(form, "ClientID");
 
                 r.Verify("client_secret が入る", !string.IsNullOrEmpty(secret),
                     "空でない", string.IsNullOrEmpty(secret) ? "**空のまま**" : "入った（値は伏せる）");
 
                 Assert.False(string.IsNullOrEmpty(secret), "前提: client_secret が発行されること");
+                Assert.False(string.IsNullOrEmpty(clientId), "前提: client_id が発行されること");
 
                 await PostAsync(client, form, "submit.Add");
 
@@ -406,8 +777,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //  **ここが往復である。**
                 //    **保存で暗号化し、読み出しで復号している**（`Sts.SecretProtector`）。
                 //    **復号できていなければ、空か、別の値になる。**
+                //
+                //  **開き直すときは、どの登録かを指す**（#307 の段階 5-a-2）。
+                //    **引数なしの画面は「新規」になった** —
+                //    **1 利用者 n クライアントなので、黙って 1 件を出さない。**
                 string reloaded = Html.FieldValue(
-                    await client.GetStringAsync("/Manage/AddSaml2OAuth2Data"), "ClientSecret");
+                    await ManageClientRegistration.OpenEditAsync(client, clientId), "ClientSecret");
 
                 r.Verify("発行した値と同じである", reloaded == secret,
                     "同じ（値は伏せる）",

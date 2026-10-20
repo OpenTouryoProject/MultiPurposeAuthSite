@@ -36,6 +36,8 @@
 //*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの列を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         registration_access_token のハッシュの列を追加（#307 の段階 2）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method の列を追加（#307 の段階 3）
+//*  2026/10/20  玄人 幸道         所有者で引く口を追加（#307 の段階 5-a-1）
+//*  2026/10/20  玄人 幸道         並びを決め、所有者＋client_idで引く口を追加（#307 の段階 5-a-2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -253,6 +255,34 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return " WHERE \"OwnerUserId\" = :OwnerUserId";
                 default:
                     return " WHERE \"owneruserid\" = @OwnerUserId";
+            }
+        }
+
+        /// <summary>並びを決める句（#307 の段階 5-a-2）</summary>
+        /// <param name="storeType">EnumUserStoreType</param>
+        /// <returns>「 ORDER BY [ClientID]」のような文字列</returns>
+        /// <remarks>
+        /// **一覧の並びを決める**（#307 の段階 5-a-2）。
+        ///
+        /// **段階 5-a-1 では決めていなかった** — **1 件を取り出すだけ**で、
+        /// **どれが来てもよかった**ためである。
+        /// **一覧にすると、並びが毎回変わるのは使いにくい**
+        /// （**E2E も「2 件目」を指せない**）ので、ここで決める。
+        ///
+        /// **鍵は `client_id`**（**32 桁の 16 進**。`Guid.ToString("N")`）。
+        /// **大文字小文字の揺れが無い**ので、**照合順序の違いが結果を変えない。**
+        /// **`mem` は序数で並べる**（`StringComparer.Ordinal`）。
+        /// </remarks>
+        private static string OrderByClientID(EnumUserStoreType storeType)
+        {
+            switch (storeType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    return " ORDER BY [ClientID]";
+                case EnumUserStoreType.ODPManagedDriver:
+                    return " ORDER BY \"ClientID\"";
+                default:
+                    return " ORDER BY \"clientid\"";
             }
         }
 
@@ -564,11 +594,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **1 利用者 n クライアント**になったので、**所有者で引く口が要る**
         /// （**以前は `Users.ClientID` が 1 件を指していた**ので、`Get` 1 つで足りた）。
         ///
-        /// **並びは決めていない。**
-        /// **「先頭の 1 件」を使う所**（`Helper.GetClientIdByName` / 管理画面 / 自己テストの導線）
-        /// **は、どれが来てもよい作りにしてある** —
-        /// **`mem` は辞書の順、DB は索引の都合**で、**同じ順になるとは限らない。**
-        /// **順を決めるなら `ORDER BY` を足すこと**（**方言 3 つに同じ句を書く**）。
+        /// **並びは `client_id` の昇順**（#307 の段階 5-a-2 で決めた）。
+        /// **`mem` も DB も同じ順になる** — **一覧の並びが毎回変わらない**ようにするためで、
+        /// **E2E が「2 件目」を指せる**ようにもなる。
+        ///
+        /// **段階 5-a-1 では決めていなかった**（**1 件を取り出すだけ**だった）。
         ///
         /// **空の `ownerUserId` では、1 件も返さない** —
         /// **所有者の無い登録**（構成ファイル発の種データ）**を、誰かのものにしないため**である。
@@ -588,6 +618,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 case EnumUserStoreType.Memory:
                     all.AddRange(DataProvider.Saml2OAuth2Data.Values
                         .Where(m => m != null && m.OwnerUserId == ownerUserId)
+                        .OrderBy(m => m.ClientID, StringComparer.Ordinal)
                         .Select(m => DataProvider.Copy(null, m)));
 
                     break;
@@ -605,7 +636,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         all.AddRange(cnn.Query<ManageAddSaml2OAuth2DataViewModel>(
                             "SELECT " + DataProvider.ColumnList(DataProvider.Columns, storeType)
                             + " FROM " + DataProvider.TableName(storeType)
-                            + DataProvider.WhereOwnerUserId(storeType),
+                            + DataProvider.WhereOwnerUserId(storeType)
+                            + DataProvider.OrderByClientID(storeType),
                             new { OwnerUserId = ownerUserId }));
                     }
 
@@ -626,14 +658,48 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>登録（1 件も無ければ null）</returns>
         /// <remarks>
         /// **「その人のクライアント」を 1 つ要る所のため**である
-        /// （**自己テストの導線・認可ログ・管理画面の段階 5-a-1**）。
-        /// **どれが来てもよい** — **`GetByOwner` の注のとおり、並びは決めていない。**
+        /// （**自己テストの導線・認可ログ**）。
+        /// **`client_id` の昇順で先頭**（#307 の段階 5-a-2 で並びを決めた）。
+        ///
+        /// **管理画面は、もうこれを使わない** — **一覧を出す**ようになった（段階 5-a-2）。
         /// </remarks>
         public static ManageAddSaml2OAuth2DataViewModel GetFirstByOwner(string ownerUserId)
         {
             List<ManageAddSaml2OAuth2DataViewModel> all = DataProvider.GetByOwner(ownerUserId);
 
             return (all.Count == 0) ? null : all[0];
+        }
+
+        /// <summary>所有者の、その 1 件を返す（#307 の段階 5-a-2）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <param name="clientID">client_id</param>
+        /// <returns>登録（無い・他人のものなら null）</returns>
+        /// <remarks>
+        /// **管理画面が「どの登録を編集・削除するか」を受け取るため**に在る（段階 5-a-2）。
+        ///
+        /// **他人の `client_id` を渡されても null を返す** —
+        /// **画面の経路で、他人の登録を読み書きさせないため**である
+        /// （**動的登録の側は `registration_access_token` で守っている**。RFC 7592 §2）。
+        ///
+        /// **所有者の無い登録**（構成ファイル発の種データ）**も null になる** —
+        /// **空の `ownerUserId` では 1 件も引かない**作りと、同じ理屈である。
+        /// </remarks>
+        public static ManageAddSaml2OAuth2DataViewModel GetByOwnerAndClientID(
+            string ownerUserId, string clientID)
+        {
+            if (string.IsNullOrEmpty(ownerUserId) || string.IsNullOrEmpty(clientID))
+            {
+                return null;
+            }
+
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(clientID);
+
+            if (model == null || model.OwnerUserId != ownerUserId)
+            {
+                return null;
+            }
+
+            return model;
         }
 
         /// <summary>所有者の登録を全件消す（#307 の段階 5-a）</summary>

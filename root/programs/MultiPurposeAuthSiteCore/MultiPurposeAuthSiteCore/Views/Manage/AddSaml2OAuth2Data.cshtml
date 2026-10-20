@@ -26,6 +26,7 @@
     //*  2026/10/09  玄人 幸道         項目の並びを整え、各項目の説明を出した（#277 の段階 1）
     //*  2026/10/09  玄人 幸道         redirect_ の既定値を datalist で選べるようにした（#277 の段階 3）
     //*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの入力欄を追加（#307 の段階 1）
+    //*  2026/10/20  玄人 幸道         編集では client_id を作り直せないようにした（#307 の段階 5-a-2）
     //**********************************************************************************
 *@
 
@@ -57,15 +58,26 @@
         **並びの理屈** : 識別子 → 経路の決まり方 → 戻り先 → sub と CORS → 署名 → 鍵と証明書。
         **client_type は対象外**（ViewModel ごとコメント アウトされている。保存もされない）。
     *@
+    @*  **編集中の印を持ち回る**（#307 の段階 5-a-2）。
+        **この画面は、押すたびに同じフォームを送り直す**ので、
+        **hidden に入れないと 2 回目で消える。** *@
+    @Html.HiddenFor(m => m.Editing)
     <div class="form-group">
         @Html.LabelFor(m => m.ClientID, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
             <div class="form-inline">
                 <div class="input-group">
                     @Html.TextBoxFor(m => m.ClientID, new { @class = "form-control", @readonly = "readonly" })
-                    <span class="input-group-btn">
-                        <input type="submit" class="btn btn-primary" name="submit.ClientID" value="@ManageViews.IndexClientIDChangeButton" />
-                    </span>
+                    @*  **編集のときは、作り直すボタンを出さない**（#307 の段階 5-a-2）。
+                        **押すと別のクライアントになり**、**更新ではなく新規の登録になる。**
+                        **`registration_access_token` も引き継げない**ので、
+                        **動的登録で作られた行は、管理 API から触れなくなる。** *@
+                    @if (Model.Editing != "1")
+                    {
+                        <span class="input-group-btn">
+                            <input type="submit" class="btn btn-primary" name="submit.ClientID" value="@ManageViews.IndexClientIDChangeButton" />
+                        </span>
+                    }
                 </div>
             </div>
             <p class="help-block">@Html.DescriptionFor(m => m.ClientID)</p>
