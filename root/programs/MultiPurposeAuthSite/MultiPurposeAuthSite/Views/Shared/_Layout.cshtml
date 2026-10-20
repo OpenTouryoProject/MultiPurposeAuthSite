@@ -21,6 +21,7 @@
     //*  2026/10/02  玄人 幸道         管理画面の導線を EnableAdministrationOfUsersAndRoles でも出し分けた（#258）
     //*  2026/10/07  玄人 幸道         WebAuthn Starters のメニューを削除（#137）
     //*  2026/10/14  玄人 幸道         IdFederationAdmin のメニューを足した（#292 の段階 2）
+    //*  2026/10/21  玄人 幸道         SoftwareStatementAdmin のメニューを足した（#308 の段階 2）
     //**********************************************************************************
 *@
 @* マスタ・ページに相当 *@
@@ -138,6 +139,10 @@ else
                                 </li>
                                     <li>
                                         <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("IdFederationAdmin Screen", "Index", "IdFederationAdmin", null, new { style = "color:peachpuff" })
+                                    </li>
+                                    <li>
+                                        @* **software_statement の発行者（ベンダ）の台帳**（#308 の段階 2） *@
+                                        <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("SoftwareStatementAdmin Screen", "Index", "SoftwareStatementAdmin", null, new { style = "color:peachpuff" })
                                     </li>
     }
 }
