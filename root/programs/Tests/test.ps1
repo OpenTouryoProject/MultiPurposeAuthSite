@@ -1151,6 +1151,11 @@ public static class MpasTestTls
         $env:MPAS_SOFTWARE_STATEMENT_ALLOWED_SCOPE = $script:SoftwareStatementAllowedScope
         $env:MPAS_SOFTWARE_STATEMENT_ROLLOVER      = 'true'   # 2 本目の鍵も渡してある
 
+        # **RT-308.* を回してよい**（#308 の段階 3）。
+        #   **設定の発行者の「鍵」をテストへ渡す** —
+        #   **「設定に在る鍵は、画面から足せない」ことを測る**のに要る。
+        $env:MPAS_SOFTWARE_STATEMENT_KEY = $script:SoftwareStatementIssuerKey
+
         # **RT-307.22 〜 .24 を回してよい**（#307 の段階 5-b）。
         #   **サイトへ渡した値と、必ず同じ値をテストへ渡す。**
         #   **渡していなければ Skip する**（net48 はここに来ないので、そちらは Skip）。
@@ -1273,6 +1278,7 @@ finally {
         Remove-Item Env:\MPAS_SHORT_LIFETIMES -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_SOFTWARE_STATEMENT_ALLOWED_SCOPE -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_SOFTWARE_STATEMENT_ROLLOVER -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_SOFTWARE_STATEMENT_KEY -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_DCR_CC_CLIENT_ID -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_DCR_CC_CLIENT_SECRET -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_DCR_CC_OWNER -ErrorAction SilentlyContinue

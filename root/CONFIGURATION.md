@@ -1322,6 +1322,63 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN TokenEndpointAuthMethod varchar(32) NULL;
 
 > **これが無いと、発行者が鍵を替えた瞬間に、出荷済みのソフトが一斉に登録できなくなる。**
 
+##### 発行者は、DB ＋ 画面でも持てる（#308）
+
+**設定ファイルだけだった**（段階 4 の決め）。**提携先が増えるたびに配備のファイルを触り、
+再起動していた。** **段階 6 で「許す範囲」が増えて台帳としての性格が強くなった**ので、
+**DB ＋ 画面でも持てるようにした。**
+
+| | |
+|---|---|
+| **表** | **`SoftwareStatementIssuers`**（**3 方言 ＋ `mem`**）。**列は設定と同じ項目** ＋ **`CerBody`** |
+| **画面** | **`/SoftwareStatementAdmin`**（**`SystemAdmin`**。`UsersAdmin` / `IdFederationAdmin` と同じ位置） |
+| **読む順** | **設定 → DB。** **同じ鍵なら設定が勝つ**（`IdFederationUpstreams` と同じ流儀） |
+| **画面が編むのは DB の行だけ** | **設定ファイルの行は、画面に出ないし編めない**（**設定に在る鍵は、追加の時点で断る**） |
+| **DB が読めないとき** | **設定の分は、そのまま効く**（**理由はログに残す** — **動的登録ごと止めない**） |
+
+###### `.cer` は、パスでも本文でも持てる
+
+| 列 | 書き方 | |
+|---|---|---|
+| **`CerFilePath`** | **`.cer` のパス**（**空白かカンマ区切りで n 本**） | **ファイルを配備側に置く**（従来どおり） |
+| **`CerBody`** | **PEM を貼る**（**並べて n 本**）**／ Base64（DER）を区切って n 本** | **ファイルを置かない。** **台帳を配備間で複製しやすい** |
+
+**両方書いてよい** — **本文を先に、次にパスを試す**（**入れ替えの途中で、片方だけ本文に移せる**）。
+
+> **公開鍵なので平文で持つ**（**暗号化しない**。#297 の対象外）。
+> **`client_secret` や `.pfx` のパスワードとは、扱いが違う。**
+
+> **アップロードの口は作っていない** — **サーバにファイルを書く口を増やさない**ためである。
+> **画面に貼る**か、**ファイルを配備側に置いてパスを書く**かの 2 択にしてある。
+
+> **`SigningKeys` は証明書を読まない。**
+> **あのファイルは `CreateJwkSetJson`（net48 の exe）からソース参照**されており、
+> **`X509CertificateLoader` は net48 に無く、`new X509Certificate2(byte[])` は
+> net10.0 で旧形式**（SYSLIB0057）である。
+> **読むのは `SoftwareStatementProvider`**（CommonLibrary 側）で、
+> **`SigningKeys` が持つのは「パラメタ → JWS」の対応だけ**にしてある。
+
+###### DDL を流す必要がある
+
+**表を 1 つ新設した**ので、**既存の配備は `CREATE TABLE` を流すこと**
+（**流さないと、画面を開いた時点で落ちる**。`IdFederationUpstreams` を足したときと同じ性質）。
+
+```sql
+-- 3 方言すべてに在る（root/files/resource/MultiPurposeAuthSite/Sql/{sqlserver,oracle,pstgrs}）
+CREATE TABLE [SoftwareStatementIssuers](
+    [IssuerKey] [nvarchar](128) NOT NULL,      -- PK
+    [DisplayName] [nvarchar](256) NULL,
+    [Enabled] [bit] NOT NULL,
+    [Issuer] [nvarchar](256) NULL,
+    [CerFilePath] [nvarchar](512) NULL,
+    [CerBody] [nvarchar](max) NULL,
+    [Alg] [nvarchar](16) NULL,
+    [AllowedScope] [nvarchar](2000) NULL,
+    [AllowedGrantTypes] [nvarchar](2000) NULL,
+    CONSTRAINT [PK.SoftwareStatementIssuers] PRIMARY KEY NONCLUSTERED ([IssuerKey] ASC)
+) ON [PRIMARY]
+```
+
 ##### 鍵は「発行者ごと」である。クライアントごとではない
 
 **ここで一番取り違えやすい所**である。
