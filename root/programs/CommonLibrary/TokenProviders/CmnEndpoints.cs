@@ -124,6 +124,7 @@
 //*  2026/10/18  玄人 幸道         登録の grant_types / response_types を効かせ、registration_endpoint を広告（#307 の段階 1）
 //*  2026/10/19  玄人 幸道         登録された token_endpoint_auth_method で絞る（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         TryReadJwtAlg を公開（software_statement の検証で使う。#307 の段階 4）
+//*  2026/10/21  玄人 幸道         client_assertion の鍵を jwks_uri からも引く（#309 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -5065,10 +5066,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             //    **鍵だけのクライアントは、ここで認証に失敗して断られる** — **出さない側に転ぶ。**
             //    **デバイス フローを使うなら、秘密ベースの方法を登録すること**
             //    （**動的登録は、その組み合わせを登録の時点で断る**）。
+            //  **`jwks_uri` を登録したクライアントも、コンフィデンシャルである**（#309 の段階 1）。
+            //    **数えないと、鍵を URL で登録したクライアントが
+            //    「パブリック」とみなされ、`client_id` の確認だけで通ってしまう**
+            //    （**列の鍵を数えていなかった #307 の段階 3 と、同じ形の穴**）。
             if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
                 || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
                 || !string.IsNullOrEmpty(Helper.GetInstance().GetJwkRsaPublickey(client_id))
                 || !string.IsNullOrEmpty(Helper.GetInstance().GetJwkECDsaPublickey(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetJwksUri(client_id))
                 || x509 != null)
             {
                 return CmnEndpoints.ClientAuthentication(
@@ -5083,6 +5089,16 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region assertion
+
+        /// <summary>
+        /// `jwks_uri` から引いた鍵を、何本まで試すか（**`kid` の無い JWS のとき**）。
+        /// </summary>
+        /// <remarks>
+        /// **`kid` が在れば 1 本に決まる**（RFC 7515 §4.1.4 は任意なので、無いこともある）。
+        /// **無いときは在る鍵を順に試す**ことになるので、**上限を置く** —
+        /// **鍵を何十本も並べた JWK Set を出す相手に、検証を何十回もさせられないため。**
+        /// </remarks>
+        private const int MaxJwksFromUri = 4;
 
         /// <summary>ClientAuthentication</summary>
         /// <param name="client_id">string</param>
@@ -5124,6 +5140,38 @@ namespace MultiPurposeAuthSite.TokenProviders
                         CmnEndpoints.DecodeRegisteredJwk(
                             Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
                     };
+
+                //  **`jwks_uri` が登録されているなら、その URL から引いた鍵も試す**（#309 の段階 1）。
+                //
+                //  **ここは同期の経路**（`/token` / `/par` / `/ciba_authz` /
+                //    `/revoke` / `/introspect` の全部から `static bool` で呼ばれる）なので、
+                //    **キャッシュを読むだけ**にする。**取りに行って待つと net48 で止まる**
+                //    （**継続が同期コンテキストへ戻れない**。#309 の起票）。
+                //
+                //  **引けなければ、背景で取り直して、この 1 本は断る**（段階 1 の決め (C)(1)）。
+                //    **次の試行で通る。** **理由はログに残す**（#253 の方針。**鍵は出さない**）。
+                if (!string.IsNullOrEmpty(assertionIss))
+                {
+                    string jwksUri = Helper.GetInstance().GetJwksUri(assertionIss);
+
+                    if (!string.IsNullOrEmpty(jwksUri))
+                    {
+                        string[] fromUri = DiscoveryJwks.PickJwksFromCache(
+                            jwksUri, DiscoveryJwks.KidOf(assertion),
+                            CmnEndpoints.MaxJwksFromUri);
+
+                        if (fromUri.Length == 0)
+                        {
+                            DiscoveryJwks.RefillInBackground(jwksUri);
+
+                            Logging.MyOperationTrace(string.Format(
+                                "The key of the client assertion was not in the jwks_uri cache. ({0})",
+                                assertionIss));
+                        }
+
+                        pubKeys = pubKeys.Concat(fromUri).ToArray();
+                    }
+                }
 
                 // **登録 token_endpoint_auth_signing_alg で絞る**（#262）。
                 //   **登録が無ければ、従来どおり両方を試す**（下位互換）。

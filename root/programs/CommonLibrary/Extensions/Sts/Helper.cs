@@ -56,6 +56,7 @@
 //*  2026/10/18  玄人 幸道         scope をDBからも読み、grant_types / response_types を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         クライアント登録の有無を返す口を追加（#307 の段階 2）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を引く口を追加（#307 の段階 3）
+//*  2026/10/21  玄人 幸道         jwks_uri を引く口を追加（#309 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1044,6 +1045,27 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         }
 
         #endregion
+
+        #endregion
+
+        #region GetJwksUri
+
+        /// <summary>client_id から jwks_uri を取得する（#309 の段階 1）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>jwks_uri（**登録が無ければ null**）</returns>
+        /// <remarks>
+        /// **鍵を URL から引くクライアント**（RFC 7591 §2 の `jwks_uri`）。
+        /// **`jwks`（列の鍵）とは排他**である（**動的登録は、両方在る要求を断る**）。
+        /// **設定ファイルのクライアントでも書ける**（`jwks_uri` の鍵）。
+        ///
+        /// **ここでは取りに行かない** — **URL を返すだけ**である。
+        /// **読む側（`CmnEndpoints.ClientAuthentication`）は同期**なので、
+        /// **取得はキャッシュ越しに行う**（`DiscoveryJwks.PickJwksFromCache`）。
+        /// </remarks>
+        public string GetJwksUri(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, "jwks_uri", model => model.JwksUri);
+        }
 
         #endregion
 

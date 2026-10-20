@@ -33,6 +33,7 @@
 //*  2026/10/19  玄人 幸道         クライアント認証の方法のケースを追加（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         software_statement のケースを追加（#307 の段階 4）
 //*  2026/10/20  玄人 幸道         RT-307.3 を「n 件作れる」に書き換えた（#307 の段階 5-a）
+//*  2026/10/21  玄人 幸道         RT-307.4 の jwks_uri を「読めない URL は 400」にした（#309 の段階 1）
 //*  2026/10/20  玄人 幸道         RT-307.22〜.24（client_credentials）を追加（#307 の段階 5-b）
 //*  2026/10/20  玄人 幸道         RT-307.25/.26（発行者の上限と鍵の入れ替え）を追加（#307 の段階 6）
 //*  2026/10/20  玄人 幸道         Noteの文面を段階5-a-1後の形に直した（#307）
@@ -484,9 +485,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "メタデータの誤りは `400`（`invalid_redirect_uri` / `invalid_client_metadata`）",
                     "**知らないメタデータは無視してよい**（RFC 7591 §3.2.1）が、"
                     + "**無視すると黙って弱くなるものは断る。**"
-                    + "**`jwks_uri` を受け取って無視すると、`private_key_jwt`（#239）や "
-                    + "Request Object（JAR）の検証が、登録したつもりの鍵で通らなくなる** — "
-                    + "**鍵をこの URL から引く実装が、まだ無い**（段階 3）。",
+                    + "**`jwks_uri` は受け付けるようになった**（#309 の段階 1）が、"
+                    + "**読めない URL は、登録のその場で断る** — "
+                    + "**受け取って無視すると、`private_key_jwt`（#239）や "
+                    + "Request Object（JAR）の検証が、登録したつもりの鍵で通らなくなる。**",
                     "RFC 7591 §3.2.1 / §3.2.2 / RFC 6749 §3.1.2 / #307");
 
                 r.Target("POST registration_endpoint（誤ったメタデータ）");
@@ -522,7 +524,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.VerifyEqual("HTTP の状態は 400", "400", ((int)relative.StatusCode).ToString());
 
-                    r.Step("(4) jwks_uri は受け付けない（段階 3 でも。別 Issue）");
+                    r.Step("(4) 読めない jwks_uri は受け付けない（#309 の段階 1）");
 
                     JsonResponse jwksUri = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token,
@@ -533,6 +535,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.VerifyEqual("error は invalid_client_metadata",
                         "invalid_client_metadata", jwksUri.String("error") ?? "（無い）");
+
+                    r.Note("**この URL には JWK Set が無い**（この配備自身の、存在しないパス）。"
+                        + "**登録の口は取りに行って、読めなければ断る**（#309 の決め (B)）。"
+                        + "**読める `jwks_uri` を登録して使うところは `RT-309.*`** で測る。");
 
                     r.Step("(5) 壊れた software_statement は受け付けない（段階 4）");
 

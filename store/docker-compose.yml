@@ -585,3 +585,32 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
+
+  # ------------------------------------------------------------------ 相手の JWK Set（#309 の段階 1）
+  #   **クライアント（RP）が公開する `jwks_uri` の代わり**である。
+  #
+  #   **E2E のクライアントは HttpClient のコードで、HTTP サーバを持たない** —
+  #   **`jwks_uri` に書ける URL が無い**ので、**静的に配るだけのものを 1 つ置く。**
+  #
+  #   **中身はホストの `store/jwks` に置く**（**テストが書き替える** —
+  #   **同じ URL の鍵が入れ替わったことを測る**ため。`RT-309.*`）。
+  #
+  #   **既存のコンテナの `/jwkcerts` は使わない**（#309 の決め）。
+  #     **あれは `JwkSet_Upstream.json` を配っており、ID 連携の測り
+  #     （`RT-140.*` / `CN-5.*`）も見ている共有のファイル**である。
+  #     **書き替える測りを入れると、戻し忘れが ID 連携を壊す。**
+  #
+  #   **平文の http で配る**（**44305**）。
+  #     **実装は `https` を要求するが、ループバックだけは `http` を許している**
+  #     （`ClientRegistrationProvider.IsSecureKeySource`。RFC 8252 §7.3 と同じ扱い）。
+  #     **証明書を用意しないので、この足場はループバック限定である。**
+  jwks:
+    image: nginx:alpine
+    # **自動で復帰させない**（他のコンテナと同じ。頭の「メモリの節約」）。
+    restart: "no"
+    ports:
+      - 44305:80
+    volumes:
+      - ./jwks:/usr/share/nginx/html:ro
+      # **既定の設定を差し替える**（下の理由）。
+      - ./jwks-nginx.conf:/etc/nginx/conf.d/default.conf:ro

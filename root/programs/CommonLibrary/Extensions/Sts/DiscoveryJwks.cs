@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#289 の段階 2。IdFederationJwks から汎用部分を分けた）
 //*  2026/10/13  玄人 幸道         JWK SetのURLから直に引く口を足した（#290）
+//*  2026/10/21  玄人 幸道         同期で読む口と、背景で補充する口を足した（#309 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Log;
@@ -101,6 +102,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>_cache の排他</summary>
         private static readonly object _lock = new object();
+
+        /// <summary>取得中の URL（**同じ URL へ何本も取りに行かない**）</summary>
+        /// <remarks>
+        /// **背景の補充は、外から起こせる**（**`kid` を偽った要求を並べる**）ので、
+        /// **同時に走る本数を 1 本に抑える**（#309 の段階 1）。
+        /// </remarks>
+        private static readonly HashSet<string> _fetching = new HashSet<string>();
 
         /// <summary>キャッシュの 1 件</summary>
         private class Entry
@@ -182,6 +190,189 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return DiscoveryJwks.ToJws(jwk);
+        }
+
+        /// <summary>
+        /// **キャッシュに在る JWK を、同期で引く**（**取りに行かない**）。
+        /// </summary>
+        /// <param name="jwkSetUrl">相手の JWK Set の URL</param>
+        /// <param name="kid">JWS のヘッダの `kid`（**空なら、在る鍵を順に返す**）</param>
+        /// <param name="max">返す本数の上限（**`kid` が空のとき**）</param>
+        /// <returns>JWK（JSON）の並び。**無ければ空の配列**</returns>
+        /// <remarks>
+        /// **同期の経路から呼ぶための口**である（#309 の段階 1）。
+        ///
+        /// **クライアント認証は `static bool` の鎖**で、
+        /// **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の
+        /// 全部から同期で呼ばれる。** **そこで `await` を待つと、net48 で止まる** —
+        /// **継続が `AspNetSynchronizationContext` へ Post され、
+        /// その順番を握っているのは待っている自分**だからである。
+        /// **だから、ここでは取りに行かない。**
+        ///
+        /// | 取りに行くのは | |
+        /// |---|---|
+        /// | **`RefillInBackground`** | **要求の外**（**待たない**。その 1 本は断る） |
+        /// | **`WarmUpAsync`** | **登録のとき**（**あちらの口は async**） |
+        ///
+        /// **`kty` で絞らない。** **返した JWK は `JwtAssertion.Verify` に渡す** —
+        /// **あちらが `kty` を見て RSA / EC を選ぶ**ので、**ES256 も通る。**
+        /// （**`PickRsaKey` は discovery の経路のもの**で、**あちらは RSA しか使わない。**）
+        /// </remarks>
+        public static string[] PickJwksFromCache(string jwkSetUrl, string kid, int max)
+        {
+            List<string> ret = new List<string>();
+
+            if (string.IsNullOrEmpty(jwkSetUrl))
+            {
+                return ret.ToArray();
+            }
+
+            lock (DiscoveryJwks._lock)
+            {
+                if (!DiscoveryJwks._cache.TryGetValue(jwkSetUrl, out Entry entry)
+                    || entry.JwkSet == null)
+                {
+                    return ret.ToArray();
+                }
+
+                JToken keys = entry.JwkSet[JwtConst.keys];
+
+                if (!(keys is JArray))
+                {
+                    return ret.ToArray();
+                }
+
+                foreach (JToken key in (JArray)keys)
+                {
+                    JObject jwk = key as JObject;
+
+                    if (jwk == null)
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrEmpty(kid))
+                    {
+                        //  **`kid` が在るなら、その 1 本だけ。**
+                        if ((string)jwk[JwtConst.kid] == kid)
+                        {
+                            ret.Add(jwk.ToString());
+                            break;
+                        }
+
+                        continue;
+                    }
+
+                    //  **`kid` の無い JWS**（RFC 7515 §4.1.4 は任意）。
+                    //    **在る鍵を順に試す**ことになるので、**本数に上限を置く。**
+                    ret.Add(jwk.ToString());
+
+                    if (max <= ret.Count)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return ret.ToArray();
+        }
+
+        /// <summary>**キャッシュに鍵が在るか**（登録の検査で使う）</summary>
+        /// <param name="jwkSetUrl">相手の JWK Set の URL</param>
+        /// <returns>1 本でも在れば true</returns>
+        /// <remarks>
+        /// **`ClientRegistrationProvider.Validate` が見る**（#309 の段階 1 の決め (B)）。
+        /// **取れない URL は、登録のその場で断る** —
+        /// **後から黙って `private_key_jwt` が通らなくなるより良い。**
+        /// </remarks>
+        public static bool HasKeysInCache(string jwkSetUrl)
+        {
+            return 0 < DiscoveryJwks.PickJwksFromCache(jwkSetUrl, "", 1).Length;
+        }
+
+        /// <summary>**要求の外で、キャッシュを補充する**（**待たない**）</summary>
+        /// <param name="jwkSetUrl">相手の JWK Set の URL</param>
+        /// <remarks>
+        /// **同期の経路で「鍵が無い」と分かったときに呼ぶ**（#309 の段階 1 の決め (C)(1)）。
+        /// **ここで待たないので、その 1 本には間に合わない** — **断って、次の試行で通す。**
+        ///
+        /// | 見るもの | なぜ |
+        /// |---|---|
+        /// | **取り直しの下限**（`MinRefetchInterval`） | **`kid` を偽った要求を並べれば、外から取得を起こせる** |
+        /// | **取得中の印**（`_fetching`） | **同時に来た要求が、同じ URL へ何本も取りに行かないため**（#305 と同じ考え方） |
+        ///
+        /// **`Task.Run` で投げる** — **同期コンテキストを持たないスレッドで走る**ので、
+        /// **呼び出し側の文脈を塞がない。** **例外は `FetchJwkSetAsync` が飲む。**
+        /// </remarks>
+        public static void RefillInBackground(string jwkSetUrl)
+        {
+            if (string.IsNullOrEmpty(jwkSetUrl))
+            {
+                return;
+            }
+
+            lock (DiscoveryJwks._lock)
+            {
+                if (DiscoveryJwks._fetching.Contains(jwkSetUrl))
+                {
+                    //  **既に取りに行っている。**
+                    return;
+                }
+
+                if (DiscoveryJwks._cache.TryGetValue(jwkSetUrl, out Entry entry)
+                    && (DateTime.UtcNow - entry.FetchedAt) <= DiscoveryJwks.MinRefetchInterval)
+                {
+                    //  **下限の内側**（**取り直さない**）。
+                    return;
+                }
+
+                DiscoveryJwks._fetching.Add(jwkSetUrl);
+            }
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await DiscoveryJwks.FetchJwkSetAsync(jwkSetUrl);
+                }
+                finally
+                {
+                    lock (DiscoveryJwks._lock)
+                    {
+                        DiscoveryJwks._fetching.Remove(jwkSetUrl);
+                    }
+                }
+            });
+        }
+
+        /// <summary>**取りに行って、キャッシュへ入れる**（**登録のときに使う**）</summary>
+        /// <param name="jwkSetUrl">相手の JWK Set の URL</param>
+        /// <returns>**鍵が 1 本でも載ったなら true**</returns>
+        /// <remarks>
+        /// **登録の口は async なので、ここは待てる**
+        /// （`OAuth2ResourceServerController.Register` / `UpdateClient`。#309 の段階 1）。
+        ///
+        /// **取り直しの下限を見ない**（**毎回、取りに行く**）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **下限を置いているのは背景の補充**（`RefillInBackground`） | **あれは外から起こせる**（`kid` を偽った要求を並べる） |
+        /// | **ここは認可が要る** | **専用 scope のトークンが必要**で、**レート制限も掛かっている**（#305 の段階 3） |
+        /// | **毎回取る利点** | **鍵を入れ替えた相手が、`PUT` でその場で反映できる**（**待たされない**） |
+        ///
+        /// **何もしなくても、最大で下限ぶん**（1 分）**で追随する** —
+        /// **背景の補充が、そこで取り直す**ためである。
+        /// </remarks>
+        public static async Task<bool> WarmUpAsync(string jwkSetUrl)
+        {
+            if (string.IsNullOrEmpty(jwkSetUrl))
+            {
+                return false;
+            }
+
+            await DiscoveryJwks.FetchJwkSetAsync(jwkSetUrl);
+
+            return DiscoveryJwks.HasKeysInCache(jwkSetUrl);
         }
 
         /// <summary>

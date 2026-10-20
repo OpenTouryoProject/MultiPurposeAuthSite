@@ -26,6 +26,9 @@ echo.
 echo  **コンテナ 3 つでハイブリッド IdP 構成になっています**（#281 / #284 / #292）。
 echo    E2E の CN-* がこれらを測ります。
 echo.
+echo  **相手の JWK Set を配るコンテナも起動しています**（http://localhost:44305）。
+echo    クライアントの jwks_uri の代わりです（RT-309.* がこれを測ります。#309）。
+echo.
 echo  **DB は起動していません。** 使う 1 つだけを、名前を指定して起動してください。
 echo.
 echo    docker compose up -d sqlserver     ：sql で回すとき（1434）

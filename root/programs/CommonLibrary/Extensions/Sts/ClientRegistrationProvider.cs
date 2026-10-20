@@ -33,6 +33,7 @@
 //*  2026/10/19  玄人 幸道         jwks / DN / token_endpoint_auth_method を受ける（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         software_statement を検証して受ける（#307 の段階 4）
 //*  2026/10/20  玄人 幸道         所有者を OwnerUserId へ移し、1 利用者 n クライアントにした（#307 の段階 5-a）
+//*  2026/10/21  玄人 幸道         jwks_uri を受け付ける（#309 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -53,6 +54,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -123,9 +125,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// **保管しない。** **応答にも返さない**（§3.2.1 で任意）。
     /// **＝ この段階で列は増えていない**（既存の配備に `ALTER` が要らない）。
     ///
-    /// **段階 5 以降で足すもの** : `jwks_uri`（**別 Issue**。
-    /// クライアント認証の経路が同期である）、`client_credentials` 経路、
-    /// 1 利用者 n クライアント、**発行者ごとに許す範囲を絞ること**。
+    /// **`jwks_uri` も受け付ける**（#309 の段階 1）。
+    /// **要求の経路ではキャッシュを読むだけ**にし、
+    /// **取りに行くのは、この口（登録のとき）と背景だけ**である —
+    /// **クライアント認証の鎖が同期**で、**そこで待つと net48 で止まる**ためである。
     /// </remarks>
     public static class ClientRegistrationProvider
     {
@@ -430,8 +433,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// |---|---|
         /// | **要求から作り直す**（**省いたら消える**） | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` |
         /// | **要求から作り直す**（**段階 3**） | `TokenEndpointAuthMethod`（**省いたら、秘密ベースに戻る**） |
-        /// | **要求に在れば置き換え、無ければ持ち越す**（**段階 3**） | `Jwk*` / `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` |
-        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `WebOrigins` / `JwksUri` / `RequestObjectSigningAlg`） |
+        /// | **要求に在れば置き換え、無ければ持ち越す**（**段階 3**） | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` |
+        /// | **要求が片方を入れたら、もう片方は消える**（**#309 の段階 1**） | `Jwk*` ↔ `JwksUri`（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
+        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `WebOrigins` / `RequestObjectSigningAlg`） |
         ///
         /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
         /// > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
@@ -555,7 +559,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             model.RedirectUriSaml = current.RedirectUriSaml;
             model.PostLogoutRedirectUri = current.PostLogoutRedirectUri;
             model.WebOrigins = current.WebOrigins;
-            model.JwksUri = current.JwksUri;
             model.RequestObjectSigningAlg = current.RequestObjectSigningAlg;
 
             //  **鍵・DN・alg は、要求に在れば `Validate` が入れている**（#307 の段階 3）。
@@ -563,10 +566,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **`private_key_jwt` / `tls_client_auth` を明記したなら、
             //    材料が無い要求は `Validate` が `400` で断っている**ので、
             //    **ここで持ち越しても「方法だけ在って材料が無い」にはならない。**
-            model.JwkRsaPublickey = string.IsNullOrEmpty(model.JwkRsaPublickey)
-                ? current.JwkRsaPublickey : model.JwkRsaPublickey;
-            model.JwkECDsaPublickey = string.IsNullOrEmpty(model.JwkECDsaPublickey)
-                ? current.JwkECDsaPublickey : model.JwkECDsaPublickey;
+            //
+            //  **`jwks` と `jwks_uri` は排他**（RFC 7591 §2）なので、
+            //    **持ち越しで両方にならないようにする**（#309 の段階 1）。
+            //    **要求が片方を入れてきたら、もう片方は持ち越さない** —
+            //    **`PUT` で `jwks_uri` から列の鍵へ（その逆へも）移れる**ようにするためである。
+            bool requestHasJwks = !string.IsNullOrEmpty(model.JwkRsaPublickey)
+                || !string.IsNullOrEmpty(model.JwkECDsaPublickey);
+
+            if (!string.IsNullOrEmpty(model.JwksUri))
+            {
+                //  **要求が `jwks_uri`** ＝ **列の鍵は持ち越さない。**
+                model.JwkRsaPublickey = "";
+                model.JwkECDsaPublickey = "";
+            }
+            else if (requestHasJwks)
+            {
+                //  **要求が `jwks`** ＝ **URL は持ち越さない。**
+                model.JwksUri = "";
+            }
+            else
+            {
+                //  **要求がどちらも入れていない** ＝ **現行をそのまま持ち越す。**
+                model.JwkRsaPublickey = current.JwkRsaPublickey;
+                model.JwkECDsaPublickey = current.JwkECDsaPublickey;
+                model.JwksUri = current.JwksUri;
+            }
+
             model.TlsClientAuthSubjectDn = string.IsNullOrEmpty(model.TlsClientAuthSubjectDn)
                 ? current.TlsClientAuthSubjectDn : model.TlsClientAuthSubjectDn;
             model.TokenEndpointAuthSigningAlg = string.IsNullOrEmpty(model.TokenEndpointAuthSigningAlg)
@@ -704,6 +730,63 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return 0;
         }
 
+        #region jwks_uri を先に取りに行く（#309 の段階 1）
+
+        /// <summary>**本文の `jwks_uri` を、検査の前に 1 回取りに行く**</summary>
+        /// <param name="requestBody">要求の本文（JSON）</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **判定はしない。** **取れたかどうかは `Validate` がキャッシュを見て決める**
+        /// （**判定は 1 か所に置く**）。
+        ///
+        /// **ここだけが async である** — **登録の口（`POST` / `PUT`）は
+        /// `async Task&lt;…&gt;` なので待てる。**
+        /// **クライアント認証の経路（`/token` など）は同期なので、あちらでは待てない**
+        /// （**待つと net48 で止まる**。#309 の起票）。
+        ///
+        /// **本文の `jwks_uri` だけを見る。**
+        /// **`software_statement` の中だけで主張された値は、取りに行かない** —
+        /// **署名の検証は `Validate` の中**にあり、
+        /// **検証していない主張で外の URL へ出て行かない**ためである。
+        ///
+        /// **`https` でなければ、取りにも行かない**（**ループバックの `http` は許す**）。
+        /// </remarks>
+        public static async Task WarmUpJwksUriAsync(string requestBody)
+        {
+            if (!Config.EnableDynamicClientRegistration
+                || string.IsNullOrWhiteSpace(requestBody))
+            {
+                return;
+            }
+
+            string jwksUri = "";
+
+            try
+            {
+                JObject metadata = JsonConvert.DeserializeObject<JObject>(requestBody);
+
+                if (metadata != null)
+                {
+                    jwksUri = ClientRegistrationProvider.GetString(metadata, "jwks_uri");
+                }
+            }
+            catch (JsonException)
+            {
+                //  **本文が JSON でない。** **`Register` / `Update` が `400` で断る。**
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(jwksUri)
+                && ClientRegistrationProvider.IsSecureKeySource(jwksUri))
+            {
+                //  **取れなくても例外にしない**（`DiscoveryJwks` が飲み、理由をログに残す）。
+                //    **断るのは `Validate`** である。
+                await DiscoveryJwks.WarmUpAsync(jwksUri);
+            }
+        }
+
+        #endregion
+
         #endregion
         #region メタデータの検査
 
@@ -776,26 +859,58 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
-            #region まだ受け付けないもの
+            #region jwks / jwks_uri（RFC 7591 §2。#309 の段階 1）
 
-            //  **`jwks_uri`（鍵を URL から引く）は受け付けない**（**別 Issue**）。
-            //
-            //  **クライアント認証の経路が同期である。**
-            //    `CmnEndpoints.ClientAuthentication` は `static bool` で、
-            //    **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の
-            //    全部から同期で呼ばれる。** **取得は非同期**（`DiscoveryJwks`）なので、
-            //    **同期から待つとデッドロックの形になる**（net48 の同期コンテキスト）。
-            //
-            //  **登録の時点で 1 回引いて列に焼く**こともできるが、
-            //    **`jwks_uri` の存在理由（鍵の入れ替え）が消える**ので、
-            //    **「対応した」と言えない。**
-            //
-            //  **受け取って無視すると、`private_key_jwt` が黙って通らなくなる**ので、断る。
-            //    **`jwks` は受け付ける**（下）。
-            if (ClientRegistrationProvider.Has(metadata, "jwks_uri"))
+            //  **両方を入れてはならない**（RFC 7591 §2 の MUST NOT）。
+            //    **どちらの鍵で認証するのかが決まらない**ので、断る。
+            //    **`software_statement` を重ねた後で見る** — **statement が片方を
+            //    主張したときも、同じ検査を通す。**
+            if (ClientRegistrationProvider.Has(metadata, "jwks")
+                && !string.IsNullOrEmpty(
+                    ClientRegistrationProvider.GetString(metadata, "jwks_uri")))
             {
-                description = "This deployment does not accept jwks_uri. Use jwks instead.";
+                description = "The jwks and jwks_uri must not both be present.";
                 return false;
+            }
+
+            //  **`jwks_uri`（鍵を URL から引く）**。
+            //    **鍵の入れ替えを、登録を直さずにできる**ようにするための項目である。
+            //
+            //  **要求の経路では取りに行かない**（`CmnEndpoints.ClientAuthentication` は
+            //    `static bool` で、`/token` などから同期で呼ばれる）。
+            //    **取りに行くのは、この口と背景である**
+            //    （`WarmUpJwksUriAsync` / `DiscoveryJwks.RefillInBackground`）。
+            if (!ClientRegistrationProvider.SetUri(metadata, "jwks_uri",
+                Const.MaxLengthOfUri, v => model.JwksUri = v, ref description))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(model.JwksUri))
+            {
+                //  **平文の HTTP では受けない** — **鍵そのものを差し替えられる**
+                //    （**署名の検証鍵なので、差し替えられればクライアント認証が破れる**）。
+                //    **ループバックだけは許す**（RFC 8252 §7.3 と同じ扱い。開発と試験のため）。
+                if (!ClientRegistrationProvider.IsSecureKeySource(model.JwksUri))
+                {
+                    description = "The jwks_uri must use https. (loopback may use http)";
+                    return false;
+                }
+
+                //  **読めないものは、ここで断る**（段階 1 の決め (B)）。
+                //    **後から黙って `private_key_jwt` が通らなくなるより、
+                //    登録のその場で分かる方が良い。**
+                //
+                //  **取りに行ったのは、この口の手前である**（`WarmUpJwksUriAsync`）。
+                //    **`software_statement` の中だけで主張された `jwks_uri` は、
+                //    ここで断られる** — **取りに行くのは本文の値だけ**であり、
+                //    **署名を検証する前に、本文の外の URL へ出て行かない**ためである
+                //    （**段階 2 で閉じる**）。
+                if (!DiscoveryJwks.HasKeysInCache(model.JwksUri))
+                {
+                    description = "The jwks_uri could not be read.";
+                    return false;
+                }
             }
 
             #endregion
@@ -871,11 +986,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **方法に必要な材料が無ければ、登録を断る**（**認証できない登録を作らない**）。
             //    **黙って作ると、クライアントは「登録した方法で認証できる」と考えるが、
             //    永久に通らない。** **`PUT` でも同じ**（材料は毎回送ること）。
+            //
+            //  **`jwks_uri` も材料である**（#309 の段階 1）。
+            //    **鍵は URL の先に在る** — **ここを数えないと、
+            //    `jwks_uri` だけを送った登録が断られる。**
             if (authMethod == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit()
                 && string.IsNullOrEmpty(model.JwkRsaPublickey)
-                && string.IsNullOrEmpty(model.JwkECDsaPublickey))
+                && string.IsNullOrEmpty(model.JwkECDsaPublickey)
+                && string.IsNullOrEmpty(model.JwksUri))
             {
-                description = "The token_endpoint_auth_method private_key_jwt requires jwks.";
+                description = "The token_endpoint_auth_method private_key_jwt requires "
+                    + "jwks or jwks_uri.";
                 return false;
             }
 
@@ -1341,6 +1462,32 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return true;
         }
 
+        /// <summary>鍵の出どころとして使える URL か（#309 の段階 1）</summary>
+        /// <param name="uri">URL</param>
+        /// <returns>使えるなら true</returns>
+        /// <remarks>
+        /// **`https` を要求する。** **平文の HTTP では、鍵そのものを差し替えられる**
+        /// （**署名の検証鍵なので、差し替えられればクライアント認証が破れる**）。
+        ///
+        /// **ループバックだけは許す**（`localhost` / `127.0.0.0/8` / `[::1]`）。
+        /// **RFC 8252 §7.3 が折り返し先で同じ扱いをしている**のと同じ理由で、
+        /// **開発と試験では証明書を用意できないことがある。**
+        /// </remarks>
+        private static bool IsSecureKeySource(string uri)
+        {
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out Uri u))
+            {
+                return false;
+            }
+
+            if (u.Scheme == Uri.UriSchemeHttps)
+            {
+                return true;
+            }
+
+            return u.Scheme == Uri.UriSchemeHttp && u.IsLoopback;
+        }
+
         /// <summary>折り返し先として使える値か</summary>
         /// <param name="redirectUri">redirect_uri</param>
         /// <returns>使えるなら true</returns>
@@ -1712,6 +1859,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 ret.Add("jwks", jwks);
             }
+
+            //  **`jwks_uri` は、そのまま返す**（#309 の段階 1。**`jwks` とは排他**）。
+            ClientRegistrationProvider.AddIfNotEmpty(ret, "jwks_uri", model.JwksUri);
 
             if (!string.IsNullOrEmpty(model.Contacts))
             {

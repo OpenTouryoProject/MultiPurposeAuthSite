@@ -36,6 +36,7 @@
 //*  2026/10/09  西野 大介         オンライン決済サービス処理の削除
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の口を追加（#307 の段階 2）
+//*  2026/10/21  玄人 幸道         jwks_uri を登録の前に取りに行く（#309 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -211,6 +212,11 @@ namespace MultiPurposeAuthSite.Controllers
                 identity = verified;
             }
 
+            //  **本文の `jwks_uri` は、ここで 1 回取りに行く**（#309 の段階 1）。
+            //    **この口は async**。**クライアント認証の経路は同期で待てない**ので、
+            //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
+            await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
+
             int status = ClientRegistrationProvider.Register(
                 body, identity, out Dictionary<string, object> ret,
                 out Dictionary<string, string> err);
@@ -271,6 +277,11 @@ namespace MultiPurposeAuthSite.Controllers
             this.SetNoStore();
 
             string body = await this.Request.Content.ReadAsStringAsync();
+
+            //  **本文の `jwks_uri` は、ここで 1 回取りに行く**（#309 の段階 1）。
+            //    **この口は async**。**クライアント認証の経路は同期で待てない**ので、
+            //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
+            await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
 
             int status = ClientRegistrationProvider.Update(
                 client_id, body, this.GetRegistrationAccessToken(),
