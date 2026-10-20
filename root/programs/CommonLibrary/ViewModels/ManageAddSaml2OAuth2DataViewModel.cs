@@ -740,5 +740,31 @@ namespace MultiPurposeAuthSite.ViewModels
         }
 
         #endregion
+        #region 所有者（#307 の段階 5-a）
+
+        /// <summary>この登録の所有者（`Users.Id`）</summary>
+        /// <remarks>
+        /// **以前は `Users.ClientID`（利用者の 1 枠）が所有を表していた。**
+        /// **それを、こちらへ移した**（#307 の段階 5-a）。**1 利用者 n クライアント**になる。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **`Users.Id` を指す** | **名前ではない** — **利用者名を変えても切れない**（`ClientName` は名前なので切れる） |
+        /// | **空（NULL）が在り得る** | **構成ファイル発の種データ**（所有者が居ない）／**移行中の行** |
+        /// | **外部キー** | **`Users.Id` へ `ON DELETE CASCADE`** — **利用者を消すと、その人の登録は全部消える** |
+        ///
+        /// **`ClientName`（所有者の利用者名）は、ラベルとして残してある** —
+        /// **`Helper.GetClientName` が「登録が在るか」の判定と、
+        /// `client_credentials` の `sub` に使っている**ためである。
+        ///
+        /// **画面からは入れられない**（**入力項目ではない**）。
+        /// **動的登録と管理画面が、サインインしている利用者から入れる。**
+        /// </remarks>
+        // **直列化しない。** **動的登録の応答に出す項目ではない**（RFC 7591 §2 に無い）。
+        [JsonIgnore]
+        [StringLength(38)]
+        public string OwnerUserId { get; set; }
+
+        #endregion
     }
 }

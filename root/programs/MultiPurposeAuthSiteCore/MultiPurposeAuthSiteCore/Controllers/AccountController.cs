@@ -5638,17 +5638,16 @@ namespace MultiPurposeAuthSite.Controllers
                     continue;
                 }
 
-                if (await this.UserManager.FindByNameAsync(entry.ClientName) == null)
-                {
-                    ApplicationUser user = ApplicationUser.CreateUser(
-                        entry.ClientName, entry.ClientName + "@gmail.com", true);
-
-                    // **client_id は固定値**（既定の Guid.NewGuid を上書きする）。
-                    user.ClientID = entry.ClientId;
-
-                    // **ロールは要らない**（このクライアントはサインインしない）。
-                    await this.UserManager.CreateAsync(user, password);
-                }
+                //  **クライアントごとの利用者は、もう作らない**（#307 の段階 5-a）。
+                //
+                //  **以前は、外部キー**（`Saml2OAuth2Data.ClientID` → `Users.ClientID`）
+                //    **を満たすためだけに、クライアント 1 件につき利用者 1 人を作っていた。**
+                //    **所有者を `Saml2OAuth2Data.OwnerUserId` へ移し、
+                //    その外部キーを落としたので、要らなくなった。**
+                //
+                //  **種データの登録は、所有者を持たない**（`OwnerUserId` は空）。
+                //    **構成ファイルのクライアントと同じ立場**である（配備全体のもの）。
+                //    **`ClientName` は、従来どおり入る**（**ラベル**。E2E が名前で引く）。
 
                 // **登録が無ければ入れる**（在れば触らない）。
                 //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、

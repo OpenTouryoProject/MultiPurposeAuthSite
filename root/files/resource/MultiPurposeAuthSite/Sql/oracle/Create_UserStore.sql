@@ -22,7 +22,8 @@ CREATE TABLE "Users"(              -- Users
     "AccessFailedCount" NUMBER(10) NOT NULL,
     "TotpAuthenticatorKey" NVARCHAR2(256) NULL,
     -- 追加の情報
-    "ClientID" NVARCHAR2(256) NOT NULL,
+    --   **ClientID は落とした**（#307 の段階 5-a）。
+    --     **所有者は Saml2OAuth2Data.OwnerUserId が持つ**（1 利用者 n クライアント）。
     "UnstructuredData" NCLOB NULL,
     "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
@@ -157,6 +158,9 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "RegistrationAccessToken" NVARCHAR2(128) NULL,   -- Const.MaxLengthOfTokenHash（ハッシュが入る）
     -- クライアント認証の方法（#307 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
     "TokenEndpointAuthMethod" NVARCHAR2(32) NULL,    -- Const.MaxLengthOfAuthMethod（空なら秘密ベースの 2 つ）
+    -- 所有者（#307 の段階 5-a）。末尾に足してある（ALTER … ADD で揃う）
+    --   **Users."Id" を指す**（名前ではない）。**NULL 可。**
+    "OwnerUserId" NVARCHAR2(38) NULL,
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 
@@ -265,7 +269,6 @@ CREATE TABLE "RequestObject"(
 ALTER TABLE "Users" ADD CONSTRAINT "UserNameIndex" UNIQUE ("UserName");
 ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName");
 ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail");
-ALTER TABLE "Users" ADD CONSTRAINT "ClientIDIndex" UNIQUE ("ClientID");
 ---- Roles
 ALTER TABLE "Roles" ADD CONSTRAINT "RoleNameIndex" UNIQUE ("Name");
 ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName");
@@ -304,7 +307,8 @@ ALTER TABLE "UserClaims" ADD CONSTRAINT "FK.UserClaims.Users_UserId" FOREIGN KEY
 ---- TotpTokens
 ALTER TABLE "TotpTokens" ADD CONSTRAINT "FK.TotpTokens.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- Saml2OAuth2Data
-ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_ClientID" FOREIGN KEY("ClientID") REFERENCES "Users" ("ClientID") ON DELETE CASCADE;
+-- **所有者は OwnerUserId で結ぶ**（#307 の段階 5-a。SQL Server 側の注と同じ）。
+ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_OwnerUserId" FOREIGN KEY("OwnerUserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE "FIDO2Data" ADD CONSTRAINT "FK.FIDO2Data.Users_UserName" FOREIGN KEY("UserName") REFERENCES "Users" ("UserName") ON DELETE CASCADE;
 ---- ConsentGrant

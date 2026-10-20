@@ -46,6 +46,7 @@
 //*  2026/09/28  玄人 幸道         PAR（/par）に認可リクエストを預ける口を追加（#246）
 //*  2026/10/01  玄人 幸道         subject_types の既定値を public に変更（#151 の段階 4）
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
+//*  2026/10/20  玄人 幸道         逆引きを OwnerUserId で引くようにした（#307 の段階 5-a）
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を引く口を追加（#129 の段階 2）
 //*  2026/10/03  玄人 幸道         検証する側のalgを引く口を追加（#262）
 //*  2026/10/04  玄人 幸道         CORSのオリジン導出のため、publicクライアントのredirect_uriを返す口を追加（#265）
@@ -1771,6 +1772,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="clientName">string</param>
         /// <param name="isResourceOwner">bool</param>
         /// <returns>指定したclientNameのclientId</returns>
+        /// <remarks>
+        /// **利用者名で引いたときは、その人の登録のうち 1 件を返す**（#307 の段階 5-a）。
+        ///
+        /// **以前は `Users.ClientID`（1 枠）を返していた。**
+        /// **1 利用者 n クライアント**になったので、**「1 件」の意味が変わった。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **どれを返すか決めていない** | **`DataProvider.GetFirstByOwner`**（並びは決めていない） |
+        /// | **0 件なら空** | **以前は「宙に浮いた GUID」が返っていた**（登録が無くても値が入っていた） |
+        ///
+        /// **呼ぶ側は「その人のクライアント 1 つ」で足りる所だけ**である —
+        /// **自己テストの導線**（`HomeController` の「ログイン・ユーザの Client」）と、
+        /// **認可ログの `User Account`**（1 行）。
+        /// **n 件から選ばせるのは、管理画面の話**（#307 の段階 5-a-2）。
+        /// </remarks>
         public string GetClientIdByName(string clientName, out bool isResourceOwner)
         {
             isResourceOwner = false;
@@ -1809,8 +1826,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return "";
             }
 
+            //  **その人の登録のうち 1 件**（#307 の段階 5-a）。
+            //    **0 件なら空を返す** — **以前は「宙に浮いた GUID」が返っていた。**
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.GetFirstByOwner(user.Id);
+
+            if (model == null)
+            {
+                return "";
+            }
+
             isResourceOwner = true;
-            return user.ClientID;
+            return model.ClientID;
         }
         #endregion
 

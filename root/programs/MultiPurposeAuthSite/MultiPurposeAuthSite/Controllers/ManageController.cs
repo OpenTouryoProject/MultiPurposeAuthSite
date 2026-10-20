@@ -214,7 +214,8 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                bool hasSaml2OAuth2Data = (Sts.DataProvider.Get(user.ClientID) != null);
+                //  **所有者の登録が在るか**（#307 の段階 5-a）。
+                bool hasSaml2OAuth2Data = (Sts.DataProvider.GetFirstByOwner(user.Id) != null);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
@@ -1665,21 +1666,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddSaml2OAuth2DataViewModel model = null;
 
-                model = Sts.DataProvider.Get(user.ClientID);
+                //  **所有者の 1 件を出す**（#307 の段階 5-a）。
+                //    **以前は `Users.ClientID`（利用者の 1 枠）で引いていた。**
+                //    **所有者は `Saml2OAuth2Data.OwnerUserId` が持つ**ようになった。
+                //    **n 件を並べるのは段階 5-a-2**（この画面は、まだ 1 件だけを扱う）。
+                model = Sts.DataProvider.GetFirstByOwner(user.Id);
 
-                if (model != null)
-                {
-                    if (string.IsNullOrEmpty(model.ClientID))
-                    {
-                        // 空（userから取得
-                        model.ClientID = user.ClientID;
-                    }
-                    else
-                    {
-                        // 既（user側が先に更新されることは無い。
-                    }
-                }
-                else
+                if (model == null)
                 {
                     // 初期
                     model = new ManageAddSaml2OAuth2DataViewModel();
@@ -1739,7 +1732,16 @@ namespace MultiPurposeAuthSite.Controllers
                             // ユーザを取得できた。
                             model.ClientName = user.UserName; // ClientNameはUser入力ではない。
 
-                            if (user.ClientID == model.ClientID)
+                            //  **所有者を列に書く**（#307 の段階 5-a）。
+                            //    **`Users.Id` を指す**（**名前ではない**）。
+                            //    **以前は利用者の行の `ClientID` を書き換えていた。**
+                            model.OwnerUserId = user.Id;
+
+                            //  **所有者の 1 件**（段階 5-a-1 の画面が扱う対象）。
+                            ManageAddSaml2OAuth2DataViewModel owned
+                                = Sts.DataProvider.GetFirstByOwner(user.Id);
+
+                            if (owned != null && owned.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
 
@@ -1753,15 +1755,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 //  **client_id を作り直した場合は、持ち越さない**
                                 //    （下の分岐。**別のクライアントになる**ので、
                                 //      **そのトークンは、もう効いてはならない**）。
-                                ManageAddSaml2OAuth2DataViewModel current
-                                    = Sts.DataProvider.Get(user.ClientID);
+                                model.RegistrationAccessToken = owned.RegistrationAccessToken;
 
-                                if (current != null)
-                                {
-                                    model.RegistrationAccessToken = current.RegistrationAccessToken;
-                                }
-
-                                Sts.DataProvider.Update(user.ClientID, model);
+                                Sts.DataProvider.Update(model.ClientID, model);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -1769,29 +1765,20 @@ namespace MultiPurposeAuthSite.Controllers
                             }
                             else if (!string.IsNullOrEmpty(model.ClientID))
                             {
-                                // ClientIDに変更がある場合、ユーザーを保存してから、
-                                string temp = user.ClientID;
-                                user.ClientID = model.ClientID;
-                                IdentityResult result = await UserManager.UpdateAsync(user);
-
-                                // 結果の確認
-                                if (result.Succeeded)
+                                //  **ClientID を作り直した、または 1 件目を作る**（#307 の段階 5-a）。
+                                //    **利用者の行には触らない**（所有者は列が持つ）。
+                                //    **古い 1 件は消す** — **この画面が扱うのは 1 件だけ**である。
+                                //    **n 件を並べるのは段階 5-a-2。**
+                                if (owned != null)
                                 {
-                                    // 成功
-
-                                    // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) Sts.DataProvider.Delete(temp);
-                                    Sts.DataProvider.Create(user.ClientID, model);
-
-                                    // 再ログイン
-                                    await this.ReSignInAsync();
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
+                                    Sts.DataProvider.Delete(owned.ClientID);
                                 }
-                                else
-                                {
-                                    // 失敗
-                                    this.AddErrors(result);
-                                }
+
+                                Sts.DataProvider.Create(model.ClientID, model);
+
+                                // 再ログイン
+                                await this.ReSignInAsync();
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                             }
                             else
                             {
@@ -1843,11 +1830,18 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                // OAuth2関連の非構造化データのクリア
-                Sts.DataProvider.Delete(user.ClientID);
+                //  **所有者の 1 件を消す**（#307 の段階 5-a）。
+                //    **利用者の行には触らない** —
+                //    **以前は「一意制約エラーになるので」`Users.ClientID` を空にできなかった。**
+                //    **その列ごと落としたので、悩みは消えた。**
+                ManageAddSaml2OAuth2DataViewModel owned
+                    = Sts.DataProvider.GetFirstByOwner(user.Id);
 
-                // ユーザーの保存（ClientIDのクリア）
-                //user.ClientID = ""; 一意制約エラーになるので
+                if (owned != null)
+                {
+                    Sts.DataProvider.Delete(owned.ClientID);
+                }
+
                 IdentityResult result = await UserManager.UpdateAsync(user);
 
                 // 結果の確認

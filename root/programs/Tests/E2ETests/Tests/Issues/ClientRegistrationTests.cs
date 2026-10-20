@@ -32,6 +32,7 @@
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）のケースを追加（#307 の段階 2）
 //*  2026/10/19  玄人 幸道         クライアント認証の方法のケースを追加（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         software_statement のケースを追加（#307 の段階 4）
+//*  2026/10/20  玄人 幸道         RT-307.3 を「n 件作れる」に書き換えた（#307 の段階 5-a）
 //**********************************************************************************
 
 using System;
@@ -58,13 +59,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// **段階 1 の形** : **ROPC で専用 scope（`client_registration`）の
     /// アクセス トークンを取り**、**それを Bearer に付けて `registration_endpoint` へ `POST` する。**
-    /// **所有者は、そのトークンの `sub` の利用者**で、**1 利用者 1 クライアント**である。
+    /// **所有者は、そのトークンの `sub` の利用者**である。
+    ///
+    /// **段階 5-a で、1 利用者 n クライアントになった。**
+    /// **所有者の置き場所を `Users.ClientID`（1 枠・NOT NULL・一意）から
+    /// `Saml2OAuth2Data.OwnerUserId`（行ごと）へ移した**ためである。
+    /// **上限は設けていない**（**洪水はレート制限で受ける**。#305 の段階 3）。
     ///
     /// | | 測ること |
     /// |---|---|
     /// | **`RT-307.1`** | **登録でき、返った資格情報で実際に認可コードが取れる** |
     /// | **`RT-307.2`** | **トークンが無ければ 401／scope が足りなければ 403** |
-    /// | **`RT-307.3`** | **2 件目の登録は `403` ＋ `access_denied`** |
+    /// | **`RT-307.3`** | **2 件目以降も登録できる**（**1 利用者 n クライアント**。#307 の段階 5-a） |
     /// | **`RT-307.4`** | **メタデータの誤りは `400`**（`jwks_uri` / `redirect_uris` 無し / 対応しない組み合わせ） |
     /// | **`RT-307.5`** | **専用トークンは scope も有効期限も絞られている** |
     /// | **`RT-307.6`** | **登録した `response_types` が効く** |
@@ -87,9 +93,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **段階 2 は RFC 7592**（`registration_client_uri` ＝ `…/register/{client_id}`）。
     /// **管理のトークンは、登録の応答で 1 回だけ返る**（**こちらはハッシュしか持たない**）。
     ///
-    /// **使い捨ての利用者を 2 人使う。** **クライアント登録は 1 人 1 件**なので、
-    /// **管理 API を叩くクライアントの持ち主（A）と、登録される側（B）を分けないと、
-    /// B の登録が「2 件目」になって断られる。**
+    /// **使い捨ての利用者を 2 人使う。**
+    /// **段階 5-a で n 件になったので、分ける必要はもう無い**が、
+    /// **分けたままにしてある** — **「管理 API を叩く権限」と「登録の所有者」は別物**であり、
+    /// **その形で測り続ける方が、本来の使い方に近い。**
     ///
     /// **段階 3 は、クライアント認証の方法**（`token_endpoint_auth_method`）。
     /// **検証する側は実装済み**（`private_key_jwt` は #239 / #129 の段階 2、
@@ -300,67 +307,157 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region RT-307.3
 
-        /// <summary>RT-307.3 2 件目の登録は 403 ＋ access_denied</summary>
+        /// <summary>RT-307.3 2 件目以降も登録でき、別々に使える</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT30703_2件目の登録は403になる(string targetKey)
+        public async Task RT30703_2件目以降も登録でき別々に使える(string targetKey)
         {
             using (IdPClient admin = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-307.3",
-                    "2 件目の登録は `403` ＋ `access_denied` になる（1 利用者 1 クライアント）",
-                    "**この配備は `Users.ClientID` で所有者を持つ**ので、**1 利用者 1 クライアント**である。"
-                    + "**RFC 7591 は「1 つの主体が n 件登録できること」を求めていない** — "
-                    + "**§3.2.1 は AS が要求を拒否・置換してよいとし、"
-                    + "§5 は重複した登録が疑わしいときは拒否すべきとしている。**"
-                    + "**§3.2.2 の 4 つはメタデータの誤り用**なので、**ポリシーによる断りには "
-                    + "RFC 6749 の `access_denied` を使う**（一般の誤りは 400 だが、"
-                    + "**`unless otherwise specified` なので 403 は禁じられていない**）。",
-                    "RFC 7591 §3.2.1 / §5 / RFC 6749 §4.1.2.1 / §5.2 / #307");
+                    "**1 利用者 n クライアント** — 2 件目以降も登録でき、**別々に使え、別々に消せる**",
+                    "**段階 1 では 2 件目を `403` ＋ `access_denied` で断っていた。** "
+                    + "**絞っていたのは仕様の要求ではなく、器の都合である** — "
+                    + "**所有者が `Users.ClientID`（1 枠・NOT NULL・一意索引）だった。** "
+                    + "**段階 5-a で `Saml2OAuth2Data.OwnerUserId`（行ごと）へ移したので、縛りが外れた。** "
+                    + "**201 が 2 回返るだけでは足りない** — "
+                    + "**2 つが本当に別の登録として生きていること**（**資格情報が違い、"
+                    + "片方を消してももう片方が動くこと**）**まで測る。**",
+                    "RFC 7591 §3.1 / §3.2.1 / RFC 7592 §2.3 / #307 の段階 5-a");
 
-                r.Target("POST registration_endpoint（同じ利用者で 2 回）");
+                r.Target("POST registration_endpoint（同じ利用者で 2 回）→ 両方で認可 → 片方を DELETE");
 
                 await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
                 {
-                    r.Step("(1) 1 件目は登録できる");
+                    r.Step("(1) 1 件目を登録する");
 
                     JsonResponse first = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token, DynamicClientRegistration.Metadata(UriA));
 
                     r.VerifyEqual("HTTP の状態は 201", "201", ((int)first.StatusCode).ToString());
 
-                    r.Step("(2) 同じトークンで 2 件目を登録しようとする");
+                    r.Step("(2) 同じトークンで 2 件目も登録できる");
 
                     JsonResponse second = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token, DynamicClientRegistration.Metadata(UriB));
 
-                    r.VerifyEqual("HTTP の状態は 403", "403", ((int)second.StatusCode).ToString());
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)second.StatusCode).ToString());
 
-                    r.VerifyEqual("error は access_denied",
-                        "access_denied", second.String("error") ?? "（無い）");
+                    r.Step("(3) 2 つは別の登録である（資格情報が違う）");
 
-                    r.Step("(3) 1 件目の登録は壊れていない");
+                    string firstId = first.String("client_id");
+                    string secondId = second.String("client_id");
 
-                    ClientRegistration registered = new ClientRegistration()
+                    r.Verify("client_id が違う",
+                        !string.IsNullOrEmpty(firstId) && firstId != secondId,
+                        "違う", (firstId == secondId) ? "**同じ**" : "違った（値は伏せる）");
+
+                    r.Verify("client_secret が違う",
+                        first.String("client_secret") != second.String("client_secret"),
+                        "違う", "違った（値は伏せる）");
+
+                    r.Verify("registration_access_token が違う",
+                        first.String("registration_access_token")
+                            != second.String("registration_access_token"),
+                        "違う", "違った（値は伏せる）");
+
+                    r.Step("(4) どちらでも認可コードが取れる（それぞれの折り返し先で）");
+
+                    ClientRegistration one = new ClientRegistration()
                     {
-                        ClientId = first.String("client_id"),
+                        ClientId = firstId,
                         ClientSecret = first.String("client_secret"),
                         RedirectUri = UriA
                     };
 
-                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
-                        client, registered, "openid email", "state-dup", "nonce-dup", UriA);
+                    ClientRegistration two = new ClientRegistration()
+                    {
+                        ClientId = secondId,
+                        ClientSecret = second.String("client_secret"),
+                        RedirectUri = UriB
+                    };
 
-                    r.Verify("1 件目で、まだ code が取れる", !string.IsNullOrEmpty(authz.Code),
-                        "取れる", string.IsNullOrEmpty(authz.Code)
-                            ? "**取れない（2 件目の要求で壊れた）**" : "取れた");
+                    AuthZResponse authzOne = await Flows.AuthorizeCodeAsync(
+                        client, one, "openid email", "state-n1", "nonce-n1", UriA);
+
+                    r.Verify("1 件目で code が取れる", !string.IsNullOrEmpty(authzOne.Code),
+                        "取れる", string.IsNullOrEmpty(authzOne.Code)
+                            ? "**取れない**（error=" + (authzOne.Error ?? "なし") + "）" : "取れた");
+
+                    AuthZResponse authzTwo = await Flows.AuthorizeCodeAsync(
+                        client, two, "openid email", "state-n2", "nonce-n2", UriB);
+
+                    r.Verify("2 件目で code が取れる", !string.IsNullOrEmpty(authzTwo.Code),
+                        "取れる", string.IsNullOrEmpty(authzTwo.Code)
+                            ? "**取れない**（error=" + (authzTwo.Error ?? "なし") + "）" : "取れた");
+
+                    r.Step("(5) 1 件目を DELETE しても、2 件目は生きている");
+
+                    JsonResponse deleted = await DynamicClientRegistration.DeleteAsync(
+                        client, first.String("registration_client_uri"),
+                        first.String("registration_access_token"));
+
+                    r.VerifyEqual("DELETE は 204", "204", ((int)deleted.StatusCode).ToString());
+
+                    JsonResponse readTwo = await DynamicClientRegistration.ReadAsync(
+                        client, second.String("registration_client_uri"),
+                        second.String("registration_access_token"));
+
+                    r.VerifyEqual("2 件目は GET で読める（200）", "200",
+                        ((int)readTwo.StatusCode).ToString());
+
+                    AuthZResponse authzTwoAgain = await Flows.AuthorizeCodeAsync(
+                        client, two, "openid email", "state-n3", "nonce-n3", UriB);
+
+                    r.Verify("2 件目で、まだ code が取れる", !string.IsNullOrEmpty(authzTwoAgain.Code),
+                        "取れる", string.IsNullOrEmpty(authzTwoAgain.Code)
+                            ? "**取れない（1 件目の DELETE で壊れた）**" : "取れた");
 
                     r.Note("**`POST` を upsert にはしていない。** "
-                        + "**`client_secret` を作り直すか据え置くかの判断が常について回り、"
-                        + "間違えると既存の RP が止まる。** "
-                        + "**更新は RFC 7592 の `PUT`（段階 2）で行う。**");
+                        + "**2 回 `POST` すれば、2 件の別の登録になる**（それが n 件である）。"
+                        + "**特定の登録を直すのは RFC 7592 の `PUT`**（段階 2）。");
+
+                    r.Note("**上限は設けていない**（設定キーも増やしていない）。"
+                        + "**洪水はレート制限で受ける**（#305 の段階 3。口の名前 `register`）。");
+
+                    r.Note("**管理画面は、まだ 1 件だけを扱う**（段階 5-a-1）。"
+                        + "**API から 2 件作った利用者が画面で保存すると、画面が扱う 1 件に寄る** — "
+                        + "**一覧にするのは段階 5-a-2。**");
+
+                    r.Step("(6) 所有者を消すと、その人の登録は全部消える");
+
+                    //  **新しい外部キー**（`OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`）
+                    //    **と、`Register` が所有者を書いていることを、同時に押さえる。**
+                    //
+                    //  **以前は `Saml2OAuth2Data.ClientID` → `Users.ClientID` の外部キー**で、
+                    //    **同じ効き方だった**（1 件だけ消えた）。
+                    //    **n 件になったので、「全部消える」ことを測る必要がある。**
+                    //
+                    //  **`WithDcrAsync` の後始末でも同じ利用者を消す**（二重になるが、無害）。
+                    await UsersAdmin.DeleteByUserNameAsync(admin, ctx.OwnerName);
+
+                    JsonResponse goneOne = await DynamicClientRegistration.ReadAsync(
+                        client, first.String("registration_client_uri"),
+                        first.String("registration_access_token"));
+
+                    r.VerifyEqual("1 件目は、もう読めない（401）", "401",
+                        ((int)goneOne.StatusCode).ToString());
+
+                    JsonResponse goneTwo = await DynamicClientRegistration.ReadAsync(
+                        client, second.String("registration_client_uri"),
+                        second.String("registration_access_token"));
+
+                    r.VerifyEqual("2 件目も、もう読めない（401）", "401",
+                        ((int)goneTwo.StatusCode).ToString());
+
+                    r.Note("**行が無くなるので `401`**（`404` ではない。RFC 7592 §2.1 の MUST）。"
+                        + "**撃ち分けると「在るが触れない」ことが外から分かる**ためである。");
+
+                    r.Note("**所有者を書いていなければ、ここで落ちる** — "
+                        + "**`OwnerUserId` が空の登録は、利用者を消しても残る**"
+                        + "（**種データが、わざとその立場に在る**）。");
                 });
 
                 r.Done();

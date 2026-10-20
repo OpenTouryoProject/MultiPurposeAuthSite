@@ -384,14 +384,9 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
         #region Additional properties
 
-        /// <summary>
-        /// ClientID
-        /// </summary>
-        /// <remarks>
-        /// OAuth2関連のClientID
-        /// </remarks>
-        [JsonProperty]
-        public string ClientID { get; set; } = Guid.NewGuid().ToString("N"); //Guid.NewGuid().ToString();
+        // ClientIDを廃止し、Saml2OAuth2Data.OwnerUserIdによる 1対N モデルへ移行。
+        //[JsonProperty]
+        ///public string ClientID { get; set; } = Guid.NewGuid().ToString("N"); //Guid.NewGuid().ToString();
 
         /// <summary>
         /// 非構造化データ

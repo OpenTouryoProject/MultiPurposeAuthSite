@@ -32,7 +32,8 @@ CREATE TABLE [Users](              -- Users
     [AccessFailedCount] [int] NOT NULL,
     [TotpAuthenticatorKey] [nvarchar](256) NULL,
     -- 追加の情報
-    [ClientID] [nvarchar](256) NOT NULL,
+    --   **ClientID は落とした**（#307 の段階 5-a）。
+    --     **所有者は Saml2OAuth2Data.OwnerUserId が持つ**（1 利用者 n クライアント）。
     [UnstructuredData] [nvarchar](max) NULL,
     [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
@@ -182,6 +183,10 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [RegistrationAccessToken] [nvarchar](128) NULL,   -- Const.MaxLengthOfTokenHash（ハッシュが入る）
     -- クライアント認証の方法（#307 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
     [TokenEndpointAuthMethod] [nvarchar](32) NULL,    -- Const.MaxLengthOfAuthMethod（空なら秘密ベースの 2 つ）
+    -- 所有者（#307 の段階 5-a）。末尾に足してある（ALTER … ADD で揃う）
+    --   **Users.Id を指す**（**名前ではない** — 利用者名を変えても切れない）。
+    --   **NULL 可** : **持ち主の居ない登録**（構成ファイル発の種データ・移行中の行）が在り得る。
+    [OwnerUserId] [nvarchar](38) NULL,                -- Users.Id と同じ幅
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
@@ -295,7 +300,6 @@ CREATE TABLE [RequestObject](
 CREATE UNIQUE NONCLUSTERED INDEX [UserNameIndex] ON [Users] ([UserName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE UNIQUE NONCLUSTERED INDEX [NormalizedUserNameIndex] ON [Users] ([NormalizedUserName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE UNIQUE NONCLUSTERED INDEX [NormalizedEmailIndex] ON [Users] ([NormalizedEmail] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-CREATE UNIQUE NONCLUSTERED INDEX [ClientIDIndex] ON [Users] ([ClientID] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ---- Roles
 CREATE UNIQUE NONCLUSTERED INDEX [RoleNameIndex] ON [Roles] ([Name] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE UNIQUE NONCLUSTERED INDEX [NormalizedNameIndex] ON [Roles] ([NormalizedName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
@@ -329,7 +333,11 @@ ALTER TABLE [UserClaims] WITH CHECK ADD CONSTRAINT [FK.UserClaims.Users_UserId] 
 ---- TotpTokens
 ALTER TABLE [TotpTokens] WITH CHECK ADD CONSTRAINT [FK.TotpTokens.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- Saml2OAuth2Data
-ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_ClientID] FOREIGN KEY([ClientID]) REFERENCES [Users] ([ClientID]) ON DELETE CASCADE
+-- **所有者は OwnerUserId で結ぶ**（#307 の段階 5-a）。
+--   **以前は ClientID → Users.ClientID だった** — **あれが「1 利用者 1 クライアント」の本体**で、
+--   **登録の client_id が、どれかの利用者の 1 枠に載っていることを強制していた。**
+--   **NULL 可なので、持ち主の居ない登録は残る**（利用者を消しても消えない）。
+ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_OwnerUserId] FOREIGN KEY([OwnerUserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- FIDO2Data
 ALTER TABLE [FIDO2Data] WITH CHECK ADD CONSTRAINT [FK.FIDO2Data.Users_UserName] FOREIGN KEY([UserName]) REFERENCES [Users] ([UserName]) ON DELETE CASCADE
 ---- ConsentGrant

@@ -637,7 +637,7 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
 > **公開情報の口は全開なので、この一覧を引かない。**
 
-### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1〜4）
+### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1〜5-a）
 
 **クライアント登録を WebAPI で行う。** **既定は無効**で、**開けると `/register` が出来る。**
 
@@ -689,19 +689,128 @@ grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 > **動的登録で `client_registration` を登録しようとすると `invalid_client_metadata` で断る**
 > （**自分と同じ強さの権限を、自分で配らせない**）。
 
-#### 1 利用者 1 クライアント
+#### 1 利用者 n クライアント（#307 の段階 5-a）
 
-**所有者は `Users.ClientID`** なので、**1 人が持てる登録は 1 件**である。
-**2 件目の登録は `403` ＋ `access_denied`** で断る。
+**1 人が、いくつでも登録できる。** **上限は設けていない。**
+
+```
+POST /register   →  201（1 件目）
+POST /register   →  201（2 件目。**別の client_id / client_secret / registration_access_token**）
+```
+
+**段階 1 では 2 件目を `403` ＋ `access_denied` で断っていた。**
+**絞っていたのは仕様の要求ではなく、器の都合である。**
+
+| | 段階 1 〜 4 | 段階 5-a |
+|---|---|---|
+| **所有者の置き場所** | **`Users.ClientID`**（**利用者の行に 1 枠**。NOT NULL ＋ 一意索引） | **`Saml2OAuth2Data.OwnerUserId`**（**登録の行ごと**。`Users.Id` を指す） |
+| **外部キー** | `Saml2OAuth2Data.ClientID` → `Users.ClientID` | **`Saml2OAuth2Data.OwnerUserId` → `Users.Id`**（`ON DELETE CASCADE`） |
+| 1 人が持てる件数 | **1 件**（2 件目は `403`） | **n 件** |
+| 上限 | — | **無い**（**洪水はレート制限で受ける**。#305 の段階 3。口の名前 `register`） |
+
+**1 対 n にするには、結び付きを「n の側」に持たせる**（**1 の側には n 個置けない**）。
+**それが「所有者の置き場所を移す」ということ**である。
+
+> **`Users.ClientID` は、列ごと落とした。**
+> **残して未使用にすると、DDL と食い違う**（**列が無いのに `INSERT` が書く**）。
+> **`ApplicationUser.ClientID` のプロパティも落とした。**
+
+##### 落としたことで、2 つの歪みが消えた
 
 | | |
 |---|---|
-| 仕様 | **RFC 7591 は「1 つの主体が n 件登録できること」を求めていない** — §3.2.1 は「AS は要求されたメタデータを拒否・置換してよい」、§5 は「重複した登録が疑わしいときは拒否すべき」 |
-| 誤りの形 | **§3.2.2 の 4 つはメタデータの誤り用**で、**ポリシーによる断りに当てはまるものが無い。** **一般の誤りは「`400` unless otherwise specified」**なので、**`403` は禁じられていない** |
-| 更新 | **`POST` は upsert ではない。** **更新は RFC 7592 の `PUT`（段階 2）で行う** |
+| **「宙に浮いた `client_id`」** | **`ApplicationUser.ClientID` の既定値が毎回 `Guid.NewGuid()`** だったので、**登録の無い利用者にも値が入っていた**。**`Register` がそれを掃除していた** |
+| **「`DELETE` で空にできない」** | **NOT NULL ＋ 一意索引 ＋ 外部キー**に当たり、**空にすると `sql` で `DELETE` が `500`** になった（**`mem` では出なかった**。#307 の段階 2 で踏んだ） |
 
-> **管理 API を叩くクライアントの持ち主と、登録される利用者は別人にすること。**
-> **同じ人だと、その人は既に 1 件持っている**ので、**2 件目として断られる。**
+##### 所有者は `Users.Id` で持つ（名前ではない）
+
+| 列 | 中身 | 役 |
+|---|---|---|
+| **`OwnerUserId`** | **`Users.Id`** | **所有者の鍵。** **利用者名を変えても切れない** |
+| `ClientName` | **所有者の利用者名** | **ラベル。** `Helper.GetClientName` が「登録が在るか」の判定と、`client_credentials` の `sub` に使う |
+
+**`OwnerUserId` は空のことがある。**
+
+| | |
+|---|---|
+| **E2E の種データ**（#264） | **所有者を持たない**（**構成ファイルのクライアントと同じ立場** ＝ 配備全体のもの） |
+| 移行中の行 | **`UPDATE` で埋め損ねた行**（下の移行手順） |
+
+> **以前は、種データのクライアント 1 件につき利用者 1 人を作っていた** —
+> **外部キーを満たすためだけ**である。**張り替えたので、その利用者はもう作らない。**
+
+##### 管理画面は、まだ 1 件だけを扱う（段階 5-a-1）
+
+**画面が出すのは「所有者の先頭 1 件」**である（`DataProvider.GetFirstByOwner`）。
+
+| | |
+|---|---|
+| **API から 2 件作った利用者が、画面で保存すると** | **画面が扱う 1 件に寄る**（**他の 1 件は、画面からは見えないまま残る**） |
+| **一覧にするのは** | **段階 5-a-2** |
+
+**「その人のクライアント 1 つ」で足りる所も、先頭 1 件を使う。**
+
+| | |
+|---|---|
+| **自己テストの「ログイン・ユーザの Client」** | `Helper.GetClientIdByName(利用者名)` |
+| **認可ログの `User Account`** | 同上（**ログの 1 行**） |
+
+> **どれが先頭かは決めていない**（`ORDER BY` を書いていない）。
+> **`mem` は辞書の順、DB は索引の都合**で、**同じ順になるとは限らない。**
+> **順を決めるなら、方言 3 つに同じ句を書くこと。**
+
+##### DDL — 既存の配備は、4 つの文を流す（#307 の段階 5-a）
+
+**順番が大事である。** **`2` を先にやらないと、所有者が分からなくなる。**
+
+```sql
+-- SQL Server
+-- 1. 足す
+ALTER TABLE [Saml2OAuth2Data] ADD [OwnerUserId] [nvarchar](38) NULL;
+-- 2. **退避**（Users.ClientID を落とす前に、所有者を写す）
+UPDATE [Saml2OAuth2Data] SET [OwnerUserId] =
+    (SELECT [Id] FROM [Users] WHERE [Users].[ClientID] = [Saml2OAuth2Data].[ClientID]);
+-- 3. 外部キーを張り替える
+ALTER TABLE [Saml2OAuth2Data] DROP CONSTRAINT [FK.Saml2OAuth2Data.Users_ClientID];
+ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_OwnerUserId]
+    FOREIGN KEY([OwnerUserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE;
+-- 4. 最後に、一意索引 → 列
+DROP INDEX [ClientIDIndex] ON [Users];
+ALTER TABLE [Users] DROP COLUMN [ClientID];
+```
+
+```sql
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("OwnerUserId" NVARCHAR2(38) NULL);
+UPDATE "Saml2OAuth2Data" SET "OwnerUserId" =
+    (SELECT "Id" FROM "Users" WHERE "Users"."ClientID" = "Saml2OAuth2Data"."ClientID");
+ALTER TABLE "Saml2OAuth2Data" DROP CONSTRAINT "FK.Saml2OAuth2Data.Users_ClientID";
+ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_OwnerUserId"
+    FOREIGN KEY("OwnerUserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
+ALTER TABLE "Users" DROP CONSTRAINT "ClientIDIndex";
+ALTER TABLE "Users" DROP COLUMN "ClientID";
+```
+
+```sql
+-- PostgreSQL（引用符なしなので、識別子は小文字に畳まれる）
+ALTER TABLE Saml2OAuth2Data ADD COLUMN OwnerUserId varchar(38) NULL;
+UPDATE Saml2OAuth2Data SET OwnerUserId =
+    (SELECT Id FROM Users WHERE Users.ClientID = Saml2OAuth2Data.ClientID);
+ALTER TABLE Saml2OAuth2Data DROP CONSTRAINT FK_Saml2OAuth2Data_Users_ClientID;
+ALTER TABLE Saml2OAuth2Data ADD CONSTRAINT FK_Saml2OAuth2Data_Users_OwnerUserId
+    FOREIGN KEY(OwnerUserId) REFERENCES Users (Id) ON DELETE CASCADE;
+DROP INDEX ClientIDIndex;
+ALTER TABLE Users DROP COLUMN ClientID;
+```
+
+> :warning: **これは、振る舞いが変わる変更である。**
+> **これまで `403` で断っていた 2 件目の登録が、通るようになる。**
+> **管理画面から作った登録も、所有者の持ち方が変わる**（**画面の見え方は、まだ同じ**）。
+
+##### 利用者を消したら、その人の登録は全部消える
+
+**新しい外部キーも `ON DELETE CASCADE`** である（**従来と同じ**）。
+**`OwnerUserId` が空の登録は残る**（**持ち主が居ないため**。種データがそれ）。
 
 #### 受け付けるメタデータ（RFC 7591 §2）
 
@@ -739,7 +848,6 @@ Content-Type: application/json
 | メタデータの不備 | **`400`** ＋ `invalid_redirect_uri` / `invalid_client_metadata` / **`invalid_software_statement`** / `unapproved_software_statement`（§3.2.2） |
 | トークンが無い・無効 | **`401`** ＋ `WWW-Authenticate: Bearer`（RFC 6750 §3.1） |
 | scope が足りない | **`403`** ＋ `insufficient_scope` |
-| **2 件目の登録** | **`403`** ＋ `access_denied` |
 | 無効の配備 | **`404`**（口が無い） |
 
 **レート制限の対象**である（#305 の段階 3。口の名前は `register`）。
@@ -1225,7 +1333,8 @@ POST /register
 
 | | いつ |
 |---|---|
-| **`client_credentials` 経路**／**1 利用者 n クライアント**（DDL ＋ 画面） | **段階 5**（**器と画面の変更**。所有者の持ち方を変える） |
+| **管理画面の一覧化**（**n 件を並べて、足す・消す**） | **段階 5-a-2**（**器は段階 5-a-1 で済んでいる**） |
+| **`client_credentials` 経路**（**人のパスワードを要らなくする**） | **段階 5-b**（**所有者を「認証したクライアントの所有者」から引く** ＋ 設定ファイルに `owner` を 1 属性） |
 | **発行者ごとに許す範囲を絞る**（この発行者は `openid` だけ、など） | **段階 5 以降**（**いまは「信じるか、信じないか」の 2 択**） |
 | **発行者の鍵の入れ替え**（新旧を並べて試す）／**発行者の登録を DB ＋ 管理画面へ** | **段階 5 以降**（`IdFederationUpstreams` が #292 の段階 2 で通った道） |
 | **`jwks_uri`**（鍵を URL から引く） | **別 Issue**（**クライアント認証の経路を非同期にする**。`/token` ほか全ての口から同期で呼ばれている） |

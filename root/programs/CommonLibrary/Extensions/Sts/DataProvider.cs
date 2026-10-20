@@ -133,7 +133,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **RFC 7592 の管理 API 用**（#307 の段階 2）。**ハッシュが入る。**
             "RegistrationAccessToken",
             //  **クライアント認証の方法**（#307 の段階 3）。**空なら秘密ベースの 2 つ。**
-            "TokenEndpointAuthMethod"
+            "TokenEndpointAuthMethod",
+            //  **所有者**（#307 の段階 5-a）。**`Users.Id` を指す。** **空が在り得る。**
+            "OwnerUserId"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -238,6 +240,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
         }
 
+        /// <summary>OwnerUserId の条件句（#307 の段階 5-a）</summary>
+        /// <param name="storeType">EnumUserStoreType</param>
+        /// <returns>条件句</returns>
+        private static string WhereOwnerUserId(EnumUserStoreType storeType)
+        {
+            switch (storeType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    return " WHERE [OwnerUserId] = @OwnerUserId";
+                case EnumUserStoreType.ODPManagedDriver:
+                    return " WHERE \"OwnerUserId\" = :OwnerUserId";
+                default:
+                    return " WHERE \"owneruserid\" = @OwnerUserId";
+            }
+        }
+
         /// <summary>モデルをパラメタにする</summary>
         /// <param name="clientID">string</param>
         /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
@@ -285,6 +303,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **クライアント認証の方法**（#307 の段階 3）。
             prm.Add("TokenEndpointAuthMethod", model.TokenEndpointAuthMethod);
+            prm.Add("OwnerUserId", model.OwnerUserId);
 
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
@@ -383,7 +402,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 SoftwareVersion = model.SoftwareVersion,
                 RegistrationAccessToken = model.RegistrationAccessToken,
                 //  **クライアント認証の方法**（#307 の段階 3）。
-                TokenEndpointAuthMethod = model.TokenEndpointAuthMethod
+                TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
+                //  **所有者**（#307 の段階 5-a）。
+                OwnerUserId = model.OwnerUserId
             };
         }
 
@@ -530,6 +551,115 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return all;
+        }
+
+        #endregion
+
+        #region GetByOwner
+
+        /// <summary>所有者の登録を全件返す（#307 の段階 5-a）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <returns>登録の一覧（1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **1 利用者 n クライアント**になったので、**所有者で引く口が要る**
+        /// （**以前は `Users.ClientID` が 1 件を指していた**ので、`Get` 1 つで足りた）。
+        ///
+        /// **並びは決めていない。**
+        /// **「先頭の 1 件」を使う所**（`Helper.GetClientIdByName` / 管理画面 / 自己テストの導線）
+        /// **は、どれが来てもよい作りにしてある** —
+        /// **`mem` は辞書の順、DB は索引の都合**で、**同じ順になるとは限らない。**
+        /// **順を決めるなら `ORDER BY` を足すこと**（**方言 3 つに同じ句を書く**）。
+        ///
+        /// **空の `ownerUserId` では、1 件も返さない** —
+        /// **所有者の無い登録**（構成ファイル発の種データ）**を、誰かのものにしないため**である。
+        /// </remarks>
+        public static List<ManageAddSaml2OAuth2DataViewModel> GetByOwner(string ownerUserId)
+        {
+            List<ManageAddSaml2OAuth2DataViewModel> all
+                = new List<ManageAddSaml2OAuth2DataViewModel>();
+
+            if (string.IsNullOrEmpty(ownerUserId))
+            {
+                return all;
+            }
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    all.AddRange(DataProvider.Saml2OAuth2Data.Values
+                        .Where(m => m != null && m.OwnerUserId == ownerUserId)
+                        .Select(m => DataProvider.Copy(null, m)));
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        EnumUserStoreType storeType = Config.UserStoreType;
+
+                        all.AddRange(cnn.Query<ManageAddSaml2OAuth2DataViewModel>(
+                            "SELECT " + DataProvider.ColumnList(DataProvider.Columns, storeType)
+                            + " FROM " + DataProvider.TableName(storeType)
+                            + DataProvider.WhereOwnerUserId(storeType),
+                            new { OwnerUserId = ownerUserId }));
+                    }
+
+                    break;
+            }
+
+            //  **使う形に戻す**（#297）。
+            for (int i = 0; i < all.Count; i++)
+            {
+                all[i] = DataProvider.Unprotect(all[i]);
+            }
+
+            return all;
+        }
+
+        /// <summary>所有者の登録のうち 1 件を返す（#307 の段階 5-a）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <returns>登録（1 件も無ければ null）</returns>
+        /// <remarks>
+        /// **「その人のクライアント」を 1 つ要る所のため**である
+        /// （**自己テストの導線・認可ログ・管理画面の段階 5-a-1**）。
+        /// **どれが来てもよい** — **`GetByOwner` の注のとおり、並びは決めていない。**
+        /// </remarks>
+        public static ManageAddSaml2OAuth2DataViewModel GetFirstByOwner(string ownerUserId)
+        {
+            List<ManageAddSaml2OAuth2DataViewModel> all = DataProvider.GetByOwner(ownerUserId);
+
+            return (all.Count == 0) ? null : all[0];
+        }
+
+        /// <summary>所有者の登録を全件消す（#307 の段階 5-a）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <remarks>
+        /// **`mem` のためだけに在る。**
+        /// **DB では外部キー**（`OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`）
+        /// **が消す**ので、**呼ぶ必要が無い。**
+        /// **`mem` には制約が無い**ので、**消す側が明示的に消す**
+        /// （**#151 の段階 2 で、`sub` の対応表に対して同じことをしている**）。
+        ///
+        /// **空の `ownerUserId` では、1 件も消さない** —
+        /// **所有者の無い登録**（構成ファイル発の種データ）**を巻き込まないため**である。
+        /// </remarks>
+        public static void DeleteByOwner(string ownerUserId)
+        {
+            if (string.IsNullOrEmpty(ownerUserId))
+            {
+                return;
+            }
+
+            foreach (ManageAddSaml2OAuth2DataViewModel model
+                in DataProvider.GetByOwner(ownerUserId))
+            {
+                DataProvider.Delete(model.ClientID);
+            }
         }
 
         #endregion

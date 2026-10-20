@@ -17,7 +17,8 @@ CREATE TABLE Users(                -- Users
     AccessFailedCount integer NOT NULL,
     TotpAuthenticatorKey varchar(256) NULL,
     -- 追加の情報
-    ClientID varchar(256) NOT NULL,
+    --   **ClientID は落とした**（#307 の段階 5-a）。
+    --     **所有者は Saml2OAuth2Data.OwnerUserId が持つ**（1 利用者 n クライアント）。
     UnstructuredData text NULL,
     DeviceToken varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,
@@ -156,6 +157,10 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     RegistrationAccessToken varchar(128) NULL,       -- Const.MaxLengthOfTokenHash（ハッシュが入る）
     -- クライアント認証の方法（#307 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
     TokenEndpointAuthMethod varchar(32) NULL,        -- Const.MaxLengthOfAuthMethod（空なら秘密ベースの 2 つ）
+    -- 所有者（#307 の段階 5-a）。末尾に足してある（ALTER … ADD で揃う）
+    --   **Users.Id を指す**（名前ではない）。**NULL 可。**
+    --   **引用符なしなので、識別子は小文字に畳まれる**（ownerluserid ではなく owneruserid）。
+    OwnerUserId varchar(38) NULL,
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 
@@ -260,7 +265,6 @@ CREATE TABLE RequestObject(
 CREATE UNIQUE INDEX UserNameIndex ON Users (UserName);
 CREATE UNIQUE INDEX NormalizedUserNameIndex ON Users (NormalizedUserName);
 CREATE UNIQUE INDEX NormalizedEmailNameIndex ON Users (NormalizedEmail);
-CREATE UNIQUE INDEX ClientIDIndex ON Users (ClientID);
 ---- Roles
 CREATE UNIQUE INDEX RoleNameIndex ON Roles (Name);
 CREATE UNIQUE INDEX NormalizedNameIndex ON Roles (NormalizedName);
@@ -294,7 +298,8 @@ ALTER TABLE UserClaims ADD CONSTRAINT FK_UserClaims_Users_UserId FOREIGN KEY(Use
 ---- TotpTokens
 ALTER TABLE TotpTokens ADD CONSTRAINT FK_TotpTokens_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- Saml2OAuth2Data
-ALTER TABLE Saml2OAuth2Data ADD CONSTRAINT FK_Saml2OAuth2Data_Users_ClientID FOREIGN KEY(ClientID) REFERENCES Users (ClientID) ON DELETE CASCADE;
+-- **所有者は OwnerUserId で結ぶ**（#307 の段階 5-a。SQL Server 側の注と同じ）。
+ALTER TABLE Saml2OAuth2Data ADD CONSTRAINT FK_Saml2OAuth2Data_Users_OwnerUserId FOREIGN KEY(OwnerUserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE FIDO2Data ADD CONSTRAINT FK_FIDO2Data_Users_UserName FOREIGN KEY(UserName) REFERENCES Users (UserName) ON DELETE CASCADE;
 ---- ConsentGrant

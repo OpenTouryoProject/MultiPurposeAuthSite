@@ -32,6 +32,7 @@
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592 の GET / PUT / DELETE）を追加（#307 の段階 2）
 //*  2026/10/19  玄人 幸道         jwks / DN / token_endpoint_auth_method を受ける（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         software_statement を検証して受ける（#307 の段階 4）
+//*  2026/10/20  玄人 幸道         所有者を OwnerUserId へ移し、1 利用者 n クライアントにした（#307 の段階 5-a）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -75,7 +76,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | | |
     /// |---|---|
     /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（ROPC で取る） |
-    /// | 所有者 | **トークンの `sub` の利用者。** **1 利用者 1 クライアント**（2 件目は `403` ＋ `access_denied`） |
+    /// | 所有者 | **トークンの `sub` の利用者**（**段階 5-a で n 件になった**。下） |
     /// | 器 | **既存の `Saml2OAuth2Data`**（`DataProvider`）。**RFC 7591 §2 の列は #307 の段階 1 で足した** |
     ///
     /// **段階 2 で出来ること**（RFC 7592。`registration_client_uri` ＝ `…/register/{client_id}`）。
@@ -85,7 +86,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | 認可 | **`registration_access_token`**（**登録の応答で 1 回だけ返す**。**その 1 件だけに効く**） |
     /// | `GET` | **登録を読む**（§2.1）。**`client_secret` は返さない** |
     /// | `PUT` | **全置換**（§2.2）。**`client_id` は一致必須**、**`client_secret` を入れるなら一致必須** |
-    /// | `DELETE` | **消す**（§2.3）。**`204`**。**同意も落とす**（**`Users.ClientID` は空にしない**。一意制約） |
+    /// | `DELETE` | **消す**（§2.3）。**`204`**。**同意も落とす** |
     ///
     /// **専用 scope のアクセス トークン（段階 1）では、管理 API を叩けない** —
     /// **作る権限と、直す権限は別物**である（§2 : クライアントは
@@ -175,7 +176,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | **201** | 登録できた（§3.2.1 : `201 Created`） |
         /// | **400** | メタデータが不正（§3.2.2） |
         /// | **401** | トークンが無効（RFC 6750 §3.1 : `invalid_token`） |
-        /// | **403** | **scope が足りない**（`insufficient_scope`）／**2 件目の登録**（`access_denied`） |
+        /// | **403** | **scope が足りない**（`insufficient_scope`） |
         /// | **404** | **この配備では動的登録を開けていない**（本来は口が張られていない） |
         /// </remarks>
         public static int Register(
@@ -231,27 +232,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return 401;
             }
 
-            //  **1 利用者 1 クライアント**（#307 の段階 1 の決定）。
+            //  **1 利用者 n クライアント**（#307 の段階 5-a）。
             //
-            //  **RFC 7591 は「1 つの主体が n 件登録できること」を求めていない** —
-            //    §3.2.1 は「AS は要求されたメタデータを拒否・置換してよい」とし、
-            //    §5 は「重複した登録が疑わしいときは拒否すべき」としている。
+            //  **段階 1 では 1 件に絞っていた**（2 件目は `403` ＋ `access_denied`）。
+            //    **絞っていたのは仕様の要求ではなく、器の都合**である —
+            //    **所有者が `Users.ClientID`（1 枠・NOT NULL・一意）だった。**
+            //    **所有者を `Saml2OAuth2Data.OwnerUserId` へ移したので、縛りは外れた。**
             //
-            //  **誤りの形は `403` ＋ `access_denied`**（RFC 6749 §4.1.2.1 / §5.2 の既存のコード）。
-            //    **§3.2.2 の 4 つはメタデータの誤り用**で、ポリシーによる断りに当てはまるものが無い。
-            //    **一般の誤りは「400 unless otherwise specified」**なので、**403 は禁じられていない。**
+            //  **上限は設けていない**（設定キーも増やしていない）。
+            //    **「条件分岐を増やさない」という決め**である。
+            //    **洪水はレート制限で受ける**（#305 の段階 3。口の名前 `register`）。
             //
             //  **`POST` を upsert にはしない** — **`client_secret` を作り直すか据え置くかの
             //    判断が常について回り、間違えると既存の RP が止まる。**
             //    **更新は RFC 7592 の `PUT`（段階 2）で行う。**
-            if (!string.IsNullOrEmpty(user.ClientID)
-                && DataProvider.Get(user.ClientID) != null)
-            {
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
-                err.Add(OAuth2AndOIDCConst.error_description,
-                    "This deployment allows one client registration per user.");
-                return 403;
-            }
+            //    **2 回 `POST` すれば、2 件の別の登録になる**（それが n 件である）。
 
             #endregion
 
@@ -307,22 +302,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientRegistrationProvider.Hash(registrationAccessToken);
 
             //  **`ClientName` は、要求の `client_name` ではなく利用者名である。**
-            //    **`Helper.GetClientName` / `GetClientIdByName` が、この列を
-            //    「登録が在るか」の判定と逆引きに使っている**ため、他の値を入れてはならない。
+            //    **`Helper.GetClientName` が、この列を「登録が在るか」の判定と、
+            //    `client_credentials` の `sub` に使っている**ため、他の値を入れてはならない。
             //    **`client_name` は受け取っても無視する**（RFC 7591 §3.2.1 が認めている）。
+            //    **所有者の鍵は `OwnerUserId`**（下）。**名前は、ラベルである。**
             model.ClientName = user.UserName;
 
-            //  **古い `Users.ClientID` が残っていれば、その登録を消しておく**
-            //    （**登録の行は無い**ことを上で確かめている。**宙に浮いた `client_id`** の掃除）。
-            string oldClientID = user.ClientID;
-
-            if (!string.IsNullOrEmpty(oldClientID))
-            {
-                DataProvider.Delete(oldClientID);
-            }
-
-            user.ClientID = client_id;
-            CmnUserStore.Update(user);
+            //  **所有者を列に書く**（#307 の段階 5-a）。
+            //    **`Users.Id` を指す**（**名前ではない** — 利用者名を変えても切れない）。
+            //    **以前は `user.ClientID = client_id; CmnUserStore.Update(user);` だった**
+            //    （**利用者の行を書き換えていた**）。**いまは利用者の行に触らない。**
+            model.OwnerUserId = user.Id;
 
             DataProvider.Create(client_id, model);
 
@@ -572,16 +562,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | | |
         /// |---|---|
         /// | **消える** | **登録の行**／**同意**（`ConsentProvider.Revoke`）／**`registration_access_token`**（**行が無くなるので、2 回目の要求は `401`**。§5） |
-        /// | **残る** | **`Users.ClientID`**（**宙に浮いた値として残る**。**一意制約があるので空にできない**。**次の登録で掃除される**） |
+        /// | **残る** | **他の登録**（**同じ所有者の n 件のうち、消したものだけが消える**。#307 の段階 5-a） |
         /// | **使えなくなる** | **既に発行されたアクセス トークン**（**登録が無くなると `Helper.HasClient` が false になる**。#307 の段階 2）／**リフレッシュ トークン**（**クライアント認証が通らない**） |
         ///
-        /// **所有者は `ClientName` から引く**（**この列には所有者の利用者名が入っている**。段階 1 の決め）。
-        /// **`registration_access_token` には利用者が入っていない**ので、**この経路しかない。**
+        /// **所有者は `OwnerUserId` の列から引く**（#307 の段階 5-a）。
+        /// **`registration_access_token` には利用者が入っていない**ので、**登録の行から引くしかない。**
+        /// **以前は `ClientName`（利用者名）で利用者を引き直していた** —
+        /// **名前は変わり得るので、Id で持つようにした。**
         ///
-        /// **`Users.ClientID` は空にしない**（**一意制約と外部キーに当たる**。下の注）。
-        /// **それでも同じ利用者が登録し直せる** —
-        /// **段階 1 の `Register` が「登録の行が無ければ通す」**ため
-        /// （**1 利用者 1 クライアントの縛りは解ける**）。
+        /// **利用者の行には触らない**（**段階 5-a で `Users.ClientID` を落とした**）。
+        /// **「一意制約があるので空にできない」という制約は、もう無い。**
         /// </remarks>
         public static int Delete(
             string client_id, string bearerToken, out Dictionary<string, string> err)
@@ -595,31 +585,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return status;
             }
 
-            //  **所有者を引く**（同意の取り消しと、`Users.ClientID` の後始末に要る）。
-            ApplicationUser user = string.IsNullOrEmpty(model.ClientName)
-                ? null : CmnUserStore.FindByName(model.ClientName);
-
-            if (user != null && user.ClientID == client_id)
+            //  **同意を落とす**（§2.3 : 払い下げたクライアントへの許可を残さない）。
+            //    **所有者は列から引く**（#307 の段階 5-a）。
+            //    **空のことが在る**（構成ファイル発の種データ）ので、そのときは何もしない。
+            if (!string.IsNullOrEmpty(model.OwnerUserId))
             {
-                //  **同意を落とす**（§2.3 : 払い下げたクライアントへの許可を残さない）。
-                ConsentProvider.Revoke(user.Id, client_id);
+                ConsentProvider.Revoke(model.OwnerUserId, client_id);
             }
 
-            //  **`Users.ClientID` は空にしない。**
+            //  **利用者の行には触らない**（#307 の段階 5-a）。
             //
-            //  **`Users.ClientID` は NOT NULL で、一意索引が張られている**
-            //    （`ClientIDIndex`）。**空にすると、2 人目で一意制約に当たる。**
-            //    **`Saml2OAuth2Data.ClientID` から `Users.ClientID` への
-            //    外部キー**も在るので、**行が残っているうちは空にできない。**
-            //    **管理画面の `RemoveSaml2OAuth2Data` も、同じ理由で空にしていない**
-            //    （「一意制約エラーになるので」というコメントが残っている）。
-            //
-            //  **それでも登録し直せる** — **段階 1 の `Register` は
-            //    「`Users.ClientID` が在っても、その登録の行が無ければ通す」**
-            //    （宙に浮いた `client_id` を許容し、作り直しのときに掃除する）。
-            //
-            //  **`mem` では制約が無いので通ってしまう。**
-            //    **`sql` で `DELETE` が 500 になって分かった**（#307 の段階 2 の実測）。
+            //  **段階 2 では `Users.ClientID` の後始末に悩んだ** —
+            //    **NOT NULL ＋ 一意索引 ＋ `Saml2OAuth2Data` からの外部キー**があり、
+            //    **空にすると `sql` で `DELETE` が 500 になった**（`mem` では出なかった）。
+            //    **段階 5-a で列ごと落としたので、その悩みは消えた。**
 
             DataProvider.Delete(client_id);
 
