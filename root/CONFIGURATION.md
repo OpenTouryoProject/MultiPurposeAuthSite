@@ -676,7 +676,7 @@ grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 
 | | |
 |---|---|
-| **なぜ ROPC なのか** | **所有者をトークンの `sub` から決める**ため。**この配備は `Users.ClientID` で所有者を持つ**ので、**利用者の居ない `client_credentials` では「誰の登録か」を表せない** |
+| **なぜ ROPC なのか** | **所有者をトークンの `sub` から決める**ため。**`client_credentials` のトークンには `sub`（利用者）が無い**ので、**それだけでは「誰の登録か」を表せない**（**段階 5-b で、構成ファイルの `owner` から引けるようにする**） |
 | **ROPC も既定で無効** | **`EnableResourceOwnerPasswordCredentialsGrantType` を併せて開ける**こと（OAuth 2.1 で外れたグラントなので、既定は無効のまま） |
 | **トークンは絞られる** | **scope は `client_registration` 1 本だけ**になり（他を一緒に要求しても外す）、**有効期限は `DcrAccessTokenExpireTimeSpanFromSeconds`**（配備ぜんたいの 360 分ではない） |
 
@@ -1021,7 +1021,7 @@ ALTER TABLE Saml2OAuth2Data
 |---|---|
 | **`GET`** | **登録の全体を返す**（`200`）。**`client_secret` は返さない** |
 | **`PUT`** | **全置換**（`200`）。**`client_id` は必須・一致必須。** **`client_secret` を入れるなら一致必須**（**自分で決めさせない**） |
-| **`DELETE`** | **`204`（本体なし）。** **同意も落とす**（**`Users.ClientID` は空にしない。下の節**）。**同じ利用者が登録し直せる** |
+| **`DELETE`** | **`204`（本体なし）。** **同意も落とす**（**所有者の行は触らない。下の節**）。**同じ利用者が登録し直せる** |
 
 **専用 scope（`client_registration`）のアクセス トークンでは叩けない** —
 **作る権限と、直す権限は別物**である（§2 : クライアントは `registration_access_token` を使うこと）。
@@ -1110,19 +1110,23 @@ curl -X DELETE "https://localhost:44300/MultiPurposeAuthSite/register/<client_id
 （**鍵と `exp` だけで通る**ため。**`/revoke` と同じ限界**である）。
 **この IdP の検証を通る口（`/userinfo` ほか）では止まる。**
 
-##### `DELETE` と `Users.ClientID`
+##### `DELETE` は、所有者の行を触らない
 
-**`Users.ClientID` は空にしない。**
+**消すのは登録の行だけ**である（**同意も落とす**）。**利用者（`Users`）の行は触らない。**
 
 | | |
 |---|---|
-| なぜ | **`Users.ClientID` は NOT NULL で、一意索引（`ClientIDIndex`）が張られている** — **空にすると 2 人目で一意制約に当たる。** **`Saml2OAuth2Data.ClientID` から `Users.ClientID` への外部キー**も在る |
-| 既存の作り | **管理画面の `RemoveSaml2OAuth2Data` も、同じ理由で空にしていない**（「一意制約エラーになるので」というコメントが残っている） |
-| それでも登録し直せる理由 | **段階 1 の `Register` は「`Users.ClientID` が在っても、その登録の行が無ければ通す」** — **宙に浮いた `client_id` を許容し、作り直しのときに掃除する** |
+| **所有者の持ち方** | **`Saml2OAuth2Data.OwnerUserId`**（**登録の行ごと**。#307 の段階 5-a-1）。**行が消えれば、結び付きも一緒に消える** |
+| **登録し直せる** | **同じ利用者が、何件でも作れる**（**上限は無い**） |
+| 管理画面 | **`RemoveSaml2OAuth2Data` も、登録の行だけを消す** |
 
-> **`mem` では制約が無いので、空にしても通ってしまう。**
-> **`sql` で `DELETE` が `500` になって分かった**（#307 の段階 2 の実測）。
-> **`RT-307.11` と `RT-307.12` が、DB ストアの通しで捕まえた。**
+> **段階 1 〜 4 は `Users.ClientID`（利用者の行の 1 枠）で所有者を持っていた**ので、
+> **「`DELETE` でそこを空にするか」が論点だった** — **空にできなかった。**
+> **NOT NULL ＋ 一意索引（`ClientIDIndex`）＋ `Saml2OAuth2Data` からの外部キー**に当たり、
+> **`sql` で `DELETE` が `500`** になった（**`mem` には制約が無いので出なかった**。
+> 段階 2 の実測。**`RT-307.11` と `RT-307.12` が捕まえた**）。
+>
+> **段階 5-a-1 で `Users.ClientID` を列ごと落としたので、この論点そのものが消えた。**
 
 ##### DDL — `Saml2OAuth2Data` に 1 列足す（#307 の段階 2）
 

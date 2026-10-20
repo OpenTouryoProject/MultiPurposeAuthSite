@@ -33,6 +33,7 @@
 //*  2026/10/19  玄人 幸道         クライアント認証の方法のケースを追加（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         software_statement のケースを追加（#307 の段階 4）
 //*  2026/10/20  玄人 幸道         RT-307.3 を「n 件作れる」に書き換えた（#307 の段階 5-a）
+//*  2026/10/20  玄人 幸道         Noteの文面を段階5-a-1後の形に直した（#307）
 //**********************************************************************************
 
 using System;
@@ -1158,7 +1159,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**`VerifyAccessToken` の「クライアントがまだ在るか」の確認は、"
                     + "効いていなかった** — **`GetClientSecret` は未登録でも `\"\"` を返す**ので、"
                     + "**`!= null` が常に真**だった（**#307 の段階 2 で `Helper.HasClient` にした**）。"
-                    + "**1 利用者 1 クライアント**なので、**消せないと登録し直せない**ことも測る。",
+                    + "**段階 1 〜 4 は 1 利用者 1 クライアントだった**ので、"
+                    + "**消せないと登録し直せなかった** — **その確認も、ここで一緒に測る**"
+                    + "（**段階 5-a-1 で上限は無くなった**）。",
                     "RFC 7592 §2.3 / §5 / #307 の段階 2");
 
                 r.Target("DELETE registration_client_uri");
@@ -1236,7 +1239,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         "返らない", string.IsNullOrEmpty(authzAfter.Code)
                             ? "返らない（error=" + (authzAfter.Error ?? "なし") + "）" : "**返った**");
 
-                    r.Step("(6) 同じ利用者が、登録し直せる（403 にならない）");
+                    r.Step("(6) 同じ利用者が、登録し直せる");
 
                     JsonResponse again = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token,
@@ -1244,17 +1247,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.VerifyEqual("HTTP の状態は 201", "201", ((int)again.StatusCode).ToString());
 
-                    r.Note("**`Users.ClientID` は空にしない** — "
-                        + "**NOT NULL ＋ 一意索引（`ClientIDIndex`）で、"
-                        + "`Saml2OAuth2Data` からの外部キーも在る**ため"
-                        + "（**管理画面の削除も、同じ理由で空にしていない**）。 "
-                        + "**それでも登録し直せるのは、段階 1 の `Register` が"
-                        + "「登録の行が無ければ通す」から**である。"
+                    r.Note("**消すのは登録の行だけ** — **所有者（`Users`）の行は触らない。** "
+                        + "**所有者は `Saml2OAuth2Data.OwnerUserId`（登録の行ごと）**なので、"
+                        + "**行が消えれば結び付きも一緒に消える**"
+                        + "（**管理画面の削除も同じ**）。 "
+                        + "**同じ利用者が、何件でも登録できる**"
+                        + "（**#307 の段階 5-a-1 で上限が無くなった**）。"
                         + "**同意は落とす**（`ConsentProvider.Revoke`）。");
 
-                    r.Note("**`mem` では制約が無いので、空にしても通ってしまう** — "
-                        + "**`sql` で `DELETE` が `500` になって分かった**"
-                        + "（**この (6) と `RT-307.12` の (6) が、それを捕まえた**）。");
+                    r.Note("**段階 1 〜 4 は、所有者が `Users.ClientID`（利用者の行の 1 枠）だった** — "
+                        + "**`DELETE` でそこを空にしようとして、`sql` で `500` になった**"
+                        + "（**NOT NULL ＋ 一意索引 ＋ 外部キー。`mem` には制約が無く、出なかった**。"
+                        + "**この (6) と `RT-307.12` の (6) が捕まえた**）。"
+                        + "**段階 5-a-1 で、その列ごと落とした。**");
 
                     r.Note("**外部のリソース サーバが、自前で JWT を検証する場合は止まらない** — "
                         + "**鍵と `exp` だけで通るため**（`/revoke` と同じ限界）。"
@@ -1344,7 +1349,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.Step("(6) 別の登録のトークンでは触れない");
 
-                    //  **1 利用者 1 クライアント**なので、**消してから作り直して 2 つ目を得る。**
+                    //  **2 つ目は、そのまま作ってもよい**（**段階 5-a-1 で上限が無くなった**）。
+                    //    **消してから作り直す形のままにしてある** —
+                    //    **「消した後に作り直せる」ことも、この経路で一緒に通る。**
                     Assert.Equal(204, (int)(await DynamicClientRegistration.DeleteAsync(
                         client, registrationClientUri, registrationAccessToken)).StatusCode);
 
@@ -2304,8 +2311,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// | **A** | **管理 API を叩くクライアントの持ち主。** 画面から、`scope` に専用 scope だけを登録する |
         /// | **B** | **登録の所有者。** ROPC の `username` / `password` で本人になる |
         ///
-        /// **分けないと、B の登録が「2 件目」になって断られる**
-        /// （**クライアント登録は 1 人 1 件**で、A が既に 1 件持っているため）。
+        /// **分けないと、A の管理クライアントと B の登録が、同じ利用者に混ざる** —
+        /// **`Helper.GetClientIdByName` と管理画面が返すのは「所有者の先頭 1 件」**なので、
+        /// **どちらを引くかが決まらない。**
+        ///
+        /// **#307 の段階 5-a-1 より前は、もっと硬く効いていた** —
+        /// **B の登録が「2 件目」になって断られた**（**1 人 1 件だった**ため）。
         ///
         /// **A のクライアントは画面から登録する** — **動的登録では専用 scope を付けられない**
         /// （`RT-307.4` の (7)）。**配るのは、管理画面か構成ファイルからだけ**である。

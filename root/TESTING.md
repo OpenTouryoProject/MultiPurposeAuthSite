@@ -521,8 +521,12 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 | **A** | **管理 API を叩くクライアントの持ち主。** 画面から、`scope` に専用 scope（`client_registration`）を登録する（ロールは **`Admin`**） |
 | **B** | **登録の所有者。** ROPC の `username` / `password` で本人になる（ロールは `User`） |
 
-> **分けないと、B の登録が「2 件目」になって断られる** —
-> **クライアント登録は 1 人 1 件**で、**A が既に 1 件持っている**ため。
+> **分けないと、A の管理クライアントと B の登録が、同じ利用者に混ざる** —
+> **`Helper.GetClientIdByName` と管理画面が返すのは「所有者の先頭 1 件」**なので、
+> **どちらを引くかが決まらない。**
+>
+> **段階 5-a-1 より前は、もっと硬く効いていた** — **B の登録が「2 件目」になって断られた**
+> （**1 人 1 件だった**ため）。
 >
 > **A のクライアントは画面から登録する。** **動的登録では専用 scope を付けられない**
 > （`RT-307.4` の (7) が、それを測っている）。
@@ -637,7 +641,8 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **`!string.IsNullOrEmpty(user.ClientID) && DataProvider.Get(user.ClientID) != null`**
 > という条件なので、**行が消えていれば、`Users.ClientID` が残っていても登録し直せる。**
 > **その後、空にしてはならないことが分かった**（下の「踏んだこと」）ので、
-> **いまの実装は空にしない。**
+> **段階 2 の実装は空にしなかった。**
+> **段階 5-a-1 で `Users.ClientID` を列ごと落としたので、この歯抜けは作れなくなった。**
 
 > **最後の 1 行が、段階 2 でいちばん大事な確認である。**
 > **以前は「クライアントがまだ在るか」の確認が効いていなかった**
@@ -714,6 +719,9 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **`mem` のストアには制約が無いので、`mem` の通しでは出ない。**
 > **`mem` で 26 件すべて通っていても、DB ストアでは落ちる**という形である。
 > **`Users` と `Saml2OAuth2Data` を跨いで書く変更は、必ず方言でも測ること。**
+>
+> **段階 5-a-1 で、この制約ごと落とした**（**所有者は `Saml2OAuth2Data.OwnerUserId` へ移した**）。
+> **踏んだ記録として残す** — **教訓（跨ぐ変更は方言でも測る）は、そのまま効いている。**
 
 ##### クライアント認証の方法（`RT-307.14` 〜 `.17`。#307 の段階 3）
 
@@ -906,8 +914,9 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 > **方言は `sql` だけでよい。** **この段階は DDL を変えていない**（**列を 1 つも足していない**）ので、
 > **`ora` / `npg` を取り直す理由が無い** — **`RT-307.18` 〜 `.21` が通る DB の道は、
 > `DataProvider.Create` / `Update` / `Get` で、段階 1 〜 3 のケースと同じ列**である。
-> **`sql` を測るのは、制約（`Users.ClientID` の一意索引・外部キー）が在る側で、
-> 登録の作成・更新・削除が通ることを見るため**（段階 2 でそこを踏んだ）。
+> **`sql` を測るのは、制約が在る側で、登録の作成・更新・削除が通ることを見るため**である
+> （段階 2 でそこを踏んだ。**当時の制約は `Users.ClientID` の一意索引と外部キー**で、
+> **段階 5-a-1 でそれごと落とした**）。
 ##### 1 利用者 n クライアント（`RT-307.3` の書き換え。#307 の段階 5-a）
 
 **所有者の置き場所を移した分**を測る。**ケースは増やさず、`RT-307.3` の意味を変えた。**
@@ -997,7 +1006,12 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 | **`RT-306.3`** | **2 件登録のとき、`redirect_uri` の省略は通らない** |
 
 **使い捨ての利用者で測る**（`UsersAdmin` で作って消す。**ロールは `Admin`**）。
-**クライアント登録は 1 人 1 件**なので、**共用の利用者で登録すると、`RT-277.1` や `RT-305.4` と登録を奪い合う**（#305 の段階 2 で踏んだ）。
+**当時はクライアント登録が 1 人 1 件**だったので、
+**共用の利用者で登録すると、`RT-277.1` や `RT-305.4` と登録を奪い合った**（#305 の段階 2 で踏んだ）。
+
+> **#307 の段階 5-a-1 で 1 人 n 件になったので、「奪い合って消える」形では起きない。**
+> **それでも使い捨てのままにする** — **管理画面が扱うのは所有者の先頭 1 件**なので、
+> **共用の利用者に登録を増やすと、画面を使うケースがどれを引くか決まらない。**
 
 > **登録する値は `ManageClientRegistration.RegisterWithSecretAsync` の
 > 「項目を差し込める」多重定義で入れる**（#306 で足した）。
@@ -1143,8 +1157,9 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 **窓の中で叩き切る必要がある**ので、**10 本ずつ並べて叩く**（窓が変わると回数は 0 に戻る）。
 
 > **使い捨てのクライアント登録だけでは足りなかった**（実測）。
-> **クライアント登録は 1 人 1 件**（`/Manage/AddSaml2OAuth2Data`）なので、
-> **共用のテスト利用者で登録すると、同じ `client_id` を他のケースと分け合う。**
+> **管理画面が扱うのは、その利用者の 1 件**（`/Manage/AddSaml2OAuth2Data`）なので、
+> **共用のテスト利用者で登録すると、同じ `client_id` を他のケースと分け合う**
+> （**当時は DB 側も 1 人 1 件だった**。#307 の段階 5-a-1 で**画面だけがこの形**になった）。
 >
 > | 実測 | 何が落ちたか |
 > |---|---|
@@ -1216,7 +1231,9 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 **どちらも使い捨ての利用者で測る**（`UsersAdmin` で作って消す）。
 **`RT-305.4` は、その利用者でクライアントを 1 件登録する**（`/Manage/AddSaml2OAuth2Data`。**ロールは `Admin`**）。
 **共用のテスト利用者やクライアントを断ると、並行して走る他のテストが落ちる**
-（**登録は 1 人 1 件なので、「使い捨て」は利用者の単位で要る**。#305 の段階 3 の節）。
+（**「使い捨て」は、クライアントではなく利用者の単位で要る**。#305 の段階 3 の節）。
+**管理画面が扱うのは、その利用者の 1 件**なので、**共用の利用者に登録を増やしても解けない**
+（**#307 の段階 5-a-1 より前は、DB 側も 1 人 1 件だった**）。
 
 > **上限は高くしてある**（`test.ps1` が **`AuthFailureMaxAttempts=20`** / `AuthFailureLockoutSeconds=5`）。
 > **低くすると通しが壊れた**（実測）：
@@ -1403,6 +1420,10 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 `UserClaims` / `TotpTokens` / `FIDO2Data` / `ConsentGrant` / `SubjectIdentifier` /
 **`Saml2OAuth2Data`（その利用者が登録したクライアント）**。
 
+> **#307 の段階 5-a-1 で、この cascade の経路が変わった** —
+> **`Saml2OAuth2Data.ClientID` → `Users.ClientID` から、`OwnerUserId` → `Users.Id` へ**である。
+> **1 人が n 件持てるようになったので、n 件とも落ちる**（`RT-307.3` の (6) が測る）。
+
 > **以前は属性を潰す実装だった**（利用者名・メアドを利用者 id で塗り潰す）。
 > **潰す対象の `Users.UserName` / `Users.ClientID` は、どちらも外部キーの参照先**であり、
 > **`ON UPDATE` の指定は 3 方言とも 1 本も無い**（= NO ACTION）。
@@ -1412,7 +1433,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > | 試した `UPDATE` | 結果 |
 > |---|---|
 > | `UPDATE Users SET UserName = Id`（WebAuthn の資格情報を持つ利用者） | **`FK.FIDO2Data.Users_UserName` で弾かれる** |
-> | `UPDATE Users SET ClientID = Id`（クライアントを登録した利用者） | **`FK.Saml2OAuth2Data.Users_ClientID` で弾かれる** |
+> | `UPDATE Users SET ClientID = Id`（クライアントを登録した利用者） | **`FK.Saml2OAuth2Data.Users_ClientID` で弾かれる**（**この列は段階 5-a-1 で落とした**） |
 >
 > **例外は握られる**（`CmnUserStore.Update`。[#300](https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues/300)）ので、
 > **画面は成功に見えて、1 列も消えていなかった。**
@@ -1857,12 +1878,18 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 **DDL は変えていないが、種データの `client_id` を変えたので `store/` は作り直す**こと。
 
 **種データの `client_id` を変えたら、必ず作り直す。**
-**`Saml2OAuth2Data.ClientID` は `Users.ClientID` への外部キーを持っている**ので、
-**古い id の利用者が残っていると、新しい id の登録を入れられない。**
+**古い `client_id` の登録が残り、テストが古い値を引く**（**種データは init SQL が入れる**）。
 
-```
-INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_ClientID" と競合しています。
-```
+> **#307 の段階 5-a-1 より前は、もっと硬い形で落ちた** —
+> **`Saml2OAuth2Data.ClientID` が `Users.ClientID` への外部キーを持っていた**ので、
+> **古い id の利用者が残っていると、新しい id の登録を入れられなかった。**
+>
+> ```
+> INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_ClientID" と競合しています。
+> ```
+>
+> **いまは外部キーが `OwnerUserId` → `Users.Id` に張り替わり、種データは所有者を持たない**ので、
+> **この形では出ない。** **作り直す理由は上の 1 行に変わった。**
 
 **種データは `CreateData`（`GET /Account/Login`）の中で作られる**ので、
 **ここで落ちると `/Account/Login` そのものが落ちる。**
