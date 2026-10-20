@@ -1063,6 +1063,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 > **表を新設したので、3 方言とも DB を作り直して測る**（`store\0_CopyInitSql.ps1` → コンテナを作り直し）。
 > **回すときは 1 つずつ、間でサイトを止めること**（#307 で踏んだメモリ不足）。
+> **回し終えた方言のコンテナも止めること**（上の「表を足したら」の囲みと同じ）。
 
 ##### 発行者ごとの上限と、鍵の入れ替え（`RT-307.25` / `.26`。#307 の段階 6）
 
@@ -1802,6 +1803,11 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > docker compose rm -sfv postgres oracle    # **作り直す**（sqlserver は毎回流れる）
 > docker compose up -d postgres oracle
 > ```
+>
+> **回し終えた方言のコンテナは止めること**（`docker compose stop <service>`）。
+> **止めないと 3 つとも上がったまま残る** — **ポートは衝突しない**（1434 / 1522 / 5433）ので
+> **気付かないまま、メモリだけを食う**（**#308 の 3 方言で踏んだ**）。
+> **消さずに止めるだけでよい**（次に回すときに作り直す）。
 
 > **製品コードで歯抜けを測るときは、先に `1_BuildAll.ps1` を回すこと。**
 > **net48 版は IIS Express が「ビルド済みの出力」を配信する**ので、
