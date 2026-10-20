@@ -1260,8 +1260,12 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN TokenEndpointAuthMethod varchar(32) NULL;
     "display_name": "Vendor 1",            // ログに出す名前（空なら鍵）
     "enabled": "true",                      // 空・未設定は true
     "issuer": "https://vendor.opentouryo.com",  // **期待する iss**（完全一致）
+    // **空白かカンマ区切りで n 本**（#307 の段階 6。**鍵の入れ替えのため**）
     "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Client.cer",
-    "alg": "RS256"                          // **ヘッダの alg と照合する**（空なら RS256）
+    "alg": "RS256",                         // **ヘッダの alg と照合する**（空なら RS256）
+    // **この発行者に許す上限**（#307 の段階 6。**空なら絞らない**）
+    "allowed_scope": "openid email",
+    "allowed_grant_types": "authorization_code refresh_token"
   }
 },
 "RequireSoftwareStatement": "false"          // **既定は false**
@@ -1272,6 +1276,51 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN TokenEndpointAuthMethod varchar(32) NULL;
 <add key="SoftwareStatementIssuers" value='{"vendor1":{"issuer":"https://vendor.opentouryo.com","cer_file_path":"C:/root/files/resource/X509/SHA256RSA_Client.cer","alg":"RS256"}}' />
 <add key="RequireSoftwareStatement" value="false" />
 ```
+
+##### 発行者ごとに、許す範囲を決められる（#307 の段階 6）
+
+**`allowed_scope` / `allowed_grant_types`**（**空白区切り。空なら絞らない**）。
+
+| | |
+|---|---|
+| **何のためか** | **提携の範囲を、技術的な上限として持つ** — **人が審査しない道**（無人の自動登録）**に歯止めが要る** |
+| **範囲外を主張されたら** | **`unapproved_software_statement` で断る**（§3.2.2）。**黙って狭めない** — **主張が通ったのか削られたのかが、要求した側に分からなくなる** |
+| **本文（plain JSON）の値も対象** | **statement に書かれていなければ、本文の値が登録の値になる**ので、**上限は「その発行者の保証で作られる登録」全体に効く** |
+| **`POST` も `PUT` も同じ判定** | **検査は `Validate` の 1 か所**である（段階 4 と同じ作り） |
+| **statement を添えない要求には効かない** | **発行者が決まらない**ため。**閉じたい配備は `RequireSoftwareStatement` を true**にする |
+
+**絞るのは「受け入れる側」の決め**である。
+
+```
+ベンダが statement に書いた scope      openid email
+受け入れる側が発行者に許した範囲      openid email phone
+   → 登録に入る                       openid email      （積）
+
+ベンダが statement に書いた scope      openid email address
+受け入れる側が発行者に許した範囲      openid email
+   → unapproved_software_statement    （断る）
+```
+
+> **ベンダが自分で絞る分は、statement の中身に書けば済む**
+> （**署名されているので、配置側が広げられない**。段階 4）。
+> **この上限は、それとは別の層**である。
+
+> **`client_registration` は、ここに書いても意味を持たない** —
+> **動的登録では配れない**（段階 1 の決め）。
+
+##### 発行者の鍵は、入れ替えられる（#307 の段階 6）
+
+**`cer_file_path` は、空白かカンマ区切りで n 本**書ける。
+
+| | |
+|---|---|
+| **入れ替えの間** | **新旧を並べて書く**（**どちらで署名された statement も通る**） |
+| **試す順** | **書いた順。** **最初に検証できた鍵で通す** |
+| **1 本目以外で通ったら** | **ログに残る** — **「古い鍵をいつ消せるか」の判断材料**になる |
+| **読めない行が在っても** | **他の鍵を試す**（**1 本の誤りで全部を止めない**）。**1 本も読めなければ `unapproved_software_statement`** |
+| **`alg` は行で 1 つ** | **鍵の種類（RSA / EC）や alg まで変える入れ替えは、この形では扱えない** — **行を分け、`iss` を別にする**しかない |
+
+> **これが無いと、発行者が鍵を替えた瞬間に、出荷済みのソフトが一斉に登録できなくなる。**
 
 ##### 鍵は「発行者ごと」である。クライアントごとではない
 
@@ -1407,11 +1456,13 @@ POST /register
 
 | | いつ |
 |---|---|
-| **管理画面の一覧化**（**n 件を並べて、足す・消す**） | **段階 5-a-2**（**器は段階 5-a-1 で済んでいる**） |
-| **`client_credentials` 経路**（**人のパスワードを要らなくする**） | **段階 5-b**（**所有者を「認証したクライアントの所有者」から引く** ＋ 設定ファイルに `owner` を 1 属性） |
-| **発行者ごとに許す範囲を絞る**（この発行者は `openid` だけ、など） | **段階 5 以降**（**いまは「信じるか、信じないか」の 2 択**） |
-| **発行者の鍵の入れ替え**（新旧を並べて試す）／**発行者の登録を DB ＋ 管理画面へ** | **段階 5 以降**（`IdFederationUpstreams` が #292 の段階 2 で通った道） |
-| **`jwks_uri`**（鍵を URL から引く） | **別 Issue**（**クライアント認証の経路を非同期にする**。`/token` ほか全ての口から同期で呼ばれている） |
+| ~~**管理画面の一覧化**~~ | **✅ 段階 5-a-2 で実装済み** |
+| ~~**`client_credentials` 経路**~~ | **✅ 段階 5-b で実装済み**（**所有者は「認証したクライアントの所有者」から引く** ＋ 構成ファイルの `owner`） |
+| ~~**発行者ごとに許す範囲を絞る**~~ | **✅ 段階 6 で実装済み**（`allowed_scope` / `allowed_grant_types`） |
+| ~~**発行者の鍵の入れ替え**~~ | **✅ 段階 6 で実装済み**（`cer_file_path` を n 本） |
+| **発行者の登録を DB ＋ 管理画面へ** | **別 Issue**（#308。`IdFederationUpstreams` が #292 の段階 2 で通った道） |
+| **`jwks_uri`**（鍵を URL から引く） | **別 Issue**（#309。**クライアント認証の経路を非同期にする**。`/token` ほか全ての口から同期で呼ばれている） |
+| **管理画面からの編集に、発行者の上限を効かせる** | **やらない**（**画面の登録は statement を持たず、どの発行者の上限を当てるかが決まらない**）。**動的登録の行を画面から書き替えたら、監査ログに残す**（段階 6） |
 | OIDC DCR §2 の残り（`application_type` / ログアウトの URI など） | D-1-2 と併せて |
 
 ## 5. ルート URI と、自己テストの折り返し（重要）

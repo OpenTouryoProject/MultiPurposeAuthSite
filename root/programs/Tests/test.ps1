@@ -472,8 +472,28 @@ $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWe
 #   **渡さないと RT-307.18 〜 .21 は Skip になる**（-Launch でないときも同じ）。
 $script:SoftwareStatementIssuerKey = 'e2e_vendor'
 $script:SoftwareStatementIssuer    = 'https://vendor.opentouryo.com'
-$script:SoftwareStatementCer       = 'C:/root/files/resource/X509/SHA256RSA_Client.cer'
+# **証明書は 2 本渡す**（#307 の段階 6 の (D)）。
+#   **発行者の鍵の入れ替えを測るため** — **新旧を並べた状態**を作る。
+#   **1 本目** : `SpRp_RsaPfxFilePath` の対（**既存の `RT-307.18` 〜 `.21` が使う**）
+#   **2 本目** : `RsaPfxFilePath` の対（**`RT-307.26` が、こちらで署名する**）
+#   **区切りは空白**（`PreviousSigningCerFilePaths` と同じ流儀）。
+#
+#   **`SHA256RSAClientCert.cer` は使えない** — **リポジトリには在るが、
+#   配備側（C:/root/files/resource/X509）に配られていない**（実測で踏んだ）。
+#   **サイトが読むのは配備側**なので、**配られているものから選ぶこと。**
+$script:SoftwareStatementCer       = 'C:/root/files/resource/X509/SHA256RSA_Client.cer ' `
+    + 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
 $script:SoftwareStatementAlg       = 'RS256'
+
+# **発行者に許す範囲**（#307 の段階 6 の (A)）。
+#   **既存のケースが登録するのは `openid` と `openid email` だけ**（実測で確かめた）なので、
+#   **上限はそこまでに絞る** — **広く取ると「範囲の外」が無くなり、`RT-307.25` が測れない。**
+#   **grant_types は、既存のケースが登録する 3 つを含める**
+#   （`authorization_code` / `refresh_token` / device_code）。
+$script:SoftwareStatementAllowedScope = 'openid email'
+$script:SoftwareStatementAllowedGrantTypes =
+    'authorization_code refresh_token urn:ietf:params:oauth:grant-type:device_code'
+
 
 # **テストで使うクレームの対応付け（#230）。**
 #   キーはクレーム名（address.<副フィールド> と書くと address オブジェクトを組み立てる）、
@@ -934,6 +954,11 @@ public static class MpasTestTls
         Set-Item -Path ($ssPrefix + 'issuer')        -Value $script:SoftwareStatementIssuer
         Set-Item -Path ($ssPrefix + 'cer_file_path') -Value $script:SoftwareStatementCer
         Set-Item -Path ($ssPrefix + 'alg')           -Value $script:SoftwareStatementAlg
+        #   **発行者に許す範囲**（#307 の段階 6 の (A)）。
+        Set-Item -Path ($ssPrefix + 'allowed_scope') `
+            -Value $script:SoftwareStatementAllowedScope
+        Set-Item -Path ($ssPrefix + 'allowed_grant_types') `
+            -Value $script:SoftwareStatementAllowedGrantTypes
 
         # **client_credentials から動的登録を叩くクライアントを足す**（#307 の段階 5-b）。
         #   **節として足すので、雛形に在るクライアントは消えない**
@@ -1072,7 +1097,10 @@ public static class MpasTestTls
                 '"display_name":"E2E Test Vendor","enabled":"true",' +
                 '"issuer":"' + $script:SoftwareStatementIssuer + '",' +
                 '"cer_file_path":"' + $script:SoftwareStatementCer + '",' +
-                '"alg":"' + $script:SoftwareStatementAlg + '"}}')
+                '"alg":"' + $script:SoftwareStatementAlg + '",' +
+                '"allowed_scope":"' + $script:SoftwareStatementAllowedScope + '",' +
+                '"allowed_grant_types":"' +
+                    $script:SoftwareStatementAllowedGrantTypes + '"}}')
 
             # **テスト利用者をサイトごとに分ける**（#260。上の net10.0 側と同じ理由）
             $env:TestUserSuffix = $script:TestUserSuffixNetFx
@@ -1115,6 +1143,13 @@ public static class MpasTestTls
         #   **期待する iss をテストへ渡す** — **サイトへ渡した値と、必ず同じ値を使う。**
         #   **渡していなければ、テスト側は Skip する**（MtlsTests.SkipIfNoMtls と同じ作法）。
         $env:MPAS_SOFTWARE_STATEMENT_ISS = $script:SoftwareStatementIssuer
+
+        # **RT-307.25 / .26 を回してよい**（#307 の段階 6）。
+        #   **サイトへ渡した値と、必ず同じ値をテストへ渡す。**
+        #   **両方の対象に同じ発行者を渡している**ので、**しるしは対象ごとに分けない**
+        #   （**構成ファイル発のクライアント（段階 5-b）とは事情が違う**）。
+        $env:MPAS_SOFTWARE_STATEMENT_ALLOWED_SCOPE = $script:SoftwareStatementAllowedScope
+        $env:MPAS_SOFTWARE_STATEMENT_ROLLOVER      = 'true'   # 2 本目の鍵も渡してある
 
         # **RT-307.22 〜 .24 を回してよい**（#307 の段階 5-b）。
         #   **サイトへ渡した値と、必ず同じ値をテストへ渡す。**
@@ -1236,6 +1271,8 @@ finally {
         Remove-Item Env:\MPAS_CORE_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_SHORT_LIFETIMES -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_SOFTWARE_STATEMENT_ALLOWED_SCOPE -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_SOFTWARE_STATEMENT_ROLLOVER -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_DCR_CC_CLIENT_ID -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_DCR_CC_CLIENT_SECRET -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_DCR_CC_OWNER -ErrorAction SilentlyContinue

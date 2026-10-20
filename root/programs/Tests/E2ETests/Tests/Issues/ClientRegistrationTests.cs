@@ -34,6 +34,7 @@
 //*  2026/10/20  玄人 幸道         software_statement のケースを追加（#307 の段階 4）
 //*  2026/10/20  玄人 幸道         RT-307.3 を「n 件作れる」に書き換えた（#307 の段階 5-a）
 //*  2026/10/20  玄人 幸道         RT-307.22〜.24（client_credentials）を追加（#307 の段階 5-b）
+//*  2026/10/20  玄人 幸道         RT-307.25/.26（発行者の上限と鍵の入れ替え）を追加（#307 の段階 6）
 //*  2026/10/20  玄人 幸道         Noteの文面を段階5-a-1後の形に直した（#307）
 //**********************************************************************************
 
@@ -2663,8 +2664,323 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-307.25
+
+        /// <summary>RT-307.25 発行者に許した範囲の外は、断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **発行者ごとの上限**（`allowed_scope` / `allowed_grant_types`。#307 の段階 6）。
+        ///
+        /// **絞るのは「受け入れる側」の決め**である。
+        /// **ベンダが自分で絞る分は statement の中身に書けば済む**（段階 4）ので、
+        /// **実際に登録に入るのは 2 つの積**になる。
+        ///
+        /// **本文（plain JSON）由来の値も上限に収める** —
+        /// **statement に書かれていなければ本文の値が登録の値になる**ためである。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30725_発行者に許した範囲の外は断る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                ClientRegistrationTests.SkipIfNoSoftwareStatement();
+                ClientRegistrationTests.SkipIfNoAllowedScope();
+
+                TestReport r = this.Report("RT-307.25",
+                    "**発行者に許した範囲の外**を主張した `software_statement` は、"
+                    + "**`unapproved_software_statement` で断る**",
+                    "**段階 4 では「信じるか、信じないか」の 2 択**だった — "
+                    + "**信頼した発行者は、何でも主張できた。**"
+                    + "**提携の範囲を技術的な上限として持てないと、無人の自動登録を許せない**"
+                    + "（**人が審査しない道**である）。"
+                    + "**発行者の鍵が漏れたときの被害を囲む**意味もある。",
+                    "RFC 7591 §3.2.2 / #307 の段階 6");
+
+                r.Target("POST registration_endpoint（上限の外を主張する statement）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 範囲内の scope は通る");
+
+                    Dictionary<string, object> inside =
+                        ClientRegistrationTests.StatementClaims();
+
+                    inside["scope"] = "openid email";
+                    inside["redirect_uris"] = new string[] { UriA };
+
+                    JsonResponse ok = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"software_statement\":\""
+                        + JwsSigner.SignRS256(client, inside) + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)ok.StatusCode).ToString());
+
+                    r.VerifyEqual("登録された scope は、主張したもの",
+                        "openid email", ok.String("scope") ?? "（無い）");
+
+                    r.Step("(2) 範囲の外の scope を主張すると、断られる");
+
+                    //  **この配備が許していない scope**（`test.ps1` の `allowed_scope` の外）。
+                    //    **`scopes_supported` には在る値**を使う — **「知らない scope」ではなく、
+                    //    「この発行者には許していない scope」であることを測る。**
+                    string outsideScope = ClientRegistrationTests.ScopeOutsideAllowed();
+
+                    Dictionary<string, object> outside =
+                        ClientRegistrationTests.StatementClaims();
+
+                    outside["scope"] = "openid " + outsideScope;
+                    outside["redirect_uris"] = new string[] { UriA };
+
+                    JsonResponse denied = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"software_statement\":\""
+                        + JwsSigner.SignRS256(client, outside) + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400",
+                        ((int)denied.StatusCode).ToString());
+
+                    r.VerifyEqual("error は unapproved_software_statement",
+                        "unapproved_software_statement", denied.String("error") ?? "（無い）");
+
+                    r.Observe("error_description", denied.String("error_description") ?? "（無い）");
+
+                    r.Note("**黙って狭めない。** **断る** — "
+                        + "**主張が通ったのか削られたのかが、要求した側に分からなくなる**ためである。");
+
+                    r.Step("(3) 本文（plain JSON）に書いても、同じく断られる");
+
+                    //  **statement に scope が無ければ、本文の値が登録の値になる**（段階 4）。
+                    //    **だから本文由来の値も上限に収める** —
+                    //    **その発行者の保証で作られる登録、全体の上限**である。
+                    Dictionary<string, object> silent =
+                        ClientRegistrationTests.StatementClaims();
+
+                    silent["redirect_uris"] = new string[] { UriA };
+
+                    JsonResponse body = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"scope\":\"openid " + outsideScope + "\","
+                        + "\"software_statement\":\""
+                        + JwsSigner.SignRS256(client, silent) + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400",
+                        ((int)body.StatusCode).ToString());
+
+                    r.VerifyEqual("error は unapproved_software_statement",
+                        "unapproved_software_statement", body.String("error") ?? "（無い）");
+
+                    r.Note("**statement を付けない要求には、この上限は効かない** — "
+                        + "**発行者が決まらない**ためである（**`RequireSoftwareStatement` で"
+                        + "statement を必須にすれば、その穴も閉じる**。段階 4）。");
+
+                    r.Step("(4) PUT（RFC 7592）でも効く");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        DynamicClientRegistration.Metadata(UriA));
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    Dictionary<string, object> forPut =
+                        ClientRegistrationTests.StatementClaims();
+
+                    forPut["scope"] = "openid " + outsideScope;
+                    forPut["redirect_uris"] = new string[] { UriA };
+
+                    JsonResponse put = await DynamicClientRegistration.UpdateAsync(
+                        client, created.String("registration_client_uri"),
+                        created.String("registration_access_token"),
+                        "{\"client_id\":\"" + created.String("client_id") + "\","
+                        + "\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"software_statement\":\""
+                        + JwsSigner.SignRS256(client, forPut) + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)put.StatusCode).ToString());
+
+                    r.VerifyEqual("error は unapproved_software_statement",
+                        "unapproved_software_statement", put.String("error") ?? "（無い）");
+
+                    r.Note("**検査は `Validate` の 1 か所**なので、"
+                        + "**`POST` と `PUT` で同じ判定**になる（段階 4 と同じ作り）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.26
+
+        /// <summary>RT-307.26 発行者の鍵を入れ替える間、新旧のどちらでも通る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **発行者の証明書を n 本持てる**（`cer_file_path` を空白区切り。#307 の段階 6）。
+        ///
+        /// **段階 4 では 1 本だけ**だった — **発行者が鍵を替えると、
+        /// 替えた瞬間に古い statement が通らなくなる**（**出荷済みのソフトが登録できない**）。
+        ///
+        /// **`test.ps1` は 2 本渡す**（`SpRp_RsaPfxFilePath` の対 ＋ `RsaPfxFilePath` の対）。
+        /// **どちらで署名しても通り、どちらでもない鍵では通らない**ことを測る。
+        ///
+        /// **鍵はテスト用の寄せ集め**である（**「発行者の鍵」として作った物ではない**） —
+        /// **要るのは「RSA 2048 の鍵が 2 つ」と「登録されていない 3 つ目」**だけで、
+        /// **配備側（`C:/root/files/resource/X509`）に配られているものから選んである。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30726_発行者の鍵を入れ替える間は新旧どちらでも通る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                ClientRegistrationTests.SkipIfNoSoftwareStatement();
+                ClientRegistrationTests.SkipIfNoRollover();
+
+                TestReport r = this.Report("RT-307.26",
+                    "**発行者の鍵を入れ替える間、新旧のどちらで署名された "
+                    + "`software_statement` でも登録できる**",
+                    "**段階 4 は証明書を 1 本しか持てなかった** — "
+                    + "**発行者が鍵を替えると、出荷済みのソフトが一斉に登録できなくなる。**"
+                    + "**入れ替えには、新旧が並ぶ期間が要る**（**鍵のロールオーバー**）。"
+                    + "**どちらでもない鍵は通らない**ことも、併せて測る。",
+                    "#307 の段階 6 / SoftwareStatementIssuer.CerFilePaths");
+
+                r.Target("POST registration_endpoint（1 本目 / 2 本目 / どちらでもない鍵で署名）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 1 本目の鍵で署名した statement は通る");
+
+                    JsonResponse first = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"software_statement\":\""
+                        + JwsSigner.SignRS256(client,
+                            ClientRegistrationTests.StatementClaims(UriA)) + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)first.StatusCode).ToString());
+
+                    r.Step("(2) 2 本目の鍵で署名した statement も通る");
+
+                    //  **入れ替えの間**（新旧が並んでいる状態）**を作っている。**
+                    JsonResponse second = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"software_statement\":\""
+                        + JwsSigner.SignRS256(client,
+                            ClientRegistrationTests.StatementClaims(UriB),
+                            "RsaPfxFilePath", "RsaPfxPassword") + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)second.StatusCode).ToString());
+
+                    r.VerifyEqual("主張した折り返し先が入る", "True",
+                        second.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.Note("**試す順は、書いた順**である。"
+                        + "**1 本目以外で通ったときは、ログに残す** — "
+                        + "**運用者が「古い鍵をいつ消せるか」を判断する材料**になる。");
+
+                    r.Step("(3) どちらでもない鍵で署名した statement は通らない");
+
+                    //  **発行者として登録されていない鍵**で署名する
+                    //    （`SpRp_ClientCertPfxFilePath`。**mTLS のクライアント証明書の鍵**）。
+                    //    **その `.cer` は発行者の一覧に無い**ので、**どの鍵でも検証できない。**
+                    JsonResponse other = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"software_statement\":\""
+                        + JwsSigner.SignRS256(client,
+                            ClientRegistrationTests.StatementClaims(UriA),
+                            "SpRp_ClientCertPfxFilePath", "SpRp_ClientCertPfxPassword") + "\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)other.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_software_statement",
+                        "invalid_software_statement", other.String("error") ?? "（無い）");
+
+                    r.Note("**`iss` は合っていて、署名だけが合わない**ので "
+                        + "**`invalid_software_statement`** である"
+                        + "（**知らない発行者なら `unapproved_software_statement`**。`RT-307.20`）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 補助
 
+        /// <summary>
+        /// 発行者に許した `scope` の上限（`test.ps1` が渡す。無ければ空）（#307 の段階 6）
+        /// </summary>
+        /// <returns>空白区切りの scope</returns>
+        private static string AllowedScope()
+        {
+            return Environment.GetEnvironmentVariable(
+                "MPAS_SOFTWARE_STATEMENT_ALLOWED_SCOPE") ?? "";
+        }
+
+        /// <summary>上限を渡していない配備では Skip する（#307 の段階 6）</summary>
+        private static void SkipIfNoAllowedScope()
+        {
+            Skip.If(string.IsNullOrEmpty(ClientRegistrationTests.AllowedScope()),
+                "この配備は発行者の上限（allowed_scope）を設定していません"
+                + "（test.ps1 -Launch が渡す。#307 の段階 6）。");
+        }
+
+        /// <summary>上限の外に在る scope を 1 つ返す（#307 の段階 6）</summary>
+        /// <returns>scope</returns>
+        /// <remarks>
+        /// **`scopes_supported` に在って、上限には無い値**を選ぶ —
+        /// **「知らない scope」ではなく「この発行者には許していない scope」**を測るためである。
+        /// **`test.ps1` の上限は `openid` 系を広く含む**ので、**ここは `address` を避けて
+        /// 固定の候補から選ぶ**（**上限に全部入っていたら Skip**）。
+        /// </remarks>
+        private static string ScopeOutsideAllowed()
+        {
+            List<string> allowed = new List<string>(
+                ClientRegistrationTests.AllowedScope().Split(
+                    new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+
+            foreach (string candidate in new string[] { "address", "phone", "roles", "userid" })
+            {
+                if (!allowed.Contains(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            Skip.If(true, "上限（allowed_scope）が、候補の scope を全て含んでいます"
+                + "（test.ps1 の SoftwareStatementAllowedScope を狭めてください。#307 の段階 6）。");
+
+            return "";
+        }
+
+        /// <summary>statement のクレーム（折り返し先も主張する）（#307 の段階 6）</summary>
+        /// <param name="redirectUri">主張する折り返し先</param>
+        /// <returns>クレーム</returns>
+        private static Dictionary<string, object> StatementClaims(string redirectUri)
+        {
+            Dictionary<string, object> claims = ClientRegistrationTests.StatementClaims();
+
+            claims["redirect_uris"] = new string[] { redirectUri };
+
+            return claims;
+        }
+
+        /// <summary>2 本目の鍵を渡していない配備では Skip する（#307 の段階 6）</summary>
+        private static void SkipIfNoRollover()
+        {
+            Skip.IfNot(
+                Environment.GetEnvironmentVariable("MPAS_SOFTWARE_STATEMENT_ROLLOVER") == "true",
+                "この配備は発行者の証明書を 1 本しか設定していません"
+                + "（test.ps1 -Launch が 2 本渡す。#307 の段階 6）。");
+        }
+
+        /// <summary>
+        /// 構成ファイル発の動的登録クライアント（`test.ps1` が渡す。無ければ空）（#307 の段階 5-b）
+        /// </summary>
         /// <summary>サインイン中の利用者の名前を変える（#307 の段階 5-b）</summary>
         /// <param name="client">IdPClient（その利用者でサインイン済み）</param>
         /// <param name="newName">新しい利用者名</param>

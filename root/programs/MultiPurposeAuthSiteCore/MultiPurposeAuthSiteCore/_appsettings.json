@@ -213,10 +213,31 @@
     //     "vendor1": {
     //       "display_name": "Vendor 1", "enabled": "true",
     //       "issuer": "https://vendor.opentouryo.com",
+    //       // **空白かカンマ区切りで n 本**書ける（#307 の段階 6。**鍵の入れ替えのため**）
     //       "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Client.cer",
-    //       "alg": "RS256"
+    //       "alg": "RS256",
+    //       // **この発行者に許す上限**（#307 の段階 6。**空なら絞らない**）
+    //       "allowed_scope": "openid email",
+    //       "allowed_grant_types": "authorization_code refresh_token"
     //     }
     //   },
+    //
+    //   **cer_file_path を n 本書くのは、発行者の鍵の入れ替えのため**（#307 の段階 6）。
+    //     **入れ替えの間は新旧を並べて書き**、**済んだら古い方を消す**
+    //     （**消すまでは古い鍵も有効**）。**試す順は書いた順**で、
+    //     **1 本目以外で通ったときはログに残る**（**古い鍵をいつ消せるかの判断材料**）。
+    //     **alg は行で 1 つ** — **鍵の種類や alg まで変える入れ替えは、この形では扱えない。**
+    //
+    //   **allowed_scope / allowed_grant_types は、その発行者に許す上限**（#307 の段階 6）。
+    //     **空（未設定）なら絞らない**（段階 4 までと同じ振る舞い）。
+    //     **範囲外を主張されたら unapproved_software_statement で断る**（黙って狭めない）。
+    //     **本文（plain JSON）に書かれた値も、この上限に収める** —
+    //     **statement に書かれていなければ、本文の値が登録の値になる**ためである。
+    //
+    //     **絞るのは「受け入れる側」の決め**である。
+    //     **ベンダが自分で絞る分は statement の中身に書けば済む**
+    //     （**署名されているので、配置側が広げられない**）。
+    //     **実際に登録に入るのは、2 つの積**になる。
     //
     //   **E2E では test.ps1 が環境変数で渡す**（RT-307.18 〜 .21）。
     //     net10.0 : appSettings__SoftwareStatementIssuers__<鍵>__<属性>

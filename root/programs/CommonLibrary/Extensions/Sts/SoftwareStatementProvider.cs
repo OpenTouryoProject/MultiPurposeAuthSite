@@ -238,46 +238,73 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  6. **署名の検証。**
             //     **`JWS.Verify(jwt)` は `typ` を照合しない版**である（上流 #611）。
             //     **`software_statement` の `typ` は仕様で決まっていない**ので、照合しない。
-            JWS jws = null;
+            //
+            //  **鍵は n 本持てる**（#307 の段階 6）。**書いた順に試し、最初に通った鍵で通す。**
+            //    **発行者が鍵を入れ替える間、新旧のどちらで署名された statement も通る**ためである。
+            int readable = 0;
+            int verifiedAt = -1;
 
-            try
+            for (int i = 0; i < issuer.CerFilePaths.Count; i++)
             {
-                jws = SigningKeys.CreateJwsFromCer(issuer.Alg, issuer.CerFilePath);
+                JWS jws = null;
+
+                try
+                {
+                    jws = SigningKeys.CreateJwsFromCer(issuer.Alg, issuer.CerFilePaths[i]);
+                }
+                catch (Exception ex)
+                {
+                    //  **設定の誤り**（証明書が無い・読めない）。**理由を残す**（#253 の方針）。
+                    //    **statement が壊れている訳ではない。**
+                    //    **他の鍵が在れば、そちらを試す**（**1 本の誤りで全部を止めない**）。
+                    Logging.MyOperationTrace(string.Format(
+                        "The certificate ({0}) of the software_statement issuer {1} "
+                        + "could not be read. ({2})",
+                        i + 1, issuer.Label, ex.GetType().Name));
+
+                    continue;
+                }
+
+                readable++;
+
+                try
+                {
+                    if (jws.Verify(statement))
+                    {
+                        verifiedAt = i;
+                        break;
+                    }
+                }
+                catch
+                {
+                    //  **壊れた値で例外にしない**（外から来た値である）。
+                }
             }
-            catch (Exception ex)
-            {
-                //  **設定の誤り**（証明書が無い・読めない）。**理由を残す**（#253 の方針）。
-                //    **statement が壊れている訳ではない**ので、**「信頼していない」に倒す。**
-                Logging.MyOperationTrace(string.Format(
-                    "The certificate of the software_statement issuer {0} could not be read. ({1})",
-                    issuer.Label, ex.GetType().Name));
 
-                jws = null;
-            }
-
-            if (jws == null)
+            if (readable == 0)
             {
+                //  **1 本も読めなかった** ＝ **検証する材料が無い。**
+                //    **「信頼していない」に倒す**（**statement が壊れている訳ではない**）。
                 description = "The issuer of the software_statement is not approved "
                     + "by this deployment.";
                 return Result.Unapproved;
             }
 
-            bool verified = false;
-
-            try
-            {
-                verified = jws.Verify(statement);
-            }
-            catch
-            {
-                //  **壊れた値で例外にしない**（外から来た値である）。
-                verified = false;
-            }
-
-            if (!verified)
+            if (verifiedAt < 0)
             {
                 description = "The signature of the software_statement is not verified.";
                 return Result.Invalid;
+            }
+
+            if (0 < verifiedAt)
+            {
+                // オペレーション・トレース・ログ出力
+                //   **1 本目以外で通った** ＝ **鍵の入れ替えが進んでいる印**である。
+                //   **運用者が「古い鍵をいつ消せるか」を判断する材料**になる。
+                Logging.MyOperationTrace(string.Format(
+                    "The software_statement of the issuer {0} was verified "
+                    + "with the certificate ({1} of {2}).",
+                    issuer.Label, verifiedAt + 1, issuer.CerFilePaths.Count));
             }
 
             //  7. **`exp`（在るときだけ）。** **RFC 7591 §2.3 では任意**だが、
@@ -299,6 +326,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 description = "The software_statement was not issued for this "
                     + "authorization server.";
                 return Result.Invalid;
+            }
+
+            //  9. **この発行者に許した範囲に収まっているか**（#307 の段階 6）。
+            //
+            //  **重ねる前に見る** — **重ねてから断ると、
+            //    「受け入れた」ログを出した後で断る**ことになり、記録が食い違う。
+            //
+            //  **見るのは「重ねた後の値」**である（statement 由来でも、本文由来でも）。
+            //    **その発行者の保証で作られる登録、全体の上限**だからである。
+            if (!SoftwareStatementProvider.IsWithinAllowed(
+                metadata, claims, issuer, out string exceeded))
+            {
+                description = "The software_statement claims " + exceeded
+                    + " that is not allowed for this issuer.";
+                return Result.Unapproved;
             }
 
             //  **主張を重ねる**（§2.3 は MUST）。
@@ -333,6 +375,117 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return DateTimeOffset.UtcNow.ToUnixTimeSeconds() < expires;
+        }
+
+        /// <summary>発行者に許した範囲に収まっているか（#307 の段階 6）</summary>
+        /// <param name="metadata">要求の本文</param>
+        /// <param name="claims">statement のクレーム</param>
+        /// <param name="issuer">発行者</param>
+        /// <param name="exceeded">範囲外だった項目と値（断る理由に使う）</param>
+        /// <returns>収まっていれば true</returns>
+        /// <remarks>
+        /// **上限は `allowed_scope` / `allowed_grant_types`**（**空なら絞らない**）。
+        ///
+        /// **見るのは「重ねた後の値」**である。
+        /// **statement に書かれていなければ本文の値**が、その登録の値になるので、
+        /// **本文由来の値も上限に収める**（**その発行者の保証で作られる登録、全体の上限**）。
+        ///
+        /// **値は理由に出す。** **断る相手は、登録を要求した側**であり、
+        /// **自分が送った値（と statement の値）しか出ていない** —
+        /// **配備の設定（上限そのもの）は出さない。**
+        /// </remarks>
+        private static bool IsWithinAllowed(
+            JObject metadata, JObject claims,
+            SoftwareStatementIssuer issuer, out string exceeded)
+        {
+            exceeded = "";
+
+            if (!SoftwareStatementProvider.IsWithin(
+                metadata, claims, "scope", issuer.AllowedScope, out string overScope))
+            {
+                exceeded = "a scope (" + overScope + ")";
+                return false;
+            }
+
+            if (!SoftwareStatementProvider.IsWithin(
+                metadata, claims, "grant_types", issuer.AllowedGrantTypes, out string overGrant))
+            {
+                exceeded = "a grant_type (" + overGrant + ")";
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>その項目が、許した範囲に収まっているか（#307 の段階 6）</summary>
+        /// <param name="metadata">要求の本文</param>
+        /// <param name="claims">statement のクレーム</param>
+        /// <param name="name">メタデータの名前（`scope` / `grant_types`）</param>
+        /// <param name="allowed">許した範囲（空白区切り。空なら絞らない）</param>
+        /// <param name="exceeded">範囲外だった最初の値</param>
+        /// <returns>収まっていれば true</returns>
+        /// <remarks>
+        /// **`scope` は空白区切りの文字列、`grant_types` は配列**（RFC 7591 §2）だが、
+        /// **どちらの形でも読めるようにしてある**（`ClientRegistrationProvider.GetStrings`
+        /// と同じ寛さ。**外から来た値である**）。
+        /// </remarks>
+        private static bool IsWithin(
+            JObject metadata, JObject claims, string name, string allowed, out string exceeded)
+        {
+            exceeded = "";
+
+            if (string.IsNullOrWhiteSpace(allowed))
+            {
+                //  **書いていなければ絞らない**（段階 4 までと同じ振る舞い）。
+                return true;
+            }
+
+            List<string> permitted = Helper.ToDistinctList(allowed);
+
+            //  **statement に在ればそれが登録の値**（§2.3 は MUST）。**無ければ本文の値。**
+            JToken token = (claims[name] != null && claims[name].Type != JTokenType.Null)
+                ? claims[name] : metadata[name];
+
+            foreach (string value in SoftwareStatementProvider.Values(token))
+            {
+                if (!permitted.Contains(value))
+                {
+                    exceeded = value;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>メタデータの値を、文字列の列として読む（#307 の段階 6）</summary>
+        /// <param name="token">値（配列 ／ 空白区切りの文字列 ／ 無し）</param>
+        /// <returns>値の列（空のときは空の列）</returns>
+        private static List<string> Values(JToken token)
+        {
+            List<string> ret = new List<string>();
+
+            if (token == null || token.Type == JTokenType.Null)
+            {
+                return ret;
+            }
+
+            if (token.Type == JTokenType.Array)
+            {
+                foreach (JToken item in (JArray)token)
+                {
+                    string value = ((string)item ?? "").Trim();
+
+                    if (!string.IsNullOrEmpty(value) && !ret.Contains(value))
+                    {
+                        ret.Add(value);
+                    }
+                }
+
+                return ret;
+            }
+
+            return Helper.ToDistinctList((string)token ?? "");
         }
 
         /// <summary>主張されたメタデータを、本文へ重ねる</summary>

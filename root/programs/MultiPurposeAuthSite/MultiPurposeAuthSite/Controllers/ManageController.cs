@@ -1845,6 +1845,29 @@ namespace MultiPurposeAuthSite.Controllers
                                 //      **そのトークンは、もう効いてはならない**）。
                                 model.RegistrationAccessToken = owned.RegistrationAccessToken;
 
+                                //  **動的登録で作られた行を、画面から書き替えた**（#307 の段階 6）。
+                                //    **記録に残す** —
+                                //    **`software_statement` の保証から外れた点が、後から分かる**ようにする
+                                //    （**ベンダの保証どおりの登録です、と言えなくなる所**である）。
+                                //
+                                //  **権限の昇格ではない。**
+                                //    **この利用者は、好きな `scope` の登録を画面から新規にも作れる**
+                                //    （段階 1 の決め : **専用 scope を配るのは画面か構成ファイルだけ**）。
+                                //    **禁止しても、作り直して同じ所に行ける**ので、壁にはならない。
+                                //
+                                //  **閉じたい配備は、画面そのものを閉じる**
+                                //    （`CanEditSaml2OAuth2Data` / `EnableEditingOfUserAttribute`）。
+                                //    **`RequireSoftwareStatement` は API 側の扉だけ**で、
+                                //    **この画面には効かない。**
+                                if (!string.IsNullOrEmpty(owned.RegistrationAccessToken))
+                                {
+                                    // オペレーション・トレース・ログ出力
+                                    Logging.MyOperationTrace(string.Format(
+                                        "{0}({1}) edited the dynamically registered client {2} "
+                                        + "on the management screen.",
+                                        user.Id, user.UserName, model.ClientID));
+                                }
+
                                 Sts.DataProvider.Update(model.ClientID, model);
 
                                 // 再ログイン

@@ -59,17 +59,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="client">IdPClient（署名鍵の場所を構成ファイルから読む）</param>
         /// <param name="payload">ペイロード（クレーム）</param>
         /// <returns>JWS</returns>
-        public static string SignRS256(IdPClient client, IDictionary<string, object> payload)
+        /// <remarks>
+        /// **鍵を選べる**（#307 の段階 6）。**既定は `SpRp_RsaPfxFilePath`** で、
+        /// **発行者の鍵の入れ替えを測るときだけ、別の鍵を指す**
+        /// （**構成ファイルに在る鍵しか指せない** — **テスト側で鍵を持たない**）。
+        /// </remarks>
+        public static string SignRS256(
+            IdPClient client, IDictionary<string, object> payload,
+            string pathKey = "SpRp_RsaPfxFilePath", string passwordKey = "SpRp_RsaPfxPassword")
         {
             string signingInput = SigningInput("RS256", payload);
 
-            using (X509Certificate2 cert = LoadCertificate(client, "SpRp_RsaPfxFilePath", "SpRp_RsaPfxPassword"))
+            using (X509Certificate2 cert = LoadCertificate(client, pathKey, passwordKey))
             using (RSA rsa = cert.GetRSAPrivateKey())
             {
                 if (rsa == null)
                 {
                     throw new InvalidOperationException(
-                        "RSAの秘密鍵を取り出せませんでした: " + client.Config.Get("SpRp_RsaPfxFilePath"));
+                        "RSAの秘密鍵を取り出せませんでした: " + client.Config.Get(pathKey));
                 }
 
                 byte[] signature = rsa.SignData(

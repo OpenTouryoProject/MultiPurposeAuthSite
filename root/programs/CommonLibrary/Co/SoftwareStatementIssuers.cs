@@ -33,6 +33,7 @@
 
 using MultiPurposeAuthSite.TokenProviders;
 
+using System;
 using System.Collections.Generic;
 
 using Touryo.Infrastructure.Public.Security.Jwt;
@@ -85,13 +86,88 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>期待する `iss`（RFC 7591 §2.3 : software_statement は `iss` を必須とする）</summary>
         public string Issuer { get; set; }
 
-        /// <summary>署名を検証する証明書（`.cer` のパス）</summary>
+        /// <summary>署名を検証する証明書（`.cer` のパス。**空白かカンマ区切りで n 本**）</summary>
         /// <remarks>
         /// **公開鍵だけで足りる**（検証しかしない）。
         /// **`jwks_uri` のように URL から引く形は採らない** —
-        /// **登録の口は同期で、取得を差し込めない**（`jwks_uri` を断っているのと同じ理由。別 Issue）。
+        /// **登録の口は同期で、取得を差し込めない**（`jwks_uri` を断っているのと同じ理由。#309）。
+        ///
+        /// **n 本書ける**（#307 の段階 6）。**発行者の鍵の入れ替えのため**である。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **入れ替えの間** | **新旧を並べて書く**（**どちらで署名された statement も通る**） |
+        /// | **試す順** | **書いた順。** **最初に検証できた鍵で通す** |
+        /// | **入れ替えが済んだら** | **古い方を消す**（**消すまでは古い鍵も有効**である） |
+        ///
+        /// **区切りは空白・カンマ・タブ**（`PreviousSigningCerFilePaths`（#292 の段階 3）と同じ流儀）。
+        /// **空白を含むパスは、この形では書けない**（**同じ限界**である）。
+        ///
+        /// **`alg` は行で 1 つ**（<see cref="Alg"/>）。
+        /// **鍵の種類（RSA / EC）や alg まで変える入れ替えは、この形では扱えない** —
+        /// **行を 2 つに分け、`iss` を別にする**しかない（**同じ `iss` の行は 1 つしか引かない**）。
         /// </remarks>
         public string CerFilePath { get; set; }
+
+        /// <summary>証明書のパス（n 本。書いた順）</summary>
+        /// <remarks>**空の要素は落とす。** **1 本も無ければ、この行は使えない**（<see cref="IsUsable"/>）。</remarks>
+        public List<string> CerFilePaths
+        {
+            get
+            {
+                List<string> ret = new List<string>();
+
+                if (string.IsNullOrWhiteSpace(this.CerFilePath))
+                {
+                    return ret;
+                }
+
+                foreach (string path in this.CerFilePath.Split(
+                    new char[] { ' ', ',', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (!ret.Contains(path))
+                    {
+                        ret.Add(path);
+                    }
+                }
+
+                return ret;
+            }
+        }
+
+        /// <summary>この発行者の保証で作れる `scope` の上限（空白区切り。空なら絞らない）</summary>
+        /// <remarks>
+        /// **この発行者の statement で作られる登録の `scope` の上限**である（#307 の段階 6）。
+        ///
+        /// **絞るのは「受け入れる側」の決め**である。
+        /// **ベンダが自分で絞る分は、statement の中身に書けば済む**（**署名されているので、
+        /// 配置側が広げられない**。段階 4）。**実際に登録に入るのは、2 つの積**になる。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **空（未設定）** | **絞らない**（**段階 4 までと同じ振る舞い**） |
+        /// | **書いたら** | **範囲外を主張されたら `unapproved_software_statement` で断る** — **黙って狭めない** |
+        ///
+        /// **効くのは、statement 由来の値だけではない** —
+        /// **本文（plain JSON）に書かれた値も、この上限に収める。**
+        /// **「その発行者の保証で作られる登録」全体の上限**だからである。
+        ///
+        /// **`client_registration` は、ここに書いても意味を持たない** —
+        /// **動的登録では配れない**（段階 1 の決め。`ClientRegistrationProvider.Validate` が断る）。
+        /// </remarks>
+        public string AllowedScope { get; set; }
+
+        /// <summary>この発行者の保証で作れる `grant_types` の上限（空白区切り。空なら絞らない）</summary>
+        /// <remarks>
+        /// **`AllowedScope` と同じ扱い**である（#307 の段階 6）。
+        ///
+        /// **強いグラント**（`password` / `implicit` / `client_credentials` /
+        /// `urn:ietf:params:oauth:grant-type:device_code`）**を、特定の発行者にだけ許す**ために在る。
+        ///
+        /// **`response_types` は書かない** — **`grant_types` と対応が決まる**（RFC 7591 §2）ので、
+        /// **上限を 2 か所に持たない。**
+        /// </remarks>
+        public string AllowedGrantTypes { get; set; }
 
         /// <summary>署名の alg（空なら `RS256`）</summary>
         /// <remarks>
@@ -124,7 +200,7 @@ namespace MultiPurposeAuthSite.Co
             {
                 return this.Enabled
                     && !string.IsNullOrEmpty(this.Issuer)
-                    && !string.IsNullOrEmpty(this.CerFilePath)
+                    && 0 < this.CerFilePaths.Count
                     && SigningKeys.IsSupported(this.Alg);
             }
         }
@@ -143,7 +219,10 @@ namespace MultiPurposeAuthSite.Co
     ///     "display_name": "Vendor 1", "enabled": "true",
     ///     "issuer": "https://vendor1.example.com",
     ///     "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Client.cer",
-    ///     "alg": "RS256"
+    ///     "alg": "RS256",
+    ///     // **この発行者に許す範囲**（#307 の段階 6。**空なら絞らない**）
+    ///     "allowed_scope": "openid email",
+    ///     "allowed_grant_types": "authorization_code refresh_token"
     ///   }
     /// }
     /// ```
@@ -231,7 +310,12 @@ namespace MultiPurposeAuthSite.Co
                 Enabled = SoftwareStatementIssuers.Flag(attributes, "enabled"),
                 Issuer = SoftwareStatementIssuers.Value(attributes, "issuer"),
                 CerFilePath = SoftwareStatementIssuers.Value(attributes, "cer_file_path"),
-                Alg = SoftwareStatementIssuers.Alg(attributes)
+                Alg = SoftwareStatementIssuers.Alg(attributes),
+
+                //  **この発行者に許す範囲**（#307 の段階 6。**空なら絞らない**）。
+                AllowedScope = SoftwareStatementIssuers.Value(attributes, "allowed_scope"),
+                AllowedGrantTypes =
+                    SoftwareStatementIssuers.Value(attributes, "allowed_grant_types")
             };
         }
 
