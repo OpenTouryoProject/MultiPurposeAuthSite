@@ -188,6 +188,22 @@ CREATE TABLE "IdFederationUpstreams"(   -- ID 連携の上流 IdP の登録（#2
     CONSTRAINT "PK.IdFederationUpstreams" PRIMARY KEY ("UpstreamKey")
 );
 
+CREATE TABLE "SoftwareStatementIssuers"(   -- software_statement の発行者の登録（#308 の段階 1）
+    -- **設定（appSettings の SoftwareStatementIssuers）と同じ項目**を持つ。
+    --   **IssuerKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    --   **これは「ベンダ（発行者）の台帳」**で、**クライアントの登録ではない。**
+    "IssuerKey" NVARCHAR2(128) NOT NULL,       -- PK
+    "DisplayName" NVARCHAR2(256) NULL,
+    "Enabled" NUMBER(3) NOT NULL,              -- 真は -1（Users の bool 列と同じ）
+    "Issuer" NVARCHAR2(256) NULL,
+    "CerFilePath" NVARCHAR2(512) NULL,         -- 空白かカンマ区切りで n 本（#307 の段階 6）
+    "CerBody" NCLOB NULL,                      -- **本文**（PEM / Base64。公開鍵なので平文）
+    "Alg" NVARCHAR2(16) NULL,
+    "AllowedScope" NVARCHAR2(2000) NULL,
+    "AllowedGrantTypes" NVARCHAR2(2000) NULL,
+    CONSTRAINT "PK.SoftwareStatementIssuers" PRIMARY KEY ("IssuerKey")
+);
+
 CREATE TABLE "FIDO2Data"(
     "PublicKeyId" NVARCHAR2(256) NOT NULL,   -- PK
     "UserName" NVARCHAR2(256) NOT NULL,      -- Value

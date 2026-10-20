@@ -29,12 +29,15 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/20  玄人 幸道         新規（#307 の段階 4）
+//*  2026/10/20  玄人 幸道         発行者ごとの上限と、鍵の入れ替えを追加（#307 の段階 6）
+//*  2026/10/21  玄人 幸道         DBの登録も読む（本文の列を追加。#308 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Touryo.Infrastructure.Public.Security.Jwt;
 
@@ -108,6 +111,92 @@ namespace MultiPurposeAuthSite.Co
         /// **行を 2 つに分け、`iss` を別にする**しかない（**同じ `iss` の行は 1 つしか引かない**）。
         /// </remarks>
         public string CerFilePath { get; set; }
+
+        /// <summary>検証鍵の本文（PEM / Base64。n 本）</summary>
+        /// <remarks>
+        /// **DB の登録だけが持つ**（#308 の段階 1）。**設定ファイルは持たない** —
+        /// **設定は人が書く物で、PEM を貼るのに向かない**（**DB は画面から貼れる**）。
+        ///
+        /// **ファイルを置かずに済む**ので、**配備間で台帳を複製しやすい。**
+        /// **公開鍵なので平文で持つ**（**暗号化しない**。#297 の対象外）。
+        ///
+        /// **本文とパスは、両方書いてよい** — **本文を先に試し、次にパスを試す**
+        /// （**入れ替えの途中で、片方だけ本文に移す**こともできる）。
+        /// </remarks>
+        public string CerBody { get; set; }
+
+        /// <summary>検証鍵の本文（Base64 の DER。n 本。書いた順）</summary>
+        /// <remarks>
+        /// **PEM でも Base64 でも受ける**（#308 の段階 1）。
+        ///
+        /// | 書き方 | 読み方 |
+        /// |---|---|
+        /// | **PEM** | `-----BEGIN CERTIFICATE-----` 〜 `-----END CERTIFICATE-----` を**並べて n 本**。**中身の Base64 だけを取る** |
+        /// | **Base64（DER）** | **空白・カンマ・改行で区切って n 本** |
+        ///
+        /// **`.cer` を貼るときの揺れを吸収する**のが役目である
+        /// （**PEM の改行や、ヘッダの有無で落とさない**）。
+        /// </remarks>
+        public List<string> CerBodies
+        {
+            get
+            {
+                List<string> ret = new List<string>();
+
+                if (string.IsNullOrWhiteSpace(this.CerBody))
+                {
+                    return ret;
+                }
+
+                string body = this.CerBody;
+
+                if (body.Contains(SoftwareStatementIssuer.PemBegin))
+                {
+                    //  **PEM。** **BEGIN 〜 END の中身だけを取る**（**並べて n 本**）。
+                    foreach (string block in body.Split(
+                        new string[] { SoftwareStatementIssuer.PemBegin },
+                        StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        int end = block.IndexOf(SoftwareStatementIssuer.PemEnd);
+
+                        if (end < 0)
+                        {
+                            //  **END が無い** ＝ 途中で切れている。**その先は使わない。**
+                            continue;
+                        }
+
+                        string base64 = new string(block.Substring(0, end)
+                            .Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+                        if (!string.IsNullOrEmpty(base64) && !ret.Contains(base64))
+                        {
+                            ret.Add(base64);
+                        }
+                    }
+
+                    return ret;
+                }
+
+                //  **Base64（DER）。** **区切りで n 本。**
+                foreach (string token in body.Split(
+                    new char[] { ' ', ',', '\t', '\r', '\n' },
+                    StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (!ret.Contains(token))
+                    {
+                        ret.Add(token);
+                    }
+                }
+
+                return ret;
+            }
+        }
+
+        /// <summary>PEM の始まり</summary>
+        private const string PemBegin = "-----BEGIN CERTIFICATE-----";
+
+        /// <summary>PEM の終わり</summary>
+        private const string PemEnd = "-----END CERTIFICATE-----";
 
         /// <summary>証明書のパス（n 本。書いた順）</summary>
         /// <remarks>**空の要素は落とす。** **1 本も無ければ、この行は使えない**（<see cref="IsUsable"/>）。</remarks>
@@ -200,7 +289,7 @@ namespace MultiPurposeAuthSite.Co
             {
                 return this.Enabled
                     && !string.IsNullOrEmpty(this.Issuer)
-                    && 0 < this.CerFilePaths.Count
+                    && (0 < this.CerBodies.Count || 0 < this.CerFilePaths.Count)
                     && SigningKeys.IsSupported(this.Alg);
             }
         }
@@ -240,27 +329,88 @@ namespace MultiPurposeAuthSite.Co
         public static List<SoftwareStatementIssuer> List()
         {
             List<SoftwareStatementIssuer> ret = new List<SoftwareStatementIssuer>();
+            List<string> keys = new List<string>();
 
+            //  **設定を先に読む**（#308 の段階 1）。
             Dictionary<string, Dictionary<string, string>> issuers =
                 Config.SoftwareStatementIssuers;
 
-            if (issuers == null)
+            if (issuers != null)
             {
-                return ret;
-            }
-
-            foreach (KeyValuePair<string, Dictionary<string, string>> entry in issuers)
-            {
-                SoftwareStatementIssuer issuer =
-                    SoftwareStatementIssuers.FromSetting(entry.Key, entry.Value);
-
-                if (issuer.IsUsable)
+                foreach (KeyValuePair<string, Dictionary<string, string>> entry in issuers)
                 {
-                    ret.Add(issuer);
+                    SoftwareStatementIssuer issuer =
+                        SoftwareStatementIssuers.FromSetting(entry.Key, entry.Value);
+
+                    keys.Add(entry.Key);
+
+                    if (issuer.IsUsable)
+                    {
+                        ret.Add(issuer);
+                    }
                 }
             }
 
+            //  **次に DB を読む**（#308 の段階 1）。**同じ鍵なら設定が勝つ** —
+            //    **`IdFederationUpstreams` と同じ流儀**（#292 の段階 2）。
+            //
+            //  **使えない行は返さない**のは、設定と同じ扱いである
+            //    （**`iss` か鍵が欠けた行で「信頼している」ことにはしない**）。
+            //
+            //  **DB を読めない配備**（表を作っていない・user store が落ちている）**でも、
+            //    設定の分は返す** — **動的登録ごと止めない**ためである。
+            try
+            {
+                foreach (ViewModels.SoftwareStatementIssuerViewModel model
+                    in Extensions.Sts.SoftwareStatementIssuerProvider.GetAll())
+                {
+                    if (keys.Contains(model.IssuerKey))
+                    {
+                        //  **設定が勝つ。**
+                        continue;
+                    }
+
+                    SoftwareStatementIssuer issuer =
+                        SoftwareStatementIssuers.FromViewModel(model);
+
+                    if (issuer.IsUsable)
+                    {
+                        ret.Add(issuer);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // オペレーション・トレース・ログ出力
+                //   **理由を残す**（#253 の方針）。**設定の分は、そのまま返す。**
+                Log.Logging.MyOperationTrace(string.Format(
+                    "The software_statement issuers could not be read from the user store. ({0})",
+                    ex.GetType().Name));
+            }
+
             return ret;
+        }
+
+        /// <summary>DB の 1 行から作る（#308 の段階 1）</summary>
+        /// <param name="model">SoftwareStatementIssuerViewModel</param>
+        /// <returns>発行者</returns>
+        /// <remarks>**設定の 1 行から作る版**（<see cref="FromSetting"/>）**と対**である。</remarks>
+        private static SoftwareStatementIssuer FromViewModel(
+            ViewModels.SoftwareStatementIssuerViewModel model)
+        {
+            return new SoftwareStatementIssuer()
+            {
+                Key = model.IssuerKey,
+                DisplayName = model.DisplayName,
+                Enabled = model.Enabled,
+                Issuer = model.Issuer,
+                CerFilePath = model.CerFilePath,
+                CerBody = model.CerBody,
+                Alg = string.IsNullOrEmpty(model.Alg)
+                    ? SoftwareStatementIssuers.DefaultAlg : model.Alg,
+                AllowedScope = model.AllowedScope,
+                AllowedGrantTypes = model.AllowedGrantTypes
+            };
         }
 
         /// <summary>信頼する発行者が 1 件でも在るか</summary>

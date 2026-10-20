@@ -90,6 +90,7 @@
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
     <Compile Include="Extensions\Sts\SecretProtector.cs" />
     <Compile Include="Extensions\Sts\SoftwareStatementProvider.cs" />
+    <Compile Include="Extensions\Sts\SoftwareStatementIssuerProvider.cs" />
     <Compile Include="Extensions\Sts\SelfTestClient.cs" />
     <Compile Include="Extensions\Sts\ConsentProvider.cs" />
     <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />
@@ -215,6 +216,7 @@
     <Compile Include="ViewModels\ManageEmailViewModel.cs" />
     <Compile Include="ViewModels\ManageConsentGrantsViewModel.cs" />
     <Compile Include="ViewModels\ManageSaml2OAuth2DataListViewModel.cs" />
+    <Compile Include="ViewModels\SoftwareStatementIssuerViewModel.cs" />
     <Compile Include="ViewModels\ManageIndexViewModel.cs" />
     <Compile Include="ViewModels\ManageLoginsViewModel.cs" />
     <Compile Include="ViewModels\ManageSetPasswordViewModel.cs" />

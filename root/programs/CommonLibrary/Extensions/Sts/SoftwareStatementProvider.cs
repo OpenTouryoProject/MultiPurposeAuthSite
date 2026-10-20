@@ -37,6 +37,8 @@ using MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json.Linq;
 
@@ -241,27 +243,42 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //
             //  **鍵は n 本持てる**（#307 の段階 6）。**書いた順に試し、最初に通った鍵で通す。**
             //    **発行者が鍵を入れ替える間、新旧のどちらで署名された statement も通る**ためである。
+            //
+            //  **本文（DB の列）を先に、次にファイル（パス）**（#308 の段階 1）。
+            //    **両方書いてよい** — **入れ替えの途中で、片方だけ本文に移せる。**
             int readable = 0;
             int verifiedAt = -1;
+            int candidates = issuer.CerBodies.Count + issuer.CerFilePaths.Count;
 
-            for (int i = 0; i < issuer.CerFilePaths.Count; i++)
+            for (int i = 0; i < candidates; i++)
             {
                 JWS jws = null;
+                bool isBody = (i < issuer.CerBodies.Count);
 
                 try
                 {
-                    jws = SigningKeys.CreateJwsFromCer(issuer.Alg, issuer.CerFilePaths[i]);
+                    jws = isBody
+                        ? SoftwareStatementProvider.JwsFromCerBody(
+                            issuer.Alg, issuer.CerBodies[i])
+                        : SigningKeys.CreateJwsFromCer(
+                            issuer.Alg, issuer.CerFilePaths[i - issuer.CerBodies.Count]);
                 }
                 catch (Exception ex)
                 {
-                    //  **設定の誤り**（証明書が無い・読めない）。**理由を残す**（#253 の方針）。
-                    //    **statement が壊れている訳ではない。**
+                    //  **設定の誤り**（証明書が無い・読めない・本文が壊れている）。
+                    //    **理由を残す**（#253 の方針）。**statement が壊れている訳ではない。**
                     //    **他の鍵が在れば、そちらを試す**（**1 本の誤りで全部を止めない**）。
                     Logging.MyOperationTrace(string.Format(
-                        "The certificate ({0}) of the software_statement issuer {1} "
-                        + "could not be read. ({2})",
-                        i + 1, issuer.Label, ex.GetType().Name));
+                        "The certificate ({0}, {1}) of the software_statement issuer {2} "
+                        + "could not be read. ({3})",
+                        i + 1, isBody ? "body" : "file", issuer.Label, ex.GetType().Name));
 
+                    continue;
+                }
+
+                if (jws == null)
+                {
+                    //  **alg の表に無い**（`IsUsable` で弾いているので、ここには来ない）。
                     continue;
                 }
 
@@ -304,7 +321,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Logging.MyOperationTrace(string.Format(
                     "The software_statement of the issuer {0} was verified "
                     + "with the certificate ({1} of {2}).",
-                    issuer.Label, verifiedAt + 1, issuer.CerFilePaths.Count));
+                    issuer.Label, verifiedAt + 1, candidates));
             }
 
             //  7. **`exp`（在るときだけ）。** **RFC 7591 §2.3 では任意**だが、
@@ -375,6 +392,52 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return DateTimeOffset.UtcNow.ToUnixTimeSeconds() < expires;
+        }
+
+        /// <summary>証明書の本文から、検証する JWS を作る（#308 の段階 1）</summary>
+        /// <param name="alg">alg</param>
+        /// <param name="base64">証明書（Base64 の DER）</param>
+        /// <returns>JWS（alg が表に無ければ null）</returns>
+        /// <remarks>
+        /// **DB に本文で持った証明書で検証するため**に在る。
+        ///
+        /// **証明書を読むのは、ここ**である。
+        /// **`SigningKeys` には置けない** — **あのファイルは `CreateJwkSetJson`（net48 の exe）
+        /// からソース参照されており**、**`X509CertificateLoader` は net48 に無く、
+        /// `new X509Certificate2(byte[])` は net10.0 で旧形式**（SYSLIB0057）である。
+        /// **ターゲットで分ける書き方は、CommonLibrary 側でだけ使える**
+        /// （`CmnSaml2Response.RsaFromCerFile` と同じ事情）。
+        ///
+        /// **`SigningKeys` が持つのは「パラメタ → JWS」の対応**だけにしてある
+        /// （**alg → class の表を 2 つに増やさない**）。
+        ///
+        /// **読めない本文は例外になる**（呼ぶ側が受けて、次の鍵を試す）。
+        /// </remarks>
+        private static JWS JwsFromCerBody(string alg, string base64)
+        {
+            byte[] der = Convert.FromBase64String(base64);
+
+            //  **証明書の読み込みはターゲットで分ける**（`CmnSaml2Response` と同じ）。
+#if NETFX
+            X509Certificate2 cert = new X509Certificate2(der);
+#else
+            X509Certificate2 cert = X509CertificateLoader.LoadCertificate(der);
+#endif
+
+            //  **破棄しない。** **公開鍵は証明書に紐づく**ので、
+            //    **先に破棄すると、この後の検証で使えない**（`CmnSaml2Response` の注と同じ）。
+            if (alg == JwtConst.ES256 || alg == JwtConst.ES384 || alg == JwtConst.ES512)
+            {
+                ECDsa ecdsa = cert.GetECDsaPublicKey();
+
+                return (ecdsa == null) ? null
+                    : SigningKeys.CreateJwsFromEcParameters(alg, ecdsa.ExportParameters(false));
+            }
+
+            RSA rsa = cert.GetRSAPublicKey();
+
+            return (rsa == null) ? null
+                : SigningKeys.CreateJwsFromRsaParameters(alg, rsa.ExportParameters(false));
         }
 
         /// <summary>発行者に許した範囲に収まっているか（#307 の段階 6）</summary>

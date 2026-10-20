@@ -217,6 +217,28 @@ CREATE TABLE [IdFederationUpstreams](   -- ID 連携の上流 IdP の登録（#2
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+CREATE TABLE [SoftwareStatementIssuers](   -- software_statement の発行者の登録（#308 の段階 1）
+    -- **設定（appSettings の SoftwareStatementIssuers）と同じ項目**を持つ。
+    --   **設定 → DB の順に見て、両方使う**（IdFederationUpstreams と同じ流儀。#292 の段階 2）。
+    --   **IssuerKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    --
+    -- **これは「ベンダ（発行者）の台帳」**である。**クライアントの登録ではない**
+    --   （あちらは Saml2OAuth2Data。**件数も変わり方も違う**）。
+    [IssuerKey] [nvarchar](128) NOT NULL,      -- PK
+    [DisplayName] [nvarchar](256) NULL,        -- 画面・ログに出す名前（空なら鍵）
+    [Enabled] [bit] NOT NULL,
+    [Issuer] [nvarchar](256) NULL,             -- 期待する iss（完全一致。RFC 7591 2.3）
+    -- **検証鍵**。**空白かカンマ区切りで n 本**（#307 の段階 6。鍵の入れ替え）
+    [CerFilePath] [nvarchar](512) NULL,        -- ファイルで置く場合
+    [CerBody] [nvarchar](max) NULL,            -- **本文で持つ場合**（PEM / Base64。**公開鍵なので平文**）
+    [Alg] [nvarchar](16) NULL,                 -- 空なら RS256
+    -- **この発行者に許す上限**（#307 の段階 6。空なら絞らない）
+    [AllowedScope] [nvarchar](2000) NULL,      -- 空白区切りの列挙
+    [AllowedGrantTypes] [nvarchar](2000) NULL, -- 空白区切りの列挙
+    CONSTRAINT [PK.SoftwareStatementIssuers] PRIMARY KEY NONCLUSTERED ([IssuerKey] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [FIDO2Data](
     [PublicKeyId] [nvarchar](256) NOT NULL,  -- PK, base64url
     [UserName] [nvarchar](256) NOT NULL,     -- Value

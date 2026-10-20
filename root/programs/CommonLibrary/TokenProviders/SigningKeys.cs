@@ -407,6 +407,52 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **読めないパスでは例外になる**ので、**呼ぶ側が受けること**
         /// （**設定の誤りを、黙って「検証できた」にしないため**）。
         /// </remarks>
+        /// <summary>検証する JWS を作る（RSA の公開鍵パラメタから）</summary>
+        /// <param name="alg">alg</param>
+        /// <param name="param">公開鍵のパラメタ</param>
+        /// <returns>JWS（alg が RSA の表に無ければ null）</returns>
+        /// <remarks>
+        /// **DB に本文で持った証明書で検証するため**に在る（#308 の段階 1）。
+        ///
+        /// **Open棟梁 の X509 の口は、すべてファイル パス**である
+        /// （`JWS_*_X509(certificateFilePath, …)`）ので、**本文からはパラメタ渡しで入る**
+        /// （`JWS_*_Param`。**`kid` で JWK を引いて検証する経路が、既に同じ口を使っている**。D-9）。
+        /// **一時ファイルは作らない。**
+        ///
+        /// **このファイルは証明書を読まない。**
+        /// **`CreateJwkSetJson`（net48 の exe）からソース参照されており**、
+        /// **`X509CertificateLoader` は net48 に無く、`new X509Certificate2(byte[])` は
+        /// net10.0 で旧形式**（SYSLIB0057）である。
+        /// **読む所は CommonLibrary 側**（`SoftwareStatementProvider`）**に置いてある。**
+        ///
+        /// **alg → class の対応は、ここ 1 か所で持つ**（#307 の段階 4 の決め）。
+        /// </remarks>
+        public static JWS CreateJwsFromRsaParameters(string alg, RSAParameters param)
+        {
+            if (alg == JwtConst.RS256) { return new JWS_RS256_Param(param); }
+            if (alg == JwtConst.RS384) { return new JWS_RS384_Param(param); }
+            if (alg == JwtConst.RS512) { return new JWS_RS512_Param(param); }
+            if (alg == JwtConst.PS256) { return new JWS_PS256_Param(param); }
+            if (alg == JwtConst.PS384) { return new JWS_PS384_Param(param); }
+            if (alg == JwtConst.PS512) { return new JWS_PS512_Param(param); }
+
+            return null;
+        }
+
+        /// <summary>検証する JWS を作る（EC の公開鍵パラメタから）</summary>
+        /// <param name="alg">alg</param>
+        /// <param name="param">公開鍵のパラメタ</param>
+        /// <returns>JWS（alg が EC の表に無ければ null）</returns>
+        /// <remarks>**#308 の段階 1。** <see cref="CreateJwsFromRsaParameters"/> と対である。</remarks>
+        public static JWS CreateJwsFromEcParameters(string alg, ECParameters param)
+        {
+            if (alg == JwtConst.ES256) { return new JWS_ES256_Param(param, false); }
+            if (alg == JwtConst.ES384) { return new JWS_ES384_Param(param, false); }
+            if (alg == JwtConst.ES512) { return new JWS_ES512_Param(param, false); }
+
+            return null;
+        }
+
         public static JWS CreateJwsFromCer(string alg, string cerFilePath)
         {
             string path = cerFilePath;
