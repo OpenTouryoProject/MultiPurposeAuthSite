@@ -520,6 +520,29 @@ $script:UserClaimsMapping = [ordered]@{
 $script:TestUserSuffixCore  = '_core'
 $script:TestUserSuffixNetFx = '_netfx'
 
+# **client_credentials から動的登録を叩くクライアント（#307 の段階 5-b）。**
+#   **ROPC を開けずに `/register` を叩く経路**を測るために渡す。
+#
+#   | | |
+#   |---|---|
+#   | **`…Dcr` の方** | **`scope` に専用 scope ＋ `owner`**（**所有者が決まる**） |
+#   | **`…DcrNoOwner` の方** | **`scope` だけ。`owner` が無い**（**所有者が決まらない** → `403`） |
+#
+#   **net10.0 にだけ渡す。** **net10.0 は「節」として読む**ので
+#   **クライアントを 1 件ずつ足せる**が、**net48 は 1 本の JSON 文字列**で、
+#   **足すと既存のクライアントを全て置き換えてしまう。**
+#   **net48 では `RT-307.23` / `.24` を Skip する**（`RT-307.15` と同じ作法）。
+#
+#   **所有者は、この測定のための専用の利用者**（`e2e_dcr_owner` ＋ 接尾辞）。
+#   **テストが作って、終わったら消す** — **種データの利用者を使わない**
+#   （**他のケースと登録を奪い合わないため**。#305 の段階 3 で踏んだ所）。
+#   **接尾辞を付けるのは、サイトごとに利用者を分けているため**（#260）。
+$script:DcrCcClientId          = 'e2e307dcc100000000000000000000aa'
+$script:DcrCcClientSecret      = 'e2e_307_5b_dcr_cc_secret_do_not_use_in_production'
+$script:DcrCcNoOwnerClientId   = 'e2e307dcc200000000000000000000bb'
+$script:DcrCcNoOwnerSecret     = 'e2e_307_5b_dcr_cc_noowner_secret_do_not_use'
+
+
 # **ID フェデレーションの下流として振る舞うための設定（#250 の段階 5）。**
 #   上流は store\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
 #   （建っていなければ、連携のテストは Skip される）。
@@ -912,6 +935,24 @@ public static class MpasTestTls
         Set-Item -Path ($ssPrefix + 'cer_file_path') -Value $script:SoftwareStatementCer
         Set-Item -Path ($ssPrefix + 'alg')           -Value $script:SoftwareStatementAlg
 
+        # **client_credentials から動的登録を叩くクライアントを足す**（#307 の段階 5-b）。
+        #   **節として足すので、雛形に在るクライアントは消えない**
+        #   （**net48 は 1 本の JSON 文字列なので、この足し方ができない**）。
+        $ccPrefix = 'Env:\appSettings__OAuth2ClientsInformation__' `
+            + $script:DcrCcClientId + '__'
+        Set-Item -Path ($ccPrefix + 'client_secret') -Value $script:DcrCcClientSecret
+        Set-Item -Path ($ccPrefix + 'client_name')   -Value 'TestClientDcrCc'
+        Set-Item -Path ($ccPrefix + 'scope')         -Value 'client_registration'
+        Set-Item -Path ($ccPrefix + 'owner') `
+            -Value ('e2e_dcr_owner' + $script:TestUserSuffixCore)
+
+        $ccPrefix2 = 'Env:\appSettings__OAuth2ClientsInformation__' `
+            + $script:DcrCcNoOwnerClientId + '__'
+        Set-Item -Path ($ccPrefix2 + 'client_secret') -Value $script:DcrCcNoOwnerSecret
+        Set-Item -Path ($ccPrefix2 + 'client_name')   -Value 'TestClientDcrCcNoOwner'
+        Set-Item -Path ($ccPrefix2 + 'scope')         -Value 'client_registration'
+        #   **owner は渡さない**（**それがこのクライアントの役**である）。
+
         # **テスト利用者をサイトごとに分ける**（#260）。
         #   2 つのサイトを同時に立てるので、DB ストアでは 1 つの DB を共有する。
         #   分けないと、同じ利用者の DeviceToken / UnstructuredData を書き換え合って
@@ -1075,6 +1116,17 @@ public static class MpasTestTls
         #   **渡していなければ、テスト側は Skip する**（MtlsTests.SkipIfNoMtls と同じ作法）。
         $env:MPAS_SOFTWARE_STATEMENT_ISS = $script:SoftwareStatementIssuer
 
+        # **RT-307.22 〜 .24 を回してよい**（#307 の段階 5-b）。
+        #   **サイトへ渡した値と、必ず同じ値をテストへ渡す。**
+        #   **渡していなければ Skip する**（net48 はここに来ないので、そちらは Skip）。
+        #   **対象ごとのしるしにする**（`MPAS_CORE_MTLS` と同じ作法）。
+        #   **process 全体に置くと、net48 のケースも「渡された」と見なして落ちる**（実測）。
+        $env:MPAS_CORE_DCR_CC_CLIENT_ID             = $script:DcrCcClientId
+        $env:MPAS_CORE_DCR_CC_CLIENT_SECRET         = $script:DcrCcClientSecret
+        $env:MPAS_CORE_DCR_CC_OWNER                 = ('e2e_dcr_owner' + $script:TestUserSuffixCore)
+        $env:MPAS_CORE_DCR_CC_NOOWNER_CLIENT_ID     = $script:DcrCcNoOwnerClientId
+        $env:MPAS_CORE_DCR_CC_NOOWNER_CLIENT_SECRET = $script:DcrCcNoOwnerSecret
+
         if ($ShortLifetimes) {
             Remove-Item Env:\OAuth2AuthorizationCodeExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
             Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
@@ -1184,6 +1236,11 @@ finally {
         Remove-Item Env:\MPAS_CORE_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_SHORT_LIFETIMES -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_DCR_CC_CLIENT_ID -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_DCR_CC_CLIENT_SECRET -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_DCR_CC_OWNER -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_DCR_CC_NOOWNER_CLIENT_ID -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_DCR_CC_NOOWNER_CLIENT_SECRET -ErrorAction SilentlyContinue
         Remove-Item Env:\OAuth2AuthorizationCodeExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
         Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
         Remove-Item Env:\OAuth2RefreshTokenExpireTimeSpanFromDays -ErrorAction SilentlyContinue

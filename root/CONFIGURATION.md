@@ -668,7 +668,15 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 **この口は Bearer で守られている**（`/userinfo` と同じ形）。
 **`client_registration` という専用の scope を持つトークンだけが通る**（無ければ `403`）。
 
+**取り方は 2 つある**（#307 の段階 5-b で `client_credentials` を足した）。
+
 ```
+# (1) client_credentials — **利用者のパスワードが要らない**（CI / IaC 向き）
+POST /token
+grant_type=client_credentials&client_id=<管理 API 用>&client_secret=<秘密>
+&scope=client_registration
+
+# (2) ROPC — **登録の所有者として入る**（段階 1 からの経路）
 POST /token
 grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 &username=<登録の所有者>&password=<パスワード>&scope=client_registration
@@ -676,9 +684,44 @@ grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 
 | | |
 |---|---|
-| **なぜ ROPC なのか** | **所有者をトークンの `sub` から決める**ため。**`client_credentials` のトークンには `sub`（利用者）が無い**ので、**それだけでは「誰の登録か」を表せない**（**段階 5-b で、構成ファイルの `owner` から引けるようにする**） |
-| **ROPC も既定で無効** | **`EnableResourceOwnerPasswordCredentialsGrantType` を併せて開ける**こと（OAuth 2.1 で外れたグラントなので、既定は無効のまま） |
-| **トークンは絞られる** | **scope は `client_registration` 1 本だけ**になり（他を一緒に要求しても外す）、**有効期限は `DcrAccessTokenExpireTimeSpanFromSeconds`**（配備ぜんたいの 360 分ではない） |
+| **`client_credentials` を推す** | **利用者のパスワードを CI に置かない。** **`EnableResourceOwnerPasswordCredentialsGrantType` を開けなくてよい**（OAuth 2.1 で外れたグラント） |
+| **`client_credentials` は細い道で通る** | **`EnableDynamicClientRegistration` が true なら、`EnableClientCredentialsGrantType` が false でも、この scope のときだけ通る** — **「CI から登録を作る」ために、グラント全体を開けさせない**ためである（**専用 scope が出ない要求は `unsupported_grant_type`**） |
+| **ROPC も残す** | **既存の配備を壊さない。** **ROPC で取るなら `EnableResourceOwnerPasswordCredentialsGrantType` も開ける** |
+| **トークンは絞られる** | **どちらの経路でも、scope は `client_registration` 1 本だけ**になり（他を一緒に要求しても外す）、**有効期限は `DcrAccessTokenExpireTimeSpanFromSeconds`**（配備ぜんたいの 360 分ではない） |
+| **Discovery** | **動的登録が有効なら `grant_types_supported` に `client_credentials` が載る**（**口が受け付ける事実**）。**「その scope しか出ない」ことは Discovery では表せない** |
+
+##### 所有者は、どう決まるか（#307 の段階 5-b）
+
+**作られる登録の所有者は、トークンから決まる。**
+
+| トークン | 所有者 |
+|---|---|
+| **ROPC**（利用者が居る） | **`sub` の利用者**（**`aud` と組で引く** — `sub` は PPID になり得る） |
+| **`client_credentials`**（利用者が居ない） | **認証したクライアントの所有者**（下の表） |
+
+| 認証したクライアントの出どころ | 所有者 |
+|---|---|
+| **構成ファイル**（`OAuth2ClientsInformation`） | **`owner` 属性**（**利用者名**）の利用者 |
+| **登録の表**（`Saml2OAuth2Data`） | **`OwnerUserId`**（`Users.Id`） |
+
+**どちらも決まらなければ `403` ＋ `access_denied`** である。
+
+| 決まらない場合 | |
+|---|---|
+| **`owner` を書いていない構成ファイルのクライアント** | **配備全体のもの**で、1 人の持ち物ではない |
+| **`owner` の利用者が居ない** | **設定の誤り**（**利用者名を変えた後に直し忘れた**ときも、ここ） |
+| **所有者の無い登録**（E2E の種データ） | **`OwnerUserId` が空** |
+
+> **`401` ではなく `403` である。** **トークンは正しい**ので、
+> **`401`（取り直せ）では誤誘導になる。**
+>
+> **見分けは `sub` でしている** — **`client_credentials` のトークンは `sub` にクライアント名が入る。**
+> **そこまで確かめるのは、「利用者が消えたトークン」を
+> クライアントの所有者に付け替えないため**である（**別人の持ち物として登録が増えてしまう**）。
+
+> **構成ファイルが「名前」なのは、人が書く物だから**である（`Users.Id` は書けない）。
+> **利用者名を変えたら、設定も直すこと。**
+> **登録の表の側は id なので切れない**（段階 5-a-1 でそう移した）。
 
 > **専用 scope は、登録に明記したクライアントにしか出さない。**
 > **他の scope の「登録が無ければ制限しない」とは、逆の倒し方である** —

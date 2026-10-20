@@ -75,8 +75,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// | | |
     /// |---|---|
-    /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（ROPC で取る） |
-    /// | 所有者 | **トークンの `sub` の利用者**（**段階 5-a で n 件になった**。下） |
+    /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（**ROPC か `client_credentials` で取る**。段階 5-b） |
+    /// | 所有者 | **トークンの `sub` の利用者**、**利用者が居なければ認証したクライアントの所有者**（段階 5-b。**n 件持てる** — 段階 5-a） |
     /// | 器 | **既存の `Saml2OAuth2Data`**（`DataProvider`）。**RFC 7591 §2 の列は #307 の段階 1 で足した** |
     ///
     /// **段階 2 で出来ること**（RFC 7592。`registration_client_uri` ＝ `…/register/{client_id}`）。
@@ -219,17 +219,53 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             Claim aud = identity.Claims.FirstOrDefault(
                 x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim);
 
-            ApplicationUser user = (aud == null)
-                ? null : PPIDExtension.GetUserFromSub(aud.Value, identity.Name);
+            if (aud == null)
+            {
+                //  **`aud` の無いトークン**（この配備が出した物ではない・形が足りない）。
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The access token is not valid.");
+                return 401;
+            }
+
+            ApplicationUser user = PPIDExtension.GetUserFromSub(aud.Value, identity.Name);
+
+            //  **利用者の居ないトークン**（`client_credentials` で取ったもの）。
+            //    **認証したクライアントの所有者を、作る登録の所有者にする**（#307 の段階 5-b）。
+            //
+            //  **段階 1 〜 5-a は、ここで `401` に倒していた** —
+            //    **所有者を AT の `sub` からしか引けなかった**ためで、
+            //    **ROPC（利用者のパスワード）を開けないと動的登録が使えなかった。**
+            //
+            //  **見分けは `sub` でする。** **`client_credentials` のトークンは、
+            //    `sub` にクライアント名が入る**（`CmnEndpoints.GrantClientCredentials`）。
+            //    **「利用者が消えたトークン」を、クライアントの所有者に付け替えないため**に、
+            //    **そこまで確かめる**（**付け替えると、別人の持ち物として登録が増える**）。
+            if (user == null
+                && identity.Name == Helper.GetInstance().GetClientName(aud.Value))
+            {
+                string ownerUserId = Helper.GetInstance().GetOwnerUserId(aud.Value);
+
+                user = string.IsNullOrEmpty(ownerUserId)
+                    ? null : CmnUserStore.FindById(ownerUserId);
+            }
 
             if (user == null)
             {
-                //  **利用者の居ないトークン**（`client_credentials` で取ったもの など）。
-                //    **段階 1 は、所有者を AT から決める**ので受け付けられない。
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                //  **所有者が決まらない。**
+                //
+                //  | | |
+                //  |---|---|
+                //  | **利用者の居ないトークン ＋ 所有者の無いクライアント** | 構成ファイルに `owner` が無い／その利用者が居ない／種データ |
+                //  | **`sub` の利用者が引けない** | 利用者が消えた後のトークン |
+                //
+                //  **`403` にする。** **トークンは正しい**ので、
+                //  **`401` では「取り直せ」と読めて誤誘導になる**
+                //  （RFC 6749 §4.1.2.1 の `access_denied` ＝ 要求を容れない）。
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
                 err.Add(OAuth2AndOIDCConst.error_description,
-                    "The access token is not bound to a user.");
-                return 401;
+                    "The owner of this registration cannot be determined.");
+                return 403;
             }
 
             //  **1 利用者 n クライアント**（#307 の段階 5-a）。

@@ -113,6 +113,33 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             });
         }
 
+        /// <summary>client_credentials で、専用 scope のトークンを取る（#307 の段階 5-b）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret</param>
+        /// <param name="scope">要求する scope</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **利用者のパスワードを使わない経路**である（#307 の段階 5-b）。
+        /// **所有者は「認証したクライアントの所有者」から決まる** —
+        /// **構成ファイルの `owner`**、または **登録の `OwnerUserId`**。
+        ///
+        /// **`EnableClientCredentialsGrantType` が false の配備でも、
+        /// この scope のときだけは通る**（**グラント全体を開けさせないため**）。
+        /// </remarks>
+        public static Task<JsonResponse> ClientCredentialsTokenAsync(
+            IdPClient client, string clientId, string clientSecret,
+            string scope = DynamicClientRegistration.Scope)
+        {
+            return client.TokenAsync(new Dictionary<string, string>()
+            {
+                { "grant_type", "client_credentials" },
+                { "client_id", clientId },
+                { "client_secret", clientSecret },
+                { "scope", scope }
+            });
+        }
+
         /// <summary>登録する（RFC 7591 §3.1）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="endpoint">registration_endpoint</param>

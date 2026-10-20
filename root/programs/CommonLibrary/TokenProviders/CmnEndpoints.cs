@@ -96,6 +96,7 @@
 //*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/25  玄人 幸道         claims_supported を、クレームの対応付けから作る（#230）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
+//*  2026/10/20  玄人 幸道         client_credentialsで専用scopeのトークンを出す（#307の段階5-b）
 //*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
@@ -241,7 +242,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
             }
 
-            if (Config.EnableClientCredentialsGrantType)
+            //  **動的登録を開けた配備では、この経路が使える**（#307 の段階 5-b）。
+            //    **`EnableClientCredentialsGrantType` が false でも、
+            //    専用 scope（`client_registration`）のトークンだけは出す**ので、
+            //    **口が受け付ける事実を広告に出す。**
+            //    **「その scope しか出ない」ことは、Discovery では表せない**
+            //    （**クライアントごとの `scope` の絞りと同じ事情**）ので、文書に書く。
+            if (Config.EnableClientCredentialsGrantType
+                || Config.EnableDynamicClientRegistration)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
             }
@@ -3551,7 +3559,22 @@ namespace MultiPurposeAuthSite.TokenProviders
             string jwkString = "";
             err = new Dictionary<string, string>();
 
-            if (Config.EnableClientCredentialsGrantType)
+            //  **動的登録のための細い道**（#307 の段階 5-b）。
+            //    **`EnableClientCredentialsGrantType` が false でも、
+            //    専用 scope（`client_registration`）を要求したときだけ通す。**
+            //
+            //  **なぜ分けるか** : **「CI から登録を作りたい」だけなのに、
+            //    `client_credentials` を配備全体で開けさせるのは広すぎる**
+            //    （**この経路は利用者の居ないトークンを出す**）。
+            //
+            //  **要求の scope で判断する**（**発行の段で、実際に出る scope をもう一度見る**）。
+            bool dcrOnly = !Config.EnableClientCredentialsGrantType
+                && Config.EnableDynamicClientRegistration
+                && (scopes ?? "").Split(new char[] { ' ' },
+                        StringSplitOptions.RemoveEmptyEntries)
+                    .Contains(Const.ScopeClientRegistration);
+
+            if (Config.EnableClientCredentialsGrantType || dcrOnly)
             {
                 #region 認証
 
@@ -3597,13 +3620,44 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+
                     // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
-                    identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
+                    List<string> issuedScopes = new List<string>(
+                        Helper.FilterSupportedScopes(scopes.Split(' '), client_id));
+
+                    //  **クライアント登録の管理 API 専用のトークンは、scope も期限も絞る**
+                    //    （#307 の段階 5-b。**ROPC と同じ規則**。段階 1）。
+                    //
+                    //  **他の scope と混ぜない** — **登録を作れる権限を持ったトークンを、
+                    //    他の用途でも使い回されると、寿命を短くした意味が薄れる。**
+                    //
+                    //  **この scope は、登録に明記したクライアントにしか付かない**
+                    //    （`Helper.FilterSupportedScopes`）。
+                    TimeSpan expires = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes;
+
+                    if (issuedScopes.Contains(Const.ScopeClientRegistration))
+                    {
+                        issuedScopes = new List<string>() { Const.ScopeClientRegistration };
+                        expires = Config.DcrAccessTokenExpireTimeSpanFromSeconds;
+                    }
+                    else if (dcrOnly)
+                    {
+                        //  **この経路を開けたのは、専用 scope のためだけ**である。
+                        //    **その scope が出ないなら、グラントを開けていないのと同じ**に倒す
+                        //    （**クライアントに `client_registration` を登録していないとき**）。
+                        //    **断り方を変えない** — **「scope を持っているか」を外から探らせない。**
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
+                        err.Add(OAuth2AndOIDCConst.error_description,
+                            Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
+                        return false;
+                    }
+
+                    identity = Helper.AddClaim(identity, client_id, issuedScopes, null, "");
 
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
                         client_id, identity.Name, identity.Claims,
-                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                        DateTimeOffset.Now.Add(expires),
                         // **登録された署名 alg で署名する**（#129 の段階 2）
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 

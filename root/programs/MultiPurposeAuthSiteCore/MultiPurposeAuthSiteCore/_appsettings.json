@@ -461,6 +461,24 @@
     //   例 : "redirect_uri_code": "https://rp.example.com/cb https://localhost:5001/cb"
     //   **2 件以上登録すると、要求で redirect_uri を省略できなくなる**
     //   （どれを使うか決められないため。RFC 6749 §3.1.2.3。CONFIGURATION.md 4 節）。
+    //
+    // **"scope" : そのクライアントに許す scope**（空白区切り。#198）。
+    //   **書かなければ絞らない**（従来どおり）。**ただし client_registration だけは逆**で、
+    //   **書いたクライアントにしか出さない**（#307 の段階 1）。
+    //
+    // **"owner" : そのクライアントの持ち主（利用者名）**（#307 の段階 5-b）。
+    //   **client_credentials で /register を叩いたときに、作る登録の所有者になる**
+    //   （**トークンに利用者が居ないため**）。
+    //   **書かなければ、そのクライアントでは登録を作れない**
+    //   （**403 ＋ access_denied**。配備全体のものを 1 人の持ち物にしないため）。
+    //
+    //   **名前で持つ**のは、**この設定を人が書く**からである（Users.Id は書けない）。
+    //   **利用者名を変えたら、ここも直すこと** —
+    //   **登録の表（Saml2OAuth2Data.OwnerUserId）は id なので切れない**（段階 5-a-1）。
+    //
+    //   例 : "scope": "client_registration", "owner": "tanaka"
+    //   **この 2 つを書いたクライアントだけが、CI から登録を作れる。**
+    //   **ROPC（利用者のパスワード）は要らない。**
     "OAuth2ClientsInformation": {
       "67d328bfe8604aae83fb15fa44780d8b": {
         "client_secret": "s_FhjujXG0U6kAD-c4S5ifiKdAgqFoil_UxKuN_Ur50",

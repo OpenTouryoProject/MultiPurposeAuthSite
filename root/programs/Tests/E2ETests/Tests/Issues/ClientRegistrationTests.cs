@@ -33,6 +33,7 @@
 //*  2026/10/19  玄人 幸道         クライアント認証の方法のケースを追加（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         software_statement のケースを追加（#307 の段階 4）
 //*  2026/10/20  玄人 幸道         RT-307.3 を「n 件作れる」に書き換えた（#307 の段階 5-a）
+//*  2026/10/20  玄人 幸道         RT-307.22〜.24（client_credentials）を追加（#307 の段階 5-b）
 //*  2026/10/20  玄人 幸道         Noteの文面を段階5-a-1後の形に直した（#307）
 //**********************************************************************************
 
@@ -2278,7 +2279,487 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         }
 
         #endregion
+
+        #region RT-307.22
+
+        /// <summary>RT-307.22 client_credentials で登録でき、所有者はそのクライアントの所有者</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **利用者のパスワードを使わずに登録する**（#307 の段階 5-b）。
+        ///
+        /// **段階 1 〜 5-a は、所有者を AT の `sub` からしか引けなかった** —
+        /// **ROPC（利用者のパスワード）を開けないと、動的登録が使えなかった。**
+        ///
+        /// **ここで測るのは「登録の表のクライアント」の側**である
+        /// （**所有者は `OwnerUserId`**）。
+        /// **構成ファイルの `owner` の側は `RT-307.23`。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30722_client_credentialsで登録でき所有者はクライアントの所有者(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                //  **動的登録と client_credentials の両方が開いている配備でしか測れない。**
+                await Flows.SkipIfGrantTypeNotSupportedAsync(admin, "client_credentials");
+                string endpoint = await DynamicClientRegistration.SkipIfNotSupportedAsync(admin);
+
+                TestReport r = this.Report("RT-307.22",
+                    "**`client_credentials` のトークンで登録でき**、"
+                    + "**所有者は「認証したクライアントの所有者」になる**",
+                    "**段階 1 〜 5-a は、所有者をトークンの `sub` からしか引けなかった** — "
+                    + "**ROPC を開けないと動的登録が使えなかった**（利用者のパスワードが要る）。"
+                    + "**CI / IaC から叩くのに、利用者のパスワードを置きたくない。**"
+                    + "**段階 5-b で、利用者の居ないトークンも受ける** — "
+                    + "**作る登録の所有者は、認証したクライアントの所有者**である。",
+                    "RFC 6749 §4.4 / #307 の段階 5-b");
+
+                r.Target("POST /token（client_credentials）→ POST /register");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                //  **使い捨ての利用者**（**ロールは `Admin`** — 管理画面を開くため）。
+                string suffix = Guid.NewGuid().ToString("N").Substring(0, 8);
+                string name = "e2e_rt30722_" + suffix;
+                string renamedTo = "e2e_rt30722_r_" + suffix;
+
+                await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "Admin");
+
+                try
+                {
+                    string apiClientId = null;
+                    string apiClientSecret = null;
+
+                    using (IdPClient owner = this.Client(targetKey))
+                    {
+                        Assert.True(
+                            await owner.TrySignInAsync(name, admin.Config.Get("TestUserPWD")),
+                            "前提: 使い捨ての利用者でサインインできること");
+
+                        r.Step("(1) 画面から、専用 scope を持つクライアントを登録する");
+
+                        //  **動的登録では `client_registration` を配れない**
+                        //    （`RT-307.4` の (7) が測っている）ので、**画面から**作る。
+                        (string ClientId, string ClientSecret) registered =
+                            await ManageClientRegistration.RegisterWithSecretAsync(owner,
+                                new Dictionary<string, string>()
+                                {
+                                    { "Scopes", DynamicClientRegistration.Scope }
+                                });
+
+                        apiClientId = registered.ClientId;
+                        apiClientSecret = registered.ClientSecret;
+
+                        r.Verify("登録できる", !string.IsNullOrEmpty(apiClientId),
+                            "登録できる", string.IsNullOrEmpty(apiClientId)
+                                ? "**登録できない**" : apiClientId);
+
+                        Assert.False(string.IsNullOrEmpty(apiClientId),
+                            "前提: 画面からクライアントを登録できること");
+
+                        r.VerifyEqual("この時点の一覧は 1 件", "1",
+                            (await ManageClientRegistration.ListAsync(owner)).Count.ToString());
+
+                        r.Step("(2) 所有者の利用者名を変える");
+
+                        //  **これを挟まないと、新しい道を測れない**（実測で踏んだ）。
+                        //    **登録の `ClientName` には所有者の利用者名が入る**（段階 5-a）ので、
+                        //    **`client_credentials` の `sub`（＝ `ClientName`）から
+                        //      利用者が引けてしまう** —
+                        //    **「クライアントの所有者から引く」道を通らずに通ってしまう。**
+                        //
+                        //  **名前を変えると `ClientName` は古い名前のまま残る**
+                        //    （**ラベルだから**。段階 5-a の決め）ので、
+                        //    **`sub` では引けなくなり、`OwnerUserId` から引く道だけが残る。**
+                        //
+                        //  **「利用者名を変えても切れない」こと**（段階 5-a-1 の主張）
+                        //    **を、正面から測ることにもなる。**
+                        bool renamed = await ClientRegistrationTests.RenameUserAsync(
+                            owner, renamedTo, admin.Config.Get("TestUserPWD"));
+
+                        r.Verify("利用者名を変えられる", renamed,
+                            "変えられる", renamed ? "変えた" : "**変えられない**");
+
+                        Assert.True(renamed, "前提: 所有者の利用者名を変えられること");
+
+                        r.Note("**この時点で、登録の `ClientName` は古い名前のまま**である"
+                            + "（**ラベルだから**。段階 5-a）。"
+                            + "**所有者の鍵は `OwnerUserId`**（`Users.Id`）なので、**切れない。**");
+                    }
+
+                    r.Step("(3) client_credentials で、専用 scope のトークンを取る");
+
+                    JsonResponse token = await DynamicClientRegistration.ClientCredentialsTokenAsync(
+                        admin, apiClientId, apiClientSecret);
+
+                    string accessToken = token.String("access_token");
+
+                    r.Verify("access_token が返る", !string.IsNullOrEmpty(accessToken),
+                        "返る", string.IsNullOrEmpty(accessToken)
+                            ? "**返らない**（error=" + (token.String("error") ?? "なし") + "）"
+                            : "返った（値は出さない）");
+
+                    r.VerifyEqual("scope は専用 scope 1 本",
+                        DynamicClientRegistration.Scope, token.String("scope") ?? "（無い）");
+
+                    r.Note("**他の scope と混ぜない** — **ROPC の経路と同じ規則**である"
+                        + "（段階 1）。**期限も `DcrAccessTokenExpireTimeSpanFromSeconds`** に絞る。");
+
+                    Assert.False(string.IsNullOrEmpty(accessToken),
+                        "前提: client_credentials でトークンが取れること");
+
+                    r.Step("(4) そのトークンで登録できる");
+
+                    JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                        admin, endpoint, accessToken,
+                        DynamicClientRegistration.Metadata(UriA));
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)res.StatusCode).ToString());
+
+                    string newClientId = res.String("client_id");
+
+                    r.Verify("client_id が返る", !string.IsNullOrEmpty(newClientId),
+                        "返る", string.IsNullOrEmpty(newClientId) ? "**返らない**" : newClientId);
+
+                    r.Step("(5) 所有者は、認証したクライアントの所有者である");
+
+                    using (IdPClient owner = this.Client(targetKey))
+                    {
+                        //  **新しい名前で入る**（**名前を変えた後**である）。
+                        Assert.True(
+                            await owner.TrySignInAsync(
+                                renamedTo, admin.Config.Get("TestUserPWD")),
+                            "前提: 名前を変えた利用者でサインインできること");
+
+                        List<string> listed = await ManageClientRegistration.ListAsync(owner);
+
+                        r.VerifyEqual("その人の一覧は 2 件になる", "2", listed.Count.ToString());
+
+                        r.Verify("動的登録で作った 1 件が、その人の一覧に出る",
+                            listed.Contains(newClientId),
+                            "出る", listed.Contains(newClientId) ? "出た" : "**出ない**");
+                    }
+
+                    r.Note("**所有者が決まるのは、認証したクライアントが所有者を持っているから**である。"
+                        + "**構成ファイル発のクライアントは `owner` 属性**で持つ（`RT-307.23`）。"
+                        + "**所有者を持たないクライアントでは断る**（`RT-307.24`）。");
+
+                    r.Done();
+                }
+                finally
+                {
+                    //  **利用者を消すと、その人の登録は全部消える**
+                    //    （`OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`。段階 5-a-1）。
+                    //  **名前を変えているので、両方を試す**（**落ちた回の後始末**）。
+                    await UsersAdmin.DeleteByUserNameAsync(admin, renamedTo);
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+            }
+        }
+
+        #endregion
+
+        #region RT-307.23
+
+        /// <summary>RT-307.23 構成ファイルの owner から、所有者が決まる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **構成ファイル発のクライアントは、`owner` 属性（利用者名）で所有者を持つ**
+        /// （#307 の段階 5-b）。
+        ///
+        /// **`test.ps1` が渡すのは net10.0 版にだけ**である —
+        /// **net10.0 は設定を「節」として読む**のでクライアントを 1 件ずつ足せるが、
+        /// **net48 は 1 本の JSON 文字列**で、**足すと雛形のクライアントを全て置き換えてしまう。**
+        /// **net48 では Skip する**（`RT-307.15` と同じ作法）。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30723_構成ファイルのownerから所有者が決まる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                //  **動的登録と client_credentials の両方が開いている配備でしか測れない。**
+                await Flows.SkipIfGrantTypeNotSupportedAsync(admin, "client_credentials");
+                string endpoint = await DynamicClientRegistration.SkipIfNotSupportedAsync(admin);
+
+                string clientId = ClientRegistrationTests.DcrCcClientId(targetKey);
+                string clientSecret = ClientRegistrationTests.DcrCcClientSecret(targetKey);
+                string ownerName = ClientRegistrationTests.DcrCcOwner(targetKey);
+
+                Skip.If(string.IsNullOrEmpty(clientId)
+                    || string.IsNullOrEmpty(clientSecret)
+                    || string.IsNullOrEmpty(ownerName),
+                    "この対象には、構成ファイル発の動的登録クライアントを渡していません"
+                    + "（test.ps1 は net10.0 版にだけ渡す。#307 の段階 5-b）。");
+
+                TestReport r = this.Report("RT-307.23",
+                    "**構成ファイルの `owner`（利用者名）から、登録の所有者が決まる**",
+                    "**構成ファイル発のクライアントは、利用者の行と結び付いていない** — "
+                    + "**配備全体のもの**である。**`owner` を 1 属性足して、持ち主を書けるようにした**"
+                    + "（#307 の段階 5-b）。**`client_credentials` で叩いたときの所有者**になる。"
+                    + "**名前で持つ**のは**設定ファイルは人が書く物**だからで、"
+                    + "**利用者名を変えたら設定も直す**必要がある"
+                    + "（**登録の表の側は `Users.Id` なので切れない**）。",
+                    "#307 の段階 5-b / Helper.GetOwnerUserId");
+
+                r.Target("POST /token（client_credentials。構成ファイル発）→ POST /register");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                r.Step("(1) `owner` に書かれた利用者を作る");
+
+                //  **設定に書いた名前の利用者を、ここで作る**
+                //    （**種データの利用者を使わない** — **他のケースと登録を奪い合わないため**）。
+                //    **ロールは `Admin`**（所有者の一覧を画面で見るため）。
+                await UsersAdmin.DeleteByUserNameAsync(admin, ownerName);
+                await UsersAdmin.CreateAsync(admin, ownerName, ownerName + "@example.com", "Admin");
+
+                try
+                {
+                    r.Step("(2) client_credentials で、専用 scope のトークンを取る");
+
+                    JsonResponse token = await DynamicClientRegistration.ClientCredentialsTokenAsync(
+                        admin, clientId, clientSecret);
+
+                    string accessToken = token.String("access_token");
+
+                    r.Verify("access_token が返る", !string.IsNullOrEmpty(accessToken),
+                        "返る", string.IsNullOrEmpty(accessToken)
+                            ? "**返らない**（error=" + (token.String("error") ?? "なし") + "）"
+                            : "返った（値は出さない）");
+
+                    r.VerifyEqual("scope は専用 scope 1 本",
+                        DynamicClientRegistration.Scope, token.String("scope") ?? "（無い）");
+
+                    Assert.False(string.IsNullOrEmpty(accessToken),
+                        "前提: client_credentials でトークンが取れること");
+
+                    r.Step("(3) 登録できる");
+
+                    JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                        admin, endpoint, accessToken,
+                        DynamicClientRegistration.Metadata(UriA));
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)res.StatusCode).ToString());
+
+                    string newClientId = res.String("client_id");
+
+                    r.Step("(4) 所有者は、`owner` に書かれた利用者である");
+
+                    using (IdPClient owner = this.Client(targetKey))
+                    {
+                        Assert.True(
+                            await owner.TrySignInAsync(ownerName, admin.Config.Get("TestUserPWD")),
+                            "前提: owner の利用者でサインインできること");
+
+                        List<string> listed = await ManageClientRegistration.ListAsync(owner);
+
+                        r.Verify("その人の一覧に出る", listed.Contains(newClientId),
+                            "出る", listed.Contains(newClientId)
+                                ? "出た（" + listed.Count + " 件）" : "**出ない**");
+                    }
+
+                    r.Note("**`ClientName` は所有者の利用者名**である（従来どおり）。"
+                        + "**`client_name` を要求に書いても無視する**（RFC 7591 §3.2.1 が認めている）。");
+
+                    r.Done();
+                }
+                finally
+                {
+                    //  **利用者を消すと、その人の登録も消える**（cascade）。
+                    await UsersAdmin.DeleteByUserNameAsync(admin, ownerName);
+                }
+            }
+        }
+
+        #endregion
+
+        #region RT-307.24
+
+        /// <summary>RT-307.24 所有者の決まらないクライアントでは断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **`owner` を書いていない構成ファイルのクライアント**は、
+        /// **配備全体のもの**であって、**1 人の持ち物ではない**（#307 の段階 5-b）。
+        /// **その登録を誰のものにもできない**ので、**断る。**
+        ///
+        /// **`403` である**（**トークンは正しい**）。
+        /// **`401` にすると「取り直せ」と読めて誤誘導**になる。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30724_所有者の決まらないクライアントでは断る(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                //  **動的登録と client_credentials の両方が開いている配備でしか測れない。**
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "client_credentials");
+                string endpoint = await DynamicClientRegistration.SkipIfNotSupportedAsync(client);
+
+                string clientId = ClientRegistrationTests.DcrCcNoOwnerClientId(targetKey);
+                string clientSecret = ClientRegistrationTests.DcrCcNoOwnerSecret(targetKey);
+
+                Skip.If(string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret),
+                    "この対象には、所有者の無い動的登録クライアントを渡していません"
+                    + "（test.ps1 は net10.0 版にだけ渡す。#307 の段階 5-b）。");
+
+                TestReport r = this.Report("RT-307.24",
+                    "**所有者の決まらないクライアントでは、登録を断る**（`403` ＋ `access_denied`）",
+                    "**`client_credentials` のトークンには利用者が居ない**ので、"
+                    + "**所有者は認証したクライアントから引く**（#307 の段階 5-b）。"
+                    + "**引けないことがある** — **`owner` を書いていない構成ファイルのクライアント**"
+                    + "（配備全体のもの）、**`owner` の利用者が居ない**（設定の誤り）、"
+                    + "**所有者の無い登録**（種データ）。"
+                    + "**そのときは断る** — **誰のものでもない登録を作らない。**",
+                    "#307 の段階 5-b / ClientRegistrationProvider.Register");
+
+                r.Target("POST /register（所有者の無いクライアントのトークン）");
+
+                r.Step("(1) client_credentials で、専用 scope のトークンを取る");
+
+                JsonResponse token = await DynamicClientRegistration.ClientCredentialsTokenAsync(
+                    client, clientId, clientSecret);
+
+                string accessToken = token.String("access_token");
+
+                r.Verify("トークンそのものは取れる", !string.IsNullOrEmpty(accessToken),
+                    "取れる", string.IsNullOrEmpty(accessToken)
+                        ? "**取れない**（error=" + (token.String("error") ?? "なし") + "）"
+                        : "取れた（値は出さない）");
+
+                r.Note("**トークンの発行は通る** — **`scope` は登録に明記してある。**"
+                    + "**止まるのは `/register` の側**で、**所有者が決まらないため**である。");
+
+                Assert.False(string.IsNullOrEmpty(accessToken),
+                    "前提: client_credentials でトークンが取れること");
+
+                r.Step("(2) 登録は断られる");
+
+                JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                    client, endpoint, accessToken,
+                    DynamicClientRegistration.Metadata(UriA));
+
+                r.VerifyEqual("HTTP の状態は 403", "403", ((int)res.StatusCode).ToString());
+
+                r.VerifyEqual("error は access_denied",
+                    "access_denied", res.String("error") ?? "（無い）");
+
+                r.Verify("client_id は返らない",
+                    string.IsNullOrEmpty(res.String("client_id")),
+                    "返らない", string.IsNullOrEmpty(res.String("client_id"))
+                        ? "返らない" : "**返った**");
+
+                r.Note("**`401` ではない** — **トークンは正しい。**"
+                    + "**`401` にすると「取り直せ」と読めて、同じ失敗を繰り返させる。**");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 補助
+
+        /// <summary>サインイン中の利用者の名前を変える（#307 の段階 5-b）</summary>
+        /// <param name="client">IdPClient（その利用者でサインイン済み）</param>
+        /// <param name="newName">新しい利用者名</param>
+        /// <param name="password">その利用者のパスワード（出力しないこと）</param>
+        /// <returns>変えられたら true</returns>
+        /// <remarks>
+        /// **`/Manage/ChangeUserName` を送る**（`RT-277.4` と同じ経路）。
+        ///
+        /// **`Password` も送る** — **`[Required(AllowEmptyStrings = true)]`** なので、
+        /// **項目ごと無いと検証に落ちて、画面が出し直されるだけ**になる
+        /// （`RequirePasswordInEditingUserNameAndEmail` が true の配備でも通るよう、実際の値を送る）。
+        /// </remarks>
+        private static async Task<bool> RenameUserAsync(
+            IdPClient client, string newName, string password)
+        {
+            string html = await client.GetStringAsync("/Manage/ChangeUserName");
+            string token = Html.Antiforgery(html);
+
+            if (string.IsNullOrEmpty(token))
+            {
+                return false;
+            }
+
+            System.Net.Http.HttpResponseMessage res = await client.PostFormAsync(
+                "/Manage/ChangeUserName",
+                new Dictionary<string, string>()
+                {
+                    { "__RequestVerificationToken", token },
+                    { "UserNameForEdit", newName },
+                    { "Password", password }
+                });
+
+            return ClientRegistrationTests.IsRedirect(res);
+        }
+
+        /// <summary>対象ごとのしるしを読む（#307 の段階 5-b）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <param name="name">しるしの名前（接尾）</param>
+        /// <returns>値（無ければ空）</returns>
+        /// <remarks>
+        /// **`MPAS_CORE_*` / `MPAS_NETFX_*` の作法**（`MPAS_CORE_MTLS` と同じ）。
+        ///
+        /// **対象ごとに分けないと、net48 のケースが「渡された」と見なして落ちる** —
+        /// **しるしは process 全体に置かれる**ので、**net48 のケースも読んでしまう**
+        /// （実測で踏んだ）。
+        /// </remarks>
+        private static string DcrCcEnv(string targetKey, string name)
+        {
+            string prefix = (targetKey == TestEnv.NetFxKey) ? "MPAS_NETFX_" : "MPAS_CORE_";
+
+            return Environment.GetEnvironmentVariable(prefix + name) ?? "";
+        }
+
+        /// <summary>
+        /// 構成ファイル発の動的登録クライアント（`test.ps1` が渡す。無ければ空）（#307 の段階 5-b）
+        /// </summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>client_id</returns>
+        /// <remarks>**net10.0 版にだけ渡される**（net48 は 1 本の JSON 文字列のため）。</remarks>
+        private static string DcrCcClientId(string targetKey)
+        {
+            return ClientRegistrationTests.DcrCcEnv(targetKey, "DCR_CC_CLIENT_ID");
+        }
+
+        /// <summary>その client_secret（値は出力しないこと）（#307 の段階 5-b）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>client_secret</returns>
+        private static string DcrCcClientSecret(string targetKey)
+        {
+            return ClientRegistrationTests.DcrCcEnv(targetKey, "DCR_CC_CLIENT_SECRET");
+        }
+
+        /// <summary>そのクライアントの `owner`（利用者名）（#307 の段階 5-b）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>利用者名</returns>
+        private static string DcrCcOwner(string targetKey)
+        {
+            return ClientRegistrationTests.DcrCcEnv(targetKey, "DCR_CC_OWNER");
+        }
+
+        /// <summary>所有者を書いていない方の client_id（#307 の段階 5-b）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>client_id</returns>
+        private static string DcrCcNoOwnerClientId(string targetKey)
+        {
+            return ClientRegistrationTests.DcrCcEnv(targetKey, "DCR_CC_NOOWNER_CLIENT_ID");
+        }
+
+        /// <summary>その client_secret（値は出力しないこと）（#307 の段階 5-b）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>client_secret</returns>
+        private static string DcrCcNoOwnerSecret(string targetKey)
+        {
+            return ClientRegistrationTests.DcrCcEnv(targetKey, "DCR_CC_NOOWNER_CLIENT_SECRET");
+        }
 
         /// <summary>管理 API を叩くための前提（使い捨ての利用者 2 人ぶん）</summary>
         private sealed class DcrContext

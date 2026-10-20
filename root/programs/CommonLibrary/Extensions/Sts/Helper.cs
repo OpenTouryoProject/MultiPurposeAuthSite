@@ -47,6 +47,7 @@
 //*  2026/10/01  玄人 幸道         subject_types の既定値を public に変更（#151 の段階 4）
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
 //*  2026/10/20  玄人 幸道         逆引きを OwnerUserId で引くようにした（#307 の段階 5-a）
+//*  2026/10/20  玄人 幸道         クライアントの所有者を引く口を追加（#307 の段階 5-b）
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を引く口を追加（#129 の段階 2）
 //*  2026/10/03  玄人 幸道         検証する側のalgを引く口を追加（#262）
 //*  2026/10/04  玄人 幸道         CORSのオリジン導出のため、publicクライアントのredirect_uriを返す口を追加（#265）
@@ -1754,6 +1755,71 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return "";
+        }
+
+        #endregion
+
+        #region GetOwnerUserId（#307 の段階 5-b）
+
+        /// <summary>client_id から、そのクライアントの所有者（`Users.Id`）を引く</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>所有者の `Users.Id`（決まらなければ空）</returns>
+        /// <remarks>
+        /// **`client_credentials` で動的登録を叩くときに、登録の所有者を決めるため**に在る
+        /// （#307 の段階 5-b）。**トークンに利用者が居ない**ので、
+        /// **「認証したクライアントの所有者」を、作る登録の所有者にする。**
+        ///
+        /// | クライアントの出どころ | 所有者 |
+        /// |---|---|
+        /// | **構成ファイル**（`OAuth2ClientsInformation`） | **`owner` 属性**（**利用者名**）を引いて、その利用者の `Users.Id` |
+        /// | **登録の表**（`Saml2OAuth2Data`） | **`OwnerUserId`**（そのまま。`Users.Id` である） |
+        ///
+        /// **構成ファイルが「名前」なのは、人が書く物だから**である
+        /// （**`Users.Id` は書けない**）。
+        /// **その代わり、利用者名を変えたら設定も直す必要がある** —
+        /// **表の側は id なので切れない**（段階 5-a-1 でそう移した）。
+        ///
+        /// **決まらないことがある**（**どれも空を返す**）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **`owner` を書いていない構成ファイルのクライアント** | **配備全体のもの**で、1 人の持ち物ではない |
+        /// | **`owner` に書いた利用者が居ない** | **設定の誤り**（**名前を変えた後に直し忘れた**ときもここ） |
+        /// | **所有者の無い登録**（種データ） | **`OwnerUserId` が空** |
+        /// | **登録が無い `client_id`** | — |
+        ///
+        /// **呼ぶ側は、空を「所有者が決まらない」として断ること**
+        /// （`ClientRegistrationProvider.Register` は `403` ＋ `access_denied`）。
+        /// </remarks>
+        public string GetOwnerUserId(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (!dic.ContainsKey("owner")
+                    || string.IsNullOrWhiteSpace(dic["owner"]))
+                {
+                    //  **構成ファイルに在るクライアントは、ここで打ち切る**
+                    //    （`GetClientScopes` と同じ流儀）。
+                    return "";
+                }
+
+                ApplicationUser owner = CmnUserStore.FindByName(dic["owner"].Trim());
+
+                //  **居ないことがある**（設定の誤り）。**空を返す** —
+                //    **null 参照で 500 にしない**（#210 / #241 と同じ性質）。
+                return (owner == null) ? "" : owner.Id;
+            }
+
+            // saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            return (model == null || string.IsNullOrEmpty(model.OwnerUserId))
+                ? "" : model.OwnerUserId;
         }
 
         #endregion
