@@ -61,6 +61,7 @@
 //*  2026/10/11  玄人 幸道         OIDCのID連携も開始とサインインに分けた（#286の段階2）
 //*  2026/10/16  玄人 幸道         user_code の投入の失敗を数える（#305 の段階 2）
 //*  2026/10/21  玄人 幸道         OP のセッションの識別子と sid クレームを追加（#310 の段階 1）
+//*  2026/10/21  玄人 幸道         ログアウトを RP へ伝え、台帳へ書くのを発行の直前に移した（#310 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3212,6 +3213,55 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region sid（OP のセッション。#310 の段階 1）
 
+        /// <summary>OP のセッションの識別子を Cookie から読む（#310 の段階 1）</summary>
+        /// <returns>セッションの識別子（Cookie が無ければ空）</returns>
+        private string GetOpSession()
+        {
+            return (Request.Cookies[Config.OpSessionCookieName] == null)
+                ? "" : Request.Cookies[Config.OpSessionCookieName].Value;
+        }
+
+        /// <summary>
+        /// OP のセッションの識別子が無ければ、作って同じ URL へ送り返す（#310 の段階 2）
+        /// </summary>
+        /// <returns>送り返す場合は ActionResult（**用意できていれば null**）</returns>
+        /// <remarks>
+        /// **認可の口の入口で呼ぶ**（**認証済みと分かった後**）。
+        ///
+        /// **なぜ送り返すのか。**
+        /// **Cookie が無いまま 2 本の認可要求が同時に来ると、それぞれが別の識別子を作り、
+        /// ブラウザには最後の 1 つしか残らない。**
+        /// **残らなかった方の行は、サインアウトでも消えない**
+        /// （**掃除まで残り、段階 2 では「もう居ないセッション」の通知先として生き続ける**）。
+        /// **先に Cookie を置いて送り返せば、2 本とも同じ識別子で戻ってくる。**
+        /// **台帳へ書くのは戻ってきた後**（`AddSidClaim`）なので、**捨てた識別子の行は残らない。**
+        ///
+        /// **送り返すのは 1 回だけ**（`Const.OpSessionRetry` の印で見分ける）。
+        /// **Cookie を置けない文脈が在る**ので、**印が無いと永久に送り返す**
+        /// （再認証の `re_auth_at` と同じ考え方）。
+        /// </remarks>
+        private ActionResult EnsureOpSession()
+        {
+            if (!string.IsNullOrEmpty(this.GetOpSession()))
+            {
+                return null;
+            }
+
+            if (!string.IsNullOrEmpty(Request.QueryString[Const.OpSessionRetry]))
+            {
+                // **既に 1 回送り返している**（Cookie を置けない文脈）。
+                //   **そのまま続ける**（`AddSidClaim` がその場で作る）。
+                return null;
+            }
+
+            this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
+
+            string url = Request.RawUrl;
+
+            return new RedirectResult(url
+                + (url.Contains("?") ? "&" : "?") + Const.OpSessionRetry + "=1");
+        }
+
         /// <summary>sidを追加</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="identity">ClaimsIdentity</param>
@@ -3220,16 +3270,22 @@ namespace MultiPurposeAuthSite.Controllers
         /// **値を決めるのは CommonLibrary**（`SessionClientProvider`） —
         /// **クライアントごとに別の sid** を、台帳から引く（無ければ作る）。
         ///
-        /// **Cookie が無ければ、ここで作る。**
-        /// **「次回から自動的にサインイン」で認証 Cookie だけが残っている**ことが在り、
-        /// **そのときもセッションとして扱えるようにする**ため。
+        /// **呼ぶのは「code / token を実際に作る直前」である**（#310 の段階 2 で移した）。
+        /// **以前は認可の経路の分岐より手前で呼んでいた**ので、
+        /// **同意画面を出しただけの相手・拒否された相手の行まで台帳に残り**、
+        /// **段階 2 で「トークンを一度も受けていない RP へログアウトを伝える」ことになった**
+        /// （**その RP に「この利用者が来た」ことを教えてしまう**）。
+        ///
+        /// **Cookie は `EnsureOpSession` が用意する**（**認可の口の入口で呼ぶ**）。
+        /// **それでも無ければ、ここで作る** — **同意応答（POST）は送り返せない**ため。
+        /// **「次回から自動的にサインイン」で認証 Cookie だけが残っている**ことも在り、
+        /// **そのときもセッションとして扱う。**
         ///
         /// **台帳に入れられない経路では、クレームを付けない**（**嘘の値を出さない**）。
         /// </remarks>
         private void AddSidClaim(string client_id, ClaimsIdentity identity)
         {
-            string sessionId = (Request.Cookies[Config.OpSessionCookieName] == null)
-                ? "" : Request.Cookies[Config.OpSessionCookieName].Value;
+            string sessionId = this.GetOpSession();
 
             if (string.IsNullOrEmpty(sessionId))
             {
@@ -3260,18 +3316,27 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>OPのセッションを終わらせる</summary>
         /// <remarks>
-        /// **サインアウトの前に呼ぶ。** **台帳を消し、Cookie を落とす。**
+        /// **サインアウトの前に呼ぶ。**
+        /// **伝えて、台帳を消し、Cookie を落とす**（#310 の段階 2）。
         ///
-        /// **段階 2 では、消す前に「伝える先」を読む**ことになる
-        /// （**消してしまうと、誰に伝えるかが分からなくなる**）。
+        /// **伝えるのが先である** — **台帳を消すと、誰に伝えるかが分からなくなる。**
+        ///
+        /// **呼ばれるのはサインアウトの 5 か所**
+        /// （`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 /
+        /// `max_age` の再認証 / 別のアカウントでログイン）。
+        /// **どれも「OP のセッションが終わる」場面**なので、**同じ扱いでよい。**
         /// </remarks>
         private void ClearOpSession()
         {
-            string sessionId = (Request.Cookies[Config.OpSessionCookieName] == null)
-                ? "" : Request.Cookies[Config.OpSessionCookieName].Value;
+            string sessionId = this.GetOpSession();
 
             if (!string.IsNullOrEmpty(sessionId))
             {
+                //  **先に伝える**（#310 の段階 2）。
+                //    **消してしまうと、誰に伝えるかが分からなくなる。**
+                //    **待たない**（背景で送る。**応答しない RP でログアウトを止めない**）。
+                Sts.BackChannelLogout.NotifyBySession(sessionId);
+
                 Sts.SessionClientProvider.DeleteBySession(sessionId);
             }
 
@@ -3426,6 +3491,12 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
+                    // **OP のセッションの識別子を用意する**（#310 の段階 2）。
+                    //   **無ければ Cookie を置いて、同じ URL へ送り返す**
+                    //   （**同時に来た要求を 1 つの識別子に揃えるため**）。
+                    ActionResult ensured = this.EnsureOpSession();
+                    if (ensured != null) return ensured;
+
                     // Cookie認証チケットからClaimsIdentityを取得しておく。
                     AuthenticateResult ticket = this.AuthenticationManager
                         .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
@@ -3445,9 +3516,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // auth_timeを追加
                     this.AddAuthTimeClaim(max_age, claims, identity);
-
-                    // sidを追加（#310 の段階 1）
-                    this.AddSidClaim(client_id, identity);
 
                     // scopeパラメタ
                     string[] scopes = (scope ?? "").Split(' ');
@@ -3510,6 +3578,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
                             }
 
+                            // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                            this.AddSidClaim(client_id, identity);
+
                             // ★ Codeの生成
                             string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
                                 identity, Request.QueryString, client_id, state, scopes, claims, nonce);
@@ -3542,6 +3613,9 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // OAuth2/OIDC Implicit
 
+                        // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                        this.AddSidClaim(client_id, identity);
+
                         // ★ Tokenの生成
                         Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
                             identity, Request.QueryString,
@@ -3559,6 +3633,9 @@ namespace MultiPurposeAuthSite.Controllers
                         || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                     {
                         // OIDC Hybrid Flow
+
+                        // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                        this.AddSidClaim(client_id, identity);
 
                         // ★ Tokenの生成
                         string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
@@ -3681,9 +3758,6 @@ namespace MultiPurposeAuthSite.Controllers
                 // auth_timeを追加
                 this.AddAuthTimeClaim(max_age, claims, identity);
 
-                // sidを追加（#310 の段階 1）
-                this.AddSidClaim(client_id, identity);
-
                 // 次に、アクセス要求を保存して、仲介コードを発行する。
 
                 // scopeパラメタ
@@ -3710,6 +3784,9 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
                 {
+                    // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                    this.AddSidClaim(client_id, identity);
+
                     // アクセス要求を保存して、仲介コードを発行する。
                     identity = new ClaimsIdentity(
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
@@ -4915,6 +4992,89 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View("DeviceAuthZVerify");
         }
+        #endregion
+
+        #region Back-Channel Logout の受け口（自己テスト。#310 の段階 2）
+
+        /// <summary>
+        /// 自己テストの RP として logout_token を受け取る
+        /// POST: /Account/BackChannelLogoutClient
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **測るためだけに在る口**である（**`IsLockedDownTestEndpoints` で閉じる**）。
+        ///
+        /// **Back-Channel Logout は「OP が RP を叩く」**ので、
+        /// **RP の側に口が無いと、送れたことを確かめられない。**
+        /// **E2E のクライアントは HTTP サーバを持たない**ので
+        /// （#309 で `jwks_uri` の足場を別に立てたのと同じ事情）、
+        /// **このサイトが自分の RP も兼ねる**（`test_self_code` と同じ考え方）。
+        ///
+        /// **ここでは検証しない。** **覚えておくだけ**である（`TestLogoutTokenBox`）。
+        /// **署名・`events`・`sid` を確かめるのは E2E の側**
+        /// （**RP が何を確かめるべきか**は、テストに書いた方が読める）。
+        ///
+        /// **200 を返す**（Back-Channel Logout 1.0 §2.6）。**本文が無ければ 400。**
+        /// </remarks>
+        [HttpPost]
+        [AllowAnonymous]
+        public ActionResult BackChannelLogoutClient()
+        {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return HttpNotFound();
+            }
+
+            string logoutToken = Request.Form[Const.LogoutToken] ?? "";
+
+            if (string.IsNullOrEmpty(logoutToken))
+            {
+                return new HttpStatusCodeResult(400);
+            }
+
+            Sts.TestLogoutTokenBox.Add(logoutToken);
+
+            // オペレーション・トレース・ログ出力
+            //   **値は出さない**（`logout_token` には `sub` と `sid` が入っている）。
+            Logging.MyOperationTrace("The self-test RP received a logout_token.");
+
+            return new HttpStatusCodeResult(200);
+        }
+
+        /// <summary>
+        /// 受け取った logout_token を返す（測るため）
+        /// GET: /Account/BackChannelLogoutBox
+        /// </summary>
+        /// <param name="clear">true なら、返した後に空にする</param>
+        /// <returns>ActionResult（JSON）</returns>
+        /// <remarks>
+        /// **測るためだけに在る口**である（**`IsLockedDownTestEndpoints` で閉じる**）。
+        /// **`logout_token` をそのまま返す** — **E2E が中身を確かめる**ため。
+        ///
+        /// **本番で開いていれば、他人のログアウトの通知を読まれる。**
+        /// **閉じる判定を外さないこと**（`ProductionCheck` が
+        /// `IsLockedDownTestEndpoints` の警告を出すのは、この種の口が在るためである）。
+        /// </remarks>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult BackChannelLogoutBox(bool clear = false)
+        {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return HttpNotFound();
+            }
+
+            List<string> tokens = Sts.TestLogoutTokenBox.GetAll();
+
+            if (clear)
+            {
+                // **測る前に空にする**ために在る（前のケースの通知が混ざらないように）。
+                Sts.TestLogoutTokenBox.Clear();
+            }
+
+            return Json(new { logout_tokens = tokens }, JsonRequestBehavior.AllowGet);
+        }
+
         #endregion
 
         #region テスト用

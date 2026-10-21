@@ -37,6 +37,7 @@
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22を追加（鍵なし。#275）
 //*  2026/10/09  玄人 幸道         TestClient_15 の折り返し先を、記号から実 URL に変えた（C-10）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を写し、TestClient_24 を追加（#307 の段階 3）
+//*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -287,6 +288,36 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **Back-Channel Logout の受け先を登録した**（#310 の段階 2）。
+                //   **サイトごとに URL が違う**ので、定数で登録して
+                //   `CmnEndpoints.GetRedirectUriFromConstr` に解決させる
+                //   （**受け口はこのサイト自身**。`IsLockedDownTestEndpoints` で閉じる）。
+                //   **`post_logout_redirect_uri` も登録してある** —
+                //   **RP からのログアウトで、戻り先と通知の両方を 1 回で測れる**ようにするため。
+                ClientName = "TestClient_26", ClientId = "e2e0tc26000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "backchannel_logout_uri", "test_self_bclogout" },
+                    { "post_logout_redirect_uri", "test_self_logout" }
+                }
+            },
+            new Entry()
+            {
+                // **受け口は登録してあるが、同意されないクライアント**（#310 の段階 2）。
+                //   **「トークンを発行していない相手には伝えない」ことを測るためだけに在る。**
+                //   **このクライアントに対しては、どのテストも「許可」を押さない**
+                //   （**押すと同意が記録され、DB ストアでは 2 回目の実行から
+                //   `RT-310.6` が測れなくなる**。`TestClient_19` と同じ事情）。
+                ClientName = "TestClient_27", ClientId = "e2e0tc27000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "backchannel_logout_uri", "test_self_bclogout" }
+                }
+            },
+            new Entry()
+            {
                 // **pairwise の登録**（#140 の段階 2）。sub が PPID（RP ごとに違う値）になる。
                 ClientName = "TestClient_5", ClientId = "e2e0tc05000000000000000000000000",
                 ClientMode = "normal", SourceName = "TestClient",
@@ -533,6 +564,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case "post_logout_redirect_uri":
                     model.PostLogoutRedirectUri = value;
+                    break;
+
+                case "backchannel_logout_uri":
+                    model.BackChannelLogoutUri = value;
                     break;
 
                 case "subject_types":

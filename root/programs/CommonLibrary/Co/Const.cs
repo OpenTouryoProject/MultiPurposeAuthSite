@@ -47,6 +47,7 @@
 //*  2026/10/18  玄人 幸道         動的クライアント登録の scope と、登録項目の上限を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         registration_access_token のハッシュの上限を追加（#307 の段階 2）
 //*  2026/10/21  玄人 幸道         セッションの識別子と sid クレームを追加（#310 の段階 1）
+//*  2026/10/21  玄人 幸道         logout_token と受け口の定数を追加（#310 の段階 2）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method の上限を追加（#307 の段階 3）
 //**********************************************************************************
 
@@ -238,6 +239,14 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
         public const string TestSelfLogout = "test_self_logout";
 
+        /// <summary>Back-Channel Logout の受け口のテスト用の値（#310 の段階 2）</summary>
+        /// <remarks>
+        /// **このサイトは、自分の RP も兼ねている**（`test_self_code` と同じ考え方）。
+        /// **受け取った `logout_token` は覚えておく**（`TestLogoutTokenBox`）。
+        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
+        /// </remarks>
+        public const string TestSelfBackChannelLogout = "test_self_bclogout";
+
         #endregion
 
         #region セッションの置き場（#256）
@@ -356,6 +365,19 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string OpSession = "op_session";
 
+        /// <summary>OP のセッションを用意し直したことを示す印（#310 の段階 2）</summary>
+        /// <remarks>
+        /// **認可の口で `op_session` が無かったとき、Cookie を置いて同じ URL へ送り返す。**
+        /// **その送り返しに 1 回だけ付ける印**である（**無いと永久に送り返す**）。
+        ///
+        /// **Cookie を置けない文脈が在る** —
+        /// **third-party cookie を遮る設定のブラウザで、iframe から `prompt=none`** を投げた場合など。
+        /// **そこでは印だけが残り、セッションの識別子はその場で作る**（台帳は 1 行だけ残る）。
+        ///
+        /// **再認証の `re_auth_at` と同じ考え方**である（#247 / #272 の段階 2）。
+        /// </remarks>
+        public const string OpSessionRetry = "op_session_retry";
+
         /// <summary>sid クレームの名前（#310 の段階 1）</summary>
         /// <remarks>
         /// **OP のセッションの識別子**（OIDC Core §2）。
@@ -371,6 +393,17 @@ namespace MultiPurposeAuthSite.Co
         /// **プロセスの外には出ない**（トークンに入るのは <see cref="Sid"/> の名前）。
         /// </remarks>
         public const string UrnSidClaim = "urn:oauth:sid";
+
+        /// <summary>logout_token を運ぶ要求の項目名（#310 の段階 2）</summary>
+        /// <remarks>**POST の本文に 1 項目だけ**（Back-Channel Logout 1.0 §2.5）。</remarks>
+        public const string LogoutToken = "logout_token";
+
+        /// <summary>logout_token の typ ヘッダ（#310 の段階 2）</summary>
+        /// <remarks>
+        /// **Back-Channel Logout 1.0 §2.4 が推している型**である。
+        /// **`id_token` と取り違えないため**（`at+jwt` を付けた #302 の段階 2 と同じ理由）。
+        /// </remarks>
+        public const string LogoutJwtTyp = "logout+jwt";
 
         #endregion
 

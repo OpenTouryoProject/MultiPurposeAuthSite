@@ -5773,10 +5773,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - RedirectUriCode に候補が付いている
 - RedirectUriToken に候補が付いている
 - PostLogoutRedirectUri に候補が付いている
+- BackChannelLogoutUri に候補が付いている
 - RedirectUriSaml の候補に test_self_saml が在る
 - RedirectUriCode の候補に test_self_code が在る
 - RedirectUriToken の候補に test_self_token が在る
 - PostLogoutRedirectUri の候補に test_self_logout が在る
+- BackChannelLogoutUri の候補に test_self_bclogout が在る
 - 既定は test_self_code
 
 **補足**
@@ -7694,6 +7696,98 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **サインアウトでは、台帳のその セッションの行も消している**（`SessionClientProvider.DeleteBySession`）。**消えたことは E2E では見えない**（**新しいセッションでは、どの行も引かれない**）。**SQL が通ることは、方言の通しで確かめている。**
+
+## RT-310.4 **Discovery が `backchannel_logout_supported` と `backchannel_logout_session_supported` を広告する**
+
+| | |
+|---|---|
+| 観点 | **RP は、OP が伝えてくれるかどうかを知る必要が在る。****広告が無ければ、RP は `backchannel_logout_uri` を登録する理由が無い。****`sid` を入れることも広告する** — **RP は `logout_token` の `sid` で、どのセッションを閉じるかを決める。** |
+| 根拠 | OIDC Back-Channel Logout 1.0 §3 / #310 の段階 2 |
+| テスト | `RT31004_DiscoveryがBackChannelLogoutを広告する` |
+
+**手順**
+
+1. 広告を読む
+1. Front-Channel Logout は、まだ広告しない（段階 3）
+
+**検証（合否を判定する）**
+
+- backchannel_logout_supported が true
+- backchannel_logout_session_supported が true
+- end_session_endpoint も在る（#232 のまま）
+- frontchannel_logout_supported は出ていない
+
+**補足**
+
+- **Session Management（`check_session_iframe`）は見送った**（third-party cookie を読む仕組みで、現代のブラウザでは効かなくなりつつある）。**広告しないので、RP は使おうとしない。**
+
+## RT-310.5 **`/end_session` でサインアウトすると、`backchannel_logout_uri` を登録した RP に `logout_token` が POST される**（中身も確かめる）。**登録が無い RP には届かない**
+
+| | |
+|---|---|
+| 観点 | **OP のセッションが終わっても、RP のセッションは残る。****伝えなければ、RP では入ったままになる** — **これが D-1-2 の「他の RP へログアウトを伝えられない」である。****`logout_token` は `id_token` と別のトークン**なので、**`events` が在り、`nonce` が無いことまで見る**（**`id_token` として受け取られると、RP でサインインに使われる恐れが在る**）。 |
+| 根拠 | OIDC Back-Channel Logout 1.0 §2.4 / §2.5 / #310 の段階 2 |
+| テスト | `RT31005_end_sessionでlogout_tokenが届く` |
+
+**手順**
+
+1. 受け口を登録した RP に、トークンを発行する
+1. 受け口を登録していない RP にも、トークンを発行する
+1. RP からのログアウト（/end_session）
+1. 受け口に logout_token が届く（背景で送られるので待つ）
+1. logout_token の中身
+1. 登録が無い RP には届いていない
+
+**検証（合否を判定する）**
+
+- id_token に sid が在る（段階 1）
+- 2 つ目の RP にもトークンが出た（台帳に 2 行）
+- HTTP 302
+- セッションが消えている
+- 届いた logout_token の数
+- aud は、登録した RP の client_id
+- iss は、この OP である
+- sid は、その RP の id_token と同じ値
+- sub も入っている（引けたので）
+- jti が在る（使い回しを RP が弾ける）
+- events に backchannel-logout が在る
+- nonce は入っていない（MUST NOT）
+- typ ヘッダは logout+jwt
+- kid が在る（id_token と同じ鍵で引ける）
+- 登録していない RP 宛ての logout_token が無い
+
+**補足**
+
+- **受信箱を空にしてから測る**（前のケースの通知が混ざらないように）。
+- **署名の検証は、ここでは行っていない。** **鍵は `id_token` と同じ**（`kid` も同じ引き方）なので、**`/jwkcerts` で検証できることは `RT-302.*` が押さえている。**
+- **再送はしない**（仕様も求めていない）。**届かなかったことはログに残る**（`The back-channel logout notified n of m RPs.`）。
+
+## RT-310.6 **同意画面を出しただけ・拒否された RP には、ログアウトを伝えない**
+
+| | |
+|---|---|
+| 観点 | **伝える先は「トークンを発行した相手」である。****段階 1 では、認可の口に入った時点で台帳に書いていた**ので、**同意画面を見せただけの相手・拒否された相手も、伝える先に残っていた** — **その RP に「この利用者が来た」ことを教えてしまう。****段階 2 の冒頭で、台帳に書くのを「発行の直前」に移した。** |
+| 根拠 | OIDC Back-Channel Logout 1.0 §2.5 / #310 の段階 2 |
+| テスト | `RT31006_同意していないRPには伝えない` |
+
+**手順**
+
+1. 拒否する RP の認可要求を出し、同意画面で「拒否」を押す
+1. 別の RP には、きちんと発行する（伝える先が 1 つ在る状態にする）
+1. サインアウトして、届いた通知を見る
+
+**検証（合否を判定する）**
+
+- 同意画面が出た
+- access_denied が返る
+- HTTP 302
+- 発行した RP には届く
+- 拒否した RP には届かない
+
+**補足**
+
+- **受信箱を空にしてから測る**（前のケースの通知が混ざらないように）。
+- **同意画面を出した時点では、台帳に行が無い。** **`sid` も、そのとき初めて作られる**（`AddSidClaim` は発行の直前で呼ぶ）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

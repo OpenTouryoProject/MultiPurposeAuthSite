@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 1）
+//*  2026/10/21  玄人 幸道         伝える先を読む口を追加（#310 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -60,7 +61,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | | |
     /// |---|---|
     /// | **`sid` を安定させる** | **同じセッション・同じクライアントなら、同じ `sid` を返す**（OIDC Core §2） |
-    /// | **伝える先を知る** | **ログアウトを伝える相手は「このセッションが触ったクライアント」である**（#310 の段階 2） |
+    /// | **伝える先を知る** | **ログアウトを伝える相手は「このセッションが触ったクライアント」である**（`BackChannelLogout`。#310 の段階 2） |
     ///
     /// **`sid` はクライアントごとに別の値にしてある。**
     /// **セッション単位で 1 つにすると、`sub` を `pairwise` にしている配備で、
@@ -290,6 +291,127 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region GetBySession
+
+        /// <summary>伝える先（台帳の 1 行。#310 の段階 2）</summary>
+        public class Target
+        {
+            /// <summary>ClientID</summary>
+            public string ClientId = "";
+
+            /// <summary>そのクライアントに名乗った sid</summary>
+            public string Sid = "";
+
+            /// <summary>Users.Id</summary>
+            public string UserId = "";
+        }
+
+        /// <summary>そのセッションが触ったクライアントを読む（#310 の段階 2）</summary>
+        /// <param name="sessionId">セッションの識別子</param>
+        /// <returns>伝える先（1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **ログアウトを伝える先を引くために使う**（`BackChannelLogout`）。
+        ///
+        /// **消す前に読むこと。** **<see cref="DeleteBySession"/> を先に呼ぶと、
+        /// 誰に伝えるかが分からなくなる。**
+        ///
+        /// **「触った」＝「トークンを発行した」**である（#310 の段階 2 の冒頭）。
+        /// **同意画面を出しただけ・拒否された相手は、この表に入っていない。**
+        /// </remarks>
+        public static List<Target> GetBySession(string sessionId)
+        {
+            List<Target> all = new List<Target>();
+
+            if (string.IsNullOrEmpty(sessionId))
+            {
+                return all;
+            }
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    string prefix = sessionId + "\t";
+
+                    foreach (KeyValuePair<string, Entry> kv in SessionClientProvider.SessionClients)
+                    {
+                        if (kv.Key.StartsWith(prefix))
+                        {
+                            all.Add(new Target()
+                            {
+                                ClientId = kv.Key.Substring(prefix.Length),
+                                Sid = kv.Value.Sid,
+                                UserId = kv.Value.UserId
+                            });
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        string sql = null;
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+                                sql = "SELECT [ClientID], [Sid], [UserId] FROM [SessionClient]"
+                                    + " WHERE [SessionId] = @SessionId ORDER BY [ClientID]";
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+                                sql = "SELECT \"ClientID\", \"Sid\", \"UserId\" FROM \"SessionClient\""
+                                    + " WHERE \"SessionId\" = :SessionId ORDER BY \"ClientID\"";
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+                                sql = "SELECT \"clientid\", \"sid\", \"userid\" FROM \"sessionclient\""
+                                    + " WHERE \"sessionid\" = @SessionId ORDER BY \"clientid\"";
+                                break;
+                        }
+
+                        foreach (dynamic row in cnn.Query(sql, new { SessionId = sessionId }))
+                        {
+                            IDictionary<string, object> r = (IDictionary<string, object>)row;
+
+                            all.Add(new Target()
+                            {
+                                ClientId = (string)SessionClientProvider.Value(r, "ClientID"),
+                                Sid = (string)SessionClientProvider.Value(r, "Sid"),
+                                UserId = (string)SessionClientProvider.Value(r, "UserId")
+                            });
+                        }
+                    }
+
+                    break;
+            }
+
+            return all;
+        }
+
+        /// <summary>方言で大文字小文字が違う列名を引く</summary>
+        /// <param name="row">1 行</param>
+        /// <param name="name">列名</param>
+        /// <returns>値</returns>
+        /// <remarks>**PostgreSQL は小文字で返る**（`ConsentProvider` と同じ）。</remarks>
+        private static object Value(IDictionary<string, object> row, string name)
+        {
+            if (row.ContainsKey(name))
+            {
+                return row[name];
+            }
+
+            return row.ContainsKey(name.ToLower()) ? row[name.ToLower()] : null;
+        }
+
+        #endregion
+
         #region DeleteBySession
 
         /// <summary>そのセッションの行を消す（#310 の段階 1）</summary>
@@ -297,8 +419,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// **サインアウトのときに呼ぶ。** **セッションが終われば `sid` も終わる。**
         ///
-        /// **段階 2 では、消す前に「伝える先」を読む**ことになる
-        /// （**消してしまうと、誰に伝えるかが分からなくなる**）。
+        /// **消す前に「伝える先」を読むこと**（<see cref="GetBySession"/>。#310 の段階 2）。
+        /// **消してしまうと、誰に伝えるかが分からなくなる。**
         /// </remarks>
         public static void DeleteBySession(string sessionId)
         {

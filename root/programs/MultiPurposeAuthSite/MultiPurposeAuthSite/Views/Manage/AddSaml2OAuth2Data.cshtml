@@ -185,6 +185,22 @@
         </div>
     </div>
     <div class="form-group">
+        @Html.LabelFor(m => m.BackChannelLogoutUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @*  **Back-Channel Logout の受け先**（#310 の段階 2）。
+                **候補は自己テストの受け口**（`test_self_bclogout`）。
+                **受け取らない RP はハイフン**（他の URI の項目と同じ）。 *@
+            @Html.TextBoxFor(m => m.BackChannelLogoutUri, new { @class = "form-control", @list = "list-BackChannelLogoutUri" })
+            <datalist id="list-BackChannelLogoutUri">
+                @foreach (string candidate in Model.BackChannelLogoutUriCandidates)
+                {
+                    <option value="@candidate"></option>
+                }
+            </datalist>
+            <p class="help-block">@Html.DescriptionFor(m => m.BackChannelLogoutUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
         @Html.LabelFor(m => m.SubjectTypes, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.SubjectTypes, Model.DdlSubjectTypesItems, new { @class = "form-control" })

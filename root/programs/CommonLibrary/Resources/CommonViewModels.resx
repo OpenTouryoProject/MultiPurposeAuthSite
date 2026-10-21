@@ -189,6 +189,9 @@
   <data name="PostLogoutRedirectUri" xml:space="preserve">
     <value>post_logout_redirect_uri</value>
   </data>
+  <data name="BackChannelLogoutUri" xml:space="preserve">
+    <value>backchannel_logout_uri</value>
+  </data>
   <data name="RedirectUriCode" xml:space="preserve">
     <value>redirect_uri_code</value>
   </data>
@@ -269,6 +272,9 @@
   </data>
   <data name="PostLogoutRedirectUriDescription" xml:space="preserve">
     <value>Where the RP may be sent back after logout (/end_session). Matched exactly.</value>
+  </data>
+  <data name="BackChannelLogoutUriDescription" xml:space="preserve">
+    <value>Where a logout_token is POSTed when the OP session ends. https only (loopback http is allowed). Put a hyphen when the client does not receive it.</value>
   </data>
   <data name="SubjectTypesDescription" xml:space="preserve">
     <value>What goes into sub. public is the user identifier; pairwise is a per-client value (PPID).</value>

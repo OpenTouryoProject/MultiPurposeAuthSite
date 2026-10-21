@@ -171,6 +171,10 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     --   **Users.Id を指す**（名前ではない）。**NULL 可。**
     --   **引用符なしなので、識別子は小文字に畳まれる**（ownerluserid ではなく owneruserid）。
     OwnerUserId varchar(38) NULL,
+    -- ログアウトを伝える先（#310 の段階 2）。末尾に足してある（ALTER … ADD で揃う）
+    --   **logout_token を POST する先**（Back-Channel Logout 1.0 §2.2）。**空なら伝えない。**
+    --   **引用符なしなので、識別子は小文字に畳まれる**（backchannellogouturi）。
+    BackChannelLogoutUri varchar(512) NULL,
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

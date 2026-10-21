@@ -38,6 +38,7 @@
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method の列を追加（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         所有者で引く口を追加（#307 の段階 5-a-1）
 //*  2026/10/20  玄人 幸道         並びを決め、所有者＋client_idで引く口を追加（#307 の段階 5-a-2）
+//*  2026/10/21  玄人 幸道         BackChannelLogoutUri の列を追加（#310 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -137,7 +138,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **クライアント認証の方法**（#307 の段階 3）。**空なら秘密ベースの 2 つ。**
             "TokenEndpointAuthMethod",
             //  **所有者**（#307 の段階 5-a）。**`Users.Id` を指す。** **空が在り得る。**
-            "OwnerUserId"
+            "OwnerUserId",
+            //  **ログアウトを伝える先**（#310 の段階 2）。**末尾に足す**（`ALTER … ADD` で揃う）。
+            "BackChannelLogoutUri"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -335,6 +338,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("TokenEndpointAuthMethod", model.TokenEndpointAuthMethod);
             prm.Add("OwnerUserId", model.OwnerUserId);
 
+            //  **ログアウトを伝える先**（#310 の段階 2）。
+            prm.Add("BackChannelLogoutUri", model.BackChannelLogoutUri);
+
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
                 prm.Add("RequirePkce", model.RequirePkce ? -1 : 0);
@@ -434,7 +440,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **クライアント認証の方法**（#307 の段階 3）。
                 TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
                 //  **所有者**（#307 の段階 5-a）。
-                OwnerUserId = model.OwnerUserId
+                OwnerUserId = model.OwnerUserId,
+                //  **ログアウトを伝える先**（#310 の段階 2）。
+                BackChannelLogoutUri = model.BackChannelLogoutUri
             };
         }
 

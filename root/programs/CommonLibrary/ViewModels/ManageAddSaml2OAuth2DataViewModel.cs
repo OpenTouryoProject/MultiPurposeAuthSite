@@ -36,6 +36,7 @@
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method の列を追加（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         所有者（OwnerUserId）を追加（#307 の段階 5-a-1）
 //*  2026/10/20  玄人 幸道         編集中の印（Editing）を追加（#307 の段階 5-a-2）
+//*  2026/10/21  玄人 幸道         backchannel_logout_uri を追加（#310 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -125,6 +126,29 @@ namespace MultiPurposeAuthSite.ViewModels
         [JsonProperty(PropertyName = "post_logout_redirect_uri")]
         public string PostLogoutRedirectUri { get; set; }
 
+        /// <summary>BackChannelLogoutUri（#310 の段階 2）</summary>
+        /// <remarks>
+        /// **ログアウトを伝える先**（OIDC Back-Channel Logout 1.0 §2.2 の backchannel_logout_uri）。
+        /// **登録が無ければ、その RP には伝えない。**
+        ///
+        /// **`https` を求める**（**ループバックの `http` だけ許す**）。
+        /// **判定は送る側**（`BackChannelLogout`）**で行う** — **鍵の出どころと同じ規則**である。
+        ///
+        /// **`backchannel_logout_session_required` は持たない。**
+        /// **この実装は `logout_token` に必ず `sid` を入れる**ので、
+        /// **「要るか」を RP ごとに持つ意味が無い**（Discovery では
+        /// `backchannel_logout_session_supported` を true で広告している）。
+        /// </remarks>
+        [Display(Name = "BackChannelLogoutUri", Description = "BackChannelLogoutUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        //[Url] localhost や IPアドレスが入力できない。
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "backchannel_logout_uri")]
+        public string BackChannelLogoutUri { get; set; }
+
         /// <summary>JwkRsaPublickey</summary>
         [Display(Name = "JwkRsaPublickey", Description = "JwkRsaPublickeyDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
@@ -195,6 +219,17 @@ namespace MultiPurposeAuthSite.ViewModels
             get
             {
                 return new List<string>() { Const.TestSelfLogout };
+            }
+        }
+
+        /// <summary>backchannel_logout_uri の候補（#310 の段階 2）</summary>
+        [JsonIgnore]
+        public List<string> BackChannelLogoutUriCandidates
+        {
+            get
+            {
+                // **使わないなら "-" を入れる**（他の項目と同じ）。
+                return new List<string>() { Const.TestSelfBackChannelLogout, "-" };
             }
         }
 

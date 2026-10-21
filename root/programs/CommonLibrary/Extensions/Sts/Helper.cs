@@ -58,6 +58,7 @@
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を引く口を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         jwks_uri を引く口を追加（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         設定ファイルの jwks_uri を集める口を追加（#309 の段階 2）
+//*  2026/10/21  玄人 幸道         backchannel_logout_uri を引く口と HttpClient を渡す口を追加（#310 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -879,6 +880,60 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return value.Split(
                 new char[] { ' ', '\t', '\r', '\n', '\u3000' },
                 StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        #endregion
+
+        #region GetOAuth2HttpClient
+
+        /// <summary>サーバ間の通信に使う HttpClient を渡す（#310 の段階 2）</summary>
+        /// <returns>HttpClient</returns>
+        /// <remarks>
+        /// **ID 連携や `/token` と同じもの**である（**TLS・プロキシ・クライアント証明書の扱いが揃う**）。
+        /// **`OAuth2AndOIDCClient.HttpClient` は設定専用**（get が無い）ので、ここから渡す。
+        ///
+        /// **`BackChannelLogout` が使う**（**RP へ `logout_token` を POST する**）。
+        /// </remarks>
+        public HttpClient GetOAuth2HttpClient()
+        {
+            return this.OAuth2HttpClient;
+        }
+
+        #endregion
+
+        #region GetClientsBackChannelLogoutUri
+
+        /// <summary>client_idからbackchannel_logout_uriを取得する（#310 の段階 2）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>backchannel_logout_uri（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **登録が無い相手には、ログアウトを伝えない**
+        /// （**Back-Channel Logout に対応していない RP** である）。
+        /// 登録は 1 本（既存の `post_logout_redirect_uri` と同じ形）。
+        /// 定数値（`test_self_bclogout`）の解決は、呼び出し側（`BackChannelLogout`）で行う。
+        /// </remarks>
+        public string GetClientsBackChannelLogoutUri(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("backchannel_logout_uri"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["backchannel_logout_uri"];
+                }
+            }
+
+            // Saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
+            {
+                return model.BackChannelLogoutUri ?? "";
+            }
+
+            return "";
         }
 
         #endregion

@@ -125,6 +125,7 @@
 //*  2026/10/19  玄人 幸道         登録された token_endpoint_auth_method で絞る（#307 の段階 3）
 //*  2026/10/20  玄人 幸道         TryReadJwtAlg を公開（software_statement の検証で使う。#307 の段階 4）
 //*  2026/10/21  玄人 幸道         client_assertion の鍵を jwks_uri からも引く（#309 の段階 1）
+//*  2026/10/21  玄人 幸道         Back-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -395,10 +396,20 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // **RP からのログアウトの口**（RP-Initiated Logout 1.0 §2.1）。
                 //   **実装しているなら、Discovery に出すことが REQUIRED。**
-                //   Front-Channel / Back-Channel Logout と Session Management は未実装なので、
-                //   frontchannel_logout_supported などは出さない（出すと「できる」と読まれる）。
                 OpenIDConfig.Add("end_session_endpoint",
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2EndSessionEndpoint);
+
+                //  **Back-Channel Logout に対応したことを広告する**（#310 の段階 2）。
+                //    | 項目 | 意味 |
+                //    |---|---|
+                //    | `backchannel_logout_supported` | **登録した `backchannel_logout_uri` を叩く** |
+                //    | `backchannel_logout_session_supported` | **`logout_token` に `sid` を入れる** |
+                //
+                //    **`sid` は必ず入れる**ので、後者も true である（段階 1 で `id_token` にも出した）。
+                //    **Front-Channel Logout（段階 3）と Session Management（見送り）は、まだ出さない**
+                //    （**出すと「できる」と読まれる**）。
+                OpenIDConfig.Add("backchannel_logout_supported", true);
+                OpenIDConfig.Add("backchannel_logout_session_supported", true);
 
                 #endregion
 
@@ -4416,6 +4427,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // **ログアウト後の戻り先のテスト用**（#232）。
                 //   サイトごとに URL が違う（net48 / net10.0）ので、定数で登録して、ここで解決する。
                 ret = Config.OAuth2ClientEndpointsRootURI + "/Home/Index";
+            }
+            else if (constr.ToLower() == Const.TestSelfBackChannelLogout)
+            {
+                // **Back-Channel Logout の受け口のテスト用**（#310 の段階 2）。
+                //   **このサイトが自分の RP も兼ねる**（`IsLockedDownTestEndpoints` で閉じる口）。
+                ret = Config.OAuth2ClientEndpointsRootURI + "/Account/BackChannelLogoutClient";
             }
             else
             {

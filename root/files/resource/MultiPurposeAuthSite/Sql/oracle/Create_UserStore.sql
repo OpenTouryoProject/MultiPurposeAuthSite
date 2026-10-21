@@ -171,6 +171,9 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     -- 所有者（#307 の段階 5-a）。末尾に足してある（ALTER … ADD で揃う）
     --   **Users."Id" を指す**（名前ではない）。**NULL 可。**
     "OwnerUserId" NVARCHAR2(38) NULL,
+    -- ログアウトを伝える先（#310 の段階 2）。末尾に足してある（ALTER … ADD で揃う）
+    --   **logout_token を POST する先**（Back-Channel Logout 1.0 §2.2）。**空なら伝えない。**
+    "BackChannelLogoutUri" NVARCHAR2(512) NULL,      -- Const.MaxLengthOfUri
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 

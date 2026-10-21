@@ -268,6 +268,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
+        ///   backchannel_logout_uri に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string BackChannelLogoutUri {
+            get {
+                return ResourceManager.GetString("BackChannelLogoutUri", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   redirect_uri_code に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RedirectUriCode {
@@ -516,6 +525,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string PostLogoutRedirectUriDescription {
             get {
                 return ResourceManager.GetString("PostLogoutRedirectUriDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   BackChannelLogoutUriDescription に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string BackChannelLogoutUriDescription {
+            get {
+                return ResourceManager.GetString("BackChannelLogoutUriDescription", resourceCulture);
             }
         }
         

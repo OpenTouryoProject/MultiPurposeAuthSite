@@ -52,6 +52,7 @@
 //*  2026/10/06  玄人 幸道         prompt=noneを付けず、同意画面を通すようにした（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22とACS URLを追加（#275）
 //*  2026/10/19  玄人 幸道         private_key_jwtのTestClient_24を追加（#307 の段階 3）
+//*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -140,6 +141,29 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// 解決後の URL は PostLogoutRedirectUri で引く。
         /// </remarks>
         public const string TestClient_4 = "TestClient_4";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**backchannel_logout_uri を登録**したクライアント（#310 の段階 2）。
+        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// </summary>
+        /// <remarks>
+        /// 登録値は定数（test_self_bclogout）で、**サーバ側で URL に解決される**
+        /// （**受け口はサイト自身の `/Account/BackChannelLogoutClient`**）。
+        /// **`post_logout_redirect_uri` も登録してある**（test_self_logout）。
+        /// </remarks>
+        public const string TestClient_26 = "TestClient_26";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**backchannel_logout_uri を登録**したが、
+        /// **同意されない**クライアント（#310 の段階 2）。
+        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// </summary>
+        /// <remarks>
+        /// **このクライアントには「許可」を押さないこと。**
+        /// **同意が記録されると、同意画面が出なくなり**（DB ストアでは次回の実行から）、
+        /// **`RT-310.6`（トークンを発行していない相手には伝えない）が測れなくなる。**
+        /// </remarks>
+        public const string TestClient_27 = "TestClient_27";
 
         /// <summary>
         /// TestClient（normal）を写し、**subject_types を pairwise にした**クライアント（#140 の段階 2）。
@@ -362,6 +386,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
                 { KnownClients.TestClient_24, "e2e0tc24000000000000000000000000" },
                 { KnownClients.TestClient_25, "e2e0tc25000000000000000000000000" },
+                { KnownClients.TestClient_26, "e2e0tc26000000000000000000000000" },
+                { KnownClients.TestClient_27, "e2e0tc27000000000000000000000000" },
                 { KnownClients.TestClient_9,  "e2e0tc09000000000000000000000000" },
                 { KnownClients.TestClient_10, "e2e0tc10000000000000000000000000" },
                 { KnownClients.TestClient_11, "e2e0tc11000000000000000000000000" },
@@ -813,6 +839,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient_4)
             {
                 // client_secret は写す元のまま（登録に足したのは post_logout_redirect_uri だけ）。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_26
+                || clientName == KnownClients.TestClient_27)
+            {
+                // **Back-Channel Logout の受け先を足しただけ**（#310 の段階 2）。
+                //   client_secret は写す元のまま。
+                //   **TestClient_27 には「許可」を押さない**（同意を記録しないため）。
                 sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_5)
