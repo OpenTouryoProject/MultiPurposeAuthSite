@@ -328,3 +328,7 @@ __pycache__/
 # 2 つ目の上流 IdP コンテナの生成物（#292 の段階 1）
 /store/keys-upstream2/
 /store/logs-upstream2/
+
+# 相手（RP）の JWK Set を配るコンテナに置くもの（#309 の段階 1）
+#   E2E が書いて、同じテストの中で消す（Infrastructure/JwksUri）
+/store/jwks/*.json

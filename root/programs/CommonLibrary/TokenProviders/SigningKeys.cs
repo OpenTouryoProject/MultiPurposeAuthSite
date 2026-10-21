@@ -31,6 +31,7 @@
 //*  2026/10/02  玄人 幸道         新規（#129 の段階 3 / D-9）
 //*  2026/10/03  玄人 幸道         ECのJWK検証を上流のJWS_ES*_Paramに戻した（OpenTouryo#595）
 //*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 を追加（#129 の段階 4）
+//*  2026/10/20  玄人 幸道         任意のパスの .cer から検証鍵を作る口を追加（#307 の段階 4）
 //**********************************************************************************
 
 using System.Security.Cryptography;
@@ -203,19 +204,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             /// <returns>JWS</returns>
             public JWS CreateJwsFromCer()
             {
-                string path = this.CerFilePath;
-
-                if (this.Alg == JwtConst.RS256) { return new JWS_RS256_X509(path, ""); }
-                if (this.Alg == JwtConst.RS384) { return new JWS_RS384_X509(path, ""); }
-                if (this.Alg == JwtConst.RS512) { return new JWS_RS512_X509(path, ""); }
-                if (this.Alg == JwtConst.PS256) { return new JWS_PS256_X509(path, ""); }
-                if (this.Alg == JwtConst.PS384) { return new JWS_PS384_X509(path, ""); }
-                if (this.Alg == JwtConst.PS512) { return new JWS_PS512_X509(path, ""); }
-                if (this.Alg == JwtConst.ES256) { return new JWS_ES256_X509(path, ""); }
-                if (this.Alg == JwtConst.ES384) { return new JWS_ES384_X509(path, ""); }
-                if (this.Alg == JwtConst.ES512) { return new JWS_ES512_X509(path, ""); }
-
-                return null;
+                //  **alg → class の対応は、static の版が 1 か所で持つ**（#307 の段階 4）。
+                return SigningKeys.CreateJwsFromCer(this.Alg, this.CerFilePath);
             }
 
             /// <summary>検証する JWS を作る（JWK Set から引いた公開鍵）</summary>
@@ -402,6 +392,82 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool IsSupported(string alg)
         {
             return SigningKeys.Of(alg) != null;
+        }
+
+        /// <summary>検証する JWS を作る（任意のパスの *.cer）</summary>
+        /// <param name="alg">alg</param>
+        /// <param name="cerFilePath">*.cer のパス</param>
+        /// <returns>JWS（扱わない alg なら null）</returns>
+        /// <remarks>
+        /// **「この配備の鍵」ではない証明書を使う経路**である（#307 の段階 4）。
+        /// **`Entry` は設定キー名から `.cer` を引く**ので、
+        /// **設定の行が持つパス**（`software_statement` の発行者など）には使えない。
+        ///
+        /// **alg → class の対応は、ここだけが持つ**（`Entry.CreateJwsFromCer` も委譲する）。
+        /// **読めないパスでは例外になる**ので、**呼ぶ側が受けること**
+        /// （**設定の誤りを、黙って「検証できた」にしないため**）。
+        /// </remarks>
+        public static JWS CreateJwsFromCer(string alg, string cerFilePath)
+        {
+            string path = cerFilePath;
+
+            if (alg == JwtConst.RS256) { return new JWS_RS256_X509(path, ""); }
+            if (alg == JwtConst.RS384) { return new JWS_RS384_X509(path, ""); }
+            if (alg == JwtConst.RS512) { return new JWS_RS512_X509(path, ""); }
+            if (alg == JwtConst.PS256) { return new JWS_PS256_X509(path, ""); }
+            if (alg == JwtConst.PS384) { return new JWS_PS384_X509(path, ""); }
+            if (alg == JwtConst.PS512) { return new JWS_PS512_X509(path, ""); }
+            if (alg == JwtConst.ES256) { return new JWS_ES256_X509(path, ""); }
+            if (alg == JwtConst.ES384) { return new JWS_ES384_X509(path, ""); }
+            if (alg == JwtConst.ES512) { return new JWS_ES512_X509(path, ""); }
+
+            return null;
+        }
+
+        /// <summary>検証する JWS を作る（RSA の公開鍵パラメタから）</summary>
+        /// <param name="alg">alg</param>
+        /// <param name="param">公開鍵のパラメタ</param>
+        /// <returns>JWS（alg が RSA の表に無ければ null）</returns>
+        /// <remarks>
+        /// **DB に本文で持った証明書で検証するため**に在る（#308 の段階 1）。
+        ///
+        /// **Open棟梁 の X509 の口は、すべてファイル パス**である
+        /// （`JWS_*_X509(certificateFilePath, …)`）ので、**本文からはパラメタ渡しで入る**
+        /// （`JWS_*_Param`。**`kid` で JWK を引いて検証する経路が、既に同じ口を使っている**。D-9）。
+        /// **一時ファイルは作らない。**
+        ///
+        /// **このファイルは証明書を読まない。**
+        /// **`CreateJwkSetJson`（net48 の exe）からソース参照されており**、
+        /// **`X509CertificateLoader` は net48 に無く、`new X509Certificate2(byte[])` は
+        /// net10.0 で旧形式**（SYSLIB0057）である。
+        /// **読む所は CommonLibrary 側**（`SoftwareStatementProvider`）**に置いてある。**
+        ///
+        /// **alg → class の対応は、ここ 1 か所で持つ**（#307 の段階 4 の決め）。
+        /// </remarks>
+        public static JWS CreateJwsFromRsaParameters(string alg, RSAParameters param)
+        {
+            if (alg == JwtConst.RS256) { return new JWS_RS256_Param(param); }
+            if (alg == JwtConst.RS384) { return new JWS_RS384_Param(param); }
+            if (alg == JwtConst.RS512) { return new JWS_RS512_Param(param); }
+            if (alg == JwtConst.PS256) { return new JWS_PS256_Param(param); }
+            if (alg == JwtConst.PS384) { return new JWS_PS384_Param(param); }
+            if (alg == JwtConst.PS512) { return new JWS_PS512_Param(param); }
+
+            return null;
+        }
+
+        /// <summary>検証する JWS を作る（EC の公開鍵パラメタから）</summary>
+        /// <param name="alg">alg</param>
+        /// <param name="param">公開鍵のパラメタ</param>
+        /// <returns>JWS（alg が EC の表に無ければ null）</returns>
+        /// <remarks>**#308 の段階 1。** <see cref="CreateJwsFromRsaParameters"/> と対である。</remarks>
+        public static JWS CreateJwsFromEcParameters(string alg, ECParameters param)
+        {
+            if (alg == JwtConst.ES256) { return new JWS_ES256_Param(param, false); }
+            if (alg == JwtConst.ES384) { return new JWS_ES384_Param(param, false); }
+            if (alg == JwtConst.ES512) { return new JWS_ES512_Param(param, false); }
+
+            return null;
         }
 
         #endregion

@@ -35,6 +35,7 @@
 //*  2026/09/11  玄人 幸道         request_uri 経路でも redirect_uri / PKCE を code に紐付ける（#197）
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
 //*  2026/09/24  玄人 幸道         期限切れの行を、書き込みのついでにまとめて消す（#188 の案 4）
+//*  2026/10/22  玄人 幸道         認可要求の dpop_jkt を code に紐付ける（#311 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -263,6 +264,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             ret[OAuth2AndOIDCConst.code_challenge] = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
             ret[OAuth2AndOIDCConst.code_challenge_method] = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge_method];
 
+            // **DPoP の鍵の申告も、Request Object の中から読む**（#311 の段階 4）。
+            //   **ここに足し忘れると、JAR / PAR の経路だけ縛りが外れる**（#197 と同じ落ち方）。
+            ret[CmnDPoP.JktParam] = (string)requestObjectPayload[CmnDPoP.JktParam];
+
             return ret;
         }
 
@@ -294,6 +299,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             // OAuth PKCE 対応
             temp.Add(OAuth2AndOIDCConst.code_challenge, authZReq[OAuth2AndOIDCConst.code_challenge]);
             temp.Add(OAuth2AndOIDCConst.code_challenge_method, authZReq[OAuth2AndOIDCConst.code_challenge_method]);
+
+            // DPoP 対応
+            //   **認可要求で申告された鍵の指紋を、コードに紐付ける**（RFC 9449 §10。#311 の段階 4）。
+            //   **`/token` での照合は GetDPoPJkt を読む側が行う**（`CmnEndpoints`）。
+            //   **指定が無ければ null が入り、照合はスキップされる**（PKCE と同じ扱い）。
+            temp.Add(CmnDPoP.JktParam, authZReq[CmnDPoP.JktParam]);
 
             // 新しいCodeのticketをストアに保存
             string jsonString = JsonConvert.SerializeObject(temp);
@@ -614,6 +625,85 @@ namespace MultiPurposeAuthSite.TokenProviders
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
             return temp["access_token_payload"];
+        }
+
+        #endregion
+
+        #region DPoP（#311 の段階 4）
+
+        /// <summary>このコードに紐付いた DPoP の鍵の指紋（RFC 9449 §10）</summary>
+        /// <param name="code">code</param>
+        /// <returns>`dpop_jkt`（申告が無ければ空）</returns>
+        /// <remarks>
+        /// **消費しない**（`Receive` と違う） — **照合して断るときに、コードを消費してはいけない。**
+        /// **断られた後、同じコードでやり直せる**ようにする（段階 1 の `/token` と同じ考え）。
+        ///
+        /// **古いコード（この機能より前に作られた行）には、この項目が無い** —
+        /// **無ければ空**を返す（**照合はスキップされる**）。
+        /// </remarks>
+        public static string GetDPoPJkt(string code)
+        {
+            string value = "";
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    value = AuthorizationCodeProvider.GetFromMemory(code, remove: false);
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                value = cnn.ExecuteScalar<string>(
+                                  "SELECT [Value] FROM [AuthenticationCodeDictionary]"
+                                  + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
+                                  new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\""
+                                    + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
+                                    new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"value\" FROM \"authenticationcodedictionary\""
+                                    + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
+                                    new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+
+            // 存在しないcodeでは空になる（#185）。
+            if (string.IsNullOrEmpty(value)) return "";
+
+            Dictionary<string, string> temp =
+                JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
+
+            if (temp == null
+                || !temp.TryGetValue(CmnDPoP.JktParam, out string jkt)
+                || string.IsNullOrEmpty(jkt))
+            {
+                return "";
+            }
+
+            return jkt;
         }
 
         #endregion

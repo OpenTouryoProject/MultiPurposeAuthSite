@@ -434,7 +434,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                //  **方法を明示したクライアントで測る**（#307 の段階 3）。
+                //    **`TestClient` は秘密で認証する**ので、**アサーションでは通らない。**
+                ClientRegistration reg = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_24);
 
                 TestReport r = this.Report("RT-245.5",
                     "client_assertion の aud が違う・exp が切れていれば、クライアント認証を通さない",
@@ -445,7 +448,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "（RFC 7523 §3 は `aud` の検証を求めている）。",
                     "RFC 7523 §3 / RFC 6749 §5.2（invalid_client）/ #245 の段階 2");
 
-                r.Target("client_name=" + KnownClients.TestClient + "（private_key_jwt）");
+                r.Target("client_name=" + KnownClients.TestClient_24 + "（private_key_jwt）");
 
                 r.Step("(1) aud が別のサーバを指すアサーションで client_credentials を要求する");
 

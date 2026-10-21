@@ -285,6 +285,45 @@
   <data name="IndexSaml2OAuth2DataAddActionLink" xml:space="preserve">
     <value>Saml2, OAuth2データの設定</value>
   </data>
+  <data name="IndexSaml2OAuth2DataListActionLink" xml:space="preserve">
+    <value>クライアント登録の一覧</value>
+  </data>
+  <data name="IndexSaml2OAuth2DataCountFormat" xml:space="preserve">
+    <value>{0} 件</value>
+  </data>
+  <data name="Saml2OAuth2DataListTitle" xml:space="preserve">
+    <value>自分のクライアント登録</value>
+  </data>
+  <data name="Saml2OAuth2DataListNone" xml:space="preserve">
+    <value>登録したクライアントはありません。</value>
+  </data>
+  <data name="Saml2OAuth2DataListClientID" xml:space="preserve">
+    <value>client_id</value>
+  </data>
+  <data name="Saml2OAuth2DataListClientMode" xml:space="preserve">
+    <value>モード</value>
+  </data>
+  <data name="Saml2OAuth2DataListRedirectUriCode" xml:space="preserve">
+    <value>redirect_uri（認可コード）</value>
+  </data>
+  <data name="Saml2OAuth2DataListSource" xml:space="preserve">
+    <value>登録の経路</value>
+  </data>
+  <data name="Saml2OAuth2DataListSourceDynamic" xml:space="preserve">
+    <value>動的登録</value>
+  </data>
+  <data name="Saml2OAuth2DataListSourceScreen" xml:space="preserve">
+    <value>この画面</value>
+  </data>
+  <data name="Saml2OAuth2DataListAddActionLink" xml:space="preserve">
+    <value>新しいクライアントを登録する</value>
+  </data>
+  <data name="Saml2OAuth2DataListEditActionLink" xml:space="preserve">
+    <value>編集</value>
+  </data>
+  <data name="Saml2OAuth2DataListRemoveButton" xml:space="preserve">
+    <value>削除</value>
+  </data>
   <data name="IndexSaml2OAuth2DataChangeActionLink" xml:space="preserve">
     <value>Saml2, OAuth2データの変更</value>
   </data>

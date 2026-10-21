@@ -33,6 +33,13 @@
 //*  2026/10/04  玄人 幸道         GetAll を追加（#266）
 //*  2026/10/06  玄人 幸道         JSON 1 列から専用列に切り出した（#270）
 //*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
+//*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの列を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         registration_access_token のハッシュの列を追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method の列を追加（#307 の段階 3）
+//*  2026/10/20  玄人 幸道         所有者で引く口を追加（#307 の段階 5-a-1）
+//*  2026/10/20  玄人 幸道         並びを決め、所有者＋client_idで引く口を追加（#307 の段階 5-a-2）
+//*  2026/10/21  玄人 幸道         BackChannelLogoutUri の列を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         FrontChannelLogoutUri の列を追加（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -87,7 +94,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>列の並び（#270）</summary>
         /// <remarks>
-        /// **1 か所で持つ。** 17 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
+        /// **1 か所で持つ。** 30 列 × 3 方言 × 3 文（INSERT / SELECT / UPDATE）を
         /// **手で書き並べると、必ずどれかが取り残される**
         /// （この Issue が直そうとしているのが、まさにその種の食い違いである）。
         ///
@@ -112,7 +119,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             "RequestObjectSigningAlg",
             "ClientMode",
             "RequirePkce",
-            "ClientName"
+            "ClientName",
+            //  **RFC 7591 §2 のクライアント メタデータ**（#307 の段階 1）。
+            //    **末尾に足す。** **既存のデータベースは `ALTER … ADD` で足せる**ので、
+            //    **作り直した `CREATE` と物理的な並びも揃う。**
+            "Scopes",
+            "GrantTypes",
+            "ResponseTypes",
+            "JwksUri",
+            "ClientUri",
+            "LogoUri",
+            "TosUri",
+            "PolicyUri",
+            "Contacts",
+            "SoftwareId",
+            "SoftwareVersion",
+            //  **RFC 7592 の管理 API 用**（#307 の段階 2）。**ハッシュが入る。**
+            "RegistrationAccessToken",
+            //  **クライアント認証の方法**（#307 の段階 3）。**空なら秘密ベースの 2 つ。**
+            "TokenEndpointAuthMethod",
+            //  **所有者**（#307 の段階 5-a）。**`Users.Id` を指す。** **空が在り得る。**
+            "OwnerUserId",
+            //  **ログアウトを伝える先**（#310 の段階 2）。**末尾に足す**（`ALTER … ADD` で揃う）。
+            "BackChannelLogoutUri",
+            //  **ブラウザ経由で伝える先**（#310 の段階 3）。**末尾に足す**（同上）。
+            "FrontChannelLogoutUri"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -217,6 +248,50 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
         }
 
+        /// <summary>OwnerUserId の条件句（#307 の段階 5-a）</summary>
+        /// <param name="storeType">EnumUserStoreType</param>
+        /// <returns>条件句</returns>
+        private static string WhereOwnerUserId(EnumUserStoreType storeType)
+        {
+            switch (storeType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    return " WHERE [OwnerUserId] = @OwnerUserId";
+                case EnumUserStoreType.ODPManagedDriver:
+                    return " WHERE \"OwnerUserId\" = :OwnerUserId";
+                default:
+                    return " WHERE \"owneruserid\" = @OwnerUserId";
+            }
+        }
+
+        /// <summary>並びを決める句（#307 の段階 5-a-2）</summary>
+        /// <param name="storeType">EnumUserStoreType</param>
+        /// <returns>「 ORDER BY [ClientID]」のような文字列</returns>
+        /// <remarks>
+        /// **一覧の並びを決める**（#307 の段階 5-a-2）。
+        ///
+        /// **段階 5-a-1 では決めていなかった** — **1 件を取り出すだけ**で、
+        /// **どれが来てもよかった**ためである。
+        /// **一覧にすると、並びが毎回変わるのは使いにくい**
+        /// （**E2E も「2 件目」を指せない**）ので、ここで決める。
+        ///
+        /// **鍵は `client_id`**（**32 桁の 16 進**。`Guid.ToString("N")`）。
+        /// **大文字小文字の揺れが無い**ので、**照合順序の違いが結果を変えない。**
+        /// **`mem` は序数で並べる**（`StringComparer.Ordinal`）。
+        /// </remarks>
+        private static string OrderByClientID(EnumUserStoreType storeType)
+        {
+            switch (storeType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    return " ORDER BY [ClientID]";
+                case EnumUserStoreType.ODPManagedDriver:
+                    return " ORDER BY \"ClientID\"";
+                default:
+                    return " ORDER BY \"clientid\"";
+            }
+        }
+
         /// <summary>モデルをパラメタにする</summary>
         /// <param name="clientID">string</param>
         /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
@@ -247,6 +322,28 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("RequestObjectSigningAlg", model.RequestObjectSigningAlg);
             prm.Add("ClientMode", model.ClientMode);
             prm.Add("ClientName", model.ClientName);
+
+            //  **RFC 7591 §2 のクライアント メタデータ**（#307 の段階 1）。
+            prm.Add("Scopes", model.Scopes);
+            prm.Add("GrantTypes", model.GrantTypes);
+            prm.Add("ResponseTypes", model.ResponseTypes);
+            prm.Add("JwksUri", model.JwksUri);
+            prm.Add("ClientUri", model.ClientUri);
+            prm.Add("LogoUri", model.LogoUri);
+            prm.Add("TosUri", model.TosUri);
+            prm.Add("PolicyUri", model.PolicyUri);
+            prm.Add("Contacts", model.Contacts);
+            prm.Add("SoftwareId", model.SoftwareId);
+            prm.Add("SoftwareVersion", model.SoftwareVersion);
+            prm.Add("RegistrationAccessToken", model.RegistrationAccessToken);
+
+            //  **クライアント認証の方法**（#307 の段階 3）。
+            prm.Add("TokenEndpointAuthMethod", model.TokenEndpointAuthMethod);
+            prm.Add("OwnerUserId", model.OwnerUserId);
+
+            //  **ログアウトを伝える先**（#310 の段階 2・3）。
+            prm.Add("BackChannelLogoutUri", model.BackChannelLogoutUri);
+            prm.Add("FrontChannelLogoutUri", model.FrontChannelLogoutUri);
 
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
@@ -330,7 +427,27 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 RequestObjectSigningAlg = model.RequestObjectSigningAlg,
                 ClientMode = model.ClientMode,
                 RequirePkce = model.RequirePkce,
-                ClientName = model.ClientName
+                ClientName = model.ClientName,
+                //  **RFC 7591 §2 のクライアント メタデータ**（#307 の段階 1）。
+                Scopes = model.Scopes,
+                GrantTypes = model.GrantTypes,
+                ResponseTypes = model.ResponseTypes,
+                JwksUri = model.JwksUri,
+                ClientUri = model.ClientUri,
+                LogoUri = model.LogoUri,
+                TosUri = model.TosUri,
+                PolicyUri = model.PolicyUri,
+                Contacts = model.Contacts,
+                SoftwareId = model.SoftwareId,
+                SoftwareVersion = model.SoftwareVersion,
+                RegistrationAccessToken = model.RegistrationAccessToken,
+                //  **クライアント認証の方法**（#307 の段階 3）。
+                TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
+                //  **所有者**（#307 の段階 5-a）。
+                OwnerUserId = model.OwnerUserId,
+                //  **ログアウトを伝える先**（#310 の段階 2・3）。
+                BackChannelLogoutUri = model.BackChannelLogoutUri,
+                FrontChannelLogoutUri = model.FrontChannelLogoutUri
             };
         }
 
@@ -477,6 +594,202 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return all;
+        }
+
+        #endregion
+
+        #region GetAllJwksUris
+
+        /// <summary>登録されている `jwks_uri` を全件返す（#309 の段階 2）</summary>
+        /// <returns>URL の一覧（**空の行は含まない**。1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **起動のときに温めるために要る**（`JwksUriWarmUp`）。
+        /// **クライアント認証はキャッシュを読むだけ**なので、
+        /// **起こし直した直後は、最初の 1 本が断られる**（#309 の段階 1 の決め (C)(1)）。
+        ///
+        /// **`JwksUri` の 1 列だけを読む**（`GetAllUris` と同じ流儀。**読む量を絞れる**）。
+        ///
+        /// **`Unprotect` は通さない。** **暗号化しているのは `ClientSecret` だけ**であり、
+        /// **`jwks_uri` は公開情報**である（#297 の対象外）。
+        /// </remarks>
+        public static List<string> GetAllJwksUris()
+        {
+            List<string> urls = new List<string>();
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    urls.AddRange(DataProvider.Saml2OAuth2Data.Values
+                        .Select(m => m.JwksUri));
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        EnumUserStoreType storeType = Config.UserStoreType;
+
+                        urls.AddRange(cnn.Query<string>(
+                            "SELECT " + DataProvider.ColumnList(
+                                new string[] { "JwksUri" }, storeType)
+                            + " FROM " + DataProvider.TableName(storeType)));
+                    }
+
+                    break;
+            }
+
+            //  **空の行は落とす**（**登録の大半は `jwks_uri` を持たない**）。
+            return urls.Where(u => !string.IsNullOrEmpty(u)).ToList();
+        }
+
+        #endregion
+
+        #region GetByOwner
+
+        /// <summary>所有者の登録を全件返す（#307 の段階 5-a）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <returns>登録の一覧（1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **1 利用者 n クライアント**になったので、**所有者で引く口が要る**
+        /// （**以前は `Users.ClientID` が 1 件を指していた**ので、`Get` 1 つで足りた）。
+        ///
+        /// **並びは `client_id` の昇順**（#307 の段階 5-a-2 で決めた）。
+        /// **`mem` も DB も同じ順になる** — **一覧の並びが毎回変わらない**ようにするためで、
+        /// **E2E が「2 件目」を指せる**ようにもなる。
+        ///
+        /// **段階 5-a-1 では決めていなかった**（**1 件を取り出すだけ**だった）。
+        ///
+        /// **空の `ownerUserId` では、1 件も返さない** —
+        /// **所有者の無い登録**（構成ファイル発の種データ）**を、誰かのものにしないため**である。
+        /// </remarks>
+        public static List<ManageAddSaml2OAuth2DataViewModel> GetByOwner(string ownerUserId)
+        {
+            List<ManageAddSaml2OAuth2DataViewModel> all
+                = new List<ManageAddSaml2OAuth2DataViewModel>();
+
+            if (string.IsNullOrEmpty(ownerUserId))
+            {
+                return all;
+            }
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    all.AddRange(DataProvider.Saml2OAuth2Data.Values
+                        .Where(m => m != null && m.OwnerUserId == ownerUserId)
+                        .OrderBy(m => m.ClientID, StringComparer.Ordinal)
+                        .Select(m => DataProvider.Copy(null, m)));
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        EnumUserStoreType storeType = Config.UserStoreType;
+
+                        all.AddRange(cnn.Query<ManageAddSaml2OAuth2DataViewModel>(
+                            "SELECT " + DataProvider.ColumnList(DataProvider.Columns, storeType)
+                            + " FROM " + DataProvider.TableName(storeType)
+                            + DataProvider.WhereOwnerUserId(storeType)
+                            + DataProvider.OrderByClientID(storeType),
+                            new { OwnerUserId = ownerUserId }));
+                    }
+
+                    break;
+            }
+
+            //  **使う形に戻す**（#297）。
+            for (int i = 0; i < all.Count; i++)
+            {
+                all[i] = DataProvider.Unprotect(all[i]);
+            }
+
+            return all;
+        }
+
+        /// <summary>所有者の登録のうち 1 件を返す（#307 の段階 5-a）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <returns>登録（1 件も無ければ null）</returns>
+        /// <remarks>
+        /// **「その人のクライアント」を 1 つ要る所のため**である
+        /// （**自己テストの導線・認可ログ**）。
+        /// **`client_id` の昇順で先頭**（#307 の段階 5-a-2 で並びを決めた）。
+        ///
+        /// **管理画面は、もうこれを使わない** — **一覧を出す**ようになった（段階 5-a-2）。
+        /// </remarks>
+        public static ManageAddSaml2OAuth2DataViewModel GetFirstByOwner(string ownerUserId)
+        {
+            List<ManageAddSaml2OAuth2DataViewModel> all = DataProvider.GetByOwner(ownerUserId);
+
+            return (all.Count == 0) ? null : all[0];
+        }
+
+        /// <summary>所有者の、その 1 件を返す（#307 の段階 5-a-2）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <param name="clientID">client_id</param>
+        /// <returns>登録（無い・他人のものなら null）</returns>
+        /// <remarks>
+        /// **管理画面が「どの登録を編集・削除するか」を受け取るため**に在る（段階 5-a-2）。
+        ///
+        /// **他人の `client_id` を渡されても null を返す** —
+        /// **画面の経路で、他人の登録を読み書きさせないため**である
+        /// （**動的登録の側は `registration_access_token` で守っている**。RFC 7592 §2）。
+        ///
+        /// **所有者の無い登録**（構成ファイル発の種データ）**も null になる** —
+        /// **空の `ownerUserId` では 1 件も引かない**作りと、同じ理屈である。
+        /// </remarks>
+        public static ManageAddSaml2OAuth2DataViewModel GetByOwnerAndClientID(
+            string ownerUserId, string clientID)
+        {
+            if (string.IsNullOrEmpty(ownerUserId) || string.IsNullOrEmpty(clientID))
+            {
+                return null;
+            }
+
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(clientID);
+
+            if (model == null || model.OwnerUserId != ownerUserId)
+            {
+                return null;
+            }
+
+            return model;
+        }
+
+        /// <summary>所有者の登録を全件消す（#307 の段階 5-a）</summary>
+        /// <param name="ownerUserId">所有者（`Users.Id`）</param>
+        /// <remarks>
+        /// **`mem` のためだけに在る。**
+        /// **DB では外部キー**（`OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`）
+        /// **が消す**ので、**呼ぶ必要が無い。**
+        /// **`mem` には制約が無い**ので、**消す側が明示的に消す**
+        /// （**#151 の段階 2 で、`sub` の対応表に対して同じことをしている**）。
+        ///
+        /// **空の `ownerUserId` では、1 件も消さない** —
+        /// **所有者の無い登録**（構成ファイル発の種データ）**を巻き込まないため**である。
+        /// </remarks>
+        public static void DeleteByOwner(string ownerUserId)
+        {
+            if (string.IsNullOrEmpty(ownerUserId))
+            {
+                return;
+            }
+
+            foreach (ManageAddSaml2OAuth2DataViewModel model
+                in DataProvider.GetByOwner(ownerUserId))
+            {
+                DataProvider.Delete(model.ClientID);
+            }
         }
 
         #endregion

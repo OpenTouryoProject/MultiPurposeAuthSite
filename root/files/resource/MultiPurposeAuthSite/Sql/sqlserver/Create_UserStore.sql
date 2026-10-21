@@ -32,7 +32,8 @@ CREATE TABLE [Users](              -- Users
     [AccessFailedCount] [int] NOT NULL,
     [TotpAuthenticatorKey] [nvarchar](256) NULL,
     -- 追加の情報
-    [ClientID] [nvarchar](256) NOT NULL,
+    --   **ClientID は落とした**（#307 の段階 5-a）。
+    --     **所有者は Saml2OAuth2Data.OwnerUserId が持つ**（1 利用者 n クライアント）。
     [UnstructuredData] [nvarchar](max) NULL,
     [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
@@ -140,6 +141,20 @@ CREATE TABLE [ConsentGrant](   -- 同意の記録（#272 の段階 2）
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+-- セッション × クライアントの台帳（#310 の段階 1）
+--   **「このセッションで、どのクライアントに、どの sid を名乗ったか」**を持つ。
+--   **sid はクライアントごとに別の値**である（pairwise の sub を分けた意味を消さないため）。
+--   **ログアウトを伝える先**は、この表から引く（#310 の段階 2・3）。
+CREATE TABLE [SessionClient](
+    [SessionId] [nvarchar](38) NOT NULL,     -- *PK, guid（OP のセッション。Cookie が持つ値）
+    [ClientID] [nvarchar](256) NOT NULL,     -- *PK
+    [Sid] [nvarchar](38) NOT NULL,           -- そのクライアントに名乗った sid（guid）
+    [UserId] [nvarchar](38) NOT NULL,        -- Users.Id
+    [CreatedDate] [smalldatetime] NOT NULL,
+    CONSTRAINT [PK.SessionClient] PRIMARY KEY NONCLUSTERED ([SessionId] ASC, [ClientID] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [CustomizedConfirmation](
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [Value] [nvarchar](max) NOT NULL,        -- Value
@@ -152,8 +167,8 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
     [ClientSecret] [nvarchar](512) NULL,        -- 暗号文が入る（#297）
     [RedirectUriSaml] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
-    [RedirectUriCode] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
-    [RedirectUriToken] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
+    [RedirectUriCode] [nvarchar](2000) NULL,         -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
+    [RedirectUriToken] [nvarchar](2000) NULL,        -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
     [PostLogoutRedirectUri] [nvarchar](512) NULL,    -- Const.MaxLengthOfUri
     [WebOrigins] [nvarchar](max) NULL,               -- 空白・カンマ区切りの列挙
     [JwkRsaPublickey] [nvarchar](max) NULL,
@@ -166,6 +181,33 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientMode] [nvarchar](32) NULL,                -- oauth2_oidc_mode
     [RequirePkce] [bit] NOT NULL,
     [ClientName] [nvarchar](256) NULL,               -- Users.UserName と同じ幅
+    -- RFC 7591 §2 のクライアント メタデータ（#307 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    [Scopes] [nvarchar](2000) NULL,                  -- Const.MaxLengthOfScopeList（空白区切りの列挙）
+    [GrantTypes] [nvarchar](256) NULL,               -- Const.MaxLengthOfTypeList（空白区切りの列挙）
+    [ResponseTypes] [nvarchar](256) NULL,            -- Const.MaxLengthOfTypeList（空白区切り。要素内の空白は「+」）
+    [JwksUri] [nvarchar](512) NULL,                  -- Const.MaxLengthOfUri（段階 1 では動的登録で受け付けない）
+    [ClientUri] [nvarchar](512) NULL,                -- Const.MaxLengthOfUri
+    [LogoUri] [nvarchar](512) NULL,                  -- Const.MaxLengthOfUri
+    [TosUri] [nvarchar](512) NULL,                   -- Const.MaxLengthOfUri
+    [PolicyUri] [nvarchar](512) NULL,                -- Const.MaxLengthOfUri
+    [Contacts] [nvarchar](2000) NULL,                -- Const.MaxLengthOfContacts（空白区切りの列挙）
+    [SoftwareId] [nvarchar](256) NULL,               -- Const.MaxLengthOfSoftwareId
+    [SoftwareVersion] [nvarchar](64) NULL,           -- Const.MaxLengthOfSoftwareVersion
+    -- RFC 7592 の管理 API（#307 の段階 2）。末尾に足してある（ALTER … ADD で揃う）
+    [RegistrationAccessToken] [nvarchar](128) NULL,   -- Const.MaxLengthOfTokenHash（ハッシュが入る）
+    -- クライアント認証の方法（#307 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
+    [TokenEndpointAuthMethod] [nvarchar](32) NULL,    -- Const.MaxLengthOfAuthMethod（空なら秘密ベースの 2 つ）
+    -- 所有者（#307 の段階 5-a）。末尾に足してある（ALTER … ADD で揃う）
+    --   **Users.Id を指す**（**名前ではない** — 利用者名を変えても切れない）。
+    --   **NULL 可** : **持ち主の居ない登録**（構成ファイル発の種データ・移行中の行）が在り得る。
+    [OwnerUserId] [nvarchar](38) NULL,                -- Users.Id と同じ幅
+    -- ログアウトを伝える先（#310 の段階 2）。末尾に足してある（ALTER … ADD で揃う）
+    --   **logout_token を POST する先**（Back-Channel Logout 1.0 §2.2）。
+    --   **空なら、その RP には伝えない。**
+    [BackChannelLogoutUri] [nvarchar](512) NULL,      -- Const.MaxLengthOfUri
+    -- ブラウザ経由で伝える先（#310 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
+    --   **iframe で開く URL**（Front-Channel Logout 1.0 §2）。**空なら伝えない。**
+    [FrontChannelLogoutUri] [nvarchar](512) NULL,     -- Const.MaxLengthOfUri
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
@@ -196,6 +238,28 @@ CREATE TABLE [IdFederationUpstreams](   -- ID 連携の上流 IdP の登録（#2
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+CREATE TABLE [SoftwareStatementIssuers](   -- software_statement の発行者の登録（#308 の段階 1）
+    -- **設定（appSettings の SoftwareStatementIssuers）と同じ項目**を持つ。
+    --   **設定 → DB の順に見て、両方使う**（IdFederationUpstreams と同じ流儀。#292 の段階 2）。
+    --   **IssuerKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    --
+    -- **これは「ベンダ（発行者）の台帳」**である。**クライアントの登録ではない**
+    --   （あちらは Saml2OAuth2Data。**件数も変わり方も違う**）。
+    [IssuerKey] [nvarchar](128) NOT NULL,      -- PK
+    [DisplayName] [nvarchar](256) NULL,        -- 画面・ログに出す名前（空なら鍵）
+    [Enabled] [bit] NOT NULL,
+    [Issuer] [nvarchar](256) NULL,             -- 期待する iss（完全一致。RFC 7591 2.3）
+    -- **検証鍵**。**空白かカンマ区切りで n 本**（#307 の段階 6。鍵の入れ替え）
+    [CerFilePath] [nvarchar](512) NULL,        -- ファイルで置く場合
+    [CerBody] [nvarchar](max) NULL,            -- **本文で持つ場合**（PEM / Base64。**公開鍵なので平文**）
+    [Alg] [nvarchar](16) NULL,                 -- 空なら RS256
+    -- **この発行者に許す上限**（#307 の段階 6。空なら絞らない）
+    [AllowedScope] [nvarchar](2000) NULL,      -- 空白区切りの列挙
+    [AllowedGrantTypes] [nvarchar](2000) NULL, -- 空白区切りの列挙
+    CONSTRAINT [PK.SoftwareStatementIssuers] PRIMARY KEY NONCLUSTERED ([IssuerKey] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [FIDO2Data](
     [PublicKeyId] [nvarchar](256) NOT NULL,  -- PK, base64url
     [UserName] [nvarchar](256) NOT NULL,     -- Value
@@ -212,6 +276,10 @@ CREATE TABLE [DeviceAuthZData](
     [TempData] [nvarchar](256) NULL,                     -- TempData
     [AuthZCode] [nvarchar](64) NULL,                     -- AuthZCode
     [Result] [bit] NULL,                                 -- Result of Verify
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    [LastPolledAt] [bigint] NULL,
     CONSTRAINT [PK.DeviceAuthZData] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
@@ -225,7 +293,23 @@ CREATE TABLE [CibaData](
     [UnstructuredData] [nvarchar](max) NULL,             -- binding_message, user_code, etc.
     [Result] [bit] NULL,                                 -- Result of CIBA
     [UserId] [nvarchar](128) NULL,                       -- 承認する利用者 (Users.Id)
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    [LastPolledAt] [bigint] NULL,
     CONSTRAINT [PK.CibaData] PRIMARY KEY NONCLUSTERED ([Id] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+-- **認証の失敗を数える**（#305 の段階 2）。
+--   **何に対する失敗か**は鍵の接頭辞で分ける（`client:<client_id>` / `device_verify:<利用者>`）。
+--   **一定回数で一定時間断る**（`AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds`）。
+--   **成功したら消す。** **表に持つ**ので、インスタンスを増やしても効く。
+CREATE TABLE [AuthFailure](
+    [FailureKey] [nvarchar](256) NOT NULL,   -- PK（client:<client_id> / device_verify:<利用者>）
+    [FailedCount] [int] NOT NULL,            -- 連続して失敗した回数
+    [LockoutEndAt] [bigint] NULL,            -- 断る期限（UNIX時刻。NULL は断っていない）
+    CONSTRAINT [PK.AuthFailure] PRIMARY KEY NONCLUSTERED ([FailureKey] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
@@ -254,12 +338,24 @@ CREATE TABLE [RequestObject](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+-- 使った DPoP の証明の台帳（#311 の段階 3）
+--   **一度使った証明を、二度と通さない**（RFC 9449 §11.1）。
+--   **持つのは指紋だけ**である（**鍵の指紋（jkt）と jti を組にしてハッシュしたもの**）。
+--   **jti だけを鍵にしない** — **jti は相手が決める値**なので、
+--     **先に使われた値は他の相手が使えなくなる**（**互いを塞げてしまう**）。
+--   **行は短命**（iat の窓の分だけ）。**書き込みのついでに消す。**
+CREATE TABLE [DPoPProof](
+    [ProofId] [nvarchar](64) NOT NULL,        -- PK, 証明の指紋（BASE64URL(SHA-256)。43文字）
+    [CreatedDate] [datetime] NOT NULL,        -- 掃除の基準（分で丸めて早く消さないよう datetime）
+    CONSTRAINT [PK.DPoPProof] PRIMARY KEY NONCLUSTERED ([ProofId] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 -- INDEX
 ---- Users
 CREATE UNIQUE NONCLUSTERED INDEX [UserNameIndex] ON [Users] ([UserName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE UNIQUE NONCLUSTERED INDEX [NormalizedUserNameIndex] ON [Users] ([NormalizedUserName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE UNIQUE NONCLUSTERED INDEX [NormalizedEmailIndex] ON [Users] ([NormalizedEmail] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-CREATE UNIQUE NONCLUSTERED INDEX [ClientIDIndex] ON [Users] ([ClientID] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ---- Roles
 CREATE UNIQUE NONCLUSTERED INDEX [RoleNameIndex] ON [Roles] ([Name] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE UNIQUE NONCLUSTERED INDEX [NormalizedNameIndex] ON [Roles] ([NormalizedName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
@@ -281,6 +377,10 @@ CREATE NONCLUSTERED INDEX [IX_UserClaims.UserId] ON [UserClaims] ([UserId] ASC) 
 CREATE UNIQUE NONCLUSTERED INDEX [IX_SubjectIdentifier.Sector_Sub] ON [SubjectIdentifier] ([Sector] ASC, [Sub] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ---- TotpTokens
 CREATE NONCLUSTERED INDEX [IX_TotpTokens.UserId] ON [TotpTokens] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+---- SessionClient
+---- **逆引き（sid → セッション）用。** sid は新しい guid なので一意（#310 の段階 1）
+CREATE UNIQUE NONCLUSTERED INDEX [IX_SessionClient.Sid] ON [SessionClient] ([Sid] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+CREATE NONCLUSTERED INDEX [IX_SessionClient.UserId] ON [SessionClient] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 
 -- CONSTRAINT
 ---- UserRoles
@@ -293,10 +393,16 @@ ALTER TABLE [UserClaims] WITH CHECK ADD CONSTRAINT [FK.UserClaims.Users_UserId] 
 ---- TotpTokens
 ALTER TABLE [TotpTokens] WITH CHECK ADD CONSTRAINT [FK.TotpTokens.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- Saml2OAuth2Data
-ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_ClientID] FOREIGN KEY([ClientID]) REFERENCES [Users] ([ClientID]) ON DELETE CASCADE
+-- **所有者は OwnerUserId で結ぶ**（#307 の段階 5-a）。
+--   **以前は ClientID → Users.ClientID だった** — **あれが「1 利用者 1 クライアント」の本体**で、
+--   **登録の client_id が、どれかの利用者の 1 枠に載っていることを強制していた。**
+--   **NULL 可なので、持ち主の居ない登録は残る**（利用者を消しても消えない）。
+ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_OwnerUserId] FOREIGN KEY([OwnerUserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- FIDO2Data
 ALTER TABLE [FIDO2Data] WITH CHECK ADD CONSTRAINT [FK.FIDO2Data.Users_UserName] FOREIGN KEY([UserName]) REFERENCES [Users] ([UserName]) ON DELETE CASCADE
 ---- ConsentGrant
 ALTER TABLE [ConsentGrant] WITH CHECK ADD CONSTRAINT [FK.ConsentGrant.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- SubjectIdentifier
 ALTER TABLE [SubjectIdentifier] WITH CHECK ADD CONSTRAINT [FK.SubjectIdentifier.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+---- SessionClient
+ALTER TABLE [SessionClient] WITH CHECK ADD CONSTRAINT [FK.SessionClient.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE

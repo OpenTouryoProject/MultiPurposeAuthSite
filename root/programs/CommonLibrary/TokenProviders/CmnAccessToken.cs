@@ -38,12 +38,19 @@
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/22  玄人 幸道         ProtectFromPayload の引数名を permittedLevel から clientMode に（#224）
 //*  2026/09/23  玄人 幸道         cnf を RFC 8705 の形式で書き、提示された証明書と照合する口を追加
+//*  2026/10/21  玄人 幸道         cnf に jkt（DPoP）も書けるようにした（#311 の段階 1）
+//*  2026/10/21  玄人 幸道         cnf.jkt と DPoP の証明を照合する口を追加（#311 の段階 2）
+//*  2026/10/22  玄人 幸道         預ける payload に cnf.jkt を書く口を追加（#311 の段階 4）
 //*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
 //*  2026/09/27  玄人 幸道         署名検証の鍵選択を切り出し、署名だけを検証する口を追加（#232）
 //*  2026/10/02  玄人 幸道         受ける alg を自分が発行する 2 つに固定（C-8）（#129 の段階 1）
 //*  2026/10/02  玄人 幸道         RS384 / RS512 を発行・検証できるようにした（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         署名する鍵の選択を SelectJwsForSigning に切り出した（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         alg と鍵の対応を SigningKeys の表に寄せた（#129 の段階 3 / D-9）
+//*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
+//*  2026/10/16  玄人 幸道         typ を at+jwt にし、検証で期待値を明示（#302 の段階 2）
+//*  2026/10/18  玄人 幸道         クライアントの登録が在るかの確認を効かせた（#307 の段階 2）
+//*  2026/10/21  玄人 幸道         sid クレームを載せ替えるようにした（#310 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -86,7 +93,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region SelectJwsForSigning
 
-        /// <summary>署名に使う JWS を選ぶ（kid / jku まで入れて返す）</summary>
+        /// <summary>署名に使う JWS を選ぶ（kid / typ まで入れて返す）</summary>
         /// <param name="alg">alg（SupportedAlgs のいずれか）</param>
         /// <returns>JWS</returns>
         /// <remarks>
@@ -118,17 +125,28 @@ namespace MultiPurposeAuthSite.TokenProviders
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             JObject jwk = key.JwkFromPfx();
             string kid = (string)jwk[JwtConst.kid];
-            string jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
+            //  **`jku` は入れない**（#302。RFC 9068 / D-10）。
+            //    **ヘッダに「鍵の在り処」を書くと、検証する側はその URL を取りに行く。**
+            //    **出どころを発行者が自由に指し示せる**ことになり、
+            //    **検証側の SSRF を誘発しうる。**
+            //    **鍵は `kid` ＋ discovery の `jwks_uri` で引く**のが標準の経路である
+            //    （この製品の検証は `CmnAccessToken.SelectJws` が `kid` で `JwkSet.json` を引く。
+            //    Open棟梁 も `jku` を「非推奨」「廃止」と注記して読んでいない）。
+            //  **`typ` は `at+jwt`**（#302 の段階 2。RFC 9068 §2.1）。
+            //    **トークンの取り違え（token confusion）を防ぐ型**である
+            //    （**id_token / Request Object / JARM は `JWT` のまま** — あちらは別の型）。
+            //    **Open棟梁 [#611](https://github.com/OpenTouryoProject/OpenTouryo/issues/611) で
+            //    署名の前に `typ` を設定できるようになった。** それまでは `readonly` だった。
             if (key.IsRsa)
             {
                 ((JWS_RSA)jws).JWSHeader.kid = kid;
-                ((JWS_RSA)jws).JWSHeader.jku = jku;
+                ((JWS_RSA)jws).JWSHeader.typ = JwtConst.AT_JWT;
             }
             else
             {
                 ((JWS_ECDSA)jws).JWSHeader.kid = kid;
-                ((JWS_ECDSA)jws).JWSHeader.jku = jku;
+                ((JWS_ECDSA)jws).JWSHeader.typ = JwtConst.AT_JWT;
             }
 
             return jws;
@@ -144,11 +162,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="claims">IEnumerable(Claim)</param>
         /// <param name="ExpiresUtc">DateTimeOffset</param>
         /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
+        /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <returns>JWT文字列</returns>
         public static string CreateFromClaims(
             string clientId, string userName,
             IEnumerable<Claim> identityClaims, DateTimeOffset expiresUtc,
-            string alg = JwtConst.RS256)
+            string alg = JwtConst.RS256, string jkt = null)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -160,6 +179,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             List<string> scopes = new List<string>();
             string auth_time = null;
             string claims = null;
+            string sid = null;
 
             // カスタムクレームは含めない。
             //bool haveRoles = false;
@@ -188,6 +208,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     auth_time = c.Value;
                 }
+                else if (c.Type == Const.UrnSidClaim)
+                {
+                    //  **sid（OP のセッションの識別子。#310 の段階 1）**
+                    sid = c.Value;
+                }
             }
             
             // PPID対応
@@ -204,6 +229,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             // auth_time
             if (!string.IsNullOrEmpty(auth_time))
                 tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, auth_time);
+
+            // sid（#310 の段階 1）
+            //   **id_token に出すためには、ここ（access_token）を通る必要が在る**
+            //   （`CmnIdToken.ChangeToIdTokenFromAccessToken` が access_token の
+            //   クレーム集合から id_token を作るため）。
+            //   **クライアントごとに別の値**なので、**RP 同士の突き合わせには使えない。**
+            if (!string.IsNullOrEmpty(sid))
+                tokenClaimSet.Add(Const.Sid, sid);
 
             // claims
             if (!string.IsNullOrEmpty(claims))
@@ -259,6 +292,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
+            //  **DPoP の鍵に縛る**（#311 の段階 1）。
+            //    **この経路は mTLS の `cnf` を書いていない**（証明書を受けていない経路である）。
+            //    **DPoP は証明が在れば書ける**ので、ここで足す。
+            if (!string.IsNullOrEmpty(jkt))
+            {
+                Dictionary<string, object> cnf = new Dictionary<string, object>();
+                cnf.Add(CmnDPoP.Jkt, jkt);
+
+                tokenClaimSet.Add(OAuth2AndOIDCConst.cnf, cnf);
+            }
+
             json = JsonConvert.SerializeObject(tokenClaimSet);
 
             #endregion
@@ -297,6 +341,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             List<string> scopes = new List<string>();
             string auth_time = null;
             string claims = null;
+            string sid = null;
 
             // カスタムクレームは含めない。
             //bool haveRoles = false;
@@ -328,6 +373,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     claims = c.Value;
                 }
+                else if (c.Type == Const.UrnSidClaim)
+                {
+                    //  **sid（OP のセッションの識別子。#310 の段階 1）**
+                    sid = c.Value;
+                }
             }
 
             // PPID対応
@@ -344,6 +394,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             // auth_time
             if(!string.IsNullOrEmpty(auth_time))
                 tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, auth_time);
+
+            // sid（#310 の段階 1）
+            if (!string.IsNullOrEmpty(sid))
+                tokenClaimSet.Add(Const.Sid, sid);
 
             // claims
             if (!string.IsNullOrEmpty(claims)) tokenClaimSet.Add(
@@ -371,12 +425,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="audience">out string</param>
         /// <param name="subject">out string</param>
         /// <param name="alg">string</param>
+        /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <returns>AccessToken</returns>
         public static string ProtectFromPayload(
             string clientId, string access_token_payload,
             DateTimeOffset expiresUtc, X509Certificate2 x509,
             OAuth2AndOIDCEnum.ClientMode clientMode,
-            out string audience, out string subject, string alg = JwtConst.RS256)
+            out string audience, out string subject, string alg = JwtConst.RS256,
+            string jkt = null)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -409,18 +465,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             
             // 書込２
             // - cnf
-            if (x509 != null)
-            {
-                // **RFC 8705 3.1 : cnf の x5t#S256 は、証明書（DER）の SHA-256 を BASE64URL したもの。**
-                //   以前は SHA-1 のサムプリント（16 進）を入れ、キーの #S256 / #S512 も
-                //   **証明書の署名アルゴリズム**で選んでいた。どちらも仕様と違い、
-                //   RFC のとおりに照合するリソース サーバとは紐づけが一致しない。
-                JObject dic = new JObject();
-                dic.Add(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256,
-                    CmnAccessToken.ComputeCertificateThumbprint(x509));
-
-                payload[OAuth2AndOIDCConst.cnf] = dic;
-            }
+            CmnAccessToken.WriteCnf(payload, x509, jkt);
 
             if (clientMode == OAuth2AndOIDCEnum.ClientMode.normal)
             {
@@ -626,7 +671,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`crv` まで見るのは、EC が alg と曲線で対応するから**である（JWA）。
         /// **`kty` だけでは、P-256 の鍵で `ES512` のトークンを受けてしまう**（#129 の段階 3）。
         /// </remarks>
-        private static bool IsSameKeyType(JObject jwkObject, string alg)
+        public static bool IsSameKeyType(JObject jwkObject, string alg)
         {
             SigningKeys.Entry key = SigningKeys.Of(alg);
 
@@ -643,6 +688,67 @@ namespace MultiPurposeAuthSite.TokenProviders
             // RSA は曲線を持たない（1 本の鍵で RS256 / RS384 / RS512）。
             return key.Crv == null
                 || (string)jwkObject[JwtConst.crv] == key.Crv;
+        }
+
+        /// <summary>トークンに書かれた `cnf.jkt`（無ければ空）（#311 の段階 2）</summary>
+        /// <param name="identity">VerifyAccessToken が返した ClaimsIdentity</param>
+        /// <returns>jkt（縛られていなければ空）</returns>
+        public static string JktOf(ClaimsIdentity identity)
+        {
+            if (identity == null)
+            {
+                return "";
+            }
+
+            Claim jkt = identity.Claims.FirstOrDefault(x => x.Type == Const.UrnCnfJktClaim);
+
+            return (jkt == null) ? "" : (jkt.Value ?? "");
+        }
+
+        /// <summary>
+        /// トークンの `cnf.jkt`（鍵への紐づけ）と、提示された DPoP の証明を照合する（RFC 9449 §7.1）
+        /// </summary>
+        /// <param name="identity">VerifyAccessToken が返した ClaimsIdentity</param>
+        /// <param name="accessToken">提示された access_token</param>
+        /// <param name="proof">`DPoP` ヘッダの値（**`DPoP` スキームでなければ空を渡すこと**）</param>
+        /// <param name="htm">この要求の HTTP メソッド（**大文字**）</param>
+        /// <param name="htu">この口の宛先</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **鍵に縛ったトークンは、その鍵で署名した証明と一緒でしか使えない。**
+        /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり bearer として扱う**
+        /// （**mTLS の `VerifyCertificateBinding` と同じ形**）。
+        ///
+        /// **縛っているのに証明が無い要求は拒否する。**
+        /// **`Bearer` スキームで出してきた要求も拒否する**（呼び出し側が空を渡す） —
+        /// **縛りを「使う側の出し方」で外せてはいけない。**
+        /// </remarks>
+        public static bool VerifyDPoPBinding(
+            ClaimsIdentity identity, string accessToken,
+            string proof, string htm, string htu, out string error)
+        {
+            error = null;
+
+            string boundJkt = CmnAccessToken.JktOf(identity);
+
+            if (string.IsNullOrEmpty(boundJkt))
+            {
+                // 縛っていないトークン
+                return true;
+            }
+
+            if (CmnDPoP.VerifyForResource(
+                proof, htm, htu, accessToken, boundJkt, out string dpopError, out string _))
+            {
+                return true;
+            }
+
+            //  **`use_dpop_nonce` だけは、呼び出し側に伝える**（RFC 9449 §9。#311 の段階 4）。
+            //    **クライアントは「nonce を貰い直して出し直す」ことになる** —
+            //    **`invalid_token` と区別できなければ、出し直す理由が分からない。**
+            error = dpopError;
+
+            return false;
         }
 
         /// <summary>JWT の署名だけを検証する（#232）</summary>
@@ -663,7 +769,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             JWS jws = CmnAccessToken.SelectJws(jwt);
 
-            return jws != null && jws.Verify(jwt);
+            //  **こちらは `id_token` なので `JWT` を期待する**（#302 の段階 2）。
+            //    **`id_token_hint` に access_token を渡されても、ここで落ちる。**
+            return jws != null && jws.Verify(jwt, JwtConst.JWT);
         }
 
         /// <summary>Verify</summary>
@@ -676,6 +784,150 @@ namespace MultiPurposeAuthSite.TokenProviders
             return CmnAccessToken.VerifyAccessToken(jwt, out claims, out identity);
         }
         
+        /// <summary>cnf（鍵への紐づけ）を書く（RFC 8705 §3.1 / RFC 9449 §6）</summary>
+        /// <param name="payload">access_token の payload</param>
+        /// <param name="x509">クライアント証明書（mTLS。無ければ null）</param>
+        /// <param name="jkt">DPoP の鍵の指紋（無ければ空）</param>
+        /// <remarks>
+        /// **どちらも「このトークンは、この鍵の持ち主のものだ」という印**である。
+        ///
+        /// | 入れるもの | いつ | 根拠 |
+        /// |---|---|---|
+        /// | `x5t#S256` | **クライアント証明書が提示されたとき**（mTLS） | RFC 8705 §3.1 |
+        /// | `jkt` | **DPoP の証明が通ったとき** | RFC 9449 §6 |
+        ///
+        /// **両方在れば、両方書く。** **どちらを要求するかは、照合する側が決める**
+        /// （**mTLS の照合は `VerifyCertificateBinding`**。**DPoP の照合は段階 2**）。
+        ///
+        /// **どちらも無ければ `cnf` を書かない** ＝ **従来どおり bearer** である。
+        ///
+        /// **RFC 8705 §3.1 の `x5t#S256` は、証明書（DER）の SHA-256 を BASE64URL したもの。**
+        /// 以前は SHA-1 のサムプリント（16 進）を入れ、キーの #S256 / #S512 も
+        /// **証明書の署名アルゴリズム**で選んでいた。どちらも仕様と違い、
+        /// RFC のとおりに照合するリソース サーバとは紐づけが一致しない。
+        /// </remarks>
+        private static void WriteCnf(JObject payload, X509Certificate2 x509, string jkt)
+        {
+            JObject cnf = new JObject();
+
+            if (x509 != null)
+            {
+                cnf.Add(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256,
+                    CmnAccessToken.ComputeCertificateThumbprint(x509));
+            }
+
+            if (!string.IsNullOrEmpty(jkt))
+            {
+                cnf.Add(CmnDPoP.Jkt, jkt);
+            }
+
+            if (cnf.Count == 0)
+            {
+                //  **書くものが無ければ、残っている `cnf` を落とす**（#311 の段階 4）。
+                //    **`refresh_token` に預けた payload は `cnf.jkt` を持つ**ようになったので、
+                //    **そのまま通すと「証明なしの要求で、縛られたトークンが出る」**ことになる。
+                //    **いまは縛られた `refresh_token` を証明なしでは使わせない**ので通らないが、
+                //    **印の出どころを 1 つに保つ**（**書くのはこの関数だけ**）。
+                payload.Remove(OAuth2AndOIDCConst.cnf);
+
+                return;
+            }
+
+            payload[OAuth2AndOIDCConst.cnf] = cnf;
+        }
+
+        /// <summary>預ける payload に、DPoP の鍵の指紋を書く / 落とす（#311 の段階 4）</summary>
+        /// <param name="payload">access_token の payload（JSON の文字列）</param>
+        /// <param name="jkt">DPoP の鍵の指紋（**空なら落とす**）</param>
+        /// <returns>書き換えた payload（読めなければ、受け取ったものをそのまま返す）</returns>
+        /// <remarks>
+        /// **`refresh_token` を鍵に縛るため**である（RFC 9449 §5）。
+        /// **預ける payload に印を残しておかないと、次に使われたときに
+        /// 「縛られていたのか」が分からない。**
+        ///
+        /// **`cnf` を丸ごと置き換えない** — **`jkt` だけを足す / 落とす。**
+        /// **mTLS の印（`x5t#S256`）と同じ場所**であり、**巻き込んで消さない。**
+        /// </remarks>
+        public static string BindJkt(string payload, string jkt)
+        {
+            if (string.IsNullOrEmpty(payload))
+            {
+                return payload;
+            }
+
+            try
+            {
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
+
+                if (jobj == null)
+                {
+                    return payload;
+                }
+
+                JObject cnf = jobj[OAuth2AndOIDCConst.cnf] as JObject;
+
+                if (string.IsNullOrEmpty(jkt))
+                {
+                    if (cnf == null)
+                    {
+                        return payload;
+                    }
+
+                    cnf.Remove(CmnDPoP.Jkt);
+
+                    if (cnf.Count == 0)
+                    {
+                        jobj.Remove(OAuth2AndOIDCConst.cnf);
+                    }
+                }
+                else
+                {
+                    if (cnf == null)
+                    {
+                        cnf = new JObject();
+                        jobj[OAuth2AndOIDCConst.cnf] = cnf;
+                    }
+
+                    cnf[CmnDPoP.Jkt] = jkt;
+                }
+
+                return JsonConvert.SerializeObject(jobj);
+            }
+            catch (Exception)
+            {
+                // **読めない payload は、そのまま返す**（この関数で要求を止めない）。
+                return payload;
+            }
+        }
+
+        /// <summary>預かった payload に書かれた DPoP の鍵の指紋（#311 の段階 4）</summary>
+        /// <param name="payload">access_token の payload（JSON の文字列）</param>
+        /// <returns>`cnf.jkt`（無ければ空）</returns>
+        /// <remarks>
+        /// **`refresh_token` が縛られているか**を見るために読む。
+        /// **空なら縛られていない** ＝ **これまでどおり、証明なしでも使える。**
+        /// </remarks>
+        public static string JktOfPayload(string payload)
+        {
+            if (string.IsNullOrEmpty(payload))
+            {
+                return "";
+            }
+
+            try
+            {
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
+                JObject cnf = (jobj == null) ? null : jobj[OAuth2AndOIDCConst.cnf] as JObject;
+
+                return (cnf == null) ? "" : ((string)cnf[CmnDPoP.Jkt] ?? "");
+            }
+            catch (Exception)
+            {
+                // **読めなければ、縛られていないものとして扱う**（従来の挙動に倒す）。
+                return "";
+            }
+        }
+
         /// <summary>証明書（DER）の SHA-256 を BASE64URL した値（RFC 8705 3.1 の x5t#S256）</summary>
         /// <param name="x509">クライアント証明書</param>
         /// <returns>BASE64URL の文字列</returns>
@@ -756,8 +1008,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // 検証（鍵の選択は SelectJws に切り出した。#232）
                 JWS jws = CmnAccessToken.SelectJws(jwt);
 
+                //  **`typ` は `at+jwt` を期待する**（#302 の段階 2。RFC 9068 §4）。
+                //    **リソース サーバは、access_token 以外の JWT を受け取ったら拒否する。**
+                //    **id_token や Request Object が流れ込んでも、ここで落ちる。**
+                //    **Open棟梁 の既定（引数なしの `Verify`）は照合しない**ので、
+                //    **期待値は呼ぶ側が決める**（Open棟梁 #611 の決め事）。
                 // jwsが決まらなかった場合（kid無し、ヘッダ破損など）は検証失敗（#185）。
-                if (jws != null && jws.Verify(jwt))
+                if (jws != null && jws.Verify(jwt, JwtConst.AT_JWT))
                 {
                     // 検証できた。
 
@@ -771,8 +1028,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (datetime == null)
                     {
                         // iss, expの検証
+                        //  **クライアントの登録が、まだ在ること**（#307 の段階 2）。
+                        //    **撤去されたクライアントのトークンを、期限まで通してはならない**
+                        //    （RFC 7592 §2.3 : 削除したら、そのクライアントのトークンを無効にすべき）。
+                        //
+                        //  **以前は `GetClientSecret(aud) != null` だったが、効いていなかった** —
+                        //    **`GetClientSecret` は、未登録でも `""` を返す**ので、**常に真**だった。
+                        //    **`IsNullOrEmpty` にもしない** — **秘密を持たない public クライアントが止まる。**
                         if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == Config.IssuerId
-                            && Helper.GetInstance().GetClientSecret((string)tokenClaimSet[OAuth2AndOIDCConst.aud]) != null
+                            && Helper.GetInstance().HasClient((string)tokenClaimSet[OAuth2AndOIDCConst.aud])
                             // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったのでToStringで渡す
                             // （文字列で発行された過去のTokenも、そのまま通る）。
                             && CmnJwtToken.VerifyExp(tokenClaimSet[OAuth2AndOIDCConst.exp].ToString()))
@@ -874,6 +1138,18 @@ namespace MultiPurposeAuthSite.TokenProviders
             Helper.AddClaim(identity,
                 (string)tokenClaimSet[OAuth2AndOIDCConst.aud], scopes, null, (string)nonce);
 
+            // - sid（#310 の段階 1）
+            //   **refresh_token で作り直すときに、同じ sid を引き継ぐ**ため。
+            //   **ここで戻さないと、作り直した id_token から sid が消える**
+            //   （**RP から見ると、同じセッションが別物に見える**）。
+            if (tokenClaimSet.TryGetValue(Const.Sid, out object sid))
+            {
+                if (!string.IsNullOrEmpty((string)sid))
+                {
+                    identity.AddClaim(new Claim(Const.UrnSidClaim, (string)sid));
+                }
+            }
+
             // 拡張Claimを追加
             // - cnf
             if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.cnf))
@@ -886,6 +1162,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + CmnAccessToken.S512))
                     identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnCnfX5tClaim + CmnAccessToken.S512,
                         (string)cnf[OAuth2AndOIDCConst.x5t + CmnAccessToken.S512]));
+
+                //  **DPoP の縛り**（#311 の段階 2）。
+                //    **mTLS と排他ではない**（両方書かれていることが在る）ので、
+                //    **`else if` で繋がない。**
+                if (cnf.ContainsKey(CmnDPoP.Jkt))
+                    identity.AddClaim(new Claim(Const.UrnCnfJktClaim, (string)cnf[CmnDPoP.Jkt]));
             }
             
             //// - fapi

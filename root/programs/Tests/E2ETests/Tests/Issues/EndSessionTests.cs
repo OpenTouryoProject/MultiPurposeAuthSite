@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/27  玄人 幸道         新規（#232）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout が広告されるようになった（#310 の段階 3）
 //*  2026/10/03  玄人 幸道         redirect_uriの照合を揃えた旨に直した（#263）
 //**********************************************************************************
 
@@ -162,12 +163,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Observe("広告された URL", endSession ?? "なし",
                     "設定キー OAuth2EndSessionEndpoint（既定 /end_session）で決まる。");
 
-                // **未実装のものは広告しない**（広告すると「できる」と読まれる）。
-                r.Verify("Front-Channel Logout は広告しない",
-                    string.IsNullOrEmpty(res.String("frontchannel_logout_supported")),
-                    "広告なし",
+                //  **Front-Channel / Back-Channel は #310 で実装した**ので、広告されている。
+                //    **#232 の時点では「広告しない」ことを見ていた**（未実装だったため）。
+                //    **中身は `RT-310.4`（Back）/ `RT-310.7`（Front）** で測る。
+                r.Verify("Front-Channel Logout も広告されている（#310 の段階 3）",
+                    !string.IsNullOrEmpty(res.String("frontchannel_logout_supported")),
+                    "広告あり",
                     string.IsNullOrEmpty(res.String("frontchannel_logout_supported"))
-                        ? "広告なし" : "**広告あり**");
+                        ? "**広告なし**" : "広告あり");
+
+                r.Observe("Session Management",
+                    string.IsNullOrEmpty(res.String("check_session_iframe"))
+                        ? "広告なし" : "広告あり",
+                    "**見送っている**（third-party cookie を読む仕組み。#310）。");
 
                 r.Done();
             }

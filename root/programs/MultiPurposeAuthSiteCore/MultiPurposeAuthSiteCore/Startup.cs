@@ -41,6 +41,9 @@
 //*                                Secure属性を設定で切り替え、CookiePolicyをDIに一本化。
 //*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
 //*  2026/10/08  玄人 幸道         AuthCookieName が空のときも接頭辞を掛ける（#283）
+//*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の経路を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -48,6 +51,7 @@ using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Notifications;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;   // RateLimitProvider（#305 の段階 3）
 
 using System;
 using System.IO;
@@ -121,6 +125,16 @@ namespace MultiPurposeAuthSite
             // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
             //   起動は止めない。警告を OPERATION ログに出すだけ。
             ProductionCheck.WarnIfRisky();
+
+            // **登録済みの jwks_uri を、背景で温める**（#309 の段階 2）。
+            //   **クライアント認証はキャッシュを読むだけ**（段階 1）なので、
+            //   **起こし直した直後は、最初の 1 本が断られる。**
+            //
+            //   **こちらは要求を受ける前に走る**ので、ほぼ間に合う
+            //   （**net48 は最初の要求が来てから走る** — Global.asax のコメント）。
+            //
+            //   **待たない。** **失敗しても起動を止めない**（理由はログに残す）。
+            Extensions.Sts.JwksUriWarmUp.StartInBackground();
 
             #region 転送ヘッダの取り込み（#279。上流 #549）
 
@@ -209,6 +223,61 @@ namespace MultiPurposeAuthSite
             {
                 app.UseHttpsRedirection();
             }
+
+            // **口ごとのレート制限**（#305 の段階 3）。
+            // （**net48 版は `Global.asax` の `BeginRequest` から同じものを呼ぶ**。
+            //   **組み込みのレート制限ミドルウェアを使うと、両アプリで振る舞いが分かれる**）。
+            app.Use(async (context, next) =>
+            {
+                string path = context.Request.Path.Value;
+
+                // 1. 判定対象外のスキップ（アーリーリターン）
+                // 機能がオフ、対象外のパスのリクエストの場合
+                if (!Sts.RateLimitProvider.Enabled
+                    || !Sts.RateLimitProvider.IsLimitedPath(path))
+                {
+                    await next();
+                    return;
+                }
+
+                // 2. client_idの抽出（RFC 6749 §2.3.1）に則った優先順位で
+                // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
+                // **`ReadFormAsync` の結果は要求に残る**ので、後のモデル バインドは読み直さない。
+                string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+                    context.Request.Headers["Authorization"]);
+
+                if (string.IsNullOrEmpty(clientId))
+                {
+                    if ((context.Request.ContentType ?? "").StartsWith(
+                        "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // 優先度 2: フォームデータ（client_secret_post 等）から取得
+                        clientId = (await context.Request.ReadFormAsync())["client_id"];
+                    }
+                    else
+                    {
+                        // 優先度 3: クエリ文字列から取得
+                        clientId = context.Request.Query["client_id"];
+                    }
+                }
+
+                // 3. レート制限チェックの実行（パス、client_id、IPアドレス）
+                int? retryAfter = Sts.RateLimitProvider.Check(path, clientId,
+                    (context.Connection.RemoteIpAddress == null)
+                        ? "" : context.Connection.RemoteIpAddress.ToString());
+
+                // 4. 制限超過時のレスポンス処理（429 応答）
+                if (retryAfter.HasValue)
+                {
+                    //  **429 ＋ `Retry-After`**（RFC 6585 §4）。**本体は返さない。**
+                    context.Response.StatusCode = 429;
+                    context.Response.Headers["Retry-After"] = retryAfter.Value.ToString();
+
+                    return;
+                }
+
+                await next();
+            });
 
             // HttpContextのマイグレーション用
             app._UseHttpContextAccessor();
@@ -380,6 +449,40 @@ namespace MultiPurposeAuthSite
                         name: "TestHybridFlow",
                         pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
                         defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
+                }
+
+                // **動的クライアント登録**（RFC 7591。#307 の段階 1）。
+                //   **開けた配備にだけ、口を張る。** **閉じている配備では 404 になる**
+                //   （`IsLockedDownTestEndpoints` とは別のキーである。**これは本番で使う口**）。
+                if (Config.EnableDynamicClientRegistration)
+                {
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistration",
+                        pattern: Config.DcrRegistrationEndpoint.Substring(1), // 先頭の[/]を削除,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "Register" });
+
+                    //  **管理 API**（RFC 7592。#307 の段階 2）。
+                    //    **同じ URL（`…/register/{client_id}`）に 3 つの口**が在る。
+                    //    **メソッドの振り分けは、動作に付けた `[HttpGet]` /
+                    //    `[HttpPut]` / `[HttpDelete]` が決める**
+                    //    （**Core は、メソッドに合う終点を選ぶ**ので、経路は 3 本でよい）。
+                    string managementPattern =
+                        Config.DcrRegistrationEndpoint.Substring(1) + "/{client_id}";
+
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistrationRead",
+                        pattern: managementPattern,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "ReadClient" });
+
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistrationUpdate",
+                        pattern: managementPattern,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "UpdateClient" });
+
+                    endpoints.MapControllerRoute(
+                        name: "ClientRegistrationDelete",
+                        pattern: managementPattern,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "DeleteClient" });
                 }
                 #endregion
 

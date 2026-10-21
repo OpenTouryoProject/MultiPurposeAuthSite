@@ -493,6 +493,123 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Manage your client registrations に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexSaml2OAuth2DataListActionLink {
+            get {
+                return ResourceManager.GetString("IndexSaml2OAuth2DataListActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   {0} registration(s) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexSaml2OAuth2DataCountFormat {
+            get {
+                return ResourceManager.GetString("IndexSaml2OAuth2DataCountFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your client registrations に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListTitle {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   No client has been registered. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListNone {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListNone", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   client_id に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListClientID {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListClientID", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Mode に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListClientMode {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListClientMode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   redirect_uri (code) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListRedirectUriCode {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListRedirectUriCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Registered by に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListSource {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Dynamic registration に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListSourceDynamic {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListSourceDynamic", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   This screen に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListSourceScreen {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListSourceScreen", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Register a new client に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListAddActionLink {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListAddActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Edit に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListEditActionLink {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListEditActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Saml2OAuth2DataListRemoveButton {
+            get {
+                return ResourceManager.GetString("Saml2OAuth2DataListRemoveButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Change your Saml2 and OAuth2 data に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexSaml2OAuth2DataChangeActionLink {

@@ -39,6 +39,11 @@
     mem 以外のときに使う接続文字列（test.ps1 に渡す）。
     省略した場合は、test.ps1 が環境変数から読む。
 
+.PARAMETER NoStoreContainer
+    store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
+    既定では、接続文字列が store\ のポートを指していれば、
+    その DB だけをテストの間だけ起動する。詳細は test.ps1 の説明を参照。
+
 .PARAMETER Url
     net10.0 版が待ち受ける URL（test.ps1 に渡す。既定 https://localhost:44300）。
 
@@ -51,6 +56,13 @@
 .PARAMETER NetFxMtls
     net48 版でも mTLS のテスト（FA-6）を回す（test.ps1 に渡す。#226）。
     **準備が要る**（TESTING.md「net48 版の mTLS」）。付けなければ、FA-6 は net10.0 版だけを測る。
+
+.PARAMETER DPoPNonce
+    **DPoP の nonce のテスト（RT-311.13 / RT-311.14）専用。**
+    **nonce を要求する設定でサイトを起動する**（#311 の段階 4）。
+
+    **-Filter と併せて使うこと**（nonce を知らない証明は全部断られる）。
+      ._RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"
 
 .PARAMETER ShortLifetimes
     有効期限のテスト（RT-188）専用。寿命をごく短くしてサイトを起動する（test.ps1 に渡す。#188）。
@@ -88,6 +100,7 @@
      2026/09/08  玄人 幸道         新規作成（OpenTouryo の 2_RunAllTests.ps1 に倣う）
      2026/09/23  玄人 幸道         -NetFxMtls を追加（net48 版でも mTLS のテストを回す。#226）
      2026/09/24  玄人 幸道         -ShortLifetimes を追加（有効期限のテストを回す。#188）
+     2026/10/22  玄人 幸道         -DPoPNonce を追加（nonce のテストを回す。#311 の段階 4）
 #>
 [CmdletBinding()]
 param(
@@ -96,11 +109,13 @@ param(
     [ValidateSet('mem', 'sql', 'ora', 'npg')]
     [string]$UserStoreType = 'mem',
     [string]$ConnectionString,
+    [switch]$NoStoreContainer,
     [string]$Url = 'https://localhost:44300',
     [string]$NetFxUrl = 'https://localhost:44302',
     [switch]$NoNetFx,
     [switch]$NetFxMtls,
     [switch]$ShortLifetimes,
+    [switch]$DPoPNonce,
     [switch]$NoWebUI,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
@@ -159,12 +174,14 @@ if ($Launch)   { $splat.Launch   = $true }
 if ($NoNetFx)  { $splat.NoNetFx  = $true }
 if ($NetFxMtls) { $splat.NetFxMtls = $true }
 if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
+if ($DPoPNonce) { $splat.DPoPNonce = $true }
 if ($NoWebUI) { $splat.NoWebUI = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }
 if ($UserStoreType)    { $splat.UserStoreType    = $UserStoreType }
 if ($ConnectionString) { $splat.ConnectionString = $ConnectionString }
+if ($NoStoreContainer) { $splat.NoStoreContainer = $true }
 
 Write-Host "=== E2ETests ===" -ForegroundColor Cyan
 if (-not $Launch)

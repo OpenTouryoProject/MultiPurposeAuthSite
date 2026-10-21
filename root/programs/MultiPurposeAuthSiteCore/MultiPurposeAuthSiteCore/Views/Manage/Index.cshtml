@@ -22,6 +22,7 @@
     //*  2026/10/06  玄人 幸道         同意の一覧への導線を追加（#272 の段階 2）
     //*  2026/10/07  玄人 幸道         WebAuthnの導線を復活、MsPassを削除（#137）
     //*  2026/10/09  玄人 幸道         SAML2 のテスト ボタンを追加（#277 の段階 5）
+    //*  2026/10/20  玄人 幸道         クライアント登録を件数＋一覧への導線にした（#307 の段階 5-a-2）
     //*  2026/10/09  西野 大介         決済・トークン取得・SAML2 テストの導線を削除（#277）
     //**********************************************************************************
 *@
@@ -246,22 +247,22 @@
                 // OAuth2データの変更が許可されている場合。
                 <dt>EditSaml2OAuth2Data :</dt>
                 <dd>
-                    @*"Add" and "Remove or Change"*@
+                    @*  **件数 ＋ 一覧への導線 1 本**（#307 の段階 5-a-2）。
+
+                        **以前は「追加 / 変更 ＋ 削除」をここで出し分けていた** —
+                        **1 利用者 1 クライアントだったので、それで決まった。**
+
+                        **n 件になると、この場所では「どの登録に効くのか」が決まらない。**
+                        **選ぶのは一覧の仕事**にして、**削除も一覧の行から**行う。 *@
                     @if (!Model.HasSaml2OAuth2Data)
                     {
                         <text>None</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexSaml2OAuth2DataAddActionLink, "AddSaml2OAuth2Data")&nbsp;&nbsp;]</text>
                     }
                     else
                     {
-                        <text>XXXXXXXXXX</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexSaml2OAuth2DataChangeActionLink, "AddSaml2OAuth2Data")&nbsp;&nbsp;]</text><br />
-                        using (Html.BeginForm("RemoveSaml2OAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                        {
-                            @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexSaml2OAuth2DataRemoveButton" class="btn btn-link" />]</text>
-                        }
+                        <text>@string.Format(ManageViews.IndexSaml2OAuth2DataCountFormat, Model.Saml2OAuth2DataCount)</text><br />
                     }
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexSaml2OAuth2DataListActionLink, "Saml2OAuth2DataList")&nbsp;&nbsp;]</text>
                 </dd>
             }
             else

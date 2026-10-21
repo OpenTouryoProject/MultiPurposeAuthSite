@@ -22,11 +22,15 @@
 //*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
 //*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の経路を追加（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
+using System.Net.Http;
 using System.Web.Http;
+using System.Web.Http.Routing;
 using Microsoft.Owin.Security.OAuth;
 using Newtonsoft.Json.Serialization;
 
@@ -174,6 +178,50 @@ namespace MultiPurposeAuthSite
                     name: "TestHybridFlow",
                     routeTemplate: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除
                     defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" }
+                );
+            }
+
+            // **動的クライアント登録**（RFC 7591。#307 の段階 1）。
+            //   **開けた配備にだけ、口を張る。** **閉じている配備では 404 になる**
+            //   （`IsLockedDownTestEndpoints` とは別のキーである。**これは本番で使う口**）。
+            if (Config.EnableDynamicClientRegistration)
+            {
+                config.Routes.MapHttpRoute(
+                    name: "ClientRegistration",
+                    routeTemplate: Config.DcrRegistrationEndpoint.Substring(1), // 先頭の[/]を削除
+                    defaults: new { controller = "OAuth2ResourceServer", action = "Register" }
+                );
+
+                //  **管理 API**（RFC 7592。#307 の段階 2）。
+                //    **同じ URL（`…/register/{client_id}`）に 3 つの口**が在るので、
+                //    **メソッドの制約で経路を選ぶ** —
+                //    **`action` を既定で固定するだけでは、`PUT` が `GET` の口に当たって
+                //    405 になる**（Web API は、経路を選んだ後に動作を選ぶ）。
+                //
+                //  **`POST` は、ここには当たらない**（**登録は `/register` の方**）。
+                //    **`client_id` を付けた `POST` は 404 になる**（それでよい）。
+                string managementTemplate =
+                    Config.DcrRegistrationEndpoint.Substring(1) + "/{client_id}";
+
+                config.Routes.MapHttpRoute(
+                    name: "ClientRegistrationRead",
+                    routeTemplate: managementTemplate,
+                    defaults: new { controller = "OAuth2ResourceServer", action = "ReadClient" },
+                    constraints: new { httpMethod = new HttpMethodConstraint(HttpMethod.Get) }
+                );
+
+                config.Routes.MapHttpRoute(
+                    name: "ClientRegistrationUpdate",
+                    routeTemplate: managementTemplate,
+                    defaults: new { controller = "OAuth2ResourceServer", action = "UpdateClient" },
+                    constraints: new { httpMethod = new HttpMethodConstraint(HttpMethod.Put) }
+                );
+
+                config.Routes.MapHttpRoute(
+                    name: "ClientRegistrationDelete",
+                    routeTemplate: managementTemplate,
+                    defaults: new { controller = "OAuth2ResourceServer", action = "DeleteClient" },
+                    constraints: new { httpMethod = new HttpMethodConstraint(HttpMethod.Delete) }
                 );
             }
 

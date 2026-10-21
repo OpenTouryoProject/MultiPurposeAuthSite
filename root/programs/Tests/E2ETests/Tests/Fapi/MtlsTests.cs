@@ -100,7 +100,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
         /// <summary>対象のサイトがクライアント証明書を受け付けていなければ Skip する</summary>
         /// <param name="target">テスト対象</param>
-        private static void SkipIfNoMtls(TargetInfo target)
+        /// <remarks>
+        /// **`RT-307.15`（動的登録 × `tls_client_auth`）も、同じ前提で測る**ので
+        /// **アセンブリ内に公開してある**（#307 の段階 3）。
+        /// </remarks>
+        internal static void SkipIfNoMtls(TargetInfo target)
         {
             string key = target.Key == TestEnv.NetFxKey ? "MPAS_NETFX_MTLS" : "MPAS_CORE_MTLS";
 

@@ -325,6 +325,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region ReceiveTokenReq
 
+        /// <summary>前回から interval 未満なら true（= slow_down）</summary>
+        /// <param name="lastPolledAt">前回の UNIX 時刻（無ければ null）</param>
+        /// <returns>速すぎれば true</returns>
+        /// <remarks>
+        /// **判定そのものは `PollingThrottle`**（Device Authorization Grant と同じものを使う）。
+        /// **ここは「どの interval を使うか」だけ**を決める。
+        /// </remarks>
+        private static bool ThrottlePolling(long? lastPolledAt)
+        {
+            return PollingThrottle.TooFast(
+                lastPolledAt, Config.CibaPollingIntervalSeconds);
+        }
+
         /// <summary>ReceiveTokenReq</summary>
         /// <param name="authReqId">string</param>
         /// <param name="authZCode">string</param>
@@ -375,14 +388,46 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     // CibaState
                                     retVal = CibaProvider.GetState(dic["authReqExp"], dic["result"], out states);
 
+                                    //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                                    //    **記録は辞書の中**（`lastPolled`。**無ければ初回**）。
+                                    if (states == OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    {
+                                        long? last = null;
+                                        string lastPolled =
+                                            dic.ContainsKey("lastPolled") ? dic["lastPolled"] : "";
+
+                                        long parsed = 0;
+                                        if (!string.IsNullOrEmpty(lastPolled)
+                                            && long.TryParse(lastPolled, out parsed))
+                                        {
+                                            last = parsed;
+                                        }
+
+                                        bool tooFast = CibaProvider.ThrottlePolling(last);
+
+                                        dic["lastPolled"] = PollingThrottle.NowUnixSeconds().ToString();
+                                        CibaProvider.CibaData[_clientNotificationToken] =
+                                            JsonConvert.SerializeObject(dic);
+
+                                        if (tooFast)
+                                        {
+                                            states = OAuth2AndOIDCEnum.CibaState.slow_down;
+                                            //  **コードは渡さない**（まだ承認されていない）。
+                                            authZCode = "";
+                                            retVal = false;
+                                        }
+                                    }
+
                                     break;
                                 }
                             }
                         }
 
-                        // 削除（pendingのケースを除いて）
+                        //  **削除（pending と slow_down のケースを除いて）。**
+                        //    **slow_down はまだ pending** なので、消してはいけない（#305 の段階 1）。
                         if (clientNotificationToken != null
-                            && states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                            && states != OAuth2AndOIDCEnum.CibaState.authorization_pending
+                            && states != OAuth2AndOIDCEnum.CibaState.slow_down)
                         {
                             CibaProvider.CibaData.TryRemove(clientNotificationToken, out temp);
                         }
@@ -402,7 +447,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             {   
                                 case EnumUserStoreType.SqlServer:
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT [AuthReqExp], [AuthZCode], [Result] FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
+                                        "SELECT [AuthReqExp], [AuthZCode], [Result], [LastPolledAt] FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
                                     if (dyn == null)
@@ -426,7 +471,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                                    if (states == OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    {
+                                        if (CibaProvider.ThrottlePolling(
+                                            (dyn.LastPolledAt == null) ? (long?)null : (long)dyn.LastPolledAt))
+                                        {
+                                            states = OAuth2AndOIDCEnum.CibaState.slow_down;
+                                            authZCode = "";
+                                            retVal = false;
+                                        }
+
+                                        cnn.Execute(
+                                            "UPDATE [CibaData] SET [LastPolledAt] = @LastPolledAt"
+                                            + " WHERE [AuthReqId] = @AuthReqId",
+                                            new
+                                            {
+                                                AuthReqId = authReqId,
+                                                LastPolledAt = PollingThrottle.NowUnixSeconds()
+                                            });
+                                    }
+
+                                    //  **削除（pending と slow_down のケースを除いて）。**
+                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending
+                                        && states != OAuth2AndOIDCEnum.CibaState.slow_down)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
@@ -437,7 +505,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                 case EnumUserStoreType.ODPManagedDriver:
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\" FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
+                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\", \"LastPolledAt\"" + " FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
                                         new { AuthReqId = authReqId });
 
                                     if (dyn == null)
@@ -464,7 +532,32 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                                    //    **Oracle の NUMBER は decimal で返る**ので、Convert を通す。
+                                    if (states == OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    {
+                                        if (CibaProvider.ThrottlePolling(
+                                            (dyn.LastPolledAt == null)
+                                                ? (long?)null : Convert.ToInt64(dyn.LastPolledAt)))
+                                        {
+                                            states = OAuth2AndOIDCEnum.CibaState.slow_down;
+                                            authZCode = "";
+                                            retVal = false;
+                                        }
+
+                                        cnn.Execute(
+                                            "UPDATE \"CibaData\" SET \"LastPolledAt\" = :LastPolledAt"
+                                            + " WHERE \"AuthReqId\" = :AuthReqId",
+                                            new
+                                            {
+                                                AuthReqId = authReqId,
+                                                LastPolledAt = PollingThrottle.NowUnixSeconds()
+                                            });
+                                    }
+
+                                    //  **削除（pending と slow_down のケースを除いて）。**
+                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending
+                                        && states != OAuth2AndOIDCEnum.CibaState.slow_down)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
@@ -475,7 +568,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                 case EnumUserStoreType.PostgreSQL:
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"authreqexp\", \"authzcode\", \"result\" FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
+                                        "SELECT \"authreqexp\", \"authzcode\", \"result\", \"lastpolledat\"" + " FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
                                     if (dyn == null)
@@ -499,7 +592,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
+                                    if (states == OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    {
+                                        if (CibaProvider.ThrottlePolling(
+                                            (dyn.lastpolledat == null)
+                                                ? (long?)null : (long)dyn.lastpolledat))
+                                        {
+                                            states = OAuth2AndOIDCEnum.CibaState.slow_down;
+                                            authZCode = "";
+                                            retVal = false;
+                                        }
+
+                                        cnn.Execute(
+                                            "UPDATE \"cibadata\" SET \"lastpolledat\" = @LastPolledAt"
+                                            + " WHERE \"authreqid\" = @AuthReqId",
+                                            new
+                                            {
+                                                AuthReqId = authReqId,
+                                                LastPolledAt = PollingThrottle.NowUnixSeconds()
+                                            });
+                                    }
+
+                                    //  **削除（pending と slow_down のケースを除いて）。**
+                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending
+                                        && states != OAuth2AndOIDCEnum.CibaState.slow_down)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",

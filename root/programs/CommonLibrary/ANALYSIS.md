@@ -513,9 +513,10 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
     （net48 用 `CustomPasswordHasher : IPasswordHasher` と
     .NET 用 `CustomPasswordHasher<TUser> : PasswordHasher<TUser>`）。
 11. **`Notifications/` の命名が系統で違う**（`*Service` / `*Sender`）。共通処理は `Cmn*` 側。
-12. **`ViewModels/ErrorViewModel.cs` だけ Shift_JIS。** 他は BOM 付き UTF-8。
-    編集ツールによっては保存時に壊れる。**新規ファイルは BOM 付き UTF-8 で作ること。**
-    （`../MultiPurposeAuthSiteCore` 側にも同種のファイルが 2 件ある。）
+12. ~~**`ViewModels/ErrorViewModel.cs` だけ Shift_JIS。**~~
+    **✅ 直した（#304）。** **UTF-8 ＋ BOM にした**（中身は 1 文字も変えていない）。
+    **`../MultiPurposeAuthSiteCore` 側の 2 件も同時に直した。**
+    **新規ファイルは BOM 付き UTF-8 で作ること**（**走査で確かめられる** — `TESTING.md`）。
 13. **`bin/` `obj/` が作業ツリーに残る。** `.gitignore` 済みだが、
     `bin\netfx\` と `bin\netcore\` の 2 系統が並ぶ点に注意。
 

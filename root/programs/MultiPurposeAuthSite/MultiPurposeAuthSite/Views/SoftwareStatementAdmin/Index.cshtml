@@ -1,0 +1,89 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Index
+    //* クラス日本語名  ：software_statement の発行者の一覧（管理画面）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/10/21  玄人 幸道         新規（#308 の段階 2）
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.ViewModels
+
+@model IEnumerable<SoftwareStatementIssuerViewModel>
+
+@{
+    ViewBag.Title = "software_statement Issuers";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<p class="text-success">@ViewBag.StatusMessage</p>
+
+@*  **「どのベンダを信じ、どこまで任せるか」の台帳**である（#308 の段階 2）。
+    **この画面が編むのは user store の行だけ** —
+    **設定ファイル（appSettings の SoftwareStatementIssuers）の行は、ここには出ない。**
+    **同じ鍵なら設定が勝つ**ので、**設定に在る鍵は足せない。** *@
+<p>
+    @Html.ActionLink("Create", "Create")
+</p>
+
+<table class="table">
+    <tr>
+        <th>Key</th>
+        <th>DisplayName</th>
+        <th>Enabled</th>
+        <th>Issuer</th>
+        <th>Alg</th>
+        <th>Keys</th>
+        <th>AllowedScope</th>
+        <th></th>
+    </tr>
+    @foreach (SoftwareStatementIssuerViewModel issuer in Model)
+    {
+        <tr>
+            <td>@issuer.IssuerKey</td>
+            <td>@issuer.DisplayName</td>
+            <td>@issuer.Enabled</td>
+            <td>@issuer.Issuer</td>
+            <td>@issuer.Alg</td>
+            <td>
+                @*  **鍵の中身は出さない**（**何本どこに在るか**だけ出す）。
+                    **公開鍵なので秘密ではない**が、**一覧が読めなくなる。** *@
+                @(string.IsNullOrWhiteSpace(issuer.CerBody) ? "" : "body ")@(string.IsNullOrWhiteSpace(issuer.CerFilePath) ? "" : "file")
+            </td>
+            <td>@issuer.AllowedScope</td>
+            <td>
+                @Html.ActionLink("Edit", "Edit", new { key = issuer.IssuerKey })
+                @using (Html.BeginForm("Delete", "SoftwareStatementAdmin", FormMethod.Post,
+                    new { style = "display:inline", onsubmit = "Fx_OnSubmit();" }))
+                {
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="key" value="@issuer.IssuerKey" />
+                    <button type="submit" class="btn btn-link">Delete</button>
+                }
+            </td>
+        </tr>
+    }
+</table>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

@@ -32,6 +32,9 @@
 //*  2026/10/09  玄人 幸道         net10.0 版に合わせて、削除の残りを落とした
 //*  2026/10/09  玄人 幸道         折り返し先の既定をtest_self_codeに戻した
 //*  2026/10/14  玄人 幸道         GDPR削除を物理削除に（DBストアなら CASCADE で関連明細も消える。
+//*  2026/10/18  玄人 幸道         画面の保存で registration_access_token を消さない（#307 の段階 2）
+//*  2026/10/20  玄人 幸道         所有者を列で持つようにした（#307 の段階 5-a-1）
+//*  2026/10/20  玄人 幸道         クライアント登録を一覧にした（#307 の段階 5-a-2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -213,7 +216,12 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                bool hasSaml2OAuth2Data = (Sts.DataProvider.Get(user.ClientID) != null);
+                //  **所有者の登録の件数**（#307 の段階 5-a-2）。
+                //    **1 利用者 n クライアント**になったので、**件数を数える** —
+                //    **「在る / 無い」だけでは、何件在るのかが分からない。**
+                //    **中身は一覧の画面（`Saml2OAuth2DataList`）で見せる。**
+                int saml2OAuth2DataCount = Sts.DataProvider.GetByOwner(user.Id).Count;
+                bool hasSaml2OAuth2Data = (0 < saml2OAuth2DataCount);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
@@ -230,7 +238,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 非構造化データ
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = hasSaml2OAuth2Data
+                    HasSaml2OAuth2Data = hasSaml2OAuth2Data,
+                    Saml2OAuth2DataCount = saml2OAuth2DataCount
                 };
 
                 // 管理画面の表示
@@ -1648,13 +1657,73 @@ namespace MultiPurposeAuthSite.Controllers
         #region Create
 
         /// <summary>
+        /// 自分のクライアント登録の一覧（#307 の段階 5-a-2）
+        /// GET: /Manage/Saml2OAuth2DataList
+        /// </summary>
+        /// <param name="message">ManageMessageId</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **1 利用者 n クライアント**（段階 5-a-1）になったので、**並べて選べる画面が要る。**
+        /// **段階 5-a-1 までは、画面から触れるのは「所有者の先頭 1 件」だけだった** —
+        /// **動的登録で 2 件目を作れても、画面には出てこなかった。**
+        ///
+        /// **出すのは自分の登録だけ**（`DataProvider.GetByOwner`。**`client_id` の昇順**）。
+        /// **所有者の無い登録**（構成ファイル発の種データ）**は出ない。**
+        ///
+        /// **`client_secret` と `registration_access_token` は、行の VM が持たない** —
+        /// **一覧に出さない値を View へ渡さない**（**出し忘れでは防げない**ため、器ごと分ける）。
+        /// </remarks>
+        [HttpGet]
+        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
+        public async Task<ActionResult> Saml2OAuth2DataList(EnumManageMessageId? message)
+        {
+            if (Config.CanEditSaml2OAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                ViewBag.StatusMessage =
+                      message == EnumManageMessageId.AddSaml2OAuth2DataSuccess ? Resources.ManageController.AddSaml2OAuth2DataSuccess
+                    : message == EnumManageMessageId.RemoveSaml2OAuth2DataSuccess ? Resources.ManageController.RemoveSaml2OAuth2DataSuccess
+                    : message == EnumManageMessageId.Error ? Resources.ManageController.Error
+                    : "";
+
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                List<Saml2OAuth2DataRowViewModel> rows = new List<Saml2OAuth2DataRowViewModel>();
+
+                foreach (ManageAddSaml2OAuth2DataViewModel owned
+                    in Sts.DataProvider.GetByOwner(user.Id))
+                {
+                    rows.Add(new Saml2OAuth2DataRowViewModel()
+                    {
+                        ClientID = owned.ClientID,
+                        ClientMode = owned.ClientMode,
+                        RedirectUriCode = owned.RedirectUriCode,
+
+                        //  **動的登録（RFC 7591）で作られたか。**
+                        //    **`registration_access_token` を持っているかで見る**（段階 2）。
+                        //    **トークンそのものは出さない**（**保管しているのはハッシュ**）。
+                        IsDynamic = !string.IsNullOrEmpty(owned.RegistrationAccessToken)
+                    });
+                }
+
+                return View(new ManageSaml2OAuth2DataListViewModel() { Registrations = rows });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
         /// OAuth2関連の非構造化データの追加・編集画面（初期表示）
         /// GET: /Manage/AddSaml2OAuth2Data
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> AddSaml2OAuth2Data()
+        public async Task<ActionResult> AddSaml2OAuth2Data(string clientId)
         {
             if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
@@ -1664,19 +1733,27 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddSaml2OAuth2DataViewModel model = null;
 
-                model = Sts.DataProvider.Get(user.ClientID);
-
-                if (model != null)
+                //  **どの登録を編集するかは、一覧から渡される**（#307 の段階 5-a-2）。
+                //    **段階 5-a-1 までは「所有者の先頭 1 件」を黙って出していた** —
+                //    **n 件になると、どれが出たのかが押す側に分からない。**
+                if (!string.IsNullOrEmpty(clientId))
                 {
-                    if (string.IsNullOrEmpty(model.ClientID))
+                    //  **所有者で照合する。**
+                    //    **他人の（または無い）`client_id` では開かない** —
+                    //    **新規として開くと、他人の行を上書きできてしまう。**
+                    //    **動的登録の側は `registration_access_token` で守っている**（RFC 7592 §2）。
+                    model = Sts.DataProvider.GetByOwnerAndClientID(user.Id, clientId);
+
+                    if (model == null)
                     {
-                        // 空（userから取得
-                        model.ClientID = user.ClientID;
+                        // エラー画面
+                        return View("Error");
                     }
-                    else
-                    {
-                        // 既（user側が先に更新されることは無い。
-                    }
+
+                    //  **編集中の印**（**`client_id` を作り直すボタンを出さない**）。
+                    //    **作り直すと別のクライアントになり**、
+                    //    **`registration_access_token` も引き継げない**ためである。
+                    model.Editing = "1";
                 }
                 else
                 {
@@ -1738,40 +1815,82 @@ namespace MultiPurposeAuthSite.Controllers
                             // ユーザを取得できた。
                             model.ClientName = user.UserName; // ClientNameはUser入力ではない。
 
-                            if (user.ClientID == model.ClientID)
+                            //  **所有者を列に書く**（#307 の段階 5-a）。
+                            //    **`Users.Id` を指す**（**名前ではない**）。
+                            //    **以前は利用者の行の `ClientID` を書き換えていた。**
+                            model.OwnerUserId = user.Id;
+
+                            //  **その `client_id` が自分の持ち物か**（#307 の段階 5-a-2）。
+                            //    **在れば更新、無ければ作成**である。
+                            //    **他人の `client_id` を送られても null になる**ので、
+                            //    **更新ではなく「作成」に落ちる** —
+                            //    **他人の行は、この経路でも書き換えられない**
+                            //    （**`Create` は、既に在る `client_id` では通らない**）。
+                            ManageAddSaml2OAuth2DataViewModel owned
+                                = Sts.DataProvider.GetByOwnerAndClientID(user.Id, model.ClientID);
+
+                            if (owned != null)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                Sts.DataProvider.Update(user.ClientID, model);
+
+                                //  **registration_access_token のハッシュを持ち越す**
+                                //    （RFC 7592。#307 の段階 2）。
+                                //    **画面の保存は、行を丸ごと上書きする**ので、
+                                //    **持ち越さないと消える** —
+                                //    **動的登録した RP が、管理 API を使えなくなる。**
+                                //    **画面には出さない**（照合にしか使わない値である）。
+                                //
+                                //  **client_id を作り直した場合は、持ち越さない**
+                                //    （下の分岐。**別のクライアントになる**ので、
+                                //      **そのトークンは、もう効いてはならない**）。
+                                model.RegistrationAccessToken = owned.RegistrationAccessToken;
+
+                                //  **動的登録で作られた行を、画面から書き替えた**（#307 の段階 6）。
+                                //    **記録に残す** —
+                                //    **`software_statement` の保証から外れた点が、後から分かる**ようにする
+                                //    （**ベンダの保証どおりの登録です、と言えなくなる所**である）。
+                                //
+                                //  **権限の昇格ではない。**
+                                //    **この利用者は、好きな `scope` の登録を画面から新規にも作れる**
+                                //    （段階 1 の決め : **専用 scope を配るのは画面か構成ファイルだけ**）。
+                                //    **禁止しても、作り直して同じ所に行ける**ので、壁にはならない。
+                                //
+                                //  **閉じたい配備は、画面そのものを閉じる**
+                                //    （`CanEditSaml2OAuth2Data` / `EnableEditingOfUserAttribute`）。
+                                //    **`RequireSoftwareStatement` は API 側の扉だけ**で、
+                                //    **この画面には効かない。**
+                                if (!string.IsNullOrEmpty(owned.RegistrationAccessToken))
+                                {
+                                    // オペレーション・トレース・ログ出力
+                                    Logging.MyOperationTrace(string.Format(
+                                        "{0}({1}) edited the dynamically registered client {2} "
+                                        + "on the management screen.",
+                                        user.Id, user.UserName, model.ClientID));
+                                }
+
+                                Sts.DataProvider.Update(model.ClientID, model);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
-                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
+
+                                //  **戻り先は一覧**（#307 の段階 5-a-2）。
+                                //    **直した行が、その場で見える。**
+                                return RedirectToAction("Saml2OAuth2DataList", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                             }
                             else if (!string.IsNullOrEmpty(model.ClientID))
                             {
-                                // ClientIDに変更がある場合、ユーザーを保存してから、
-                                string temp = user.ClientID;
-                                user.ClientID = model.ClientID;
-                                IdentityResult result = await UserManager.UpdateAsync(user);
+                                //  **新しい登録を作る**（#307 の段階 5-a-2）。
+                                //    **利用者の行には触らない**（所有者は列が持つ）。
+                                //    **古い登録は消さない** — **1 人が n 件持てる**ようになった
+                                //    （**段階 5-a-1 までは、この画面が 1 件だけを扱うために消していた**）。
+                                Sts.DataProvider.Create(model.ClientID, model);
 
-                                // 結果の確認
-                                if (result.Succeeded)
-                                {
-                                    // 成功
+                                // 再ログイン
+                                await this.ReSignInAsync();
 
-                                    // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) Sts.DataProvider.Delete(temp);
-                                    Sts.DataProvider.Create(user.ClientID, model);
-
-                                    // 再ログイン
-                                    await this.ReSignInAsync();
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
-                                }
-                                else
-                                {
-                                    // 失敗
-                                    this.AddErrors(result);
-                                }
+                                //  **戻り先は一覧**（#307 の段階 5-a-2）。
+                                //    **足した行が、その場で見える。**
+                                return RedirectToAction("Saml2OAuth2DataList", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                             }
                             else
                             {
@@ -1815,7 +1934,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> RemoveSaml2OAuth2Data()
+        public async Task<ActionResult> RemoveSaml2OAuth2Data(string clientId)
         {
             if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
@@ -1823,36 +1942,34 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                // OAuth2関連の非構造化データのクリア
-                Sts.DataProvider.Delete(user.ClientID);
+                //  **一覧の行から渡された 1 件を消す**（#307 の段階 5-a-2）。
+                //    **所有者で照合する** — **他人の `client_id` では、何も消さない。**
+                //    **空でも何も消さない** —
+                //    **「先頭 1 件を黙って消す」をしない**ためである
+                //    （**どれが消えるのかは、押す側に見えていなければならない**）。
+                ManageAddSaml2OAuth2DataViewModel owned
+                    = Sts.DataProvider.GetByOwnerAndClientID(user.Id, clientId);
 
-                // ユーザーの保存（ClientIDのクリア）
-                //user.ClientID = ""; 一意制約エラーになるので
-                IdentityResult result = await UserManager.UpdateAsync(user);
-
-                // 結果の確認
-                if (result.Succeeded)
+                if (owned == null)
                 {
-                    // 削除の成功
-
-                    // 再ログイン
-                    if (await this.ReSignInAsync())
-                    {
-                        // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveSaml2OAuth2DataSuccess });
-                    }
-                    else
-                    {
-                        // 再ログインに失敗
-                    }
-                }
-                else
-                {
-                    // 削除の失敗
+                    // 一覧 - Error
+                    return RedirectToAction("Saml2OAuth2DataList",
+                        new { Message = EnumManageMessageId.Error });
                 }
 
-                // Index - Error
-                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+                Sts.DataProvider.Delete(owned.ClientID);
+
+                //  **利用者の行は触らない**（#307 の段階 5-a-1）。
+                //    **以前は `UserManager.UpdateAsync` を呼んでいた** —
+                //    **`Users.ClientID` を持っていた頃の名残**で、いまは何も変わらない。
+                //    **呼ばないので、その失敗を見る分岐も要らない。**
+                //
+                //  **再ログインはする** — **追加の側と揃える**
+                //    （**この画面の操作の後は、資格情報を取り直す**作りである）。
+                await this.ReSignInAsync();
+
+                return RedirectToAction("Saml2OAuth2DataList",
+                    new { Message = EnumManageMessageId.RemoveSaml2OAuth2DataSuccess });
             }
             else
             {

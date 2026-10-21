@@ -38,6 +38,7 @@
 //*  2026/10/07  玄人 幸道         Users.FIDO2PublicKey（MsPass専用）を削除（#137）
 //*  2026/10/09  玄人 幸道         Users.PaymentInformation を削除（オンライン決済の取り下げ）
 //*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
+//*  2026/10/21  玄人 幸道         利用者の削除で、セッション × クライアントの台帳も消す（#310 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -180,12 +181,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Id], [UserName], [NormalizedUserName], [PasswordHash], " +
                                         "    [Email], [NormalizedEmail], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], [TotpAuthenticatorKey], " +
-                                        "    [ClientID], [UnstructuredData], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
+                                        "    [UnstructuredData], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
 
@@ -196,12 +197,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Id\", \"UserName\", \"NormalizedUserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"NormalizedEmail\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", \"TotpAuthenticatorKey\", " +
-                                        "    \"ClientID\", \"UnstructuredData\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
+                                        "    \"UnstructuredData\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :NormalizedUserName, :PasswordHash, " +
                                         "        :Email, :NormalizedEmail, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, :TotpAuthenticatorKey, " +
-                                        "        :ClientID, :UnstructuredData, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
+                                        "        :UnstructuredData, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -219,7 +220,6 @@ namespace MultiPurposeAuthSite.Data
                                             SecurityStamp = user.SecurityStamp,
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
                                             TotpAuthenticatorKey = user.TotpAuthenticatorKey,
-                                            ClientID = user.ClientID,
                                             UnstructuredData = user.UnstructuredData,
                                             DeviceToken = user.DeviceToken,
                                             CreatedDate = user.CreatedDate,
@@ -235,12 +235,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"id\", \"username\", \"normalizedusername\", \"passwordhash\", " +
                                         "    \"email\", \"normalizedemail\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
                                         "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", \"totpauthenticatorkey\", " +
-                                        "    \"clientid\", \"unstructureddata\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
+                                        "    \"unstructureddata\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
                             }
@@ -703,7 +703,7 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Email] = @Email, [NormalizedEmail] = @NormalizedEmail, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
                                         "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
                                         "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
-                                        "    [ClientID] = @ClientID, [UnstructuredData] = @UnstructuredData, " + 
+                                        "    [UnstructuredData] = @UnstructuredData, " + 
                                         "    [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
                                         "WHERE [Id] = @Id", user);
 
@@ -717,7 +717,7 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Email\" = :Email, \"NormalizedEmail\" = :NormalizedEmail, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
                                         "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
                                         "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
-                                        "    \"ClientID\" = :ClientID, \"UnstructuredData\" = :UnstructuredData, " +
+                                        "    \"UnstructuredData\" = :UnstructuredData, " +
                                         "    \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
                                         "WHERE \"Id\" = :Id",
                                         new // 拡張メソッドで対策できる。
@@ -737,7 +737,6 @@ namespace MultiPurposeAuthSite.Data
                                             SecurityStamp = user.SecurityStamp,
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
                                             TotpAuthenticatorKey = user.TotpAuthenticatorKey,
-                                            ClientID = user.ClientID,
                                             UnstructuredData = user.UnstructuredData,
                                             DeviceToken = user.DeviceToken,
                                             //CreatedDate = user.CreatedDate,
@@ -754,7 +753,7 @@ namespace MultiPurposeAuthSite.Data
                                        "    \"email\" = @Email, \"normalizedemail\" = @NormalizedEmail, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
                                        "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
                                        "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
-                                       "    \"clientid\" = @ClientID, \"unstructureddata\" = @UnstructuredData, " +
+                                       "    \"unstructureddata\" = @UnstructuredData, " +
                                        "    \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
                                        "WHERE \"id\" = @Id", user);
 
@@ -1044,6 +1043,22 @@ namespace MultiPurposeAuthSite.Data
                         // **sub の対応表も消す**（#151 の段階 2）。
                         //   **DB では外部キー（ON DELETE CASCADE）が消す**ので、mem だけ。
                         SubjectIdProvider.DeleteByUserId(user.Id);
+
+                        // **その人のクライアント登録も消す**（#307 の段階 5-a）。
+                        //   **DB では外部キー（OwnerUserId → Users.Id の ON DELETE CASCADE）が消す**
+                        //   ので、**ここも mem だけ**である（上の sub と同じ事情）。
+                        //
+                        //   **この不整合は、段階 5-a より前から在った** —
+                        //   **旧い外部キー（Saml2OAuth2Data.ClientID → Users.ClientID）も
+                        //   ON DELETE CASCADE** で、**DB では消えて、mem では残っていた。**
+                        //   **1 利用者 n クライアントになり、`RT-307.3` の (6) が
+                        //   正面から当たるので、ここで揃えた。**
+                        DataProvider.DeleteByOwner(user.Id);
+
+                        // **セッション × クライアントの台帳も消す**（#310 の段階 1）。
+                        //   **DB では外部キー（UserId → Users.Id の ON DELETE CASCADE）が消す**
+                        //   ので、**ここも mem だけ**である（上の 2 つと同じ事情）。
+                        SessionClientProvider.DeleteByUser(user.Id);
 
                         break;
 

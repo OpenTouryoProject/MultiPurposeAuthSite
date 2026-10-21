@@ -56,6 +56,9 @@
 //*  2026/10/06  玄人 幸道         同意画面の許可・拒否と、同意の取り消しの操作を追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         WebAuthn の登録・認証の画面操作を追加（#137）
 //*  2026/10/08  玄人 幸道         CookieNames（名前だけ）を追加（#284）
+//*  2026/10/16  玄人 幸道         ヘッダを付けて GET する口を足した（#303）
+//*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         メソッドを選んで JSON を送る口にした（#307 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -193,6 +196,32 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this._http.GetAsync(this.Absolute(pathOrUrl));
         }
 
+        /// <summary>ヘッダを付けて GET する（#303。`If-None-Match` を送るため）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="headers">足すヘッダ（値が空の項目は送らない）</param>
+        /// <returns>応答</returns>
+        public Task<HttpResponseMessage> GetAsync(
+            string pathOrUrl, IDictionary<string, string> headers)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Get, this.Absolute(pathOrUrl));
+
+            if (headers != null)
+            {
+                foreach (KeyValuePair<string, string> h in headers)
+                {
+                    if (!string.IsNullOrEmpty(h.Value))
+                    {
+                        //  **検証を通さずに足す**（`If-None-Match` のような、
+                        //    形式の厳しいヘッダをそのまま送るため）。
+                        req.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    }
+                }
+            }
+
+            return this._http.SendAsync(req);
+        }
+
         /// <summary>POST（application/x-www-form-urlencoded）</summary>
         /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
         /// <param name="form">フォーム</param>
@@ -238,6 +267,59 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             StringContent content = new StringContent(body, Encoding.UTF8, "text/plain");
             HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
+
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>
+        /// JSON の本文を、Authorization ヘッダを付けて POST する（#307 の段階 1）
+        /// </summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="json">本文（JSON の文字列。null なら本文を付けない）</param>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **動的クライアント登録（RFC 7591 §3.1）は `application/json` を受ける。**
+        /// **フォームではない**ので、`PostJsonWithAuthorizationAsync`（フォームを送る口）
+        /// とは別に用意してある。
+        /// </remarks>
+        public Task<JsonResponse> PostJsonBodyWithAuthorizationAsync(
+            string pathOrUrl, string json, string authorization)
+        {
+            return this.SendJsonBodyWithAuthorizationAsync(
+                HttpMethod.Post, pathOrUrl, json, authorization);
+        }
+
+        /// <summary>
+        /// メソッドを選んで、JSON の本文と Authorization ヘッダを付けて送る（#307 の段階 2）
+        /// </summary>
+        /// <param name="method">HTTP メソッド（GET / PUT / DELETE / POST）</param>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="json">本文（JSON の文字列。null なら本文を付けない）</param>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **クライアント登録の管理 API（RFC 7592）は、同じ URL を
+        /// `GET` / `PUT` / `DELETE` で叩く。**
+        /// **`HttpClient` の `GetAsync` / `PutAsync` では Authorization を付けられない**ので、
+        /// **要求を組み立てて送る。**
+        /// </remarks>
+        public async Task<JsonResponse> SendJsonBodyWithAuthorizationAsync(
+            HttpMethod method, string pathOrUrl, string json, string authorization)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(method, this.Absolute(pathOrUrl));
+
+            if (json != null)
+            {
+                req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            }
+
+            if (authorization != null)
+            {
+                req.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
+
+            HttpResponseMessage res = await this._http.SendAsync(req);
 
             return await ToJsonResponseAsync(res);
         }
@@ -310,6 +392,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string pathOrUrl, IDictionary<string, string> form)
         {
             HttpResponseMessage res = await this.PostFormAsync(pathOrUrl, form);
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>ヘッダを付けて、JSONを返すエンドポイントをPOSTする</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="headers">足すヘッダ（値が空の項目は送らない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **`X-Forwarded-For` を送るため**（#305 の段階 4）。
+        /// **送信元ごとの数えを、1 台のホストから測る**のに使う（`RT-305.7`）。
+        /// **net10.0 版が `UseForwardedHeaders` を有効にしている配備でだけ効く。**
+        /// </remarks>
+        public async Task<JsonResponse> PostJsonAsync(
+            string pathOrUrl, IDictionary<string, string> form,
+            IDictionary<string, string> headers)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Post, this.Absolute(pathOrUrl));
+
+            // 値が null の項目は送らない（PostFormAsync と同じ）。
+            List<KeyValuePair<string, string>> items = new List<KeyValuePair<string, string>>();
+
+            foreach (KeyValuePair<string, string> item in form)
+            {
+                if (item.Value != null)
+                {
+                    items.Add(item);
+                }
+            }
+
+            req.Content = new FormUrlEncodedContent(items);
+
+            if (headers != null)
+            {
+                foreach (KeyValuePair<string, string> h in headers)
+                {
+                    if (!string.IsNullOrEmpty(h.Value))
+                    {
+                        //  **検証を通さずに足す**（`GetAsync` のヘッダ版と同じ）。
+                        req.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                    }
+                }
+            }
+
+            HttpResponseMessage res = await this._http.SendAsync(req);
+
             return await ToJsonResponseAsync(res);
         }
 

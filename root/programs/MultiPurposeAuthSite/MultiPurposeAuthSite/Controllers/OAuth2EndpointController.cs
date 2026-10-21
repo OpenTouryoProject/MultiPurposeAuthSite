@@ -74,6 +74,10 @@
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（#237）
 //*  2026/10/01  玄人 幸道         CIBA の認可コードに、sub ではなく利用者名を入れるようにした（#151 の段階 4）
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
+//*  2026/10/16  玄人 幸道         /jwkcerts を覚えて返す（Cache-Control / ETag / 304）（#303）
+//*  2026/10/21  玄人 幸道         /token で DPoP の証明を受け取る（#311 の段階 1）
+//*  2026/10/21  玄人 幸道         保護されたリソースで DPoP の証明を照合する（#311 の段階 2）
+//*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -104,6 +108,7 @@ using System.Web.Http.Cors;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
+using System.Net.Http.Headers;   // ETag / Cache-Control（#303）
 
 using Microsoft.AspNet.Identity.Owin;
 
@@ -232,6 +237,21 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #endregion
 
+
+                #region DPoP（#311 の段階 1）
+
+                //  **DPoP の証明**（RFC 9449 §4）。
+                //    **ヘッダで来る**（本文のパラメタではない）。
+                //    **無ければ従来どおり bearer** で発行する（既定の挙動を変えない）。
+                //    **検証は `CmnEndpoints` 側**（グラントの入口で、code を使う前に見る）。
+                //  **この口は Web API（`ApiController`）**なので、`Request.Headers` は
+                //    `HttpRequestHeaders` である（添字で引けない）。
+                //    **`Authorization` を読んでいる口と同じ流儀**で、`HttpContext` から引く。
+                string dPoPProof =
+                    HttpContext.Current.Request.Headers[Token.CmnDPoP.HttpHeader];
+
+                #endregion
+
                 #region grant_type
 
                 string grant_type = "";
@@ -250,7 +270,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             if (Token.CmnEndpoints.GrantAuthorizationCodeCredentials(
                                 grant_type, client_id, client_secret, clientAssertion, x509,
-                                code, code_verifier, redirect_uri, out ret, out err))
+                                dPoPProof, code, code_verifier, redirect_uri, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -260,7 +280,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
                             if (Token.CmnEndpoints.GrantRefreshTokenCredentials(
                                 grant_type, client_id, client_secret, clientAssertion,
-                                x509, refresh_token, out ret, out err))
+                                x509, dPoPProof, refresh_token, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -272,7 +292,7 @@ namespace MultiPurposeAuthSite.Controllers
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantResourceOwnerCredentials(
                                 grant_type, client_id, client_secret, clientAssertion, x509,
-                                username, password, scope, out ret, out err))
+                                dPoPProof, username, password, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -282,7 +302,7 @@ namespace MultiPurposeAuthSite.Controllers
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantClientCredentials(
                                 grant_type, client_id, client_secret, clientAssertion,
-                                x509, scope, out ret, out err))
+                                x509, dPoPProof, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -292,7 +312,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // トークン要求の scope を渡す（RFC 7521 4.1 / RFC 7523 2.1）（#218）
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantJwtBearerTokenCredentials(
-                            grant_type, assertion, x509, scope, out ret, out err))
+                            grant_type, assertion, x509, dPoPProof, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -301,7 +321,8 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.DeviceAuthZGrantType:
                             string device_code = formData[OAuth2AndOIDCConst.device_code];
                             if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
-                                client_id, client_secret, x509, device_code, out ret, out err))
+                                client_id, client_secret, x509, dPoPProof, device_code,
+                                out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -311,7 +332,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string auth_req_id = formData[OAuth2AndOIDCConst.auth_req_id];
                             if (Token.CmnEndpoints.GrantCiba(grant_type, 
                                 client_id, client_secret, x509,
-                                auth_req_id, out ret, out err))
+                                dPoPProof, auth_req_id, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -343,6 +364,39 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+
+        #region DPoP の照合（#311 の段階 2）
+
+        /// <summary>DPoP に縛られたトークンなら、証明を照合する（#311 の段階 2）</summary>
+        /// <param name="identity">検証済みの ClaimsIdentity</param>
+        /// <param name="accessToken">提示された access_token</param>
+        /// <param name="isDPoP">**`DPoP` スキームで来たか**</param>
+        /// <param name="dpopError">out : error（**`use_dpop_nonce` のときだけ**。#311 の段階 4）</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり通る**
+        /// （**DPoP を知らないクライアントに影響しない**）。
+        ///
+        /// **`Bearer` スキームで来た要求には、証明を渡さない** ＝
+        /// **縛られたトークンなら断る**（RFC 9449 §7.1）。
+        /// **縛りを「使う側の出し方」で外せてはいけない。**
+        ///
+        /// **`htu` は、要求のパスから設定の URL を引く**（`CmnDPoP.EndpointUriOf`。
+        /// **`Host` ヘッダは見ない**）。**`htm` は、実際のメソッド**である。
+        /// </remarks>
+        private bool VerifyDPoP(
+            ClaimsIdentity identity, string accessToken, bool isDPoP, out string dpopError)
+        {
+            return Token.CmnAccessToken.VerifyDPoPBinding(
+                identity, accessToken,
+                isDPoP ? HttpContext.Current.Request.Headers[Token.CmnDPoP.HttpHeader] : null,
+                HttpContext.Current.Request.HttpMethod,
+                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
+                out dpopError);
+        }
+
+        #endregion
+
         #region /userinfo
 
         /// <summary>
@@ -362,8 +416,9 @@ namespace MultiPurposeAuthSite.Controllers
             Dictionary<string, string> err = new Dictionary<string, string>();
 
             // クライアント認証
-            if (AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
                 {
@@ -374,6 +429,23 @@ namespace MultiPurposeAuthSite.Controllers
                         err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
                         err.Add(OAuth2AndOIDCConst.error_description,
                             "The access token is bound to a client certificate.");
+
+                        return this.UserInfoError(err);
+                    }
+
+                    //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                    //    （RFC 9449 §7.1。#311 の段階 2）。
+                    //    **縛っていないトークンは、これまでどおり通る。**
+                    if (!this.VerifyDPoP(identity, bearerToken, isDPoP, out string dpopError))
+                    {
+                        //  **nonce を貰い直させる断りは、区別して返す**
+                        //    （RFC 9449 §9。#311 の段階 4）。
+                        err.Add(OAuth2AndOIDCConst.error,
+                            dpopError ?? OAuth2AndOIDCConst.invalid_token);
+                        err.Add(OAuth2AndOIDCConst.error_description,
+                            (dpopError == Token.CmnDPoP.UseDPoPNonce)
+                                ? "A DPoP proof with a new nonce is required."
+                                : "The access token is bound to a DPoP key.");
 
                         return this.UserInfoError(err);
                     }
@@ -488,10 +560,23 @@ namespace MultiPurposeAuthSite.Controllers
         {
             HttpResponseMessage res = (err.Count == 0)
                 ? this.Request.CreateResponse(HttpStatusCode.Unauthorized)
-                : this.Request.CreateResponse((HttpStatusCode)Token.CmnEndpoints.GetErrorStatusCode(err), err);
+                : this.Request.CreateResponse(
+                    (HttpStatusCode)Token.CmnEndpoints.GetResourceErrorStatusCode(err), err);
+
+            //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
+            string scheme = Token.CmnEndpoints.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
 
             res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
-                "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter("userinfo", err)));
+                scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, "userinfo", err)));
+
+            //  **nonce を要求する配備では、新しい値を渡す**（§9）。
+            //    **これが無いと、クライアントは出し直せない。**
+            string nonce = Token.CmnDPoP.NonceForChallenge(scheme == Token.CmnDPoP.TokenType);
+
+            if (nonce != null)
+            {
+                res.Headers.Add(Token.CmnDPoP.NonceHeader, nonce);
+            }
 
             return this.ResponseMessage(res);
         }
@@ -1050,8 +1135,9 @@ namespace MultiPurposeAuthSite.Controllers
         public IHttpActionResult CibaPushResult(FormDataCollection formData)
         {
             // クライアント認証（Bearer トークン）
-            if (!AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (!Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
                 return this.NGResult(401, "ciba_result", null);
@@ -1060,8 +1146,16 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = null;
 
             // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
+            //  **`out` の変数は、条件の前で宣言する**（#311 の段階 4）。
+            //    **`&&` で呼ばれないことが在る**ので、
+            //    **条件の中で宣言すると「代入されていない」ことになる。**
+            string dpopError = null;
+
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
+                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §7.1。#311 の段階 2）。
+                && this.VerifyDPoP(identity, bearerToken, isDPoP, out dpopError))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(
@@ -1073,7 +1167,8 @@ namespace MultiPurposeAuthSite.Controllers
             if (user == null)
             {
                 // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-                return this.NGResult(401, "ciba_result", OAuth2AndOIDCConst.invalid_token);
+                return this.NGResult(401, "ciba_result",
+                dpopError ?? OAuth2AndOIDCConst.invalid_token);
             }
 
             // 変数
@@ -1106,17 +1201,63 @@ namespace MultiPurposeAuthSite.Controllers
         /// GET: /jwkcerts
         /// </summary>
         /// <returns>HttpResponseMessage</returns>
+        /// <remarks>
+        /// **覚えて返す**（#303。E-7）。**要求ごとにファイルを開いて読んでいた。**
+        /// **内容は鍵を入れ替えるまで変わらない**ので、
+        /// **ファイルの更新を見て、変わっていなければ覚えている分を返す**
+        /// （`Extensions/Sts/JwkSetDocument`）。
+        ///
+        /// **`Cache-Control` と `ETag` も付ける。**
+        /// **`JwkSetCacheMaxAgeSeconds` が 0（既定）なら `no-store`** ＝ 従来どおり。
+        /// **`If-None-Match` が一致すれば `304`**（本文を送らない）。
+        /// </remarks>
         [HttpGet]
         [MpasPublicDocsCors]   // jwkcerts（公開情報）
         public HttpResponseMessage JwksUri()
         {
-            return new HttpResponseMessage()
+            string body = Sts.JwkSetDocument.Get(out string etag);
+            int maxAge = Sts.JwkSetDocument.MaxAgeSeconds;
+
+            EntityTagHeaderValue tag = new EntityTagHeaderValue(etag);
+
+            //  **同じものを持っている相手には、本文を送らない**（`304`）。
+            foreach (EntityTagHeaderValue candidate in this.Request.Headers.IfNoneMatch)
             {
-                Content = new JsonContent(
-                    ResourceLoader.LoadAsString(
-                        OAuth2AndOIDCParams.JwkSetFilePath,
-                        Encoding.GetEncoding(CustomEncode.UTF_8)))
+                if (candidate.Tag == etag)
+                {
+                    HttpResponseMessage notModified =
+                        new HttpResponseMessage(HttpStatusCode.NotModified);
+
+                    notModified.Headers.ETag = tag;
+                    JwksUriCache(notModified, maxAge);
+
+                    return notModified;
+                }
+            }
+
+            HttpResponseMessage res = new HttpResponseMessage()
+            {
+                Content = new JsonContent(body)
             };
+
+            res.Headers.ETag = tag;
+            JwksUriCache(res, maxAge);
+
+            return res;
+        }
+
+        /// <summary>`/jwkcerts` の `Cache-Control` を付ける（#303）</summary>
+        /// <param name="res">HttpResponseMessage</param>
+        /// <param name="maxAge">秒数（0 なら no-store）</param>
+        private static void JwksUriCache(HttpResponseMessage res, int maxAge)
+        {
+            res.Headers.CacheControl = (0 < maxAge)
+                ? new CacheControlHeaderValue()
+                {
+                    Public = true,
+                    MaxAge = TimeSpan.FromSeconds(maxAge)
+                }
+                : new CacheControlHeaderValue() { NoStore = true };
         }
 
         #endregion
@@ -1302,16 +1443,25 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // クライアント認証（Bearer トークン）
-            if (!AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (!Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
                 return this.NGResult(401, "SetDeviceToken", null);
             }
 
             // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
+            //  **`out` の変数は、条件の前で宣言する**（#311 の段階 4）。
+            //    **`&&` で呼ばれないことが在る**ので、
+            //    **条件の中で宣言すると「代入されていない」ことになる。**
+            string dpopError = null;
+
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
+                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §7.1。#311 の段階 2）。
+                && this.VerifyDPoP(identity, bearerToken, isDPoP, out dpopError))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(
@@ -1332,7 +1482,8 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-            return this.NGResult(401, "SetDeviceToken", OAuth2AndOIDCConst.invalid_token);
+            return this.NGResult(401, "SetDeviceToken",
+                dpopError ?? OAuth2AndOIDCConst.invalid_token);
         }
 
         /// <summary>
@@ -1358,8 +1509,9 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<IHttpActionResult> TwoFactorPushResult(FormDataCollection formData)
         {
             // クライアント認証（Bearer トークン）
-            if (!AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (!Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）
                 return this.NGResult(401, "2fa_result", null);
@@ -1368,8 +1520,16 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = null;
 
             // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
+            //  **`out` の変数は、条件の前で宣言する**（#311 の段階 4）。
+            //    **`&&` で呼ばれないことが在る**ので、
+            //    **条件の中で宣言すると「代入されていない」ことになる。**
+            string dpopError = null;
+
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
+                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §7.1。#311 の段階 2）。
+                && this.VerifyDPoP(identity, bearerToken, isDPoP, out dpopError))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(
@@ -1381,7 +1541,8 @@ namespace MultiPurposeAuthSite.Controllers
             if (user == null)
             {
                 // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）
-                return this.NGResult(401, "2fa_result", OAuth2AndOIDCConst.invalid_token);
+                return this.NGResult(401, "2fa_result",
+                dpopError ?? OAuth2AndOIDCConst.invalid_token);
             }
 
             string code = (formData == null) ? null : (string)formData["code"];
@@ -1465,6 +1626,16 @@ namespace MultiPurposeAuthSite.Controllers
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", "realm=\"" + realm + "\""));
             }
 
+            //  **nonce が要るなら、新しい値を渡す**（RFC 9449 §8。#311 の段階 4）。
+            //    **成功応答には付けない** — **窓（5〜10 分）が切れたら 1 往復増える。**
+            if (err != null
+                && err.TryGetValue(OAuth2AndOIDCConst.error, out string error)
+                && error == Token.CmnDPoP.UseDPoPNonce)
+            {
+                res.Headers.Add(Token.CmnDPoP.NonceHeader,
+                    Token.CmnDPoP.CurrentNonce(Token.CmnDPoP.PurposeAs));
+            }
+
             return this.ResponseMessage(res);
         }
 
@@ -1493,8 +1664,18 @@ namespace MultiPurposeAuthSite.Controllers
                     err.Add(OAuth2AndOIDCConst.error, error);
                 }
 
+                //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
+                string scheme = Token.CmnEndpoints.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
+
                 res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
-                    "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter(realm, err)));
+                    scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, realm, err)));
+
+                string nonce = Token.CmnDPoP.NonceForChallenge(scheme == Token.CmnDPoP.TokenType);
+
+                if (nonce != null)
+                {
+                    res.Headers.Add(Token.CmnDPoP.NonceHeader, nonce);
+                }
             }
 
             return this.ResponseMessage(res);

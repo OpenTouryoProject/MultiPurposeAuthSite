@@ -62,6 +62,14 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>HasSaml2OAuth2Data</summary>
         public bool HasSaml2OAuth2Data { get; set; }
 
+        /// <summary>Saml2OAuth2Data の件数（#307 の段階 5-a-2）</summary>
+        /// <remarks>
+        /// **1 利用者 n クライアント**になったので、**「在る / 無い」だけでは足りない**
+        /// （#307 の段階 5-a-1 で縛りが外れた）。
+        /// **この画面は件数だけを出し、中身は一覧の画面で見せる。**
+        /// </remarks>
+        public int Saml2OAuth2DataCount { get; set; }
+
         /// <summary>HasFIDO2Data</summary>
         public bool HasFIDO2Data { get; set; }
 

@@ -33,6 +33,7 @@
 //*  2026/09/29  玄人 幸道         更新後も fapi クレームが載ることを確認（#245）
 //*  2026/09/30  玄人 幸道         RT-129.1（ES256 の client_assertion）を追加（#129 の段階 2）
 //*  2026/10/03  玄人 幸道         RT-262.1（登録で絞ったalg以外は通らない）を追加（#262）
+//*  2026/10/19  玄人 幸道         方法を明示したTestClient_24に向けた（#307 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -113,6 +114,38 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ? JwsSigner.SignES256(client, payload) : JwsSigner.SignRS256(client, payload);
         }
 
+        /// <summary>認可コードを取り、client_assertion で交換する（#307 の段階 3）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">クライアント</param>
+        /// <param name="scope">スコープ</param>
+        /// <returns>トークン応答</returns>
+        /// <remarks>
+        /// **client_secret を一度も使わない。**
+        ///
+        /// **段階 3 で、登録された `token_endpoint_auth_method` を認証で効かせる**ように
+        /// なったので、**`private_key_jwt` のクライアントは、交換も client_assertion で行う。**
+        /// **以前は「交換は秘密、更新はアサーション」と混ぜていた**が、
+        /// **仕様（RFC 7591 §2）の `token_endpoint_auth_method` は 1 つ**であり、
+        /// **混ぜられたのは、この実装が方法を見ていなかったから**である。
+        /// </remarks>
+        private static async Task<JsonResponse> TokenByClientAssertionAsync(
+            IdPClient client, ClientRegistration reg, string scope)
+        {
+            AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                client, reg, scope, redirectUri: reg.RedirectUri);
+
+            Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が発行されること");
+
+            return await client.TokenAsync(
+                AsymmetricAuthTests.WithClientAssertion(client, reg.ClientId,
+                    new Dictionary<string, string>()
+                    {
+                        { "grant_type", "authorization_code" },
+                        { "code", authz.Code },
+                        { "redirect_uri", reg.RedirectUri }
+                    }));
+        }
+
         /// <summary>client_assertion だけを添えたフォームを作る</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
@@ -139,7 +172,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                ClientRegistration reg = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_24);
 
                 TestReport r = this.Report("RT-239.1",
                     "refresh_token の更新を、private_key_jwt のクライアント認証で行える",
@@ -149,13 +183,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "`GrantRefreshTokenCredentials` は**引数にアサーションを持っていなかった**（#239）。",
                     "RFC 6749 §6 / RFC 7523 §2.2 / FAPI 2.0 / #239");
 
-                r.Target("client_name=" + KnownClients.TestClient
-                    + "（normal。client_secret と jwk_rsa_publickey の両方を登録済み）");
+                r.Target("client_name=" + KnownClients.TestClient_24
+                    + "（normal。token_endpoint_auth_method=private_key_jwt）");
 
-                r.Step("(1) 認可コード フローで refresh_token を得る（client_secret で交換）");
+                r.Step("(1) 認可コード フローで refresh_token を得る（交換も client_assertion）");
 
-                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
-                    client, KnownClients.TestClient, "openid email offline_access");
+                JsonResponse token = await AsymmetricAuthTests.TokenByClientAssertionAsync(
+                    client, reg, "openid email offline_access");
 
                 string refreshToken = token.String("refresh_token");
 
@@ -194,7 +228,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                ClientRegistration reg = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_24);
 
                 TestReport r = this.Report("RT-239.2",
                     "トークンの失効（/revoke）を、private_key_jwt のクライアント認証で行える",
@@ -204,12 +239,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "失効できないと、**漏れたトークンを止める手段が無い。**",
                     "RFC 7009 §2.1 / RFC 7523 §2.2 / #239");
 
-                r.Target("client_name=" + KnownClients.TestClient);
+                r.Target("client_name=" + KnownClients.TestClient_24
+                    + "（token_endpoint_auth_method=private_key_jwt）");
 
-                r.Step("(1) トークンを得る");
+                r.Step("(1) トークンを得る（交換も client_assertion）");
 
-                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
-                    client, KnownClients.TestClient, "openid email");
+                JsonResponse token = await AsymmetricAuthTests.TokenByClientAssertionAsync(
+                    client, reg, "openid email");
 
                 Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
 
@@ -244,7 +280,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                ClientRegistration reg = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_24);
 
                 TestReport r = this.Report("RT-239.3",
                     "トークンの問い合わせ（/introspect）を、private_key_jwt のクライアント認証で行える",
@@ -252,12 +289,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "以前は `client_assertion` を読んでおらず、**秘密を持たないクライアントは問い合わせできなかった。**",
                     "RFC 7662 §2.1 / RFC 7523 §2.2 / #239");
 
-                r.Target("client_name=" + KnownClients.TestClient);
+                r.Target("client_name=" + KnownClients.TestClient_24
+                    + "（token_endpoint_auth_method=private_key_jwt）");
 
-                r.Step("(1) トークンを得る");
+                r.Step("(1) トークンを得る（交換も client_assertion）");
 
-                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
-                    client, KnownClients.TestClient, "openid email");
+                JsonResponse token = await AsymmetricAuthTests.TokenByClientAssertionAsync(
+                    client, reg, "openid email");
 
                 Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
 
@@ -377,7 +415,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                ClientRegistration reg = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_24);
 
                 TestReport r = this.Report("RT-239.4",
                     "署名が壊れた client_assertion では、/revoke も /introspect も通らない",
@@ -386,7 +425,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**検証せずに通すと、誰でも他人のトークンを失効できる。**",
                     "RFC 7009 §2.1 / RFC 7662 §2.1 / #239");
 
-                r.Target("client_name=" + KnownClients.TestClient + "（署名の先頭 1 文字を書き換える）");
+                r.Target("client_name=" + KnownClients.TestClient_24
+                    + "（private_key_jwt。署名の先頭 1 文字を書き換える）");
 
                 r.Step("(1) 署名を壊した client_assertion を作る");
 
@@ -434,8 +474,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 // **normal の登録を使う**（`client_credentials` は normal だけが使える。
-                //   ClientModePolicy の表）。**TestClient は RSA と ECDSA の両方の公開鍵を登録済み。**
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                //   ClientModePolicy の表）。**写す元の TestClient が RSA と ECDSA の
+                //   両方の公開鍵を持つ**ので、**写した TestClient_24 も両方を持つ。**
+                //   **方法を明示したクライアントを使う**（#307 の段階 3。
+                //   **`TestClient` は秘密で認証するので、鍵では通らない**）。
+                ClientRegistration reg = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_24);
 
                 TestReport r = this.Report("RT-129.1",
                     "ES256 で署名した client_assertion でも、クライアント認証が通る",
@@ -447,8 +491,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。",
                     "RFC 7523 §2.2 / OIDC Core §9（private_key_jwt）/ #129 の段階 2");
 
-                r.Target("client_name=" + KnownClients.TestClient
-                    + "（normal。RSA と ECDSA の両方の公開鍵を登録済み）");
+                r.Target("client_name=" + KnownClients.TestClient_24
+                    + "（normal。private_key_jwt。RSA と ECDSA の両方の公開鍵を登録済み）");
 
                 r.Step("(1) ES256 の client_assertion で client_credentials を要求する");
 
@@ -513,14 +557,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                // **TestClient_8 は構成ファイルに無い**（test.ps1 -Launch が差し込む）。
+                // **TestClient_25 は構成ファイルに無い**（種データ。#264）。
                 //   写す元（TestClient）は **RSA と ECDSA の公開鍵を両方登録している。**
-                //   **RT-129.3 と同じクライアントを使っている**（#262）。
+                //
+                //   **以前は RT-129.3 と同じ TestClient_8 を使っていた**（#262）。
                 //   あちらは `id_token_signed_response_alg`（発行する側）、
-                //   こちらは `token_endpoint_auth_signing_alg`（受ける側）で、**別の項目。**
-                //   **専用のクライアントを足さないのは、net48 が一覧ごと 1 本の環境変数で受け、
-                //   件数に上限があるため**（test.ps1 の差し込み一覧 / TESTING.md 1 節）。
-                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_8);
+                //   こちらは `token_endpoint_auth_signing_alg`（受ける側）で**別の項目**だが、
+                //   **#307 の段階 3 で「1 クライアントは 1 方法」になった**ため、
+                //   **あちらは `client_secret`、こちらは `private_key_jwt`** で分けた。
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_25);
 
                 TestReport r = this.Report("RT-262.1",
                     "token_endpoint_auth_signing_alg を登録すると、その alg 以外の client_assertion は通らない",
@@ -531,8 +576,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**書かなければ、従来どおり両方が通る**（`RT-129.1`）。",
                     "OIDC Registration 1.0 §2 / FAPI 1.0 Advanced §8.6 / #262");
 
-                r.Target("client_name=" + KnownClients.TestClient_8
-                    + "（token_endpoint_auth_signing_alg=RS256。鍵は RSA / ECDSA の両方を登録済み）");
+                r.Target("client_name=" + KnownClients.TestClient_25
+                    + "（token_endpoint_auth_signing_alg=RS256 / private_key_jwt。"
+                    + "鍵は RSA / ECDSA の両方を登録済み）");
 
                 r.Step("(1) 登録した alg（RS256）の client_assertion は通る");
 
@@ -564,9 +610,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     string.IsNullOrEmpty(es256.AccessToken)
                         ? "返らなかった（" + es256.ToString() + "）" : "**返してしまった**");
 
-                r.Step("(3)（対照）絞っていないクライアントは、ES256 でも通る");
+                r.Step("(3)（対照）alg を絞っていないクライアントは、ES256 でも通る");
 
-                ClientRegistration plain = Flows.Registration(client, KnownClients.TestClient);
+                //  **方法を明示したクライアントで測る**（#307 の段階 3）。
+                //    **`TestClient` は秘密で認証する**ので、**鍵では通らなくなった。**
+                //    **`alg` を絞っていない**ことだけが、ここの対照である。
+                ClientRegistration plain = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_24);
 
                 JsonResponse notNarrowed = await client.TokenAsync(new Dictionary<string, string>()
                 {
@@ -584,6 +634,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**絞るのは「受ける側」だけ**である。"
                     + "**発行する側（`id_token_signed_response_alg`）は #129 の段階 2 で入っており、別の項目。**");
+
+                r.Note("**`token_endpoint_auth_signing_alg` と `token_endpoint_auth_method` は別物。**"
+                    + "**方法（#307 の段階 3）は「何で認証するか」**、"
+                    + "**alg（#262）は「`private_key_jwt` のとき、どの署名を受けるか」**である。"
+                    + "**どちらの対照も `private_key_jwt` のクライアントで測る。**");
 
                 r.Note("**`request_object_signing_alg` も同じ形で足した**（#262）。"
                     + "**ただし、受ける集合が `RS256` だけ**なので"

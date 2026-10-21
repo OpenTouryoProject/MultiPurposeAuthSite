@@ -603,7 +603,8 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 ## 10. 落とし穴 / 既知の不整合
 
 1. **`10_MultiPurposeAuthSiteCore.bat` が存在しない `RestoreLib1/2.bat` を呼ぶ**（9 節）。
-2. **`log4net` 3.2.0 に既知の脆弱性**（9.1 節）。Open棟梁側は 3.3.0 で、版が割れている。
+2. ~~**`log4net` 3.2.0 に既知の脆弱性**（9.1 節）。Open棟梁側は 3.3.0 で、版が割れている。~~
+   **✅ 解消した**（9.1 節）。**3.3.0 に上げ、`NU1902` と版の割れの両方が消えた。**
 3. **`C:\` 直下配置が前提**（2.2 節）。`appsettings.json` は絶対パスを直書きしている。
 4. **`/MultiPurposeAuthSite` 仮想パス前提**（2.5 節）。
    ~~Cookie の `LoginPath` などが直書き。~~
@@ -630,11 +631,14 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 8. ~~**Session が `AddDistributedMemoryCache`（開発用）のまま。**~~
    **✅ `SessionStoreType`（`mem` / `sql` / `redis`）で選べる（#256。4.3 節）。**
    **既定は `mem`** なので、**複数インスタンスにするなら設定が要る**ことは変わらない。
-9. **UTF-8 でないファイルが 2 件ある**（Shift_JIS）。
-   - `Views/_ViewImports.cshtml`（ヘッダ コメントが文字化けする）
-   - `Views/Manage/ManageTwoFactorAuthenticator.cshtml`
+9. ~~**UTF-8 でないファイルが 2 件ある**（Shift_JIS）。~~
+   **✅ 直した（#304）。** **2 件とも UTF-8 ＋ BOM にした**（中身は 1 文字も変えていない）。
+   - `Views/_ViewImports.cshtml`
+   - `Views/Manage/ManageTwoFactorAuthenticator.cshtml`（**HTML コメントが応答に出る**）
 
-   他は BOM 付き UTF-8。**編集ツールによっては保存時に壊すので注意。**
+   **直すまで化けていなかったのは、組む機械の ANSI コード ページが 932 だから**である
+   （**Roslyn / Razor は、BOM 無しのソースを UTF-8 で読んで失敗すると ANSI で読み直す**）。
+   **932 でない機械で組むと化ける。** **新規ファイルは BOM 付き UTF-8 で作ること。**
 10. **WebAuthn はこのアプリだけにある**（#137。`Fido2` 4.2.0）。
     - 登録 : `/Manage/AddWebAuthnData`（**form post で 3 往復**。`ffWebauthn.js`）
     - 一覧・削除 : `/Manage/RemoveWebAuthnData`

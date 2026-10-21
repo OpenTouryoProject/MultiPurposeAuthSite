@@ -63,6 +63,10 @@
 //*  2026/10/10  玄人 幸道         ID連携からprompt=noneを外し、エラー応答を受け取る（#287）
 //*  2026/10/10  玄人 幸道         SAML2のID連携を追加（#286の段階2）
 //*  2026/10/11  玄人 幸道         OIDCのID連携も開始とサインインに分けた（#286の段階2）
+//*  2026/10/16  玄人 幸道         user_code の投入の失敗を数える（#305 の段階 2）
+//*  2026/10/21  玄人 幸道         OP のセッションの識別子と sid クレームを追加（#310 の段階 1）
+//*  2026/10/21  玄人 幸道         ログアウトを RP へ伝え、台帳へ書くのを発行の直前に移した（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         ブラウザ経由（iframe）でもログアウトを伝える（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -280,6 +284,10 @@ namespace MultiPurposeAuthSite.Controllers
             Response.Cookies.Set(this.SessionCookieName, "", this._cookieOptions);
             Response.Cookies.Set(Config.AuthTimeCookieName,
                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+
+            // **OP のセッションの識別子を作る**（#310 の段階 1）。
+            //   **ここがセッションの始まり**である（`sid` はこの値から引く）。
+            this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
         }
 
         #region サインイン
@@ -640,8 +648,13 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous] // 空振りできるように。
         public async Task<ActionResult> LogOff()
         {
+            List<string> iframeUrls = new List<string>();
+
             if (User.Identity.IsAuthenticated) // 空振りできるように。
             {
+                // **OP のセッションを終わらせる**（#310 の段階 1・2・3）
+                iframeUrls = this.ClearOpSession();
+
                 // サインアウト（Cookieの削除）
                 await SignInManager.SignOutAsync(); // DefaultAuthenticationTypes.ApplicationCookie);
 
@@ -652,6 +665,11 @@ namespace MultiPurposeAuthSite.Controllers
                     // 「デバッグ時にユーザ登録していない状態で、ログインしている状態になる」の対策コード
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
             }
+
+            // **ブラウザ経由で伝える**（#310 の段階 3。**伝える先が無ければ、従来どおり戻る**）
+            ActionResult frontChannel = this.FrontChannelLogoutView(
+                iframeUrls, Url.Action("Index", "Home"));
+            if (frontChannel != null) return frontChannel;
 
             // リダイレクト "Index", "Home"へ
             return RedirectToAction("Index", "Home");
@@ -765,8 +783,13 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("EndSession");
             }
 
+            List<string> iframeUrls = new List<string>();
+
             if (signedIn)
             {
+                // **OP のセッションを終わらせる**（#310 の段階 1・2・3）
+                iframeUrls = this.ClearOpSession();
+
                 // サインアウト（Cookieの削除）
                 await SignInManager.SignOutAsync();
 
@@ -776,6 +799,14 @@ namespace MultiPurposeAuthSite.Controllers
                     Logging.MyOperationTrace(string.Format(
                         "{0}({1}) has signed out by RP-Initiated Logout.", user.Id, user.UserName));
             }
+
+            // **ブラウザ経由で伝える**（#310 の段階 3）。
+            //   **画面を挟んでから、戻り先へ進む**（**進む先は、ここで決める**）。
+            //   **伝える先が無ければ、従来どおり直に戻る。**
+            ActionResult frontChannel = this.FrontChannelLogoutView(
+                iframeUrls,
+                string.IsNullOrEmpty(redirectUri) ? Url.Action("Index", "Home") : redirectUri);
+            if (frontChannel != null) return frontChannel;
 
             if (!string.IsNullOrEmpty(redirectUri))
             {
@@ -3564,6 +3595,187 @@ namespace MultiPurposeAuthSite.Controllers
         }
         #endregion
 
+        #region sid（OP のセッション。#310 の段階 1）
+
+        /// <summary>OP のセッションの識別子を Cookie から読む（#310 の段階 1）</summary>
+        /// <returns>セッションの識別子（Cookie が無ければ空）</returns>
+        private string GetOpSession()
+        {
+            return MyHttpContext.Current.Request.Cookies.Get(Config.OpSessionCookieName) ?? "";
+        }
+
+        /// <summary>
+        /// OP のセッションの識別子が無ければ、作って同じ URL へ送り返す（#310 の段階 2）
+        /// </summary>
+        /// <returns>送り返す場合は ActionResult（**用意できていれば null**）</returns>
+        /// <remarks>
+        /// **認可の口の入口で呼ぶ**（**認証済みと分かった後**）。
+        ///
+        /// **なぜ送り返すのか。**
+        /// **Cookie が無いまま 2 本の認可要求が同時に来ると、それぞれが別の識別子を作り、
+        /// ブラウザには最後の 1 つしか残らない。**
+        /// **残らなかった方の行は、サインアウトでも消えない**
+        /// （**掃除まで残り、段階 2 では「もう居ないセッション」の通知先として生き続ける**）。
+        /// **先に Cookie を置いて送り返せば、2 本とも同じ識別子で戻ってくる。**
+        /// **台帳へ書くのは戻ってきた後**（`AddSidClaim`）なので、**捨てた識別子の行は残らない。**
+        ///
+        /// **送り返すのは 1 回だけ**（`Const.OpSessionRetry` の印で見分ける）。
+        /// **Cookie を置けない文脈が在る**ので、**印が無いと永久に送り返す**
+        /// （再認証の `re_auth_at` と同じ考え方）。
+        /// </remarks>
+        private ActionResult EnsureOpSession()
+        {
+            if (!string.IsNullOrEmpty(this.GetOpSession()))
+            {
+                return null;
+            }
+
+            if (!string.IsNullOrEmpty(HttpUtility.ParseQueryString(
+                Request.QueryString.Value)[Const.OpSessionRetry]))
+            {
+                // **既に 1 回送り返している**（Cookie を置けない文脈）。
+                //   **そのまま続ける**（`AddSidClaim` がその場で作る）。
+                return null;
+            }
+
+            this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
+
+            string url = UriHelper.GetEncodedUrl(Request);
+
+            return new RedirectResult(url
+                + (url.Contains("?") ? "&" : "?") + Const.OpSessionRetry + "=1");
+        }
+
+        /// <summary>sidを追加</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <remarks>
+        /// **Cookie に関わるので Controller 側で追加**（`AddAuthTimeClaim` と同じ理由）。
+        /// **値を決めるのは CommonLibrary**（`SessionClientProvider`） —
+        /// **クライアントごとに別の sid** を、台帳から引く（無ければ作る）。
+        ///
+        /// **呼ぶのは「code / token を実際に作る直前」である**（#310 の段階 2 で移した）。
+        /// **以前は認可の経路の分岐より手前で呼んでいた**ので、
+        /// **同意画面を出しただけの相手・拒否された相手の行まで台帳に残り**、
+        /// **段階 2 で「トークンを一度も受けていない RP へログアウトを伝える」ことになった**
+        /// （**その RP に「この利用者が来た」ことを教えてしまう**）。
+        ///
+        /// **Cookie は `EnsureOpSession` が用意する**（**認可の口の入口で呼ぶ**）。
+        /// **それでも無ければ、ここで作る** — **同意応答（POST）は送り返せない**ため。
+        /// **「次回から自動的にサインイン」で認証 Cookie だけが残っている**ことも在り、
+        /// **そのときもセッションとして扱う。**
+        ///
+        /// **台帳に入れられない経路では、クレームを付けない**（**嘘の値を出さない**）。
+        /// </remarks>
+        private void AddSidClaim(string client_id, ClaimsIdentity identity)
+        {
+            string sessionId = this.GetOpSession();
+
+            if (string.IsNullOrEmpty(sessionId))
+            {
+                sessionId = Guid.NewGuid().ToString("N");
+                this.SetOpSessionCookie(sessionId);
+            }
+
+            string sid = Sts.SessionClientProvider.GetOrCreateSid(
+                sessionId, client_id, identity.Name);
+
+            if (!string.IsNullOrEmpty(sid))
+            {
+                identity.AddClaim(new Claim(Const.UrnSidClaim, sid));
+            }
+        }
+
+        /// <summary>OPのセッションの識別子をCookieに書く</summary>
+        /// <param name="sessionId">セッションの識別子</param>
+        /// <remarks>**期限を付けない**（セッション Cookie）。**ブラウザを閉じれば終わる。**</remarks>
+        private void SetOpSessionCookie(string sessionId)
+        {
+            MyHttpContext.Current.Response.Cookies.Set(
+                Config.OpSessionCookieName, sessionId, this._cookieOptions);
+        }
+
+        /// <summary>OPのセッションを終わらせる</summary>
+        /// <returns>
+        /// **ブラウザ経由で伝える先**（`iframe` に入れる URL。#310 の段階 3）。
+        /// **1 件も無ければ空** — **そのときは画面を挟まない。**
+        /// </returns>
+        /// <remarks>
+        /// **サインアウトの前に呼ぶ。**
+        /// **伝えて、台帳を消し、Cookie を落とす**（#310 の段階 2・3）。
+        ///
+        /// **伝えるのが先である** — **台帳を消すと、誰に伝えるかが分からなくなる。**
+        ///
+        /// | 伝え方 | ここで何をするか |
+        /// |---|---|
+        /// | **Back-Channel**（段階 2） | **サーバから POST する**（背景。**待たない**） |
+        /// | **Front-Channel**（段階 3） | **URL を作って返すだけ。** **開くのはブラウザ**（`iframe`） |
+        ///
+        /// **呼ばれるのはサインアウトの 5 か所**
+        /// （`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 /
+        /// `max_age` の再認証 / 別のアカウントでログイン）。
+        /// **どれも「OP のセッションが終わる」場面**なので、**同じ扱いでよい。**
+        /// </remarks>
+        private List<string> ClearOpSession()
+        {
+            string sessionId = this.GetOpSession();
+            List<string> iframeUrls = new List<string>();
+
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                //  **先に伝える**（#310 の段階 2）。
+                //    **消してしまうと、誰に伝えるかが分からなくなる。**
+                //    **待たない**（背景で送る。**応答しない RP でログアウトを止めない**）。
+                Sts.BackChannelLogout.NotifyBySession(sessionId);
+
+                //  **ブラウザ経由で伝える URL を作る**（#310 の段階 3）。
+                //    **これも消す前**である（**台帳から `sid` を引く**）。
+                iframeUrls = Sts.FrontChannelLogout.GetIframeUrls(sessionId);
+
+                Sts.SessionClientProvider.DeleteBySession(sessionId);
+            }
+
+            MyHttpContext.Current.Response.Cookies.Delete(Config.OpSessionCookieName);
+
+            return iframeUrls;
+        }
+
+        /// <summary>Front-Channel Logout の画面を返す（#310 の段階 3）</summary>
+        /// <param name="iframeUrls">`iframe` に入れる URL</param>
+        /// <param name="continueUrl">`iframe` を開いた後に進む先</param>
+        /// <returns>画面（**伝える先が 1 件も無ければ null**）</returns>
+        /// <remarks>
+        /// **1 件も無ければ null を返す** — **従来どおりリダイレクトで終わる。**
+        /// **登録している RP が無い配備では、画面が増えない**（**応答も変わらない**）。
+        ///
+        /// **進む先は、呼び出し側が決める。**
+        ///
+        /// | 呼び出し元 | 進む先 |
+        /// |---|---|
+        /// | `/end_session` | **登録された `post_logout_redirect_uri`**（無ければ Home） |
+        /// | `/Account/LogOff` | Home |
+        /// | 再認証・別アカウント | **同じ認可要求の URL**（**そのまま続ける**） |
+        ///
+        /// **外から渡された URL は、ここへ来ない。**
+        /// **`post_logout_redirect_uri` は登録と完全一致を確かめた後の値**であり、
+        /// **他は自分の URL** である（**オープン リダイレクタにしない**）。
+        /// </remarks>
+        private ActionResult FrontChannelLogoutView(List<string> iframeUrls, string continueUrl)
+        {
+            if (iframeUrls == null || iframeUrls.Count == 0)
+            {
+                return null;
+            }
+
+            ViewBag.IframeUrls = iframeUrls;
+            ViewBag.ContinueUrl = continueUrl;
+
+            return View("FrontChannelLogout");
+        }
+
+
+        #endregion
+
         #region エンドポイント自体
         /// <summary>認可エンドポイント</summary>
         /// <param name="client_id">string（必須）</param>
@@ -3694,7 +3906,15 @@ namespace MultiPurposeAuthSite.Controllers
                     //   「UI を出せないのに再認証」にはならない。
                     MyHttpContext.Current.Response.Cookies.Set(Config.ReAuthenticatedAtCookieName,
                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+                    // **OP のセッションを終わらせる**（#310 の段階 1。入り直すと新しい sid になる）
+                    List<string> iframeUrlsForPromptLogin = this.ClearOpSession();
                     await this.SignInManager.SignOutAsync();
+
+                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
+                    ActionResult frontChannelForPromptLogin = this.FrontChannelLogoutView(
+                        iframeUrlsForPromptLogin, UriHelper.GetEncodedUrl(Request));
+                    if (frontChannelForPromptLogin != null) return frontChannelForPromptLogin;
+
                     return new RedirectResult(UriHelper.GetEncodedUrl(Request));
                 }
                 else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication)
@@ -3710,12 +3930,25 @@ namespace MultiPurposeAuthSite.Controllers
                     //   **このサイトが実際に使っているクッキー（Identity.Application）が消えず、
                     //   次の要求でも認証済みのままだった**（実測した。#247）。
                     //   既存の LogOff も SignInManager を使っている。
+                    // **OP のセッションを終わらせる**（#310 の段階 1。入り直すと新しい sid になる）
+                    List<string> iframeUrlsForMaxAge = this.ClearOpSession();
                     await this.SignInManager.SignOutAsync();
+
+                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
+                    ActionResult frontChannelForMaxAge = this.FrontChannelLogoutView(
+                        iframeUrlsForMaxAge, UriHelper.GetEncodedUrl(Request));
+                    if (frontChannelForMaxAge != null) return frontChannelForMaxAge;
 
                     return new RedirectResult(UriHelper.GetEncodedUrl(Request));
                 }
                 else
                 {
+                    // **OP のセッションの識別子を用意する**（#310 の段階 2）。
+                    //   **無ければ Cookie を置いて、同じ URL へ送り返す**
+                    //   （**同時に来た要求を 1 つの識別子に揃えるため**）。
+                    ActionResult ensured = this.EnsureOpSession();
+                    if (ensured != null) return ensured;
+
                     // Cookie認証チケットからClaimsPrincipalを取得しておく。
                     AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
                     ClaimsPrincipal principal = (ticket != null) ? ticket.Principal : null;
@@ -3793,6 +4026,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
                             }
 
+                            // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                            this.AddSidClaim(client_id, identity);
+
                             // ★ Codeの生成
                             string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
                                 identity, HttpUtility.ParseQueryString(Request.QueryString.Value),
@@ -3826,6 +4062,9 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // OAuth2/OIDC Implicit
 
+                        // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                        this.AddSidClaim(client_id, identity);
+
                         // ★ Tokenの生成
                         Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
                             identity, HttpUtility.ParseQueryString(Request.QueryString.Value),
@@ -3843,6 +4082,9 @@ namespace MultiPurposeAuthSite.Controllers
                         || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                     {
                         // OIDC Hybrid Flow
+
+                        // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                        this.AddSidClaim(client_id, identity);
 
                         // ★ Tokenの生成
                         string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
@@ -3990,7 +4232,14 @@ namespace MultiPurposeAuthSite.Controllers
                     //   サインアウトしていなかった**（同じ利用者のまま戻っていた）。
                     //   net48 版は `SignOut(DefaultAuthenticationTypes.ApplicationCookie)` と
                     //   スキームを指定しているため、こちらだけの症状だった。
+                    // **OP のセッションを終わらせる**（#310 の段階 1）
+                    List<string> iframeUrlsForSwitch = this.ClearOpSession();
                     await this.SignInManager.SignOutAsync();
+
+                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
+                    ActionResult frontChannelForSwitch = this.FrontChannelLogoutView(
+                        iframeUrlsForSwitch, UriHelper.GetEncodedUrl(Request));
+                    if (frontChannelForSwitch != null) return frontChannelForSwitch;
 
                     return new RedirectResult(UriHelper.GetEncodedUrl(Request));
                 }
@@ -4007,6 +4256,9 @@ namespace MultiPurposeAuthSite.Controllers
                 else if (!string.IsNullOrEmpty(MyHttpContext.Current.Request.Form["submit.Grant"]))
                 {
                     // OAuth2/OIDC Authorization Code
+
+                    // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                    this.AddSidClaim(client_id, identity);
 
                     // **同意を記録する**（#272 の段階 2 / D-6）。
                     //   **これが次回以降の `prompt=none` の判定の土台になる。**
@@ -5181,11 +5433,190 @@ namespace MultiPurposeAuthSite.Controllers
             if (formData != null)
             {
                 string userCode = formData[OAuth2AndOIDCConst.user_code];
-                ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(userCode, User.Identity.Name, formData.ContainsKey("allow"));
+                string failureKey = Sts.AuthFailureProvider.DeviceVerifyKey(User.Identity.Name);
+
+                //  **続けて間違えている利用者は、断る**（#305 の段階 2。RFC 8628 §5.2）。
+                //    **間違えた `user_code` では、どの要求を狙ったか分からない**ので、
+                //    **投入した人で数える。**
+                //    **断っている間は、正しい `user_code` でも通さない。**
+                if (Sts.AuthFailureProvider.IsLockedOut(failureKey))
+                {
+                    ViewBag.ReceiveResult = false;
+                }
+                else
+                {
+                    ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(userCode, User.Identity.Name, formData.ContainsKey("allow"));
+
+                    if (ViewBag.ReceiveResult)
+                    {
+                        Sts.AuthFailureProvider.Clear(failureKey);
+                    }
+                    else
+                    {
+                        Sts.AuthFailureProvider.Record(failureKey);
+                    }
+                }
             }
             
             return View("DeviceAuthZVerify");
         }
+        #endregion
+
+        #region Front-Channel Logout の受け口（自己テスト。#310 の段階 3）
+
+        /// <summary>
+        /// 自己テストの RP として、`iframe` で叩かれたことを覚える
+        /// GET: /Account/FrontChannelLogoutClient
+        /// </summary>
+        /// <param name="iss">iss（どの OP か）</param>
+        /// <param name="sid">sid（どのセッションか）</param>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **測るためだけに在る口**である（**`IsLockedDownTestEndpoints` で閉じる**）。
+        ///
+        /// **本来はブラウザが `iframe` で開く。**
+        /// **E2E のクライアントは `iframe` を開かない**ので、
+        /// **テストが画面から URL を取り出して、自分で叩く**（**ブラウザの代わりをする**）。
+        ///
+        /// **ここでは検証しない。** **覚えておくだけ**である（`TestFrontChannelLogoutBox`）。
+        /// **`iss` と `sid` が付いていることを確かめるのは E2E の側。**
+        ///
+        /// **本物の RP は、ここで自分のセッションを閉じる**
+        /// （**`sid` で、どのセッションかを決める**）。
+        /// </remarks>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult FrontChannelLogoutClient(string iss, string sid)
+        {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return this.NotFound();
+            }
+
+            Sts.TestFrontChannelLogoutBox.Add(iss, sid);
+
+            // オペレーション・トレース・ログ出力
+            //   **値は出さない**（`sid` はセッションの識別子である）。
+            Logging.MyOperationTrace("The self-test RP was called by front-channel logout.");
+
+            // **中身は要らない**（`iframe` の中なので、見えない）。
+            return this.Ok();
+        }
+
+        /// <summary>
+        /// `iframe` で叩かれた記録を返す（測るため）
+        /// GET: /Account/FrontChannelLogoutBox
+        /// </summary>
+        /// <param name="clear">true なら、返した後に空にする</param>
+        /// <returns>ActionResult（JSON）</returns>
+        /// <remarks>
+        /// **測るためだけに在る口**である（**`IsLockedDownTestEndpoints` で閉じる**）。
+        /// **`iss` と `sid` をそのまま返す** — **E2E が中身を確かめる**ため。
+        /// </remarks>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult FrontChannelLogoutBox(bool clear = false)
+        {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return this.NotFound();
+            }
+
+            List<string> hits = Sts.TestFrontChannelLogoutBox.GetAll();
+
+            if (clear)
+            {
+                // **測る前に空にする**ために在る。
+                Sts.TestFrontChannelLogoutBox.Clear();
+            }
+
+            return this.Json(new { frontchannel_hits = hits });
+        }
+
+        #endregion
+
+        #region Back-Channel Logout の受け口（自己テスト。#310 の段階 2）
+
+        /// <summary>
+        /// 自己テストの RP として logout_token を受け取る
+        /// POST: /Account/BackChannelLogoutClient
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **測るためだけに在る口**である（**`IsLockedDownTestEndpoints` で閉じる**）。
+        ///
+        /// **Back-Channel Logout は「OP が RP を叩く」**ので、
+        /// **RP の側に口が無いと、送れたことを確かめられない。**
+        /// **E2E のクライアントは HTTP サーバを持たない**ので
+        /// （#309 で `jwks_uri` の足場を別に立てたのと同じ事情）、
+        /// **このサイトが自分の RP も兼ねる**（`test_self_code` と同じ考え方）。
+        ///
+        /// **ここでは検証しない。** **覚えておくだけ**である（`TestLogoutTokenBox`）。
+        /// **署名・`events`・`sid` を確かめるのは E2E の側**
+        /// （**RP が何を確かめるべきか**は、テストに書いた方が読める）。
+        ///
+        /// **200 を返す**（Back-Channel Logout 1.0 §2.6）。**本文が無ければ 400。**
+        /// </remarks>
+        [HttpPost]
+        [AllowAnonymous]
+        public ActionResult BackChannelLogoutClient()
+        {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return this.NotFound();
+            }
+
+            string logoutToken = MyHttpContext.Current.Request.HasFormContentType
+                ? MyHttpContext.Current.Request.Form[Const.LogoutToken].ToString() : "";
+
+            if (string.IsNullOrEmpty(logoutToken))
+            {
+                return this.BadRequest();
+            }
+
+            Sts.TestLogoutTokenBox.Add(logoutToken);
+
+            // オペレーション・トレース・ログ出力
+            //   **値は出さない**（`logout_token` には `sub` と `sid` が入っている）。
+            Logging.MyOperationTrace("The self-test RP received a logout_token.");
+
+            return this.Ok();
+        }
+
+        /// <summary>
+        /// 受け取った logout_token を返す（測るため）
+        /// GET: /Account/BackChannelLogoutBox
+        /// </summary>
+        /// <param name="clear">true なら、返した後に空にする</param>
+        /// <returns>ActionResult（JSON）</returns>
+        /// <remarks>
+        /// **測るためだけに在る口**である（**`IsLockedDownTestEndpoints` で閉じる**）。
+        /// **`logout_token` をそのまま返す** — **E2E が中身を確かめる**ため。
+        ///
+        /// **本番で開いていれば、他人のログアウトの通知を読まれる。**
+        /// **閉じる判定を外さないこと**（`ProductionCheck` が
+        /// `IsLockedDownTestEndpoints` の警告を出すのは、この種の口が在るためである）。
+        /// </remarks>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult BackChannelLogoutBox(bool clear = false)
+        {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return this.NotFound();
+            }
+
+            List<string> tokens = Sts.TestLogoutTokenBox.GetAll();
+
+            if (clear)
+            {
+                // **測る前に空にする**ために在る（前のケースの通知が混ざらないように）。
+                Sts.TestLogoutTokenBox.Clear();
+            }
+
+            return this.Json(new { logout_tokens = tokens });
+        }
+
         #endregion
 
         #region テスト用
@@ -5615,17 +6046,16 @@ namespace MultiPurposeAuthSite.Controllers
                     continue;
                 }
 
-                if (await this.UserManager.FindByNameAsync(entry.ClientName) == null)
-                {
-                    ApplicationUser user = ApplicationUser.CreateUser(
-                        entry.ClientName, entry.ClientName + "@gmail.com", true);
-
-                    // **client_id は固定値**（既定の Guid.NewGuid を上書きする）。
-                    user.ClientID = entry.ClientId;
-
-                    // **ロールは要らない**（このクライアントはサインインしない）。
-                    await this.UserManager.CreateAsync(user, password);
-                }
+                //  **クライアントごとの利用者は、もう作らない**（#307 の段階 5-a）。
+                //
+                //  **以前は、外部キー**（`Saml2OAuth2Data.ClientID` → `Users.ClientID`）
+                //    **を満たすためだけに、クライアント 1 件につき利用者 1 人を作っていた。**
+                //    **所有者を `Saml2OAuth2Data.OwnerUserId` へ移し、
+                //    その外部キーを落としたので、要らなくなった。**
+                //
+                //  **種データの登録は、所有者を持たない**（`OwnerUserId` は空）。
+                //    **構成ファイルのクライアントと同じ立場**である（配備全体のもの）。
+                //    **`ClientName` は、従来どおり入る**（**ラベル**。E2E が名前で引く）。
 
                 // **登録が無ければ入れる**（在れば触らない）。
                 //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、

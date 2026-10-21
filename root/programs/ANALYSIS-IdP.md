@@ -28,7 +28,10 @@
 
 ## 0. 全体の所見
 
-現状は **「OAuth 2.0（RFC 6749）＋ OIDC Core ＋ FAPI1/2・CIBA・Device の実験的実装」** であり、
+> **以下の箇条書きは、この分析を起こした時点の所見**である（**直した分も、そのまま残してある**）。
+> **いま何が残っているかは、次の「対応状況」と 5 / 6 節の表が一次情報**である。
+
+当時の状況は **「OAuth 2.0（RFC 6749）＋ OIDC Core ＋ FAPI1/2・CIBA・Device の実験的実装」** であり、
 プロトコルの守備範囲は広い。一方で、
 
 - **エンドポイントの応答形式（`expires_in` / `error` / JSON 型）が仕様から外れている**箇所があり、
@@ -40,12 +43,29 @@
 「最新の IdP に近づける」うえでの最短経路は、**新機能の追加ではなく、
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
-**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
-**フェーズ 1 は A-6 / A-8 / A-10 / A-11 が完了**し、A-7 は #196 で対応済み（全エンドポイント）。A-10 の残り（#189 の 9〜14）は仕様方針の判断を伴う。
-セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。C-17（#198）が完了。
-A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
-nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
-見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
+### 対応状況（2026/10/16 時点）
+
+| グループ | |
+|---|---|
+| **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**） |
+| **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199） |
+| **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った） |
+| **D. 機能不足** | **2 件 残り** : **D-4**（DCR。**段階 1〜6 は ✅ #307**。残りは #308 / #309）／**D-14**（適合性テスト）。**D-3（DPoP）は ✅ #311**（段階 1〜4） |
+| **E. 品質** | **2 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
+
+**7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
+**残っているものは フェーズ 4・5（機能の追加と土台）に寄っている。**
+
+**起票時の箇条書きとの対応。**
+
+| 起票時の指摘 | いま |
+|---|---|
+| 応答形式（`expires_in` / `error` / JSON 型）が仕様から外れている | **✅ A で片付いた**（#182 / #184 / #187 / #196 / #200 / #201） |
+| 異常系がほぼ全て未実装で 500 になる | **✅ B で片付いた**（#185 / #199） |
+| 有効期限が一切検証されていない | **✅ C-4 / C-5 / C-11**（#188 / #229） |
+| **PAR / DPoP / RP-Initiated Logout / DCR / OAuth 2.1** が未対応 | **PAR は ✅ #229**、**RP-Initiated Logout は ✅ #232**（**Front / Back-Channel Logout も ✅ #310**。**Session Management だけは見送り**）、**OAuth 2.1 は ✅ #220**。**DPoP も ✅ #311**（D-3。**段階 1〜4**）。**残るのは DCR の段階 4 以降（D-4。**登録・管理・クライアント認証の方法（RFC 7591 / 7592）は ✅ #307**）** |
+
+**見出しの ✅ 修正済み / ⚠️ 誤検出 で個別に追える**（7 節も参照）。
 
 ---
 
@@ -67,7 +87,9 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
-| | `/end_session`（RP-Initiated Logout） | ✓ | #232。Front-Channel / Back-Channel は未実装（5 節 D-1） |
+| | `/end_session`（RP-Initiated Logout） | ✓ | #232。**`sid` は `id_token` に出る**（#310 の段階 1。**RP ごとに別の値**。伝える先は `SessionClient` の表）。**サインアウトすると、登録が在る RP へ `logout_token` を POST する**（#310 の段階 2）。**`frontchannel_logout_uri` の登録が在れば、`iframe` の画面も返す**（#310 の段階 3）。**どちらも Discovery で広告している** |
+| | `/register`（Dynamic Client Registration） | ✓ | #307 の段階 1。**既定は無効**（`EnableDynamicClientRegistration`）。**専用 scope（`client_registration`）のアクセス トークンで叩く** |
+| | `/register/{client_id}`（Client Configuration） | ✓ | #307 の段階 2（RFC 7592 の `GET` / `PUT` / `DELETE`）。**`registration_access_token` で叩く**（登録の応答で 1 回だけ返る） |
 | | `.well-known/openid-configuration` | ✓ | 不足あり（3 節） |
 | | `/ros`（Request Object 登録） | ✓ | **PAR ではない独自仕様** |
 | | `samlmetadata` / SAML2 IdP | ✓ | |
@@ -649,7 +671,7 @@ CIBA クライアントはこのキーを見つけられない。
 | 10 | **変えない**（#151 に委ねる） → **✅ #151 の段階 4〜5 で解決** | 独自値は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）だった。広告だけ直すと、実際の `sub` とズレる。**段階 4 で既定を `public` に変え、段階 5 で独自値を廃止した**ので、**いまの広告は `public` / `pairwise` の 2 つ**＝実装どおりである | `RT-151.1` / `RT-151.2` |
 | 11 | **変えない**（D-2＝#229 に委ねる） | `request_object_endpoint` は FAPI1 の Request Object（JAR）の置き場所を示す独自拡張。**名前だけ PAR に寄せると、中身が PAR でないのに PAR と読まれる** | — |
 | 13 | **別 Issue（#230）**（`profile` / `address` のクレームは未実装。D-7） | 広告だけ足すと嘘になる | — |
-| 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、#129 と関連） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
+| 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、**#307 の段階 1 で広告するようになった**。**管理は段階 2**） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
 
 > **`request_object_endpoint`（`/ros`）と PAR（RFC 9126）の差**（D-2）。
 > `/ros` は Request Object の署名だけで受け付け、応答の `exp` は空文字、`request_uri` は使い切りにしていない。
@@ -2657,26 +2679,76 @@ else
 
 ---
 
+### C-25. mTLS で、登録が空のときに空の Subject DN が一致していた **[Lib]** — **✅ 修正済み（#305 の段階 4）**
+
+**クライアント認証の mTLS の分岐が、登録値を確かめずに突き合わせていた。**
+
+```csharp
+// 修正前
+if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+```
+
+**`GetTlsClientAuthSubjectDn` は、登録が見つからなければ `""` を返す**
+（`tls_client_auth_subject_dn` を登録していないクライアントと、未登録の `client_id` が該当する）。
+**`X509Certificate2.Subject` は、Subject DN が空の証明書では `""` になる**
+（RFC 5280 は `subjectAltName` が在る場合に空の Subject を認めている）。
+
+**両方が `""` で一致し、クライアント認証が通った。**
+
+| | |
+|---|---|
+| **`client_secret` 側は起きない** | **前段に `!string.IsNullOrEmpty(client_secret)` が在る**（空の秘密では、この分岐に入らない） |
+| **通った後** | `/revoke` / `/introspect` は**互換版の入口**で `CheckClientMode` を通らないため、**クライアント認証だけで決まる**。`/token` は `ClientModePolicy` の `Flow.ClientCredentials` × `Proof.Any` → `normal` に当たる |
+
+**発火の前提**（**雛形の配備では成立しない**）。
+
+| | |
+|---|---|
+| **サーバがクライアント証明書を要求する設定になっていること** | **雛形のままでは要求しない**（#226 で実測。`CONFIGURATION.md` 7 節） |
+| TLS 層がその証明書を受け付けること | 信頼の設定次第 |
+| 対象の `client_id` に Subject DN が登録されていないこと | **`fapi2` 以外は通常登録していない** |
+
+**登録が空なら通さないようにした。**
+
+```csharp
+// 修正後
+string registeredDn = Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id);
+
+if (!string.IsNullOrEmpty(registeredDn)
+    && x509.Subject == registeredDn)
+```
+
+**E2E の常設ケースは足していない。**
+**空の Subject DN を持つ証明書を、TLS 層に受け付けさせる仕掛けが要る**ためである
+（`Tests/MtlsTestHook` は**発行元を問わずに受け付ける**が、**証明書そのものは用意が要る**）。
+**C-24 と同じく、ここは読み取りで見つけたものである。**
+
+> **段階 4 の本題（送信元を鍵に混ぜる）で `ClientAuthentication` を読み直したときに気付いた。**
+> **`AuthFailureProvider.Record` を「登録されているクライアントのときだけ」に絞る**作業で、
+> **登録の有無を見る必要が出たため、同じ関数の照合も見直した。**
+
+---
+
 ## 5. D. 最新の IdP として不足している機能
 
 | # | 仕様 | 状況 | 影響 |
 |---|---|---|---|
 | D-1 | **RP-Initiated Logout** | **✅ 実装済み**（#232）。`/end_session` を新設（GET / POST の両方・`id_token_hint` の検証・`post_logout_redirect_uri` の完全一致・確認画面）。Discovery に `end_session_endpoint`（`RT-232`） | RP から SSO を解除できる |
-| D-1-2 | Front-Channel / Back-Channel Logout / Session Management | 未実装。**#232 の範囲外**（別の仕様。`sid` クレームと RP 側の口の登録が要る） | **OP が他の RP へログアウトを伝えられない。** RP-Initiated Logout で消えるのは OP のセッションだけ |
+| D-1-2 | Front-Channel / Back-Channel Logout / Session Management | **✅ 実装済み**（#310。**段階 1・2・3**） — **段階 1** : **`sid` を `id_token` に出し**（**RP ごとに別の値**。`pairwise` の `sub` を分けた意味を消さないため）、**セッション × クライアントの台帳**（`SessionClient`）を持つようにした。**段階 2** : **サインアウトで、登録が在る RP へ `logout_token` を POST する**（**`backchannel_logout_uri` の登録を足した**。**要求の経路では待たない**）。**`backchannel_logout_supported` / `backchannel_logout_session_supported` を広告**（`RT-310.4`〜`.6`）。**段階 3** : **`frontchannel_logout_uri` の登録が在る相手を `iframe` に並べた画面を返す**（**`iss` と `sid` を付ける**）。**`frontchannel_logout_supported` / `frontchannel_logout_session_supported` を広告**（`RT-310.7`〜`.9`）。**Session Management（`check_session_iframe`）は見送る**（third-party cookie を読む仕組みで、現代のブラウザでは効かなくなりつつある） | **両方の伝え方が入った** — **受け口を持てる RP にはサーバから、持てない RP にはブラウザから伝わる。** **届いたかどうかは Front-Channel では分からない**（仕様の限界。**Back-Channel と補い合う**） |
 | D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。`/ros` は **RFC 9101 §5.2.1 の任意機能**として残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
-| D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
-| D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
+| D-3 | **DPoP（RFC 9449）** | **✅ 実装済み（#311。段階 1〜4）** — **`/token` で証明（`DPoP` ヘッダ）を受け、`cnf.jkt` で発行する**（**7 つのグラント全部**）。**`token_type` は `DPoP`**、**`dpop_signing_alg_values_supported` を広告**。**証明が無ければ従来どおり `bearer`**（`RT-311.*`）。**段階 2** : **保護されたリソースで照合する**（`Authorization: DPoP …` ＋ `ath` ＋ `cnf.jkt`。**トークンを受け取る口はすべて同じ判定を通る**）。**段階 3** : **一度使った証明を、二度と通さない**（`DPoPProof` の台帳。**鍵の指紋（`jkt`）と `jti` を組にして記録する** — **`jti` だけでは、クライアントが互いを塞げる**。**記録は検証の最後**。`RT-311.8` / `RT-311.9`）。**段階 4** : **縛りを前と後ろへ広げた**（**認可要求の `dpop_jkt` で `code` を縛り**、**`refresh_token` も同じ鍵に縛る**。`RT-311.10` / `RT-311.11`）＋ **チャレンジを `DPoP` にし**（`algs` 付き。`RT-311.12`）、**`nonce` を要求できるようにした**（`use_dpop_nonce` ＋ `DPoP-Nonce`。**既定は要求しない**。`RT-311.13` / `RT-311.14`） | **パブリック クライアントのトークンを、持ち主に縛れるようになった**（**漏えいしても、鍵が無ければ使えない**）。**縛りは `code` から `refresh_token` まで続き**、**証明の使い回しも断る。** **FAPI 2.0 の Sender-Constrained を、mTLS 以外でも満たせる**（**DPoP のみなら `private_key_jwt` と組み合わせる**。#307 の段階 3） |
+| D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | **段階 1 〜 6 は ✅ 実装済み（#307）。** **登録（RFC 7591）** : **`registration_endpoint` を新設**（`POST`。既定は無効で、`EnableDynamicClientRegistration` で開ける）。**認可は ROPC で取る専用 scope（`client_registration`）のアクセス トークン**で、**scope も有効期限も絞られる。****所有者はトークンの `sub` の利用者**（**段階 5-a で 1 利用者 n クライアントになった**。下）。**RFC 7591 §2 のメタデータを `Saml2OAuth2Data` の 11 列として持ち**、**`scope` / `grant_types` / `response_types` は実際に効かせる**（空なら絞らない）。**Discovery に `registration_endpoint`**。**管理（RFC 7592）** : **`registration_client_uri`（`…/register/{client_id}`）の `GET` / `PUT`（全置換）/ `DELETE`（`204`）**。**鍵は `registration_access_token`**（**登録の応答で 1 回だけ返し、ハッシュで保管する**。**回さない**）。**`GET` / `PUT` では `client_secret` を返さない**。**`DELETE` は同意も落とす**（**利用者の行は触らない**。**それでも登録し直せる** — **段階 1 〜 4 は `Users.ClientID` を一意制約のため空にできず**、**段階 5-a-1 でその列ごと落ちた**。下）。`RT-307.1` 〜 `.13` | **クライアントを CI / IaC から作り、読み・直し・消せるようになった**（再デプロイも画面も要らない）。**クライアント認証の方法（段階 3）** : **`token_endpoint_auth_method` を 1 列として持ち**、**4 つとも動的登録から設定できる**（`jwks` は **RSA 1 本 ＋ EC 1 本**として列に入れ、`tls_client_auth_subject_dn` と `token_endpoint_auth_signing_alg` も受ける）。**登録された方法は認証でも効く** — **明示が無ければ `client_secret_basic` / `client_secret_post` だけ**で、**鍵や DN を登録しただけでは、その方法では通らない**（`CmnEndpoints.AllowsAuthMethod`）。**材料の無い登録は断る**（`private_key_jwt` に `jwks` 無し・`tls_client_auth` に DN 無し・**`device_code` × `private_key_jwt`**）。**`client_secret` は方法に関わらず発行する**（秘密しか使えない口が在るため）。`RT-307.14` 〜 `.17`。**署名付きの主張（段階 4）** : **`software_statement`（RFC 7591 §2.3）を検証して受ける。** **信頼する発行者は設定で持つ**（`SoftwareStatementIssuers`。**`iss` ＋ `.cer` ＋ `alg`**）。**鍵は「発行者ごと」で、クライアントごとではない** — **1 つのソフトウェアに 1 枚配られ、その全ての配置が同じものを提示する**（§2 の `software_id`）ため、**登録が何件になっても検証鍵は発行者 1 件につき 1 つ**である。**主張した値は本文（plain JSON）に勝つ**（§2.3 は MUST。**食い違っても断らず、上書きした項目の名前をログに残す**）。**壊れていれば `invalid_software_statement`、信頼していない発行者なら `unapproved_software_statement`**（**1 件も設定していない配備は常に後者 ＝ 従来どおり**）。**`exp` / `aud` は在るときだけ効かせる。** **statement は保管せず、応答にも返さない**（§3.2.1 で任意）ので、**この段階で列は増えていない。** **`RequireSoftwareStatement` で必須にできる**（**`POST` と `PUT` の両方に効く** — **`PUT` に効かせないと、statement を省いて主張された値を書き換えられる**）。**statement は 2 つの専用トークンを置き換えない** — **あれは認可、これは内容の保証**であり、**statement はソフトウェアに同梱されて配布される ＝ 秘密ではない**（**RFC 7591 §1.2 の「AT を要らない開いた登録口」は採らない**）。`RT-307.18` 〜 `.21`。**1 利用者 n クライアント（段階 5-a-1）** : **所有者の置き場所を `Users.ClientID`（利用者の行の 1 枠。NOT NULL ＋ 一意索引）から `Saml2OAuth2Data.OwnerUserId`（登録の行ごと。`Users.Id` を指す）へ移した。** **1 対 n にするには、結び付きを「n の側」に持たせる**ためである。**外部キーも張り替えた**（`OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`）。**`Users.ClientID` は列ごと落とし**、**`ApplicationUser.ClientID` のプロパティも落とした**（**残して未使用にすると、DDL と食い違う**）。**上限は設けていない**（**条件分岐を増やさない**という決め。**洪水はレート制限で受ける**）。**あわせて 2 つの歪みが消えた** — **(a)** **「宙に浮いた `client_id`」**（既定値が毎回 `Guid.NewGuid()` で、**登録の無い利用者にも値が入っていた**。`Register` が掃除していた）、**(b)** **「`DELETE` で空にできない」**（NOT NULL ＋ 一意索引 ＋ 外部キーに当たり、**`sql` で `DELETE` が `500`** になった。**`mem` では出なかった**。段階 2 で踏んだ）。**所有者は `Users.Id` で持つ**（**名前ではない** — 利用者名を変えても切れない）。**`ClientName` はラベルとして残す**（`Helper.GetClientName` が「登録が在るか」の判定と `client_credentials` の `sub` に使う）。**`OwnerUserId` は空のことがある**（**E2E の種データ**は所有者を持たない — **以前は外部キーを満たすためだけに、クライアント 1 件につき利用者 1 人を作っていた**）。`RT-307.3` を書き換えた。**管理画面の一覧（段階 5-a-2）** : **`/Manage/Saml2OAuth2DataList` を新設**し、**自分の登録を `client_id` の昇順で並べる**（`ConsentGrants` と同じ流儀）。**`/Manage/Index` は件数と導線 1 本**になり、**削除は一覧の行から**行う。**編集は `?clientId=…` で指す**（**所有者はサーバ側で照合する** — **他人の・所有者の無い・在りもしない `client_id` は、どれも `Error` 画面**で、**撃ち分けない**）。**保存は「自分の持ち物なら更新、無ければ作成」**（**段階 5-a-1 までは、`client_id` が違えば古い 1 件を消していた**）。**編集では `client_id` を作り直せない** — **作り直すと別のクライアントになり、`registration_access_token` を引き継げないため**である。**一覧は `client_secret` と `registration_access_token` を持たない行の VM で出す**（**出し忘れでは防げないので、器ごと分けた**）。**並びを `client_id` の昇順に決めた**（`DataProvider.GetByOwner` の `ORDER BY`。**`mem` も方言 3 つも同じ**）。`RT-277.9` 〜 `.11`。**`client_credentials` 経路（段階 5-b）** : **利用者のパスワードを使わずに登録できる。** **トークンに利用者が居ないので、作る登録の所有者は「認証したクライアントの所有者」から引く** — **構成ファイル発なら `owner` 属性（利用者名）、登録の表なら `OwnerUserId`（`Users.Id`）**。**どちらも決まらなければ `403` ＋ `access_denied`**（**トークンは正しいので `401` にしない** — 「取り直せ」と読めて誤誘導になる）。**見分けは `sub`** でする（**`client_credentials` のトークンは `sub` にクライアント名が入る**）ので、**「利用者が消えたトークン」をクライアントの所有者に付け替えない。** **`EnableDynamicClientRegistration` が true なら、`EnableClientCredentialsGrantType` が false でも、この scope のときだけ通す**（**「CI から登録を作る」ためにグラント全体を開けさせない**。**専用 scope が出ない要求は `unsupported_grant_type`**）。**scope も期限も ROPC と同じ規則で絞る。** **ROPC も残す**（既存の配備を壊さない）。**構成ファイルが名前で持つのは、人が書く物だから**で、**利用者名を変えたら設定も直す**必要がある（**表の側は id なので切れない**）。`RT-307.22` 〜 `.24`（**`.23` / `.24` は net48 では Skip** — **net48 の設定は 1 本の JSON 文字列**で、クライアントを 1 件足せない）。**発行者ごとの上限と、鍵の入れ替え（段階 6）** : **発行者ごとに `allowed_scope` / `allowed_grant_types` を書ける**（**空なら絞らない**）。**範囲外を主張されたら `unapproved_software_statement` で断る**（§3.2.2。**黙って狭めない**）。**本文（plain JSON）由来の値も上限に収める** — **statement に書かれていなければ本文の値が登録の値になる**ためで、**上限は「その発行者の保証で作られる登録」全体に効く**（**`POST` も `PUT` も `Validate` の 1 か所**）。**絞るのは受け入れる側の決め**で、**ベンダが自分で絞る分は statement の中身に書けば済む**（段階 4）ので、**実際に登録に入るのは 2 つの積**である。**`cer_file_path` は空白かカンマ区切りで n 本**書ける（**発行者の鍵の入れ替え**。**書いた順に試し、最初に検証できた鍵で通す**。**1 本目以外で通ったらログに残す** ＝ **古い鍵をいつ消せるかの判断材料**。**読めない行が在っても他を試し、1 本も読めなければ `unapproved_software_statement`**。**`alg` は行で 1 つ**）。**動的登録で作られた行を管理画面から書き替えたときは、監査ログに残す** — **権限の昇格ではない**（**その利用者は好きな `scope` の登録を画面から新規にも作れる**）が、**`software_statement` の保証から外れた点が後から分かるようにする**ためである（**画面に上限は効かせない** — **画面の登録は statement を持たず、どの発行者の上限を当てるかが決まらない**）。`RT-307.25` / `.26`。**発行者の台帳を DB ＋ 画面で持つ（#308）** : **設定ファイルだけだった**ものを、**`SoftwareStatementIssuers` 表（3 方言 ＋ `mem`）と `/SoftwareStatementAdmin` 画面（`SystemAdmin`）でも持てる**ようにした。**読む順は 設定 → DB で、同じ鍵なら設定が勝つ**（`IdFederationUpstreams` と同じ流儀。**画面が編むのは DB の行だけ**で、**設定に在る鍵は追加の時点で断る**）。**DB が読めなくても設定の分は効く**（理由はログに残す）。**`.cer` はパスでも本文でも持てる** — **`CerBody` に PEM を貼れば、ファイルを配備側に置かずに済む**（**公開鍵なので平文**。#297 の対象外）。**本文を先に、次にパスを試す**ので、**入れ替えの途中で片方だけ本文に移せる。** **アップロードの口は作っていない**（**サーバにファイルを書く口を増やさない**）。**`SigningKeys` は証明書を読まない** — **`CreateJwkSetJson`（net48 の exe）からソース参照されており、`X509CertificateLoader` が net48 に無く、`new X509Certificate2(byte[])` は net10.0 で旧形式**（SYSLIB0057）であるため、**読むのは `SoftwareStatementProvider`**（CommonLibrary 側）にし、**`SigningKeys` は「パラメタ → JWS」の対応だけ**を持つ。**表を新設したので、既存の配備は `CREATE TABLE` を流す必要がある。** `RT-308.1` 〜 `.3`。**クライアントの鍵を `jwks_uri` から引く（#309 の段階 1）** : **`jwks`（鍵そのもの）だけを受けていた**ものを、**`jwks_uri` でも受けるようにした**（**RP は鍵を入れ替えても登録を直さなくてよい**）。**列は #307 の段階 1 から在る**ので **DDL は変わらない。** **塞いでいたのは構造である** — **クライアント認証は `static bool` の鎖で、`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の全部から同期で呼ばれ、そこで取得を待つと net48 で止まる**（**継続が `AspNetSynchronizationContext` へ Post され、その順番を握っているのは待っている自分**）。**そこで「要求の経路では待たない」形にした** — **要求はキャッシュを読むだけ**（`DiscoveryJwks.PickJwksFromCache`）で、**引けなければ `invalid_client` で断り、背景で取り直す**（`RefillInBackground`。**取り直しの下限 1 分 ＋ 取得中は 1 本** — **`kid` を偽った要求で叩かせない**）。**取りに行って待つのは登録の口だけ**（**`POST` / `PUT` は `async`**。`WarmUpJwksUriAsync` → `WarmUpAsync`）で、**読めない URL はその場で `400` ＋ `invalid_client_metadata`**（**後から黙って `private_key_jwt` が通らなくなるより良い**）。**登録の口は下限を見ない**（**毎回取りに行く** — **認可とレート制限が掛かっており、鍵を入れ替えた相手が `PUT` でその場で反映できる**）。**`https` を要求し、ループバックだけ `http` を許す**（RFC 8252 §7.3 と同じ扱い。**鍵を差し替えられればクライアント認証が破れる**）。**`jwks` とは排他**（§2 の MUST NOT。**併記は `400`**。**`PUT` で片方を送ればもう片方は消える**）。**`kid` が無い JWS は、在る鍵を順に 4 本まで試す。** **`private_key_jwt` の「材料」にも数える**（**`jwks` が無くても登録できる**）。**画面の `JwksUri` 欄は前から在ったが、誰も読んでいなかった** — **塞ぐ側に倒れていた**（鍵が無いので認証は失敗する）**ので穴ではない**が、**入れた人には何も起きなかった。** **Device AuthZ の「コンフィデンシャルかどうか」にも数えた**（#307 の段階 3 で閉じた穴と同じ形）。`RT-309.1` 〜 `.3`。**段階 2** : **起動のときに、登録済みの `jwks_uri` を温める**（**設定ファイルの分 ＋ user store の `JwksUri` が空でない行**。**重複を除き、直列に読み、100 本で打ち切る**。**読めなくても起動を止めず、ログに残す**。**起動のたびに `The jwks_uri warm-up read n of m JWK Sets.` が 1 行出る** — **0 件でも出すので、仕掛けが動いていることが分かる**）。**窓は消えない** — **net10.0 版は要求を受ける前に走る**が、**net48 版の `Application_Start` は最初の要求が来てから走り、その要求自身は温めを待たない**ので、**段階 1 の「1 回断って背景で取り直す」はそのまま残してある**（**これは速くする仕掛けで、必ず通す仕掛けではない**）。**`software_statement` が主張した `jwks_uri` も受けるようにした** — **段階 1 は「署名を検証する前に本文の外の URL へ出て行かない」として断っていたが、過剰だった**（**同じ呼び出し元は本文の `jwks_uri` に任意の URL を書けるので、行き先の範囲は変わらない**。**キャッシュは URL → 鍵の対応でしかなく、statement の検証が落ちれば登録は作られないので、温めた分は誰にも使われない**）。**鍵の出どころとして使える URL かの判定は `DiscoveryJwks.IsUsableKeySource` の 1 か所に寄せた**（**登録の検査と起動の温めが同じ規則で絞る**）。`RT-309.4`。**起動のときの温めは E2E では測れない**（**サイトの起動は `test.ps1` が握っており、テストから再起動できない**）ので、**ログで確かめる手順を `TESTING.md` に置いた**（**実測で net48 / net10.0 の両方の呼び出しと、`sql` の列挙までは確かめた**。**`ora` / `npg` の列挙は未測定**）。**あわせて穴が 3 つ閉じた** — **(1)** **`Helper.GetClientScopes` が構成ファイルだけを見ていたため、DB に登録したクライアントには #198 の「クライアントごとの `scope` の絞り」が効いていなかった**（段階 1）。**(2)** **アクセス トークンの検証にある「クライアントがまだ在るか」の確認が効いていなかった**（`GetClientSecret` は**未登録でも空文字を返す**ので、`!= null` が常に真だった）。**`Helper.HasClient` で「行が在るか」を見るようにしたので、登録を消すと既存のアクセス トークンもその場で通らなくなる**（RFC 7592 §2.3。段階 2）。**(3)** **Device AuthZ の「コンフィデンシャルかどうか」の判定に、鍵の登録が入っていなかった**（`DeviceAuthZClientAuthentication` は `client_secret` / `tls_client_auth_subject_dn` / 提示された証明書だけを見ていた）。**秘密も DN も持たず鍵だけを登録したクライアントは、パブリック クライアントとみなされ、`client_id` の確認だけで通っていた**（**#307 とは無関係に、構成ファイルや管理画面からも作れる形**）。**鍵の登録も数えるようにした**ので、**断る側に転ぶ**（この口は `client_assertion` を読まないため。段階 3） |
 | D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）／**✅ 修正済み（#252）**。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`）。**`form_post` だけ抜けていた**（`iss` は `BuildRedirectUrl` が付けており、**URL を組まない `form_post` はそこを通らない**）。**View で出すようにした**（`RT-231.5` / `RT-231.6`） | Mix-Up 攻撃への対策 |
 | D-6 | **同意（consent）の永続化** | **✅ 実装済み（#272 の段階 2）**。`ConsentGrant` 表（DDL 3 方言）。**粒度は（利用者, クライアント）で 1 行、scope は集合として足し込む**。管理画面から取り消せる | C-3 の根本原因だった。これで `prompt=none` を仕様どおり扱える |
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった。**標準クレームのサンプルを持たせた**（#261）。`IsDebug` のとき **2 人目のテスト利用者に OIDC Core 5.1 の形で仕込み**、雛形には対応付けのサンプルを コメントで置いた（`RT-261.1`）。**画面は変えていない**（入れ物の中身は導入する側が決める方針を保つ）。あわせて**クレームの型を JSON のまま返すよう直した**（`updated_at` は数値。以前は文字列。#184 と同種） |
-| D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
+| D-8 | クライアントあたり複数 `redirect_uri` | **✅ 解けた（#306）。** **`redirect_uri_code` / `redirect_uri_token` に空白区切りで n 件登録できる**（設定ファイルでも DB の列でも同じ形）。**照合は全件に対して完全一致**（`Ordinal`。**前方一致にしない**）。**要求で省略できるのは登録が 1 件のときだけ** — **2 件以上なら `invalid_request`**（RFC 6749 §3.1.2.3。`RT-306.1` 〜 `.3`）。**`post_logout_redirect_uri` と `redirect_uri_saml`（ACS）は 1 本のまま** | **既存の配備はそのまま動く**（1 本の登録は 1 件の列挙として読める）。**DB は列幅の変更が要る**（512 → 2000。`CONFIGURATION.md` に `ALTER` を載せた）。**n 件にした RP は、要求に `redirect_uri` を含める必要がある** |
 | D-9 | 署名鍵のローテーション運用 | **✅ 解けた（#129 の段階 3）。** **alg → 鍵の対応を `SigningKeys` の表 1 か所に寄せ**、**`CreateJwkSetJson` がその表を回して `jwkcerts` を作る**ようにした（ソース参照）。**JWK Set は追記式**なので、**新しい鍵を先に載せ、RP のキャッシュが切れてから署名に切り替えられる**（手順は `CONFIGURATION.md`）。**広告と鍵が揃っていることは `RT-129.6` で測る** | **無停止で替えられるようになった**（残り : 旧い `kid` を外すのは手作業） |
 | D-15 | **ID フェデレーションの上流が 1 つだけ**（✅ 解けた。#292 の段階 1・2） | **設定 `IdFederationUpstreams` で n 件登録でき、導線も n 個出る**（`CN-5.4` 〜 `CN-5.6` で実測）。**同じものを user store（`IdFederationUpstreams` 表。DDL は 3 方言）にも置け、管理画面（`/IdFederationAdmin`）から足せる**（#292 の段階 2。`RT-292.*`）。**読む順は 設定 → DB で、同じ鍵なら設定が勝つ。****相手ごとの値（`issuer` / `client_id` / 口 / 鍵 / メタデータ）は、その行が持つ。****折り返し口は共通設定のまま**（自分の URL なので相手ごとに変わらない） | **(2) の署名鍵は上流ごとに替えられる**（#292 の段階 4-a・4-b。Open棟梁 #606 の追随。`signing_pfx_file_path`。**設定でも DB でもよく、管理画面から入れられる**。`RT-292.4`）。**`client_secret` の暗号化は解けた**（#297。`UserStoreSecretPassword`）。**鍵の入れ替え（ロールオーバー）は、段階 3 で解けた**（出す側は 2 本広告し、受け取る側は 2 本試す。`SA-2.2` / `SA-6.6`）。**連携キーの幅も広げた**（`UserLogins.LoginProvider` 512 / `ProviderKey` 256。**上流が n 件になると長い値を踏む確率が上がる**ため。**SQL Server 2016 以降が前提**になった） |
 | D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **✅ 解けた（#151 の段階 2）。** **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、**秘密を替えても発行済みの値は動かない**（表から引くため）。以前は導出していたので替えられなかった（A-14） | **漏洩時に替えられるようになった** |
-| D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
-| D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
+| D-10 | **`typ: at+jwt`（RFC 9068）** | **✅ 解けた（#302）。** **access_token は `typ: at+jwt`**（段階 2。Open棟梁 #611 の追随）、**`jku` は出さない**（段階 1）。**受ける側も期待値を明示する** — `VerifyAccessToken` は `at+jwt`、`id_token_hint` の `VerifySignature` は `JWT`。**`RT-302.1`** で access_token / id_token / JARM の 3 つを測る | **トークン取り違え（token confusion）を型で見分けられるようになった。** **`jku` の SSRF も解けた** |
+| D-11 | 応答の `scope` | **✅ 返している**（`CmnEndpoints.CreateAccessTokenResponse`。**#198 でスコープを絞るようにしたときに、同時に入った**）。**発行したスコープを空白区切りで返す** — **要求と違うことがあるので必須**（RFC 6749 §5.1）。**測定は `RT-198.*`**（「トークン応答の `scope` が、発行したスコープと一致する」） | **解けた。** 要求と付与が違っても RP が判別できる |
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
-| D-13 | レート制限 / ブルートフォース対策 | 未実装（`/token` `/device_authz` `/ciba_authz` とも無制限） | user_code・client_secret への総当たりが可能 |
+| D-13 | **レート制限 / ブルートフォース対策**（#305） | **✅ 解けた（#305）。** **段階 1** : ポーリングが `interval` より速ければ **`slow_down`**（`LastPolledAt`。`RT-305.1` / `.2`）。**段階 2** : **クライアント認証と `user_code` の投入の失敗を数え、一定回数で一定時間断る**（`AuthFailure` 表。`RT-305.3` / `.4`）。**段階 3** : **口ごとのレート制限** — **`client_id` ごと・送信元ごとに窓の中の要求を数え、超えた分に `429`**（`RateLimitProvider`。`RT-305.5` / `.6`）。**段階 4** : **失敗の数えを「クライアント ＋ 送信元」ごとにし**（`client_id` だけで数えると、**ロックアウトがそのまま妨害の手段になる**。`RT-305.7`）、**`/token` の `grant_type=password` を画面と同じ利用者ロックアウトに合流させた**（`RT-305.8`）。**行には寿命を入れた**（期限の切れた行を掃除する）。**判定は両アプリで 1 か所**（net48 に組み込みが無いため） | **既定は「制限しない」**（`RateLimitPerClientPermits` / `RateLimitPerIpPermits` が 0。**雛形は 120 回 / 600 回 / 60 秒**）。**失敗の数えは雛形で有効**（5 回 / 300 秒）。**プロセスの中に覚えるので、インスタンスを増やすとその数だけ緩くなる**（レート制限の方。失敗の数えは表に持つ）。**鍵の粒度は利用者の数に追随しない** — **同じ `client_id` に利用者が多数いる配備では、閾値をその全員分に合わせることになる**（`CONFIGURATION.md`） |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
 
 ---
@@ -2688,10 +2760,10 @@ else
 | E-1 | `Startup.cs` 方式のまま。.NET 6 以降の Minimal Hosting（`WebApplication.CreateBuilder`）へ寄せると、`Program.cs` の `IWebHost` / `IHost` のコメント アウト群も整理できる |
 | E-2 | **✅ 修正済み（#256）**。`AddDistributedMemoryCache()` 固定をやめ、**`SessionStoreType`（`mem` / `sql` / `redis`）で選べるようにした**（`UserStoreType` と同じ流儀）。**既定は `mem`**（キーを書かなければも `mem`。既存の配備は従来どおり）。**単一インスタンスならそれが正しい**ので、**雛形を `redis` にはしない**（[`TESTING.md`](../TESTING.md) 1 節の「既定は `mem`」と同じ理由）。**セッションには途中の状態が載っている** — ID 連携の `state` / `nonce` / `code_verifier`、管理画面の `access_token`、FIDO2 の challenge、自己テスト画面の値（**実測 14 キー・46 か所。net10.0 版**）。`mem` のまま増やすと、要求が別のインスタンスへ回った時にそれらが読めず、**途中で失敗する**。**Cookie へ寄せる案（案 B）は採らなかった**（量と、`access_token` を Cookie に置きたくないため）。**`sql` は `Create_SessionCache.sql`**（`dotnet sql-cache create` と同じスキーマ。スキーマ名・表名は `Const` に置き、設定キーにしない）。**Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、**3 方言が揃わない唯一の設定**であり、それらのストアでは `redis` を使う。**`mem` 以外で接続文字列が空なら、`ConfigureServices` で落とす**（`IDistributedCache` は遅延で落ちるため、放っておくと「画面が 500 を返すだけ」になる）。**DataProtection の方は C-13 / #251 で済んでいる**（`DataProtectionKeyPath`）。**検証は通し × 3 通り ＋ ストア側の件数**（[`TESTING.md`](../TESTING.md) 1 節） |
 | E-3 | ✅ **CORS の 3 重定義を片付けた**（C-9 / #265）。既定のポリシーを置かず、口ごとに属性で選ぶ。`AllowAllOrigins` は自己テスト用の口だけが使う |
-| E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
-| E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
+| E-4 | **✅ 直した（#304）。** **`Views/_ViewImports.cshtml` / `Views/Manage/ManageTwoFactorAuthenticator.cshtml` / `CommonLibrary/ViewModels/ErrorViewModel.cs` を UTF-8 ＋ BOM にした**（中身は 1 文字も変えていない）。**`root/programs/z_Common2.bat` は cp932 のまま** — **bat は cmd がバイト単位で読む**ので、**筋は ASCII 化**である（[`CODING.md`](../CODING.md) 4 節で追っている） |
+| E-5 | **✅ 解消済み**。`log4net` を **3.2.0 → 3.3.0** に上げた（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節。**`NU1902` は解消**し、**版の割れ（実行時の `FileNotFoundException`）も直った**）。**net48 側は `OpenTouryoAssemblies` の 3.3.0 を使う**ので、元から対象外 |
 | E-6 | **✅ Deny ボタンは入れた（#272 の段階 2）**。認可画面で拒否でき、**`access_denied` を `redirect_uri` へ返す**（RFC 6749 §4.1.2.1。`RT-272.6`）。**拒否は記録しない**。残るのは **scope が生の識別子のまま**であること |
-| E-7 | `/jwkcerts` は毎回ファイルを読む（キャッシュ・`Cache-Control` なし） |
+| E-7 | **✅ 解けた（#303）。** **ファイルの更新だけを見て覚える**（`Extensions/Sts/JwkSetDocument`）。**`ETag` を常に付け、`If-None-Match` に `304`**。**`Cache-Control` は `JwkSetCacheMaxAgeSeconds`**（0 なら `no-store` ＝ 従来どおり）。**鍵の入れ替えに追随する**（`RT-303.2`） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
 | E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
 | E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |
@@ -2749,6 +2821,7 @@ else
 | ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251 ／ ✅ **E-2 セッションの置き場を選べるように** #256（`SessionStoreType`） |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
+| ✅ **C-25 mTLS で、登録が空のときに空の Subject DN が一致していた** #305 の段階 4 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 
@@ -2756,22 +2829,22 @@ else
 |---|
 | ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換え**（#224 の段階 1）、**振る舞いを見直した**（段階 2 : 使えない `refresh_token` を出さない・早い拒否・`unauthorized_client`・不正な登録値の拒否）。**mTLS の経路の E2E も張った**（#226。`FA-6`） |
 | ✅ **C-3 / D-6 同意の永続化と `prompt` の正しい処理** #272（段階 1 : `prompt` を集合として扱う / 段階 2 : `ConsentGrant` 表。**あわせて E-6 の Deny ボタンも**） |
-| D-2 `/ros` を PAR（RFC 9126）へ寄せる |
-| D-5 `iss` 認可応答パラメタ |
-| D-10 `typ: at+jwt`、`jku` の除去 |
+| ✅ **D-2 `/ros` を PAR（RFC 9126）へ寄せる** #229（`/par` を新設。`/ros` は RFC 9101 §5.2.1 の任意機能として残す） |
+| ✅ **D-5 `iss` 認可応答パラメタ（RFC 9207）** #231 ／ **✅ 修正済み（#252）**（成功・失敗の両方に付け、Discovery でも広告する） |
+| ✅ **D-10 `typ: at+jwt`、`jku` の除去** **#302**（段階 1 : `jku` の除去／段階 2 : `at+jwt` ＋ 受ける側の期待値。Open棟梁 #611 の追随） |
 | ✅ **D-12 Implicit / ROPC を既定 無効に**（#220。コードは残し、設定で戻せる） |
 
 ### フェーズ 4 — 機能の追加
 
 | 項目 |
 |---|
-| D-1 RP-Initiated Logout（＋ Front-Channel / Back-Channel） |
-| D-3 DPoP |
-| D-4 Dynamic Client Registration |
+| ✅ **D-1-2 Front / Back-Channel Logout**（**#310**。`sid` ＋ 台帳（段階 1）＋ Back-Channel（段階 2）＋ Front-Channel（段階 3）。**Session Management だけ見送り**） |
+| ~~**D-3 DPoP**~~（**✅ #311。段階 1〜4**。発行 ＋ 照合 ＋ 使い回しの拒否 ＋ **`dpop_jkt` / `refresh_token` の縛り ＋ `DPoP` チャレンジ ＋ `nonce`**） |
+| **D-4 Dynamic Client Registration**（**段階 1〜6 は ✅ #307**。`POST /register` ＋ 専用 scope ＋ RFC 7591 §2 の列 ＋ **RFC 7592 の `GET` / `PUT` / `DELETE`** ＋ **`token_endpoint_auth_method` / `jwks` / DN** ＋ **`software_statement`** ＋ **1 利用者 n クライアント** ＋ **管理画面の一覧** ＋ **`client_credentials` 経路** ＋ **発行者ごとの上限と鍵の入れ替え**。**残りは #308（発行者を DB ＋ 管理画面へ）と #309（`jwks_uri`）**） |
 | D-7 `profile` / `address` クレーム |
-| D-8 複数 `redirect_uri` |
+| ✅ **D-8 複数 `redirect_uri`**（**#306**。空白区切りで n 件。照合は全件と完全一致。省略できるのは 1 件のときだけ） |
 | ✅ **D-9 鍵ローテーション**（alg → 鍵の表に寄せ、`jwkcerts` をその表から作る）**#129 の段階 3** |
-| D-13 レート制限 |
+| ✅ **D-13 レート制限**（**#305**。**段階 1** `slow_down` ／ **段階 2** 失敗の回数 ／ **段階 3** 口ごとのレート制限 ／ **段階 4** 送信元ごとの数えと `grant_type=password`） |
 
 ### フェーズ 5 — 土台
 

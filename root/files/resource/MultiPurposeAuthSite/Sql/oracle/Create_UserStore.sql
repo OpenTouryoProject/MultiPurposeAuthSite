@@ -22,7 +22,8 @@ CREATE TABLE "Users"(              -- Users
     "AccessFailedCount" NUMBER(10) NOT NULL,
     "TotpAuthenticatorKey" NVARCHAR2(256) NULL,
     -- 追加の情報
-    "ClientID" NVARCHAR2(256) NOT NULL,
+    --   **ClientID は落とした**（#307 の段階 5-a）。
+    --     **所有者は Saml2OAuth2Data.OwnerUserId が持つ**（1 利用者 n クライアント）。
     "UnstructuredData" NCLOB NULL,
     "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
@@ -116,6 +117,16 @@ CREATE TABLE "ConsentGrant"(   -- 同意の記録（#272 の段階 2）
     CONSTRAINT "PK.ConsentGrant" PRIMARY KEY ("UserId", "ClientID")
 );
 
+-- セッション × クライアントの台帳（#310 の段階 1。SQL Server 側の注と同じ）
+CREATE TABLE "SessionClient"(
+    "SessionId" NVARCHAR2(38) NOT NULL,         -- *PK, guid（OP のセッション）
+    "ClientID" NVARCHAR2(256) NOT NULL,         -- *PK
+    "Sid" NVARCHAR2(38) NOT NULL,               -- そのクライアントに名乗った sid（guid）
+    "UserId" NVARCHAR2(38) NOT NULL,            -- Users.Id
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.SessionClient" PRIMARY KEY ("SessionId", "ClientID")
+);
+
 CREATE TABLE "CustomizedConfirmation"(
     "UserId" NVARCHAR2(38) NOT NULL,         -- PK, guid
     "Value" NVARCHAR2(2000) NOT NULL,        -- Value
@@ -127,8 +138,8 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
     "ClientSecret" NVARCHAR2(512) NULL,      -- 暗号文が入る（#297）
     "RedirectUriSaml" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
-    "RedirectUriCode" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
-    "RedirectUriToken" NVARCHAR2(512) NULL,          -- Const.MaxLengthOfUri
+    "RedirectUriCode" NVARCHAR2(2000) NULL,          -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
+    "RedirectUriToken" NVARCHAR2(2000) NULL,         -- Const.MaxLengthOfUriList（空白区切りの列挙。#306）
     "PostLogoutRedirectUri" NVARCHAR2(512) NULL,     -- Const.MaxLengthOfUri
     "WebOrigins" NCLOB NULL,                         -- 空白・カンマ区切りの列挙
     "JwkRsaPublickey" NCLOB NULL,
@@ -141,6 +152,31 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "ClientMode" NVARCHAR2(32) NULL,                 -- oauth2_oidc_mode
     "RequirePkce" NUMBER(3) NOT NULL,                -- 真は -1（Users の bool 列と同じ）
     "ClientName" NVARCHAR2(256) NULL,                -- Users.UserName と同じ幅
+    -- RFC 7591 §2 のクライアント メタデータ（#307 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    "Scopes" NVARCHAR2(2000) NULL,                   -- Const.MaxLengthOfScopeList（空白区切りの列挙）
+    "GrantTypes" NVARCHAR2(256) NULL,                -- Const.MaxLengthOfTypeList（空白区切りの列挙）
+    "ResponseTypes" NVARCHAR2(256) NULL,             -- Const.MaxLengthOfTypeList（空白区切り。要素内の空白は「+」）
+    "JwksUri" NVARCHAR2(512) NULL,                   -- Const.MaxLengthOfUri（段階 1 では動的登録で受け付けない）
+    "ClientUri" NVARCHAR2(512) NULL,                 -- Const.MaxLengthOfUri
+    "LogoUri" NVARCHAR2(512) NULL,                   -- Const.MaxLengthOfUri
+    "TosUri" NVARCHAR2(512) NULL,                    -- Const.MaxLengthOfUri
+    "PolicyUri" NVARCHAR2(512) NULL,                 -- Const.MaxLengthOfUri
+    "Contacts" NVARCHAR2(2000) NULL,                 -- Const.MaxLengthOfContacts（空白区切りの列挙）
+    "SoftwareId" NVARCHAR2(256) NULL,                -- Const.MaxLengthOfSoftwareId
+    "SoftwareVersion" NVARCHAR2(64) NULL,            -- Const.MaxLengthOfSoftwareVersion
+    -- RFC 7592 の管理 API（#307 の段階 2）。末尾に足してある（ALTER … ADD で揃う）
+    "RegistrationAccessToken" NVARCHAR2(128) NULL,   -- Const.MaxLengthOfTokenHash（ハッシュが入る）
+    -- クライアント認証の方法（#307 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
+    "TokenEndpointAuthMethod" NVARCHAR2(32) NULL,    -- Const.MaxLengthOfAuthMethod（空なら秘密ベースの 2 つ）
+    -- 所有者（#307 の段階 5-a）。末尾に足してある（ALTER … ADD で揃う）
+    --   **Users."Id" を指す**（名前ではない）。**NULL 可。**
+    "OwnerUserId" NVARCHAR2(38) NULL,
+    -- ログアウトを伝える先（#310 の段階 2）。末尾に足してある（ALTER … ADD で揃う）
+    --   **logout_token を POST する先**（Back-Channel Logout 1.0 §2.2）。**空なら伝えない。**
+    "BackChannelLogoutUri" NVARCHAR2(512) NULL,      -- Const.MaxLengthOfUri
+    -- ブラウザ経由で伝える先（#310 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
+    --   **iframe で開く URL**（Front-Channel Logout 1.0 §2）。**空なら伝えない。**
+    "FrontChannelLogoutUri" NVARCHAR2(512) NULL,     -- Const.MaxLengthOfUri
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 
@@ -168,6 +204,22 @@ CREATE TABLE "IdFederationUpstreams"(   -- ID 連携の上流 IdP の登録（#2
     CONSTRAINT "PK.IdFederationUpstreams" PRIMARY KEY ("UpstreamKey")
 );
 
+CREATE TABLE "SoftwareStatementIssuers"(   -- software_statement の発行者の登録（#308 の段階 1）
+    -- **設定（appSettings の SoftwareStatementIssuers）と同じ項目**を持つ。
+    --   **IssuerKey が、設定の「鍵」に当たる**（Key は予約語なので避けた）。
+    --   **これは「ベンダ（発行者）の台帳」**で、**クライアントの登録ではない。**
+    "IssuerKey" NVARCHAR2(128) NOT NULL,       -- PK
+    "DisplayName" NVARCHAR2(256) NULL,
+    "Enabled" NUMBER(3) NOT NULL,              -- 真は -1（Users の bool 列と同じ）
+    "Issuer" NVARCHAR2(256) NULL,
+    "CerFilePath" NVARCHAR2(512) NULL,         -- 空白かカンマ区切りで n 本（#307 の段階 6）
+    "CerBody" NCLOB NULL,                      -- **本文**（PEM / Base64。公開鍵なので平文）
+    "Alg" NVARCHAR2(16) NULL,
+    "AllowedScope" NVARCHAR2(2000) NULL,
+    "AllowedGrantTypes" NVARCHAR2(2000) NULL,
+    CONSTRAINT "PK.SoftwareStatementIssuers" PRIMARY KEY ("IssuerKey")
+);
+
 CREATE TABLE "FIDO2Data"(
     "PublicKeyId" NVARCHAR2(256) NOT NULL,   -- PK
     "UserName" NVARCHAR2(256) NOT NULL,      -- Value
@@ -186,6 +238,10 @@ CREATE TABLE "DeviceAuthZData"(
     "TempData" NVARCHAR2(256) NULL,              -- TempData
     "AuthZCode" NVARCHAR2(64) NULL,              -- AuthZCode
     "Result" NUMBER(3) NULL,                     -- Result of Verify
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    "LastPolledAt" NUMBER(19) NULL,
     CONSTRAINT "PK.DeviceAuthZData" PRIMARY KEY ("Id")
 );
 
@@ -199,7 +255,22 @@ CREATE TABLE "CibaData"(
     "UnstructuredData" NCLOB NULL,     -- binding_message, user_code, etc.
     "Result" NUMBER(3) NULL,                     -- Result of CIBA
     "UserId" NVARCHAR2(128) NULL,                -- 承認する利用者 (Users.Id)
+    -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
+    --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
+    --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。
+    "LastPolledAt" NUMBER(19) NULL,
     CONSTRAINT "PK.CibaData" PRIMARY KEY ("Id")
+);
+
+-- **認証の失敗を数える**（#305 の段階 2）。
+--   **何に対する失敗か**は鍵の接頭辞で分ける（`client:<client_id>` / `device_verify:<利用者>`）。
+--   **一定回数で一定時間断る**（`AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds`）。
+--   **成功したら消す。** **表に持つ**ので、インスタンスを増やしても効く。
+CREATE TABLE "AuthFailure"(
+    "FailureKey" NVARCHAR2(256) NOT NULL,   -- PK
+    "FailedCount" NUMBER(10) NOT NULL,      -- 連続して失敗した回数
+    "LockoutEndAt" NUMBER(19) NULL,         -- 断る期限（UNIX時刻）
+    CONSTRAINT "PK.AuthFailure" PRIMARY KEY ("FailureKey")
 );
 
 CREATE TABLE "OAuth2Revocation"(
@@ -224,13 +295,19 @@ CREATE TABLE "RequestObject"(
     CONSTRAINT "PK.RequestObject" PRIMARY KEY ("Urn")
 );
 
+-- 使った DPoP の証明の台帳（#311 の段階 3。SQL Server 側の注と同じ）
+CREATE TABLE "DPoPProof"(
+    "ProofId" NVARCHAR2(64) NOT NULL,            -- PK, 証明の指紋（43文字）
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.DPoPProof" PRIMARY KEY ("ProofId")
+);
+
 -- INDEX
 --- UNIQUE INDEX
 ---- Users
 ALTER TABLE "Users" ADD CONSTRAINT "UserNameIndex" UNIQUE ("UserName");
 ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName");
 ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail");
-ALTER TABLE "Users" ADD CONSTRAINT "ClientIDIndex" UNIQUE ("ClientID");
 ---- Roles
 ALTER TABLE "Roles" ADD CONSTRAINT "RoleNameIndex" UNIQUE ("Name");
 ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName");
@@ -255,6 +332,10 @@ CREATE INDEX "IX_UserClaims.UserId" ON "UserClaims" ("UserId" ASC);
 CREATE UNIQUE INDEX "IX_SubjectIdentifier.Sector_Sub" ON "SubjectIdentifier" ("Sector" ASC, "Sub" ASC);
 ---- TotpTokens
 CREATE INDEX "IX_TotpTokens.UserId" ON "TotpTokens" ("UserId" ASC);
+---- SessionClient
+---- **逆引き（sid → セッション）用。** sid は新しい guid なので一意（#310 の段階 1）
+CREATE UNIQUE INDEX "IX_SessionClient.Sid" ON "SessionClient" ("Sid" ASC);
+CREATE INDEX "IX_SessionClient.UserId" ON "SessionClient" ("UserId" ASC);
 
 -- CONSTRAINT
 ---- UserRoles
@@ -269,10 +350,13 @@ ALTER TABLE "UserClaims" ADD CONSTRAINT "FK.UserClaims.Users_UserId" FOREIGN KEY
 ---- TotpTokens
 ALTER TABLE "TotpTokens" ADD CONSTRAINT "FK.TotpTokens.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- Saml2OAuth2Data
-ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_ClientID" FOREIGN KEY("ClientID") REFERENCES "Users" ("ClientID") ON DELETE CASCADE;
+-- **所有者は OwnerUserId で結ぶ**（#307 の段階 5-a。SQL Server 側の注と同じ）。
+ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_OwnerUserId" FOREIGN KEY("OwnerUserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE "FIDO2Data" ADD CONSTRAINT "FK.FIDO2Data.Users_UserName" FOREIGN KEY("UserName") REFERENCES "Users" ("UserName") ON DELETE CASCADE;
 ---- ConsentGrant
 ALTER TABLE "ConsentGrant" ADD CONSTRAINT "FK.ConsentGrant.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- SubjectIdentifier
 ALTER TABLE "SubjectIdentifier" ADD CONSTRAINT "FK.SubjectIdentifier.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
+---- SessionClient
+ALTER TABLE "SessionClient" ADD CONSTRAINT "FK.SessionClient.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;

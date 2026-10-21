@@ -34,6 +34,7 @@
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ ボタン（RT-246.3）を追加（#246 の 3-a）
 //*  2026/10/01  玄人 幸道         承認した利用者の確認を /userinfo の email に替えた（#151 の段階 4）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/16  玄人 幸道         Start/Poll を internal に（RT-305 が使う。#305 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -76,7 +77,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <returns>JsonResponse</returns>
-        private static Task<JsonResponse> StartAsync(IdPClient client, string clientId)
+        internal static Task<JsonResponse> StartAsync(IdPClient client, string clientId)
         {
             return client.DeviceAuthorizationAsync(new Dictionary<string, string>()
             {
@@ -90,7 +91,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="clientId">client_id</param>
         /// <param name="deviceCode">device_code</param>
         /// <returns>JsonResponse</returns>
-        private static Task<JsonResponse> PollAsync(IdPClient client, string clientId, string deviceCode)
+        internal static Task<JsonResponse> PollAsync(IdPClient client, string clientId, string deviceCode)
         {
             return client.TokenAsync(new Dictionary<string, string>()
             {

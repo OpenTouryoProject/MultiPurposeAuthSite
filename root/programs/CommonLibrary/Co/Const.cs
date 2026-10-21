@@ -44,6 +44,13 @@
 //*  2026/10/07  玄人 幸道         データ保護のアプリケーション名を追加（#279）
 //*  2026/10/09  玄人 幸道         test_self_saml を定数にした（#277 の段階 3）
 //*  2026/10/09  玄人 幸道         test_self_code_manage を削除（管理画面のトークン取得の廃止に伴う）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の scope と、登録項目の上限を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         registration_access_token のハッシュの上限を追加（#307 の段階 2）
+//*  2026/10/21  玄人 幸道         セッションの識別子と sid クレームを追加（#310 の段階 1）
+//*  2026/10/21  玄人 幸道         logout_token と受け口の定数を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout の受け口の定数を追加（#310 の段階 3）
+//*  2026/10/21  玄人 幸道         cnf.jkt のクレーム型を追加（#311 の段階 2）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method の上限を追加（#307 の段階 3）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -59,6 +66,18 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>UriのMaxLength</summary>
         public const int MaxLengthOfUri = 512;
 
+        /// <summary>Uriの列挙のMaxLength（#306）</summary>
+        /// <remarks>
+        /// **空白区切りで複数の URI を持つ項目**（`redirect_uri_code` /
+        /// `redirect_uri_token` / `web_origins`）**の上限。**
+        ///
+        /// **2000 にしてあるのは、Oracle の `NVARCHAR2` の上限**である
+        /// （2000 文字 ＝ 4000 バイト）。**3 方言とも同じ幅に揃えられる。**
+        /// **`WebOrigins` のように LOB（NCLOB / text）にはしていない** —
+        /// **URI を数本並べるのに LOB は要らない。**
+        /// </remarks>
+        public const int MaxLengthOfUriList = 2000;
+
         /// <summary>ClientNameのMaxLength</summary>
         public const int MaxLengthOfClientName = 64;
 
@@ -70,6 +89,52 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>PasswordのMaxLength</summary>
         public const int MaxLengthOfPassword = 100;
+
+        /// <summary>scope の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **RFC 7591 §2 の `scope`**（空白区切りの列挙）**の上限。**
+        /// **`MaxLengthOfUriList` と同じ 2000**（Oracle の `NVARCHAR2` の上限）だが、
+        /// **URI の列挙ではない**ので、別の定数にしてある。
+        /// </remarks>
+        public const int MaxLengthOfScopeList = 2000;
+
+        /// <summary>grant_types / response_types の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **RFC 7591 §2 の `grant_types` / `response_types`**（空白区切りの列挙）**の上限。**
+        /// **既知の値しか入らない**（`authorization_code` / `implicit` / `password` /
+        /// `client_credentials` / `refresh_token` / `urn:…:jwt-bearer` / `urn:…:device_code` /
+        /// `urn:…:ciba`、`code` / `token` / `id_token` の組み合わせ）ので、
+        /// **全部並べても 256 に収まる。**
+        /// </remarks>
+        public const int MaxLengthOfTypeList = 256;
+
+        /// <summary>contacts（連絡先）の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>**RFC 7591 §2 の `contacts`**（空白区切りのメール アドレスの列挙）。</remarks>
+        public const int MaxLengthOfContacts = 2000;
+
+        /// <summary>software_id の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>**RFC 7591 §2 の `software_id`**（UUID を想定しているが、縛られていない）。</remarks>
+        public const int MaxLengthOfSoftwareId = 256;
+
+        /// <summary>software_version の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>**RFC 7591 §2 の `software_version`**（形は仕様が定めていない）。</remarks>
+        public const int MaxLengthOfSoftwareVersion = 64;
+
+        /// <summary>registration_access_token のハッシュの MaxLength（#307 の段階 2）</summary>
+        /// <remarks>
+        /// **保管するのはハッシュである**（**平文は、登録の応答で 1 回だけ返す**）。
+        /// **SHA-256 を base64 にすると 44 文字**だが、**別のハッシュに替えても入るように 128** とした。
+        /// </remarks>
+        public const int MaxLengthOfTokenHash = 128;
+
+        /// <summary>token_endpoint_auth_method の MaxLength（#307 の段階 3）</summary>
+        /// <remarks>
+        /// **RFC 7591 §2 の `token_endpoint_auth_method`**（**値は 1 つ**）。
+        /// **いちばん長い既知の値が `client_secret_basic`（19 文字）**なので、**32 で足りる**。
+        /// **既知でない値は拒否する**（`CmnEndpoints.AllowsAuthMethod`）ので、
+        /// **長い値を保管する必要が無い。**
+        /// </remarks>
+        public const int MaxLengthOfAuthMethod = 32;
 
         #endregion
 
@@ -138,6 +203,26 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region Dynamic Client Registration（#307 の段階 1）
+
+        /// <summary>クライアント登録の管理 API 専用の scope（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **この scope を持つアクセス トークンだけが、`registration_endpoint` を叩ける。**
+        ///
+        /// **仕様が定めた名前ではない**（RFC 7591 §3.1 の initial access token は、
+        /// **どう取るかを定めていない**）。**この配備が決めた値**である。
+        ///
+        /// **広告するのは、動的登録を開けた配備だけ**（`Helper.GetScopesSupported`）。
+        ///
+        /// > **この scope は、登録に明記したクライアントにしか出さない**
+        /// > （`Helper.FilterSupportedScopes`）。
+        /// > **他の scope の「登録が無ければ制限しない」とは、逆の倒し方である** —
+        /// > **登録を作れる強い権限なので、既定で持たせてはならない。**
+        /// </remarks>
+        public const string ScopeClientRegistration = "client_registration";
+
+        #endregion
+
         #endregion
 
         #region RedirectUri
@@ -155,6 +240,22 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
         public const string TestSelfLogout = "test_self_logout";
+
+        /// <summary>Front-Channel Logout の受け口のテスト用の値（#310 の段階 3）</summary>
+        /// <remarks>
+        /// **ブラウザが `iframe` で開く口**である（**`logout_token` は来ない**。`iss` と `sid` だけ）。
+        /// **E2E は `iframe` を開けない**ので、**テストが自分で叩く**（`TestFrontChannelLogoutBox`）。
+        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
+        /// </remarks>
+        public const string TestSelfFrontChannelLogout = "test_self_fclogout";
+
+        /// <summary>Back-Channel Logout の受け口のテスト用の値（#310 の段階 2）</summary>
+        /// <remarks>
+        /// **このサイトは、自分の RP も兼ねている**（`test_self_code` と同じ考え方）。
+        /// **受け取った `logout_token` は覚えておく**（`TestLogoutTokenBox`）。
+        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
+        /// </remarks>
+        public const string TestSelfBackChannelLogout = "test_self_bclogout";
 
         #endregion
 
@@ -257,6 +358,70 @@ namespace MultiPurposeAuthSite.Co
         /// 印より後に認証されていれば、**一度は再認証した**と判断して先へ進む。
         /// </remarks>
         public const string ReAuthenticatedAt = "re_auth_at";
+
+        #endregion
+
+        #region セッション（sid。#310 の段階 1）
+
+        /// <summary>OP のセッションの識別子を保存するCookieのKey（#310 の段階 1）</summary>
+        /// <remarks>
+        /// **中身は guid。** **サインインで作り、サインアウトで消す。**
+        ///
+        /// **これは `sid` そのものではない。**
+        /// **`sid` はクライアントごとに別の値**にしてあり（`SessionClientProvider`）、
+        /// **この値は、その台帳を引くための鍵**である。
+        ///
+        /// **接頭辞が掛かる**（#255。`Config.PrefixCookieName`）。
+        /// </remarks>
+        public const string OpSession = "op_session";
+
+        /// <summary>OP のセッションを用意し直したことを示す印（#310 の段階 2）</summary>
+        /// <remarks>
+        /// **認可の口で `op_session` が無かったとき、Cookie を置いて同じ URL へ送り返す。**
+        /// **その送り返しに 1 回だけ付ける印**である（**無いと永久に送り返す**）。
+        ///
+        /// **Cookie を置けない文脈が在る** —
+        /// **third-party cookie を遮る設定のブラウザで、iframe から `prompt=none`** を投げた場合など。
+        /// **そこでは印だけが残り、セッションの識別子はその場で作る**（台帳は 1 行だけ残る）。
+        ///
+        /// **再認証の `re_auth_at` と同じ考え方**である（#247 / #272 の段階 2）。
+        /// </remarks>
+        public const string OpSessionRetry = "op_session_retry";
+
+        /// <summary>sid クレームの名前（#310 の段階 1）</summary>
+        /// <remarks>
+        /// **OP のセッションの識別子**（OIDC Core §2）。
+        /// **Front-Channel / Back-Channel Logout が「どのセッションか」を言う手段**である
+        /// （#310 の段階 2・3）。
+        /// </remarks>
+        public const string Sid = "sid";
+
+        /// <summary>sid を運ぶ ClaimsIdentity のクレーム型（#310 の段階 1）</summary>
+        /// <remarks>
+        /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
+        /// （`UrnAuthTimeClaim` などと同じ流儀）。
+        /// **プロセスの外には出ない**（トークンに入るのは <see cref="Sid"/> の名前）。
+        /// </remarks>
+        public const string UrnSidClaim = "urn:oauth:sid";
+
+        /// <summary>cnf.jkt を運ぶ ClaimsIdentity のクレーム型（#311 の段階 2）</summary>
+        /// <remarks>
+        /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
+        /// （**mTLS の `UrnCnfX5tClaim` と同じ流儀**）。
+        /// **トークンの `cnf.jkt` を、検証後の `ClaimsIdentity` に移すために使う。**
+        /// </remarks>
+        public const string UrnCnfJktClaim = "urn:oauth:cnf:jkt";
+
+        /// <summary>logout_token を運ぶ要求の項目名（#310 の段階 2）</summary>
+        /// <remarks>**POST の本文に 1 項目だけ**（Back-Channel Logout 1.0 §2.5）。</remarks>
+        public const string LogoutToken = "logout_token";
+
+        /// <summary>logout_token の typ ヘッダ（#310 の段階 2）</summary>
+        /// <remarks>
+        /// **Back-Channel Logout 1.0 §2.4 が推している型**である。
+        /// **`id_token` と取り違えないため**（`at+jwt` を付けた #302 の段階 2 と同じ理由）。
+        /// </remarks>
+        public const string LogoutJwtTyp = "logout+jwt";
 
         #endregion
 

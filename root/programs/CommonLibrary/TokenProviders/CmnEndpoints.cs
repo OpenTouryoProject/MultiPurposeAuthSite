@@ -96,6 +96,7 @@
 //*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/25  玄人 幸道         claims_supported を、クレームの対応付けから作る（#230）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
+//*  2026/10/20  玄人 幸道         client_credentialsで専用scopeのトークンを出す（#307の段階5-b）
 //*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
@@ -118,6 +119,16 @@
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンをキャッシュしないようにした（#271）
 //*  2026/10/06  玄人 幸道         promptを空白区切りの集合として扱う（#272 の段階 1）
 //*  2026/10/06  玄人 幸道         promptのlogin/consent/select_accountの値を追加（#272 の段階 2）
+//*  2026/10/16  玄人 幸道         ポーリングが速すぎたら slow_down を返す（#305 の段階 1）
+//*  2026/10/16  玄人 幸道         クライアント認証の失敗を数える（#305 の段階 2）
+//*  2026/10/18  玄人 幸道         登録の grant_types / response_types を効かせ、registration_endpoint を広告（#307 の段階 1）
+//*  2026/10/19  玄人 幸道         登録された token_endpoint_auth_method で絞る（#307 の段階 3）
+//*  2026/10/20  玄人 幸道         TryReadJwtAlg を公開（software_statement の検証で使う。#307 の段階 4）
+//*  2026/10/21  玄人 幸道         client_assertion の鍵を jwks_uri からも引く（#309 の段階 1）
+//*  2026/10/21  玄人 幸道         Back-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 3）
+//*  2026/10/21  玄人 幸道         DPoP の証明を /token で受け、cnf.jkt で発行する（#311 の段階 1）
+//*  2026/10/22  玄人 幸道         dpop_jkt と refresh_token を DPoP の鍵に縛る（#311 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -197,12 +208,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("response_modes_supported", response_modes_supported);
 
             #region token
-            OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit(),
-                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
-                OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
-            });
+            // **一覧は 1 か所から作る**（#262 と同じ考え方。#307 の段階 3 で揃えた）。
+            //   **広告・登録値の検証・画面の選択肢**が、同じ `TokenEndpointAuthMethods` を見る。
+            OpenIDConfig.Add("token_endpoint_auth_methods_supported",
+                new List<string>(CmnEndpoints.TokenEndpointAuthMethods));
 
             // **ES256 も通る**（#129 の段階 2）。
             //   `client_assertion` の検証で、**登録された RSA / ECDSA の公開鍵を順に試す**
@@ -238,7 +247,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
             }
 
-            if (Config.EnableClientCredentialsGrantType)
+            //  **動的登録を開けた配備では、この経路が使える**（#307 の段階 5-b）。
+            //    **`EnableClientCredentialsGrantType` が false でも、
+            //    専用 scope（`client_registration`）のトークンだけは出す**ので、
+            //    **口が受け付ける事実を広告に出す。**
+            //    **「その scope しか出ない」ことは、Discovery では表せない**
+            //    （**クライアントごとの `scope` の絞りと同じ事情**）ので、文書に書く。
+            if (Config.EnableClientCredentialsGrantType
+                || Config.EnableDynamicClientRegistration)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
             }
@@ -383,10 +399,32 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // **RP からのログアウトの口**（RP-Initiated Logout 1.0 §2.1）。
                 //   **実装しているなら、Discovery に出すことが REQUIRED。**
-                //   Front-Channel / Back-Channel Logout と Session Management は未実装なので、
-                //   frontchannel_logout_supported などは出さない（出すと「できる」と読まれる）。
                 OpenIDConfig.Add("end_session_endpoint",
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2EndSessionEndpoint);
+
+                //  **Back-Channel Logout に対応したことを広告する**（#310 の段階 2）。
+                //    | 項目 | 意味 |
+                //    |---|---|
+                //    | `backchannel_logout_supported` | **登録した `backchannel_logout_uri` を叩く** |
+                //    | `backchannel_logout_session_supported` | **`logout_token` に `sid` を入れる** |
+                //
+                //    **`sid` は必ず入れる**ので、後者も true である（段階 1 で `id_token` にも出した）。
+                //    **Front-Channel Logout（段階 3）と Session Management（見送り）は、まだ出さない**
+                //    （**出すと「できる」と読まれる**）。
+                OpenIDConfig.Add("backchannel_logout_supported", true);
+                OpenIDConfig.Add("backchannel_logout_session_supported", true);
+
+                //  **Front-Channel Logout に対応したことを広告する**（#310 の段階 3）。
+                //    | 項目 | 意味 |
+                //    |---|---|
+                //    | `frontchannel_logout_supported` | **登録した `frontchannel_logout_uri` を `iframe` で開く** |
+                //    | `frontchannel_logout_session_supported` | **その URL に `iss` と `sid` を付ける** |
+                //
+                //    **`sid` は必ず付ける**ので、後者も true である。
+                //    **Session Management（`check_session_iframe`）は見送った**ので、出さない
+                //    （**third-party cookie を読む仕組み**で、現代のブラウザでは効かなくなりつつある）。
+                OpenIDConfig.Add("frontchannel_logout_supported", true);
+                OpenIDConfig.Add("frontchannel_logout_session_supported", true);
 
                 #endregion
 
@@ -408,6 +446,19 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region OAuth2拡張
+
+            #region Dynamic Client Registration（#307 の段階 1）
+
+            //  **動的クライアント登録を開けた配備だけ広告する**
+            //    （OIDC Discovery §3 の `registration_endpoint` / RFC 7591 §3）。
+            //    **閉じている配備では口そのものが張られていない**ので、広告してはならない。
+            if (Config.EnableDynamicClientRegistration)
+            {
+                OpenIDConfig.Add("registration_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.DcrRegistrationEndpoint);
+            }
+
+            #endregion
 
             #region Revocation
             OpenIDConfig.Add("revocation_endpoint",
@@ -452,6 +503,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region FAPI
+
+            //  **DPoP に対応したことを広告する**（RFC 9449 §5.1。#311 の段階 1）。
+            //    **証明の署名に使える alg** を出す。
+            //    **一覧は `SigningKeys` の表が持つ**（発行・検証・広告が同じ表を見る。#129 の段階 3）。
+            //    **非対称の alg だけ**であり、**`none` は入っていない。**
+            OpenIDConfig.Add("dpop_signing_alg_values_supported", CmnAccessToken.SupportedAlgs);
 
             // **RFC 8705 §3.3 の名前は tls_client_certificate_bound_access_tokens、値は boolean**（#189 の 2）。
             //   以前は mutual_tls_sender_constrained_access_tokens（草案の名前）に文字列の "true" を入れていた。
@@ -785,6 +842,23 @@ namespace MultiPurposeAuthSite.TokenProviders
                 redirect_uri, client_id, response_type,
                 out valid_redirect_uri, ref err, ref errDescription))
             {
+                #region 登録の response_types（#307 の段階 1）
+
+                // **登録で許された `response_type` か**（RFC 7591 §2 の `response_types`）。
+                //   **`ClientModePolicy` の手前に 1 段置く** —
+                //   **登録が「`code` だけ」と言っているのに認可サーバが他も通すのでは、**
+                //   **登録の意味が無い。**
+                //   **登録が無ければ絞らない**（既存の登録を壊さないため。#198 と同じ倒し方）。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                if (!CmnEndpoints.CheckClientResponseType(client_id, response_type))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This response_type is not registered for this client.";
+                    return false;
+                }
+
+                #endregion
+
                 #region 登録種別（#224 の段階 2）
 
                 // **この response_type の経路を、登録種別で使えるか。**
@@ -912,6 +986,132 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return types.Length == 1 ? ClientModePolicy.Flow.AuthorizationCode : ClientModePolicy.Flow.Hybrid;
+        }
+
+        #endregion
+
+        #region 登録の grant_types / response_types（#307 の段階 1）
+
+        /// <summary>登録された response_types に、この response_type が入っているか</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">要求の response_type</param>
+        /// <returns>通してよいなら true</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `response_types`。**
+        /// **登録が無ければ絞らない**（既存の登録を壊さないため）。
+        ///
+        /// **比較は「要素の集合」として行う** — **`code id_token` と `id_token code` は同じ**
+        /// （OAuth 2.0 Multiple Response Types §4 : 順序は意味を持たない。#254 と同じ扱い）。
+        /// </remarks>
+        private static bool CheckClientResponseType(string client_id, string response_type)
+        {
+            List<string> permitted = Helper.GetInstance().GetClientResponseTypes(client_id);
+
+            if (permitted == null)
+            {
+                // **登録が無い（列が空）** ＝ 絞らない。
+                return true;
+            }
+
+            foreach (string registered in permitted)
+            {
+                if (CmnEndpoints.IsSameResponseType(registered, response_type))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>2 つの response_type が、同じ組み合わせか</summary>
+        /// <param name="a">response_type</param>
+        /// <param name="b">response_type</param>
+        /// <returns>同じなら true</returns>
+        /// <remarks>**空白で切った要素の集合として比べる**（順序は意味を持たない）。</remarks>
+        private static bool IsSameResponseType(string a, string b)
+        {
+            string[] x = (a ?? "").ToLower().Split(
+                new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] y = (b ?? "").ToLower().Split(
+                new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+            return x.Length == y.Length && x.All(t => y.Contains(t));
+        }
+
+        /// <summary>登録された grant_types に、この経路が入っているか</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="flow">経路</param>
+        /// <returns>通してよいなら true</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `grant_types`。**
+        /// **`ClientModePolicy` の手前に 1 段置く**（#307 の段階 1）。
+        /// **登録が無ければ絞らない**（既存の登録を壊さないため）。
+        ///
+        /// **`ClientModePolicy` との役割の違い** :
+        ///
+        /// | | 何を見るか |
+        /// |---|---|
+        /// | **この関数** | **そのクライアントが、その経路を登録したか**（RP の申告） |
+        /// | `ClientModePolicy` | **その登録種別（normal / fapi1 / fapi2…）に、その経路と証明を許すか**（AS の方針） |
+        /// </remarks>
+        private static bool CheckClientGrantType(string client_id, ClientModePolicy.Flow flow)
+        {
+            List<string> permitted = Helper.GetInstance().GetClientGrantTypes(client_id);
+
+            if (permitted == null)
+            {
+                // **登録が無い（列が空）** ＝ 絞らない。
+                return true;
+            }
+
+            string grantType = CmnEndpoints.GrantTypeOfFlow(flow);
+
+            return grantType == null || permitted.Contains(grantType);
+        }
+
+        /// <summary>経路から、RFC 7591 §2 の grant_types の値を引く</summary>
+        /// <param name="flow">経路</param>
+        /// <returns>grant_type の値（表に無ければ null ＝ 絞らない）</returns>
+        /// <remarks>
+        /// **認可エンドポイントで発行する経路（Implicit / Hybrid）は `implicit`**
+        /// （RFC 7591 §2 : `response_types` の `token` には `grant_types` の `implicit` が対応する）。
+        /// **Hybrid は `authorization_code` と `implicit` の両方を要する** ので、
+        /// **その 2 つを `response_types` 側で突き合わせる**（この関数は代表の 1 つを返す）。
+        /// </remarks>
+        private static string GrantTypeOfFlow(ClientModePolicy.Flow flow)
+        {
+            switch (flow)
+            {
+                case ClientModePolicy.Flow.AuthorizationCode:
+                    return OAuth2AndOIDCConst.AuthorizationCodeGrantType;
+
+                case ClientModePolicy.Flow.Implicit:
+                case ClientModePolicy.Flow.Hybrid:
+                    return OAuth2AndOIDCConst.ImplicitGrantType;
+
+                case ClientModePolicy.Flow.RefreshToken:
+                    return OAuth2AndOIDCConst.RefreshTokenGrantType;
+
+                case ClientModePolicy.Flow.ResourceOwnerPassword:
+                    return OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType;
+
+                case ClientModePolicy.Flow.ClientCredentials:
+                    return OAuth2AndOIDCConst.ClientCredentialsGrantType;
+
+                case ClientModePolicy.Flow.JwtBearer:
+                    return OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType;
+
+                case ClientModePolicy.Flow.Ciba:
+                    return OAuth2AndOIDCConst.CibaGrantType;
+
+                case ClientModePolicy.Flow.DeviceAuthZ:
+                    return OAuth2AndOIDCConst.DeviceAuthZGrantType;
+
+                default:
+                    // **表に無い経路は絞らない**（新しい経路を足したときに、黙って塞がないため）。
+                    return null;
+            }
         }
 
         #endregion
@@ -1215,6 +1415,27 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // Base64URL でない、JSON でない（外から来た値なので、例外にしない）。
                 return null;
             }
+        }
+
+        /// <summary>公開鍵（JWK）を、登録する形（Base64URL）にする（#307 の段階 3）</summary>
+        /// <param name="jwk">JWK（1 本。JWK Set ではない）</param>
+        /// <returns>登録する値（Base64URL の JWK）</returns>
+        /// <remarks>
+        /// **`DecodeRegisteredJwk` の逆である。** **形の知識を 1 か所に置くため、ここに並べた。**
+        /// **列が持つのは「JWK 1 本を Base64URL にしたもの」**で、**JWK Set ではない**
+        /// （`jwk_rsa_publickey` / `jwk_ecdsa_publickey` の 2 列に分かれている）。
+        /// **余白を入れない**（`Formatting.None`）。
+        /// </remarks>
+        public static string EncodeRegisteredJwk(JObject jwk)
+        {
+            if (jwk == null)
+            {
+                return "";
+            }
+
+            return CustomEncode.ToBase64UrlString(
+                CustomEncode.StringToByte(
+                    jwk.ToString(Formatting.None), CustomEncode.us_ascii));
         }
 
         /// <summary>登録された公開鍵（Base64URL の JWK）を復号する（無ければ空）</summary>
@@ -1923,6 +2144,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
+                // **登録で許されたグラントか**（RFC 7591 §2 の `grant_types`。#307 の段階 1）。
+                //   **ここでも見る** — **利用者にプッシュ通知を届ける前に断る**ため
+                //   （下の `MayUse` と同じ理屈）。**登録が無ければ絞らない。**
+                if (!CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.Ciba))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This grant_type is not registered for this client.";
+                    return false;
+                }
+
                 // **登録種別で CIBA を使えるか（#224 の段階 2）。**
                 //   以前はトークンの時点（GrantCiba）で初めて拒否していたため、
                 //   利用者にプッシュ通知が届き、承認させた後で失敗していた。
@@ -2140,6 +2371,103 @@ namespace MultiPurposeAuthSite.TokenProviders
             JwtConst.RS256
         };
 
+        #endregion
+
+        #region 登録されたクライアント認証の方法（#307 の段階 3）
+
+        /// <summary>この配備が扱う `token_endpoint_auth_method`（#307 の段階 3）</summary>
+        /// <remarks>
+        /// **この一覧が、広告（`token_endpoint_auth_methods_supported`）と、
+        /// 登録値の検証（`AllowsAuthMethod` / 動的登録）と、画面の選択肢を決める。**
+        ///
+        /// **4 つとも、検証する側は実装済みである**
+        /// （秘密は `ClientAuthentication`、`private_key_jwt` は #239 / #129 の段階 2、
+        /// `tls_client_auth` は #226）。
+        /// </remarks>
+        public static readonly string[] TokenEndpointAuthMethods = new string[]
+        {
+            OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
+            OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit(),
+            OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
+            OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
+        };
+
+        /// <summary>この証明で、このクライアントを通してよいか（#307 の段階 3）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="proof">実際に示された証明</param>
+        /// <returns>通してよければ true</returns>
+        /// <remarks>
+        /// **登録された `token_endpoint_auth_method` と、実際の証明を突き合わせる。**
+        ///
+        /// | 登録 | 通す証明 |
+        /// |---|---|
+        /// | **空**（未登録） | **`ClientSecret` だけ**（＝ `client_secret_basic` / `client_secret_post` を暗黙に許す） |
+        /// | `client_secret_basic` / `client_secret_post` | **`ClientSecret`** |
+        /// | **`private_key_jwt`** | **`PrivateKeyJwt`** |
+        /// | **`tls_client_auth`** | **`Mtls`** |
+        /// | **既知でない値** | **通さない**（登録の誤り。#224 の段階 2 と同じ方針） |
+        ///
+        /// **つまり「強い方法は明示が要る」。** **鍵や DN を登録しただけでは、その方法では通らない。**
+        /// **以前は「登録されている資格のどれかで通る」**作りだったため、
+        /// **登録で求めた強さが効かなかった。**
+        ///
+        /// **`client_secret_basic` と `client_secret_post` は区別しない。**
+        /// **どちらで来たかを、この層は知らない**（口が `client_id` ＋ `client_secret` に
+        /// 正規化して渡す）。**どちらを登録しても、両方が通る。**
+        ///
+        /// **断ったときは、運用のログに残す** — **資格情報は合っていたのに通らない**ので、
+        /// **残さないと配備側で原因が分からない。** **秘密そのものは書かない。**
+        ///
+        /// **呼ぶのは「資格情報が合った後」である。** 失敗の数え（#305 の段階 2）は
+        /// 従来どおり呼び出し側で行われる（**方法の違いも、認証の失敗として数える**）。
+        /// </remarks>
+        private static bool AllowsAuthMethod(string client_id, ClientModePolicy.Proof proof)
+        {
+            string registered = Helper.GetInstance().GetTokenEndpointAuthMethod(client_id);
+
+            bool allowed;
+
+            if (string.IsNullOrEmpty(registered))
+            {
+                // **明示が無ければ、秘密ベースの 2 つだけ**（#307 の段階 3 の決定）。
+                allowed = (proof == ClientModePolicy.Proof.ClientSecret);
+            }
+            else if (Array.IndexOf(CmnEndpoints.TokenEndpointAuthMethods, registered) < 0)
+            {
+                // **既知でない値が登録されている**（設定の誤り）。
+                allowed = false;
+            }
+            else if (registered == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit())
+            {
+                allowed = (proof == ClientModePolicy.Proof.PrivateKeyJwt);
+            }
+            else if (registered == OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit())
+            {
+                allowed = (proof == ClientModePolicy.Proof.Mtls);
+            }
+            else
+            {
+                // client_secret_basic / client_secret_post
+                allowed = (proof == ClientModePolicy.Proof.ClientSecret);
+            }
+
+            if (!allowed)
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The client authentication of {0} was refused. "
+                    + "(the registered token_endpoint_auth_method is \"{1}\", but the client proved \"{2}\")",
+                    client_id,
+                    string.IsNullOrEmpty(registered) ? "(none)" : registered,
+                    proof.ToString()));
+            }
+
+            return allowed;
+        }
+
+        #endregion
+
+        #region 検証する側の alg（#262。続き）
+
         /// <summary>登録された alg で絞ってよいか（#262）</summary>
         /// <param name="registeredAlg">登録された alg（null / 空 なら絞らない）</param>
         /// <param name="supported">受ける集合</param>
@@ -2178,7 +2506,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>JWT のヘッダから alg を読む（読めなければ null）（#262）</summary>
         /// <param name="jwt">JWS（コンパクト形式）</param>
         /// <returns>alg（読めなければ null）</returns>
-        private static string TryReadJwtAlg(string jwt)
+        /// <remarks>
+        /// **`TryReadJwtPayload` と対の、純粋な読み取り**である。
+        /// **`software_statement` の検証でも使う**ので公開した（#307 の段階 4）。
+        /// </remarks>
+        public static string TryReadJwtAlg(string jwt)
+        {
+            JObject header = CmnEndpoints.TryReadJwtHeader(jwt);
+
+            return (header == null) ? null : (string)header[JwtConst.alg];
+        }
+
+        /// <summary>JWT のヘッダを読む（読めなければ null）（#311 の段階 1）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>ヘッダ（読めなければ null）</returns>
+        /// <remarks>
+        /// **`TryReadJwtPayload` と対の、純粋な読み取り**である。
+        /// **DPoP の証明は、ヘッダに公開鍵（`jwk`）を持つ**ので、
+        /// **ヘッダ全体を読む口が要る**（`TryReadJwtAlg` もここに委ねている）。
+        /// </remarks>
+        public static JObject TryReadJwtHeader(string jwt)
         {
             if (string.IsNullOrEmpty(jwt))
             {
@@ -2194,11 +2541,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return null;
                 }
 
-                JObject header = (JObject)JsonConvert.DeserializeObject(
+                return (JObject)JsonConvert.DeserializeObject(
                     CustomEncode.ByteToString(
                         CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
-
-                return (string)header[JwtConst.alg];
             }
             catch
             {
@@ -2326,26 +2671,42 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             valid_redirect_uri = "";
 
+            //  **事前登録は n 件ある**（#306）。**全件を読み、要素ごとに定数値を解決する。**
+            //    **登録は空白区切りの 1 つの文字列**（設定ファイルでも DB の列でも同じ形）。
+            string[] preRegisteredUris = Helper.GetInstance().GetClientsRedirectUris(client_id, response_type);
+
+            for (int i = 0; i < preRegisteredUris.Length; i++)
+            {
+                // 定数値は変換する（test_self_code など）。
+                preRegisteredUris[i] = CmnEndpoints.GetRedirectUriFromConstr(preRegisteredUris[i]) ?? "";
+            }
+
             // redirect_uriのチェック
             if (string.IsNullOrEmpty(redirect_uri))
             {
                 // redirect_uriの指定が無い。
 
-                // クライアント識別子に対応する事前登録したredirect_uriを取得する。
-                redirect_uri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
-
-                if (!string.IsNullOrEmpty(redirect_uri))
+                if (preRegisteredUris.Length == 1)
                 {
-                    // 事前登録されている。
-                    // 定数値は変換する。
-                    valid_redirect_uri = CmnEndpoints.GetRedirectUriFromConstr(redirect_uri);
+                    //  **1 件だけ登録されている。** **それを使う**（従来どおり）。
+                    valid_redirect_uri = preRegisteredUris[0];
                     return true;
                 }
-                else
+                else if (preRegisteredUris.Length == 0)
                 {
                     // 事前登録されていない。
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.redirect_uri_NotRegistered;
+                    return false;
+                }
+                else
+                {
+                    //  **2 件以上登録されている**（#306）。
+                    //    **どれを使うべきか決められない**ので、**要求で指定させる。**
+                    //    RFC 6749 §3.1.2.3 : **複数登録しているなら、要求に redirect_uri を含めること。**
+                    //    **1 件だけの配備では、従来どおり省略できる**（上の分岐）。
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "redirect_uri is required because multiple redirect_uris are registered.";
                     return false;
                 }
             }
@@ -2359,15 +2720,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   **`test_self_code_manage` を記号にして登録値で表せるようにし、分岐を消した。**
                 //   **例外は無い。**
                 {
-                    // クライアント識別子に対応する事前登録したredirect_uri
-                    string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
-
-                    // 定数値は変換する。
-                    preRegisteredUri = CmnEndpoints.GetRedirectUriFromConstr(preRegisteredUri);
-
-                    //if (redirect_uri.StartsWith(preRegisteredUri))
-                    if (preRegisteredUri == null) preRegisteredUri = ""; // null対策
-
                     // **単純文字列比較**（#263）。**大文字小文字を区別する。**
                     //   RFC 6749 §3.1.2.3 は RFC 3986 §6.2.1（Simple String Comparison）を指しており、
                     //   **正規化せず、1 文字ずつ比べること**を求めている（OIDC Core §3.1.2.1 も exact match）。
@@ -2375,19 +2727,24 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //   **仕様が「正規化しない比較」と言っているので、そこも揃っていなければ通さない。**
                     //   以前は `ToLower()` 同士で比べていたため、**パスの大文字小文字だけが違う値でも通っていた**
                     //   （`post_logout_redirect_uri` の方は #232 の時点から Ordinal で比べている）。
-                    if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
+                    //
+                    //  **n 件のときは、どれか 1 つと完全一致すればよい**（#306）。
+                    //    **前方一致にはしない。** **登録の 1 本が、別の登録の接頭辞になっていても、
+                    //    それぞれ別の値として扱う。**
+                    foreach (string preRegisteredUri in preRegisteredUris)
                     {
-                        // 完全一致する場合。
-                        valid_redirect_uri = redirect_uri;
-                        return true;
+                        if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
+                        {
+                            // 完全一致する場合。
+                            valid_redirect_uri = redirect_uri;
+                            return true;
+                        }
                     }
-                    else
-                    {
-                        // 完全一致しない場合。
-                        err = OAuth2AndOIDCConst.invalid_request;
-                        errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri;
-                        return false;
-                    }
+
+                    // どれとも完全一致しない場合。
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri;
+                    return false;
                 }
             }
         }
@@ -2696,12 +3053,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="code">string</param>
         /// <param name="code_verifier">string</param>
         /// <param name="redirect_uri">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantAuthorizationCodeCredentials(
             string grant_type, string client_id, string client_secret,
-            string assertion, X509Certificate2 x509,
+            string assertion, X509Certificate2 x509, string dPoPProof,
             string code, string code_verifier, string redirect_uri,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
@@ -2709,6 +3067,13 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableAuthorizationCodeGrantType)
             {
@@ -2786,6 +3151,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
+                //  **認可要求で `dpop_jkt` を送っていたなら、その鍵の証明でしか引き換えられない**
+                //    （RFC 9449 §10。#311 の段階 4）。
+                //    **PKCE の必須性を code 側から決めるのと同じ考え**である
+                //    （**クライアントが何を送ってきたかでは決めない**）。
+                //    **code を消費する前に断る** — **断られた後、同じ code でやり直せる。**
+                if (authned && !CmnEndpoints.CheckDPoPJktOfCode(code, jkt, err))
+                {
+                    return false;
+                }
+
                 if (authned)
                 {
                     string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, redirect_uri);
@@ -2826,7 +3201,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                         x509, clientMode, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
-                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                        // **DPoP の鍵に縛る**（#311 の段階 1。**証明が無ければ空**）
+                        jkt);
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -2839,11 +3216,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // refresh_token
                     // **登録種別で refresh_token の経路を使えないなら、発行しない**（#224 の段階 2）。
                     //   以前は発行していたが、使うと必ず拒否された（受け取ったのに使えない資格情報）。
+                    //   **登録で `refresh_token` を申告していないクライアントにも、発行しない**
+                    //     （RFC 7591 §2 の `grant_types`。#307 の段階 1。**登録が無ければ絞らない**）。
                     string refresh_token = "";
                     if (Config.EnableRefreshToken
-                        && ClientModePolicy.MayUse(clientMode, ClientModePolicy.Flow.RefreshToken))
+                        && ClientModePolicy.MayUse(clientMode, ClientModePolicy.Flow.RefreshToken)
+                        && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
-                        refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                        // **access_token を縛ったなら、refresh_token も同じ鍵に縛る**
+                        //   （RFC 9449 §5。#311 の段階 4）。
+                        //   **access_token だけを縛っても、更新で縛りの無いものに乗り換えられる。**
+                        refresh_token = RefreshTokenProvider.Create(
+                            CmnAccessToken.BindJkt(tokenPayload, jkt));
                     }
 
                     // オペレーション・トレース・ログ出力
@@ -2853,7 +3237,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         client_id, name,                                         // Client Account
                         PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, jwkString);
+                    ret = CmnEndpoints.CreateAccessTokenResponse(
+                        access_token, refresh_token, jwkString, jkt);
 
                     return true;
 
@@ -2893,18 +3278,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="refresh_token">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantRefreshTokenCredentials(
             string grant_type, string client_id, string client_secret, string clientAssertion,
-            X509Certificate2 x509,
+            X509Certificate2 x509, string dPoPProof,
             string refresh_token, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableRefreshToken)
             {
@@ -2921,6 +3314,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 #endregion
+
+                //  **縛られた refresh_token は、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §5。#311 の段階 4）。
+                //    **消費する前に断る** — **断られた後、同じ refresh_token でやり直せる**
+                //    （**ローテーションで一族ごと失効させてしまわない**。#188 の段階 3）。
+                if (authned && !CmnEndpoints.CheckDPoPJktOfRefreshToken(refresh_token, jkt, err))
+                {
+                    return false;
+                }
 
                 if (authned)
                 {
@@ -2963,7 +3365,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                             x509, clientMode, out string aud, out string sub,
                             // **登録された署名 alg で署名する**（#129 の段階 2）
-                            Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                            Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                            // **DPoP の鍵に縛る**（#311 の段階 1。**証明が無ければ空**）
+                            jkt);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)
@@ -2976,7 +3380,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string new_refresh_token = "";
                         if (Config.EnableRefreshToken)
                         {
-                            new_refresh_token = RefreshTokenProvider.Create(tokenPayload, familyId);
+                            // **縛りは、ローテーションしても引き継ぐ**（#311 の段階 4）。
+                            //   **引き継がないと、1 回更新するだけで縛りが外れる。**
+                            new_refresh_token = RefreshTokenProvider.Create(
+                                CmnAccessToken.BindJkt(tokenPayload, jkt), familyId);
                         }
 
                         // オペレーション・トレース・ログ出力
@@ -2986,7 +3393,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                         // Client Account
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, new_refresh_token, jwkString);
+                        ret = CmnEndpoints.CreateAccessTokenResponse(
+                            access_token, new_refresh_token, jwkString, jkt);
 
                         return true;
                     }
@@ -3025,22 +3433,56 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="username">string</param>
         /// <param name="password">string</param>
         /// <param name="scopes">string</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
+        /// <remarks>
+        /// **このグラントは、利用者のパスワードを `/token` に流す**（RFC 6749 §4.3）。
+        /// **雛形の既定では無効**（`EnableResourceOwnerPasswordCredentialsGrantType`）。
+        ///
+        /// **パスワードの失敗を数える**（#305 の段階 4）。
+        ///
+        /// **段階 4 より前は、ここだけ数えていなかった。**
+        /// **`VerifyHashedPassword` を直に呼んでいて、`SignInManager` を通らない**ため、
+        /// **画面のサインインのロックアウトが効かず、何回でも試せた**
+        /// （クライアント認証の失敗は数えていたが、**それはクライアントの秘密の話**であって、
+        /// **同じ `client_id` の下で利用者名を変えながら試す経路は止まらなかった**）。
+        ///
+        /// **画面のサインインと同じ数えに合流させた** —
+        /// `MaxFailedAccessAttemptsBeforeLockout` /
+        /// `DefaultAccountLockoutTimeSpanFromSeconds` /
+        /// `UserLockoutEnabledByDefault`（`Users` 表の `AccessFailedCount` と
+        /// `LockoutEndDateUtc`）。**別の数えを作らない** —
+        /// **口を変えれば回数が戻る、という抜けを作らないため。**
+        ///
+        /// **応答は、どの場合も `access_denied` のまま。**
+        /// **「利用者が居ない」「パスワードが違う」「断っている」を区別させない**
+        /// （`TC-4.2` が、この区別が付かないことを測っている）。
+        ///
+        /// **利用者名が見つからないときは数えられない**（鍵が無い）。
+        /// **利用者名を変えながら試す経路は、口ごとのレート制限が頭を打つ**（段階 3）。
+        /// </remarks>
         public static bool GrantResourceOwnerCredentials(
             string grant_type, string client_id,
             string client_secret, string clientAssertion, X509Certificate2 x509,
-            string username, string password, string scopes,
+            string dPoPProof, string username, string password, string scopes,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
             {
@@ -3085,6 +3527,19 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     if (user != null)
                     {
+                        //  **断っている間は、正しいパスワードでも通さない**（#305 の段階 4）。
+                        //    **画面のサインインと同じ数え**（ASP.NET Identity のロックアウト）。
+                        //    **応答は誤パスワードと同じ `access_denied`**
+                        //    （**断っていること自体を教えない**）。
+                        if (CmnEndpoints.IsUserLockedOut(user))
+                        {
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
+                            err.Add(OAuth2AndOIDCConst.error_description,
+                                Resources.ApplicationOAuthBearerTokenProvider.access_denied);
+
+                            return false;
+                        }
+
                         // ユーザーが見つかった場合。
 #if NETFX
                         PasswordVerificationResult pvRet = (new CustomPasswordHasher()).VerifyHashedPassword(user.PasswordHash, password);
@@ -3093,22 +3548,47 @@ namespace MultiPurposeAuthSite.TokenProviders
 #endif
                         if (pvRet.HasFlag(PasswordVerificationResult.Success))
                         {
+                            //  **成功したので、数えた分は消す**（#305 の段階 4）。
+                            CmnEndpoints.ResetUserAccessFailed(user);
+
                             // ClaimsIdentityにClaimを追加する。
                             ClaimsIdentity identity = new ClaimsIdentity(OAuth2AndOIDCConst.Bearer);
 
                             // Name Claimを追加
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
-                            // ClaimsIdentityに、その他、所定のClaimを追加する。
                             // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
-                            identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
+                            List<string> issuedScopes = new List<string>(
+                                Helper.FilterSupportedScopes(scopes.Split(' '), client_id));
+
+                            //  **クライアント登録の管理 API 専用のトークンは、scope も期限も絞る**
+                            //    （#307 の段階 1）。
+                            //
+                            //  **他の scope と混ぜない** — **登録を作れる権限を持ったトークンが、**
+                            //    **利用者の属性を読む用途でも使い回されると、寿命を短くした意味が薄れる。**
+                            //    **要求に `client_registration` が入っていたら、それ 1 本のトークンにする。**
+                            //
+                            //  **この scope は、登録に明記したクライアントにしか付かない**
+                            //    （`Helper.FilterSupportedScopes`）。
+                            TimeSpan expires = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes;
+
+                            if (issuedScopes.Contains(Const.ScopeClientRegistration))
+                            {
+                                issuedScopes = new List<string>() { Const.ScopeClientRegistration };
+                                expires = Config.DcrAccessTokenExpireTimeSpanFromSeconds;
+                            }
+
+                            // ClaimsIdentityに、その他、所定のClaimを追加する。
+                            identity = Helper.AddClaim(identity, client_id, issuedScopes, null, "");
 
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
                             	client_id, identity.Name, identity.Claims,
-                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                                DateTimeOffset.Now.Add(expires),
                                 // **登録された署名 alg で署名する**（#129 の段階 2）
-                                Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                                Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                                // **DPoP の鍵に縛る**（#311 の段階 1）
+                                jkt);
 
                             // オペレーション・トレース・ログ出力
                             string name = Helper.GetInstance().GetClientName(client_id);
@@ -3117,11 +3597,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 user.Id, user.UserName, // User Account
                                 client_id, name));      // Client Account
 
-                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
+                            ret = CmnEndpoints.CreateAccessTokenResponse(
+                                access_token, "", jwkString, jkt);
                             return true;
                         }
                         else
                         {
+                            //  **失敗を 1 回数える**（#305 の段階 4）。
+                            //    **上限に達したら、一定時間断る。**
+                            CmnEndpoints.RecordUserAccessFailed(user);
+
                             // パスワードが一致しない場合。
                             err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
                             err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.access_denied);
@@ -3165,13 +3650,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="scopes">string</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantClientCredentials(
             string grant_type, string client_id, string client_secret, string clientAssertion,
-            X509Certificate2 x509,
+            X509Certificate2 x509, string dPoPProof,
             string scopes, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -3179,7 +3665,29 @@ namespace MultiPurposeAuthSite.TokenProviders
             string jwkString = "";
             err = new Dictionary<string, string>();
 
-            if (Config.EnableClientCredentialsGrantType)
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
+
+            //  **動的登録のための細い道**（#307 の段階 5-b）。
+            //    **`EnableClientCredentialsGrantType` が false でも、
+            //    専用 scope（`client_registration`）を要求したときだけ通す。**
+            //
+            //  **なぜ分けるか** : **「CI から登録を作りたい」だけなのに、
+            //    `client_credentials` を配備全体で開けさせるのは広すぎる**
+            //    （**この経路は利用者の居ないトークンを出す**）。
+            //
+            //  **要求の scope で判断する**（**発行の段で、実際に出る scope をもう一度見る**）。
+            bool dcrOnly = !Config.EnableClientCredentialsGrantType
+                && Config.EnableDynamicClientRegistration
+                && (scopes ?? "").Split(new char[] { ' ' },
+                        StringSplitOptions.RemoveEmptyEntries)
+                    .Contains(Const.ScopeClientRegistration);
+
+            if (Config.EnableClientCredentialsGrantType || dcrOnly)
             {
                 #region 認証
 
@@ -3225,22 +3733,56 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+
                     // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
-                    identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
+                    List<string> issuedScopes = new List<string>(
+                        Helper.FilterSupportedScopes(scopes.Split(' '), client_id));
+
+                    //  **クライアント登録の管理 API 専用のトークンは、scope も期限も絞る**
+                    //    （#307 の段階 5-b。**ROPC と同じ規則**。段階 1）。
+                    //
+                    //  **他の scope と混ぜない** — **登録を作れる権限を持ったトークンを、
+                    //    他の用途でも使い回されると、寿命を短くした意味が薄れる。**
+                    //
+                    //  **この scope は、登録に明記したクライアントにしか付かない**
+                    //    （`Helper.FilterSupportedScopes`）。
+                    TimeSpan expires = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes;
+
+                    if (issuedScopes.Contains(Const.ScopeClientRegistration))
+                    {
+                        issuedScopes = new List<string>() { Const.ScopeClientRegistration };
+                        expires = Config.DcrAccessTokenExpireTimeSpanFromSeconds;
+                    }
+                    else if (dcrOnly)
+                    {
+                        //  **この経路を開けたのは、専用 scope のためだけ**である。
+                        //    **その scope が出ないなら、グラントを開けていないのと同じ**に倒す
+                        //    （**クライアントに `client_registration` を登録していないとき**）。
+                        //    **断り方を変えない** — **「scope を持っているか」を外から探らせない。**
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
+                        err.Add(OAuth2AndOIDCConst.error_description,
+                            Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
+                        return false;
+                    }
+
+                    identity = Helper.AddClaim(identity, client_id, issuedScopes, null, "");
 
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
                         client_id, identity.Name, identity.Claims,
-                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                        DateTimeOffset.Now.Add(expires),
                         // **登録された署名 alg で署名する**（#129 の段階 2）
-                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                        // **DPoP の鍵に縛る**（#311 の段階 1）
+                        jkt);
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format(
                         "Passed the 'client credentials flow' by {0}({1}).",
                         client_id, sub)); // Client Account
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
+                    ret = CmnEndpoints.CreateAccessTokenResponse(
+                        access_token, "", jwkString, jkt);
                     return true;
 
                     #endregion
@@ -3274,17 +3816,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="assertion">string</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="scope">string（トークン要求の scope。RFC 7521 4.1 / RFC 7523 2.1）</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantJwtBearerTokenCredentials(
-            string grant_type, string assertion, X509Certificate2 x509, string scope,
+            string grant_type, string assertion, X509Certificate2 x509, string dPoPProof,
+            string scope,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableJwtBearerTokenFlowGrantType &&
                 grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
@@ -3333,13 +3884,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     iss, identity.Name, identity.Claims,
                                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                                     // **登録された署名 alg で署名する**（#129 の段階 2。client_id は iss）
-                                    Helper.GetInstance().GetIdTokenSignedResponseAlg(iss));
+                                    Helper.GetInstance().GetIdTokenSignedResponseAlg(iss),
+                                    // **DPoP の鍵に縛る**（#311 の段階 1）
+                                    jkt);
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format(
                                     "Passed the 'jwt bearer token flow' by {0}({1}).", iss, sub)); // Client Account
 
-                                ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
+                                ret = CmnEndpoints.CreateAccessTokenResponse(
+                                    access_token, "", jwkString, jkt);
                                 return true;
                             }
                             else
@@ -3380,16 +3934,24 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="device_code">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantDeviceAuthZ(
             string grant_type, string client_id, string client_secret,
-            X509Certificate2 x509, string device_code,
+            X509Certificate2 x509, string dPoPProof, string device_code,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableDeviceAuthZGrantType)
             {
@@ -3453,7 +4015,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                         null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
-                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                        // **DPoP の鍵に縛る**（#311 の段階 1）
+                        jkt);
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -3466,12 +4030,20 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // refresh_token
                     // **登録種別で refresh_token の経路を使えないなら、発行しない**（#224 の段階 2）。
                     //   device の登録は refresh_token の経路を使えない（normal の登録は従来どおり発行する）。
+                    //   **登録で `refresh_token` を申告していないクライアントにも、発行しない**
+                    //     （RFC 7591 §2 の `grant_types`。#307 の段階 1。**登録が無ければ絞らない**）。
                     string refresh_token = "";
                     if (Config.EnableRefreshToken
                         && ClientModePolicy.MayUse(
-                            Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.RefreshToken))
+                            Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.RefreshToken)
+                        && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
-                        refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                        // **この経路でも、縛ったなら refresh_token も縛る**（#311 の段階 4）。
+                        //   **デバイスの経路に `dpop_jkt` は無い**（認可要求がブラウザを通らない）が、
+                        //   **`/token` で証明を受けていれば、access_token は縛られている** —
+                        //   **refresh_token だけ縛られないのは、穴になる。**
+                        refresh_token = RefreshTokenProvider.Create(
+                            CmnAccessToken.BindJkt(tokenPayload, jkt));
                     }
 
                     // オペレーション・トレース・ログ出力
@@ -3481,7 +4053,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         client_id, name,                                         // Client Account
                         PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "");
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "", jkt);
 
                     return true;
                 }
@@ -3492,12 +4064,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                     switch (deviceState)
                     {
                         case OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending:
-
-                            // このケースだけ、slow_downを検討する（どうやって？）。
-
-                            //if() err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.slow_down.ToStringByEmit());
-                            //else
                             err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending.ToStringByEmit());
+                            break;
+
+                        case OAuth2AndOIDCEnum.DeviceAuthZState.slow_down:
+
+                            //  **速すぎるポーリング**（#305 の段階 1。RFC 8628 §3.5）。
+                            //    **まだ承認されていない**（pending と同じ状態）が、
+                            //    **間隔を伸ばさせる**ために別の値を返す
+                            //    （クライアントは interval を 5 秒伸ばす）。
+                            //    **判定は `DeviceAuthZProvider`**（`LastPolledAt` を見る）。
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.slow_down.ToStringByEmit());
                             break;
 
                         case OAuth2AndOIDCEnum.DeviceAuthZState.access_denied:
@@ -3544,17 +4121,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="auth_req_id">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantCiba(
             string grant_type, string client_id, string client_secret, X509Certificate2 x509, 
-            string auth_req_id, out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            string dPoPProof, string auth_req_id,
+            out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableCibaGrantType)
             {
@@ -3615,7 +4201,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            x509, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out string aud, out string sub, JwtConst.ES256);
+                            x509, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out string aud, out string sub,
+                            JwtConst.ES256,
+                            // **DPoP の鍵に縛る**（#311 の段階 1）
+                            jkt);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)
@@ -3646,7 +4235,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                         // Client Account
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "");
+                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "", jkt);
 
                         return true;
                     }
@@ -3657,12 +4246,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                         switch (cibaState)
                         {
                             case OAuth2AndOIDCEnum.CibaState.authorization_pending:
-                                
-                                // このケースだけ、slow_downを検討する（どうやって？）。
-
-                                //if() err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.slow_down.ToStringByEmit());
-                                //else
                                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit());
+                                break;
+
+                            case OAuth2AndOIDCEnum.CibaState.slow_down:
+
+                                //  **速すぎるポーリング**（#305 の段階 1。CIBA §11）。
+                                //    **判定は `CibaProvider`**（`LastPolledAt` を見る）。
+                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.slow_down.ToStringByEmit());
                                 break;
 
                             default:
@@ -3979,6 +4570,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // **ログアウト後の戻り先のテスト用**（#232）。
                 //   サイトごとに URL が違う（net48 / net10.0）ので、定数で登録して、ここで解決する。
                 ret = Config.OAuth2ClientEndpointsRootURI + "/Home/Index";
+            }
+            else if (constr.ToLower() == Const.TestSelfFrontChannelLogout)
+            {
+                // **Front-Channel Logout の受け口のテスト用**（#310 の段階 3）。
+                //   **ブラウザが `iframe` で開く口**（`IsLockedDownTestEndpoints` で閉じる）。
+                ret = Config.OAuth2ClientEndpointsRootURI + "/Account/FrontChannelLogoutClient";
+            }
+            else if (constr.ToLower() == Const.TestSelfBackChannelLogout)
+            {
+                // **Back-Channel Logout の受け口のテスト用**（#310 の段階 2）。
+                //   **このサイトが自分の RP も兼ねる**（`IsLockedDownTestEndpoints` で閉じる口）。
+                ret = Config.OAuth2ClientEndpointsRootURI + "/Account/BackChannelLogoutClient";
             }
             else
             {
@@ -4359,6 +4962,32 @@ namespace MultiPurposeAuthSite.TokenProviders
             return 400;
         }
 
+        /// <summary>保護されたリソースのエラー応答の HTTP ステータス（#311 の段階 4）</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>HTTP ステータス</returns>
+        /// <remarks>
+        /// **`use_dpop_nonce` は、口によって状態が違う**（RFC 9449）。
+        ///
+        /// | 口 | 状態 |
+        /// |---|---|
+        /// | **`/token`** | **400**（§8。**トークン エンドポイントのエラー**） |
+        /// | **保護されたリソース** | **401**（§9。**チャレンジである**） |
+        ///
+        /// **同じ error で状態が違う**ので、**口の側で決める** —
+        /// **`GetErrorStatusCode` は `/token` の表**であり、そこに混ぜない。
+        /// </remarks>
+        public static int GetResourceErrorStatusCode(Dictionary<string, string> err)
+        {
+            if (err != null
+                && err.TryGetValue(OAuth2AndOIDCConst.error, out string error)
+                && error == CmnDPoP.UseDPoPNonce)
+            {
+                return 401;
+            }
+
+            return CmnEndpoints.GetErrorStatusCode(err);
+        }
+
         /// <summary>Bearer トークンのエラー応答の WWW-Authenticate を作る（RFC 6750 3）</summary>
         /// <param name="realm">realm（保護資源の名前）</param>
         /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
@@ -4387,6 +5016,47 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return string.Join(", ", items);
+        }
+
+        /// <summary>チャレンジのスキームを決める（RFC 9449 §7.1。#311 の段階 4）</summary>
+        /// <param name="authorizationHeader">要求の `Authorization` ヘッダ</param>
+        /// <returns>`DPoP` または `Bearer`</returns>
+        /// <remarks>
+        /// **`DPoP` スキームで来た要求には、`DPoP` で答える**（§7.1）。
+        /// **それ以外は従来どおり `Bearer`** — **DPoP の話をしていない相手に、
+        /// 別のスキームを突き付けない。**
+        ///
+        /// **両方を並べて広告はしない。** **できるが、`Bearer` だけを知るクライアントが
+        /// 2 つ目を読めるとは限らず、得るものが無い。**
+        /// </remarks>
+        public static string GetChallengeScheme(string authorizationHeader)
+        {
+            CmnDPoP.GetToken(authorizationHeader, out string _, out bool isDPoP);
+
+            return isDPoP ? CmnDPoP.TokenType : "Bearer";
+        }
+
+        /// <summary>チャレンジの中身を作る（RFC 6750 §3 / RFC 9449 §7.1）</summary>
+        /// <param name="scheme">`GetChallengeScheme` が返したスキーム</param>
+        /// <param name="realm">realm（保護資源の名前）</param>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>スキーム名より後ろ</returns>
+        /// <remarks>
+        /// **`DPoP` のときは `algs` も示す**（§7.1。**証明の署名に使える alg**）。
+        /// **一覧は `SigningKeys` の表が持つ**（**Discovery の
+        /// `dpop_signing_alg_values_supported` と同じもの**）。
+        /// </remarks>
+        public static string GetChallengeParameter(
+            string scheme, string realm, Dictionary<string, string> err)
+        {
+            string parameter = CmnEndpoints.GetBearerChallengeParameter(realm, err);
+
+            if (scheme != CmnDPoP.TokenType)
+            {
+                return parameter;
+            }
+
+            return parameter + ", algs=\"" + string.Join(" ", CmnAccessToken.SupportedAlgs) + "\"";
         }
 
         #endregion
@@ -4451,6 +5121,22 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             proof = ClientModePolicy.Proof.None;
 
+            //  **続けて失敗しているクライアントは、断る**（#305 の段階 2）。
+            //    **断っている間は、正しい資格情報でも通さない** — それがロックアウトである。
+            //    **応答は従来と同じ `invalid_client`**（**断っていることを教えない**）。
+            //
+            //  **鍵は「クライアント ＋ 送信元」**（#305 の段階 4）。
+            //    **断るのは、失敗を重ねた送信元だけ**である。
+            string failureKey = AuthFailureProvider.ClientKey(client_id);
+
+            if (AuthFailureProvider.IsLockedOut(failureKey))
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The client authentication of {0} was refused. (too many failures)", client_id));
+
+                return false;
+            }
+
             // client_id & client_secret
             if (!string.IsNullOrEmpty(client_id))
             {
@@ -4458,10 +5144,22 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（client_secret）を行なう。
-                    if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
+                    string registeredSecret = Helper.GetInstance().GetClientSecret(client_id);
+
+                    //  **登録が空なら通さない**（#305 の段階 4。**空と空の一致を作らない**）。
+                    //  **登録された方法でなければ通さない**（#307 の段階 3）。
+                    //    **明示が無ければ、秘密ベースの 2 つを暗黙に許す。**
+                    if (!string.IsNullOrEmpty(registeredSecret)
+                        && client_secret == registeredSecret
+                        && CmnEndpoints.AllowsAuthMethod(
+                            client_id, ClientModePolicy.Proof.ClientSecret))
                     {
                         proof = ClientModePolicy.Proof.ClientSecret;
                         x509 = null; // client_secretがあった場合、x509を無効化
+
+                        //  **成功したら、数えた分は消す**（連続した失敗だけを数える）。
+                        AuthFailureProvider.Clear(failureKey);
+
                         return true;
                     }
                 }
@@ -4469,12 +5167,40 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（X509Certificate2）を行なう。
-                    if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                    string registeredDn = Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id);
+
+                    //  **登録が空なら通さない**（#305 の段階 4）。
+                    //    **以前は、登録の無い `client_id` に Subject が空の証明書を出すと、
+                    //    空と空が一致して通った**（`/revoke` / `/introspect` は
+                    //    この後の登録種別の判定を通らないので、そこで落ちない）。
+                    //  **登録された方法でなければ通さない**（#307 の段階 3）。
+                    //    **`tls_client_auth` の明示が要る** — **DN を登録しただけでは通らない。**
+                    if (!string.IsNullOrEmpty(registeredDn)
+                        && x509.Subject == registeredDn
+                        && CmnEndpoints.AllowsAuthMethod(
+                            client_id, ClientModePolicy.Proof.Mtls))
                     {
                         proof = ClientModePolicy.Proof.Mtls;
+
+                        AuthFailureProvider.Clear(failureKey);
+
                         return true;
                     }
                 }
+            }
+
+            //  **失敗を 1 回数える**（#305 の段階 2）。
+            //    **`client_id` が空のときは数えない**（鍵にならない）。
+            //
+            //  **登録されていない `client_id` では数えない**（#305 の段階 4）。
+            //    **要求の `client_id` をそのまま鍵にして行を作ると、
+            //    誰でも `AuthFailure` 表を好きなだけ太らせられる。**
+            //    **登録の有無は `GetClientName` で見る**
+            //    （`DeviceAuthZClientAuthentication` と同じ見方）。
+            if (!string.IsNullOrEmpty(client_id)
+                && !string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id)))
+            {
+                AuthFailureProvider.Record(failureKey);
             }
 
             return false;
@@ -4523,6 +5249,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         public static bool IsDeviceAuthZAllowed(string client_id)
         {
+            // **登録で許されたグラントか**（RFC 7591 §2 の `grant_types`。#307 の段階 1）。
+            //   **利用者に user_code を打ち込ませる前に断る**（登録が無ければ絞らない）。
+            if (!CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.DeviceAuthZ))
+            {
+                return false;
+            }
+
             // 表の「Device AuthZ → normal / device」の行で判定する（#224 の段階 1）。
             //   この行は証明を問わないので、MayUse で足りる。既知でない登録値は拒否（段階 2）。
             return ClientModePolicy.MayUse(
@@ -4552,9 +5285,29 @@ namespace MultiPurposeAuthSite.TokenProviders
             // コンフィデンシャル クライアントは認証必須
             // - client_secretを登録済み
             // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
+            // - **公開鍵を登録済み**（private_key_jwt のみのクライアント）（#307 の段階 3）
             // - x509を提示してきた
+            //
+            //  **鍵の登録を数えていなかった**（#307 の段階 3 で閉じた）。
+            //    **秘密も DN も無く、鍵だけを登録したクライアント**は、
+            //    **ここで「パブリック クライアント」とみなされ、`client_id` の確認だけで通っていた。**
+            //    **`IsDeviceAuthZAllowed` のコメントが警戒しているのと同じこと**が、
+            //    **逆向き（強い方法を登録した側）で起きていた。**
+            //
+            //  **この口は `client_assertion` を読んでいない**（RFC 8628 の `/device_authz` /
+            //    `/token`。両アプリの呼び出しに引数が無い）ので、
+            //    **鍵だけのクライアントは、ここで認証に失敗して断られる** — **出さない側に転ぶ。**
+            //    **デバイス フローを使うなら、秘密ベースの方法を登録すること**
+            //    （**動的登録は、その組み合わせを登録の時点で断る**）。
+            //  **`jwks_uri` を登録したクライアントも、コンフィデンシャルである**（#309 の段階 1）。
+            //    **数えないと、鍵を URL で登録したクライアントが
+            //    「パブリック」とみなされ、`client_id` の確認だけで通ってしまう**
+            //    （**列の鍵を数えていなかった #307 の段階 3 と、同じ形の穴**）。
             if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
                 || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetJwkRsaPublickey(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetJwkECDsaPublickey(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetJwksUri(client_id))
                 || x509 != null)
             {
                 return CmnEndpoints.ClientAuthentication(
@@ -4569,6 +5322,16 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region assertion
+
+        /// <summary>
+        /// `jwks_uri` から引いた鍵を、何本まで試すか（**`kid` の無い JWS のとき**）。
+        /// </summary>
+        /// <remarks>
+        /// **`kid` が在れば 1 本に決まる**（RFC 7515 §4.1.4 は任意なので、無いこともある）。
+        /// **無いときは在る鍵を順に試す**ことになるので、**上限を置く** —
+        /// **鍵を何十本も並べた JWK Set を出す相手に、検証を何十回もさせられないため。**
+        /// </remarks>
+        private const int MaxJwksFromUri = 4;
 
         /// <summary>ClientAuthentication</summary>
         /// <param name="client_id">string</param>
@@ -4611,6 +5374,38 @@ namespace MultiPurposeAuthSite.TokenProviders
                             Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
                     };
 
+                //  **`jwks_uri` が登録されているなら、その URL から引いた鍵も試す**（#309 の段階 1）。
+                //
+                //  **ここは同期の経路**（`/token` / `/par` / `/ciba_authz` /
+                //    `/revoke` / `/introspect` の全部から `static bool` で呼ばれる）なので、
+                //    **キャッシュを読むだけ**にする。**取りに行って待つと net48 で止まる**
+                //    （**継続が同期コンテキストへ戻れない**。#309 の起票）。
+                //
+                //  **引けなければ、背景で取り直して、この 1 本は断る**（段階 1 の決め (C)(1)）。
+                //    **次の試行で通る。** **理由はログに残す**（#253 の方針。**鍵は出さない**）。
+                if (!string.IsNullOrEmpty(assertionIss))
+                {
+                    string jwksUri = Helper.GetInstance().GetJwksUri(assertionIss);
+
+                    if (!string.IsNullOrEmpty(jwksUri))
+                    {
+                        string[] fromUri = DiscoveryJwks.PickJwksFromCache(
+                            jwksUri, DiscoveryJwks.KidOf(assertion),
+                            CmnEndpoints.MaxJwksFromUri);
+
+                        if (fromUri.Length == 0)
+                        {
+                            DiscoveryJwks.RefillInBackground(jwksUri);
+
+                            Logging.MyOperationTrace(string.Format(
+                                "The key of the client assertion was not in the jwks_uri cache. ({0})",
+                                assertionIss));
+                        }
+
+                        pubKeys = pubKeys.Concat(fromUri).ToArray();
+                    }
+                }
+
                 // **登録 token_endpoint_auth_signing_alg で絞る**（#262）。
                 //   **登録が無ければ、従来どおり両方を試す**（下位互換）。
                 //   **登録が在れば、その alg でなければ通さない**
@@ -4639,7 +5434,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
-                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
+                        //
+                        //  **登録された方法でなければ通さない**（#307 の段階 3）。
+                        //    **`private_key_jwt` の明示が要る** — **鍵を登録しただけでは通らない。**
+                        //    **`client_id` はアサーションの `iss`**（RFC 7523 §3）なので、それで引く。
+                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint
+                            && CmnEndpoints.AllowsAuthMethod(
+                                iss, ClientModePolicy.Proof.PrivateKeyJwt))
                         {
                             proof = ClientModePolicy.Proof.PrivateKeyJwt;
                             client_id = iss;
@@ -4661,6 +5462,94 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region Private
+
+        #region 利用者のロックアウト
+
+        /// <summary>この配備で、利用者のロックアウトを使うか</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>使うなら true</returns>
+        /// <remarks>
+        /// **画面のサインインと同じ条件で判定する**（#305 の段階 4）。
+        /// **`UserLockoutEnabledByDefault` が false の配備では、何もしない**
+        /// （`SignInManager.PasswordSignInAsync` に渡している値と同じ）。
+        /// </remarks>
+        private static bool UserLockoutEnabled(ApplicationUser user)
+        {
+            return Config.UserLockoutEnabledByDefault
+                && 0 < Config.MaxFailedAccessAttemptsBeforeLockout
+                && CmnUserStore.GetLockoutEnabled(user);
+        }
+
+        /// <summary>いま、この利用者を断っているか</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>断っていれば true</returns>
+        private static bool IsUserLockedOut(ApplicationUser user)
+        {
+            if (!CmnEndpoints.UserLockoutEnabled(user))
+            {
+                return false;
+            }
+
+            DateTimeOffset? lockoutEnd = CmnUserStore.GetLockoutEndDate(user);
+
+            return lockoutEnd.HasValue && DateTimeOffset.UtcNow < lockoutEnd.Value;
+        }
+
+        /// <summary>パスワードの失敗を 1 回数える（上限に達したら断り始める）</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <remarks>
+        /// **`UserManager.AccessFailedAsync` と同じ段取り**にしてある
+        /// （**上限に達したら期限を入れ、回数は 0 に戻す**）。
+        /// **`CmnUserStore` の設定子は、物に書かない**ので、**`Update` で書く。**
+        /// </remarks>
+        private static void RecordUserAccessFailed(ApplicationUser user)
+        {
+            if (!CmnEndpoints.UserLockoutEnabled(user))
+            {
+                return;
+            }
+
+            int count = CmnUserStore.IncrementAccessFailedCount(user);
+
+            if (Config.MaxFailedAccessAttemptsBeforeLockout <= count)
+            {
+                CmnUserStore.SetLockoutEndDate(user,
+                    DateTimeOffset.UtcNow.Add(Config.DefaultAccountLockoutTimeSpanFromSeconds));
+
+                CmnUserStore.ResetAccessFailedCount(user);
+
+                //  **断り始めた 1 回だけ、ログに残す。**
+                Logging.MyOperationTrace(string.Format(
+                    "{0}({1}) was locked out. (too many password failures at the token endpoint)",
+                    user.Id, user.UserName));
+            }
+
+            CmnUserStore.Update(user);
+        }
+
+        /// <summary>成功したので、数えた分を消す</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <remarks>**書くことが無ければ、書かない**（成功のたびに UPDATE を撃たない）。</remarks>
+        private static void ResetUserAccessFailed(ApplicationUser user)
+        {
+            if (!CmnEndpoints.UserLockoutEnabled(user))
+            {
+                return;
+            }
+
+            if (CmnUserStore.GetAccessFailedCount(user) == 0
+                && !CmnUserStore.GetLockoutEndDate(user).HasValue)
+            {
+                return;
+            }
+
+            CmnUserStore.ResetAccessFailedCount(user);
+            CmnUserStore.SetLockoutEndDate(user, null);
+
+            CmnUserStore.Update(user);
+        }
+
+        #endregion
 
         #region CheckClientMode
 
@@ -4715,6 +5604,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
+            // **登録で許されたグラントか**（RFC 7591 §2 の `grant_types`。#307 の段階 1）。
+            //   **`ClientModePolicy` の手前で絞る。**
+            //   **登録が無ければ絞らない**（既存の登録を壊さないため）。
+            //   RFC 6749 §5.2 : 認証済みのクライアントに許されていないグラントは unauthorized_client。
+            if (!CmnEndpoints.CheckClientGrantType(client_id, flow))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "This grant_type is not registered for this client.");
+                return false;
+            }
+
             // 登録された種別
             string clientModeString = Helper.GetInstance().GetClientMode(client_id);
 
@@ -4761,20 +5662,163 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region DPoP（#311 の段階 1）
+
+        /// <summary>DPoP の証明が在れば検証する（#311 の段階 1）</summary>
+        /// <param name="dPoPProof">`DPoP` ヘッダの値（無ければ空）</param>
+        /// <param name="jkt">out : 鍵の指紋（証明が無ければ空）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **証明が無ければ、何もしないで true を返す** —
+        /// **DPoP を使わないクライアントは、従来どおり bearer** である
+        /// （**既定の挙動を変えない**）。
+        ///
+        /// **証明が在って通らなければ、`invalid_dpop_proof` で断る**（RFC 9449 §5）。
+        /// **黙って bearer に落とさない** — **落とすと、縛ったつもりのクライアントが縛られない。**
+        ///
+        /// **nonce を要求する配備では、`nonce` も見る**（§8。#311 の段階 4）。
+        /// **通らなければ `use_dpop_nonce`** であり、**`invalid_dpop_proof` とは区別する** —
+        /// **クライアントは「貰い直して出し直す」ことになる。**
+        ///
+        /// **`htu` は設定から作る**（`CmnDPoP.TokenEndpointUri`。**要求の `Host` を信じない**）。
+        /// </remarks>
+        private static bool CheckDPoP(
+            string dPoPProof, out string jkt, Dictionary<string, string> err)
+        {
+            jkt = "";
+
+            if (string.IsNullOrEmpty(dPoPProof))
+            {
+                return true;
+            }
+
+            if (CmnDPoP.Verify(dPoPProof, "POST", CmnDPoP.TokenEndpointUri, CmnDPoP.PurposeAs,
+                out jkt, out string error, out string errDescription))
+            {
+                return true;
+            }
+
+            //  **nonce が要るときは `use_dpop_nonce` で断る**（RFC 9449 §8。#311 の段階 4）。
+            //    **応答の `DPoP-Nonce` ヘッダで新しい値を渡す**（各アプリの `OAuth2Error`）。
+            err.Add(OAuth2AndOIDCConst.error, error);
+            err.Add(OAuth2AndOIDCConst.error_description, errDescription);
+
+            return false;
+        }
+
+        #endregion
+
+        #region DPoP の鍵への紐づけ（#311 の段階 4）
+
+        /// <summary>この code が鍵に縛られていないか、同じ鍵の証明が在るか（RFC 9449 §10）</summary>
+        /// <param name="code">認可コード</param>
+        /// <param name="jkt">この要求の証明の鍵の指紋（証明が無ければ空）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **認可要求で `dpop_jkt` を送っていたら、その鍵でしか引き換えられない。**
+        /// **送っていなければ、何も変わらない**（**既定の挙動を変えない**）。
+        /// </remarks>
+        private static bool CheckDPoPJktOfCode(
+            string code, string jkt, Dictionary<string, string> err)
+        {
+            return CmnEndpoints.CheckDPoPJkt(
+                AuthorizationCodeProvider.GetDPoPJkt(code), jkt, "code", err);
+        }
+
+        /// <summary>この refresh_token が鍵に縛られていないか、同じ鍵の証明が在るか（RFC 9449 §5）</summary>
+        /// <param name="refresh_token">refresh_token</param>
+        /// <param name="jkt">この要求の証明の鍵の指紋（証明が無ければ空）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **預けた payload の `cnf.jkt` を見る**（`CmnAccessToken.JktOfPayload`）。
+        /// **消費しないで読む**（`RefreshTokenProvider.Refer`） —
+        /// **ローテーションを起こさずに断る**ためである。
+        ///
+        /// **使用済み・存在しない refresh_token では空が返る** →
+        /// **ここは通り、後の `Receive` が `invalid_grant` で断る**（**従来の断り方を変えない**）。
+        /// </remarks>
+        private static bool CheckDPoPJktOfRefreshToken(
+            string refresh_token, string jkt, Dictionary<string, string> err)
+        {
+            return CmnEndpoints.CheckDPoPJkt(
+                CmnAccessToken.JktOfPayload(RefreshTokenProvider.Refer(refresh_token)),
+                jkt, "refresh_token", err);
+        }
+
+        /// <summary>縛られているなら、同じ鍵の証明が在るか（#311 の段階 4）</summary>
+        /// <param name="boundJkt">縛られている鍵の指紋（縛られていなければ空）</param>
+        /// <param name="jkt">この要求の証明の鍵の指紋（証明が無ければ空）</param>
+        /// <param name="what">何が縛られているか（`code` / `refresh_token`）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **`invalid_grant` で断る**（`invalid_dpop_proof` ではない）。
+        /// **証明そのものは正しく、「この資格情報のものではない」**のであり、
+        /// **断られているのは grant の側**である。
+        /// **証明の作りが悪いのか、持ち主が違うのかを、クライアントが区別できる。**
+        ///
+        /// **理由はログに残すが、指紋は出さない**（**そのクライアントを辿れる値**である）。
+        /// </remarks>
+        private static bool CheckDPoPJkt(
+            string boundJkt, string jkt, string what, Dictionary<string, string> err)
+        {
+            if (string.IsNullOrEmpty(boundJkt))
+            {
+                // **縛られていない** ＝ 従来どおり。
+                return true;
+            }
+
+            if (string.Equals(boundJkt, jkt, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+            err.Add(OAuth2AndOIDCConst.error_description,
+                string.IsNullOrEmpty(jkt)
+                    ? ("A DPoP proof is required for this " + what + ".")
+                    : ("The " + what + " is bound to another DPoP key."));
+
+            Logging.MyOperationTrace(string.Format(
+                "The {0} is bound to a DPoP key. ({1})", what,
+                string.IsNullOrEmpty(jkt) ? "no proof" : "another key"));
+
+            return false;
+        }
+
+        #endregion
+
         #region CreateAccessTokenResponse
 
         /// <summary>CreateAccessTokenResponse</summary>
         /// <param name="access_token">string</param>
         /// <param name="refresh_token">string</param>
         /// <param name="jwkString">string</param>
+        /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <returns>Dictionary(string, string)</returns>
+        /// <remarks>
+        /// **`token_type` は、縛ったかどうかで変わる**（RFC 9449 §5）。
+        ///
+        /// | | `token_type` |
+        /// |---|---|
+        /// | **DPoP の証明が通った** | **`DPoP`** |
+        /// | それ以外 | `bearer`（従来どおり） |
+        ///
+        /// **クライアントは `token_type` を見て、使うときの出し方を決める**
+        /// （`Authorization: DPoP …` ＋ 証明。**段階 2 で照合する**）。
+        /// </remarks>
         private static Dictionary<string, string> CreateAccessTokenResponse(
-            string access_token, string refresh_token, string jwkString)
+            string access_token, string refresh_token, string jwkString, string jkt = null)
         {
             Dictionary<string, string> ret = new Dictionary<string, string>();
 
             // token_type
-            ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
+            ret.Add(OAuth2AndOIDCConst.token_type,
+                string.IsNullOrEmpty(jkt)
+                    ? OAuth2AndOIDCConst.Bearer.ToLower() : CmnDPoP.TokenType);
 
             // access_token
             ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);

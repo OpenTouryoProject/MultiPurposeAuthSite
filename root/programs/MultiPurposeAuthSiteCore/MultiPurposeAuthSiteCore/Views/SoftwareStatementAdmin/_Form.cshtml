@@ -1,0 +1,89 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：_Form
+    //* クラス日本語名  ：software_statement の発行者の入力欄（追加・編集で共用）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/10/21  玄人 幸道         新規（#308 の段階 2）
+    //**********************************************************************************
+*@
+
+@model SoftwareStatementIssuerViewModel
+
+@*  **追加と編集で同じ欄**なので、1 か所に置く（**片方だけ直す事故を避ける**）。
+    **項目は設定（appSettings の SoftwareStatementIssuers）と同じ**である。 *@
+<div class="form-group">
+    @Html.LabelFor(m => m.Enabled, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.CheckBoxFor(m => m.Enabled)
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.DisplayName, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.DisplayName, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.DisplayName, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.Issuer, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @*  **statement の `iss` と完全一致**（RFC 7591 2.3）。 *@
+        @Html.TextBoxFor(m => m.Issuer, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Issuer, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.Alg, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @*  **ヘッダの alg と照合する**（**外から alg を選ばせない**）。空なら RS256。 *@
+        @Html.TextBoxFor(m => m.Alg, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.Alg, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.CerFilePath, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @*  **空白かカンマ区切りで n 本**（#307 の段階 6。鍵の入れ替え）。 *@
+        @Html.TextBoxFor(m => m.CerFilePath, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.CerFilePath, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.CerBody, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @*  **PEM を貼れる**（#308 の段階 1）。**並べて n 本**でもよい。
+            **Base64（DER）なら、区切って n 本。**
+            **公開鍵なので平文**で持つ（暗号化しない）。
+            **ファイルを置かずに済む**ので、配備間で台帳を複製しやすい。 *@
+        @Html.TextAreaFor(m => m.CerBody, new { @class = "form-control", rows = "6" })
+        @Html.ValidationMessageFor(m => m.CerBody, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.AllowedScope, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @*  **この発行者に許す上限**（#307 の段階 6）。**空なら絞らない。** *@
+        @Html.TextBoxFor(m => m.AllowedScope, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.AllowedScope, "", new { @class = "text-danger" })
+    </div>
+</div>
+<div class="form-group">
+    @Html.LabelFor(m => m.AllowedGrantTypes, new { @class = "col-md-3 control-label" })
+    <div class="col-md-9">
+        @Html.TextBoxFor(m => m.AllowedGrantTypes, new { @class = "form-control" })
+        @Html.ValidationMessageFor(m => m.AllowedGrantTypes, "", new { @class = "text-danger" })
+    </div>
+</div>

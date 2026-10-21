@@ -63,6 +63,9 @@
 //*  2026/10/09  玄人 幸道         OAuth2AuthorizationCodeGrantClient_Manage を削除
 //*  2026/10/10  玄人 幸道         SAML2のID連携の設定を追加（#286の段階1）
 //*  2026/10/10  玄人 幸道         ID連携の導線を設定の有無で出す（#286の段階2）
+//*  2026/10/16  玄人 幸道         slow_down・失敗回数・レート制限の設定を追加（#305）
+//*  2026/10/18  玄人 幸道         動的クライアント登録の設定を追加（#307 の段階 1）
+//*  2026/10/20  玄人 幸道         software_statement の設定を追加（#307 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -672,7 +675,7 @@ namespace MultiPurposeAuthSite.Co
         /// |---|---|
         /// | 認証・外部ログイン・2FA（Identity の 4 スキーム） | <see cref="AuthCookieName"/>、または枠組みの既定 |
         /// | セッション | `sessionState:SessionCookieName` |
-        /// | `auth_time` / `re_auth_at` | このクラスの定数 |
+        /// | `auth_time` / `re_auth_at` / `op_session` | このクラスの定数 |
         /// | TempData（net10.0 版だけ） | 枠組みの既定 |
         ///
         /// **外部ログインの Cookie も要る。** **ID フェデレーションの途中で使う**ので、
@@ -828,6 +831,25 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Config.PrefixCookieName(Const.ReAuthenticatedAt);
+            }
+        }
+
+        /// <summary>
+        /// OP のセッションの識別子を保存する Cookie の名前（#310 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **`sid` の台帳（`SessionClientProvider`）を引く鍵**である。
+        /// **中身は guid** で、**サインインで作り、サインアウトで消す。**
+        ///
+        /// **セッション Cookie である**（期限を付けない） — **ブラウザを閉じれば終わる。**
+        /// **認証 Cookie が「次回から自動的にサインイン」で残っていても、
+        /// この Cookie が無ければ別のセッションとして扱う**（**新しい `sid` になる**）。
+        /// </remarks>
+        public static string OpSessionCookieName
+        {
+            get
+            {
+                return Config.PrefixCookieName(Const.OpSession);
             }
         }
 
@@ -1500,6 +1522,37 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// クライアント登録の管理 API 専用のアクセス トークンの有効期限（秒）（#307 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **`Const.ScopeClientRegistration` を要求したときだけ、この期限で出す。**
+        /// **配備ぜんたいの `OAuth2AccessTokenExpireTimeSpanFromMinutes`（既定 360 分）では長すぎる** —
+        /// **この口は、人の操作より CI から叩く想定**で、長く持たせる理由が無い。
+        ///
+        /// **未設定・空なら既定値（300 秒）に倒す**（**既存の配備にはこのキーが無い**）。
+        /// **倒れ先を読む先例は `Saml2AssertionExpireTimeSpanFromMinutes`**（#276）。
+        ///
+        /// > **0 以下を書いたときも既定値に倒す。**
+        /// > **0 は「発行した瞬間に切れるトークン」であり、設定の誤りとしか考えられない。**
+        /// </remarks>
+        public static TimeSpan DcrAccessTokenExpireTimeSpanFromSeconds
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue(
+                    "DcrAccessTokenExpireTimeSpanFromSeconds");
+
+                if (!int.TryParse(temp, out int seconds) || seconds <= 0)
+                {
+                    //  **既定値**（キーが無い配備でも動く）。
+                    seconds = 300;
+                }
+
+                return TimeSpan.FromSeconds(seconds);
+            }
+        }
+
+        /// <summary>
         /// OAuth2の認可コードの有効期限（秒）（#188）
         /// </summary>
         /// <remarks>
@@ -1601,6 +1654,218 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// 認証の失敗を、この回数で断る（#305 の段階 2）
+        /// </summary>
+        /// <remarks>
+        /// **クライアント認証（`client_secret` / mTLS）と、
+        /// `user_code` の投入**の失敗を数える（`Extensions/Sts/AuthFailureProvider`）。
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **数えない**（従来どおり） |
+        /// | 正の回数（雛形は 5） | **連続してこの回数失敗したら、`AuthFailureLockoutSeconds` の間断る** |
+        ///
+        /// **断っている間は、正しい資格情報でも通さない**（ロックアウトの意味）。
+        /// **成功したら回数は消える。**
+        ///
+        /// **利用者のパスワードは、ASP.NET Identity 側で数えている**
+        /// （`MaxFailedAccessAttemptsBeforeLockout`）。**こちらは別の口である。**
+        ///
+        /// **数えるのは「クライアント ＋ 送信元」ごと**である（#305 の段階 4）。
+        /// **`client_id` だけで数えると、誰でもそのクライアントを止められる。**
+        /// </remarks>
+        public static int AuthFailureMaxAttempts
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureMaxAttempts");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は 0**（数えない。従来どおり）。
+                    return 0;
+                }
+
+                int attempts = 0;
+                return int.TryParse(value, out attempts) ? attempts : 0;
+            }
+        }
+
+        /// <summary>
+        /// 認証の失敗が上限に達したとき、断る長さ（秒。#305 の段階 2）
+        /// </summary>
+        /// <remarks>**未設定は 300 秒**（5 分）。</remarks>
+        public static int AuthFailureLockoutSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureLockoutSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 300;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 300;
+            }
+        }
+
+        /// <summary>
+        /// 数えた分を、いつまで覚えているか（秒。#305 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **最後の失敗からこの時間が過ぎると、数えた分は忘れる**
+        /// （**間隔を空けた失敗が、いつまでも積み上がらない**）。
+        /// **行の寿命もこれで決まる** — **期限の過ぎた行は掃除される**
+        /// （`AuthFailureProvider.PruneExpired`）。
+        ///
+        /// **未設定は `AuthFailureLockoutSeconds` と同じ**（雛形では 300 秒）。
+        ///
+        /// **`AuthFailureMaxAttempts` 回を試すのに掛かる時間より、長くすること。**
+        /// **短いと、数が積まれる前に忘れるので、いつまでも断らない。**
+        /// </remarks>
+        public static int AuthFailureWindowSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureWindowSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は、断る長さと同じ。**
+                    return Config.AuthFailureLockoutSeconds;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds)
+                    ? seconds : Config.AuthFailureLockoutSeconds;
+            }
+        }
+
+        /// <summary>
+        /// 口ごとのレート制限 : クライアント 1 つあたりの上限（#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **`client_id` が分かる要求を、`client_id` ごとに数える**
+        /// （`Extensions/Sts/RateLimitProvider`）。**窓は `RateLimitWindowSeconds`。**
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **制限しない**（従来どおり） |
+        /// | 正の回数（雛形は 120） | **窓の中でこの回数を超えた要求に `429`**（`Retry-After` 付き） |
+        ///
+        /// **数えるのは口ごと**である（`/token` の洪水で `/revoke` が止まらない）。
+        /// **段階 2 は「失敗の回数」、ここは「要求の回数」**（成否を問わない）。
+        /// </remarks>
+        public static int RateLimitPerClientPermits
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitPerClientPermits");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は 0**（制限しない。従来どおり）。
+                    return 0;
+                }
+
+                int permits = 0;
+                return int.TryParse(value, out permits) ? permits : 0;
+            }
+        }
+
+        /// <summary>
+        /// 口ごとのレート制限 : 送信元 1 つあたりの上限（#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **`client_id` が分からない要求**（`/jwkcerts` の読み出しなど）**と、**
+        /// **`client_id` が分かる要求の両方**を、**送信元アドレスごとに数える。**
+        /// **`client_id` を毎回変えて `client_id` ごとの上限を避ける**攻撃に、これが効く。
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **制限しない**（従来どおり） |
+        /// | 正の回数（雛形は 600） | **窓の中でこの回数を超えた要求に `429`** |
+        ///
+        /// **リバース プロキシの後ろでは、見えるアドレスはプロキシのものになる。**
+        /// **net10.0 版は `UseForwardedHeaders`**（設定キーも同名。`ForwardedHeadersKnownProxies` と併せて使う）**で元に戻せるが、**
+        /// **net48 版は戻さない**（`Request.UserHostAddress` をそのまま使う）。
+        /// **プロキシの後ろに置く配備では、プロキシ側で制限する方が確かである。**
+        /// </remarks>
+        public static int RateLimitPerIpPermits
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitPerIpPermits");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 0;
+                }
+
+                int permits = 0;
+                return int.TryParse(value, out permits) ? permits : 0;
+            }
+        }
+
+        /// <summary>
+        /// 口ごとのレート制限 : 数える窓の長さ（秒。#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **未設定は 60 秒。**
+        /// **窓は固定窓**（`UNIX 時刻 / 窓` で切る。窓が変わると回数は 0 に戻る）。
+        /// **窓の境目では、瞬間的に上限の 2 倍まで通り得る**
+        /// （固定窓の性質。**滑る窓にするほどの精度は、ここでは要らない**）。
+        /// </remarks>
+        public static int RateLimitWindowSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitWindowSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 60;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 60;
+            }
+        }
+
+        /// <summary>
+        /// ポーリングが速すぎるときに `slow_down` を返すか（#305 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**
+        /// **間隔は `interval`**（`DeviceAuthZPollingIntervalSeconds` /
+        /// `CibaPollingIntervalSeconds`）**で伝えてあるが、守らなくても何も起きなかった。**
+        ///
+        /// **true なら、前回から `interval` 未満で来た要求に `slow_down` を返す**
+        /// （RFC 8628 §3.5 / CIBA §11。**クライアントは間隔を 5 秒伸ばす**）。
+        ///
+        /// **未設定なら true**（**仕様どおりの振る舞い**）。
+        /// **false にすると従来どおり**、`authorization_pending` を返し続ける。
+        /// </remarks>
+        public static bool EnablePollingSlowDown
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("EnablePollingSlowDown");
+
+                //  **未設定は true**（仕様どおり）。**false と書いたときだけ止める。**
+                if (string.IsNullOrEmpty(value))
+                {
+                    return true;
+                }
+
+                bool enabled = true;
+                return bool.TryParse(value, out enabled) ? enabled : true;
+            }
+        }
+
         #endregion
 
         #endregion
@@ -1654,6 +1919,43 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>DPoP の証明に `nonce` を要求するか（#311 の段階 4）</summary>
+        /// <remarks>
+        /// **RFC 9449 §8 / §9 : サーバは `nonce` を要求してよい**（MAY）。
+        /// **要求すると、クライアントは 1 往復多く掛かる**
+        /// （**`use_dpop_nonce` で断られ、`DPoP-Nonce` で受け取った値を入れて出し直す**）。
+        ///
+        /// **既定は false** — **要求すると、`nonce` を知らないクライアントが全部止まる。**
+        /// **使い回しの拒否（段階 3）は、この設定とは無関係に効いている。**
+        /// </remarks>
+        public static bool EnableDPoPNonce
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableDPoPNonce"));
+            }
+        }
+
+        /// <summary>DPoP の `nonce` を作る鍵（#311 の段階 4）</summary>
+        /// <remarks>
+        /// **`nonce` は、この値から計算する**（**台帳を持たない**）。
+        /// **同じ値を持つインスタンスなら、互いの `nonce` を受け付けられる。**
+        ///
+        /// **空なら、プロセスごとのランダムな値を使う** —
+        /// **単一のインスタンスなら、それで足りる**
+        /// （**再起動すると、前の `nonce` は通らなくなる** ＝ **1 往復増えるだけ**）。
+        ///
+        /// **インスタンスを増やす配備では、設定すること** —
+        /// **設定しないと、要求が別のインスタンスへ行くたびに断られ、やり直しが終わらない。**
+        /// </remarks>
+        public static string DPoPNonceSecret
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("DPoPNonceSecret");
+            }
+        }
+
         /// <summary>EnableJwtBearerTokenFlowGrantType</summary>
         public static bool EnableJwtBearerTokenFlowGrantType
         {
@@ -1687,6 +1989,104 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableOpenIDConnect"));
+            }
+        }
+
+        /// <summary>動的クライアント登録（RFC 7591）を開けるか（#307 の段階 1）</summary>
+        /// <remarks>
+        /// **既定は false**（**口そのものを張らない**）。
+        ///
+        /// **`Convert.ToBoolean` ではなく `bool.TryParse` で読む** —
+        /// **既存の配備にはこのキーが無く、`Convert.ToBoolean("")` は例外になる**
+        /// （`EnableOpenIDConnect` などの既存キーは、どちらの雛形にも在る）。
+        ///
+        /// **この口は `IsLockedDownTestEndpoints` の対象ではない**
+        /// （**本番で使う口**であり、テスト用の口とは別に、このキーで開閉する）。
+        /// </remarks>
+        public static bool EnableDynamicClientRegistration
+        {
+            get
+            {
+                bool.TryParse(
+                    GetConfigParameter.GetConfigValue("EnableDynamicClientRegistration"),
+                    out bool enable);
+
+                return enable;
+            }
+        }
+
+        /// <summary>
+        /// `software_statement`（RFC 7591 §2.3）の発行者の登録（n 件。#307 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **読み方は `OAuth2ClientsInformation` / `IdFederationUpstreams` と同じ**
+        /// （net48 は JSON 文字列、net10.0 は節）。**値はすべて文字列**で、
+        /// **鍵 → 属性の辞書**である。
+        ///
+        /// **解釈は <see cref="SoftwareStatementIssuers"/> が持つ。**
+        /// **ここは「設定を読むだけ」**にしてある（`Config` に判断を増やさない）。
+        ///
+        /// **空なら、`software_statement` は受け付けない**
+        /// （**従来どおり `unapproved_software_statement`**）。
+        /// **既存の配備は、このキーを書かなくても従来どおり動く。**
+        ///
+        /// **「発行者ごと」である。** **クライアントごとではない**
+        /// （クライアント自身の鍵は `Saml2OAuth2Data` の列。段階 3）。
+        /// </remarks>
+        public static Dictionary<string, Dictionary<string, string>> SoftwareStatementIssuers
+        {
+            get
+            {
+#if NETFX
+                string json = GetConfigParameter.GetConfigValue("SoftwareStatementIssuers");
+
+                if (string.IsNullOrEmpty(json))
+                {
+                    return null;
+                }
+
+                return JsonConvert.DeserializeObject<
+                    Dictionary<string, Dictionary<string, string>>>(json);
+#else
+                IConfigurationSection section = GetConfigParameter
+                    .GetAnyConfigSection("appSettings:SoftwareStatementIssuers");
+
+                if (section == null)
+                {
+                    return null;
+                }
+
+                return section.Get<Dictionary<string, Dictionary<string, string>>>();
+#endif
+            }
+        }
+
+        /// <summary>
+        /// 動的クライアント登録に `software_statement` を必須とするか（#307 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **既定は false**（**従来どおり、添えなくても登録できる**）。
+        ///
+        /// **true にすると、「審査を通したソフトウェアだけ登録させる」配備になる。**
+        /// **`POST /register` と `PUT`（RFC 7592）の両方に効く。**
+        ///
+        /// > **`PUT` にも効かせるのが要点である。**
+        /// > **効かせないと、`PUT` で statement を省いて
+        /// > 「主張されていた値」を自分の値に書き換えられる**
+        /// > （**statement は保管しないので、省かれたことしか分からない**）。
+        ///
+        /// **信頼する発行者（`SoftwareStatementIssuers`）を 1 件も書かずに true にすると、
+        /// 動的登録は通らなくなる**（**必須なのに、どの statement も approved にならない**）。
+        /// </remarks>
+        public static bool RequireSoftwareStatement
+        {
+            get
+            {
+                bool.TryParse(
+                    GetConfigParameter.GetConfigValue("RequireSoftwareStatement"),
+                    out bool require);
+
+                return require;
             }
         }
 
@@ -1827,6 +2227,24 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region WebAPI
+
+        /// <summary>
+        /// 動的クライアント登録のエンドポイント（RFC 7591 / OIDC Discovery §3 の registration_endpoint）（#307 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **`EnableDynamicClientRegistration` が false なら、この口は張らない。**
+        /// **未設定・空なら `/register` に倒す**（**既存の配備にはこのキーが無い**）。
+        /// **広告（Discovery）も、張ったときだけ行う。**
+        /// </remarks>
+        public static string DcrRegistrationEndpoint
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue("DcrRegistrationEndpoint");
+
+                return string.IsNullOrEmpty(temp) ? "/register" : temp;
+            }
+        }
 
         /// <summary>
         /// OAuth2/OIDCのUserInfoエンドポイント 
@@ -2190,6 +2608,46 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region /jwkcerts のキャッシュ（#303。E-7）
+
+        /// <summary>
+        /// `/jwkcerts` の応答に付ける `Cache-Control: public, max-age=` の秒数
+        /// </summary>
+        /// <remarks>
+        /// **`/jwkcerts` は、トークンを検証する相手が必ず読む口**である。
+        /// **内容は鍵を入れ替えるまで変わらない**ので、**持ち回らせてよい。**
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **`no-store`**（**従来どおり**。毎回取りに来る） |
+        /// | 正の秒数 | **`public, max-age=<秒>`** ＋ `ETag`（`If-None-Match` に `304`） |
+        ///
+        /// **鍵を入れ替えた直後は、この秒数の間だけ古い鍵を見る相手が居る。**
+        /// **出す側は新旧 2 本を広告する**作りにしてある（#291 / #292 の段階 3）ので、
+        /// **入れ替えの最中も検証は通る。** **入れ替えの周期より短くすること。**
+        ///
+        /// **サーバ側で覚える分は、この値に関係なく効く**
+        /// （`Extensions/Sts/JwkSetDocument`。**ファイルの更新を見て読み直す**）。
+        /// </remarks>
+        public static int JwkSetCacheMaxAgeSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("JwkSetCacheMaxAgeSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定なら 0**（従来どおり `no-store`）。
+                    return 0;
+                }
+
+                int seconds = 0;
+                return int.TryParse(value, out seconds) ? seconds : 0;
+            }
+        }
+
+        #endregion
+
         #region 鍵のロールオーバー（#292 の段階 3）
 
         /// <summary>
@@ -2379,7 +2837,8 @@ namespace MultiPurposeAuthSite.Co
         ///
         /// **`JwkSetUri` とは役が違う。**
         /// **`JwkSetUri` は「この配備の JWK Set の口」**（クライアント・サーバの共通設定）であり、
-        /// **自分の `/jwkcerts` のパスとして読む**（ルート登録・`jku`・discovery の `jwks_uri`）。
+        /// **自分の `/jwkcerts` のパスとして読む**（ルート登録・discovery の `jwks_uri`）。
+        /// **`jku` には使わない**（#302 で、ヘッダに `jku` を入れるのをやめた）。
         /// **上流（相手）の JWK Set は別の値**なので、このキーで持つ。
         ///
         /// > **信頼の根拠は、このキーを書いた人である**（discovery のような `issuer` の照合が無い）。

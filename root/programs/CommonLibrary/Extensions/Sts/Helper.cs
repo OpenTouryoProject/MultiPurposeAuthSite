@@ -46,11 +46,20 @@
 //*  2026/09/28  玄人 幸道         PAR（/par）に認可リクエストを預ける口を追加（#246）
 //*  2026/10/01  玄人 幸道         subject_types の既定値を public に変更（#151 の段階 4）
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
+//*  2026/10/20  玄人 幸道         逆引きを OwnerUserId で引くようにした（#307 の段階 5-a）
+//*  2026/10/20  玄人 幸道         クライアントの所有者を引く口を追加（#307 の段階 5-b）
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を引く口を追加（#129 の段階 2）
 //*  2026/10/03  玄人 幸道         検証する側のalgを引く口を追加（#262）
 //*  2026/10/04  玄人 幸道         CORSのオリジン導出のため、publicクライアントのredirect_uriを返す口を追加（#265）
 //*  2026/10/04  玄人 幸道         web_originsと画面登録ぶんを返す口を追加（#266）
 //*  2026/10/06  玄人 幸道         クライアント登録を専用列から読む（#270）
+//*  2026/10/18  玄人 幸道         scope をDBからも読み、grant_types / response_types を追加（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         クライアント登録の有無を返す口を追加（#307 の段階 2）
+//*  2026/10/19  玄人 幸道         token_endpoint_auth_method を引く口を追加（#307 の段階 3）
+//*  2026/10/21  玄人 幸道         jwks_uri を引く口を追加（#309 の段階 1）
+//*  2026/10/21  玄人 幸道         設定ファイルの jwks_uri を集める口を追加（#309 の段階 2）
+//*  2026/10/21  玄人 幸道         backchannel_logout_uri を引く口と HttpClient を渡す口を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         frontchannel_logout_uri を引く口を追加（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -695,23 +704,92 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region HasClient
+
+        /// <summary>client_id の登録が在るか（#307 の段階 2）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>登録が在れば true</returns>
+        /// <remarks>
+        /// **「クライアントがまだ在るか」を確かめるための口**である
+        /// （**アクセス トークンの検証が使う**。`CmnAccessToken.VerifyAccessToken`）。
+        ///
+        /// > **以前は `GetClientSecret(aud) != null` で確かめていたが、効いていなかった** —
+        /// > **`GetClientSecret` は、未登録の `client_id` でも `""` を返す**（`null` ではない）。
+        /// > **そのため、登録を消しても、既に発行されたアクセス トークンが
+        /// > 期限切れまで通っていた**（#307 の段階 2 で修正）。
+        ///
+        /// **「秘密が空でないか」で判定してはならない** —
+        /// **秘密を持たないクライアント**（PKCE だけの public クライアント）**のトークンまで止まる。**
+        /// **見るのは「行が在るか」**である。
+        /// </remarks>
+        public bool HasClient(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                return true;
+            }
+
+            // saml2OAuth2Dataを検索
+            return DataProvider.Get(client_id) != null;
+        }
+
+        #endregion
+
         #region GetClientsRedirectUri
 
-        /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
+        /// <summary>登録された redirect_uri の 1 本目を取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
-        /// <returns>redirect_uri</returns>
+        /// <returns>redirect_uri（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **登録は n 件になった**（#306）。**ここは 1 本目を返す。**
+        /// **照合には使わないこと** — **照合は `GetClientsRedirectUris`**（全件）を使う。
+        /// **画面に 1 本だけ出したい所**（自己テストの画面）**のために残してある。**
+        /// </remarks>
         public string GetClientsRedirectUri(string client_id, string response_type)
         {
             return this.GetClientsRedirectUri(client_id, response_type, out bool isResourceOwner);
         }
 
-        /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
+        /// <summary>登録された redirect_uri の 1 本目を取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
         /// <param name="isResourceOwner">bool</param>
-        /// <returns>redirect_uri</returns>
+        /// <returns>redirect_uri（登録が無ければ空）</returns>
         public string GetClientsRedirectUri(string client_id, string response_type, out bool isResourceOwner)
+        {
+            string[] uris = Helper.SplitUriList(
+                this.GetClientsRedirectUriList(client_id, response_type, out isResourceOwner));
+
+            return (0 < uris.Length) ? uris[0] : "";
+        }
+
+        /// <summary>登録された redirect_uri を全件取得する（#306）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">response_type</param>
+        /// <returns>redirect_uri の並び（登録が無ければ 0 件）</returns>
+        /// <remarks>
+        /// **1 つのクライアントに n 件登録できる**（#306）。
+        /// **登録は空白区切りの 1 つの文字列**で、**設定ファイルでも DB の列でも同じ形**である。
+        ///
+        /// **照合は、この全件に対して行う**（`CmnEndpoints.CheckRedirectUri`）。
+        /// **定数値の解決は呼び出し側**（要素ごとに `GetRedirectUriFromConstr` を通す）。
+        /// </remarks>
+        public string[] GetClientsRedirectUris(string client_id, string response_type)
+        {
+            return Helper.SplitUriList(
+                this.GetClientsRedirectUriList(client_id, response_type, out bool isResourceOwner));
+        }
+
+        /// <summary>登録された redirect_uri を、登録されたままの形で取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">response_type</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>空白区切りの列挙（登録が無ければ空）</returns>
+        private string GetClientsRedirectUriList(string client_id, string response_type, out bool isResourceOwner)
         {
             isResourceOwner = false;
             client_id = client_id ?? "";
@@ -773,6 +851,124 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     // Others
                     return model.RedirectUriToken;
                 }
+            }
+
+            return "";
+        }
+
+        /// <summary>空白区切りの列挙を分解する（#306）</summary>
+        /// <param name="value">空白区切りの列挙</param>
+        /// <returns>要素の並び（空なら 0 件）</returns>
+        /// <remarks>
+        /// **区切りは空白である。**
+        /// **URI に空白は入らない**（RFC 3986 §2。入れるなら `%20` に符号化される）ので、
+        /// **曖昧にならない。**
+        ///
+        /// **カンマは区切りにしない** — **URI に入り得る**
+        /// （RFC 3986 §2.2 の `sub-delims` に `,` が含まれる）。
+        /// **`scope` が空白区切り**（RFC 6749 §3.3）なのと同じ流儀である。
+        ///
+        /// **1 本だけの登録は、1 件の列挙として読める** — **既存の配備はそのまま動く。**
+        /// </remarks>
+        public static string[] SplitUriList(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return new string[0];
+            }
+
+            //  **空白（半角・全角・タブ・改行）で切り、空の要素は捨てる。**
+            return value.Split(
+                new char[] { ' ', '\t', '\r', '\n', '\u3000' },
+                StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        #endregion
+
+        #region GetOAuth2HttpClient
+
+        /// <summary>サーバ間の通信に使う HttpClient を渡す（#310 の段階 2）</summary>
+        /// <returns>HttpClient</returns>
+        /// <remarks>
+        /// **ID 連携や `/token` と同じもの**である（**TLS・プロキシ・クライアント証明書の扱いが揃う**）。
+        /// **`OAuth2AndOIDCClient.HttpClient` は設定専用**（get が無い）ので、ここから渡す。
+        ///
+        /// **`BackChannelLogout` が使う**（**RP へ `logout_token` を POST する**）。
+        /// </remarks>
+        public HttpClient GetOAuth2HttpClient()
+        {
+            return this.OAuth2HttpClient;
+        }
+
+        #endregion
+
+        #region GetClientsFrontChannelLogoutUri
+
+        /// <summary>client_idからfrontchannel_logout_uriを取得する（#310 の段階 3）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>frontchannel_logout_uri（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **登録が無い相手には、ブラウザ経由でも伝えない**
+        /// （**Front-Channel Logout に対応していない RP** である）。
+        /// 登録は 1 本（`backchannel_logout_uri` と同じ形）。
+        /// 定数値（`test_self_fclogout`）の解決は、呼び出し側（`FrontChannelLogout`）で行う。
+        /// </remarks>
+        public string GetClientsFrontChannelLogoutUri(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("frontchannel_logout_uri"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["frontchannel_logout_uri"];
+                }
+            }
+
+            // Saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
+            {
+                return model.FrontChannelLogoutUri ?? "";
+            }
+
+            return "";
+        }
+
+        #endregion
+
+        #region GetClientsBackChannelLogoutUri
+
+        /// <summary>client_idからbackchannel_logout_uriを取得する（#310 の段階 2）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>backchannel_logout_uri（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **登録が無い相手には、ログアウトを伝えない**
+        /// （**Back-Channel Logout に対応していない RP** である）。
+        /// 登録は 1 本（既存の `post_logout_redirect_uri` と同じ形）。
+        /// 定数値（`test_self_bclogout`）の解決は、呼び出し側（`BackChannelLogout`）で行う。
+        /// </remarks>
+        public string GetClientsBackChannelLogoutUri(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("backchannel_logout_uri"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["backchannel_logout_uri"];
+                }
+            }
+
+            // Saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
+            {
+                return model.BackChannelLogoutUri ?? "";
             }
 
             return "";
@@ -943,6 +1139,55 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         }
 
         #endregion
+
+        #endregion
+
+        #region GetJwksUri
+
+        /// <summary>client_id から jwks_uri を取得する（#309 の段階 1）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>jwks_uri（**登録が無ければ null**）</returns>
+        /// <remarks>
+        /// **鍵を URL から引くクライアント**（RFC 7591 §2 の `jwks_uri`）。
+        /// **`jwks`（列の鍵）とは排他**である（**動的登録は、両方在る要求を断る**）。
+        /// **設定ファイルのクライアントでも書ける**（`jwks_uri` の鍵）。
+        ///
+        /// **ここでは取りに行かない** — **URL を返すだけ**である。
+        /// **読む側（`CmnEndpoints.ClientAuthentication`）は同期**なので、
+        /// **取得はキャッシュ越しに行う**（`DiscoveryJwks.PickJwksFromCache`）。
+        /// </remarks>
+        public string GetJwksUri(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, "jwks_uri", model => model.JwksUri);
+        }
+
+        #endregion
+
+        #region GetConfiguredJwksUris
+
+        /// <summary>設定ファイルに書かれた `jwks_uri` を全件返す（#309 の段階 2）</summary>
+        /// <returns>URL の一覧（1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **起動のときに温めるために要る**（`JwksUriWarmUp`）。
+        /// **`OAuth2ClientsInformation` の各クライアントの `jwks_uri`** を集める。
+        ///
+        /// **user store を読めない配備でも効く**ので、**こちらを先に温める。**
+        /// </remarks>
+        public List<string> GetConfiguredJwksUris()
+        {
+            List<string> urls = new List<string>();
+
+            foreach (Dictionary<string, string> client in this.Oauth2ClientsInfo.Values)
+            {
+                if (client.ContainsKey("jwks_uri")
+                    && !string.IsNullOrEmpty(client["jwks_uri"]))
+                {
+                    urls.Add(client["jwks_uri"]);
+                }
+            }
+
+            return urls;
+        }
 
         #endregion
 
@@ -1130,7 +1375,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// RFC 7591 2 の client metadata の scope と同じく、スペース区切りで登録する（#198）。
         /// 空文字列を登録した場合は、空の一覧（＝ どのスコープも許さない）になる。
-        /// saml2OAuth2Data（管理画面で登録したクライアント）には、まだこの項目が無いので制限しない。
+        ///
+        /// **saml2OAuth2Data（管理画面・動的登録で作ったクライアント）の `Scopes` 列も見る**（#307 の段階 1）。
+        /// **以前は構成ファイルだけを見ていた** ので、
+        /// **DB に登録したクライアントは「登録が無い」扱いになり、**
+        /// **#198 の「クライアントごとの絞り」が一切効いていなかった**
+        /// （`scopes_supported` の絞りだけが効いていた）。
+        ///
+        /// **列が空なら、従来どおり制限しない** — **既存の登録を壊さないため。**
         /// </remarks>
         public List<string> GetClientScopes(string client_id)
         {
@@ -1143,22 +1395,136 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 if (dic.ContainsKey("scope") && dic["scope"] != null)
                 {
-                    List<string> ret = new List<string>();
+                    return Helper.ToDistinctList(dic["scope"]);
+                }
 
-                    foreach (string s in dic["scope"].Split(' '))
-                    {
-                        if (!string.IsNullOrEmpty(s) && !ret.Contains(s))
-                        {
-                            ret.Add(s);
-                        }
-                    }
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（従来どおり）。
+                return null;
+            }
 
-                    return ret;
+            // saml2OAuth2Dataを検索（#307 の段階 1）
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null && !string.IsNullOrWhiteSpace(model.Scopes))
+            {
+                return Helper.ToDistinctList(model.Scopes);
+            }
+
+            // 登録が無い
+            return null;
+        }
+
+        #endregion
+
+        #region Client GrantTypes / ResponseTypes（#307 の段階 1）
+
+        /// <summary>client_id から、使ってよいグラント（登録の grant_types）を取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>グラントの一覧（登録が無ければ null ＝ 制限しない）</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `grant_types`。** **空白区切りで登録する**（`scope` と同じ流儀）。
+        ///
+        /// **空（未登録）なら制限しない** — **既存の登録を壊さないため。**
+        /// **RFC 7591 §2 の既定（`authorization_code`）を、既存の登録に当てはめてはならない**
+        /// （既存のクライアントはこの列を持たないので、当てはめると
+        /// **`authorization_code` 以外が通らなくなる**という破壊になる）。
+        /// **既定を書き込むのは、動的登録で作るときだけ**である。
+        /// </remarks>
+        public List<string> GetClientGrantTypes(string client_id)
+        {
+            return this.GetClientTypeList(client_id, "grant_types", false);
+        }
+
+        /// <summary>client_id から、使ってよい response_type（登録の response_types）を取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>response_type の一覧（登録が無ければ null ＝ 制限しない）</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `response_types`。**
+        ///
+        /// **要素の中の空白は、そのままでは持てない**（区切りと区別が付かない）ので、
+        /// **`code id_token` のような組み合わせは `code+id_token` と書く。**
+        /// **ここで空白へ戻してから返す**（突き合わせる相手は、要求の `response_type` である）。
+        /// </remarks>
+        public List<string> GetClientResponseTypes(string client_id)
+        {
+            return this.GetClientTypeList(client_id, "response_types", true);
+        }
+
+        /// <summary>登録の列挙（grant_types / response_types）を読む</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="key">構成ファイルのキー（grant_types / response_types）</param>
+        /// <param name="unescapeSpace">要素の中の「+」を空白に戻すか</param>
+        /// <returns>一覧（登録が無ければ null ＝ 制限しない）</returns>
+        /// <remarks>
+        /// **構成ファイル → saml2OAuth2Data の順に見る**（他の `Get*` と同じ）。
+        /// **読み出しの入口を 1 か所に保つ**ため、2 つの項目で共用している。
+        /// </remarks>
+        private List<string> GetClientTypeList(string client_id, string key, bool unescapeSpace)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey(key) && !string.IsNullOrWhiteSpace(dic[key]))
+                {
+                    return Helper.ToDistinctList(dic[key], unescapeSpace);
+                }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る。**
+                return null;
+            }
+
+            // saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
+            {
+                string value = (key == "grant_types") ? model.GrantTypes : model.ResponseTypes;
+
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return Helper.ToDistinctList(value, unescapeSpace);
                 }
             }
 
             // 登録が無い
             return null;
+        }
+
+        /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
+        /// <param name="value">登録値</param>
+        /// <returns>一覧</returns>
+        public static List<string> ToDistinctList(string value)
+        {
+            return Helper.ToDistinctList(value, false);
+        }
+
+        /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
+        /// <param name="value">登録値</param>
+        /// <param name="unescapeSpace">要素の中の「+」を空白に戻すか</param>
+        /// <returns>一覧</returns>
+        /// <remarks>
+        /// **切り方は `SplitUriList` と同じ**（半角・全角の空白・タブ・改行。空の要素は捨てる）。
+        /// **`scope` が空白区切り**（RFC 6749 §3.3）**なのと同じ流儀**である。
+        /// </remarks>
+        public static List<string> ToDistinctList(string value, bool unescapeSpace)
+        {
+            List<string> ret = new List<string>();
+
+            foreach (string s in Helper.SplitUriList(value))
+            {
+                string item = unescapeSpace ? s.Replace("+", " ") : s;
+
+                if (!ret.Contains(item))
+                {
+                    ret.Add(item);
+                }
+            }
+
+            return ret;
         }
 
         #endregion
@@ -1287,7 +1653,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetTokenEndpointAuthSigningAlg(string client_id)
         {
-            return this.GetVerifyingAlg(client_id, "token_endpoint_auth_signing_alg",
+            return this.GetRegisteredValue(client_id, "token_endpoint_auth_signing_alg",
                 model => model.TokenEndpointAuthSigningAlg);
         }
 
@@ -1305,20 +1671,45 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetRequestObjectSigningAlg(string client_id)
         {
-            return this.GetVerifyingAlg(client_id, "request_object_signing_alg",
+            return this.GetRegisteredValue(client_id, "request_object_signing_alg",
                 model => model.RequestObjectSigningAlg);
         }
 
-        /// <summary>検証する側の alg を、登録から引く（#262）</summary>
+        #endregion
+
+        #region token_endpoint_auth_method
+
+        /// <summary>client_id から token_endpoint_auth_method を取得する（#307 の段階 3）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>方法（**登録が無ければ null** ＝ 秘密ベースの 2 つ）</returns>
+        /// <remarks>
+        /// **RFC 7591 §2 の `token_endpoint_auth_method`。**
+        /// **登録が無い（null / 空）なら `client_secret_basic` / `client_secret_post` を暗黙に許す**
+        /// （**既存の登録を壊さないため**ではなく、**強い方法は明示を要する**という決定による。
+        /// #307 の段階 3）。
+        ///
+        /// **既知でない値は、使う側（`CmnEndpoints.AllowsAuthMethod`）が拒否する**
+        /// （#224 の段階 2 と同じ方針。「一番厳しいものに倒す」はしない）。
+        /// 受ける集合は `CmnEndpoints.TokenEndpointAuthMethods`。
+        /// </remarks>
+        public string GetTokenEndpointAuthMethod(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, "token_endpoint_auth_method",
+                model => model.TokenEndpointAuthMethod);
+        }
+
+        /// <summary>登録された値を引く（構成ファイル → saml2OAuth2Data。#262）</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="key">*.config の項目名</param>
         /// <param name="fromModel">画面登録（saml2OAuth2Data）から取り出す式</param>
-        /// <returns>alg（登録が無ければ null）</returns>
+        /// <returns>登録値（登録が無ければ null）</returns>
         /// <remarks>
-        /// **2 つの項目で同じ引き方になる**ので、1 か所にまとめた。
+        /// **同じ引き方をする項目が複数ある**ので、1 か所にまとめた
+        /// （`token_endpoint_auth_signing_alg` / `request_object_signing_alg` /
+        /// **`token_endpoint_auth_method`**（#307 の段階 3））。
         /// **`GetIdTokenSignedResponseAlg` と違い、既定値を持たない**（null ＝ 絞らない）。
         /// </remarks>
-        private string GetVerifyingAlg(string client_id, string key,
+        private string GetRegisteredValue(string client_id, string key,
             Func<ManageAddSaml2OAuth2DataViewModel, string> fromModel)
         {
             client_id = client_id ?? "";
@@ -1512,6 +1903,71 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region GetOwnerUserId（#307 の段階 5-b）
+
+        /// <summary>client_id から、そのクライアントの所有者（`Users.Id`）を引く</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>所有者の `Users.Id`（決まらなければ空）</returns>
+        /// <remarks>
+        /// **`client_credentials` で動的登録を叩くときに、登録の所有者を決めるため**に在る
+        /// （#307 の段階 5-b）。**トークンに利用者が居ない**ので、
+        /// **「認証したクライアントの所有者」を、作る登録の所有者にする。**
+        ///
+        /// | クライアントの出どころ | 所有者 |
+        /// |---|---|
+        /// | **構成ファイル**（`OAuth2ClientsInformation`） | **`owner` 属性**（**利用者名**）を引いて、その利用者の `Users.Id` |
+        /// | **登録の表**（`Saml2OAuth2Data`） | **`OwnerUserId`**（そのまま。`Users.Id` である） |
+        ///
+        /// **構成ファイルが「名前」なのは、人が書く物だから**である
+        /// （**`Users.Id` は書けない**）。
+        /// **その代わり、利用者名を変えたら設定も直す必要がある** —
+        /// **表の側は id なので切れない**（段階 5-a-1 でそう移した）。
+        ///
+        /// **決まらないことがある**（**どれも空を返す**）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **`owner` を書いていない構成ファイルのクライアント** | **配備全体のもの**で、1 人の持ち物ではない |
+        /// | **`owner` に書いた利用者が居ない** | **設定の誤り**（**名前を変えた後に直し忘れた**ときもここ） |
+        /// | **所有者の無い登録**（種データ） | **`OwnerUserId` が空** |
+        /// | **登録が無い `client_id`** | — |
+        ///
+        /// **呼ぶ側は、空を「所有者が決まらない」として断ること**
+        /// （`ClientRegistrationProvider.Register` は `403` ＋ `access_denied`）。
+        /// </remarks>
+        public string GetOwnerUserId(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (!dic.ContainsKey("owner")
+                    || string.IsNullOrWhiteSpace(dic["owner"]))
+                {
+                    //  **構成ファイルに在るクライアントは、ここで打ち切る**
+                    //    （`GetClientScopes` と同じ流儀）。
+                    return "";
+                }
+
+                ApplicationUser owner = CmnUserStore.FindByName(dic["owner"].Trim());
+
+                //  **居ないことがある**（設定の誤り）。**空を返す** —
+                //    **null 参照で 500 にしない**（#210 / #241 と同じ性質）。
+                return (owner == null) ? "" : owner.Id;
+            }
+
+            // saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            return (model == null || string.IsNullOrEmpty(model.OwnerUserId))
+                ? "" : model.OwnerUserId;
+        }
+
+        #endregion
+
         #region GetClientIdByName
 
         /// <summary>clientNameからclientIdを取得</summary>
@@ -1526,6 +1982,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="clientName">string</param>
         /// <param name="isResourceOwner">bool</param>
         /// <returns>指定したclientNameのclientId</returns>
+        /// <remarks>
+        /// **利用者名で引いたときは、その人の登録のうち 1 件を返す**（#307 の段階 5-a）。
+        ///
+        /// **以前は `Users.ClientID`（1 枠）を返していた。**
+        /// **1 利用者 n クライアント**になったので、**「1 件」の意味が変わった。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **どれを返すか決めていない** | **`DataProvider.GetFirstByOwner`**（並びは決めていない） |
+        /// | **0 件なら空** | **以前は「宙に浮いた GUID」が返っていた**（登録が無くても値が入っていた） |
+        ///
+        /// **呼ぶ側は「その人のクライアント 1 つ」で足りる所だけ**である —
+        /// **自己テストの導線**（`HomeController` の「ログイン・ユーザの Client」）と、
+        /// **認可ログの `User Account`**（1 行）。
+        /// **n 件から選ばせるのは、管理画面の話**（#307 の段階 5-a-2）。
+        /// </remarks>
         public string GetClientIdByName(string clientName, out bool isResourceOwner)
         {
             isResourceOwner = false;
@@ -1564,8 +2036,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return "";
             }
 
+            //  **その人の登録のうち 1 件**（#307 の段階 5-a）。
+            //    **0 件なら空を返す** — **以前は「宙に浮いた GUID」が返っていた。**
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.GetFirstByOwner(user.Id);
+
+            if (model == null)
+            {
+                return "";
+            }
+
             isResourceOwner = true;
-            return user.ClientID;
+            return model.ClientID;
         }
         #endregion
 
@@ -1602,6 +2083,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (Config.EnableOpenIDConnect)
             {
                 scopes.Add(OAuth2AndOIDCConst.Scope_Openid);
+            }
+
+            //  **クライアント登録の管理 API 専用の scope は、動的登録を開けた配備だけ**
+            //    （#307 の段階 1）。**閉じている配備では、広告も発行もしない。**
+            if (Config.EnableDynamicClientRegistration)
+            {
+                scopes.Add(Const.ScopeClientRegistration);
             }
 
             return scopes;
@@ -1650,6 +2138,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// scopes_supported での絞り込み（#198 の前半）に加え、
         /// クライアントの登録に scope があれば、その範囲にも収める（#198 の後半）。
         /// 登録が無いクライアントは、既存の登録を壊さないよう、ここでは制限しない。
+        ///
+        /// **`Const.ScopeClientRegistration`（クライアント登録の管理 API）だけは、倒し方が逆**
+        /// （#307 の段階 1）。**登録に明記していなければ出さない。**
+        ///
+        /// | | 倒し方 |
+        /// |---|---|
+        /// | 普通の scope | **登録が無ければ制限しない**（従来どおり） |
+        /// | **`client_registration`** | **登録に明記していなければ出さない** |
+        ///
+        /// **理由** : **この scope は「クライアント登録を作れる」権限**である。
+        /// **「登録が無ければ制限しない」を当てはめると、**
+        /// **`scope` を登録していない既存のクライアントが全て、**
+        /// **ROPC で登録を作れることになる。**
         /// </remarks>
         public static IEnumerable<string> FilterSupportedScopes(IEnumerable<string> scopes, string client_id)
         {
@@ -1658,7 +2159,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (string s in Helper.FilterSupportedScopes(scopes))
             {
-                if (permitted == null || permitted.Contains(s))
+                if (s == Const.ScopeClientRegistration)
+                {
+                    //  **明記されているときだけ通す**（#307 の段階 1）。
+                    if (permitted != null && permitted.Contains(s))
+                    {
+                        ret.Add(s);
+                    }
+                }
+                else if (permitted == null || permitted.Contains(s))
                 {
                     ret.Add(s);
                 }

@@ -35,6 +35,8 @@
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/10/02  玄人 幸道         RS384 / RS512 でも署名できるようにした（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         署名する鍵を SigningKeys の表から引く（#129 の段階 3 / D-9）
+//*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
+//*  2026/10/21  玄人 幸道         sid クレームを残すようにした（#310 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -102,10 +104,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         JObject claims = (JObject)tokenClaimSet[OAuth2AndOIDCConst.claims];
 
                         // IdTokenから不要なクレームを削除する。
+                        //   **sid は残す**（#310 の段階 1。OIDC Core §2）。
+                        //   **access_token 経由で運ばれてくる**ので、ここで落とすと id_token に出ない。
                         List<string> keys = new List<string>();
                         foreach (KeyValuePair<string, JToken> item in tokenClaimSet)
                         {
-                            if ("iss sub aud client_id exp iat nonce auth_time".IndexOf(item.Key) == -1)
+                            if ("iss sub aud client_id exp iat nonce auth_time sid".IndexOf(item.Key) == -1)
                             {
                                 keys.Add(item.Key);
                             }
@@ -198,18 +202,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                             JWS jws = key.CreateJwsFromPfx();
 
-                            // **jku / kid は access_token から写す**（鍵が同じなので同じ値になる）。
-                            if (!string.IsNullOrEmpty(jwsHeader.jku)
-                            && !string.IsNullOrEmpty(jwsHeader.kid))
+                            // **kid は access_token から写す**（鍵が同じなので同じ値になる）。
+                            //   **`jku` は写さない**（#302。もう付けていない。RFC 9068 / D-10）。
+                            if (!string.IsNullOrEmpty(jwsHeader.kid))
                             {
                                 if (key.IsRsa)
                                 {
-                                    ((JWS_RSA)jws).JWSHeader.jku = jwsHeader.jku;
                                     ((JWS_RSA)jws).JWSHeader.kid = jwsHeader.kid;
                                 }
                                 else
                                 {
-                                    ((JWS_ECDSA)jws).JWSHeader.jku = jwsHeader.jku;
                                     ((JWS_ECDSA)jws).JWSHeader.kid = jwsHeader.kid;
                                 }
                             }
@@ -239,8 +241,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             Dictionary<string, string> jwk =
                                 JsonConvert.DeserializeObject<Dictionary<string, string>>(cerJwkString);
 
+                            //  **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
                             jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
-                            jwsES256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
                             // Create
                             // Nested JWT : JWSをJWEで暗号化する。

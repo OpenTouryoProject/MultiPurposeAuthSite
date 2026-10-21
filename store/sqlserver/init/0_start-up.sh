@@ -22,6 +22,29 @@ do
   sleep 5
 done
 
+# **キャッシュ（バッファプール）に上限を付ける。**
+#   **イメージ本来の既定は上限なし**で、**VM のメモリに比例して大きく使う**。
+#   **3 つの DB の中で、ここが一番効く**（LocalServicesOnDocker の CHEATSHEET と同じ方針）。
+#
+#   **起動の度に設定する。** データベースの設定なので、コンテナを作り直しても消えないが、
+#   **compose の値を変えたときに追随させる**ため、毎回入れている。
+#
+#   **128 未満は設定できない**（SQL Server の制限）。小さすぎる値は 128 に丸める。
+#   **バッファプール等の上限**なので、プロセス全体はこれより大きくなる。
+if [ -n "$SQLSERVER_BUFFER_POOL_MB" ]; then
+
+  if [ "$SQLSERVER_BUFFER_POOL_MB" -lt 128 ]; then
+    echo "SQLSERVER_BUFFER_POOL_MB=$SQLSERVER_BUFFER_POOL_MB is too small. using 128."
+    SQLSERVER_BUFFER_POOL_MB=128
+  fi
+
+  echo "setting 'max server memory (MB)' to $SQLSERVER_BUFFER_POOL_MB ..."
+
+  "$SQLCMD" -S localhost -U SA -P "$MSSQL_SA_PASSWORD" -C -Q \
+    "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; \
+     EXEC sp_configure 'max server memory (MB)', $SQLSERVER_BUFFER_POOL_MB; RECONFIGURE;"
+fi
+
 echo "importing data ..."
 
 for filepath in /init/*.sql
