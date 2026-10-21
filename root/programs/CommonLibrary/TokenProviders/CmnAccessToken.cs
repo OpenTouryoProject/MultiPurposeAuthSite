@@ -47,6 +47,7 @@
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //*  2026/10/16  玄人 幸道         typ を at+jwt にし、検証で期待値を明示（#302 の段階 2）
 //*  2026/10/18  玄人 幸道         クライアントの登録が在るかの確認を効かせた（#307 の段階 2）
+//*  2026/10/21  玄人 幸道         sid クレームを載せ替えるようにした（#310 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -174,6 +175,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             List<string> scopes = new List<string>();
             string auth_time = null;
             string claims = null;
+            string sid = null;
 
             // カスタムクレームは含めない。
             //bool haveRoles = false;
@@ -202,6 +204,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     auth_time = c.Value;
                 }
+                else if (c.Type == Const.UrnSidClaim)
+                {
+                    //  **sid（OP のセッションの識別子。#310 の段階 1）**
+                    sid = c.Value;
+                }
             }
             
             // PPID対応
@@ -218,6 +225,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             // auth_time
             if (!string.IsNullOrEmpty(auth_time))
                 tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, auth_time);
+
+            // sid（#310 の段階 1）
+            //   **id_token に出すためには、ここ（access_token）を通る必要が在る**
+            //   （`CmnIdToken.ChangeToIdTokenFromAccessToken` が access_token の
+            //   クレーム集合から id_token を作るため）。
+            //   **クライアントごとに別の値**なので、**RP 同士の突き合わせには使えない。**
+            if (!string.IsNullOrEmpty(sid))
+                tokenClaimSet.Add(Const.Sid, sid);
 
             // claims
             if (!string.IsNullOrEmpty(claims))
@@ -311,6 +326,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             List<string> scopes = new List<string>();
             string auth_time = null;
             string claims = null;
+            string sid = null;
 
             // カスタムクレームは含めない。
             //bool haveRoles = false;
@@ -342,6 +358,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     claims = c.Value;
                 }
+                else if (c.Type == Const.UrnSidClaim)
+                {
+                    //  **sid（OP のセッションの識別子。#310 の段階 1）**
+                    sid = c.Value;
+                }
             }
 
             // PPID対応
@@ -358,6 +379,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             // auth_time
             if(!string.IsNullOrEmpty(auth_time))
                 tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, auth_time);
+
+            // sid（#310 の段階 1）
+            if (!string.IsNullOrEmpty(sid))
+                tokenClaimSet.Add(Const.Sid, sid);
 
             // claims
             if (!string.IsNullOrEmpty(claims)) tokenClaimSet.Add(
@@ -901,6 +926,18 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             Helper.AddClaim(identity,
                 (string)tokenClaimSet[OAuth2AndOIDCConst.aud], scopes, null, (string)nonce);
+
+            // - sid（#310 の段階 1）
+            //   **refresh_token で作り直すときに、同じ sid を引き継ぐ**ため。
+            //   **ここで戻さないと、作り直した id_token から sid が消える**
+            //   （**RP から見ると、同じセッションが別物に見える**）。
+            if (tokenClaimSet.TryGetValue(Const.Sid, out object sid))
+            {
+                if (!string.IsNullOrEmpty((string)sid))
+                {
+                    identity.AddClaim(new Claim(Const.UrnSidClaim, (string)sid));
+                }
+            }
 
             // 拡張Claimを追加
             // - cnf

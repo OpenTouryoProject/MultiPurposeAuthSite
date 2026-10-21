@@ -141,6 +141,20 @@ CREATE TABLE [ConsentGrant](   -- 同意の記録（#272 の段階 2）
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+-- セッション × クライアントの台帳（#310 の段階 1）
+--   **「このセッションで、どのクライアントに、どの sid を名乗ったか」**を持つ。
+--   **sid はクライアントごとに別の値**である（pairwise の sub を分けた意味を消さないため）。
+--   **ログアウトを伝える先**は、この表から引く（#310 の段階 2・3）。
+CREATE TABLE [SessionClient](
+    [SessionId] [nvarchar](38) NOT NULL,     -- *PK, guid（OP のセッション。Cookie が持つ値）
+    [ClientID] [nvarchar](256) NOT NULL,     -- *PK
+    [Sid] [nvarchar](38) NOT NULL,           -- そのクライアントに名乗った sid（guid）
+    [UserId] [nvarchar](38) NOT NULL,        -- Users.Id
+    [CreatedDate] [smalldatetime] NOT NULL,
+    CONSTRAINT [PK.SessionClient] PRIMARY KEY NONCLUSTERED ([SessionId] ASC, [ClientID] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [CustomizedConfirmation](
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [Value] [nvarchar](max) NOT NULL,        -- Value
@@ -343,6 +357,10 @@ CREATE NONCLUSTERED INDEX [IX_UserClaims.UserId] ON [UserClaims] ([UserId] ASC) 
 CREATE UNIQUE NONCLUSTERED INDEX [IX_SubjectIdentifier.Sector_Sub] ON [SubjectIdentifier] ([Sector] ASC, [Sub] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ---- TotpTokens
 CREATE NONCLUSTERED INDEX [IX_TotpTokens.UserId] ON [TotpTokens] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+---- SessionClient
+---- **逆引き（sid → セッション）用。** sid は新しい guid なので一意（#310 の段階 1）
+CREATE UNIQUE NONCLUSTERED INDEX [IX_SessionClient.Sid] ON [SessionClient] ([Sid] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+CREATE NONCLUSTERED INDEX [IX_SessionClient.UserId] ON [SessionClient] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 
 -- CONSTRAINT
 ---- UserRoles
@@ -366,3 +384,5 @@ ALTER TABLE [FIDO2Data] WITH CHECK ADD CONSTRAINT [FK.FIDO2Data.Users_UserName] 
 ALTER TABLE [ConsentGrant] WITH CHECK ADD CONSTRAINT [FK.ConsentGrant.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- SubjectIdentifier
 ALTER TABLE [SubjectIdentifier] WITH CHECK ADD CONSTRAINT [FK.SubjectIdentifier.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+---- SessionClient
+ALTER TABLE [SessionClient] WITH CHECK ADD CONSTRAINT [FK.SessionClient.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE

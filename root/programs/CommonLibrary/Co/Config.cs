@@ -675,7 +675,7 @@ namespace MultiPurposeAuthSite.Co
         /// |---|---|
         /// | 認証・外部ログイン・2FA（Identity の 4 スキーム） | <see cref="AuthCookieName"/>、または枠組みの既定 |
         /// | セッション | `sessionState:SessionCookieName` |
-        /// | `auth_time` / `re_auth_at` | このクラスの定数 |
+        /// | `auth_time` / `re_auth_at` / `op_session` | このクラスの定数 |
         /// | TempData（net10.0 版だけ） | 枠組みの既定 |
         ///
         /// **外部ログインの Cookie も要る。** **ID フェデレーションの途中で使う**ので、
@@ -831,6 +831,25 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Config.PrefixCookieName(Const.ReAuthenticatedAt);
+            }
+        }
+
+        /// <summary>
+        /// OP のセッションの識別子を保存する Cookie の名前（#310 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **`sid` の台帳（`SessionClientProvider`）を引く鍵**である。
+        /// **中身は guid** で、**サインインで作り、サインアウトで消す。**
+        ///
+        /// **セッション Cookie である**（期限を付けない） — **ブラウザを閉じれば終わる。**
+        /// **認証 Cookie が「次回から自動的にサインイン」で残っていても、
+        /// この Cookie が無ければ別のセッションとして扱う**（**新しい `sid` になる**）。
+        /// </remarks>
+        public static string OpSessionCookieName
+        {
+            get
+            {
+                return Config.PrefixCookieName(Const.OpSession);
             }
         }
 

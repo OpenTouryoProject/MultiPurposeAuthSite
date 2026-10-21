@@ -38,6 +38,7 @@
 //*  2026/10/07  玄人 幸道         Users.FIDO2PublicKey（MsPass専用）を削除（#137）
 //*  2026/10/09  玄人 幸道         Users.PaymentInformation を削除（オンライン決済の取り下げ）
 //*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
+//*  2026/10/21  玄人 幸道         利用者の削除で、セッション × クライアントの台帳も消す（#310 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1053,6 +1054,11 @@ namespace MultiPurposeAuthSite.Data
                         //   **1 利用者 n クライアントになり、`RT-307.3` の (6) が
                         //   正面から当たるので、ここで揃えた。**
                         DataProvider.DeleteByOwner(user.Id);
+
+                        // **セッション × クライアントの台帳も消す**（#310 の段階 1）。
+                        //   **DB では外部キー（UserId → Users.Id の ON DELETE CASCADE）が消す**
+                        //   ので、**ここも mem だけ**である（上の 2 つと同じ事情）。
+                        SessionClientProvider.DeleteByUser(user.Id);
 
                         break;
 

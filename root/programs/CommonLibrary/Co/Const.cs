@@ -46,6 +46,7 @@
 //*  2026/10/09  玄人 幸道         test_self_code_manage を削除（管理画面のトークン取得の廃止に伴う）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の scope と、登録項目の上限を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         registration_access_token のハッシュの上限を追加（#307 の段階 2）
+//*  2026/10/21  玄人 幸道         セッションの識別子と sid クレームを追加（#310 の段階 1）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method の上限を追加（#307 の段階 3）
 //**********************************************************************************
 
@@ -338,6 +339,38 @@ namespace MultiPurposeAuthSite.Co
         /// 印より後に認証されていれば、**一度は再認証した**と判断して先へ進む。
         /// </remarks>
         public const string ReAuthenticatedAt = "re_auth_at";
+
+        #endregion
+
+        #region セッション（sid。#310 の段階 1）
+
+        /// <summary>OP のセッションの識別子を保存するCookieのKey（#310 の段階 1）</summary>
+        /// <remarks>
+        /// **中身は guid。** **サインインで作り、サインアウトで消す。**
+        ///
+        /// **これは `sid` そのものではない。**
+        /// **`sid` はクライアントごとに別の値**にしてあり（`SessionClientProvider`）、
+        /// **この値は、その台帳を引くための鍵**である。
+        ///
+        /// **接頭辞が掛かる**（#255。`Config.PrefixCookieName`）。
+        /// </remarks>
+        public const string OpSession = "op_session";
+
+        /// <summary>sid クレームの名前（#310 の段階 1）</summary>
+        /// <remarks>
+        /// **OP のセッションの識別子**（OIDC Core §2）。
+        /// **Front-Channel / Back-Channel Logout が「どのセッションか」を言う手段**である
+        /// （#310 の段階 2・3）。
+        /// </remarks>
+        public const string Sid = "sid";
+
+        /// <summary>sid を運ぶ ClaimsIdentity のクレーム型（#310 の段階 1）</summary>
+        /// <remarks>
+        /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
+        /// （`UrnAuthTimeClaim` などと同じ流儀）。
+        /// **プロセスの外には出ない**（トークンに入るのは <see cref="Sid"/> の名前）。
+        /// </remarks>
+        public const string UrnSidClaim = "urn:oauth:sid";
 
         #endregion
 

@@ -36,6 +36,7 @@
 //*  2026/10/02  玄人 幸道         RS384 / RS512 でも署名できるようにした（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         署名する鍵を SigningKeys の表から引く（#129 の段階 3 / D-9）
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
+//*  2026/10/21  玄人 幸道         sid クレームを残すようにした（#310 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -103,10 +104,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         JObject claims = (JObject)tokenClaimSet[OAuth2AndOIDCConst.claims];
 
                         // IdTokenから不要なクレームを削除する。
+                        //   **sid は残す**（#310 の段階 1。OIDC Core §2）。
+                        //   **access_token 経由で運ばれてくる**ので、ここで落とすと id_token に出ない。
                         List<string> keys = new List<string>();
                         foreach (KeyValuePair<string, JToken> item in tokenClaimSet)
                         {
-                            if ("iss sub aud client_id exp iat nonce auth_time".IndexOf(item.Key) == -1)
+                            if ("iss sub aud client_id exp iat nonce auth_time sid".IndexOf(item.Key) == -1)
                             {
                                 keys.Add(item.Key);
                             }

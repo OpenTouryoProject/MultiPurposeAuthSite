@@ -508,6 +508,95 @@ OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に
 > `CreateClientsIdentity` はこの項目を出力しない。必要なクライアントにだけ、手で足す。
 > 画面（`/Manage/AddSaml2OAuth2Data`）から登録したクライアントでも設定できる。
 
+
+### `sid` — OP のセッションの識別子（#310 の段階 1）
+
+**ログアウトを他の RP へ伝えるには、「どのセッションか」を言う手段が要る**
+（Front-Channel / Back-Channel Logout。#310 の段階 2・3）。
+**段階 1 では、その手段（`sid`）と、伝える先の台帳だけを入れてある。**
+
+| | |
+|---|---|
+| **どこに出るか** | **`id_token`**（OIDC Core §2）。**`access_token` にも入る** — **`id_token` は access_token のクレーム集合から作る**ため |
+| **いつ入るか** | **認可の口（`/authorize`）を通ったとき**。**ブラウザのセッションが在る経路だけ** |
+| **入らない経路** | `grant_type=password` / `client_credentials` / CIBA / Device Authorization Grant（**ブラウザのセッションを経ていない**）。**クレームを付けない**（**嘘の値を出さない**） |
+| **`refresh_token`** | **引き継ぐ**（取り直した `id_token` にも同じ値が入る） |
+| **Discovery** | **変えていない。** **`frontchannel_logout_supported` などは、まだ出さない**（段階 2・3 で出す） |
+
+#### RP ごとに別の値である
+
+**セッション単位で 1 つにすると、`sub` を `pairwise` にしている配備で、
+2 つの RP が突き合わせたときに同じ利用者だと分かってしまう**（**`sub` を分けた意味が消える**）。
+
+**仕様が求めるのは「その RP に出した `id_token` の `sid` と、
+その RP へ送る `logout_token` の `sid` が同じこと」**なので、**RP ごとに別の値でよい**
+（OIDC Back-Channel Logout 1.0 §2.4）。
+
+#### セッションの識別子は Cookie が持つ
+
+| | |
+|---|---|
+| **Cookie の名前** | **`op_session`**（**接頭辞が掛かる**。#255 の `CookieNamePrefix`） |
+| **中身** | **guid。** **`sid` そのものではない** — **台帳を引くための鍵**である |
+| **作る / 消す** | **サインインで作り、サインアウトで消す**（`/Account/LogOff` / `/end_session` / 再認証） |
+| **属性** | **`HttpOnly` ＋ `Secure`。** **期限を付けない**（セッション Cookie。**ブラウザを閉じれば終わる**） |
+| **無いとき** | **認可の口で作る** — **「次回から自動的にサインイン」で認証 Cookie だけが残っている**ことが在り、**そのときもセッションとして扱う**（**新しい `sid` になる**） |
+
+#### 台帳（`SessionClient`）— DDL が増える
+
+**「このセッションで、どのクライアントに、どの `sid` を名乗ったか」**を持つ。
+**段階 2 では、ここからログアウトを伝える先を引く。**
+
+| 列 | |
+|---|---|
+| `SessionId` | **PK。** Cookie が持つ値 |
+| `ClientID` | **PK** |
+| `Sid` | **そのクライアントに名乗った `sid`**（guid）。**逆引き用に一意索引**を張ってある |
+| `UserId` | `Users.Id`（**`ON DELETE CASCADE`** — **利用者を消せば消える**） |
+| `CreatedDate` | **掃除の基準** |
+
+**既に配備された DB には、表を足すこと**（`Create_UserStore.sql` には入っている）。
+
+```sql
+-- SQL Server
+CREATE TABLE [SessionClient](
+    [SessionId] [nvarchar](38) NOT NULL,
+    [ClientID] [nvarchar](256) NOT NULL,
+    [Sid] [nvarchar](38) NOT NULL,
+    [UserId] [nvarchar](38) NOT NULL,
+    [CreatedDate] [smalldatetime] NOT NULL,
+    CONSTRAINT [PK.SessionClient] PRIMARY KEY NONCLUSTERED ([SessionId] ASC, [ClientID] ASC)
+)
+CREATE UNIQUE NONCLUSTERED INDEX [IX_SessionClient.Sid] ON [SessionClient] ([Sid] ASC)
+CREATE NONCLUSTERED INDEX [IX_SessionClient.UserId] ON [SessionClient] ([UserId] ASC)
+ALTER TABLE [SessionClient] WITH CHECK ADD CONSTRAINT [FK.SessionClient.Users_UserId]
+    FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
+```
+
+**Oracle / PostgreSQL も同じ形**（`Create_UserStore.sql` の 3 方言を参照。
+**Oracle は `NVARCHAR2` と `DATE`、PostgreSQL は `varchar` と `timestamp`**）。
+
+> **`mem` では表は要らない**（プロセス内の辞書に持つ）。
+> **`mem` の後始末は実装が行う** — **利用者の削除で、その人の行も消える**
+> （DB は外部キーが消す）。
+
+#### 掃除
+
+**サインアウトを通らずに捨てられたセッションの行**が残るため、
+**書き込みのついでに、古い行をまとめて消す**（常駐の仕組みは増やさない。`AuthorizationCodeProvider` と同じ流儀）。
+
+| | |
+|---|---|
+| **間隔** | **10 分**（定数） |
+| **消す線** | **`AuthCookieExpiresFromHours` ＋ 1 日**より古い行（**Sliding で延びることが在る**ので猶予を足している） |
+
+> **設定キーは増やしていない。**
+>
+> **Sliding でその線を超えて生き続けたセッションでは、同じ RP でも `sid` が替わる**
+> （**行が消えた後に、作り直すため**）。**RP からは新しいセッションに見える** —
+> **段階 2 では、替わる前の `sid` への通知が届かない**ことになる。
+> **最終利用の時刻で掃除する形に変えれば消えるが、認可のたびに 1 行更新することになる**ので、段階 1 では採っていない。
+
 ### `redirect_uri` の記号
 
 `test_self_code` / `test_self_token` は URL ではなく**記号**である。
@@ -3083,7 +3172,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `UseForwardedHeaders` | `""`（空＝取り込まない） | **リバース プロキシの背後なら `on`** | **`X-Forwarded-Proto` / `X-Forwarded-For` を取り込む**（#279。上流 Open棟梁 #549）。**取り込まないと、プロキシが https で受けていてもアプリは http だと思う** → `issuer`・リダイレクト先の URI・`Secure` の判定がずれる。**パイプラインの先頭で呼んでいる。** **net10.0 版だけ** |
 | `ForwardedHeadersKnownProxies` | `""`（空） | **プロキシの IP を列挙する** | **転送ヘッダを信じるプロキシの IP**（#279。カンマ区切り）。**`UseForwardedHeaders` が `on` のときだけ読む。** 空なら、**送った相手を問わない**（`KnownProxies` / `KnownIPNetworks` を空にしてあるため）。**プロキシを経由せずアプリに直接届く経路があるなら、必ず列挙する。** **net10.0 版だけ** |
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
-| `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**`AuthCookieName` が空でも、枠組みの既定名に接頭辞が付く**（`.probe_AspNetCore.Identity.Application` など。#283。**以前はこの組み合わせだけで 500 になっていた**）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。**AntiForgery にも掛かる**（#282）。名前は net10.0 版では **DataProtection の識別子から導かれ**、**#279 でそれを固定したので、`DataProtectionKeyPath` を設定した配備同士はパスが違っても同名になる**（**実測 2026/10/08**。[`TESTING.md`](TESTING.md) 1 節）。net48 版は `AntiForgeryConfig.CookieName`。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
+| `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at` / `op_session`（#310 の段階 1）、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**`AuthCookieName` が空でも、枠組みの既定名に接頭辞が付く**（`.probe_AspNetCore.Identity.Application` など。#283。**以前はこの組み合わせだけで 500 になっていた**）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。**AntiForgery にも掛かる**（#282）。名前は net10.0 版では **DataProtection の識別子から導かれ**、**#279 でそれを固定したので、`DataProtectionKeyPath` を設定した配備同士はパスが違っても同名になる**（**実測 2026/10/08**。[`TESTING.md`](TESTING.md) 1 節）。net48 版は `AntiForgeryConfig.CookieName`。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
 | `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4）。**サンプルは下の「標準クレームを返す」**（#261） |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |

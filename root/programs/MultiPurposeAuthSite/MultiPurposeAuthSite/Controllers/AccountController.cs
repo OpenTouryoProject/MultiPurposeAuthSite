@@ -60,6 +60,7 @@
 //*  2026/10/10  玄人 幸道         SAML2のID連携を追加（#286の段階2）
 //*  2026/10/11  玄人 幸道         OIDCのID連携も開始とサインインに分けた（#286の段階2）
 //*  2026/10/16  玄人 幸道         user_code の投入の失敗を数える（#305 の段階 2）
+//*  2026/10/21  玄人 幸道         OP のセッションの識別子と sid クレームを追加（#310 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -192,6 +193,10 @@ namespace MultiPurposeAuthSite.Controllers
             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
             Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
             Response.Cookies[Config.AuthTimeCookieName].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+
+            // **OP のセッションの識別子を作る**（#310 の段階 1）。
+            //   **ここがセッションの始まり**である（`sid` はこの値から引く）。
+            this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
         }
 
         #region サインイン
@@ -423,6 +428,9 @@ namespace MultiPurposeAuthSite.Controllers
         {
             if (User.Identity.IsAuthenticated) // 空振りできるように。
             {
+                // **OP のセッションを終わらせる**（#310 の段階 1）
+                this.ClearOpSession();
+
                 // サインアウト（Cookieの削除）
                 AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
 
@@ -544,6 +552,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (signedIn)
             {
+                // **OP のセッションを終わらせる**（#310 の段階 1）
+                this.ClearOpSession();
+
                 // サインアウト（Cookieの削除）
                 AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
 
@@ -3199,6 +3210,79 @@ namespace MultiPurposeAuthSite.Controllers
         }
         #endregion
 
+        #region sid（OP のセッション。#310 の段階 1）
+
+        /// <summary>sidを追加</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <remarks>
+        /// **Cookie に関わるので Controller 側で追加**（`AddAuthTimeClaim` と同じ理由）。
+        /// **値を決めるのは CommonLibrary**（`SessionClientProvider`） —
+        /// **クライアントごとに別の sid** を、台帳から引く（無ければ作る）。
+        ///
+        /// **Cookie が無ければ、ここで作る。**
+        /// **「次回から自動的にサインイン」で認証 Cookie だけが残っている**ことが在り、
+        /// **そのときもセッションとして扱えるようにする**ため。
+        ///
+        /// **台帳に入れられない経路では、クレームを付けない**（**嘘の値を出さない**）。
+        /// </remarks>
+        private void AddSidClaim(string client_id, ClaimsIdentity identity)
+        {
+            string sessionId = (Request.Cookies[Config.OpSessionCookieName] == null)
+                ? "" : Request.Cookies[Config.OpSessionCookieName].Value;
+
+            if (string.IsNullOrEmpty(sessionId))
+            {
+                sessionId = Guid.NewGuid().ToString("N");
+                this.SetOpSessionCookie(sessionId);
+            }
+
+            string sid = Sts.SessionClientProvider.GetOrCreateSid(
+                sessionId, client_id, identity.Name);
+
+            if (!string.IsNullOrEmpty(sid))
+            {
+                identity.AddClaim(new Claim(Const.UrnSidClaim, sid));
+            }
+        }
+
+        /// <summary>OPのセッションの識別子をCookieに書く</summary>
+        /// <param name="sessionId">セッションの識別子</param>
+        /// <remarks>**期限を付けない**（セッション Cookie）。**ブラウザを閉じれば終わる。**</remarks>
+        private void SetOpSessionCookie(string sessionId)
+        {
+            Response.Cookies.Add(new HttpCookie(Config.OpSessionCookieName, sessionId)
+            {
+                HttpOnly = true,
+                Secure = true
+            });
+        }
+
+        /// <summary>OPのセッションを終わらせる</summary>
+        /// <remarks>
+        /// **サインアウトの前に呼ぶ。** **台帳を消し、Cookie を落とす。**
+        ///
+        /// **段階 2 では、消す前に「伝える先」を読む**ことになる
+        /// （**消してしまうと、誰に伝えるかが分からなくなる**）。
+        /// </remarks>
+        private void ClearOpSession()
+        {
+            string sessionId = (Request.Cookies[Config.OpSessionCookieName] == null)
+                ? "" : Request.Cookies[Config.OpSessionCookieName].Value;
+
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                Sts.SessionClientProvider.DeleteBySession(sessionId);
+            }
+
+            Response.Cookies.Add(new HttpCookie(Config.OpSessionCookieName, "")
+            {
+                Expires = DateTime.UtcNow.AddDays(-1)
+            });
+        }
+
+        #endregion
+
         #region エンドポイント自体
         /// <summary>認可エンドポイント</summary>
         /// <param name="client_id">string（必須）</param>
@@ -3323,6 +3407,8 @@ namespace MultiPurposeAuthSite.Controllers
                     //   印が無いと永久に送り返すことになる。
                     Response.Cookies.Add(new HttpCookie(Config.ReAuthenticatedAtCookieName,
                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow)));
+                    // **OP のセッションを終わらせる**（#310 の段階 1。入り直すと新しい sid になる）
+                    this.ClearOpSession();
                     this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
                     return new RedirectResult(Request.RawUrl);
                 }
@@ -3333,6 +3419,8 @@ namespace MultiPurposeAuthSite.Controllers
                     //   **印は繰り返しを防ぐため**（max_age=0 でも、再認証の直後なら続ける）。
                     Response.Cookies.Add(new HttpCookie(Config.ReAuthenticatedAtCookieName,
                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow)));
+                    // **OP のセッションを終わらせる**（#310 の段階 1。入り直すと新しい sid になる）
+                    this.ClearOpSession();
                     this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
                     return new RedirectResult(Request.RawUrl);
                 }
@@ -3357,6 +3445,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // auth_timeを追加
                     this.AddAuthTimeClaim(max_age, claims, identity);
+
+                    // sidを追加（#310 の段階 1）
+                    this.AddSidClaim(client_id, identity);
 
                     // scopeパラメタ
                     string[] scopes = (scope ?? "").Split(' ');
@@ -3590,6 +3681,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // auth_timeを追加
                 this.AddAuthTimeClaim(max_age, claims, identity);
 
+                // sidを追加（#310 の段階 1）
+                this.AddSidClaim(client_id, identity);
+
                 // 次に、アクセス要求を保存して、仲介コードを発行する。
 
                 // scopeパラメタ
@@ -3599,6 +3693,8 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 別のアカウントでログイン
                     //（サインアウトしてリダイレクト）
+                    // **OP のセッションを終わらせる**（#310 の段階 1）
+                    this.ClearOpSession();
                     this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
                     return new RedirectResult(Request.RawUrl);
                 }

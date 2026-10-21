@@ -95,6 +95,7 @@
     <Compile Include="Extensions\Sts\SelfTestClient.cs" />
     <Compile Include="Extensions\Sts\ConsentProvider.cs" />
     <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />
+    <Compile Include="Extensions\Sts\SessionClientProvider.cs" />
     <Compile Include="Extensions\Sts\TestClients.cs" />
     <Compile Include="Extensions\Sts\UserClaims.cs" />
     <Compile Include="Notifications\FcmService.cs" />

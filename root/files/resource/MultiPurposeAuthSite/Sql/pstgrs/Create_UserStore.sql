@@ -116,6 +116,16 @@ CREATE TABLE ConsentGrant(   -- 同意の記録（#272 の段階 2）
     CONSTRAINT PK_ConsentGrant PRIMARY KEY (UserId, ClientID)
 );
 
+-- セッション × クライアントの台帳（#310 の段階 1。SQL Server 側の注と同じ）
+CREATE TABLE SessionClient(
+    SessionId varchar(38) NOT NULL,                -- *PK, guid（OP のセッション）
+    ClientID varchar(256) NOT NULL,             -- *PK
+    Sid varchar(38) NOT NULL,                   -- そのクライアントに名乗った sid（guid）
+    UserId varchar(38) NOT NULL,                -- Users.Id
+    CreatedDate timestamp NOT NULL,
+    CONSTRAINT PK_SessionClient PRIMARY KEY (SessionId, ClientID)
+);
+
 CREATE TABLE CustomizedConfirmation(
     UserId varchar(38) NOT NULL,             -- PK, guid
     Value varchar(2000) NOT NULL,            -- Value
@@ -303,6 +313,10 @@ CREATE INDEX IX_UserClaims_UserId ON UserClaims (UserId);
 CREATE UNIQUE INDEX IX_SubjectIdentifier_Sector_Sub ON SubjectIdentifier (Sector, Sub);
 ---- TotpTokens
 CREATE INDEX IX_TotpTokens_UserId ON TotpTokens (UserId);
+---- SessionClient
+---- **逆引き（sid → セッション）用。** sid は新しい guid なので一意（#310 の段階 1）
+CREATE UNIQUE INDEX IX_SessionClient_Sid ON SessionClient (Sid);
+CREATE INDEX IX_SessionClient_UserId ON SessionClient (UserId);
 
 -- CONSTRAINT
 ---- UserRoles
@@ -323,3 +337,5 @@ ALTER TABLE FIDO2Data ADD CONSTRAINT FK_FIDO2Data_Users_UserName FOREIGN KEY(Use
 ALTER TABLE ConsentGrant ADD CONSTRAINT FK_ConsentGrant_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- SubjectIdentifier
 ALTER TABLE SubjectIdentifier ADD CONSTRAINT FK_SubjectIdentifier_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
+---- SessionClient
+ALTER TABLE SessionClient ADD CONSTRAINT FK_SessionClient_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
