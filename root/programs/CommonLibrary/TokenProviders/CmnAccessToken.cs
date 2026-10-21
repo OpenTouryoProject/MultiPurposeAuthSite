@@ -40,6 +40,7 @@
 //*  2026/09/23  玄人 幸道         cnf を RFC 8705 の形式で書き、提示された証明書と照合する口を追加
 //*  2026/10/21  玄人 幸道         cnf に jkt（DPoP）も書けるようにした（#311 の段階 1）
 //*  2026/10/21  玄人 幸道         cnf.jkt と DPoP の証明を照合する口を追加（#311 の段階 2）
+//*  2026/10/22  玄人 幸道         預ける payload に cnf.jkt を書く口を追加（#311 の段階 4）
 //*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
 //*  2026/09/27  玄人 幸道         署名検証の鍵選択を切り出し、署名だけを検証する口を追加（#232）
 //*  2026/10/02  玄人 幸道         受ける alg を自分が発行する 2 つに固定（C-8）（#129 の段階 1）
@@ -723,8 +724,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **縛りを「使う側の出し方」で外せてはいけない。**
         /// </remarks>
         public static bool VerifyDPoPBinding(
-            ClaimsIdentity identity, string accessToken, string proof, string htm, string htu)
+            ClaimsIdentity identity, string accessToken,
+            string proof, string htm, string htu, out string error)
         {
+            error = null;
+
             string boundJkt = CmnAccessToken.JktOf(identity);
 
             if (string.IsNullOrEmpty(boundJkt))
@@ -733,8 +737,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return true;
             }
 
-            return CmnDPoP.VerifyForResource(
-                proof, htm, htu, accessToken, boundJkt, out string _);
+            if (CmnDPoP.VerifyForResource(
+                proof, htm, htu, accessToken, boundJkt, out string dpopError, out string _))
+            {
+                return true;
+            }
+
+            //  **`use_dpop_nonce` だけは、呼び出し側に伝える**（RFC 9449 §9。#311 の段階 4）。
+            //    **クライアントは「nonce を貰い直して出し直す」ことになる** —
+            //    **`invalid_token` と区別できなければ、出し直す理由が分からない。**
+            error = dpopError;
+
+            return false;
         }
 
         /// <summary>JWT の署名だけを検証する（#232）</summary>
@@ -809,10 +823,109 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (cnf.Count == 0)
             {
+                //  **書くものが無ければ、残っている `cnf` を落とす**（#311 の段階 4）。
+                //    **`refresh_token` に預けた payload は `cnf.jkt` を持つ**ようになったので、
+                //    **そのまま通すと「証明なしの要求で、縛られたトークンが出る」**ことになる。
+                //    **いまは縛られた `refresh_token` を証明なしでは使わせない**ので通らないが、
+                //    **印の出どころを 1 つに保つ**（**書くのはこの関数だけ**）。
+                payload.Remove(OAuth2AndOIDCConst.cnf);
+
                 return;
             }
 
             payload[OAuth2AndOIDCConst.cnf] = cnf;
+        }
+
+        /// <summary>預ける payload に、DPoP の鍵の指紋を書く / 落とす（#311 の段階 4）</summary>
+        /// <param name="payload">access_token の payload（JSON の文字列）</param>
+        /// <param name="jkt">DPoP の鍵の指紋（**空なら落とす**）</param>
+        /// <returns>書き換えた payload（読めなければ、受け取ったものをそのまま返す）</returns>
+        /// <remarks>
+        /// **`refresh_token` を鍵に縛るため**である（RFC 9449 §5）。
+        /// **預ける payload に印を残しておかないと、次に使われたときに
+        /// 「縛られていたのか」が分からない。**
+        ///
+        /// **`cnf` を丸ごと置き換えない** — **`jkt` だけを足す / 落とす。**
+        /// **mTLS の印（`x5t#S256`）と同じ場所**であり、**巻き込んで消さない。**
+        /// </remarks>
+        public static string BindJkt(string payload, string jkt)
+        {
+            if (string.IsNullOrEmpty(payload))
+            {
+                return payload;
+            }
+
+            try
+            {
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
+
+                if (jobj == null)
+                {
+                    return payload;
+                }
+
+                JObject cnf = jobj[OAuth2AndOIDCConst.cnf] as JObject;
+
+                if (string.IsNullOrEmpty(jkt))
+                {
+                    if (cnf == null)
+                    {
+                        return payload;
+                    }
+
+                    cnf.Remove(CmnDPoP.Jkt);
+
+                    if (cnf.Count == 0)
+                    {
+                        jobj.Remove(OAuth2AndOIDCConst.cnf);
+                    }
+                }
+                else
+                {
+                    if (cnf == null)
+                    {
+                        cnf = new JObject();
+                        jobj[OAuth2AndOIDCConst.cnf] = cnf;
+                    }
+
+                    cnf[CmnDPoP.Jkt] = jkt;
+                }
+
+                return JsonConvert.SerializeObject(jobj);
+            }
+            catch (Exception)
+            {
+                // **読めない payload は、そのまま返す**（この関数で要求を止めない）。
+                return payload;
+            }
+        }
+
+        /// <summary>預かった payload に書かれた DPoP の鍵の指紋（#311 の段階 4）</summary>
+        /// <param name="payload">access_token の payload（JSON の文字列）</param>
+        /// <returns>`cnf.jkt`（無ければ空）</returns>
+        /// <remarks>
+        /// **`refresh_token` が縛られているか**を見るために読む。
+        /// **空なら縛られていない** ＝ **これまでどおり、証明なしでも使える。**
+        /// </remarks>
+        public static string JktOfPayload(string payload)
+        {
+            if (string.IsNullOrEmpty(payload))
+            {
+                return "";
+            }
+
+            try
+            {
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
+                JObject cnf = (jobj == null) ? null : jobj[OAuth2AndOIDCConst.cnf] as JObject;
+
+                return (cnf == null) ? "" : ((string)cnf[CmnDPoP.Jkt] ?? "");
+            }
+            catch (Exception)
+            {
+                // **読めなければ、縛られていないものとして扱う**（従来の挙動に倒す）。
+                return "";
+            }
         }
 
         /// <summary>証明書（DER）の SHA-256 を BASE64URL した値（RFC 8705 3.1 の x5t#S256）</summary>

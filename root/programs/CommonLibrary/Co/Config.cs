@@ -1919,6 +1919,43 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>DPoP の証明に `nonce` を要求するか（#311 の段階 4）</summary>
+        /// <remarks>
+        /// **RFC 9449 §8 / §9 : サーバは `nonce` を要求してよい**（MAY）。
+        /// **要求すると、クライアントは 1 往復多く掛かる**
+        /// （**`use_dpop_nonce` で断られ、`DPoP-Nonce` で受け取った値を入れて出し直す**）。
+        ///
+        /// **既定は false** — **要求すると、`nonce` を知らないクライアントが全部止まる。**
+        /// **使い回しの拒否（段階 3）は、この設定とは無関係に効いている。**
+        /// </remarks>
+        public static bool EnableDPoPNonce
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableDPoPNonce"));
+            }
+        }
+
+        /// <summary>DPoP の `nonce` を作る鍵（#311 の段階 4）</summary>
+        /// <remarks>
+        /// **`nonce` は、この値から計算する**（**台帳を持たない**）。
+        /// **同じ値を持つインスタンスなら、互いの `nonce` を受け付けられる。**
+        ///
+        /// **空なら、プロセスごとのランダムな値を使う** —
+        /// **単一のインスタンスなら、それで足りる**
+        /// （**再起動すると、前の `nonce` は通らなくなる** ＝ **1 往復増えるだけ**）。
+        ///
+        /// **インスタンスを増やす配備では、設定すること** —
+        /// **設定しないと、要求が別のインスタンスへ行くたびに断られ、やり直しが終わらない。**
+        /// </remarks>
+        public static string DPoPNonceSecret
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("DPoPNonceSecret");
+            }
+        }
+
         /// <summary>EnableJwtBearerTokenFlowGrantType</summary>
         public static bool EnableJwtBearerTokenFlowGrantType
         {

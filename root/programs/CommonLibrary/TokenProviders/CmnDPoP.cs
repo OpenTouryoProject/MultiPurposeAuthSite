@@ -31,6 +31,7 @@
 //*  2026/10/21  玄人 幸道         新規（#311 の段階 1）
 //*  2026/10/21  玄人 幸道         リソース側の照合（ath / jkt / スキーム）を追加（#311 の段階 2）
 //*  2026/10/22  玄人 幸道         使った証明を記録して使い回しを断る（#311 の段階 3）
+//*  2026/10/22  玄人 幸道         nonce・dpop_jkt を追加（#311 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -71,7 +72,7 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// | **`/token` で証明を受け、`cnf.jkt` を書く** | **段階 1**（この型） |
     /// | **保護されたリソースで照合する**（`ath` / `Authorization: DPoP`） | 段階 2 |
     /// | **`jti` の使い回しを拒む**（記録と掃除が要る） | **段階 3**（`DPoPProofProvider`） |
-    /// | **`DPoP-Nonce`・認可要求の `dpop_jkt`・`refresh_token` の縛り** | 段階 4 |
+    /// | **`DPoP-Nonce`・認可要求の `dpop_jkt`・`refresh_token` の縛り** | **段階 4** |
     /// </remarks>
     public class CmnDPoP
     {
@@ -152,6 +153,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>`ath`（access_token の指紋。RFC 9449 §4.2）</summary>
         public const string Ath = "ath";
+
+        /// <summary>認可要求で鍵を先に申告するパラメタ（RFC 9449 §10）</summary>
+        /// <remarks>
+        /// **`dpop_jkt`** は、**認可要求の時点で「このコードは、この鍵でしか引き換えない」と言う**ための値である
+        /// （**値は `jkt` と同じ** ＝ 公開鍵の指紋）。
+        ///
+        /// **コードを盗んで `/token` に持ち込む筋**を塞ぐ —
+        /// **PKCE が `code_verifier` で塞ぐのと同じ所**を、**鍵で塞ぐ。**
+        /// </remarks>
+        public const string JktParam = "dpop_jkt";
 
         #endregion
 
@@ -274,6 +285,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="htu">この口の宛先</param>
         /// <param name="accessToken">提示された access_token</param>
         /// <param name="boundJkt">トークンに書かれた `cnf.jkt`</param>
+        /// <param name="error">out : error（`invalid_token`、または `use_dpop_nonce`）</param>
         /// <param name="errDescription">out : 断る理由</param>
         /// <returns>使ってよければ true</returns>
         /// <remarks>
@@ -285,11 +297,15 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// | **証明の鍵が、トークンの `cnf.jkt` と同じであること** | **これが「持ち主である」ことの確認**である |
         ///
         /// **`ath` は access_token の SHA-256 を BASE64URL したもの**（§4.2）。
+        ///
+        /// **`error` を返すのは、`use_dpop_nonce` を区別するため**である（§9。#311 の段階 4）。
+        /// **それ以外は `invalid_token`**（**この口の従来の断り方**）。
         /// </remarks>
         public static bool VerifyForResource(
             string proof, string htm, string htu,
-            string accessToken, string boundJkt, out string errDescription)
+            string accessToken, string boundJkt, out string error, out string errDescription)
         {
+            error = OAuth2AndOIDCConst.invalid_token;
             errDescription = "";
 
             if (string.IsNullOrEmpty(proof))
@@ -298,8 +314,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return CmnDPoP.Deny(errDescription);
             }
 
-            if (!CmnDPoP.Verify(proof, htm, htu, out string jkt, out errDescription))
+            if (!CmnDPoP.Verify(proof, htm, htu, CmnDPoP.PurposeRs,
+                out string jkt, out string proofError, out errDescription))
             {
+                //  **nonce が要るときだけ、その error を返す**（RFC 9449 §9。#311 の段階 4）。
+                //    **それ以外は `invalid_token`** — **証明の中身は、要求元に教えない。**
+                if (proofError == CmnDPoP.UseDPoPNonce)
+                {
+                    error = CmnDPoP.UseDPoPNonce;
+                }
+
                 return false;
             }
 
@@ -336,6 +360,170 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return CustomEncode.ToBase64UrlString(
                     sha256.ComputeHash(CustomEncode.StringToByte(value, CustomEncode.us_ascii)));
             }
+        }
+
+        #endregion
+
+        #region nonce（#311 の段階 4）
+
+        /// <summary>`DPoP-Nonce` 応答ヘッダ（RFC 9449 §8）</summary>
+        public const string NonceHeader = "DPoP-Nonce";
+
+        /// <summary>証明の `nonce`（RFC 9449 §8）</summary>
+        public const string Nonce = "nonce";
+
+        /// <summary>nonce が要る / 通らないときの error（RFC 9449 §8 / §9）</summary>
+        public const string UseDPoPNonce = "use_dpop_nonce";
+
+        /// <summary>nonce の用途（`/token` 側。RFC 9449 §8）</summary>
+        /// <remarks>
+        /// **`/token` の nonce と、保護されたリソースの nonce は別物**である（§9）。
+        /// **用途を混ぜると、片方で貰った nonce がもう片方で通ってしまう。**
+        /// </remarks>
+        public const string PurposeAs = "as";
+
+        /// <summary>nonce の用途（保護されたリソース側。RFC 9449 §9）</summary>
+        public const string PurposeRs = "rs";
+
+        /// <summary>nonce が変わる間隔</summary>
+        /// <remarks>
+        /// **1 つ前の時間帯の nonce も受け付ける**ので、**使える長さは 5〜10 分**である。
+        /// **設定キーは増やしていない**（窓や掃除の間隔と同じ扱い）。
+        /// </remarks>
+        private static readonly TimeSpan NonceSlot = TimeSpan.FromMinutes(5);
+
+        /// <summary>nonce を作る鍵</summary>
+        /// <remarks>
+        /// **設定（`DPoPNonceSecret`）が空なら、プロセスごとのランダムな値**である。
+        /// **インスタンスを増やす配備では、設定すること**（`Config.DPoPNonceSecret` の注）。
+        /// </remarks>
+        private static readonly byte[] NonceKey = CmnDPoP.CreateNonceKey();
+
+        /// <summary>nonce を要求する配備か</summary>
+        public static bool NonceRequired
+        {
+            get { return Config.EnableDPoPNonce; }
+        }
+
+        /// <summary>いまの nonce（RFC 9449 §8）</summary>
+        /// <param name="purpose">用途（`PurposeAs` / `PurposeRs`）</param>
+        /// <returns>nonce</returns>
+        /// <remarks>
+        /// **台帳を持たない** — **「鍵 ＋ 用途 ＋ 時間帯」から計算する。**
+        /// **発行したものを覚えておく必要が無い**ので、**インスタンスを増やしても効く**
+        /// （**同じ鍵を配る限り**）。
+        ///
+        /// **照合は、いまと 1 つ前の時間帯の値と比べるだけ**である —
+        /// **相手から来た文字列を解析しない**（**解析する物が無い**）。
+        /// </remarks>
+        public static string CurrentNonce(string purpose)
+        {
+            return CmnDPoP.NonceOfSlot(purpose, CmnDPoP.CurrentSlot());
+        }
+
+        /// <summary>チャレンジに載せる nonce（要らない配備なら null）</summary>
+        /// <param name="isDPoP">**`DPoP` スキームで来たか**</param>
+        /// <returns>nonce（null なら付けない）</returns>
+        /// <remarks>
+        /// **`Bearer` で来た要求には付けない** — **DPoP の話をしていない相手**である。
+        /// </remarks>
+        public static string NonceForChallenge(bool isDPoP)
+        {
+            if (!CmnDPoP.NonceRequired || !isDPoP)
+            {
+                return null;
+            }
+
+            return CmnDPoP.CurrentNonce(CmnDPoP.PurposeRs);
+        }
+
+        /// <summary>証明の `nonce` を見る（#311 の段階 4）</summary>
+        /// <param name="payload">証明のペイロード</param>
+        /// <param name="purpose">用途（`PurposeAs` / `PurposeRs`）</param>
+        /// <param name="errDescription">out : 断る理由</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **要求しない配備では、何も見ない**（**既定の挙動を変えない**）。
+        /// **`nonce` が無い場合も、古い場合も、同じ `use_dpop_nonce` で断る** —
+        /// **クライアントの出直し方は、どちらも同じ**である（§8）。
+        /// </remarks>
+        private static bool CheckNonce(JObject payload, string purpose, out string errDescription)
+        {
+            errDescription = "";
+
+            if (!CmnDPoP.NonceRequired || string.IsNullOrEmpty(purpose))
+            {
+                return true;
+            }
+
+            string nonce = (payload == null) ? null : (string)payload[CmnDPoP.Nonce];
+
+            if (string.IsNullOrEmpty(nonce))
+            {
+                errDescription = "The DPoP proof must have a nonce.";
+                return CmnDPoP.Deny(errDescription);
+            }
+
+            long slot = CmnDPoP.CurrentSlot();
+
+            //  **1 つ前の時間帯も受け付ける** — **境目で断らない**ため。
+            if (string.Equals(nonce, CmnDPoP.NonceOfSlot(purpose, slot), StringComparison.Ordinal)
+                || string.Equals(nonce, CmnDPoP.NonceOfSlot(purpose, slot - 1), StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            errDescription = "The nonce of the DPoP proof is not acceptable.";
+            return CmnDPoP.Deny(errDescription);
+        }
+
+        /// <summary>いまの時間帯</summary>
+        /// <returns>時間帯の番号</returns>
+        private static long CurrentSlot()
+        {
+            return DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                / (long)CmnDPoP.NonceSlot.TotalSeconds;
+        }
+
+        /// <summary>その時間帯の nonce</summary>
+        /// <param name="purpose">用途</param>
+        /// <param name="slot">時間帯の番号</param>
+        /// <returns>nonce</returns>
+        private static string NonceOfSlot(string purpose, long slot)
+        {
+            using (HMACSHA256 hmac = new HMACSHA256(CmnDPoP.NonceKey))
+            {
+                return CustomEncode.ToBase64UrlString(hmac.ComputeHash(
+                    CustomEncode.StringToByte(
+                        purpose + "." + slot.ToString(), CustomEncode.UTF_8)));
+            }
+        }
+
+        /// <summary>nonce を作る鍵を決める</summary>
+        /// <returns>鍵</returns>
+        /// <remarks>
+        /// **設定が在ればそれを使い、無ければランダムに作る。**
+        /// **ランダムの場合、再起動で前の nonce が通らなくなる** —
+        /// **クライアントは `use_dpop_nonce` で新しい値を貰ってやり直す**ので、
+        /// **止まりはしない**（**1 往復増えるだけ**）。
+        /// </remarks>
+        private static byte[] CreateNonceKey()
+        {
+            string secret = Config.DPoPNonceSecret;
+
+            if (!string.IsNullOrEmpty(secret))
+            {
+                return CustomEncode.StringToByte(secret, CustomEncode.UTF_8);
+            }
+
+            byte[] key = new byte[32];
+
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(key);
+            }
+
+            return key;
         }
 
         #endregion
@@ -383,7 +571,9 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="proof">`DPoP` ヘッダの値（証明の JWT）</param>
         /// <param name="htm">期待する HTTP メソッド（`POST` など。**大文字**）</param>
         /// <param name="htu">期待する宛先（クエリと素片を含まない URL）</param>
+        /// <param name="noncePurpose">nonce の用途（`PurposeAs` / `PurposeRs`。**見ないなら null**）</param>
         /// <param name="jkt">out : 公開鍵の指紋（RFC 7638）</param>
+        /// <param name="error">out : error（`invalid_dpop_proof`、または `use_dpop_nonce`）</param>
         /// <param name="errDescription">out : 断る理由（**そのまま応答に載せられる文**）</param>
         /// <returns>使ってよければ true</returns>
         /// <remarks>
@@ -399,14 +589,18 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// | **`jti`** | **在ること**（**使い回しの検出は段階 3**） |
         /// | **`htm` / `htu`** | **期待どおりであること** |
         /// | **`iat`** | **窓の中であること** |
+        /// | **`nonce`** | **`noncePurpose` が在り、要求する配備のときだけ見る**（段階 4） |
+        /// | **使い回し** | **記録できたら初回**（段階 3。`DPoPProofProvider`） |
         ///
         /// **読めない値でも例外にしない**（外から来る値である。#241 と同じ扱い）。
         /// **断った理由はログに残す**（**値そのものは出さない**）。
         /// </remarks>
         public static bool Verify(
-            string proof, string htm, string htu, out string jkt, out string errDescription)
+            string proof, string htm, string htu, string noncePurpose,
+            out string jkt, out string error, out string errDescription)
         {
             jkt = "";
+            error = CmnDPoP.InvalidDPoPProof;
             errDescription = "";
 
             try
@@ -494,6 +688,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     errDescription = "The iat of the DPoP proof is not acceptable.";
                     return CmnDPoP.Deny(errDescription);
+                }
+
+                //  **nonce を要求する配備では、サーバが出した値であること**（RFC 9449 §8。段階 4）。
+                //    **台帳に記録する前に見る** — **nonce を貰い直すための断りで、
+                //    `jti` を焼いてしまわない**（**出し直す証明は、新しい `jti` で作られる**）。
+                if (!CmnDPoP.CheckNonce(payload, noncePurpose, out errDescription))
+                {
+                    error = CmnDPoP.UseDPoPNonce;
+                    return false;
                 }
 
                 jkt = CmnDPoP.Thumbprint(jwk);

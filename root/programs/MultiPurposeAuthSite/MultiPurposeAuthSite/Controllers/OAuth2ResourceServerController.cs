@@ -37,6 +37,7 @@
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の口を追加（#307 の段階 2）
 //*  2026/10/21  玄人 幸道         jwks_uri を登録の前に取りに行く（#309 の段階 1）
+//*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -204,13 +205,18 @@ namespace MultiPurposeAuthSite.Controllers
 
             ClaimsIdentity identity = null;
 
+            //  **`out` の変数は、条件の前で宣言する**（#311 の段階 4。`&&` の短絡）。
+            //    **この口の error は登録の側が決める**ので、ここでは使わない —
+            //    **チャレンジのスキームと `DPoP-Nonce` は、応答を作る所で付く。**
+            string dpopError = null;
+
             //  **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 §3）。
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject _, out ClaimsIdentity verified)
                 && Token.CmnAccessToken.VerifyCertificateBinding(
                     verified, this.Request.GetClientCertificate())
                 //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
                 //    （RFC 9449 §7.1。#311 の段階 2）。
-                && this.VerifyDPoP(verified, bearerToken, isDPoP))
+                && this.VerifyDPoP(verified, bearerToken, isDPoP, out dpopError))
             {
                 identity = verified;
             }
@@ -335,6 +341,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="identity">検証済みの ClaimsIdentity</param>
         /// <param name="accessToken">提示された access_token</param>
         /// <param name="isDPoP">**`DPoP` スキームで来たか**</param>
+        /// <param name="dpopError">out : error（**`use_dpop_nonce` のときだけ**。#311 の段階 4）</param>
         /// <returns>使ってよければ true</returns>
         /// <remarks>
         /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり通る**
@@ -350,13 +357,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// **`registration_access_token`（RFC 7592）には関わらない** —
         /// **あちらは JWT ではなく、登録の行に突き合わせる資格情報**である。
         /// </remarks>
-        private bool VerifyDPoP(ClaimsIdentity identity, string accessToken, bool isDPoP)
+        private bool VerifyDPoP(
+            ClaimsIdentity identity, string accessToken, bool isDPoP, out string dpopError)
         {
             return Token.CmnAccessToken.VerifyDPoPBinding(
                 identity, accessToken,
                 isDPoP ? HttpContext.Current.Request.Headers[Token.CmnDPoP.HttpHeader] : null,
                 HttpContext.Current.Request.HttpMethod,
-                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path));
+                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
+                out dpopError);
         }
 
         #endregion
@@ -390,9 +399,19 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (status == 401 || status == 403)
             {
+                //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
+                string scheme = Token.CmnEndpoints.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
+
                 res.Headers.WwwAuthenticate.Add(
                     new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter("register", err)));
+                        scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, "register", err)));
+
+                string nonce = Token.CmnDPoP.NonceForChallenge(scheme == Token.CmnDPoP.TokenType);
+
+                if (nonce != null)
+                {
+                    res.Headers.Add(Token.CmnDPoP.NonceHeader, nonce);
+                }
             }
 
             return this.ResponseMessage(res);

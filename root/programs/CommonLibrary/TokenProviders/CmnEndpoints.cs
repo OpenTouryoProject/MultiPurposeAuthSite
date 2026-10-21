@@ -128,6 +128,7 @@
 //*  2026/10/21  玄人 幸道         Back-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         Front-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 3）
 //*  2026/10/21  玄人 幸道         DPoP の証明を /token で受け、cnf.jkt で発行する（#311 の段階 1）
+//*  2026/10/22  玄人 幸道         dpop_jkt と refresh_token を DPoP の鍵に縛る（#311 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3150,6 +3151,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
+                //  **認可要求で `dpop_jkt` を送っていたなら、その鍵の証明でしか引き換えられない**
+                //    （RFC 9449 §10。#311 の段階 4）。
+                //    **PKCE の必須性を code 側から決めるのと同じ考え**である
+                //    （**クライアントが何を送ってきたかでは決めない**）。
+                //    **code を消費する前に断る** — **断られた後、同じ code でやり直せる。**
+                if (authned && !CmnEndpoints.CheckDPoPJktOfCode(code, jkt, err))
+                {
+                    return false;
+                }
+
                 if (authned)
                 {
                     string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, redirect_uri);
@@ -3212,7 +3223,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         && ClientModePolicy.MayUse(clientMode, ClientModePolicy.Flow.RefreshToken)
                         && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
-                        refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                        // **access_token を縛ったなら、refresh_token も同じ鍵に縛る**
+                        //   （RFC 9449 §5。#311 の段階 4）。
+                        //   **access_token だけを縛っても、更新で縛りの無いものに乗り換えられる。**
+                        refresh_token = RefreshTokenProvider.Create(
+                            CmnAccessToken.BindJkt(tokenPayload, jkt));
                     }
 
                     // オペレーション・トレース・ログ出力
@@ -3300,6 +3315,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
 
+                //  **縛られた refresh_token は、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §5。#311 の段階 4）。
+                //    **消費する前に断る** — **断られた後、同じ refresh_token でやり直せる**
+                //    （**ローテーションで一族ごと失効させてしまわない**。#188 の段階 3）。
+                if (authned && !CmnEndpoints.CheckDPoPJktOfRefreshToken(refresh_token, jkt, err))
+                {
+                    return false;
+                }
+
                 if (authned)
                 {
                     #region CheckClientMode
@@ -3356,7 +3380,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string new_refresh_token = "";
                         if (Config.EnableRefreshToken)
                         {
-                            new_refresh_token = RefreshTokenProvider.Create(tokenPayload, familyId);
+                            // **縛りは、ローテーションしても引き継ぐ**（#311 の段階 4）。
+                            //   **引き継がないと、1 回更新するだけで縛りが外れる。**
+                            new_refresh_token = RefreshTokenProvider.Create(
+                                CmnAccessToken.BindJkt(tokenPayload, jkt), familyId);
                         }
 
                         // オペレーション・トレース・ログ出力
@@ -4011,7 +4038,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                             Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.RefreshToken)
                         && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
-                        refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                        // **この経路でも、縛ったなら refresh_token も縛る**（#311 の段階 4）。
+                        //   **デバイスの経路に `dpop_jkt` は無い**（認可要求がブラウザを通らない）が、
+                        //   **`/token` で証明を受けていれば、access_token は縛られている** —
+                        //   **refresh_token だけ縛られないのは、穴になる。**
+                        refresh_token = RefreshTokenProvider.Create(
+                            CmnAccessToken.BindJkt(tokenPayload, jkt));
                     }
 
                     // オペレーション・トレース・ログ出力
@@ -4930,6 +4962,32 @@ namespace MultiPurposeAuthSite.TokenProviders
             return 400;
         }
 
+        /// <summary>保護されたリソースのエラー応答の HTTP ステータス（#311 の段階 4）</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>HTTP ステータス</returns>
+        /// <remarks>
+        /// **`use_dpop_nonce` は、口によって状態が違う**（RFC 9449）。
+        ///
+        /// | 口 | 状態 |
+        /// |---|---|
+        /// | **`/token`** | **400**（§8。**トークン エンドポイントのエラー**） |
+        /// | **保護されたリソース** | **401**（§9。**チャレンジである**） |
+        ///
+        /// **同じ error で状態が違う**ので、**口の側で決める** —
+        /// **`GetErrorStatusCode` は `/token` の表**であり、そこに混ぜない。
+        /// </remarks>
+        public static int GetResourceErrorStatusCode(Dictionary<string, string> err)
+        {
+            if (err != null
+                && err.TryGetValue(OAuth2AndOIDCConst.error, out string error)
+                && error == CmnDPoP.UseDPoPNonce)
+            {
+                return 401;
+            }
+
+            return CmnEndpoints.GetErrorStatusCode(err);
+        }
+
         /// <summary>Bearer トークンのエラー応答の WWW-Authenticate を作る（RFC 6750 3）</summary>
         /// <param name="realm">realm（保護資源の名前）</param>
         /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
@@ -4958,6 +5016,47 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return string.Join(", ", items);
+        }
+
+        /// <summary>チャレンジのスキームを決める（RFC 9449 §7.1。#311 の段階 4）</summary>
+        /// <param name="authorizationHeader">要求の `Authorization` ヘッダ</param>
+        /// <returns>`DPoP` または `Bearer`</returns>
+        /// <remarks>
+        /// **`DPoP` スキームで来た要求には、`DPoP` で答える**（§7.1）。
+        /// **それ以外は従来どおり `Bearer`** — **DPoP の話をしていない相手に、
+        /// 別のスキームを突き付けない。**
+        ///
+        /// **両方を並べて広告はしない。** **できるが、`Bearer` だけを知るクライアントが
+        /// 2 つ目を読めるとは限らず、得るものが無い。**
+        /// </remarks>
+        public static string GetChallengeScheme(string authorizationHeader)
+        {
+            CmnDPoP.GetToken(authorizationHeader, out string _, out bool isDPoP);
+
+            return isDPoP ? CmnDPoP.TokenType : "Bearer";
+        }
+
+        /// <summary>チャレンジの中身を作る（RFC 6750 §3 / RFC 9449 §7.1）</summary>
+        /// <param name="scheme">`GetChallengeScheme` が返したスキーム</param>
+        /// <param name="realm">realm（保護資源の名前）</param>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>スキーム名より後ろ</returns>
+        /// <remarks>
+        /// **`DPoP` のときは `algs` も示す**（§7.1。**証明の署名に使える alg**）。
+        /// **一覧は `SigningKeys` の表が持つ**（**Discovery の
+        /// `dpop_signing_alg_values_supported` と同じもの**）。
+        /// </remarks>
+        public static string GetChallengeParameter(
+            string scheme, string realm, Dictionary<string, string> err)
+        {
+            string parameter = CmnEndpoints.GetBearerChallengeParameter(realm, err);
+
+            if (scheme != CmnDPoP.TokenType)
+            {
+                return parameter;
+            }
+
+            return parameter + ", algs=\"" + string.Join(" ", CmnAccessToken.SupportedAlgs) + "\"";
         }
 
         #endregion
@@ -5578,6 +5677,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **証明が在って通らなければ、`invalid_dpop_proof` で断る**（RFC 9449 §5）。
         /// **黙って bearer に落とさない** — **落とすと、縛ったつもりのクライアントが縛られない。**
         ///
+        /// **nonce を要求する配備では、`nonce` も見る**（§8。#311 の段階 4）。
+        /// **通らなければ `use_dpop_nonce`** であり、**`invalid_dpop_proof` とは区別する** —
+        /// **クライアントは「貰い直して出し直す」ことになる。**
+        ///
         /// **`htu` は設定から作る**（`CmnDPoP.TokenEndpointUri`。**要求の `Host` を信じない**）。
         /// </remarks>
         private static bool CheckDPoP(
@@ -5590,14 +5693,98 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return true;
             }
 
-            if (CmnDPoP.Verify(dPoPProof, "POST", CmnDPoP.TokenEndpointUri,
-                out jkt, out string errDescription))
+            if (CmnDPoP.Verify(dPoPProof, "POST", CmnDPoP.TokenEndpointUri, CmnDPoP.PurposeAs,
+                out jkt, out string error, out string errDescription))
             {
                 return true;
             }
 
-            err.Add(OAuth2AndOIDCConst.error, CmnDPoP.InvalidDPoPProof);
+            //  **nonce が要るときは `use_dpop_nonce` で断る**（RFC 9449 §8。#311 の段階 4）。
+            //    **応答の `DPoP-Nonce` ヘッダで新しい値を渡す**（各アプリの `OAuth2Error`）。
+            err.Add(OAuth2AndOIDCConst.error, error);
             err.Add(OAuth2AndOIDCConst.error_description, errDescription);
+
+            return false;
+        }
+
+        #endregion
+
+        #region DPoP の鍵への紐づけ（#311 の段階 4）
+
+        /// <summary>この code が鍵に縛られていないか、同じ鍵の証明が在るか（RFC 9449 §10）</summary>
+        /// <param name="code">認可コード</param>
+        /// <param name="jkt">この要求の証明の鍵の指紋（証明が無ければ空）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **認可要求で `dpop_jkt` を送っていたら、その鍵でしか引き換えられない。**
+        /// **送っていなければ、何も変わらない**（**既定の挙動を変えない**）。
+        /// </remarks>
+        private static bool CheckDPoPJktOfCode(
+            string code, string jkt, Dictionary<string, string> err)
+        {
+            return CmnEndpoints.CheckDPoPJkt(
+                AuthorizationCodeProvider.GetDPoPJkt(code), jkt, "code", err);
+        }
+
+        /// <summary>この refresh_token が鍵に縛られていないか、同じ鍵の証明が在るか（RFC 9449 §5）</summary>
+        /// <param name="refresh_token">refresh_token</param>
+        /// <param name="jkt">この要求の証明の鍵の指紋（証明が無ければ空）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **預けた payload の `cnf.jkt` を見る**（`CmnAccessToken.JktOfPayload`）。
+        /// **消費しないで読む**（`RefreshTokenProvider.Refer`） —
+        /// **ローテーションを起こさずに断る**ためである。
+        ///
+        /// **使用済み・存在しない refresh_token では空が返る** →
+        /// **ここは通り、後の `Receive` が `invalid_grant` で断る**（**従来の断り方を変えない**）。
+        /// </remarks>
+        private static bool CheckDPoPJktOfRefreshToken(
+            string refresh_token, string jkt, Dictionary<string, string> err)
+        {
+            return CmnEndpoints.CheckDPoPJkt(
+                CmnAccessToken.JktOfPayload(RefreshTokenProvider.Refer(refresh_token)),
+                jkt, "refresh_token", err);
+        }
+
+        /// <summary>縛られているなら、同じ鍵の証明が在るか（#311 の段階 4）</summary>
+        /// <param name="boundJkt">縛られている鍵の指紋（縛られていなければ空）</param>
+        /// <param name="jkt">この要求の証明の鍵の指紋（証明が無ければ空）</param>
+        /// <param name="what">何が縛られているか（`code` / `refresh_token`）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **`invalid_grant` で断る**（`invalid_dpop_proof` ではない）。
+        /// **証明そのものは正しく、「この資格情報のものではない」**のであり、
+        /// **断られているのは grant の側**である。
+        /// **証明の作りが悪いのか、持ち主が違うのかを、クライアントが区別できる。**
+        ///
+        /// **理由はログに残すが、指紋は出さない**（**そのクライアントを辿れる値**である）。
+        /// </remarks>
+        private static bool CheckDPoPJkt(
+            string boundJkt, string jkt, string what, Dictionary<string, string> err)
+        {
+            if (string.IsNullOrEmpty(boundJkt))
+            {
+                // **縛られていない** ＝ 従来どおり。
+                return true;
+            }
+
+            if (string.Equals(boundJkt, jkt, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+            err.Add(OAuth2AndOIDCConst.error_description,
+                string.IsNullOrEmpty(jkt)
+                    ? ("A DPoP proof is required for this " + what + ".")
+                    : ("The " + what + " is bound to another DPoP key."));
+
+            Logging.MyOperationTrace(string.Format(
+                "The {0} is bound to a DPoP key. ({1})", what,
+                string.IsNullOrEmpty(jkt) ? "no proof" : "another key"));
 
             return false;
         }

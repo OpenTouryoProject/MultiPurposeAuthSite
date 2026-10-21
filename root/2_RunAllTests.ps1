@@ -57,6 +57,13 @@
     net48 版でも mTLS のテスト（FA-6）を回す（test.ps1 に渡す。#226）。
     **準備が要る**（TESTING.md「net48 版の mTLS」）。付けなければ、FA-6 は net10.0 版だけを測る。
 
+.PARAMETER DPoPNonce
+    **DPoP の nonce のテスト（RT-311.13 / RT-311.14）専用。**
+    **nonce を要求する設定でサイトを起動する**（#311 の段階 4）。
+
+    **-Filter と併せて使うこと**（nonce を知らない証明は全部断られる）。
+      ._RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"
+
 .PARAMETER ShortLifetimes
     有効期限のテスト（RT-188）専用。寿命をごく短くしてサイトを起動する（test.ps1 に渡す。#188）。
     **-Filter と併せて使うこと**（寿命が短いので、他のテストは落ちる）。
@@ -93,6 +100,7 @@
      2026/09/08  玄人 幸道         新規作成（OpenTouryo の 2_RunAllTests.ps1 に倣う）
      2026/09/23  玄人 幸道         -NetFxMtls を追加（net48 版でも mTLS のテストを回す。#226）
      2026/09/24  玄人 幸道         -ShortLifetimes を追加（有効期限のテストを回す。#188）
+     2026/10/22  玄人 幸道         -DPoPNonce を追加（nonce のテストを回す。#311 の段階 4）
 #>
 [CmdletBinding()]
 param(
@@ -107,6 +115,7 @@ param(
     [switch]$NoNetFx,
     [switch]$NetFxMtls,
     [switch]$ShortLifetimes,
+    [switch]$DPoPNonce,
     [switch]$NoWebUI,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
@@ -165,6 +174,7 @@ if ($Launch)   { $splat.Launch   = $true }
 if ($NoNetFx)  { $splat.NoNetFx  = $true }
 if ($NetFxMtls) { $splat.NetFxMtls = $true }
 if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
+if ($DPoPNonce) { $splat.DPoPNonce = $true }
 if ($NoWebUI) { $splat.NoWebUI = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }

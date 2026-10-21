@@ -113,6 +113,16 @@
 
     付けなければ、有効期限のテストはケースを作らない（Skip にもならない）。
 
+.PARAMETER DPoPNonce
+    **DPoP の nonce のテスト（RT-311.13 / RT-311.14）専用。**
+    **nonce を要求する設定（EnableDPoPNonce）でサイトを起動する**（#311 の段階 4）。
+
+    **-Filter と併せて使うこと。** **nonce を知らない証明は全部断られる**ので、
+    他の DPoP のテストは落ちる。
+      .	est.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"
+
+    付けなければ、nonce のテストはケースを作らない（Skip にもならない）。
+
 .PARAMETER NoWebUI
     ブラウザで測るもの（`Tests/WebUI`。識別子 UI-n.n）を走らせない。
     既定では走らせる（ブラウザが無ければ Skip する）。
@@ -159,6 +169,7 @@ param(
     [switch] $NoNetFx,
     [switch] $NetFxMtls,
     [switch] $ShortLifetimes,
+    [switch] $DPoPNonce,
     [switch] $NoWebUI,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
@@ -886,6 +897,18 @@ try {
             $env:OAuth2RefreshTokenExpireTimeSpanFromDays = '0'
         }
 
+        # **DPoP の nonce のテスト（#311 の段階 4）は、要求する設定で起動して測る。**
+        #   **既定は要求しない**（nonce を知らないクライアントが全部止まるため）。
+        #   **他の DPoP のテストは落ちるので、-Filter と併せて使う。**
+        #   **鍵も渡す** — **渡さないとプロセスごとのランダムになり、
+        #   net10.0 版と net48 版で別の nonce になる**（測る分には困らないが、揃えておく）。
+        if ($DPoPNonce) {
+            Write-Warning '-DPoPNonce : nonce を要求して起動します。-Filter と併せて使ってください（#311）。'
+            $env:EnableDPoPNonce = 'true'
+            $env:DPoPNonceSecret = 'e2e-dpop-nonce-secret'
+            $env:MPAS_DPOP_NONCE = 'true'
+        }
+
         if ($PSVersionTable.PSVersion.Major -lt 6) {
             # **コールバックは、スクリプト ブロックではなくコンパイルしたデリゲートにする。**
             #   クライアント証明書のネゴシエーション（-NetFxMtls）が入ると、
@@ -1197,6 +1220,15 @@ public static class MpasTestTls
 
     if (-not $ShortLifetimes) {
         $exclude = 'FullyQualifiedName!~LifetimeTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    # **DPoP の nonce のテスト（RT-311.13 / RT-311.14）も、既定では走らせない**
+    #   （#311 の段階 4）。**nonce を要求する設定で起動したときにだけ意味がある。**
+    #   **ケースを作らないのではなく、ここで除外する**（上の RT-188 と同じ事情）。
+    #   **チャレンジのスキーム（RT-311.12）は DPoPChallengeTests に在り、いつでも走る。**
+    if (-not $DPoPNonce) {
+        $exclude = 'FullyQualifiedName!~DPoPNonceTests'
         if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
     }
 
