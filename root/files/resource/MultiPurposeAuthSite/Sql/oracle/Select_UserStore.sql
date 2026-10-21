@@ -18,3 +18,4 @@ SELECT * FROM "AuthFailure";
 SELECT * FROM "OAuth2Revocation";
 SELECT * FROM "IssuedToken";
 SELECT * FROM "RequestObject";
+SELECT * FROM "DPoPProof";

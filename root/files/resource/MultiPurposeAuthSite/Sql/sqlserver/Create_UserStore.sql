@@ -338,6 +338,19 @@ CREATE TABLE [RequestObject](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+-- 使った DPoP の証明の台帳（#311 の段階 3）
+--   **一度使った証明を、二度と通さない**（RFC 9449 §11.1）。
+--   **持つのは指紋だけ**である（**鍵の指紋（jkt）と jti を組にしてハッシュしたもの**）。
+--   **jti だけを鍵にしない** — **jti は相手が決める値**なので、
+--     **先に使われた値は他の相手が使えなくなる**（**互いを塞げてしまう**）。
+--   **行は短命**（iat の窓の分だけ）。**書き込みのついでに消す。**
+CREATE TABLE [DPoPProof](
+    [ProofId] [nvarchar](64) NOT NULL,        -- PK, 証明の指紋（BASE64URL(SHA-256)。43文字）
+    [CreatedDate] [datetime] NOT NULL,        -- 掃除の基準（分で丸めて早く消さないよう datetime）
+    CONSTRAINT [PK.DPoPProof] PRIMARY KEY NONCLUSTERED ([ProofId] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 -- INDEX
 ---- Users
 CREATE UNIQUE NONCLUSTERED INDEX [UserNameIndex] ON [Users] ([UserName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]

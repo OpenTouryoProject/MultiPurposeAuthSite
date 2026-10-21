@@ -295,6 +295,13 @@ CREATE TABLE RequestObject(
     CONSTRAINT PK_RequestObject PRIMARY KEY (Urn)
 );
 
+-- 使った DPoP の証明の台帳（#311 の段階 3。SQL Server 側の注と同じ）
+CREATE TABLE DPoPProof(
+    ProofId varchar(64) NOT NULL,            -- PK, 証明の指紋（43文字）
+    CreatedDate timestamp NOT NULL,
+    CONSTRAINT PK_DPoPProof PRIMARY KEY (ProofId)
+);
+
 -- INDEX
 ---- Users
 CREATE UNIQUE INDEX UserNameIndex ON Users (UserName);

@@ -30,9 +30,11 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#311 の段階 1）
 //*  2026/10/21  玄人 幸道         リソース側の照合（ath / jkt / スキーム）を追加（#311 の段階 2）
+//*  2026/10/22  玄人 幸道         使った証明を記録して使い回しを断る（#311 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Log;
 
 using System;
@@ -68,7 +70,7 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// |---|---|
     /// | **`/token` で証明を受け、`cnf.jkt` を書く** | **段階 1**（この型） |
     /// | **保護されたリソースで照合する**（`ath` / `Authorization: DPoP`） | 段階 2 |
-    /// | **`jti` の使い回しを拒む**（記録と掃除が要る） | 段階 3 |
+    /// | **`jti` の使い回しを拒む**（記録と掃除が要る） | **段階 3**（`DPoPProofProvider`） |
     /// | **`DPoP-Nonce`・認可要求の `dpop_jkt`・`refresh_token` の縛り** | 段階 4 |
     /// </remarks>
     public class CmnDPoP
@@ -112,7 +114,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **狭すぎると時計のズレで落ちる**ため、**少し広く取っている。**
         ///
         /// **使い回しをここで止めるつもりはない** —
-        /// **止めるのは `jti` の記録（段階 3）と `DPoP-Nonce`（段階 4）である。**
+        /// **止めるのは `jti` の記録（段階 3。`DPoPProofProvider`）と
+        /// `DPoP-Nonce`（段階 4）である。**
         /// **設定キーは増やしていない**（#310 の掃除の間隔と同じ扱い）。
         /// </remarks>
         private static readonly TimeSpan PastWindow = TimeSpan.FromMinutes(5);
@@ -120,6 +123,21 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>`iat` が未来すぎるとみなす線</summary>
         /// <remarks>**未来は時計のズレの分だけ**許す（**作り置きを許さない**）。</remarks>
         private static readonly TimeSpan FutureWindow = TimeSpan.FromMinutes(1);
+
+        /// <summary>1 つの証明が通りうる長さ（#311 の段階 3）</summary>
+        /// <remarks>
+        /// **窓の中なら、同じ証明が何度でも通りうる** —
+        /// **だから、台帳はこの長さだけ持てばよい**（`DPoPProofProvider`）。
+        ///
+        /// **「過去 ＋ 未来」である**ことに意味が在る。
+        /// **`iat` が 1 分先の証明は、作られてから 6 分後まで窓の中**にいる
+        /// （**`iat` が「今 − 5 分」を上回っている間**）。
+        /// **過去の分だけで消すと、その差だけ使い回しが通る。**
+        ///
+        /// **台帳の側に長さを書かない** — **片方だけ直して食い違うのを防ぐ。**
+        /// </remarks>
+        public static readonly TimeSpan ProofReplayWindow =
+            CmnDPoP.PastWindow + CmnDPoP.FutureWindow;
 
         /// <summary>秘密鍵が混ざっていないかを見る項目（RFC 7517 / 7518）</summary>
         /// <remarks>
@@ -322,6 +340,43 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region 台帳の鍵（#311 の段階 3）
+
+        /// <summary>台帳に記録する、証明の指紋（#311 の段階 3）</summary>
+        /// <param name="jkt">鍵の指紋（RFC 7638）</param>
+        /// <param name="jti">証明の `jti`</param>
+        /// <returns>記録に使う値（作れなければ空）</returns>
+        /// <remarks>
+        /// **`jti` だけを鍵にしない** — **`jti` の値はクライアントが決める**ので、
+        /// **先に使われた値は、他の相手が使えなくなる**（**互いを塞げてしまう**）。
+        /// **`jkt` と組にすれば、台帳は「鍵ごと」になる**（RFC 9449 §11.1）。
+        ///
+        /// **組にしてから指紋にする**のは、**`jti` の長さに上限が無い**ためと、
+        /// **`jkt` をそのまま持たない**ため（**鍵の指紋は、そのクライアントを辿れる値**である）。
+        ///
+        /// **区切りに `.` を入れる** — **入れないと、
+        /// 境目の違う 2 つの組が同じ値になりうる**（**それだけで別の相手を塞げる**）。
+        ///
+        /// **UTF-8 で読む**（**`ath` の us_ascii とは違う**）。
+        /// **`jti` は相手が決める文字列**で、**ASCII の外の文字が入りうる** —
+        /// **us_ascii で読むと、違う `jti` が同じ値に潰れて、通るはずの証明を断ってしまう。**
+        /// </remarks>
+        public static string ProofId(string jkt, string jti)
+        {
+            if (string.IsNullOrEmpty(jkt) || string.IsNullOrEmpty(jti))
+            {
+                return "";
+            }
+
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                return CustomEncode.ToBase64UrlString(sha256.ComputeHash(
+                    CustomEncode.StringToByte(jkt + "." + jti, CustomEncode.UTF_8)));
+            }
+        }
+
+        #endregion
+
         #region public
 
         /// <summary>DPoP の証明を検証し、鍵の指紋（`jkt`）を返す（#311 の段階 1）</summary>
@@ -412,8 +467,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return CmnDPoP.Deny(errDescription);
                 }
 
-                // jti（**在ること**。**使い回しの検出は段階 3**）
-                if (string.IsNullOrEmpty((string)payload[OAuth2AndOIDCConst.jti]))
+                // jti（**在ること**。**使い回しの検出は、この後の記録で行う**）
+                string jti = (string)payload[OAuth2AndOIDCConst.jti];
+
+                if (string.IsNullOrEmpty(jti))
                 {
                     errDescription = "The DPoP proof must have a jti.";
                     return CmnDPoP.Deny(errDescription);
@@ -444,6 +501,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (string.IsNullOrEmpty(jkt))
                 {
                     errDescription = "The jwk of the DPoP proof could not be read.";
+                    return CmnDPoP.Deny(errDescription);
+                }
+
+                //  **一度使った証明は、二度と通さない**（RFC 9449 §11.1。#311 の段階 3）。
+                //    **ここが最後**であることに意味が在る —
+                //    **検証に通らなかった証明で、`jti` を焼かせない**
+                //    （**署名を壊した証明を投げるだけで、相手の `jti` を使えなくできてしまう**）。
+                if (!DPoPProofProvider.TryRecord(CmnDPoP.ProofId(jkt, jti)))
+                {
+                    errDescription = "The DPoP proof has already been used.";
                     return CmnDPoP.Deny(errDescription);
                 }
 
