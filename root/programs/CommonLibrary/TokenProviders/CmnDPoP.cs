@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#311 の段階 1）
+//*  2026/10/21  玄人 幸道         リソース側の照合（ath / jkt / スキーム）を追加（#311 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -131,23 +132,197 @@ namespace MultiPurposeAuthSite.TokenProviders
             "d", "p", "q", "dp", "dq", "qi", "oth", "k"
         };
 
+        /// <summary>`ath`（access_token の指紋。RFC 9449 §4.2）</summary>
+        public const string Ath = "ath";
+
         #endregion
 
-        #region public
+        #region 口の URL（`htu` の期待値）
 
-        /// <summary>`/token` の宛先（`htu` の期待値）</summary>
+        /// <summary>`/token` の宛先</summary>
         /// <remarks>
         /// **設定から作る。** **要求の `Host` ヘッダを信じない** —
         /// **信じると、`htu` の照合が「相手の言うとおり」になって意味を失う。**
-        /// **この製品は発行者の URL を設定で持っている**（`IssuerId` / 口のルート）ので、そこから作れる。
+        /// **この製品は発行者の URL を設定で持っている**ので、そこから作れる。
         /// </remarks>
         public static string TokenEndpointUri
         {
-            get
+            get { return CmnDPoP.EndpointUri(Config.OAuth2TokenEndpoint); }
+        }
+
+        /// <summary>この要求の口の宛先を、設定から引く（#311 の段階 2）</summary>
+        /// <param name="requestPath">要求のパス（`/MultiPurposeAuthSite/userinfo` など）</param>
+        /// <returns>設定から作った URL（当てが無ければ空）</returns>
+        /// <remarks>
+        /// **要求から使うのはパスだけ**である。**`Host` ヘッダは見ない** —
+        /// **見ると `htu` の照合が「相手の言うとおり」になって意味を失う。**
+        /// **URL は設定のルートから作る。**
+        ///
+        /// **口のパスは、すべて設定キーで持っている**（**ルーティングも同じ値を見ている**）ので、
+        /// **ここに文字列リテラルを置かない** — **ルートと食い違うと、黙って照合が落ちる。**
+        ///
+        /// **仮想ディレクトリの下に配備されることが在る**ので、**末尾の一致で見る。**
+        /// **当てが無ければ空を返す** — **呼び出し側（照合）は、空の `htu` では通らない。**
+        /// </remarks>
+        public static string EndpointUriOf(string requestPath)
+        {
+            if (string.IsNullOrEmpty(requestPath))
             {
-                return Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+                return "";
+            }
+
+            string[] paths = new string[]
+            {
+                Config.OAuth2TokenEndpoint,
+                Config.OAuth2UserInfoEndpoint,
+                Config.DcrRegistrationEndpoint,
+                Config.CibaPushResultEndpoint,
+                Config.SetDeviceTokenWebAPI,
+                Config.TwoFactorPushResultEndpoint
+            };
+
+            foreach (string path in paths)
+            {
+                if (!string.IsNullOrEmpty(path)
+                    && requestPath.EndsWith(path, StringComparison.OrdinalIgnoreCase))
+                {
+                    return CmnDPoP.EndpointUri(path);
+                }
+            }
+
+            return "";
+        }
+
+        /// <summary>口の URL（設定のルート ＋ 口のパス）</summary>
+        /// <param name="path">口のパス（設定キーの値）</param>
+        /// <returns>URL</returns>
+        /// <remarks>
+        /// **口のパスは、すべて設定キーで持っている**（ルーティングも同じ値を見ている）。
+        /// **ここに文字列リテラルを置かない** — **ルートと食い違うと、黙って照合が落ちる。**
+        /// </remarks>
+        private static string EndpointUri(string path)
+        {
+            return Config.OAuth2AuthorizationServerEndpointsRootURI + path;
+        }
+
+        #endregion
+
+        #region Authorization ヘッダ
+
+        /// <summary>`Authorization` ヘッダから、トークンとスキームを読む（#311 の段階 2）</summary>
+        /// <param name="authorizationHeader">`Authorization` ヘッダ</param>
+        /// <param name="token">out : トークン</param>
+        /// <param name="isDPoP">out : **`DPoP` スキームで来たか**</param>
+        /// <returns>トークンが読めれば true</returns>
+        /// <remarks>
+        /// **`DPoP` スキーム**（RFC 9449 §7.1）**と、従来の `Bearer`** の両方を読む。
+        /// **`Bearer` の読み取りは、これまでと同じ口に委ねる**（`AuthenticationHeader.GetCredentials`） —
+        /// **大文字小文字や空白の扱いを、ここで作り直さない。**
+        ///
+        /// **スキームを呼び出し側に返す**のが要点である。
+        /// **`cnf.jkt` で縛ったトークンを `Bearer` で出してきた要求は、断らなければならない**
+        /// （**縛りを「使う側の出し方」で外せてはいけない**）。
+        /// </remarks>
+        public static bool GetToken(string authorizationHeader, out string token, out bool isDPoP)
+        {
+            token = "";
+            isDPoP = false;
+
+            if (string.IsNullOrEmpty(authorizationHeader))
+            {
+                return false;
+            }
+
+            string prefix = CmnDPoP.TokenType + " ";
+
+            if (authorizationHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                token = authorizationHeader.Substring(prefix.Length).Trim();
+                isDPoP = true;
+
+                return !string.IsNullOrEmpty(token);
+            }
+
+            return AuthenticationHeader.GetCredentials(authorizationHeader, out token);
+        }
+
+        #endregion
+
+        #region リソース側の照合（#311 の段階 2）
+
+        /// <summary>保護されたリソースで、証明とトークンの結び付きを照合する（#311 の段階 2）</summary>
+        /// <param name="proof">`DPoP` ヘッダの値（**`DPoP` スキームで来ていないなら空**）</param>
+        /// <param name="htm">この要求の HTTP メソッド（**大文字**）</param>
+        /// <param name="htu">この口の宛先</param>
+        /// <param name="accessToken">提示された access_token</param>
+        /// <param name="boundJkt">トークンに書かれた `cnf.jkt`</param>
+        /// <param name="errDescription">out : 断る理由</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **段階 1 の検証に、2 つ足す**（RFC 9449 §7.1）。
+        ///
+        /// | 足すもの | なぜ |
+        /// |---|---|
+        /// | **`ath` が、提示されたトークンの指紋と一致すること** | **別のトークンに付けた証明を使い回させない** |
+        /// | **証明の鍵が、トークンの `cnf.jkt` と同じであること** | **これが「持ち主である」ことの確認**である |
+        ///
+        /// **`ath` は access_token の SHA-256 を BASE64URL したもの**（§4.2）。
+        /// </remarks>
+        public static bool VerifyForResource(
+            string proof, string htm, string htu,
+            string accessToken, string boundJkt, out string errDescription)
+        {
+            errDescription = "";
+
+            if (string.IsNullOrEmpty(proof))
+            {
+                errDescription = "A DPoP proof is required for this access token.";
+                return CmnDPoP.Deny(errDescription);
+            }
+
+            if (!CmnDPoP.Verify(proof, htm, htu, out string jkt, out errDescription))
+            {
+                return false;
+            }
+
+            if (!string.Equals(jkt, boundJkt, StringComparison.Ordinal))
+            {
+                errDescription = "The DPoP proof was signed with another key.";
+                return CmnDPoP.Deny(errDescription);
+            }
+
+            JObject payload = CmnEndpoints.TryReadJwtPayload(proof);
+            string ath = (payload == null) ? null : (string)payload[CmnDPoP.Ath];
+
+            if (!string.Equals(ath, CmnDPoP.Thumbprint(accessToken), StringComparison.Ordinal))
+            {
+                errDescription = "The ath of the DPoP proof does not match the access token.";
+                return CmnDPoP.Deny(errDescription);
+            }
+
+            return true;
+        }
+
+        /// <summary>文字列の指紋（`ath` の値。RFC 9449 §4.2）</summary>
+        /// <param name="value">access_token</param>
+        /// <returns>BASE64URL(SHA-256(value))。空なら空</returns>
+        public static string Thumbprint(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "";
+            }
+
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                return CustomEncode.ToBase64UrlString(
+                    sha256.ComputeHash(CustomEncode.StringToByte(value, CustomEncode.us_ascii)));
             }
         }
+
+        #endregion
+
+        #region public
 
         /// <summary>DPoP の証明を検証し、鍵の指紋（`jkt`）を返す（#311 の段階 1）</summary>
         /// <param name="proof">`DPoP` ヘッダの値（証明の JWT）</param>

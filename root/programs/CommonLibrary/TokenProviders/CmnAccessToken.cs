@@ -39,6 +39,7 @@
 //*  2026/09/22  玄人 幸道         ProtectFromPayload の引数名を permittedLevel から clientMode に（#224）
 //*  2026/09/23  玄人 幸道         cnf を RFC 8705 の形式で書き、提示された証明書と照合する口を追加
 //*  2026/10/21  玄人 幸道         cnf に jkt（DPoP）も書けるようにした（#311 の段階 1）
+//*  2026/10/21  玄人 幸道         cnf.jkt と DPoP の証明を照合する口を追加（#311 の段階 2）
 //*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
 //*  2026/09/27  玄人 幸道         署名検証の鍵選択を切り出し、署名だけを検証する口を追加（#232）
 //*  2026/10/02  玄人 幸道         受ける alg を自分が発行する 2 つに固定（C-8）（#129 の段階 1）
@@ -688,6 +689,54 @@ namespace MultiPurposeAuthSite.TokenProviders
                 || (string)jwkObject[JwtConst.crv] == key.Crv;
         }
 
+        /// <summary>トークンに書かれた `cnf.jkt`（無ければ空）（#311 の段階 2）</summary>
+        /// <param name="identity">VerifyAccessToken が返した ClaimsIdentity</param>
+        /// <returns>jkt（縛られていなければ空）</returns>
+        public static string JktOf(ClaimsIdentity identity)
+        {
+            if (identity == null)
+            {
+                return "";
+            }
+
+            Claim jkt = identity.Claims.FirstOrDefault(x => x.Type == Const.UrnCnfJktClaim);
+
+            return (jkt == null) ? "" : (jkt.Value ?? "");
+        }
+
+        /// <summary>
+        /// トークンの `cnf.jkt`（鍵への紐づけ）と、提示された DPoP の証明を照合する（RFC 9449 §7.1）
+        /// </summary>
+        /// <param name="identity">VerifyAccessToken が返した ClaimsIdentity</param>
+        /// <param name="accessToken">提示された access_token</param>
+        /// <param name="proof">`DPoP` ヘッダの値（**`DPoP` スキームでなければ空を渡すこと**）</param>
+        /// <param name="htm">この要求の HTTP メソッド（**大文字**）</param>
+        /// <param name="htu">この口の宛先</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **鍵に縛ったトークンは、その鍵で署名した証明と一緒でしか使えない。**
+        /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり bearer として扱う**
+        /// （**mTLS の `VerifyCertificateBinding` と同じ形**）。
+        ///
+        /// **縛っているのに証明が無い要求は拒否する。**
+        /// **`Bearer` スキームで出してきた要求も拒否する**（呼び出し側が空を渡す） —
+        /// **縛りを「使う側の出し方」で外せてはいけない。**
+        /// </remarks>
+        public static bool VerifyDPoPBinding(
+            ClaimsIdentity identity, string accessToken, string proof, string htm, string htu)
+        {
+            string boundJkt = CmnAccessToken.JktOf(identity);
+
+            if (string.IsNullOrEmpty(boundJkt))
+            {
+                // 縛っていないトークン
+                return true;
+            }
+
+            return CmnDPoP.VerifyForResource(
+                proof, htm, htu, accessToken, boundJkt, out string _);
+        }
+
         /// <summary>JWT の署名だけを検証する（#232）</summary>
         /// <param name="jwt">JWS（コンパクト形式）</param>
         /// <returns>この認可サーバの鍵で署名されていれば true</returns>
@@ -1000,6 +1049,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + CmnAccessToken.S512))
                     identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnCnfX5tClaim + CmnAccessToken.S512,
                         (string)cnf[OAuth2AndOIDCConst.x5t + CmnAccessToken.S512]));
+
+                //  **DPoP の縛り**（#311 の段階 2）。
+                //    **mTLS と排他ではない**（両方書かれていることが在る）ので、
+                //    **`else if` で繋がない。**
+                if (cnf.ContainsKey(CmnDPoP.Jkt))
+                    identity.AddClaim(new Claim(Const.UrnCnfJktClaim, (string)cnf[CmnDPoP.Jkt]));
             }
             
             //// - fapi

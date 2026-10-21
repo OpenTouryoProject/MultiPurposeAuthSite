@@ -76,6 +76,7 @@
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
 //*  2026/10/16  玄人 幸道         /jwkcerts を覚えて返す（Cache-Control / ETag / 304）（#303）
 //*  2026/10/21  玄人 幸道         /token で DPoP の証明を受け取る（#311 の段階 1）
+//*  2026/10/21  玄人 幸道         保護されたリソースで DPoP の証明を照合する（#311 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -362,6 +363,36 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+
+        #region DPoP の照合（#311 の段階 2）
+
+        /// <summary>DPoP に縛られたトークンなら、証明を照合する（#311 の段階 2）</summary>
+        /// <param name="identity">検証済みの ClaimsIdentity</param>
+        /// <param name="accessToken">提示された access_token</param>
+        /// <param name="isDPoP">**`DPoP` スキームで来たか**</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり通る**
+        /// （**DPoP を知らないクライアントに影響しない**）。
+        ///
+        /// **`Bearer` スキームで来た要求には、証明を渡さない** ＝
+        /// **縛られたトークンなら断る**（RFC 9449 §7.1）。
+        /// **縛りを「使う側の出し方」で外せてはいけない。**
+        ///
+        /// **`htu` は、要求のパスから設定の URL を引く**（`CmnDPoP.EndpointUriOf`。
+        /// **`Host` ヘッダは見ない**）。**`htm` は、実際のメソッド**である。
+        /// </remarks>
+        private bool VerifyDPoP(ClaimsIdentity identity, string accessToken, bool isDPoP)
+        {
+            return Token.CmnAccessToken.VerifyDPoPBinding(
+                identity, accessToken,
+                isDPoP ? HttpContext.Current.Request.Headers[Token.CmnDPoP.HttpHeader] : null,
+                HttpContext.Current.Request.HttpMethod,
+                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path));
+        }
+
+        #endregion
+
         #region /userinfo
 
         /// <summary>
@@ -381,8 +412,9 @@ namespace MultiPurposeAuthSite.Controllers
             Dictionary<string, string> err = new Dictionary<string, string>();
 
             // クライアント認証
-            if (AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
                 {
@@ -393,6 +425,18 @@ namespace MultiPurposeAuthSite.Controllers
                         err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
                         err.Add(OAuth2AndOIDCConst.error_description,
                             "The access token is bound to a client certificate.");
+
+                        return this.UserInfoError(err);
+                    }
+
+                    //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                    //    （RFC 9449 §7.1。#311 の段階 2）。
+                    //    **縛っていないトークンは、これまでどおり通る。**
+                    if (!this.VerifyDPoP(identity, bearerToken, isDPoP))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                        err.Add(OAuth2AndOIDCConst.error_description,
+                            "The access token is bound to a DPoP key.");
 
                         return this.UserInfoError(err);
                     }
@@ -1069,8 +1113,9 @@ namespace MultiPurposeAuthSite.Controllers
         public IHttpActionResult CibaPushResult(FormDataCollection formData)
         {
             // クライアント認証（Bearer トークン）
-            if (!AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (!Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
                 return this.NGResult(401, "ciba_result", null);
@@ -1080,7 +1125,10 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
+                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §7.1。#311 の段階 2）。
+                && this.VerifyDPoP(identity, bearerToken, isDPoP))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(
@@ -1367,8 +1415,9 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // クライアント認証（Bearer トークン）
-            if (!AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (!Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
                 return this.NGResult(401, "SetDeviceToken", null);
@@ -1376,7 +1425,10 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
+                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §7.1。#311 の段階 2）。
+                && this.VerifyDPoP(identity, bearerToken, isDPoP))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(
@@ -1423,8 +1475,9 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<IHttpActionResult> TwoFactorPushResult(FormDataCollection formData)
         {
             // クライアント認証（Bearer トークン）
-            if (!AuthenticationHeader.GetCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            if (!Token.CmnDPoP.GetToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out bool isDPoP))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）
                 return this.NGResult(401, "2fa_result", null);
@@ -1434,7 +1487,10 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
+                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
+                //    （RFC 9449 §7.1。#311 の段階 2）。
+                && this.VerifyDPoP(identity, bearerToken, isDPoP))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(

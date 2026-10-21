@@ -49,6 +49,7 @@
 //*  2026/10/21  玄人 幸道         セッションの識別子と sid クレームを追加（#310 の段階 1）
 //*  2026/10/21  玄人 幸道         logout_token と受け口の定数を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         Front-Channel Logout の受け口の定数を追加（#310 の段階 3）
+//*  2026/10/21  玄人 幸道         cnf.jkt のクレーム型を追加（#311 の段階 2）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method の上限を追加（#307 の段階 3）
 //**********************************************************************************
 
@@ -402,6 +403,14 @@ namespace MultiPurposeAuthSite.Co
         /// **プロセスの外には出ない**（トークンに入るのは <see cref="Sid"/> の名前）。
         /// </remarks>
         public const string UrnSidClaim = "urn:oauth:sid";
+
+        /// <summary>cnf.jkt を運ぶ ClaimsIdentity のクレーム型（#311 の段階 2）</summary>
+        /// <remarks>
+        /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
+        /// （**mTLS の `UrnCnfX5tClaim` と同じ流儀**）。
+        /// **トークンの `cnf.jkt` を、検証後の `ClaimsIdentity` に移すために使う。**
+        /// </remarks>
+        public const string UrnCnfJktClaim = "urn:oauth:cnf:jkt";
 
         /// <summary>logout_token を運ぶ要求の項目名（#310 の段階 2）</summary>
         /// <remarks>**POST の本文に 1 項目だけ**（Back-Channel Logout 1.0 §2.5）。</remarks>
