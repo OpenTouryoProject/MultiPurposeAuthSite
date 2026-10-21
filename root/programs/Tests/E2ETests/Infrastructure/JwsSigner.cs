@@ -31,6 +31,7 @@
 //*  2026/09/11  玄人 幸道         新規（RequestObjectBuilder と JwtBearerAssertion に重複していた署名を集約）
 //*  2026/09/11  玄人 幸道         ES256 の署名（CIBA の認証リクエスト用）を追加（#196）
 //*  2026/10/19  玄人 幸道         公開鍵の JWK を作る口を追加（#307 の段階 3）
+//*  2026/10/21  玄人 幸道         DPoP の証明を作る口を追加（#311 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -180,10 +181,155 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
         }
 
+        #region DPoP（#311 の段階 1）
+
+        /// <summary>DPoP の証明（proof）を作る（RFC 9449 §4）</summary>
+        /// <param name="client">IdPClient（署名鍵の場所を構成ファイルから読む）</param>
+        /// <param name="payload">ペイロード（`jti` / `htm` / `htu` / `iat` など）</param>
+        /// <param name="es256">true なら ES256（既定）、false なら RS256</param>
+        /// <returns>証明（JWS。コンパクト形式）</returns>
+        /// <remarks>
+        /// **ヘッダに公開鍵（`jwk`）を入れる**のが、普通の JWS との違いである
+        /// （**検証する側は、要求の中の鍵で検証する**）。
+        /// **`typ` は `dpop+jwt`。**
+        ///
+        /// **ペイロードは呼び出し側が作る** — **わざと壊した証明も作れるように**している
+        /// （`RT-311.4`）。
+        ///
+        /// **鍵はテスト用クライアントのもの**（`SpRp_EcdsaPfxFilePath` / `SpRp_RsaPfxFilePath`）。
+        /// **DPoP の鍵は、登録も要らない** — **その場で作って、指紋で縛られる**だけである。
+        /// </remarks>
+        public static string SignDPoP(
+            IdPClient client, IDictionary<string, object> payload, bool es256 = true)
+        {
+            Dictionary<string, object> header = new Dictionary<string, object>()
+            {
+                { "alg", es256 ? "ES256" : "RS256" },
+                { "typ", "dpop+jwt" },
+                { "jwk", JwsSigner.DPoPJwk(client, es256) }
+            };
+
+            string signingInput =
+                Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(header))
+                + "." + Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(payload));
+
+            return signingInput + "." + Base64Url.Encode(
+                JwsSigner.SignatureOf(client, signingInput, es256));
+        }
+
+        /// <summary>DPoP の証明のヘッダに入れる公開鍵（必須の項目だけ）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="es256">true なら EC（P-256）、false なら RSA</param>
+        /// <returns>JWK（辞書）</returns>
+        /// <remarks>
+        /// **必須の項目だけを入れる**（RFC 7638 が指紋に使う項目）。
+        /// **`kid` も `use` も入れない** — **入れても指紋は変わらない**が、
+        /// **「指紋の材料はこれだけ」**ということを、作る側でも明示しておく。
+        /// </remarks>
+        public static Dictionary<string, object> DPoPJwk(IdPClient client, bool es256 = true)
+        {
+            if (es256)
+            {
+                using (X509Certificate2 cert = LoadCertificate(
+                    client, "SpRp_EcdsaPfxFilePath", "SpRp_EcdsaPfxPassword"))
+                using (ECDsa ecdsa = cert.GetECDsaPublicKey())
+                {
+                    ECParameters p = ecdsa.ExportParameters(false);
+
+                    return new Dictionary<string, object>()
+                    {
+                        { "crv", "P-256" },
+                        { "kty", "EC" },
+                        { "x", Base64Url.Encode(p.Q.X) },
+                        { "y", Base64Url.Encode(p.Q.Y) }
+                    };
+                }
+            }
+
+            using (X509Certificate2 cert = LoadCertificate(
+                client, "SpRp_RsaPfxFilePath", "SpRp_RsaPfxPassword"))
+            using (RSA rsa = cert.GetRSAPublicKey())
+            {
+                RSAParameters p = rsa.ExportParameters(false);
+
+                return new Dictionary<string, object>()
+                {
+                    { "e", Base64Url.Encode(p.Exponent) },
+                    { "kty", "RSA" },
+                    { "n", Base64Url.Encode(p.Modulus) }
+                };
+            }
+        }
+
+        /// <summary>DPoP の鍵の指紋（`cnf.jkt` の期待値。RFC 7638）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="es256">true なら EC（P-256）、false なら RSA</param>
+        /// <returns>BASE64URL(SHA-256(正規化した JSON))</returns>
+        /// <remarks>
+        /// **サーバと同じ計算を、テスト側でも独立に行う**
+        /// （**実装のコードは使わない** — 使うと「同じコードで作って同じコードで確かめた」ことになる）。
+        /// </remarks>
+        public static string DPoPJkt(IdPClient client, bool es256 = true)
+        {
+            Dictionary<string, object> jwk = JwsSigner.DPoPJwk(client, es256);
+
+            string canonical = es256
+                ? "{\"crv\":\"" + jwk["crv"] + "\",\"kty\":\"" + jwk["kty"]
+                    + "\",\"x\":\"" + jwk["x"] + "\",\"y\":\"" + jwk["y"] + "\"}"
+                : "{\"e\":\"" + jwk["e"] + "\",\"kty\":\"" + jwk["kty"]
+                    + "\",\"n\":\"" + jwk["n"] + "\"}";
+
+            return JwsSigner.Thumbprint(canonical);
+        }
+
+        /// <summary>署名する（ES256 / RS256）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="signingInput">ヘッダ.ペイロード</param>
+        /// <param name="es256">true なら ES256、false なら RS256</param>
+        /// <returns>署名</returns>
+        private static byte[] SignatureOf(IdPClient client, string signingInput, bool es256)
+        {
+            if (es256)
+            {
+                using (X509Certificate2 cert = LoadCertificate(
+                    client, "SpRp_EcdsaPfxFilePath", "SpRp_EcdsaPfxPassword"))
+                using (ECDsa ecdsa = cert.GetECDsaPrivateKey())
+                {
+                    if (ecdsa == null)
+                    {
+                        throw new InvalidOperationException(
+                            "ECDSAの秘密鍵を取り出せませんでした: "
+                            + client.Config.Get("SpRp_EcdsaPfxFilePath"));
+                    }
+
+                    return ecdsa.SignData(
+                        Encoding.UTF8.GetBytes(signingInput), HashAlgorithmName.SHA256);
+                }
+            }
+
+            using (X509Certificate2 cert = LoadCertificate(
+                client, "SpRp_RsaPfxFilePath", "SpRp_RsaPfxPassword"))
+            using (RSA rsa = cert.GetRSAPrivateKey())
+            {
+                if (rsa == null)
+                {
+                    throw new InvalidOperationException(
+                        "RSAの秘密鍵を取り出せませんでした: "
+                        + client.Config.Get("SpRp_RsaPfxFilePath"));
+                }
+
+                return rsa.SignData(
+                    Encoding.UTF8.GetBytes(signingInput),
+                    HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            }
+        }
+
+        #endregion
+
         /// <summary>JWK の指紋（RFC 7638）</summary>
         /// <param name="canonical">必須の項目だけを辞書順に並べた JSON</param>
         /// <returns>BASE64URL(SHA-256(JSON))</returns>
-        private static string Thumbprint(string canonical)
+        public static string Thumbprint(string canonical)
         {
             using (SHA256 sha256 = SHA256.Create())
             {

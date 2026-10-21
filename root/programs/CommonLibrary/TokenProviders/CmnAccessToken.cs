@@ -38,6 +38,7 @@
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/22  玄人 幸道         ProtectFromPayload の引数名を permittedLevel から clientMode に（#224）
 //*  2026/09/23  玄人 幸道         cnf を RFC 8705 の形式で書き、提示された証明書と照合する口を追加
+//*  2026/10/21  玄人 幸道         cnf に jkt（DPoP）も書けるようにした（#311 の段階 1）
 //*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
 //*  2026/09/27  玄人 幸道         署名検証の鍵選択を切り出し、署名だけを検証する口を追加（#232）
 //*  2026/10/02  玄人 幸道         受ける alg を自分が発行する 2 つに固定（C-8）（#129 の段階 1）
@@ -159,11 +160,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="claims">IEnumerable(Claim)</param>
         /// <param name="ExpiresUtc">DateTimeOffset</param>
         /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
+        /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <returns>JWT文字列</returns>
         public static string CreateFromClaims(
             string clientId, string userName,
             IEnumerable<Claim> identityClaims, DateTimeOffset expiresUtc,
-            string alg = JwtConst.RS256)
+            string alg = JwtConst.RS256, string jkt = null)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -288,6 +290,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
+            //  **DPoP の鍵に縛る**（#311 の段階 1）。
+            //    **この経路は mTLS の `cnf` を書いていない**（証明書を受けていない経路である）。
+            //    **DPoP は証明が在れば書ける**ので、ここで足す。
+            if (!string.IsNullOrEmpty(jkt))
+            {
+                Dictionary<string, object> cnf = new Dictionary<string, object>();
+                cnf.Add(CmnDPoP.Jkt, jkt);
+
+                tokenClaimSet.Add(OAuth2AndOIDCConst.cnf, cnf);
+            }
+
             json = JsonConvert.SerializeObject(tokenClaimSet);
 
             #endregion
@@ -410,12 +423,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="audience">out string</param>
         /// <param name="subject">out string</param>
         /// <param name="alg">string</param>
+        /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <returns>AccessToken</returns>
         public static string ProtectFromPayload(
             string clientId, string access_token_payload,
             DateTimeOffset expiresUtc, X509Certificate2 x509,
             OAuth2AndOIDCEnum.ClientMode clientMode,
-            out string audience, out string subject, string alg = JwtConst.RS256)
+            out string audience, out string subject, string alg = JwtConst.RS256,
+            string jkt = null)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -448,18 +463,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             
             // 書込２
             // - cnf
-            if (x509 != null)
-            {
-                // **RFC 8705 3.1 : cnf の x5t#S256 は、証明書（DER）の SHA-256 を BASE64URL したもの。**
-                //   以前は SHA-1 のサムプリント（16 進）を入れ、キーの #S256 / #S512 も
-                //   **証明書の署名アルゴリズム**で選んでいた。どちらも仕様と違い、
-                //   RFC のとおりに照合するリソース サーバとは紐づけが一致しない。
-                JObject dic = new JObject();
-                dic.Add(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256,
-                    CmnAccessToken.ComputeCertificateThumbprint(x509));
-
-                payload[OAuth2AndOIDCConst.cnf] = dic;
-            }
+            CmnAccessToken.WriteCnf(payload, x509, jkt);
 
             if (clientMode == OAuth2AndOIDCEnum.ClientMode.normal)
             {
@@ -665,7 +669,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`crv` まで見るのは、EC が alg と曲線で対応するから**である（JWA）。
         /// **`kty` だけでは、P-256 の鍵で `ES512` のトークンを受けてしまう**（#129 の段階 3）。
         /// </remarks>
-        private static bool IsSameKeyType(JObject jwkObject, string alg)
+        public static bool IsSameKeyType(JObject jwkObject, string alg)
         {
             SigningKeys.Entry key = SigningKeys.Of(alg);
 
@@ -717,6 +721,51 @@ namespace MultiPurposeAuthSite.TokenProviders
             return CmnAccessToken.VerifyAccessToken(jwt, out claims, out identity);
         }
         
+        /// <summary>cnf（鍵への紐づけ）を書く（RFC 8705 §3.1 / RFC 9449 §6）</summary>
+        /// <param name="payload">access_token の payload</param>
+        /// <param name="x509">クライアント証明書（mTLS。無ければ null）</param>
+        /// <param name="jkt">DPoP の鍵の指紋（無ければ空）</param>
+        /// <remarks>
+        /// **どちらも「このトークンは、この鍵の持ち主のものだ」という印**である。
+        ///
+        /// | 入れるもの | いつ | 根拠 |
+        /// |---|---|---|
+        /// | `x5t#S256` | **クライアント証明書が提示されたとき**（mTLS） | RFC 8705 §3.1 |
+        /// | `jkt` | **DPoP の証明が通ったとき** | RFC 9449 §6 |
+        ///
+        /// **両方在れば、両方書く。** **どちらを要求するかは、照合する側が決める**
+        /// （**mTLS の照合は `VerifyCertificateBinding`**。**DPoP の照合は段階 2**）。
+        ///
+        /// **どちらも無ければ `cnf` を書かない** ＝ **従来どおり bearer** である。
+        ///
+        /// **RFC 8705 §3.1 の `x5t#S256` は、証明書（DER）の SHA-256 を BASE64URL したもの。**
+        /// 以前は SHA-1 のサムプリント（16 進）を入れ、キーの #S256 / #S512 も
+        /// **証明書の署名アルゴリズム**で選んでいた。どちらも仕様と違い、
+        /// RFC のとおりに照合するリソース サーバとは紐づけが一致しない。
+        /// </remarks>
+        private static void WriteCnf(JObject payload, X509Certificate2 x509, string jkt)
+        {
+            JObject cnf = new JObject();
+
+            if (x509 != null)
+            {
+                cnf.Add(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256,
+                    CmnAccessToken.ComputeCertificateThumbprint(x509));
+            }
+
+            if (!string.IsNullOrEmpty(jkt))
+            {
+                cnf.Add(CmnDPoP.Jkt, jkt);
+            }
+
+            if (cnf.Count == 0)
+            {
+                return;
+            }
+
+            payload[OAuth2AndOIDCConst.cnf] = cnf;
+        }
+
         /// <summary>証明書（DER）の SHA-256 を BASE64URL した値（RFC 8705 3.1 の x5t#S256）</summary>
         /// <param name="x509">クライアント証明書</param>
         /// <returns>BASE64URL の文字列</returns>

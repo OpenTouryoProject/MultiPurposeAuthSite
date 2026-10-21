@@ -75,6 +75,7 @@
 //*  2026/10/01  玄人 幸道         CIBA の認可コードに、sub ではなく利用者名を入れるようにした（#151 の段階 4）
 //*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
 //*  2026/10/16  玄人 幸道         /jwkcerts を覚えて返す（Cache-Control / ETag / 304）（#303）
+//*  2026/10/21  玄人 幸道         /token で DPoP の証明を受け取る（#311 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -234,6 +235,21 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #endregion
 
+
+                #region DPoP（#311 の段階 1）
+
+                //  **DPoP の証明**（RFC 9449 §4）。
+                //    **ヘッダで来る**（本文のパラメタではない）。
+                //    **無ければ従来どおり bearer** で発行する（既定の挙動を変えない）。
+                //    **検証は `CmnEndpoints` 側**（グラントの入口で、code を使う前に見る）。
+                //  **この口は Web API（`ApiController`）**なので、`Request.Headers` は
+                //    `HttpRequestHeaders` である（添字で引けない）。
+                //    **`Authorization` を読んでいる口と同じ流儀**で、`HttpContext` から引く。
+                string dPoPProof =
+                    HttpContext.Current.Request.Headers[Token.CmnDPoP.HttpHeader];
+
+                #endregion
+
                 #region grant_type
 
                 string grant_type = "";
@@ -252,7 +268,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             if (Token.CmnEndpoints.GrantAuthorizationCodeCredentials(
                                 grant_type, client_id, client_secret, clientAssertion, x509,
-                                code, code_verifier, redirect_uri, out ret, out err))
+                                dPoPProof, code, code_verifier, redirect_uri, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -262,7 +278,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
                             if (Token.CmnEndpoints.GrantRefreshTokenCredentials(
                                 grant_type, client_id, client_secret, clientAssertion,
-                                x509, refresh_token, out ret, out err))
+                                x509, dPoPProof, refresh_token, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -274,7 +290,7 @@ namespace MultiPurposeAuthSite.Controllers
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantResourceOwnerCredentials(
                                 grant_type, client_id, client_secret, clientAssertion, x509,
-                                username, password, scope, out ret, out err))
+                                dPoPProof, username, password, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -284,7 +300,7 @@ namespace MultiPurposeAuthSite.Controllers
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantClientCredentials(
                                 grant_type, client_id, client_secret, clientAssertion,
-                                x509, scope, out ret, out err))
+                                x509, dPoPProof, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -294,7 +310,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // トークン要求の scope を渡す（RFC 7521 4.1 / RFC 7523 2.1）（#218）
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantJwtBearerTokenCredentials(
-                            grant_type, assertion, x509, scope, out ret, out err))
+                            grant_type, assertion, x509, dPoPProof, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -303,7 +319,8 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.DeviceAuthZGrantType:
                             string device_code = formData[OAuth2AndOIDCConst.device_code];
                             if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
-                                client_id, client_secret, x509, device_code, out ret, out err))
+                                client_id, client_secret, x509, dPoPProof, device_code,
+                                out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -313,7 +330,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string auth_req_id = formData[OAuth2AndOIDCConst.auth_req_id];
                             if (Token.CmnEndpoints.GrantCiba(grant_type, 
                                 client_id, client_secret, x509,
-                                auth_req_id, out ret, out err))
+                                dPoPProof, auth_req_id, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }

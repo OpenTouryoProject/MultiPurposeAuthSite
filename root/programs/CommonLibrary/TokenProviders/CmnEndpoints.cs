@@ -127,6 +127,7 @@
 //*  2026/10/21  玄人 幸道         client_assertion の鍵を jwks_uri からも引く（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         Front-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 3）
+//*  2026/10/21  玄人 幸道         DPoP の証明を /token で受け、cnf.jkt で発行する（#311 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -501,6 +502,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region FAPI
+
+            //  **DPoP に対応したことを広告する**（RFC 9449 §5.1。#311 の段階 1）。
+            //    **証明の署名に使える alg** を出す。
+            //    **一覧は `SigningKeys` の表が持つ**（発行・検証・広告が同じ表を見る。#129 の段階 3）。
+            //    **非対称の alg だけ**であり、**`none` は入っていない。**
+            OpenIDConfig.Add("dpop_signing_alg_values_supported", CmnAccessToken.SupportedAlgs);
 
             // **RFC 8705 §3.3 の名前は tls_client_certificate_bound_access_tokens、値は boolean**（#189 の 2）。
             //   以前は mutual_tls_sender_constrained_access_tokens（草案の名前）に文字列の "true" を入れていた。
@@ -2504,6 +2511,21 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         public static string TryReadJwtAlg(string jwt)
         {
+            JObject header = CmnEndpoints.TryReadJwtHeader(jwt);
+
+            return (header == null) ? null : (string)header[JwtConst.alg];
+        }
+
+        /// <summary>JWT のヘッダを読む（読めなければ null）（#311 の段階 1）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>ヘッダ（読めなければ null）</returns>
+        /// <remarks>
+        /// **`TryReadJwtPayload` と対の、純粋な読み取り**である。
+        /// **DPoP の証明は、ヘッダに公開鍵（`jwk`）を持つ**ので、
+        /// **ヘッダ全体を読む口が要る**（`TryReadJwtAlg` もここに委ねている）。
+        /// </remarks>
+        public static JObject TryReadJwtHeader(string jwt)
+        {
             if (string.IsNullOrEmpty(jwt))
             {
                 return null;
@@ -2518,11 +2540,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return null;
                 }
 
-                JObject header = (JObject)JsonConvert.DeserializeObject(
+                return (JObject)JsonConvert.DeserializeObject(
                     CustomEncode.ByteToString(
                         CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
-
-                return (string)header[JwtConst.alg];
             }
             catch
             {
@@ -3032,12 +3052,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="code">string</param>
         /// <param name="code_verifier">string</param>
         /// <param name="redirect_uri">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantAuthorizationCodeCredentials(
             string grant_type, string client_id, string client_secret,
-            string assertion, X509Certificate2 x509,
+            string assertion, X509Certificate2 x509, string dPoPProof,
             string code, string code_verifier, string redirect_uri,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
@@ -3045,6 +3066,13 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableAuthorizationCodeGrantType)
             {
@@ -3162,7 +3190,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                         x509, clientMode, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
-                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                        // **DPoP の鍵に縛る**（#311 の段階 1。**証明が無ければ空**）
+                        jkt);
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -3192,7 +3222,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         client_id, name,                                         // Client Account
                         PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, jwkString);
+                    ret = CmnEndpoints.CreateAccessTokenResponse(
+                        access_token, refresh_token, jwkString, jkt);
 
                     return true;
 
@@ -3232,18 +3263,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="refresh_token">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantRefreshTokenCredentials(
             string grant_type, string client_id, string client_secret, string clientAssertion,
-            X509Certificate2 x509,
+            X509Certificate2 x509, string dPoPProof,
             string refresh_token, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableRefreshToken)
             {
@@ -3302,7 +3341,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                             x509, clientMode, out string aud, out string sub,
                             // **登録された署名 alg で署名する**（#129 の段階 2）
-                            Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                            Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                            // **DPoP の鍵に縛る**（#311 の段階 1。**証明が無ければ空**）
+                            jkt);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)
@@ -3325,7 +3366,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                         // Client Account
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, new_refresh_token, jwkString);
+                        ret = CmnEndpoints.CreateAccessTokenResponse(
+                            access_token, new_refresh_token, jwkString, jkt);
 
                         return true;
                     }
@@ -3364,6 +3406,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="username">string</param>
         /// <param name="password">string</param>
         /// <param name="scopes">string</param>
@@ -3399,13 +3442,20 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool GrantResourceOwnerCredentials(
             string grant_type, string client_id,
             string client_secret, string clientAssertion, X509Certificate2 x509,
-            string username, string password, string scopes,
+            string dPoPProof, string username, string password, string scopes,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
             {
@@ -3509,7 +3559,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             	client_id, identity.Name, identity.Claims,
                                 DateTimeOffset.Now.Add(expires),
                                 // **登録された署名 alg で署名する**（#129 の段階 2）
-                                Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                                Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                                // **DPoP の鍵に縛る**（#311 の段階 1）
+                                jkt);
 
                             // オペレーション・トレース・ログ出力
                             string name = Helper.GetInstance().GetClientName(client_id);
@@ -3518,7 +3570,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 user.Id, user.UserName, // User Account
                                 client_id, name));      // Client Account
 
-                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
+                            ret = CmnEndpoints.CreateAccessTokenResponse(
+                                access_token, "", jwkString, jkt);
                             return true;
                         }
                         else
@@ -3570,19 +3623,27 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="scopes">string</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantClientCredentials(
             string grant_type, string client_id, string client_secret, string clientAssertion,
-            X509Certificate2 x509,
+            X509Certificate2 x509, string dPoPProof,
             string scopes, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             //  **動的登録のための細い道**（#307 の段階 5-b）。
             //    **`EnableClientCredentialsGrantType` が false でも、
@@ -3684,14 +3745,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                         client_id, identity.Name, identity.Claims,
                         DateTimeOffset.Now.Add(expires),
                         // **登録された署名 alg で署名する**（#129 の段階 2）
-                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                        // **DPoP の鍵に縛る**（#311 の段階 1）
+                        jkt);
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format(
                         "Passed the 'client credentials flow' by {0}({1}).",
                         client_id, sub)); // Client Account
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
+                    ret = CmnEndpoints.CreateAccessTokenResponse(
+                        access_token, "", jwkString, jkt);
                     return true;
 
                     #endregion
@@ -3725,17 +3789,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="assertion">string</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="scope">string（トークン要求の scope。RFC 7521 4.1 / RFC 7523 2.1）</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantJwtBearerTokenCredentials(
-            string grant_type, string assertion, X509Certificate2 x509, string scope,
+            string grant_type, string assertion, X509Certificate2 x509, string dPoPProof,
+            string scope,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableJwtBearerTokenFlowGrantType &&
                 grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
@@ -3784,13 +3857,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     iss, identity.Name, identity.Claims,
                                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                                     // **登録された署名 alg で署名する**（#129 の段階 2。client_id は iss）
-                                    Helper.GetInstance().GetIdTokenSignedResponseAlg(iss));
+                                    Helper.GetInstance().GetIdTokenSignedResponseAlg(iss),
+                                    // **DPoP の鍵に縛る**（#311 の段階 1）
+                                    jkt);
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format(
                                     "Passed the 'jwt bearer token flow' by {0}({1}).", iss, sub)); // Client Account
 
-                                ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
+                                ret = CmnEndpoints.CreateAccessTokenResponse(
+                                    access_token, "", jwkString, jkt);
                                 return true;
                             }
                             else
@@ -3831,16 +3907,24 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="device_code">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantDeviceAuthZ(
             string grant_type, string client_id, string client_secret,
-            X509Certificate2 x509, string device_code,
+            X509Certificate2 x509, string dPoPProof, string device_code,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableDeviceAuthZGrantType)
             {
@@ -3904,7 +3988,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                         null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
-                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
+                        // **DPoP の鍵に縛る**（#311 の段階 1）
+                        jkt);
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -3935,7 +4021,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         client_id, name,                                         // Client Account
                         PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "");
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "", jkt);
 
                     return true;
                 }
@@ -4003,17 +4089,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="auth_req_id">string</param>
+        /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantCiba(
             string grant_type, string client_id, string client_secret, X509Certificate2 x509, 
-            string auth_req_id, out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            string dPoPProof, string auth_req_id,
+            out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
             string jwkString = "";
             err = new Dictionary<string, string>();
+
+            //  **DPoP の証明が在れば検証する**（#311 の段階 1）。
+            //    **ここで見るのは、code を使う前**である — **断った後に retry できるように。**
+            if (!CmnEndpoints.CheckDPoP(dPoPProof, out string jkt, err))
+            {
+                return false;
+            }
 
             if (Config.EnableCibaGrantType)
             {
@@ -4074,7 +4169,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            x509, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out string aud, out string sub, JwtConst.ES256);
+                            x509, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out string aud, out string sub,
+                            JwtConst.ES256,
+                            // **DPoP の鍵に縛る**（#311 の段階 1）
+                            jkt);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)
@@ -4105,7 +4203,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                         // Client Account
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "");
+                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "", jkt);
 
                         return true;
                     }
@@ -5465,20 +5563,75 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region DPoP（#311 の段階 1）
+
+        /// <summary>DPoP の証明が在れば検証する（#311 の段階 1）</summary>
+        /// <param name="dPoPProof">`DPoP` ヘッダの値（無ければ空）</param>
+        /// <param name="jkt">out : 鍵の指紋（証明が無ければ空）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// **証明が無ければ、何もしないで true を返す** —
+        /// **DPoP を使わないクライアントは、従来どおり bearer** である
+        /// （**既定の挙動を変えない**）。
+        ///
+        /// **証明が在って通らなければ、`invalid_dpop_proof` で断る**（RFC 9449 §5）。
+        /// **黙って bearer に落とさない** — **落とすと、縛ったつもりのクライアントが縛られない。**
+        ///
+        /// **`htu` は設定から作る**（`CmnDPoP.TokenEndpointUri`。**要求の `Host` を信じない**）。
+        /// </remarks>
+        private static bool CheckDPoP(
+            string dPoPProof, out string jkt, Dictionary<string, string> err)
+        {
+            jkt = "";
+
+            if (string.IsNullOrEmpty(dPoPProof))
+            {
+                return true;
+            }
+
+            if (CmnDPoP.Verify(dPoPProof, "POST", CmnDPoP.TokenEndpointUri,
+                out jkt, out string errDescription))
+            {
+                return true;
+            }
+
+            err.Add(OAuth2AndOIDCConst.error, CmnDPoP.InvalidDPoPProof);
+            err.Add(OAuth2AndOIDCConst.error_description, errDescription);
+
+            return false;
+        }
+
+        #endregion
+
         #region CreateAccessTokenResponse
 
         /// <summary>CreateAccessTokenResponse</summary>
         /// <param name="access_token">string</param>
         /// <param name="refresh_token">string</param>
         /// <param name="jwkString">string</param>
+        /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <returns>Dictionary(string, string)</returns>
+        /// <remarks>
+        /// **`token_type` は、縛ったかどうかで変わる**（RFC 9449 §5）。
+        ///
+        /// | | `token_type` |
+        /// |---|---|
+        /// | **DPoP の証明が通った** | **`DPoP`** |
+        /// | それ以外 | `bearer`（従来どおり） |
+        ///
+        /// **クライアントは `token_type` を見て、使うときの出し方を決める**
+        /// （`Authorization: DPoP …` ＋ 証明。**段階 2 で照合する**）。
+        /// </remarks>
         private static Dictionary<string, string> CreateAccessTokenResponse(
-            string access_token, string refresh_token, string jwkString)
+            string access_token, string refresh_token, string jwkString, string jkt = null)
         {
             Dictionary<string, string> ret = new Dictionary<string, string>();
 
             // token_type
-            ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
+            ret.Add(OAuth2AndOIDCConst.token_type,
+                string.IsNullOrEmpty(jkt)
+                    ? OAuth2AndOIDCConst.Bearer.ToLower() : CmnDPoP.TokenType);
 
             // access_token
             ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);

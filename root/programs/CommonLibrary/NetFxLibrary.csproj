@@ -126,6 +126,7 @@
     <Compile Include="TokenProviders\CmnEndpoints.cs" />
     <Compile Include="TokenProviders\CmnIdToken.cs" />
     <Compile Include="TokenProviders\CmnLogoutToken.cs" />
+    <Compile Include="TokenProviders\CmnDPoP.cs" />
     <Compile Include="TokenProviders\SigningKeys.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
