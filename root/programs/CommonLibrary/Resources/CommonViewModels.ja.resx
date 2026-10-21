@@ -168,6 +168,9 @@
   <data name="BackChannelLogoutUri" xml:space="preserve">
     <value>backchannel_logout_uri</value>
   </data>
+  <data name="FrontChannelLogoutUri" xml:space="preserve">
+    <value>frontchannel_logout_uri</value>
+  </data>
   <data name="RedirectUriCode" xml:space="preserve">
     <value>redirect_uri_code</value>
   </data>
@@ -275,6 +278,9 @@
   </data>
   <data name="BackChannelLogoutUriDescription" xml:space="preserve">
     <value>OP のセッションが終わったときに logout_token を POST する先。**https のみ**（ループバックの http は許す）。**受け取らないならハイフン（-）を入れる。**</value>
+  </data>
+  <data name="FrontChannelLogoutUriDescription" xml:space="preserve">
+    <value>OP のセッションが終わったときに iframe で開く先（iss と sid が付く）。**https のみ**（ループバックの http は許す）。**受け取らないならハイフン（-）を入れる。**</value>
   </data>
   <data name="SubjectTypesDescription" xml:space="preserve">
     <value>sub に入れる識別子の種別。public は利用者の識別子、**pairwise はクライアントごとに違う値（PPID）**。</value>

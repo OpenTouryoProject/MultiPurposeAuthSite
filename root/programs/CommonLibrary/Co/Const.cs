@@ -48,6 +48,7 @@
 //*  2026/10/18  玄人 幸道         registration_access_token のハッシュの上限を追加（#307 の段階 2）
 //*  2026/10/21  玄人 幸道         セッションの識別子と sid クレームを追加（#310 の段階 1）
 //*  2026/10/21  玄人 幸道         logout_token と受け口の定数を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout の受け口の定数を追加（#310 の段階 3）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method の上限を追加（#307 の段階 3）
 //**********************************************************************************
 
@@ -238,6 +239,14 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
         public const string TestSelfLogout = "test_self_logout";
+
+        /// <summary>Front-Channel Logout の受け口のテスト用の値（#310 の段階 3）</summary>
+        /// <remarks>
+        /// **ブラウザが `iframe` で開く口**である（**`logout_token` は来ない**。`iss` と `sid` だけ）。
+        /// **E2E は `iframe` を開けない**ので、**テストが自分で叩く**（`TestFrontChannelLogoutBox`）。
+        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
+        /// </remarks>
+        public const string TestSelfFrontChannelLogout = "test_self_fclogout";
 
         /// <summary>Back-Channel Logout の受け口のテスト用の値（#310 の段階 2）</summary>
         /// <remarks>

@@ -196,6 +196,22 @@
         </div>
     </div>
     <div class="form-group">
+        @Html.LabelFor(m => m.FrontChannelLogoutUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @*  **Front-Channel Logout の受け先**（#310 の段階 3）。
+                **ブラウザが `iframe` で開く URL**（`iss` と `sid` が付く）。
+                **受け取らない RP はハイフン**（他の URI の項目と同じ）。 *@
+            @Html.TextBoxFor(m => m.FrontChannelLogoutUri, new { @class = "form-control", @list = "list-FrontChannelLogoutUri" })
+            <datalist id="list-FrontChannelLogoutUri">
+                @foreach (string candidate in Model.FrontChannelLogoutUriCandidates)
+                {
+                    <option value="@candidate"></option>
+                }
+            </datalist>
+            <p class="help-block">@Html.DescriptionFor(m => m.FrontChannelLogoutUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
         @Html.LabelFor(m => m.SubjectTypes, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.SubjectTypes, Model.DdlSubjectTypesItems, new { @class = "form-control" })

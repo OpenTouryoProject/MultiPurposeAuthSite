@@ -36,6 +36,7 @@
 //*  2026/10/21  玄人 幸道         jwks_uri を受け付ける（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         software_statement が主張した jwks_uri も温める（#309 の段階 2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri は動的登録で変えさせない（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         frontchannel_logout_uri も動的登録で変えさせない（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -437,7 +438,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | **要求から作り直す**（**段階 3**） | `TokenEndpointAuthMethod`（**省いたら、秘密ベースに戻る**） |
         /// | **要求に在れば置き換え、無ければ持ち越す**（**段階 3**） | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` |
         /// | **要求が片方を入れたら、もう片方は消える**（**#309 の段階 1**） | `Jwk*` ↔ `JwksUri`（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
-        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `BackChannelLogoutUri` / `WebOrigins` / `RequestObjectSigningAlg`） |
+        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `BackChannelLogoutUri` / `FrontChannelLogoutUri` / `WebOrigins` / `RequestObjectSigningAlg`） |
         ///
         /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
         /// > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
@@ -563,6 +564,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **動的登録では設定できない**（#310 の段階 2）。
             //    **RFC 7591 のメタデータではない**ので、**画面と設定ファイルからだけ入れる。**
             model.BackChannelLogoutUri = current.BackChannelLogoutUri;
+            model.FrontChannelLogoutUri = current.FrontChannelLogoutUri;
             model.WebOrigins = current.WebOrigins;
             model.RequestObjectSigningAlg = current.RequestObjectSigningAlg;
 

@@ -59,6 +59,7 @@
 //*  2026/10/21  玄人 幸道         jwks_uri を引く口を追加（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         設定ファイルの jwks_uri を集める口を追加（#309 の段階 2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を引く口と HttpClient を渡す口を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         frontchannel_logout_uri を引く口を追加（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -897,6 +898,43 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public HttpClient GetOAuth2HttpClient()
         {
             return this.OAuth2HttpClient;
+        }
+
+        #endregion
+
+        #region GetClientsFrontChannelLogoutUri
+
+        /// <summary>client_idからfrontchannel_logout_uriを取得する（#310 の段階 3）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>frontchannel_logout_uri（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **登録が無い相手には、ブラウザ経由でも伝えない**
+        /// （**Front-Channel Logout に対応していない RP** である）。
+        /// 登録は 1 本（`backchannel_logout_uri` と同じ形）。
+        /// 定数値（`test_self_fclogout`）の解決は、呼び出し側（`FrontChannelLogout`）で行う。
+        /// </remarks>
+        public string GetClientsFrontChannelLogoutUri(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("frontchannel_logout_uri"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["frontchannel_logout_uri"];
+                }
+            }
+
+            // Saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
+            {
+                return model.FrontChannelLogoutUri ?? "";
+            }
+
+            return "";
         }
 
         #endregion

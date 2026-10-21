@@ -97,6 +97,8 @@
     <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />
     <Compile Include="Extensions\Sts\SessionClientProvider.cs" />
     <Compile Include="Extensions\Sts\BackChannelLogout.cs" />
+    <Compile Include="Extensions\Sts\FrontChannelLogout.cs" />
+    <Compile Include="Extensions\Sts\TestFrontChannelLogoutBox.cs" />
     <Compile Include="Extensions\Sts\TestLogoutTokenBox.cs" />
     <Compile Include="Extensions\Sts\TestClients.cs" />
     <Compile Include="Extensions\Sts\UserClaims.cs" />

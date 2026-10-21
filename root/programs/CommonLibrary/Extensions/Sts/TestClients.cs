@@ -38,6 +38,7 @@
 //*  2026/10/09  玄人 幸道         TestClient_15 の折り返し先を、記号から実 URL に変えた（C-10）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を写し、TestClient_24 を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -299,6 +300,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Overrides = new Dictionary<string, string>()
                 {
                     { "backchannel_logout_uri", "test_self_bclogout" },
+                    { "post_logout_redirect_uri", "test_self_logout" }
+                }
+            },
+            new Entry()
+            {
+                // **Front-Channel Logout の受け先を登録した**（#310 の段階 3）。
+                //   **Back-Channel の TestClient_26 とは別にしてある** —
+                //   **あちらでログアウトすると、応答が `iframe` の画面になり**、
+                //   **段階 2 の測り（302 を見ている）が変わってしまう。**
+                //   **`post_logout_redirect_uri` も登録**（**画面の後に戻る先**を測るため）。
+                ClientName = "TestClient_28", ClientId = "e2e0tc28000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "frontchannel_logout_uri", "test_self_fclogout" },
                     { "post_logout_redirect_uri", "test_self_logout" }
                 }
             },
@@ -568,6 +584,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case "backchannel_logout_uri":
                     model.BackChannelLogoutUri = value;
+                    break;
+
+                case "frontchannel_logout_uri":
+                    model.FrontChannelLogoutUri = value;
                     break;
 
                 case "subject_types":

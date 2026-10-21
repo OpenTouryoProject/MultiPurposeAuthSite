@@ -53,6 +53,7 @@
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22とACS URLを追加（#275）
 //*  2026/10/19  玄人 幸道         private_key_jwtのTestClient_24を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -164,6 +165,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **`RT-310.6`（トークンを発行していない相手には伝えない）が測れなくなる。**
         /// </remarks>
         public const string TestClient_27 = "TestClient_27";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**frontchannel_logout_uri を登録**したクライアント（#310 の段階 3）。
+        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// </summary>
+        /// <remarks>
+        /// 登録値は定数（test_self_fclogout）で、**サーバ側で URL に解決される**
+        /// （**受け口はサイト自身の `/Account/FrontChannelLogoutClient`**）。
+        /// **`post_logout_redirect_uri` も登録してある**（画面の後に進む先を測るため）。
+        ///
+        /// **Back-Channel の TestClient_26 とは別である** —
+        /// **こちらでログアウトすると、応答が `iframe` の画面（200）になる。**
+        /// </remarks>
+        public const string TestClient_28 = "TestClient_28";
 
         /// <summary>
         /// TestClient（normal）を写し、**subject_types を pairwise にした**クライアント（#140 の段階 2）。
@@ -388,6 +403,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_25, "e2e0tc25000000000000000000000000" },
                 { KnownClients.TestClient_26, "e2e0tc26000000000000000000000000" },
                 { KnownClients.TestClient_27, "e2e0tc27000000000000000000000000" },
+                { KnownClients.TestClient_28, "e2e0tc28000000000000000000000000" },
                 { KnownClients.TestClient_9,  "e2e0tc09000000000000000000000000" },
                 { KnownClients.TestClient_10, "e2e0tc10000000000000000000000000" },
                 { KnownClients.TestClient_11, "e2e0tc11000000000000000000000000" },
@@ -449,6 +465,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static string PostLogoutRedirectUri(IdPClient client)
         {
             return Flows.ResolveRedirectUri(client, "test_self_logout");
+        }
+
+        /// <summary>
+        /// TestClient_28 に登録された frontchannel_logout_uri の**解決後の値**（#310 の段階 3）。
+        /// </summary>
+        /// <param name="client">IdPClient（対象ごとに URL が違う）</param>
+        /// <returns>`iframe` で開かれる URL（`iss` と `sid` は付いていない）</returns>
+        /// <remarks>
+        /// **サーバ側の解決（test_self_fclogout → クライアント側の口 ＋
+        /// /Account/FrontChannelLogoutClient）と同じ値**を作る。
+        /// </remarks>
+        public static string FrontChannelLogoutUri(IdPClient client)
+        {
+            return Flows.ResolveRedirectUri(client, "test_self_fclogout");
         }
     }
 
@@ -547,6 +577,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             if (value == "test_self_logout")
             {
                 return client.ToLocalUrl(root + "/Home/Index");
+            }
+
+            // **Front-Channel Logout の受け口**（#310 の段階 3）。
+            //   サーバ側は「クライアント側の口 ＋ /Account/FrontChannelLogoutClient」。
+            if (value == "test_self_fclogout")
+            {
+                return client.ToLocalUrl(root + "/Account/FrontChannelLogoutClient");
             }
 
             // test_self_saml やカスタム スキーム（myapp:/oauthredirect）は、そのまま。
@@ -842,7 +879,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_26
-                || clientName == KnownClients.TestClient_27)
+                || clientName == KnownClients.TestClient_27
+                || clientName == KnownClients.TestClient_28)
             {
                 // **Back-Channel Logout の受け先を足しただけ**（#310 の段階 2）。
                 //   client_secret は写す元のまま。

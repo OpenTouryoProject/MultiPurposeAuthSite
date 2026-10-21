@@ -37,6 +37,7 @@
 //*  2026/10/20  玄人 幸道         所有者（OwnerUserId）を追加（#307 の段階 5-a-1）
 //*  2026/10/20  玄人 幸道         編集中の印（Editing）を追加（#307 の段階 5-a-2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         frontchannel_logout_uri を追加（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -125,6 +126,31 @@ namespace MultiPurposeAuthSite.ViewModels
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "post_logout_redirect_uri")]
         public string PostLogoutRedirectUri { get; set; }
+
+        /// <summary>FrontChannelLogoutUri（#310 の段階 3）</summary>
+        /// <remarks>
+        /// **ブラウザ経由でログアウトを伝える先**
+        /// （OIDC Front-Channel Logout 1.0 §2 の frontchannel_logout_uri）。
+        /// **登録が無ければ、その RP には伝えない。**
+        ///
+        /// **`iframe` で開かれる URL** である。**`iss` と `sid` が付く。**
+        /// **`https` を求める**（**ループバックの `http` だけ許す**）。
+        /// **判定は開く側**（`FrontChannelLogout`）**で行う** — **`backchannel_logout_uri` と同じ規則。**
+        ///
+        /// **`frontchannel_logout_session_required` は持たない。**
+        /// **この実装は必ず `iss` と `sid` を付ける**ので、
+        /// **「要るか」を RP ごとに持つ意味が無い**（Discovery では
+        /// `frontchannel_logout_session_supported` を true で広告している）。
+        /// </remarks>
+        [Display(Name = "FrontChannelLogoutUri", Description = "FrontChannelLogoutUriDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        //[Url] localhost や IPアドレスが入力できない。
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "frontchannel_logout_uri")]
+        public string FrontChannelLogoutUri { get; set; }
 
         /// <summary>BackChannelLogoutUri（#310 の段階 2）</summary>
         /// <remarks>
@@ -219,6 +245,17 @@ namespace MultiPurposeAuthSite.ViewModels
             get
             {
                 return new List<string>() { Const.TestSelfLogout };
+            }
+        }
+
+        /// <summary>frontchannel_logout_uri の候補（#310 の段階 3）</summary>
+        [JsonIgnore]
+        public List<string> FrontChannelLogoutUriCandidates
+        {
+            get
+            {
+                // **使わないなら "-" を入れる**（他の項目と同じ）。
+                return new List<string>() { Const.TestSelfFrontChannelLogout, "-" };
             }
         }
 

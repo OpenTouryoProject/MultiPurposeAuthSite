@@ -1118,11 +1118,77 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### ブラウザ経由でログアウトを伝える（`RT-310.7`〜`.9`。#310 の段階 3）
+
+| | 測ること |
+|---|---|
+| **`RT-310.7`** | **Discovery が `frontchannel_logout_supported` と `frontchannel_logout_session_supported` を広告する**。**`check_session_iframe` は出ていない**（Session Management は見送り） |
+| **`RT-310.8`** | **`/end_session` が `iframe` の画面を返す**（**302 ではなく 200**）。**URL に `iss` と `sid` が付く**。**その URL を叩くと RP に届く**。**登録が無い RP の `iframe` は無い**。**画面の後は、登録された戻り先へ `state` 付きで進む** |
+| **`RT-310.9`** | **`/Account/LogOff` でも画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**（**302 のまま**） |
+
+###### E2E はブラウザの代わりをする
+
+**`HttpClient` は `iframe` を開かない。**
+**テストが画面から `src` を取り出して、自分で叩く。**
+**叩かれたことは受信箱で見る**（`/Account/FrontChannelLogoutBox`）。
+
+| 口 | |
+|---|---|
+| `GET /Account/FrontChannelLogoutClient` | **叩かれたことを覚える**（`iss` と `sid`） |
+| `GET /Account/FrontChannelLogoutBox` | **覚えているものを返す**（`?clear=true` で空にする） |
+
+> **どちらも `IsLockedDownTestEndpoints` で閉じる。** **閉じている配備では Skip する。**
+
+###### 画面が出る条件に気を付ける
+
+**登録が在る RP が 1 つでも居れば、応答が 302 から 200 に変わる。**
+**だから、Back-Channel の測り（`RT-310.5` / `.6`。302 を見ている）とは
+別のクライアントを使っている。**
+
+| クライアント | 登録 | ログアウトの応答 |
+|---|---|---|
+| **`TestClient_26`** | `backchannel_logout_uri` | **302**（従来どおり） |
+| **`TestClient_28`** | `frontchannel_logout_uri` | **200**（`iframe` の画面） |
+
+###### 歯抜け（実測 2026/10/21）
+
+| 壊すもの | 実測 |
+|---|---|
+| **`iframe` を 1 つも出さない** | **`RT-310.8` と `RT-310.9` が落ちる**（**6 件 / 成功 2 / 失敗 4**。**302 が返る**）。**`RT-310.7`（広告）は通ったまま** |
+| **`sid` を付けない**（`iss` だけ） | **`RT-310.8` と `RT-310.9` の「sid が id_token と同じ」が落ちる**（**6 件 / 成功 2 / 失敗 4**） |
+| **登録を見ずに、全ての相手を `iframe` に入れる** | **`RT-310.8` の「iframe の数」が 2 になり、`RT-310.9` の「登録が無ければ画面が出ない」も落ちる**（**6 件 / 成功 2 / 失敗 4**） |
+
+###### 測っていないこと
+
+| | |
+|---|---|
+| **本物の `iframe`** | **ブラウザで開いていない**（**テストが URL を叩いている**）。**`display:none` の `iframe` が実際に要求を出すこと自体は、ブラウザの振る舞い**である |
+| **進むまでの待ち** | **`meta refresh` の 2 秒は測っていない**（**画面の HTML だけを見ている**） |
+| **再認証の経路の画面** | **`prompt=login` / `max_age` / 別のアカウントでログイン**でも同じ口を呼んでいるが、**測っていない**（**登録が在る RP が居るときだけ画面が出る**） |
+| **届いたかどうか** | **仕様上、OP には分からない**（`iframe` の中は見えない）。**Back-Channel と補い合う** |
+
+###### 実測（2026/10/21）
+
+| | 結果 |
+|---|---|
+| クリーン ビルド | **net48 / net10.0 とも エラー 0 / 警告 0** |
+| `RT-310.*` ＋ `RT-232.*`（単独。`mem`） | **32 件 / 成功 32 / 失敗 0** |
+| `mem`（既定の通し） | **731 件 / 成功 723 / 失敗 0 / Skip 8**（原本 **374 件**。**1 回目で 失敗 0**） |
+| `sql`（SQL Server） | **44 件 / 成功 44 / 失敗 0** |
+| `ora`（Oracle） | **44 件 / 成功 44 / 失敗 0** |
+| `npg`（PostgreSQL） | **44 件 / 成功 22 / 失敗 0 ＋ Skip 22**（netfx は PostgreSQL を使えない。従来どおり） |
+
+> **DDL を変えたので 3 方言とも測る**（**`Saml2OAuth2Data` に列がもう 1 つ**）。
+> **`store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
+>
+> **`RT-232.*` も一緒に回す** — **「Front-Channel は広告しない」を見ていた検証**を、
+> **広告するようになったことに合わせて直した**ためである（#232 の測りの更新）。
+
 ##### ログアウトを RP へ伝える（`RT-310.4`〜`.6`。#310 の段階 2）
 
 | | 測ること |
 |---|---|
-| **`RT-310.4`** | **Discovery が `backchannel_logout_supported` と `backchannel_logout_session_supported` を広告する**。**`frontchannel_logout_supported` は、まだ出ていない**（段階 3） |
+| **`RT-310.4`** | **Discovery が `backchannel_logout_supported` と `backchannel_logout_session_supported` を広告する**（**`frontchannel_logout_supported` は段階 3 で出た** — `RT-310.7`） |
 | **`RT-310.5`** | **`/end_session` でサインアウトすると、`backchannel_logout_uri` を登録した RP に `logout_token` が POST される**（**中身も見る**）。**登録が無い RP には届かない** |
 | **`RT-310.6`** | **同意画面を出しただけ・拒否された RP には伝えない**（**段階 2 の冒頭で直した**） |
 
@@ -1238,7 +1304,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | | |
 |---|---|
 | **掃除** | **10 分間隔で、`AuthCookieExpiresFromHours` ＋ 1 日より古い行を消す**（`CONFIGURATION.md`）。**E2E で 1 日待たない** |
-| **Front-Channel / Back-Channel Logout** | **Back-Channel は段階 2 で入った**（`RT-310.4`〜`.6`）。**Front-Channel は段階 3**で、**`RT-232.1` の「`frontchannel_logout_supported` が出ていない」はそのまま通る** |
+| **Front-Channel / Back-Channel Logout** | **Back-Channel は段階 2**（`RT-310.4`〜`.6`）、**Front-Channel は段階 3**（`RT-310.7`〜`.9`）**で入った**。**`RT-232.1` の「広告しない」を見ていた検証は、広告するようになったことに合わせて直した** |
 | **`sid` が入らない経路** | `grant_type=password` / `client_credentials` / CIBA / Device（**ブラウザのセッションを経ていない**）。**クレームを付けないことは、実装では決めてあるが測っていない** |
 
 ###### 実測（2026/10/21）

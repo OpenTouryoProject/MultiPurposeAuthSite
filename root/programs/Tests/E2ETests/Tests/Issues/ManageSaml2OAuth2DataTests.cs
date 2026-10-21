@@ -33,6 +33,7 @@
 //*  2026/10/14  玄人 幸道         フォームの拾い方を共有ヘルパへ出した（#299）
 //*  2026/10/20  玄人 幸道         RT-277.9〜.11（一覧）を足した（#307 の段階 5-a-2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri の入力欄も見る（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         frontchannel_logout_uri の入力欄も見る（#310 の段階 3）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -206,7 +207,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 foreach (string name in new string[] {
                     "RedirectUriSaml", "RedirectUriCode", "RedirectUriToken", "PostLogoutRedirectUri",
-                    "BackChannelLogoutUri" })
+                    "BackChannelLogoutUri", "FrontChannelLogoutUri" })
                 {
                     bool linked = Regex.IsMatch(html,
                         "name=\"" + name + "\"[^>]*list=\"list-" + name + "\"")
@@ -228,7 +229,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "RedirectUriCode", "test_self_code" },
                     { "RedirectUriToken", "test_self_token" },
                     { "PostLogoutRedirectUri", "test_self_logout" },
-                    { "BackChannelLogoutUri", "test_self_bclogout" } })
+                    { "BackChannelLogoutUri", "test_self_bclogout" },
+                    { "FrontChannelLogoutUri", "test_self_fclogout" } })
                 {
                     string list = ManageSaml2OAuth2DataTests.DataList(html, pair.Key);
 

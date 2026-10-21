@@ -3690,12 +3690,14 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - end_session_endpoint が有る
 - https である
-- Front-Channel Logout は広告しない
+- Front-Channel Logout も広告されている（#310 の段階 3）
 
 **観測（判定しない）**
 
 - 広告された URL
   - 設定キー OAuth2EndSessionEndpoint（既定 /end_session）で決まる。
+- Session Management
+  - **見送っている**（third-party cookie を読む仕組み。#310）。
 
 ## RT-232.2 id_token_hint 付きの GET で、サインアウトして post_logout_redirect_uri へ戻る
 
@@ -5774,11 +5776,13 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - RedirectUriToken に候補が付いている
 - PostLogoutRedirectUri に候補が付いている
 - BackChannelLogoutUri に候補が付いている
+- FrontChannelLogoutUri に候補が付いている
 - RedirectUriSaml の候補に test_self_saml が在る
 - RedirectUriCode の候補に test_self_code が在る
 - RedirectUriToken の候補に test_self_token が在る
 - PostLogoutRedirectUri の候補に test_self_logout が在る
 - BackChannelLogoutUri の候補に test_self_bclogout が在る
+- FrontChannelLogoutUri の候補に test_self_fclogout が在る
 - 既定は test_self_code
 
 **補足**
@@ -7708,14 +7712,14 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. 広告を読む
-1. Front-Channel Logout は、まだ広告しない（段階 3）
+1. Front-Channel Logout も広告されている（段階 3 で入った）
 
 **検証（合否を判定する）**
 
 - backchannel_logout_supported が true
 - backchannel_logout_session_supported が true
 - end_session_endpoint も在る（#232 のまま）
-- frontchannel_logout_supported は出ていない
+- frontchannel_logout_supported が出ている
 
 **補足**
 
@@ -7788,6 +7792,101 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **受信箱を空にしてから測る**（前のケースの通知が混ざらないように）。
 - **同意画面を出した時点では、台帳に行が無い。** **`sid` も、そのとき初めて作られる**（`AddSidClaim` は発行の直前で呼ぶ）。
+
+## RT-310.7 **Discovery が `frontchannel_logout_supported` と `frontchannel_logout_session_supported` を広告する**
+
+| | |
+|---|---|
+| 観点 | **RP は、どちらの伝え方に対応しているかを知る必要が在る。****受け口を持てない RP**（ブラウザの中だけで動く RP）**は、Front-Channel しか使えない。****`sid` を付けることも広告する** — **RP は `sid` で、どのセッションを閉じるかを決める。** |
+| 根拠 | OIDC Front-Channel Logout 1.0 §3 / #310 の段階 3 |
+| テスト | `RT31007_DiscoveryがFrontChannelLogoutを広告する` |
+
+**手順**
+
+1. 広告を読む
+1. 段階 2 の広告も、そのまま在る
+1. Session Management は見送ったので、広告しない
+
+**検証（合否を判定する）**
+
+- frontchannel_logout_supported が true
+- frontchannel_logout_session_supported が true
+- backchannel_logout_supported が true
+- check_session_iframe は出ていない
+
+**補足**
+
+- **Session Management（`check_session_iframe`）は見送った** — **third-party cookie を読む仕組み**で、**現代のブラウザでは効かなくなりつつある。**
+
+## RT-310.8 **`/end_session` が `iframe` の画面を返し、`iss` と `sid` を付けた URL で RP を叩ける**。**登録が無い RP の `iframe` は無い**。**画面の後は、登録された戻り先へ進む**
+
+| | |
+|---|---|
+| 観点 | **受け口を持てない RP には、ブラウザ経由でしか伝えられない。****`iframe` の URL に `iss` と `sid` が要る** — **Cookie が送られない文脈も在る**ので、**URL だけで「どの OP の・どのセッションか」が分からなければ、RP は閉じるセッションを決められない。** |
+| 根拠 | OIDC Front-Channel Logout 1.0 §2 / #310 の段階 3 |
+| テスト | `RT31008_end_sessionがiframeの画面を返す` |
+
+**手順**
+
+1. 受け口を登録した RP に、トークンを発行する
+1. 受け口を登録していない RP にも、トークンを発行する
+1. RP からのログアウト（/end_session）
+1. 画面に在る iframe
+1. 画面の後に進む先（meta refresh）
+1. ブラウザの代わりに、その URL を叩く
+
+**検証（合否を判定する）**
+
+- id_token に sid が在る（段階 1）
+- 2 つ目の RP にもトークンが出た（台帳に 2 行）
+- リダイレクトではなく、画面が返る（HTTP 200）
+- セッションが消えている
+- iframe の数
+- 登録された frontchannel_logout_uri で始まる
+- iss が付いている
+- sid は、その RP の id_token と同じ値
+- 登録していない RP の iframe は無い
+- 登録された post_logout_redirect_uri へ進む
+- state も付いている
+- 受け口が応える（2xx）
+- RP が受け取った回数
+- 受け取った sid が、id_token と同じ
+
+**補足**
+
+- **受信箱を空にしてから測る**（前のケースの記録が混ざらないように）。
+- **E2E のクライアントは `iframe` を開かない**ので、**画面から URL を取り出して自分で叩いた**（ブラウザの代わり）。**本物の RP は、この要求で自分のセッションを閉じる。**
+- **Back-Channel（段階 2）も同時に動く**（登録が在れば）。**この RP には `backchannel_logout_uri` を登録していない**ので、**ここで測っているのは Front-Channel だけ**である。
+
+## RT-310.9 **`/Account/LogOff`（OP 主導のサインアウト）でも `iframe` の画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**
+
+| | |
+|---|---|
+| 観点 | **伝えるのは「OP のセッションが終わるとき」である。****RP から言われたときだけ伝えるのでは、足りない。****一方で、登録している RP が 1 つも無い配備では、画面が増えてはならない** — **応答が変わると、既存の導線が壊れる。** |
+| 根拠 | OIDC Front-Channel Logout 1.0 §2 / #310 の段階 3 |
+| テスト | `RT31009_LogOffでも画面が出る` |
+
+**手順**
+
+1. 登録が無い RP だけのセッションでは、画面が出ない
+1. 登録が在る RP が居れば、画面が出る
+1. 画面の後は Home へ進む（RP の指定が無いので）
+
+**検証（合否を判定する）**
+
+- 前提: トークンが出た（台帳に 1 行）
+- 従来どおりリダイレクトで返る（HTTP 302）
+- 前提: id_token に sid が在る
+- 画面が返る（HTTP 200）
+- iframe の数
+- sid は、その RP の id_token と同じ値
+- 進む先が在る
+- セッションが消えている
+
+**補足**
+
+- **受信箱を空にしてから測る**（前のケースの記録が混ざらないように）。
+- **同じ口を、サインアウトの 5 か所から呼んでいる**（`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。**再認証の経路では、画面の後に同じ認可要求へ戻る**（測っていない）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

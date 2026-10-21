@@ -39,6 +39,7 @@
 //*  2026/10/20  玄人 幸道         所有者で引く口を追加（#307 の段階 5-a-1）
 //*  2026/10/20  玄人 幸道         並びを決め、所有者＋client_idで引く口を追加（#307 の段階 5-a-2）
 //*  2026/10/21  玄人 幸道         BackChannelLogoutUri の列を追加（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         FrontChannelLogoutUri の列を追加（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -140,7 +141,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **所有者**（#307 の段階 5-a）。**`Users.Id` を指す。** **空が在り得る。**
             "OwnerUserId",
             //  **ログアウトを伝える先**（#310 の段階 2）。**末尾に足す**（`ALTER … ADD` で揃う）。
-            "BackChannelLogoutUri"
+            "BackChannelLogoutUri",
+            //  **ブラウザ経由で伝える先**（#310 の段階 3）。**末尾に足す**（同上）。
+            "FrontChannelLogoutUri"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -338,8 +341,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("TokenEndpointAuthMethod", model.TokenEndpointAuthMethod);
             prm.Add("OwnerUserId", model.OwnerUserId);
 
-            //  **ログアウトを伝える先**（#310 の段階 2）。
+            //  **ログアウトを伝える先**（#310 の段階 2・3）。
             prm.Add("BackChannelLogoutUri", model.BackChannelLogoutUri);
+            prm.Add("FrontChannelLogoutUri", model.FrontChannelLogoutUri);
 
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
@@ -441,8 +445,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 TokenEndpointAuthMethod = model.TokenEndpointAuthMethod,
                 //  **所有者**（#307 の段階 5-a）。
                 OwnerUserId = model.OwnerUserId,
-                //  **ログアウトを伝える先**（#310 の段階 2）。
-                BackChannelLogoutUri = model.BackChannelLogoutUri
+                //  **ログアウトを伝える先**（#310 の段階 2・3）。
+                BackChannelLogoutUri = model.BackChannelLogoutUri,
+                FrontChannelLogoutUri = model.FrontChannelLogoutUri
             };
         }
 

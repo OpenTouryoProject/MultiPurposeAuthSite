@@ -1,0 +1,66 @@
+@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Account.FrontChannelLogout
+    //* クラス日本語名  ：Account.FrontChannelLogout（ログアウトをブラウザ経由で RP へ伝える画面）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/10/21  玄人 幸道         新規（#310 の段階 3）
+    //**********************************************************************************
+
+    Front-Channel Logout 1.0 §2 : OP は、登録された frontchannel_logout_uri を
+    iframe で開く。RP はその要求で自分のセッションを閉じる。
+
+    **この画面は通り道である。** iframe を並べて、少し待ってから戻り先へ進む。
+    **待つのは、iframe の要求が出るまで**（出る前に遷移すると、伝わらない）。
+
+    **JavaScript に頼らない。** meta refresh で進む
+    （**切っている利用者でも、リンクで進める**ようにもしてある）。
+*@
+
+@using System.Collections.Generic
+
+@{
+    ViewBag.Title = "Signing out";
+
+    List<string> iframeUrls = (List<string>)ViewBag.IframeUrls;
+    string continueUrl = (string)ViewBag.ContinueUrl;
+}
+
+@section HeaderScriptsSection{
+    @* **戻り先へ進む。** 2 秒は、iframe の要求が出るまでの猶予である。 *@
+    <meta http-equiv="refresh" content="2;url=@continueUrl" />
+}
+
+<h2>@ViewBag.Title</h2>
+
+<div class="col-md-8">
+    <p>Signing you out of the sites you signed in to ...</p>
+
+    @* **自動で進まなかったときのために、リンクも置く。** *@
+    <p><a href="@continueUrl">Continue</a></p>
+</div>
+
+@*  **ここが本体である。**
+    **幅も高さも 0 にして隠す**（表示するものではない）。
+    **`src` は OP が作った URL**（登録された frontchannel_logout_uri ＋ iss ＋ sid）。 *@
+@foreach (string url in iframeUrls)
+{
+    <iframe src="@url" width="0" height="0" style="display:none;border:0"
+            title="front-channel logout"></iframe>
+}
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

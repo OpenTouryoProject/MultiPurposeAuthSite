@@ -205,6 +205,9 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     --   **logout_token を POST する先**（Back-Channel Logout 1.0 §2.2）。
     --   **空なら、その RP には伝えない。**
     [BackChannelLogoutUri] [nvarchar](512) NULL,      -- Const.MaxLengthOfUri
+    -- ブラウザ経由で伝える先（#310 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
+    --   **iframe で開く URL**（Front-Channel Logout 1.0 §2）。**空なら伝えない。**
+    [FrontChannelLogoutUri] [nvarchar](512) NULL,     -- Const.MaxLengthOfUri
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

@@ -521,7 +521,7 @@ OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に
 | **いつ入るか** | **認可の口（`/authorize`）を通ったとき**。**ブラウザのセッションが在る経路だけ** |
 | **入らない経路** | `grant_type=password` / `client_credentials` / CIBA / Device Authorization Grant（**ブラウザのセッションを経ていない**）。**クレームを付けない**（**嘘の値を出さない**） |
 | **`refresh_token`** | **引き継ぐ**（取り直した `id_token` にも同じ値が入る） |
-| **Discovery** | **`backchannel_logout_supported` を出した**（段階 2）。**`frontchannel_logout_supported` は、まだ出さない**（段階 3） |
+| **Discovery** | **`backchannel_logout_supported`（段階 2）と `frontchannel_logout_supported`（段階 3）を出した**。**`check_session_iframe` は出さない**（Session Management は見送り） |
 
 #### RP ごとに別の値である
 
@@ -613,8 +613,9 @@ ALTER TABLE [SessionClient] WITH CHECK ADD CONSTRAINT [FK.SessionClient.Users_Us
 | **いつ** | **サインアウトの 5 か所**（`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン） |
 | **広告** | **`backchannel_logout_supported`** ＋ **`backchannel_logout_session_supported`**（どちらも true。**`sid` を必ず入れる**ため） |
 
-> **Front-Channel Logout（段階 3）と Session Management（見送り）は、まだ広告しない。**
-> **`frontchannel_logout_supported` は出ていない** — **できないことを広告しない。**
+> **Front-Channel Logout も広告している**（段階 3。下の節）。
+> **Session Management（`check_session_iframe`）は見送った**ので、**広告しない** —
+> **できないことを広告しない。**
 
 #### 登録（`backchannel_logout_uri`）— 列が 1 つ増える
 
@@ -681,6 +682,92 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN BackChannelLogoutUri varchar(512) NULL;
 > **どちらも `IsLockedDownTestEndpoints` で閉じる**（**本番では必ず閉じること**）。
 > **開いていれば、他人のログアウトの通知を読まれる。**
 > `ProductionCheck` が `IsLockedDownTestEndpoints` の警告を出すのは、この種の口が在るためである。
+
+
+### Front-Channel Logout — ブラウザ経由で伝える（#310 の段階 3）
+
+**Back-Channel（段階 2）では届かない RP が在る。**
+**受け口を持てない RP**（**ブラウザの中だけで動く RP**）**には、ブラウザに叩かせるしかない。**
+
+| | 誰が RP を叩くか | 届く相手 |
+|---|---|---|
+| **Back-Channel**（段階 2） | **OP のサーバ**（POST） | **受け口を持てる RP** |
+| **Front-Channel**（段階 3） | **利用者のブラウザ**（`iframe`） | **ブラウザの中だけで動く RP** も届く |
+
+**両方を登録してもよい。** **登録が在る方だけが動く。**
+
+#### 何が起きるか
+
+1. **サインアウトの経路で、台帳から「このセッションが触った RP」を読む**（**消す前**）
+2. **`frontchannel_logout_uri` の登録が在る相手の URL に、`iss` と `sid` を付ける**
+3. **その URL を `iframe` に並べた画面を返す**（`Views/Account/FrontChannelLogout.cshtml`）
+4. **ブラウザが `iframe` を開く** ＝ **RP が自分のセッションを閉じる**
+5. **画面は、少し待ってから進む先へ移る**（`meta refresh`。**2 秒**）
+
+| 呼び出し元 | 画面の後に進む先 |
+|---|---|
+| `/end_session` | **登録された `post_logout_redirect_uri`**（`state` 付き。無ければ Home） |
+| `/Account/LogOff` | Home |
+| `prompt=login` / `max_age` の再認証・別のアカウントでログイン | **同じ認可要求の URL**（**そのまま続ける**） |
+
+> **登録が在る RP が 1 つも無ければ、画面は出ない。**
+> **その配備では、応答も導線も従来どおり**である（**リダイレクトで終わる**）。
+
+> **進む先に、外から来た URL は入らない。**
+> **`post_logout_redirect_uri` は登録と完全一致を確かめた後の値**であり、
+> **他は自分の URL** である（**オープン リダイレクタにしない**）。
+
+#### 登録（`frontchannel_logout_uri`）— 列がもう 1 つ増える
+
+| | |
+|---|---|
+| **どこで登録するか** | **クライアント登録の画面と、設定ファイル**（`OAuth2ClientsInformation` の `frontchannel_logout_uri`） |
+| **動的登録（RFC 7591）では設定できない** | **`backchannel_logout_uri` と同じ扱い**（更新のときは持ち越す） |
+| **URL の規則** | **`https` のみ。** **ループバックの `http` だけ許す**（**ブラウザが開くので、平文だと混在コンテンツで止められることも在る**） |
+| **候補** | **`test_self_fclogout`**（**自己テスト用**） |
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [FrontChannelLogoutUri] [nvarchar](512) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD "FrontChannelLogoutUri" NVARCHAR2(512) NULL;
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN FrontChannelLogoutUri varchar(512) NULL;
+```
+
+> **`frontchannel_logout_session_required` は持たない。**
+> **この実装は必ず `iss` と `sid` を付ける**ので、**RP ごとに持つ意味が無い**
+> （`backchannel_logout_session_required` と同じ判断）。
+
+#### 広告
+
+**`frontchannel_logout_supported` ＋ `frontchannel_logout_session_supported`**（どちらも true）。
+
+**`check_session_iframe` は出さない** — **Session Management は見送った**
+（**third-party cookie を読む仕組み**で、**現代のブラウザでは効かなくなりつつある**）。
+
+#### 受け口（**測るためのもの**）
+
+**本来は RP が持つ口**だが、**このサイトは自分の RP も兼ねている。**
+
+| 口 | |
+|---|---|
+| `GET /Account/FrontChannelLogoutClient` | **叩かれたことを覚える**（`iss` と `sid`。20 件まで） |
+| `GET /Account/FrontChannelLogoutBox` | **覚えているものを返す**（`?clear=true` で空にする） |
+
+> **どちらも `IsLockedDownTestEndpoints` で閉じる**（**本番では必ず閉じること**）。
+
+#### Front-Channel の限界（**仕様の側の限界**）
+
+| | |
+|---|---|
+| **届いたか分からない** | **`iframe` の中で何が起きたかは、OP には見えない。** **Back-Channel なら 2xx が返る** |
+| **ブラウザが閉じられたら終わり** | **画面を閉じられると、残りの `iframe` は開かれない**（**待ち時間を長くしても、確実にはならない**） |
+| **third-party cookie の遮断** | **RP の Cookie が送られないことが在る** — **だから `sid` を URL に載せる**（§2） |
+
+**この 2 つは補い合う。** **両方登録するのが、いちばん確実である。**
 
 #### `op_session` が無い認可要求は、1 回だけ送り返す（#310 の段階 2 の冒頭）
 
@@ -3284,7 +3371,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `TestUserSuffix` | `""`（空） | **E2E が渡す。手で設定しない** | **テスト利用者の名前に付ける接尾辞**（#260）。空なら `super_tanaka` / `tanaka`。**E2E は 2 つのサイトを同時に立てる**ので、**DB ストアでは同じ利用者の行を書き換え合う。**`test.ps1` がサイトごとに `_core` / `_netfx` を渡して分ける。**初期化済みの DB でも、居なければ作る**ので、接尾辞を変えても DB を作り直さなくてよい |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
-| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）。**`/Ping` は閉じない**（下の注意 3） |
+| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
 | `RequireVerifiedEmailForAccountLinking` | **`true`**（#140 の段階 1 で追加） | `true` のまま | **外部 ID を既存アカウントに結び付けるとき、上流が `email_verified: true` と言ったメアドだけを鍵にする。** **未設定でも `true`**（他の `Require*` と既定の向きが違う）。`false` にすると従来どおり（上流の言い値で結び付ける）。**Google は `email_verified` を写すようにしたので自動リンクできる。Microsoft Account は示せないので、`/Manage/ManageLogins` での明示的な追加になる** |
@@ -3321,6 +3408,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|
 | `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownTestEndpoints`） |
 | `/Account/BackChannelLogoutBox` | **404 が返る**（`IsLockedDownTestEndpoints`。#310 の段階 2。**開いていれば、他人のログアウトの通知を読まれる**） |
+| `/Account/FrontChannelLogoutBox` | **404 が返る**（同上。#310 の段階 3） |
 | 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
 | `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnableDebugTraceLog`） |

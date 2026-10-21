@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout の広告に追随（#310 の段階 3）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -121,12 +122,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "在る", string.IsNullOrEmpty(res.String("end_session_endpoint"))
                         ? "**無い**" : "在る");
 
-                r.Step("Front-Channel Logout は、まだ広告しない（段階 3）");
+                r.Step("Front-Channel Logout も広告されている（段階 3 で入った）");
 
-                r.Verify("frontchannel_logout_supported は出ていない",
-                    string.IsNullOrEmpty(res.String("frontchannel_logout_supported")),
-                    "無い", string.IsNullOrEmpty(res.String("frontchannel_logout_supported"))
-                        ? "無い" : "**出ている**（できないことを広告している）");
+                //  **段階 2 の時点では「出ていない」ことを見ていた**（#310）。
+                //    **段階 3 で実装したので、出ていることを見る**
+                //    （**中身は `RT-310.7`** で測る）。
+                r.Verify("frontchannel_logout_supported が出ている",
+                    !string.IsNullOrEmpty(res.String("frontchannel_logout_supported")),
+                    "出ている", string.IsNullOrEmpty(res.String("frontchannel_logout_supported"))
+                        ? "**出ていない**" : "出ている");
 
                 r.Note("**Session Management（`check_session_iframe`）は見送った**"
                     + "（third-party cookie を読む仕組みで、現代のブラウザでは効かなくなりつつある）。"

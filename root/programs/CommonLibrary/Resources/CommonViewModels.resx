@@ -192,6 +192,9 @@
   <data name="BackChannelLogoutUri" xml:space="preserve">
     <value>backchannel_logout_uri</value>
   </data>
+  <data name="FrontChannelLogoutUri" xml:space="preserve">
+    <value>frontchannel_logout_uri</value>
+  </data>
   <data name="RedirectUriCode" xml:space="preserve">
     <value>redirect_uri_code</value>
   </data>
@@ -275,6 +278,9 @@
   </data>
   <data name="BackChannelLogoutUriDescription" xml:space="preserve">
     <value>Where a logout_token is POSTed when the OP session ends. https only (loopback http is allowed). Put a hyphen when the client does not receive it.</value>
+  </data>
+  <data name="FrontChannelLogoutUriDescription" xml:space="preserve">
+    <value>Loaded in an iframe when the OP session ends, with iss and sid. https only (loopback http is allowed). Put a hyphen when the client does not receive it.</value>
   </data>
   <data name="SubjectTypesDescription" xml:space="preserve">
     <value>What goes into sub. public is the user identifier; pairwise is a per-client value (PPID).</value>

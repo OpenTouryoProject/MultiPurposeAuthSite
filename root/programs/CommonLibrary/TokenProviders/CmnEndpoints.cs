@@ -126,6 +126,7 @@
 //*  2026/10/20  玄人 幸道         TryReadJwtAlg を公開（software_statement の検証で使う。#307 の段階 4）
 //*  2026/10/21  玄人 幸道         client_assertion の鍵を jwks_uri からも引く（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 2）
+//*  2026/10/21  玄人 幸道         Front-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -410,6 +411,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //    （**出すと「できる」と読まれる**）。
                 OpenIDConfig.Add("backchannel_logout_supported", true);
                 OpenIDConfig.Add("backchannel_logout_session_supported", true);
+
+                //  **Front-Channel Logout に対応したことを広告する**（#310 の段階 3）。
+                //    | 項目 | 意味 |
+                //    |---|---|
+                //    | `frontchannel_logout_supported` | **登録した `frontchannel_logout_uri` を `iframe` で開く** |
+                //    | `frontchannel_logout_session_supported` | **その URL に `iss` と `sid` を付ける** |
+                //
+                //    **`sid` は必ず付ける**ので、後者も true である。
+                //    **Session Management（`check_session_iframe`）は見送った**ので、出さない
+                //    （**third-party cookie を読む仕組み**で、現代のブラウザでは効かなくなりつつある）。
+                OpenIDConfig.Add("frontchannel_logout_supported", true);
+                OpenIDConfig.Add("frontchannel_logout_session_supported", true);
 
                 #endregion
 
@@ -4427,6 +4440,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // **ログアウト後の戻り先のテスト用**（#232）。
                 //   サイトごとに URL が違う（net48 / net10.0）ので、定数で登録して、ここで解決する。
                 ret = Config.OAuth2ClientEndpointsRootURI + "/Home/Index";
+            }
+            else if (constr.ToLower() == Const.TestSelfFrontChannelLogout)
+            {
+                // **Front-Channel Logout の受け口のテスト用**（#310 の段階 3）。
+                //   **ブラウザが `iframe` で開く口**（`IsLockedDownTestEndpoints` で閉じる）。
+                ret = Config.OAuth2ClientEndpointsRootURI + "/Account/FrontChannelLogoutClient";
             }
             else if (constr.ToLower() == Const.TestSelfBackChannelLogout)
             {
