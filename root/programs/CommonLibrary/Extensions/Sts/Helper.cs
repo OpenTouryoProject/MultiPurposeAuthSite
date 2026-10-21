@@ -57,6 +57,7 @@
 //*  2026/10/18  玄人 幸道         クライアント登録の有無を返す口を追加（#307 の段階 2）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を引く口を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         jwks_uri を引く口を追加（#309 の段階 1）
+//*  2026/10/21  玄人 幸道         設定ファイルの jwks_uri を集める口を追加（#309 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1065,6 +1066,34 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public string GetJwksUri(string client_id)
         {
             return this.GetRegisteredValue(client_id, "jwks_uri", model => model.JwksUri);
+        }
+
+        #endregion
+
+        #region GetConfiguredJwksUris
+
+        /// <summary>設定ファイルに書かれた `jwks_uri` を全件返す（#309 の段階 2）</summary>
+        /// <returns>URL の一覧（1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **起動のときに温めるために要る**（`JwksUriWarmUp`）。
+        /// **`OAuth2ClientsInformation` の各クライアントの `jwks_uri`** を集める。
+        ///
+        /// **user store を読めない配備でも効く**ので、**こちらを先に温める。**
+        /// </remarks>
+        public List<string> GetConfiguredJwksUris()
+        {
+            List<string> urls = new List<string>();
+
+            foreach (Dictionary<string, string> client in this.Oauth2ClientsInfo.Values)
+            {
+                if (client.ContainsKey("jwks_uri")
+                    && !string.IsNullOrEmpty(client["jwks_uri"]))
+                {
+                    urls.Add(client["jwks_uri"]);
+                }
+            }
+
+            return urls;
         }
 
         #endregion

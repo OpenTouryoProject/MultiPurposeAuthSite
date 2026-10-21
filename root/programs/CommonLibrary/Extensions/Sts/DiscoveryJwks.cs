@@ -31,6 +31,7 @@
 //*  2026/10/13  玄人 幸道         新規（#289 の段階 2。IdFederationJwks から汎用部分を分けた）
 //*  2026/10/13  玄人 幸道         JWK SetのURLから直に引く口を足した（#290）
 //*  2026/10/21  玄人 幸道         同期で読む口と、背景で補充する口を足した（#309 の段階 1）
+//*  2026/10/21  玄人 幸道         鍵の出どころとして使える URL かの判定を、ここへ寄せた（#309 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Log;
@@ -275,6 +276,36 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return ret.ToArray();
+        }
+
+        /// <summary>鍵の出どころとして使える URL か（#309 の段階 2）</summary>
+        /// <param name="jwkSetUrl">JWK Set の URL</param>
+        /// <returns>使えるなら true</returns>
+        /// <remarks>
+        /// **`https` を要求する。** **平文の HTTP では、鍵そのものを差し替えられる**
+        /// （**署名の検証鍵なので、差し替えられればクライアント認証が破れる**）。
+        ///
+        /// **ループバックだけは許す**（`localhost` / `127.0.0.0/8` / `[::1]`）。
+        /// **RFC 8252 §7.3 が折り返し先で同じ扱いをしている**のと同じ理由で、
+        /// **開発と試験では証明書を用意できないことがある。**
+        ///
+        /// **判定はここ 1 か所に置く**（#309 の段階 2）。
+        /// **登録の検査**（`ClientRegistrationProvider`）**と起動の温め**（`JwksUriWarmUp`）
+        /// **が、同じ規則で絞る** — **2 か所に書くと食い違う。**
+        /// </remarks>
+        public static bool IsUsableKeySource(string jwkSetUrl)
+        {
+            if (!Uri.TryCreate(jwkSetUrl, UriKind.Absolute, out Uri uri))
+            {
+                return false;
+            }
+
+            if (uri.Scheme == Uri.UriSchemeHttps)
+            {
+                return true;
+            }
+
+            return uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback;
         }
 
         /// <summary>**キャッシュに鍵が在るか**（登録の検査で使う）</summary>

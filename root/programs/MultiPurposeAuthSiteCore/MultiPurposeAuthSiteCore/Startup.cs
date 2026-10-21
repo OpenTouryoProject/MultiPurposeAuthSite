@@ -126,6 +126,16 @@ namespace MultiPurposeAuthSite
             //   起動は止めない。警告を OPERATION ログに出すだけ。
             ProductionCheck.WarnIfRisky();
 
+            // **登録済みの jwks_uri を、背景で温める**（#309 の段階 2）。
+            //   **クライアント認証はキャッシュを読むだけ**（段階 1）なので、
+            //   **起こし直した直後は、最初の 1 本が断られる。**
+            //
+            //   **こちらは要求を受ける前に走る**ので、ほぼ間に合う
+            //   （**net48 は最初の要求が来てから走る** — Global.asax のコメント）。
+            //
+            //   **待たない。** **失敗しても起動を止めない**（理由はログに残す）。
+            Extensions.Sts.JwksUriWarmUp.StartInBackground();
+
             #region 転送ヘッダの取り込み（#279。上流 #549）
 
             //  **リバース プロキシで TLS を終端すると、アプリから見た接続は HTTP になる。**

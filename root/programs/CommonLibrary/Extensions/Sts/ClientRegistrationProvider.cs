@@ -34,6 +34,7 @@
 //*  2026/10/20  玄人 幸道         software_statement を検証して受ける（#307 の段階 4）
 //*  2026/10/20  玄人 幸道         所有者を OwnerUserId へ移し、1 利用者 n クライアントにした（#307 の段階 5-a）
 //*  2026/10/21  玄人 幸道         jwks_uri を受け付ける（#309 の段階 1）
+//*  2026/10/21  玄人 幸道         software_statement が主張した jwks_uri も温める（#309 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -744,10 +745,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **クライアント認証の経路（`/token` など）は同期なので、あちらでは待てない**
         /// （**待つと net48 で止まる**。#309 の起票）。
         ///
-        /// **本文の `jwks_uri` だけを見る。**
-        /// **`software_statement` の中だけで主張された値は、取りに行かない** —
-        /// **署名の検証は `Validate` の中**にあり、
-        /// **検証していない主張で外の URL へ出て行かない**ためである。
+        /// **本文の `jwks_uri` と、`software_statement` が主張した `jwks_uri` を見る**
+        /// （#309 の段階 2）。
+        ///
+        /// **statement の署名は、ここでは検証しない**（**検証は `Validate` の中**）。
+        /// **それでよい理由は 3 つある。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **増える能力が無い** | **同じ呼び出し元は、本文の `jwks_uri` に任意の URL を書ける**（段階 1 で既に取りに行く）。**statement の中に書いても、行き先の範囲は変わらない** |
+        /// | **キャッシュは信頼ではない** | **URL → 鍵の対応**でしかなく、**参照されるのは「その URL を登録したクライアント」だけ**である。**statement の検証が落ちれば登録は作られない**ので、**温めた分は誰にも使われない** |
+        /// | **叩ける回数に限りが在る** | **専用 scope のトークンが要り**、**レート制限も掛かっている**（#305 の段階 3） |
+        ///
+        /// **段階 1 では、statement の主張を温めず、`Validate` で断っていた**
+        /// （**「署名を検証する前に、本文の外の URL へ出て行かない」**という理由）。
+        /// **行き先の範囲が変わらないので、過剰だった。**
         ///
         /// **`https` でなければ、取りにも行かない**（**ループバックの `http` は許す**）。
         /// </remarks>
@@ -759,15 +771,28 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return;
             }
 
-            string jwksUri = "";
+            List<string> urls = new List<string>();
 
             try
             {
                 JObject metadata = JsonConvert.DeserializeObject<JObject>(requestBody);
 
-                if (metadata != null)
+                if (metadata == null)
                 {
-                    jwksUri = ClientRegistrationProvider.GetString(metadata, "jwks_uri");
+                    return;
+                }
+
+                urls.Add(ClientRegistrationProvider.GetString(metadata, "jwks_uri"));
+
+                //  **statement が主張した分**（#309 の段階 2）。
+                //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
+                //    （`CmnEndpoints.TryReadJwtPayload`。#241 と同じ扱い）。
+                JObject claims = CmnEndpoints.TryReadJwtPayload(
+                    ClientRegistrationProvider.GetString(metadata, "software_statement"));
+
+                if (claims != null)
+                {
+                    urls.Add((string)claims["jwks_uri"]);
                 }
             }
             catch (JsonException)
@@ -776,12 +801,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return;
             }
 
-            if (!string.IsNullOrEmpty(jwksUri)
-                && ClientRegistrationProvider.IsSecureKeySource(jwksUri))
+            foreach (string url in urls)
             {
-                //  **取れなくても例外にしない**（`DiscoveryJwks` が飲み、理由をログに残す）。
-                //    **断るのは `Validate`** である。
-                await DiscoveryJwks.WarmUpAsync(jwksUri);
+                if (!string.IsNullOrEmpty(url)
+                    && DiscoveryJwks.IsUsableKeySource(url))
+                {
+                    //  **取れなくても例外にしない**（`DiscoveryJwks` が飲み、理由をログに残す）。
+                    //    **断るのは `Validate`** である。
+                    await DiscoveryJwks.WarmUpAsync(url);
+                }
             }
         }
 
@@ -891,7 +919,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **平文の HTTP では受けない** — **鍵そのものを差し替えられる**
                 //    （**署名の検証鍵なので、差し替えられればクライアント認証が破れる**）。
                 //    **ループバックだけは許す**（RFC 8252 §7.3 と同じ扱い。開発と試験のため）。
-                if (!ClientRegistrationProvider.IsSecureKeySource(model.JwksUri))
+                if (!DiscoveryJwks.IsUsableKeySource(model.JwksUri))
                 {
                     description = "The jwks_uri must use https. (loopback may use http)";
                     return false;
@@ -902,10 +930,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    登録のその場で分かる方が良い。**
                 //
                 //  **取りに行ったのは、この口の手前である**（`WarmUpJwksUriAsync`）。
-                //    **`software_statement` の中だけで主張された `jwks_uri` は、
-                //    ここで断られる** — **取りに行くのは本文の値だけ**であり、
-                //    **署名を検証する前に、本文の外の URL へ出て行かない**ためである
-                //    （**段階 2 で閉じる**）。
+                //    **`software_statement` が主張した `jwks_uri` も温めてある**
+                //    （#309 の段階 2）。**あちらは署名を検証しないで読む**が、
+                //    **行き先の範囲は本文と同じ**であり、**ここ（検証済み）が信頼を決める。**
                 if (!DiscoveryJwks.HasKeysInCache(model.JwksUri))
                 {
                     description = "The jwks_uri could not be read.";
@@ -1460,32 +1487,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             set(value);
             return true;
-        }
-
-        /// <summary>鍵の出どころとして使える URL か（#309 の段階 1）</summary>
-        /// <param name="uri">URL</param>
-        /// <returns>使えるなら true</returns>
-        /// <remarks>
-        /// **`https` を要求する。** **平文の HTTP では、鍵そのものを差し替えられる**
-        /// （**署名の検証鍵なので、差し替えられればクライアント認証が破れる**）。
-        ///
-        /// **ループバックだけは許す**（`localhost` / `127.0.0.0/8` / `[::1]`）。
-        /// **RFC 8252 §7.3 が折り返し先で同じ扱いをしている**のと同じ理由で、
-        /// **開発と試験では証明書を用意できないことがある。**
-        /// </remarks>
-        private static bool IsSecureKeySource(string uri)
-        {
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out Uri u))
-            {
-                return false;
-            }
-
-            if (u.Scheme == Uri.UriSchemeHttps)
-            {
-                return true;
-            }
-
-            return u.Scheme == Uri.UriSchemeHttp && u.IsLoopback;
         }
 
         /// <summary>折り返し先として使える値か</summary>

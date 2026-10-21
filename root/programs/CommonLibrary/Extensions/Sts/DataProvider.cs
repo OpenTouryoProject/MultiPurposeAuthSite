@@ -585,6 +585,57 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region GetAllJwksUris
+
+        /// <summary>登録されている `jwks_uri` を全件返す（#309 の段階 2）</summary>
+        /// <returns>URL の一覧（**空の行は含まない**。1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **起動のときに温めるために要る**（`JwksUriWarmUp`）。
+        /// **クライアント認証はキャッシュを読むだけ**なので、
+        /// **起こし直した直後は、最初の 1 本が断られる**（#309 の段階 1 の決め (C)(1)）。
+        ///
+        /// **`JwksUri` の 1 列だけを読む**（`GetAllUris` と同じ流儀。**読む量を絞れる**）。
+        ///
+        /// **`Unprotect` は通さない。** **暗号化しているのは `ClientSecret` だけ**であり、
+        /// **`jwks_uri` は公開情報**である（#297 の対象外）。
+        /// </remarks>
+        public static List<string> GetAllJwksUris()
+        {
+            List<string> urls = new List<string>();
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    urls.AddRange(DataProvider.Saml2OAuth2Data.Values
+                        .Select(m => m.JwksUri));
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        EnumUserStoreType storeType = Config.UserStoreType;
+
+                        urls.AddRange(cnn.Query<string>(
+                            "SELECT " + DataProvider.ColumnList(
+                                new string[] { "JwksUri" }, storeType)
+                            + " FROM " + DataProvider.TableName(storeType)));
+                    }
+
+                    break;
+            }
+
+            //  **空の行は落とす**（**登録の大半は `jwks_uri` を持たない**）。
+            return urls.Where(u => !string.IsNullOrEmpty(u)).ToList();
+        }
+
+        #endregion
+
         #region GetByOwner
 
         /// <summary>所有者の登録を全件返す（#307 の段階 5-a）</summary>

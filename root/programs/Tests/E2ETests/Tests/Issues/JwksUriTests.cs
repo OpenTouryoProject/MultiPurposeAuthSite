@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
+//*  2026/10/21  玄人 幸道         RT-309.4 を追加（statement が主張した jwks_uri。#309 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -57,6 +58,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-309.1`** | **動的登録で `jwks_uri` を登録でき、その URL の鍵で `private_key_jwt` が通る**（**`jwks` との併記は `400`**／**読めない URL は `400`**） |
     /// | **`RT-309.2`** | **画面から登録した `jwks_uri`**（**取りに行っていない**）**は、1 回目に断られ、背景で補充された後は通る** |
     /// | **`RT-309.3`** | **同じ URL の鍵を入れ替えると、`PUT` で読み直して新しい鍵で通る**（**読み直すまではキャッシュが効く**） |
+    /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
     /// **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の全部から呼ばれる。
@@ -494,6 +496,103 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-309.4
+
+        /// <summary>RT-309.4 software_statement が主張した jwks_uri でも登録できる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30904_statementが主張したjwks_uriでも登録できる(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-309.4",
+                    "**`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、"
+                    + "**その URL の鍵で、1 回目のクライアント認証から通る**",
+                    "**段階 1 では断っていた** — **「署名を検証する前に、本文の外の URL へ"
+                    + "出て行かない」**という理由だったが、**過剰だった。**"
+                    + "**同じ呼び出し元は、本文の `jwks_uri` に任意の URL を書ける**"
+                    + "（段階 1 で既に取りに行く）ので、**statement の中に書いても、"
+                    + "行き先の範囲は変わらない。** "
+                    + "**キャッシュは信頼ではない** — **URL → 鍵の対応**でしかなく、"
+                    + "**statement の検証が落ちれば登録は作られない**ので、"
+                    + "**温めた分は誰にも使われない。**",
+                    "RFC 7591 §2.3 / #309 の段階 2");
+
+                r.Target("POST registration_endpoint（statement が jwks_uri を主張する）");
+
+                JwksUriTests.SkipIfNoSoftwareStatement();
+
+                string name = "rt309_4_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        r.Step("(1) 相手の JWK Set を置き、statement だけが jwks_uri を主張する");
+
+                        JwksUri.Write(name, JwsSigner.PublicRsaJwk(client));
+
+                        Dictionary<string, object> claims = JwksUriTests.StatementClaims();
+
+                        claims.Add("jwks_uri", JwksUri.Url(name));
+
+                        string statement = JwsSigner.SignRS256(client, claims);
+
+                        //  **本文には `jwks_uri` を書かない**（**ここが段階 2 の論点**）。
+                        JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"software_statement\":\"" + statement + "\"}");
+
+                        r.VerifyEqual("HTTP の状態は 201", "201",
+                            ((int)created.StatusCode).ToString());
+
+                        string clientId = created.String("client_id");
+
+                        Assert.False(string.IsNullOrEmpty(clientId),
+                            "前提: client_id が返ること（" + created.ToString() + "）");
+
+                        r.VerifyEqual("応答に jwks_uri が返る（statement の値）",
+                            JwksUri.Url(name), created.String("jwks_uri") ?? "（無い）");
+
+                        r.Note("**段階 1 では `400` ＋ `invalid_client_metadata`"
+                            + "（`The jwks_uri could not be read.`）だった** — "
+                            + "**本文の値しか温めていなかった**ためである。");
+
+                        r.Step("(2) 1 回目のクライアント認証から通る（登録のときに温めてある）");
+
+                        JsonResponse first = await JwksUriTests.RevokeAsync(
+                            client, clientId, false);
+
+                        r.VerifyEqual("error は無い（1 回目から通る）", "（無い）",
+                            first.String("error") ?? "（無い）");
+
+                        r.VerifyEqual("HTTP の状態は 200"
+                            + "（知らないトークンは成功。RFC 7009 §2.2）",
+                            "200", ((int)first.StatusCode).ToString());
+
+                        r.Note("**`jwks` を 1 本も登録していない** — "
+                            + "**`private_key_jwt` の「材料」として `jwks_uri` を数えている**"
+                            + "（#309 の段階 1）。");
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 私的なヘルパ
 
         /// <summary>リダイレクトか（画面の成功）</summary>
@@ -504,6 +603,42 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             int status = (int)res.StatusCode;
 
             return 300 <= status && status < 400;
+        }
+
+        /// <summary>この配備が statement の発行者を設定していなければ Skip する</summary>
+        /// <remarks>
+        /// **`ClientRegistrationTests` と同じしるし**（`MPAS_SOFTWARE_STATEMENT_ISS`）を見る。
+        /// **あちらは `private`** なので、**ここにも置いてある** —
+        /// **しるしの名前だけは、必ず同じ値を使うこと**（**サイトへ渡した値と食い違わせない**）。
+        /// </remarks>
+        private static void SkipIfNoSoftwareStatement()
+        {
+            Skip.If(string.IsNullOrEmpty(
+                Environment.GetEnvironmentVariable("MPAS_SOFTWARE_STATEMENT_ISS")),
+                "この配備は software_statement の発行者を設定していません"
+                + "（test.ps1 -Launch が、SpRp_RsaPfxFilePath と対の .cer を渡す。#307 の段階 4）。");
+        }
+
+        /// <summary>statement の最小のクレーム</summary>
+        /// <returns>クレーム</returns>
+        /// <remarks>
+        /// **`iss` は必須**（RFC 7591 §2.3）。**`exp` / `aud` は入れない**（任意）。
+        /// **`scope` は主張しない** — **発行者ごとの上限（#307 の段階 6）に当たらないため**で、
+        /// **本文の `scope` が、そのまま登録の値になる。**
+        /// </remarks>
+        private static Dictionary<string, object> StatementClaims()
+        {
+            return new Dictionary<string, object>()
+            {
+                {
+                    "iss",
+                    Environment.GetEnvironmentVariable("MPAS_SOFTWARE_STATEMENT_ISS") ?? ""
+                },
+                { "jti", Guid.NewGuid().ToString("N") },
+                { "iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+                { "software_id", "e2e-rt309" },
+                { "software_version", "1.0.0" }
+            };
         }
 
         /// <summary>`/revoke` を、client_assertion で叩く</summary>
