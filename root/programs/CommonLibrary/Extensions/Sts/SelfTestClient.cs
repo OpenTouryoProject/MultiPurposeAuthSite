@@ -33,6 +33,7 @@
 //*  2026/09/28  玄人 幸道         Device Authorization Grant のポーリングも寄せた（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         SAML2 の応答（Assertion）を読む処理を寄せた（#246 の項目 3）
 //*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
+//*  2026/10/10  玄人 幸道         SAML2 の応答の検証を CmnSaml2Response へ移した（#286 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;

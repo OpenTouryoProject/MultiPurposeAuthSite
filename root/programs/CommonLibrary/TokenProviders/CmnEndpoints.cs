@@ -96,7 +96,6 @@
 //*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/25  玄人 幸道         claims_supported を、クレームの対応付けから作る（#230）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
-//*  2026/10/20  玄人 幸道         client_credentialsで専用scopeのトークンを出す（#307の段階5-b）
 //*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
@@ -122,7 +121,9 @@
 //*  2026/10/16  玄人 幸道         ポーリングが速すぎたら slow_down を返す（#305 の段階 1）
 //*  2026/10/16  玄人 幸道         クライアント認証の失敗を数える（#305 の段階 2）
 //*  2026/10/18  玄人 幸道         登録の grant_types / response_types を効かせ、registration_endpoint を広告（#307 の段階 1）
+//*  2026/10/18  玄人 幸道         redirect_uri の事前登録を n 件にし、全件と照合する（#306）
 //*  2026/10/19  玄人 幸道         登録された token_endpoint_auth_method で絞る（#307 の段階 3）
+//*  2026/10/20  玄人 幸道         client_credentialsで専用scopeのトークンを出す（#307の段階5-b）
 //*  2026/10/20  玄人 幸道         TryReadJwtAlg を公開（software_statement の検証で使う。#307 の段階 4）
 //*  2026/10/21  玄人 幸道         client_assertion の鍵を jwks_uri からも引く（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 2）
