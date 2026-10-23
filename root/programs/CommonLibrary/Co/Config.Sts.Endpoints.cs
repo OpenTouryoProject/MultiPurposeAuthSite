@@ -31,16 +31,10 @@
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/23  玄人 幸道         口ごとの役・URL の組み立て・同じ値を見る所を、コメントに書き足した（#294）
 //*  2026/10/23  玄人 幸道         パスの設定に既定値（雛形の値）を持たせた（#294）
+//*  2026/10/23  玄人 幸道         OAuth2ClientsInformation / UserClaimsMapping を Config.Sts.Features.cs へ移した（#294）
 //**********************************************************************************
 
 using System;
-using System.Collections.Generic;
-
-#if NETFX
-using Newtonsoft.Json;
-#else
-using Microsoft.Extensions.Configuration;
-#endif
 
 using Touryo.Infrastructure.Public.Util;
 
@@ -306,7 +300,7 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// 動的クライアント登録のエンドポイント（RFC 7591 / OIDC Discovery §3 の registration_endpoint）（#307 の段階 1）
+        /// DynamicClientRegistrationのエンドポイント（RFC 7591 / OIDC Discovery §3 の registration_endpoint）（#307 の段階 1）
         /// </summary>
         /// <remarks>
         /// **`EnableDynamicClientRegistration` が false なら、この口は張らない**（**404 になる**。`IsLockedDownTestEndpoints` とは別のキー）。
@@ -388,10 +382,10 @@ namespace MultiPurposeAuthSite.Co
 
         //  **Device Authorization Grant（RFC 8628）。** **口は 2 つで、トークンは `/token` で引き換える。**
         //
-        //  | 口 | 誰が来るか |
+        //  | 口 | 誰が来るか（何を貰う／どの URL で来る） |
         //  |---|---|
-        //  | `DeviceAuthZAuthorizeEndpoint` | **デバイス**（`device_code` / `user_code` を貰う） |
-        //  | `DeviceAuthZVerifyEndpoint` | **利用者のブラウザ**（`user_code` を入れて承認する。`verification_uri`） |
+        //  | `DeviceAuthZAuthorizeEndpoint` | **デバイス**（`device_code`・`user_code`・`expires_in`・`interval`・`verification_uri`・`verification_uri_complete` を貰う） |
+        //  | `DeviceAuthZVerifyEndpoint` | **利用者のブラウザ**（`user_code` を入れて承認する。`verification_uri`・`verification_uri_complete`） |
 
         /// <summary>
         /// Device AuthZのAuthorizeエンドポイント（RFC 8628 §3.1 の device_authorization_endpoint）
@@ -421,18 +415,16 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        // Tokenエンドポイントは共用。
-
         #endregion
 
-        #region CIBA
+        #region CIBA Core
 
         //  **Client Initiated Backchannel Authentication（CIBA Core）。** **トークンは `/token` で引き換える**（poll）。
         //
-        //  | 口 | 誰が来るか |
+        //  | 口 | 誰が来るか（何を送る／何を貰う） |
         //  |---|---|
-        //  | `CibaAuthorizeEndpoint` | **クライアント**（署名した認証要求を送る。`backchannel_authentication_endpoint`） |
-        //  | `CibaPushResultEndpoint` | **認証デバイス**（利用者の承認・拒否を返す） |
+        //  | `CibaAuthorizeEndpoint` | **クライアント**（署名した認証要求を送り、`auth_req_id`・`expires_in`・`interval` を貰う） |
+        //  | `CibaPushResultEndpoint` | **認証デバイス**（プッシュ通知で受けた `auth_req_id` と、利用者の承認・拒否（`result`）を送る。応答は `OK` / `NG`） |
 
         /// <summary>
         /// CIBAのAuthorizeエンドポイント（backchannel_authentication_endpoint）
@@ -440,6 +432,8 @@ namespace MultiPurposeAuthSite.Co
         /// <remarks>
         /// **Discovery に広告する。** **レート制限の対象**（#305）。
         /// **要求は、クライアントが署名した Request Object**で、**クライアント認証も要る**（CIBA Core 7.1）。
+        /// 
+        /// 成功の応答は auth_req_id・expires_in・interval の 3 つ（interval は CibaPollingIntervalSeconds）。
         /// </remarks>
         public static string CibaAuthorizeEndpoint
         {
@@ -453,8 +447,9 @@ namespace MultiPurposeAuthSite.Co
         /// CIBAのプッシュ結果を受信するエンドポイント
         /// </summary>
         /// <remarks>
-        /// **認証デバイスが、CIBA の承認・拒否の結果を返す口**である（**標準の口ではない**。Discovery には広告しない）。
-        /// **叩き方は `SetDeviceTokenWebAPI` と同じ**（Bearer / DPoP。本文は `OK` / `NG`）。
+        /// 認証デバイスが、CIBA の承認・拒否の結果を返す口（標準の口ではない。Discovery には広告しない）。
+        /// 叩き方は `SetDeviceTokenWebAPI` と同じ、フォームで `auth_req_id` と `result` を受け、
+        /// Bearer（または DPoP）で認証。成功は 200 と本文 `OK`、失敗は 400 / 401 と本文 `NG`。
         /// </remarks>
         public static string CibaPushResultEndpoint
         {
@@ -464,83 +459,12 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        // Tokenエンドポイントは共用。
-
         #endregion
 
-        #region クライアント
+        #region 自己テスト
 
-        //  **構成ファイルに書くクライアントの登録**と、**自己テストのクライアントの口**。
-        //  **登録は、構成ファイル → user store（`Saml2OAuth2Data`）の順に引く**（**同じ `client_id` なら構成ファイルが勝つ**）。
-
-        /// <summary>
-        /// OAuth2のClientのInformation（構成ファイルに書くクライアントの登録）
-        /// </summary>
-        /// <remarks>
-        /// **`client_id` → 項目（`client_secret` / `redirect_uri_code` / `redirect_uri_token` / `redirect_uri_saml` ほか）の辞書。**
-        /// **net48 版は JSON 文字列 1 本、net10.0 版は節で書く**（読み方だけが違う）。
-        ///
-        /// **`redirect_uri_*` に `test_self_code` / `test_self_token` / `test_self_saml` と書くと、
-        /// 自己テストの口（下の 3 つ ＋ `Saml2ResponseEndpoint`）に展開される。**
-        ///
-        /// > **秘密が入る。** **実ファイルの値を、報告・Issue に転記しないこと**（`ANALYSIS.md`）。
-        /// </remarks>
-        public static Dictionary<string, Dictionary<string, string>> OAuth2ClientsInformation
-        {
-            get
-            {
-#if NETFX
-                return JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(
-                    GetConfigParameter.GetConfigValue("OAuth2ClientsInformation"));
-#else
-                IConfigurationSection section = GetConfigParameter
-                    .GetAnyConfigSection("appSettings:OAuth2ClientsInformation");
-
-                return section.Get<Dictionary<string, Dictionary<string, string>>>();
-#endif
-            }
-        }
-
-        /// <summary>
-        /// profile / address のクレームの対応付け（#230）
-        /// </summary>
-        /// <remarks>
-        /// **「どのキーを、どのクレームとして返すか」だけを持つ。**
-        /// 値の在り処は `ApplicationUser.UnstructuredData`（JSON）の中のパス、
-        /// または `user:&lt;項目&gt;`（白名簿。<see cref="Extensions.Sts.UserClaims"/>）。
-        ///
-        /// **既定は空で、何も返らない**（従来どおり）。設定した分だけ返る。
-        /// どのクレームがどの scope に属するかは**仕様が決めている**ので、ここには書かせない
-        /// （OIDC Core §5.4。表は `UserClaims`）。
-        ///
-        /// 読み方は `OAuth2ClientsInformation` と同じ（net48 は JSON 文字列、net10.0 は節）。
-        /// </remarks>
-        public static Dictionary<string, string> UserClaimsMapping
-        {
-            get
-            {
-                Dictionary<string, string> mapping = null;
-
-#if NETFX
-                string json = GetConfigParameter.GetConfigValue("UserClaimsMapping");
-
-                if (!string.IsNullOrEmpty(json))
-                {
-                    mapping = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-                }
-#else
-                IConfigurationSection section = GetConfigParameter
-                    .GetAnyConfigSection("appSettings:UserClaimsMapping");
-
-                if (section != null)
-                {
-                    mapping = section.Get<Dictionary<string, string>>();
-                }
-#endif
-                // **未設定・空は「対応付け無し」として扱う。** null を返して呼び先を壊さない。
-                return mapping ?? new Dictionary<string, string>();
-            }
-        }
+        //  **自己テストのクライアントの口**（`OAuth2ClientEndpointsRootURI` ＋ パス）。
+        //  **構成ファイルに書くクライアントの登録（`OAuth2ClientsInformation`）は `Config.Sts.Features.cs`** に在る。
 
         /// <summary>
         /// OAuth2のClientのEndpointのRootURI（自己テストのクライアントの口の基底）
@@ -587,10 +511,6 @@ namespace MultiPurposeAuthSite.Co
                 return Config.EndpointPathOrDefault("OAuth2ImplicitGrantClient_Account", "/Account/OAuth2ImplicitGrantClient");
             }
         }
-
-        #endregion
-
-        #region テスト用の口
 
         /// <summary>
         /// テスト用のエンドポイントがロックダウンされているかどうか。

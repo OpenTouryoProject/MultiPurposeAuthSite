@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
+//*  2026/10/23  玄人 幸道         OAuth2ClientsInformation / UserClaimsMapping を Config.Sts.Endpoints.cs から移した（#294）
 //**********************************************************************************
 
 using System;
@@ -137,6 +138,47 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// profile / address のクレームの対応付け（#230）
+        /// </summary>
+        /// <remarks>
+        /// **「どのキーを、どのクレームとして返すか」だけを持つ。**
+        /// 値の在り処は `ApplicationUser.UnstructuredData`（JSON）の中のパス、
+        /// または `user:&lt;項目&gt;`（白名簿。<see cref="Extensions.Sts.UserClaims"/>）。
+        ///
+        /// **既定は空で、何も返らない**（従来どおり）。設定した分だけ返る。
+        /// どのクレームがどの scope に属するかは**仕様が決めている**ので、ここには書かせない
+        /// （OIDC Core §5.4。表は `UserClaims`）。
+        ///
+        /// 読み方は `OAuth2ClientsInformation` と同じ（net48 は JSON 文字列、net10.0 は節）。
+        /// </remarks>
+        public static Dictionary<string, string> UserClaimsMapping
+        {
+            get
+            {
+                Dictionary<string, string> mapping = null;
+
+#if NETFX
+                string json = GetConfigParameter.GetConfigValue("UserClaimsMapping");
+
+                if (!string.IsNullOrEmpty(json))
+                {
+                    mapping = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+                }
+#else
+                IConfigurationSection section = GetConfigParameter
+                    .GetAnyConfigSection("appSettings:UserClaimsMapping");
+
+                if (section != null)
+                {
+                    mapping = section.Get<Dictionary<string, string>>();
+                }
+#endif
+                // **未設定・空は「対応付け無し」として扱う。** null を返して呼び先を壊さない。
+                return mapping ?? new Dictionary<string, string>();
+            }
+        }
+
         #endregion
 
         #region PKCE
@@ -200,6 +242,42 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("DPoPNonceSecret");
+            }
+        }
+
+        #endregion
+
+        #region クライアントの登録（構成ファイル）
+
+        //  **登録は、構成ファイル → user store（`Saml2OAuth2Data`）の順に引く**（**同じ `client_id` なら構成ファイルが勝つ**）。
+        //  **動的に登録したもの（下の #307）は user store に入る。**
+
+        /// <summary>
+        /// OAuth2のClientのInformation（構成ファイルに書くクライアントの登録）
+        /// </summary>
+        /// <remarks>
+        /// **`client_id` → 項目（`client_secret` / `redirect_uri_code` / `redirect_uri_token` / `redirect_uri_saml` ほか）の辞書。**
+        /// **net48 版は JSON 文字列 1 本、net10.0 版は節で書く**（読み方だけが違う）。
+        ///
+        /// **`redirect_uri_*` に `test_self_code` / `test_self_token` / `test_self_saml` と書くと、
+        /// 自己テストの口（`OAuth2AuthorizationCodeGrantClient_Account` / `OAuth2ImplicitGrantClient_Account` /
+        /// `Saml2ResponseEndpoint`。`Config.Sts.Endpoints.cs`）に展開される。**
+        ///
+        /// > **秘密が入る。** **実ファイルの値を、報告・Issue に転記しないこと**（`ANALYSIS.md`）。
+        /// </remarks>
+        public static Dictionary<string, Dictionary<string, string>> OAuth2ClientsInformation
+        {
+            get
+            {
+#if NETFX
+                return JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(
+                    GetConfigParameter.GetConfigValue("OAuth2ClientsInformation"));
+#else
+                IConfigurationSection section = GetConfigParameter
+                    .GetAnyConfigSection("appSettings:OAuth2ClientsInformation");
+
+                return section.Get<Dictionary<string, Dictionary<string, string>>>();
+#endif
             }
         }
 
