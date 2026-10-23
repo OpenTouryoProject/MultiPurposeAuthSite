@@ -86,6 +86,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- **Config は partial に分けてある**（#294）。IDE で Config.cs の下に畳んで見せる。 -->
+    <Compile Update="Co\Config.*.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Update="Resources\AccountController.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>

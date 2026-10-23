@@ -67,6 +67,33 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Co\Config.cs" />
+    <Compile Include="Co\Config.Account.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Deployment.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.ExternalLogin.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.IdFederation.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Notification.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.Endpoints.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.Features.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.Protection.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
     <Compile Include="Co\IdFederationUpstreams.cs" />
     <Compile Include="Co\SoftwareStatementIssuers.cs" />
     <Compile Include="Co\Const.cs" />
