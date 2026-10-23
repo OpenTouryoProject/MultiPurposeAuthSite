@@ -33,7 +33,18 @@
     "FxCacheControl": "on",
     // フレームワークの使用するパラメータ - end
 
-    // Proxy設定
+    // ==== 土台 : Config.cs ====
+    // [ストア]
+    // User store type (mem, sql, ora, npg)
+    "UserStoreType": "mem",
+
+    // [デバッグ]
+    // Debugかどうか
+    "IsDebug": "true",
+    "EnableDebugTraceLog": "true",
+
+    // ==== 配備・基盤 : Config.Deployment.cs ====
+    // [Proxy]
     // InternetProxy設定 (Internet アクセス用、)
     "UseInternetProxy": "false",
     "InternetProxyURL": "[If necessary, please fill in internal proxy url]",
@@ -50,25 +61,25 @@
     "DebugProxyUID": "",
     "DebugProxyPWD": "",
 
-    // ASP.NET Identity
-    // Debugかどうか
-    "IsDebug": "true",
-    "EnableDebugTraceLog": "true",
+    // [CORS]
+    // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
+    //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
+    //   ここは、その導出で拾えないものを足すための口（空白かカンマ区切り）。
+    //   **末尾の「/」は付けない。「*」は書かない**（落とすので許可されない）。
+    "CorsAllowedOrigins": "",
 
-    // User store type (mem, sql, ora, npg)
-    "UserStoreType": "mem",
-    
-    // **net10.0 版だけ**
+    // [.NET Core / セッション]
     // Session store type (mem, sql, redis)
     "SessionStoreType": "mem",
     // Session store connection string **mem なら空のまま。**
     "SessionStoreConnectionString": "",
+
+    // [.NET Core / データ保護の鍵]
     // DataProtectionKeyPath 鍵の置き場 
     // 空なら %LOCALAPPDATA%、揮発するコンテナでは : /keys
     "DataProtectionKeyPath": "",
 
-    // 配備で切り替えるもの（net10.0 版だけ）。
-    
+    // [.NET Core / HTTPS・逆プロキシ（#279）]
     // on で HTTP を HTTPS へリダイレクト（ポートも決める。ASPNETCORE_HTTPS_PORT は**単数**）
     "UseHttpsRedirection": "",
     // always で Cookie に Secure 属性を必ず付ける（平文 HTTP の環境で付けるとサインインできなくなる）
@@ -78,32 +89,26 @@
     // 信用する前段のアドレス（カンマ区切り、空なら範囲を制限しない）
     "ForwardedHeadersKnownProxies": "",
 
-    // Notification Provider
-    // Smtp
+    // ==== 通知 : Config.Notification.cs ====
+    // [SMTP (Eメール)]
     "SmtpHostName": "[e.g. : smtp.gmail.com]",
     "SmtpPortNo": "587",
     "SmtpSSL": "true",
     "SmtpAccountUID": "[xxxxx@gmail.com]",
     "SmtpAccountPWD": "[password of xxxxx@gmail.com]",
-    // Twilio
+
+    // [SMS (Twilio)]
     "TwilioAccountSid": "[TwilioAccountSid]",
     "TwilioAuthToken": "[TwilioAuthToken]",
     "TwilioFromPhoneNumber": "[TwilioFromPhoneNumber]",
-    // Firebase Cloud Messaging (FCM)
+
+    // [PushNotification (FCM)]
     "FirebaseServiceAccountKey": "C:/root/files/resource/MultiPurposeAuthSite/FirebaseServiceAccountKey.json",
     // テスト用 : 設定すると、プッシュ通知を FCM に送らず、このディレクトリにファイルとして書く。本番では空のまま
     "FcmOutboxDirectory": "",
 
-    // UserListCount
-    "UserListCount": "50",
-    // 約款画面を表示するかどうか
-    "DisplayAgreementScreen": "false",
-    // 文面ファイルのフォルダ
-    "ContentOfLetterFilePath": "C:/root/files/resource/MultiPurposeAuthSite/Txt",
-
-    // 本サイトでSaltとして機能する値：PPID生成に使用するSalt、外部ログイン追加時のXSRF防止
-    "SaltParameter": "[Please set a random string for each site.]",
-
+    // ==== アカウント : Config.Account.cs ====
+    // [事前登録ユーザ（Admin, Test）]
     // Administrator（システム管理者のアカウント）
     "AdministratorUID": "[Please fill in this input item.]",
     "AdministratorPWD": "[Please fill in this input item.]", // PWDのみ、初期化後削除可能
@@ -114,14 +119,20 @@
     // 接尾辞（#260）。E2E（test.ps1）が、サイトごとに _core / _netfx を与える。
     "TestUserSuffix": "",
 
-    // User関連
+    // [サインアップ・ユーザ名]
     "AllowOnlyAlphanumericUserNames": "false",
+    // 約款画面を表示するかどうか
+    "DisplayAgreementScreen": "false",
+    // 文面ファイルのフォルダ
+    "ContentOfLetterFilePath": "C:/root/files/resource/MultiPurposeAuthSite/Txt",
     // メアド検証リンクの有効期限 24  時間
     "EmailConfirmationTokenLifespanFromHours": "24",
     // UserNameの編集を許可するかどうか
     "AllowEditingUserName": "true",
     // UserNameとEmail編集時にパスワードを要求するかどうか
     "RequirePasswordInEditingUserNameAndEmail": "false",
+
+    // [パスワード]
     // パスワード検証（8文字以上の大文字・小文字、数値、記号
     "RequiredLength": "8",
     "RequireNonLetterOrDigit": "true",
@@ -129,21 +140,18 @@
     "RequireLowercase": "true",
     "RequireUppercase": "true",
     "StretchCount": "1000",
+
+    // [ロックアウト]
     // ロックアウト（5 回入力ミスすると、5分ロックアウト
     "UserLockoutEnabledByDefault": "true",
     "DefaultAccountLockoutTimeSpanFromSeconds": "300",
     "MaxFailedAccessAttemptsBeforeLockout": "5",
-    
-    // その他、属性の編集を許可するかどうか
-    "CanEditEmail": "true",
-    "CanEditPhone": "true",
-    "CanEdit2FA": "true",
-    "CanEditUnstructuredData": "true",
-    "CanEditSaml2OAuth2Data": "true",
-    "CanUseGdprFunction": "true",
-    
+
+    // [SetするCookie名]
     //  Cookie の名前に付ける接頭辞（同じホストに 2 つ立てるときだけ指定
     "CookieNamePrefix": "",
+
+    // [Cookie 認証チケット]
     // 認証 Cookie の名前**（#250 の段階 4）空なら既定のまま
     // net48 : .AspNet.ApplicationCookie, net10.0 : .AspNetCore.Identity.Application
     "AuthCookieName": "",
@@ -151,32 +159,192 @@
     "AuthCookieExpiresFromHours": "336",
     // Cookie認証チケットのSliding（再発行）機能
     "AuthCookieSlidingExpiration": "true",
+    // SecurityStamp（検証間隔は10秒、本番は長めに設定
+    "SecurityStampValidateIntervalFromSeconds": "10",
+
+    // [2 要素認証 (2FA)]
     // 2FA : TwoFactorAuthentication
     // 必要に応じてユーザが有効にするので初期値は false
     "TwoFactorEnabled": "false",
     // 2FA Cookieの有効期限は2週間 24 * 14 = 336 時間
     "TwoFactorCookieExpiresFromHours": "336",
-    // SecurityStamp（検証間隔は10秒、本番は長めに設定
-    "SecurityStampValidateIntervalFromSeconds": "10",
 
+    // [FIDO]
     // FIDOServerMode: none, webauthn
     //   **net10.0 版だけの設定**（#137）。net48 版にはこのキーが無い。
     //   **mspass（Microsoft Passport）は落とした**（前身 API で、動く環境が無い）。
     "FIDOServerMode": "webauthn",
 
-    // STS (SAML2, OAuth2/OIDC, FAPI)
+    // [属性編集の可否]
+    // その他、属性の編集を許可するかどうか
+    "CanEditEmail": "true",
+    "CanEditPhone": "true",
+    "CanEdit2FA": "true",
+    "CanEditUnstructuredData": "true",
+    "CanEditSaml2OAuth2Data": "true",
+    "CanUseGdprFunction": "true",
+
+    // [機能ロックダウン（STS 専用モード）・管理画面]
+    // 機能のロックダウン（全てfalseでSTS専用モードで動作）
+    // サインアップ
+    "EnableSignupProcess": "true",
+    // ユーザ属性編集
+    "EnableEditingOfUserAttribute": "true",
+    // ユーザ・ロール管理
+    "EnableAdministrationOfUsersAndRoles": "true",
+
+    // UserListCount
+    "UserListCount": "50",
+
+    // [user store の秘密（#297）]
+    // user store に入る秘密を暗号化する鍵（#297）
+    //   **空なら暗号化しない**（平文のまま入る ＝ 従来どおり）。
+    //   **対象は `Saml2OAuth2Data.ClientSecret` と `IdFederationUpstreams.ClientSecret`。**
+    //   **どちらも上流へ送る・画面で再表示する**ので、**ハッシュではなく対称鍵で暗号化する。**
+    //   **設定ファイルの秘密は平文のまま**である（ここで守るのは「DB を見られたとき」）。
+    //   **本番では、ここに直接書かないこと**（環境変数・秘密の管理機構から渡す）。
+    "UserStoreSecretPassword": "",
+
+    // ==== 外部ログイン : Config.ExternalLogin.cs ====
+    // [共通]
+    // **外部 ID を既存アカウントに結び付けるとき、検証済みのメアドを要求する**（#140 の段階 1）。
+    //   未設定でも true（安全側）。false にすると従来どおり（上流の言い値のメアドで結び付ける）。
+    "RequireVerifiedEmailForAccountLinking": "true",
+
+    // [MicrosoftAccountAuthentication]
+    "MicrosoftAccountAuthentication": "false",
+    "MicrosoftAccountAuthenticationClientId": "[If necessary, please fill in ClientId of Microsoft Account]",
+    "MicrosoftAccountAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Microsoft Account]",
+
+    // [GoogleAuthentication]
+    "GoogleAuthentication": "false",
+    "GoogleAuthenticationClientId": "[If necessary, please fill in ClientId of Google Authentication]",
+    "GoogleAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Google Authentication]",
+
+    // ==== STS（鍵・有効期間） : Config.Sts.cs ====
+    // [発行者]
     "IssuerId": "https://ssoauth.opentouryo.com",
 
+    // [秘密（PPID ほか）]
+    // 本サイトでSaltとして機能する値：PPID生成に使用するSalt、外部ログイン追加時のXSRF防止
+    "SaltParameter": "[Please set a random string for each site.]",
+
+    // [鍵]
+    // SAML, JWTの署名に使用する X.509 証明書に関するパラメタ
+    "RsaPfxPassword": "test",
+    "RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
+    "EcdsaPfxPassword": "test",
+    "EcdsaPfxFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
+    // ES384 / ES512 は曲線が alg に紐づくので、鍵が分かれる（#129 の段階 3）
+    "Ecdsa384PfxPassword": "test",
+    "Ecdsa384PfxFilePath": "C:/root/files/resource/X509/SHA384ECDSA.pfx",
+    "Ecdsa512PfxPassword": "test",
+    "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
+    "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
+
+    // 退役させる途中の署名証明書（#292 の段階 3）
+    //   **/samlmetadata に並べて広告する。** **空なら 1 本だけ**（従来どおり）。
+    //   **鍵を替える前に、新しい証明書をここに書いて広告する** → SP のキャッシュが切れたら
+    //   **署名鍵を入れ替える**（RsaPfxFilePath / SpRp_RsaCerFilePath）→ **古い方をここに書く。**
+    //   **区切りは空白かカンマ。** OIDC 側は JwkSet.json に新旧を並べる（この設定は使わない）。
+    "PreviousSigningCerFilePaths": "",
+
+    // [有効期間]
+    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
+    "OidcIdTokenExpireTimeSpanFromMinutes": "30",
+    "RequestObjectExpireTimeSpanFromSeconds": "300",
+    "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
+    "OAuth2AccessTokenExpireTimeSpanFromMinutes": "360",
+    "OAuth2RefreshTokenExpireTimeSpanFromDays": "14",
+    "DeviceAuthZExpireTimeSpanFromSeconds": "600",
+    "CibaExpireTimeSpanFromSeconds": "600",
+    //   **管理 API 専用のアクセス トークンの有効期限（秒）。**
+    //     **未設定・0 以下なら 300 秒**（CI から叩く想定で、長く持たせる理由が無い）。
+    "DcrAccessTokenExpireTimeSpanFromSeconds": "300",
+
+    // [ポーリングの間隔]
+    "DeviceAuthZPollingIntervalSeconds": "5",
+    "CibaPollingIntervalSeconds": "5",
+
+    // [/jwkcerts のキャッシュ（#303。E-7）]
+    // **/jwkcerts の Cache-Control: public, max-age=（秒）**（#303。E-7）。
+    //   **0（または未設定）なら no-store**（従来どおり）。
+    //   **鍵を入れ替える周期より短くすること**（入れ替え直後は、この秒数の間だけ
+    //   古い鍵を見る相手が居る。出す側は新旧 2 本を広告する。#291 / #292 の段階 3）。
+    "JwkSetCacheMaxAgeSeconds": "300",
+
+    // ==== STS（機能の有効 / 無効） : Config.Sts.Features.cs ====
+    // [Grant Type]
     // Grant Typeの有効・無効
     "EnableAuthorizationCodeGrantType": "true",
     "EnableImplicitGrantType": "false",
     "EnableResourceOwnerPasswordCredentialsGrantType": "false",
     "EnableClientCredentialsGrantType": "true",
+    "EnableRefreshToken": "true",
     "EnableJwtBearerTokenFlowGrantType": "true",
     "EnableDeviceAuthZGrantType": "true",
     "EnableCibaGrantType": "true",
-    "EnableRefreshToken": "true",
 
+    // [OIDC]
+    // profile / address のクレームの対応付け（#230）
+    //   **「どのキーを、どのクレームとして返すか」だけを書く。**
+    //   値の在り処は UnstructuredData（JSON）の中のパス（入れ子は「.」で辿る）か、
+    //   user:<項目>（UserName / Email / PhoneNumber のみ）。
+    //   クレーム名に「address.<副フィールド>」と書くと、address オブジェクトを組み立てる。
+    //   **空なら profile / address では何も返らない**（従来どおり）。
+    //   どのクレームがどの scope に属するかは OIDC Core 5.4 が決めており、ここには書かない。
+    //   例 : { "name": "fullName", "given_name": "person.first", "address.postal_code": "addr.zip" }
+    //
+    //   **利用者名を RP に渡したいなら、ここで preferred_username に対応付ける**（#151 の段階 1）。
+    //     { "preferred_username": "user:UserName" }
+    //   **sub は利用者を指す識別子なので、そこに利用者名を載せてはならない。**
+    //   sub は「その RP の中で利用者を指す識別子」、preferred_username は「表示・照合用の属性」。
+    //   **RP が主キーに使ってよいのは sub だけ**で、preferred_username は変わりうる（改名）。
+    // **標準クレームを返すときのサンプル**（#261）。**既定は空のまま**にしてある。
+    //   左がクレーム名（OIDC Core 5.1）、右が値の在り処。
+    //     ・`UnstructuredData`（JSON）の中のパス … `.` で辿る（例 : address.postal_code）
+    //     ・`user:<項目>` … ApplicationUser から直に取る（UserName / Email / PhoneNumber）
+    //   **IsDebug のとき、2 人目のテスト利用者（tanaka）に、この形の JSON が入る**
+    //   （AccountController.SampleUnstructuredData）。
+    //
+    //   "UserClaimsMapping": {
+    //     "name":                   "name",
+    //     "family_name":            "family_name",
+    //     "given_name":             "given_name",
+    //     "nickname":               "nickname",
+    //     "profile":                "profile",
+    //     "picture":                "picture",
+    //     "website":                "website",
+    //     "gender":                 "gender",
+    //     "birthdate":              "birthdate",
+    //     "zoneinfo":               "zoneinfo",
+    //     "locale":                 "locale",
+    //     "updated_at":             "updated_at",
+    //     "address.formatted":      "address.formatted",
+    //     "address.street_address": "address.street_address",
+    //     "address.locality":       "address.locality",
+    //     "address.region":         "address.region",
+    //     "address.postal_code":    "address.postal_code",
+    //     "address.country":        "address.country",
+    //     "preferred_username":     "user:UserName"
+    //   }
+    //
+    //   **管理画面で入れられるのは usd1 / usd2 の 2 欄だけ**である。
+    //   それ以外のキーは、**導入する側が入れる**（画面を足すか、別の経路で書く）。
+    //
+    //   **E2E だけは、name と address.locality を usd1 / usd2 に向けている**（test.ps1）。
+    //     **画面から入れた値が返ることを測り続けるため**である（RT-230.*）。
+    //     そのため **E2E の報告書には `name ← usd1` と出る。** 上のサンプルとは違う。
+    "UserClaimsMapping": {
+    },
+
+    // [PKCE]
+    // PKCE を必須にするか（OAuth 2.1 は true）
+    "RequirePkce": "false",
+    // PKCE で S256 だけを受け付けるか（OAuth 2.1 / FAPI は true）
+    "RequirePkceS256": "false",
+
+    // [DPoP]
     // **DPoP の証明に nonce を要求するか**（RFC 9449 §8 / §9。#311 の段階 4）。
     //   **既定は false** — **要求すると、nonce を知らないクライアントが全部止まる。**
     //   **要求すると 1 往復増える**（use_dpop_nonce で断り、DPoP-Nonce で値を渡す）。
@@ -189,300 +357,7 @@
     //   **設定しないと、別のインスタンスへ行くたびに断られ、やり直しが終わらない。**
     "DPoPNonceSecret": "",
 
-    // **動的クライアント登録（RFC 7591）を開けるか**（#307 の段階 1）。
-    //   **既定は false**（**口そのものを張らない**。開けると /register が出来て、
-    //   Discovery に registration_endpoint が載る）。
-    //   **使うには ROPC も開ける必要がある**
-    //   （EnableResourceOwnerPasswordCredentialsGrantType。管理 API 用の
-    //   アクセス トークンは ROPC で取る）。
-    //   **専用 scope（client_registration）を、構成ファイルか管理画面の
-    //   クライアント登録に明記したクライアントだけが使える。**
-    "EnableDynamicClientRegistration": "false",
-    "DcrRegistrationEndpoint": "/register",
-    //   **管理 API 専用のアクセス トークンの有効期限（秒）。**
-    //     **未設定・0 以下なら 300 秒**（CI から叩く想定で、長く持たせる理由が無い）。
-    "DcrAccessTokenExpireTimeSpanFromSeconds": "300",
-    // **software_statement（RFC 7591 2.3）の発行者**（#307 の段階 4）。
-    //   **「発行者ごと」である。** **クライアントごとではない**
-    //   （**クライアント自身の鍵**は、動的登録の jwks か管理画面に入れる。段階 3）。
-    //   **1 つのソフトウェアに 1 枚配られ、その全ての配置が同じものを提示する**ので、
-    //   **登録が何件になっても、検証鍵は発行者 1 件につき 1 つ**である。
-    //
-    //   **1 件も書かなければ、software_statement は受け付けない**
-    //   （**従来どおり unapproved_software_statement**）。
-    //   **EnableDynamicClientRegistration が false の間は、この設定は効かない**
-    //   （**口そのものが張られていない**）。
-    //
-    //   issuer        : **期待する iss**（statement の iss。**完全一致**）
-    //   cer_file_path : **署名を検証する証明書**（**公開鍵だけで足りる**）
-    //   alg           : **ヘッダの alg と照合する**（空なら RS256）
-    //   enabled       : 空・未設定は true
-    //
-    //   "SoftwareStatementIssuers": {
-    //     "vendor1": {
-    //       "display_name": "Vendor 1", "enabled": "true",
-    //       "issuer": "https://vendor.opentouryo.com",
-    //       // **空白かカンマ区切りで n 本**書ける（#307 の段階 6。**鍵の入れ替えのため**）
-    //       "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Client.cer",
-    //       "alg": "RS256",
-    //       // **この発行者に許す上限**（#307 の段階 6。**空なら絞らない**）
-    //       "allowed_scope": "openid email",
-    //       "allowed_grant_types": "authorization_code refresh_token"
-    //     }
-    //   },
-    //
-    //   **cer_file_path を n 本書くのは、発行者の鍵の入れ替えのため**（#307 の段階 6）。
-    //     **入れ替えの間は新旧を並べて書き**、**済んだら古い方を消す**
-    //     （**消すまでは古い鍵も有効**）。**試す順は書いた順**で、
-    //     **1 本目以外で通ったときはログに残る**（**古い鍵をいつ消せるかの判断材料**）。
-    //     **alg は行で 1 つ** — **鍵の種類や alg まで変える入れ替えは、この形では扱えない。**
-    //
-    //   **allowed_scope / allowed_grant_types は、その発行者に許す上限**（#307 の段階 6）。
-    //     **空（未設定）なら絞らない**（段階 4 までと同じ振る舞い）。
-    //     **範囲外を主張されたら unapproved_software_statement で断る**（黙って狭めない）。
-    //     **本文（plain JSON）に書かれた値も、この上限に収める** —
-    //     **statement に書かれていなければ、本文の値が登録の値になる**ためである。
-    //
-    //     **絞るのは「受け入れる側」の決め**である。
-    //     **ベンダが自分で絞る分は statement の中身に書けば済む**
-    //     （**署名されているので、配置側が広げられない**）。
-    //     **実際に登録に入るのは、2 つの積**になる。
-    //
-    //   **E2E では test.ps1 が環境変数で渡す**（RT-307.18 〜 .21）。
-    //     net10.0 : appSettings__SoftwareStatementIssuers__<鍵>__<属性>
-    //     net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
-    //
-    // **動的クライアント登録に software_statement を必須とするか**（#307 の段階 4）。
-    //   **既定は false**（**従来どおり、添えなくても登録できる**）。
-    //   **true にすると「審査を通したソフトウェアだけ登録させる」配備になる。**
-    //   **POST /register と PUT（RFC 7592）の両方に効く** —
-    //   **PUT に効かせないと、statement を省いて、主張された値を書き換えられる。**
-    //   **信頼する発行者を 1 件も書かずに true にすると、動的登録は通らなくなる。**
-    "RequireSoftwareStatement": "false",
-    // PKCE を必須にするか（OAuth 2.1 は true）
-    "RequirePkce": "false",
-    // PKCE で S256 だけを受け付けるか（OAuth 2.1 / FAPI は true）
-    "RequirePkceS256": "false",
-
-    "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
-    "RequestObjectExpireTimeSpanFromSeconds": "300",
-    "OAuth2AccessTokenExpireTimeSpanFromMinutes": "360",
-    "OAuth2RefreshTokenExpireTimeSpanFromDays": "14",
-    "OidcIdTokenExpireTimeSpanFromMinutes": "30",
-    "Saml2AssertionExpireTimeSpanFromMinutes": "30",
-    "DeviceAuthZExpireTimeSpanFromSeconds": "600",
-    "DeviceAuthZPollingIntervalSeconds": "5",
-    "CibaExpireTimeSpanFromSeconds": "600",
-    "CibaPollingIntervalSeconds": "5",
-    // **ポーリングが interval より速いとき slow_down を返すか**（#305 の段階 1）。
-    //   **未設定は true**（RFC 8628 §3.5 / CIBA §11 のとおり）。
-    //   **false にすると従来どおり** authorization_pending を返し続ける。
-    "EnablePollingSlowDown": "true",
-    // **認証の失敗を数えて、一定回数で一定時間断る**（#305 の段階 2）。
-    //   **0（または未設定）なら数えない**（従来どおり）。
-    //   **クライアント認証**（client_secret / private_key_jwt）と
-    //   **user_code の投入**が対象（利用者のパスワードは
-    //   MaxFailedAccessAttemptsBeforeLockout 側で既に数えている）。
-    "AuthFailureMaxAttempts": "5",
-    "AuthFailureLockoutSeconds": "300",
-    //   **数えた分を覚えている長さ**（#305 の段階 4）。
-    //     **未設定なら AuthFailureLockoutSeconds と同じ。**
-    //     **行の寿命もこれで決まる**（期限の過ぎた行は掃除される）。
-    "AuthFailureWindowSeconds": "300",
-
-    // **口ごとのレート制限**（#305 の段階 3）。
-    //   **窓の中の要求の回数を数え、超えた分に 429（Retry-After）を返す。**
-    //   **0（または未設定）なら制限しない**（従来どおり）。
-    //   **client_id ごと**（洪水を起こしたクライアントだけを止める）と
-    //   **送信元アドレスごと**（client_id を毎回変えても効く）の 2 つを数える。
-    //   **プロセスの中に覚える**ので、**インスタンスを増やすとその数だけ緩くなる。**
-    "RateLimitPerClientPermits": "120",
-    "RateLimitPerIpPermits": "600",
-    "RateLimitWindowSeconds": "60",
-
-    // AuthorizationServerエンドポイント
-    "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
-    // 認可エンドポイント
-    "OAuth2AuthorizeEndpoint": "/authorize",
-    "Saml2RequestEndpoint": "/saml2request",
-    // Tokenエンドポイント
-    "OAuth2TokenEndpoint": "/token",
-    // その他のエンドポイント
-    "OAuth2UserInfoEndpoint": "/userinfo",
-    "OAuth2RevokeTokenEndpoint": "/revoke",
-    "OAuth2IntrospectTokenEndpoint": "/introspect",
-    // RP-Initiated Logout
-    "OAuth2EndSessionEndpoint": "/end_session",
-    // Device AuthZ
-    "DeviceAuthZAuthorizeEndpoint": "/device_authz",
-    "DeviceAuthZVerifyEndpoint": "/device_verify",
-    // CIBA
-    "CibaAuthorizeEndpoint": "/ciba_authz",
-    "CibaPushResultEndpoint": "/ciba_result",
-    
-    // SAML, JWTの署名に使用する X.509 証明書に関するパラメタ
-    "RsaPfxPassword": "test",
-    "RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
-    "EcdsaPfxPassword": "test",
-    "EcdsaPfxFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
-    // ES384 / ES512 は曲線が alg に紐づくので、鍵が分かれる（#129 の段階 3）
-    "Ecdsa384PfxPassword": "test",
-    "Ecdsa384PfxFilePath": "C:/root/files/resource/X509/SHA384ECDSA.pfx",
-    "Ecdsa512PfxPassword": "test",
-    "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
-    "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
-    // **/jwkcerts の Cache-Control: public, max-age=（秒）**（#303。E-7）。
-    //   **0（または未設定）なら no-store**（従来どおり）。
-    //   **鍵を入れ替える周期より短くすること**（入れ替え直後は、この秒数の間だけ
-    //   古い鍵を見る相手が居る。出す側は新旧 2 本を広告する。#291 / #292 の段階 3）。
-    "JwkSetCacheMaxAgeSeconds": "300",
-
-    // プッシュ通知
-    "SetDeviceTokenWebAPI": "/SetDeviceToken",
-    "TwoFactorPushResultEndpoint": "/2fa_result",
-    // HybridFlowのテスト用
-    "TestHybridFlowWebAPI": "/TestHybridFlowWebAPI",
-
-    // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
-    //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
-    //   ここは、その導出で拾えないものを足すための口（空白かカンマ区切り）。
-    //   **末尾の「/」は付けない。「*」は書かない**（落とすので許可されない）。
-    "CorsAllowedOrigins": "",
-
-    // コンテナ内で自己テストがバックチャンネルを呼ぶ場合
-    "OAuth2ContainerizatedAuthSvrFqdnAndPort": "", // ホスト名とポートだけ差し替える（スキームは元のまま）
-    "OAuth2ContainerizatedAuthSvrEPRootURI": "",   // スキームごと差し替える（HTTP のループバックにできる）
-
-    // 外部ログイン
-
-    // **外部 ID を既存アカウントに結び付けるとき、検証済みのメアドを要求する**（#140 の段階 1）。
-    //   未設定でも true（安全側）。false にすると従来どおり（上流の言い値のメアドで結び付ける）。
-    "RequireVerifiedEmailForAccountLinking": "true",
-    // 外部ログイン（MicrosoftAccountAuthentication）
-    "MicrosoftAccountAuthentication": "false",
-    "MicrosoftAccountAuthenticationClientId": "[If necessary, please fill in ClientId of Microsoft Account]",
-    "MicrosoftAccountAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Microsoft Account]",
-    // 外部ログイン（GoogleAuthentication）
-    "GoogleAuthentication": "false",
-    "GoogleAuthenticationClientId": "[If necessary, please fill in ClientId of Google Authentication]",
-    "GoogleAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Google Authentication]",
-    // **Facebook / Twitter のサポートは取り下げた**（#249）。
-    //   **動かないからではなく、維持コストが便益に見合わないため。**
-    //   **アプリ側の登録はコメントアウトしてあるので、true にしても有効にならない。**
-    //   キーだけ残してあるのは、判断が変わったときに戻せるようにするため。
-    // 外部ログイン（FacebookAuthentication）
-    "FacebookAuthentication": "false",
-    "FacebookAuthenticationClientId": "[If necessary, please fill in ClientId of Facebook Authentication]",
-    "FacebookAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Facebook Authentication]",
-    // 外部ログイン（TwitterAuthentication）
-    "TwitterAuthentication": "false",
-    "TwitterAuthenticationClientId": "[If necessary, please fill in ClientId of Twitter Authentication]",
-    "TwitterAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Twitter Authentication]",
-
-    // IDフェデレーション
-    // 既定値はコンテナ、E2Eは、環境変数で上書き。
-    
-    // 値は、上流の /openid-configuration から引ける。
-    // 上流の JWK Set（書けば discovery を読まない。#290）
-    "IdFederationJwkSetUri": "",
-    // discovery（空なら IdFederationAuthorizeEndpoint の基底から組み立てる。#289）
-    "IdFederationOidcDiscoveryUrl": "https://localhost:44301/.well-known/openid-configuration",
-    // 認可エンドポイント
-    "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
-    // Redirectエンドポイント
-    "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
-    // Tokenエンドポイント
-    "IdFederationTokenEndpoint": "https://localhost:44301/token",
-    // UserInfoエンドポイント
-    "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
-    // 上流の署名を検証する証明書
-    "IdFederationOidcCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
-
-    // 値は、上流の /samlmetadata から引ける。
-    // メタデータ（EntityDescriptor）。書けば SSO の口と署名証明書をここから引く（#291）
-    "IdFederationSaml2MetadataUrl": "https://localhost:44301/samlmetadata",
-    // Requestエンドポイント（メタデータから引けなければ、こちらを読む）
-    "IdFederationSaml2RequestEndpoint": "https://localhost:44301/saml2request",
-    // Responseエンドポイント
-    "IdFederationSaml2ResponseEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationAssertionConsumerService",
-    // 期待する上流の Issuer（上流の entityID）
-    "IdFederationSaml2IssuerId": "https://ssoauth.opentouryo.com",
-    // 上流の署名を検証する証明書
-    "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
-
-    // user store に入る秘密を暗号化する鍵（#297）
-    //   **空なら暗号化しない**（平文のまま入る ＝ 従来どおり）。
-    //   **対象は `Saml2OAuth2Data.ClientSecret` と `IdFederationUpstreams.ClientSecret`。**
-    //   **どちらも上流へ送る・画面で再表示する**ので、**ハッシュではなく対称鍵で暗号化する。**
-    //   **設定ファイルの秘密は平文のまま**である（ここで守るのは「DB を見られたとき」）。
-    //   **本番では、ここに直接書かないこと**（環境変数・秘密の管理機構から渡す）。
-    "UserStoreSecretPassword": "",
-
-    // 退役させる途中の署名証明書（#292 の段階 3）
-    //   **/samlmetadata に並べて広告する。** **空なら 1 本だけ**（従来どおり）。
-    //   **鍵を替える前に、新しい証明書をここに書いて広告する** → SP のキャッシュが切れたら
-    //   **署名鍵を入れ替える**（RsaPfxFilePath / SpRp_RsaCerFilePath）→ **古い方をここに書く。**
-    //   **区切りは空白かカンマ。** OIDC 側は JwkSet.json に新旧を並べる（この設定は使わない）。
-    "PreviousSigningCerFilePaths": "",
-
-    // 上流 IdP の登録（n 件。#292 の段階 1）
-    //   **書けば、上の IdFederation* / SpRp_Isser / OAuth2AndOidcClientID より優先する。**
-    //   **空なら、上の単数キーから 1 件が組み立てられる**（従来どおり）。
-    //
-    //   **鍵は短い識別子**（画面の導線の値・Session に控える値・ログに出る値）。
-    //   **protocol は oidc / saml2。** **enabled は空なら有効。**
-    //   **issuer は、期待する iss（OIDC）/ entityID（SAML2）** — **メタデータの照合に使う。**
-    //   **折り返し口（IdFederationRedirectEndpoint / …Saml2ResponseEndpoint）は共通設定のまま**
-    //   （**自分の URL なので相手ごとに変わらない**。全ての上流に同じ 1 本を登録する）。
-    //
-    //   "IdFederationUpstreams": {
-    //     "upstream1": {
-    //       "display_name": "Upstream IdP (OIDC)", "protocol": "oidc", "enabled": "true",
-    //       "issuer": "https://ssoauth.opentouryo.com",
-    //       "client_id": "06d20f595b694114b710c1d85e21bb8e", "client_secret": "...",
-    //       "discovery_url": "https://localhost:44301/.well-known/openid-configuration",
-    //       "jwk_set_uri": "", "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
-    //       "authorize_endpoint": "https://localhost:44301/authorize",
-    //       "token_endpoint": "https://localhost:44301/token",
-    //       "userinfo_endpoint": "https://localhost:44301/userinfo"
-    //     },
-    //     "upstream1_saml2": {
-    //       "display_name": "Upstream IdP (SAML2)", "protocol": "saml2",
-    //       "issuer": "https://ssoauth.opentouryo.com",
-    //       "client_id": "06d20f595b694114b710c1d85e21bb8e",
-    //       "metadata_url": "https://localhost:44301/samlmetadata",
-    //       "sso_endpoint": "https://localhost:44301/saml2request",
-    //       "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
-    //       // **この上流へ送る AuthnRequest に署名する鍵**（#292 の段階 4-a）。
-    //       //   **空なら共通設定**（SpRp_RsaPfxFilePath / SpRp_RsaPfxPassword）。
-    //       //   **相手が「この SP の公開鍵はこれ」と指定してくる配備**のために在る。
-    //       "signing_pfx_file_path": "", "signing_pfx_password": ""
-    //     }
-    //   },
-    "IdFederationUpstreams": {},
-
-    // 機能のロックダウン（全てfalseでSTS専用モードで動作）
-    // サインアップ
-    "EnableSignupProcess": "true",
-    // ユーザ属性編集
-    "EnableEditingOfUserAttribute": "true",
-    // ユーザ・ロール管理
-    "EnableAdministrationOfUsersAndRoles": "true",
-
-    // Discovery の service_documentation **空なら Discovery に出さない**（任意の項目）
-    "ServiceDocumentation": "",
-
-    // テスト用Clientエンドポイント
-    "OAuth2ClientEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
-    // - test_self_saml : AssertionConsumerService
-    "Saml2ResponseEndpoint": "/Account/AssertionConsumerService",
-    // - test_self_code : Authorization Codeグラント種別
-    "OAuth2AuthorizationCodeGrantClient_Account": "/Account/OAuth2AuthorizationCodeGrantClient",
-    // - test_self_token : Implicitグラント種別
-    "OAuth2ImplicitGrantClient_Account": "/Account/OAuth2ImplicitGrantClient",
-    // Redirectエンドポイント（テスト用）のロックダウン
-    "IsLockedDownTestEndpoints": "false",
-    
+    // [CR（構成ファイル）]
     // クライアント識別子 (client_id, client_secret, redirect_uri)
     // このセクションは、CreateClientsIdentity.exeを使用して生成できます。
     // 本稼働前にかならず、以下のclient_id, client_secretを置き換えて下さい。
@@ -615,57 +490,233 @@
       }
     },
 
-    // profile / address のクレームの対応付け（#230）
-    //   **「どのキーを、どのクレームとして返すか」だけを書く。**
-    //   値の在り処は UnstructuredData（JSON）の中のパス（入れ子は「.」で辿る）か、
-    //   user:<項目>（UserName / Email / PhoneNumber のみ）。
-    //   クレーム名に「address.<副フィールド>」と書くと、address オブジェクトを組み立てる。
-    //   **空なら profile / address では何も返らない**（従来どおり）。
-    //   どのクレームがどの scope に属するかは OIDC Core 5.4 が決めており、ここには書かない。
-    //   例 : { "name": "fullName", "given_name": "person.first", "address.postal_code": "addr.zip" }
+    // [DCR（WebAPI→DB）]
+    // **動的クライアント登録（RFC 7591）を開けるか**（#307 の段階 1）。
+    //   **既定は false**（**口そのものを張らない**。開けると /register が出来て、
+    //   Discovery に registration_endpoint が載る）。
+    //   **使うには ROPC も開ける必要がある**
+    //   （EnableResourceOwnerPasswordCredentialsGrantType。管理 API 用の
+    //   アクセス トークンは ROPC で取る）。
+    //   **専用 scope（client_registration）を、構成ファイルか管理画面の
+    //   クライアント登録に明記したクライアントだけが使える。**
+    "EnableDynamicClientRegistration": "false",
+    // **software_statement（RFC 7591 2.3）の発行者**（#307 の段階 4）。
+    //   **「発行者ごと」である。** **クライアントごとではない**
+    //   （**クライアント自身の鍵**は、動的登録の jwks か管理画面に入れる。段階 3）。
+    //   **1 つのソフトウェアに 1 枚配られ、その全ての配置が同じものを提示する**ので、
+    //   **登録が何件になっても、検証鍵は発行者 1 件につき 1 つ**である。
     //
-    //   **利用者名を RP に渡したいなら、ここで preferred_username に対応付ける**（#151 の段階 1）。
-    //     { "preferred_username": "user:UserName" }
-    //   **sub は利用者を指す識別子なので、そこに利用者名を載せてはならない。**
-    //   sub は「その RP の中で利用者を指す識別子」、preferred_username は「表示・照合用の属性」。
-    //   **RP が主キーに使ってよいのは sub だけ**で、preferred_username は変わりうる（改名）。
-    // **標準クレームを返すときのサンプル**（#261）。**既定は空のまま**にしてある。
-    //   左がクレーム名（OIDC Core 5.1）、右が値の在り処。
-    //     ・`UnstructuredData`（JSON）の中のパス … `.` で辿る（例 : address.postal_code）
-    //     ・`user:<項目>` … ApplicationUser から直に取る（UserName / Email / PhoneNumber）
-    //   **IsDebug のとき、2 人目のテスト利用者（tanaka）に、この形の JSON が入る**
-    //   （AccountController.SampleUnstructuredData）。
+    //   **1 件も書かなければ、software_statement は受け付けない**
+    //   （**従来どおり unapproved_software_statement**）。
+    //   **EnableDynamicClientRegistration が false の間は、この設定は効かない**
+    //   （**口そのものが張られていない**）。
     //
-    //   "UserClaimsMapping": {
-    //     "name":                   "name",
-    //     "family_name":            "family_name",
-    //     "given_name":             "given_name",
-    //     "nickname":               "nickname",
-    //     "profile":                "profile",
-    //     "picture":                "picture",
-    //     "website":                "website",
-    //     "gender":                 "gender",
-    //     "birthdate":              "birthdate",
-    //     "zoneinfo":               "zoneinfo",
-    //     "locale":                 "locale",
-    //     "updated_at":             "updated_at",
-    //     "address.formatted":      "address.formatted",
-    //     "address.street_address": "address.street_address",
-    //     "address.locality":       "address.locality",
-    //     "address.region":         "address.region",
-    //     "address.postal_code":    "address.postal_code",
-    //     "address.country":        "address.country",
-    //     "preferred_username":     "user:UserName"
-    //   }
+    //   issuer        : **期待する iss**（statement の iss。**完全一致**）
+    //   cer_file_path : **署名を検証する証明書**（**公開鍵だけで足りる**）
+    //   alg           : **ヘッダの alg と照合する**（空なら RS256）
+    //   enabled       : 空・未設定は true
     //
-    //   **管理画面で入れられるのは usd1 / usd2 の 2 欄だけ**である。
-    //   それ以外のキーは、**導入する側が入れる**（画面を足すか、別の経路で書く）。
+    //   "SoftwareStatementIssuers": {
+    //     "vendor1": {
+    //       "display_name": "Vendor 1", "enabled": "true",
+    //       "issuer": "https://vendor.opentouryo.com",
+    //       // **空白かカンマ区切りで n 本**書ける（#307 の段階 6。**鍵の入れ替えのため**）
+    //       "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Client.cer",
+    //       "alg": "RS256",
+    //       // **この発行者に許す上限**（#307 の段階 6。**空なら絞らない**）
+    //       "allowed_scope": "openid email",
+    //       "allowed_grant_types": "authorization_code refresh_token"
+    //     }
+    //   },
     //
-    //   **E2E だけは、name と address.locality を usd1 / usd2 に向けている**（test.ps1）。
-    //     **画面から入れた値が返ることを測り続けるため**である（RT-230.*）。
-    //     そのため **E2E の報告書には `name ← usd1` と出る。** 上のサンプルとは違う。
-    "UserClaimsMapping": {
-    },
+    //   **cer_file_path を n 本書くのは、発行者の鍵の入れ替えのため**（#307 の段階 6）。
+    //     **入れ替えの間は新旧を並べて書き**、**済んだら古い方を消す**
+    //     （**消すまでは古い鍵も有効**）。**試す順は書いた順**で、
+    //     **1 本目以外で通ったときはログに残る**（**古い鍵をいつ消せるかの判断材料**）。
+    //     **alg は行で 1 つ** — **鍵の種類や alg まで変える入れ替えは、この形では扱えない。**
+    //
+    //   **allowed_scope / allowed_grant_types は、その発行者に許す上限**（#307 の段階 6）。
+    //     **空（未設定）なら絞らない**（段階 4 までと同じ振る舞い）。
+    //     **範囲外を主張されたら unapproved_software_statement で断る**（黙って狭めない）。
+    //     **本文（plain JSON）に書かれた値も、この上限に収める** —
+    //     **statement に書かれていなければ、本文の値が登録の値になる**ためである。
+    //
+    //     **絞るのは「受け入れる側」の決め**である。
+    //     **ベンダが自分で絞る分は statement の中身に書けば済む**
+    //     （**署名されているので、配置側が広げられない**）。
+    //     **実際に登録に入るのは、2 つの積**になる。
+    //
+    //   **E2E では test.ps1 が環境変数で渡す**（RT-307.18 〜 .21）。
+    //     net10.0 : appSettings__SoftwareStatementIssuers__<鍵>__<属性>
+    //     net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
+    //
+    // **動的クライアント登録に software_statement を必須とするか**（#307 の段階 4）。
+    //   **既定は false**（**従来どおり、添えなくても登録できる**）。
+    //   **true にすると「審査を通したソフトウェアだけ登録させる」配備になる。**
+    //   **POST /register と PUT（RFC 7592）の両方に効く** —
+    //   **PUT に効かせないと、statement を省いて、主張された値を書き換えられる。**
+    //   **信頼する発行者を 1 件も書かずに true にすると、動的登録は通らなくなる。**
+    "RequireSoftwareStatement": "false",
+
+    // [Discovery]
+    // Discovery の service_documentation **空なら Discovery に出さない**（任意の項目）
+    "ServiceDocumentation": "",
+
+    // ==== STS（防御） : Config.Sts.Protection.cs ====
+    // [認証の失敗回数]
+    // **認証の失敗を数えて、一定回数で一定時間断る**（#305 の段階 2）。
+    //   **0（または未設定）なら数えない**（従来どおり）。
+    //   **クライアント認証**（client_secret / private_key_jwt）と
+    //   **user_code の投入**が対象（利用者のパスワードは
+    //   MaxFailedAccessAttemptsBeforeLockout 側で既に数えている）。
+    "AuthFailureMaxAttempts": "5",
+    "AuthFailureLockoutSeconds": "300",
+    //   **数えた分を覚えている長さ**（#305 の段階 4）。
+    //     **未設定なら AuthFailureLockoutSeconds と同じ。**
+    //     **行の寿命もこれで決まる**（期限の過ぎた行は掃除される）。
+    "AuthFailureWindowSeconds": "300",
+
+    // [レート制限]
+    // **口ごとのレート制限**（#305 の段階 3）。
+    //   **窓の中の要求の回数を数え、超えた分に 429（Retry-After）を返す。**
+    //   **0（または未設定）なら制限しない**（従来どおり）。
+    //   **client_id ごと**（洪水を起こしたクライアントだけを止める）と
+    //   **送信元アドレスごと**（client_id を毎回変えても効く）の 2 つを数える。
+    //   **プロセスの中に覚える**ので、**インスタンスを増やすとその数だけ緩くなる。**
+    "RateLimitPerClientPermits": "120",
+    "RateLimitPerIpPermits": "600",
+    "RateLimitWindowSeconds": "60",
+
+    // [ポーリングの slow_down]
+    // **ポーリングが interval より速いとき slow_down を返すか**（#305 の段階 1）。
+    //   **未設定は true**（RFC 8628 §3.5 / CIBA §11 のとおり）。
+    //   **false にすると従来どおり** authorization_pending を返し続ける。
+    "EnablePollingSlowDown": "true",
+
+    // ==== STS（口） : Config.Sts.Endpoints.cs ====
+    // [基底]
+    // AuthorizationServerエンドポイント
+    "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
+
+    // コンテナ内で自己テストがバックチャンネルを呼ぶ場合
+    "OAuth2ContainerizatedAuthSvrEPRootURI": "",   // スキームごと差し替える（HTTP のループバックにできる）
+    "OAuth2ContainerizatedAuthSvrFqdnAndPort": "", // ホスト名とポートだけ差し替える（スキームは元のまま）
+
+    // [SAML2]
+    "Saml2RequestEndpoint": "/saml2request",
+    // - test_self_saml : AssertionConsumerService
+    "Saml2ResponseEndpoint": "/Account/AssertionConsumerService",
+
+    // [OAuth2/OIDC]
+    // 認可エンドポイント
+    "OAuth2AuthorizeEndpoint": "/authorize",
+    // Tokenエンドポイント
+    "OAuth2TokenEndpoint": "/token",
+    // RP-Initiated Logout
+    "OAuth2EndSessionEndpoint": "/end_session",
+
+    // [WebAPI]
+    "OAuth2UserInfoEndpoint": "/userinfo",
+    "OAuth2RevokeTokenEndpoint": "/revoke",
+    "OAuth2IntrospectTokenEndpoint": "/introspect",
+    "DcrRegistrationEndpoint": "/register",
+
+    // [その他の WebAPI]
+    // HybridFlowのテスト用
+    "TestHybridFlowWebAPI": "/TestHybridFlowWebAPI",
+
+    // プッシュ通知
+    "SetDeviceTokenWebAPI": "/SetDeviceToken",
+    "TwoFactorPushResultEndpoint": "/2fa_result",
+
+    // [Device AuthZ]
+    "DeviceAuthZAuthorizeEndpoint": "/device_authz",
+    "DeviceAuthZVerifyEndpoint": "/device_verify",
+
+    // [CIBA Core]
+    "CibaAuthorizeEndpoint": "/ciba_authz",
+    "CibaPushResultEndpoint": "/ciba_result",
+
+    // [自己テスト]
+    // テスト用Clientエンドポイント
+    "OAuth2ClientEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
+    // - test_self_code : Authorization Codeグラント種別
+    "OAuth2AuthorizationCodeGrantClient_Account": "/Account/OAuth2AuthorizationCodeGrantClient",
+    // - test_self_token : Implicitグラント種別
+    "OAuth2ImplicitGrantClient_Account": "/Account/OAuth2ImplicitGrantClient",
+    // Redirectエンドポイント（テスト用）のロックダウン
+    "IsLockedDownTestEndpoints": "false",
+
+    // ==== ID 連携 : Config.IdFederation.cs ====
+    // [折り返し口]
+    // 既定値はコンテナ、E2Eは、環境変数で上書き。
+    // Redirectエンドポイント
+    "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
+    // Responseエンドポイント
+    "IdFederationSaml2ResponseEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationAssertionConsumerService",
+
+    // [複数キー（上流 IdP の登録 n 件）]
+    // 上流 IdP の登録（n 件。#292 の段階 1）
+    //   **書けば、上の IdFederation* / SpRp_Isser / OAuth2AndOidcClientID より優先する。**
+    //   **空なら、上の単数キーから 1 件が組み立てられる**（従来どおり）。
+    //
+    //   **鍵は短い識別子**（画面の導線の値・Session に控える値・ログに出る値）。
+    //   **protocol は oidc / saml2。** **enabled は空なら有効。**
+    //   **issuer は、期待する iss（OIDC）/ entityID（SAML2）** — **メタデータの照合に使う。**
+    //   **折り返し口（IdFederationRedirectEndpoint / …Saml2ResponseEndpoint）は共通設定のまま**
+    //   （**自分の URL なので相手ごとに変わらない**。全ての上流に同じ 1 本を登録する）。
+    //
+    //   "IdFederationUpstreams": {
+    //     "upstream1": {
+    //       "display_name": "Upstream IdP (OIDC)", "protocol": "oidc", "enabled": "true",
+    //       "issuer": "https://ssoauth.opentouryo.com",
+    //       "client_id": "06d20f595b694114b710c1d85e21bb8e", "client_secret": "...",
+    //       "discovery_url": "https://localhost:44301/.well-known/openid-configuration",
+    //       "jwk_set_uri": "", "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+    //       "authorize_endpoint": "https://localhost:44301/authorize",
+    //       "token_endpoint": "https://localhost:44301/token",
+    //       "userinfo_endpoint": "https://localhost:44301/userinfo"
+    //     },
+    //     "upstream1_saml2": {
+    //       "display_name": "Upstream IdP (SAML2)", "protocol": "saml2",
+    //       "issuer": "https://ssoauth.opentouryo.com",
+    //       "client_id": "06d20f595b694114b710c1d85e21bb8e",
+    //       "metadata_url": "https://localhost:44301/samlmetadata",
+    //       "sso_endpoint": "https://localhost:44301/saml2request",
+    //       "cer_file_path": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+    //       // **この上流へ送る AuthnRequest に署名する鍵**（#292 の段階 4-a）。
+    //       //   **空なら共通設定**（SpRp_RsaPfxFilePath / SpRp_RsaPfxPassword）。
+    //       //   **相手が「この SP の公開鍵はこれ」と指定してくる配備**のために在る。
+    //       "signing_pfx_file_path": "", "signing_pfx_password": ""
+    //     }
+    //   },
+    "IdFederationUpstreams": {},
+
+    // [単数キー（上流 IdP の登録 1 件。互換） / OIDC]
+    // 値は、上流の /openid-configuration から引ける。
+    // discovery（空なら IdFederationAuthorizeEndpoint の基底から組み立てる。#289）
+    "IdFederationOidcDiscoveryUrl": "https://localhost:44301/.well-known/openid-configuration",
+    // 認可エンドポイント
+    "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
+    // Tokenエンドポイント
+    "IdFederationTokenEndpoint": "https://localhost:44301/token",
+    // UserInfoエンドポイント
+    "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
+    // 上流の JWK Set（書けば discovery を読まない。#290）
+    "IdFederationJwkSetUri": "",
+    // 上流の署名を検証する証明書
+    "IdFederationOidcCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+
+    // [単数キー（上流 IdP の登録 1 件。互換） / SAML2]
+    // 値は、上流の /samlmetadata から引ける。
+    // メタデータ（EntityDescriptor）。書けば SSO の口と署名証明書をここから引く（#291）
+    "IdFederationSaml2MetadataUrl": "https://localhost:44301/samlmetadata",
+    // Requestエンドポイント（メタデータから引けなければ、こちらを読む）
+    "IdFederationSaml2RequestEndpoint": "https://localhost:44301/saml2request",
+    // 期待する上流の Issuer（上流の entityID）
+    "IdFederationSaml2IssuerId": "https://ssoauth.opentouryo.com",
+    // 上流の署名を検証する証明書
+    "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
     // Client-Server共通設定 ----------------------------------------------------------
     "JwkSetUri": "/jwkcerts",
