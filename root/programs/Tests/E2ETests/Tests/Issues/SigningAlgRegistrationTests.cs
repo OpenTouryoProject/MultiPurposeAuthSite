@@ -31,6 +31,7 @@
 //*  2026/10/02  玄人 幸道         新規（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         ES384 / ES512 と、広告と鍵の突き合わせを追加（#129 の段階 3）
 //*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 を追加（#129 の段階 4）
+//*  2026/10/22  玄人 幸道         参照先の名前を Open棟梁 に改めた（#294）
 //**********************************************************************************
 
 using System.Text.Json;
@@ -144,7 +145,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**C-8 で「受ける alg」を固定した**（#129 の段階 1）。"
                     + "**段階 2 で RS384 / RS512 を足した**ので、**ここが通ることが、その証拠**になる。"
-                    + "**受ける集合は `CmnAccessToken.SupportedAlgs` の 1 か所**で、"
+                    + "**受ける集合は `JwsFactory.SupportedAlgs` の 1 か所**で、"
                     + "**Discovery の `id_token_signing_alg_values_supported` も、そこから作っている。**");
 
                 r.Done();
@@ -289,7 +290,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     !accepted, "受けない", accepted ? "**受理してしまった**" : "拒否した");
 
                 r.Note("**`kty` だけで判定していると、ここが通ってしまう**（どちらも `kty=EC`）。"
-                    + "**`crv` まで突き合わせる**ようにした（`CmnAccessToken.IsSameKeyType`）。"
+                    + "**`crv` まで突き合わせる**ようにした（`JwsFactory.IsSameKeyType`）。"
                     + "**実害が出る前に入れた**（ES384 / ES512 を発行し始めるのと同じ段階）。");
 
                 r.Done();

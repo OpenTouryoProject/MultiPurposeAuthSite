@@ -130,6 +130,7 @@
 //*  2026/10/21  玄人 幸道         Front-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 3）
 //*  2026/10/21  玄人 幸道         DPoP の証明を /token で受け、cnf.jkt で発行する（#311 の段階 1）
 //*  2026/10/22  玄人 幸道         dpop_jkt と refresh_token を DPoP の鍵に縛る（#311 の段階 4）
+//*  2026/10/22  玄人 幸道         仕様の部品（prompt・PKCE・redirect URL 等）を Open棟梁 に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -183,7 +184,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region 基本
 
-            OpenIDConfig.Add("issuer", Config.IssuerId);
+            OpenIDConfig.Add("issuer", CmnServerParams.IssuerId);
 
             OpenIDConfig.Add("authorization_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2AuthorizeEndpoint);
@@ -309,10 +310,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #endregion
 
                 #region id_token
-                // **一覧は CmnAccessToken.SupportedAlgs が持つ**（#129 の段階 2）。
+                // **一覧は JwsFactory.SupportedAlgs が持つ**（#129 の段階 2）。
                 //   **発行・検証・広告が同じ一覧を見る**ので、増やしても食い違わない。
                 OpenIDConfig.Add("id_token_signing_alg_values_supported",
-                    new List<string>(CmnAccessToken.SupportedAlgs));
+                    new List<string>(JwsFactory.SupportedAlgs));
 
                 // **alg と enc は対で広告する**（OIDC Discovery 1.0 §3。#189 の 5）。
                 //   実装は JWE_RsaOaepAesGcm（Open棟梁）で、鍵の暗号化が RSA-OAEP、本文が A256GCM。
@@ -490,7 +491,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //     ここ（対応するメソッド）とは別。Discovery にクライアント別の項目は無い。
             List<string> code_challenge_methods_supported = new List<string>();
 
-            if (!Config.RequirePkceS256)
+            if (!CmnServerParams.RequirePkceS256)
             {
                 code_challenge_methods_supported.Add(OAuth2AndOIDCConst.PKCE_plain);
             }
@@ -507,9 +508,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             //  **DPoP に対応したことを広告する**（RFC 9449 §5.1。#311 の段階 1）。
             //    **証明の署名に使える alg** を出す。
-            //    **一覧は `SigningKeys` の表が持つ**（発行・検証・広告が同じ表を見る。#129 の段階 3）。
+            //    **一覧は `JwsFactory.SupportedAlgs` が持つ**（発行・検証・広告が同じ一覧を見る。#129 の段階 3 / #294）。
             //    **非対称の alg だけ**であり、**`none` は入っていない。**
-            OpenIDConfig.Add("dpop_signing_alg_values_supported", CmnAccessToken.SupportedAlgs);
+            OpenIDConfig.Add("dpop_signing_alg_values_supported", JwsFactory.SupportedAlgs);
 
             // **RFC 8705 §3.3 の名前は tls_client_certificate_bound_access_tokens、値は boolean**（#189 の 2）。
             //   以前は mutual_tls_sender_constrained_access_tokens（草案の名前）に文字列の "true" を入れていた。
@@ -573,24 +574,11 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>再認証の印（Cookie）を有効とみなす長さ（秒）</summary>
         /// <remarks>
-        /// **繰り返しを防ぐ最後の砦。** 主たる判定は秒単位の比較（`CheckAuthTime` の末尾）で、
+        /// **繰り返しを防ぐ最後の砦。** 主たる判定は秒単位の比較（`OAuth2AndOIDCSpec.CheckAuthTime`）で、
         /// **印はそれでも収束しない場合のための保険**である。
         /// **人がサインインを終えるまでの時間**を見込んで 10 分。
         /// </remarks>
         private const int ReAuthenticationMarkerLifetimeSeconds = 600;
-
-        /// <summary>max_age の判定の結果</summary>
-        public enum AuthTimeCheck
-        {
-            /// <summary>そのまま続けてよい</summary>
-            Ok,
-
-            /// <summary>max_age が数値（0 以上の整数）でない</summary>
-            InvalidMaxAge,
-
-            /// <summary>再認証が必要（prompt=none なら login_required）</summary>
-            NeedsReAuthentication
-        }
 
         /// <summary>max_age と auth_time を照合する（#247）</summary>
         /// <param name="max_age">要求の max_age（空なら判定しない）</param>
@@ -616,50 +604,32 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 経過時間は 0 より大きくなるため、印が無いと延々と送り返すことになる。
         /// **印より後に認証されていれば、一度は再認証したと見て続ける。**
         /// </remarks>
-        public static AuthTimeCheck CheckAuthTime(string max_age, string authTime, string reAuthenticatedAt)
+        public static OAuth2AndOIDCEnum.AuthTimeCheck CheckAuthTime(string max_age, string authTime, string reAuthenticatedAt)
         {
-            if (string.IsNullOrEmpty(max_age))
-            {
-                // max_age の指定なし
-                return AuthTimeCheck.Ok;
-            }
+            //  **照合（max_age の形・秒単位の比較）は Open棟梁 の `OAuth2AndOIDCSpec.CheckAuthTime`**（#294）。
+            //    **秒で比べるのが要**である（小数で比べると、`max_age=0` では再認証の直後も超過になる）。
+            OAuth2AndOIDCEnum.AuthTimeCheck ret =
+                OAuth2AndOIDCSpec.CheckAuthTime(max_age, CmnEndpoints.FromW3c(authTime));
 
-            // **0 以上の整数であること**（OIDC Core 3.1.2.1）。
-            if (!int.TryParse(max_age, out int maxAge) || maxAge < 0)
+            if (ret != OAuth2AndOIDCEnum.AuthTimeCheck.NeedsReAuthentication)
             {
-                return AuthTimeCheck.InvalidMaxAge;
+                return ret;
             }
-
-            DateTime? authenticatedAt = CmnEndpoints.FromW3c(authTime);
 
             // **印（一度求めた証）が在って、それが古すぎなければ通す**（繰り返しの最後の砦）。
-            //   **この印だけに頼らない。** 下の「秒単位の比較」で、たいていの場合はここまで来ない。
+            //   **この印だけに頼らない。** 上の「秒単位の比較」で、たいていの場合はここまで来ない。
             //   印は**サインインの往復で失われることがある**ため（実測）、
-            //   **主たる判定は下の秒単位の比較**に置く。
+            //   **主たる判定は上の秒単位の比較**に置く。
             DateTime? askedAt = CmnEndpoints.FromW3c(reAuthenticatedAt);
 
             if (askedAt != null
                 && (DateTime.UtcNow - (DateTime)askedAt).TotalSeconds
                     <= CmnEndpoints.ReAuthenticationMarkerLifetimeSeconds)
             {
-                return AuthTimeCheck.Ok;
+                return OAuth2AndOIDCEnum.AuthTimeCheck.Ok;
             }
 
-            if (authenticatedAt == null)
-            {
-                // 認証時刻が分からない（Cookie が無い・読めない）
-                return AuthTimeCheck.NeedsReAuthentication;
-            }
-
-            // **経過は「秒」で比べる**（切り捨て。#247）。
-            //   `auth_time` も `max_age` も秒単位なので、**秒未満の差を超過とみなさない。**
-            //   これが要である。小数のまま比べると、**再認証した直後でも
-            //   「0.3 秒 > 0 秒」で超過**となり、`max_age=0` では何度でも求めることになる
-            //   （印が失われる環境では、それが二度のサインインとして現れた。実測）。
-            long elapsedSeconds = (long)(DateTime.UtcNow - (DateTime)authenticatedAt).TotalSeconds;
-
-            return (elapsedSeconds <= maxAge)
-                ? AuthTimeCheck.Ok : AuthTimeCheck.NeedsReAuthentication;
+            return ret;
         }
 
         /// <summary>W3C 形式の時刻を読む（読めなければ null）</summary>
@@ -674,7 +644,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             try
             {
-                return FormatConverter.FromW3cTimestamp(value);
+                //  **UTC として読む**（W3C 形式の末尾の `Z` を落として読むので、種別が不定になる）。
+                //    **不定のまま渡すと、`OAuth2AndOIDCSpec.CheckAuthTime` が現地時刻とみなして UTC へずらす。**
+                return DateTime.SpecifyKind(FormatConverter.FromW3cTimestamp(value), DateTimeKind.Utc);
             }
             catch
             {
@@ -720,7 +692,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   完全一致のままで正しくなる。**
             //   **`ref` にしたのは、呼び出し元を取りこぼさないため**
             //   （コンパイラが全ての呼び出し元に `ref` を書かせる）。
-            response_type = CmnEndpoints.NormalizeResponseType(response_type);
+            response_type = OAuth2AndOIDCSpec.NormalizeResponseType(response_type);
 
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
@@ -911,7 +883,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // **`none` を他の値と併記していないか**（OIDC Core §3.1.2.1）。
                 //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
-                if (!CmnEndpoints.CheckPrompt(prompt, ref err, ref errDescription))
+                if (!OAuth2AndOIDCSpec.CheckPrompt(prompt, ref err, ref errDescription))
                 {
                     return false;
                 }
@@ -1139,41 +1111,21 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// **英数字だけの値では、どちらも同じ文字列になる**ので、この分岐は効かない。
         ///
-        /// ここで照合を試すのは**読むだけ**（設定・ストアの参照）なので、副作用は無い。
+        /// **切り替えは Open棟梁 の `AuthenticationHeader.GetCredentials`（照合を渡す版）が行う**（#294）。
+        /// ここで渡すのは**照合**で、**読むだけ**（設定・ストアの参照）なので、副作用は無い。
         /// **フォーム（`client_secret_post`）の値は復号しない。**
         /// そちらは枠組みが既に復号しており、二重に復号すると壊れる。
         /// </remarks>
         public static bool GetBasicCredentials(
             string authHeader, out string client_id, out string client_secret)
         {
-            client_id = "";
-            client_secret = "";
-
-            if (!AuthenticationHeader.GetCredentials(authHeader,
-                out string decodedId, out string decodedSecret,
-                out string rawId, out string rawSecret))
-            {
-                return false;
-            }
-
-            client_id = decodedId;
-            client_secret = decodedSecret;
-
-            if (decodedId != rawId || decodedSecret != rawSecret)
-            {
-                // 符号化されていた（または、符号化しないクライアントが記号を含む値を送った）。
-                //   **復号後で認証できなければ、復号前で扱う。**
-                X509Certificate2 none = null;
-
-                if (!CmnEndpoints.ClientAuthentication(
-                    decodedId, decodedSecret, ref none, out ClientModePolicy.Proof _))
+            return AuthenticationHeader.GetCredentials(authHeader,
+                (id, secret) =>
                 {
-                    client_id = rawId;
-                    client_secret = rawSecret;
-                }
-            }
-
-            return true;
+                    X509Certificate2 none = null;
+                    return CmnEndpoints.ClientAuthentication(id, secret, ref none, out ClientModePolicy.Proof _);
+                },
+                out client_id, out client_secret);
         }
 
         #endregion
@@ -1319,7 +1271,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             try
             {
-                JObject payload = CmnEndpoints.TryReadJwtPayload(idTokenHint);
+                JObject payload = JwtReader.TryReadPayload(idTokenHint);
 
                 if (payload == null)
                 {
@@ -1328,7 +1280,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // **自分が発行したものか**（§2 の MUST）。
                 if (!string.Equals(
-                    (string)payload[OAuth2AndOIDCConst.iss], Config.IssuerId, StringComparison.Ordinal))
+                    (string)payload[OAuth2AndOIDCConst.iss], CmnServerParams.IssuerId, StringComparison.Ordinal))
                 {
                     return false;
                 }
@@ -1374,49 +1326,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region JWT の読み取り（#241）
-
-        /// <summary>JWT の payload を読む（JWT でなければ null）</summary>
-        /// <param name="jwt">JWS（コンパクト形式）</param>
-        /// <returns>payload（読めなければ null）</returns>
-        /// <remarks>
-        /// **外から来た文字列を、例外にせず読む**（#241）。
-        /// 公開鍵を引くには payload の `iss` が要るので、**署名検証の前に読む**ことになる。
-        /// そこで壊れた値を渡されると、以前は処理されない例外で **HTTP 500** になっていた。
-        ///
-        /// | 渡された値 | 以前 |
-        /// |---|---|
-        /// | `.` が無い | `Split('.')[1]` が IndexOutOfRangeException |
-        /// | Base64URL でない | FormatException |
-        /// | JSON がオブジェクトでない | null が返り、呼び先で NullReferenceException |
-        ///
-        /// **`JObject` で読む**（`Dictionary&lt;string, string&gt;` だと、
-        /// 入れ子のクレーム（`cnf` など）で変換に失敗する）。
-        /// </remarks>
-        public static JObject TryReadJwtPayload(string jwt)
-        {
-            if (string.IsNullOrEmpty(jwt))
-            {
-                return null;
-            }
-
-            string[] parts = jwt.Split('.');
-
-            if (parts.Length < 2)
-            {
-                return null;
-            }
-
-            try
-            {
-                return JsonConvert.DeserializeObject(CustomEncode.ByteToString(
-                    CustomEncode.FromBase64UrlString(parts[1]), CustomEncode.us_ascii)) as JObject;
-            }
-            catch
-            {
-                // Base64URL でない、JSON でない（外から来た値なので、例外にしない）。
-                return null;
-            }
-        }
 
         /// <summary>公開鍵（JWK）を、登録する形（Base64URL）にする（#307 の段階 3）</summary>
         /// <param name="jwk">JWK（1 本。JWK Set ではない）</param>
@@ -1468,60 +1377,6 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region GetClientAssertion
-
-        /// <summary>client_assertion（RFC 7523 §2.2）</summary>
-        /// <remarks>Open棟梁 の定数に無いので、ここで定義する（#238）。</remarks>
-        public const string ClientAssertion = "client_assertion";
-
-        /// <summary>client_assertion_type（RFC 7523 §2.2）</summary>
-        public const string ClientAssertionType = "client_assertion_type";
-
-        /// <summary>client_assertion_type の値（RFC 7523 §2.2）</summary>
-        public const string JwtBearerClientAssertionType =
-            "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
-
-        /// <summary>
-        /// クライアント認証のアサーションを取り出す（#238）
-        /// </summary>
-        /// <param name="clientAssertion">client_assertion（RFC 7523 §2.2 の名前）</param>
-        /// <param name="clientAssertionType">client_assertion_type</param>
-        /// <param name="assertion">assertion（この実装が従来読んでいた名前）</param>
-        /// <returns>アサーション（無い・受け付けられないなら空）</returns>
-        /// <remarks>
-        /// **RFC 7523 §2.2 が定めているのは `client_assertion`**（＋ `client_assertion_type`）。
-        /// `assertion` は **JWT Bearer グラント**（§2.1）のパラメタで、別物である。
-        /// この実装は 3 つの口（`/token`・`/par`・`/ciba_authz`）で `assertion` を読んでいたため、
-        /// **仕様に従うクライアントが private_key_jwt で認証できなかった。**
-        ///
-        /// **両方を受ける。** `client_assertion` を優先し、無ければ `assertion` も読む
-        /// （Open棟梁 の既存のクライアントは `assertion` を送るため。OpenTouryo #592）。
-        ///
-        /// **`client_assertion_type` が来ていて、値が違うなら受け付けない**（空を返す）。
-        /// 呼び先はアサーション無しとして扱い、**クライアント認証の失敗**（`invalid_client`）になる。
-        /// </remarks>
-        public static string GetClientAssertion(
-            string clientAssertion, string clientAssertionType, string assertion)
-        {
-            if (!string.IsNullOrEmpty(clientAssertion))
-            {
-                // **型が明示されていれば、確かめる。**
-                //   省略されていても受ける（この実装が従来、型を見ていなかったため）。
-                if (!string.IsNullOrEmpty(clientAssertionType)
-                    && clientAssertionType != CmnEndpoints.JwtBearerClientAssertionType)
-                {
-                    return "";
-                }
-
-                return clientAssertion;
-            }
-
-            // 従来の名前（後方互換）
-            return assertion ?? "";
-        }
-
-        #endregion
-
         #region RegisterRequestObject
 
         /// <summary>
@@ -1557,7 +1412,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // 公開鍵取得にissが必要。
             // - issを取り出す。
             //   **JWT でない値を渡されても、例外にしない**（#241）。
-            JObject payload = CmnEndpoints.TryReadJwtPayload(requestObject);
+            JObject payload = JwtReader.TryReadPayload(requestObject);
 
             if (payload == null)
             {
@@ -1600,7 +1455,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (!CmnEndpoints.AllowsVerifyingAlg(
                     Helper.GetInstance().GetRequestObjectSigningAlg(iss),
                     CmnEndpoints.RequestObjectSigningAlgs,
-                    CmnEndpoints.TryReadJwtAlg(requestObject)))
+                    JwtReader.TryReadAlg(requestObject)))
                 {
                     return false;
                 }
@@ -1624,7 +1479,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   差分を読みやすくするためだけ）。`exp` は**数値**で返す（文字列にしない）。
             ret = new Dictionary<string, object>()
             {
-                { OAuth2AndOIDCConst.iss, Config.IssuerId },
+                { OAuth2AndOIDCConst.iss, CmnServerParams.IssuerId },
                 { OAuth2AndOIDCConst.aud, iss },
                 { OAuth2AndOIDCConst.request_uri, OAuth2AndOIDCConst.UrnRequestUriBase + urn },
                 // **有効期限を返す**（#188。以前は空文字だった）。
@@ -1728,7 +1583,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (!CmnEndpoints.AllowsVerifyingAlg(
                     Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
                     CmnEndpoints.RequestObjectSigningAlgs,
-                    CmnEndpoints.TryReadJwtAlg(request)))
+                    JwtReader.TryReadAlg(request)))
                 {
                     err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description,
@@ -1768,8 +1623,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         // クライアント認証の値は預からない（#238 で assertion も対象にした）
                         case OAuth2AndOIDCConst.client_secret:
-                        case CmnEndpoints.ClientAssertion:
-                        case CmnEndpoints.ClientAssertionType:
+                        case OAuth2AndOIDCConst.client_assertion:
+                        case OAuth2AndOIDCConst.client_assertion_type:
                         case OAuth2AndOIDCConst.assertion:
                             break;
 
@@ -2180,7 +2035,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
             else
             {
-                if (aud != Config.IssuerId)
+                if (aud != CmnServerParams.IssuerId)
                 {
                     // CIBA Core 13 : invalid_request
                     err = OAuth2AndOIDCConst.invalid_request;
@@ -2504,55 +2359,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 && registeredAlg == actualAlg;
         }
 
-        /// <summary>JWT のヘッダから alg を読む（読めなければ null）（#262）</summary>
-        /// <param name="jwt">JWS（コンパクト形式）</param>
-        /// <returns>alg（読めなければ null）</returns>
-        /// <remarks>
-        /// **`TryReadJwtPayload` と対の、純粋な読み取り**である。
-        /// **`software_statement` の検証でも使う**ので公開した（#307 の段階 4）。
-        /// </remarks>
-        public static string TryReadJwtAlg(string jwt)
-        {
-            JObject header = CmnEndpoints.TryReadJwtHeader(jwt);
-
-            return (header == null) ? null : (string)header[JwtConst.alg];
-        }
-
-        /// <summary>JWT のヘッダを読む（読めなければ null）（#311 の段階 1）</summary>
-        /// <param name="jwt">JWS（コンパクト形式）</param>
-        /// <returns>ヘッダ（読めなければ null）</returns>
-        /// <remarks>
-        /// **`TryReadJwtPayload` と対の、純粋な読み取り**である。
-        /// **DPoP の証明は、ヘッダに公開鍵（`jwk`）を持つ**ので、
-        /// **ヘッダ全体を読む口が要る**（`TryReadJwtAlg` もここに委ねている）。
-        /// </remarks>
-        public static JObject TryReadJwtHeader(string jwt)
-        {
-            if (string.IsNullOrEmpty(jwt))
-            {
-                return null;
-            }
-
-            try
-            {
-                string[] segments = jwt.Split('.');
-
-                if (segments.Length != 3)
-                {
-                    return null;
-                }
-
-                return (JObject)JsonConvert.DeserializeObject(
-                    CustomEncode.ByteToString(
-                        CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
-            }
-            catch
-            {
-                // Base64Url・JSON として壊れている。
-                return null;
-            }
-        }
-
         #endregion
 
         #region VerifyPkce
@@ -2574,40 +2380,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             string code, string client_id, string redirect_uri,
             string code_verifier, out bool usedS256)
         {
-            usedS256 = false;
-
             AuthorizationCodeProvider.ReceiveChallenge(
                 code, client_id, redirect_uri,
                 out string code_challenge_method, out string code_challenge);
 
-            if (string.IsNullOrEmpty(code_challenge_method)
-                || string.IsNullOrEmpty(code_challenge))
-            {
-                // 認可要求で PKCE を使っていない（code_verifier だけ送られた）。
-                return false;
-            }
-
-            if (code_challenge_method.ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
-            {
-                usedS256 = (code_challenge
-                    == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier));
-
-                return usedS256;
-            }
-
-            if (code_challenge_method.ToLower() == OAuth2AndOIDCConst.PKCE_plain)
-            {
-                if (Config.RequirePkceS256)
-                {
-                    // plain は受け付けない設定（#220）
-                    return false;
-                }
-
-                return (code_challenge == code_verifier);
-            }
-
-            // 未知のメソッド
-            return false;
+            //  **照合は Open棟梁 の `OAuth2AndOIDCSpec.VerifyPkce`**（#294）。
+            //    認可要求で PKCE を使っていない（code_verifier だけ送られた）・未知のメソッドは false。
+            //    **plain を受けるかは `RequirePkceS256` で決まる**（設定を読む版）。
+            return OAuth2AndOIDCSpec.VerifyPkce(
+                code_challenge_method, code_challenge, code_verifier, out usedS256);
         }
 
         #endregion
@@ -2900,7 +2681,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
                                 HashClaimType.AtHash | HashClaimType.SHash,
-                                Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString, signingAlg);
+                                CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, jwkString, signingAlg);
                         }
                     }
                 }
@@ -3012,7 +2793,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, code, state, // at_hash, c_hash, s_hash
                             HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString, signingAlg);
+                            CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, jwkString, signingAlg);
                     }
                 }
 
@@ -4593,162 +4374,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             return ret;
         }
 
-        #region NormalizeResponseType
-
-        /// <summary>response_type を正規化する（#267）</summary>
-        /// <param name="response_type">response_type</param>
-        /// <returns>正規化した response_type</returns>
-        /// <remarks>
-        /// **`response_type` は順不同の空白区切り集合**である
-        /// （OAuth 2.0 Multiple Response Type Encoding Practices §3。**並びは意味を持たない**）。
-        /// **以前は文字列の完全一致で照合していたため、`id_token code` と書く RP を弾いていた。**
-        ///
-        /// **空白で分け、空を捨て、重複を除き、辞書順に並べて、空白 1 個で繋ぐ。**
-        /// **辞書順が、そのまま `OAuth2AndOIDCConst` の並びになる**ので、定数側は変えなくてよい。
-        ///
-        /// ```
-        /// code &lt; id_token &lt; token
-        ///   → "code id_token token" / "id_token token" / "code token" / "code id_token"
-        /// ```
-        ///
-        /// **大文字小文字は、いまの扱いを変えない。**
-        /// **仕様では値は case-sensitive** だが、**以前から `ToLower()` していて `CODE` も通っていた。**
-        /// **ここは安全性の性質ではなく、弾く範囲が変わるだけ**なので、
-        /// **寛容さを残す**（`Contributing.ja.md` の下位互換の方針）。
-        /// #263 で `redirect_uri` を厳密にしたのは、**仕様が単純文字列比較を明示し、
-        /// かつ照合の緩さが安全性に効く**ためで、性質が違う。
-        /// </remarks>
-        public static string NormalizeResponseType(string response_type)
-        {
-            if (string.IsNullOrEmpty(response_type))
-            {
-                return response_type;
-            }
-
-            // **区切りは空白。** 連続した空白やタブでも分かれるようにする。
-            string[] types = response_type.ToLower().Split(
-                new char[] { ' ', '	' }, StringSplitOptions.RemoveEmptyEntries);
-
-            List<string> normalized = new List<string>();
-
-            foreach (string type in types)
-            {
-                // **重複は 1 つにする**（"code code" は "code"）。
-                if (!normalized.Contains(type))
-                {
-                    normalized.Add(type);
-                }
-            }
-
-            normalized.Sort(StringComparer.Ordinal);
-
-            return string.Join(" ", normalized);
-        }
-
-        #endregion
-
-        #region Prompt
-
-        /// <summary>prompt の値 : none（OIDC Core §3.1.2.1）</summary>
-        public const string PromptNone = "none";
-
-        /// <summary>prompt の値 : login（再認証を求める。#272 の段階 2）</summary>
-        public const string PromptLogin = "login";
-
-        /// <summary>prompt の値 : consent（同意を取り直す。#272 の段階 2）</summary>
-        public const string PromptConsent = "consent";
-
-        /// <summary>prompt の値 : select_account（アカウントを選ばせる。#272 の段階 2）</summary>
-        public const string PromptSelectAccount = "select_account";
-
-        /// <summary>prompt を空白区切りの集合として分ける（#272 の段階 1）</summary>
-        /// <param name="prompt">prompt</param>
-        /// <returns>値の一覧（重複なし。空なら空の一覧）</returns>
-        /// <remarks>
-        /// **`prompt` は空白区切りの集合**である（OIDC Core §3.1.2.1）。
-        /// **並びは意味を持たない**ので、`response_type`（#267）と同じ扱いにする。
-        ///
-        /// **大文字小文字は、いまの扱いを変えない。**
-        /// **仕様では値は case-sensitive** だが、**以前から `ToLower()` していた**。
-        /// #267 と同じ理由で、**寛容さを残す**（`Contributing.ja.md` の下位互換の方針）。
-        /// </remarks>
-        public static List<string> SplitPrompt(string prompt)
-        {
-            List<string> values = new List<string>();
-
-            if (string.IsNullOrEmpty(prompt))
-            {
-                return values;
-            }
-
-            foreach (string value in prompt.ToLower().Split(
-                new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (!values.Contains(value))
-                {
-                    values.Add(value);
-                }
-            }
-
-            return values;
-        }
-
-        /// <summary>prompt に、その値が入っているか（#272 の段階 1）</summary>
-        /// <param name="prompt">prompt</param>
-        /// <param name="value">探す値（`PromptNone` など）</param>
-        /// <returns>入っていれば true</returns>
-        /// <remarks>
-        /// **以前は、同じ要求の中で照合規則が 2 つあった。**
-        ///
-        /// | 書き方 | 問題 |
-        /// |---|---|
-        /// | `prompt.ToLower().Contains("none")` | **部分文字列**なので、**`prompt=nonexistent` でも true になっていた** |
-        /// | `prompt.ToLower() == "none"` | **完全一致**なので、**`prompt=none login` で false になっていた** |
-        ///
-        /// **同じ `/authorize` の中でこの 2 つが混在していた**ので、
-        /// **`prompt=none login` は「login_required の判定では none 扱い、
-        /// 同意画面の判定では none でない」という状態になっていた。**
-        /// </remarks>
-        public static bool HasPrompt(string prompt, string value)
-        {
-            return CmnEndpoints.SplitPrompt(prompt).Contains(value);
-        }
-
-        /// <summary>prompt の組み合わせを確かめる（#272 の段階 1）</summary>
-        /// <param name="prompt">prompt</param>
-        /// <param name="err">string</param>
-        /// <param name="errDescription">string</param>
-        /// <returns>正しければ true</returns>
-        /// <remarks>
-        /// **`none` は、他の値と併記できない**（OIDC Core §3.1.2.1 :
-        /// 「If this parameter contains none with any other value, an error is returned.」）。
-        ///
-        /// **これを入れないと、集合にしたことで振る舞いが悪くなる。**
-        /// 以前の `prompt=none login` は**同意画面を出していた**が、
-        /// 集合の判定に揃えると**同意を飛ばして code を発行する**ことになる。
-        /// **仕様どおりエラーにするのが、安全側でもある。**
-        ///
-        /// **既知でない値は、それ自身ではエラーにしない**
-        /// （§3.1.2.1 は未知の値を `invalid_request` とはしていない）。
-        /// **ただし `none` と併記されたときは「他の値」なので、エラーになる。**
-        /// </remarks>
-        public static bool CheckPrompt(string prompt, ref string err, ref string errDescription)
-        {
-            List<string> values = CmnEndpoints.SplitPrompt(prompt);
-
-            if (values.Contains(CmnEndpoints.PromptNone)
-                && 1 < values.Count)
-            {
-                err = OAuth2AndOIDCConst.invalid_request;
-                errDescription = "prompt=none must not be combined with other values.";
-                return false;
-            }
-
-            return true;
-        }
-
-        #endregion
-
         #region GetCorsAllowedOrigins
 
         /// <summary>CORS で許可するオリジン（#265）</summary>
@@ -4877,76 +4502,61 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region Redirect URLの組み立て
-
-        /// <summary>リダイレクト先URLに、パラメタを付ける</summary>
-        /// <param name="redirectUri">リダイレクト先</param>
-        /// <param name="parameters">付けるパラメタ（値が空のものは付けない）</param>
-        /// <param name="useFragment">true : フラグメント（#）、false : クエリ文字列（?）</param>
-        /// <returns>URL</returns>
-        /// <remarks>
-        /// #187
-        /// - **既にクエリ文字列を持つredirect_uriでも壊れない**よう、区切りを ? と & で切り替える。
-        /// - **値は必ずURLエンコードする。** stateはクライアントが自由に決められるため、
-        ///   生で連結するとリダイレクト先URLにパラメタを注入できてしまう。
-        /// - 値が空のパラメタは付けない。stateは、要求に含まれた場合のみ返す（RFC 6749 4.1.2）。
-        /// </remarks>
-        public static string BuildRedirectUrl(
-            string redirectUri, Dictionary<string, string> parameters, bool useFragment = false)
-        {
-            StringBuilder sb = new StringBuilder();
-
-            // **どの認可サーバからの応答かを示す**（RFC 9207。#231）。
-            //   RP が複数の IdP を使うとき、応答を取り違えさせる攻撃（Mix-Up）への対策。
-            //   **成功にも失敗にも付ける**（同 §2）。
-            //
-            //   JARM（response=...）のときは付けない。**署名された JWT の中に iss が入っており**
-            //   （CmnResponseObject）、そちらが同じ役目を果たすため。
-            if (!parameters.ContainsKey(OAuth2AndOIDCConst.iss)
-                && !parameters.ContainsKey("response"))
-            {
-                parameters = new Dictionary<string, string>(parameters);
-                parameters[OAuth2AndOIDCConst.iss] = Config.IssuerId;
-            }
-
-            foreach (KeyValuePair<string, string> p in parameters)
-            {
-                if (string.IsNullOrEmpty(p.Value)) continue;
-
-                if (sb.Length != 0) sb.Append("&");
-                sb.Append(Uri.EscapeDataString(p.Key));
-                sb.Append("=");
-                sb.Append(Uri.EscapeDataString(p.Value));
-            }
-
-            if (sb.Length == 0) return redirectUri;
-
-            if (useFragment)
-            {
-                return redirectUri + (redirectUri.Contains("#") ? "&" : "#") + sb.ToString();
-            }
-            else
-            {
-                return redirectUri + (redirectUri.Contains("?") ? "&" : "?") + sb.ToString();
-            }
-        }
-
-        #endregion
-
         #region エラー応答（HTTP ステータス・WWW-Authenticate）
 
         /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2 / RFC 6750 3.1）</summary>
         /// <param name="err">error / error_description を持つ辞書</param>
         /// <returns>HTTP ステータス（invalid_client / invalid_token は 401、それ以外は 400）</returns>
         /// <remarks>
-        /// 以前は、どのエンドポイントも Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
-        /// RFC 6749 5.2 : エラーは 400。invalid_client（クライアント認証の失敗）は 401。
-        /// RFC 6750 3.1 : invalid_token（無効・失効・期限切れの Bearer トークン）は 401。
-        /// CIBA Core 13 : invalid_client は 401、それ以外（invalid_scope・unknown_user_id など）は 400。
-        /// Device / CIBA のポーリングのエラー（authorization_pending など）も 400（RFC 8628 3.5）。
+        /// **表は Open棟梁 の `OAuth2AndOIDCSpec.GetErrorStatusCode` が持つ**（#294）。
+        /// ここは**辞書から `error` を取り出すだけ**である。
         /// 実際の応答（IActionResult / IHttpActionResult）は、フレームワークごとに各アプリで作る。
         /// </remarks>
         public static int GetErrorStatusCode(Dictionary<string, string> err)
+        {
+            return OAuth2AndOIDCSpec.GetErrorStatusCode(CmnEndpoints.ErrorOf(err));
+        }
+
+        /// <summary>保護されたリソースのエラー応答の HTTP ステータス（#311 の段階 4）</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>HTTP ステータス</returns>
+        /// <remarks>
+        /// **`use_dpop_nonce` は、口によって状態が違う**（RFC 9449。`/token` は 400、リソースは 401）。
+        /// **表は Open棟梁 の `OAuth2AndOIDCSpec.GetResourceErrorStatusCode` が持つ**（#294）。
+        /// </remarks>
+        public static int GetResourceErrorStatusCode(Dictionary<string, string> err)
+        {
+            return OAuth2AndOIDCSpec.GetResourceErrorStatusCode(CmnEndpoints.ErrorOf(err));
+        }
+
+        /// <summary>チャレンジの中身を作る（RFC 6750 §3 / RFC 9449 §7.1）</summary>
+        /// <param name="scheme">`AuthenticationHeader.GetChallengeScheme` が返したスキーム</param>
+        /// <param name="realm">realm（保護資源の名前）</param>
+        /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
+        /// <returns>スキーム名より後ろ</returns>
+        /// <remarks>
+        /// **組み立ては Open棟梁 の `AuthenticationHeader.CreateChallengeParameter` が行う**（#294）。
+        /// ここで決めるのは、**`DPoP` のときに示す `algs`**（§7.1。**証明の署名に使える alg**）で、
+        /// **Discovery の `dpop_signing_alg_values_supported` と同じ一覧**を渡す。
+        /// </remarks>
+        public static string GetChallengeParameter(
+            string scheme, string realm, Dictionary<string, string> err)
+        {
+            string errorDescription = null;
+
+            if (err != null)
+            {
+                err.TryGetValue(OAuth2AndOIDCConst.error_description, out errorDescription);
+            }
+
+            return AuthenticationHeader.CreateChallengeParameter(
+                scheme, realm, CmnEndpoints.ErrorOf(err), errorDescription, JwsFactory.SupportedAlgs);
+        }
+
+        /// <summary>辞書から error を取り出す</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>error（無ければ null）</returns>
+        private static string ErrorOf(Dictionary<string, string> err)
         {
             string error = null;
 
@@ -4955,109 +4565,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.TryGetValue(OAuth2AndOIDCConst.error, out error);
             }
 
-            if (error == OAuth2AndOIDCConst.invalid_client || error == OAuth2AndOIDCConst.invalid_token)
-            {
-                return 401;
-            }
-
-            return 400;
-        }
-
-        /// <summary>保護されたリソースのエラー応答の HTTP ステータス（#311 の段階 4）</summary>
-        /// <param name="err">error / error_description を持つ辞書</param>
-        /// <returns>HTTP ステータス</returns>
-        /// <remarks>
-        /// **`use_dpop_nonce` は、口によって状態が違う**（RFC 9449）。
-        ///
-        /// | 口 | 状態 |
-        /// |---|---|
-        /// | **`/token`** | **400**（§8。**トークン エンドポイントのエラー**） |
-        /// | **保護されたリソース** | **401**（§9。**チャレンジである**） |
-        ///
-        /// **同じ error で状態が違う**ので、**口の側で決める** —
-        /// **`GetErrorStatusCode` は `/token` の表**であり、そこに混ぜない。
-        /// </remarks>
-        public static int GetResourceErrorStatusCode(Dictionary<string, string> err)
-        {
-            if (err != null
-                && err.TryGetValue(OAuth2AndOIDCConst.error, out string error)
-                && error == CmnDPoP.UseDPoPNonce)
-            {
-                return 401;
-            }
-
-            return CmnEndpoints.GetErrorStatusCode(err);
-        }
-
-        /// <summary>Bearer トークンのエラー応答の WWW-Authenticate を作る（RFC 6750 3）</summary>
-        /// <param name="realm">realm（保護資源の名前）</param>
-        /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
-        /// <returns>WWW-Authenticate の値のうち、スキーム名（Bearer）より後ろ</returns>
-        /// <remarks>
-        /// RFC 6750 3 : 保護資源は、トークンが無い・無効な要求に WWW-Authenticate: Bearer を返す（#196）。
-        /// - トークンが無い（ヘッダ無し、または他の方式）: realm だけ。エラー情報は付けない（3.1 : SHOULD NOT）
-        /// - 無効なトークン : error と error_description を付ける
-        /// 値には固定の文字列を渡すこと（quoted-string の中に " と \ は入れられない）。
-        /// ヘッダの付け方はフレームワークごとに違うので、各アプリで付ける。
-        /// </remarks>
-        public static string GetBearerChallengeParameter(string realm, Dictionary<string, string> err)
-        {
-            List<string> items = new List<string>();
-            items.Add("realm=\"" + realm + "\"");
-
-            if (err != null)
-            {
-                foreach (string key in new string[] { OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.error_description })
-                {
-                    if (err.TryGetValue(key, out string value) && !string.IsNullOrEmpty(value))
-                    {
-                        items.Add(key + "=\"" + value + "\"");
-                    }
-                }
-            }
-
-            return string.Join(", ", items);
-        }
-
-        /// <summary>チャレンジのスキームを決める（RFC 9449 §7.1。#311 の段階 4）</summary>
-        /// <param name="authorizationHeader">要求の `Authorization` ヘッダ</param>
-        /// <returns>`DPoP` または `Bearer`</returns>
-        /// <remarks>
-        /// **`DPoP` スキームで来た要求には、`DPoP` で答える**（§7.1）。
-        /// **それ以外は従来どおり `Bearer`** — **DPoP の話をしていない相手に、
-        /// 別のスキームを突き付けない。**
-        ///
-        /// **両方を並べて広告はしない。** **できるが、`Bearer` だけを知るクライアントが
-        /// 2 つ目を読めるとは限らず、得るものが無い。**
-        /// </remarks>
-        public static string GetChallengeScheme(string authorizationHeader)
-        {
-            CmnDPoP.GetToken(authorizationHeader, out string _, out bool isDPoP);
-
-            return isDPoP ? CmnDPoP.TokenType : "Bearer";
-        }
-
-        /// <summary>チャレンジの中身を作る（RFC 6750 §3 / RFC 9449 §7.1）</summary>
-        /// <param name="scheme">`GetChallengeScheme` が返したスキーム</param>
-        /// <param name="realm">realm（保護資源の名前）</param>
-        /// <param name="err">error / error_description を持つ辞書</param>
-        /// <returns>スキーム名より後ろ</returns>
-        /// <remarks>
-        /// **`DPoP` のときは `algs` も示す**（§7.1。**証明の署名に使える alg**）。
-        /// **一覧は `SigningKeys` の表が持つ**（**Discovery の
-        /// `dpop_signing_alg_values_supported` と同じもの**）。
-        /// </remarks>
-        public static string GetChallengeParameter(
-            string scheme, string realm, Dictionary<string, string> err)
-        {
-            string parameter = CmnEndpoints.GetBearerChallengeParameter(realm, err);
-
-            if (scheme != CmnDPoP.TokenType)
-            {
-                return parameter;
-            }
-
-            return parameter + ", algs=\"" + string.Join(" ", CmnAccessToken.SupportedAlgs) + "\"";
+            return error;
         }
 
         #endregion
@@ -5350,7 +4858,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // **JWT でない値・iss の無い JWT・未登録のクライアントで、例外にしない**（#241）。
                 //   ここは /token・/par・/ciba_authz・/revoke・/introspect の全てから通る（#238 / #239）。
-                JObject payload = CmnEndpoints.TryReadJwtPayload(assertion);
+                JObject payload = JwtReader.TryReadPayload(assertion);
                 string assertionIss = (payload == null)
                     ? "" : (string)payload[OAuth2AndOIDCConst.iss];
 
@@ -5390,13 +4898,13 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     if (!string.IsNullOrEmpty(jwksUri))
                     {
-                        string[] fromUri = DiscoveryJwks.PickJwksFromCache(
-                            jwksUri, DiscoveryJwks.KidOf(assertion),
-                            CmnEndpoints.MaxJwksFromUri);
+                        string[] fromUri = RemoteJwkSetStore.PickJwksFromCache(
+                            jwksUri, JwtReader.TryReadKid(assertion),
+                            CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
 
                         if (fromUri.Length == 0)
                         {
-                            DiscoveryJwks.RefillInBackground(jwksUri);
+                            RemoteJwkSetStore.RefillInBackground(jwksUri);
 
                             Logging.MyOperationTrace(string.Format(
                                 "The key of the client assertion was not in the jwks_uri cache. ({0})",
@@ -5415,7 +4923,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (!CmnEndpoints.AllowsVerifyingAlg(
                     Helper.GetInstance().GetTokenEndpointAuthSigningAlg(assertionIss),
                     CmnEndpoints.TokenEndpointAuthSigningAlgs,
-                    CmnEndpoints.TryReadJwtAlg(assertion)))
+                    JwtReader.TryReadAlg(assertion)))
                 {
                     proof = ClientModePolicy.Proof.None;
                     client_id = "";
@@ -5597,7 +5105,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   ここで止めないと、**発行の直前で既定（RS256）に落ちて、設定の誤りが分からない。**
             string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
 
-            if (!CmnAccessToken.IsSupportedAlg(signingAlg))
+            if (!JwsFactory.IsSupported(signingAlg))
             {
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
                 err.Add(OAuth2AndOIDCConst.error_description,
@@ -5819,7 +5327,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // token_type
             ret.Add(OAuth2AndOIDCConst.token_type,
                 string.IsNullOrEmpty(jkt)
-                    ? OAuth2AndOIDCConst.Bearer.ToLower() : CmnDPoP.TokenType);
+                    ? OAuth2AndOIDCConst.Bearer.ToLower() : OAuth2AndOIDCConst.DPoP);
 
             // access_token
             ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);
@@ -5855,7 +5363,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **鍵は alg から引く**（#129 の段階 3）ので、ここで alg ごとに分けない。
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "",
+                            HashClaimType.None, CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, "",
                             (string)jObjHeader[JwtConst.alg]);
                     }
                     else

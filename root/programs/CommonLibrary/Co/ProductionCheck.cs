@@ -20,6 +20,7 @@
 //*  2026/09/25  玄人 幸道         CibaProvider.DebugModeWithOutAD の確認を追加
 //*  2026/09/25  玄人 幸道         改名した設定キーの警告を、一覧（Config.RenamedKeys）から出す（#236）
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins の * を警告（#265）
+//*  2026/10/22  玄人 幸道         RequirePkceS256 を Open棟梁 の CmnServerParams から読むようにした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -27,6 +28,8 @@ using MultiPurposeAuthSite.Log;
 
 using System;
 using System.Collections.Generic;
+
+using Touryo.Infrastructure.Framework.Authentication;
 
 /// <summary>MultiPurposeAuthSite.Co</summary>
 namespace MultiPurposeAuthSite.Co
@@ -149,7 +152,7 @@ namespace MultiPurposeAuthSite.Co
                         loosePkce.Add("RequirePkce");
                     }
 
-                    if (!Config.RequirePkceS256)
+                    if (!CmnServerParams.RequirePkceS256)
                     {
                         loosePkce.Add("RequirePkceS256");
                     }

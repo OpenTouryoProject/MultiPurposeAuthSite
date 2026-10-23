@@ -39,6 +39,7 @@
 //*  2026/10/20  玄人 幸道         編集中の印（Editing）を追加（#307 の段階 5-a-2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri を追加（#310 の段階 3）
+//*  2026/10/22  玄人 幸道         alg の一覧を Open棟梁 の JwsFactory から引くようにした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -56,6 +57,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security.Jwt;
 
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>
 namespace MultiPurposeAuthSite.ViewModels
@@ -338,7 +340,7 @@ namespace MultiPurposeAuthSite.ViewModels
             {
                 List<SelectListItem> items = new List<SelectListItem>();
 
-                foreach (string alg in TokenProviders.SigningKeys.SupportedAlgs)
+                foreach (string alg in JwsFactory.SupportedAlgs)
                 {
                     items.Add(new SelectListItem()
                     {

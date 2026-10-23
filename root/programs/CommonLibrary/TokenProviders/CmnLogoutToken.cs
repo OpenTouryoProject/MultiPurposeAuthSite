@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 2）
+//*  2026/10/22  玄人 幸道         IssuerId を Open棟梁 の CmnServerParams から読むようにした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -109,7 +110,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             JObject payload = new JObject();
 
-            payload.Add(OAuth2AndOIDCConst.iss, Config.IssuerId);
+            payload.Add(OAuth2AndOIDCConst.iss, CmnServerParams.IssuerId);
             payload.Add(OAuth2AndOIDCConst.aud, clientId);
             payload.Add(OAuth2AndOIDCConst.iat, now.ToUnixTimeSeconds());
             payload.Add(OAuth2AndOIDCConst.exp, now.Add(CmnLogoutToken.ExpiresIn).ToUnixTimeSeconds());

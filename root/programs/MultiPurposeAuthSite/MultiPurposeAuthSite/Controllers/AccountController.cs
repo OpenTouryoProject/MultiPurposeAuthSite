@@ -67,6 +67,7 @@
 //*  2026/10/21  玄人 幸道         OP のセッションの識別子と sid クレームを追加（#310 の段階 1）
 //*  2026/10/21  玄人 幸道         ログアウトを RP へ伝え、台帳へ書くのを発行の直前に移した（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         ブラウザ経由（iframe）でもログアウトを伝える（#310 の段階 3）
+//*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -118,6 +119,7 @@ using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Log;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -226,12 +228,12 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // RawUrlから、UrlデコードしたReturnUrlを取得
                 returnUrl = CustomEncode.UrlDecode(
-                    StringExtractor.GetParameterFromQueryString("ReturnUrl", Request.RawUrl));
+                    UriOperator.GetParameterFromQueryString("ReturnUrl", Request.RawUrl));
                 //ViewBag.ReturnUrl = returnUrl;
 
                 // ReturnUrlからLoginHintを取得
                 loginHint = CustomEncode.UrlDecode(
-                    StringExtractor.GetParameterFromQueryString("login_hint", returnUrl));
+                    UriOperator.GetParameterFromQueryString("login_hint", returnUrl));
                 //ViewBag.LoginHint = loginHint;
             }
 
@@ -1940,8 +1942,8 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     Logging.MyOperationTrace(string.Format(
                         "The ID federation ended with an error response. (error: {0}, description: {1})",
-                        AccountController.SanitizeForTrace(error),
-                        AccountController.DescribeForTrace(error_description)));
+                        LogSanitizer.Sanitize(error),
+                        LogSanitizer.Describe(error_description)));
 
                     return View("Error");
                 }
@@ -1982,8 +1984,8 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     Logging.MyOperationTrace(string.Format(
                         "The state of the authorization response did not match the session. (response: {0}, session: {1})",
-                        AccountController.DescribeForTrace(state),
-                        AccountController.DescribeForTrace((string)Session["id_federation_signin_state"])));
+                        LogSanitizer.Describe(state),
+                        LogSanitizer.Describe((string)Session["id_federation_signin_state"])));
                 }
 
                 // stateの検証
@@ -2574,7 +2576,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// | 自己テストの ACS | **`IsLockedDownTestEndpoints` で閉じる。** 結果を画面に出すだけ |
         /// | **この口** | **閉じない**（本番の導線）。**検証できたらサインインさせる** |
         ///
-        /// **検証の本体は `SamlProviders.CmnSaml2Response.Verify`**（#286 の段階 1）。
+        /// **検証の本体は Open棟梁 の `SAML2Client.VerifyResponseWithReason`**（#286 の段階 1 / #294）。
         /// **自己テストと同じ本体に、上流の鍵と EntityID を渡す。**
         /// **鍵は、メタデータ → 設定の `.cer` の順で決める**（#291）。
         /// </remarks>
@@ -2621,32 +2623,41 @@ namespace MultiPurposeAuthSite.Controllers
             List<RSA> upstreamKeys =
                 await SamlProviders.IdFederationSaml2Metadata.GetSigningKeysAsync(upstream);
 
-            SamlProviders.CmnSaml2Response.Saml2Result result =
-                SamlProviders.CmnSaml2Response.Verify(
-                    samlResponse, queryString, sigAlg, relayState, state, isGet,
-                    Config.IdFederationSaml2ResponseEndpoint, requestId,
-                    upstreamKeys, upstream.Issuer);
+            //  **POST Binding のときは、クエリ文字列を渡さない**（空なら POST として検証する）。
+            SAML2VerifyResult result = SAML2Client.VerifyResponseWithReason(
+                queryString, isGet ? null : samlResponse, upstreamKeys,
+                upstream.Issuer, Config.IdFederationSaml2ResponseEndpoint, requestId,
+                relayState, state);
 
-            if (result.Verdict != "NORMAL_END")
+            if (!result.IsValid)
             {
                 //  **理由を残す**（#253 / #287 と同じ方針）。
-                //    **`Reason` は自分で組み立てた文言**なので、そのまま出してよい。
+                //    **理由は自分で組み立てた文言**なので、そのまま出してよい。
                 Logging.MyOperationTrace(string.Format(
-                    "The SAML2 ID federation was not accepted. (reason: {0})", result.Reason));
+                    "The SAML2 ID federation was not accepted. (reason: {0})",
+                    SamlProviders.CmnSaml2Response.ReasonOf(
+                        result, upstream.Issuer, Config.IdFederationSaml2ResponseEndpoint, requestId)));
 
                 return View("Error");
+            }
+
+            if (0 < result.VerifiedKeyIndex)
+            {
+                //  **ロールオーバー中**（2 本目以降の鍵で通った。#292 の段階 3）。
+                Logging.MyOperationTrace(string.Format(
+                    "The SAML2 response was verified with key #{0}.", result.VerifiedKeyIndex + 1));
             }
 
             //  **連携キーは `NameID`**（上流の EntityID と組で使う）。
             //    **`Transient` は受けない**（#286 の段階 4）—
             //    **毎回変わる値を連携キーにできない**（SAML Core 8.3.8）。
             if (string.IsNullOrEmpty(result.NameId)
-                || result.NameIdFormat == SAML2Enum.NameIDFormat.Transient.ToString())
+                || result.NameIdFormat == SAML2Enum.NameIDFormat.Transient)
             {
                 Logging.MyOperationTrace(string.Format(
                     "The SAML2 ID federation needs a stable NameID. (format: {0}, nameId: {1})",
-                    AccountController.SanitizeForTrace(result.NameIdFormat),
-                    AccountController.DescribeForTrace(result.NameId)));
+                    LogSanitizer.Sanitize(result.NameIdFormat?.ToString()),
+                    LogSanitizer.Describe(result.NameId)));
 
                 return View("Error");
             }
@@ -2656,10 +2667,10 @@ namespace MultiPurposeAuthSite.Controllers
             //    **`NameIDFormat` が `emailAddress` 以外でも利用者を作れる**ようになる
             //    （`Persistent` の `NameID` を返す上流。段階 2 では繋げなかった）。
             //    **無ければ、従来どおり `emailAddress` の `NameID` をメアドとして扱う。**
-            string email = result.AttrEmail;
+            string email = SAML2Attributes.GetEmail(result.Attributes);
 
             if (string.IsNullOrEmpty(email)
-                && result.NameIdFormat == SAML2Enum.NameIDFormat.EmailAddress.ToString())
+                && result.NameIdFormat == SAML2Enum.NameIDFormat.EmailAddress)
             {
                 email = result.NameId;
             }
@@ -2671,7 +2682,7 @@ namespace MultiPurposeAuthSite.Controllers
                 Logging.MyOperationTrace(string.Format(
                     "The SAML2 ID federation could not determine the email. "
                         + "(format: {0}, attributes: {1})",
-                    AccountController.SanitizeForTrace(result.NameIdFormat),
+                    LogSanitizer.Sanitize(result.NameIdFormat?.ToString()),
                     result.Attributes.Count));
 
                 return View("Error");
@@ -2685,17 +2696,17 @@ namespace MultiPurposeAuthSite.Controllers
             //
             //    **それ以外は空のまま** — **既存アカウントには結ばず**（`AccountLink`）、
             //    **新規に作る利用者の `EmailConfirmed` も false になる。**
-            string emailVerified = result.AttrEmailVerified;
+            string emailVerified = SAML2Attributes.GetEmailVerified(result.Attributes);
 
             if (string.IsNullOrEmpty(emailVerified)
-                && result.NameIdFormat == SAML2Enum.NameIDFormat.EmailAddress.ToString()
+                && result.NameIdFormat == SAML2Enum.NameIDFormat.EmailAddress
                 && email == result.NameId)
             {
                 emailVerified = "true";
             }
 
             return await this.SignInByIdFederationSaml2(
-                result.Issuer, result.NameId, email, result.AttrUserName, emailVerified);
+                result.Issuer, result.NameId, email, SAML2Attributes.GetUserName(result.Attributes), emailVerified);
         }
 
         /// <summary>検証できたアサーションで、利用者を結び付けてサインインする</summary>
@@ -2715,7 +2726,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// | 新規作成時の名前 | `preferred_username` → メアドの `@` より前 | **属性の `uid`** → メアドの `@` より前（段階 4） |
         /// | 検証済みのメアドか | 上流の `email_verified` | **属性の `email_verified`** → `emailAddress` の `NameID`（段階 4） |
         ///
-        /// **段階 4 で、3 つとも属性から受け取れるようになった**（`CmnSamlAttributes`）。
+        /// **段階 4 で、3 つとも属性から受け取れるようになった**（Open棟梁 の `SAML2Attributes`）。
         /// **値を決めるのは、呼び出し側（ACS の口）である**（倒し方をそこに置いてある）。
         /// **このメソッドは、受け取った値で結び付けるだけ**で、OIDC 側と同じ形になる。
         /// </remarks>
@@ -2873,39 +2884,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
         
-        #region 共通
-
-        /// <summary>値そのものを出さずに、有無と長さだけを表す（#253）</summary>
-        /// <param name="value">値</param>
-        /// <returns>"(empty)" または "len=&lt;長さ&gt;"</returns>
-        /// <remarks>
-        /// **state や nonce をログに出さないため。**
-        /// **切り分けに要るのは「空か／長さが違うか」までで、値そのものではない。**
-        /// </remarks>
-        private static string DescribeForTrace(string value)
-        {
-            return string.IsNullOrEmpty(value) ? "(empty)" : ("len=" + value.Length);
-        }
-
-        /// <summary>ログに出してよい形にする（#287）</summary>
-        /// <param name="value">相手から来た短い値（エラー コードなど）</param>
-        /// <returns>改行を落とし、長さを切った値</returns>
-        /// <remarks>
-        /// **値そのものを見たいが、相手の決めた文字列である**という場合に使う。
-        /// **改行を落とす**（**行を割られると、ログの 1 行 1 件が崩れる**）。
-        /// **長さも切る**（エラー コードは短い）。
-        /// </remarks>
-        private static string SanitizeForTrace(string value)
-        {
-            if (string.IsNullOrEmpty(value)) { return "(empty)"; }
-
-            string ret = value.Replace('\r', ' ').Replace('\n', ' ');
-
-            return (64 < ret.Length) ? ret.Substring(0, 64) + "..." : ret;
-        }
-
-        #endregion
-
         #endregion
 
         #region STS (Security Token Service)
@@ -2924,7 +2902,6 @@ namespace MultiPurposeAuthSite.Controllers
             bool verified = false;
 
             string queryString = "";
-            string decodeSaml = "";
 
             XmlDocument samlRequest2 = null;
             XmlNamespaceManager samlNsMgr = null;
@@ -2949,36 +2926,22 @@ namespace MultiPurposeAuthSite.Controllers
                     // DecodeRedirect
                     string rawUrl = Request.RawUrl;
                     queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
-                    decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
 
-                    // XmlDocument
-                    samlRequest2 = new XmlDocument();
-                    samlRequest2.PreserveWhitespace = false;
-                    samlRequest2.LoadXml(decodeSaml);
-
-                    // XmlNamespaceManager
-                    samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
-
-                    // VerifySamlRequest
+                    // VerifySamlRequest（展開と読み込みも行う）
                     verified = Saml.CmnEndpoints.VerifySamlRequest(
-                        queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                        queryString, "", out iss, out id, out samlRequest2);
                 }
                 else if (Request.HttpMethod.ToLower() == "post")
                 {
-                    // DecodePost
-                    decodeSaml = SAML2Bindings.DecodePost(samlRequest);
-
-                    // XmlDocument
-                    samlRequest2 = new XmlDocument();
-                    samlRequest2.PreserveWhitespace = false;
-                    samlRequest2.LoadXml(decodeSaml);
-
-                    // XmlNamespaceManager
-                    samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
-
-                    // VerifySamlRequest
+                    // VerifySamlRequest（展開と読み込みも行う）
                     verified = Saml.CmnEndpoints.VerifySamlRequest(
-                        "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                        "", samlRequest, out iss, out id, out samlRequest2);
+                }
+
+                // XmlNamespaceManager（応答の組み立てで、要求の ACS URL などを読む）
+                if (samlRequest2 != null)
+                {
+                    samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
                 }
 
                 //// ここでエラーになった場合、返る？
@@ -3088,8 +3051,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="sigAlg">string</param>
         /// <returns>ActionResult（Saml2Response 画面）</returns>
         /// <remarks>
-        /// **検証の本体は `SamlProviders.CmnSaml2Response.Verify`**
-        /// （#246 で両アプリから寄せ、#286 の段階 1 で鍵と期待 Issuer を引数にした）。
+        /// **検証の本体は Open棟梁 の `SAML2Client.VerifyResponseWithReason`**
+        /// （#246 で両アプリから寄せ、#286 の段階 1 で鍵と期待 Issuer を引数にし、#294 で移した）。
         ///
         /// **アサーションを画面に出す**（#246 の項目 3）。
         /// 以前は `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に移るだけで、
@@ -3132,13 +3095,15 @@ namespace MultiPurposeAuthSite.Controllers
             //   （`SamlProviders/CmnEndpoints`）。
             string acsUrl = Config.OAuth2ClientEndpointsRootURI + Config.Saml2ResponseEndpoint;
 
-            SamlProviders.CmnSaml2Response.Saml2Result result = Sts.SelfTestClient.VerifySaml2Response(
-                samlResponse, queryString, sigAlg, relayState,
-                state_InSessionOrCookie, isGet, acsUrl, this.LoadTestSamlRequestId());
+            string requestId = this.LoadTestSamlRequestId();
 
-            ViewBag.Verdict = result.Verdict;
-            ViewBag.Reason = result.Reason;
-            ViewBag.Binding = result.Binding;
+            SAML2VerifyResult result = Sts.SelfTestClient.VerifySaml2Response(
+                samlResponse, queryString, relayState,
+                state_InSessionOrCookie, isGet, acsUrl, requestId);
+
+            ViewBag.Verdict = SamlProviders.CmnSaml2Response.VerdictOf(result);
+            ViewBag.Reason = SamlProviders.CmnSaml2Response.ReasonOf(result, CmnServerParams.IssuerId, acsUrl, requestId);
+            ViewBag.Binding = SamlProviders.CmnSaml2Response.BindingOf(result);
             ViewBag.SigAlg = result.SigAlg;
             ViewBag.RelayState = result.RelayState;
             ViewBag.RelayStateMatched = result.RelayStateMatched;
@@ -3153,17 +3118,17 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.Audience = result.Audience;
             ViewBag.InResponseTo = result.InResponseTo;
             ViewBag.Recipient = result.Recipient;
-            ViewBag.NotOnOrAfter = result.NotOnOrAfter;
-            ViewBag.StatusCode = result.StatusCode;
-            ViewBag.NameIdFormat = result.NameIdFormat;
-            ViewBag.AuthnContextClassRef = result.AuthnContextClassRef;
-            ViewBag.ResponseXml = result.ResponseXml;
+            ViewBag.NotOnOrAfter = SamlProviders.CmnSaml2Response.NotOnOrAfterOf(result);
+            ViewBag.StatusCode = result.StatusCode?.ToString() ?? "";
+            ViewBag.NameIdFormat = result.NameIdFormat?.ToString() ?? "";
+            ViewBag.AuthnContextClassRef = result.AuthnContextClassRef?.ToString() ?? "";
+            ViewBag.ResponseXml = SamlProviders.CmnSaml2Response.FormatXml(result.Response);
 
             //  **アサーションの属性**（#286 の段階 4）。**目視のため**（判定には使わない）。
             ViewBag.Attributes = result.Attributes;
-            ViewBag.AttrEmail = result.AttrEmail;
-            ViewBag.AttrUserName = result.AttrUserName;
-            ViewBag.AttrEmailVerified = result.AttrEmailVerified;
+            ViewBag.AttrEmail = SAML2Attributes.GetEmail(result.Attributes);
+            ViewBag.AttrUserName = SAML2Attributes.GetUserName(result.Attributes);
+            ViewBag.AttrEmailVerified = SAML2Attributes.GetEmailVerified(result.Attributes);
 
             return View("Saml2Response");
         }
@@ -3498,19 +3463,19 @@ namespace MultiPurposeAuthSite.Controllers
                 out valid_redirect_uri, out err, out errDescription, code_challenge, prompt))
             {
                 // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
-                Token.CmnEndpoints.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
+                OAuth2AndOIDCEnum.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
                     max_age,
                     Request.Cookies[Config.AuthTimeCookieName]?.Value,
                     Request.Cookies[Config.ReAuthenticatedAtCookieName]?.Value);
 
-                if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.InvalidMaxAge)
+                if (authTimeCheck == OAuth2AndOIDCEnum.AuthTimeCheck.InvalidMaxAge)
                 {
                     // **0 以上の整数でない**（RFC 6749 4.1.2.1 : invalid_request）。
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "max_age must be a non-negative integer.";
                 }
                 else if (!this.User.Identity.IsAuthenticated
-                    && Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptNone))
+                    && OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptNone))
                 {
                     // **そもそもサインインしていない**（OIDC Core 3.1.2.6 : login_required）。
                     //   **#247 で足したのは「セッションは在るが古い」場合だけ**だった。
@@ -3527,14 +3492,14 @@ namespace MultiPurposeAuthSite.Controllers
                     //   **[Authorize] が行っていたことと同じ**（ReturnUrl も付く）。
                     return new HttpUnauthorizedResult();
                 }
-                else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication
-                    && Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptNone))
+                else if (authTimeCheck == OAuth2AndOIDCEnum.AuthTimeCheck.NeedsReAuthentication
+                    && OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptNone))
                 {
                     // **prompt=none では UI を出せない**（OIDC Core 3.1.2.6 : login_required）。
                     err = OAuth2AndOIDCConst.login_required;
                     errDescription = "Re-authentication is required, but prompt=none was specified.";
                 }
-                else if (Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptLogin)
+                else if (OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptLogin)
                     && string.IsNullOrEmpty(Request.Cookies[Config.ReAuthenticatedAtCookieName] == null ? "" : Request.Cookies[Config.ReAuthenticatedAtCookieName].Value))
                 {
                     // **prompt=login は、再認証を求める**（OIDC Core §3.1.2.1。#272 の段階 2）。
@@ -3555,7 +3520,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     return new RedirectResult(Request.RawUrl);
                 }
-                else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication)
+                else if (authTimeCheck == OAuth2AndOIDCEnum.AuthTimeCheck.NeedsReAuthentication)
                 {
                     // **再認証する**（OIDC Core 3.1.2.1）。
                     //   印を残してサインアウトし、同じ URL に戻す（この後は認証が要るのでサインイン画面になる）。
@@ -3644,10 +3609,10 @@ namespace MultiPurposeAuthSite.Controllers
                         string userId = User.Identity.GetUserId();
 
                         bool hasConsent = Sts.ConsentProvider.HasConsent(userId, client_id, scopes);
-                        bool asksConsent = Token.CmnEndpoints.HasPrompt(
-                                               prompt, Token.CmnEndpoints.PromptConsent)
-                                           || Token.CmnEndpoints.HasPrompt(
-                                               prompt, Token.CmnEndpoints.PromptSelectAccount);
+                        bool asksConsent = OAuth2AndOIDCSpec.HasPrompt(
+                                               prompt, OAuth2AndOIDCConst.PromptConsent)
+                                           || OAuth2AndOIDCSpec.HasPrompt(
+                                               prompt, OAuth2AndOIDCConst.PromptSelectAccount);
 
                         #endregion
 
@@ -3674,8 +3639,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 client_id, response_mode, valid_redirect_uri, code, state);
                             if (actionResult != null) return actionResult;
                         }
-                        else if (Token.CmnEndpoints.HasPrompt(
-                            prompt, Token.CmnEndpoints.PromptNone))
+                        else if (OAuth2AndOIDCSpec.HasPrompt(
+                            prompt, OAuth2AndOIDCConst.PromptNone))
                         {
                             // **UI を出せないので、エラーを RP へ返す**
                             //   （OIDC Core §3.1.2.6 : consent_required。#272 の段階 2）。
@@ -3749,13 +3714,13 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // valid_redirect_uri
                 // RFC 6749 4.1.2.1 : error / error_description、stateは要求にあれば返す（#187）
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(valid_redirect_uri,
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(valid_redirect_uri,
                     new Dictionary<string, string>()
                     {
                         { OAuth2AndOIDCConst.error, err },
                         { OAuth2AndOIDCConst.error_description, errDescription },
                         { OAuth2AndOIDCConst.state, state }
-                    }));
+                    }, false, CmnServerParams.IssuerId));
             }
             //else if (!string.IsNullOrEmpty(redirect_uri))
             //{
@@ -3915,13 +3880,13 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // valid_redirect_uriに返す。
                 // RFC 6749 4.1.2.1 : error / error_description、stateは要求にあれば返す（#187）
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(valid_redirect_uri,
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(valid_redirect_uri,
                     new Dictionary<string, string>()
                     {
                         { OAuth2AndOIDCConst.error, err },
                         { OAuth2AndOIDCConst.error_description, errDescription },
                         { OAuth2AndOIDCConst.state, state }
-                    }));
+                    }, false, CmnServerParams.IssuerId));
             }
             //else if (!string.IsNullOrEmpty(redirect_uri))
             //{
@@ -3961,8 +3926,8 @@ namespace MultiPurposeAuthSite.Controllers
                 || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit())
             {
                 // query
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { OAuth2AndOIDCConst.code, code }, { OAuth2AndOIDCConst.state, state } }));
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { OAuth2AndOIDCConst.code, code }, { OAuth2AndOIDCConst.state, state } }, false, CmnServerParams.IssuerId));
             }
             else if (response_mode.ToLower() 
                 == OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit()
@@ -3975,14 +3940,14 @@ namespace MultiPurposeAuthSite.Controllers
                     { "code" , code },
                     { "state",  state }
                 }, client_id, expiresUtc);
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }));
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, false, CmnServerParams.IssuerId));
             }
             else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
             {
                 // fragment
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { OAuth2AndOIDCConst.code, code }, { OAuth2AndOIDCConst.state, state } }, true));
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { OAuth2AndOIDCConst.code, code }, { OAuth2AndOIDCConst.state, state } }, true, CmnServerParams.IssuerId));
             }
             else if (response_mode.ToLower().Replace('.', '_')
                 == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -3993,8 +3958,8 @@ namespace MultiPurposeAuthSite.Controllers
                     { "code" , code },
                     { "state",  state }
                 }, client_id, expiresUtc);
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
             }
             else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
             {
@@ -4058,14 +4023,14 @@ namespace MultiPurposeAuthSite.Controllers
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.AccessToken, access_token },
                                     { OAuth2AndOIDCConst.state, state },
                                     { OAuth2AndOIDCConst.token_type, "bearer" },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                                }, true));
+                                }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -4078,8 +4043,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -4119,12 +4084,12 @@ namespace MultiPurposeAuthSite.Controllers
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.IDToken, id_token },
                                     { OAuth2AndOIDCConst.state, state }
-                                }, true));
+                                }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -4135,8 +4100,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.IDToken , id_token },
                                 { OAuth2AndOIDCConst.state,  state }
                             }, null, null);
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -4172,7 +4137,7 @@ namespace MultiPurposeAuthSite.Controllers
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.IDToken, id_token },
@@ -4180,7 +4145,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.state, state },
                                     { OAuth2AndOIDCConst.token_type, "bearer" },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                                }, true));
+                                }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -4194,8 +4159,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -4265,7 +4230,7 @@ namespace MultiPurposeAuthSite.Controllers
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.code, code },
@@ -4273,7 +4238,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.state, state },
                                     { OAuth2AndOIDCConst.token_type, "bearer" },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                                }, true));
+                                }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -4287,8 +4252,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -4331,13 +4296,13 @@ namespace MultiPurposeAuthSite.Controllers
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.code, code },
                                     { OAuth2AndOIDCConst.IDToken, id_token },
                                     { OAuth2AndOIDCConst.state, state }
-                                }, true));
+                                }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -4349,8 +4314,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.IDToken , id_token },
                                 { OAuth2AndOIDCConst.state,  state }
                             }, client_id, expiresUtc);
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -4389,7 +4354,7 @@ namespace MultiPurposeAuthSite.Controllers
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.code, code },
@@ -4398,7 +4363,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.state, state },
                                     { OAuth2AndOIDCConst.token_type, "bearer" },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                                }, true));
+                                }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -4413,8 +4378,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
-                            return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -4474,12 +4439,12 @@ namespace MultiPurposeAuthSite.Controllers
                 || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
             {
                 // fragment
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                     new Dictionary<string, string>()
                     {
                         { OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied },
                         { OAuth2AndOIDCConst.state, state }
-                    }, true));
+                    }, true, CmnServerParams.IssuerId));
             }
             else if(response_mode.ToLower().Replace('.', '_')
                 == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -4490,8 +4455,8 @@ namespace MultiPurposeAuthSite.Controllers
                     { OAuth2AndOIDCConst.error , OAuth2AndOIDCConst.access_denied },
                     { OAuth2AndOIDCConst.state,  state }
                 }, null, null);
-                return new RedirectResult(Token.CmnEndpoints.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true));
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
             }
             else if(response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
             {
@@ -4564,13 +4529,13 @@ namespace MultiPurposeAuthSite.Controllers
                     //    | 渡すもの | 値 |
                     //    |---|---|
                     //    | 鍵（`jws`） | **null**（自分が出したトークンなので、設定の選び方で引ける） |
-                    //    | `iss` | **`Config.IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**である |
+                    //    | `iss` | **`CmnServerParams.IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**である |
                     //    | `aud` | **その回の `client_id`** |
                     if (!string.IsNullOrEmpty(response))
                     {
                         // responseObject検証
                         if (ResponseObject.Verify(response,
-                            null, Config.IssuerId, clientId_InSessionOrCookie,
+                            null, CmnServerParams.IssuerId, clientId_InSessionOrCookie,
                             out JObject responseObject))
                         {
                             // OK
@@ -4738,7 +4703,7 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 if (!IdToken.Verify(
                                     model.IdToken, model.AccessToken, code, state,
-                                    null, Config.IssuerId, clientId_InSessionOrCookie,
+                                    null, CmnServerParams.IssuerId, clientId_InSessionOrCookie,
                                     out out_sub, out string out_nonce, out out_jobj)
                                     && out_nonce == nonce_InSessionOrCookie)
                                 {
@@ -4970,7 +4935,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // responseObject検証
                         if (ResponseObject.Verify(response,
-                            null, Config.IssuerId, clientId_InSessionOrCookie,
+                            null, CmnServerParams.IssuerId, clientId_InSessionOrCookie,
                             out JObject responseObject))
                         {
                             // OK
@@ -5033,7 +4998,7 @@ namespace MultiPurposeAuthSite.Controllers
         public ActionResult DeviceAuthZVerify()
         {
             ViewBag.ReceiveResult = false;
-            ViewBag.UserCode = StringExtractor.GetParameterFromQueryString(
+            ViewBag.UserCode = UriOperator.GetParameterFromQueryString(
                 OAuth2AndOIDCConst.user_code, Request.RawUrl);
 
             return View("DeviceAuthZVerify");

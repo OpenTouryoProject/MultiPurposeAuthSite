@@ -37,6 +37,7 @@
 //*  2026/10/21  玄人 幸道         software_statement が主張した jwks_uri も温める（#309 の段階 2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri は動的登録で変えさせない（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri も動的登録で変えさせない（#310 の段階 3）
+//*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -792,8 +793,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 //  **statement が主張した分**（#309 の段階 2）。
                 //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
-                //    （`CmnEndpoints.TryReadJwtPayload`。#241 と同じ扱い）。
-                JObject claims = CmnEndpoints.TryReadJwtPayload(
+                //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
+                JObject claims = JwtReader.TryReadPayload(
                     ClientRegistrationProvider.GetString(metadata, "software_statement"));
 
                 if (claims != null)
@@ -810,11 +811,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             foreach (string url in urls)
             {
                 if (!string.IsNullOrEmpty(url)
-                    && DiscoveryJwks.IsUsableKeySource(url))
+                    && RemoteJwkSetStore.IsUsableKeySource(url))
                 {
-                    //  **取れなくても例外にしない**（`DiscoveryJwks` が飲み、理由をログに残す）。
+                    //  **取れなくても例外にしない**（`RemoteJwkSetStore` が飲む）。
                     //    **断るのは `Validate`** である。
-                    await DiscoveryJwks.WarmUpAsync(url);
+                    await RemoteJwkSetStore.WarmUpAsync(url);
                 }
             }
         }
@@ -913,7 +914,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **要求の経路では取りに行かない**（`CmnEndpoints.ClientAuthentication` は
             //    `static bool` で、`/token` などから同期で呼ばれる）。
             //    **取りに行くのは、この口と背景である**
-            //    （`WarmUpJwksUriAsync` / `DiscoveryJwks.RefillInBackground`）。
+            //    （`WarmUpJwksUriAsync` / `RemoteJwkSetStore.RefillInBackground`）。
             if (!ClientRegistrationProvider.SetUri(metadata, "jwks_uri",
                 Const.MaxLengthOfUri, v => model.JwksUri = v, ref description))
             {
@@ -925,7 +926,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **平文の HTTP では受けない** — **鍵そのものを差し替えられる**
                 //    （**署名の検証鍵なので、差し替えられればクライアント認証が破れる**）。
                 //    **ループバックだけは許す**（RFC 8252 §7.3 と同じ扱い。開発と試験のため）。
-                if (!DiscoveryJwks.IsUsableKeySource(model.JwksUri))
+                if (!RemoteJwkSetStore.IsUsableKeySource(model.JwksUri))
                 {
                     description = "The jwks_uri must use https. (loopback may use http)";
                     return false;
@@ -939,7 +940,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    **`software_statement` が主張した `jwks_uri` も温めてある**
                 //    （#309 の段階 2）。**あちらは署名を検証しないで読む**が、
                 //    **行き先の範囲は本文と同じ**であり、**ここ（検証済み）が信頼を決める。**
-                if (!DiscoveryJwks.HasKeysInCache(model.JwksUri))
+                if (!RemoteJwkSetStore.HasKeysInCache(model.JwksUri))
                 {
                     description = "The jwks_uri could not be read.";
                     return false;
@@ -1195,7 +1196,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #region scope
 
-            List<string> scopes = Helper.ToDistinctList(
+            List<string> scopes = OAuth2AndOIDCSpec.ToDistinctList(
                 ClientRegistrationProvider.GetString(metadata, "scope"));
 
             if (0 < scopes.Count)
@@ -1291,7 +1292,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (!string.IsNullOrEmpty(signingAlg))
             {
-                if (!CmnAccessToken.IsSupportedAlg(signingAlg))
+                if (!JwsFactory.IsSupported(signingAlg))
                 {
                     description = string.Format(
                         "The id_token_signed_response_alg ({0}) is not supported.", signingAlg);
@@ -1458,7 +1459,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return ret;
             }
 
-            return Helper.ToDistinctList(ClientRegistrationProvider.GetString(metadata, name));
+            return OAuth2AndOIDCSpec.ToDistinctList(ClientRegistrationProvider.GetString(metadata, name));
         }
 
         /// <summary>URI のメタデータを読んで入れる</summary>
@@ -1555,7 +1556,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>配列</returns>
         private static List<string> ToArray(string value)
         {
-            return Helper.ToDistinctList(value);
+            return OAuth2AndOIDCSpec.ToDistinctList(value);
         }
 
         /// <summary>空でなければ、応答に足す</summary>
@@ -1815,9 +1816,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **列は `response_type` で分かれている**ので、**両方を合わせて返す**
             //    （**同じ値が入っている**ことが多い。Hybrid の登録では両方に入れている）。
-            List<string> redirectUris = Helper.ToDistinctList(model.RedirectUriCode);
+            List<string> redirectUris = OAuth2AndOIDCSpec.ToDistinctList(model.RedirectUriCode);
 
-            foreach (string redirectUri in Helper.ToDistinctList(model.RedirectUriToken))
+            foreach (string redirectUri in OAuth2AndOIDCSpec.ToDistinctList(model.RedirectUriToken))
             {
                 if (!redirectUris.Contains(redirectUri))
                 {
@@ -1827,7 +1828,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             ret.Add("redirect_uris", redirectUris);
 
-            ret.Add("grant_types", Helper.ToDistinctList(model.GrantTypes));
+            ret.Add("grant_types", OAuth2AndOIDCSpec.ToDistinctList(model.GrantTypes));
 
             //  **`response_types` は、要素の中の空白を「+」にして保管している**（段階 1）。
             ret.Add("response_types", Helper.ToDistinctList(model.ResponseTypes, true));

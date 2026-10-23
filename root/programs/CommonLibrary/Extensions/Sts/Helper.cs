@@ -61,6 +61,7 @@
 //*  2026/10/21  玄人 幸道         設定ファイルの jwks_uri を集める口を追加（#309 の段階 2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を引く口と HttpClient を渡す口を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri を引く口を追加（#310 の段階 3）
+//*  2026/10/22  玄人 幸道         空白区切りの分解と HttpClient の口を Open棟梁 に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -160,17 +161,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             get
             {
                 return this._oauth2ClientsInfo;
-            }
-        }
-
-        /// <summary>
-        /// OAuthHttpClient
-        /// </summary>
-        private HttpClient OAuth2HttpClient
-        {
-            get
-            {
-                return this._oAuth2HttpClient;
             }
         }
 
@@ -762,7 +752,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>redirect_uri（登録が無ければ空）</returns>
         public string GetClientsRedirectUri(string client_id, string response_type, out bool isResourceOwner)
         {
-            string[] uris = Helper.SplitUriList(
+            string[] uris = OAuth2AndOIDCSpec.SplitSpaceDelimited(
                 this.GetClientsRedirectUriList(client_id, response_type, out isResourceOwner));
 
             return (0 < uris.Length) ? uris[0] : "";
@@ -781,7 +771,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string[] GetClientsRedirectUris(string client_id, string response_type)
         {
-            return Helper.SplitUriList(
+            return OAuth2AndOIDCSpec.SplitSpaceDelimited(
                 this.GetClientsRedirectUriList(client_id, response_type, out bool isResourceOwner));
         }
 
@@ -855,50 +845,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return "";
-        }
-
-        /// <summary>空白区切りの列挙を分解する（#306）</summary>
-        /// <param name="value">空白区切りの列挙</param>
-        /// <returns>要素の並び（空なら 0 件）</returns>
-        /// <remarks>
-        /// **区切りは空白である。**
-        /// **URI に空白は入らない**（RFC 3986 §2。入れるなら `%20` に符号化される）ので、
-        /// **曖昧にならない。**
-        ///
-        /// **カンマは区切りにしない** — **URI に入り得る**
-        /// （RFC 3986 §2.2 の `sub-delims` に `,` が含まれる）。
-        /// **`scope` が空白区切り**（RFC 6749 §3.3）なのと同じ流儀である。
-        ///
-        /// **1 本だけの登録は、1 件の列挙として読める** — **既存の配備はそのまま動く。**
-        /// </remarks>
-        public static string[] SplitUriList(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return new string[0];
-            }
-
-            //  **空白（半角・全角・タブ・改行）で切り、空の要素は捨てる。**
-            return value.Split(
-                new char[] { ' ', '\t', '\r', '\n', '\u3000' },
-                StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        #endregion
-
-        #region GetOAuth2HttpClient
-
-        /// <summary>サーバ間の通信に使う HttpClient を渡す（#310 の段階 2）</summary>
-        /// <returns>HttpClient</returns>
-        /// <remarks>
-        /// **ID 連携や `/token` と同じもの**である（**TLS・プロキシ・クライアント証明書の扱いが揃う**）。
-        /// **`OAuth2AndOIDCClient.HttpClient` は設定専用**（get が無い）ので、ここから渡す。
-        ///
-        /// **`BackChannelLogout` が使う**（**RP へ `logout_token` を POST する**）。
-        /// </remarks>
-        public HttpClient GetOAuth2HttpClient()
-        {
-            return this.OAuth2HttpClient;
         }
 
         #endregion
@@ -1155,7 +1101,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// **ここでは取りに行かない** — **URL を返すだけ**である。
         /// **読む側（`CmnEndpoints.ClientAuthentication`）は同期**なので、
-        /// **取得はキャッシュ越しに行う**（`DiscoveryJwks.PickJwksFromCache`）。
+        /// **取得はキャッシュ越しに行う**（`RemoteJwkSetStore.PickJwksFromCache`）。
         /// </remarks>
         public string GetJwksUri(string client_id)
         {
@@ -1396,7 +1342,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 if (dic.ContainsKey("scope") && dic["scope"] != null)
                 {
-                    return Helper.ToDistinctList(dic["scope"]);
+                    return OAuth2AndOIDCSpec.ToDistinctList(dic["scope"]);
                 }
 
                 // **構成ファイルに在るクライアントは、ここで打ち切る**（従来どおり）。
@@ -1408,7 +1354,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (model != null && !string.IsNullOrWhiteSpace(model.Scopes))
             {
-                return Helper.ToDistinctList(model.Scopes);
+                return OAuth2AndOIDCSpec.ToDistinctList(model.Scopes);
             }
 
             // 登録が無い
@@ -1497,25 +1443,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
         /// <param name="value">登録値</param>
-        /// <returns>一覧</returns>
-        public static List<string> ToDistinctList(string value)
-        {
-            return Helper.ToDistinctList(value, false);
-        }
-
-        /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
-        /// <param name="value">登録値</param>
         /// <param name="unescapeSpace">要素の中の「+」を空白に戻すか</param>
         /// <returns>一覧</returns>
         /// <remarks>
-        /// **切り方は `SplitUriList` と同じ**（半角・全角の空白・タブ・改行。空の要素は捨てる）。
-        /// **`scope` が空白区切り**（RFC 6749 §3.3）**なのと同じ流儀**である。
+        /// **切り方は `OAuth2AndOIDCSpec.SplitSpaceDelimited` と同じ**（半角・全角の空白・タブ・改行。空の要素は捨てる）。
+        /// **`+` を戻さないなら、`OAuth2AndOIDCSpec.ToDistinctList` を使う。**
         /// </remarks>
         public static List<string> ToDistinctList(string value, bool unescapeSpace)
         {
             List<string> ret = new List<string>();
 
-            foreach (string s in Helper.SplitUriList(value))
+            foreach (string s in OAuth2AndOIDCSpec.SplitSpaceDelimited(value))
             {
                 string item = unescapeSpace ? s.Replace("+", " ") : s;
 
@@ -2219,7 +2157,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #region 標準
 
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuerClaim, Config.IssuerId));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuerClaim, CmnServerParams.IssuerId));
             identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnAudienceClaim, client_id));
 
             foreach (string scope in scopes)

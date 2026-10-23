@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 2）
+//*  2026/10/22  玄人 幸道         鍵の取得を Open棟梁 の RemoteJwkSetStore に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -37,6 +38,8 @@ using MultiPurposeAuthSite.Log;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
+using Touryo.Infrastructure.Framework.Authentication;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
@@ -102,7 +105,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>読めた URL の数</returns>
         /// <remarks>
         /// **直列に読む**（**起動と同時に、外向きの接続を何十本も出さない**）。
-        /// **1 本が読めなくても続ける**（`DiscoveryJwks` が理由をログに残す）。
+        /// **1 本が読めなくても続ける**（`RemoteJwkSetStore` が例外を飲む）。
         /// </remarks>
         public static async Task<int> WarmUpAllAsync()
         {
@@ -111,7 +114,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (string url in urls)
             {
-                if (await DiscoveryJwks.WarmUpAsync(url))
+                if (await RemoteJwkSetStore.WarmUpAsync(url))
                 {
                     warmed++;
                 }
@@ -135,7 +138,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **`private_key_jwt` に絞らない**（**Request Object（JAR）の検証にも使い得る**）。
         ///
         /// **`https` でなければ集めない**（**ループバックの `http` は許す**。
-        /// **判定は `DiscoveryJwks.IsUsableKeySource` の 1 か所**である）。
+        /// **判定は `RemoteJwkSetStore.IsUsableKeySource` の 1 か所**である）。
         /// </remarks>
         private static List<string> Collect()
         {
@@ -176,11 +179,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return;
                 }
 
-                //  **使える URL かの判定は `DiscoveryJwks` に 1 つだけ置いてある**
+                //  **使える URL かの判定は `RemoteJwkSetStore` に 1 つだけ置いてある**
                 //    （**登録の検査と同じ規則で絞る** — **2 か所に書くと食い違う**）。
                 if (string.IsNullOrEmpty(url)
                     || urls.Contains(url)
-                    || !DiscoveryJwks.IsUsableKeySource(url))
+                    || !RemoteJwkSetStore.IsUsableKeySource(url))
                 {
                     continue;
                 }

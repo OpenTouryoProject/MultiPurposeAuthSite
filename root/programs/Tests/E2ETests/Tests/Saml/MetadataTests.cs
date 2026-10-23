@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
 //*  2026/10/14  玄人 幸道         SA-2.2（退役前の証明書）を足した（#292 の段階 3）
+//*  2026/10/22  玄人 幸道         参照先の名前を Open棟梁 に改めた（#294）
 //**********************************************************************************
 
 using System.Net.Http;
@@ -254,7 +255,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         /// （**いまの鍵が 1 本目**）。**空なら 1 本だけ**（従来どおり）。
         ///
         /// **`SAML2Bindings.CreateMetadata` は証明書を 1 本しか受けない**ので、
-        /// **出来上がった XML に足している**（`CmnSamlMetadata.AppendPreviousSigningKeyDescriptors`）。
+        /// **出来上がった XML に足している**（Open棟梁 の `SAML2Bindings.AppendSigningCertificates`）。
         /// </remarks>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
@@ -268,7 +269,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                     + "**SP はメタデータをキャッシュする**ので、"
                     + "**1 本だけ広告していると、替えた瞬間に検証できなくなる。**"
                     + "**2 本並べておけば、SP がどちらでも検証できる**"
-                    + "（**受け取る側は全部試す**。`CmnSaml2Response` の鍵の列を受ける版）。",
+                    + "（**受け取る側は全部試す**。`SAML2Client.VerifyResponseWithReason` の鍵の列を受ける版）。",
                     "SAML 2.0 Metadata 2.4.1.1 / #292 の段階 3");
 
                 r.Target("GET /samlmetadata");

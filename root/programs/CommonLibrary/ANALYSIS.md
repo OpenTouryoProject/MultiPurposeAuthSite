@@ -353,7 +353,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 
 ### 7.4 署名鍵
 
-`root/files/resource/X509/` の `.pfx` / `.cer` を `Config.RsaPfxFilePath` などで参照する。
+`root/files/resource/X509/` の `.pfx` / `.cer` を `CmnServerParams.RsaPfxFilePath` などで参照する。
 JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 `../CommandLineTools/CreateJwkSetJson` が `.cer` から生成する。
 **証明書を差し替えたら JwkSet.json を作り直すこと。**

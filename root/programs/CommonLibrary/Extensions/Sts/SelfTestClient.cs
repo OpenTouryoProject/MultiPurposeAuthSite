@@ -34,6 +34,7 @@
 //*  2026/09/28  玄人 幸道         SAML2 の応答（Assertion）を読む処理を寄せた（#246 の項目 3）
 //*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
 //*  2026/10/10  玄人 幸道         SAML2 の応答の検証を CmnSaml2Response へ移した（#286 の段階 1）
+//*  2026/10/22  玄人 幸道         SAML2 の応答の検証を Open棟梁 の SAML2Client に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -186,7 +187,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string clientNotificationToken, string bindingMessage)
         {
             string requestObject = RequestObject.CreateCiba(
-                clientId, Config.IssuerId,
+                clientId, CmnServerParams.IssuerId,
                 DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds().ToString(),
                 DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
                 scopes, clientNotificationToken, bindingMessage, "", "",
@@ -624,8 +625,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>SAML2 の応答（SAMLResponse）を検証し、目視できる形にする</summary>
         /// <param name="samlResponse">SAMLResponse（受け取ったまま）</param>
-        /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象）</param>
-        /// <param name="sigAlg">SigAlg（同上）</param>
+        /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象。SigAlg も読む）</param>
         /// <param name="relayState">RelayState</param>
         /// <param name="expectedRelayState">送った state（照合する。無ければ空）</param>
         /// <param name="isGet">GET（Redirect Binding）で受け取ったか</param>
@@ -633,28 +633,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="expectedInResponseTo">送った AuthnRequest の ID（空なら照合しない）</param>
         /// <returns>結果（画面で見せる）</returns>
         /// <remarks>
-        /// **検証の本体は `SamlProviders.CmnSaml2Response.Verify`**（#286 の段階 1 で移した）。
+        /// **検証の本体は Open棟梁 の `SAML2Client.VerifyResponseWithReason`**（#286 の段階 1 / #294）。
         ///
         /// **ここは「自己テストの SP 役」としての引数を埋めるだけ**である。
         ///
         /// | 引数 | 自己テストが渡すもの |
         /// |---|---|
         /// | 証明書 | **自分の `SpRp_RsaCerFilePath`** — **IdP ＝ SP なので、相手の証明書が自分のもの**である |
-        /// | 期待 Issuer | **自分の `Config.IssuerId`** |
+        /// | 期待 Issuer | **自分の `CmnServerParams.IssuerId`** |
         ///
         /// **ID 連携（#286）は、同じ本体に上流の証明書と EntityID を渡す。**
         /// **引数が違うだけで、判定は 1 か所である。**
         /// </remarks>
-        public static CmnSaml2Response.Saml2Result VerifySaml2Response(
-            string samlResponse, string queryString, string sigAlg,
+        public static SAML2VerifyResult VerifySaml2Response(
+            string samlResponse, string queryString,
             string relayState, string expectedRelayState, bool isGet,
             string expectedAcsUrl = null, string expectedInResponseTo = null)
         {
-            return CmnSaml2Response.Verify(
-                samlResponse, queryString, sigAlg,
-                relayState, expectedRelayState, isGet,
-                expectedAcsUrl, expectedInResponseTo,
-                CmnClientParams.RsaCerFilePath, Config.IssuerId);
+            //  **読めない証明書は、鍵が無いものとして扱う**（`NoKey` で落ちる）。
+            //  **POST Binding のときは、クエリ文字列を渡さない**（空なら POST として検証する）。
+            return SAML2Client.VerifyResponseWithReason(
+                isGet ? queryString : null, isGet ? null : samlResponse,
+                new RSA[] { CmnSaml2Response.RsaFromCerFile(CmnClientParams.RsaCerFilePath) },
+                CmnServerParams.IssuerId, expectedAcsUrl, expectedInResponseTo,
+                relayState, expectedRelayState);
         }
 
         #endregion

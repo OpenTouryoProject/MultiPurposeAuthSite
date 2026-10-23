@@ -35,6 +35,7 @@
 //*  2026/10/07  玄人 幸道         エラー応答にAssertionを組み込まないようにした（#278）
 //*  2026/10/12  玄人 幸道         アサーションにAttributeStatementを足した（#286 の段階 4）
 //*  2026/10/12  玄人 幸道         Redirectの検証をRSAを受ける版に移した（Open棟梁 #604）
+//*  2026/10/22  玄人 幸道         要求の検証と応答の組み立てを Open棟梁 の SAML2Client に移した（#294）
 //**********************************************************************************
 
 #if NETFX
@@ -47,6 +48,8 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
+using System;
+using System.Collections.Generic;
 using System.Xml;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -63,79 +66,42 @@ namespace MultiPurposeAuthSite.SamlProviders
     public class CmnEndpoints
     {
         /// <summary>VerifySamlRequest</summary>
-        /// <param name="queryString">string</param>
-        /// <param name="decodeSaml">string</param>
-        /// <param name="iss">out string</param>
-        /// <param name="inResponseTo">out string</param>
-        /// <param name="samlRequest2">XmlDocument</param>
-        /// <param name="samlNsMgr">XmlNamespaceManager</param>
+        /// <param name="queryString">string（Redirect Binding のときのクエリ文字列。POST なら空）</param>
+        /// <param name="samlRequest">string（POST Binding のときの SAMLRequest）</param>
+        /// <param name="iss">out string（要求の Issuer。この製品では client_id）</param>
+        /// <param name="inResponseTo">out string（要求の ID）</param>
+        /// <param name="samlRequest2">out XmlDocument（要求。読めなければ null）</param>
         /// <returns>検証できたか</returns>
-        /// <remarks>`SigAlg` で選ぶのでハッシュ引数は落とした</remarks>
+        /// <remarks>
+        /// **検証は Open棟梁 の `SAML2Client.VerifyRequest`**（署名と XML の構造。#294）。
+        /// **鍵は、要求の Issuer（＝ client_id）の登録から引く。**
+        ///
+        /// **鍵が無い SP の要求は、従来どおり通す**（この製品の決め）。
+        /// **Open棟梁 は通さない**（鍵を返す処理が null を返せば false）ので、
+        /// **その判断はここで行う**（Open棟梁 #634 の補足 3-5）。
+        /// </remarks>
         public static bool VerifySamlRequest(
-            string queryString, string decodeSaml,
-            out string iss, out string inResponseTo,
-            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
+            string queryString, string samlRequest,
+            out string iss, out string inResponseTo, out XmlDocument samlRequest2)
         {
-            bool verified = false;
+            bool hasNoKey = false;
 
-            // iss, id
+            bool verified = SAML2Client.VerifyRequest(queryString, samlRequest,
+                requestIss =>
+                {
+                    RSA rsa = CmnEndpoints.RsaOf(CmnEndpoints.ClientIdOf(requestIss));
+                    hasNoKey = (rsa == null);
+                    return hasNoKey ? null : new RSA[] { rsa };
+                },
+                out iss, out inResponseTo, out samlRequest2);
 
             // - iss : 当該IdP/Stsの仕様（client_idを流用するので）
-            iss = SAML2Bindings.GetIssuerInRequest(
-                samlRequest, samlNsMgr).Replace("http://", "");
+            iss = CmnEndpoints.ClientIdOf(iss);
 
-            // - id
-            inResponseTo = SAML2Bindings.GetIdInRequest(samlRequest, samlNsMgr);
-
-            // rsa from iss
-            string pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
-
-            if (string.IsNullOrEmpty(pubKey))
+            if (!verified && hasNoKey)
             {
                 // 鍵がない場合は、通す。
                 verified = true;
-            }
-            else
-            {
-                // 鍵がある場合は、検証。
-                pubKey = CustomEncode.ByteToString(
-                    CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                // 鍵変換
-                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-
-                if (!string.IsNullOrEmpty(queryString))
-                {
-                    // VerifyRedirect
-                    RSA rsaForRedirect = rpkc.JwkToProvider(pubKey);
-
-                    if (SAML2Bindings.VerifyRedirect(queryString, rsaForRedirect))
-                    {
-                        // XSDスキーマによる検証
-                        // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
-                        // The XML is valid.
-
-                        // XPathによる検証
-                        verified = SAML2Bindings.VerifyByXPath(
-                            samlRequest, SAML2Enum.SamlSchema.Request, samlNsMgr);
-                    }
-                }
-                else
-                {
-                    // VerifyPost
-                    RSA rsa = rpkc.JwkToProvider(pubKey);
-
-                    if (SAML2Bindings.VerifyPost(decodeSaml, inResponseTo, rsa))
-                    {
-                        // XSDスキーマによる検証
-                        // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
-                        // The XML is valid. (ただし、Signature要素は外す。
-
-                        // XPathによる検証
-                        verified = SAML2Bindings.VerifyByXPath(
-                            samlRequest, SAML2Enum.SamlSchema.Request, samlNsMgr);
-                    }
-                }
             }
 
             return verified;
@@ -176,7 +142,7 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // DigitalSignX509
             HashAlgorithmName han = hashAlgorithmName ?? HashAlgorithmName.SHA256;
-            DigitalSignX509 dsX509 = new DigitalSignX509(Config.RsaPfxFilePath, Config.RsaPfxPassword, han);
+            DigitalSignX509 dsX509 = new DigitalSignX509(CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, han);
 
             // rtnUrl
             //  **返す先は、常に事前登録の値である**（#276）。
@@ -227,62 +193,115 @@ namespace MultiPurposeAuthSite.SamlProviders
             SAML2Enum.StringToEnum(rtnProtocol, out protocolBinding);
             if (!protocolBinding.HasValue) protocolBinding = SAML2Enum.ProtocolBinding.HttpRedirect;
 
-            string id1 = "";
+            // nameIDFormat.Valueに合わせて処理（PPID）
+            //  **sub の算出も属性も、エラー応答では要らない値**（Assertion を組み込まない。#278）。
+            string sub = "";
+            List<Tuple<string, string, string, string>> attributes = null;
 
-            // SamlResponseを作成する。
-            XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
-                Config.IssuerId, rtnUrl, inResponseTo, statusCode, out id1);
-
-            //  **Assertion は、成功のときだけ組み込む**（#278）。
-            //  **sub の算出もエラー応答では要らない値。**
             if (statusCode == SAML2Enum.StatusCode.Success)
             {
-                string id2 = "";
-
-                // nameIDFormat.Valueに合わせて処理（PPID）
                 //  **利用者も受け取る**（#286 の段階 4）。**属性に入れる値を、引き直さずに使う。**
                 ApplicationUser user = null;
-                string sub = PPIDExtension.GetSubForSAML2(
+                sub = PPIDExtension.GetSubForSAML2(
                     iss, identity.Name, nameIDFormat.Value, out user);
 
-                // SamlAssertionを作成する
-                XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
-                    inResponseTo, Config.IssuerId,
-                    sub, nameIDFormat.Value, authnContextClassRef,
-                    Config.Saml2AssertionExpireTimeSpanFromMinutes * 60, rtnUrl, out id2);
-
                 // **メアドと利用者名を属性で返す**（#286 の段階 4）。
-                // **署名の前に足すこと。** **後から足すと署名が合わなくなる。**
                 if (user != null)
                 {
-                    CmnSamlAttributes.AppendStatement(
-                        samlAssertion, user.Email, user.UserName, user.EmailConfirmed);
+                    attributes = CmnEndpoints.AttributesOf(user.Email, user.UserName, user.EmailConfirmed);
                 }
-
-                // ResponseにAssertionを組込
-                XmlNode newNode = samlResponse2.ImportNode( // 御呪い
-                    samlAssertion.GetElementsByTagName("saml:Assertion")[0], true);
-                samlResponse2.GetElementsByTagName("samlp:Response")[0].AppendChild(newNode);
             }
+
+            //  **応答の組み立てと署名は Open棟梁 の `SAML2Client`**（#294）。
+            //    **返す先・NameID・属性・Binding の決めは、ここに残る。**
+            //    **有効期間は `Config` の値を渡す**（無ければ id_token の期間に倒す。Open棟梁 #634 の補足 3-4）。
+            double expiresInSeconds = Config.Saml2AssertionExpireTimeSpanFromMinutes * 60;
 
             // 返しのProtocol Binding
             switch (protocolBinding)
             {
                 case SAML2Enum.ProtocolBinding.HttpRedirect:
                     // SamlResponseのエンコと、QueryStringを生成（ + 署名）
-                    queryString = SAML2Bindings.EncodeAndSignRedirect(
-                        SAML2Enum.RequestOrResponse.Response,
-                        samlResponse2.OuterXml, relayState, dsX509);
+                    queryString = SAML2Client.CreateRedirectResponse(
+                        CmnServerParams.IssuerId, rtnUrl, inResponseTo, statusCode,
+                        sub, nameIDFormat.Value, authnContextClassRef,
+                        expiresInSeconds, attributes, relayState, dsX509);
                     break;
                 case SAML2Enum.ProtocolBinding.HttpPost:
-                    // SamlRequestのエンコと署名
-                    samlResponse = SAML2Bindings.EncodeAndSignPost(
-                        samlResponse2.OuterXml, id1, dsX509.X509Certificate.GetRSAPrivateKey());
+                    // SamlResponseのエンコと署名
+                    samlResponse = SAML2Client.CreatePostResponse(
+                        CmnServerParams.IssuerId, rtnUrl, inResponseTo, statusCode,
+                        sub, nameIDFormat.Value, authnContextClassRef,
+                        expiresInSeconds, attributes, dsX509.X509Certificate.GetRSAPrivateKey());
                     break;
             }
 
             return protocolBinding;
         }
+
+        #region private
+
+        /// <summary>要求の Issuer から、client_id を作る</summary>
+        /// <param name="iss">要求の Issuer</param>
+        /// <returns>client_id</returns>
+        /// <remarks>当該IdP/Stsの仕様（client_idを流用するので）</remarks>
+        private static string ClientIdOf(string iss)
+        {
+            return (iss ?? "").Replace("http://", "");
+        }
+
+        /// <summary>client_id に登録された、署名を検証する鍵（RSA）</summary>
+        /// <param name="clientId">client_id</param>
+        /// <returns>RSA（登録が無ければ null）</returns>
+        private static RSA RsaOf(string clientId)
+        {
+            // rsa from iss
+            string pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(clientId);
+
+            if (string.IsNullOrEmpty(pubKey))
+            {
+                return null;
+            }
+
+            pubKey = CustomEncode.ByteToString(
+                CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+            // 鍵変換
+            return new RsaPublicKeyConverter(JWS_RSA.RS._256).JwkToProvider(pubKey);
+        }
+
+        /// <summary>アサーションに入れる属性（メアド・email_verified・利用者名）</summary>
+        /// <param name="email">メアド</param>
+        /// <param name="userName">利用者名</param>
+        /// <param name="emailVerified">メアドを確かめたか</param>
+        /// <returns>属性の並び（Name, FriendlyName, NameFormat, 値）</returns>
+        /// <remarks>
+        /// **名前は Open棟梁 の `SAML2Const` が持つ**（読む側の `SAML2Attributes` と同じもの）。
+        /// **`email_verified` は、メアドを出すときだけ添える。**
+        /// </remarks>
+        private static List<Tuple<string, string, string, string>> AttributesOf(
+            string email, string userName, bool emailVerified)
+        {
+            List<Tuple<string, string, string, string>> ret = new List<Tuple<string, string, string, string>>();
+
+            if (!string.IsNullOrEmpty(email))
+            {
+                ret.Add(Tuple.Create(SAML2Const.UrnOidMail,
+                    SAML2Const.FriendlyNameMail, SAML2Const.UrnAttrNameFormatUri, email));
+                ret.Add(Tuple.Create(OAuth2AndOIDCConst.email_verified,
+                    "", SAML2Const.UrnAttrNameFormatBasic, emailVerified ? "true" : "false"));
+            }
+
+            if (!string.IsNullOrEmpty(userName))
+            {
+                ret.Add(Tuple.Create(SAML2Const.UrnOidUid,
+                    SAML2Const.FriendlyNameUid, SAML2Const.UrnAttrNameFormatUri, userName));
+            }
+
+            return ret;
+        }
+
+        #endregion
 
         // VerifySamlResponseはクライアントライブラリなので、
         // Touryo.Infrastructure.Framework.Authenticationに実装

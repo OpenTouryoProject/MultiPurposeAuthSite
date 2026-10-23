@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         RT-309.4 を追加（statement が主張した jwks_uri。#309 の段階 2）
+//*  2026/10/22  玄人 幸道         参照先の名前を Open棟梁 に改めた（#294）
 //**********************************************************************************
 
 using System;
@@ -259,7 +260,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**キャッシュはプロセスの中に在る**ので、"
                     + "**画面から登録した直後・再起動の直後は、空である。**"
                     + "**そのときは断って、背景で取り直す**（決め (C)(1)）。",
-                    "#309 の段階 1 / RFC 7009 §2.1 / DiscoveryJwks.RefillInBackground");
+                    "#309 の段階 1 / RFC 7009 §2.1 / RemoteJwkSetStore.RefillInBackground");
 
                 r.Target("POST /revoke（client_assertion。鍵は画面で登録した jwks_uri の先）");
 
@@ -402,7 +403,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**鍵を入れ替えても、登録のメタデータを書き換えずに済む。**"
                     + "**登録の時点で 1 回引いて列に焼く形**（起票時の案 (c)）**では、"
                     + "この性質が消える**ので、**「対応した」と言えない。**",
-                    "RFC 7591 §2 / #309 の段階 1 / DiscoveryJwks.WarmUpAsync");
+                    "RFC 7591 §2 / #309 の段階 1 / RemoteJwkSetStore.WarmUpAsync");
 
                 r.Target("POST /revoke（client_assertion）→ PUT registration_client_uri");
 
@@ -448,7 +449,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.VerifyEqual("まだ RSA の鍵で通る（キャッシュが効いている）", "（無い）",
                             stillRsa.String("error") ?? "（無い）");
 
-                        r.Note("**取り直しの下限は 1 分**（`DiscoveryJwks.MinRefetchInterval`）。"
+                        r.Note("**取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）。"
                             + "**`kid` を偽った要求を並べれば、外から取得を起こせる**ので、"
                             + "**背景の補充には下限を置いてある。**"
                             + "**何もしなくても、最大でその下限ぶんで追随する** — "

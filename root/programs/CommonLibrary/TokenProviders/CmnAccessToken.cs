@@ -51,6 +51,7 @@
 //*  2026/10/21  玄人 幸道         cnf に jkt（DPoP）も書けるようにした（#311 の段階 1）
 //*  2026/10/21  玄人 幸道         cnf.jkt と DPoP の証明を照合する口を追加（#311 の段階 2）
 //*  2026/10/22  玄人 幸道         預ける payload に cnf.jkt を書く口を追加（#311 の段階 4）
+//*  2026/10/22  玄人 幸道         alg の表と鍵の判定を Open棟梁 の JwsFactory に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -298,7 +299,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (!string.IsNullOrEmpty(jkt))
             {
                 Dictionary<string, object> cnf = new Dictionary<string, object>();
-                cnf.Add(CmnDPoP.Jkt, jkt);
+                cnf.Add(OAuth2AndOIDCConst.jkt, jkt);
 
                 tokenClaimSet.Add(OAuth2AndOIDCConst.cnf, cnf);
             }
@@ -520,7 +521,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// | ヘッダの alg | |
         /// |---|---|
-        /// | `SigningKeys.SupportedAlgs` のいずれか | **受ける**（この認可サーバが発行しうる） |
+        /// | `JwsFactory.SupportedAlgs` のいずれか | **受ける**（この認可サーバが発行しうる） |
         /// | それ以外（`none` / `HS256` / `HS384` など） | **即、検証失敗**（null を返す） |
         ///
         /// **以前は、知らない alg を RS256 として扱っていた。**
@@ -572,7 +573,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // **自分が発行する alg だけを受ける**（C-8。#129 の段階 1）。
                 //   **一覧は 1 か所で持つ**（#129 の段階 2 で RS384 / RS512 を足した）。
                 //   **それ以外の alg のトークンは、自分が発行したものではない。**
-                if (!CmnAccessToken.IsSupportedAlg(alg))
+                if (!JwsFactory.IsSupported(alg))
                 {
                     return null;
                 }
@@ -598,7 +599,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **証明書に落とす**（従来どおり）。**ただし alg に対応する鍵を選ぶ。**
                         jws = CmnAccessToken.SelectJwsFromCertificate(alg);
                     }
-                    else if (!CmnAccessToken.IsSameKeyType(jwkObject, alg))
+                    else if (!JwsFactory.IsSameKeyType(jwkObject, alg))
                     {
                         // **JWK の鍵の種類と、ヘッダの alg が食い違っている。**
                         //   どちらを信じるかという話にしないため、受けない。
@@ -606,8 +607,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
                     else
                     {
-                        // Jwkを使用（鍵の作り方は SigningKeys の表が持つ）
-                        jws = SigningKeys.Of(alg).CreateJwsFromJwk(jwkObject);
+                        // Jwkを使用（alg → class の対応は Open棟梁 の JwsFactory が持つ）
+                        jws = JwsFactory.CreateFromJwk(alg, jwkObject);
                     }
                 }
             }
@@ -628,66 +629,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             SigningKeys.Entry key = SigningKeys.Of(alg);
 
             return (key == null) ? null : key.CreateJwsFromCer();
-        }
-
-        /// <summary>この認可サーバが署名に使う alg（#129 の段階 1〜3）</summary>
-        /// <remarks>
-        /// **一覧は `SigningKeys` の表が持つ**（#129 の段階 3 / D-9）。
-        /// **発行（`SelectJwsForSigning`）・検証（`SelectJws`）・広告（Discovery の
-        /// `*_signing_alg_values_supported`）・`jwkcerts` の生成が、同じ表を見る。**
-        ///
-        /// **増やすときは表に 1 行足す。** ただし **E2E の `RT-129.2`（受けない alg の一覧）も直すこと**
-        /// （黙って広がらないようにするため）。
-        /// </remarks>
-        public static string[] SupportedAlgs
-        {
-            get { return SigningKeys.SupportedAlgs; }
-        }
-
-        /// <summary>この認可サーバが署名に使う alg かどうか</summary>
-        /// <param name="alg">alg</param>
-        /// <returns>使うなら true</returns>
-        public static bool IsSupportedAlg(string alg)
-        {
-            return SigningKeys.IsSupported(alg);
-        }
-
-        /// <summary>JWK の鍵が、alg に合っているか（#129 の段階 2・3）</summary>
-        /// <param name="jwkObject">JWK</param>
-        /// <param name="alg">ヘッダの alg</param>
-        /// <returns>合っていれば true</returns>
-        /// <remarks>
-        /// **以前は JWK の `alg` と完全一致を求めていた**（C-8）。
-        /// **同じ鍵で RS256 / RS384 / RS512 を使えるようにした**ので、
-        /// **一致ではなく「鍵が合っているか」で見る**（RFC 7517 の `alg` は「用途」で、任意）。
-        ///
-        /// | alg | 要る kty | 要る crv |
-        /// |---|---|---|
-        /// | `RS256` / `RS384` / `RS512` | `RSA` | （無し。**1 本の鍵で 3 つ**） |
-        /// | `ES256` | `EC` | `P-256` |
-        /// | `ES384` | `EC` | `P-384` |
-        /// | `ES512` | `EC` | `P-521` |
-        ///
-        /// **`crv` まで見るのは、EC が alg と曲線で対応するから**である（JWA）。
-        /// **`kty` だけでは、P-256 の鍵で `ES512` のトークンを受けてしまう**（#129 の段階 3）。
-        /// </remarks>
-        public static bool IsSameKeyType(JObject jwkObject, string alg)
-        {
-            SigningKeys.Entry key = SigningKeys.Of(alg);
-
-            if (key == null)
-            {
-                return false;
-            }
-
-            if ((string)jwkObject[JwtConst.kty] != key.Kty)
-            {
-                return false;
-            }
-
-            // RSA は曲線を持たない（1 本の鍵で RS256 / RS384 / RS512）。
-            return key.Crv == null
-                || (string)jwkObject[JwtConst.crv] == key.Crv;
         }
 
         /// <summary>トークンに書かれた `cnf.jkt`（無ければ空）（#311 の段階 2）</summary>
@@ -818,7 +759,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (!string.IsNullOrEmpty(jkt))
             {
-                cnf.Add(CmnDPoP.Jkt, jkt);
+                cnf.Add(OAuth2AndOIDCConst.jkt, jkt);
             }
 
             if (cnf.Count == 0)
@@ -873,7 +814,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         return payload;
                     }
 
-                    cnf.Remove(CmnDPoP.Jkt);
+                    cnf.Remove(OAuth2AndOIDCConst.jkt);
 
                     if (cnf.Count == 0)
                     {
@@ -888,7 +829,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         jobj[OAuth2AndOIDCConst.cnf] = cnf;
                     }
 
-                    cnf[CmnDPoP.Jkt] = jkt;
+                    cnf[OAuth2AndOIDCConst.jkt] = jkt;
                 }
 
                 return JsonConvert.SerializeObject(jobj);
@@ -919,7 +860,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
                 JObject cnf = (jobj == null) ? null : jobj[OAuth2AndOIDCConst.cnf] as JObject;
 
-                return (cnf == null) ? "" : ((string)cnf[CmnDPoP.Jkt] ?? "");
+                return (cnf == null) ? "" : ((string)cnf[OAuth2AndOIDCConst.jkt] ?? "");
             }
             catch (Exception)
             {
@@ -1035,7 +976,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //  **以前は `GetClientSecret(aud) != null` だったが、効いていなかった** —
                         //    **`GetClientSecret` は、未登録でも `""` を返す**ので、**常に真**だった。
                         //    **`IsNullOrEmpty` にもしない** — **秘密を持たない public クライアントが止まる。**
-                        if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == Config.IssuerId
+                        if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == CmnServerParams.IssuerId
                             && Helper.GetInstance().HasClient((string)tokenClaimSet[OAuth2AndOIDCConst.aud])
                             // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったのでToStringで渡す
                             // （文字列で発行された過去のTokenも、そのまま通る）。
@@ -1166,8 +1107,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //  **DPoP の縛り**（#311 の段階 2）。
                 //    **mTLS と排他ではない**（両方書かれていることが在る）ので、
                 //    **`else if` で繋がない。**
-                if (cnf.ContainsKey(CmnDPoP.Jkt))
-                    identity.AddClaim(new Claim(Const.UrnCnfJktClaim, (string)cnf[CmnDPoP.Jkt]));
+                if (cnf.ContainsKey(OAuth2AndOIDCConst.jkt))
+                    identity.AddClaim(new Claim(Const.UrnCnfJktClaim, (string)cnf[OAuth2AndOIDCConst.jkt]));
             }
             
             //// - fapi

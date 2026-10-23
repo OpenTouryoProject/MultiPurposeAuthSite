@@ -31,6 +31,7 @@
 //*  2026/10/13  玄人 幸道         新規（#291。CmnSamlMetadata から設定の読み方を分けた）
 //*  2026/10/13  玄人 幸道         上流n件から読めるようにした（#292 の段階 1）
 //*  2026/10/14  玄人 幸道         鍵を全部集める版を足した（#292 の段階 3）
+//*  2026/10/22  玄人 幸道         メタデータの取得を Open棟梁 の SAML2Metadata に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -39,6 +40,8 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 
+using Touryo.Infrastructure.Framework.Authentication;
+
 namespace MultiPurposeAuthSite.SamlProviders
 {
     /// <summary>
@@ -46,14 +49,14 @@ namespace MultiPurposeAuthSite.SamlProviders
     /// </summary>
     /// <remarks>
     /// **この型は「設定の読み方」だけを持つ。**
-    /// **取得と解析とキャッシュは `CmnSamlMetadata`（汎用）**に在る。
+    /// **取得と解析とキャッシュは `SAML2Metadata`（Open棟梁）**に在る。
     ///
     /// **OIDC 側と同じ分け方**である（#289 の段階 2）。
     ///
     /// | | 汎用 | 設定の読み方 |
     /// |---|---|---|
-    /// | OIDC | `Extensions.Sts.DiscoveryJwks` | `Extensions.Sts.IdFederationJwks` |
-    /// | **SAML2** | **`CmnSamlMetadata`** | **この型** |
+    /// | OIDC | `RemoteJwkSetStore`（Open棟梁） | `Extensions.Sts.IdFederationJwks` |
+    /// | **SAML2** | **`SAML2Metadata`**（Open棟梁） | **この型** |
     ///
     /// | | この配備での決め方 |
     /// |---|---|
@@ -75,7 +78,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <returns>SSO の URL（分からなければ空）</returns>
         /// <remarks>
         /// **メタデータの `entityID` が `IdFederationSaml2IssuerId` と一致しなければ、
-        /// メタデータの値は使わない**（`CmnSamlMetadata.GetAsync` が照合する）。
+        /// メタデータの値は使わない**（`SAML2Metadata.GetAsync` が照合する）。
         /// </remarks>
         public static async Task<string> GetSsoUrlAsync()
         {
@@ -96,7 +99,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                 return "";
             }
 
-            CmnSamlMetadata.Metadata metadata = await CmnSamlMetadata.GetAsync(
+            SAML2Metadata metadata = await SAML2Metadata.GetAsync(
                 upstream.MetadataUrl, upstream.Issuer);
 
             if (metadata != null && !string.IsNullOrEmpty(metadata.SsoRedirectLocation))
@@ -113,7 +116,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <returns>RSA（分からなければ null）</returns>
         /// <remarks>
         /// **メタデータから引けなければ、設定の `.cer` を読む**（従来どおり）。
-        /// **どちらも無ければ null** — **検証は成立しない**（`CmnSaml2Response` が理由を返す）。
+        /// **どちらも無ければ null** — **検証は成立しない**（`SAML2Client.VerifyResponseWithReason` が理由を返す）。
         /// </remarks>
         public static async Task<RSA> GetSigningKeyAsync()
         {
@@ -132,7 +135,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         ///
         /// **ロールオーバー中は、メタデータに 2 本以上並ぶ。**
         /// **SAML2 の署名には `kid` に当たるものが無い**ので、**受け取る側は全部試す**
-        /// （`CmnSaml2Response.Verify` の鍵の列を受ける版）。
+        /// （`SAML2Client.VerifyResponseWithReason`）。
         ///
         /// **設定の `.cer` は、いつでも最後の受け皿**である
         /// （**メタデータが引けない配備**のため。#291）。
@@ -146,10 +149,13 @@ namespace MultiPurposeAuthSite.SamlProviders
                 return keys;
             }
 
-            CmnSamlMetadata.Metadata metadata = await CmnSamlMetadata.GetAsync(
+            SAML2Metadata metadata = await SAML2Metadata.GetAsync(
                 upstream.MetadataUrl, upstream.Issuer);
 
-            keys.AddRange(CmnSamlMetadata.SigningKeys(metadata));
+            if (metadata != null)
+            {
+                keys.AddRange(metadata.GetSigningKeys());
+            }
 
             //  **設定の `.cer` も足す**（**メタデータから引けた鍵の後ろ**）。
             RSA fromFile = CmnSaml2Response.RsaFromCerFile(upstream.CerFilePath);
@@ -174,10 +180,10 @@ namespace MultiPurposeAuthSite.SamlProviders
                 return null;
             }
 
-            CmnSamlMetadata.Metadata metadata = await CmnSamlMetadata.GetAsync(
+            SAML2Metadata metadata = await SAML2Metadata.GetAsync(
                 upstream.MetadataUrl, upstream.Issuer);
 
-            RSA rsa = CmnSamlMetadata.FirstSigningKey(metadata);
+            RSA rsa = (metadata == null) ? null : metadata.GetFirstSigningKey();
 
             if (rsa != null)
             {

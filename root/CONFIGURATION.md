@@ -1846,7 +1846,7 @@ Post され、その順番を握っているのは、待っている自分**だ�
 |---|---|
 | **登録**（`POST` / `PUT`） | **取りに行って待つ**（**口が `async`**）。**読めなければ `400` ＋ `invalid_client_metadata`** |
 | **要求**（`/token` など） | **キャッシュを読むだけ。** **引けなければ `invalid_client` で断り、背景で取り直す** |
-| **背景** | **取り直しの下限は 1 分**（`DiscoveryJwks.MinRefetchInterval`）。**取得中は 1 本だけ**（**`kid` を偽った要求を並べれば、外から起こせる**） |
+| **背景** | **取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`。Open棟梁）。**取得中は 1 本だけ**（**`kid` を偽った要求を並べれば、外から起こせる**） |
 
 > **プロセスを起こし直した直後・画面から登録した直後は、1 回断られる**（**次の試行で通る**）。
 > **キャッシュはプロセスの中に在る**ためである。
@@ -2868,7 +2868,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 
 **`NameID` だけでは、メアドと利用者名を運べない。**
 **段階 4 で、OIDC 側のクレームに 1 対 1 で対応する属性を出すようにした**
-（`CommonLibrary/SamlProviders/CmnSamlAttributes.cs`）。
+（**出す側は `CommonLibrary/SamlProviders/CmnEndpoints.cs` が属性を決め、名前と読み取りは Open棟梁 の `SAML2Const` / `SAML2Attributes`**。#294）。
 
 | OIDC | SAML2 の `Name` | `FriendlyName` | `NameFormat` |
 |---|---|---|---|
@@ -3532,7 +3532,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 **`ETag` は、値に関係なく常に付く**（中身の SHA-256。**同じ中身なら同じ値**）。
 **`If-None-Match` が一致すれば `304`** を返し、**本文を送らない。**
 
-**サーバ側でも覚える**（`Extensions/Sts/JwkSetDocument`）。
+**サーバ側でも覚える**（Open棟梁 の `JwkSetDocument`）。
 **ファイルの最終更新時刻と長さだけを見て**、変わっていなければ覚えている分を返す
 （**`stat` だけで済ませ、中身は読まない**）。
 

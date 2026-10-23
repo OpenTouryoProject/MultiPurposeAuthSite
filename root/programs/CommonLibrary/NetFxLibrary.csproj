@@ -79,10 +79,8 @@
     <Compile Include="Extensions\Sts\ClientRegistrationProvider.cs" />
     <Compile Include="Extensions\Sts\AccountLink.cs" />
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
-    <Compile Include="Extensions\Sts\DiscoveryJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationUpstreamProvider.cs" />
-    <Compile Include="Extensions\Sts\JwkSetDocument.cs" />
     <Compile Include="Extensions\Sts\JwksUriWarmUp.cs" />
     <Compile Include="Extensions\Sts\PollingThrottle.cs" />
     <Compile Include="Extensions\Sts\RateLimitProvider.cs" />
@@ -106,7 +104,6 @@
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="SamlProviders\CmnSaml2Response.cs" />
-    <Compile Include="SamlProviders\CmnSamlAttributes.cs" />
     <Compile Include="SamlProviders\CmnSamlMetadata.cs" />
     <Compile Include="SamlProviders\IdFederationSaml2Metadata.cs" />
     <Compile Include="SamlProviders\IdFederationSaml2Request.cs" />

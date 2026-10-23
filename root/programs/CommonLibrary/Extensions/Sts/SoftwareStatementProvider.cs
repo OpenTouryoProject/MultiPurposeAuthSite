@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/20  玄人 幸道         新規（#307 の段階 4）
+//*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -198,7 +199,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string statement = (token.Type == JTokenType.String) ? (string)token : "";
             string[] segments = (statement ?? "").Split('.');
 
-            JObject claims = CmnEndpoints.TryReadJwtPayload(statement);
+            JObject claims = JwtReader.TryReadPayload(statement);
 
             if (claims == null || segments.Length != 3 || string.IsNullOrEmpty(segments[2]))
             {
@@ -229,7 +230,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  5. **ヘッダの `alg` を照合する**（**外から alg を選ばせない**。#262 と同じ方針）。
-            string alg = CmnEndpoints.TryReadJwtAlg(statement);
+            string alg = JwtReader.TryReadAlg(statement);
 
             if (alg != issuer.Alg)
             {
@@ -260,7 +261,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     jws = isBody
                         ? SoftwareStatementProvider.JwsFromCerBody(
                             issuer.Alg, issuer.CerBodies[i])
-                        : SigningKeys.CreateJwsFromCer(
+                        : JwsFactory.CreateFromCertificate(
                             issuer.Alg, issuer.CerFilePaths[i - issuer.CerBodies.Count]);
                 }
                 catch (Exception ex)
@@ -338,7 +339,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JToken audToken = claims[OAuth2AndOIDCConst.aud];
 
             if (audToken != null && audToken.Type != JTokenType.Null
-                && !IdTokenAudience.Matches(claims, Config.IssuerId))
+                && !IdTokenAudience.Matches(claims, CmnServerParams.IssuerId))
             {
                 description = "The software_statement was not issued for this "
                     + "authorization server.";
@@ -431,13 +432,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ECDsa ecdsa = cert.GetECDsaPublicKey();
 
                 return (ecdsa == null) ? null
-                    : SigningKeys.CreateJwsFromEcParameters(alg, ecdsa.ExportParameters(false));
+                    : JwsFactory.CreateFromEcParameters(alg, ecdsa.ExportParameters(false));
             }
 
             RSA rsa = cert.GetRSAPublicKey();
 
             return (rsa == null) ? null
-                : SigningKeys.CreateJwsFromRsaParameters(alg, rsa.ExportParameters(false));
+                : JwsFactory.CreateFromRsaParameters(alg, rsa.ExportParameters(false));
         }
 
         /// <summary>発行者に許した範囲に収まっているか（#307 の段階 6）</summary>
@@ -503,7 +504,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return true;
             }
 
-            List<string> permitted = Helper.ToDistinctList(allowed);
+            List<string> permitted = OAuth2AndOIDCSpec.ToDistinctList(allowed);
 
             //  **statement に在ればそれが登録の値**（§2.3 は MUST）。**無ければ本文の値。**
             JToken token = (claims[name] != null && claims[name].Type != JTokenType.Null)
@@ -548,7 +549,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return ret;
             }
 
-            return Helper.ToDistinctList((string)token ?? "");
+            return OAuth2AndOIDCSpec.ToDistinctList((string)token ?? "");
         }
 
         /// <summary>主張されたメタデータを、本文へ重ねる</summary>

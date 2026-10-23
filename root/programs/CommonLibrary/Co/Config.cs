@@ -74,6 +74,7 @@
 //*  2026/10/20  玄人 幸道         software_statement の設定を追加（#307 の段階 4）
 //*  2026/10/21  玄人 幸道         OP のセッションの Cookie 名を追加（#310 の段階 1）
 //*  2026/10/22  玄人 幸道         DPoP の nonce の設定を追加（#311 の段階 4）
+//*  2026/10/22  玄人 幸道         IssuerId などを Open棟梁 の CmnServerParams に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1387,42 +1388,13 @@ namespace MultiPurposeAuthSite.Co
 
         #region STS
 
-        /// <summary>
-        /// IssuerId
-        /// </summary>
-        public static string IssuerId
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("IssuerId");
-            }
-        }
+        // **IssuerId は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
 
         #region 証明書
 
         #region RSA
 
-        /// <summary>
-        /// RSA署名用証明書（*.pfx）のパスワード
-        /// </summary>
-        public static string RsaPfxPassword
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("RsaPfxPassword");
-            }
-        }
-
-        /// <summary>
-        /// RSA署名用証明書（*.pfx）のパス
-        /// </summary>
-        public static string RsaPfxFilePath
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("RsaPfxFilePath");
-            }
-        }
+        // **RsaPfxPassword / RsaPfxFilePath は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
 
         #endregion
 
@@ -2453,20 +2425,8 @@ namespace MultiPurposeAuthSite.Co
                     Config.GetRenamedConfigValue("IsLockedDownTestEndpoints"));
             }
         }
-        /// <summary>
-        /// PKCE で S256 だけを受け付けるかどうか（#220）
-        /// </summary>
-        /// <remarks>
-        /// OAuth 2.1 / FAPI は S256 のみを許す。plain は保護にならない。
-        /// **既定は false（従来どおり plain も受理）。** 下位互換のため。
-        /// </remarks>
-        public static bool RequirePkceS256
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePkceS256"));
-            }
-        }
+        // **RequirePkceS256**（PKCE で S256 だけを受け付けるか。#220）**は Open棟梁 の `CmnServerParams` が読む**
+        //   （キー名は同じ。**既定は false**（従来どおり plain も受理）。#294）。
 
         // **PAR（RFC 9126）のエンドポイントは、Open棟梁 の OAuth2AndOIDCParams が持つ**（#236 の宿題）。
         //   キー名 AuthRequestPushUri は、RequestObjectRegUri / JwkSetUri と同じく
@@ -2635,7 +2595,7 @@ namespace MultiPurposeAuthSite.Co
         /// **入れ替えの最中も検証は通る。** **入れ替えの周期より短くすること。**
         ///
         /// **サーバ側で覚える分は、この値に関係なく効く**
-        /// （`Extensions/Sts/JwkSetDocument`。**ファイルの更新を見て読み直す**）。
+        /// （Open棟梁 の `JwkSetDocument`。**ファイルの更新を見て読み直す**）。
         /// </remarks>
         public static int JwkSetCacheMaxAgeSeconds
         {
@@ -2658,36 +2618,8 @@ namespace MultiPurposeAuthSite.Co
 
         #region 鍵のロールオーバー（#292 の段階 3）
 
-        /// <summary>
-        /// 退役させる途中の署名証明書（`/samlmetadata` に並べて広告する）
-        /// </summary>
-        /// <remarks>
-        /// **鍵の入れ替え（ロールオーバー）に要る**（#292 の段階 3）。
-        ///
-        /// **SAML2 のメタデータは、署名証明書を広告する。**
-        /// **1 本しか広告していないと、鍵を替えた瞬間に、SP は検証できなくなる**
-        /// （**SP はメタデータをキャッシュする**ので、こちらが替えたことを知らない）。
-        ///
-        /// | 順 | |
-        /// |---|---|
-        /// | 1 | **新しい鍵で署名する前に**、ここに**新しい証明書**を書いて広告する |
-        /// | 2 | SP のキャッシュが切れたら、**署名鍵を入れ替える**（`RsaPfxFilePath` / `SpRp_RsaCerFilePath`） |
-        /// | 3 | **古い証明書**をここに書き（新しい方は共通設定が広告する）、SP が追随したら消す |
-        ///
-        /// **区切りは空白かカンマ**（`CorsAllowedOrigins` と同じ流儀）。**値はファイルのパス。**
-        /// **空なら、広告するのは 1 本だけ**（従来どおり）。
-        ///
-        /// **OIDC 側は、この設定を使わない。**
-        /// **`JwkSet.json` に新旧を並べられる**（`CreateJwkSetJson` は追記しかしない）ので、
-        /// **`/jwkcerts` は `kid` で選べる形になっている。**
-        /// </remarks>
-        public static string PreviousSigningCerFilePaths
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("PreviousSigningCerFilePaths");
-            }
-        }
+        // **PreviousSigningCerFilePaths**（退役させる途中の署名証明書。#292 の段階 3）**は Open棟梁 の `CmnServerParams` が読む**
+        //   （キー名は同じ。#294）。**鍵の入れ替えの手順は `CONFIGURATION.md`** にある。
 
         #endregion
 

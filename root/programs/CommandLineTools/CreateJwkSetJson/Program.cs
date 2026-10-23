@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/08/15  西野 大介         新規
 //*  2026/10/02  玄人 幸道         署名に使う鍵をすべて載せる（#129 の段階 3 / D-9）
+//*  2026/10/22  玄人 幸道         alg の一覧を Open棟梁 の JwsFactory から引くようにした（#294）
 //**********************************************************************************
 
 using System;
@@ -94,7 +95,7 @@ namespace CreateJwkSetJson
 
             // **署名に使う鍵を、すべて載せる**（#129 の段階 3）。
             //   RS256 / RS384 / RS512 は同じ鍵（kid も同じ）なので、2 つ目以降は追記されない。
-            foreach (string alg in SigningKeys.SupportedAlgs)
+            foreach (string alg in JwsFactory.SupportedAlgs)
             {
                 SigningKeys.Entry key = SigningKeys.Of(alg);
                 JObject jwkObject = key.JwkFromCer();

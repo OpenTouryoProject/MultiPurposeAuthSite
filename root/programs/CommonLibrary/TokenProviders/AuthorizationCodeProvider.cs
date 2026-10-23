@@ -36,6 +36,7 @@
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
 //*  2026/09/24  玄人 幸道         期限切れの行を、書き込みのついでにまとめて消す（#188 の案 4）
 //*  2026/10/22  玄人 幸道         認可要求の dpop_jkt を code に紐付ける（#311 の段階 4）
+//*  2026/10/22  玄人 幸道         dpop_jkt の定数を Open棟梁 の OAuth2AndOIDCConst にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -266,7 +267,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // **DPoP の鍵の申告も、Request Object の中から読む**（#311 の段階 4）。
             //   **ここに足し忘れると、JAR / PAR の経路だけ縛りが外れる**（#197 と同じ落ち方）。
-            ret[CmnDPoP.JktParam] = (string)requestObjectPayload[CmnDPoP.JktParam];
+            ret[OAuth2AndOIDCConst.dpop_jkt] = (string)requestObjectPayload[OAuth2AndOIDCConst.dpop_jkt];
 
             return ret;
         }
@@ -304,7 +305,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   **認可要求で申告された鍵の指紋を、コードに紐付ける**（RFC 9449 §10。#311 の段階 4）。
             //   **`/token` での照合は GetDPoPJkt を読む側が行う**（`CmnEndpoints`）。
             //   **指定が無ければ null が入り、照合はスキップされる**（PKCE と同じ扱い）。
-            temp.Add(CmnDPoP.JktParam, authZReq[CmnDPoP.JktParam]);
+            temp.Add(OAuth2AndOIDCConst.dpop_jkt, authZReq[OAuth2AndOIDCConst.dpop_jkt]);
 
             // 新しいCodeのticketをストアに保存
             string jsonString = JsonConvert.SerializeObject(temp);
@@ -697,7 +698,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
             if (temp == null
-                || !temp.TryGetValue(CmnDPoP.JktParam, out string jkt)
+                || !temp.TryGetValue(OAuth2AndOIDCConst.dpop_jkt, out string jkt)
                 || string.IsNullOrEmpty(jkt))
             {
                 return "";

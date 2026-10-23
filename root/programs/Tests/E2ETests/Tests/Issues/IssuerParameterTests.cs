@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/24  玄人 幸道         新規（#231 : 認可応答に iss を返す）
 //*  2026/09/30  玄人 幸道         form_post の場合を追加（#252）
+//*  2026/10/22  玄人 幸道         参照先の名前を Open棟梁 に改めた（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -249,7 +250,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <returns>Task</returns>
         /// <remarks>
         /// **#231 で対応したとき、form_post だけ抜けていた**（#252）。
-        /// `iss` は `CmnEndpoints.BuildRedirectUrl`（URL を組む経路）で付けており、
+        /// `iss` は `OAuth2AndOIDCSpec.BuildRedirectUrl`（URL を組む経路。Open棟梁）で付けており、
         /// **form_post はそこを通らない**（`ViewData` を組んで `FormPost` を返す）。
         ///
         /// **エラー応答の form_post は、ここでは測っていない。**

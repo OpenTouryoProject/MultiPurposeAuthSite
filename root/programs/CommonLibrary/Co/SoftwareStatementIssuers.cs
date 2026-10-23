@@ -31,6 +31,7 @@
 //*  2026/10/20  玄人 幸道         新規（#307 の段階 4）
 //*  2026/10/20  玄人 幸道         発行者ごとの上限と、鍵の入れ替えを追加（#307 の段階 6）
 //*  2026/10/21  玄人 幸道         DBの登録も読む（本文の列を追加。#308 の段階 1）
+//*  2026/10/22  玄人 幸道         alg の判定を Open棟梁 の JwsFactory に移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.TokenProviders;
@@ -262,10 +263,10 @@ namespace MultiPurposeAuthSite.Co
         /// <remarks>
         /// **ヘッダの `alg` と照合する**（**外から alg を選ばせない**。#262 と同じ方針）。
         ///
-        /// **扱うのは `SigningKeys.SupportedAlgs` の範囲**である。
+        /// **扱うのは `JwsFactory.SupportedAlgs` の範囲**である（Open棟梁。#294）。
         /// **あれは「この配備が署名に使う alg」の一覧**だが、
         /// **`.cer` から検証用の JWS を作れる alg の一覧でもある**
-        /// （`SigningKeys.CreateJwsFromCer`）。**一覧を 2 つ持たない。**
+        /// （`JwsFactory.CreateFromCertificate`）。**一覧を 2 つ持たない。**
         /// </remarks>
         public string Alg { get; set; }
 
@@ -290,7 +291,7 @@ namespace MultiPurposeAuthSite.Co
                 return this.Enabled
                     && !string.IsNullOrEmpty(this.Issuer)
                     && (0 < this.CerBodies.Count || 0 < this.CerFilePaths.Count)
-                    && SigningKeys.IsSupported(this.Alg);
+                    && JwsFactory.IsSupported(this.Alg);
             }
         }
     }
