@@ -31,6 +31,7 @@
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
 //*  2026/10/13  玄人 幸道         SSO へ行く部分を FollowSsoAsync に切り出した（#293 の段階 4）
 //*  2026/10/13  玄人 幸道         どの上流か（idpKey）を渡せるようにした（#292 の段階 1）
+//*  2026/10/23  玄人 幸道         導線の判定の参照先を IdFederationUpstream.IsUsable に改めた（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -85,7 +86,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="client">IdPClient（下流）</param>
         /// <returns>上流の URL</returns>
         /// <remarks>
-        /// **設定が無い配備では、導線そのものが出ない**（`Config.CanIdFederationBySaml2`）。
+        /// **設定が無い配備では、導線そのものが出ない**（`IdFederationUpstream.IsUsable`）。
         /// **上流が建っていないときと同じ扱い**で Skip する。
         /// </remarks>
         public static async Task<string> SkipIfNotAvailableAsync(IdPClient client)

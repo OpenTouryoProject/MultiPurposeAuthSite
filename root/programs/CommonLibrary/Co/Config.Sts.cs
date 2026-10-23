@@ -41,7 +41,18 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（STS（鍵・有効期間））</summary>
     public partial class Config
     {
-        #region STS（鍵・有効期間）
+        /// <summary>
+        /// 本サイトでSaltとして機能する値
+        /// - PPID生成に使用するSalt
+        /// - 外部ログイン追加時のXSRF防止
+        /// </summary>
+        public static string SaltParameter
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("SaltParameter");
+            }
+        }
 
         #region 鍵（ECDSA）
 
@@ -288,6 +299,5 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #endregion
     }
 }

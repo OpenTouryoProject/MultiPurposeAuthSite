@@ -46,9 +46,7 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（アカウント）</summary>
     public partial class Config
     {
-        #region アカウント
-
-        #region 事前登録ユーザ
+        #region 事前登録ユーザ（Admin, Test）
 
         /// <summary>AdministratorUID</summary>
         public static string AdministratorUID
@@ -278,7 +276,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region このサイト自身が書く Cookie の名前（#255）
+        #region SetするCookie名
 
         /// <summary>
         /// このサイト自身が書く Cookie の名前に付ける接頭辞（#255）
@@ -334,7 +332,7 @@ namespace MultiPurposeAuthSite.Co
         /// **枠組みが付けた `.` を潰さない**ため、後ろへ入れる。
         /// **見た目も揃う**（どの Cookie も `.` の直後に接頭辞が来る）。
         /// </remarks>
-        public static string PrefixCookieName(string name)
+        public static string PrefixedCookieName(string name)
         {
             string prefix = Config.CookieNamePrefix;
 
@@ -359,7 +357,7 @@ namespace MultiPurposeAuthSite.Co
         {
             get
             {
-                return Config.PrefixCookieName(OAuth2AndOIDCConst.auth_time);
+                return Config.PrefixedCookieName(OAuth2AndOIDCConst.auth_time);
             }
         }
 
@@ -371,7 +369,7 @@ namespace MultiPurposeAuthSite.Co
         {
             get
             {
-                return Config.PrefixCookieName(Const.ReAuthenticatedAt);
+                return Config.PrefixedCookieName(Const.ReAuthenticatedAt);
             }
         }
 
@@ -390,7 +388,7 @@ namespace MultiPurposeAuthSite.Co
         {
             get
             {
-                return Config.PrefixCookieName(Const.OpSession);
+                return Config.PrefixedCookieName(Const.OpSession);
             }
         }
 
@@ -682,8 +680,6 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("UserStoreSecretPassword");
             }
         }
-
-        #endregion
 
         #endregion
     }

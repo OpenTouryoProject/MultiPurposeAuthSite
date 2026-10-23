@@ -92,7 +92,74 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config</summary>
     public partial class Config
     {
-        #region 土台
+        #region ストア
+
+        /// <summary>UserStoreのTypeを返す。</summary>
+        public static EnumUserStoreType UserStoreType
+        {
+            get
+            {
+                switch (GetConfigParameter.GetConfigValue("UserStoreType").ToUpper())
+                {
+                    case "MEM":
+                        return EnumUserStoreType.Memory;
+                    case "SQL":
+                        return EnumUserStoreType.SqlServer;
+                    case "ORA":
+                        return EnumUserStoreType.ODPManagedDriver;
+                    case "NPG":
+                        return EnumUserStoreType.PostgreSQL;
+                    default:
+                        return EnumUserStoreType.Memory;
+                }
+            }
+        }
+
+        #endregion
+
+        #region デバッグ
+
+        /// <summary>Debugかどうか</summary>
+        public static bool IsDebug
+        {
+            get
+            {
+                if (Config.UserStoreType == EnumUserStoreType.Memory)
+                {
+                    return true; // Memory Provider 利用時は = Debug 扱い。
+                }
+                else
+                {
+                    return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsDebug"));
+                }
+            }
+        }
+
+        /// <summary>DebugTraceLogを有効にする</summary>
+        /// <remarks>**改名した**（綴りが `Enabe` だった。#236）。旧いキー名も読む。</remarks>
+        public static bool EnableDebugTraceLog
+        {
+            get
+            {
+                return Convert.ToBoolean(Config.GetRenamedConfigValue("EnableDebugTraceLog"));
+            }
+        }
+
+        #endregion
+
+        #region Open棟梁 に移行（キー名は同じ）
+
+        // CmnServerParams
+        // - IssuerId
+        // - RsaPfxPassword / RsaPfxFilePath
+        // - RequirePkceS256
+        // - PreviousSigningCerFilePaths
+
+        // OAuth2AndOIDCParams
+        // - AuthRequestPushUri（PAR（RFC 9126）のエンドポイント
+        // - その他、移行前からSPRPで使用するパラメタを定義している。
+
+        #endregion
 
         #region 改名した設定キー（#236）
 
@@ -153,82 +220,6 @@ namespace MultiPurposeAuthSite.Co
 
             return used;
         }
-
-        #endregion
-
-        #region デバッグ
-
-        /// <summary>Debugかどうか</summary>
-        public static bool IsDebug
-        {
-            get
-            {
-                if (Config.UserStoreType == EnumUserStoreType.Memory)
-                {
-                    return true; // Memory Provider 利用時は = Debug 扱い。
-                }
-                else
-                {
-                    return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsDebug"));
-                }
-            }
-        }
-
-        /// <summary>DebugTraceLogを有効にする</summary>
-        /// <remarks>**改名した**（綴りが `Enabe` だった。#236）。旧いキー名も読む。</remarks>
-        public static bool EnableDebugTraceLog
-        {
-            get
-            {
-                return Convert.ToBoolean(Config.GetRenamedConfigValue("EnableDebugTraceLog"));
-            }
-        }
-
-        #endregion
-
-        #region ストア
-
-        /// <summary>UserStoreのTypeを返す。</summary>
-        public static EnumUserStoreType UserStoreType
-        {
-            get
-            {
-                switch (GetConfigParameter.GetConfigValue("UserStoreType").ToUpper())
-                {
-                    case "MEM":
-                        return EnumUserStoreType.Memory;
-                    case "SQL":
-                        return EnumUserStoreType.SqlServer;
-                    case "ORA":
-                        return EnumUserStoreType.ODPManagedDriver;
-                    case "NPG":
-                        return EnumUserStoreType.PostgreSQL;
-                    default:
-                        return EnumUserStoreType.Memory;
-                }
-            }
-        }
-
-        #endregion
-
-        #region Open棟梁 が読む設定（キー名は同じ。#294）
-
-        // **IssuerId は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
-
-        // **RsaPfxPassword / RsaPfxFilePath は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
-
-        // **RequirePkceS256**（PKCE で S256 だけを受け付けるか。#220）**は Open棟梁 の `CmnServerParams` が読む**
-        //   （キー名は同じ。**既定は false**（従来どおり plain も受理）。#294）。
-
-        // **PreviousSigningCerFilePaths**（退役させる途中の署名証明書。#292 の段階 3）**は Open棟梁 の `CmnServerParams` が読む**
-        //   （キー名は同じ。#294）。**鍵の入れ替えの手順は `CONFIGURATION.md`** にある。
-
-        // **PAR（RFC 9126）のエンドポイントは、Open棟梁 の OAuth2AndOIDCParams が持つ**（#236 の宿題）。
-        //   キー名 AuthRequestPushUri は、RequestObjectRegUri / JwkSetUri と同じく
-        //   **クライアント側も読む設定**なので、框の側に置く（OpenTouryo #592 で実装された）。
-        //   ここに自前のプロパティは置かない。
-
-        #endregion
 
         #endregion
     }

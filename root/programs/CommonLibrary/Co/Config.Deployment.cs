@@ -43,8 +43,6 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（配備・基盤）</summary>
     public partial class Config
     {
-        #region 配備・基盤
-
         #region Proxy
 
         /// <summary>
@@ -181,6 +179,128 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region CORS
+
+        /// <summary>CORS で追加して許可するオリジン（任意。#265）</summary>
+        /// <remarks>
+        /// **空でよい。** 既定では、**構成ファイルに登録された public クライアントの
+        /// `redirect_uri_*` からオリジンを導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **ここは、その導出で拾えないものを足すための口**である。
+        ///
+        /// **区切りは空白かカンマ。** 値はオリジン（`https://host:port`）で書く。
+        /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
+        ///
+        /// **`*` は書かないこと。** 書いても拒否する（`ProductionCheck` が警告する）。
+        /// </remarks>
+        public static string CorsAllowedOrigins
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("CorsAllowedOrigins");
+            }
+        }
+
+        #endregion
+
+        #region .NET Core
+        
+        #region セッション
+
+        /// <summary>セッションの置き場（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`mem`（既定） / `sql` / `redis`。**
+        /// **書かなければ `mem`**（＝ 従来どおり。プロセス内のメモリ）。
+        ///
+        /// **net48 版は読まない。** あちらは `Web.config` の `sessionState` で選ぶ。
+        ///
+        /// | 値 | 置き場 | 複数インスタンス |
+        /// |---|---|---|
+        /// | `mem` | プロセス内 | **共有されない**（単一インスタンス向け） |
+        /// | `sql` | SQL Server のテーブル | 共有される。`Create_SessionCache.sql` を流しておく |
+        /// | `redis` | Redis | 共有される。**`UserStoreType` の方言に依らない** |
+        ///
+        /// **`UserStoreType` と同じ流儀**にしてある（`EnumSessionStoreType`）。
+        /// **Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、
+        /// **それらのストアで複数インスタンスにするなら `redis` を使う。**
+        /// </remarks>
+        public static EnumSessionStoreType SessionStoreType
+        {
+            get
+            {
+                // **キーが無いと null が返る。** `UserStoreType` と違い、
+                //   **このキーは雛形以外では無いことがある**（既存の配備）ので、
+                //   そのまま `ToUpper()` すると、起動時に落ちる。
+                string sessionStoreType = GetConfigParameter.GetConfigValue("SessionStoreType");
+
+                switch ((sessionStoreType ?? "").ToUpper())
+                {
+                    case "MEM":
+                        return EnumSessionStoreType.Memory;
+                    case "SQL":
+                        return EnumSessionStoreType.SqlServer;
+                    case "REDIS":
+                        return EnumSessionStoreType.Redis;
+                    default:
+                        // **書かなければプロセス内**（＝ 従来どおり）。
+                        return EnumSessionStoreType.Memory;
+                }
+            }
+        }
+
+        /// <summary>セッションの置き場への接続文字列（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`SessionStoreType` で意味が変わる。**
+        ///
+        /// | `SessionStoreType` | 書くもの |
+        /// |---|---|
+        /// | `mem` | **要らない**（読まない） |
+        /// | `sql` | **SQL Server の接続文字列。** `ConnectionString_SQL` と同じでよいが、別の DB にもできる |
+        /// | `redis` | **Redis の接続文字列**（`localhost:6379` など） |
+        ///
+        /// **`UserStoreType` のように方言ごとに分けていない**のは、
+        /// **`SessionStoreType` が置き場を一意に決める**ためである。
+        /// </remarks>
+        public static string SessionStoreConnectionString
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("SessionStoreConnectionString");
+            }
+        }
+
+        #endregion
+
+        #region データ保護の鍵
+
+        /// <summary>
+        /// DataProtection の鍵の置き場（#251。C-13）
+        /// </summary>
+        /// <remarks>
+        /// **net10.0 版だけで使う。** net48 版は machineKey の話で、別。
+        ///
+        /// **指定しなければ、従来どおり `%LOCALAPPDATA%` 配下**（コンテナでは揮発）。
+        /// **指定すると、そこに鍵リングを置く**ので、
+        /// **再起動やコンテナの作り直しでもサインインが切れない。**
+        ///
+        /// **鍵そのものは書かない**（net48 の `machineKey` との違い）。
+        /// **鍵は自動生成・自動ローテーションされる。共有するのは置き場である。**
+        ///
+        /// **効くのは「画面のセッション」**（認証 Cookie / AntiForgery /
+        /// メール確認・パスワード リセットのリンク）。
+        /// **access_token / id_token・PPID・認可コード・refresh_token には影響しない。**
+        ///
+        /// **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
+        /// </remarks>
+        public static string DataProtectionKeyPath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("DataProtectionKeyPath");
+            }
+        }
+
+        #endregion
+
         #region HTTPS・逆プロキシ（#279）
 
         //  **本番でだけ有効にしたい設定を「コメントアウトして置いておく」と、
@@ -259,126 +379,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("ForwardedHeadersKnownProxies");
-            }
-        }
-
-        #endregion
-
-        #region データ保護の鍵
-
-        /// <summary>
-        /// DataProtection の鍵の置き場（#251。C-13）
-        /// </summary>
-        /// <remarks>
-        /// **net10.0 版だけで使う。** net48 版は machineKey の話で、別。
-        ///
-        /// **指定しなければ、従来どおり `%LOCALAPPDATA%` 配下**（コンテナでは揮発）。
-        /// **指定すると、そこに鍵リングを置く**ので、
-        /// **再起動やコンテナの作り直しでもサインインが切れない。**
-        ///
-        /// **鍵そのものは書かない**（net48 の `machineKey` との違い）。
-        /// **鍵は自動生成・自動ローテーションされる。共有するのは置き場である。**
-        ///
-        /// **効くのは「画面のセッション」**（認証 Cookie / AntiForgery /
-        /// メール確認・パスワード リセットのリンク）。
-        /// **access_token / id_token・PPID・認可コード・refresh_token には影響しない。**
-        ///
-        /// **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
-        /// </remarks>
-        public static string DataProtectionKeyPath
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("DataProtectionKeyPath");
-            }
-        }
-
-        #endregion
-
-        #region セッション
-
-        /// <summary>セッションの置き場（net10.0 版だけ。#256）</summary>
-        /// <remarks>
-        /// **`mem`（既定） / `sql` / `redis`。**
-        /// **書かなければ `mem`**（＝ 従来どおり。プロセス内のメモリ）。
-        ///
-        /// **net48 版は読まない。** あちらは `Web.config` の `sessionState` で選ぶ。
-        ///
-        /// | 値 | 置き場 | 複数インスタンス |
-        /// |---|---|---|
-        /// | `mem` | プロセス内 | **共有されない**（単一インスタンス向け） |
-        /// | `sql` | SQL Server のテーブル | 共有される。`Create_SessionCache.sql` を流しておく |
-        /// | `redis` | Redis | 共有される。**`UserStoreType` の方言に依らない** |
-        ///
-        /// **`UserStoreType` と同じ流儀**にしてある（`EnumSessionStoreType`）。
-        /// **Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、
-        /// **それらのストアで複数インスタンスにするなら `redis` を使う。**
-        /// </remarks>
-        public static EnumSessionStoreType SessionStoreType
-        {
-            get
-            {
-                // **キーが無いと null が返る。** `UserStoreType` と違い、
-                //   **このキーは雛形以外では無いことがある**（既存の配備）ので、
-                //   そのまま `ToUpper()` すると、起動時に落ちる。
-                string sessionStoreType = GetConfigParameter.GetConfigValue("SessionStoreType");
-
-                switch ((sessionStoreType ?? "").ToUpper())
-                {
-                    case "MEM":
-                        return EnumSessionStoreType.Memory;
-                    case "SQL":
-                        return EnumSessionStoreType.SqlServer;
-                    case "REDIS":
-                        return EnumSessionStoreType.Redis;
-                    default:
-                        // **書かなければプロセス内**（＝ 従来どおり）。
-                        return EnumSessionStoreType.Memory;
-                }
-            }
-        }
-
-        /// <summary>セッションの置き場への接続文字列（net10.0 版だけ。#256）</summary>
-        /// <remarks>
-        /// **`SessionStoreType` で意味が変わる。**
-        ///
-        /// | `SessionStoreType` | 書くもの |
-        /// |---|---|
-        /// | `mem` | **要らない**（読まない） |
-        /// | `sql` | **SQL Server の接続文字列。** `ConnectionString_SQL` と同じでよいが、別の DB にもできる |
-        /// | `redis` | **Redis の接続文字列**（`localhost:6379` など） |
-        ///
-        /// **`UserStoreType` のように方言ごとに分けていない**のは、
-        /// **`SessionStoreType` が置き場を一意に決める**ためである。
-        /// </remarks>
-        public static string SessionStoreConnectionString
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("SessionStoreConnectionString");
-            }
-        }
-
-        #endregion
-
-        #region CORS
-
-        /// <summary>CORS で追加して許可するオリジン（任意。#265）</summary>
-        /// <remarks>
-        /// **空でよい。** 既定では、**構成ファイルに登録された public クライアントの
-        /// `redirect_uri_*` からオリジンを導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
-        /// **ここは、その導出で拾えないものを足すための口**である。
-        ///
-        /// **区切りは空白かカンマ。** 値はオリジン（`https://host:port`）で書く。
-        /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
-        ///
-        /// **`*` は書かないこと。** 書いても拒否する（`ProductionCheck` が警告する）。
-        /// </remarks>
-        public static string CorsAllowedOrigins
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("CorsAllowedOrigins");
             }
         }
 

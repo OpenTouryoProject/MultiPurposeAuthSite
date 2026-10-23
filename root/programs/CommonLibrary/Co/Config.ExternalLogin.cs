@@ -41,18 +41,7 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（外部ログイン）</summary>
     public partial class Config
     {
-        #region 外部ログイン
-
         #region 共通
-
-        /// <summary>本サイトでSaltとして機能する値</summary>
-        public static string SaltParameter
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("SaltParameter");
-            }
-        }
 
         /// <summary>
         /// 外部 ID を既存アカウントに結び付けるとき、検証済みのメアドを要求するかどうか（#140 の段階 1）
@@ -228,8 +217,6 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("TwitterAuthenticationClientSecret");
             }
         }
-
-        #endregion
 
         #endregion
     }

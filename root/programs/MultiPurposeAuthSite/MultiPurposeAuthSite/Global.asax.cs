@@ -122,7 +122,7 @@ namespace MultiPurposeAuthSite
             if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
             {
                 AntiForgeryConfig.CookieName =
-                    Config.PrefixCookieName(AntiForgeryConfig.CookieName);
+                    Config.PrefixedCookieName(AntiForgeryConfig.CookieName);
             }
         }
 

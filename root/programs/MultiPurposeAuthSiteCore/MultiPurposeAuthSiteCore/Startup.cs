@@ -308,7 +308,7 @@ namespace MultiPurposeAuthSite
                     //   **持続時間を変えたいなら、上の `IdleTimeout` を使う。**
                     HttpOnly = true,
                     // **接頭辞を掛ける**（#255。同じホストに 2 つ立てたときに分けるため）
-                    Name = Config.PrefixCookieName(
+                    Name = Config.PrefixedCookieName(
                         GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName")),
                     Path = "/",
                     SameSite = SameSiteMode.Strict,
@@ -679,7 +679,7 @@ namespace MultiPurposeAuthSite
             {
                 services.PostConfigure<CookieTempDataProviderOptions>(options =>
                 {
-                    options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                    options.Cookie.Name = Config.PrefixedCookieName(options.Cookie.Name);
                 });
 
                 // **AntiForgery の Cookie にも掛ける**（#282）。
@@ -694,7 +694,7 @@ namespace MultiPurposeAuthSite
                 //   **CSRF の穴にはならないが、正しい POST が 400 になる。**
                 services.PostConfigure<AntiforgeryOptions>(options =>
                 {
-                    options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                    options.Cookie.Name = Config.PrefixedCookieName(options.Cookie.Name);
                 });
 
                 // **Identity が使う Cookie すべてに掛ける**（#255）。
@@ -741,7 +741,7 @@ namespace MultiPurposeAuthSite
                                 ? CookieAuthenticationDefaults.CookiePrefix + scheme
                                 : options.Cookie.Name;
 
-                            options.Cookie.Name = Config.PrefixCookieName(baseCookieName);
+                            options.Cookie.Name = Config.PrefixedCookieName(baseCookieName);
                         });
                 }
             }

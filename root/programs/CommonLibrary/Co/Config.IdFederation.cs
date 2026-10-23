@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
+//*  2026/10/23  玄人 幸道         ID 連携の設定を折り返し口・複数キー・単数キーに分けた（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -47,9 +48,43 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（ID 連携）</summary>
     public partial class Config
     {
-        #region ID 連携
+        //  **上流の登録は 3 通り**（`IdFederationUpstreams` が n 件の列にまとめる。#292）。
+        //    設定ファイルの `IdFederationUpstreams`（複数キー） → user store の行 の順。同じ鍵なら設定が勝つ。
+        //    **設定ファイルに 1 行でも在れば、単数キー（互換）は読まない**（user store の行とは併用できる）。
+        //    **導線を出すかの判定は `IdFederationUpstream.IsUsable`**（#292 の段階 1。`CanIdFederationBy*` は削除した）。
 
-        #region 上流の登録（n 件。#292 の段階 1）
+        #region 折り返し口
+
+        /// <summary>
+        /// IDフェデレーション時のRedirectエンドポイント
+        /// </summary>
+        public static string IdFederationRedirectEndpoint
+        {
+            get
+            {
+                return Config.GetRenamedConfigValue("IdFederationRedirectEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// SAML2のID連携で、応答（アサーション）を受け取る口（自分のACS）
+        /// </summary>
+        /// <remarks>
+        /// **上流のクライアント登録（`redirect_uri_saml`）に、この値を登録する。**
+        /// **自己テストの ACS（`Saml2ResponseEndpoint`）とは別の口**である
+        /// （あちらは `IsLockedDownTestEndpoints` で閉じる）。
+        /// </remarks>
+        public static string IdFederationSaml2ResponseEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IdFederationSaml2ResponseEndpoint");
+            }
+        }
+
+        #endregion
+
+        #region 複数キー（上流 IdP の登録 n 件）
 
         /// <summary>
         /// ID 連携の上流 IdP の登録（n 件）
@@ -94,6 +129,8 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region 単数キー（上流 IdP の登録 1 件。互換）
+
         #region OIDC
 
         /// <summary>
@@ -136,17 +173,6 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// IDフェデレーション時のRedirectエンドポイント
-        /// </summary>
-        public static string IdFederationRedirectEndpoint
-        {
-            get
-            {
-                return Config.GetRenamedConfigValue("IdFederationRedirectEndpoint");
-            }
-        }
-
-        /// <summary>
         /// IDフェデレーション時のTokenエンドポイント
         /// </summary>
         public static string IdFederationTokenEndpoint
@@ -165,24 +191,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Config.GetRenamedConfigValue("IdFederationUserInfoEndpoint");
-            }
-        }
-
-        /// <summary>OIDCのID連携が有効か（設定が揃っているか）</summary>
-        /// <remarks>
-        /// **4 本すべてが要る。** **1 本でも欠けていれば、導線を出さない**（#286 の段階 2）。
-        ///
-        /// **以前は、サインイン画面に無条件でボタンが出ていた。**
-        /// **口を設定していない配備でも押せた**ので、**押すとエラー画面に着いた。**
-        /// </remarks>
-        public static bool CanIdFederationByOidc
-        {
-            get
-            {
-                return !string.IsNullOrEmpty(Config.IdFederationAuthorizeEndpoint)
-                    && !string.IsNullOrEmpty(Config.IdFederationRedirectEndpoint)
-                    && !string.IsNullOrEmpty(Config.IdFederationTokenEndpoint)
-                    && !string.IsNullOrEmpty(Config.IdFederationUserInfoEndpoint);
             }
         }
 
@@ -263,13 +271,13 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        //  **上の 4 本は OIDC 用である。** ここは SAML2 用で、別に持つ。
+        //  **上の 3 本は OIDC 用である。** ここは SAML2 用で、別に持つ。
         //
         //  **OIDC と SAML2 で、要る設定の数が違う。**
         //    OIDC は口が 3 つ（authorize / token / userinfo）あり、鍵は discovery から引ける前提。
         //    SAML2 は口が 1 つ（SSO）で、**鍵と EntityID を設定で与える**（#286）。
         //
-        //  **1 本でも空なら、SAML2 の ID 連携は無効**（`CanIdFederationBySaml2`）。
+        //  **足りなければ、SAML2 の ID 連携は無効**（`IdFederationUpstream.IsUsable`）。
         //    **導線（サインイン画面のボタン）も出さない。**
         //    **押しても成立しないボタンを出さないため**である。
 
@@ -284,22 +292,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("IdFederationSaml2RequestEndpoint");
-            }
-        }
-
-        /// <summary>
-        /// SAML2のID連携で、応答（アサーション）を受け取る口（自分のACS）
-        /// </summary>
-        /// <remarks>
-        /// **上流のクライアント登録（`redirect_uri_saml`）に、この値を登録する。**
-        /// **自己テストの ACS（`Saml2ResponseEndpoint`）とは別の口**である
-        /// （あちらは `IsLockedDownTestEndpoints` で閉じる）。
-        /// </remarks>
-        public static string IdFederationSaml2ResponseEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("IdFederationSaml2ResponseEndpoint");
             }
         }
 
@@ -334,35 +326,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("IdFederationSaml2CerFilePath");
-            }
-        }
-
-        /// <summary>SAML2のID連携が有効か（設定が揃っているか）</summary>
-        /// <remarks>
-        /// **自分の ACS と、期待する上流の EntityID は、必ず要る。**
-        ///
-        /// **上流の口と鍵は、2 通りのどちらかで揃っていればよい**（#291）。
-        ///
-        /// | | |
-        /// |---|---|
-        /// | **メタデータの URL** | そこから口と鍵を引く |
-        /// | **口（`…RequestEndpoint`）と鍵（`…CerFilePath`）** | 従来の形 |
-        ///
-        /// **どちらも無ければ、導線を出さない**（押しても成立しないため）。
-        /// </remarks>
-        public static bool CanIdFederationBySaml2
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(Config.IdFederationSaml2ResponseEndpoint)
-                    || string.IsNullOrEmpty(Config.IdFederationSaml2IssuerId))
-                {
-                    return false;
-                }
-
-                return !string.IsNullOrEmpty(Config.IdFederationSaml2MetadataUrl)
-                    || (!string.IsNullOrEmpty(Config.IdFederationSaml2RequestEndpoint)
-                        && !string.IsNullOrEmpty(Config.IdFederationSaml2CerFilePath));
             }
         }
 

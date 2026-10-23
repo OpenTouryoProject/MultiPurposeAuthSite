@@ -254,7 +254,7 @@ namespace MultiPurposeAuthSite
                     ? CookieAuthenticationDefaults.CookiePrefix + cookieOptions.AuthenticationType
                     : cookieOptions.CookieName;
 
-                cookieOptions.CookieName = Config.PrefixCookieName(baseCookieName);
+                cookieOptions.CookieName = Config.PrefixedCookieName(baseCookieName);
             }
 
             app.UseCookieAuthentication(cookieOptions);

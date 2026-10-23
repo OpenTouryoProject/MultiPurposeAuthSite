@@ -2768,7 +2768,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > （**失敗側に倒れる**ので安全性の問題ではないが、**連携できない**）。
 > **このキーを書くのが、その対処である。**
 
-**`CanIdFederationByOidc` には入れていない** — **空でも ID 連携は成立する**ためである
+**導線を出す判定（`IdFederationUpstream.IsUsable`）には入れていない** — **空でも ID 連携は成立する**ためである
 （SAML2 側の 4 本とは扱いが違う）。
 
 **鍵の出どころは 4 段**である。
@@ -2823,7 +2823,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 **雛形の既定は、OIDC の `IdFederation*Endpoint` と同じ**
 （**上流は `store/` のコンテナ**。`https://localhost:44301`。**E2E は環境変数で上書きする**）。
 
-**1 本でも空なら、SAML2 の ID 連携は無効**である（`Config.CanIdFederationBySaml2`）。
+**1 本でも空なら、SAML2 の ID 連携は無効**である（`IdFederationUpstream.IsUsable`。#292 の段階 1 までは `Config.CanIdFederationBySaml2`）。
 **押しても成立しない導線を出さない**ため、**サインイン画面のボタンも出さない。**
 
 > **証明書は、開発用の上流が同じ雛形の鍵を使っているので、結果として
@@ -2852,7 +2852,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 
 | | |
 |---|---|
-| **サインイン画面のボタン** | **設定が揃っているときだけ出す**（`CanIdFederationBySaml2`）。**OIDC 側も同じにした**（`CanIdFederationByOidc`） |
+| **サインイン画面のボタン** | **設定が揃っているときだけ出す**（`IdFederationUpstream.IsUsable`）。**OIDC 側も同じにした**（#292 の段階 1 までは `CanIdFederationBySaml2` / `CanIdFederationByOidc`） |
 | **口** | `/Account/IDFederationAssertionConsumerService`（**`IsLockedDownTestEndpoints` で閉じない**。本番の導線） |
 | 自己テストの口 | `/Account/AssertionConsumerService`（**閉じる**。結果を画面に出すだけ） |
 | `AuthnRequest` | `NameIDFormat=emailAddress`、`Issuer` ＝ **`http://` ＋ 上流に登録された `client_id`**、**ACS URL は入れない**（上流が登録値から解決する） |
@@ -2991,7 +2991,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **メタデータは署名されていない**（実測）。**信頼の根拠は TLS と `entityID` の照合だけ**である。
 > **署名されたメタデータを検証する形は、まだ無い**（その鍵をどこから得るかを決める必要がある）。
 
-**導線（サインイン画面のボタン）の出し方も変わった**（`Config.CanIdFederationBySaml2`）。
+**導線（サインイン画面のボタン）の出し方も変わった**（いまは `IdFederationUpstream.IsUsable`）。
 
 | | |
 |---|---|

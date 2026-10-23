@@ -216,7 +216,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             get
             {
-                return Config.PrefixCookieName(
+                return Config.PrefixedCookieName(
                     GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName"));
             }
         }
