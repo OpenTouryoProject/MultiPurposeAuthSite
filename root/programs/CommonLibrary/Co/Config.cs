@@ -75,6 +75,7 @@
 //*  2026/10/21  玄人 幸道         OP のセッションの Cookie 名を追加（#310 の段階 1）
 //*  2026/10/22  玄人 幸道         DPoP の nonce の設定を追加（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         IssuerId などを Open棟梁 の CmnServerParams に移した（#294）
+//*  2026/10/22  玄人 幸道         region を処理区分ごとに並べ替えた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -101,9 +102,149 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config</summary>
     public class Config
     {
-        #region Proxy
+        #region 土台
 
-        #region Internet Proxy
+        #region 改名した設定キー（#236）
+
+        /// <summary>改名した設定キー（新しい名前 → 改名前の名前。#236）</summary>
+        /// <remarks>
+        /// **改名しても、旧いキー名を読み続ける**（#219 で始めた扱い）。
+        /// 設定ファイルは配備済みのものがあり、**改名だけで黙って既定値に戻ると危ない**ため。
+        /// 旧いキー名だけが設定されている場合は、起動時に ProductionCheck が警告する。
+        ///
+        /// **ここに載せたキーは、Config 側も新しい名前で読むこと**
+        /// （<see cref="GetRenamedConfigValue"/> を通す）。
+        /// </remarks>
+        public static readonly Dictionary<string, string> RenamedKeys =
+            new Dictionary<string, string>()
+            {
+                // テスト用の口をまとめて閉じるキー（#219）
+                { "IsLockedDownTestEndpoints", "IsLockedDownRedirectEndpoint" },
+                // 綴りの誤り（Enabe → Enable。#236）
+                { "EnableDebugTraceLog", "EnabeDebugTraceLog" },
+                // EndPoint → Endpoint（この実装の他のキーに揃えた。#236）
+                { "IdFederationAuthorizeEndpoint", "IdFederationAuthorizeEndPoint" },
+                { "IdFederationRedirectEndpoint", "IdFederationRedirectEndPoint" },
+                { "IdFederationTokenEndpoint", "IdFederationTokenEndPoint" },
+                { "IdFederationUserInfoEndpoint", "IdFederationUserInfoEndPoint" },
+            };
+
+        /// <summary>改名した設定キーの値を読む（新しい名前を優先し、無ければ旧い名前）</summary>
+        /// <param name="key">新しいキー名（<see cref="RenamedKeys"/> に載っているもの）</param>
+        /// <returns>値</returns>
+        private static string GetRenamedConfigValue(string key)
+        {
+            string value = GetConfigParameter.GetConfigValue(key);
+
+            if (string.IsNullOrEmpty(value))
+            {
+                value = GetConfigParameter.GetConfigValue(Config.RenamedKeys[key]);
+            }
+
+            return value;
+        }
+
+        /// <summary>
+        /// 旧いキー名だけが設定されているものを返す（起動時の警告に使う）
+        /// </summary>
+        /// <returns>「旧いキー名 → 新しいキー名」の一覧（無ければ空）</returns>
+        public static List<KeyValuePair<string, string>> OldKeysStillUsed()
+        {
+            List<KeyValuePair<string, string>> used = new List<KeyValuePair<string, string>>();
+
+            foreach (KeyValuePair<string, string> renamed in Config.RenamedKeys)
+            {
+                if (string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(renamed.Key))
+                    && !string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(renamed.Value)))
+                {
+                    used.Add(new KeyValuePair<string, string>(renamed.Value, renamed.Key));
+                }
+            }
+
+            return used;
+        }
+
+        #endregion
+
+        #region デバッグ
+
+        /// <summary>Debugかどうか</summary>
+        public static bool IsDebug
+        {
+            get
+            {
+                if (Config.UserStoreType == EnumUserStoreType.Memory)
+                {
+                    return true; // Memory Provider 利用時は = Debug 扱い。
+                }
+                else
+                {
+                    return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsDebug"));
+                }
+            }
+        }
+
+        /// <summary>DebugTraceLogを有効にする</summary>
+        /// <remarks>**改名した**（綴りが `Enabe` だった。#236）。旧いキー名も読む。</remarks>
+        public static bool EnableDebugTraceLog
+        {
+            get
+            {
+                return Convert.ToBoolean(Config.GetRenamedConfigValue("EnableDebugTraceLog"));
+            }
+        }
+
+        #endregion
+
+        #region ストア
+
+        /// <summary>UserStoreのTypeを返す。</summary>
+        public static EnumUserStoreType UserStoreType
+        {
+            get
+            {
+                switch (GetConfigParameter.GetConfigValue("UserStoreType").ToUpper())
+                {
+                    case "MEM":
+                        return EnumUserStoreType.Memory;
+                    case "SQL":
+                        return EnumUserStoreType.SqlServer;
+                    case "ORA":
+                        return EnumUserStoreType.ODPManagedDriver;
+                    case "NPG":
+                        return EnumUserStoreType.PostgreSQL;
+                    default:
+                        return EnumUserStoreType.Memory;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Open棟梁 が読む設定（キー名は同じ。#294）
+
+        // **IssuerId は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
+
+        // **RsaPfxPassword / RsaPfxFilePath は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
+
+        // **RequirePkceS256**（PKCE で S256 だけを受け付けるか。#220）**は Open棟梁 の `CmnServerParams` が読む**
+        //   （キー名は同じ。**既定は false**（従来どおり plain も受理）。#294）。
+
+        // **PreviousSigningCerFilePaths**（退役させる途中の署名証明書。#292 の段階 3）**は Open棟梁 の `CmnServerParams` が読む**
+        //   （キー名は同じ。#294）。**鍵の入れ替えの手順は `CONFIGURATION.md`** にある。
+
+        // **PAR（RFC 9126）のエンドポイントは、Open棟梁 の OAuth2AndOIDCParams が持つ**（#236 の宿題）。
+        //   キー名 AuthRequestPushUri は、RequestObjectRegUri / JwkSetUri と同じく
+        //   **クライアント側も読む設定**なので、框の側に置く（OpenTouryo #592 で実装された）。
+        //   ここに自前のプロパティは置かない。
+
+        #endregion
+
+        #endregion
+
+        #region 配備・基盤
+
+        #region Proxy
 
         /// <summary>
         /// UseInternetProxy
@@ -149,10 +290,6 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        #endregion
-
-        #region Intranet Proxy
-
         /// <summary>
         /// UseIntranetProxy
         /// </summary>
@@ -196,10 +333,6 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("IntranetProxyPWD");
             }
         }
-
-        #endregion
-
-        #region DebugProxy
 
         /// <summary>
         /// UseDebugProxy
@@ -247,136 +380,212 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #endregion
+        #region HTTPS・逆プロキシ（#279）
 
-        #region IsDebug
+        //  **本番でだけ有効にしたい設定を「コメントアウトして置いておく」と、
+        //    環境を移すときにソースを書き換えることになる。**
+        //    Open棟梁 の MVC_Sample に倣い、設定で切り替える形にした（#279 / 上流 #541・#549）。
+        //
+        //  **いずれも net10.0 版だけの設定である。**
+        //    net48 版は `Web.config` の `<httpCookies>` / `<rewrite>` などで行う。
+        //    **`_app.config` にキーを置いていない**のは、`DataProtectionKeyPath`（#251）と同じ理由。
+        //
+        //  **既定値は、いずれも従来どおりの動作**である。
 
-        /// <summary>Debugかどうか</summary>
-        public static bool IsDebug
+        /// <summary>HTTP を HTTPS へリダイレクトするか（#279）</summary>
+        /// <remarks>
+        /// **既定は off。** 平文 HTTP で動かす環境（疎通確認や、
+        /// TLS を前段のリバース プロキシで終端する構成）でリダイレクトすると、
+        /// **到達できなくなる**ため。TLS を自分で終端するなら `on` にする。
+        ///
+        /// **on にするだけでは足りない。リダイレクト先のポートも要る。**
+        /// 決められないと、ミドルウェアは警告を出すだけで素通りする。
+        /// </remarks>
+        public static bool UseHttpsRedirection
         {
             get
             {
-                if (Config.UserStoreType == EnumUserStoreType.Memory)
-                {
-                    return true; // Memory Provider 利用時は = Debug 扱い。
-                }
-                else
-                {
-                    return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsDebug"));
-                }
+                return (GetConfigParameter.GetConfigValue("UseHttpsRedirection") ?? "")
+                    .ToLower() == "on";
             }
         }
 
-        /// <summary>DebugTraceLogを有効にする</summary>
-        /// <remarks>**改名した**（綴りが `Enabe` だった。#236）。旧いキー名も読む。</remarks>
-        public static bool EnableDebugTraceLog
+        /// <summary>Cookie に Secure 属性を必ず付けるか（#279）</summary>
+        /// <remarks>
+        /// **設定キーは `CookieSecurePolicy`**（`always` のときだけ true）。
+        ///
+        /// **既定は空＝各 Cookie の設定に従う。**
+        /// **平文 HTTP の環境で `always` にすると、Cookie が送られずサインインできなくなる**
+        /// （AntiForgery の Cookie も返らないので、
+        /// 症状は「サインイン画面は出るが POST が 400」になる）。
+        /// </remarks>
+        public static bool CookieSecurePolicyAlways
         {
             get
             {
-                return Convert.ToBoolean(Config.GetRenamedConfigValue("EnableDebugTraceLog"));
+                return (GetConfigParameter.GetConfigValue("CookieSecurePolicy") ?? "")
+                    .ToLower() == "always";
+            }
+        }
+
+        /// <summary>転送ヘッダ（X-Forwarded-Proto / -For）を取り込むか（#279）</summary>
+        /// <remarks>
+        /// **リバース プロキシで TLS を終端すると、アプリから見た接続は HTTP になる。**
+        /// 利用者のブラウザは HTTPS で繋いでいるのに `Request.IsHttps` は false のままで、
+        /// **Secure 属性が付かず、生成する絶対 URL も http になる。**
+        ///
+        /// **既定は off。** 素の HTTP で動かす環境では、
+        /// **転送ヘッダを誰でも付けられる（＝ クライアントが詐称できる）**ため。
+        /// </remarks>
+        public static bool UseForwardedHeaders
+        {
+            get
+            {
+                return (GetConfigParameter.GetConfigValue("UseForwardedHeaders") ?? "")
+                    .ToLower() == "on";
+            }
+        }
+
+        /// <summary>信用する前段のアドレス（#279。カンマ区切り。空なら範囲を制限しない）</summary>
+        /// <remarks>
+        /// **既定ではループバックからの転送しか信用しない。**
+        /// コンテナや Kubernetes では前段が別アドレスになるため、
+        /// **指定しないとヘッダが黙って捨てられ、何も起きない。**
+        /// **「on にしたのに直らない」の原因はほぼこれである。**
+        /// </remarks>
+        public static string ForwardedHeadersKnownProxies
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ForwardedHeadersKnownProxies");
             }
         }
 
         #endregion
 
-        #region UserStore
-
-        /// <summary>UserStoreのTypeを返す。</summary>
-        public static EnumUserStoreType UserStoreType
-        {
-            get
-            {
-                switch (GetConfigParameter.GetConfigValue("UserStoreType").ToUpper())
-                {
-                    case "MEM":
-                        return EnumUserStoreType.Memory;
-                    case "SQL":
-                        return EnumUserStoreType.SqlServer;
-                    case "ORA":
-                        return EnumUserStoreType.ODPManagedDriver;
-                    case "NPG":
-                        return EnumUserStoreType.PostgreSQL;
-                    default:
-                        return EnumUserStoreType.Memory;
-                }
-            }
-        }
-
-        #endregion
-        
-        #region UserListCount
+        #region データ保護の鍵
 
         /// <summary>
-        /// ユーザ一覧の件数
+        /// DataProtection の鍵の置き場（#251。C-13）
         /// </summary>
-        public static int UserListCount
-        {
-            get
-            {
-                return Convert.ToInt32(GetConfigParameter.GetConfigValue("UserListCount"));
-            }
-        }
-
-        #endregion
-
-        #region 事前登録ユーザ
-
-        #region 管理者ユーザ
-
-        /// <summary>AdministratorUID</summary>
-        public static string AdministratorUID
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("AdministratorUID");
-            }
-        }
-
-        /// <summary>AdministratorPWD</summary>
-        public static string AdministratorPWD
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("AdministratorPWD");
-            }
-        }
-
-        #endregion
-
-        /// <summary>TestUserPWD</summary>
-        public static string TestUserPWD
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("TestUserPWD");
-            }
-        }
-
-        /// <summary>TestUserSuffix（テスト利用者の名前に付ける接尾辞。#260）</summary>
         /// <remarks>
-        /// **空なら従来どおり**（`super_tanaka` / `tanaka`）。
+        /// **net10.0 版だけで使う。** net48 版は machineKey の話で、別。
         ///
-        /// **なぜ要るか。** E2E は **net48 版と net10.0 版を同時に立てて、同じケースを両方に流す。**
-        /// **DB ストアでは 1 つの DB を共有する**ので、
-        /// **両サイトが同じテスト利用者の属性（`DeviceToken` / `UnstructuredData`）を
-        /// 書き換え合って、間欠で落ちていた。**
+        /// **指定しなければ、従来どおり `%LOCALAPPDATA%` 配下**（コンテナでは揮発）。
+        /// **指定すると、そこに鍵リングを置く**ので、
+        /// **再起動やコンテナの作り直しでもサインインが切れない。**
         ///
-        /// **サイトごとに違う接尾辞を与えると、テスト利用者が分かれる**（`_core` / `_netfx`）。
-        /// **`mem` では各サイトが自前のストアを持つので、以前から起きていない。**
+        /// **鍵そのものは書かない**（net48 の `machineKey` との違い）。
+        /// **鍵は自動生成・自動ローテーションされる。共有するのは置き場である。**
         ///
-        /// **製品の既定は空である。** 接尾辞を与えるのは `test.ps1` だけ。
+        /// **効くのは「画面のセッション」**（認証 Cookie / AntiForgery /
+        /// メール確認・パスワード リセットのリンク）。
+        /// **access_token / id_token・PPID・認可コード・refresh_token には影響しない。**
+        ///
+        /// **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
         /// </remarks>
-        public static string TestUserSuffix
+        public static string DataProtectionKeyPath
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("TestUserSuffix") ?? "";
+                return GetConfigParameter.GetConfigValue("DataProtectionKeyPath");
             }
         }
 
         #endregion
 
-        #region Notification Provider
+        #region セッション
+
+        /// <summary>セッションの置き場（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`mem`（既定） / `sql` / `redis`。**
+        /// **書かなければ `mem`**（＝ 従来どおり。プロセス内のメモリ）。
+        ///
+        /// **net48 版は読まない。** あちらは `Web.config` の `sessionState` で選ぶ。
+        ///
+        /// | 値 | 置き場 | 複数インスタンス |
+        /// |---|---|---|
+        /// | `mem` | プロセス内 | **共有されない**（単一インスタンス向け） |
+        /// | `sql` | SQL Server のテーブル | 共有される。`Create_SessionCache.sql` を流しておく |
+        /// | `redis` | Redis | 共有される。**`UserStoreType` の方言に依らない** |
+        ///
+        /// **`UserStoreType` と同じ流儀**にしてある（`EnumSessionStoreType`）。
+        /// **Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、
+        /// **それらのストアで複数インスタンスにするなら `redis` を使う。**
+        /// </remarks>
+        public static EnumSessionStoreType SessionStoreType
+        {
+            get
+            {
+                // **キーが無いと null が返る。** `UserStoreType` と違い、
+                //   **このキーは雛形以外では無いことがある**（既存の配備）ので、
+                //   そのまま `ToUpper()` すると、起動時に落ちる。
+                string sessionStoreType = GetConfigParameter.GetConfigValue("SessionStoreType");
+
+                switch ((sessionStoreType ?? "").ToUpper())
+                {
+                    case "MEM":
+                        return EnumSessionStoreType.Memory;
+                    case "SQL":
+                        return EnumSessionStoreType.SqlServer;
+                    case "REDIS":
+                        return EnumSessionStoreType.Redis;
+                    default:
+                        // **書かなければプロセス内**（＝ 従来どおり）。
+                        return EnumSessionStoreType.Memory;
+                }
+            }
+        }
+
+        /// <summary>セッションの置き場への接続文字列（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`SessionStoreType` で意味が変わる。**
+        ///
+        /// | `SessionStoreType` | 書くもの |
+        /// |---|---|
+        /// | `mem` | **要らない**（読まない） |
+        /// | `sql` | **SQL Server の接続文字列。** `ConnectionString_SQL` と同じでよいが、別の DB にもできる |
+        /// | `redis` | **Redis の接続文字列**（`localhost:6379` など） |
+        ///
+        /// **`UserStoreType` のように方言ごとに分けていない**のは、
+        /// **`SessionStoreType` が置き場を一意に決める**ためである。
+        /// </remarks>
+        public static string SessionStoreConnectionString
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("SessionStoreConnectionString");
+            }
+        }
+
+        #endregion
+
+        #region CORS
+
+        /// <summary>CORS で追加して許可するオリジン（任意。#265）</summary>
+        /// <remarks>
+        /// **空でよい。** 既定では、**構成ファイルに登録された public クライアントの
+        /// `redirect_uri_*` からオリジンを導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **ここは、その導出で拾えないものを足すための口**である。
+        ///
+        /// **区切りは空白かカンマ。** 値はオリジン（`https://host:port`）で書く。
+        /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
+        ///
+        /// **`*` は書かないこと。** 書いても拒否する（`ProductionCheck` が警告する）。
+        /// </remarks>
+        public static string CorsAllowedOrigins
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("CorsAllowedOrigins");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region 通知
 
         #region SMTP
 
@@ -486,9 +695,62 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region ログイン
+        #region アカウント
 
-        #region ユーザ名検証
+        #region 事前登録ユーザ
+
+        /// <summary>AdministratorUID</summary>
+        public static string AdministratorUID
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("AdministratorUID");
+            }
+        }
+
+        /// <summary>AdministratorPWD</summary>
+        public static string AdministratorPWD
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("AdministratorPWD");
+            }
+        }
+
+        /// <summary>TestUserPWD</summary>
+        public static string TestUserPWD
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("TestUserPWD");
+            }
+        }
+
+        /// <summary>TestUserSuffix（テスト利用者の名前に付ける接尾辞。#260）</summary>
+        /// <remarks>
+        /// **空なら従来どおり**（`super_tanaka` / `tanaka`）。
+        ///
+        /// **なぜ要るか。** E2E は **net48 版と net10.0 版を同時に立てて、同じケースを両方に流す。**
+        /// **DB ストアでは 1 つの DB を共有する**ので、
+        /// **両サイトが同じテスト利用者の属性（`DeviceToken` / `UnstructuredData`）を
+        /// 書き換え合って、間欠で落ちていた。**
+        ///
+        /// **サイトごとに違う接尾辞を与えると、テスト利用者が分かれる**（`_core` / `_netfx`）。
+        /// **`mem` では各サイトが自前のストアを持つので、以前から起きていない。**
+        ///
+        /// **製品の既定は空である。** 接尾辞を与えるのは `test.ps1` だけ。
+        /// </remarks>
+        public static string TestUserSuffix
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("TestUserSuffix") ?? "";
+            }
+        }
+
+        #endregion
+
+        #region サインアップ・ユーザ名
 
         /// <summary>
         /// ユーザ名検証（アルファベットと数値のみ）
@@ -558,7 +820,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region パスワード検証
+        #region パスワード
 
         /// <summary>
         /// パスワード検証（長さ）
@@ -628,7 +890,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region ユーザ ロックアウト
+        #region ロックアウト
 
         /// <summary>
         /// ユーザ ロックアウトの有効と無効
@@ -665,7 +927,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region このサイト自身が書くCookieの名前（#255）
+        #region このサイト自身が書く Cookie の名前（#255）
 
         /// <summary>
         /// このサイト自身が書く Cookie の名前に付ける接頭辞（#255）
@@ -702,87 +964,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("CookieNamePrefix");
-            }
-        }
-
-        /// <summary>セッションの置き場（net10.0 版だけ。#256）</summary>
-        /// <remarks>
-        /// **`mem`（既定） / `sql` / `redis`。**
-        /// **書かなければ `mem`**（＝ 従来どおり。プロセス内のメモリ）。
-        ///
-        /// **net48 版は読まない。** あちらは `Web.config` の `sessionState` で選ぶ。
-        ///
-        /// | 値 | 置き場 | 複数インスタンス |
-        /// |---|---|---|
-        /// | `mem` | プロセス内 | **共有されない**（単一インスタンス向け） |
-        /// | `sql` | SQL Server のテーブル | 共有される。`Create_SessionCache.sql` を流しておく |
-        /// | `redis` | Redis | 共有される。**`UserStoreType` の方言に依らない** |
-        ///
-        /// **`UserStoreType` と同じ流儀**にしてある（`EnumSessionStoreType`）。
-        /// **Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、
-        /// **それらのストアで複数インスタンスにするなら `redis` を使う。**
-        /// </remarks>
-        public static EnumSessionStoreType SessionStoreType
-        {
-            get
-            {
-                // **キーが無いと null が返る。** `UserStoreType` と違い、
-                //   **このキーは雛形以外では無いことがある**（既存の配備）ので、
-                //   そのまま `ToUpper()` すると、起動時に落ちる。
-                string sessionStoreType = GetConfigParameter.GetConfigValue("SessionStoreType");
-
-                switch ((sessionStoreType ?? "").ToUpper())
-                {
-                    case "MEM":
-                        return EnumSessionStoreType.Memory;
-                    case "SQL":
-                        return EnumSessionStoreType.SqlServer;
-                    case "REDIS":
-                        return EnumSessionStoreType.Redis;
-                    default:
-                        // **書かなければプロセス内**（＝ 従来どおり）。
-                        return EnumSessionStoreType.Memory;
-                }
-            }
-        }
-
-        /// <summary>セッションの置き場への接続文字列（net10.0 版だけ。#256）</summary>
-        /// <remarks>
-        /// **`SessionStoreType` で意味が変わる。**
-        ///
-        /// | `SessionStoreType` | 書くもの |
-        /// |---|---|
-        /// | `mem` | **要らない**（読まない） |
-        /// | `sql` | **SQL Server の接続文字列。** `ConnectionString_SQL` と同じでよいが、別の DB にもできる |
-        /// | `redis` | **Redis の接続文字列**（`localhost:6379` など） |
-        ///
-        /// **`UserStoreType` のように方言ごとに分けていない**のは、
-        /// **`SessionStoreType` が置き場を一意に決める**ためである。
-        /// </remarks>
-        public static string SessionStoreConnectionString
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("SessionStoreConnectionString");
-            }
-        }
-
-        /// <summary>CORS で追加して許可するオリジン（任意。#265）</summary>
-        /// <remarks>
-        /// **空でよい。** 既定では、**構成ファイルに登録された public クライアントの
-        /// `redirect_uri_*` からオリジンを導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
-        /// **ここは、その導出で拾えないものを足すための口**である。
-        ///
-        /// **区切りは空白かカンマ。** 値はオリジン（`https://host:port`）で書く。
-        /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
-        ///
-        /// **`*` は書かないこと。** 書いても拒否する（`ProductionCheck` が警告する）。
-        /// </remarks>
-        public static string CorsAllowedOrigins
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("CorsAllowedOrigins");
             }
         }
 
@@ -864,7 +1045,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region Cookie認証チケット
+        #region Cookie 認証チケット
 
         /// <summary>
         /// Cookie認証チケットの名前（#250 の段階 4）
@@ -916,9 +1097,20 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// SecurityStampの検証間隔
+        /// </summary>
+        public static TimeSpan SecurityStampValidateIntervalFromSeconds
+        {
+            get
+            {
+                return TimeSpan.FromSeconds(Double.Parse(GetConfigParameter.GetConfigValue("SecurityStampValidateIntervalFromSeconds")));
+            }
+        }
+
         #endregion
 
-        #region 2要素認証 (2FA)
+        #region 2 要素認証 (2FA)
 
         /// <summary>
         /// 2FA:TwoFactorAuthentication
@@ -944,7 +1136,209 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region FIDO
+
+#if NETCORE
+
+        /// <summary>
+        /// FIDOServerMode
+        /// </summary>
+        /// <remarks>
+        /// **net10.0 版だけの設定**（#137）。
+        /// **`Fido2` は 2.0.2 を最後に `netstandard2.0` を落としている**ので、
+        /// **net48 版では WebAuthn を支えられない。**
+        /// **設定キーも net48 版の `_app.config` から落としてある。**
+        /// </remarks>
+        public static EnumFidoType FIDOServerMode
+        {
+            get
+            {
+                // **キーが無ければ null が返る**ので、null 合流で受ける（#256 と同じ）。
+                string temp = GetConfigParameter.GetConfigValue("FIDOServerMode");
+                switch ((temp ?? "").ToLower())
+                {
+                    case "webauthn":
+                        return EnumFidoType.WebAuthn;
+                    default:
+                        return EnumFidoType.None;
+                }
+            }
+        }
+#endif
+
+        #endregion
+
+        #region 属性編集の可否
+
+        /// <summary>
+        /// CanEditEmail
+        /// </summary>
+        public static bool CanEditEmail
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditEmail"));
+            }
+        }
+
+        /// <summary>
+        /// CanEditPhone
+        /// </summary>
+        public static bool CanEditPhone
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditPhone"));
+            }
+        }
+
+        /// <summary>
+        /// CanEdit2FA
+        /// </summary>
+        public static bool CanEdit2FA
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEdit2FA"));
+            }
+        }
+
+        /// <summary>
+        /// CanEditUnstructuredData
+        /// </summary>
+        public static bool CanEditUnstructuredData
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditUnstructuredData"));
+            }
+        }
+
+        /// <summary>
+        /// CanEditSaml2OAuth2Data
+        /// </summary>
+        public static bool CanEditSaml2OAuth2Data
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditSaml2OAuth2Data"));
+            }
+        }        
+
+        /// <summary>
+        /// CanUseGdprFunction
+        /// </summary>
+        public static bool CanUseGdprFunction
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanUseGdprFunction"));
+            }
+        }
+
+        /// <summary>
+        /// CanEditExtLogin
+        /// </summary>
+        public static bool CanEditExtLogin
+        {
+            get
+            {
+                return
+                    Config.MicrosoftAccountAuthentication
+                    || Config.GoogleAuthentication
+                    || Config.FacebookAuthentication;
+            }
+        }
+
+        #endregion
+
+        #region 機能ロックダウン（STS 専用モード）・管理画面
+
+        /// <summary>
+        /// EnableSignupProcess
+        /// </summary>
+        public static bool EnableSignupProcess
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableSignupProcess"));
+            }
+        }
+
+        /// <summary>
+        /// EnableEditingOfUserAttribute
+        /// </summary>
+        public static bool EnableEditingOfUserAttribute
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableEditingOfUserAttribute"));
+            }
+        }
+
+        /// <summary>
+        /// EnableAdministrationOfUsersAndRoles
+        /// </summary>
+        public static bool EnableAdministrationOfUsersAndRoles
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableAdministrationOfUsersAndRoles"));
+            }
+        }
+
+        /// <summary>
+        /// ユーザ一覧の件数
+        /// </summary>
+        public static int UserListCount
+        {
+            get
+            {
+                return Convert.ToInt32(GetConfigParameter.GetConfigValue("UserListCount"));
+            }
+        }
+
+        #endregion
+
+        #region user store の秘密（#297）
+
+        /// <summary>
+        /// user store に入る秘密を暗号化する鍵（パスワード）
+        /// </summary>
+        /// <remarks>
+        /// **空なら暗号化しない**（平文のまま入る ＝ 従来どおり）。
+        ///
+        /// **対象は「元に戻せる形でなければならない秘密」**である（#297）。
+        ///
+        /// | 表 | 列 |
+        /// |---|---|
+        /// | `Saml2OAuth2Data` | `ClientSecret`（**クライアント認証で照合し、画面で再表示する**） |
+        /// | `IdFederationUpstreams` | `ClientSecret`（**上流へ送る**） |
+        ///
+        /// **`DataProtectionKeyPath`（#251）とは別物**である
+        /// （あちらは Cookie とトークンの保護で、**枠組みが使う**）。
+        ///
+        /// **設定ファイルの秘密は平文のまま**である。
+        /// **ここで守るのは「DB を見られたとき」**であり、
+        /// **設定ファイルを見られたら、この鍵も読める**（そこはファイルの権限で守る）。
+        ///
+        /// **本番では、設定ファイルに直接書かないこと**（環境変数・秘密の管理機構から渡す）。
+        /// </remarks>
+        public static string UserStoreSecretPassword
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("UserStoreSecretPassword");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
         #region 外部ログイン
+
+        #region 共通
 
         /// <summary>本サイトでSaltとして機能する値</summary>
         public static string SaltParameter
@@ -954,122 +1348,6 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("SaltParameter");
             }
         }
-
-        #region DataProtectionKeyPath
-
-        /// <summary>
-        /// DataProtection の鍵の置き場（#251。C-13）
-        /// </summary>
-        /// <remarks>
-        /// **net10.0 版だけで使う。** net48 版は machineKey の話で、別。
-        ///
-        /// **指定しなければ、従来どおり `%LOCALAPPDATA%` 配下**（コンテナでは揮発）。
-        /// **指定すると、そこに鍵リングを置く**ので、
-        /// **再起動やコンテナの作り直しでもサインインが切れない。**
-        ///
-        /// **鍵そのものは書かない**（net48 の `machineKey` との違い）。
-        /// **鍵は自動生成・自動ローテーションされる。共有するのは置き場である。**
-        ///
-        /// **効くのは「画面のセッション」**（認証 Cookie / AntiForgery /
-        /// メール確認・パスワード リセットのリンク）。
-        /// **access_token / id_token・PPID・認可コード・refresh_token には影響しない。**
-        ///
-        /// **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
-        /// </remarks>
-        public static string DataProtectionKeyPath
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("DataProtectionKeyPath");
-            }
-        }
-
-        #endregion
-
-        #region 配備で切り替えるもの（#279）
-
-        //  **本番でだけ有効にしたい設定を「コメントアウトして置いておく」と、
-        //    環境を移すときにソースを書き換えることになる。**
-        //    Open棟梁 の MVC_Sample に倣い、設定で切り替える形にした（#279 / 上流 #541・#549）。
-        //
-        //  **いずれも net10.0 版だけの設定である。**
-        //    net48 版は `Web.config` の `<httpCookies>` / `<rewrite>` などで行う。
-        //    **`_app.config` にキーを置いていない**のは、`DataProtectionKeyPath`（#251）と同じ理由。
-        //
-        //  **既定値は、いずれも従来どおりの動作**である。
-
-        /// <summary>HTTP を HTTPS へリダイレクトするか（#279）</summary>
-        /// <remarks>
-        /// **既定は off。** 平文 HTTP で動かす環境（疎通確認や、
-        /// TLS を前段のリバース プロキシで終端する構成）でリダイレクトすると、
-        /// **到達できなくなる**ため。TLS を自分で終端するなら `on` にする。
-        ///
-        /// **on にするだけでは足りない。リダイレクト先のポートも要る。**
-        /// 決められないと、ミドルウェアは警告を出すだけで素通りする。
-        /// </remarks>
-        public static bool UseHttpsRedirection
-        {
-            get
-            {
-                return (GetConfigParameter.GetConfigValue("UseHttpsRedirection") ?? "")
-                    .ToLower() == "on";
-            }
-        }
-
-        /// <summary>Cookie に Secure 属性を必ず付けるか（#279）</summary>
-        /// <remarks>
-        /// **設定キーは `CookieSecurePolicy`**（`always` のときだけ true）。
-        ///
-        /// **既定は空＝各 Cookie の設定に従う。**
-        /// **平文 HTTP の環境で `always` にすると、Cookie が送られずサインインできなくなる**
-        /// （AntiForgery の Cookie も返らないので、
-        /// 症状は「サインイン画面は出るが POST が 400」になる）。
-        /// </remarks>
-        public static bool CookieSecurePolicyAlways
-        {
-            get
-            {
-                return (GetConfigParameter.GetConfigValue("CookieSecurePolicy") ?? "")
-                    .ToLower() == "always";
-            }
-        }
-
-        /// <summary>転送ヘッダ（X-Forwarded-Proto / -For）を取り込むか（#279）</summary>
-        /// <remarks>
-        /// **リバース プロキシで TLS を終端すると、アプリから見た接続は HTTP になる。**
-        /// 利用者のブラウザは HTTPS で繋いでいるのに `Request.IsHttps` は false のままで、
-        /// **Secure 属性が付かず、生成する絶対 URL も http になる。**
-        ///
-        /// **既定は off。** 素の HTTP で動かす環境では、
-        /// **転送ヘッダを誰でも付けられる（＝ クライアントが詐称できる）**ため。
-        /// </remarks>
-        public static bool UseForwardedHeaders
-        {
-            get
-            {
-                return (GetConfigParameter.GetConfigValue("UseForwardedHeaders") ?? "")
-                    .ToLower() == "on";
-            }
-        }
-
-        /// <summary>信用する前段のアドレス（#279。カンマ区切り。空なら範囲を制限しない）</summary>
-        /// <remarks>
-        /// **既定ではループバックからの転送しか信用しない。**
-        /// コンテナや Kubernetes では前段が別アドレスになるため、
-        /// **指定しないとヘッダが黙って捨てられ、何も起きない。**
-        /// **「on にしたのに直らない」の原因はほぼこれである。**
-        /// </remarks>
-        public static string ForwardedHeadersKnownProxies
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("ForwardedHeadersKnownProxies");
-            }
-        }
-
-        #endregion
-
-        #region RequireVerifiedEmailForAccountLinking
 
         /// <summary>
         /// 外部 ID を既存アカウントに結び付けるとき、検証済みのメアドを要求するかどうか（#140 の段階 1）
@@ -1250,155 +1528,9 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #endregion
+        #region STS（鍵・有効期間）
 
-        #region SecurityStamp
-
-        /// <summary>
-        /// SecurityStampの検証間隔
-        /// </summary>
-        public static TimeSpan SecurityStampValidateIntervalFromSeconds
-        {
-            get
-            {
-                return TimeSpan.FromSeconds(Double.Parse(GetConfigParameter.GetConfigValue("SecurityStampValidateIntervalFromSeconds")));
-            }
-        }
-
-        #endregion
-
-        #region 属性編集の可否
-
-        /// <summary>
-        /// CanEditEmail
-        /// </summary>
-        public static bool CanEditEmail
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditEmail"));
-            }
-        }
-
-        /// <summary>
-        /// CanEditPhone
-        /// </summary>
-        public static bool CanEditPhone
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditPhone"));
-            }
-        }
-
-        /// <summary>
-        /// CanEdit2FA
-        /// </summary>
-        public static bool CanEdit2FA
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEdit2FA"));
-            }
-        }
-
-        /// <summary>
-        /// CanEditUnstructuredData
-        /// </summary>
-        public static bool CanEditUnstructuredData
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditUnstructuredData"));
-            }
-        }
-
-        /// <summary>
-        /// CanEditSaml2OAuth2Data
-        /// </summary>
-        public static bool CanEditSaml2OAuth2Data
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditSaml2OAuth2Data"));
-            }
-        }        
-
-        /// <summary>
-        /// CanUseGdprFunction
-        /// </summary>
-        public static bool CanUseGdprFunction
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanUseGdprFunction"));
-            }
-        }
-
-        #region 複合
-
-        /// <summary>
-        /// CanEditExtLogin
-        /// </summary>
-        public static bool CanEditExtLogin
-        {
-            get
-            {
-                return
-                    Config.MicrosoftAccountAuthentication
-                    || Config.GoogleAuthentication
-                    || Config.FacebookAuthentication;
-            }
-        }
-
-        #endregion
-
-        #endregion
-
-        #region FIDO
-#if NETCORE
-
-        /// <summary>
-        /// FIDOServerMode
-        /// </summary>
-        /// <remarks>
-        /// **net10.0 版だけの設定**（#137）。
-        /// **`Fido2` は 2.0.2 を最後に `netstandard2.0` を落としている**ので、
-        /// **net48 版では WebAuthn を支えられない。**
-        /// **設定キーも net48 版の `_app.config` から落としてある。**
-        /// </remarks>
-        public static EnumFidoType FIDOServerMode
-        {
-            get
-            {
-                // **キーが無ければ null が返る**ので、null 合流で受ける（#256 と同じ）。
-                string temp = GetConfigParameter.GetConfigValue("FIDOServerMode");
-                switch ((temp ?? "").ToLower())
-                {
-                    case "webauthn":
-                        return EnumFidoType.WebAuthn;
-                    default:
-                        return EnumFidoType.None;
-                }
-            }
-        }
-
-#endif
-        #endregion
-
-        #region STS
-
-        // **IssuerId は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
-
-        #region 証明書
-
-        #region RSA
-
-        // **RsaPfxPassword / RsaPfxFilePath は Open棟梁 の `CmnServerParams` が読む**（キー名は同じ。#294）。
-
-        #endregion
-
-        #region ECDSA
+        #region 鍵（ECDSA）
 
         /// <summary>
         /// ECDSA署名用証明書（*.pfx）のパスワード
@@ -1421,74 +1553,50 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("EcdsaPfxFilePath");
             }
         }
-        #endregion
 
         #endregion
 
-        #region Saml2
-
-        // 基本的に、OAuth2/OIDCインフラを流用
+        #region /jwkcerts のキャッシュ（#303。E-7）
 
         /// <summary>
-        /// SAML2 Assertionの有効期限（分）
+        /// `/jwkcerts` の応答に付ける `Cache-Control: public, max-age=` の秒数
         /// </summary>
         /// <remarks>
-        /// **専用のキーを読む**（#276）。
-        /// **以前は `OidcIdTokenExpireTimeSpanFromMinutes` を読んでいた**が、
-        /// **この名前のキーはどちらの雛形にも在らなかった**。
+        /// **`/jwkcerts` は、トークンを検証する相手が必ず読む口**である。
+        /// **内容は鍵を入れ替えるまで変わらない**ので、**持ち回らせてよい。**
         ///
-        /// **キーが無ければ、従来どおり id_token の値を使う**
-        /// （**既存の配備を壊さないため**）。
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **`no-store`**（**従来どおり**。毎回取りに来る） |
+        /// | 正の秒数 | **`public, max-age=<秒>`** ＋ `ETag`（`If-None-Match` に `304`） |
         ///
-        /// > **单位に注意。** `SAML2Bindings.CreateAssertion` の引数は
-        /// > **`double expiresFromSecond`（秒）** である。
-        /// > **渡すときに 60 を掛けること**（`SamlProviders/CmnEndpoints`）。
+        /// **鍵を入れ替えた直後は、この秒数の間だけ古い鍵を見る相手が居る。**
+        /// **出す側は新旧 2 本を広告する**作りにしてある（#291 / #292 の段階 3）ので、
+        /// **入れ替えの最中も検証は通る。** **入れ替えの周期より短くすること。**
+        ///
+        /// **サーバ側で覚える分は、この値に関係なく効く**
+        /// （Open棟梁 の `JwkSetDocument`。**ファイルの更新を見て読み直す**）。
         /// </remarks>
-        public static double Saml2AssertionExpireTimeSpanFromMinutes
+        public static int JwkSetCacheMaxAgeSeconds
         {
             get
             {
-                string temp = GetConfigParameter.GetConfigValue("Saml2AssertionExpireTimeSpanFromMinutes");
+                string value = GetConfigParameter.GetConfigValue("JwkSetCacheMaxAgeSeconds");
 
-                if (string.IsNullOrEmpty(temp))
+                if (string.IsNullOrEmpty(value))
                 {
-                    // **従来の振る舞い**（id_token の値を流用）。
-                    temp = GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes");
+                    //  **未設定なら 0**（従来どおり `no-store`）。
+                    return 0;
                 }
 
-                return double.Parse(temp);
-            }
-        }
-
-        /// <summary>
-        /// Saml2のRequestエンドポイント 
-        /// </summary>
-        public static string Saml2RequestEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("Saml2RequestEndpoint");
-            }
-        }
-
-        /// <summary>
-        /// Saml2のResponseエンドポイント 
-        /// </summary>
-        public static string Saml2ResponseEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("Saml2ResponseEndpoint");
+                int seconds = 0;
+                return int.TryParse(value, out seconds) ? seconds : 0;
             }
         }
 
         #endregion
 
-        #region OAuth2
-
-        #region OAuth2関連プロパティ
-
-        #region ExpireTime
+        #region 有効期間
 
         /// <summary>
         /// OAuth2のAccessTokenの有効期限（分）
@@ -1608,9 +1716,40 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// SAML2 Assertionの有効期限（分）
+        /// </summary>
+        /// <remarks>
+        /// **専用のキーを読む**（#276）。
+        /// **以前は `OidcIdTokenExpireTimeSpanFromMinutes` を読んでいた**が、
+        /// **この名前のキーはどちらの雛形にも在らなかった**。
+        ///
+        /// **キーが無ければ、従来どおり id_token の値を使う**
+        /// （**既存の配備を壊さないため**）。
+        ///
+        /// > **单位に注意。** `SAML2Bindings.CreateAssertion` の引数は
+        /// > **`double expiresFromSecond`（秒）** である。
+        /// > **渡すときに 60 を掛けること**（`SamlProviders/CmnEndpoints`）。
+        /// </remarks>
+        public static double Saml2AssertionExpireTimeSpanFromMinutes
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue("Saml2AssertionExpireTimeSpanFromMinutes");
+
+                if (string.IsNullOrEmpty(temp))
+                {
+                    // **従来の振る舞い**（id_token の値を流用）。
+                    temp = GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes");
+                }
+
+                return double.Parse(temp);
+            }
+        }
+
         #endregion
 
-        #region Interval
+        #region ポーリングの間隔
 
         /// <summary>
         /// Device AuthZのPollingのInterval（秒）
@@ -1634,225 +1773,13 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        /// <summary>
-        /// 認証の失敗を、この回数で断る（#305 の段階 2）
-        /// </summary>
-        /// <remarks>
-        /// **クライアント認証（`client_secret` / mTLS）と、
-        /// `user_code` の投入**の失敗を数える（`Extensions/Sts/AuthFailureProvider`）。
-        ///
-        /// | 値 | |
-        /// |---|---|
-        /// | **0（または未設定）** | **数えない**（従来どおり） |
-        /// | 正の回数（雛形は 5） | **連続してこの回数失敗したら、`AuthFailureLockoutSeconds` の間断る** |
-        ///
-        /// **断っている間は、正しい資格情報でも通さない**（ロックアウトの意味）。
-        /// **成功したら回数は消える。**
-        ///
-        /// **利用者のパスワードは、ASP.NET Identity 側で数えている**
-        /// （`MaxFailedAccessAttemptsBeforeLockout`）。**こちらは別の口である。**
-        ///
-        /// **数えるのは「クライアント ＋ 送信元」ごと**である（#305 の段階 4）。
-        /// **`client_id` だけで数えると、誰でもそのクライアントを止められる。**
-        /// </remarks>
-        public static int AuthFailureMaxAttempts
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("AuthFailureMaxAttempts");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    //  **未設定は 0**（数えない。従来どおり）。
-                    return 0;
-                }
-
-                int attempts = 0;
-                return int.TryParse(value, out attempts) ? attempts : 0;
-            }
-        }
-
-        /// <summary>
-        /// 認証の失敗が上限に達したとき、断る長さ（秒。#305 の段階 2）
-        /// </summary>
-        /// <remarks>**未設定は 300 秒**（5 分）。</remarks>
-        public static int AuthFailureLockoutSeconds
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("AuthFailureLockoutSeconds");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    return 300;
-                }
-
-                int seconds = 0;
-                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 300;
-            }
-        }
-
-        /// <summary>
-        /// 数えた分を、いつまで覚えているか（秒。#305 の段階 4）
-        /// </summary>
-        /// <remarks>
-        /// **最後の失敗からこの時間が過ぎると、数えた分は忘れる**
-        /// （**間隔を空けた失敗が、いつまでも積み上がらない**）。
-        /// **行の寿命もこれで決まる** — **期限の過ぎた行は掃除される**
-        /// （`AuthFailureProvider.PruneExpired`）。
-        ///
-        /// **未設定は `AuthFailureLockoutSeconds` と同じ**（雛形では 300 秒）。
-        ///
-        /// **`AuthFailureMaxAttempts` 回を試すのに掛かる時間より、長くすること。**
-        /// **短いと、数が積まれる前に忘れるので、いつまでも断らない。**
-        /// </remarks>
-        public static int AuthFailureWindowSeconds
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("AuthFailureWindowSeconds");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    //  **未設定は、断る長さと同じ。**
-                    return Config.AuthFailureLockoutSeconds;
-                }
-
-                int seconds = 0;
-                return (int.TryParse(value, out seconds) && 0 < seconds)
-                    ? seconds : Config.AuthFailureLockoutSeconds;
-            }
-        }
-
-        /// <summary>
-        /// 口ごとのレート制限 : クライアント 1 つあたりの上限（#305 の段階 3）
-        /// </summary>
-        /// <remarks>
-        /// **`client_id` が分かる要求を、`client_id` ごとに数える**
-        /// （`Extensions/Sts/RateLimitProvider`）。**窓は `RateLimitWindowSeconds`。**
-        ///
-        /// | 値 | |
-        /// |---|---|
-        /// | **0（または未設定）** | **制限しない**（従来どおり） |
-        /// | 正の回数（雛形は 120） | **窓の中でこの回数を超えた要求に `429`**（`Retry-After` 付き） |
-        ///
-        /// **数えるのは口ごと**である（`/token` の洪水で `/revoke` が止まらない）。
-        /// **段階 2 は「失敗の回数」、ここは「要求の回数」**（成否を問わない）。
-        /// </remarks>
-        public static int RateLimitPerClientPermits
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("RateLimitPerClientPermits");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    //  **未設定は 0**（制限しない。従来どおり）。
-                    return 0;
-                }
-
-                int permits = 0;
-                return int.TryParse(value, out permits) ? permits : 0;
-            }
-        }
-
-        /// <summary>
-        /// 口ごとのレート制限 : 送信元 1 つあたりの上限（#305 の段階 3）
-        /// </summary>
-        /// <remarks>
-        /// **`client_id` が分からない要求**（`/jwkcerts` の読み出しなど）**と、**
-        /// **`client_id` が分かる要求の両方**を、**送信元アドレスごとに数える。**
-        /// **`client_id` を毎回変えて `client_id` ごとの上限を避ける**攻撃に、これが効く。
-        ///
-        /// | 値 | |
-        /// |---|---|
-        /// | **0（または未設定）** | **制限しない**（従来どおり） |
-        /// | 正の回数（雛形は 600） | **窓の中でこの回数を超えた要求に `429`** |
-        ///
-        /// **リバース プロキシの後ろでは、見えるアドレスはプロキシのものになる。**
-        /// **net10.0 版は `UseForwardedHeaders`**（設定キーも同名。`ForwardedHeadersKnownProxies` と併せて使う）**で元に戻せるが、**
-        /// **net48 版は戻さない**（`Request.UserHostAddress` をそのまま使う）。
-        /// **プロキシの後ろに置く配備では、プロキシ側で制限する方が確かである。**
-        /// </remarks>
-        public static int RateLimitPerIpPermits
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("RateLimitPerIpPermits");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    return 0;
-                }
-
-                int permits = 0;
-                return int.TryParse(value, out permits) ? permits : 0;
-            }
-        }
-
-        /// <summary>
-        /// 口ごとのレート制限 : 数える窓の長さ（秒。#305 の段階 3）
-        /// </summary>
-        /// <remarks>
-        /// **未設定は 60 秒。**
-        /// **窓は固定窓**（`UNIX 時刻 / 窓` で切る。窓が変わると回数は 0 に戻る）。
-        /// **窓の境目では、瞬間的に上限の 2 倍まで通り得る**
-        /// （固定窓の性質。**滑る窓にするほどの精度は、ここでは要らない**）。
-        /// </remarks>
-        public static int RateLimitWindowSeconds
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("RateLimitWindowSeconds");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    return 60;
-                }
-
-                int seconds = 0;
-                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 60;
-            }
-        }
-
-        /// <summary>
-        /// ポーリングが速すぎるときに `slow_down` を返すか（#305 の段階 1）
-        /// </summary>
-        /// <remarks>
-        /// **Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**
-        /// **間隔は `interval`**（`DeviceAuthZPollingIntervalSeconds` /
-        /// `CibaPollingIntervalSeconds`）**で伝えてあるが、守らなくても何も起きなかった。**
-        ///
-        /// **true なら、前回から `interval` 未満で来た要求に `slow_down` を返す**
-        /// （RFC 8628 §3.5 / CIBA §11。**クライアントは間隔を 5 秒伸ばす**）。
-        ///
-        /// **未設定なら true**（**仕様どおりの振る舞い**）。
-        /// **false にすると従来どおり**、`authorization_pending` を返し続ける。
-        /// </remarks>
-        public static bool EnablePollingSlowDown
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("EnablePollingSlowDown");
-
-                //  **未設定は true**（仕様どおり）。**false と書いたときだけ止める。**
-                if (string.IsNullOrEmpty(value))
-                {
-                    return true;
-                }
-
-                bool enabled = true;
-                return bool.TryParse(value, out enabled) ? enabled : true;
-            }
-        }
-
         #endregion
 
         #endregion
 
-        #region AuthorizationServer関連
+        #region STS（機能の有効 / 無効）
 
-        #region Grant Typeの有効 / 無効
+        #region Grant Type
 
         /// <summary>EnableAuthorizationCodeGrantType</summary>
         public static bool EnableAuthorizationCodeGrantType
@@ -1899,6 +1826,75 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>EnableJwtBearerTokenFlowGrantType</summary>
+        public static bool EnableJwtBearerTokenFlowGrantType
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableJwtBearerTokenFlowGrantType"));
+            }
+        }
+
+        /// <summary>EnableDeviceAuthZGrantType</summary>
+        public static bool EnableDeviceAuthZGrantType
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableDeviceAuthZGrantType"));
+            }
+        }
+
+        /// <summary>EnableCibaGrantType</summary>
+        public static bool EnableCibaGrantType
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableCibaGrantType"));
+            }
+        }
+
+        #endregion
+
+        #region OpenID Connect
+
+        /// <summary>EnableOpenIDConnect</summary>
+        public static bool EnableOpenIDConnect
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableOpenIDConnect"));
+            }
+        }
+
+        #endregion
+
+        #region PKCE
+
+        /// <summary>
+        /// 認可コード フローで code_challenge（PKCE）を必須にするかどうか（#220）
+        /// </summary>
+        /// <remarks>
+        /// OAuth 2.1 は、クライアントの種別によらず PKCE を必須とする。
+        /// **既定は false（従来どおり PKCE 無しでも通る）。** 下位互換のため。
+        ///
+        /// **RequirePkceS256 とは別のもの。**
+        /// - RequirePkce     : PKCE 自体を求める（認可エンドポイントで判定）
+        /// - RequirePkceS256 : 使うなら S256 に限る（トークン エンドポイントで判定）
+        ///
+        /// Device AuthZ / CIBA は認可エンドポイントを通らないので、この判定に掛からない。
+        /// </remarks>
+        public static bool RequirePkce
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePkce"));
+            }
+        }
+
+        #endregion
+
+        #region DPoP（#311）
+
         /// <summary>DPoP の証明に `nonce` を要求するか（#311 の段階 4）</summary>
         /// <remarks>
         /// **RFC 9449 §8 / §9 : サーバは `nonce` を要求してよい**（MAY）。
@@ -1936,41 +1932,9 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        /// <summary>EnableJwtBearerTokenFlowGrantType</summary>
-        public static bool EnableJwtBearerTokenFlowGrantType
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableJwtBearerTokenFlowGrantType"));
-            }
-        }
+        #endregion
 
-        /// <summary>EnableDeviceAuthZGrantType</summary>
-        public static bool EnableDeviceAuthZGrantType
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableDeviceAuthZGrantType"));
-            }
-        }
-
-        /// <summary>EnableCibaGrantType</summary>
-        public static bool EnableCibaGrantType
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableCibaGrantType"));
-            }
-        }
-
-        /// <summary>EnableOpenIDConnect</summary>
-        public static bool EnableOpenIDConnect
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableOpenIDConnect"));
-            }
-        }
+        #region 動的クライアント登録（#307）
 
         /// <summary>動的クライアント登録（RFC 7591）を開けるか（#307 の段階 1）</summary>
         /// <remarks>
@@ -2072,7 +2036,258 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region エンドポイント 
+        #region Discovery
+
+        /// <summary>
+        /// Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
+        /// </summary>
+        /// <remarks>
+        /// **任意の項目**（OIDC Discovery 1.0 §3）。**既定は空で、空なら Discovery に出さない。**
+        /// 以前は "・・・" というプレースホルダを配っていた。
+        /// </remarks>
+        public static string ServiceDocumentation
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ServiceDocumentation");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region STS（防御）
+
+        #region 認証の失敗回数（#305）
+
+        /// <summary>
+        /// 認証の失敗を、この回数で断る（#305 の段階 2）
+        /// </summary>
+        /// <remarks>
+        /// **クライアント認証（`client_secret` / mTLS）と、
+        /// `user_code` の投入**の失敗を数える（`Extensions/Sts/AuthFailureProvider`）。
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **数えない**（従来どおり） |
+        /// | 正の回数（雛形は 5） | **連続してこの回数失敗したら、`AuthFailureLockoutSeconds` の間断る** |
+        ///
+        /// **断っている間は、正しい資格情報でも通さない**（ロックアウトの意味）。
+        /// **成功したら回数は消える。**
+        ///
+        /// **利用者のパスワードは、ASP.NET Identity 側で数えている**
+        /// （`MaxFailedAccessAttemptsBeforeLockout`）。**こちらは別の口である。**
+        ///
+        /// **数えるのは「クライアント ＋ 送信元」ごと**である（#305 の段階 4）。
+        /// **`client_id` だけで数えると、誰でもそのクライアントを止められる。**
+        /// </remarks>
+        public static int AuthFailureMaxAttempts
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureMaxAttempts");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は 0**（数えない。従来どおり）。
+                    return 0;
+                }
+
+                int attempts = 0;
+                return int.TryParse(value, out attempts) ? attempts : 0;
+            }
+        }
+
+        /// <summary>
+        /// 認証の失敗が上限に達したとき、断る長さ（秒。#305 の段階 2）
+        /// </summary>
+        /// <remarks>**未設定は 300 秒**（5 分）。</remarks>
+        public static int AuthFailureLockoutSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureLockoutSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 300;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 300;
+            }
+        }
+
+        /// <summary>
+        /// 数えた分を、いつまで覚えているか（秒。#305 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **最後の失敗からこの時間が過ぎると、数えた分は忘れる**
+        /// （**間隔を空けた失敗が、いつまでも積み上がらない**）。
+        /// **行の寿命もこれで決まる** — **期限の過ぎた行は掃除される**
+        /// （`AuthFailureProvider.PruneExpired`）。
+        ///
+        /// **未設定は `AuthFailureLockoutSeconds` と同じ**（雛形では 300 秒）。
+        ///
+        /// **`AuthFailureMaxAttempts` 回を試すのに掛かる時間より、長くすること。**
+        /// **短いと、数が積まれる前に忘れるので、いつまでも断らない。**
+        /// </remarks>
+        public static int AuthFailureWindowSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("AuthFailureWindowSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は、断る長さと同じ。**
+                    return Config.AuthFailureLockoutSeconds;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds)
+                    ? seconds : Config.AuthFailureLockoutSeconds;
+            }
+        }
+
+        #endregion
+
+        #region レート制限（#305）
+
+        /// <summary>
+        /// 口ごとのレート制限 : クライアント 1 つあたりの上限（#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **`client_id` が分かる要求を、`client_id` ごとに数える**
+        /// （`Extensions/Sts/RateLimitProvider`）。**窓は `RateLimitWindowSeconds`。**
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **制限しない**（従来どおり） |
+        /// | 正の回数（雛形は 120） | **窓の中でこの回数を超えた要求に `429`**（`Retry-After` 付き） |
+        ///
+        /// **数えるのは口ごと**である（`/token` の洪水で `/revoke` が止まらない）。
+        /// **段階 2 は「失敗の回数」、ここは「要求の回数」**（成否を問わない）。
+        /// </remarks>
+        public static int RateLimitPerClientPermits
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitPerClientPermits");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    //  **未設定は 0**（制限しない。従来どおり）。
+                    return 0;
+                }
+
+                int permits = 0;
+                return int.TryParse(value, out permits) ? permits : 0;
+            }
+        }
+
+        /// <summary>
+        /// 口ごとのレート制限 : 送信元 1 つあたりの上限（#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **`client_id` が分からない要求**（`/jwkcerts` の読み出しなど）**と、**
+        /// **`client_id` が分かる要求の両方**を、**送信元アドレスごとに数える。**
+        /// **`client_id` を毎回変えて `client_id` ごとの上限を避ける**攻撃に、これが効く。
+        ///
+        /// | 値 | |
+        /// |---|---|
+        /// | **0（または未設定）** | **制限しない**（従来どおり） |
+        /// | 正の回数（雛形は 600） | **窓の中でこの回数を超えた要求に `429`** |
+        ///
+        /// **リバース プロキシの後ろでは、見えるアドレスはプロキシのものになる。**
+        /// **net10.0 版は `UseForwardedHeaders`**（設定キーも同名。`ForwardedHeadersKnownProxies` と併せて使う）**で元に戻せるが、**
+        /// **net48 版は戻さない**（`Request.UserHostAddress` をそのまま使う）。
+        /// **プロキシの後ろに置く配備では、プロキシ側で制限する方が確かである。**
+        /// </remarks>
+        public static int RateLimitPerIpPermits
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitPerIpPermits");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 0;
+                }
+
+                int permits = 0;
+                return int.TryParse(value, out permits) ? permits : 0;
+            }
+        }
+
+        /// <summary>
+        /// 口ごとのレート制限 : 数える窓の長さ（秒。#305 の段階 3）
+        /// </summary>
+        /// <remarks>
+        /// **未設定は 60 秒。**
+        /// **窓は固定窓**（`UNIX 時刻 / 窓` で切る。窓が変わると回数は 0 に戻る）。
+        /// **窓の境目では、瞬間的に上限の 2 倍まで通り得る**
+        /// （固定窓の性質。**滑る窓にするほどの精度は、ここでは要らない**）。
+        /// </remarks>
+        public static int RateLimitWindowSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("RateLimitWindowSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 60;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 60;
+            }
+        }
+
+        #endregion
+
+        #region ポーリングの slow_down（#305）
+
+        /// <summary>
+        /// ポーリングが速すぎるときに `slow_down` を返すか（#305 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **Device Authorization Grant と CIBA は、クライアントが `/token` を繰り返し叩く。**
+        /// **間隔は `interval`**（`DeviceAuthZPollingIntervalSeconds` /
+        /// `CibaPollingIntervalSeconds`）**で伝えてあるが、守らなくても何も起きなかった。**
+        ///
+        /// **true なら、前回から `interval` 未満で来た要求に `slow_down` を返す**
+        /// （RFC 8628 §3.5 / CIBA §11。**クライアントは間隔を 5 秒伸ばす**）。
+        ///
+        /// **未設定なら true**（**仕様どおりの振る舞い**）。
+        /// **false にすると従来どおり**、`authorization_pending` を返し続ける。
+        /// </remarks>
+        public static bool EnablePollingSlowDown
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("EnablePollingSlowDown");
+
+                //  **未設定は true**（仕様どおり）。**false と書いたときだけ止める。**
+                if (string.IsNullOrEmpty(value))
+                {
+                    return true;
+                }
+
+                bool enabled = true;
+                return bool.TryParse(value, out enabled) ? enabled : true;
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region STS（口）
+
+        #region 基底
 
         /// <summary>
         /// OAuth2のAuthorizationServerのEndpointのRootのURI
@@ -2106,6 +2321,8 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("OAuth2ContainerizatedAuthSvrEPRootURI");
             }
         }
+
+        #endregion
 
         #region 既定
 
@@ -2150,9 +2367,8 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region OAuth2拡張
-
         #region Device AuthZ
+
         /// <summary>
         /// Device AuthZのAuthorizeエンドポイント 
         /// </summary>
@@ -2180,6 +2396,7 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region CIBA
+
         /// <summary>
         /// CIBAのAuthorizeエンドポイント 
         /// </summary>
@@ -2261,11 +2478,35 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region SAML2
+
+        // 基本的に、OAuth2/OIDCインフラを流用
+
+        /// <summary>
+        /// Saml2のRequestエンドポイント 
+        /// </summary>
+        public static string Saml2RequestEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2RequestEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// Saml2のResponseエンドポイント 
+        /// </summary>
+        public static string Saml2ResponseEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2ResponseEndpoint");
+            }
+        }
+
         #endregion
 
-        #region その他
-
-        #region WebAPI
+        #region その他の WebAPI
 
         /// <summary>
         /// Hybrid Flowのテスト用WebAPI
@@ -2302,15 +2543,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #endregion
-
-        #endregion
-
-        #endregion
-
-        #region Client関連
-
-        #region 静的設定
+        #region クライアント
 
         /// <summary>
         /// OAuth2のClientのInformation
@@ -2372,10 +2605,6 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        #endregion
-
-        #region エンドポイント
-
         /// <summary>
         /// OAuth2のClientのEndpointのRootURI
         /// </summary>
@@ -2386,8 +2615,6 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("OAuth2ClientEndpointsRootURI");
             }
         }
-
-        #region Redirect
 
         /// <summary>
         /// AccountController.OAuth2AuthorizationCodeGrantClientのRedirectエンドポイント
@@ -2410,7 +2637,11 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("OAuth2ImplicitGrantClient_Account");
             }
         }
-        
+
+        #endregion
+
+        #region テスト用の口
+
         /// <summary>
         /// テスト用のエンドポイントがロックダウンされているかどうか。
         /// </summary>
@@ -2425,205 +2656,12 @@ namespace MultiPurposeAuthSite.Co
                     Config.GetRenamedConfigValue("IsLockedDownTestEndpoints"));
             }
         }
-        // **RequirePkceS256**（PKCE で S256 だけを受け付けるか。#220）**は Open棟梁 の `CmnServerParams` が読む**
-        //   （キー名は同じ。**既定は false**（従来どおり plain も受理）。#294）。
-
-        // **PAR（RFC 9126）のエンドポイントは、Open棟梁 の OAuth2AndOIDCParams が持つ**（#236 の宿題）。
-        //   キー名 AuthRequestPushUri は、RequestObjectRegUri / JwkSetUri と同じく
-        //   **クライアント側も読む設定**なので、框の側に置く（OpenTouryo #592 で実装された）。
-        //   ここに自前のプロパティは置かない。
-
-        /// <summary>
-        /// Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
-        /// </summary>
-        /// <remarks>
-        /// **任意の項目**（OIDC Discovery 1.0 §3）。**既定は空で、空なら Discovery に出さない。**
-        /// 以前は "・・・" というプレースホルダを配っていた。
-        /// </remarks>
-        public static string ServiceDocumentation
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("ServiceDocumentation");
-            }
-        }
-
-        /// <summary>
-        /// 認可コード フローで code_challenge（PKCE）を必須にするかどうか（#220）
-        /// </summary>
-        /// <remarks>
-        /// OAuth 2.1 は、クライアントの種別によらず PKCE を必須とする。
-        /// **既定は false（従来どおり PKCE 無しでも通る）。** 下位互換のため。
-        ///
-        /// **RequirePkceS256 とは別のもの。**
-        /// - RequirePkce     : PKCE 自体を求める（認可エンドポイントで判定）
-        /// - RequirePkceS256 : 使うなら S256 に限る（トークン エンドポイントで判定）
-        ///
-        /// Device AuthZ / CIBA は認可エンドポイントを通らないので、この判定に掛からない。
-        /// </remarks>
-        public static bool RequirePkce
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePkce"));
-            }
-        }
-
-
-        #region 改名した設定キー
-
-        /// <summary>改名した設定キー（新しい名前 → 改名前の名前。#236）</summary>
-        /// <remarks>
-        /// **改名しても、旧いキー名を読み続ける**（#219 で始めた扱い）。
-        /// 設定ファイルは配備済みのものがあり、**改名だけで黙って既定値に戻ると危ない**ため。
-        /// 旧いキー名だけが設定されている場合は、起動時に ProductionCheck が警告する。
-        ///
-        /// **ここに載せたキーは、Config 側も新しい名前で読むこと**
-        /// （<see cref="GetRenamedConfigValue"/> を通す）。
-        /// </remarks>
-        public static readonly Dictionary<string, string> RenamedKeys =
-            new Dictionary<string, string>()
-            {
-                // テスト用の口をまとめて閉じるキー（#219）
-                { "IsLockedDownTestEndpoints", "IsLockedDownRedirectEndpoint" },
-                // 綴りの誤り（Enabe → Enable。#236）
-                { "EnableDebugTraceLog", "EnabeDebugTraceLog" },
-                // EndPoint → Endpoint（この実装の他のキーに揃えた。#236）
-                { "IdFederationAuthorizeEndpoint", "IdFederationAuthorizeEndPoint" },
-                { "IdFederationRedirectEndpoint", "IdFederationRedirectEndPoint" },
-                { "IdFederationTokenEndpoint", "IdFederationTokenEndPoint" },
-                { "IdFederationUserInfoEndpoint", "IdFederationUserInfoEndPoint" },
-            };
-
-        /// <summary>改名した設定キーの値を読む（新しい名前を優先し、無ければ旧い名前）</summary>
-        /// <param name="key">新しいキー名（<see cref="RenamedKeys"/> に載っているもの）</param>
-        /// <returns>値</returns>
-        private static string GetRenamedConfigValue(string key)
-        {
-            string value = GetConfigParameter.GetConfigValue(key);
-
-            if (string.IsNullOrEmpty(value))
-            {
-                value = GetConfigParameter.GetConfigValue(Config.RenamedKeys[key]);
-            }
-
-            return value;
-        }
-
-        /// <summary>
-        /// 旧いキー名だけが設定されているものを返す（起動時の警告に使う）
-        /// </summary>
-        /// <returns>「旧いキー名 → 新しいキー名」の一覧（無ければ空）</returns>
-        public static List<KeyValuePair<string, string>> OldKeysStillUsed()
-        {
-            List<KeyValuePair<string, string>> used = new List<KeyValuePair<string, string>>();
-
-            foreach (KeyValuePair<string, string> renamed in Config.RenamedKeys)
-            {
-                if (string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(renamed.Key))
-                    && !string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(renamed.Value)))
-                {
-                    used.Add(new KeyValuePair<string, string>(renamed.Value, renamed.Key));
-                }
-            }
-
-            return used;
-        }
 
         #endregion
 
         #endregion
 
-        #endregion
-
-        #endregion
-
-        #endregion
-
-        #endregion
-
-        #region user store の秘密（#297）
-
-        /// <summary>
-        /// user store に入る秘密を暗号化する鍵（パスワード）
-        /// </summary>
-        /// <remarks>
-        /// **空なら暗号化しない**（平文のまま入る ＝ 従来どおり）。
-        ///
-        /// **対象は「元に戻せる形でなければならない秘密」**である（#297）。
-        ///
-        /// | 表 | 列 |
-        /// |---|---|
-        /// | `Saml2OAuth2Data` | `ClientSecret`（**クライアント認証で照合し、画面で再表示する**） |
-        /// | `IdFederationUpstreams` | `ClientSecret`（**上流へ送る**） |
-        ///
-        /// **`DataProtectionKeyPath`（#251）とは別物**である
-        /// （あちらは Cookie とトークンの保護で、**枠組みが使う**）。
-        ///
-        /// **設定ファイルの秘密は平文のまま**である。
-        /// **ここで守るのは「DB を見られたとき」**であり、
-        /// **設定ファイルを見られたら、この鍵も読める**（そこはファイルの権限で守る）。
-        ///
-        /// **本番では、設定ファイルに直接書かないこと**（環境変数・秘密の管理機構から渡す）。
-        /// </remarks>
-        public static string UserStoreSecretPassword
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("UserStoreSecretPassword");
-            }
-        }
-
-        #endregion
-
-        #region /jwkcerts のキャッシュ（#303。E-7）
-
-        /// <summary>
-        /// `/jwkcerts` の応答に付ける `Cache-Control: public, max-age=` の秒数
-        /// </summary>
-        /// <remarks>
-        /// **`/jwkcerts` は、トークンを検証する相手が必ず読む口**である。
-        /// **内容は鍵を入れ替えるまで変わらない**ので、**持ち回らせてよい。**
-        ///
-        /// | 値 | |
-        /// |---|---|
-        /// | **0（または未設定）** | **`no-store`**（**従来どおり**。毎回取りに来る） |
-        /// | 正の秒数 | **`public, max-age=<秒>`** ＋ `ETag`（`If-None-Match` に `304`） |
-        ///
-        /// **鍵を入れ替えた直後は、この秒数の間だけ古い鍵を見る相手が居る。**
-        /// **出す側は新旧 2 本を広告する**作りにしてある（#291 / #292 の段階 3）ので、
-        /// **入れ替えの最中も検証は通る。** **入れ替えの周期より短くすること。**
-        ///
-        /// **サーバ側で覚える分は、この値に関係なく効く**
-        /// （Open棟梁 の `JwkSetDocument`。**ファイルの更新を見て読み直す**）。
-        /// </remarks>
-        public static int JwkSetCacheMaxAgeSeconds
-        {
-            get
-            {
-                string value = GetConfigParameter.GetConfigValue("JwkSetCacheMaxAgeSeconds");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    //  **未設定なら 0**（従来どおり `no-store`）。
-                    return 0;
-                }
-
-                int seconds = 0;
-                return int.TryParse(value, out seconds) ? seconds : 0;
-            }
-        }
-
-        #endregion
-
-        #region 鍵のロールオーバー（#292 の段階 3）
-
-        // **PreviousSigningCerFilePaths**（退役させる途中の署名証明書。#292 の段階 3）**は Open棟梁 の `CmnServerParams` が読む**
-        //   （キー名は同じ。#294）。**鍵の入れ替えの手順は `CONFIGURATION.md`** にある。
-
-        #endregion
-
-        #region IDフェデレーション関連
+        #region ID 連携
 
         #region 上流の登録（n 件。#292 の段階 1）
 
@@ -2939,43 +2977,6 @@ namespace MultiPurposeAuthSite.Co
                 return !string.IsNullOrEmpty(Config.IdFederationSaml2MetadataUrl)
                     || (!string.IsNullOrEmpty(Config.IdFederationSaml2RequestEndpoint)
                         && !string.IsNullOrEmpty(Config.IdFederationSaml2CerFilePath));
-            }
-        }
-
-        #endregion
-
-        #region 機能ロックダウン（STS専用モード）
-
-        /// <summary>
-        /// EnableSignupProcess
-        /// </summary>
-        public static bool EnableSignupProcess
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableSignupProcess"));
-            }
-        }
-
-        /// <summary>
-        /// EnableEditingOfUserAttribute
-        /// </summary>
-        public static bool EnableEditingOfUserAttribute
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableEditingOfUserAttribute"));
-            }
-        }
-
-        /// <summary>
-        /// EnableAdministrationOfUsersAndRoles
-        /// </summary>
-        public static bool EnableAdministrationOfUsersAndRoles
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableAdministrationOfUsersAndRoles"));
             }
         }
 
