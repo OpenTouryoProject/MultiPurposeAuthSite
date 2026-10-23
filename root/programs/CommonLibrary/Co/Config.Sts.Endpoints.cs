@@ -48,11 +48,38 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（STS（口））</summary>
     public partial class Config
     {
+        //  **この節は「口（エンドポイント）の URL」を持つ。**
+        //
+        //  | 区分 | 中身 | URL の組み立て |
+        //  |---|---|---|
+        //  | **認可サーバの口** | 認可・トークン・UserInfo・失効・イントロスペクション・DCR・Device・CIBA・SAML2 の要求 | **`OAuth2AuthorizationServerEndpointsRootURI` ＋ パス** |
+        //  | **自己テストのクライアントの口** | 自己テストの折り返し口（`test_self_*`）・SAML2 の ACS | **`OAuth2ClientEndpointsRootURI` ＋ パス** |
+        //
+        //  **パスの設定は `/` で始めること。** **ルートの登録は先頭の `/` を落として使う**
+        //  （`RouteConfig` / `WebApiConfig` / `Startup` の `.Substring(1)`）ので、**空や `/` 無しでは起動時に落ちるか、口がずれる。**
+        //  **同じ値を、ルートの登録・Discovery の広告・DPoP の `htu` の期待値・レート制限の対象が見ている**
+        //  （**片方だけ書き換えると、黙って食い違う**）。
+        //
+        //  **既定値を持つのは、後から足したキーだけ**である（`OAuth2EndSessionEndpoint` / `DcrRegistrationEndpoint`。**既存の配備の設定ファイルに無い**ため）。
+
         #region 基底
 
         /// <summary>
         /// OAuth2のAuthorizationServerのEndpointのRootのURI
         /// </summary>
+        /// <remarks>
+        /// **認可サーバの口の URL は、すべて「この値 ＋ パスの設定」で作る**（例 : `https://localhost:44300/MultiPurposeAuthSite` ＋ `/token`）。
+        /// **仮想ディレクトリを含める**（net48 版は `/MultiPurposeAuthSite` の下に置く）。**末尾に `/` を付けない。**
+        ///
+        /// | 使う所 | |
+        /// |---|---|
+        /// | **Discovery** | `authorization_endpoint` ほかの広告（`TokenProviders/CmnEndpoints.OpenIDConfig`） |
+        /// | **DPoP の `htu` の期待値** | **要求の `Host` を信じず、ここから作る**（`CmnDPoP.EndpointUriOf`。#311） |
+        /// | **SAML2 のメタデータ** | `SingleSignOnService` の Location（`CmnSamlMetadata`） |
+        /// | **自己テスト** | 自分の口を叩く URL（`Helper` / `SelfTestClient`） |
+        ///
+        /// **Issuer（`IssuerId`）とは別の値**である（Issuer は論理名で、URL である必要は無い）。
+        /// </remarks>
         public static string OAuth2AuthorizationServerEndpointsRootURI
         {
             get
@@ -62,8 +89,21 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// OAuth2ContainerizatedAuthSvrFqdnAndPort
+        /// コンテナの中から自分の口を叩くときの、ホスト名とポート（スキームは元のまま）
         /// </summary>
+        /// <remarks>
+        /// **自己テストがサーバ間で自分の口（`/token` など）を叩く経路だけ**に効く
+        /// （`Helper.GetContainerizatedAuthZServerUri`。**`Helper` の WebAPI 呼び出しはすべて通る**）。
+        ///
+        /// **コンテナの中では、外向きの URL（`localhost:44300` など）が自分に届かない**ことがある。
+        /// **ブラウザ向けの URL は変えずに、サーバ間の宛先だけを差し替える**ための口である。
+        ///
+        /// - **Windows では効かない**（`PlatformID.Win32NT` なら差し替えない）
+        /// - **空なら差し替えない**（従来どおり）
+        /// - **これと `OAuth2ContainerizatedAuthSvrEPRootURI` が両方在れば、こちらが先**
+        ///
+        /// > **ID 連携の相手（他の IdP）には効かない**（宛先が自分ではないため、`Helper` を通さない）。
+        /// </remarks>
         public static string OAuth2ContainerizatedAuthSvrFqdnAndPort
         {
             get
@@ -73,8 +113,15 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// OAuth2ContainerizatedAuthSvrEPRootURI
+        /// コンテナの中から自分の口を叩くときの、スキームを含む基底（`http://localhost:8080` など）
         /// </summary>
+        /// <remarks>
+        /// **`OAuth2ContainerizatedAuthSvrFqdnAndPort` のスキームごと差し替える版**である。
+        /// **TLS をコンテナの外（前段）で終端する配備では、中は HTTP になる**ので、
+        /// **HTTP のループバックへ向けられるように**してある。
+        ///
+        /// 効く経路・効かない条件は `OAuth2ContainerizatedAuthSvrFqdnAndPort` と同じ（**両方在れば、あちらが先**）。
+        /// </remarks>
         public static string OAuth2ContainerizatedAuthSvrEPRootURI
         {
             get
@@ -85,7 +132,35 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region 既定
+        #region SAML2
+
+        // 基本的に、OAuth2/OIDCインフラを流用
+
+        /// <summary>
+        /// Saml2のRequestエンドポイント 
+        /// </summary>
+        public static string Saml2RequestEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2RequestEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// Saml2のResponseエンドポイント 
+        /// </summary>
+        public static string Saml2ResponseEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2ResponseEndpoint");
+            }
+        }
+
+        #endregion
+
+        #region OAuth2/OIDC
 
         /// <summary>
         /// OAuth2のAuthorizeエンドポイント 
@@ -123,6 +198,100 @@ namespace MultiPurposeAuthSite.Co
             {
                 string value = GetConfigParameter.GetConfigValue("OAuth2EndSessionEndpoint");
                 return string.IsNullOrEmpty(value) ? "/end_session" : value;
+            }
+        }
+
+        #endregion
+
+        #region WebAPI
+
+        // AccessTokenを使用してアクセスするWebAPIのエンドポイント
+
+        /// <summary>
+        /// OAuth2/OIDCのUserInfoエンドポイント 
+        /// </summary>
+        public static string OAuth2UserInfoEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("OAuth2UserInfoEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// OAuth2のRevokeエンドポイント 
+        /// </summary>
+        public static string OAuth2RevokeTokenEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("OAuth2RevokeTokenEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// OAuth2のIntrospectエンドポイント 
+        /// </summary>
+        public static string OAuth2IntrospectTokenEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("OAuth2IntrospectTokenEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// 動的クライアント登録のエンドポイント（RFC 7591 / OIDC Discovery §3 の registration_endpoint）（#307 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **`EnableDynamicClientRegistration` が false なら、この口は張らない。**
+        /// **未設定・空なら `/register` に倒す**（**既存の配備にはこのキーが無い**）。
+        /// **広告（Discovery）も、張ったときだけ行う。**
+        /// </remarks>
+        public static string DcrRegistrationEndpoint
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue("DcrRegistrationEndpoint");
+
+                return string.IsNullOrEmpty(temp) ? "/register" : temp;
+            }
+        }
+
+        #endregion
+
+        #region その他の WebAPI
+
+        /// <summary>
+        /// Hybrid Flowのテスト用WebAPI
+        /// </summary>
+        public static string TestHybridFlowWebAPI
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("TestHybridFlowWebAPI");
+            }
+        }
+
+        /// <summary>
+        /// ユーザ情報にデバイス・トークンを追加するWebAPI
+        /// </summary>
+        public static string SetDeviceTokenWebAPI
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("SetDeviceTokenWebAPI");
+            }
+        }
+
+        /// <summary>
+        /// 2FAのプッシュ承認を受信するWebAPI（#213）
+        /// </summary>
+        public static string TwoFactorPushResultEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("TwoFactorPushResultEndpoint");
             }
         }
 
@@ -181,126 +350,6 @@ namespace MultiPurposeAuthSite.Co
         }
 
         // Tokenエンドポイントは共用。
-
-        #endregion
-
-        #region WebAPI
-
-        /// <summary>
-        /// 動的クライアント登録のエンドポイント（RFC 7591 / OIDC Discovery §3 の registration_endpoint）（#307 の段階 1）
-        /// </summary>
-        /// <remarks>
-        /// **`EnableDynamicClientRegistration` が false なら、この口は張らない。**
-        /// **未設定・空なら `/register` に倒す**（**既存の配備にはこのキーが無い**）。
-        /// **広告（Discovery）も、張ったときだけ行う。**
-        /// </remarks>
-        public static string DcrRegistrationEndpoint
-        {
-            get
-            {
-                string temp = GetConfigParameter.GetConfigValue("DcrRegistrationEndpoint");
-
-                return string.IsNullOrEmpty(temp) ? "/register" : temp;
-            }
-        }
-
-        /// <summary>
-        /// OAuth2/OIDCのUserInfoエンドポイント 
-        /// </summary>
-        public static string OAuth2UserInfoEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2UserInfoEndpoint");
-            }
-        }
-
-        /// <summary>
-        /// OAuth2のRevokeエンドポイント 
-        /// </summary>
-        public static string OAuth2RevokeTokenEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2RevokeTokenEndpoint");
-            }
-        }
-
-        /// <summary>
-        /// OAuth2のIntrospectエンドポイント 
-        /// </summary>
-        public static string OAuth2IntrospectTokenEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2IntrospectTokenEndpoint");
-            }
-        }
-
-        #endregion
-
-        #region SAML2
-
-        // 基本的に、OAuth2/OIDCインフラを流用
-
-        /// <summary>
-        /// Saml2のRequestエンドポイント 
-        /// </summary>
-        public static string Saml2RequestEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("Saml2RequestEndpoint");
-            }
-        }
-
-        /// <summary>
-        /// Saml2のResponseエンドポイント 
-        /// </summary>
-        public static string Saml2ResponseEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("Saml2ResponseEndpoint");
-            }
-        }
-
-        #endregion
-
-        #region その他の WebAPI
-
-        /// <summary>
-        /// Hybrid Flowのテスト用WebAPI
-        /// </summary>
-        public static string TestHybridFlowWebAPI
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("TestHybridFlowWebAPI");
-            }
-        }
-
-        /// <summary>
-        /// ユーザ情報にデバイス・トークンを追加するWebAPI
-        /// </summary>
-        public static string SetDeviceTokenWebAPI
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("SetDeviceTokenWebAPI");
-            }
-        }
-
-        /// <summary>
-        /// 2FAのプッシュ承認を受信するWebAPI（#213）
-        /// </summary>
-        public static string TwoFactorPushResultEndpoint
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("TwoFactorPushResultEndpoint");
-            }
-        }
 
         #endregion
 
