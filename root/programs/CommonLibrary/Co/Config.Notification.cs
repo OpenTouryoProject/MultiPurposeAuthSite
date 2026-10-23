@@ -41,9 +41,7 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（通知）</summary>
     public partial class Config
     {
-        #region 通知
-
-        #region SMTP
+        #region SMTP (Eメール)
 
         /// <summary>SmtpHostName</summary>
         public static string SmtpHostName
@@ -146,8 +144,6 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("FcmOutboxDirectory");
             }
         }
-
-        #endregion
 
         #endregion
     }

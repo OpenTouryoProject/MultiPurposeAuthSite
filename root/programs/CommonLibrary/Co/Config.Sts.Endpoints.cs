@@ -48,8 +48,6 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（STS（口））</summary>
     public partial class Config
     {
-        #region STS（口）
-
         #region 基底
 
         /// <summary>
@@ -419,8 +417,6 @@ namespace MultiPurposeAuthSite.Co
                     Config.GetRenamedConfigValue("IsLockedDownTestEndpoints"));
             }
         }
-
-        #endregion
 
         #endregion
     }
