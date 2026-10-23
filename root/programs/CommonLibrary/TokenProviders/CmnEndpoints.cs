@@ -131,6 +131,7 @@
 //*  2026/10/21  玄人 幸道         DPoP の証明を /token で受け、cnf.jkt で発行する（#311 の段階 1）
 //*  2026/10/22  玄人 幸道         dpop_jkt と refresh_token を DPoP の鍵に縛る（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         仕様の部品（prompt・PKCE・redirect URL 等）を Open棟梁 に移した（#294）
+//*  2026/10/24  玄人 幸道         Hybrid / OIDC の Implicit も Enable*GrantType に従わせ、EnableOpenIDConnect を廃止した（#314）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -235,14 +236,16 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (Config.EnableAuthorizationCodeGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
-                response_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType);
             }
 
             if (Config.EnableImplicitGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ImplicitGrantType);
-                response_types_supported.Add(OAuth2AndOIDCConst.ImplicitResponseType);
             }
+
+            //  **受け付ける response_type だけを広告する**（#314）。
+            //    **Hybrid / OIDC の Implicit も、`code` / `token` を含むなら同じ設定に従う。**
+            response_types_supported.AddRange(CmnEndpoints.SupportedResponseTypes());
 
             if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
             {
@@ -298,146 +301,137 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region OpenID Connect
 
-            if (Config.EnableOpenIDConnect)
-            {
-                // openid は、上の Helper.GetScopesSupported で追加済み（#198）
+            // openid は、上の Helper.GetScopesSupported で追加済み（#198）
+            // response_types は、上の SupportedResponseTypes で追加済み（#314）
 
-                #region response_types
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
-                #endregion
+            #region id_token
+            // **一覧は JwsFactory.SupportedAlgs が持つ**（#129 の段階 2）。
+            //   **発行・検証・広告が同じ一覧を見る**ので、増やしても食い違わない。
+            OpenIDConfig.Add("id_token_signing_alg_values_supported",
+                new List<string>(JwsFactory.SupportedAlgs));
 
-                #region id_token
-                // **一覧は JwsFactory.SupportedAlgs が持つ**（#129 の段階 2）。
-                //   **発行・検証・広告が同じ一覧を見る**ので、増やしても食い違わない。
-                OpenIDConfig.Add("id_token_signing_alg_values_supported",
-                    new List<string>(JwsFactory.SupportedAlgs));
+            // **alg と enc は対で広告する**（OIDC Discovery 1.0 §3。#189 の 5）。
+            //   実装は JWE_RsaOaepAesGcm（Open棟梁）で、鍵の暗号化が RSA-OAEP、本文が A256GCM。
+            OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
+                "RSA-OAEP"
+            });
 
-                // **alg と enc は対で広告する**（OIDC Discovery 1.0 §3。#189 の 5）。
-                //   実装は JWE_RsaOaepAesGcm（Open棟梁）で、鍵の暗号化が RSA-OAEP、本文が A256GCM。
-                OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
-                    "RSA-OAEP"
-                });
+            OpenIDConfig.Add("id_token_encryption_enc_values_supported", new List<string> {
+                "A256GCM"
+            });
+            #endregion
 
-                OpenIDConfig.Add("id_token_encryption_enc_values_supported", new List<string> {
-                    "A256GCM"
-                });
-                #endregion
+            #region subject_types
+            // **OIDC の登録値だけを扱う**（既定は public）。
+            //   利用者名が要る RP は、**preferred_username**（UserClaimsMapping）を使う。
+            OpenIDConfig.Add("subject_types_supported", new List<string> {
+                OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit(),
+                OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit()
+            });
+            #endregion
 
-                #region subject_types
-                // **OIDC の登録値だけを扱う**（既定は public）。
-                //   利用者名が要る RP は、**preferred_username**（UserClaimsMapping）を使う。
-                OpenIDConfig.Add("subject_types_supported", new List<string> {
-                    OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit(),
-                    OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit()
-                });
-                #endregion
+            #region claims
+            OpenIDConfig.Add("claims_parameter_supported", false); // RequestObjectでのみサポート
+            // **profile / address のクレームは、対応付けから作る**（#230）。
+            //   固定の一覧にすると「広告しているのに返らない」が起きる（#228 の 13）。
+            List<string> claimsSupported = new List<string> {
+                //Jwt
+                OAuth2AndOIDCConst.iss,
+                OAuth2AndOIDCConst.aud,
+                OAuth2AndOIDCConst.sub,
+                OAuth2AndOIDCConst.exp,
+                OAuth2AndOIDCConst.nbf,
+                OAuth2AndOIDCConst.iat,
+                OAuth2AndOIDCConst.jti,
+                // scope
+                // 標準
+                OAuth2AndOIDCConst.Scope_Email,
+                OAuth2AndOIDCConst.email_verified,
+                OAuth2AndOIDCConst.phone_number,
+                OAuth2AndOIDCConst.phone_number_verified,
+                // 拡張
+                OAuth2AndOIDCConst.scopes,
+                OAuth2AndOIDCConst.Scope_Roles,
+                OAuth2AndOIDCConst.Scope_UserID,
+                // OIDC, FAPI1
+                OAuth2AndOIDCConst.nonce,
+                OAuth2AndOIDCConst.at_hash,
+                OAuth2AndOIDCConst.c_hash,
+                OAuth2AndOIDCConst.s_hash //,
+                //OAuth2AndOIDCConst.auth
+            };
 
-                #region claims
-                OpenIDConfig.Add("claims_parameter_supported", false); // RequestObjectでのみサポート
-                // **profile / address のクレームは、対応付けから作る**（#230）。
-                //   固定の一覧にすると「広告しているのに返らない」が起きる（#228 の 13）。
-                List<string> claimsSupported = new List<string> {
-                    //Jwt
-                    OAuth2AndOIDCConst.iss,
-                    OAuth2AndOIDCConst.aud,
-                    OAuth2AndOIDCConst.sub,
-                    OAuth2AndOIDCConst.exp,
-                    OAuth2AndOIDCConst.nbf,
-                    OAuth2AndOIDCConst.iat,
-                    OAuth2AndOIDCConst.jti,
-                    // scope
-                    // 標準
-                    OAuth2AndOIDCConst.Scope_Email,
-                    OAuth2AndOIDCConst.email_verified,
-                    OAuth2AndOIDCConst.phone_number,
-                    OAuth2AndOIDCConst.phone_number_verified,
-                    // 拡張
-                    OAuth2AndOIDCConst.scopes,
-                    OAuth2AndOIDCConst.Scope_Roles,
-                    OAuth2AndOIDCConst.Scope_UserID,
-                    // OIDC, FAPI1
-                    OAuth2AndOIDCConst.nonce,
-                    OAuth2AndOIDCConst.at_hash,
-                    OAuth2AndOIDCConst.c_hash,
-                    OAuth2AndOIDCConst.s_hash //,
-                    //OAuth2AndOIDCConst.auth
-                };
+            claimsSupported.AddRange(UserClaims.GetSupportedClaims());
 
-                claimsSupported.AddRange(UserClaims.GetSupportedClaims());
+            OpenIDConfig.Add("claims_supported", claimsSupported);
+            #endregion
 
-                OpenIDConfig.Add("claims_supported", claimsSupported);
-                #endregion
+            #region RequestObject
+            //   **一覧は 1 か所から作る**（#262）。
+            OpenIDConfig.Add("request_object_signing_alg_values_supported", new List<string> {
+                "RS256"
+            });
+            OpenIDConfig.Add("request_parameter_supported", false);
+            OpenIDConfig.Add("request_uri_parameter_supported", true);
+            OpenIDConfig.Add("request_object_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri);
 
-                #region RequestObject
-                //   **一覧は 1 か所から作る**（#262）。
-                OpenIDConfig.Add("request_object_signing_alg_values_supported", new List<string> {
-                    "RS256"
-                });
-                OpenIDConfig.Add("request_parameter_supported", false);
-                OpenIDConfig.Add("request_uri_parameter_supported", true);
-                OpenIDConfig.Add("request_object_endpoint",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri);
+            // **PAR（RFC 9126）の口**（#229）。
+            //   request_object_endpoint（独自の /ros）は、後方互換のため残している。
+            //   こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
+            OpenIDConfig.Add("pushed_authorization_request_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.AuthRequestPushUri);
 
-                // **PAR（RFC 9126）の口**（#229）。
-                //   request_object_endpoint（独自の /ros）は、後方互換のため残している。
-                //   こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
-                OpenIDConfig.Add("pushed_authorization_request_endpoint",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.AuthRequestPushUri);
+            // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
+            OpenIDConfig.Add("require_pushed_authorization_requests", false);
+            #endregion
 
-                // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
-                OpenIDConfig.Add("require_pushed_authorization_requests", false);
-                #endregion
+            #region ResponseObject(JARM)
+            // 「.」がね...。
+            response_modes_supported.Add("query.jwt");
+            response_modes_supported.Add("fragment.jwt");
+            response_modes_supported.Add("form_post.jwt");
 
-                #region ResponseObject(JARM)
-                // 「.」がね...。
-                response_modes_supported.Add("query.jwt");
-                response_modes_supported.Add("fragment.jwt");
-                response_modes_supported.Add("form_post.jwt");
+            #region RP-Initiated Logout（#232）
 
-                #region RP-Initiated Logout（#232）
+            // **RP からのログアウトの口**（RP-Initiated Logout 1.0 §2.1）。
+            //   **実装しているなら、Discovery に出すことが REQUIRED。**
+            OpenIDConfig.Add("end_session_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2EndSessionEndpoint);
 
-                // **RP からのログアウトの口**（RP-Initiated Logout 1.0 §2.1）。
-                //   **実装しているなら、Discovery に出すことが REQUIRED。**
-                OpenIDConfig.Add("end_session_endpoint",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2EndSessionEndpoint);
+            //  **Back-Channel Logout に対応したことを広告する**（#310 の段階 2）。
+            //    | 項目 | 意味 |
+            //    |---|---|
+            //    | `backchannel_logout_supported` | **登録した `backchannel_logout_uri` を叩く** |
+            //    | `backchannel_logout_session_supported` | **`logout_token` に `sid` を入れる** |
+            //
+            //    **`sid` は必ず入れる**ので、後者も true である（段階 1 で `id_token` にも出した）。
+            //    **Front-Channel Logout（段階 3）と Session Management（見送り）は、まだ出さない**
+            //    （**出すと「できる」と読まれる**）。
+            OpenIDConfig.Add("backchannel_logout_supported", true);
+            OpenIDConfig.Add("backchannel_logout_session_supported", true);
 
-                //  **Back-Channel Logout に対応したことを広告する**（#310 の段階 2）。
-                //    | 項目 | 意味 |
-                //    |---|---|
-                //    | `backchannel_logout_supported` | **登録した `backchannel_logout_uri` を叩く** |
-                //    | `backchannel_logout_session_supported` | **`logout_token` に `sid` を入れる** |
-                //
-                //    **`sid` は必ず入れる**ので、後者も true である（段階 1 で `id_token` にも出した）。
-                //    **Front-Channel Logout（段階 3）と Session Management（見送り）は、まだ出さない**
-                //    （**出すと「できる」と読まれる**）。
-                OpenIDConfig.Add("backchannel_logout_supported", true);
-                OpenIDConfig.Add("backchannel_logout_session_supported", true);
+            //  **Front-Channel Logout に対応したことを広告する**（#310 の段階 3）。
+            //    | 項目 | 意味 |
+            //    |---|---|
+            //    | `frontchannel_logout_supported` | **登録した `frontchannel_logout_uri` を `iframe` で開く** |
+            //    | `frontchannel_logout_session_supported` | **その URL に `iss` と `sid` を付ける** |
+            //
+            //    **`sid` は必ず付ける**ので、後者も true である。
+            //    **Session Management（`check_session_iframe`）は見送った**ので、出さない
+            //    （**third-party cookie を読む仕組み**で、現代のブラウザでは効かなくなりつつある）。
+            OpenIDConfig.Add("frontchannel_logout_supported", true);
+            OpenIDConfig.Add("frontchannel_logout_session_supported", true);
 
-                //  **Front-Channel Logout に対応したことを広告する**（#310 の段階 3）。
-                //    | 項目 | 意味 |
-                //    |---|---|
-                //    | `frontchannel_logout_supported` | **登録した `frontchannel_logout_uri` を `iframe` で開く** |
-                //    | `frontchannel_logout_session_supported` | **その URL に `iss` と `sid` を付ける** |
-                //
-                //    **`sid` は必ず付ける**ので、後者も true である。
-                //    **Session Management（`check_session_iframe`）は見送った**ので、出さない
-                //    （**third-party cookie を読む仕組み**で、現代のブラウザでは効かなくなりつつある）。
-                OpenIDConfig.Add("frontchannel_logout_supported", true);
-                OpenIDConfig.Add("frontchannel_logout_session_supported", true);
+            #endregion
 
-                #endregion
-
-                // **応答の署名アルゴリズムを広告していなかった**（JARM §7。#189 の 8）。
-                //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
-                //   実装は CmnResponseObject の JWS(RS256)。
-                OpenIDConfig.Add("authorization_signing_alg_values_supported", new List<string> {
-                    "RS256"
-                });
-                #endregion
-            }
+            // **応答の署名アルゴリズムを広告していなかった**（JARM §7。#189 の 8）。
+            //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
+            //   実装は CmnResponseObject の JWS(RS256)。
+            OpenIDConfig.Add("authorization_signing_alg_values_supported", new List<string> {
+                "RS256"
+            });
+            #endregion
 
             // **認可応答に iss を付けることを広告する**（RFC 9207 §3。#231）
             OpenIDConfig.Add("authorization_response_iss_parameter_supported", true);
@@ -758,48 +752,62 @@ namespace MultiPurposeAuthSite.TokenProviders
             #region response_type
 
             // response_typeチェック
+            //   **フロント チャネルで返すものごとに、グラント種別の設定を見る**（#314）。
+            //
+            //   | 含む要素 | 要る設定 |
+            //   |---|---|
+            //   | `code` | `EnableAuthorizationCodeGrantType` |
+            //   | `token`（access_token をフロント チャネルで返す） | `EnableImplicitGrantType` |
+            //
+            //   **Hybrid / OIDC の Implicit（`code token` / `id_token token` など）も対象**である。
+            //   以前は `code` / `token` 単独のときだけ見ており、**`EnableImplicitGrantType` を false にしても、
+            //   Hybrid で access_token をフロント チャネルに返していた。**
             if (!string.IsNullOrEmpty(response_type))
             {
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                {
-                    if (!Config.EnableAuthorizationCodeGrantType)
-                    {
-                        err = OAuth2AndOIDCConst.unsupported_response_type;
-                        errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType;
-                        return false;
-                    }
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
-                {
-                    if (!Config.EnableImplicitGrantType)
-                    {
-                        err = OAuth2AndOIDCConst.unsupported_response_type;
-                        errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType;
-                        return false;
-                    }
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
-                            || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
-                            || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
-                            || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
-                            || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
-                {
-                    // OIDCチェック１
-                    if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
-                    {
-                        // OIDC無効
-                        err = OAuth2AndOIDCConst.invalid_request;
-                        errDescription = string.Format(
-                            "This response_type is required {0} value in scope param.",
-                            OAuth2AndOIDCConst.Scope_Openid);
+                string rt = response_type.ToLower();
 
-                        return false;
-                    }
-                }
-                else
+                bool isOAuth2 = rt == OAuth2AndOIDCConst.AuthorizationCodeResponseType
+                    || rt == OAuth2AndOIDCConst.ImplicitResponseType;
+
+                bool isOidc = rt == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                    || rt == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                    || rt == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                    || rt == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                    || rt == OAuth2AndOIDCConst.OidcHybrid3_ResponseType;
+
+                if (!isOAuth2 && !isOidc)
                 {
                     err = OAuth2AndOIDCConst.unsupported_response_type;
                     errDescription = "This response_type is unknown.";
+                    return false;
+                }
+
+                string[] types = OAuth2AndOIDCSpec.SplitSpaceDelimited(rt);
+
+                if (types.Contains(OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                    && !Config.EnableAuthorizationCodeGrantType)
+                {
+                    err = OAuth2AndOIDCConst.unsupported_response_type;
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType;
+                    return false;
+                }
+
+                if (types.Contains(OAuth2AndOIDCConst.ImplicitResponseType)
+                    && !Config.EnableImplicitGrantType)
+                {
+                    err = OAuth2AndOIDCConst.unsupported_response_type;
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType;
+                    return false;
+                }
+
+                // OIDCチェック１（`code` / `token` 単独以外は、OIDC の response_type）
+                if (isOidc && !scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = string.Format(
+                        "This response_type is required {0} value in scope param.",
+                        OAuth2AndOIDCConst.Scope_Openid);
+
                     return false;
                 }
             }
@@ -893,14 +901,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // OIDCチェック２
                 if (scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
                 {
-                    // OIDC有効
-                    if (!Config.EnableOpenIDConnect)
-                    {
-                        err = OAuth2AndOIDCConst.invalid_scope;
-                        errDescription = "OIDC is not enabled.";
-                        return false;
-                    }
-
                     // redirect_uriパラメタ 必須
                     if (string.IsNullOrEmpty(redirect_uri) 
                         || string.IsNullOrEmpty(valid_redirect_uri))
@@ -937,6 +937,41 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 結果を返す。
             return false;
+        }
+
+        #endregion
+
+        #region 受け付ける response_type（#314）
+
+        /// <summary>この配備が受け付ける response_type（Discovery の `response_types_supported`）</summary>
+        /// <returns>response_type の一覧（正規化した形）</returns>
+        /// <remarks>
+        /// **認可要求の検査（`ValidateAuthZReqParam`）と同じ規則**である（#314）。
+        /// **Discovery の広告と、動的クライアント登録で受け付ける `response_types` が、この一覧を見る**
+        /// （**受け付けないものを広告しない・登録させない**）。
+        ///
+        /// | 含む要素 | 要る設定 |
+        /// |---|---|
+        /// | `code` | `EnableAuthorizationCodeGrantType` |
+        /// | `token`（access_token をフロント チャネルで返す） | `EnableImplicitGrantType` |
+        ///
+        /// **`id_token` 単独は広告しない**（従来どおり。受け付けはする）。
+        /// </remarks>
+        public static List<string> SupportedResponseTypes()
+        {
+            bool code = Config.EnableAuthorizationCodeGrantType;
+            bool token = Config.EnableImplicitGrantType;
+
+            List<string> ret = new List<string>();
+
+            if (code) { ret.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType); }
+            if (token) { ret.Add(OAuth2AndOIDCConst.ImplicitResponseType); }
+            if (token) { ret.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType); }
+            if (code && token) { ret.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType); }
+            if (code) { ret.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType); }
+            if (code && token) { ret.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType); }
+
+            return ret;
         }
 
         #endregion
@@ -2726,89 +2761,86 @@ namespace MultiPurposeAuthSite.TokenProviders
             access_token = ""; // 初期化
             id_token = "";     // 初期化
 
-            if (Config.EnableOpenIDConnect)
+            #region CheckClientMode
+
+            // ★ 未実装
+            // TokenBinding を実装するなら、証明（ClientModePolicy.Proof）の 1 つとして扱う。
+            //   いまは証明なし（Proof.None）で判定する（#224）。
+
+            // このフローが認められるか？（経路 × 証明 → ClientModePolicy の表で引く。#224）
+            Dictionary<string, string> err = new Dictionary<string, string>();
+            if (CmnEndpoints.CheckClientMode(client_id,
+                ClientModePolicy.Flow.Hybrid, ClientModePolicy.Proof.None,
+                out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
             {
-                #region CheckClientMode
-
-                // ★ 未実装
-                // TokenBinding を実装するなら、証明（ClientModePolicy.Proof）の 1 つとして扱う。
-                //   いまは証明なし（Proof.None）で判定する（#224）。
-
-                // このフローが認められるか？（経路 × 証明 → ClientModePolicy の表で引く。#224）
-                Dictionary<string, string> err = new Dictionary<string, string>();
-                if (CmnEndpoints.CheckClientMode(client_id,
-                    ClientModePolicy.Flow.Hybrid, ClientModePolicy.Proof.None,
-                    out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
-                {
-                    // 継続可
-                }
-                else
-                {
-                    // 継続不可
-                    return "";
-                }
-
-                #endregion
-
-                #region Token発行
-
-                // ClaimsIdentityに、その他、所定のClaimを追加する。
-                // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
-                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
-
-                // Codeの生成
-                code = AuthorizationCodeProvider.Create(identity, queryString);
-
-                string tokenPayload = AuthorizationCodeProvider.GetAccessTokenPayload(code);
-
-                // ★ 必要に応じて、scopeを調整する。
-
-                // access_token
-                // **クレームは、登録された種別（clientMode）で書く**（#220）。
-                //   経路や証明（ClientModePolicy の表。#224）は、トークンの名乗りには使わない。
-                access_token = CmnAccessToken.ProtectFromPayload(
-                	client_id, tokenPayload,
-                    DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                    null, clientMode, out string aud, out string sub,
-                    // **登録された署名 alg で署名する**（#129 の段階 2）
-                    Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
-
-                // Client認証のclient_idとToken類のaudをチェック
-                if (client_id != aud) { throw new Exception("[client_id != aud]"); }
-
-                JObject jObj = (JObject)JsonConvert.DeserializeObject(
-                                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                                    access_token.Split('.')[1]), CustomEncode.us_ascii));
-
-                // id_token
-                JArray jAry = (JArray)jObj["scopes"];
-                foreach (string s in jAry)
-                {
-                    if (s == OAuth2AndOIDCConst.Scope_Openid)
-                    {
-                        // **access_token に揃える**（#129 の段階 2）。
-                        //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
-                        string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
-
-                        id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
-                            access_token, code, state, // at_hash, c_hash, s_hash
-                            HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, jwkString, signingAlg);
-                    }
-                }
-
-                // オペレーション・トレース・ログ出力
-                string name = Helper.GetInstance().GetClientName(client_id);
-                Logging.MyOperationTrace(string.Format(
-                    "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
-                    client_id, name,                                         // Client Account
-                    PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
-
-                // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
-                CmnEndpoints.ConsumeRequestObject(queryString);
-
-                #endregion
+                // 継続可
             }
+            else
+            {
+                // 継続不可
+                return "";
+            }
+
+            #endregion
+
+            #region Token発行
+
+            // ClaimsIdentityに、その他、所定のClaimを追加する。
+            // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+            Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
+
+            // Codeの生成
+            code = AuthorizationCodeProvider.Create(identity, queryString);
+
+            string tokenPayload = AuthorizationCodeProvider.GetAccessTokenPayload(code);
+
+            // ★ 必要に応じて、scopeを調整する。
+
+            // access_token
+            // **クレームは、登録された種別（clientMode）で書く**（#220）。
+            //   経路や証明（ClientModePolicy の表。#224）は、トークンの名乗りには使わない。
+            access_token = CmnAccessToken.ProtectFromPayload(
+            	client_id, tokenPayload,
+                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                null, clientMode, out string aud, out string sub,
+                // **登録された署名 alg で署名する**（#129 の段階 2）
+                Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
+
+            // Client認証のclient_idとToken類のaudをチェック
+            if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+
+            JObject jObj = (JObject)JsonConvert.DeserializeObject(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                                access_token.Split('.')[1]), CustomEncode.us_ascii));
+
+            // id_token
+            JArray jAry = (JArray)jObj["scopes"];
+            foreach (string s in jAry)
+            {
+                if (s == OAuth2AndOIDCConst.Scope_Openid)
+                {
+                    // **access_token に揃える**（#129 の段階 2）。
+                    //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
+                    string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
+
+                    id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                        access_token, code, state, // at_hash, c_hash, s_hash
+                        HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
+                        CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, jwkString, signingAlg);
+                }
+            }
+
+            // オペレーション・トレース・ログ出力
+            string name = Helper.GetInstance().GetClientName(client_id);
+            Logging.MyOperationTrace(string.Format(
+                "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
+                client_id, name,                                         // Client Account
+                PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
+
+            // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
+            CmnEndpoints.ConsumeRequestObject(queryString);
+
+            #endregion
 
             return code;
         }

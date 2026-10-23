@@ -123,6 +123,15 @@
 
     付けなければ、nonce のテストはケースを作らない（Skip にもならない）。
 
+.PARAMETER NoImplicit
+    **Implicit を閉じた配備のテスト（RT-314）専用。**
+    **`EnableImplicitGrantType` を false にしてサイトを起動する**（#314）。
+
+    **-Filter と併せて使うこと。** Implicit / Hybrid（`token` を含むもの）のテストは落ちる。
+      .\test.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"
+
+    付けなければ、このテストはケースを作らない（Skip にもならない）。
+
 .PARAMETER NoWebUI
     ブラウザで測るもの（`Tests/WebUI`。識別子 UI-n.n）を走らせない。
     既定では走らせる（ブラウザが無ければ Skip する）。
@@ -170,6 +179,7 @@ param(
     [switch] $NetFxMtls,
     [switch] $ShortLifetimes,
     [switch] $DPoPNonce,
+    [switch] $NoImplicit,
     [switch] $NoWebUI,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
@@ -909,6 +919,15 @@ try {
             $env:MPAS_DPOP_NONCE = 'true'
         }
 
+        # **Implicit を閉じた配備のテスト（#314）は、閉じた設定で起動して測る。**
+        #   **通しは Implicit を開けて起動する**（廃止したフローの回帰を測るため。#220）。
+        #   **Implicit / Hybrid（token を含むもの）のテストは落ちるので、-Filter と併せて使う。**
+        #   **値は下の 2 か所（net10.0 / net48 の起動）で入れる**（そこで true に上書きしているため）。
+        if ($NoImplicit) {
+            Write-Warning '-NoImplicit : Implicit を閉じて起動します。-Filter と併せて使ってください（#314）。'
+            $env:MPAS_NO_IMPLICIT = 'true'
+        }
+
         if ($PSVersionTable.PSVersion.Major -lt 6) {
             # **コールバックは、スクリプト ブロックではなくコンパイルしたデリゲートにする。**
             #   クライアント証明書のネゴシエーション（-NetFxMtls）が入ると、
@@ -961,7 +980,7 @@ public static class MpasTestTls
         # **Obsolete のテスト（Implicit / ROPC）も必ず測る（#220）。**
         #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
         #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
-        $env:EnableImplicitGrantType = 'true'
+        $env:EnableImplicitGrantType = $(if ($NoImplicit) { 'false' } else { 'true' })
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
         # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1）。**
         #   雛形の既定は無効（口そのものを張らない）だが、**テストでは有効にして起動する。**
@@ -1109,7 +1128,7 @@ public static class MpasTestTls
             # **Obsolete のテスト（Implicit / ROPC）も必ず測る（#220）。**
             #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
             #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
-            $env:EnableImplicitGrantType = 'true'
+            $env:EnableImplicitGrantType = $(if ($NoImplicit) { 'false' } else { 'true' })
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
             # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1。上の net10.0 側と同じ理由）**
             $env:EnableDynamicClientRegistration = 'true'
@@ -1229,6 +1248,13 @@ public static class MpasTestTls
     #   **チャレンジのスキーム（RT-311.12）は DPoPChallengeTests に在り、いつでも走る。**
     if (-not $DPoPNonce) {
         $exclude = 'FullyQualifiedName!~DPoPNonceTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    # **Implicit を閉じた配備のテスト（RT-314）も、既定では走らせない**（#314）。
+    #   **閉じた設定で起動したときにだけ意味がある**（上の DPoPNonceTests と同じ事情）。
+    if (-not $NoImplicit) {
+        $exclude = 'FullyQualifiedName!~ImplicitDisabledTests'
         if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
     }
 

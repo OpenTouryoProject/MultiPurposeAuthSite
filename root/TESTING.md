@@ -4013,6 +4013,30 @@ E2E で 2 件測っている。
 > **実測 2026/10/22（#311 の段階 4）** : **4 成功 / 失敗 0 / Skip 0**（`mem`。net48 版も 44302 で起動した）。
 > **鍵（`DPoPNonceSecret`）も渡している** — **渡さないとプロセスごとのランダムになる。**
 
+### Implicit を閉じた配備（`RT-314`）と `-NoImplicit`
+
+**通しは Implicit を開けて起動する**（廃止したフローの回帰を測るため。#220）。
+そのため、**閉じた配備の振る舞いは通しでは測れない。**
+`-NoImplicit` が、**`EnableImplicitGrantType` を false にしてサイトを起動する**（#314）。
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"
+```
+
+| | 測ること |
+|---|---|
+| **`RT-314.1`** | **Discovery が `token` を含む response_type を広告しない**（`code` / `code id_token` は広告する） |
+| **`RT-314.2`** | **`token` / `id_token token` / `code token` / `code id_token token` を `unsupported_response_type` で断り、access_token を返さない** |
+| **`RT-314.3`** | **`code id_token` は従来どおり通る**（閉じすぎていないこと） |
+
+- **`-Filter` と併せて使う。** **Implicit / Hybrid（`token` を含むもの）のテストは落ちる**
+- **既定の通しでは除外している**（`test.ps1` が `FullyQualifiedName!~ImplicitDisabledTests` を足す。`-DPoPNonce` と同じ事情）
+- そのため **この 3 件は `TESTCASES.md`（原本）に載らない。** **`-NoImplicit` の実行で `-UpdateTestCases` を付けないこと**
+
+> **実測 2026/10/24（#314）** : **6 成功 / 失敗 0 / Skip 0**（`mem`。net10.0 版・net48 版の両方）。
+> **直す前のコードでは測っていない**（`RT-314.2` の `code token` / `code id_token token` は、
+> 直す前は access_token を返していた — コードを読んで確かめた）。
+
 ### 有効期限（`RT-188`）と `-ShortLifetimes`
 
 **既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待つのは現実的でない。**

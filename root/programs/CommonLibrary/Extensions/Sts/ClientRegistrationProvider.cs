@@ -38,6 +38,7 @@
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri は動的登録で変えさせない（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri も動的登録で変えさせない（#310 の段階 3）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
+//*  2026/10/24  玄人 幸道         受け付ける response_types を CmnEndpoints.SupportedResponseTypes に寄せた（#314）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1370,30 +1371,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>この配備が扱う response_type</summary>
         /// <returns>response_type の一覧</returns>
-        /// <remarks>**Discovery の `response_types_supported` と同じ設定を見る。**</remarks>
+        /// <remarks>**Discovery の `response_types_supported` と同じ一覧**（`CmnEndpoints.SupportedResponseTypes`。#314）。</remarks>
         private static List<string> SupportedResponseTypes()
         {
-            List<string> ret = new List<string>();
-
-            if (Config.EnableAuthorizationCodeGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType);
-            }
-
-            if (Config.EnableImplicitGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.ImplicitResponseType);
-            }
-
-            if (Config.EnableOpenIDConnect)
-            {
-                ret.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
-                ret.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
-                ret.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
-                ret.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
-            }
-
-            return ret;
+            return CmnEndpoints.SupportedResponseTypes();
         }
 
         #endregion

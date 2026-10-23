@@ -62,6 +62,7 @@
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を引く口と HttpClient を渡す口を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri を引く口を追加（#310 の段階 3）
 //*  2026/10/22  玄人 幸道         空白区切りの分解と HttpClient の口を Open棟梁 に移した（#294）
+//*  2026/10/24  玄人 幸道         openid を常に広告するようにした（EnableOpenIDConnect の廃止。#314）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -2018,11 +2019,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 OAuth2AndOIDCConst.Scope_Roles
             };
 
-            // openid は OIDC が有効なときだけ
-            if (Config.EnableOpenIDConnect)
-            {
-                scopes.Add(OAuth2AndOIDCConst.Scope_Openid);
-            }
+            // openid（**OIDC は常に有効**。#314 で EnableOpenIDConnect を廃止した）
+            scopes.Add(OAuth2AndOIDCConst.Scope_Openid);
 
             //  **クライアント登録の管理 API 専用の scope は、動的登録を開けた配備だけ**
             //    （#307 の段階 1）。**閉じている配備では、広告も発行もしない。**

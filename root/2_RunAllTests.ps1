@@ -64,6 +64,13 @@
     **-Filter と併せて使うこと**（nonce を知らない証明は全部断られる）。
       ._RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"
 
+.PARAMETER NoImplicit
+    **Implicit を閉じた配備のテスト（RT-314）専用。**
+    **`EnableImplicitGrantType` を false にしてサイトを起動する**（test.ps1 に渡す。#314）。
+
+    **-Filter と併せて使うこと**（Implicit / Hybrid（token を含むもの）のテストは落ちる）。
+      .\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"
+
 .PARAMETER ShortLifetimes
     有効期限のテスト（RT-188）専用。寿命をごく短くしてサイトを起動する（test.ps1 に渡す。#188）。
     **-Filter と併せて使うこと**（寿命が短いので、他のテストは落ちる）。
@@ -101,6 +108,7 @@
      2026/09/23  玄人 幸道         -NetFxMtls を追加（net48 版でも mTLS のテストを回す。#226）
      2026/09/24  玄人 幸道         -ShortLifetimes を追加（有効期限のテストを回す。#188）
      2026/10/22  玄人 幸道         -DPoPNonce を追加（nonce のテストを回す。#311 の段階 4）
+     2026/10/24  玄人 幸道         -NoImplicit を追加（Implicit を閉じた配備のテストを回す。#314）
 #>
 [CmdletBinding()]
 param(
@@ -116,6 +124,7 @@ param(
     [switch]$NetFxMtls,
     [switch]$ShortLifetimes,
     [switch]$DPoPNonce,
+    [switch]$NoImplicit,
     [switch]$NoWebUI,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
@@ -175,6 +184,7 @@ if ($NoNetFx)  { $splat.NoNetFx  = $true }
 if ($NetFxMtls) { $splat.NetFxMtls = $true }
 if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
 if ($DPoPNonce) { $splat.DPoPNonce = $true }
+if ($NoImplicit) { $splat.NoImplicit = $true }
 if ($NoWebUI) { $splat.NoWebUI = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
