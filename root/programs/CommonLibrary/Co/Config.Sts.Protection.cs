@@ -39,9 +39,7 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（STS（防御））</summary>
     public partial class Config
     {
-        #region STS（防御）
-
-        #region 認証の失敗回数（#305）
+        #region 認証の失敗回数
 
         /// <summary>
         /// 認証の失敗を、この回数で断る（#305 の段階 2）
@@ -102,7 +100,7 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// 数えた分を、いつまで覚えているか（秒。#305 の段階 4）
+        /// 認証の失敗を、いつまで覚えているか（秒。#305 の段階 4）
         /// </summary>
         /// <remarks>
         /// **最後の失敗からこの時間が過ぎると、数えた分は忘れる**
@@ -135,7 +133,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region レート制限（#305）
+        #region レート制限
 
         /// <summary>
         /// 口ごとのレート制限 : クライアント 1 つあたりの上限（#305 の段階 3）
@@ -230,7 +228,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region ポーリングの slow_down（#305）
+        #region ポーリングの slow_down
 
         /// <summary>
         /// ポーリングが速すぎるときに `slow_down` を返すか（#305 の段階 1）
@@ -262,8 +260,6 @@ namespace MultiPurposeAuthSite.Co
                 return bool.TryParse(value, out enabled) ? enabled : true;
             }
         }
-
-        #endregion
 
         #endregion
     }

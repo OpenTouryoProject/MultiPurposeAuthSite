@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/23  玄人 幸道         OAuth2ClientsInformation / UserClaimsMapping を Config.Sts.Endpoints.cs から移した（#294）
+//*  2026/10/24  玄人 幸道         EnableOpenIDConnect を廃止した（#314）
 //**********************************************************************************
 
 using System;
@@ -49,8 +50,6 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Config（STS（機能の有効 / 無効））</summary>
     public partial class Config
     {
-        #region STS（機能の有効 / 無効）
-
         #region Grant Type
 
         /// <summary>EnableAuthorizationCodeGrantType</summary>
@@ -127,16 +126,9 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region OpenID Connect
+        #region OIDC
 
-        /// <summary>EnableOpenIDConnect</summary>
-        public static bool EnableOpenIDConnect
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableOpenIDConnect"));
-            }
-        }
+        //  **OIDC は常に有効**（#314 で `EnableOpenIDConnect` を廃止した。**既存の設定ファイルにキーが残っていても、読まれない**）。
 
         /// <summary>
         /// profile / address のクレームの対応付け（#230）
@@ -206,7 +198,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region DPoP（#311）
+        #region DPoP
 
         /// <summary>DPoP の証明に `nonce` を要求するか（#311 の段階 4）</summary>
         /// <remarks>
@@ -247,7 +239,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region クライアントの登録（構成ファイル）
+        #region CR（構成ファイル）
 
         //  **登録は、構成ファイル → user store（`Saml2OAuth2Data`）の順に引く**（**同じ `client_id` なら構成ファイルが勝つ**）。
         //  **動的に登録したもの（下の #307）は user store に入る。**
@@ -283,7 +275,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region 動的クライアント登録（#307）
+        #region DCR（WebAPI→DB）
 
         /// <summary>動的クライアント登録（RFC 7591）を開けるか（#307 の段階 1）</summary>
         /// <remarks>
@@ -291,7 +283,7 @@ namespace MultiPurposeAuthSite.Co
         ///
         /// **`Convert.ToBoolean` ではなく `bool.TryParse` で読む** —
         /// **既存の配備にはこのキーが無く、`Convert.ToBoolean("")` は例外になる**
-        /// （`EnableOpenIDConnect` などの既存キーは、どちらの雛形にも在る）。
+        /// （`EnableCibaGrantType` などの既存キーは、どちらの雛形にも在る）。
         ///
         /// **この口は `IsLockedDownTestEndpoints` の対象ではない**
         /// （**本番で使う口**であり、テスト用の口とは別に、このキーで開閉する）。
@@ -401,8 +393,6 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("ServiceDocumentation");
             }
         }
-
-        #endregion
 
         #endregion
     }
