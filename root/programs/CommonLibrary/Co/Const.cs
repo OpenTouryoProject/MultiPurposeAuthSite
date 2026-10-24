@@ -52,6 +52,7 @@
 //*  2026/10/21  玄人 幸道         logout_token と受け口の定数を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         Front-Channel Logout の受け口の定数を追加（#310 の段階 3）
 //*  2026/10/21  玄人 幸道         cnf.jkt のクレーム型を追加（#311 の段階 2）
+//*  2026/10/24  玄人 幸道         メンバの region を Config の処理区分（土台・配備・アカウント・STS・ID 連携）に揃えた（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -62,28 +63,11 @@ namespace MultiPurposeAuthSite.Co
     /// <summary>Const</summary>
     public class Const
     {
-        #region MaxLength
+        #region 土台
 
-        /// <summary>UriのMaxLength</summary>
-        public const int MaxLengthOfUri = 512;
+        #region user store の列幅（MaxLength）
 
-        /// <summary>Uriの列挙のMaxLength（#306）</summary>
-        /// <remarks>
-        /// **空白区切りで複数の URI を持つ項目**（`redirect_uri_code` /
-        /// `redirect_uri_token` / `web_origins`）**の上限。**
-        ///
-        /// **2000 にしてあるのは、Oracle の `NVARCHAR2` の上限**である
-        /// （2000 文字 ＝ 4000 バイト）。**3 方言とも同じ幅に揃えられる。**
-        /// **`WebOrigins` のように LOB（NCLOB / text）にはしていない** —
-        /// **URI を数本並べるのに LOB は要らない。**
-        /// </remarks>
-        public const int MaxLengthOfUriList = 2000;
-
-        /// <summary>ClientNameのMaxLength</summary>
-        public const int MaxLengthOfClientName = 64;
-
-        /// <summary>RoleNameのMaxLength</summary>
-        public const int MaxLengthOfRoleName = 64;
+        #region ユーザー情報
 
         /// <summary>UserNameのMaxLength</summary>
         public const int MaxLengthOfUserName = 64;
@@ -91,51 +75,220 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>PasswordのMaxLength</summary>
         public const int MaxLengthOfPassword = 100;
 
-        /// <summary>scope の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <summary>RoleNameのMaxLength</summary>
+        public const int MaxLengthOfRoleName = 64;
+
+        /// <summary>UriのMaxLength</summary>
+        public const int MaxLengthOfUri = 512;
+
+        #endregion
+
+        #region 認証・認可
+
+        /// <summary>ClientNameのMaxLength</summary>
+        public const int MaxLengthOfClientName = 64;
+
+        /// <summary>token_endpoint_auth_method の MaxLength</summary>
         /// <remarks>
-        /// **RFC 7591 §2 の `scope`**（空白区切りの列挙）**の上限。**
-        /// **`MaxLengthOfUriList` と同じ 2000**（Oracle の `NVARCHAR2` の上限）だが、
-        /// **URI の列挙ではない**ので、別の定数にしてある。
+        /// RFC 7591 §2 の `token_endpoint_auth_method`（値は 1 つ）。
+        /// いちばん長い既知の値が `client_secret_basic`（19 文字）なので、32 で足りる。
+        /// 既知でない値は拒否する（`CmnEndpoints.AllowsAuthMethod`）ので長い値を保管する必要が無い。
         /// </remarks>
-        public const int MaxLengthOfScopeList = 2000;
+        public const int MaxLengthOfAuthMethod = 32;
 
-        /// <summary>grant_types / response_types の列挙の MaxLength（#307 の段階 1）</summary>
-        /// <remarks>
-        /// **RFC 7591 §2 の `grant_types` / `response_types`**（空白区切りの列挙）**の上限。**
-        /// **既知の値しか入らない**（`authorization_code` / `implicit` / `password` /
-        /// `client_credentials` / `refresh_token` / `urn:…:jwt-bearer` / `urn:…:device_code` /
-        /// `urn:…:ciba`、`code` / `token` / `id_token` の組み合わせ）ので、
-        /// **全部並べても 256 に収まる。**
-        /// </remarks>
-        public const int MaxLengthOfTypeList = 256;
-
-        /// <summary>contacts（連絡先）の列挙の MaxLength（#307 の段階 1）</summary>
-        /// <remarks>**RFC 7591 §2 の `contacts`**（空白区切りのメール アドレスの列挙）。</remarks>
-        public const int MaxLengthOfContacts = 2000;
-
-        /// <summary>software_id の MaxLength（#307 の段階 1）</summary>
-        /// <remarks>**RFC 7591 §2 の `software_id`**（UUID を想定しているが、縛られていない）。</remarks>
+        /// <summary>software_id の MaxLength</summary>
+        /// <remarks>RFC 7591 §2 の `software_id`（UUID を想定しているが、縛られていない）。</remarks>
         public const int MaxLengthOfSoftwareId = 256;
 
-        /// <summary>software_version の MaxLength（#307 の段階 1）</summary>
-        /// <remarks>**RFC 7591 §2 の `software_version`**（形は仕様が定めていない）。</remarks>
+        /// <summary>software_version の MaxLength</summary>
+        /// <remarks>RFC 7591 §2 の `software_version`（形は仕様が定めていない）。</remarks>
         public const int MaxLengthOfSoftwareVersion = 64;
 
-        /// <summary>registration_access_token のハッシュの MaxLength（#307 の段階 2）</summary>
+        /// <summary>registration_access_token のハッシュの MaxLength</summary>
         /// <remarks>
-        /// **保管するのはハッシュである**（**平文は、登録の応答で 1 回だけ返す**）。
-        /// **SHA-256 を base64 にすると 44 文字**だが、**別のハッシュに替えても入るように 128** とした。
+        /// 保管するのはハッシュ（平文は、登録の応答で 1 回だけ返す）。
+        /// SHA-256 を base64 にすると 44 文字、別のハッシュに替えても入るように 128 とした。
         /// </remarks>
         public const int MaxLengthOfTokenHash = 128;
 
-        /// <summary>token_endpoint_auth_method の MaxLength（#307 の段階 3）</summary>
+        #endregion
+
+        #region リスト
+
+        /// <summary>grant_types / response_types の列挙の MaxLength</summary>
         /// <remarks>
-        /// **RFC 7591 §2 の `token_endpoint_auth_method`**（**値は 1 つ**）。
-        /// **いちばん長い既知の値が `client_secret_basic`（19 文字）**なので、**32 で足りる**。
-        /// **既知でない値は拒否する**（`CmnEndpoints.AllowsAuthMethod`）ので、
-        /// **長い値を保管する必要が無い。**
+        /// `grant_types` / `response_types`（空白区切りの列挙）の上限。
+        /// 既知の値しか入らないので、全部並べても 256 に収まる。
         /// </remarks>
-        public const int MaxLengthOfAuthMethod = 32;
+        public const int MaxLengthOfTypeList = 256;
+
+        /// <summary>Uriの列挙のMaxLength</summary>
+        /// <remarks>
+        /// 空白区切りで複数の URI を持つ項目の上限。
+        /// （`redirect_uri_code` / `redirect_uri_token` / `web_origins`）
+        /// 2000 は、Oracle の `NVARCHAR2` の上限で 3 方言とも同じ幅に揃えられる。
+        /// WebOrigins の列は LOB のまま（ALTER は既存の配備に重いので、そのまま）。
+        /// </remarks>
+        public const int MaxLengthOfUriList = 2000;
+
+        /// <summary>scope の列挙の MaxLength</summary>
+        public const int MaxLengthOfScopeList = 2000;
+
+        /// <summary>contacts（連絡先）の列挙の MaxLength（#307 の段階 1）</summary>
+        /// <remarks>RFC 7591 §2 の `contacts`（空白区切りのメール アドレスの列挙）。</remarks>
+        public const int MaxLengthOfContacts = 2000;
+
+        #endregion
+
+        #endregion
+
+        #endregion
+
+        #region 配備・基盤
+
+        #region CORS のポリシー名
+
+        /// <summary>公開情報の口のポリシー名</summary>
+        /// <remarks>
+        /// PublicDocs はどのオリジンにも許す
+        /// `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata`。
+        /// </remarks>
+        public const string CorsPolicyPublicDocs = "MpasPublicDocs";
+
+        /// <summary>ブラウザから叩く口のポリシー名</summary>
+        /// <remarks>
+        /// BrowserApi は許したオリジンだけ（CmnEndpoints.GetCorsAllowedOrigins）
+        /// `/token` / `/userinfo` / `/SetDeviceToken` / `/ciba_result` / `/2fa_result`。
+        /// `/revoke` / `/introspect` には付けない（SPA からのrevokeは想定していない）。
+        /// </remarks>
+        public const string CorsPolicyBrowserApi = "MpasBrowserApi";
+
+        #endregion
+
+        #region セッションの置き場
+
+        // Startup.cs で、AddDistributedSqlServerCache に 渡している。
+        // DDL と一致すると機能するが、一致しないと黙って壊れるので注意
+
+        /// <summary>SessionCacheのスキーマ名（SqlServer）</summary>
+        /// <remarks>
+        /// `Create_SessionCache.sql` と同じ値にすること。
+        /// </remarks>
+        public const string SessionCacheSchemaName = "dbo";
+
+        /// <summary>SessionCacheのテーブル名（SqlServer）</summary>
+        /// <remarks>`Create_SessionCache.sql` と同じ値にすること。</remarks>
+        public const string SessionCacheTableName = "SessionCache";
+
+        #endregion
+
+        #region データ保護のアプリ名
+
+        /// <summary>データ保護のアプリ名</summary>
+        /// <remarks>
+        /// 鍵リングの置き場は設定キー `DataProtectionKeyPath` を使用して設定する。
+        /// （未指定なら `%LOCALAPPDATA%\ASP.NET\DataProtection-Keys`、Linux / macOS は `~/.aspnet/DataProtection-Keys`）。
+        /// 設定キー `DataProtectionKeyPath` で、置き場を共有しても、アプリ名が揃わないと復号できない。
+        /// 既定のアプリ名はパスから決まるり、設定キーにすると揃っていない配備ができる。
+        /// この場合、復号できなくなるが、症状が「ログインし直しになる」だけで気付けないので固定化した。
+        /// </remarks>
+        public const string DataProtectionApplicationName = "MultiPurposeAuthSite";
+
+        #endregion
+
+        #endregion
+
+        #region アカウント
+
+        #region 利用者の識別子
+
+        /// <summary>
+        /// 入力された識別子が、メアドの形かどうか
+        /// </summary>
+        /// <param name="identifier">サインイン画面に入力された値</param>
+        /// <returns>メアドの形なら true</returns>
+        /// <remarks>
+        /// **利用者名とメアドの両方でサインインできる。**
+        /// どちらとして引くかを、**`@` を含むかどうか**で決める。
+        ///
+        /// **新しい利用者名に `@` を禁じている**ので（<see cref="IsValidUserName"/>）、
+        /// **この判定は曖昧にならない。**
+        ///
+        /// > **既存の利用者名は書き換えていない。** 以前は「利用者名＝メアド」だったため、
+        /// > **`@` を含む利用者名が残っている。**
+        /// > その利用者は**メアドとして引かれる**が、**値が同じなので同じ利用者に当たる。**
+        /// </remarks>
+        public static bool LooksLikeEmail(string identifier)
+        {
+            return !string.IsNullOrEmpty(identifier) && identifier.Contains("@");
+        }
+
+        /// <summary>
+        /// 利用者名として使える値かどうか（#151 の段階 3）
+        /// </summary>
+        /// <param name="userName">利用者名</param>
+        /// <returns>使えるなら true</returns>
+        /// <remarks>
+        /// **`@` を含む利用者名を認めない。**
+        /// 認めると、**サインインの入力がメアドなのか利用者名なのか決まらない。**
+        ///
+        /// **新しく作る・変えるときだけ掛ける。**
+        /// **既存の利用者名（以前の「利用者名＝メアド」）は、そのまま使い続けられる。**
+        /// </remarks>
+        public static bool IsValidUserName(string userName)
+        {
+            return !string.IsNullOrWhiteSpace(userName) && !userName.Contains("@");
+        }
+
+        /// <summary>
+        /// メアドから、利用者名の既定値を作る（#151 の段階 3）
+        /// </summary>
+        /// <param name="email">メアド</param>
+        /// <returns>`@` より前の部分（`@` が無ければ、そのまま）</returns>
+        /// <remarks>
+        /// **利用者名を別に決められない場面で使う。**
+        ///
+        /// | 使う場所 | なぜ |
+        /// |---|---|
+        /// | 管理者・テスト利用者の生成 | 設定にあるのは**メアドだけ**（`AdministratorUID`） |
+        /// | 外部ログイン・ID 連携での新規作成 | 上流が返すのは `sub` と**メアド**で、利用者名は無い |
+        ///
+        /// **一意性は呼び出し側が確かめる。** ここは形を整えるだけ。
+        /// </remarks>
+        public static string UserNameFromEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return email;
+            }
+
+            int at = email.IndexOf('@');
+
+            return (at > 0) ? email.Substring(0, at) : email;
+        }
+
+        /// <summary>
+        /// 利用者名を運ぶ標準のクレーム
+        /// </summary>
+        /// <remarks>
+        /// - **`sub` の代わりに利用者名を運ぶのは、これ**（OIDC Core §5.1）。
+        /// -　**出す側は `UserClaimsMapping`** で `user:UserName` に対応付ける。
+        /// - **受ける側（ID 連携の下流）は、新規作成の利用者名にこれを使う。**
+        /// </remarks>
+        public const string PreferredUserNameClaim = "preferred_username";
+
+        #endregion
+
+        #region WebAuthn（#137）
+
+        /// <summary>WebAuthn の RP の表示名（#137）</summary>
+        /// <remarks>
+        /// **認証器の画面に出る名前**である（`RPName`）。
+        /// **RPID とは別物**で、**RPID は配備先のホスト名から取る**
+        /// （`WebAuthnHelper` の constructor）。
+        /// **設定キーにしていない**のは、**表示名を変えても振る舞いが変わらない**ため。
+        /// </remarks>
+        public const string WebAuthnRpName = "MultiPurposeAuthSite";
 
         #endregion
 
@@ -160,9 +313,11 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region Scope
+        #endregion
 
-        #region ScopeSet
+        #region STS
+
+        #region Scope
 
         /// <summary>標準的なscope</summary>
         public static readonly string StandardScopes =
@@ -176,31 +331,6 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>OIDCのscope</summary>
         public static readonly string OidcScopes =
             OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
-        
-        /// <summary>ID連携 scope</summary>
-        /// <remarks>
-        /// **標準のスコープだけを要求する**（#140 の段階 3）。
-        ///
-        /// **以前は `StandardScopes`（独自の `userid` / `roles` を含む）を要求していた。**
-        /// **独自のスコープは、厳格な OP では `invalid_scope` になりうる**
-        /// （この IdP 自身も #198 で、宣言外のスコープを発行しないようにした）。
-        /// **汎用の OP と連携するには、標準だけを要求するのが筋。**
-        ///
-        /// **`userid` はもう連携キーではない**（#140 の段階 3 で `(iss, sub)` に移した）。
-        /// 旧い鍵（`"MultiPurposeAuthSite"` × `userid`）を持つ利用者は、
-        /// **`userid` が返らなくなっても、検証済みメアドの突き合わせで拾われて新しい鍵へ移行する**
-        /// （C-23 の判定を通る。上流が `email_verified` を返すため）。
-        ///
-        /// > **突き合わせは常にメアドである**（#151 の段階 3）。
-        /// > 以前は `RequireUniqueEmail` が false の配備で利用者名が鍵になり、
-        /// > **旧い鍵の利用者が拾われない**という穴があった。その設定は落とした。
-        /// </remarks>
-        public static readonly string IdFederationScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " "
-            + OAuth2AndOIDCConst.Scope_Profile + " "
-            + OAuth2AndOIDCConst.Scope_Email + " "
-            + OAuth2AndOIDCConst.Scope_Phone + " "
-            + OAuth2AndOIDCConst.Scope_Address;
 
         #endregion
 
@@ -221,131 +351,6 @@ namespace MultiPurposeAuthSite.Co
         /// > **登録を作れる強い権限なので、既定で持たせてはならない。**
         /// </remarks>
         public const string ScopeClientRegistration = "client_registration";
-
-        #endregion
-
-        #endregion
-
-        #region RedirectUri
-
-		// サイトごとに URL が違う**（net48, net10.0）ので、定数で登録し、サーバ側で解決
-
-        /// <summary>SAML2のテスト用のRedirectUri（ACS URL。#277 の段階 3 で定数にした）</summary>
-        public const string TestSelfSaml = "test_self_saml";
-		
-        /// <summary>codeのテスト用のRedirectUri</summary>
-        public const string TestSelfCode = "test_self_code";
-
-        /// <summary>tokenのテスト用のRedirectUri</summary>
-        public const string TestSelfToken = "test_self_token";
-
-        /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
-        public const string TestSelfLogout = "test_self_logout";
-
-        /// <summary>Front-Channel Logout の受け口のテスト用の値（#310 の段階 3）</summary>
-        /// <remarks>
-        /// **ブラウザが `iframe` で開く口**である（**`logout_token` は来ない**。`iss` と `sid` だけ）。
-        /// **E2E は `iframe` を開けない**ので、**テストが自分で叩く**（`TestFrontChannelLogoutBox`）。
-        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
-        /// </remarks>
-        public const string TestSelfFrontChannelLogout = "test_self_fclogout";
-
-        /// <summary>Back-Channel Logout の受け口のテスト用の値（#310 の段階 2）</summary>
-        /// <remarks>
-        /// **このサイトは、自分の RP も兼ねている**（`test_self_code` と同じ考え方）。
-        /// **受け取った `logout_token` は覚えておく**（`TestLogoutTokenBox`）。
-        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
-        /// </remarks>
-        public const string TestSelfBackChannelLogout = "test_self_bclogout";
-
-        #endregion
-
-        #region セッションの置き場（#256）
-
-        /// <summary>セッション キャッシュのスキーマ名（#256。SqlServer のとき）</summary>
-        /// <remarks>
-        /// **`Create_SessionCache.sql` と同じ値にすること。**
-        /// **設定キーにしていない**のは、**DDL と食い違うと黙って動かなくなる**ためである。
-        /// </remarks>
-        public const string SessionCacheSchemaName = "dbo";
-
-        /// <summary>セッション キャッシュのテーブル名（#256。SqlServer のとき）</summary>
-        /// <remarks>**`Create_SessionCache.sql` と同じ値にすること。**</remarks>
-        public const string SessionCacheTableName = "SessionCache";
-
-        #endregion
-
-        #region WebAuthn（#137）
-
-        /// <summary>WebAuthn の RP の表示名（#137）</summary>
-        /// <remarks>
-        /// **認証器の画面に出る名前**である（`RPName`）。
-        /// **RPID とは別物**で、**RPID は配備先のホスト名から取る**
-        /// （`WebAuthnHelper` の constructor）。
-        /// **設定キーにしていない**のは、**表示名を変えても振る舞いが変わらない**ため。
-        /// </remarks>
-        public const string WebAuthnRpName = "MultiPurposeAuthSite";
-
-        #endregion
-
-        #region データ保護のアプリケーション名（#279）
-
-        /// <summary>データ保護のアプリケーション名（#279）</summary>
-        /// <remarks>
-        /// **`DataProtectionKeyPath` で鍵を共有しても、これが揃わないと復号できない。**
-        /// **既定ではコンテンツ ルートのパスから決まる**ため、
-        /// **配置先のパスが違うと、同じ鍵を見ていても復号できない**
-        /// （Windows の `C:\…` とコンテナの `/app` など）。
-        ///
-        /// **固定値にしてある。** 設定キーにすると、
-        /// **揃っていない配備ができてしまい、症状が「ログインし直しになる」だけなので気付けない。**
-        /// </remarks>
-        public const string DataProtectionApplicationName = "MultiPurposeAuthSite";
-
-        #endregion
-
-        #region CORS のポリシー名（#265）
-
-        /// <summary>公開情報の口のポリシー名（#265）</summary>
-        /// <remarks>
-        /// `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata`。
-        /// **誰でも読んでよい**（RP の検出に使う）。
-        /// </remarks>
-        public const string CorsPolicyPublicDocs = "MpasPublicDocs";
-
-        /// <summary>ブラウザから叩く口のポリシー名（#265）</summary>
-        /// <remarks>
-        /// `/token` / `/userinfo` / `/SetDeviceToken` / `/ciba_result` / `/2fa_result`。
-        /// **許すオリジンだけ**（`CmnEndpoints.GetCorsAllowedOrigins`）。
-        /// **`/revoke` `/introspect` には付けない**（ブラウザから叩く口ではない）。
-        /// </remarks>
-        public const string CorsPolicyBrowserApi = "MpasBrowserApi";
-
-        #endregion
-
-        #region テスト用
-
-        /// <summary>テスト用ClientIdを保存するSession, CookieのKey</summary>
-        public const string TestClientId = "test_client_id";
-
-        /// <summary>テスト用Stateを保存するSession, CookieのKey</summary>
-        public const string TestState = "test_state";
-
-        /// <summary>テスト用RedirectUriを保存するSession, CookieのKey</summary>
-        public const string TestRedirectUri = "test_redirect_uri";
-
-        /// <summary>テスト用Nonceを保存するSession, CookieのKey</summary>
-        public const string TestNonce = "test_nonce";
-
-        /// <summary>テスト用CodeVerifierを保存するSession, CookieのKey</summary>
-        public const string TestCodeVerifier = "test_code_verifier";
-
-        /// <summary>テスト用の SAML2 AuthnRequest の ID を保存する Session, Cookie の Key（#276）</summary>
-        /// <remarks>
-        /// **応答の `InResponseTo` と照合するために保存する**（Web SSO Profile 4.1.4.3）。
-        /// **以前は `out id` を捨てていた**ので、照合できなかった。
-        /// </remarks>
-        public const string TestSamlRequestId = "test_saml_request_id";
 
         #endregion
 
@@ -426,82 +431,102 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region 利用者の識別子（#151 の段階 3）
+        #region 自己テスト
 
-        /// <summary>
-        /// 入力された識別子が、メアドの形かどうか（#151 の段階 3）
-        /// </summary>
-        /// <param name="identifier">サインイン画面に入力された値</param>
-        /// <returns>メアドの形なら true</returns>
+        #region RedirectUri
+
+        // サイトごとに URL が違う**（net48, net10.0）ので、定数で登録し、サーバ側で解決
+
+        /// <summary>SAML2のテスト用のRedirectUri（ACS URL。#277 の段階 3 で定数にした）</summary>
+        public const string TestSelfSaml = "test_self_saml";
+        
+        /// <summary>codeのテスト用のRedirectUri</summary>
+        public const string TestSelfCode = "test_self_code";
+
+        /// <summary>tokenのテスト用のRedirectUri</summary>
+        public const string TestSelfToken = "test_self_token";
+
+        /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
+        public const string TestSelfLogout = "test_self_logout";
+
+        /// <summary>Front-Channel Logout の受け口のテスト用の値（#310 の段階 3）</summary>
         /// <remarks>
-        /// **利用者名とメアドの両方でサインインできる。**
-        /// どちらとして引くかを、**`@` を含むかどうか**で決める。
-        ///
-        /// **新しい利用者名に `@` を禁じている**ので（<see cref="IsValidUserName"/>）、
-        /// **この判定は曖昧にならない。**
-        ///
-        /// > **既存の利用者名は書き換えていない。** 以前は「利用者名＝メアド」だったため、
-        /// > **`@` を含む利用者名が残っている。**
-        /// > その利用者は**メアドとして引かれる**が、**値が同じなので同じ利用者に当たる。**
+        /// **ブラウザが `iframe` で開く口**である（**`logout_token` は来ない**。`iss` と `sid` だけ）。
+        /// **E2E は `iframe` を開けない**ので、**テストが自分で叩く**（`TestFrontChannelLogoutBox`）。
+        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
         /// </remarks>
-        public static bool LooksLikeEmail(string identifier)
-        {
-            return !string.IsNullOrEmpty(identifier) && identifier.Contains("@");
-        }
+        public const string TestSelfFrontChannelLogout = "test_self_fclogout";
 
-        /// <summary>
-        /// 利用者名として使える値かどうか（#151 の段階 3）
-        /// </summary>
-        /// <param name="userName">利用者名</param>
-        /// <returns>使えるなら true</returns>
+        /// <summary>Back-Channel Logout の受け口のテスト用の値（#310 の段階 2）</summary>
         /// <remarks>
-        /// **`@` を含む利用者名を認めない。**
-        /// 認めると、**サインインの入力がメアドなのか利用者名なのか決まらない。**
-        ///
-        /// **新しく作る・変えるときだけ掛ける。**
-        /// **既存の利用者名（以前の「利用者名＝メアド」）は、そのまま使い続けられる。**
+        /// **このサイトは、自分の RP も兼ねている**（`test_self_code` と同じ考え方）。
+        /// **受け取った `logout_token` は覚えておく**（`TestLogoutTokenBox`）。
+        /// **口は `IsLockedDownTestEndpoints` で閉じる。**
         /// </remarks>
-        public static bool IsValidUserName(string userName)
-        {
-            return !string.IsNullOrWhiteSpace(userName) && !userName.Contains("@");
-        }
+        public const string TestSelfBackChannelLogout = "test_self_bclogout";
 
-        /// <summary>
-        /// メアドから、利用者名の既定値を作る（#151 の段階 3）
-        /// </summary>
-        /// <param name="email">メアド</param>
-        /// <returns>`@` より前の部分（`@` が無ければ、そのまま）</returns>
+        #endregion
+
+        #region Session, Cookie のキー
+
+        /// <summary>テスト用ClientIdを保存するSession, CookieのKey</summary>
+        public const string TestClientId = "test_client_id";
+
+        /// <summary>テスト用Stateを保存するSession, CookieのKey</summary>
+        public const string TestState = "test_state";
+
+        /// <summary>テスト用RedirectUriを保存するSession, CookieのKey</summary>
+        public const string TestRedirectUri = "test_redirect_uri";
+
+        /// <summary>テスト用Nonceを保存するSession, CookieのKey</summary>
+        public const string TestNonce = "test_nonce";
+
+        /// <summary>テスト用CodeVerifierを保存するSession, CookieのKey</summary>
+        public const string TestCodeVerifier = "test_code_verifier";
+
+        /// <summary>テスト用の SAML2 AuthnRequest の ID を保存する Session, Cookie の Key（#276）</summary>
         /// <remarks>
-        /// **利用者名を別に決められない場面で使う。**
-        ///
-        /// | 使う場所 | なぜ |
-        /// |---|---|
-        /// | 管理者・テスト利用者の生成 | 設定にあるのは**メアドだけ**（`AdministratorUID`） |
-        /// | 外部ログイン・ID 連携での新規作成 | 上流が返すのは `sub` と**メアド**で、利用者名は無い |
-        ///
-        /// **一意性は呼び出し側が確かめる。** ここは形を整えるだけ。
+        /// **応答の `InResponseTo` と照合するために保存する**（Web SSO Profile 4.1.4.3）。
+        /// **以前は `out id` を捨てていた**ので、照合できなかった。
         /// </remarks>
-        public static string UserNameFromEmail(string email)
-        {
-            if (string.IsNullOrEmpty(email))
-            {
-                return email;
-            }
+        public const string TestSamlRequestId = "test_saml_request_id";
 
-            int at = email.IndexOf('@');
+        #endregion
 
-            return (at > 0) ? email.Substring(0, at) : email;
-        }
+        #endregion
 
-        /// <summary>
-        /// 利用者名を運ぶ標準のクレーム（#151 の段階 4）
-        /// </summary>
+        #endregion
+
+        #region ID 連携
+
+        #region Scope
+
+        /// <summary>ID連携 scope</summary>
         /// <remarks>
-        /// **`sub` の代わりに利用者名を運ぶのは、これ**（OIDC Core §5.1）。
-        /// **出す側は `UserClaimsMapping`** で `user:UserName` に対応付ける（#151 の段階 1）。
-        /// **受ける側（ID 連携の下流）は、新規作成の利用者名にこれを使う。**
+        /// **標準のスコープだけを要求する**（#140 の段階 3）。
+        ///
+        /// **以前は `StandardScopes`（独自の `userid` / `roles` を含む）を要求していた。**
+        /// **独自のスコープは、厳格な OP では `invalid_scope` になりうる**
+        /// （この IdP 自身も #198 で、宣言外のスコープを発行しないようにした）。
+        /// **汎用の OP と連携するには、標準だけを要求するのが筋。**
+        ///
+        /// **`userid` はもう連携キーではない**（#140 の段階 3 で `(iss, sub)` に移した）。
+        /// 旧い鍵（`"MultiPurposeAuthSite"` × `userid`）を持つ利用者は、
+        /// **`userid` が返らなくなっても、検証済みメアドの突き合わせで拾われて新しい鍵へ移行する**
+        /// （C-23 の判定を通る。上流が `email_verified` を返すため）。
+        ///
+        /// > **突き合わせは常にメアドである**（#151 の段階 3）。
+        /// > 以前は `RequireUniqueEmail` が false の配備で利用者名が鍵になり、
+        /// > **旧い鍵の利用者が拾われない**という穴があった。その設定は落とした。
         /// </remarks>
-        public const string PreferredUserNameClaim = "preferred_username";
+        public static readonly string IdFederationScopes =
+            OAuth2AndOIDCConst.Scope_Openid + " "
+            + OAuth2AndOIDCConst.Scope_Profile + " "
+            + OAuth2AndOIDCConst.Scope_Email + " "
+            + OAuth2AndOIDCConst.Scope_Phone + " "
+            + OAuth2AndOIDCConst.Scope_Address;
+
+        #endregion
 
         #endregion
     }
