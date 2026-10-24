@@ -147,7 +147,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region 配備・基盤
+        #region 配備
 
         #region CORS のポリシー名
 
@@ -201,7 +201,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region アカウント
+        #region IdP
 
         #region 利用者の識別子
 
@@ -246,7 +246,7 @@ namespace MultiPurposeAuthSite.Co
         public const string Role_Admin = "Admin";
 
         /// <summary>Userのrole</summary>
-        public const string Role_User = "User";    
+        public const string Role_User = "User";
 
         #endregion
 
@@ -256,37 +256,6 @@ namespace MultiPurposeAuthSite.Co
 
         #region Scope
 
-        /// <summary>自己テストのscope</summary>
-        /// <remarks>
-        /// **自己テストで要求する、利用者の属性の scope**（`openid` は含まない）。
-        ///
-        /// | scope | 種別 | 載るもの |
-        /// |---|---|---|
-        /// | `profile` / `email` / `phone` / `address` | OIDC Core §5.4 の標準 | 利用者の属性のクレーム |
-        /// | `roles` | **この IdP の独自** | ロールの一覧 |
-        ///
-        /// **`roles` は、自前の資源サーバ（Web API）で使う可能性を考えて残している**
-        /// （access_token の `scopes` には scope 名が載るが、ロールそのものは載らないので、/userinfo から取る）。
-        ///
-        /// **独自の `userid` は PPID の意味を打ち消す**ため scope ごと廃止した**（#294）。
-        ///
-        /// **独自の `roles` を含む。** **他の OP へ送ってはならない**
-        /// （厳格な OP では `invalid_scope` になりうる。ID 連携は標準だけの `IdFederationScopes` を使う）。
-        ///
-        /// **使うのは自己テストだけ**（`HomeController` の OAuth2 の開始・ROPC・Client Credentials・JWT Bearer、
-        /// `AccountController` の FAPI1 の `client_assertion`）。**自分自身に対して要求する**ので、独自の scope も通る。
-        /// OIDC として要求するときは、`openid` を足した <see cref="OidcScopes"/> を使う。
-        ///
-        /// **発行するかは、要求とは別に絞られる** —
-        /// Discovery で広告した scope（`Helper.GetScopesSupported`）と、クライアントごとの登録の範囲だけが出る。
-        /// </remarks>
-        public static readonly string SelfTestScopes =
-            OAuth2AndOIDCConst.Scope_Profile + " "
-            + OAuth2AndOIDCConst.Scope_Email + " "
-            + OAuth2AndOIDCConst.Scope_Phone + " "
-            + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_Roles;
-
         /// <summary>OIDCのscope</summary>
         /// <remarks>
         /// `openid` と <see cref="SelfTestScopes"/> を合わせたもの。
@@ -294,18 +263,12 @@ namespace MultiPurposeAuthSite.Co
         public static readonly string OidcScopes =
             OAuth2AndOIDCConst.Scope_Openid + " " + SelfTestScopes;
 
-        #endregion
-
-        #region Dynamic Client Registration
-
-        /// <summary>クライアント登録の管理 API 専用の scope</summary>
+        /// <summary>DCRの管理 API 専用の scope</summary>
         /// <remarks>
         /// **この scope を持つアクセス トークンだけが、`registration_endpoint` を叩ける。**
         ///
-        /// **仕様が定めた名前ではない**（RFC 7591 §3.1 の initial access token は、
-        /// **どう取るかを定めていない**）。**この配備が決めた値**である。
-        ///
-        /// **広告するのは、動的登録を開けた配備だけ**（`Helper.GetScopesSupported`）。
+        /// **仕様が定めた名前ではない**。**この配備が決めた値**である。
+        /// **広告するのは、DCRを開けた配備だけ**（`Helper.GetScopesSupported`）。
         ///
         /// > **この scope は、登録に明記したクライアントにしか出さない**
         /// > （`Helper.FilterSupportedScopes`）。
@@ -313,6 +276,18 @@ namespace MultiPurposeAuthSite.Co
         /// > **登録を作れる強い権限なので、既定で持たせてはならない。**
         /// </remarks>
         public const string ScopeClientRegistration = "client_registration";
+
+        /// <summary>ID連携 scope</summary>
+        /// <remarks>
+        /// 標準のスコープだけを要求する。
+        /// 上流が `email_verified` を返す。突き合わせは常にメアド。
+        /// </remarks>
+        public static readonly string IdFederationScopes =
+            OAuth2AndOIDCConst.Scope_Openid + " "
+            + OAuth2AndOIDCConst.Scope_Profile + " "
+            + OAuth2AndOIDCConst.Scope_Email + " "
+            + OAuth2AndOIDCConst.Scope_Phone + " "
+            + OAuth2AndOIDCConst.Scope_Address;
 
         #endregion
 
@@ -329,7 +304,19 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region セッション（sid）
+        #region DPoP/mTLS
+
+        /// <summary>cnf.jkt を運ぶ ClaimsIdentity のクレーム型</summary>
+        /// <remarks>
+        /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
+        /// （**mTLS の `UrnCnfX5tClaim` と同じ流儀**）。
+        /// **トークンの `cnf.jkt` を、検証後の `ClaimsIdentity` に移すために使う。**
+        /// </remarks>
+        public const string UrnCnfJktClaim = "urn:oauth:cnf:jkt";
+
+        #endregion
+
+        #region sid（Single Logout）
 
         /// <summary>OP のセッションの識別子を保存するCookieのKey</summary>
         /// <remarks>
@@ -368,14 +355,6 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string UrnSidClaim = "urn:oauth:sid";
 
-        /// <summary>cnf.jkt を運ぶ ClaimsIdentity のクレーム型</summary>
-        /// <remarks>
-        /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
-        /// （**mTLS の `UrnCnfX5tClaim` と同じ流儀**）。
-        /// **トークンの `cnf.jkt` を、検証後の `ClaimsIdentity` に移すために使う。**
-        /// </remarks>
-        public const string UrnCnfJktClaim = "urn:oauth:cnf:jkt";
-
         /// <summary>logout_token を運ぶ要求の項目名</summary>
         /// <remarks>**POST の本文に 1 項目だけ**（Back-Channel Logout 1.0 §2.5）。</remarks>
         public const string LogoutToken = "logout_token";
@@ -403,6 +382,42 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>tokenのテスト用のRedirectUri</summary>
         public const string TestSelfToken = "test_self_token";
+
+        #endregion
+
+        #region Scopes
+
+        /// <summary>自己テストのscope</summary>
+        /// <remarks>
+        /// **自己テストで要求する、利用者の属性の scope**（`openid` は含まない）。
+        ///
+        /// | scope | 種別 | 載るもの |
+        /// |---|---|---|
+        /// | `profile` / `email` / `phone` / `address` | OIDC Core §5.4 の標準 | 利用者の属性のクレーム |
+        /// | `roles` | **この IdP の独自** | ロールの一覧 |
+        ///
+        /// **独自の `userid` は PPID の意味を打ち消す**ため scope ごと廃止**。
+        ///
+        /// **独自の `roles` を含む。** **他の OP へ送ってはならない**
+        /// - 厳格な OP では `invalid_scope` になりうる。
+        /// - ID 連携は標準だけの `IdFederationScopes` を使う。
+        /// 
+        /// **`roles` は、自前のResource Server（Web API）で使う可能性を考えて残している**
+        /// - access_token の `scopes` には scope 名が載る。
+        /// - ロールそのものは載らないので、/userinfo から取る。
+        ///
+        /// **使うのは自己テストだけ**。**自分自身に対して要求する**ので、独自の scope も通る。
+        /// OIDC として要求するときは、`openid` を足した <see cref="OidcScopes"/> を使う。
+        ///
+        /// **発行するかは、要求とは別に絞られる** —
+        /// Discovery で広告した scope（`Helper.GetScopesSupported`）と、クライアントごとの登録の範囲だけが出る。
+        /// </remarks>
+        public static readonly string SelfTestScopes =
+            OAuth2AndOIDCConst.Scope_Profile + " "
+            + OAuth2AndOIDCConst.Scope_Email + " "
+            + OAuth2AndOIDCConst.Scope_Phone + " "
+            + OAuth2AndOIDCConst.Scope_Address + " "
+            + OAuth2AndOIDCConst.Scope_Roles;
 
         #endregion
 
@@ -454,39 +469,6 @@ namespace MultiPurposeAuthSite.Co
         public const string TestSamlRequestId = "test_saml_request_id";
 
         #endregion
-
-        #endregion
-
-        #endregion
-
-        #region ID 連携
-
-        #region Scope
-
-        /// <summary>ID連携 scope</summary>
-        /// <remarks>
-        /// **標準のスコープだけを要求する**（#140 の段階 3）。
-        ///
-        /// **以前は `StandardScopes`（現 `SelfTestScopes`。独自の `userid` / `roles` を含んでいた）を要求していた。**
-        /// **独自のスコープは、厳格な OP では `invalid_scope` になりうる**
-        /// （この IdP 自身も #198 で、宣言外のスコープを発行しないようにした）。
-        /// **汎用の OP と連携するには、標準だけを要求するのが筋。**
-        ///
-        /// **`userid` はもう連携キーではない**（#140 の段階 3 で `(iss, sub)` に移した）。
-        /// 旧い鍵（`"MultiPurposeAuthSite"` × `userid`）を持つ利用者は、
-        /// **`userid` が返らなくなっても、検証済みメアドの突き合わせで拾われて新しい鍵へ移行する**
-        /// （C-23 の判定を通る。上流が `email_verified` を返すため）。
-        ///
-        /// > **突き合わせは常にメアドである**（#151 の段階 3）。
-        /// > 以前は `RequireUniqueEmail` が false の配備で利用者名が鍵になり、
-        /// > **旧い鍵の利用者が拾われない**という穴があった。その設定は落とした。
-        /// </remarks>
-        public static readonly string IdFederationScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " "
-            + OAuth2AndOIDCConst.Scope_Profile + " "
-            + OAuth2AndOIDCConst.Scope_Email + " "
-            + OAuth2AndOIDCConst.Scope_Phone + " "
-            + OAuth2AndOIDCConst.Scope_Address;
 
         #endregion
 
