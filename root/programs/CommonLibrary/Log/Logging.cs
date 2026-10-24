@@ -30,16 +30,20 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/14  西野 大介         新規
 //*  2026/09/25  玄人 幸道         設定キーの改名（EnableDebugTraceLog）に追随（#236）
+//*  2026/10/25  玄人 幸道         エラー応答を記録する MyOperationTraceForErrorResponse を追加（障害対応のため。#294）
+//*  2026/10/25  玄人 幸道         追加した OPERATION ログの文言を resx に、長さの上限を Const にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Log
@@ -148,6 +152,33 @@ namespace MultiPurposeAuthSite.Log
                 // 本番時
                 LogIF.DebugLog("OPERATION", log);
             }
+        }
+
+        /// <summary>エンドポイントが返したエラー応答を、OPERATION に記録する</summary>
+        /// <param name="path">要求のパス</param>
+        /// <param name="status">HTTP ステータス</param>
+        /// <param name="err">error / error_description（無ければ null）</param>
+        /// <param name="clientId">client_id（分からなければ空）</param>
+        /// <remarks>
+        /// **障害対応のため**（#294）。**以前はエラー応答を返すだけで記録していなかった**ので、
+        /// 「どのクライアントが、どの口で、なぜ断られたか」を**ログから追えなかった。**
+        /// **値は要求から来る**ので、`LogSanitizer` を通す（改行の注入・長すぎる値を防ぐ）。
+        /// </remarks>
+        public static void MyOperationTraceForErrorResponse(
+            string path, int status, IDictionary<string, string> err, string clientId)
+        {
+            string error = null;
+            string description = null;
+
+            if (err != null)
+            {
+                err.TryGetValue(OAuth2AndOIDCConst.error, out error);
+                err.TryGetValue(OAuth2AndOIDCConst.error_description, out description);
+            }
+
+            Logging.MyOperationTrace(string.Format(Resources.Diagnostics.LogErrorResponse,
+                LogSanitizer.Sanitize(path), status, LogSanitizer.Sanitize(clientId),
+                LogSanitizer.Sanitize(error), LogSanitizer.Sanitize(description, Const.LogDetailMaxLength)));
         }
         #endregion
         

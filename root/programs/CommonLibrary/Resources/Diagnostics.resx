@@ -234,4 +234,31 @@
   <data name="ErrorScreenSuppressed" xml:space="preserve">
     <value>An error on the development error screen (suppressed to avoid an infinite loop).</value>
   </data>
+  <data name="LogErrorResponse" xml:space="preserve">
+    <value>The endpoint returned an error response. (path: {0}, status: {1}, client_id: {2}, error: {3}, description: {4})</value>
+  </data>
+  <data name="LogAuthorizeError" xml:space="preserve">
+    <value>The authorization endpoint returned an error. (client_id: {0}, error: {1}, description: {2}, response: {3})</value>
+  </data>
+  <data name="LogAuthorizeErrorToErrorPage" xml:space="preserve">
+    <value>error page</value>
+  </data>
+  <data name="LogAuthorizeErrorToRedirectUri" xml:space="preserve">
+    <value>redirect_uri</value>
+  </data>
+  <data name="LogSaml2RequestNotVerified" xml:space="preserve">
+    <value>The SAML2 request was not verified. (issuer: {0})</value>
+  </data>
+  <data name="LogSaml2RequestFailed" xml:space="preserve">
+    <value>The SAML2 request could not be processed. (issuer: {0}, {1})</value>
+  </data>
+  <data name="LogSaml2ErrorResponseFailed" xml:space="preserve">
+    <value>The SAML2 error response could not be created. ({0})</value>
+  </data>
+  <data name="LogWebAuthnSignInFailed" xml:space="preserve">
+    <value>The WebAuthn sign-in failed. ({0})</value>
+  </data>
+  <data name="LogWebAuthnRegistrationFailed" xml:space="preserve">
+    <value>The WebAuthn registration failed. ({0})</value>
+  </data>
 </root>

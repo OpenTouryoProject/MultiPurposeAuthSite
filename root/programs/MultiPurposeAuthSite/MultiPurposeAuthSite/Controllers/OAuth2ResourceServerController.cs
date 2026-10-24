@@ -40,6 +40,7 @@
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         Authorization ヘッダの読み取りを Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         登録の失敗の応答を OPERATION に記録する（障害対応のため。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -395,6 +396,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private IHttpActionResult RegistrationError(int status, Dictionary<string, string> err)
         {
+            //  **障害対応のため、記録する**（#294）。**クライアントはトークンで識別する口なので、client_id は出さない。**
+            Log.Logging.MyOperationTraceForErrorResponse(HttpContext.Current.Request.Path, status, err, "");
+
             HttpResponseMessage res = (err == null)
                 ? this.Request.CreateResponse((HttpStatusCode)status)
                 : this.Request.CreateResponse((HttpStatusCode)status, err);

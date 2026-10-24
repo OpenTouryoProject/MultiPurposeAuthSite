@@ -84,6 +84,7 @@
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
+//*  2026/10/25  玄人 幸道         エラー応答（OAuth2Error / NGResult / /userinfo）を OPERATION に記録する（障害対応のため。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -582,6 +583,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private IActionResult UserInfoError(Dictionary<string, string> err)
         {
+            this.TraceErrorResponse(
+                (err.Count == 0) ? 401 : Token.CmnEndpoints.GetResourceErrorStatusCode(err), err);
+
             //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
             string scheme = AuthenticationHeader.GetChallengeScheme(MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
 
@@ -1602,6 +1606,39 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 共通のエラー応答
 
+        /// <summary>エラー応答を記録する（障害対応のため。#294）</summary>
+        /// <param name="status">HTTP ステータス</param>
+        /// <param name="err">error / error_description（無ければ null）</param>
+        private void TraceErrorResponse(int status, Dictionary<string, string> err)
+        {
+            Logging.MyOperationTraceForErrorResponse(
+                this.Request.Path.Value, status, err, this.ClientIdForLog());
+        }
+
+        /// <summary>ログに出す client_id（Basic 認証 → フォームの順。分からなければ空）</summary>
+        /// <returns>client_id</returns>
+        private string ClientIdForLog()
+        {
+            try
+            {
+                string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+                    this.Request.Headers[Const.HeaderAuthorization]);
+
+                //  **フォームは、口の処理で読み終えている**（ここで本文を読み直さない）。
+                if (string.IsNullOrEmpty(clientId) && this.Request.HasFormContentType)
+                {
+                    clientId = this.Request.Form[OAuth2AndOIDCConst.client_id];
+                }
+
+                return clientId ?? "";
+            }
+            catch
+            {
+                //  **記録のために、応答を落とさない。**
+                return "";
+            }
+        }
+
         /// <summary>
         /// クライアント認証を行うエンドポイント（/token・/revoke・/introspect・/device_authz・/ciba_authz）のエラー応答を作る（RFC 6749 5.2）
         /// </summary>
@@ -1619,6 +1656,8 @@ namespace MultiPurposeAuthSite.Controllers
         private IActionResult OAuth2Error(Dictionary<string, string> err, string realm)
         {
             int status = Token.CmnEndpoints.GetErrorStatusCode(err);
+
+            this.TraceErrorResponse(status, err);
 
             if (status == 401 && realm != null)
             {
@@ -1654,6 +1693,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private IActionResult NGResult(int status, string realm, string error)
         {
+            this.TraceErrorResponse(status,
+                (error == null) ? null : new Dictionary<string, string>() { { OAuth2AndOIDCConst.error, error } });
+
             if (status == 401)
             {
                 Dictionary<string, string> err = new Dictionary<string, string>();

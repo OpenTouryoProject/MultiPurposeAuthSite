@@ -410,5 +410,86 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("ErrorScreenSuppressed", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   The endpoint returned an error response. (path: {0}, status: {1}, client_id: {2}, error: {3}, description: {4}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogErrorResponse {
+            get {
+                return ResourceManager.GetString("LogErrorResponse", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The authorization endpoint returned an error. (client_id: {0}, error: {1}, description: {2}, response: {3}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogAuthorizeError {
+            get {
+                return ResourceManager.GetString("LogAuthorizeError", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   error page に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogAuthorizeErrorToErrorPage {
+            get {
+                return ResourceManager.GetString("LogAuthorizeErrorToErrorPage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   redirect_uri に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogAuthorizeErrorToRedirectUri {
+            get {
+                return ResourceManager.GetString("LogAuthorizeErrorToRedirectUri", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The SAML2 request was not verified. (issuer: {0}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogSaml2RequestNotVerified {
+            get {
+                return ResourceManager.GetString("LogSaml2RequestNotVerified", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The SAML2 request could not be processed. (issuer: {0}, {1}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogSaml2RequestFailed {
+            get {
+                return ResourceManager.GetString("LogSaml2RequestFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The SAML2 error response could not be created. ({0}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogSaml2ErrorResponseFailed {
+            get {
+                return ResourceManager.GetString("LogSaml2ErrorResponseFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The WebAuthn sign-in failed. ({0}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogWebAuthnSignInFailed {
+            get {
+                return ResourceManager.GetString("LogWebAuthnSignInFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The WebAuthn registration failed. ({0}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogWebAuthnRegistrationFailed {
+            get {
+                return ResourceManager.GetString("LogWebAuthnRegistrationFailed", resourceCulture);
+            }
+        }
     }
 }

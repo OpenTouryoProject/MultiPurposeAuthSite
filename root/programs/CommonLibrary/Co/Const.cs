@@ -60,6 +60,7 @@
 //*  2026/10/24  玄人 幸道         クライアント登録の項目名・エンドポイントの名前・ポーリングの台帳の項目名・token_type を追加（#294）
 //*  2026/10/25  玄人 幸道         HTTP ヘッダ・Session のキー・要求の項目名・JARM・error・自己テストの判定などを追加（#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
+//*  2026/10/25  玄人 幸道         ログに出す説明の長さの上限（LogDetailMaxLength）を追加（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -146,6 +147,17 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #endregion
+
+        #endregion
+
+        #region ログ
+
+        /// <summary>ログに出す説明・例外のメッセージの長さの上限</summary>
+        /// <remarks>
+        /// **`LogSanitizer.Sanitize` の既定（64）では、`error_description` や例外のメッセージが切れて読めない。**
+        /// **要求から来る値なので、上限は置く**（長い値でログを埋められないように）。
+        /// </remarks>
+        public const int LogDetailMaxLength = 256;
 
         #endregion
 

@@ -234,4 +234,31 @@
   <data name="ErrorScreenSuppressed" xml:space="preserve">
     <value>開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。</value>
   </data>
+  <data name="LogErrorResponse" xml:space="preserve">
+    <value>エンドポイントがエラー応答を返した。（path: {0}, status: {1}, client_id: {2}, error: {3}, description: {4}）</value>
+  </data>
+  <data name="LogAuthorizeError" xml:space="preserve">
+    <value>認可エンドポイントがエラーを返した。（client_id: {0}, error: {1}, description: {2}, 応答: {3}）</value>
+  </data>
+  <data name="LogAuthorizeErrorToErrorPage" xml:space="preserve">
+    <value>エラー画面</value>
+  </data>
+  <data name="LogAuthorizeErrorToRedirectUri" xml:space="preserve">
+    <value>redirect_uri へ返した</value>
+  </data>
+  <data name="LogSaml2RequestNotVerified" xml:space="preserve">
+    <value>SAML2 の要求を検証できなかった。（issuer: {0}）</value>
+  </data>
+  <data name="LogSaml2RequestFailed" xml:space="preserve">
+    <value>SAML2 の要求を処理できなかった。（issuer: {0}, {1}）</value>
+  </data>
+  <data name="LogSaml2ErrorResponseFailed" xml:space="preserve">
+    <value>SAML2 のエラー応答を作れなかった。（{0}）</value>
+  </data>
+  <data name="LogWebAuthnSignInFailed" xml:space="preserve">
+    <value>WebAuthn のサインインに失敗した。（{0}）</value>
+  </data>
+  <data name="LogWebAuthnRegistrationFailed" xml:space="preserve">
+    <value>WebAuthn の登録に失敗した。（{0}）</value>
+  </data>
 </root>

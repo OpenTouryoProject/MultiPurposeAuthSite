@@ -35,6 +35,8 @@
 //*  2026/10/20  玄人 幸道         所有者を列で持つようにした（#307 の段階 5-a-1）
 //*  2026/10/20  玄人 幸道         クライアント登録を一覧にした（#307 の段階 5-a-2）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
+//*  2026/10/25  玄人 幸道         WebAuthn の登録の失敗を OPERATION に記録する（障害対応のため。#294）
+//*  2026/10/25  玄人 幸道         追加した OPERATION ログの文言を resx に、長さの上限を Const にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -89,6 +91,7 @@ using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.Diagnostics;
+using Touryo.Infrastructure.Public.Log;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -2350,6 +2353,9 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     catch (Exception e)
                     {
+                        //  **障害対応のため、記録する**（#294）。**以前は画面へ返すだけだった。**
+                        Logging.MyOperationTrace(string.Format(
+                            Resources.Diagnostics.LogWebAuthnRegistrationFailed, LogSanitizer.Sanitize(e.Message, Const.LogDetailMaxLength)));
                         temp = FIDO.WebAuthnHelper.ToErrorJson(e);
                     }
 
@@ -2387,6 +2393,9 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     catch (Exception e)
                     {
+                        //  **障害対応のため、記録する**（#294）。**以前は画面へ返すだけだった。**
+                        Logging.MyOperationTrace(string.Format(
+                            Resources.Diagnostics.LogWebAuthnRegistrationFailed, LogSanitizer.Sanitize(e.Message, Const.LogDetailMaxLength)));
                         temp = FIDO.WebAuthnHelper.ToErrorJson(e);
                     }
 

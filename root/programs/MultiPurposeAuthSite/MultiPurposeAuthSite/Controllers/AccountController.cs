@@ -74,6 +74,8 @@
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/24  玄人 幸道         自己テストの認証方式の表示と検証エラーの文言を resx にした（#294）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
+//*  2026/10/25  玄人 幸道         認可エンドポイントと SAML2 のエラーを OPERATION に記録する（障害対応のため。#294）
+//*  2026/10/25  玄人 幸道         追加した OPERATION ログの文言を resx に、長さの上限を Const にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2941,12 +2943,16 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // Error Response
+                    Logging.MyOperationTrace(string.Format(
+                        Resources.Diagnostics.LogSaml2RequestNotVerified, LogSanitizer.Sanitize(iss)));
                     statusCode = SAML2Enum.StatusCode.Requester;
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // Error Response
+                Logging.MyOperationTrace(string.Format(Resources.Diagnostics.LogSaml2RequestFailed,
+                    LogSanitizer.Sanitize(iss), LogSanitizer.Sanitize(ex.Message, Const.LogDetailMaxLength)));
                 statusCode = SAML2Enum.StatusCode.Responder;
             }
 
@@ -2956,8 +2962,11 @@ namespace MultiPurposeAuthSite.Controllers
                 return this.CreateSaml2Response(
                     identity, statusCode, iss, relayState, id, samlRequest2, samlNsMgr);
             }
-            catch
+            catch (Exception ex)
             {
+                Logging.MyOperationTrace(string.Format(
+                    Resources.Diagnostics.LogSaml2ErrorResponseFailed, LogSanitizer.Sanitize(ex.Message, Const.LogDetailMaxLength)));
+
                 // **iss などが取れていないと返せない。**
                 //   **以前は null を返していた**が、
                 //   **MVC のアクションから null を返すと 500 になる**（#276）。
@@ -3692,6 +3701,13 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // ここまで来たらエラー。
+            //   **障害対応のため、記録する**（#294）。**redirect_uri へ返したか、エラー画面か**も出す。
+            Logging.MyOperationTrace(string.Format(Resources.Diagnostics.LogAuthorizeError,
+                LogSanitizer.Sanitize(client_id), LogSanitizer.Sanitize(err),
+                LogSanitizer.Sanitize(errDescription, Const.LogDetailMaxLength),
+                string.IsNullOrEmpty(valid_redirect_uri)
+                    ? Resources.Diagnostics.LogAuthorizeErrorToErrorPage : Resources.Diagnostics.LogAuthorizeErrorToRedirectUri));
+
             if (!string.IsNullOrEmpty(valid_redirect_uri))
             {
                 // valid_redirect_uri

@@ -41,6 +41,7 @@
 //*  2026/10/22  玄人 幸道         Authorization ヘッダの読み取りを Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
+//*  2026/10/25  玄人 幸道         登録の失敗の応答を OPERATION に記録する（障害対応のため。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -434,6 +435,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private IActionResult RegistrationError(int status, Dictionary<string, string> err)
         {
+            //  **障害対応のため、記録する**（#294）。**クライアントはトークンで識別する口なので、client_id は出さない。**
+            Log.Logging.MyOperationTraceForErrorResponse(this.Request.Path.Value, status, err, "");
+
             if (status == 401 || status == 403)
             {
                 //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
