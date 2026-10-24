@@ -81,6 +81,7 @@
 //*  2026/10/21  玄人 幸道         保護されたリソースで DPoP の証明を照合する（#311 の段階 2）
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -525,9 +526,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 #region Else
 
-                                case OAuth2AndOIDCConst.Scope_UserID:
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
-                                    break;
                                 case OAuth2AndOIDCConst.Scope_Roles:
                                     userinfoClaimSet.Add(
                                         OAuth2AndOIDCConst.Scope_Roles,

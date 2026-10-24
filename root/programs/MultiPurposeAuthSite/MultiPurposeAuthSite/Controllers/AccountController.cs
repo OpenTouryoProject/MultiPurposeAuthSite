@@ -70,6 +70,7 @@
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
 //*  2026/10/24  玄人 幸道         ID 連携の旧い鍵（userid）からの移行の枝を削除した（上流へ userid を要求しないので通らない。#140 の段階 3）
+//*  2026/10/24  玄人 幸道         Const.StandardScopes を Const.SelfTestScopes にリネームした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4577,7 +4578,7 @@ namespace MultiPurposeAuthSite.Controllers
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
                                 Sts.SelfTestClient.CreateClientAssertion(
-                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.StandardScopes));
+                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.SelfTestScopes));
                         }
                         else if (state.StartsWith(fapi2Prefix))
                         {

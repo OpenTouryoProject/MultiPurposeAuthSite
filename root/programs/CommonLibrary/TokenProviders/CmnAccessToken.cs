@@ -52,6 +52,7 @@
 //*  2026/10/21  玄人 幸道         cnf.jkt と DPoP の証明を照合する口を追加（#311 の段階 2）
 //*  2026/10/22  玄人 幸道         預ける payload に cnf.jkt を書く口を追加（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         alg の表と鍵の判定を Open棟梁 の JwsFactory に移した（#294）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -278,14 +279,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                         case OAuth2AndOIDCConst.Scope_Address:
                             // **返す項目は設定で決まる**（#230。UserClaims）。
                             UserClaims.AddClaims(tokenClaimSet, user, OAuth2AndOIDCConst.Scope_Address);
-                            break;
-
-                        #endregion
-
-                        #region Else
-
-                        case OAuth2AndOIDCConst.Scope_UserID:
-                            tokenClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
                             break;
 
                         #endregion

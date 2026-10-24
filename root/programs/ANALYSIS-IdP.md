@@ -2727,6 +2727,38 @@ if (!string.IsNullOrEmpty(registeredDn)
 > **`AuthFailureProvider.Record` を「登録されているクライアントのときだけ」に絞る**作業で、
 > **登録の有無を見る必要が出たため、同じ関数の照合も見直した。**
 
+
+### C-26. 独自 scope の `userid` が、`pairwise` のクライアントにも全体で共通の利用者 Id を渡していた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**`userid` scope を要求すると、`user.Id` がそのまま `userid` クレームとして載っていた**
+（access_token は `CmnAccessToken`、/userinfo は両版の `OAuth2EndpointController`）。
+
+**`pairwise` のクライアントには、`sub` を PPID（クライアントごとに違う値。A-14）で返している。**
+**ところが `userid` は、どのクライアントにも同じ値を返す。**
+**そのため、PPID が防いでいる「クライアントをまたいだ利用者の突き合わせ」を、`userid` で打ち消せた。**
+
+| | |
+|---|---|
+| **クライアントごとの scope の登録（C-17。#198）** | **登録が在れば、その範囲に絞られる。** **登録が無ければ制限しない**ので、既定では出ていた |
+| **`public` のクライアント** | **`sub` が `user.Id` そのもの**なので、`userid` は**同じ値の重複**でしかない |
+| **MPAS の中で読む所** | **無い。** ID 連携の旧い鍵（`userid`）からの移行で読んでいた枝は、**上流へ `userid` を要求しない**（#140 の段階 3）ので通らず、先に削除した |
+
+**`userid` を scope ごと廃止した。**
+
+- **Discovery** : `scopes_supported`（`Helper.GetScopesSupported`）と `claims_supported`（`CmnEndpoints`）から外した
+- **発行** : access_token（`CmnAccessToken`）と /userinfo（両版）で `userid` を載せる分岐を消した
+- **`auth` scope の絞り込み**（`Helper.FilterClaimAtAuth`）で `userid` を残す分岐も消した
+- **要求されても、宣言外の scope として外される**（C-17 と同じ扱い。エラーにはしない）
+- **自己テストの要求**（`Const.StandardScopes`）からも外した。**使うのが自己テストだけなので、名前も `SelfTestScopes` にした**
+- **下位互換は取らない。** `userid` を使っていた RP は、**`sub` を使う**（`public` なら同じ値。`pairwise` なら、それが意図どおりの値である）
+
+**E2E** : **`RT-198.1`** の期待値から `userid` を外した（**要求には残してある** ＝ **宣言外として外されることを測る**）。
+**`RT-307.25`** の「上限の外の scope」の候補からも外した（`scopes_supported` に在る値から選ぶため）。
+**原本の `scopes_supported` の期待値**が変わった（`TESTCASES.md`）。
+
+> **`Const` の整理（#294）で `StandardScopes` の中身を確かめたときに気付いた。**
+> **`roles` は残した** — **自前の資源サーバ（Web API）で使う可能性を考えて**である。
+> **ロールそのものは access_token に載らない**（`scopes` には scope 名だけが載る）ので、使うなら /userinfo から取る。
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -2822,6 +2854,7 @@ if (!string.IsNullOrEmpty(registeredDn)
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 | ✅ **C-25 mTLS で、登録が空のときに空の Subject DN が一致していた** #305 の段階 4 |
+| ✅ **C-26 独自 scope の `userid` が、`pairwise` のクライアントにも共通の利用者 Id を渡していた** #294 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 

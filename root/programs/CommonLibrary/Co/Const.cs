@@ -54,6 +54,8 @@
 //*  2026/10/21  玄人 幸道         cnf.jkt のクレーム型を追加（#311 の段階 2）
 //*  2026/10/24  玄人 幸道         メンバの region を Config の処理区分（土台・配備・アカウント・STS・ID 連携）に揃えた（#294）
 //*  2026/10/24  玄人 幸道         利用者名とメアドの規則（メソッド）を Util.IdP.UserIdentifier へ移した（#294）
+//*  2026/10/24  玄人 幸道         StandardScopes から userid を外した（独自 scope の userid を廃止。#294）
+//*  2026/10/24  玄人 幸道         StandardScopes を SelfTestScopes にリネームした（使うのは自己テストだけ。独自の roles を含む。#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -254,22 +256,22 @@ namespace MultiPurposeAuthSite.Co
 
         #region Scope
 
-        /// <summary>標準的なscope</summary>
+        /// <summary>自己テストのscope</summary>
         /// <remarks>
-        /// **この IdP が出せる、利用者の属性の scope を全部並べたもの**（`openid` は含まない）。
+        /// **自己テストで要求する、利用者の属性の scope**（`openid` は含まない）。
         ///
         /// | scope | 種別 | 載るもの |
         /// |---|---|---|
         /// | `profile` / `email` / `phone` / `address` | OIDC Core §5.4 の標準 | 利用者の属性のクレーム |
-        /// | `userid` | **この IdP の独自** | 利用者の Id（access_token と /userinfo） |
-        /// | `roles` | **この IdP の独自** | ロールの一覧（**/userinfo だけ**。access_token には載せない） |
+        /// | `roles` | **この IdP の独自** | ロールの一覧 |
         ///
-        /// **MPAS の中では読んでいない**（RP 向けの出力である）。
-        /// 以前は ID 連携の旧い鍵（`userid`）からの移行で読んでいたが、
-        /// **上流へ `userid` を要求しない**（`IdFederationScopes`。#140 の段階 3）ので通らず、その枝は削除した。
+        /// **`roles` は、自前の資源サーバ（Web API）で使う可能性を考えて残している**
+        /// （access_token の `scopes` には scope 名が載るが、ロールそのものは載らないので、/userinfo から取る）。
         ///
-        /// **「標準的」と言うが、独自の 2 つを含む。** **他の OP へ送ってはならない**
-        /// （厳格な OP では `invalid_scope` になりうる。ID 連携は標準だけの `IdFederationScopes` を使う。）。
+        /// **独自の `userid` は PPID の意味を打ち消す**ため scope ごと廃止した**（#294）。
+        ///
+        /// **独自の `roles` を含む。** **他の OP へ送ってはならない**
+        /// （厳格な OP では `invalid_scope` になりうる。ID 連携は標準だけの `IdFederationScopes` を使う）。
         ///
         /// **使うのは自己テストだけ**（`HomeController` の OAuth2 の開始・ROPC・Client Credentials・JWT Bearer、
         /// `AccountController` の FAPI1 の `client_assertion`）。**自分自身に対して要求する**ので、独自の scope も通る。
@@ -278,20 +280,19 @@ namespace MultiPurposeAuthSite.Co
         /// **発行するかは、要求とは別に絞られる** —
         /// Discovery で広告した scope（`Helper.GetScopesSupported`）と、クライアントごとの登録の範囲だけが出る。
         /// </remarks>
-        public static readonly string StandardScopes =
+        public static readonly string SelfTestScopes =
             OAuth2AndOIDCConst.Scope_Profile + " "
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_UserID + " "
             + OAuth2AndOIDCConst.Scope_Roles;
 
         /// <summary>OIDCのscope</summary>
         /// <remarks>
-        /// `openid` と標準的な scope を合わせたもの。
+        /// `openid` と <see cref="SelfTestScopes"/> を合わせたもの。
         /// </remarks>
         public static readonly string OidcScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
+            OAuth2AndOIDCConst.Scope_Openid + " " + SelfTestScopes;
 
         #endregion
 
@@ -466,7 +467,7 @@ namespace MultiPurposeAuthSite.Co
         /// <remarks>
         /// **標準のスコープだけを要求する**（#140 の段階 3）。
         ///
-        /// **以前は `StandardScopes`（独自の `userid` / `roles` を含む）を要求していた。**
+        /// **以前は `StandardScopes`（現 `SelfTestScopes`。独自の `userid` / `roles` を含んでいた）を要求していた。**
         /// **独自のスコープは、厳格な OP では `invalid_scope` になりうる**
         /// （この IdP 自身も #198 で、宣言外のスコープを発行しないようにした）。
         /// **汎用の OP と連携するには、標準だけを要求するのが筋。**

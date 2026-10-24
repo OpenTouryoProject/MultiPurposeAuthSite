@@ -132,6 +132,7 @@
 //*  2026/10/22  玄人 幸道         dpop_jkt と refresh_token を DPoP の鍵に縛る（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         仕様の部品（prompt・PKCE・redirect URL 等）を Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         Hybrid / OIDC の Implicit も Enable*GrantType に従わせ、EnableOpenIDConnect を廃止した（#314）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -352,7 +353,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // 拡張
                 OAuth2AndOIDCConst.scopes,
                 OAuth2AndOIDCConst.Scope_Roles,
-                OAuth2AndOIDCConst.Scope_UserID,
                 // OIDC, FAPI1
                 OAuth2AndOIDCConst.nonce,
                 OAuth2AndOIDCConst.at_hash,

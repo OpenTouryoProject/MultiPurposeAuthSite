@@ -237,7 +237,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## TC-1.5 アクセス トークンの exp と expires_in が整合する
 
@@ -3101,7 +3101,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## RT-198.2 password : scopes_supported に無いスコープを発行しない
 
@@ -3123,7 +3123,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## RT-198.3 クライアントの登録（scope）の範囲に収める : client_credentials
 
@@ -3146,7 +3146,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## RT-198.4 クライアントの登録（scope）の範囲に収める : 認可コード フロー
 

@@ -63,6 +63,7 @@
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri を引く口を追加（#310 の段階 3）
 //*  2026/10/22  玄人 幸道         空白区切りの分解と HttpClient の口を Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         openid を常に広告するようにした（EnableOpenIDConnect の廃止。#314）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -2015,7 +2016,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 OAuth2AndOIDCConst.Scope_Phone,
                 OAuth2AndOIDCConst.Scope_Address,
                 OAuth2AndOIDCConst.Scope_Auth,
-                OAuth2AndOIDCConst.Scope_UserID,
                 OAuth2AndOIDCConst.Scope_Roles
             };
 
@@ -2127,10 +2127,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 if (s == OAuth2AndOIDCConst.Scope_Openid)
                 {
                     temp.Add(OAuth2AndOIDCConst.Scope_Openid);
-                }
-                else if (s == OAuth2AndOIDCConst.Scope_UserID)
-                {
-                    temp.Add(OAuth2AndOIDCConst.Scope_UserID);
                 }
             }
 

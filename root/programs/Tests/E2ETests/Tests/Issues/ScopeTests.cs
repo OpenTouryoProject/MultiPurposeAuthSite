@@ -34,6 +34,7 @@
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-198）
 //*  2026/09/18  玄人 幸道         既定で無効にした機能に依存するテストを Skip 対象にした（#220）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -200,7 +201,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 Assert.False(string.IsNullOrEmpty(token.AccessToken),
                     "前提: トークンが発行されること（" + token.ToString() + "）");
 
-                VerifyIssuedScopes(r, token, supported, new string[] { "roles", "userid", "auth" });
+                VerifyIssuedScopes(r, token, supported, new string[] { "roles", "auth" });
 
                 r.Done();
             }

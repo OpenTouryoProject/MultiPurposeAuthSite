@@ -37,6 +37,7 @@
 //*  2026/10/20  玄人 幸道         RT-307.25/.26（発行者の上限と鍵の入れ替え）を追加（#307 の段階 6）
 //*  2026/10/20  玄人 幸道         Noteの文面を段階5-a-1後の形に直した（#307）
 //*  2026/10/21  玄人 幸道         RT-307.4 の jwks_uri を「読めない URL は 400」にした（#309 の段階 1）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //**********************************************************************************
 
 using System;
@@ -2949,7 +2950,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistrationTests.AllowedScope().Split(
                     new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
 
-            foreach (string candidate in new string[] { "address", "phone", "roles", "userid" })
+            foreach (string candidate in new string[] { "address", "phone", "roles" })
             {
                 if (!allowed.Contains(candidate))
                 {

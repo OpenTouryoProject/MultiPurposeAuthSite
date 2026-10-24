@@ -44,6 +44,7 @@
 //*  2026/10/07  玄人 幸道         WebAuthnStarters を削除（#137）
 //*  2026/10/07  玄人 幸道         SAML2のAuthnRequestのIDを保存するようにした（#276）
 //*  2026/10/08  玄人 幸道         自己テストで NameIDFormat / ResponseMode を選べるようにした（#277 の段階 4）
+//*  2026/10/24  玄人 幸道         Const.StandardScopes を Const.SelfTestScopes にリネームした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -406,7 +407,7 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.StandardScopes, this.State);
+                    this.ClientId, response_type, Const.SelfTestScopes, this.State);
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
@@ -446,7 +447,7 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.StandardScopes,
+                    this.ClientId, response_type, Const.SelfTestScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
 
@@ -1435,7 +1436,7 @@ namespace MultiPurposeAuthSite.Controllers
             string response = await Helper.GetInstance()
                 .ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                    client_id, client_secret, Config.AdministratorUID, Config.AdministratorPWD, Const.StandardScopes);
+                    client_id, client_secret, Config.AdministratorUID, Config.AdministratorPWD, Const.SelfTestScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
@@ -1461,7 +1462,7 @@ namespace MultiPurposeAuthSite.Controllers
             string response = await Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                    client_id, client_secret, Const.StandardScopes);
+                    client_id, client_secret, Const.SelfTestScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
@@ -1484,7 +1485,7 @@ namespace MultiPurposeAuthSite.Controllers
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
                 SelfTestClient.CreateClientAssertion(
-                    iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes));
+                    iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.SelfTestScopes));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
