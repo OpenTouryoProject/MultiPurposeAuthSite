@@ -18,72 +18,130 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //**********************************************************************************
 
+/*
+自己テストの RP（Redirect エンドポイントでのトークンの取得・検証・更新・失効・照会、
+Front-Channel / Back-Channel Logout の受け口）を担うAccountControllerの一部（本番の口ではない）
+*/
+
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util;
-using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
-using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
-using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
-using System.Xml;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using Stj = System.Text.Json;
-
-using System.Web;
 
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using AspNetId = Microsoft.AspNetCore.Identity;
-
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using Fido2NetLib;
-using Fido2NetLib.Objects;
-
-using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util;
-using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
 {
     // **AccountController の 自己テストの RP**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Action Method
+        #region テスト用（LoadRequestParameters）
 
-        #region STS (Security Token Service)
+        /// <summary>LoadRequestParameters</summary>
+        /// <param name="clientId">out string</param>
+        /// <param name="state">out string</param>
+        /// <param name="redirect_uri">out string</param>
+        /// <param name="nonce">out string</param>
+        /// <param name="code_verifier">out string</param>
+        private void LoadRequestParameters(
+            out string clientId,
+            out string state, out string redirect_uri,
+            out string nonce, out string code_verifier)
+        {
+            IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
+            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
 
-        #region OAuth Endpoint
+            // client_id
+            clientId = HttpContext.Session.GetString(Const.TestClientId);
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                HttpContext.Session.SetString(Const.TestClientId, "");
+            }
+            else
+            {
+                clientId = requestCookies.Get(Const.TestClientId);
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    responseCookies.Set(Const.TestClientId, "", this._cookieOptions);
+                }
+            }
+
+            // state
+            state = HttpContext.Session.GetString(Const.TestState);
+            if (!string.IsNullOrEmpty(state))
+            {
+                HttpContext.Session.SetString(Const.TestState, "");
+            }
+            else
+            {
+                state = requestCookies.Get(Const.TestState);
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    responseCookies.Set(Const.TestState, "", this._cookieOptions);
+                }
+            }
+
+            // redirect_uri
+            redirect_uri = HttpContext.Session.GetString(Const.TestRedirectUri);
+            if (!string.IsNullOrEmpty(redirect_uri))
+            {
+                HttpContext.Session.SetString(Const.TestRedirectUri, "");
+            }
+            else
+            {
+                redirect_uri = requestCookies.Get(Const.TestRedirectUri);
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    responseCookies.Set(Const.TestRedirectUri, "", this._cookieOptions);
+                }
+            }
+
+            // nonce
+            nonce = HttpContext.Session.GetString(Const.TestNonce);
+            if (!string.IsNullOrEmpty(nonce))
+            {
+                HttpContext.Session.SetString(Const.TestNonce, "");
+            }
+            else
+            {
+                nonce = requestCookies.Get(Const.TestNonce);
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    responseCookies.Set(Const.TestNonce, "", this._cookieOptions);
+                }
+            }
+
+            // code_verifier
+            code_verifier = HttpContext.Session.GetString(Const.TestCodeVerifier);
+            if (!string.IsNullOrEmpty(code_verifier))
+            {
+                HttpContext.Session.SetString(Const.TestCodeVerifier, "");
+            }
+            else
+            {
+                code_verifier = requestCookies.Get(Const.TestCodeVerifier);
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    responseCookies.Set(Const.TestCodeVerifier, "", this._cookieOptions);
+                }
+            }
+        }
+        #endregion
 
         #region Client (Redirectエンドポイント)
 
@@ -584,8 +642,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #endregion
-
         #region Front-Channel Logout の受け口（自己テスト。#310 の段階 3）
 
         /// <summary>
@@ -740,103 +796,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             return this.Json(new { logout_tokens = tokens });
         }
-
-        #endregion
-
-        #region テスト用
-
-        /// <summary>LoadRequestParameters</summary>
-        /// <param name="clientId">out string</param>
-        /// <param name="state">out string</param>
-        /// <param name="redirect_uri">out string</param>
-        /// <param name="nonce">out string</param>
-        /// <param name="code_verifier">out string</param>
-        private void LoadRequestParameters(
-            out string clientId,
-            out string state, out string redirect_uri,
-            out string nonce, out string code_verifier)
-        {
-            IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
-            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-
-            // client_id
-            clientId = HttpContext.Session.GetString(Const.TestClientId);
-            if (!string.IsNullOrEmpty(clientId))
-            {
-                HttpContext.Session.SetString(Const.TestClientId, "");
-            }
-            else
-            {
-                clientId = requestCookies.Get(Const.TestClientId);
-                if (!string.IsNullOrEmpty(clientId))
-                {
-                    responseCookies.Set(Const.TestClientId, "", this._cookieOptions);
-                }
-            }
-
-            // state
-            state = HttpContext.Session.GetString(Const.TestState);
-            if (!string.IsNullOrEmpty(state))
-            {
-                HttpContext.Session.SetString(Const.TestState, "");
-            }
-            else
-            {
-                state = requestCookies.Get(Const.TestState);
-                if (!string.IsNullOrEmpty(clientId))
-                {
-                    responseCookies.Set(Const.TestState, "", this._cookieOptions);
-                }
-            }
-
-            // redirect_uri
-            redirect_uri = HttpContext.Session.GetString(Const.TestRedirectUri);
-            if (!string.IsNullOrEmpty(redirect_uri))
-            {
-                HttpContext.Session.SetString(Const.TestRedirectUri, "");
-            }
-            else
-            {
-                redirect_uri = requestCookies.Get(Const.TestRedirectUri);
-                if (!string.IsNullOrEmpty(clientId))
-                {
-                    responseCookies.Set(Const.TestRedirectUri, "", this._cookieOptions);
-                }
-            }
-
-            // nonce
-            nonce = HttpContext.Session.GetString(Const.TestNonce);
-            if (!string.IsNullOrEmpty(nonce))
-            {
-                HttpContext.Session.SetString(Const.TestNonce, "");
-            }
-            else
-            {
-                nonce = requestCookies.Get(Const.TestNonce);
-                if (!string.IsNullOrEmpty(clientId))
-                {
-                    responseCookies.Set(Const.TestNonce, "", this._cookieOptions);
-                }
-            }
-
-            // code_verifier
-            code_verifier = HttpContext.Session.GetString(Const.TestCodeVerifier);
-            if (!string.IsNullOrEmpty(code_verifier))
-            {
-                HttpContext.Session.SetString(Const.TestCodeVerifier, "");
-            }
-            else
-            {
-                code_verifier = requestCookies.Get(Const.TestCodeVerifier);
-                if (!string.IsNullOrEmpty(clientId))
-                {
-                    responseCookies.Set(Const.TestCodeVerifier, "", this._cookieOptions);
-                }
-            }
-        }
-        #endregion
-
-        #endregion
 
         #endregion
     }

@@ -18,54 +18,33 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //**********************************************************************************
 
+/*
+OAuth 2.0 / OIDC の認可エンドポイント
+（要求の検証、max_age・prompt・同意、認可応答の返し方（Response Mode / JARM））と、
+Device Authorization Grant の利用者コードの確認画面を担うAccountControllerの一部
+*/
+
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
-using System.Xml;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Configuration;
 
 using System.Web;
 using System.Web.Mvc;
-using System.Net.Http;
-using System.Web.Configuration;
-//using System.Net;
-//using System.Net.Http;
-using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using Facebook;
-
-
-using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Log;
 
@@ -74,12 +53,6 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の 認可エンドポイント**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Action Method
-
-        #region STS (Security Token Service)
-
-        #region OAuth Endpoint
-
         #region Authorize（認可エンドポイント）
 
         #region max_age & auth_time
@@ -1407,8 +1380,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #endregion
-
         #region Device AuthZ
         /// <summary>
         /// DeviceAuthZVerify画面（初期表示）
@@ -1468,10 +1439,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View("DeviceAuthZVerify");
         }
-        #endregion
-
-        #endregion
-
         #endregion
     }
 }

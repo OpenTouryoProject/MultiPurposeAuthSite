@@ -18,67 +18,123 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //**********************************************************************************
 
+/*
+自己テストの RP（Redirect エンドポイントでのトークンの取得・検証・更新・失効・照会、
+Front-Channel / Back-Channel Logout の受け口）を担うAccountControllerの一部（本番の口ではない）
+*/
+
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
-using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
-using System.Xml;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Configuration;
 
-using System.Web;
 using System.Web.Mvc;
-using System.Net.Http;
-using System.Web.Configuration;
-//using System.Net;
-//using System.Net.Http;
-using System.Net.Http.Formatting;
-
-using Microsoft.Owin.Security;
-using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using Facebook;
-
-
-using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
 {
     // **AccountController の 自己テストの RP**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Action Method
+        #region テスト用（LoadRequestParameters）
 
-        #region STS (Security Token Service)
+        /// <summary>LoadRequestParameters</summary>
+        /// <param name="clientId">out string</param>
+        /// <param name="state">out string</param>
+        /// <param name="redirect_uri">out string</param>
+        /// <param name="nonce">out string</param>
+        /// <param name="code_verifier">out string</param>
+        private void LoadRequestParameters(
+            out string clientId,
+            out string state, out string redirect_uri,
+            out string nonce, out string code_verifier)
+        {
+            // client_id
+            clientId = (string)Session[Const.TestClientId];
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                Session.Remove(Const.TestClientId);
+            }
+            else
+            {
+                clientId = Request.Cookies[Const.TestClientId]?.Value;
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    Response.Cookies[Const.TestClientId].Value = "";
+                }
+            }
 
-        #region OAuth Endpoint
+            // state
+            state = (string)Session[Const.TestState];
+            if (!string.IsNullOrEmpty(state))
+            {
+                Session.Remove(Const.TestState);
+            }
+            else
+            {
+                state = Request.Cookies[Const.TestState]?.Value;
+                if (!string.IsNullOrEmpty(state))
+                {
+                    Response.Cookies[Const.TestState].Value = "";
+                }
+            }
+
+            // redirect_uri
+            redirect_uri = (string)Session[Const.TestRedirectUri];
+            if (!string.IsNullOrEmpty(redirect_uri))
+            {
+                Session.Remove(Const.TestRedirectUri);
+            }
+            else
+            {
+                redirect_uri = Request.Cookies[Const.TestRedirectUri]?.Value;
+                if (!string.IsNullOrEmpty(redirect_uri))
+                {
+                    Response.Cookies[Const.TestRedirectUri].Value = "";
+                }
+            }
+
+            // nonce
+            nonce = (string)Session[Const.TestNonce];
+            if (!string.IsNullOrEmpty(nonce))
+            {
+                Session.Remove(Const.TestNonce);
+            }
+            else
+            {
+                nonce = Request.Cookies[Const.TestNonce]?.Value;
+                if (!string.IsNullOrEmpty(nonce))
+                {
+                    Response.Cookies[Const.TestNonce].Value = "";
+                }
+            }
+
+            // code_verifier
+            code_verifier = (string)Session[Const.TestCodeVerifier];
+            if (!string.IsNullOrEmpty(code_verifier))
+            {
+                Session.Remove(Const.TestCodeVerifier);
+            }
+            else
+            {
+                code_verifier = Request.Cookies[Const.TestCodeVerifier]?.Value;
+                if (!string.IsNullOrEmpty(code_verifier))
+                {
+                    Response.Cookies[Const.TestCodeVerifier].Value = "";
+                }
+            }
+        }
+        #endregion
 
         #region Client (Redirectエンドポイント)
 
@@ -579,8 +635,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #endregion
-
         #region Front-Channel Logout の受け口（自己テスト。#310 の段階 3）
 
         /// <summary>
@@ -737,98 +791,5 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region テスト用
-
-        /// <summary>LoadRequestParameters</summary>
-        /// <param name="clientId">out string</param>
-        /// <param name="state">out string</param>
-        /// <param name="redirect_uri">out string</param>
-        /// <param name="nonce">out string</param>
-        /// <param name="code_verifier">out string</param>
-        private void LoadRequestParameters(
-            out string clientId,
-            out string state, out string redirect_uri,
-            out string nonce, out string code_verifier)
-        {
-            // client_id
-            clientId = (string)Session[Const.TestClientId];
-            if (!string.IsNullOrEmpty(clientId))
-            {
-                Session.Remove(Const.TestClientId);
-            }
-            else
-            {
-                clientId = Request.Cookies[Const.TestClientId]?.Value;
-                if (!string.IsNullOrEmpty(clientId))
-                {
-                    Response.Cookies[Const.TestClientId].Value = "";
-                }
-            }
-
-            // state
-            state = (string)Session[Const.TestState];
-            if (!string.IsNullOrEmpty(state))
-            {
-                Session.Remove(Const.TestState);
-            }
-            else
-            {
-                state = Request.Cookies[Const.TestState]?.Value;
-                if (!string.IsNullOrEmpty(state))
-                {
-                    Response.Cookies[Const.TestState].Value = "";
-                }
-            }
-
-            // redirect_uri
-            redirect_uri = (string)Session[Const.TestRedirectUri];
-            if (!string.IsNullOrEmpty(redirect_uri))
-            {
-                Session.Remove(Const.TestRedirectUri);
-            }
-            else
-            {
-                redirect_uri = Request.Cookies[Const.TestRedirectUri]?.Value;
-                if (!string.IsNullOrEmpty(redirect_uri))
-                {
-                    Response.Cookies[Const.TestRedirectUri].Value = "";
-                }
-            }
-
-            // nonce
-            nonce = (string)Session[Const.TestNonce];
-            if (!string.IsNullOrEmpty(nonce))
-            {
-                Session.Remove(Const.TestNonce);
-            }
-            else
-            {
-                nonce = Request.Cookies[Const.TestNonce]?.Value;
-                if (!string.IsNullOrEmpty(nonce))
-                {
-                    Response.Cookies[Const.TestNonce].Value = "";
-                }
-            }
-
-            // code_verifier
-            code_verifier = (string)Session[Const.TestCodeVerifier];
-            if (!string.IsNullOrEmpty(code_verifier))
-            {
-                Session.Remove(Const.TestCodeVerifier);
-            }
-            else
-            {
-                code_verifier = Request.Cookies[Const.TestCodeVerifier]?.Value;
-                if (!string.IsNullOrEmpty(code_verifier))
-                {
-                    Response.Cookies[Const.TestCodeVerifier].Value = "";
-                }
-            }
-        }
-        #endregion
-
-        #endregion
-
-        #endregion
     }
 }

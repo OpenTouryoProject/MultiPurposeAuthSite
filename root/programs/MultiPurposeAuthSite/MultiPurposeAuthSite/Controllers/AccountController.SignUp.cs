@@ -18,66 +18,30 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //**********************************************************************************
 
+/*
+サインアップ（利用者の登録・メアド検証）と、
+パスワードの失念・リセットを担うAccountControllerの一部
+*/
+
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
-using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
-using System;
-using System.Collections.Generic;
-using System.Xml;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Configuration;
 
-using System.Web;
 using System.Web.Mvc;
-using System.Net.Http;
-using System.Web.Configuration;
-//using System.Net;
-//using System.Net.Http;
-using System.Net.Http.Formatting;
 
-using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Facebook;
-
-
-using Touryo.Infrastructure.Business.Presentation;
-using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.Security.Pwd;
-using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
 {
     // **AccountController の サインアップ・パスワード**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Action Method
-
-        #region IdP (Identity Provider)
-
         #region サインアップ プロセス
 
         #region サインアップ
@@ -611,10 +575,6 @@ namespace MultiPurposeAuthSite.Controllers
             // 再表示
             return View(model);
         }
-
-        #endregion
-
-        #endregion
 
         #endregion
 

@@ -18,55 +18,36 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //**********************************************************************************
 
+/*
+上流の IdP との ID 連携（OIDC と SAML2）の開始とコールバック、
+トークン・アサーションの検証、利用者の登録・更新を担うAccountControllerの一部
+*/
+
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
-using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
-using System.Xml;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Configuration;
 
-using System.Web;
 using System.Web.Mvc;
-using System.Net.Http;
-using System.Web.Configuration;
-//using System.Net;
-//using System.Net.Http;
-using System.Net.Http.Formatting;
 
-using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using Facebook;
-
-
-using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Security.Pwd;
-using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
@@ -74,12 +55,6 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の ID 連携**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Action Method
-
-        #region IdP (Identity Provider)
-
-        #region ID連携 (ID Federation)
-        
         #region OIDC
 
         /// <summary>OIDC の ID 連携を始める（上流へ認可要求を送る）</summary>
@@ -734,7 +709,7 @@ namespace MultiPurposeAuthSite.Controllers
         
         #endregion
         
-        #region SAML2（#286 の段階 2）
+        #region SAML2
 
         /// <summary>SAML2 の ID 連携を始める（上流へ AuthnRequest を送る）</summary>
         /// <returns>ActionResult（上流の SSO へのリダイレクト）</returns>
@@ -1117,12 +1092,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View("Error");
         }
-
-        #endregion
-
-        #endregion
-
-        #endregion
 
         #endregion
     }

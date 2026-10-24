@@ -79,56 +79,31 @@
 //*  2026/10/25  玄人 幸道         サインイン・認可エンドポイントなどを partial（AccountController.*.cs）に分けた（#294）
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Notifications;
-using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
-using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
+/*
+- ASP.NET Identity（OWIN）を用いた認証・認可およびアカウント管理機能の基盤や共通処理を提供するコントローラーの一部。
+- 属性 (Attributes): [Authorize]（原則として認証済みのユーザーのみアクセス可能）
+- 主要なマネージャーは、OWIN のコンテキストから取得する（プロパティ）。
+  - ApplicationUserManager UserManager: ユーザー管理のためのマネージャー。
+  - ApplicationRoleManager RoleManager: ロール管理のためのマネージャー。
+  - ApplicationSignInManager SignInManager: サインイン管理のためのマネージャー。
+  - IAuthenticationManager AuthenticationManager: 認証（Cookie）の管理。
+*/
 
-using System;
+using MultiPurposeAuthSite.Manager;
+
 using System.Collections.Generic;
-using System.Xml;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Configuration;
 
 using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
 using System.Web.Configuration;
-//using System.Net;
-//using System.Net.Http;
-using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Facebook;
-
-
 using Touryo.Infrastructure.Business.Presentation;
-using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.Security.Pwd;
-using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Log;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers

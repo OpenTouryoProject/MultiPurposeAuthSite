@@ -18,32 +18,23 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //**********************************************************************************
 
+/*
+サインイン（ID・パスワード、WebAuthn、ID 連携の開始）とサインアウト、
+RP-Initiated Logout（end_session_endpoint）を担うAccountControllerの一部
+*/
+
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
 using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
-using System.Xml;
-using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Security.Claims;
-using System.Security.Cryptography;
 using Stj = System.Text.Json;
-
-using System.Web;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
@@ -51,27 +42,16 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using AspNetId = Microsoft.AspNetCore.Identity;
-
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Fido2NetLib;
-using Fido2NetLib.Objects;
 
-using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util;
-using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.Security.Pwd;
-using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
@@ -79,10 +59,6 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の サインイン・サインアウト**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Action Method
-
-        #region IdP (Identity Provider)
-
         /// <summary>InitSessionAfterlogin</summary>
         private void InitSessionAfterlogin()
         {
@@ -182,8 +158,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // **Email 欄が「利用者名またはメアド」の入力である**（#151 の段階 3）。
-            //   **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の login_hint に
-            //   波及するため、名前の整理は後の段階に回す。
+            //   **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の login_hint に波及するため、名前の整理は後の段階に回す。
             return View(new AccountLoginViewModel
             {
                 ReturnUrl = returnUrl,
@@ -631,10 +606,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             return RedirectToAction("Index", "Home");
         }
-
-        #endregion
-
-        #endregion
 
         #endregion
     }

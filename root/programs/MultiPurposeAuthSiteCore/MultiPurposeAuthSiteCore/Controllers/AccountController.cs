@@ -95,60 +95,17 @@
 */
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Notifications;
-using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util;
-using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.Util.Sts;
-using Token = MultiPurposeAuthSite.TokenProviders;
-using Saml = MultiPurposeAuthSite.SamlProviders;
-using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
-using System;
 using System.Collections.Generic;
-using System.Xml;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using Stj = System.Text.Json;
-
-using System.Web;
 
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using AspNetId = Microsoft.AspNetCore.Identity;
-
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Fido2NetLib;
-using Fido2NetLib.Objects;
 
 using Touryo.Infrastructure.Business.Presentation;
-using Touryo.Infrastructure.Framework.StdMigration;
-using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util;
-using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.Security.Pwd;
-using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
 {
