@@ -144,4 +144,22 @@
   <data name="SendEmail_passwordreset_msg" xml:space="preserve">
     <value>&lt;a href="{0}"&gt;こちら&lt;/a&gt; をクリックして、パスワードをリセットしてください。</value>
   </data>
+  <data name="AuthMethodFapi1" xml:space="preserve">
+    <value>private_key_jwt（client_assertion。FAPI1 は非対称の認証）</value>
+  </data>
+  <data name="AuthMethodFapi2" xml:space="preserve">
+    <value>private_key_jwt（client_assertion。FAPI 2.0 は MTLS か これ）</value>
+  </data>
+  <data name="AuthMethodClientSecretBasic" xml:space="preserve">
+    <value>client_secret_basic（Authorization ヘッダ）</value>
+  </data>
+  <data name="AuthMethodClientSecretPostPkce" xml:space="preserve">
+    <value>client_secret_post（フォーム）＋ PKCE の code_verifier</value>
+  </data>
+  <data name="AccessTokenVerificationError" xml:space="preserve">
+    <value>AccessToken検証エラー</value>
+  </data>
+  <data name="IdTokenVerificationError" xml:space="preserve">
+    <value>IdToken検証エラー</value>
+  </data>
 </root>

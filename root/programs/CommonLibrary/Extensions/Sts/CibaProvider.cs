@@ -30,6 +30,7 @@
 //*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
 //*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using System;
@@ -92,11 +93,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
                             { "authReqId", authReqId },
-                            { "authReqExp", authReqExp.ToString() },
-                            { "authZCode", authZCode },
+                            { Const.PollingAuthReqExp, authReqExp.ToString() },
+                            { Const.PollingAuthZCode, authZCode },
                             { "unstructuredData", unstructuredData },
                             { "userId", userId },
-                            { "result", "" }
+                            { Const.PollingResult, "" }
                         };
                         
                         CibaProvider.CibaData.TryAdd(
@@ -239,7 +240,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
 
                                     // 結果の登録
-                                    dic["result"] = result.ToString();
+                                    dic[Const.PollingResult] = result.ToString();
                                     CibaProvider.CibaData[clientNotificationToken] = JsonConvert.SerializeObject(dic);
                                     retVal = true;
 
@@ -385,9 +386,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     clientNotificationToken = _clientNotificationToken;
 
                                     // Code
-                                    authZCode = dic["authZCode"];
+                                    authZCode = dic[Const.PollingAuthZCode];
                                     // CibaState
-                                    retVal = CibaProvider.GetState(dic["authReqExp"], dic["result"], out states);
+                                    retVal = CibaProvider.GetState(dic[Const.PollingAuthReqExp], dic[Const.PollingResult], out states);
 
                                     //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
                                     //    **記録は辞書の中**（`lastPolled`。**無ければ初回**）。
@@ -395,7 +396,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     {
                                         long? last = null;
                                         string lastPolled =
-                                            dic.ContainsKey("lastPolled") ? dic["lastPolled"] : "";
+                                            dic.ContainsKey(Const.PollingLastPolled) ? dic[Const.PollingLastPolled] : "";
 
                                         long parsed = 0;
                                         if (!string.IsNullOrEmpty(lastPolled)
@@ -406,7 +407,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                         bool tooFast = CibaProvider.ThrottlePolling(last);
 
-                                        dic["lastPolled"] = PollingThrottle.NowUnixSeconds().ToString();
+                                        dic[Const.PollingLastPolled] = PollingThrottle.NowUnixSeconds().ToString();
                                         CibaProvider.CibaData[_clientNotificationToken] =
                                             JsonConvert.SerializeObject(dic);
 

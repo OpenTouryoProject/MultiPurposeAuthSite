@@ -39,6 +39,7 @@
 //*  2026/10/21  玄人 幸道         jwks_uri を登録の前に取りに行く（#309 の段階 1）
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         Authorization ヘッダの読み取りを Open棟梁 に移した（#294）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -405,7 +406,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 res.Headers.WwwAuthenticate.Add(
                     new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, "register", err)));
+                        scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, Const.EndpointRegister, err)));
 
                 string nonce = Token.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
 

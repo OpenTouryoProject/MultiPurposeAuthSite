@@ -128,6 +128,11 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>CommonViewModels.resx</DependentUpon>
     </Compile>
+    <Compile Update="Resources\Diagnostics.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Diagnostics.resx</DependentUpon>
+    </Compile>
     <Compile Update="Resources\ManageController.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -180,6 +185,11 @@
       <CustomToolNamespace></CustomToolNamespace>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>CommonViewModels.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\Diagnostics.resx">
+      <CustomToolNamespace></CustomToolNamespace>
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Diagnostics.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Update="Resources\ManageController.resx">
       <CustomToolNamespace></CustomToolNamespace>

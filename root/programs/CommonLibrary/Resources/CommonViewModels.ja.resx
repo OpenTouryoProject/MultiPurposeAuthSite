@@ -402,4 +402,70 @@
   <data name="TokenEndpointAuthMethodDescription" xml:space="preserve">
     <value>このクライアントが**自分を証明する方法**。**空なら client_secret_basic と client_secret_post を許す。** **private_key_jwt と tls_client_auth は、ここで選ぶこと** — **鍵や DN を登録しただけでは通らない。**</value>
   </data>
+  <data name="DdlNotSpecified" xml:space="preserve">
+    <value>指定しない</value>
+  </data>
+  <data name="DdlPromptNone" xml:space="preserve">
+    <value>none（UI を出さない）</value>
+  </data>
+  <data name="DdlPromptLogin" xml:space="preserve">
+    <value>login（再認証）</value>
+  </data>
+  <data name="DdlPromptConsent" xml:space="preserve">
+    <value>consent（再同意）</value>
+  </data>
+  <data name="DdlPromptSelectAccount" xml:space="preserve">
+    <value>select_account（同意画面を出す）</value>
+  </data>
+  <data name="DdlMaxAge0" xml:space="preserve">
+    <value>0（毎回、再認証）</value>
+  </data>
+  <data name="DdlMaxAge60" xml:space="preserve">
+    <value>60（1 分）</value>
+  </data>
+  <data name="DdlMaxAge600" xml:space="preserve">
+    <value>600（10 分。OIDC のボタンの既定）</value>
+  </data>
+  <data name="DdlNameIdFormatNone" xml:space="preserve">
+    <value>指定しない（IdP は unspecified に倒す）</value>
+  </data>
+  <data name="DdlNameIdFormatUnspecified" xml:space="preserve">
+    <value>unspecified（利用者名）</value>
+  </data>
+  <data name="DdlNameIdFormatEmailAddress" xml:space="preserve">
+    <value>emailAddress（メアド）</value>
+  </data>
+  <data name="DdlNameIdFormatPersistent" xml:space="preserve">
+    <value>persistent（RP ごとの PPID）</value>
+  </data>
+  <data name="DdlClientTypeNormal" xml:space="preserve">
+    <value>Saml2 / OAuth2.0 / OIDC用 Client</value>
+  </data>
+  <data name="DdlClientTypeRequirePkce" xml:space="preserve">
+    <value>PKCE 必須 (require_pkce) の Client (OAuth2.1)</value>
+  </data>
+  <data name="DdlClientTypeDevice" xml:space="preserve">
+    <value>Device Authorization Grant用 Client</value>
+  </data>
+  <data name="DdlClientTypeFapi1" xml:space="preserve">
+    <value>Financial-grade API - Part1用 Client</value>
+  </data>
+  <data name="DdlClientTypeFapi2" xml:space="preserve">
+    <value>Financial-grade API - Part2用 Client</value>
+  </data>
+  <data name="DdlClientTypeFapiCiba" xml:space="preserve">
+    <value>Financial-grade API - CIBA用 Client</value>
+  </data>
+  <data name="DdlClientTypeLoginUser" xml:space="preserve">
+    <value>ログイン・ユーザの Client</value>
+  </data>
+  <data name="DdlDefaultAlg" xml:space="preserve">
+    <value>{0}（既定）</value>
+  </data>
+  <data name="DdlNotNarrowed" xml:space="preserve">
+    <value>（絞らない）</value>
+  </data>
+  <data name="DdlTokenEndpointAuthMethodNone" xml:space="preserve">
+    <value>（明示しない ＝ client_secret_basic / client_secret_post）</value>
+  </data>
 </root>

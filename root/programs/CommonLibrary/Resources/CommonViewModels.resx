@@ -402,4 +402,70 @@
   <data name="TokenEndpointAuthMethodDescription" xml:space="preserve">
     <value>How this client authenticates itself. When empty, client_secret_basic and client_secret_post are allowed. private_key_jwt and tls_client_auth must be selected here; registering a key or a DN alone is not enough.</value>
   </data>
+  <data name="DdlNotSpecified" xml:space="preserve">
+    <value>Not specified</value>
+  </data>
+  <data name="DdlPromptNone" xml:space="preserve">
+    <value>none (no UI)</value>
+  </data>
+  <data name="DdlPromptLogin" xml:space="preserve">
+    <value>login (re-authenticate)</value>
+  </data>
+  <data name="DdlPromptConsent" xml:space="preserve">
+    <value>consent (re-consent)</value>
+  </data>
+  <data name="DdlPromptSelectAccount" xml:space="preserve">
+    <value>select_account (show the consent screen)</value>
+  </data>
+  <data name="DdlMaxAge0" xml:space="preserve">
+    <value>0 (re-authenticate every time)</value>
+  </data>
+  <data name="DdlMaxAge60" xml:space="preserve">
+    <value>60 (1 minute)</value>
+  </data>
+  <data name="DdlMaxAge600" xml:space="preserve">
+    <value>600 (10 minutes. The default of the OIDC buttons)</value>
+  </data>
+  <data name="DdlNameIdFormatNone" xml:space="preserve">
+    <value>Not specified (the IdP falls back to unspecified)</value>
+  </data>
+  <data name="DdlNameIdFormatUnspecified" xml:space="preserve">
+    <value>unspecified (user name)</value>
+  </data>
+  <data name="DdlNameIdFormatEmailAddress" xml:space="preserve">
+    <value>emailAddress (email address)</value>
+  </data>
+  <data name="DdlNameIdFormatPersistent" xml:space="preserve">
+    <value>persistent (PPID per RP)</value>
+  </data>
+  <data name="DdlClientTypeNormal" xml:space="preserve">
+    <value>Client for Saml2 / OAuth2.0 / OIDC</value>
+  </data>
+  <data name="DdlClientTypeRequirePkce" xml:space="preserve">
+    <value>Client that requires PKCE (require_pkce) (OAuth2.1)</value>
+  </data>
+  <data name="DdlClientTypeDevice" xml:space="preserve">
+    <value>Client for Device Authorization Grant</value>
+  </data>
+  <data name="DdlClientTypeFapi1" xml:space="preserve">
+    <value>Client for Financial-grade API - Part1</value>
+  </data>
+  <data name="DdlClientTypeFapi2" xml:space="preserve">
+    <value>Client for Financial-grade API - Part2</value>
+  </data>
+  <data name="DdlClientTypeFapiCiba" xml:space="preserve">
+    <value>Client for Financial-grade API - CIBA</value>
+  </data>
+  <data name="DdlClientTypeLoginUser" xml:space="preserve">
+    <value>Client of the signed-in user</value>
+  </data>
+  <data name="DdlDefaultAlg" xml:space="preserve">
+    <value>{0} (default)</value>
+  </data>
+  <data name="DdlNotNarrowed" xml:space="preserve">
+    <value>(not narrowed)</value>
+  </data>
+  <data name="DdlTokenEndpointAuthMethodNone" xml:space="preserve">
+    <value>(not specified = client_secret_basic / client_secret_post)</value>
+  </data>
 </root>

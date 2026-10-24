@@ -16,6 +16,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  20xx/xx/xx  ＸＸ ＸＸ         ＸＸＸＸ
 //*  2026/09/19  玄人 幸道         効いていない [Authorize] を外す（#223）
+//*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -75,7 +76,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // エラー発生時
                         // このカバレージを通過する場合、
                         // おそらく起動した画面のパスが間違っている。
-                        Console.WriteLine("このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。");
+                        Console.WriteLine(Resources.Diagnostics.ErrorScreenPathWrong);
                         Console.WriteLine(ex.Message);
                     }
                 }

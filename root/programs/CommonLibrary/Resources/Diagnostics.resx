@@ -1,0 +1,237 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Saml2Valid" xml:space="preserve">
+    <value>Verified the signature, Issuer, Audience, Recipient, InResponseTo and RelayState.</value>
+  </data>
+  <data name="Saml2NoResponse" xml:space="preserve">
+    <value>No SAMLResponse.</value>
+  </data>
+  <data name="Saml2NoSigAlg" xml:space="preserve">
+    <value>Not verified because SigAlg is missing.</value>
+  </data>
+  <data name="Saml2NoKey" xml:space="preserve">
+    <value>No certificate is configured to verify the signature.</value>
+  </data>
+  <data name="Saml2Unreadable" xml:space="preserve">
+    <value>Could not read the response.</value>
+  </data>
+  <data name="Saml2ErrorStatus" xml:space="preserve">
+    <value>An error response (StatusCode={0}).</value>
+  </data>
+  <data name="Saml2Expired" xml:space="preserve">
+    <value>The assertion has expired (NotOnOrAfter={0}).</value>
+  </data>
+  <data name="Saml2SignatureInvalid" xml:space="preserve">
+    <value>Failed the signature or XML (schema) verification.</value>
+  </data>
+  <data name="Saml2IssuerMismatch" xml:space="preserve">
+    <value>Issuer differs from the expected value: {0} (expected: {1})</value>
+  </data>
+  <data name="Saml2AudienceMismatch" xml:space="preserve">
+    <value>Audience differs from this ACS URL: {0} (expected: {1})</value>
+  </data>
+  <data name="Saml2RecipientMismatch" xml:space="preserve">
+    <value>Recipient differs from this ACS URL: {0} (expected: {1})</value>
+  </data>
+  <data name="Saml2InResponseToMismatch" xml:space="preserve">
+    <value>InResponseTo differs from the ID of the sent request: {0} (expected: {1})</value>
+  </data>
+  <data name="Saml2RelayStateMismatch" xml:space="preserve">
+    <value>RelayState differs from the sent state.</value>
+  </data>
+  <data name="Saml2BindingRedirect" xml:space="preserve">
+    <value>Redirect (GET. The signature is in the query string)</value>
+  </data>
+  <data name="Saml2BindingPost" xml:space="preserve">
+    <value>POST (the signature is inside the XML)</value>
+  </data>
+  <data name="ValueNone" xml:space="preserve">
+    <value>(none)</value>
+  </data>
+  <data name="SelfTestCibaRequestObjectInvalid" xml:space="preserve">
+    <value>Self-verification of the authentication request (signed JWT) failed. Not sent.</value>
+  </data>
+  <data name="SelfTestCibaNotAccepted" xml:space="preserve">
+    <value>The authentication request was not accepted (no auth_req_id): {0}</value>
+  </data>
+  <data name="SelfTestResponseNotJson" xml:space="preserve">
+    <value>The response is not JSON</value>
+  </data>
+  <data name="SelfTestDeviceCodeMissing" xml:space="preserve">
+    <value>client_id or device_code was not passed. Not queried.</value>
+  </data>
+  <data name="SelfTestReachedUserInfo" xml:space="preserve">
+    <value>Got the token and reached /userinfo.</value>
+  </data>
+  <data name="SelfTestPollingEnded" xml:space="preserve">
+    <value>Polling ended: {0}</value>
+  </data>
+  <data name="SelfTestPollingTimedOut" xml:space="preserve">
+    <value>Reached the limit of waiting for approval ({0} seconds). Not approved (still authorization_pending).</value>
+  </data>
+  <data name="SelfTestNoError" xml:space="preserve">
+    <value>(no error)</value>
+  </data>
+  <data name="CheckFormat" xml:space="preserve">
+    <value>[Configuration check] {0} (CONFIGURATION.md section 11)</value>
+  </data>
+  <data name="CheckAdministratorNotFilledIn" xml:space="preserve">
+    <value>AdministratorUID / AdministratorPWD are still the template values.</value>
+  </data>
+  <data name="CheckIsDebug" xml:space="preserve">
+    <value>IsDebug is true. Generating test users and substituting email / SMS sending are enabled.</value>
+  </data>
+  <data name="CheckTestUserPwd" xml:space="preserve">
+    <value>TestUserPWD is set. If IsDebug is true, test users are created.</value>
+  </data>
+  <data name="CheckTestEndpointsOpen" xml:space="preserve">
+    <value>IsLockedDownTestEndpoints is false. The self-test screen (/Home/Saml2OAuth2Starters) is open.</value>
+  </data>
+  <data name="CheckCorsWildcard" xml:space="preserve">
+    <value>CorsAllowedOrigins contains *. Values that cannot be treated as an origin are dropped, so they are not allowed. Write them as https://host[:port].</value>
+  </data>
+  <data name="CheckFcmOutbox" xml:space="preserve">
+    <value>FcmOutboxDirectory is set. Push notifications are written to files instead of being sent to FCM.</value>
+  </data>
+  <data name="CheckCibaDebugMode" xml:space="preserve">
+    <value>CibaProvider.DebugModeWithOutAD is built as true. CIBA succeeds without registering or approving an authentication device.</value>
+  </data>
+  <data name="CheckRenamedKey" xml:space="preserve">
+    <value>The old key name ({0}) is used. Change it to {1}.</value>
+  </data>
+  <data name="CheckDebugTraceLog" xml:space="preserve">
+    <value>EnableDebugTraceLog is true.</value>
+  </data>
+  <data name="CheckLoosePkce" xml:space="preserve">
+    <value>{0} is false. Set it to true to align with OAuth 2.1 (clients that do not use PKCE, or use plain, will no longer connect).</value>
+  </data>
+  <data name="SessionStoreConnectionStringRequired" xml:space="preserve">
+    <value>SessionStoreConnectionString is required because SessionStoreType is {0}.</value>
+  </data>
+  <data name="TestClientsUnknownKey" xml:space="preserve">
+    <value>TestClients.Override: unknown key: {0}</value>
+  </data>
+  <data name="ErrorScreenPathWrong" xml:space="preserve">
+    <value>If this coverage is reached, the path of the launched screen is probably wrong.</value>
+  </data>
+  <data name="ErrorScreenSuppressed" xml:space="preserve">
+    <value>An error on the development error screen (suppressed to avoid an infinite loop).</value>
+  </data>
+</root>

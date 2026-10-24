@@ -34,6 +34,7 @@
 //*  2026/10/13  玄人 幸道         検証鍵にRSAを受けるオーバーロードを足した（#291）
 //*  2026/10/14  玄人 幸道         鍵の列を受ける版を足した（#292 の段階 3）
 //*  2026/10/22  玄人 幸道         検証を Open棟梁 の SAML2Client.VerifyResponseWithReason に移した（#294）
+//*  2026/10/24  玄人 幸道         検証結果の文言を resx にした（#294）
 //**********************************************************************************
 
 using System;
@@ -93,56 +94,56 @@ namespace MultiPurposeAuthSite.SamlProviders
             switch (result.Reason)
             {
                 case SAML2VerifyResult.Reasons.Valid:
-                    return "署名、Issuer、Audience、Recipient、InResponseTo、RelayState を照合した。";
+                    return Resources.Diagnostics.Saml2Valid;
 
                 case SAML2VerifyResult.Reasons.NoResponse:
-                    return "SAMLResponse が無い。";
+                    return Resources.Diagnostics.Saml2NoResponse;
 
                 case SAML2VerifyResult.Reasons.NoSigAlg:
-                    return "SigAlg が無いため、検証していない。";
+                    return Resources.Diagnostics.Saml2NoSigAlg;
 
                 case SAML2VerifyResult.Reasons.NoKey:
                     // **鍵が無ければ検証できない。** **通してはならない。**
-                    return "署名を検証する証明書が設定されていない。";
+                    return Resources.Diagnostics.Saml2NoKey;
 
                 case SAML2VerifyResult.Reasons.Unreadable:
-                    return "応答を読めなかった。";
+                    return Resources.Diagnostics.Saml2Unreadable;
 
                 case SAML2VerifyResult.Reasons.ErrorStatus:
-                    return "エラー応答である（StatusCode=" + result.StatusCode + "）。";
+                    return string.Format(Resources.Diagnostics.Saml2ErrorStatus, result.StatusCode);
 
                 case SAML2VerifyResult.Reasons.Expired:
                     if (result.NotExpired == false)
                     {
-                        return "アサーションの有効期限が切れている（NotOnOrAfter="
-                            + CmnSaml2Response.NotOnOrAfterOf(result) + "）。";
+                        return string.Format(Resources.Diagnostics.Saml2Expired,
+                            CmnSaml2Response.NotOnOrAfterOf(result));
                     }
 
                     // **NotOnOrAfter が無い・読めない**（従来どおり、署名の検証で落ちたものとして扱う）。
-                    return "署名または XML（スキーマ）の検証で落ちた。";
+                    return Resources.Diagnostics.Saml2SignatureInvalid;
 
                 case SAML2VerifyResult.Reasons.IssuerMismatch:
-                    return "Issuer が期待値と違う : "
-                        + CmnSaml2Response.OrNone(result.Issuer) + "（期待 : " + expectedIssuer + "）";
+                    return string.Format(Resources.Diagnostics.Saml2IssuerMismatch,
+                        CmnSaml2Response.OrNone(result.Issuer), expectedIssuer);
 
                 case SAML2VerifyResult.Reasons.AudienceMismatch:
-                    return "Audience が自分の ACS URL と違う : "
-                        + CmnSaml2Response.OrNone(result.Audience) + "（期待 : " + expectedAcsUrl + "）";
+                    return string.Format(Resources.Diagnostics.Saml2AudienceMismatch,
+                        CmnSaml2Response.OrNone(result.Audience), expectedAcsUrl);
 
                 case SAML2VerifyResult.Reasons.RecipientMismatch:
-                    return "Recipient が自分の ACS URL と違う : "
-                        + CmnSaml2Response.OrNone(result.Recipient) + "（期待 : " + expectedAcsUrl + "）";
+                    return string.Format(Resources.Diagnostics.Saml2RecipientMismatch,
+                        CmnSaml2Response.OrNone(result.Recipient), expectedAcsUrl);
 
                 case SAML2VerifyResult.Reasons.InResponseToMismatch:
-                    return "InResponseTo が、送った要求の ID と違う : "
-                        + CmnSaml2Response.OrNone(result.InResponseTo) + "（期待 : " + expectedInResponseTo + "）";
+                    return string.Format(Resources.Diagnostics.Saml2InResponseToMismatch,
+                        CmnSaml2Response.OrNone(result.InResponseTo), expectedInResponseTo);
 
                 case SAML2VerifyResult.Reasons.RelayStateMismatch:
-                    return "RelayState が、送った state と違う。";
+                    return Resources.Diagnostics.Saml2RelayStateMismatch;
 
                 default:
                     // SignatureInvalid / Conflicted（Response と Assertion の食い違い）
-                    return "署名または XML（スキーマ）の検証で落ちた。";
+                    return Resources.Diagnostics.Saml2SignatureInvalid;
             }
         }
 
@@ -156,7 +157,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         public static string BindingOf(SAML2VerifyResult result)
         {
             return result.IsRedirect
-                ? "Redirect（GET。署名はクエリ文字列に付く）" : "POST（署名は XML の中）";
+                ? Resources.Diagnostics.Saml2BindingRedirect : Resources.Diagnostics.Saml2BindingPost;
         }
 
         /// <summary>NotOnOrAfter（表示する形。無ければ空）</summary>
@@ -252,7 +253,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <returns>表示する文字列</returns>
         private static string OrNone(string value)
         {
-            return string.IsNullOrEmpty(value) ? "（無し）" : value;
+            return string.IsNullOrEmpty(value) ? Resources.Diagnostics.ValueNone : value;
         }
 
         #endregion

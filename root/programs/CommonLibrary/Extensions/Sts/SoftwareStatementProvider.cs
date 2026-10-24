@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/20  玄人 幸道         新規（#307 の段階 4）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -465,7 +466,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             exceeded = "";
 
             if (!SoftwareStatementProvider.IsWithin(
-                metadata, claims, "scope", issuer.AllowedScope, out string overScope))
+                metadata, claims, OAuth2AndOIDCConst.scope, issuer.AllowedScope, out string overScope))
             {
                 exceeded = "a scope (" + overScope + ")";
                 return false;

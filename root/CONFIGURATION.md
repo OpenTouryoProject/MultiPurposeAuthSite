@@ -3708,6 +3708,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 **このチェックリストの読み落としを拾うため、起動時にも確かめている**（`Co/ProductionCheck`。両アプリ）。
 
 - 該当すると、`OPERATION` ログに `[設定の確認] …（CONFIGURATION.md 11 節）` が出る
+  （**文言は resx**（`Resources/Diagnostics`）。**日本語以外のカルチャでは** `[Configuration check] … (CONFIGURATION.md section 11)`）
 - **起動は止めない。** 設定を直せない状況で復旧できなくなるため
 - **`UserStoreType` が `mem` のときは何も言わない**（開発・テスト専用の構成なので、雑音にしかならない）。
   ただし `AdministratorUID` / `AdministratorPWD` が雛形の値のままのときだけは、ストアによらず言う

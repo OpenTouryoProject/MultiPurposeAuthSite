@@ -64,6 +64,7 @@
 //*  2026/10/22  玄人 幸道         空白区切りの分解と HttpClient の口を Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         openid を常に広告するようにした（EnableOpenIDConnect の廃止。#314）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -677,9 +678,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("client_secret"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(OAuth2AndOIDCConst.client_secret))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["client_secret"];
+                    return this.Oauth2ClientsInfo[client_id][OAuth2AndOIDCConst.client_secret];
                 }
             }
 
@@ -798,9 +799,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     // Code
-                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_code"))
+                    if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriCode))
                     {
-                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
+                        return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriCode];
                     }
                 }
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
@@ -811,9 +812,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     // Others
-                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_token"))
+                    if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriToken))
                     {
-                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
+                        return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriToken];
                     }
                 }
             }
@@ -869,9 +870,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("frontchannel_logout_uri"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientFrontChannelLogoutUri))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["frontchannel_logout_uri"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientFrontChannelLogoutUri];
                 }
             }
 
@@ -906,9 +907,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("backchannel_logout_uri"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientBackChannelLogoutUri))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["backchannel_logout_uri"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientBackChannelLogoutUri];
                 }
             }
 
@@ -942,9 +943,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("post_logout_redirect_uri"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientPostLogoutRedirectUri))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["post_logout_redirect_uri"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientPostLogoutRedirectUri];
                 }
             }
 
@@ -983,9 +984,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_saml"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriSaml))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_saml"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriSaml];
                 }
             }
 
@@ -1027,9 +1028,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("jwk_rsa_publickey"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientJwkRsaPublicKey))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["jwk_rsa_publickey"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientJwkRsaPublicKey];
                 }
             }
 
@@ -1069,9 +1070,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("jwk_ecdsa_publickey"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientJwkEcdsaPublicKey))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["jwk_ecdsa_publickey"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientJwkEcdsaPublicKey];
                 }
             }
 
@@ -1107,7 +1108,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetJwksUri(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "jwks_uri", model => model.JwksUri);
+            return this.GetRegisteredValue(client_id, OAuth2AndOIDCConst.jwks_uri, model => model.JwksUri);
         }
 
         #endregion
@@ -1128,10 +1129,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (Dictionary<string, string> client in this.Oauth2ClientsInfo.Values)
             {
-                if (client.ContainsKey("jwks_uri")
-                    && !string.IsNullOrEmpty(client["jwks_uri"]))
+                if (client.ContainsKey(OAuth2AndOIDCConst.jwks_uri)
+                    && !string.IsNullOrEmpty(client[OAuth2AndOIDCConst.jwks_uri]))
                 {
-                    urls.Add(client["jwks_uri"]);
+                    urls.Add(client[OAuth2AndOIDCConst.jwks_uri]);
                 }
             }
 
@@ -1162,9 +1163,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("tls_client_auth_subject_dn"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientTlsClientAuthSubjectDn))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["tls_client_auth_subject_dn"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientTlsClientAuthSubjectDn];
                 }
             }
 
@@ -1220,10 +1221,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("subject_types"))
+                if (dic.ContainsKey(Const.ClientSubjectTypes))
                 {
                     // 設定値
-                    return this.Oauth2ClientsInfo[client_id]["subject_types"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientSubjectTypes];
                 }
                 else
                 {
@@ -1280,10 +1281,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("oauth2_oidc_mode"))
+                if (dic.ContainsKey(Const.ClientOAuth2OidcMode))
                 {
                     // 設定値
-                    return this.Oauth2ClientsInfo[client_id]["oauth2_oidc_mode"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientOAuth2OidcMode];
                 }
                 else
                 {
@@ -1342,9 +1343,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("scope") && dic["scope"] != null)
+                if (dic.ContainsKey(OAuth2AndOIDCConst.scope) && dic[OAuth2AndOIDCConst.scope] != null)
                 {
-                    return OAuth2AndOIDCSpec.ToDistinctList(dic["scope"]);
+                    return OAuth2AndOIDCSpec.ToDistinctList(dic[OAuth2AndOIDCConst.scope]);
                 }
 
                 // **構成ファイルに在るクライアントは、ここで打ち切る**（従来どおり）。
@@ -1381,7 +1382,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public List<string> GetClientGrantTypes(string client_id)
         {
-            return this.GetClientTypeList(client_id, "grant_types", false);
+            return this.GetClientTypeList(client_id, Const.ClientGrantTypes, false);
         }
 
         /// <summary>client_id から、使ってよい response_type（登録の response_types）を取得する。</summary>
@@ -1396,7 +1397,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public List<string> GetClientResponseTypes(string client_id)
         {
-            return this.GetClientTypeList(client_id, "response_types", true);
+            return this.GetClientTypeList(client_id, Const.ClientResponseTypes, true);
         }
 
         /// <summary>登録の列挙（grant_types / response_types）を読む</summary>
@@ -1431,7 +1432,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (model != null)
             {
-                string value = (key == "grant_types") ? model.GrantTypes : model.ResponseTypes;
+                string value = (key == Const.ClientGrantTypes) ? model.GrantTypes : model.ResponseTypes;
 
                 if (!string.IsNullOrWhiteSpace(value))
                 {
@@ -1492,10 +1493,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("require_pkce"))
+                if (dic.ContainsKey(Const.ClientRequirePkce))
                 {
                     // **空文字列で Convert.ToBoolean は例外になる**ので、TryParse で読む。
-                    bool.TryParse(dic["require_pkce"], out bool require);
+                    bool.TryParse(dic[Const.ClientRequirePkce], out bool require);
                     return require;
                 }
 
@@ -1546,10 +1547,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("id_token_signed_response_alg")
-                    && !string.IsNullOrEmpty(dic["id_token_signed_response_alg"]))
+                if (dic.ContainsKey(Const.ClientIdTokenSignedResponseAlg)
+                    && !string.IsNullOrEmpty(dic[Const.ClientIdTokenSignedResponseAlg]))
                 {
-                    return dic["id_token_signed_response_alg"];
+                    return dic[Const.ClientIdTokenSignedResponseAlg];
                 }
 
                 return JwtConst.RS256;
@@ -1594,7 +1595,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetTokenEndpointAuthSigningAlg(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "token_endpoint_auth_signing_alg",
+            return this.GetRegisteredValue(client_id, Const.ClientTokenEndpointAuthSigningAlg,
                 model => model.TokenEndpointAuthSigningAlg);
         }
 
@@ -1612,7 +1613,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetRequestObjectSigningAlg(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "request_object_signing_alg",
+            return this.GetRegisteredValue(client_id, Const.ClientRequestObjectSigningAlg,
                 model => model.RequestObjectSigningAlg);
         }
 
@@ -1635,7 +1636,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetTokenEndpointAuthMethod(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "token_endpoint_auth_method",
+            return this.GetRegisteredValue(client_id, Const.ClientTokenEndpointAuthMethod,
                 model => model.TokenEndpointAuthMethod);
         }
 
@@ -1715,22 +1716,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Dictionary<string, string> client = this.Oauth2ClientsInfo[clientId];
 
                 // **confidential は対象外**（client_secret を持つもの）。
-                if (client.ContainsKey("client_secret")
-                    && !string.IsNullOrEmpty(client["client_secret"]))
+                if (client.ContainsKey(OAuth2AndOIDCConst.client_secret)
+                    && !string.IsNullOrEmpty(client[OAuth2AndOIDCConst.client_secret]))
                 {
                     continue;
                 }
 
                 // **`web_origins` が書かれていれば、それを使う**（#266）。
                 //   **書いたときは、導出しない**（登録どおりに絞る）。
-                if (client.ContainsKey("web_origins")
-                    && !string.IsNullOrEmpty(client["web_origins"]))
+                if (client.ContainsKey(Const.ClientWebOrigins)
+                    && !string.IsNullOrEmpty(client[Const.ClientWebOrigins]))
                 {
-                    uris.Add(client["web_origins"]);
+                    uris.Add(client[Const.ClientWebOrigins]);
                     continue;
                 }
 
-                foreach (string key in new string[] { "redirect_uri_code", "redirect_uri_token" })
+                foreach (string key in new string[] { Const.ClientRedirectUriCode, Const.ClientRedirectUriToken })
                 {
                     if (client.ContainsKey(key)
                         && !string.IsNullOrEmpty(client[key]))

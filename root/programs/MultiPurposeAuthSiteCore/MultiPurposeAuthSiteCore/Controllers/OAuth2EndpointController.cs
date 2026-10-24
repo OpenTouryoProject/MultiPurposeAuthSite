@@ -82,6 +82,7 @@
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -382,7 +383,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return this.OAuth2Error(err, "token"); // 失敗（RFC 6749 5.2 : 400 / 401）（#196）
+            return this.OAuth2Error(err, Const.EndpointToken); // 失敗（RFC 6749 5.2 : 400 / 401）（#196）
         }
 
         #endregion
@@ -698,7 +699,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return this.OAuth2Error(err, "revoke"); // 失敗（RFC 7009 2.2.1 : RFC 6749 5.2 のとおり 400 / 401）（#196）
+            return this.OAuth2Error(err, Const.EndpointRevoke); // 失敗（RFC 7009 2.2.1 : RFC 6749 5.2 のとおり 400 / 401）（#196）
         }
 
         #endregion
@@ -790,7 +791,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return this.OAuth2Error(err, "introspect"); // 失敗（RFC 7662 2.3 : RFC 6749 5.2 のとおり 400 / 401）（#196）
+            return this.OAuth2Error(err, Const.EndpointIntrospect); // 失敗（RFC 7662 2.3 : RFC 6749 5.2 のとおり 400 / 401）（#196）
         }
 
         #endregion
@@ -837,7 +838,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client},
                         {OAuth2AndOIDCConst.error_description, "Invalid credential."}
-                    }, "device_authz");
+                    }, Const.EndpointDeviceAuthZ);
                 }
 
                 // **登録種別で、このグラントを許すか**（normal と device だけ）。
@@ -850,7 +851,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client},
                         {OAuth2AndOIDCConst.error_description,
                             "This client is not allowed to use the device authorization grant."}
-                    }, "device_authz");
+                    }, Const.EndpointDeviceAuthZ);
                 }
 
                 // scopeパラメタ
@@ -860,7 +861,7 @@ namespace MultiPurposeAuthSite.Controllers
                 Dictionary<string, string> tempDic = new Dictionary<string, string>()
                 {
                     {"client_id", client_id},
-                    {"scope", scope}
+                    {OAuth2AndOIDCConst.scope, scope}
                 };
 
                 //string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(...);
@@ -904,7 +905,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 {OAuth2AndOIDCConst.error, err},
                 {OAuth2AndOIDCConst.error_description, errDescription}
-            }, "device_authz");
+            }, Const.EndpointDeviceAuthZ);
         }
 
         // DeviceAuthZResponse画面 → HomeControllerに。
@@ -1141,7 +1142,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 {OAuth2AndOIDCConst.error, err},
                 {OAuth2AndOIDCConst.error_description, errDescription}
-            }, "ciba_authz");
+            }, Const.EndpointCibaAuthZ);
         }
 
         /// <summary>
@@ -1169,7 +1170,7 @@ namespace MultiPurposeAuthSite.Controllers
                 out string bearerToken, out string authScheme))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
-                return this.NGResult(401, "ciba_result", null);
+                return this.NGResult(401, Const.EndpointCibaResult, null);
             }
 
             ApplicationUser user = null;
@@ -1196,12 +1197,12 @@ namespace MultiPurposeAuthSite.Controllers
             if (user == null)
             {
                 // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-                return this.NGResult(401, "ciba_result",
+                return this.NGResult(401, Const.EndpointCibaResult,
                 dpopError ?? OAuth2AndOIDCConst.invalid_token);
             }
 
             // 変数
-            string auth_req_id = (formData == null) ? null : (string)formData["auth_req_id"];
+            string auth_req_id = (formData == null) ? null : (string)formData[OAuth2AndOIDCConst.auth_req_id];
             string temp = (formData == null) ? null : (string)formData["result"];
 
             if (!string.IsNullOrEmpty(auth_req_id)
@@ -1214,11 +1215,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // **自分宛ての要求ではない（または、その要求が無い）。**
                 //   区別して返すと、auth_req_id の存在を推測させるので、同じ応答にする。
-                return this.NGResult(400, "ciba_result", null);
+                return this.NGResult(400, Const.EndpointCibaResult, null);
             }
 
             // パラメタの不備（#196 : 400）
-            return this.NGResult(400, "ciba_result", null);
+            return this.NGResult(400, Const.EndpointCibaResult, null);
         }
 
         #endregion
@@ -1298,7 +1299,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
 
-                return this.OAuth2Error(err, "par");
+                return this.OAuth2Error(err, Const.EndpointPar);
             }
 
             // client_secret_basic
@@ -1333,7 +1334,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return new ObjectResult(ret) { StatusCode = 201 };
             }
 
-            return this.OAuth2Error(err, "par");
+            return this.OAuth2Error(err, Const.EndpointPar);
         }
 
         #endregion
@@ -1520,7 +1521,7 @@ namespace MultiPurposeAuthSite.Controllers
                 out string bearerToken, out string authScheme))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）
-                return this.NGResult(401, "2fa_result", null);
+                return this.NGResult(401, Const.EndpointTwoFactorResult, null);
             }
 
             ApplicationUser user = null;
@@ -1547,7 +1548,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (user == null)
             {
                 // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）
-                return this.NGResult(401, "2fa_result",
+                return this.NGResult(401, Const.EndpointTwoFactorResult,
                 dpopError ?? OAuth2AndOIDCConst.invalid_token);
             }
 
@@ -1556,7 +1557,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (string.IsNullOrEmpty(code))
             {
                 // パラメタの不備
-                return this.NGResult(400, "2fa_result", null);
+                return this.NGResult(400, Const.EndpointTwoFactorResult, null);
             }
 
             // **保存する前に、そのコードがこの利用者のものかを確かめる。**
@@ -1565,7 +1566,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (!await UserManager.VerifyTwoFactorTokenAsync(user, "Email", code))
             {
                 // 合わないコード（存在を推測させないよう、パラメタの不備と同じ応答にする）
-                return this.NGResult(400, "2fa_result", null);
+                return this.NGResult(400, Const.EndpointTwoFactorResult, null);
             }
 
             // 承認を記録する（待っているブラウザが拾う）

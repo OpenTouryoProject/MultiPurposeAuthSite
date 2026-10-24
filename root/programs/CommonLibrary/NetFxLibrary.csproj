@@ -209,6 +209,11 @@
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
     </Compile>
+    <Compile Include="Resources\Diagnostics.Designer.cs">
+      <DependentUpon>Diagnostics.resx</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
     <Compile Include="Resources\ManageController.Designer.cs">
       <DependentUpon>ManageController.resx</DependentUpon>
       <AutoGen>True</AutoGen>
@@ -298,6 +303,11 @@
     <EmbeddedResource Include="Resources\CommonViewModels.resx">
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>CommonViewModels.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Diagnostics.ja.resx" />
+    <EmbeddedResource Include="Resources\Diagnostics.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Diagnostics.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\ManageController.ja.resx" />
     <EmbeddedResource Include="Resources\ManageController.resx">

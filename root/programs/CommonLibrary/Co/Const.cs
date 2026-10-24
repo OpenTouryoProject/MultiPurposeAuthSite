@@ -57,6 +57,7 @@
 //*  2026/10/24  玄人 幸道         StandardScopes から userid を外した（独自 scope の userid を廃止。#294）
 //*  2026/10/24  玄人 幸道         StandardScopes を SelfTestScopes にリネームした（使うのは自己テストだけ。独自の roles を含む。#294）
 //*  2026/10/24  玄人 幸道         OidcScopes / SelfTestScopes / IdFederationScopes を const にした（宣言の順で初期化が欠けないように。#294）
+//*  2026/10/24  玄人 幸道         クライアント登録の項目名・エンドポイントの名前・ポーリングの台帳の項目名・token_type を追加（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -255,14 +256,18 @@ namespace MultiPurposeAuthSite.Co
 
         #region STS
 
-        #region Scope
+        #region token_type
 
-        /// <summary>OIDCのscope</summary>
+        /// <summary>token_type（RFC 6750）</summary>
         /// <remarks>
-        /// `openid` と <see cref="SelfTestScopes"/> を合わせたもの。
+        /// **値は大文字小文字を区別しない**（RFC 6749 §5.1）。**従来どおり小文字で返す**
+        /// （Open棟梁 の `OAuth2AndOIDCConst.Bearer` は、Authorization ヘッダの "Bearer"）。
         /// </remarks>
-        public const string OidcScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " " + SelfTestScopes;
+        public const string TokenTypeBearer = "bearer";
+
+        #endregion
+
+        #region Scope
 
         /// <summary>DCRの管理 API 専用の scope</summary>
         /// <remarks>
@@ -278,7 +283,14 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string ScopeClientRegistration = "client_registration";
 
-        /// <summary>ID連携 scope</summary>
+        /// <summary>OIDCのscopes</summary>
+        /// <remarks>
+        /// `openid` と <see cref="SelfTestScopes"/> を合わせたもの。
+        /// </remarks>
+        public const string OidcScopes =
+            OAuth2AndOIDCConst.Scope_Openid + " " + SelfTestScopes;
+
+        /// <summary>ID連携のscopes</summary>
         /// <remarks>
         /// 標準のスコープだけを要求する。
         /// 上流が `email_verified` を返す。突き合わせは常にメアド。
@@ -292,7 +304,141 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region 再認証（max_age）
+        #region Client登録項目
+
+        // **登録（DB の JSON・TestClients・画面・動的クライアント登録）で同じ名前を使う。**
+        //   **Open棟梁 の OAuth2AndOIDCConst に在るもの**（scope / jwks_uri / redirect_uris / client_secret）は、そちらを使う。
+
+        /// <summary>SAML2 の ACS URL（この IdP の独自）</summary>
+        public const string ClientRedirectUriSaml = "redirect_uri_saml";
+
+        /// <summary>code を返す redirect_uri（この IdP の独自）</summary>
+        public const string ClientRedirectUriCode = "redirect_uri_code";
+
+        /// <summary>token を返す redirect_uri（この IdP の独自）</summary>
+        public const string ClientRedirectUriToken = "redirect_uri_token";
+
+        /// <summary>post_logout_redirect_uri（RP-Initiated Logout 1.0）</summary>
+        public const string ClientPostLogoutRedirectUri = "post_logout_redirect_uri";
+
+        /// <summary>frontchannel_logout_uri（Front-Channel Logout 1.0）</summary>
+        public const string ClientFrontChannelLogoutUri = "frontchannel_logout_uri";
+
+        /// <summary>backchannel_logout_uri（Back-Channel Logout 1.0）</summary>
+        public const string ClientBackChannelLogoutUri = "backchannel_logout_uri";
+
+        /// <summary>RSA の公開鍵（JWK。この IdP の独自）</summary>
+        public const string ClientJwkRsaPublicKey = "jwk_rsa_publickey";
+
+        /// <summary>ECDSA の公開鍵（JWK。この IdP の独自）</summary>
+        public const string ClientJwkEcdsaPublicKey = "jwk_ecdsa_publickey";
+
+        /// <summary>jwks（RFC 7591 §2）</summary>
+        public const string ClientJwks = "jwks";
+
+        /// <summary>tls_client_auth_subject_dn（RFC 8705 §2.1.2）</summary>
+        public const string ClientTlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
+
+        /// <summary>sub の種別（登録の列。この IdP の独自の名前）</summary>
+        public const string ClientSubjectTypes = "subject_types";
+
+        /// <summary>subject_type（OIDC DCR 1.0 §2）</summary>
+        public const string ClientSubjectType = "subject_type";
+
+        /// <summary>id_token_signed_response_alg（OIDC DCR 1.0 §2）</summary>
+        public const string ClientIdTokenSignedResponseAlg = "id_token_signed_response_alg";
+
+        /// <summary>token_endpoint_auth_method（RFC 7591 §2）</summary>
+        public const string ClientTokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        /// <summary>token_endpoint_auth_signing_alg（OIDC DCR 1.0 §2）</summary>
+        public const string ClientTokenEndpointAuthSigningAlg = "token_endpoint_auth_signing_alg";
+
+        /// <summary>request_object_signing_alg（OIDC DCR 1.0 §2）</summary>
+        public const string ClientRequestObjectSigningAlg = "request_object_signing_alg";
+
+        /// <summary>CORS で許すオリジン（この IdP の独自）</summary>
+        public const string ClientWebOrigins = "web_origins";
+
+        /// <summary>クライアントの種別（この IdP の独自）</summary>
+        public const string ClientType = "client_type";
+
+        /// <summary>クライアントのモード（この IdP の独自）</summary>
+        public const string ClientOAuth2OidcMode = "oauth2_oidc_mode";
+
+        /// <summary>PKCE を必須にするか（この IdP の独自）</summary>
+        public const string ClientRequirePkce = "require_pkce";
+
+        /// <summary>grant_types（RFC 7591 §2）</summary>
+        public const string ClientGrantTypes = "grant_types";
+
+        /// <summary>response_types（RFC 7591 §2）</summary>
+        public const string ClientResponseTypes = "response_types";
+
+        /// <summary>client_uri（RFC 7591 §2）</summary>
+        public const string ClientUri = "client_uri";
+
+        /// <summary>logo_uri（RFC 7591 §2）</summary>
+        public const string ClientLogoUri = "logo_uri";
+
+        /// <summary>tos_uri（RFC 7591 §2）</summary>
+        public const string ClientTosUri = "tos_uri";
+
+        /// <summary>policy_uri（RFC 7591 §2）</summary>
+        public const string ClientPolicyUri = "policy_uri";
+
+        /// <summary>contacts（RFC 7591 §2）</summary>
+        public const string ClientContacts = "contacts";
+
+        /// <summary>software_id（RFC 7591 §2）</summary>
+        public const string ClientSoftwareId = "software_id";
+
+        /// <summary>software_version（RFC 7591 §2）</summary>
+        public const string ClientSoftwareVersion = "software_version";
+
+        /// <summary>管理用トークンのハッシュ（RFC 7592。この IdP の独自の保存名）</summary>
+        public const string ClientRegistrationAccessTokenHash = "registration_access_token_hash";
+        #endregion
+
+        #region Endpoint名
+
+        // **レート制限の数える単位**（`RateLimitProvider`）と、**WWW-Authenticate の realm** に使う。
+
+        /// <summary>/token</summary>
+        public const string EndpointToken = "token";
+
+        /// <summary>/revoke</summary>
+        public const string EndpointRevoke = "revoke";
+
+        /// <summary>/introspect</summary>
+        public const string EndpointIntrospect = "introspect";
+
+        /// <summary>/device_authz</summary>
+        public const string EndpointDeviceAuthZ = "device_authz";
+
+        /// <summary>/device_verify</summary>
+        public const string EndpointDeviceVerify = "device_verify";
+
+        /// <summary>/ciba_authz</summary>
+        public const string EndpointCibaAuthZ = "ciba_authz";
+
+        /// <summary>/par</summary>
+        public const string EndpointPar = "par";
+
+        /// <summary>/jwkcerts</summary>
+        public const string EndpointJwkCerts = "jwkcerts";
+
+        /// <summary>/register（動的クライアント登録）</summary>
+        public const string EndpointRegister = "register";
+
+        /// <summary>/ciba_result（認証デバイスからの結果）</summary>
+        public const string EndpointCibaResult = "ciba_result";
+
+        /// <summary>/2fa_result（認証デバイスからの結果）</summary>
+        public const string EndpointTwoFactorResult = "2fa_result";
+        #endregion
+
+        #region 再認証 (max_age)
 
         /// <summary>再認証を求めた時刻を保存するCookieのKey</summary>
         /// <remarks>
@@ -315,6 +461,23 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string UrnCnfJktClaim = "urn:oauth:cnf:jkt";
 
+        #endregion
+
+        #region Polling台帳項目名
+
+        // **CIBA と Device Authorization Grant の台帳**（`CibaProvider` / `DeviceAuthZProvider`）の項目。
+
+        /// <summary>要求の期限</summary>
+        public const string PollingAuthReqExp = "authReqExp";
+
+        /// <summary>承認されたときの認可コード</summary>
+        public const string PollingAuthZCode = "authZCode";
+
+        /// <summary>認証デバイスの結果</summary>
+        public const string PollingResult = "result";
+
+        /// <summary>前回のポーリングの時刻（slow_down の判定）</summary>
+        public const string PollingLastPolled = "lastPolled";
         #endregion
 
         #region sid（Front / Back-Channel Logout）

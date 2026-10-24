@@ -35,6 +35,7 @@
 //*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
 //*  2026/10/10  玄人 幸道         SAML2 の応答の検証を CmnSaml2Response へ移した（#286 の段階 1）
 //*  2026/10/22  玄人 幸道         SAML2 の応答の検証を Open棟梁 の SAML2Client に移した（#294）
+//*  2026/10/24  玄人 幸道         結果の文言を resx にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -345,7 +346,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (string.IsNullOrEmpty(ret.RequestObject))
             {
-                ret.Reason = "認証要求（署名付き JWT）の自己検証に失敗した。送っていない。";
+                ret.Reason = Resources.Diagnostics.SelfTestCibaRequestObjectInvalid;
                 return ret;
             }
 
@@ -372,8 +373,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (string.IsNullOrEmpty(ret.AuthReqId))
             {
                 // **端末が登録されていなければ、ここで終わる。**
-                ret.Reason = "認証要求が受け付けられなかった（auth_req_id が返らない） : "
-                    + SelfTestClient.ErrorOf(authZ, "応答が JSON ではない");
+                ret.Reason = string.Format(Resources.Diagnostics.SelfTestCibaNotAccepted,
+                    SelfTestClient.ErrorOf(authZ, Resources.Diagnostics.SelfTestResponseNotJson));
                 return ret;
             }
 
@@ -489,7 +490,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(deviceCode))
             {
-                ret.Reason = "client_id か device_code が渡されていない。問い合わせていない。";
+                ret.Reason = Resources.Diagnostics.SelfTestDeviceCodeMissing;
                 return ret;
             }
 
@@ -589,7 +590,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         (string)token[OAuth2AndOIDCConst.AccessToken]);
 
                     ret.Verdict = "NORMAL_END";
-                    ret.Reason = "トークンを取得し、/userinfo まで通った。";
+                    ret.Reason = Resources.Diagnostics.SelfTestReachedUserInfo;
                     return ret;
                 }
 
@@ -603,15 +604,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 else if (error != OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
                 {
                     // **authorization_pending 以外は、待っても変わらない**（拒否・期限切れなど）。
-                    ret.Reason = "ポーリングが終了した : "
-                        + SelfTestClient.ErrorOf(token, "応答が JSON ではない");
+                    ret.Reason = string.Format(Resources.Diagnostics.SelfTestPollingEnded,
+                        SelfTestClient.ErrorOf(token, Resources.Diagnostics.SelfTestResponseNotJson));
                     return ret;
                 }
 
                 if (deadline <= DateTime.Now)
                 {
-                    ret.Reason = "承認を待つ上限（" + waitLimitSeconds.ToString()
-                        + " 秒）に達した。承認されなかった（authorization_pending のまま）。";
+                    ret.Reason = string.Format(Resources.Diagnostics.SelfTestPollingTimedOut, waitLimitSeconds);
                     return ret;
                 }
 
@@ -691,7 +691,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return whenNull;
             }
 
-            string error = (string)json[OAuth2AndOIDCConst.error] ?? "（error なし）";
+            string error = (string)json[OAuth2AndOIDCConst.error] ?? Resources.Diagnostics.SelfTestNoError;
             string description = (string)json[OAuth2AndOIDCConst.error_description] ?? "";
 
             return string.IsNullOrEmpty(description) ? error : (error + " : " + description);

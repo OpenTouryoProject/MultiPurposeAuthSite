@@ -31,6 +31,7 @@
 //*  2026/09/13  玄人 幸道         Oracle: AuthReqExp(decimal)のlongへの明示キャスト（#207で判明）
 //*  2026/10/01  玄人 幸道         codeのidentityに利用者名を入れる（subではない）（#151 の段階 4）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using System;
@@ -100,9 +101,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
                             { "userCode", userCode },
-                            { "authReqExp", authReqExp.ToString() },
+                            { Const.PollingAuthReqExp, authReqExp.ToString() },
                             { "tempData", tempData },
-                            { "result", "" }
+                            { Const.PollingResult, "" }
                         };
 
                         DeviceAuthZProvider.DeviceAuthZData.TryAdd(
@@ -224,8 +225,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 string code = DeviceAuthZProvider.GetCode(userName, tempdic);
 
                                 // 更新
-                                dic["authZCode"] = code;
-                                dic["result"] = result.ToString();
+                                dic[Const.PollingAuthZCode] = code;
+                                dic[Const.PollingResult] = result.ToString();
 
                                 DeviceAuthZProvider.DeviceAuthZData[deviceCode] = JsonConvert.SerializeObject(dic);
                                 retVal = true;
@@ -419,10 +420,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
                             
                             // 結果の判別
-                            if (DeviceAuthZProvider.GetState(dic["authReqExp"], dic["result"], out states))
+                            if (DeviceAuthZProvider.GetState(dic[Const.PollingAuthReqExp], dic[Const.PollingResult], out states))
                             {
                                 // Code
-                                authZCode = dic["authZCode"];
+                                authZCode = dic[Const.PollingAuthZCode];
                                 // retVal
                                 retVal = true;
                             }
@@ -432,7 +433,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             if (states == OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                             {
                                 long? last = null;
-                                string lastPolled = dic.ContainsKey("lastPolled") ? dic["lastPolled"] : "";
+                                string lastPolled = dic.ContainsKey(Const.PollingLastPolled) ? dic[Const.PollingLastPolled] : "";
 
                                 long parsed = 0;
                                 if (!string.IsNullOrEmpty(lastPolled) && long.TryParse(lastPolled, out parsed))
@@ -443,7 +444,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 bool tooFast = PollingThrottle.TooFast(
                                     last, Config.DeviceAuthZPollingIntervalSeconds);
 
-                                dic["lastPolled"] = PollingThrottle.NowUnixSeconds().ToString();
+                                dic[Const.PollingLastPolled] = PollingThrottle.NowUnixSeconds().ToString();
                                 DeviceAuthZProvider.DeviceAuthZData[deviceCode] =
                                     JsonConvert.SerializeObject(dic);
 
@@ -723,7 +724,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         private static string GetCode(string userName, Dictionary<string, string> tempdic)
         {
             string client_id = tempdic["client_id"];
-            string scope = tempdic["scope"];
+            string scope = tempdic[OAuth2AndOIDCConst.scope];
 
             // **identity.Name に入れるのは利用者名**（#151 の段階 4）。
             //   **sub を入れてはいけない。** sub は利用者 ID（または PPID）であり、

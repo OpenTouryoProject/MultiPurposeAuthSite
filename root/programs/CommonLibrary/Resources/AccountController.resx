@@ -144,4 +144,22 @@
   <data name="SendEmail_passwordreset_msg" xml:space="preserve">
     <value>Please reset your password by clicking &lt;a href="{0}"&gt;here&lt;/a&gt;.</value>
   </data>
+  <data name="AuthMethodFapi1" xml:space="preserve">
+    <value>private_key_jwt (client_assertion. FAPI1 uses asymmetric authentication)</value>
+  </data>
+  <data name="AuthMethodFapi2" xml:space="preserve">
+    <value>private_key_jwt (client_assertion. FAPI 2.0 uses MTLS or this)</value>
+  </data>
+  <data name="AuthMethodClientSecretBasic" xml:space="preserve">
+    <value>client_secret_basic (Authorization header)</value>
+  </data>
+  <data name="AuthMethodClientSecretPostPkce" xml:space="preserve">
+    <value>client_secret_post (form) + PKCE code_verifier</value>
+  </data>
+  <data name="AccessTokenVerificationError" xml:space="preserve">
+    <value>AccessToken verification error</value>
+  </data>
+  <data name="IdTokenVerificationError" xml:space="preserve">
+    <value>IdToken verification error</value>
+  </data>
 </root>

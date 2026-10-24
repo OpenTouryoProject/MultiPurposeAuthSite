@@ -71,6 +71,8 @@
 //*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
 //*  2026/10/24  玄人 幸道         ID 連携の旧い鍵（userid）からの移行の枝を削除した（上流へ userid を要求しないので通らない。#140 の段階 3）
 //*  2026/10/24  玄人 幸道         Const.StandardScopes を Const.SelfTestScopes にリネームした（#294）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/24  玄人 幸道         自己テストの認証方式の表示と検証エラーの文言を resx にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3916,8 +3918,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // jwt or query.jwt
                 response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
                 {
-                    { "code" , code },
-                    { "state",  state }
+                    { OAuth2AndOIDCConst.code , code },
+                    { OAuth2AndOIDCConst.state,  state }
                 }, client_id, expiresUtc);
                 return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                     new Dictionary<string, string>() { { "response", response } }, false, CmnServerParams.IssuerId));
@@ -3934,8 +3936,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // fragment.jwt
                 response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
                 {
-                    { "code" , code },
-                    { "state",  state }
+                    { OAuth2AndOIDCConst.code , code },
+                    { OAuth2AndOIDCConst.state,  state }
                 }, client_id, expiresUtc);
                 return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
                     new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
@@ -3954,8 +3956,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // form_post.jwt
                 response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
                 {
-                    { "code" , code },
-                    { "state",  state }
+                    { OAuth2AndOIDCConst.code , code },
+                    { OAuth2AndOIDCConst.state,  state }
                 }, client_id, expiresUtc);
                 ViewData["Action"] = redirect_uri;
                 ViewData["Response"] = response;
@@ -4007,7 +4009,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 {
                                     { OAuth2AndOIDCConst.AccessToken, access_token },
                                     { OAuth2AndOIDCConst.state, state },
-                                    { OAuth2AndOIDCConst.token_type, "bearer" },
+                                    { OAuth2AndOIDCConst.token_type, Const.TokenTypeBearer },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                                 }, true, CmnServerParams.IssuerId));
                         }
@@ -4019,7 +4021,7 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
@@ -4031,7 +4033,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["Action"] = redirect_uri;
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
-                            ViewData["TokenType"] = "bearer";
+                            ViewData["TokenType"] = Const.TokenTypeBearer;
                             ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
@@ -4042,7 +4044,7 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             ViewData["Action"] = redirect_uri;
@@ -4122,7 +4124,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.IDToken, id_token },
                                     { OAuth2AndOIDCConst.AccessToken, access_token },
                                     { OAuth2AndOIDCConst.state, state },
-                                    { OAuth2AndOIDCConst.token_type, "bearer" },
+                                    { OAuth2AndOIDCConst.token_type, Const.TokenTypeBearer },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                                 }, true, CmnServerParams.IssuerId));
                         }
@@ -4135,7 +4137,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.IDToken , id_token },
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
@@ -4148,7 +4150,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["IDToken"] = id_token;
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
-                            ViewData["TokenType"] = "bearer";
+                            ViewData["TokenType"] = Const.TokenTypeBearer;
                             ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
@@ -4160,7 +4162,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.IDToken , id_token },
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             ViewData["Action"] = redirect_uri;
@@ -4215,7 +4217,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.code, code },
                                     { OAuth2AndOIDCConst.AccessToken, access_token },
                                     { OAuth2AndOIDCConst.state, state },
-                                    { OAuth2AndOIDCConst.token_type, "bearer" },
+                                    { OAuth2AndOIDCConst.token_type, Const.TokenTypeBearer },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                                 }, true, CmnServerParams.IssuerId));
                         }
@@ -4228,7 +4230,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.code , code },
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
@@ -4241,7 +4243,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["Code"] = code;
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
-                            ViewData["TokenType"] = "bearer";
+                            ViewData["TokenType"] = Const.TokenTypeBearer;
                             ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
@@ -4254,7 +4256,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.code , code },
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             ViewData["Action"] = redirect_uri;
@@ -4340,7 +4342,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.AccessToken, access_token },
                                     { OAuth2AndOIDCConst.IDToken, id_token },
                                     { OAuth2AndOIDCConst.state, state },
-                                    { OAuth2AndOIDCConst.token_type, "bearer" },
+                                    { OAuth2AndOIDCConst.token_type, Const.TokenTypeBearer },
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                                 }, true, CmnServerParams.IssuerId));
                         }
@@ -4354,7 +4356,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.IDToken , id_token },
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
@@ -4368,7 +4370,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["IDToken"] = id_token;
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
-                            ViewData["TokenType"] = "bearer";
+                            ViewData["TokenType"] = Const.TokenTypeBearer;
                             ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
@@ -4382,7 +4384,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.IDToken , id_token },
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
                                 { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             ViewData["Action"] = redirect_uri;
@@ -4573,7 +4575,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // FAPI1
 
                             // **アサーションの組み立ては SelfTestClient**（#246）。
-                            model.AuthMethod = "private_key_jwt（client_assertion。FAPI1 は非対称の認証）";
+                            model.AuthMethod = Resources.AccountController.AuthMethodFapi1;
 
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
@@ -4595,7 +4597,7 @@ namespace MultiPurposeAuthSite.Controllers
                             //   mTLS の経路は E2E（FA-6）が測る。
 
                             // **アサーションの組み立ては SelfTestClient**（#246）。
-                            model.AuthMethod = "private_key_jwt（client_assertion。FAPI 2.0 は MTLS か これ）";
+                            model.AuthMethod = Resources.AccountController.AuthMethodFapi2;
 
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
@@ -4615,7 +4617,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // 通常
                                 //   **Open棟梁 のクライアントは、この経路を Basic で送る**
                                 //   （既定が client_secret_basic。#246 の項目 3）。
-                                model.AuthMethod = "client_secret_basic（Authorization ヘッダ）";
+                                model.AuthMethod = Resources.AccountController.AuthMethodClientSecretBasic;
 
                                 model.Response = await Sts.Helper.GetInstance()
                                     .GetAccessTokenByCodeAsync(tokenEndpointUri,
@@ -4626,7 +4628,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // PKCE
                                 //   **PKCE の経路は既定が client_secret_post**（Basic ではない。#246 の項目 3）。
                                 //   PKCE 自体はクライアント認証ではないので、code_verifier は別に送る。
-                                model.AuthMethod = "client_secret_post（フォーム）＋ PKCE の code_verifier";
+                                model.AuthMethod = Resources.AccountController.AuthMethodClientSecretPostPkce;
 
                                 model.Response = await Sts.Helper.GetInstance()
                                    .GetAccessTokenByCodeAsync(tokenEndpointUri,
@@ -4665,12 +4667,12 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (!AccessToken.Verify(model.AccessToken,
                                 out out_sub, out List<string> out_roles, out List<string> out_scopes, out out_jobj))
                                 {
-                                    throw new Exception("AccessToken検証エラー");
+                                    throw new Exception(Resources.AccountController.AccessTokenVerificationError);
                                 }
                             }
                             else
                             {
-                                throw new Exception("AccessToken検証エラー");
+                                throw new Exception(Resources.AccountController.AccessTokenVerificationError);
                             }
                         }
 
@@ -4686,12 +4688,12 @@ namespace MultiPurposeAuthSite.Controllers
                                     out out_sub, out string out_nonce, out out_jobj)
                                     && out_nonce == nonce_InSessionOrCookie)
                                 {
-                                    throw new Exception("IdToken検証エラー");
+                                    throw new Exception(Resources.AccountController.IdTokenVerificationError);
                                 }
                             }
                             else
                             {
-                                throw new Exception("IdToken検証エラー");
+                                throw new Exception(Resources.AccountController.IdTokenVerificationError);
                             }
 
                             // 暗号化解除のケースがあるので、jobjを使用。

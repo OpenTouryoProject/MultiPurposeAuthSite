@@ -39,6 +39,7 @@
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri も動的登録で変えさせない（#310 の段階 3）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //*  2026/10/24  玄人 幸道         受け付ける response_types を CmnEndpoints.SupportedResponseTypes に寄せた（#314）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -377,7 +378,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 client_id, model, registrationAccessToken);
 
             //  **秘密を返すのは、この口だけ**（`GET` / `PUT` では返さない。#307 の段階 2 の決定）。
-            ret.Add("client_secret", client_secret);
+            ret.Add(OAuth2AndOIDCConst.client_secret, client_secret);
 
             //  **発行した時刻**（エポック秒）。
             //    **保管していない**ので、**`GET` / `PUT` では返さない**（§3.2.1 で任意）。
@@ -512,10 +513,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **`client_secret` を入れてきたなら、現行と一致していなければならない**（§2.2 の MUST）。
             //    **自分で秘密を決めさせてはならない**（§2.2 : the client MUST NOT be allowed to
             //    set its own secret）。**この口では秘密を作り直さない**（段階 2 の決定）。
-            if (ClientRegistrationProvider.Has(metadata, "client_secret"))
+            if (ClientRegistrationProvider.Has(metadata, OAuth2AndOIDCConst.client_secret))
             {
                 string requestedSecret = ClientRegistrationProvider.GetString(
-                    metadata, "client_secret");
+                    metadata, OAuth2AndOIDCConst.client_secret);
 
                 if (!ClientRegistrationProvider.FixedTimeEquals(requestedSecret, current.ClientSecret))
                 {
@@ -790,7 +791,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return;
                 }
 
-                urls.Add(ClientRegistrationProvider.GetString(metadata, "jwks_uri"));
+                urls.Add(ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.jwks_uri));
 
                 //  **statement が主張した分**（#309 の段階 2）。
                 //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
@@ -800,7 +801,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 if (claims != null)
                 {
-                    urls.Add((string)claims["jwks_uri"]);
+                    urls.Add((string)claims[OAuth2AndOIDCConst.jwks_uri]);
                 }
             }
             catch (JsonException)
@@ -901,9 +902,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **どちらの鍵で認証するのかが決まらない**ので、断る。
             //    **`software_statement` を重ねた後で見る** — **statement が片方を
             //    主張したときも、同じ検査を通す。**
-            if (ClientRegistrationProvider.Has(metadata, "jwks")
+            if (ClientRegistrationProvider.Has(metadata, Const.ClientJwks)
                 && !string.IsNullOrEmpty(
-                    ClientRegistrationProvider.GetString(metadata, "jwks_uri")))
+                    ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.jwks_uri)))
             {
                 description = "The jwks and jwks_uri must not both be present.";
                 return false;
@@ -916,7 +917,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    `static bool` で、`/token` などから同期で呼ばれる）。
             //    **取りに行くのは、この口と背景である**
             //    （`WarmUpJwksUriAsync` / `RemoteJwkSetStore.RefillInBackground`）。
-            if (!ClientRegistrationProvider.SetUri(metadata, "jwks_uri",
+            if (!ClientRegistrationProvider.SetUri(metadata, OAuth2AndOIDCConst.jwks_uri,
                 Const.MaxLengthOfUri, v => model.JwksUri = v, ref description))
             {
                 return false;
@@ -958,7 +959,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **空（省略）は `client_secret_basic` / `client_secret_post`**（RFC 7591 §2 の既定）。
             //    **列も空のまま**にして、**`AllowsAuthMethod` が暗黙に許す。**
             string authMethod = ClientRegistrationProvider.GetString(
-                metadata, "token_endpoint_auth_method");
+                metadata, Const.ClientTokenEndpointAuthMethod);
 
             if (!string.IsNullOrEmpty(authMethod)
                 && Array.IndexOf(CmnEndpoints.TokenEndpointAuthMethods, authMethod) < 0)
@@ -973,7 +974,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **`jwks`（RFC 7517 §5 の JWK Set）を、鍵の 2 列に移す。**
             //    **列は「JWK 1 本」**なので、**RSA 1 本 ＋ EC 1 本まで**である。
-            if (ClientRegistrationProvider.Has(metadata, "jwks"))
+            if (ClientRegistrationProvider.Has(metadata, Const.ClientJwks))
             {
                 if (!ClientRegistrationProvider.ParseJwks(
                     metadata, model, out description))
@@ -985,7 +986,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **mTLS の Subject DN**（RFC 8705 §2.1.2）。
             //    **照合は `x509.Subject` との完全一致**である（`CmnEndpoints.ClientAuthentication`）。
             string subjectDn = ClientRegistrationProvider.GetString(
-                metadata, "tls_client_auth_subject_dn");
+                metadata, Const.ClientTlsClientAuthSubjectDn);
 
             if (!string.IsNullOrEmpty(subjectDn))
             {
@@ -1002,7 +1003,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **`client_assertion` の alg を絞る**（#262 の列。OIDC Registration 1.0 §2）。
             //    **空なら絞らない**（登録された鍵で順に試す ＝ 従来どおり）。
             string authSigningAlg = ClientRegistrationProvider.GetString(
-                metadata, "token_endpoint_auth_signing_alg");
+                metadata, Const.ClientTokenEndpointAuthSigningAlg);
 
             if (!string.IsNullOrEmpty(authSigningAlg))
             {
@@ -1053,8 +1054,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **既定を書き込むのは、ここ（動的登録）だけである。**
             //    **既存の登録（列が空）に当てはめてはならない** —
             //    **当てはめると「`authorization_code` 以外が通らなくなる」破壊になる。**
-            grantTypes = ClientRegistrationProvider.GetStrings(metadata, "grant_types");
-            responseTypes = ClientRegistrationProvider.GetStrings(metadata, "response_types");
+            grantTypes = ClientRegistrationProvider.GetStrings(metadata, Const.ClientGrantTypes);
+            responseTypes = ClientRegistrationProvider.GetStrings(metadata, Const.ClientResponseTypes);
 
             if (grantTypes.Count == 0)
             {
@@ -1145,7 +1146,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #region redirect_uris
 
-            List<string> redirectUris = ClientRegistrationProvider.GetStrings(metadata, "redirect_uris");
+            List<string> redirectUris = ClientRegistrationProvider.GetStrings(metadata, OAuth2AndOIDCConst.redirect_uris);
 
             if (usesCode || usesToken)
             {
@@ -1198,7 +1199,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #region scope
 
             List<string> scopes = OAuth2AndOIDCSpec.ToDistinctList(
-                ClientRegistrationProvider.GetString(metadata, "scope"));
+                ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.scope));
 
             if (0 < scopes.Count)
             {
@@ -1239,23 +1240,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #region その他（保存して返すだけ）
 
-            if (!ClientRegistrationProvider.SetUri(metadata, "client_uri",
+            if (!ClientRegistrationProvider.SetUri(metadata, Const.ClientUri,
                 Const.MaxLengthOfUri, v => model.ClientUri = v, ref description)
-                || !ClientRegistrationProvider.SetUri(metadata, "logo_uri",
+                || !ClientRegistrationProvider.SetUri(metadata, Const.ClientLogoUri,
                     Const.MaxLengthOfUri, v => model.LogoUri = v, ref description)
-                || !ClientRegistrationProvider.SetUri(metadata, "tos_uri",
+                || !ClientRegistrationProvider.SetUri(metadata, Const.ClientTosUri,
                     Const.MaxLengthOfUri, v => model.TosUri = v, ref description)
-                || !ClientRegistrationProvider.SetUri(metadata, "policy_uri",
+                || !ClientRegistrationProvider.SetUri(metadata, Const.ClientPolicyUri,
                     Const.MaxLengthOfUri, v => model.PolicyUri = v, ref description))
             {
                 return false;
             }
 
             model.Contacts = string.Join(" ",
-                ClientRegistrationProvider.GetStrings(metadata, "contacts"));
+                ClientRegistrationProvider.GetStrings(metadata, Const.ClientContacts));
 
-            model.SoftwareId = ClientRegistrationProvider.GetString(metadata, "software_id");
-            model.SoftwareVersion = ClientRegistrationProvider.GetString(metadata, "software_version");
+            model.SoftwareId = ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareId);
+            model.SoftwareVersion = ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareVersion);
 
             if (Const.MaxLengthOfContacts < (model.Contacts ?? "").Length
                 || Const.MaxLengthOfSoftwareId < (model.SoftwareId ?? "").Length
@@ -1270,7 +1271,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #region OIDC の登録項目（既に列が在るもの）
 
             //  **`subject_type`**（OIDC DCR 1.0 §2）。**扱う値は public / pairwise**（OIDC Core §8）。
-            string subjectType = ClientRegistrationProvider.GetString(metadata, "subject_type");
+            string subjectType = ClientRegistrationProvider.GetString(metadata, Const.ClientSubjectType);
 
             if (!string.IsNullOrEmpty(subjectType))
             {
@@ -1289,7 +1290,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **扱える alg でなければ断る** — **ここで止めないと、
             //    発行の直前に既定（RS256）へ落ちて、登録の誤りが分からない。**
             string signingAlg = ClientRegistrationProvider.GetString(
-                metadata, "id_token_signed_response_alg");
+                metadata, Const.ClientIdTokenSignedResponseAlg);
 
             if (!string.IsNullOrEmpty(signingAlg))
             {
@@ -1640,7 +1641,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             description = "";
 
-            JToken jwks = metadata["jwks"];
+            JToken jwks = metadata[Const.ClientJwks];
 
             if (jwks.Type != JTokenType.Object)
             {
@@ -1807,17 +1808,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
             }
 
-            ret.Add("redirect_uris", redirectUris);
+            ret.Add(OAuth2AndOIDCConst.redirect_uris, redirectUris);
 
-            ret.Add("grant_types", OAuth2AndOIDCSpec.ToDistinctList(model.GrantTypes));
+            ret.Add(Const.ClientGrantTypes, OAuth2AndOIDCSpec.ToDistinctList(model.GrantTypes));
 
             //  **`response_types` は、要素の中の空白を「+」にして保管している**（段階 1）。
-            ret.Add("response_types", Helper.ToDistinctList(model.ResponseTypes, true));
+            ret.Add(Const.ClientResponseTypes, Helper.ToDistinctList(model.ResponseTypes, true));
 
             //  **登録された `token_endpoint_auth_method` を返す**（#307 の段階 3）。
             //    **空（明示なし）は `client_secret_basic`** — **RFC 7591 §2 の既定**であり、
             //    **実際に通る方法**でもある（`CmnEndpoints.AllowsAuthMethod`）。
-            ret.Add("token_endpoint_auth_method",
+            ret.Add(Const.ClientTokenEndpointAuthMethod,
                 string.IsNullOrEmpty(model.TokenEndpointAuthMethod)
                     ? OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
                     : model.TokenEndpointAuthMethod);
@@ -1825,20 +1826,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **`client_secret` に期限は設けていない** — **0 は「期限なし」**（RFC 7591 §3.2.1）。
             ret.Add("client_secret_expires_at", 0);
 
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "scope", model.Scopes);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "client_uri", model.ClientUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "logo_uri", model.LogoUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "tos_uri", model.TosUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "policy_uri", model.PolicyUri);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "software_id", model.SoftwareId);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "software_version", model.SoftwareVersion);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "subject_type", model.SubjectTypes);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.scope, model.Scopes);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientUri, model.ClientUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientLogoUri, model.LogoUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTosUri, model.TosUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientPolicyUri, model.PolicyUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareId, model.SoftwareId);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareVersion, model.SoftwareVersion);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSubjectType, model.SubjectTypes);
             ClientRegistrationProvider.AddIfNotEmpty(
-                ret, "id_token_signed_response_alg", model.IdTokenSignedResponseAlg);
+                ret, Const.ClientIdTokenSignedResponseAlg, model.IdTokenSignedResponseAlg);
             ClientRegistrationProvider.AddIfNotEmpty(
-                ret, "tls_client_auth_subject_dn", model.TlsClientAuthSubjectDn);
+                ret, Const.ClientTlsClientAuthSubjectDn, model.TlsClientAuthSubjectDn);
             ClientRegistrationProvider.AddIfNotEmpty(
-                ret, "token_endpoint_auth_signing_alg", model.TokenEndpointAuthSigningAlg);
+                ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
 
             //  **登録された鍵を `jwks` に戻して返す**（#307 の段階 3）。
             //    **列は 2 本に分かれている**ので、**在るものだけを `keys` に並べる。**
@@ -1846,15 +1847,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (jwks != null)
             {
-                ret.Add("jwks", jwks);
+                ret.Add(Const.ClientJwks, jwks);
             }
 
             //  **`jwks_uri` は、そのまま返す**（#309 の段階 1。**`jwks` とは排他**）。
-            ClientRegistrationProvider.AddIfNotEmpty(ret, "jwks_uri", model.JwksUri);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.jwks_uri, model.JwksUri);
 
             if (!string.IsNullOrEmpty(model.Contacts))
             {
-                ret.Add("contacts", ClientRegistrationProvider.ToArray(model.Contacts));
+                ret.Add(Const.ClientContacts, ClientRegistrationProvider.ToArray(model.Contacts));
             }
 
             //  **RFC 7592 §3 : どちらも REQUIRED**（**管理の口と、その鍵**）。

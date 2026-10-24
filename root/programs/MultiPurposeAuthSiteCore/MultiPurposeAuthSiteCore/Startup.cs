@@ -45,6 +45,7 @@
 //*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の経路を追加（#307 の段階 2）
 //*  2026/10/21  玄人 幸道         起動のときに jwks_uri を温める（#309 の段階 2）
+//*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -602,9 +603,8 @@ namespace MultiPurposeAuthSite
                 // **ここで落とす。** 接続文字列が無いと、
                 //   `IDistributedCache` は**最初にセッションを触った時に**落ちる。
                 //   起動は通ってしまうので、**画面が 500 を返すだけで理由が分からない。**
-                throw new InvalidOperationException(
-                    "SessionStoreType が " + Config.SessionStoreType
-                    + " なので、SessionStoreConnectionString が必要です。");
+                throw new InvalidOperationException(string.Format(
+                    Resources.Diagnostics.SessionStoreConnectionStringRequired, Config.SessionStoreType));
             }
 
             switch (Config.SessionStoreType)

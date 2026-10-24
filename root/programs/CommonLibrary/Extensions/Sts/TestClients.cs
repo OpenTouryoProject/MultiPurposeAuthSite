@@ -39,8 +39,11 @@
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を写し、TestClient_24 を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 
 using System.Collections.Generic;
@@ -145,7 +148,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "token_endpoint_auth_method", "private_key_jwt" }
+                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -156,8 +159,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "fapi2", SourceName = "TestClient2",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "tls_client_auth_subject_dn", "CN=mpas-e2e-mtls-client" },
-                    { "token_endpoint_auth_method", "tls_client_auth" }
+                    { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
+                    { Const.ClientTokenEndpointAuthMethod, "tls_client_auth" }
                 }
             },
             new Entry()
@@ -166,8 +169,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "fapi_1", SourceName = "TestClient2",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "tls_client_auth_subject_dn", "CN=mpas-e2e-mtls-client" },
-                    { "token_endpoint_auth_method", "tls_client_auth" }
+                    { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
+                    { Const.ClientTokenEndpointAuthMethod, "tls_client_auth" }
                 }
             },
 
@@ -182,8 +185,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "id_token_signed_response_alg", JwtConst.RS512 },
-                    { "token_endpoint_auth_signing_alg", JwtConst.RS256 }
+                    { Const.ClientIdTokenSignedResponseAlg, JwtConst.RS512 },
+                    { Const.ClientTokenEndpointAuthSigningAlg, JwtConst.RS256 }
                 }
             },
             new Entry()
@@ -201,8 +204,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "token_endpoint_auth_signing_alg", JwtConst.RS256 },
-                    { "token_endpoint_auth_method", "private_key_jwt" }
+                    { Const.ClientTokenEndpointAuthSigningAlg, JwtConst.RS256 },
+                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -211,7 +214,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "id_token_signed_response_alg", JwtConst.ES384 }
+                    { Const.ClientIdTokenSignedResponseAlg, JwtConst.ES384 }
                 }
             },
             new Entry()
@@ -220,7 +223,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "id_token_signed_response_alg", JwtConst.ES512 }
+                    { Const.ClientIdTokenSignedResponseAlg, JwtConst.ES512 }
                 }
             },
             new Entry()
@@ -229,7 +232,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "id_token_signed_response_alg", JwtConst.PS256 }
+                    { Const.ClientIdTokenSignedResponseAlg, JwtConst.PS256 }
                 }
             },
             new Entry()
@@ -238,7 +241,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "id_token_signed_response_alg", JwtConst.PS384 }
+                    { Const.ClientIdTokenSignedResponseAlg, JwtConst.PS384 }
                 }
             },
             new Entry()
@@ -247,7 +250,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "id_token_signed_response_alg", JwtConst.PS512 }
+                    { Const.ClientIdTokenSignedResponseAlg, JwtConst.PS512 }
                 }            },
 
             // ---------------------------------------------------------------- 基本プロファイル
@@ -261,7 +264,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "client_secret", "e2e+ab/cd=ef" }
+                    { OAuth2AndOIDCConst.client_secret, "e2e+ab/cd=ef" }
                 }
             },
             new Entry()
@@ -273,7 +276,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "client_secret", "e2e:ab+cd" }
+                    { OAuth2AndOIDCConst.client_secret, "e2e:ab+cd" }
                 }
             },
             new Entry()
@@ -284,7 +287,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "post_logout_redirect_uri", "test_self_logout" }
+                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -299,8 +302,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "backchannel_logout_uri", "test_self_bclogout" },
-                    { "post_logout_redirect_uri", "test_self_logout" }
+                    { Const.ClientBackChannelLogoutUri, Const.TestSelfBackChannelLogout },
+                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -314,8 +317,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "frontchannel_logout_uri", "test_self_fclogout" },
-                    { "post_logout_redirect_uri", "test_self_logout" }
+                    { Const.ClientFrontChannelLogoutUri, Const.TestSelfFrontChannelLogout },
+                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -329,7 +332,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "backchannel_logout_uri", "test_self_bclogout" }
+                    { Const.ClientBackChannelLogoutUri, Const.TestSelfBackChannelLogout }
                 }
             },
             new Entry()
@@ -339,7 +342,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "subject_types", "pairwise" }
+                    { Const.ClientSubjectTypes, "pairwise" }
                 }
             },
             new Entry()
@@ -369,10 +372,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "client_secret", "" },
-                    { "web_origins", "https://o001.example https://o002.example https://o003.example https://o004.example https://o005.example https://o006.example https://o007.example https://o008.example https://o009.example https://o010.example https://o011.example https://o012.example https://o013.example https://o014.example https://o015.example https://o016.example https://o017.example https://o018.example https://o019.example https://o020.example https://o021.example https://o022.example https://o023.example https://o024.example" },
-                    { "redirect_uri_saml", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
-                    { "post_logout_redirect_uri", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+                    { OAuth2AndOIDCConst.client_secret, "" },
+                    { Const.ClientWebOrigins, "https://o001.example https://o002.example https://o003.example https://o004.example https://o005.example https://o006.example https://o007.example https://o008.example https://o009.example https://o010.example https://o011.example https://o012.example https://o013.example https://o014.example https://o015.example https://o016.example https://o017.example https://o018.example https://o019.example https://o020.example https://o021.example https://o022.example https://o023.example https://o024.example" },
+                    { Const.ClientRedirectUriSaml, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+                    { Const.ClientPostLogoutRedirectUri, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
                 }
             },
             new Entry()
@@ -406,7 +409,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "require_pkce", "true" }
+                    { Const.ClientRequirePkce, "true" }
                 }
             },
             new Entry()
@@ -420,9 +423,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "client_secret", "" },
-                    { "redirect_uri_code", "https://notallowed.example/cb" },
-                    { "web_origins", "https://spa.example" }
+                    { OAuth2AndOIDCConst.client_secret, "" },
+                    { Const.ClientRedirectUriCode, "https://notallowed.example/cb" },
+                    { Const.ClientWebOrigins, "https://spa.example" }
                 }
             },
             new Entry()
@@ -436,7 +439,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "redirect_uri_code", "https://rtc10.example/cb" }
+                    { Const.ClientRedirectUriCode, "https://rtc10.example/cb" }
                 }
             },
             new Entry()
@@ -461,7 +464,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient3",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "redirect_uri_saml", "https://saml.e2e.example/acs" }
+                    { Const.ClientRedirectUriSaml, "https://saml.e2e.example/acs" }
                 }
             },
             new Entry()
@@ -473,7 +476,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ClientMode = "normal", SourceName = "TestClient3",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { "redirect_uri_saml", "https://saml.e2e.example/acs2" }
+                    { Const.ClientRedirectUriSaml, "https://saml.e2e.example/acs2" }
                 }
             }
         };
@@ -562,63 +565,63 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             switch (key)
             {
-                case "client_secret":
+                case OAuth2AndOIDCConst.client_secret:
                     model.ClientSecret = value;
                     break;
 
-                case "redirect_uri_saml":
+                case Const.ClientRedirectUriSaml:
                     model.RedirectUriSaml = value;
                     break;
 
-                case "redirect_uri_code":
+                case Const.ClientRedirectUriCode:
                     model.RedirectUriCode = value;
                     break;
 
-                case "redirect_uri_token":
+                case Const.ClientRedirectUriToken:
                     model.RedirectUriToken = value;
                     break;
 
-                case "post_logout_redirect_uri":
+                case Const.ClientPostLogoutRedirectUri:
                     model.PostLogoutRedirectUri = value;
                     break;
 
-                case "backchannel_logout_uri":
+                case Const.ClientBackChannelLogoutUri:
                     model.BackChannelLogoutUri = value;
                     break;
 
-                case "frontchannel_logout_uri":
+                case Const.ClientFrontChannelLogoutUri:
                     model.FrontChannelLogoutUri = value;
                     break;
 
-                case "subject_types":
+                case Const.ClientSubjectTypes:
                     model.SubjectTypes = value;
                     break;
 
-                case "tls_client_auth_subject_dn":
+                case Const.ClientTlsClientAuthSubjectDn:
                     model.TlsClientAuthSubjectDn = value;
                     break;
 
-                case "id_token_signed_response_alg":
+                case Const.ClientIdTokenSignedResponseAlg:
                     model.IdTokenSignedResponseAlg = value;
                     break;
 
-                case "token_endpoint_auth_signing_alg":
+                case Const.ClientTokenEndpointAuthSigningAlg:
                     model.TokenEndpointAuthSigningAlg = value;
                     break;
 
-                case "token_endpoint_auth_method":
+                case Const.ClientTokenEndpointAuthMethod:
                     model.TokenEndpointAuthMethod = value;
                     break;
 
-                case "request_object_signing_alg":
+                case Const.ClientRequestObjectSigningAlg:
                     model.RequestObjectSigningAlg = value;
                     break;
 
-                case "web_origins":
+                case Const.ClientWebOrigins:
                     model.WebOrigins = value;
                     break;
 
-                case "require_pkce":
+                case Const.ClientRequirePkce:
                     // **ここだけ bool**（#270）。
                     //   **綾り違いを黙って false にしない**ため、`Parse` で落とす。
                     model.RequirePkce = bool.Parse(value);
@@ -626,7 +629,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 default:
                     throw new System.NotSupportedException(
-                        "TestClients.Override: 知らない項目名です: " + key);
+                        string.Format(Resources.Diagnostics.TestClientsUnknownKey, key));
             }
         }
 

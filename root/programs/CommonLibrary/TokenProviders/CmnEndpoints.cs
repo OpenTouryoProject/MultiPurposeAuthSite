@@ -133,6 +133,7 @@
 //*  2026/10/22  玄人 幸道         仕様の部品（prompt・PKCE・redirect URL 等）を Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         Hybrid / OIDC の Implicit も Enable*GrantType に従わせ、EnableOpenIDConnect を廃止した（#314）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2706,7 +2707,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // id_token
                 if (response_type.IndexOf(OAuth2AndOIDCConst.IDToken) != -1)
                 {
-                    JArray jAry = (JArray)jObj["scopes"];
+                    JArray jAry = (JArray)jObj[OAuth2AndOIDCConst.scopes];
                     foreach (string s in jAry)
                     {
                         if (s == OAuth2AndOIDCConst.Scope_Openid)
@@ -2814,7 +2815,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 access_token.Split('.')[1]), CustomEncode.us_ascii));
 
             // id_token
-            JArray jAry = (JArray)jObj["scopes"];
+            JArray jAry = (JArray)jObj[OAuth2AndOIDCConst.scopes];
             foreach (string s in jAry)
             {
                 if (s == OAuth2AndOIDCConst.Scope_Openid)
@@ -5380,7 +5381,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 access_token.Split('.')[1]), CustomEncode.us_ascii));
 
             // id_token
-            JArray jAry = (JArray)jObjPayload["scopes"];
+            JArray jAry = (JArray)jObjPayload[OAuth2AndOIDCConst.scopes];
 
             foreach (string s in jAry)
             {

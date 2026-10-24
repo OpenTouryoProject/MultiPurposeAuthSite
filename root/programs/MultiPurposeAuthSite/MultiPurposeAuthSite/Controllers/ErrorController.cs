@@ -32,6 +32,7 @@
 //*  2015/09/03  Supragyan         Rename Position data class to Exception data class
 //*  2015/09/03  Supragyan         Modified Index Action method
 //*  2015/09/04  Supragyan         Modified ArrayList to List of ExceptionData on Index action method
+//*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
 //**********************************************************************************
 
 using System;
@@ -158,7 +159,7 @@ namespace MultiPurposeAuthSite.Controllers
                     catch (Exception ex)
                     {
                         // このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。
-                        string err_str = "このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。";
+                        string err_str = Resources.Diagnostics.ErrorScreenPathWrong;
 #if DEBUG
                         Debug.WriteLine(err_str);
                         Debug.WriteLine(ex.Message);
@@ -171,7 +172,7 @@ namespace MultiPurposeAuthSite.Controllers
             catch (Exception ex)
             {
                 // 開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。
-                string err_str = "開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。";
+                string err_str = Resources.Diagnostics.ErrorScreenSuppressed;
 #if DEBUG
                 Debug.WriteLine(err_str);
                 Debug.WriteLine(ex.Message);

@@ -21,6 +21,7 @@
 //*  2026/09/25  玄人 幸道         改名した設定キーの警告を、一覧（Config.RenamedKeys）から出す（#236）
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins の * を警告（#265）
 //*  2026/10/22  玄人 幸道         RequirePkceS256 を Open棟梁 の CmnServerParams から読むようにした（#294）
+//*  2026/10/24  玄人 幸道         設定の確認の文言を resx にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -69,7 +70,7 @@ namespace MultiPurposeAuthSite.Co
                 if (Config.AdministratorUID == ProductionCheck.NotFilledIn
                     || Config.AdministratorPWD == ProductionCheck.NotFilledIn)
                 {
-                    warnings.Add("AdministratorUID / AdministratorPWD が雛形の値のままです。");
+                    warnings.Add(Resources.Diagnostics.CheckAdministratorNotFilledIn);
                 }
 
                 if (Config.UserStoreType != EnumUserStoreType.Memory)
@@ -78,20 +79,17 @@ namespace MultiPurposeAuthSite.Co
 
                     if (Config.IsDebug)
                     {
-                        warnings.Add("IsDebug が true です。テスト利用者の生成や、"
-                            + "メール / SMS の送信の代替が有効になります。");
+                        warnings.Add(Resources.Diagnostics.CheckIsDebug);
                     }
 
                     if (!string.IsNullOrWhiteSpace(Config.TestUserPWD))
                     {
-                        warnings.Add("TestUserPWD が設定されています。"
-                            + "IsDebug が true なら、テスト利用者が作られます。");
+                        warnings.Add(Resources.Diagnostics.CheckTestUserPwd);
                     }
 
                     if (!Config.IsLockedDownTestEndpoints)
                     {
-                        warnings.Add("IsLockedDownTestEndpoints が false です。"
-                            + "自己テスト画面（/Home/Saml2OAuth2Starters）が開いています。");
+                        warnings.Add(Resources.Diagnostics.CheckTestEndpointsOpen);
                     }
 
                     // **CORS の追加分に `*` が書かれていないか**（#265）。
@@ -100,15 +98,12 @@ namespace MultiPurposeAuthSite.Co
                     if (!string.IsNullOrWhiteSpace(Config.CorsAllowedOrigins)
                         && Config.CorsAllowedOrigins.Contains("*"))
                     {
-                        warnings.Add("CorsAllowedOrigins に * が含まれています。"
-                            + "オリジンとして扱えない値は落とすので、その分は許可されません。"
-                            + "https://host[:port] の形で書いてください。");
+                        warnings.Add(Resources.Diagnostics.CheckCorsWildcard);
                     }
 
                     if (!string.IsNullOrWhiteSpace(Config.FcmOutboxDirectory))
                     {
-                        warnings.Add("FcmOutboxDirectory が設定されています。"
-                            + "プッシュ通知は FCM に送られず、ファイルに書かれます。");
+                        warnings.Add(Resources.Diagnostics.CheckFcmOutbox);
                     }
 
                     // **ここだけは設定ではなく、コードに埋め込んだ値を見る。**
@@ -122,8 +117,7 @@ namespace MultiPurposeAuthSite.Co
 
                     if (Extensions.Sts.CibaProvider.DebugModeWithOutAD)
                     {
-                        warnings.Add("CibaProvider.DebugModeWithOutAD が true でビルドされています。"
-                            + "CIBA が、認証デバイスの登録と承認なしに成立します。");
+                        warnings.Add(Resources.Diagnostics.CheckCibaDebugMode);
                     }
 
 #pragma warning restore 162
@@ -132,13 +126,12 @@ namespace MultiPurposeAuthSite.Co
                     //   旧いキー名でも動くが、**放置すると、いつ読まれなくなるか分からない。**
                     foreach (KeyValuePair<string, string> old in Config.OldKeysStillUsed())
                     {
-                        warnings.Add("改名前のキー名（" + old.Key + "）が使われています。"
-                            + old.Value + " に直してください。");
+                        warnings.Add(string.Format(Resources.Diagnostics.CheckRenamedKey, old.Key, old.Value));
                     }
 
                     if (Config.EnableDebugTraceLog)
                     {
-                        warnings.Add("EnableDebugTraceLog が true です。");
+                        warnings.Add(Resources.Diagnostics.CheckDebugTraceLog);
                     }
 
                     // **これは「開発向けの設定が残っている」ではない（#220）。**
@@ -159,16 +152,13 @@ namespace MultiPurposeAuthSite.Co
 
                     if (loosePkce.Count != 0)
                     {
-                        warnings.Add(string.Join(" / ", loosePkce) + " が false です。"
-                            + "OAuth 2.1 に寄せるなら true にしてください"
-                            + "（PKCE を使っていない、または plain のクライアントは通らなくなります）。");
+                        warnings.Add(string.Format(Resources.Diagnostics.CheckLoosePkce, string.Join(" / ", loosePkce)));
                     }
                 }
 
                 foreach (string warning in warnings)
                 {
-                    Logging.MyOperationTrace(
-                        "[設定の確認] " + warning + "（CONFIGURATION.md 11 節）");
+                    Logging.MyOperationTrace(string.Format(Resources.Diagnostics.CheckFormat, warning));
                 }
             }
             catch (Exception ex)

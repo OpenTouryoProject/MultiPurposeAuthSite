@@ -40,6 +40,8 @@
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri を追加（#310 の段階 3）
 //*  2026/10/22  玄人 幸道         alg の一覧を Open棟梁 の JwsFactory から引くようにした（#294）
+//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/24  玄人 幸道         選択肢の文言を resx にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -76,7 +78,7 @@ namespace MultiPurposeAuthSite.ViewModels
         [Display(Name = "ClientSecret", Description = "ClientSecretDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         // [StringLength( // ユーザ入力でないので不要
-        [JsonProperty(PropertyName = "client_secret")]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.client_secret)]
         public string ClientSecret { get; set; }
 
         /// <summary>RedirectUriSaml</summary>
@@ -87,7 +89,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "redirect_uri_saml")]
+        [JsonProperty(PropertyName = Const.ClientRedirectUriSaml)]
         public string RedirectUriSaml { get; set; }
 
         /// <summary>RedirectUriCode</summary>
@@ -99,7 +101,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUriList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "redirect_uri_code")]
+        [JsonProperty(PropertyName = Const.ClientRedirectUriCode)]
         public string RedirectUriCode { get; set; }
 
         /// <summary>RedirectUriToken</summary>
@@ -111,7 +113,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUriList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "redirect_uri_token")]
+        [JsonProperty(PropertyName = Const.ClientRedirectUriToken)]
         public string RedirectUriToken { get; set; }
 
         /// <summary>PostLogoutRedirectUri（#232）</summary>
@@ -127,7 +129,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "post_logout_redirect_uri")]
+        [JsonProperty(PropertyName = Const.ClientPostLogoutRedirectUri)]
         public string PostLogoutRedirectUri { get; set; }
 
         /// <summary>FrontChannelLogoutUri（#310 の段階 3）</summary>
@@ -152,7 +154,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "frontchannel_logout_uri")]
+        [JsonProperty(PropertyName = Const.ClientFrontChannelLogoutUri)]
         public string FrontChannelLogoutUri { get; set; }
 
         /// <summary>BackChannelLogoutUri（#310 の段階 2）</summary>
@@ -175,25 +177,25 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "backchannel_logout_uri")]
+        [JsonProperty(PropertyName = Const.ClientBackChannelLogoutUri)]
         public string BackChannelLogoutUri { get; set; }
 
         /// <summary>JwkRsaPublickey</summary>
         [Display(Name = "JwkRsaPublickey", Description = "JwkRsaPublickeyDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "jwk_rsa_publickey")]
+        [JsonProperty(PropertyName = Const.ClientJwkRsaPublicKey)]
         public string JwkRsaPublickey { get; set; }
 
         /// <summary>JwkECDsaPublickey</summary>
         [Display(Name = "JwkECDsaPublickey", ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "jwk_ecdsa_publickey")]
+        [JsonProperty(PropertyName = Const.ClientJwkEcdsaPublicKey)]
         public string JwkECDsaPublickey { get; set; }
         
 
         /// <summary>TlsClientAuthSubjectDn</summary>
         [Display(Name = "TlsClientAuthSubjectDn", Description = "TlsClientAuthSubjectDnDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "tls_client_auth_subject_dn")]
+        [JsonProperty(PropertyName = Const.ClientTlsClientAuthSubjectDn)]
         public string TlsClientAuthSubjectDn { get; set; }
 
 
@@ -279,7 +281,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>SubjectTypes</summary>
         [Display(Name = "SubjectTypes", Description = "SubjectTypesDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "subject_types")]
+        [JsonProperty(PropertyName = Const.ClientSubjectTypes)]
         public string SubjectTypes { get; set; }
 
         /// <summary>SubjectTypesアイテムリスト</summary>
@@ -319,7 +321,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// </remarks>
         [Display(Name = "IdTokenSignedResponseAlg", Description = "IdTokenSignedResponseAlgDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "id_token_signed_response_alg")]
+        [JsonProperty(PropertyName = Const.ClientIdTokenSignedResponseAlg)]
         public string IdTokenSignedResponseAlg { get; set; }
 
         /// <summary>IdTokenSignedResponseAlg アイテムリスト</summary>
@@ -345,7 +347,7 @@ namespace MultiPurposeAuthSite.ViewModels
                     items.Add(new SelectListItem()
                     {
                         // 先頭が既定（登録しなかったときの値）。
-                        Text = (items.Count == 0) ? alg + "（既定）" : alg,
+                        Text = (items.Count == 0) ? string.Format(Resources.CommonViewModels.DdlDefaultAlg, alg) : alg,
                         Value = alg
                     });
                 }
@@ -378,7 +380,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUriList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "web_origins")]
+        [JsonProperty(PropertyName = Const.ClientWebOrigins)]
         public string WebOrigins { get; set; }
 
         #endregion
@@ -392,7 +394,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// </remarks>
         [Display(Name = "TokenEndpointAuthSigningAlg", Description = "TokenEndpointAuthSigningAlgDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "token_endpoint_auth_signing_alg")]
+        [JsonProperty(PropertyName = Const.ClientTokenEndpointAuthSigningAlg)]
         public string TokenEndpointAuthSigningAlg { get; set; }
 
         /// <summary>TokenEndpointAuthSigningAlg アイテムリスト</summary>
@@ -425,7 +427,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// </remarks>
         [Display(Name = "RequestObjectSigningAlg", Description = "RequestObjectSigningAlgDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "request_object_signing_alg")]
+        [JsonProperty(PropertyName = Const.ClientRequestObjectSigningAlg)]
         public string RequestObjectSigningAlg { get; set; }
 
         /// <summary>RequestObjectSigningAlg アイテムリスト</summary>
@@ -457,7 +459,7 @@ namespace MultiPurposeAuthSite.ViewModels
             List<SelectListItem> items = new List<SelectListItem>()
             {
                 // **空 ＝ 絞らない**（登録しないのと同じ）。
-                new SelectListItem() { Text = "（絞らない）", Value = "" }
+                new SelectListItem() { Text = Resources.CommonViewModels.DdlNotNarrowed, Value = "" }
             };
 
             foreach (string alg in algs)
@@ -501,7 +503,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>ClientMode</summary>
         [Display(Name = "ClientMode", Description = "ClientModeDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "oauth2_oidc_mode")]
+        [JsonProperty(PropertyName = Const.ClientOAuth2OidcMode)]
         public string ClientMode { get; set; }
 
         /// <summary>ClientModeアイテムリスト</summary>
@@ -542,7 +544,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// </remarks>
         [Display(Name = "RequirePkce", Description = "RequirePkceDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "require_pkce")]
+        [JsonProperty(PropertyName = Const.ClientRequirePkce)]
         public bool RequirePkce { get; set; }
         #endregion
 
@@ -585,7 +587,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfScopeList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "scope")]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.scope)]
         public string Scopes { get; set; }
 
         /// <summary>GrantTypes（RFC 7591 §2 の grant_types）</summary>
@@ -607,7 +609,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfTypeList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "grant_types")]
+        [JsonProperty(PropertyName = Const.ClientGrantTypes)]
         public string GrantTypes { get; set; }
 
         /// <summary>ResponseTypes（RFC 7591 §2 の response_types）</summary>
@@ -628,7 +630,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfTypeList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "response_types")]
+        [JsonProperty(PropertyName = Const.ClientResponseTypes)]
         public string ResponseTypes { get; set; }
 
         /// <summary>JwksUri（RFC 7591 §2 の jwks_uri）</summary>
@@ -649,7 +651,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "jwks_uri")]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.jwks_uri)]
         public string JwksUri { get; set; }
 
         /// <summary>ClientUri（RFC 7591 §2 の client_uri）</summary>
@@ -660,7 +662,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "client_uri")]
+        [JsonProperty(PropertyName = Const.ClientUri)]
         public string ClientUri { get; set; }
 
         /// <summary>LogoUri（RFC 7591 §2 の logo_uri）</summary>
@@ -671,7 +673,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "logo_uri")]
+        [JsonProperty(PropertyName = Const.ClientLogoUri)]
         public string LogoUri { get; set; }
 
         /// <summary>TosUri（RFC 7591 §2 の tos_uri）</summary>
@@ -682,7 +684,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "tos_uri")]
+        [JsonProperty(PropertyName = Const.ClientTosUri)]
         public string TosUri { get; set; }
 
         /// <summary>PolicyUri（RFC 7591 §2 の policy_uri）</summary>
@@ -693,7 +695,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "policy_uri")]
+        [JsonProperty(PropertyName = Const.ClientPolicyUri)]
         public string PolicyUri { get; set; }
 
         /// <summary>Contacts（RFC 7591 §2 の contacts）</summary>
@@ -707,7 +709,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfContacts,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "contacts")]
+        [JsonProperty(PropertyName = Const.ClientContacts)]
         public string Contacts { get; set; }
 
         /// <summary>SoftwareId（RFC 7591 §2 の software_id）</summary>
@@ -722,7 +724,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfSoftwareId,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "software_id")]
+        [JsonProperty(PropertyName = Const.ClientSoftwareId)]
         public string SoftwareId { get; set; }
 
         /// <summary>SoftwareVersion（RFC 7591 §2 の software_version）</summary>
@@ -733,7 +735,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfSoftwareVersion,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "software_version")]
+        [JsonProperty(PropertyName = Const.ClientSoftwareVersion)]
         public string SoftwareVersion { get; set; }
 
         #endregion
@@ -757,7 +759,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfTokenHash,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "registration_access_token_hash")]
+        [JsonProperty(PropertyName = Const.ClientRegistrationAccessTokenHash)]
         public string RegistrationAccessToken { get; set; }
 
         #endregion
@@ -787,7 +789,7 @@ namespace MultiPurposeAuthSite.ViewModels
         [Display(Name = "TokenEndpointAuthMethod", Description = "TokenEndpointAuthMethodDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(Const.MaxLengthOfAuthMethod)]
-        [JsonProperty(PropertyName = "token_endpoint_auth_method")]
+        [JsonProperty(PropertyName = Const.ClientTokenEndpointAuthMethod)]
         public string TokenEndpointAuthMethod { get; set; }
 
         /// <summary>TokenEndpointAuthMethod アイテムリスト</summary>
@@ -804,7 +806,7 @@ namespace MultiPurposeAuthSite.ViewModels
                 List<SelectListItem> items = new List<SelectListItem>()
                 {
                     // **空 ＝ 明示しない**（秘密ベースの 2 つを暗黙に許す）。
-                    new SelectListItem() { Text = "（明示しない ＝ client_secret_basic / client_secret_post）", Value = "" }
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlTokenEndpointAuthMethodNone, Value = "" }
                 };
 
                 foreach (string method in TokenProviders.CmnEndpoints.TokenEndpointAuthMethods)
