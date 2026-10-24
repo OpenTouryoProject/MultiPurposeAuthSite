@@ -267,6 +267,33 @@
     <Compile Include="App_Start\RouteConfig.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
     <Compile Include="Controllers\AccountController.cs" />
+    <Compile Include="Controllers\AccountController.SignIn.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.SignUp.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.TwoFactor.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.ExternalLogin.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.IdFederation.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.Saml2.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.Authorize.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.SelfTest.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.Helper.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\ErrorController.cs" />
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ManageController.cs" />
