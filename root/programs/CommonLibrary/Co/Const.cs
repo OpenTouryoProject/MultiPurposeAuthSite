@@ -53,6 +53,7 @@
 //*  2026/10/21  玄人 幸道         Front-Channel Logout の受け口の定数を追加（#310 の段階 3）
 //*  2026/10/21  玄人 幸道         cnf.jkt のクレーム型を追加（#311 の段階 2）
 //*  2026/10/24  玄人 幸道         メンバの region を Config の処理区分（土台・配備・アカウント・STS・ID 連携）に揃えた（#294）
+//*  2026/10/24  玄人 幸道         利用者名とメアドの規則（メソッド）を Util.IdP.UserIdentifier へ移した（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -83,7 +84,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region 認証・認可
+        #region OAuth2/OIDC
 
         /// <summary>ClientNameのMaxLength</summary>
         public const int MaxLengthOfClientName = 64;
@@ -111,8 +112,6 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const int MaxLengthOfTokenHash = 128;
 
-        #endregion
-
         #region リスト
 
         /// <summary>grant_types / response_types の列挙の MaxLength</summary>
@@ -121,6 +120,9 @@ namespace MultiPurposeAuthSite.Co
         /// 既知の値しか入らないので、全部並べても 256 に収まる。
         /// </remarks>
         public const int MaxLengthOfTypeList = 256;
+
+        /// <summary>scope の列挙の MaxLength</summary>
+        public const int MaxLengthOfScopeList = 2000;
 
         /// <summary>Uriの列挙のMaxLength</summary>
         /// <remarks>
@@ -131,12 +133,11 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const int MaxLengthOfUriList = 2000;
 
-        /// <summary>scope の列挙の MaxLength</summary>
-        public const int MaxLengthOfScopeList = 2000;
-
         /// <summary>contacts（連絡先）の列挙の MaxLength（#307 の段階 1）</summary>
         /// <remarks>RFC 7591 §2 の `contacts`（空白区切りのメール アドレスの列挙）。</remarks>
         public const int MaxLengthOfContacts = 2000;
+
+        #endregion
 
         #endregion
 
@@ -203,90 +204,24 @@ namespace MultiPurposeAuthSite.Co
         #region 利用者の識別子
 
         /// <summary>
-        /// 入力された識別子が、メアドの形かどうか
-        /// </summary>
-        /// <param name="identifier">サインイン画面に入力された値</param>
-        /// <returns>メアドの形なら true</returns>
-        /// <remarks>
-        /// **利用者名とメアドの両方でサインインできる。**
-        /// どちらとして引くかを、**`@` を含むかどうか**で決める。
-        ///
-        /// **新しい利用者名に `@` を禁じている**ので（<see cref="IsValidUserName"/>）、
-        /// **この判定は曖昧にならない。**
-        ///
-        /// > **既存の利用者名は書き換えていない。** 以前は「利用者名＝メアド」だったため、
-        /// > **`@` を含む利用者名が残っている。**
-        /// > その利用者は**メアドとして引かれる**が、**値が同じなので同じ利用者に当たる。**
-        /// </remarks>
-        public static bool LooksLikeEmail(string identifier)
-        {
-            return !string.IsNullOrEmpty(identifier) && identifier.Contains("@");
-        }
-
-        /// <summary>
-        /// 利用者名として使える値かどうか（#151 の段階 3）
-        /// </summary>
-        /// <param name="userName">利用者名</param>
-        /// <returns>使えるなら true</returns>
-        /// <remarks>
-        /// **`@` を含む利用者名を認めない。**
-        /// 認めると、**サインインの入力がメアドなのか利用者名なのか決まらない。**
-        ///
-        /// **新しく作る・変えるときだけ掛ける。**
-        /// **既存の利用者名（以前の「利用者名＝メアド」）は、そのまま使い続けられる。**
-        /// </remarks>
-        public static bool IsValidUserName(string userName)
-        {
-            return !string.IsNullOrWhiteSpace(userName) && !userName.Contains("@");
-        }
-
-        /// <summary>
-        /// メアドから、利用者名の既定値を作る（#151 の段階 3）
-        /// </summary>
-        /// <param name="email">メアド</param>
-        /// <returns>`@` より前の部分（`@` が無ければ、そのまま）</returns>
-        /// <remarks>
-        /// **利用者名を別に決められない場面で使う。**
-        ///
-        /// | 使う場所 | なぜ |
-        /// |---|---|
-        /// | 管理者・テスト利用者の生成 | 設定にあるのは**メアドだけ**（`AdministratorUID`） |
-        /// | 外部ログイン・ID 連携での新規作成 | 上流が返すのは `sub` と**メアド**で、利用者名は無い |
-        ///
-        /// **一意性は呼び出し側が確かめる。** ここは形を整えるだけ。
-        /// </remarks>
-        public static string UserNameFromEmail(string email)
-        {
-            if (string.IsNullOrEmpty(email))
-            {
-                return email;
-            }
-
-            int at = email.IndexOf('@');
-
-            return (at > 0) ? email.Substring(0, at) : email;
-        }
-
-        /// <summary>
         /// 利用者名を運ぶ標準のクレーム
         /// </summary>
         /// <remarks>
         /// - **`sub` の代わりに利用者名を運ぶのは、これ**（OIDC Core §5.1）。
-        /// -　**出す側は `UserClaimsMapping`** で `user:UserName` に対応付ける。
+        /// - **出す側は `UserClaimsMapping`** で `user:UserName` に対応付ける。
         /// - **受ける側（ID 連携の下流）は、新規作成の利用者名にこれを使う。**
         /// </remarks>
         public const string PreferredUserNameClaim = "preferred_username";
 
         #endregion
 
-        #region WebAuthn（#137）
+        #region WebAuthn
 
-        /// <summary>WebAuthn の RP の表示名（#137）</summary>
+        /// <summary>WebAuthn の RP の表示名</summary>
         /// <remarks>
-        /// **認証器の画面に出る名前**である（`RPName`）。
-        /// **RPID とは別物**で、**RPID は配備先のホスト名から取る**
-        /// （`WebAuthnHelper` の constructor）。
-        /// **設定キーにしていない**のは、**表示名を変えても振る舞いが変わらない**ため。
+        /// - **認証器の画面に出る名前**（`RPName`）。
+        /// - **RPID とは別物**で、**RPID は配備先のホスト名から取る**（`WebAuthnHelper` の constructor）。
+        /// - **設定キーにしていない**のは、**表示名を変えても振る舞いが変わらない**ため。
         /// </remarks>
         public const string WebAuthnRpName = "MultiPurposeAuthSite";
 
@@ -320,6 +255,27 @@ namespace MultiPurposeAuthSite.Co
         #region Scope
 
         /// <summary>標準的なscope</summary>
+        /// <remarks>
+        /// **この IdP が出せる、利用者の属性の scope を全部並べたもの**（`openid` は含まない）。
+        ///
+        /// | scope | 種別 | 載るもの |
+        /// |---|---|---|
+        /// | `profile` / `email` / `phone` / `address` | OIDC Core §5.4 の標準 | 利用者の属性のクレーム |
+        /// | `userid` | **この IdP の独自** | 利用者の Id（access_token と /userinfo） |
+        /// | `roles` | **この IdP の独自** | ロールの一覧（**/userinfo だけ**。access_token には載せない） |
+        ///
+        /// **MPAS の中で読むのは、ID 連携の旧い鍵の移行（`userid`）だけ**（#140 の段階 3）。それ以外は RP 向けの出力である。
+        ///
+        /// **「標準的」と言うが、独自の 2 つを含む。** **他の OP へ送ってはならない**
+        /// （厳格な OP では `invalid_scope` になりうる。ID 連携は標準だけの `IdFederationScopes` を使う。）。
+        ///
+        /// **使うのは自己テストだけ**（`HomeController` の OAuth2 の開始・ROPC・Client Credentials・JWT Bearer、
+        /// `AccountController` の FAPI1 の `client_assertion`）。**自分自身に対して要求する**ので、独自の scope も通る。
+        /// OIDC として要求するときは、`openid` を足した <see cref="OidcScopes"/> を使う。
+        ///
+        /// **発行するかは、要求とは別に絞られる** —
+        /// Discovery で広告した scope（`Helper.GetScopesSupported`）と、クライアントごとの登録の範囲だけが出る。
+        /// </remarks>
         public static readonly string StandardScopes =
             OAuth2AndOIDCConst.Scope_Profile + " "
             + OAuth2AndOIDCConst.Scope_Email + " "
@@ -329,14 +285,17 @@ namespace MultiPurposeAuthSite.Co
             + OAuth2AndOIDCConst.Scope_Roles;
 
         /// <summary>OIDCのscope</summary>
+        /// <remarks>
+        /// `openid` と標準的な scope を合わせたもの。
+        /// </remarks>
         public static readonly string OidcScopes =
             OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
 
         #endregion
 
-        #region Dynamic Client Registration（#307 の段階 1）
+        #region Dynamic Client Registration
 
-        /// <summary>クライアント登録の管理 API 専用の scope（#307 の段階 1）</summary>
+        /// <summary>クライアント登録の管理 API 専用の scope</summary>
         /// <remarks>
         /// **この scope を持つアクセス トークンだけが、`registration_endpoint` を叩ける。**
         ///
@@ -354,9 +313,9 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region 再認証（max_age。#247）
+        #region 再認証（max_age）
 
-        /// <summary>再認証を求めた時刻を保存するCookieのKey（#247）</summary>
+        /// <summary>再認証を求めた時刻を保存するCookieのKey</summary>
         /// <remarks>
         /// **`max_age` の超過で再認証へ送ったことの印。**
         /// これが無いと、`max_age=0` のときに
@@ -367,21 +326,18 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region セッション（sid。#310 の段階 1）
+        #region セッション（sid）
 
-        /// <summary>OP のセッションの識別子を保存するCookieのKey（#310 の段階 1）</summary>
+        /// <summary>OP のセッションの識別子を保存するCookieのKey</summary>
         /// <remarks>
         /// **中身は guid。** **サインインで作り、サインアウトで消す。**
+        /// **これは `sid` そのものではない。台帳を引くための鍵**である。
         ///
-        /// **これは `sid` そのものではない。**
-        /// **`sid` はクライアントごとに別の値**にしてあり（`SessionClientProvider`）、
-        /// **この値は、その台帳を引くための鍵**である。
-        ///
-        /// **接頭辞が掛かる**（#255。`Config.PrefixCookieName`）。
+        /// **接頭辞が掛かる**（`Config.PrefixCookieName`）。
         /// </remarks>
         public const string OpSession = "op_session";
 
-        /// <summary>OP のセッションを用意し直したことを示す印（#310 の段階 2）</summary>
+        /// <summary>OP のセッションを用意し直したことを示す印</summary>
         /// <remarks>
         /// **認可の口で `op_session` が無かったとき、Cookie を置いて同じ URL へ送り返す。**
         /// **その送り返しに 1 回だけ付ける印**である（**無いと永久に送り返す**）。
@@ -390,19 +346,18 @@ namespace MultiPurposeAuthSite.Co
         /// **third-party cookie を遮る設定のブラウザで、iframe から `prompt=none`** を投げた場合など。
         /// **そこでは印だけが残り、セッションの識別子はその場で作る**（台帳は 1 行だけ残る）。
         ///
-        /// **再認証の `re_auth_at` と同じ考え方**である（#247 / #272 の段階 2）。
+        /// **再認証の `re_auth_at` と同じ考え方**である。
         /// </remarks>
         public const string OpSessionRetry = "op_session_retry";
 
-        /// <summary>sid クレームの名前（#310 の段階 1）</summary>
+        /// <summary>sid クレームの名前</summary>
         /// <remarks>
         /// **OP のセッションの識別子**（OIDC Core §2）。
-        /// **Front-Channel / Back-Channel Logout が「どのセッションか」を言う手段**である
-        /// （#310 の段階 2・3）。
+        /// **Front-Channel / Back-Channel Logout が「どのセッションか」を言う手段**である。
         /// </remarks>
         public const string Sid = "sid";
 
-        /// <summary>sid を運ぶ ClaimsIdentity のクレーム型（#310 の段階 1）</summary>
+        /// <summary>sid を運ぶ ClaimsIdentity のクレーム型</summary>
         /// <remarks>
         /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
         /// （`UrnAuthTimeClaim` などと同じ流儀）。
@@ -410,7 +365,7 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string UrnSidClaim = "urn:oauth:sid";
 
-        /// <summary>cnf.jkt を運ぶ ClaimsIdentity のクレーム型（#311 の段階 2）</summary>
+        /// <summary>cnf.jkt を運ぶ ClaimsIdentity のクレーム型</summary>
         /// <remarks>
         /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
         /// （**mTLS の `UrnCnfX5tClaim` と同じ流儀**）。
@@ -418,14 +373,14 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string UrnCnfJktClaim = "urn:oauth:cnf:jkt";
 
-        /// <summary>logout_token を運ぶ要求の項目名（#310 の段階 2）</summary>
+        /// <summary>logout_token を運ぶ要求の項目名</summary>
         /// <remarks>**POST の本文に 1 項目だけ**（Back-Channel Logout 1.0 §2.5）。</remarks>
         public const string LogoutToken = "logout_token";
 
-        /// <summary>logout_token の typ ヘッダ（#310 の段階 2）</summary>
+        /// <summary>logout_token の typ ヘッダ</summary>
         /// <remarks>
         /// **Back-Channel Logout 1.0 §2.4 が推している型**である。
-        /// **`id_token` と取り違えないため**（`at+jwt` を付けた #302 の段階 2 と同じ理由）。
+        /// **`id_token` と取り違えないため**（`at+jwt` を付けた）。
         /// </remarks>
         public const string LogoutJwtTyp = "logout+jwt";
 
@@ -437,7 +392,7 @@ namespace MultiPurposeAuthSite.Co
 
         // サイトごとに URL が違う**（net48, net10.0）ので、定数で登録し、サーバ側で解決
 
-        /// <summary>SAML2のテスト用のRedirectUri（ACS URL。#277 の段階 3 で定数にした）</summary>
+        /// <summary>SAML2のテスト用のRedirectUri（ACS URL）</summary>
         public const string TestSelfSaml = "test_self_saml";
         
         /// <summary>codeのテスト用のRedirectUri</summary>
@@ -446,10 +401,14 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>tokenのテスト用のRedirectUri</summary>
         public const string TestSelfToken = "test_self_token";
 
-        /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
+        #endregion
+
+        #region Logout
+
+        /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値</summary>
         public const string TestSelfLogout = "test_self_logout";
 
-        /// <summary>Front-Channel Logout の受け口のテスト用の値（#310 の段階 3）</summary>
+        /// <summary>Front-Channel Logout の受け口のテスト用の値</summary>
         /// <remarks>
         /// **ブラウザが `iframe` で開く口**である（**`logout_token` は来ない**。`iss` と `sid` だけ）。
         /// **E2E は `iframe` を開けない**ので、**テストが自分で叩く**（`TestFrontChannelLogoutBox`）。
@@ -457,7 +416,7 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string TestSelfFrontChannelLogout = "test_self_fclogout";
 
-        /// <summary>Back-Channel Logout の受け口のテスト用の値（#310 の段階 2）</summary>
+        /// <summary>Back-Channel Logout の受け口のテスト用の値</summary>
         /// <remarks>
         /// **このサイトは、自分の RP も兼ねている**（`test_self_code` と同じ考え方）。
         /// **受け取った `logout_token` は覚えておく**（`TestLogoutTokenBox`）。
@@ -484,7 +443,7 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>テスト用CodeVerifierを保存するSession, CookieのKey</summary>
         public const string TestCodeVerifier = "test_code_verifier";
 
-        /// <summary>テスト用の SAML2 AuthnRequest の ID を保存する Session, Cookie の Key（#276）</summary>
+        /// <summary>テスト用の SAML2 AuthnRequest の ID を保存する Session, Cookie の Key</summary>
         /// <remarks>
         /// **応答の `InResponseTo` と照合するために保存する**（Web SSO Profile 4.1.4.3）。
         /// **以前は `out id` を捨てていた**ので、照合できなかった。

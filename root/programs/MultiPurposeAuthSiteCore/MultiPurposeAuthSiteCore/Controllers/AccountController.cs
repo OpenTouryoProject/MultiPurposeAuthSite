@@ -72,6 +72,7 @@
 //*  2026/10/21  玄人 幸道         ログアウトを RP へ伝え、台帳へ書くのを発行の直前に移した（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         ブラウザ経由（iframe）でもログアウトを伝える（#310 の段階 3）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
+//*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -418,7 +419,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //   **`@` を含むならメアド**として引く（利用者名に `@` は禁じている）。
                         string uid = model.Email;
 
-                        ApplicationUser user = Const.LooksLikeEmail(uid)
+                        ApplicationUser user = UserIdentifier.LooksLikeEmail(uid)
                             ? await UserManager.FindByEmailAsync(uid)
                             : await UserManager.FindByNameAsync(uid);
 
@@ -877,7 +878,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string email = model.Email;
 
                     // **利用者名に `@` を禁じる**（サインインの入力がどちらなのか決まらなくなるため）。
-                    if (!Const.IsValidUserName(userName))
+                    if (!UserIdentifier.IsValidUserName(userName))
                     {
                         ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
                     }
@@ -1976,8 +1977,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // **新規に作るときの利用者名**（#151 の段階 3）。
                 //   上流の識別子がそのまま使えるならそれを、
                 //   **`@` を含んで使えないならメアドから作る**（利用者名に `@` は禁じている）。
-                string newUserName = Const.IsValidUserName(name)
-                    ? name : Const.UserNameFromEmail(email);
+                string newUserName = UserIdentifier.IsValidUserName(name)
+                    ? name : UserIdentifier.UserNameFromEmail(email);
 
                 if (!string.IsNullOrWhiteSpace(email)
                     && !string.IsNullOrWhiteSpace(name))
@@ -2629,8 +2630,8 @@ namespace MultiPurposeAuthSite.Controllers
             //   **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く**（上の uid）。
             //   ここで決まるのは、**新規に作るときの名前だけ**である。
 
-            string newUserName = Const.IsValidUserName(preferredUserName)
-                ? preferredUserName : Const.UserNameFromEmail(email);
+            string newUserName = UserIdentifier.IsValidUserName(preferredUserName)
+                ? preferredUserName : UserIdentifier.UserNameFromEmail(email);
 
             if (!string.IsNullOrWhiteSpace(email)
                 && !string.IsNullOrWhiteSpace(name))
@@ -3111,8 +3112,8 @@ namespace MultiPurposeAuthSite.Controllers
             //  **新規に作るときの名前は、属性の `uid` → メアドの `@` より前**（#286 の段階 4）。
             //    **OIDC 側の `preferred_username` と同じ扱い**である。
             //    **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く。**
-            string newUserName = Const.IsValidUserName(preferredUserName)
-                ? preferredUserName : Const.UserNameFromEmail(email);
+            string newUserName = UserIdentifier.IsValidUserName(preferredUserName)
+                ? preferredUserName : UserIdentifier.UserNameFromEmail(email);
 
             Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, federationKey);
             Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
@@ -6101,7 +6102,7 @@ namespace MultiPurposeAuthSite.Controllers
                 #region 管理者ユーザ
 
                 user = ApplicationUser.CreateUser(
-                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        UserIdentifier.UserNameFromEmail(Config.AdministratorUID),
                         Config.AdministratorUID, true);
                 result = await this.UserManager.CreateAsync(user, Config.AdministratorPWD);
                 if (result.Succeeded)

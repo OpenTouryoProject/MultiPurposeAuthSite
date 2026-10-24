@@ -16,10 +16,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（net48 版から移植。#258）
+//*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Util.IdP;
 
 using System.Linq;
 using System.Collections.Generic;
@@ -286,7 +288,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // （一般）ユーザを作成
                 //   **利用者名とメアドの両方を渡す**（#151 の段階 3）。
                 //   **利用者名に `@` は使えない**（サインインの入力がどちらなのか決まらなくなる）。
-                if (!Const.IsValidUserName(userViewModel.Name))
+                if (!UserIdentifier.IsValidUserName(userViewModel.Name))
                 {
                     ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
 
@@ -409,7 +411,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **ここで return しない。**
                 //   この画面は RolesList を持つモデルを要するので、
                 //   **下の「再表示」に落として、そこで作らせる**（詰めずに返すとビューで落ちる）。
-                bool userNameIsValid = Const.IsValidUserName(editUser.Name);
+                bool userNameIsValid = UserIdentifier.IsValidUserName(editUser.Name);
 
                 if (!userNameIsValid)
                 {

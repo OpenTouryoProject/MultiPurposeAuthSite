@@ -155,6 +155,7 @@
     <Compile Include="TokenProviders\SigningKeys.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
+    <Compile Include="Util\IdP\UserIdentifier.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
     <Compile Include="Util\PPIDExtension.cs" />
     <Compile Include="Util\UriExtension.cs" />

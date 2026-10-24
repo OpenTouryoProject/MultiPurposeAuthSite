@@ -18,11 +18,13 @@
 //*  2017/04/24  西野 大介         新規
 //*  2026/10/01  玄人 幸道         利用者名とメアドを別の項目として扱うようにした（#151 の段階 3）
 //*  2026/10/01  玄人 幸道         作成・編集の検証エラーで、画面が要る値を詰めるようにした（#151 の段階 3）
+//*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Entity;
 
@@ -287,7 +289,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **利用者名とメアドの両方を渡す**（#151 の段階 3）。
                 //   以前はどちらか一方を利用者名にして、もう一方を捨てていた。
                 //   **利用者名に `@` は使えない**（サインインの入力がどちらなのか決まらなくなる）。
-                if (!Const.IsValidUserName(userViewModel.Name))
+                if (!UserIdentifier.IsValidUserName(userViewModel.Name))
                 {
                     ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
 
@@ -429,7 +431,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **ここで return しない。**
                 //   この画面は RolesList を持つモデルを要するので、
                 //   **下の「再表示」に落として、そこで作らせる**（詰めずに返すとビューで落ちる）。
-                bool userNameIsValid = Const.IsValidUserName(editUser.Name);
+                bool userNameIsValid = UserIdentifier.IsValidUserName(editUser.Name);
 
                 if (!userNameIsValid)
                 {

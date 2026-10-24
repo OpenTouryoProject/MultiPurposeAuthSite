@@ -40,6 +40,7 @@
 //*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
 //*  2026/10/20  玄人 幸道         Users から ClientID 列を落とした（#307 の段階 5-a-1）
 //*  2026/10/21  玄人 幸道         利用者の削除で、セッション × クライアントの台帳も消す（#310 の段階 1）
+//*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -51,6 +52,7 @@ using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -298,7 +300,7 @@ namespace MultiPurposeAuthSite.Data
 
                     // テスト：管理者ユーザを返す。
                     user = ApplicationUser.CreateUser(
-                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        UserIdentifier.UserNameFromEmail(Config.AdministratorUID),
                         Config.AdministratorUID, true);
                     user.Id = userId;
 
@@ -413,7 +415,7 @@ namespace MultiPurposeAuthSite.Data
 #endif
                     {
                         user = ApplicationUser.CreateUser(
-                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        UserIdentifier.UserNameFromEmail(Config.AdministratorUID),
                         Config.AdministratorUID, true);
 #if NETFX
                         user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
