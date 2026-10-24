@@ -24,33 +24,28 @@ OAuth 2.0 / OIDC の認可エンドポイント
 Device Authorization Grant の利用者コードの確認画面を担うAccountControllerの一部
 */
 
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Mvc;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
-using Token = MultiPurposeAuthSite.TokenProviders;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
-
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Security.Claims;
-
+using System.Threading.Tasks;
 using System.Web;
-
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Log;
+using Touryo.Infrastructure.Public.Str;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
+using Token = MultiPurposeAuthSite.TokenProviders;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -60,98 +55,150 @@ namespace MultiPurposeAuthSite.Controllers
         #region Authorize（認可エンドポイント）
 
         #region max_age & auth_time
+
         // **max_age の判定は CommonLibrary へ移した**（#247。`CmnEndpoints.CheckAuthTime`）。
-        //   bool では「再認証」「login_required」「invalid_request」を区別できなかった。
+        // bool では「再認証」「login_required」「invalid_request」を区別できなかった。
 
         /// <summary>auth_timeを追加</summary>
         /// <param name="max_age">string</param>
-        /// <param name="claims">JObject</param>
-        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="claims">JObject（Request Object の claims（無ければ null））</param>
+        /// <param name="identity">ClaimsIdentity（認証Cookieから取得）</param>
         private void AddAuthTimeClaim(string max_age, JObject claims, ClaimsIdentity identity)
         {
             // QueryString、Cookieなどに関連するのでController側で追加。
+            // **auth_time を載せるのは、要求されたときだけ**（OIDC Core 2）。
+            // - max_age が指定された（RP が「いつ認証したか」を確かめる）
+            // - claims パラメタで id_token の auth_time を求められた（OIDC Core 5.5）
             if (!string.IsNullOrEmpty(max_age) || (claims != null
-                && claims.ContainsKey(OAuth2AndOIDCConst.claims_id_token) 
+                && claims.ContainsKey(OAuth2AndOIDCConst.claims_id_token)
                 && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
             {
+                // **前回の認証時刻は Cookie から読む**
+                // サインイン時（InitSessionAfterlogin）と、ManageController でパスワードを確かめた時・サインインし直した時
                 IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
                 string auth_time = requestCookies.Get(Config.AuthTimeCookieName);
 
+                // 「次回から自動的にサインイン」にチェックを入れてサインインし、ブラウザを閉じてから開き直した場合。
+                // 認証 Cookie は残っているが、認証時刻 Cookie は消えている（そういうカバレッジがあると言う話）。
                 if (string.IsNullOrEmpty(auth_time))
                 {
+                    // AuthTimeCookie が無ければ、最小値で埋める（認証時刻が分からない）。
                     auth_time = DateTimeOffset.MinValue.ToString();
                 }
 
+                // **クレームとして持たせる**（値は W3C 形式）。
+                // CmnAccessToken がこのクレームを拾い、id_token の auth_time にする。
                 identity.AddClaim(new Claim(
                     OAuth2AndOIDCConst.UrnAuthTimeClaim,
                     FormatConverter.ToW3cTimestamp(DateTime.Parse(auth_time))));
             }
         }
+
         #endregion
 
-        #region sid（OP のセッション。#310 の段階 1）
+        #region sid（OpSession）
 
-        /// <summary>OP のセッションの識別子を Cookie から読む（#310 の段階 1）</summary>
-        /// <returns>セッションの識別子（Cookie が無ければ空）</returns>
+        /// <summary>OpSessionの識別子を Cookie から読む</summary>
+        /// <returns>OpSessionの識別子（Cookie が無ければ空）</returns>
         private string GetOpSession()
         {
             return MyHttpContext.Current.Request.Cookies.Get(Config.OpSessionCookieName) ?? "";
         }
 
+        /// <summary>OpSessionの識別子をCookieに書く</summary>
+        /// <param name="sessionId">Sessionの識別子</param>
+        /// <remarks>**期限を付けない**（Session Cookie）。**ブラウザを閉じれば終わる。**</remarks>
+        private void SetOpSessionCookie(string sessionId)
+        {
+            MyHttpContext.Current.Response.Cookies.Set(
+                Config.OpSessionCookieName, sessionId, this._cookieOptions);
+        }
+
         /// <summary>
-        /// OP のセッションの識別子が無ければ、作って同じ URL へ送り返す（#310 の段階 2）
+        /// OpSessionの識別子が無ければ、作って送り返す。
         /// </summary>
-        /// <returns>送り返す場合は ActionResult（**用意できていれば null**）</returns>
-        /// <remarks>
-        /// **認可の口の入口で呼ぶ**（**認証済みと分かった後**）。
-        ///
-        /// **なぜ送り返すのか。**
-        /// **Cookie が無いまま 2 本の認可要求が同時に来ると、それぞれが別の識別子を作り、
-        /// ブラウザには最後の 1 つしか残らない。**
-        /// **残らなかった方の行は、サインアウトでも消えない**
-        /// （**掃除まで残り、段階 2 では「もう居ないセッション」の通知先として生き続ける**）。
-        /// **先に Cookie を置いて送り返せば、2 本とも同じ識別子で戻ってくる。**
-        /// **台帳へ書くのは戻ってきた後**（`AddSidClaim`）なので、**捨てた識別子の行は残らない。**
-        ///
-        /// **送り返すのは 1 回だけ**（`Const.OpSessionRetry` の印で見分ける）。
-        /// **Cookie を置けない文脈が在る**ので、**印が無いと永久に送り返す**
-        /// （再認証の `re_auth_at` と同じ考え方）。
-        /// </remarks>
+        /// <returns>
+        /// ある場合 null（呼び出し元は継続）。
+        /// ない場合、作成してRedirectResult。同時に来た要求で識別子がずれるのを防ぐ。
+        /// </returns>
         private ActionResult EnsureOpSession()
         {
+            // OpSessionがある場合は、何もしない。
             if (!string.IsNullOrEmpty(this.GetOpSession()))
             {
                 return null;
             }
 
+            // 既に 1 回送り返している場合も、何もしない。
+            // 1.送り返したのに、ブラウザが Cookie を戻さない（本来の想定）
+            // 2.最初から URL に印が付いている（送り返していないのに）
             if (!string.IsNullOrEmpty(HttpUtility.ParseQueryString(
                 Request.QueryString.Value)[Const.OpSessionRetry]))
             {
-                // **既に 1 回送り返している**（Cookie を置けない文脈）。
-                //   **そのまま続ける**（`AddSidClaim` がその場で作る）。
+                // 続けても失うのは「ログアウト補助」だけで、認証の安全性は下がらない。
                 return null;
             }
 
+            // OpSessionの識別子を作って
             this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
 
+            // 元のURLにRedirectしCookie に置く
             string url = UriHelper.GetEncodedUrl(Request);
+            return new RedirectResult(url + (url.Contains("?") ? "&" : "?") + Const.OpSessionRetry + "=1");
+        }
 
-            return new RedirectResult(url
-                + (url.Contains("?") ? "&" : "?") + Const.OpSessionRetry + "=1");
+        /// <summary>OpSessionを終わらせる</summary>
+        /// <returns>
+        /// **ブラウザ経由で伝える先**（`iframe` に入れる URL）。
+        /// **1 件も無ければ空** — **そのときは画面を挟まない。**
+        /// </returns>
+        /// <remarks>
+        /// **サインアウトの前に呼ぶ。** **伝えて、台帳を消し、Cookie を落とす**。
+        /// **伝えるのが先である** — **台帳を消すと、誰に伝えるかが分からなくなる。**
+        ///
+        /// | 伝え方 | ここで何をするか |
+        /// |---|---|
+        /// | **Back-Channel**（段階 2） | **サーバから POST する**（背景。**待たない**） |
+        /// | **Front-Channel**（段階 3） | **URL を作って返すだけ。** **開くのはブラウザ**（`iframe`） |
+        ///
+        /// **呼ばれるのはサインアウトの 5 か所** **どれも「OpSessionが終わる」場面**なので、**同じ扱いでよい。**
+        /// （`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。
+        /// </remarks>
+        private List<string> ClearOpSession()
+        {
+            string sessionId = this.GetOpSession();
+            List<string> iframeUrls = new List<string>();
+
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                // **先に伝える**（#310 の段階 2）。
+                // BackChannelLogout
+                Sts.BackChannelLogout.NotifyBySession(sessionId);
+                // FrontChannelLogout
+                iframeUrls = Sts.FrontChannelLogout.GetIframeUrls(sessionId);
+
+                // 台帳を消す
+                Sts.SessionClientProvider.DeleteBySession(sessionId);
+            }
+
+            // OpSession の Cookie を落とす
+            MyHttpContext.Current.Response.Cookies.Delete(Config.OpSessionCookieName);
+
+            return iframeUrls;
         }
 
         /// <summary>sidを追加</summary>
         /// <param name="client_id">client_id</param>
-        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="identity">ClaimsIdentity（認証Cookieから取得）</param>
         /// <remarks>
         /// **Cookie に関わるので Controller 側で追加**（`AddAuthTimeClaim` と同じ理由）。
         /// **値を決めるのは CommonLibrary**（`SessionClientProvider`） —
-        /// **クライアントごとに別の sid** を、台帳から引く（無ければ作る）。
+        /// **クライアント毎に別の sid** を、台帳から引く（無ければ作る）。
         ///
-        /// **呼ぶのは「code / token を実際に作る直前」である**（#310 の段階 2 で移した）。
+        /// **呼ぶのは「code / token を実際に作る直前」である**。
         /// **以前は認可の経路の分岐より手前で呼んでいた**ので、
         /// **同意画面を出しただけの相手・拒否された相手の行まで台帳に残り**、
-        /// **段階 2 で「トークンを一度も受けていない RP へログアウトを伝える」ことになった**
+        /// **「トークンを一度も受けていない RP へログアウトを伝える」ことになった**
         /// （**その RP に「この利用者が来た」ことを教えてしまう**）。
         ///
         /// **Cookie は `EnsureOpSession` が用意する**（**認可の口の入口で呼ぶ**）。
@@ -163,97 +210,31 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private void AddSidClaim(string client_id, ClaimsIdentity identity)
         {
+            // OpSessionからIDを取得
             string sessionId = this.GetOpSession();
 
+            // OpSessionIDが無ければ、作ってCookieに置く。
             if (string.IsNullOrEmpty(sessionId))
             {
                 sessionId = Guid.NewGuid().ToString("N");
                 this.SetOpSessionCookie(sessionId);
             }
 
+            // **クライアント毎に別の sid** を、台帳から引く（無ければ作る）。
             string sid = Sts.SessionClientProvider.GetOrCreateSid(
                 sessionId, client_id, identity.Name);
 
+            // **sid をクレームとして持たせる**。
             if (!string.IsNullOrEmpty(sid))
             {
                 identity.AddClaim(new Claim(Const.UrnSidClaim, sid));
             }
         }
 
-        /// <summary>OPのセッションの識別子をCookieに書く</summary>
-        /// <param name="sessionId">セッションの識別子</param>
-        /// <remarks>**期限を付けない**（セッション Cookie）。**ブラウザを閉じれば終わる。**</remarks>
-        private void SetOpSessionCookie(string sessionId)
-        {
-            MyHttpContext.Current.Response.Cookies.Set(
-                Config.OpSessionCookieName, sessionId, this._cookieOptions);
-        }
-
-        /// <summary>OPのセッションを終わらせる</summary>
-        /// <returns>
-        /// **ブラウザ経由で伝える先**（`iframe` に入れる URL。#310 の段階 3）。
-        /// **1 件も無ければ空** — **そのときは画面を挟まない。**
-        /// </returns>
-        /// <remarks>
-        /// **サインアウトの前に呼ぶ。**
-        /// **伝えて、台帳を消し、Cookie を落とす**（#310 の段階 2・3）。
-        ///
-        /// **伝えるのが先である** — **台帳を消すと、誰に伝えるかが分からなくなる。**
-        ///
-        /// | 伝え方 | ここで何をするか |
-        /// |---|---|
-        /// | **Back-Channel**（段階 2） | **サーバから POST する**（背景。**待たない**） |
-        /// | **Front-Channel**（段階 3） | **URL を作って返すだけ。** **開くのはブラウザ**（`iframe`） |
-        ///
-        /// **呼ばれるのはサインアウトの 5 か所**
-        /// （`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 /
-        /// `max_age` の再認証 / 別のアカウントでログイン）。
-        /// **どれも「OP のセッションが終わる」場面**なので、**同じ扱いでよい。**
-        /// </remarks>
-        private List<string> ClearOpSession()
-        {
-            string sessionId = this.GetOpSession();
-            List<string> iframeUrls = new List<string>();
-
-            if (!string.IsNullOrEmpty(sessionId))
-            {
-                //  **先に伝える**（#310 の段階 2）。
-                //    **消してしまうと、誰に伝えるかが分からなくなる。**
-                //    **待たない**（背景で送る。**応答しない RP でログアウトを止めない**）。
-                Sts.BackChannelLogout.NotifyBySession(sessionId);
-
-                //  **ブラウザ経由で伝える URL を作る**（#310 の段階 3）。
-                //    **これも消す前**である（**台帳から `sid` を引く**）。
-                iframeUrls = Sts.FrontChannelLogout.GetIframeUrls(sessionId);
-
-                Sts.SessionClientProvider.DeleteBySession(sessionId);
-            }
-
-            MyHttpContext.Current.Response.Cookies.Delete(Config.OpSessionCookieName);
-
-            return iframeUrls;
-        }
-
         /// <summary>Front-Channel Logout の画面を返す（#310 の段階 3）</summary>
         /// <param name="iframeUrls">`iframe` に入れる URL</param>
         /// <param name="continueUrl">`iframe` を開いた後に進む先</param>
         /// <returns>画面（**伝える先が 1 件も無ければ null**）</returns>
-        /// <remarks>
-        /// **1 件も無ければ null を返す** — **従来どおりリダイレクトで終わる。**
-        /// **登録している RP が無い配備では、画面が増えない**（**応答も変わらない**）。
-        ///
-        /// **進む先は、呼び出し側が決める。**
-        ///
-        /// | 呼び出し元 | 進む先 |
-        /// |---|---|
-        /// | `/end_session` | **登録された `post_logout_redirect_uri`**（無ければ Home） |
-        /// | `/Account/LogOff` | Home |
-        /// | 再認証・別アカウント | **同じ認可要求の URL**（**そのまま続ける**） |
-        ///
-        /// **外から渡された URL は、ここへ来ない。**
-        /// **`post_logout_redirect_uri` は登録と完全一致を確かめた後の値**であり、
-        /// **他は自分の URL** である（**オープン リダイレクタにしない**）。
-        /// </remarks>
         private ActionResult FrontChannelLogoutView(List<string> iframeUrls, string continueUrl)
         {
             if (iframeUrls == null || iframeUrls.Count == 0)
@@ -261,7 +242,21 @@ namespace MultiPurposeAuthSite.Controllers
                 return null;
             }
 
+            // iframe で、各 RP の frontchannel_logout_uri を開く（iss と sid を付けて）。
+            // ブラウザが RP の Cookie を付けて送るので、RP は自分のセッションを閉じられる。
             ViewBag.IframeUrls = iframeUrls;
+
+            // iframe を開いた後に進む先 **進む先は、呼び出し側が決める。**
+            //
+            // | 呼び出し元 | 場面 | 進む先 |
+            // |---|---|---|
+            // | `EndSession`（`/end_session`） | RP-Initiated Logout | `post_logout_redirect_uri` |
+            // | `LogOff`（`/Account/LogOff`） | OP の画面でのサインアウト | Home |
+            // | `OAuth2Authorize` | 認可の途中のサインアウト（`max_age` 超過・`prompt=login`・別アカウント） | **同じ認可要求の URL**（サインインし直して、**認可を続ける**） |
+            // 
+            // **外から渡された URL は、ここへ来ない（オープン リダイレクタにしない）。**
+            // **`post_logout_redirect_uri` は登録と完全一致を確かめた後の値**で、**他は自分の URL**
+            // continueUrl の「iframe を開いた後に進む先」とは、各iframeが進む先ではなく、iframe親が進む先
             ViewBag.ContinueUrl = continueUrl;
 
             return View("FrontChannelLogout");
@@ -310,17 +305,21 @@ namespace MultiPurposeAuthSite.Controllers
             string errDescription = "";
 
             JObject claims = null;
-            // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
-            // **クエリ文字列は、デコードされた値で読む**（#229）。
+
+            // PKCE の code_challenge は、Request.Query から直接読む
+            string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
+
+            // Request Objectが在ればその値を使う（無ければクエリ文字列）
+            // **クエリ文字列は、デコードされた値で読む**。
             //   以前は GetEncodedUrl から生のまま取り出していたため、
             //   **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
-            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
-            string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
+            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。            
             string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
                     request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+
                 // 存在しないrequest_uriではnullになる（#185）。
                 // その場合は上書きせず、後続のValidateAuthZReqParamでエラーにする。
                 JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
@@ -341,16 +340,13 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
-            // **要求の検証を先に行う**（#247）。
-            //   `redirect_uri` を照合できていないと、エラーを RP へ返せない。
-            //   以前は `max_age` の判定が先で、超過すると
-            //   **valid_redirect_uri も err も空のまま、文面の無いエラー画面**になっていた
-            //   （`ANALYSIS-IdP.md` の A-12）。
+            // **要求の検証を先に行う**（#247）。`redirect_uri` を照合できていないと、エラーを RP へ返せない。
+            // 以前は `max_age` の判定が先で、超過すると**valid_redirect_uri も err も空のまま、文面の無いエラー画面**になっていた。
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription, code_challenge, prompt))
             {
-                // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
+                // **max_age と auth_time の照合**（判定は CommonLibrary）。
                 OAuth2AndOIDCEnum.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
                     max_age,
                     MyHttpContext.Current.Request.Cookies.Get(Config.AuthTimeCookieName),
@@ -362,84 +358,76 @@ namespace MultiPurposeAuthSite.Controllers
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "max_age must be a non-negative integer.";
                 }
-                else if (!this.User.Identity.IsAuthenticated
-                    && OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptNone))
-                {
-                    // **そもそもサインインしていない**（OIDC Core 3.1.2.6 : login_required）。
-                    //   **#247 で足したのは「セッションは在るが古い」場合だけ**だった。
-                    //   **「セッションが無い」場合は、[Authorize] が
-                    //   このコードに入る前にサインイン画面へ飛ばしていた**（#254）。
-                    err = OAuth2AndOIDCConst.login_required;
-                    errDescription = "The end-user is not authenticated, but prompt=none was specified.";
-                }
                 else if (!this.User.Identity.IsAuthenticated)
                 {
-                    // **サインイン画面へ送る**（#254）。
-                    //   **[Authorize] を外した**ので、未認証のときの扱いを自分で決める。
-                    //   ChallengeResult は 401 を返し、Cookie 認証が LoginPath へのリダイレクトに変える。
-                    //   **[Authorize] が行っていたことと同じ**（ReturnUrl も付く）。
-                    return new ChallengeResult();
+                    // **そもそもサインインしていない**（OIDC Core 3.1.2.6 : login_required）。
+                    if (OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptNone))
+                    {
+                        // **prompt=none では UI を出せない**
+                        err = OAuth2AndOIDCConst.login_required;
+                        errDescription = "The end-user is not authenticated, but prompt=none was specified.";
+                    }
+                    else
+                    {
+                        // **サインイン画面へ送る**。
+                        //   ChallengeResult は 401 を返し、Cookie 認証が LoginPath へのリダイレクトに変える。
+                        return new ChallengeResult();
+                    }
                 }
-                else if (authTimeCheck == OAuth2AndOIDCEnum.AuthTimeCheck.NeedsReAuthentication
-                    && OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptNone))
+                else if (authTimeCheck == OAuth2AndOIDCEnum.AuthTimeCheck.NeedsReAuthentication)
                 {
-                    // **prompt=none では UI を出せない**（OIDC Core 3.1.2.6 : login_required）。
-                    err = OAuth2AndOIDCConst.login_required;
-                    errDescription = "Re-authentication is required, but prompt=none was specified.";
+                    // **再認証する**（OIDC Core 3.1.2.1）。
+                    if (OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptNone))
+                    {
+                        // **prompt=none では UI を出せない**
+                        err = OAuth2AndOIDCConst.login_required;
+                        errDescription = "Re-authentication is required, but prompt=none was specified.";
+                    }
+                    else
+                    {
+                        // 印を残してサインアウトし、同じ URL に戻す（この後は認証が要るのでサインイン画面になる）。
+                        // **印は繰り返しを防ぐため**（max_age=0 でも、再認証の直後なら続ける）。
+                        MyHttpContext.Current.Response.Cookies.Set(Config.ReAuthenticatedAtCookieName,
+                            FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+
+                        // OpSessionを終わらせる（入り直すと新しい sid になる）
+                        List<string> iframeUrlsForMaxAge = this.ClearOpSession();
+
+                        // **SignInManager でサインアウトする。**
+                        // `HttpContext.SignOutAsync()` では、Cookie（Identity.Application）が消えず、
+                        // 次の要求でも認証済みのままだった（実測）。既存の LogOff も SignInManager を使っている。
+                        await this.SignInManager.SignOutAsync();
+
+                        // ...
+                        ActionResult frontChannelForMaxAge = this.FrontChannelLogoutView(
+                            iframeUrlsForMaxAge, UriHelper.GetEncodedUrl(Request));
+                        if (frontChannelForMaxAge != null) { return frontChannelForMaxAge; }
+                        else { return new RedirectResult(UriHelper.GetEncodedUrl(Request)); }
+                    }
                 }
                 else if (OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptLogin)
                     && string.IsNullOrEmpty(MyHttpContext.Current.Request.Cookies.Get(Config.ReAuthenticatedAtCookieName)))
                 {
                     // **prompt=login は、再認証を求める**（OIDC Core §3.1.2.1。#272 の段階 2）。
-                    //   **max_age の再認証と同じ経路**を使う（印を残してサインアウトし、同じ URL に戻す）。
-                    //   **印（re_auth_at）が在るときはここを通らない。**
-                    //   **戻ってきた要求にも prompt=login が付いている**ので、
-                    //   印が無いと永久に送り返すことになる。
-                    //   **prompt=none との併記は段階 1 で invalid_request にしてある**ので、
-                    //   「UI を出せないのに再認証」にはならない。
                     MyHttpContext.Current.Response.Cookies.Set(Config.ReAuthenticatedAtCookieName,
                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
-                    // **OP のセッションを終わらせる**（#310 の段階 1。入り直すと新しい sid になる）
+
+                    // **OpSessionを終わらせる**（入り直すと新しい sid になる）
                     List<string> iframeUrlsForPromptLogin = this.ClearOpSession();
                     await this.SignInManager.SignOutAsync();
 
-                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
+                    // ...
                     ActionResult frontChannelForPromptLogin = this.FrontChannelLogoutView(
                         iframeUrlsForPromptLogin, UriHelper.GetEncodedUrl(Request));
-                    if (frontChannelForPromptLogin != null) return frontChannelForPromptLogin;
-
-                    return new RedirectResult(UriHelper.GetEncodedUrl(Request));
-                }
-                else if (authTimeCheck == OAuth2AndOIDCEnum.AuthTimeCheck.NeedsReAuthentication)
-                {
-                    // **再認証する**（OIDC Core 3.1.2.1）。
-                    //   印を残してサインアウトし、同じ URL に戻す（この後は認証が要るのでサインイン画面になる）。
-                    //   **印は繰り返しを防ぐため**（max_age=0 でも、再認証の直後なら続ける）。
-                    MyHttpContext.Current.Response.Cookies.Set(Config.ReAuthenticatedAtCookieName,
-                        FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
-
-                    // **SignInManager でサインアウトする。**
-                    //   `HttpContext.SignOutAsync()`（スキーム指定なし）では、
-                    //   **このサイトが実際に使っているクッキー（Identity.Application）が消えず、
-                    //   次の要求でも認証済みのままだった**（実測した。#247）。
-                    //   既存の LogOff も SignInManager を使っている。
-                    // **OP のセッションを終わらせる**（#310 の段階 1。入り直すと新しい sid になる）
-                    List<string> iframeUrlsForMaxAge = this.ClearOpSession();
-                    await this.SignInManager.SignOutAsync();
-
-                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
-                    ActionResult frontChannelForMaxAge = this.FrontChannelLogoutView(
-                        iframeUrlsForMaxAge, UriHelper.GetEncodedUrl(Request));
-                    if (frontChannelForMaxAge != null) return frontChannelForMaxAge;
-
-                    return new RedirectResult(UriHelper.GetEncodedUrl(Request));
+                    if (frontChannelForPromptLogin != null) { return frontChannelForPromptLogin; }
+                    else { return new RedirectResult(UriHelper.GetEncodedUrl(Request)); }
                 }
                 else
                 {
-                    // **OP のセッションの識別子を用意する**（#310 の段階 2）。
-                    //   **無ければ Cookie を置いて、同じ URL へ送り返す**
-                    //   （**同時に来た要求を 1 つの識別子に揃えるため**）。
+                    // **OpSessionの識別子**。
                     ActionResult ensured = this.EnsureOpSession();
+
+                    // **無ければ Cookie を置いて、同じ URL へ送り返す**
                     if (ensured != null) return ensured;
 
                     // Cookie認証チケットからClaimsPrincipalを取得しておく。
@@ -451,8 +439,7 @@ namespace MultiPurposeAuthSite.Controllers
                         principal.Claims, OAuth2AndOIDCConst.Bearer,
                         ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
-                    // **再認証の印を消す**（#247）。
-                    //   一度きりの印なので、ここまで来たら落とす。
+                    // **再認証の印を消す** 一度きりの印なので、ここまで来たら落とす。
                     MyHttpContext.Current.Response.Cookies.Delete(Config.ReAuthenticatedAtCookieName);
 
                     // auth_timeを追加
@@ -488,7 +475,7 @@ namespace MultiPurposeAuthSite.Controllers
                         #region 同意の判定（#272 の段階 2 / D-6）
 
                         // **以前は「`prompt=none` なら無条件に飛ばす」だった**（C-3）。
-                        //   **記録を持ったので、「以前に同意済みか」で判定できる。**
+                        // **記録を持ったので、「以前に同意済みか」で判定できる。**
                         //
                         //   | 状況 | ここでの扱い |
                         //   |---|---|
@@ -501,10 +488,8 @@ namespace MultiPurposeAuthSite.Controllers
                         string userId = this.UserManager.GetUserId(this.User);
 
                         bool hasConsent = Sts.ConsentProvider.HasConsent(userId, client_id, scopes);
-                        bool asksConsent = OAuth2AndOIDCSpec.HasPrompt(
-                                               prompt, OAuth2AndOIDCConst.PromptConsent)
-                                           || OAuth2AndOIDCSpec.HasPrompt(
-                                               prompt, OAuth2AndOIDCConst.PromptSelectAccount);
+                        bool asksConsent = OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptConsent)
+                                           || OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptSelectAccount);
 
                         #endregion
 
