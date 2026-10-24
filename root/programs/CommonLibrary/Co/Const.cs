@@ -56,6 +56,7 @@
 //*  2026/10/24  玄人 幸道         利用者名とメアドの規則（メソッド）を Util.IdP.UserIdentifier へ移した（#294）
 //*  2026/10/24  玄人 幸道         StandardScopes から userid を外した（独自 scope の userid を廃止。#294）
 //*  2026/10/24  玄人 幸道         StandardScopes を SelfTestScopes にリネームした（使うのは自己テストだけ。独自の roles を含む。#294）
+//*  2026/10/24  玄人 幸道         OidcScopes / SelfTestScopes / IdFederationScopes を const にした（宣言の順で初期化が欠けないように。#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -260,14 +261,14 @@ namespace MultiPurposeAuthSite.Co
         /// <remarks>
         /// `openid` と <see cref="SelfTestScopes"/> を合わせたもの。
         /// </remarks>
-        public static readonly string OidcScopes =
+        public const string OidcScopes =
             OAuth2AndOIDCConst.Scope_Openid + " " + SelfTestScopes;
 
         /// <summary>DCRの管理 API 専用の scope</summary>
         /// <remarks>
         /// **この scope を持つアクセス トークンだけが、`registration_endpoint` を叩ける。**
         ///
-        /// **仕様が定めた名前ではない**。**この配備が決めた値**である。
+        /// **仕様が定めた名前ではない**（RFC 7591 は initial access token の取り方を定めていない）。**この配備が決めた値**である。
         /// **広告するのは、DCRを開けた配備だけ**（`Helper.GetScopesSupported`）。
         ///
         /// > **この scope は、登録に明記したクライアントにしか出さない**
@@ -282,7 +283,7 @@ namespace MultiPurposeAuthSite.Co
         /// 標準のスコープだけを要求する。
         /// 上流が `email_verified` を返す。突き合わせは常にメアド。
         /// </remarks>
-        public static readonly string IdFederationScopes =
+        public const string IdFederationScopes =
             OAuth2AndOIDCConst.Scope_Openid + " "
             + OAuth2AndOIDCConst.Scope_Profile + " "
             + OAuth2AndOIDCConst.Scope_Email + " "
@@ -316,7 +317,7 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region sid（Single Logout）
+        #region sid（Front / Back-Channel Logout）
 
         /// <summary>OP のセッションの識別子を保存するCookieのKey</summary>
         /// <remarks>
@@ -396,12 +397,12 @@ namespace MultiPurposeAuthSite.Co
         /// | `profile` / `email` / `phone` / `address` | OIDC Core §5.4 の標準 | 利用者の属性のクレーム |
         /// | `roles` | **この IdP の独自** | ロールの一覧 |
         ///
-        /// **独自の `userid` は PPID の意味を打ち消す**ため scope ごと廃止**。
+        /// **独自の `userid` は、PPID の意味を打ち消すため scope ごと廃止した**（#294）。
         ///
         /// **独自の `roles` を含む。** **他の OP へ送ってはならない**
         /// - 厳格な OP では `invalid_scope` になりうる。
         /// - ID 連携は標準だけの `IdFederationScopes` を使う。
-        /// 
+        ///
         /// **`roles` は、自前のResource Server（Web API）で使う可能性を考えて残している**
         /// - access_token の `scopes` には scope 名が載る。
         /// - ロールそのものは載らないので、/userinfo から取る。
@@ -412,7 +413,7 @@ namespace MultiPurposeAuthSite.Co
         /// **発行するかは、要求とは別に絞られる** —
         /// Discovery で広告した scope（`Helper.GetScopesSupported`）と、クライアントごとの登録の範囲だけが出る。
         /// </remarks>
-        public static readonly string SelfTestScopes =
+        public const string SelfTestScopes =
             OAuth2AndOIDCConst.Scope_Profile + " "
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
