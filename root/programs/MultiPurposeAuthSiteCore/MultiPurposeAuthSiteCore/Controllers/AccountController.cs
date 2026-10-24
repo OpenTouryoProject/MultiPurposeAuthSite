@@ -73,6 +73,7 @@
 //*  2026/10/21  玄人 幸道         ブラウザ経由（iframe）でもログアウトを伝える（#310 の段階 3）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
+//*  2026/10/24  玄人 幸道         ID 連携の旧い鍵（userid）からの移行の枝を削除した（上流へ userid を要求しないので通らない。#140 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2521,9 +2522,6 @@ namespace MultiPurposeAuthSite.Controllers
                     string idpIssuer = (string)idTokenPayload[OAuth2AndOIDCConst.iss];
                     string federationKey = sub;
 
-                    // **旧い鍵**（下位互換。移行のために読む）。
-                    string legacyKey = (string)jobj[OAuth2AndOIDCConst.Scope_UserID];
-
                     string name = (string)jobj[OAuth2AndOIDCConst.sub];
                     string email = (string)jobj[OAuth2AndOIDCConst.Scope_Email];
 
@@ -2558,7 +2556,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //  **ここから先は、利用者の結び付けとサインイン**（#286 の段階 2 で分けた）。
                     //    **SAML2 側と同じ形**である（`SignInByIdFederationSaml2`）。
                     return await this.SignInByIdFederationOidc(
-                        idpIssuer, federationKey, legacyKey,
+                        idpIssuer, federationKey,
                         email, name, preferredUserName, emailVerified);
 
                     #endregion
@@ -2582,7 +2580,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>検証できた id_token と /userinfo で、利用者を結び付けてサインインする</summary>
         /// <param name="idpIssuer">上流の Issuer（`id_token` の `iss`）</param>
         /// <param name="federationKey">連携キー（`id_token` の `sub`）</param>
-        /// <param name="legacyKey">旧い連携キー（`userid`。下位互換のために読む）</param>
         /// <param name="email">メアド（`/userinfo` の `email`）</param>
         /// <param name="name">`/userinfo` の `sub`</param>
         /// <param name="preferredUserName">`preferred_username`（新規作成時の名前に使う）</param>
@@ -2599,11 +2596,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// | 利用者の鍵 | メアド | メアド（＝ `NameID`） |
         /// | 新規作成時の名前 | `preferred_username` → メアドの `@` より前 | メアドの `@` より前 |
         /// | 検証済みのメアドか | **上流の `email_verified`** | **`NameIDFormat=emailAddress` を検証済みとして扱う** |
-        ///
-        /// **旧い鍵からの移行は OIDC 側だけに在る**（`legacyKey`。#140 の段階 3）。
         /// </remarks>
         private async Task<ActionResult> SignInByIdFederationOidc(
-            string idpIssuer, string federationKey, string legacyKey,
+            string idpIssuer, string federationKey,
             string email, string name, string preferredUserName, string emailVerified)
         {
             IdentityResult idResult = null;
@@ -2642,24 +2637,6 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **新しい鍵（iss, sub）で引く**（#140 の段階 3）。
                 ApplicationUser user = await UserManager.FindByLoginAsync(idpIssuer, federationKey);
 
-                if (user == null && !string.IsNullOrEmpty(legacyKey))
-                {
-                    // **旧い鍵（"MultiPurposeAuthSite", userid）で引き直す**（下位互換）。
-                    //   見つかったら**新しい鍵を足して移行する**（旧い鍵は消さない。
-                    //   切り戻しできるようにするため）。
-                    user = await UserManager.FindByLoginAsync("MultiPurposeAuthSite", legacyKey);
-
-                    if (user != null)
-                    {
-                        idResult = await UserManager.AddLoginAsync(user,
-                            new UserLoginInfo(idpIssuer, federationKey, idpIssuer));
-
-                        Logging.MyOperationTrace(string.Format(
-                            "Migrated the ID federation key of {0}({1}) to (iss, sub).",
-                            user.Id, user.UserName));
-                    }
-                }
-
                 if (user != null)
                 {
                     // 既存の外部ログインがある場合。
@@ -2677,7 +2654,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 既存の外部ログイン・プロバイダでサインイン
                     //   **新しい鍵（iss, sub）で**（#140 の段階 3）。
-                    //   旧い鍵しか無かった場合は、上で新しい鍵を足してある。
                     siResult = await SignInManager.ExternalLoginSignInAsync(
                         idpIssuer, federationKey,
                         isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.

@@ -264,7 +264,9 @@ namespace MultiPurposeAuthSite.Co
         /// | `userid` | **この IdP の独自** | 利用者の Id（access_token と /userinfo） |
         /// | `roles` | **この IdP の独自** | ロールの一覧（**/userinfo だけ**。access_token には載せない） |
         ///
-        /// **MPAS の中で読むのは、ID 連携の旧い鍵の移行（`userid`）だけ**（#140 の段階 3）。それ以外は RP 向けの出力である。
+        /// **MPAS の中では読んでいない**（RP 向けの出力である）。
+        /// 以前は ID 連携の旧い鍵（`userid`）からの移行で読んでいたが、
+        /// **上流へ `userid` を要求しない**（`IdFederationScopes`。#140 の段階 3）ので通らず、その枝は削除した。
         ///
         /// **「標準的」と言うが、独自の 2 つを含む。** **他の OP へ送ってはならない**
         /// （厳格な OP では `invalid_scope` になりうる。ID 連携は標準だけの `IdFederationScopes` を使う。）。
