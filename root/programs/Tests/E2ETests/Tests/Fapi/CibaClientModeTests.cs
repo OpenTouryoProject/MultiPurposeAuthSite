@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#224 の段階 0 : CIBA × 登録種別）
 //*  2026/09/22  玄人 幸道         FA-5.1 を開始（/ciba_authz）での拒否に改め、FA-5.2（既知でない登録値）を追加（#224 の段階 2）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using System.Threading.Tasks;
@@ -117,11 +118,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient4_3);
 
                 TestReport r = this.Report("FA-5.2",
-                    "oauth2_oidc_mode が既知でない値（fapi_1）のクライアントは、開始（/ciba_authz）で unauthorized_client になる",
+                    "client_mode が既知でない値（fapi_1）のクライアントは、開始（/ciba_authz）で unauthorized_client になる",
                     "**既知でない登録値は、不正な登録として拒否する**（#224 の段階 2）。"
                     + "以前は fapi2 とみなしていた。「一番厳しい種別」に倒す作りは、"
                     + "種別が増えると意味が変わるため、やめた。"
-                    + "なお oauth2_oidc_mode を書いていない登録は normal で、これには当たらない。",
+                    + "なお client_mode を書いていない登録は normal で、これには当たらない。",
                     "#224");
 
                 r.Target("client_name=" + KnownClients.TestClient4_3

@@ -32,6 +32,7 @@
 //*  2026/10/01  玄人 幸道         codeのidentityに利用者名を入れる（subではない）（#151 の段階 4）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using System;
@@ -100,9 +101,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
-                            { "userCode", userCode },
+                            { Const.PollingUserCode, userCode },
                             { Const.PollingAuthReqExp, authReqExp.ToString() },
-                            { "tempData", tempData },
+                            { Const.PollingTempData, tempData },
                             { Const.PollingResult, "" }
                         };
 
@@ -213,11 +214,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             Dictionary<string, string> dic
                                 = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
 
-                            string _userCode = dic["userCode"];
+                            string _userCode = dic[Const.PollingUserCode];
 
                             if (userCode == _userCode)
                             {
-                                string tempData = dic["tempData"];
+                                string tempData = dic[Const.PollingTempData];
 
                                 Dictionary<string, string> tempdic
                                      = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
@@ -723,7 +724,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>Code</returns>
         private static string GetCode(string userName, Dictionary<string, string> tempdic)
         {
-            string client_id = tempdic["client_id"];
+            string client_id = tempdic[OAuth2AndOIDCConst.client_id];
             string scope = tempdic[OAuth2AndOIDCConst.scope];
 
             // **identity.Name に入れるのは利用者名**（#151 の段階 4）。

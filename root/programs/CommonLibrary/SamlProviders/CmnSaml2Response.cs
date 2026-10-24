@@ -35,7 +35,10 @@
 //*  2026/10/14  玄人 幸道         鍵の列を受ける版を足した（#292 の段階 3）
 //*  2026/10/22  玄人 幸道         検証を Open棟梁 の SAML2Client.VerifyResponseWithReason に移した（#294）
 //*  2026/10/24  玄人 幸道         検証結果の文言を resx にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
+
+using MultiPurposeAuthSite.Co;
 
 using System;
 using System.Security.Cryptography;
@@ -74,7 +77,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <remarks>**認証の判断には `IsValid` だけを使う**（Open棟梁 の決め）。</remarks>
         public static string VerdictOf(SAML2VerifyResult result)
         {
-            return (result != null && result.IsValid) ? "NORMAL_END" : "ABNORMAL_END";
+            return (result != null && result.IsValid) ? Const.VerdictNormalEnd : Const.VerdictAbnormalEnd;
         }
 
         /// <summary>判定の理由（画面とログに出す）</summary>

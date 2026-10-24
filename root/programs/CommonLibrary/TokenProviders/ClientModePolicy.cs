@@ -34,6 +34,7 @@
 //*  2026/09/25  玄人 幸道         認可コード × private_key_jwt に fapi2 を足した（#238）
 //*  2026/09/26  玄人 幸道         refresh_token を、非対称の証明なら fapi1 / fapi2 にも開いた（#239 の段階 3）
 //*  2026/09/29  玄人 幸道         行ごとの E2E を突き合わせ、注記を更新（#245 の段階 1）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using System.Linq;
@@ -44,7 +45,7 @@ using Touryo.Infrastructure.Public.FastReflection;
 namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>
-    /// 登録種別（oauth2_oidc_mode）ごとに、どの経路を許すか（#224）
+    /// 登録種別（client_mode）ごとに、どの経路を許すか（#224）
     /// </summary>
     /// <remarks>
     /// **「経路 × 何を証明したか」から、通す登録種別を表で引く。**
@@ -228,7 +229,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 x => x.Flow == flow && x.Allowed.Contains(clientMode));
         }
 
-        /// <summary>登録種別の文字列（oauth2_oidc_mode）を解釈する</summary>
+        /// <summary>登録種別の文字列（client_mode）を解釈する</summary>
         /// <param name="clientModeString">登録の値</param>
         /// <param name="clientMode">登録種別（解釈できなければ normal。使わないこと）</param>
         /// <returns>既知の値なら true</returns>
@@ -237,7 +238,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 以前は fapi2 とみなしていた（初期値が fapi2 のまま残っていた）。
         /// 「一番厳しい種別」に倒す作りは、種別が増えると意味が変わるため、やめた。
         ///
-        /// なお、**oauth2_oidc_mode を書いていない登録は normal**（Helper.GetClientMode の既定値）で、ここには来ない。
+        /// なお、**client_mode を書いていない登録は normal**（Helper.GetClientMode の既定値）で、ここには来ない。
         /// </remarks>
         public static bool TryParse(string clientModeString, out OAuth2AndOIDCEnum.ClientMode clientMode)
         {
@@ -256,7 +257,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         /// <summary>登録された種別で、この経路を（何かの証明で）使えるか</summary>
-        /// <param name="clientModeString">登録の値（oauth2_oidc_mode）</param>
+        /// <param name="clientModeString">登録の値（client_mode）</param>
         /// <param name="flow">経路</param>
         /// <returns>使えるなら true。既知でない登録値なら false</returns>
         public static bool MayUse(string clientModeString, Flow flow)

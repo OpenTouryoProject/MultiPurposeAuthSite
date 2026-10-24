@@ -307,7 +307,7 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 **alg → 鍵の対応は `SigningKeys`（`CommonLibrary/TokenProviders`）の表 1 か所**にあり、
 **発行・検証・Discovery の広告・`jwkcerts` の生成が、すべてその表を見る**（#129 の段階 3 / D-9）。
 
-> **CIBA（`oauth2_oidc_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
+> **CIBA（`client_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
 > **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
 
@@ -1496,7 +1496,7 @@ Content-Type: application/json
 | **`response_types`** | **認可エンドポイント**（`CmnEndpoints.CheckAuthZEndpoint`）。**利用者を操作させる前に `unauthorized_client` で断る** |
 | **`grant_types`** | **トークン エンドポイント**（`CmnEndpoints.CheckClientMode` の手前）。`unauthorized_client` |
 
-> **`ClientModePolicy`（`oauth2_oidc_mode`）とは役割が違う。**
+> **`ClientModePolicy`（`client_mode`）とは役割が違う。**
 >
 > | | 何を見るか |
 > |---|---|
@@ -1513,6 +1513,13 @@ Content-Type: application/json
 > **DB に登録したクライアント（管理画面・動的登録）は「登録が無い」扱いになり、**
 > **#198 の後半（クライアントごとの絞り）が一切効いていなかった**
 > （`scopes_supported` の絞りだけが効いていた）。**#307 の段階 1 で、DB も見るようにした。**
+
+##### :warning: 登録種別の項目名を `client_mode` に改めた（#294）
+
+- **以前の名前は `oauth2_oidc_mode`。旧い名前は読まない**（下位互換は取らない）。
+- **旧い名前のまま残すと、`normal` として扱われる**（`fapi1` / `fapi2` などの制約が外れる）。
+  **構成ファイル（`OAuth2ClientsInformation`）の項目名を書き換えること。**
+- **管理画面から登録したクライアント**（`Saml2OAuth2Data`）は、DB の `ClientMode` 列に入っているので**影響しない。**
 
 #### クライアント認証の方法 — `token_endpoint_auth_method`（#307 の段階 3）
 
@@ -1551,7 +1558,7 @@ Content-Type: application/json
 ```jsonc
 "6336f8ff137044c4a30bbbdcd6c2cf5b": {
   "client_name": "TestClient2",
-  "oauth2_oidc_mode": "fapi2",
+  "client_mode": "fapi2",
   "token_endpoint_auth_method": "private_key_jwt",   // ← 足す（段階 3）
   "jwk_rsa_publickey": "..."
 }
@@ -3760,7 +3767,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    **移行では、締められるクライアントから順に `require_pkce` を立て、
    全部揃ったらサーバの `RequirePkce` を `true` にする**、という順序が取れる。
 
-   > **`oauth2_oidc_mode` を `fapi1` にしても PKCE は必須になるが、そちらは重い。**
+   > **`client_mode` を `fapi1` にしても PKCE は必須になるが、そちらは重い。**
    > **ROPC / `client_credentials` / `refresh_token` も巻き添えで塞がる**（実測。#222）。
    > 「PKCE だけ必須にしたい」なら `require_pkce` を使う。
 

@@ -45,6 +45,7 @@
 //*  2026/10/07  玄人 幸道         SAML2のAuthnRequestのIDを保存するようにした（#276）
 //*  2026/10/08  玄人 幸道         自己テストで NameIDFormat / ResponseMode を選べるようにした（#277 の段階 4）
 //*  2026/10/24  玄人 幸道         Const.StandardScopes を Const.SelfTestScopes にリネームした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -346,10 +347,10 @@ namespace MultiPurposeAuthSite.Controllers
         {
             switch (this.NameIdFormat)
             {
-                case "emailAddress":
+                case Const.NameIdFormatEmailAddress:
                     return SAML2Enum.NameIDFormat.EmailAddress;
 
-                case "persistent":
+                case Const.NameIdFormatPersistent:
                     return SAML2Enum.NameIDFormat.Persistent;
 
                 default:
@@ -749,17 +750,17 @@ namespace MultiPurposeAuthSite.Controllers
                     else if (model.ResponseMode.ToLower().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit())
                     {
-                        this.ResponseMode = "query.jwt";
+                        this.ResponseMode = Const.ResponseModeQueryJwt;
                     }
                     else if (model.ResponseMode.ToLower().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                     {
-                        this.ResponseMode = "fragment.jwt";
+                        this.ResponseMode = Const.ResponseModeFragmentJwt;
                     }
                     else if (model.ResponseMode.ToLower().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                     {
-                        this.ResponseMode = "form_post.jwt";
+                        this.ResponseMode = Const.ResponseModeFormPostJwt;
                     }
                     else
                     {

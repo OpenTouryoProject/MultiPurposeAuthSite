@@ -1161,7 +1161,7 @@ RFC 8628 §3.1 は「クライアントの識別」を要求し、コンフィ�
 | パブリック（`client_secret` 未登録） | `client_id` の確認のみ（RFC 8628 は公開クライアントを許す） |
 
 **パブリックを一律で弾かないのが要点。** 実測では、登録済み 10 クライアントのうち
-`oauth2_oidc_mode: device` の `ae5a1798…`（TestClient3）**だけが `client_secret` を持たない**。
+`client_mode: device` の `ae5a1798…`（TestClient3）**だけが `client_secret` を持たない**。
 一律に認証必須にすると、同梱の自己テストが動かなくなる。
 
 `device_code` と `client_id` の紐付けは、`AuthorizationCodeProvider.Receive(code, client_id, "")` が
@@ -1517,7 +1517,7 @@ PKCE 無しの認可コード フローがそのまま通る。
 
 E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は次のとおり。**
 
-| 登録（`oauth2_oidc_mode`） | 認可コード ＋ `client_secret` | 認可コード ＋ PKCE `S256` | ROPC | `client_credentials` | `refresh_token` |
+| 登録（`client_mode`） | 認可コード ＋ `client_secret` | 認可コード ＋ PKCE `S256` | ROPC | `client_credentials` | `refresh_token` |
 |---|---|---|---|---|---|
 | `normal`（対照） | 通る | 通る | 通る | 通る | 通る |
 | **`fapi1`** | 拒否 | **通る** | 拒否 | 拒否 | **拒否** |
@@ -1577,7 +1577,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | B | 拒否の時点 | 認可エンドポイント（Implicit / Hybrid）はログイン・同意の後、CIBA はプッシュ通知・承認の後で拒否 | **要求を検証する時点で断る**（認可エンドポイントは `redirect_uri` を確かめた直後。`/ciba_authz` は `iss` を確かめた直後） | `FA-1.4` / `FA-5.1` |
 | C | エラー コード | `/token` は `unsupported_grant_type`、Hybrid は `access_denied`、Device AuthZ は `unauthorized_client` | **`unauthorized_client` に揃えた**（RFC 6749 §4.1.2.1 / §4.2.2.1 / §5.2、CIBA Core §13） | `FA-1.1` ほか |
 | D | `fapi1` で `client_secret` と PKCE の併用 | 拒否 | **変えない**（FAPI 1.0 Advanced は `client_secret` を認めない。設計どおり） | `FA-1.3` |
-| E | 既知でない登録値（書き間違い・空） | `fapi2` とみなす | **不正な登録として拒否する**（「一番厳しい種別」に倒す作りは、種別が増えると意味が変わる）。`oauth2_oidc_mode` を書いていない登録は従来どおり `normal` | `FA-5.2` / **`FA-6.3`**（以前との違いが出るのは mTLS の経路だけ。#226） |
+| E | 既知でない登録値（書き間違い・空） | `fapi2` とみなす | **不正な登録として拒否する**（「一番厳しい種別」に倒す作りは、種別が増えると意味が変わる）。`client_mode` を書いていない登録は従来どおり `normal` | `FA-5.2` / **`FA-6.3`**（以前との違いが出るのは mTLS の経路だけ。#226） |
 | F | mTLS で認証したクライアントの refresh / ROPC / client_credentials | `normal` の登録のみ | **見送り**（表は変えていない。mTLS の E2E は #226 で張ったので、変えるときは `FA-6` に足して測れる） | — |
 
 - **B の早い判定は「その経路を、何かの証明で使えるか」**（`ClientModePolicy.MayUse`）で見る。
@@ -1587,7 +1587,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   - RP から見えるエラー コードが変わる（`unsupported_grant_type` / `access_denied` → `unauthorized_client`）。
     **登録どおりに使っている RP には影響しない**（もともと拒否される要求だけが対象）
   - `fapi1` / `device` の登録のクライアントには、`refresh_token` が返らなくなる（もともと使えなかった）
-  - `oauth2_oidc_mode` に既知でない値を書いた登録は、全経路で拒否される（以前も、mTLS 以外はほぼ拒否されていた）
+  - `client_mode` に既知でない値を書いた登録は、全経路で拒否される（以前も、mTLS 以外はほぼ拒否されていた）
 
 ### 署名アルゴリズムの対照表（#129 の段階 0）
 
@@ -1597,7 +1597,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
 | `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる。登録 `token_endpoint_auth_signing_alg` で片方に絞れる**（#262） |
-| `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
+| `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`client_mode=fapi_ciba` は ES256 固定 |
 | access_token | （広告しない） | 同上（9 つ） | 同上（`id_token` と同じ alg になる） |
 | Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify`。**登録 `request_object_signing_alg` で絞れる**が、受ける集合が 1 つなので結果は変わらない（#262） |
 | CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
@@ -2306,7 +2306,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 #224 の段階 0（未測定の経路を測る）で見つかった。
 
 他のグラント（認可コード / refresh / ROPC / client_credentials / JWT Bearer / CIBA）は
-`CheckClientMode` で登録種別（`oauth2_oidc_mode`）を判定しているが、
+`CheckClientMode` で登録種別（`client_mode`）を判定しているが、
 **`GrantDeviceAuthZ` だけが呼んでいなかった。** 行っていたのはクライアント認証
 （`DeviceAuthZClientAuthentication`）だけで、**client_secret が合えば、どの登録種別でもトークンを出していた。**
 

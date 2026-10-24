@@ -40,6 +40,7 @@
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         Authorization ヘッダの読み取りを Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -438,7 +439,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
                 string scheme = AuthenticationHeader.GetChallengeScheme(MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
 
-                this.Response.Headers["WWW-Authenticate"] =
+                this.Response.Headers[Const.HeaderWwwAuthenticate] =
                     scheme + " " + Token.CmnEndpoints.GetChallengeParameter(scheme, Const.EndpointRegister, err);
 
                 string nonce = Token.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
@@ -464,8 +465,8 @@ namespace MultiPurposeAuthSite.Controllers
         {
             IHeaderDictionary headers = MyHttpContext.Current.Response.Headers;
 
-            headers["Cache-Control"] = "no-store";
-            headers["Pragma"] = "no-cache";
+            headers[Const.HeaderCacheControl] = Const.CacheControlNoStore;
+            headers[Const.HeaderPragma] = Const.PragmaNoCache;
         }
 
         #endregion

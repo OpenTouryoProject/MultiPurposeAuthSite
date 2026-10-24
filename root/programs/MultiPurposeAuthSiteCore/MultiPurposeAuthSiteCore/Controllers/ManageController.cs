@@ -34,6 +34,7 @@
 //*  2026/10/18  玄人 幸道         画面の保存で registration_access_token を消さない（#307 の段階 2）
 //*  2026/10/20  玄人 幸道         所有者を列で持つようにした（#307 の段階 5-a-1）
 //*  2026/10/20  玄人 幸道         クライアント登録を一覧にした（#307 の段階 5-a-2）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2322,7 +2323,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         JObject requestJSON = JsonConvert.DeserializeObject<JObject>(fido2Data);
 
-                        string username = (string)requestJSON["username"];
+                        string username = (string)requestJSON[Const.WebAuthnRequestUserName];
                         bool residentKey = (bool)requestJSON["authenticatorSelection"]["residentKey"];
                         string authenticatorAttachment = (string)requestJSON["authenticatorSelection"]["authenticatorAttachment"];
                         string userVerification = (string)requestJSON["authenticatorSelection"]["userVerification"];
@@ -2343,7 +2344,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // **Sessionに保存**（challenge を後で照合するため）
                         string optionsJson = options.ToJson();
-                        HttpContext.Session.SetString("fido2.CredentialCreateOptions", optionsJson);
+                        HttpContext.Session.SetString(Const.WebAuthnSessionCredentialCreateOptions, optionsJson);
 
                         temp = FIDO.WebAuthnHelper.ToOkJson(optionsJson);
                     }
@@ -2374,12 +2375,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // Sessionから復元
                         CredentialCreateOptions options = CredentialCreateOptions.FromJson(
-                            HttpContext.Session.GetString("fido2.CredentialCreateOptions"));
+                            HttpContext.Session.GetString(Const.WebAuthnSessionCredentialCreateOptions));
 
                         await webAuthnHelper.AuthenticatorAttestation(attestationResponse, options);
 
                         // **一度使った challenge は捨てる**（使い回しを防ぐ）。
-                        HttpContext.Session.Remove("fido2.CredentialCreateOptions");
+                        HttpContext.Session.Remove(Const.WebAuthnSessionCredentialCreateOptions);
 
                         // **成否だけを返す。** 資格情報の中身を画面へ戻す必要は無い。
                         temp = FIDO.WebAuthnHelper.ToOkJson("");

@@ -36,6 +36,7 @@
 //*  2026/09/22  玄人 幸道         RT-197.2 の期待するエラー コードを unauthorized_client に改めた（#224 の段階 2）
 //*  2026/09/24  玄人 幸道         RT-188.4（request_uri は使い切り）を追加（#188 の段階 2）
 //*  2026/10/19  玄人 幸道         RT-197.2 の誤りを invalid_client に改めた（#307 の段階 3）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -90,7 +91,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**起動 URL の食い違い**であることが多い。",
                     "RFC 9101（JAR）/ RFC 9126（PAR。ただしこの実装の `/ros` は独自仕様）");
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（oauth2_oidc_mode=fapi2）");
+                r.Target("client_name=" + KnownClients.TestClient2 + "（client_mode=fapi2）");
                 r.Step("POST /Home/Saml2OAuth2Starters に submit.AuthorizationCodeFAPI2 を送る");
 
                 HttpResponseMessage starter = await client.StartSelfTestAsync(
@@ -126,7 +127,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-197.2",
                     "FAPI2 クライアントは、client_secret だけのトークン要求を受け付けない",
-                    "`oauth2_oidc_mode=fapi2` のクライアントは、より強いクライアント認証"
+                    "`client_mode=fapi2` のクライアントは、より強いクライアント認証"
                     + "（mTLS / private_key_jwt）を要求する。"
                     + "**この性質のため、FAPI2 の経路では redirect_uri の照合まで到達しない。**"
                     + "照合そのものは RT-197.4 で、normal モードのクライアントを使って測る。",
@@ -200,7 +201,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
                 r.Target("client_name=" + KnownClients.TestClient
-                    + "（jwk_rsa_publickey 登録済み、oauth2_oidc_mode 指定なし）");
+                    + "（jwk_rsa_publickey 登録済み、client_mode 指定なし）");
                 r.Step("(1) SpRp_RsaPfxFilePath の秘密鍵で Request Object に署名する");
                 r.Step("(2) POST /ros に登録して request_uri を得る");
                 r.Step("(3) GET /authorize?request_uri=… で認可する");

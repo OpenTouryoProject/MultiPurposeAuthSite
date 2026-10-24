@@ -134,6 +134,7 @@
 //*  2026/10/24  玄人 幸道         Hybrid / OIDC の Implicit も Enable*GrantType に従わせ、EnableOpenIDConnect を廃止した（#314）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -389,9 +390,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region ResponseObject(JARM)
             // 「.」がね...。
-            response_modes_supported.Add("query.jwt");
-            response_modes_supported.Add("fragment.jwt");
-            response_modes_supported.Add("form_post.jwt");
+            response_modes_supported.Add(Const.ResponseModeQueryJwt);
+            response_modes_supported.Add(Const.ResponseModeFragmentJwt);
+            response_modes_supported.Add(Const.ResponseModeFormPostJwt);
 
             #region RP-Initiated Logout（#232）
 
@@ -1621,7 +1622,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     CmnEndpoints.RequestObjectSigningAlgs,
                     JwtReader.TryReadAlg(request)))
                 {
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description,
                         "The request object is not signed with the registered request_object_signing_alg.");
                     return false;
@@ -1629,7 +1630,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (!RequestObject.Verify(request, out string iss, pubKey))
                 {
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object is not verified.");
                     return false;
                 }
@@ -1637,7 +1638,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (iss != client_id)
                 {
                     // **認証したクライアントと、要求の中の iss が食い違う。**
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object was not issued by this client.");
                     return false;
                 }
@@ -1711,7 +1712,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             ret = new Dictionary<string, string>()
             {
                 { OAuth2AndOIDCConst.request_uri, OAuth2AndOIDCConst.UrnRequestUriBase + urn },
-                { "expires_in", ((int)Config.RequestObjectExpireTimeSpanFromSeconds.TotalSeconds).ToString() }
+                { OAuth2AndOIDCConst.expires_in, ((int)Config.RequestObjectExpireTimeSpanFromSeconds.TotalSeconds).ToString() }
             };
 
             return true;

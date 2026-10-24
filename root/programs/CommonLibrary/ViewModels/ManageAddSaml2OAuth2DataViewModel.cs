@@ -42,6 +42,7 @@
 //*  2026/10/22  玄人 幸道         alg の一覧を Open棟梁 の JwsFactory から引くようにした（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/24  玄人 幸道         選択肢の文言を resx にした（#294）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -503,7 +504,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>ClientMode</summary>
         [Display(Name = "ClientMode", Description = "ClientModeDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = Const.ClientOAuth2OidcMode)]
+        [JsonProperty(PropertyName = Const.ClientMode)]
         public string ClientMode { get; set; }
 
         /// <summary>ClientModeアイテムリスト</summary>

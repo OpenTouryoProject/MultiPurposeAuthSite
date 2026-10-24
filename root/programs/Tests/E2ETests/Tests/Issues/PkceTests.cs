@@ -35,6 +35,7 @@
 //*  2026/09/18  玄人 幸道         RT-221.1 / RT-221.2（クライアント単位の PKCE）を追加（#221）
 //*  2026/09/22  玄人 幸道         観点の文面を、ClientModePolicy の表に合わせた（#224 の段階 1。判定は変えていない）
 //*  2026/10/06  玄人 幸道         RT-270.1（登録経由の require_pkce）を追加（#270）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -332,7 +333,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "登録で require_pkce を true にしたクライアントは、PKCE 無しの認可を拒否する",
                     "**サーバ全体の RequirePkce（#220）は、全クライアントが揃わないと有効にできない。**"
                     + "移行の途中でも、**締められるクライアントから順に締められる**必要がある。"
-                    + "oauth2_oidc_mode=fapi1 でも PKCE は必須になるが、"
+                    + "client_mode=fapi1 でも PKCE は必須になるが、"
                     + "**そちらは ROPC / client_credentials / refresh_token も巻き添えで塞ぐ**（#222）。",
                     "OAuth 2.1 draft §4.1.1 / #221");
 
@@ -355,7 +356,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "invalid_request",
                     without.Error ?? "（無し）");
 
-                r.Note("**認可エンドポイントで弾いている。** oauth2_oidc_mode=fapi1 の経路は"
+                r.Note("**認可エンドポイントで弾いている。** client_mode=fapi1 の経路は"
                     + "認可コードを発行してから /token で拒否するので、**利用者が同意まで進んだ後に失敗する**（#222）。");
 
                 r.Step("(2) 同じクライアントに、PKCE（S256）を付けて出す");

@@ -41,6 +41,7 @@
 //*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -96,7 +97,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             /// <summary>client_id（固定値。E2E の KnownClients と揃える）</summary>
             public string ClientId { get; set; }
 
-            /// <summary>oauth2_oidc_mode（normal / fapi_1 / fapi2 …）</summary>
+            /// <summary>client_mode（normal / fapi_1 / fapi2 …）</summary>
             public string ClientMode { get; set; }
 
             /// <summary>写す元のクライアント名（構成ファイル）</summary>
@@ -532,7 +533,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //   **写し元が `private_key_jwt` でも、鍵では通らなくなる。**
                 TokenEndpointAuthMethod = helper.GetTokenEndpointAuthMethod(sourceId),
 
-                // **oauth2_oidc_mode は、写さず表の値を使う**（登録種別を変えるのが目的のため）。
+                // **client_mode は、写さず表の値を使う**（登録種別を変えるのが目的のため）。
                 ClientMode = entry.ClientMode
             };
 

@@ -40,6 +40,7 @@
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //*  2026/10/24  玄人 幸道         受け付ける response_types を CmnEndpoints.SupportedResponseTypes に寄せた（#314）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -797,7 +798,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
                 //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
                 JObject claims = JwtReader.TryReadPayload(
-                    ClientRegistrationProvider.GetString(metadata, "software_statement"));
+                    ClientRegistrationProvider.GetString(metadata, SoftwareStatementProvider.SoftwareStatement));
 
                 if (claims != null)
                 {

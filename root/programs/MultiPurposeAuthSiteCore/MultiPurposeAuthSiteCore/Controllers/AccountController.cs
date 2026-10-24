@@ -77,6 +77,7 @@
 //*  2026/10/24  玄人 幸道         Const.StandardScopes を Const.SelfTestScopes にリネームした（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/24  玄人 幸道         自己テストの認証方式の表示と検証エラーの文言を resx にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -501,7 +502,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             JObject requestJSON = JsonConvert.DeserializeObject<JObject>(model.Fido2Data);
 
-                            string username = (string)requestJSON["username"];
+                            string username = (string)requestJSON[Const.WebAuthnRequestUserName];
                             string userVerification = (string)requestJSON["userVerification"];
 
                             FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
@@ -509,7 +510,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // **Sessionに保存**（challenge を後で照合するため）
                             string optionsJson = options.ToJson();
-                            HttpContext.Session.SetString("fido2.AssertionOptions", optionsJson);
+                            HttpContext.Session.SetString(Const.WebAuthnSessionAssertionOptions, optionsJson);
 
                             temp = FIDO.WebAuthnHelper.ToOkJson(optionsJson);
                         }
@@ -536,13 +537,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // Sessionから復元
                             AssertionOptions options = AssertionOptions.FromJson(
-                                HttpContext.Session.GetString("fido2.AssertionOptions"));
+                                HttpContext.Session.GetString(Const.WebAuthnSessionAssertionOptions));
 
                             // **失敗は例外で返る**（4.x に `Status` は無い）。
                             await webAuthnHelper.AuthenticatorAssertion(clientResponse, options);
 
                             // **一度使った challenge は捨てる**（使い回しを防ぐ）。
-                            HttpContext.Session.Remove("fido2.AssertionOptions");
+                            HttpContext.Session.Remove(Const.WebAuthnSessionAssertionOptions);
 
                             Fido2User fido2User = FIDO.DataProvider.GetUserByCredential(clientResponse.RawId);
                             ApplicationUser user = await UserManager.FindByNameAsync(fido2User.Name);
@@ -2232,18 +2233,18 @@ namespace MultiPurposeAuthSite.Controllers
             //   **32 文字にした**（#140 の段階 3）。10 文字では短い。
             //   PKCE があるので CSRF は守られるが、**推測しにくい方がよい。**
             string state = GetPassword.Generate(32, 0);
-            HttpContext.Session.SetString("id_federation_signin_state", state);
+            HttpContext.Session.SetString(Const.IdFederationSigninState, state);
 
             //  **どの上流へ送ったかを控える**（#292 の段階 1）。
             //    **折り返し口は 1 本**なので、**戻ってきた側はこれで相手を引く。**
-            HttpContext.Session.SetString("id_federation_signin_upstream", upstream.Key);
+            HttpContext.Session.SetString(Const.IdFederationSigninUpstream, upstream.Key);
 
             // redirect_uri
             string redirect_uri = Config.IdFederationRedirectEndpoint;
 
             // nonce // 記号は入れない。
             string nonce = GetPassword.Generate(20, 0);
-            HttpContext.Session.SetString("id_federation_signin_nonce", nonce);
+            HttpContext.Session.SetString(Const.IdFederationSigninNonce, nonce);
 
             // ID連携に必要なscope
             string scope = Const.IdFederationScopes;
@@ -2253,7 +2254,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   クライアントでも PKCE を付けることを求める**（コードの横取りに備える）。
             //   相手が PKCE を見ない OP でも、**余分なパラメタとして無視されるだけ**なので壊れない。
             string codeVerifier = GetPassword.Base64UrlSecret(50);
-            HttpContext.Session.SetString("id_federation_signin_verifier", codeVerifier);
+            HttpContext.Session.SetString(Const.IdFederationSigninVerifier, codeVerifier);
 
             return Redirect(
                 upstream.AuthorizeEndpoint +
@@ -2294,12 +2295,12 @@ namespace MultiPurposeAuthSite.Controllers
                 //    **開始処理が Session に控えた鍵**で引く（折り返し口は 1 本）。
                 //    **Session が切れていれば、既定の上流** — **1 件の配備では従来どおり。**
                 string upstreamKeyInSession =
-                    HttpContext.Session.GetString("id_federation_signin_upstream");
+                    HttpContext.Session.GetString(Const.IdFederationSigninUpstream);
 
                 IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
                     upstreamKeyInSession, IdFederationUpstream.Oidc);
 
-                HttpContext.Session.SetString("id_federation_signin_upstream", ""); // 誤動作防止
+                HttpContext.Session.SetString(Const.IdFederationSigninUpstream, ""); // 誤動作防止
 
                 if (upstream == null)
                 {
@@ -2353,19 +2354,19 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **この分岐には else が無く、末尾の View("Error") に落ちるだけだった**ので、
                 //   **「なぜ Error になったか」がログから分からなかった。**
                 //   **値そのものは出さない**（有無と長さだけ）。
-                if (state != (string)HttpContext.Session.GetString("id_federation_signin_state"))
+                if (state != (string)HttpContext.Session.GetString(Const.IdFederationSigninState))
                 {
                     Logging.MyOperationTrace(string.Format(
                         "The state of the authorization response did not match the session. (response: {0}, session: {1})",
                         LogSanitizer.Describe(state),
-                        LogSanitizer.Describe(HttpContext.Session.GetString("id_federation_signin_state"))));
+                        LogSanitizer.Describe(HttpContext.Session.GetString(Const.IdFederationSigninState))));
                 }
 
                 // stateの検証
-                if (state == (string)HttpContext.Session.GetString("id_federation_signin_state"))
+                if (state == (string)HttpContext.Session.GetString(Const.IdFederationSigninState))
                 {
                     // state正常
-                    HttpContext.Session.SetString("id_federation_signin_state", ""); // 誤動作防止
+                    HttpContext.Session.SetString(Const.IdFederationSigninState, ""); // 誤動作防止
 
                     #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
@@ -2383,8 +2384,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // **code_verifier を渡す**（#140 の段階 3）。
                     //   以前は "" を渡しており、**PKCE を使っていないのに PKCE の
                     //   オーバーロード（client_secret_post）を選んでいた。**
-                    string codeVerifier = HttpContext.Session.GetString("id_federation_signin_verifier");
-                    HttpContext.Session.SetString("id_federation_signin_verifier", ""); // 誤動作防止
+                    string codeVerifier = HttpContext.Session.GetString(Const.IdFederationSigninVerifier);
+                    HttpContext.Session.SetString(Const.IdFederationSigninVerifier, ""); // 誤動作防止
 
                     model.Response = await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                             new Uri(upstream.TokenEndpoint),
@@ -2454,7 +2455,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         bool nonceMatched =
-                            (nonce == (string)HttpContext.Session.GetString("id_federation_signin_nonce"));
+                            (nonce == (string)HttpContext.Session.GetString(Const.IdFederationSigninNonce));
 
                         //  **`aud` は、呼び出し側で確認する**（#286 の段階 5）。
                         //    **`IdToken.Verify` は、この配備では `aud` を見ない** —
@@ -2483,7 +2484,7 @@ namespace MultiPurposeAuthSite.Controllers
                             return View("Error");
                         }
 
-                        HttpContext.Session.SetString("id_federation_signin_nonce", ""); // 誤動作防止
+                        HttpContext.Session.SetString(Const.IdFederationSigninNonce, ""); // 誤動作防止
                     }
                     else
                     {
@@ -2897,13 +2898,13 @@ namespace MultiPurposeAuthSite.Controllers
             string queryString = SamlProviders.IdFederationSaml2Request.CreateRedirectRequest(
                 upstream, state, out id);
 
-            HttpContext.Session.SetString("id_federation_saml2_state", state);
+            HttpContext.Session.SetString(Const.IdFederationSaml2State, state);
 
             //  **どの上流へ送ったかを控える**（#292 の段階 1。ACS は 1 本）。
-            HttpContext.Session.SetString("id_federation_saml2_upstream", upstream.Key);
+            HttpContext.Session.SetString(Const.IdFederationSaml2Upstream, upstream.Key);
 
             // **応答の InResponseTo と照合する**（#276 と同じ）。
-            HttpContext.Session.SetString("id_federation_saml2_request_id", id);
+            HttpContext.Session.SetString(Const.IdFederationSaml2RequestId, id);
 
             return Redirect(ssoUrl + "?" + queryString);
         }
@@ -2935,10 +2936,10 @@ namespace MultiPurposeAuthSite.Controllers
             //  **どの上流から戻ってきたか**（#292 の段階 1）。
             //    **開始処理が Session に控えた鍵**で引く（ACS は 1 本）。
             IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
-                HttpContext.Session.GetString("id_federation_saml2_upstream"),
+                HttpContext.Session.GetString(Const.IdFederationSaml2Upstream),
                 IdFederationUpstream.Saml2);
 
-            HttpContext.Session.SetString("id_federation_saml2_upstream", ""); // 誤動作防止
+            HttpContext.Session.SetString(Const.IdFederationSaml2Upstream, ""); // 誤動作防止
 
             if (upstream == null)
             {
@@ -2959,12 +2960,12 @@ namespace MultiPurposeAuthSite.Controllers
                 queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
             }
 
-            string state = HttpContext.Session.GetString("id_federation_saml2_state");
-            string requestId = HttpContext.Session.GetString("id_federation_saml2_request_id");
+            string state = HttpContext.Session.GetString(Const.IdFederationSaml2State);
+            string requestId = HttpContext.Session.GetString(Const.IdFederationSaml2RequestId);
 
             // 誤動作防止（1 度しか使わない）。
-            HttpContext.Session.SetString("id_federation_saml2_state", "");
-            HttpContext.Session.SetString("id_federation_saml2_request_id", "");
+            HttpContext.Session.SetString(Const.IdFederationSaml2State, "");
+            HttpContext.Session.SetString(Const.IdFederationSaml2RequestId, "");
 
             //  **検証鍵は、メタデータ → 設定の `.cer` の順で集める**（#291 / #292 の段階 3）。
             //    **ロールオーバー中は 2 本以上並ぶ**ので、**全部渡して試させる**

@@ -82,6 +82,7 @@
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -291,8 +292,8 @@ namespace MultiPurposeAuthSite.Controllers
                             break;
 
                         case OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType:
-                            string username = formData["username"];
-                            string password = formData["password"];
+                            string username = formData[Const.ParamUsername];
+                            string password = formData[Const.ParamPassword];
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantResourceOwnerCredentials(
                                 grant_type, client_id, client_secret, clientAssertion, x509,
@@ -568,7 +569,7 @@ namespace MultiPurposeAuthSite.Controllers
             string scheme = AuthenticationHeader.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
 
             res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
-                scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, "userinfo", err)));
+                scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, Const.EndpointUserInfo, err)));
 
             //  **nonce を要求する配備では、新しい値を渡す**（§9）。
             //    **これが無いと、クライアントは出し直せない。**
@@ -829,7 +830,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // codeの生成は先送り
                 Dictionary<string, string> tempDic = new Dictionary<string, string>()
                 {
-                    {"client_id", client_id},
+                    {OAuth2AndOIDCConst.client_id, client_id},
                     {OAuth2AndOIDCConst.scope, scope}
                 };
 
@@ -1435,7 +1436,7 @@ namespace MultiPurposeAuthSite.Controllers
         [MpasBrowserApiCors]   // 同上
         public async Task<IHttpActionResult> SetDeviceToken(FormDataCollection formData)
         {
-            string device_token = (formData == null) ? null : (string)formData["device_token"];
+            string device_token = (formData == null) ? null : (string)formData[Const.ParamDeviceToken];
 
             if (string.IsNullOrEmpty(device_token))
             {

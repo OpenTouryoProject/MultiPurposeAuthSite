@@ -37,6 +37,7 @@
 //*  2026/09/24  玄人 幸道         期限切れの行を、書き込みのついでにまとめて消す（#188 の案 4）
 //*  2026/10/22  玄人 幸道         認可要求の dpop_jkt を code に紐付ける（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         dpop_jkt の定数を Open棟梁 の OAuth2AndOIDCConst にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -283,7 +284,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 有効期限が無効なtokenのペイロードだけ作成
             string access_token_payload = CmnAccessToken.CreatePayloadForCode(identity, DateTimeOffset.Now);
-            temp.Add("access_token_payload", access_token_payload);
+            temp.Add(Const.AuthZCodeAccessTokenPayload, access_token_payload);
 
             // redirect_uri 対応
             // 認可リクエストのredirect_uriをcodeに紐付ける（#186）。
@@ -538,7 +539,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             // payload
             JObject payload = (JObject)JsonConvert.
-                DeserializeObject((string)jobj["access_token_payload"]);
+                DeserializeObject((string)jobj[Const.AuthZCodeAccessTokenPayload]);
 
             // client_idチェック
             if (client_id == (string)payload[OAuth2AndOIDCConst.aud])
@@ -625,7 +626,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
-            return temp["access_token_payload"];
+            return temp[Const.AuthZCodeAccessTokenPayload];
         }
 
         #endregion

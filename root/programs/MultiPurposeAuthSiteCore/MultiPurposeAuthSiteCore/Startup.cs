@@ -46,6 +46,7 @@
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の経路を追加（#307 の段階 2）
 //*  2026/10/21  玄人 幸道         起動のときに jwks_uri を温める（#309 の段階 2）
 //*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -246,7 +247,7 @@ namespace MultiPurposeAuthSite
                 // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
                 // **`ReadFormAsync` の結果は要求に残る**ので、後のモデル バインドは読み直さない。
                 string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
-                    context.Request.Headers["Authorization"]);
+                    context.Request.Headers[Const.HeaderAuthorization]);
 
                 if (string.IsNullOrEmpty(clientId))
                 {
@@ -254,12 +255,12 @@ namespace MultiPurposeAuthSite
                         "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
                     {
                         // 優先度 2: フォームデータ（client_secret_post 等）から取得
-                        clientId = (await context.Request.ReadFormAsync())["client_id"];
+                        clientId = (await context.Request.ReadFormAsync())[OAuth2AndOIDCConst.client_id];
                     }
                     else
                     {
                         // 優先度 3: クエリ文字列から取得
-                        clientId = context.Request.Query["client_id"];
+                        clientId = context.Request.Query[OAuth2AndOIDCConst.client_id];
                     }
                 }
 
@@ -273,7 +274,7 @@ namespace MultiPurposeAuthSite
                 {
                     //  **429 ＋ `Retry-After`**（RFC 6585 §4）。**本体は返さない。**
                     context.Response.StatusCode = 429;
-                    context.Response.Headers["Retry-After"] = retryAfter.Value.ToString();
+                    context.Response.Headers[Const.HeaderRetryAfter] = retryAfter.Value.ToString();
 
                     return;
                 }

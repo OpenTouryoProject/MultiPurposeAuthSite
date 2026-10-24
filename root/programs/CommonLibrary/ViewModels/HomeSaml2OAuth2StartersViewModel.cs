@@ -23,6 +23,7 @@
 //*  2026/10/09  玄人 幸道         各オプションの説明を追加（#277 の段階 2）
 //*  2026/10/09  玄人 幸道         NameIDFormat を画面で選べるようにした（#277 の段階 4）
 //*  2026/10/24  玄人 幸道         選択肢の文言を resx にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -185,9 +186,9 @@ namespace MultiPurposeAuthSite.ViewModels
                 return new List<SelectListItem>()
                 {
                     new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatNone, Value = "" },
-                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatUnspecified, Value = "unspecified" },
-                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatEmailAddress, Value = "emailAddress" },
-                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatPersistent, Value = "persistent" }
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatUnspecified, Value = Const.NameIdFormatUnspecified },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatEmailAddress, Value = Const.NameIdFormatEmailAddress },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatPersistent, Value = Const.NameIdFormatPersistent }
                 };
             }
         }

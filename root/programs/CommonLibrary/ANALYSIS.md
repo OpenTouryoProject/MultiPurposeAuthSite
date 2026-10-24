@@ -328,7 +328,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 - JWT Bearer Token Flow ／ Refresh Token
 - Device Authorization Grant ／ CIBA
 - Revocation ／ Introspection ／ UserInfo ／ JWK Set ／ Request Object ／ JARM
-- FAPI1 / FAPI2（クライアント個別に `oauth2_oidc_mode` で指定）
+- FAPI1 / FAPI2（クライアント個別に `client_mode` で指定）
 - SAML2（IdP 側）
 - ID フェデレーション（`IdFederation*Endpoint` で別の汎用認証サイトへ委譲）
 
@@ -341,7 +341,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
   "client_secret": "...", "client_name": "TestClient",
   "redirect_uri_code": "test_self_code", "redirect_uri_token": "test_self_token",
   // "subject_types" を書かなければ public（既定。他は pairwise のみ）
-  "oauth2_oidc_mode": "fapi1",       // normal / fapi1 / fapi2 / device / fapi_ciba（省略時は normal。既知でない値は不正として拒否。#224）
+  "client_mode": "fapi1",       // normal / fapi1 / fapi2 / device / fapi_ciba（省略時は normal。既知でない値は不正として拒否。#224）
   "jwk_rsa_publickey": "...", "jwk_ecdsa_publickey": "...",
   "tls_client_auth_subject_dn": "..."
 }

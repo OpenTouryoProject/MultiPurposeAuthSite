@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：ClientModeTests
-//* クラス日本語名  ：FA ClientMode（oauth2_oidc_mode）ごとに通る経路（#222）
+//* クラス日本語名  ：FA ClientMode（client_mode）ごとに通る経路（#222）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -38,6 +38,7 @@
 //*  2026/09/26  玄人 幸道         FA-1.2 を、refresh_token を「非対称の証明でだけ使える」に改めた（#239 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/19  玄人 幸道         FA-4.1 の fapi2 を、認証の段で断られる形に改めた（#307 の段階 3）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -51,7 +52,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 {
     /// <summary>
-    /// FA-1〜4. クライアント登録の <c>oauth2_oidc_mode</c> によって、
+    /// FA-1〜4. クライアント登録の <c>client_mode</c> によって、
     /// **どの経路が通り、どの経路が塞がるか**を測る。
     /// </summary>
     /// <remarks>
@@ -167,7 +168,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("FA-1.1",
-                    "oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る",
+                    "client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る",
                     "**登録が上位のクライアントほど、通る経路が狭い。**"
                     + "CheckClientMode は ClientModePolicy の表（経路 × 何を証明したか）で判定する。"
                     + "認可コードを client_secret で取る行は normal だけを通すので、fapi1 の登録は通らない。"
@@ -468,7 +469,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("FA-2.1",
-                    "oauth2_oidc_mode=fapi2 のクライアントは、client_secret でも PKCE でも通らない",
+                    "client_mode=fapi2 のクライアントは、client_secret でも PKCE でも通らない",
                     "**fapi2 に達するのは x509（mTLS）だけ。**"
                     + "PKCE の S256 で上がるのは fapi1 までなので、**平文の経路は全滅する**。"
                     + "FAPI2 のクライアントは、Request Object（JAR）＋ 証明書で使う想定"
@@ -521,7 +522,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("FA-3.1",
-                    "oauth2_oidc_mode=device のクライアントは、PKCE(S256) の認可コードが通る",
+                    "client_mode=device のクライアントは、PKCE(S256) の認可コードが通る",
                     "**表の「認可コード × PKCE の S256」の行は、device も通す**（LIR 用）。"
                     + "以前の大小比較では device は fapi2 より大きい値で、この経路は例外措置として"
                     + "ハードコードされていた（#224 の段階 1 で表に置き換えた）。**その行が効いていることを測る。**",

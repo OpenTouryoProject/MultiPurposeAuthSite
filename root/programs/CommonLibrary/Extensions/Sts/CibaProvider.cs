@@ -31,6 +31,7 @@
 //*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using System;
@@ -92,11 +93,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
-                            { "authReqId", authReqId },
+                            { Const.PollingAuthReqId, authReqId },
                             { Const.PollingAuthReqExp, authReqExp.ToString() },
                             { Const.PollingAuthZCode, authZCode },
                             { "unstructuredData", unstructuredData },
-                            { "userId", userId },
+                            { Const.PollingUserId, userId },
                             { Const.PollingResult, "" }
                         };
                         
@@ -227,7 +228,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     Dictionary<string, string> dic
                                         = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
 
-                                    if (authReqId != dic["authReqId"])
+                                    if (authReqId != dic[Const.PollingAuthReqId])
                                     {
                                         // 別の要求
                                         continue;
@@ -315,7 +316,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             string temp;
 
-            if (!dic.TryGetValue("userId", out temp) || string.IsNullOrEmpty(temp))
+            if (!dic.TryGetValue(Const.PollingUserId, out temp) || string.IsNullOrEmpty(temp))
             {
                 return false;
             }
@@ -381,7 +382,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 Dictionary<string, string> dic
                                     = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
 
-                                if (authReqId == dic["authReqId"])
+                                if (authReqId == dic[Const.PollingAuthReqId])
                                 {
                                     clientNotificationToken = _clientNotificationToken;
 

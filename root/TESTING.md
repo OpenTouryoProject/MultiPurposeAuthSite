@@ -3294,7 +3294,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer / CIBA） | `Tests/Extended/` |
 | `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/Issues/` |
 | `RT-C<n>.n` | **公開の Issue を持たない項目**の回帰（`RT-C10.1` なら `ANALYSIS-IdP.md` の C-10） | `Tests/Issues/` |
-| `FA-n.n` | FAPI（クライアント登録 ＝ `oauth2_oidc_mode` ごとに通る経路） | `Tests/Fapi/` |
+| `FA-n.n` | FAPI（クライアント登録 ＝ `client_mode` ごとに通る経路） | `Tests/Fapi/` |
 | `21-n.n` | OAuth 2.1（許されない経路の抑止） | `Tests/OAuth21/` |
 | `SA-n.n` | **SAML2**（Web Browser SSO。#275） | `Tests/Saml/` |
 | `CN-n.n` | **コンテナ配備**（疎通と配備固有。#284） | `Tests/Container/` |

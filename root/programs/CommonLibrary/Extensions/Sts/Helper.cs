@@ -65,6 +65,8 @@
 //*  2026/10/24  玄人 幸道         openid を常に広告するようにした（EnableOpenIDConnect の廃止。#314）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
+//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1281,10 +1283,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey(Const.ClientOAuth2OidcMode))
+                if (dic.ContainsKey(Const.ClientMode))
                 {
                     // 設定値
-                    return this.Oauth2ClientsInfo[client_id][Const.ClientOAuth2OidcMode];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientMode];
                 }
                 else
                 {
@@ -1828,7 +1830,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.Oauth2ClientsInfo[client_id]["client_name"];
+                return this.Oauth2ClientsInfo[client_id][Const.ClientName];
             }
 
             // saml2OAuth2Dataを検索
@@ -1886,15 +1888,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (!dic.ContainsKey("owner")
-                    || string.IsNullOrWhiteSpace(dic["owner"]))
+                if (!dic.ContainsKey(Const.ClientOwner)
+                    || string.IsNullOrWhiteSpace(dic[Const.ClientOwner]))
                 {
                     //  **構成ファイルに在るクライアントは、ここで打ち切る**
                     //    （`GetClientScopes` と同じ流儀）。
                     return "";
                 }
 
-                ApplicationUser owner = CmnUserStore.FindByName(dic["owner"].Trim());
+                ApplicationUser owner = CmnUserStore.FindByName(dic[Const.ClientOwner].Trim());
 
                 //  **居ないことがある**（設定の誤り）。**空を返す** —
                 //    **null 参照で 500 にしない**（#210 / #241 と同じ性質）。
@@ -1950,7 +1952,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Dictionary<string, string> client
                     = this.Oauth2ClientsInfo[clientId];
 
-                string temp = client["client_name"];
+                string temp = client[Const.ClientName];
                 if (temp.ToLower() == clientName.ToLower())
                 {
                     return clientId;

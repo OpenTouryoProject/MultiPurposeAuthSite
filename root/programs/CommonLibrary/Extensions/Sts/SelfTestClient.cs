@@ -36,6 +36,7 @@
 //*  2026/10/10  玄人 幸道         SAML2 の応答の検証を CmnSaml2Response へ移した（#286 の段階 1）
 //*  2026/10/22  玄人 幸道         SAML2 の応答の検証を Open棟梁 の SAML2Client に移した（#294）
 //*  2026/10/24  玄人 幸道         結果の文言を resx にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -322,7 +323,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             CibaResult ret = new CibaResult()
             {
-                Verdict = "ABNORMAL_END",
+                Verdict = Const.VerdictAbnormalEnd,
                 Reason = "",
                 Endpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint,
                 RequestObject = "",
@@ -477,7 +478,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             DeviceAuthZResult ret = new DeviceAuthZResult()
             {
-                Verdict = "ABNORMAL_END",
+                Verdict = Const.VerdictAbnormalEnd,
                 Reason = "",
                 TokenEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
                 Interval = interval ?? "",
@@ -564,7 +565,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             PollOutcome ret = new PollOutcome()
             {
-                Verdict = "ABNORMAL_END",
+                Verdict = Const.VerdictAbnormalEnd,
                 Reason = "",
                 IntervalSeconds = intervalSeconds,
                 Count = 0,
@@ -589,7 +590,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     ret.UserInfoResponse = await Helper.GetInstance().GetUserInfoAsync(
                         (string)token[OAuth2AndOIDCConst.AccessToken]);
 
-                    ret.Verdict = "NORMAL_END";
+                    ret.Verdict = Const.VerdictNormalEnd;
                     ret.Reason = Resources.Diagnostics.SelfTestReachedUserInfo;
                     return ret;
                 }
@@ -833,7 +834,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 if (json != null)
                 {
                     ret.RequestUri = (string)json[OAuth2AndOIDCConst.request_uri] ?? "";
-                    ret.ExpiresIn = (string)json["expires_in"] ?? "";
+                    ret.ExpiresIn = (string)json[OAuth2AndOIDCConst.expires_in] ?? "";
                 }
             }
             catch

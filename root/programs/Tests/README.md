@@ -396,7 +396,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 > **ID 連携の手順は `Infrastructure/IdFederation` に 1 つだけある**（#284）。
 > **`RT-140.*`（下流 = ホスト）と `CN-5.*`（下流 = コンテナ）が同じ実装を使う。**
 
-**`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
+**`Tests/Fapi/` は、クライアント登録（`client_mode`）ごとに通る経路**（#222）。
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
@@ -485,7 +485,7 @@ net48 版（IIS Express）は、IIS が自己署名の証明書をアプリよ�
 
 **サーバ全体の設定は変えない。** `-Launch` は Implicit / ROPC を有効にして起動し、
 `RequirePkce` も `false` のまま。**締めるのはクライアント単位の登録**
-（`oauth2_oidc_mode` / `require_pkce`）なので、
+（`client_mode` / `require_pkce`）なので、
 **「サーバは開いているのに、このクライアントでは塞がる」**という対照が効く。
 
 > **サーバ全体の `RequirePkce` / `RequirePkceS256` を `true` にしたときの挙動は測れない。**

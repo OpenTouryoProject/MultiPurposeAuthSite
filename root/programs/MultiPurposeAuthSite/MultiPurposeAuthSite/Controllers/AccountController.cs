@@ -73,6 +73,7 @@
 //*  2026/10/24  玄人 幸道         Const.StandardScopes を Const.SelfTestScopes にリネームした（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/24  玄人 幸道         自己テストの認証方式の表示と検証エラーの文言を resx にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1866,18 +1867,18 @@ namespace MultiPurposeAuthSite.Controllers
             //   **32 文字にした**（#140 の段階 3）。10 文字では短い。
             //   PKCE があるので CSRF は守られるが、**推測しにくい方がよい。**
             string state = GetPassword.Generate(32, 0);
-            Session["id_federation_signin_state"] = state;
+            Session[Const.IdFederationSigninState] = state;
 
             //  **どの上流へ送ったかを控える**（#292 の段階 1）。
             //    **折り返し口は 1 本**なので、**戻ってきた側はこれで相手を引く。**
-            Session["id_federation_signin_upstream"] = upstream.Key;
+            Session[Const.IdFederationSigninUpstream] = upstream.Key;
 
             // redirect_uri
             string redirect_uri = Config.IdFederationRedirectEndpoint;
 
             // nonce // 記号は入れない。
             string nonce = GetPassword.Generate(20, 0);
-            Session["id_federation_signin_nonce"] = nonce;
+            Session[Const.IdFederationSigninNonce] = nonce;
 
             // ID連携に必要なscope
             string scope = Const.IdFederationScopes;
@@ -1887,7 +1888,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   クライアントでも PKCE を付けることを求める**（コードの横取りに備える）。
             //   相手が PKCE を見ない OP でも、**余分なパラメタとして無視されるだけ**なので壊れない。
             string codeVerifier = GetPassword.Base64UrlSecret(50);
-            Session["id_federation_signin_verifier"] = codeVerifier;
+            Session[Const.IdFederationSigninVerifier] = codeVerifier;
 
             return Redirect(
                 upstream.AuthorizeEndpoint +
@@ -1928,10 +1929,10 @@ namespace MultiPurposeAuthSite.Controllers
                 //    **開始処理が Session に控えた鍵**で引く（折り返し口は 1 本）。
                 //    **Session が切れていれば、既定の上流** — **1 件の配備では従来どおり。**
                 IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
-                    (string)Session["id_federation_signin_upstream"],
+                    (string)Session[Const.IdFederationSigninUpstream],
                     IdFederationUpstream.Oidc);
 
-                Session["id_federation_signin_upstream"] = ""; // 誤動作防止
+                Session[Const.IdFederationSigninUpstream] = ""; // 誤動作防止
 
                 if (upstream == null)
                 {
@@ -1985,19 +1986,19 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **この分岐には else が無く、末尾の View("Error") に落ちるだけだった**ので、
                 //   **「なぜ Error になったか」がログから分からなかった。**
                 //   **値そのものは出さない**（有無と長さだけ）。
-                if (state != (string)Session["id_federation_signin_state"])
+                if (state != (string)Session[Const.IdFederationSigninState])
                 {
                     Logging.MyOperationTrace(string.Format(
                         "The state of the authorization response did not match the session. (response: {0}, session: {1})",
                         LogSanitizer.Describe(state),
-                        LogSanitizer.Describe((string)Session["id_federation_signin_state"])));
+                        LogSanitizer.Describe((string)Session[Const.IdFederationSigninState])));
                 }
 
                 // stateの検証
-                if (state == (string)Session["id_federation_signin_state"])
+                if (state == (string)Session[Const.IdFederationSigninState])
                 {
                     // state正常
-                    Session["id_federation_signin_state"] = ""; // 誤動作防止
+                    Session[Const.IdFederationSigninState] = ""; // 誤動作防止
 
                     #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
@@ -2014,8 +2015,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // **code_verifier を渡す**（#140 の段階 3）。
                     //   以前は "" を渡しており、**PKCE を使っていないのに PKCE の
                     //   オーバーロード（client_secret_post）を選んでいた。**
-                    string codeVerifier = (string)Session["id_federation_signin_verifier"];
-                    Session["id_federation_signin_verifier"] = ""; // 誤動作防止
+                    string codeVerifier = (string)Session[Const.IdFederationSigninVerifier];
+                    Session[Const.IdFederationSigninVerifier] = ""; // 誤動作防止
 
                     model.Response = await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                             new Uri(upstream.TokenEndpoint),
@@ -2085,7 +2086,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         bool nonceMatched =
-                            (nonce == (string)Session["id_federation_signin_nonce"]);
+                            (nonce == (string)Session[Const.IdFederationSigninNonce]);
 
                         //  **`aud` は、呼び出し側で確認する**（#286 の段階 5）。
                         //    **`IdToken.Verify` は、この配備では `aud` を見ない** —
@@ -2114,7 +2115,7 @@ namespace MultiPurposeAuthSite.Controllers
                             return View("Error");
                         }
 
-                        Session["id_federation_signin_nonce"] = ""; // 誤動作防止
+                        Session[Const.IdFederationSigninNonce] = ""; // 誤動作防止
                     }
                     else
                     {
@@ -2530,13 +2531,13 @@ namespace MultiPurposeAuthSite.Controllers
             string queryString = SamlProviders.IdFederationSaml2Request.CreateRedirectRequest(
                 upstream, state, out id);
 
-            Session["id_federation_saml2_state"] = state;
+            Session[Const.IdFederationSaml2State] = state;
 
             //  **どの上流へ送ったかを控える**（#292 の段階 1。ACS は 1 本）。
-            Session["id_federation_saml2_upstream"] = upstream.Key;
+            Session[Const.IdFederationSaml2Upstream] = upstream.Key;
 
             // **応答の InResponseTo と照合する**（#276 と同じ）。
-            Session["id_federation_saml2_request_id"] = id;
+            Session[Const.IdFederationSaml2RequestId] = id;
 
             return Redirect(ssoUrl + "?" + queryString);
         }
@@ -2568,9 +2569,9 @@ namespace MultiPurposeAuthSite.Controllers
             //  **どの上流から戻ってきたか**（#292 の段階 1）。
             //    **開始処理が Session に控えた鍵**で引く（ACS は 1 本）。
             IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
-                (string)Session["id_federation_saml2_upstream"], IdFederationUpstream.Saml2);
+                (string)Session[Const.IdFederationSaml2Upstream], IdFederationUpstream.Saml2);
 
-            Session["id_federation_saml2_upstream"] = ""; // 誤動作防止
+            Session[Const.IdFederationSaml2Upstream] = ""; // 誤動作防止
 
             if (upstream == null)
             {
@@ -2591,12 +2592,12 @@ namespace MultiPurposeAuthSite.Controllers
                 queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
             }
 
-            string state = (string)Session["id_federation_saml2_state"];
-            string requestId = (string)Session["id_federation_saml2_request_id"];
+            string state = (string)Session[Const.IdFederationSaml2State];
+            string requestId = (string)Session[Const.IdFederationSaml2RequestId];
 
             // 誤動作防止（1 度しか使わない）。
-            Session["id_federation_saml2_state"] = "";
-            Session["id_federation_saml2_request_id"] = "";
+            Session[Const.IdFederationSaml2State] = "";
+            Session[Const.IdFederationSaml2RequestId] = "";
 
             //  **検証鍵は、メタデータ → 設定の `.cer` の順で決める**（#291）。
             //    **ロールオーバー中は 2 本以上並ぶ**ので、**全部渡して試させる**（#292 の段階 3）
