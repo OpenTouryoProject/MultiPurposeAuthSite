@@ -31,6 +31,11 @@
 //*  2026/10/06  玄人 幸道         新規（#272 の段階 2 / D-6）
 //**********************************************************************************
 
+/*
+ * 本Providerの主キーはUserIDとClientIDで、コレ毎にScopeが許可される。
+ * Scopeは許可の度に追加される可能性があるが、削除はされない。
+ */
+
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 
@@ -45,18 +50,14 @@ using Dapper;
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
-    /// ConsentProvider
     /// 同意（consent grant）を記録する。
     /// </summary>
     /// <remarks>
-    /// **「この利用者が、このクライアントに、どの scope を許したか」を持つ**（#272 の段階 2 / D-6）。
+    /// **「この利用者が、このクライアントに、どの scope を許したか」を持つ**
     ///
     /// **これが無いと `prompt=none` の判定ができない。**
     /// OIDC Core §3.1.2.1 の `prompt=none` は「UI を出すな。出す必要があるならエラーを返せ」
     /// という意味だが、**「出す必要があるか」は「以前に同意済みか」で決まる。**
-    /// 記録が無ければ、**同意画面を出さずに code を発行する**か、
-    /// **毎回同意画面を出す**かの二択しかなかった（C-3 の根本原因）。
-    ///
     /// **粒度は (利用者, クライアント) で 1 行。** scope は**集合として足し込む**。
     ///
     /// | | |
@@ -64,11 +65,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | 要求 scope が記録の**部分集合** | **同意済み**（同意画面を出さない） |
     /// | 要求 scope に**記録に無いものが在る** | **同意を取り直す**（許可されたら記録に足す） |
     ///
-    /// **並びは辞書順に正規化して持つ**（`response_type` の #267 と同じ理由。
-    /// **"openid email" と "email openid" を別物にしない**）。
-    ///
-    /// **`Users.Id` への FK（`ON DELETE CASCADE`）を張ってある**ので、
-    /// **利用者を消せば同意も消える。**
+    /// **並びは辞書順に正規化して持つ**（**"openid email" と "email openid" を別物にしない**）。
+    /// **`Users.Id` への FK（`ON DELETE CASCADE`）を張ってある**ので、**利用者を消せば同意も消える。**
     /// </remarks>
     public class ConsentProvider
     {
@@ -99,7 +97,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **`scope` の値は case-sensitive**（RFC 6749 §3.3）なので、**ここでは小文字化しない。**
         /// `response_type` と違い、**以前から小文字化していない**ので、変える理由が無い。
         /// </remarks>
-        public static string NormalizeScopes(IEnumerable<string> scopes)
+        private static string NormalizeScopes(IEnumerable<string> scopes)
         {
             List<string> normalized = new List<string>();
 
@@ -187,14 +185,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region Grant
 
-        /// <summary>同意を記録する（#272 の段階 2）</summary>
+        /// <summary>
+        /// 同意を記録する（#272 の段階 2）
+        /// 許可した「scope（権限の範囲）の同意履歴」をDBなどに記録・更新するためのメソッド。
+        /// </summary>
         /// <param name="userId">UserId</param>
         /// <param name="clientId">ClientID</param>
         /// <param name="scopes">許可された scope</param>
         /// <remarks>
         /// **在れば足し込み、無ければ作る。**
-        /// **足し込みにするのは、scope を増やす要求で同意し直したときに、
-        /// 以前の分を失わないため**である。
+        /// **足し込みにするのは、scope を増やす要求で同意し直したときに、以前の分を失わないため**である。
         /// </remarks>
         public static void Grant(string userId, string clientId, IEnumerable<string> scopes)
         {
@@ -233,7 +233,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Get
+        #region Get (SELECT)
 
         /// <summary>記録した scope を返す（#272 の段階 2）</summary>
         /// <param name="userId">UserId</param>
@@ -290,10 +290,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return null;
         }
-
-        #endregion
-
-        #region GetByUser
 
         /// <summary>その利用者の同意を全部返す（#272 の段階 2）</summary>
         /// <param name="userId">UserId</param>
@@ -386,7 +382,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Revoke
+        #region Revoke (DELETE)
 
         /// <summary>同意を取り消す（#272 の段階 2）</summary>
         /// <param name="userId">UserId</param>

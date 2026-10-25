@@ -24,28 +24,33 @@ OAuth 2.0 / OIDC の認可エンドポイント
 Device Authorization Grant の利用者コードの確認画面を担うAccountControllerの一部
 */
 
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.AspNetCore.Mvc;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using Token = MultiPurposeAuthSite.TokenProviders;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Security.Claims;
+
 using System.Web;
-using Touryo.Infrastructure.Framework.Authentication;
+
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
 using Touryo.Infrastructure.Framework.StdMigration;
+using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Log;
-using Touryo.Infrastructure.Public.Str;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
-using Token = MultiPurposeAuthSite.TokenProviders;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -74,12 +79,13 @@ namespace MultiPurposeAuthSite.Controllers
                 && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
             {
                 // **前回の認証時刻は Cookie から読む**
-                // サインイン時（InitSessionAfterlogin）と、ManageController でパスワードを確かめた時・サインインし直した時
+                // サインイン時（InitSessionAfterlogin）と、ManageController でパスワードを確かめた時・サインインし直した時に、
+                // W3C 形式の UTC で書いてある。
                 IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
                 string auth_time = requestCookies.Get(Config.AuthTimeCookieName);
 
                 // 「次回から自動的にサインイン」にチェックを入れてサインインし、ブラウザを閉じてから開き直した場合。
-                // 認証 Cookie は残っているが、認証時刻 Cookie は消えている（そういうカバレッジがあると言う話）。
+                // 認証 Cookie は残っているが、認証時刻 Cookie は消えている（そういう経路がある）。
                 if (string.IsNullOrEmpty(auth_time))
                 {
                     // AuthTimeCookie が無ければ、最小値で埋める（認証時刻が分からない）。
@@ -121,6 +127,10 @@ namespace MultiPurposeAuthSite.Controllers
         /// ある場合 null（呼び出し元は継続）。
         /// ない場合、作成してRedirectResult。同時に来た要求で識別子がずれるのを防ぐ。
         /// </returns>
+        /// <remarks>
+        /// **Cookie が無いまま認可要求が同時に来ると、別々の識別子ができ、片方が台帳に残る。**
+        /// **先に Cookie を置いて送り返せば、同じ識別子で戻ってくる。**
+        /// </remarks>
         private ActionResult EnsureOpSession()
         {
             // OpSessionがある場合は、何もしない。
@@ -142,7 +152,7 @@ namespace MultiPurposeAuthSite.Controllers
             // OpSessionの識別子を作って
             this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
 
-            // 元のURLにRedirectしCookie に置く
+            // 印を付けて、元の URL へ送り返す（ブラウザは Cookie を受け取ってから戻ってくる）
             string url = UriHelper.GetEncodedUrl(Request);
             return new RedirectResult(url + (url.Contains("?") ? "&" : "?") + Const.OpSessionRetry + "=1");
         }
@@ -161,8 +171,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// | **Back-Channel**（段階 2） | **サーバから POST する**（背景。**待たない**） |
         /// | **Front-Channel**（段階 3） | **URL を作って返すだけ。** **開くのはブラウザ**（`iframe`） |
         ///
-        /// **呼ばれるのはサインアウトの 5 か所** **どれも「OpSessionが終わる」場面**なので、**同じ扱いでよい。**
+        /// **呼ばれるのはサインアウトの 5 か所**
         /// （`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。
+        /// **どれも「OpSessionが終わる」場面**なので、**同じ扱いでよい。**
         /// </remarks>
         private List<string> ClearOpSession()
         {
@@ -233,8 +244,23 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Front-Channel Logout の画面を返す（#310 の段階 3）</summary>
         /// <param name="iframeUrls">`iframe` に入れる URL</param>
-        /// <param name="continueUrl">`iframe` を開いた後に進む先</param>
+        /// <param name="continueUrl">`iframe` を並べた画面（親）が、その後に進む先（`iframe` の中は進まない）</param>
         /// <returns>画面（**伝える先が 1 件も無ければ null**）</returns>
+        /// <remarks>
+        /// **1 件も無ければ null を返す** — **従来どおりリダイレクトで終わる。**
+        /// **登録している RP が無い配備では、画面が増えない**（**応答も変わらない**）。
+        ///
+        /// **進む先は、呼び出し側が決める。**
+        ///
+        /// | 呼び出し元 | 場面 | 進む先 |
+        /// |---|---|---|
+        /// | `EndSession`（`/end_session`） | RP-Initiated Logout | **`post_logout_redirect_uri`**（登録と一致したもの。無ければ Home） |
+        /// | `LogOff`（`/Account/LogOff`） | OP の画面でのサインアウト | Home |
+        /// | `OAuth2Authorize` | 認可の途中のサインアウト（`max_age` 超過・`prompt=login`・別アカウント） | **同じ認可要求の URL**（サインインし直して、**認可を続ける**） |
+        ///
+        /// **外から渡された URL は、ここへ来ない（オープン リダイレクタにしない）。**
+        /// **`post_logout_redirect_uri` は登録と完全一致を確かめた後の値**で、**他は自分の URL** である。
+        /// </remarks>
         private ActionResult FrontChannelLogoutView(List<string> iframeUrls, string continueUrl)
         {
             if (iframeUrls == null || iframeUrls.Count == 0)
@@ -246,17 +272,7 @@ namespace MultiPurposeAuthSite.Controllers
             // ブラウザが RP の Cookie を付けて送るので、RP は自分のセッションを閉じられる。
             ViewBag.IframeUrls = iframeUrls;
 
-            // iframe を開いた後に進む先 **進む先は、呼び出し側が決める。**
-            //
-            // | 呼び出し元 | 場面 | 進む先 |
-            // |---|---|---|
-            // | `EndSession`（`/end_session`） | RP-Initiated Logout | `post_logout_redirect_uri` |
-            // | `LogOff`（`/Account/LogOff`） | OP の画面でのサインアウト | Home |
-            // | `OAuth2Authorize` | 認可の途中のサインアウト（`max_age` 超過・`prompt=login`・別アカウント） | **同じ認可要求の URL**（サインインし直して、**認可を続ける**） |
-            // 
-            // **外から渡された URL は、ここへ来ない（オープン リダイレクタにしない）。**
-            // **`post_logout_redirect_uri` は登録と完全一致を確かめた後の値**で、**他は自分の URL**
-            // continueUrl の「iframe を開いた後に進む先」とは、各iframeが進む先ではなく、iframe親が進む先
+            // iframe を並べた画面（親）が、その後に進む先（進む先は呼び出し側が決める。remarks の表）
             ViewBag.ContinueUrl = continueUrl;
 
             return View("FrontChannelLogout");
@@ -306,14 +322,14 @@ namespace MultiPurposeAuthSite.Controllers
 
             JObject claims = null;
 
-            // PKCE の code_challenge は、Request.Query から直接読む
+            // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
+            // Request Object が在れば、その値で上書きする（無ければクエリ文字列のまま）。
+            
+            // **クエリ文字列は、デコードされた値で読む**。以前は GetEncodedUrl から生のまま取り出していたため、
+            // **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
+            // net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
+            
             string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
-
-            // Request Objectが在ればその値を使う（無ければクエリ文字列）
-            // **クエリ文字列は、デコードされた値で読む**。
-            //   以前は GetEncodedUrl から生のまま取り出していたため、
-            //   **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
-            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。            
             string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
             {
@@ -398,7 +414,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 次の要求でも認証済みのままだった（実測）。既存の LogOff も SignInManager を使っている。
                         await this.SignInManager.SignOutAsync();
 
-                        // ...
+                        // **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
                         ActionResult frontChannelForMaxAge = this.FrontChannelLogoutView(
                             iframeUrlsForMaxAge, UriHelper.GetEncodedUrl(Request));
                         if (frontChannelForMaxAge != null) { return frontChannelForMaxAge; }
@@ -409,6 +425,9 @@ namespace MultiPurposeAuthSite.Controllers
                     && string.IsNullOrEmpty(MyHttpContext.Current.Request.Cookies.Get(Config.ReAuthenticatedAtCookieName)))
                 {
                     // **prompt=login は、再認証を求める**（OIDC Core §3.1.2.1。#272 の段階 2）。
+                    // **印が無いときだけ再認証する**（印は繰り返しを防ぐため）。
+                    //   戻ってきた要求にも prompt=login が付いているので、印が無いと永久に送り返す。
+                    //   印は、認可を続ける所（else）で消す。次の新しい要求の prompt=login は、また再認証になる。
                     MyHttpContext.Current.Response.Cookies.Set(Config.ReAuthenticatedAtCookieName,
                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
 
@@ -416,7 +435,7 @@ namespace MultiPurposeAuthSite.Controllers
                     List<string> iframeUrlsForPromptLogin = this.ClearOpSession();
                     await this.SignInManager.SignOutAsync();
 
-                    // ...
+                    // **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
                     ActionResult frontChannelForPromptLogin = this.FrontChannelLogoutView(
                         iframeUrlsForPromptLogin, UriHelper.GetEncodedUrl(Request));
                     if (frontChannelForPromptLogin != null) { return frontChannelForPromptLogin; }
@@ -424,10 +443,9 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // **OpSessionの識別子**。
+                    // **OpSessionの識別子を用意する**（#310 の段階 2）。
+                    //   **無ければ Cookie を置いて、同じ URL へ送り返す**（同時に来た要求を 1 つの識別子に揃えるため）。
                     ActionResult ensured = this.EnsureOpSession();
-
-                    // **無ければ Cookie を置いて、同じ URL へ送り返す**
                     if (ensured != null) return ensured;
 
                     // Cookie認証チケットからClaimsPrincipalを取得しておく。
@@ -472,11 +490,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
-                        #region 同意の判定（#272 の段階 2 / D-6）
-
-                        // **以前は「`prompt=none` なら無条件に飛ばす」だった**（C-3）。
-                        // **記録を持ったので、「以前に同意済みか」で判定できる。**
-                        //
+                        #region 同意の判定
                         //   | 状況 | ここでの扱い |
                         //   |---|---|
                         //   | scope に `auth`（独自の認証用） | **従来どおり飛ばす**（同意を求める対象でない） |
