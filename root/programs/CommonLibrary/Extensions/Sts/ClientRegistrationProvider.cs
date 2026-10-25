@@ -42,7 +42,20 @@
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //*  2026/10/25  玄人 幸道         auth も動的登録で付けさせない（#294）
+//*  2026/10/25  玄人 幸道         仕様の要諦を冒頭に書き、段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
+
+/*
+ * 本Providerは、RFC 7591 の登録（POST）と、RFC 7592 の管理（GET / PUT / DELETE）を行う。
+ * 登録は Saml2OAuth2Data の 1 行で、主キーは client_id（登録の度に新しく作る）。
+ * 登録には client_registration scope のアクセス トークンが要り、所有者（OwnerUserId）はその sub の利用者
+ * （利用者が居なければ、認証したクライアントの所有者）で、1 利用者が n 件の登録を持てる。
+ * client_secret と registration_access_token は、登録の応答で 1 回だけ返す（後者はハッシュで保管）。
+ * 管理は、その登録の registration_access_token でだけ行え、PUT は全置換、DELETE は同意も消す。
+ * client_registration と auth の scope は、動的登録では付けられない（管理画面で付ける）。
+ *
+ * 段階ごとの決定と経緯（#307 / #309 / #310 など）は、root/programs/DesignNotes/ClientRegistrationProvider.md に在る。
+ */
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
@@ -81,15 +94,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// **口（WebAPI）は両アプリの `OAuth2ResourceServerController` に在るが、
     /// 判定と保存は、ここ 1 か所で行う**（net48 版と net10.0 版で振る舞いを食い違わせないため）。
     ///
-    /// **段階 1 で出来ること**（#307）。
+    /// **登録**（RFC 7591。`POST`）。
     ///
     /// | | |
     /// |---|---|
-    /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（**ROPC か `client_credentials` で取る**。段階 5-b） |
-    /// | 所有者 | **トークンの `sub` の利用者**、**利用者が居なければ認証したクライアントの所有者**（段階 5-b。**n 件持てる** — 段階 5-a） |
-    /// | 器 | **既存の `Saml2OAuth2Data`**（`DataProvider`）。**RFC 7591 §2 の列は #307 の段階 1 で足した** |
+    /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（**ROPC か `client_credentials` で取る**） |
+    /// | 所有者 | **トークンの `sub` の利用者**、**利用者が居なければ認証したクライアントの所有者**（**1 利用者が n 件持てる**） |
+    /// | 器 | **既存の `Saml2OAuth2Data`**（`DataProvider`） |
     ///
-    /// **段階 2 で出来ること**（RFC 7592。`registration_client_uri` ＝ `…/register/{client_id}`）。
+    /// **管理**（RFC 7592。`registration_client_uri` ＝ `…/register/{client_id}`）。
     ///
     /// | | |
     /// |---|---|
@@ -98,11 +111,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | `PUT` | **全置換**（§2.2）。**`client_id` は一致必須**、**`client_secret` を入れるなら一致必須** |
     /// | `DELETE` | **消す**（§2.3）。**`204`**。**同意も落とす** |
     ///
-    /// **専用 scope のアクセス トークン（段階 1）では、管理 API を叩けない** —
+    /// **専用 scope のアクセス トークンでは、管理 API を叩けない** —
     /// **作る権限と、直す権限は別物**である（§2 : クライアントは
     /// `registration_access_token` を使うこと）。
     ///
-    /// **段階 3 で出来ること**（**クライアント認証の方法を、API から登録できる**）。
+    /// **クライアント認証の方法**も、API から登録できる。
     ///
     /// | | |
     /// |---|---|
@@ -111,12 +124,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | `tls_client_auth_subject_dn` | **mTLS の Subject DN**（RFC 8705 §2.1.2） |
     /// | `token_endpoint_auth_signing_alg` | **`client_assertion` の alg を絞る**（#262 の列） |
     ///
-    /// **`client_secret` は、方法に関わらず発行する**（段階 3 の決定）。
+    /// **`client_secret` は、方法に関わらず発行する** —
     /// **デバイス フローのように、秘密しか使えない口が在る**ためである。
     /// **登録された方法は `CmnEndpoints.AllowsAuthMethod` が効かせる** —
     /// **明示が無ければ、秘密ベースの 2 つだけ**（**強い方法は明示が要る**）。
     ///
-    /// **段階 4 で出来ること**（**署名付きの主張を受ける**）。
+    /// **署名付きの主張**（`software_statement`）も受ける。
     ///
     /// | | |
     /// |---|---|
@@ -131,9 +144,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// **認可の代わりにはならない。**
     ///
     /// **保管しない。** **応答にも返さない**（§3.2.1 で任意）。
-    /// **＝ この段階で列は増えていない**（既存の配備に `ALTER` が要らない）。
     ///
-    /// **`jwks_uri` も受け付ける**（#309 の段階 1）。
+    /// **`jwks_uri` も受け付ける。**
     /// **要求の経路ではキャッシュを読むだけ**にし、
     /// **取りに行くのは、この口（登録のとき）と背景だけ**である —
     /// **クライアント認証の鎖が同期**で、**そこで待つと net48 で止まる**ためである。
@@ -151,7 +163,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <summary>RFC 7591 §3.2.2 : メタデータが不正</summary>
         public const string invalid_client_metadata = "invalid_client_metadata";
 
-        /// <summary>RFC 7591 §3.2.2 : software_statement が壊れている（#307 の段階 4）</summary>
+        /// <summary>RFC 7591 §3.2.2 : software_statement が壊れている</summary>
         /// <remarks>
         /// **JWT として読めない・署名が合わない・`iss` が無い・`exp` が切れている**とき。
         /// **「中身は読めたが、信頼していない」のは <see cref="unapproved_software_statement"/>** である。
@@ -162,7 +174,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// **その発行者を信頼していない**とき（§3.2.2 の
         /// "not approved for use by this authorization server"）。
-        /// **信頼する発行者を 1 件も設定していない配備では、常にこれ**である（従来どおり）。
+        /// **信頼する発行者を 1 件も設定していない配備では、常にこれ**である。
         /// </remarks>
         public const string unapproved_software_statement = "unapproved_software_statement";
 
@@ -242,11 +254,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ApplicationUser user = PPIDExtension.GetUserFromSub(aud.Value, identity.Name);
 
             //  **利用者の居ないトークン**（`client_credentials` で取ったもの）。
-            //    **認証したクライアントの所有者を、作る登録の所有者にする**（#307 の段階 5-b）。
-            //
-            //  **段階 1 〜 5-a は、ここで `401` に倒していた** —
-            //    **所有者を AT の `sub` からしか引けなかった**ためで、
-            //    **ROPC（利用者のパスワード）を開けないと動的登録が使えなかった。**
+            //    **認証したクライアントの所有者を、作る登録の所有者にする。**
             //
             //  **見分けは `sub` でする。** **`client_credentials` のトークンは、
             //    `sub` にクライアント名が入る**（`CmnEndpoints.GrantClientCredentials`）。
@@ -279,20 +287,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return 403;
             }
 
-            //  **1 利用者 n クライアント**（#307 の段階 5-a）。
-            //
-            //  **段階 1 では 1 件に絞っていた**（2 件目は `403` ＋ `access_denied`）。
-            //    **絞っていたのは仕様の要求ではなく、器の都合**である —
-            //    **所有者が `Users.ClientID`（1 枠・NOT NULL・一意）だった。**
-            //    **所有者を `Saml2OAuth2Data.OwnerUserId` へ移したので、縛りは外れた。**
-            //
-            //  **上限は設けていない**（設定キーも増やしていない）。
-            //    **「条件分岐を増やさない」という決め**である。
-            //    **洪水はレート制限で受ける**（#305 の段階 3。口の名前 `register`）。
+            //  **1 利用者 n クライアント。** **上限は設けていない**（設定キーも無い）。
+            //    **洪水はレート制限で受ける**（#305。口の名前 `register`）。
             //
             //  **`POST` を upsert にはしない** — **`client_secret` を作り直すか据え置くかの
             //    判断が常について回り、間違えると既存の RP が止まる。**
-            //    **更新は RFC 7592 の `PUT`（段階 2）で行う。**
+            //    **更新は RFC 7592 の `PUT` で行う。**
             //    **2 回 `POST` すれば、2 件の別の登録になる**（それが n 件である）。
 
             #endregion
@@ -322,7 +322,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ManageAddSaml2OAuth2DataViewModel model = new ManageAddSaml2OAuth2DataViewModel();
 
             //  **`grant_types` / `response_types` は、応答では `model` の列から読む**
-            //    （**`POST` / `GET` / `PUT` で同じ形にするため**。#307 の段階 2）。
+            //    （**`POST` / `GET` / `PUT` で同じ形にするため**）。
             if (!ClientRegistrationProvider.Validate(metadata, model, out string code,
                 out string description, out _, out _))
             {
@@ -339,7 +339,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string client_id = Guid.NewGuid().ToString("N");
             string client_secret = GetPassword.Base64UrlSecret(32);
 
-            //  **管理 API のトークン**（RFC 7592 §2。#307 の段階 2）。
+            //  **管理 API のトークン**（RFC 7592 §2）。
             //    **平文は、この応答で 1 回だけ返す。** **保管するのはハッシュ**である。
             string registrationAccessToken = ClientRegistrationProvider.GenerateToken();
 
@@ -355,10 +355,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **所有者の鍵は `OwnerUserId`**（下）。**名前は、ラベルである。**
             model.ClientName = user.UserName;
 
-            //  **所有者を列に書く**（#307 の段階 5-a）。
+            //  **所有者を列に書く。**
             //    **`Users.Id` を指す**（**名前ではない** — 利用者名を変えても切れない）。
-            //    **以前は `user.ClientID = client_id; CmnUserStore.Update(user);` だった**
-            //    （**利用者の行を書き換えていた**）。**いまは利用者の行に触らない。**
+            //    **利用者の行には触らない。**
             model.OwnerUserId = user.Id;
 
             DataProvider.Create(client_id, model);
@@ -379,7 +378,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ret = ClientRegistrationProvider.BuildClientInformation(
                 client_id, model, registrationAccessToken);
 
-            //  **秘密を返すのは、この口だけ**（`GET` / `PUT` では返さない。#307 の段階 2 の決定）。
+            //  **秘密を返すのは、この口だけ**（`GET` / `PUT` では返さない）。
             ret.Add(OAuth2AndOIDCConst.client_secret, client_secret);
 
             //  **発行した時刻**（エポック秒）。
@@ -393,7 +392,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-
         #region 管理 API（RFC 7592）
 
         /// <summary>読む（RFC 7592 §2.1）</summary>
@@ -403,7 +401,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="err">誤り（失敗したときだけ）</param>
         /// <returns>HTTP の状態（200 / 401 / 404）</returns>
         /// <remarks>
-        /// **`client_secret` は返さない**（#307 の段階 2 の決定。RFC 7592 §3 では任意）。
+        /// **`client_secret` は返さない**（RFC 7592 §3 では任意）。
         /// **トークンが漏れても、秘密は漏らさない。** **所有者は管理画面で再表示できる。**
         /// </remarks>
         public static int Read(
@@ -440,16 +438,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | | 列 |
         /// |---|---|
         /// | **要求から作り直す**（**省いたら消える**） | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` |
-        /// | **要求から作り直す**（**段階 3**） | `TokenEndpointAuthMethod`（**省いたら、秘密ベースに戻る**） |
-        /// | **要求に在れば置き換え、無ければ持ち越す**（**段階 3**） | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` |
-        /// | **要求が片方を入れたら、もう片方は消える**（**#309 の段階 1**） | `Jwk*` ↔ `JwksUri`（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
+        /// | **要求から作り直す** | `TokenEndpointAuthMethod`（**省いたら、秘密ベースに戻る**） |
+        /// | **要求に在れば置き換え、無ければ持ち越す** | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` |
+        /// | **要求が片方を入れたら、もう片方は消える** | `Jwk*` ↔ `JwksUri`（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
         /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `BackChannelLogoutUri` / `FrontChannelLogoutUri` / `WebOrigins` / `RequestObjectSigningAlg`） |
         ///
         /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
         /// > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
         /// > **管理画面から入れた値を、`PUT` で消してはならない。**
         ///
-        /// > **鍵と DN は「省いたら消える」にしていない**（段階 3）。
+        /// > **鍵と DN は「省いたら消える」にしていない。**
         /// > **管理画面から入れた鍵を、`PUT` で消してはならない**のが理由である。
         /// > **`private_key_jwt` / `tls_client_auth` を明記するなら、材料も毎回送ること**
         /// > （**材料が無ければ `400`**。**認証できない登録を作らない**）。
@@ -458,7 +456,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**`client_registration` と `auth` だけは、明記しても断る** |
+        /// | **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない。****`client_registration` と `auth` だけは、明記しても断る** |
         /// | **`redirect_uris` は省けない** | OIDC DCR 1.0 §2 で必須。**うっかり全消しにはならない** |
         /// | **`grant_types` / `response_types` を省くと狭まる** | **RFC 7591 §2 の既定**（`authorization_code` / `code`）が書かれる |
         /// </remarks>
@@ -514,7 +512,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **`client_secret` を入れてきたなら、現行と一致していなければならない**（§2.2 の MUST）。
             //    **自分で秘密を決めさせてはならない**（§2.2 : the client MUST NOT be allowed to
-            //    set its own secret）。**この口では秘密を作り直さない**（段階 2 の決定）。
+            //    set its own secret）。**この口では秘密を作り直さない。**
             if (ClientRegistrationProvider.Has(metadata, OAuth2AndOIDCConst.client_secret))
             {
                 string requestedSecret = ClientRegistrationProvider.GetString(
@@ -566,21 +564,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **動的登録では設定できない列**（管理画面から入れた値）。
             model.RedirectUriSaml = current.RedirectUriSaml;
             model.PostLogoutRedirectUri = current.PostLogoutRedirectUri;
-            //  **動的登録では設定できない**（#310 の段階 2）。
+            //  **ログアウトの通知先も、動的登録では設定できない**（#310）。
             //    **RFC 7591 のメタデータではない**ので、**画面と設定ファイルからだけ入れる。**
             model.BackChannelLogoutUri = current.BackChannelLogoutUri;
             model.FrontChannelLogoutUri = current.FrontChannelLogoutUri;
             model.WebOrigins = current.WebOrigins;
             model.RequestObjectSigningAlg = current.RequestObjectSigningAlg;
 
-            //  **鍵・DN・alg は、要求に在れば `Validate` が入れている**（#307 の段階 3）。
+            //  **鍵・DN・alg は、要求に在れば `Validate` が入れている。**
             //    **無ければ持ち越す** — **管理画面から入れた鍵を、`PUT` で消してはならない。**
             //    **`private_key_jwt` / `tls_client_auth` を明記したなら、
             //    材料が無い要求は `Validate` が `400` で断っている**ので、
             //    **ここで持ち越しても「方法だけ在って材料が無い」にはならない。**
             //
             //  **`jwks` と `jwks_uri` は排他**（RFC 7591 §2）なので、
-            //    **持ち越しで両方にならないようにする**（#309 の段階 1）。
+            //    **持ち越しで両方にならないようにする。**
             //    **要求が片方を入れてきたら、もう片方は持ち越さない** —
             //    **`PUT` で `jwks_uri` から列の鍵へ（その逆へも）移れる**ようにするためである。
             bool requestHasJwks = !string.IsNullOrEmpty(model.JwkRsaPublickey)
@@ -636,16 +634,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | | |
         /// |---|---|
         /// | **消える** | **登録の行**／**同意**（`ConsentProvider.Revoke`）／**`registration_access_token`**（**行が無くなるので、2 回目の要求は `401`**。§5） |
-        /// | **残る** | **他の登録**（**同じ所有者の n 件のうち、消したものだけが消える**。#307 の段階 5-a） |
-        /// | **使えなくなる** | **既に発行されたアクセス トークン**（**登録が無くなると `Helper.HasClient` が false になる**。#307 の段階 2）／**リフレッシュ トークン**（**クライアント認証が通らない**） |
+        /// | **残る** | **他の登録**（**同じ所有者の n 件のうち、消したものだけが消える**） |
+        /// | **使えなくなる** | **既に発行されたアクセス トークン**（**登録が無くなると `Helper.HasClient` が false になる**）／**リフレッシュ トークン**（**クライアント認証が通らない**） |
         ///
-        /// **所有者は `OwnerUserId` の列から引く**（#307 の段階 5-a）。
+        /// **所有者は `OwnerUserId` の列から引く** —
         /// **`registration_access_token` には利用者が入っていない**ので、**登録の行から引くしかない。**
-        /// **以前は `ClientName`（利用者名）で利用者を引き直していた** —
-        /// **名前は変わり得るので、Id で持つようにした。**
-        ///
-        /// **利用者の行には触らない**（**段階 5-a で `Users.ClientID` を落とした**）。
-        /// **「一意制約があるので空にできない」という制約は、もう無い。**
+        /// **利用者の行には触らない。**
         /// </remarks>
         public static int Delete(
             string client_id, string bearerToken, out Dictionary<string, string> err)
@@ -660,19 +654,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  **同意を落とす**（§2.3 : 払い下げたクライアントへの許可を残さない）。
-            //    **所有者は列から引く**（#307 の段階 5-a）。
+            //    **所有者は列から引く。**
             //    **空のことが在る**（構成ファイル発の種データ）ので、そのときは何もしない。
             if (!string.IsNullOrEmpty(model.OwnerUserId))
             {
                 ConsentProvider.Revoke(model.OwnerUserId, client_id);
             }
-
-            //  **利用者の行には触らない**（#307 の段階 5-a）。
-            //
-            //  **段階 2 では `Users.ClientID` の後始末に悩んだ** —
-            //    **NOT NULL ＋ 一意索引 ＋ `Saml2OAuth2Data` からの外部キー**があり、
-            //    **空にすると `sql` で `DELETE` が 500 になった**（`mem` では出なかった）。
-            //    **段階 5-a で列ごと落としたので、その悩みは消えた。**
 
             DataProvider.Delete(client_id);
 
@@ -694,8 +681,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **知らない `client_id` も、他人のトークンも `401`** である（§2.1 〜 §2.3 の MUST）。
         /// **`404` にしてはならない** — **「在るが触れない」と「無い」を、外から区別させない。**
         ///
-        /// **`registration_access_token` を持たない登録**（**管理画面で作ったもの**や、
-        /// **段階 1 で作ったもの**）**は、この口では触れない**（`401`）。
+        /// **`registration_access_token` を持たない登録**（**管理画面で作ったもの**など）
+        /// **は、この口では触れない**（`401`）。
         /// **管理画面から直す**（所有者は、画面で自分の 1 件を編集・削除できる）。
         /// </remarks>
         private static int Authorize(
@@ -742,7 +729,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return 0;
         }
 
-        #region jwks_uri を先に取りに行く（#309 の段階 1）
+        #region jwks_uri を先に取りに行く
 
         /// <summary>**本文の `jwks_uri` を、検査の前に 1 回取りに行く**</summary>
         /// <param name="requestBody">要求の本文（JSON）</param>
@@ -754,23 +741,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **ここだけが async である** — **登録の口（`POST` / `PUT`）は
         /// `async Task&lt;…&gt;` なので待てる。**
         /// **クライアント認証の経路（`/token` など）は同期なので、あちらでは待てない**
-        /// （**待つと net48 で止まる**。#309 の起票）。
+        /// （**待つと net48 で止まる**）。
         ///
-        /// **本文の `jwks_uri` と、`software_statement` が主張した `jwks_uri` を見る**
-        /// （#309 の段階 2）。
+        /// **本文の `jwks_uri` と、`software_statement` が主張した `jwks_uri` を見る。**
         ///
         /// **statement の署名は、ここでは検証しない**（**検証は `Validate` の中**）。
         /// **それでよい理由は 3 つある。**
         ///
         /// | | |
         /// |---|---|
-        /// | **増える能力が無い** | **同じ呼び出し元は、本文の `jwks_uri` に任意の URL を書ける**（段階 1 で既に取りに行く）。**statement の中に書いても、行き先の範囲は変わらない** |
+        /// | **増える能力が無い** | **同じ呼び出し元は、本文の `jwks_uri` に任意の URL を書ける**（そちらも取りに行く）。**statement の中に書いても、行き先の範囲は変わらない** |
         /// | **キャッシュは信頼ではない** | **URL → 鍵の対応**でしかなく、**参照されるのは「その URL を登録したクライアント」だけ**である。**statement の検証が落ちれば登録は作られない**ので、**温めた分は誰にも使われない** |
-        /// | **叩ける回数に限りが在る** | **専用 scope のトークンが要り**、**レート制限も掛かっている**（#305 の段階 3） |
-        ///
-        /// **段階 1 では、statement の主張を温めず、`Validate` で断っていた**
-        /// （**「署名を検証する前に、本文の外の URL へ出て行かない」**という理由）。
-        /// **行き先の範囲が変わらないので、過剰だった。**
+        /// | **叩ける回数に限りが在る** | **専用 scope のトークンが要り**、**レート制限も掛かっている**（#305） |
         ///
         /// **`https` でなければ、取りにも行かない**（**ループバックの `http` は許す**）。
         /// </remarks>
@@ -795,7 +777,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 urls.Add(ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.jwks_uri));
 
-                //  **statement が主張した分**（#309 の段階 2）。
+                //  **statement が主張した分。**
                 //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
                 //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
                 JObject claims = JwtReader.TryReadPayload(
@@ -827,6 +809,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #endregion
 
         #endregion
+
         #region メタデータの検査
 
         /// <summary>要求のメタデータを検査して、保存する形にする</summary>
@@ -842,7 +825,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **ただし、無視すると黙って弱くなるものは断る**（`jwks` / `jwks_uri` /
         /// `token_endpoint_auth_method`）。
         ///
-        /// **`software_statement` は、一番先に見る**（#307 の段階 4）。
+        /// **`software_statement` は、一番先に見る。**
         /// **主張を本文へ重ねてから、以降の検査にかける** —
         /// **statement が主張した値も、同じ検査を通る**
         /// （**署名が付いていても、この配備が扱えない値は通さない**）。
@@ -857,7 +840,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             grantTypes = null;
             responseTypes = null;
 
-            #region software_statement（RFC 7591 §2.3 / §3.1.1。#307 の段階 4）
+            #region software_statement（RFC 7591 §2.3 / §3.1.1）
 
             //  **署名付きの添え状を検証し、主張されたメタデータを本文へ重ねる。**
             //    **statement が勝つ**（§2.3 は MUST）。**以降の検査は、重ねた後の値で行う。**
@@ -880,7 +863,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
-            //  **statement を必須にしている配備では、添えていない登録を断る**（段階 4 の決定）。
+            //  **statement を必須にしている配備では、添えていない登録を断る。**
             //
             //  **`PUT` にも効く。** **効かせないと、`PUT` で statement を省いて
             //    「主張されていた値」を自分の値に書き換えられる**
@@ -898,7 +881,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
-            #region jwks / jwks_uri（RFC 7591 §2。#309 の段階 1）
+            #region jwks / jwks_uri（RFC 7591 §2）
 
             //  **両方を入れてはならない**（RFC 7591 §2 の MUST NOT）。
             //    **どちらの鍵で認証するのかが決まらない**ので、断る。
@@ -936,13 +919,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
 
-                //  **読めないものは、ここで断る**（段階 1 の決め (B)）。
+                //  **読めないものは、ここで断る** —
                 //    **後から黙って `private_key_jwt` が通らなくなるより、
                 //    登録のその場で分かる方が良い。**
                 //
                 //  **取りに行ったのは、この口の手前である**（`WarmUpJwksUriAsync`）。
-                //    **`software_statement` が主張した `jwks_uri` も温めてある**
-                //    （#309 の段階 2）。**あちらは署名を検証しないで読む**が、
+                //    **`software_statement` が主張した `jwks_uri` も温めてある。**
+                //    **あちらは署名を検証しないで読む**が、
                 //    **行き先の範囲は本文と同じ**であり、**ここ（検証済み）が信頼を決める。**
                 if (!RemoteJwkSetStore.HasKeysInCache(model.JwksUri))
                 {
@@ -953,10 +936,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
-            #region クライアント認証の方法と、その材料（#307 の段階 3）
+            #region クライアント認証の方法と、その材料
 
             //  **方法は 1 つ**（RFC 7591 §2）。**既知でない値は拒否する**
-            //    （#224 の段階 2 と同じ方針。「一番厳しいものに倒す」はしない）。
+            //    （#224 と同じ方針。「一番厳しいものに倒す」はしない）。
             //
             //  **空（省略）は `client_secret_basic` / `client_secret_post`**（RFC 7591 §2 の既定）。
             //    **列も空のまま**にして、**`AllowsAuthMethod` が暗黙に許す。**
@@ -1003,7 +986,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  **`client_assertion` の alg を絞る**（#262 の列。OIDC Registration 1.0 §2）。
-            //    **空なら絞らない**（登録された鍵で順に試す ＝ 従来どおり）。
+            //    **空なら絞らない**（登録された鍵で順に試す）。
             string authSigningAlg = ClientRegistrationProvider.GetString(
                 metadata, Const.ClientTokenEndpointAuthSigningAlg);
 
@@ -1025,7 +1008,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **黙って作ると、クライアントは「登録した方法で認証できる」と考えるが、
             //    永久に通らない。** **`PUT` でも同じ**（材料は毎回送ること）。
             //
-            //  **`jwks_uri` も材料である**（#309 の段階 1）。
+            //  **`jwks_uri` も材料である。**
             //    **鍵は URL の先に在る** — **ここを数えないと、
             //    `jwks_uri` だけを送った登録が断られる。**
             if (authMethod == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit()
@@ -1130,7 +1113,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
-            //  **デバイス フロー × `private_key_jwt` は断る**（#307 の段階 3）。
+            //  **デバイス フロー × `private_key_jwt` は断る。**
             //    **RFC 8628 の口（`/device_authz` と `/token`）は `client_assertion` を
             //    読んでいない**（両アプリの呼び出しに引数が無い）ので、
             //    **その組み合わせでは、永久に認証できない。**
@@ -1209,7 +1192,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 foreach (string scope in scopes)
                 {
-                    //  **自分と同じ強さの scope を、自分で配らせない**（#307 の段階 1）。
+                    //  **自分と同じ強さの scope を、自分で配らせない。**
                     //  **`client_registration` は「クライアント登録を作れる」権限**であり、
                     //    **動的登録で付けられるようにすると、権限を際限なく増やせる。**
                     //    **配るのは、管理画面か構成ファイルからだけ**にする。
@@ -1291,7 +1274,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 model.SubjectTypes = subjectType;
             }
 
-            //  **`id_token_signed_response_alg`**（#129 の段階 2 で列を足してある）。
+            //  **`id_token_signed_response_alg`**（列は #129 で足してある）。
             //    **扱える alg でなければ断る** — **ここで止めないと、
             //    発行の直前に既定（RS256）へ落ちて、登録の誤りが分からない。**
             string signingAlg = ClientRegistrationProvider.GetString(
@@ -1311,7 +1294,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
-            //  **登録種別は normal**（段階 1）。**FAPI の登録は、鍵や証明書の登録を要する。**
+            //  **登録種別は normal。****FAPI の登録は、鍵や証明書の登録を要する。**
             model.ClientMode = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit();
 
             code = "";
@@ -1560,7 +1543,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         }
 
         #endregion
-        #region 管理 API のトークンと、応答の形（RFC 7592。#307 の段階 2）
+
+        #region 管理 API のトークンと、応答の形（RFC 7592）
 
         /// <summary>registration_access_token を作る</summary>
         /// <returns>トークン（**平文。登録の応答で 1 回だけ返す**）</returns>
@@ -1622,7 +1606,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return diff == 0;
         }
 
-        /// <summary>`jwks` を読んで、鍵の 2 列に入れる（#307 の段階 3）</summary>
+        /// <summary>`jwks` を読んで、鍵の 2 列に入れる</summary>
         /// <param name="metadata">要求の JSON</param>
         /// <param name="model">保存する形（入出力）</param>
         /// <param name="description">誤りの説明（出力）</param>
@@ -1630,7 +1614,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// **列は「JWK 1 本を Base64URL にしたもの」が 2 本**
         /// （`JwkRsaPublickey` / `JwkECDsaPublickey`）。**JWK Set は持てない。**
-        /// **`CmnEndpoints.ClientAuthentication` が、この 2 本を順に試す**（#129 の段階 2）。
+        /// **`CmnEndpoints.ClientAuthentication` が、この 2 本を順に試す。**
         ///
         /// **断る形**（**どれも「黙って落とすと、後で認証に失敗する」もの**）。
         ///
@@ -1720,7 +1704,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return true;
         }
 
-        /// <summary>登録された鍵を `jwks` にして返す（無ければ null）（#307 の段階 3）</summary>
+        /// <summary>登録された鍵を `jwks` にして返す（無ければ null）</summary>
         /// <param name="model">登録</param>
         /// <returns>JWK Set（鍵が 1 本も無ければ null）</returns>
         /// <remarks>
@@ -1817,10 +1801,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             ret.Add(Const.ClientGrantTypes, OAuth2AndOIDCSpec.ToDistinctList(model.GrantTypes));
 
-            //  **`response_types` は、要素の中の空白を「+」にして保管している**（段階 1）。
+            //  **`response_types` は、要素の中の空白を「+」にして保管している。**
             ret.Add(Const.ClientResponseTypes, Helper.ToDistinctList(model.ResponseTypes, true));
 
-            //  **登録された `token_endpoint_auth_method` を返す**（#307 の段階 3）。
+            //  **登録された `token_endpoint_auth_method` を返す。**
             //    **空（明示なし）は `client_secret_basic`** — **RFC 7591 §2 の既定**であり、
             //    **実際に通る方法**でもある（`CmnEndpoints.AllowsAuthMethod`）。
             ret.Add(Const.ClientTokenEndpointAuthMethod,
@@ -1846,7 +1830,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ClientRegistrationProvider.AddIfNotEmpty(
                 ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
 
-            //  **登録された鍵を `jwks` に戻して返す**（#307 の段階 3）。
+            //  **登録された鍵を `jwks` に戻して返す。**
             //    **列は 2 本に分かれている**ので、**在るものだけを `keys` に並べる。**
             JObject jwks = ClientRegistrationProvider.BuildJwks(model);
 
@@ -1855,7 +1839,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ret.Add(Const.ClientJwks, jwks);
             }
 
-            //  **`jwks_uri` は、そのまま返す**（#309 の段階 1。**`jwks` とは排他**）。
+            //  **`jwks_uri` は、そのまま返す**（**`jwks` とは排他**）。
             ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.jwks_uri, model.JwksUri);
 
             if (!string.IsNullOrEmpty(model.Contacts))
