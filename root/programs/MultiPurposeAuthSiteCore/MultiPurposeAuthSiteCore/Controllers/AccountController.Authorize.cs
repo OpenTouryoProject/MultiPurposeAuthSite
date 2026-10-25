@@ -21,9 +21,9 @@
 //**********************************************************************************
 
 /*
-OAuth 2.0 / OIDC の認可エンドポイント
-（要求の検証、max_age・prompt・同意、認可応答の返し方（Response Mode / JARM））と、
-Device Authorization Grant の利用者コードの確認画面を担うAccountControllerの一部
+ * OAuth 2.0 / OIDC の認可エンドポイント
+ * （要求の検証、max_age・prompt・同意、認可応答の返し方（Response Mode / JARM））と、
+ * Device Authorization Grant の利用者コードの確認画面を担うAccountControllerの一部
 */
 
 using MultiPurposeAuthSite.Co;

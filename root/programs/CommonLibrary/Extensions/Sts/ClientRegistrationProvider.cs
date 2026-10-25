@@ -53,7 +53,13 @@
  * client_secret と registration_access_token は、登録の応答で 1 回だけ返す（後者はハッシュで保管）。
  * 管理は、その登録の registration_access_token でだけ行え、PUT は全置換、DELETE は同意も消す。
  * client_registration と auth の scope は、動的登録では付けられない（管理画面で付ける）。
- *
+ * 
+ * | | ROPC（Resource Owner Password Credentials） | CC（Client Credentials） |
+ * |---|---|---|
+ * | `aud` | トークンを取った client_id | トークンを取った client_id |
+ * | `sub` | 利用者の Id、または PPID | **そのClientIdのClientName** |
+ * | `aud` の使い道 | **PPID を元の利用者に戻す鍵**（どのClient向けの `sub` か） | **所有者を引く相手**（このClientの所有者を、作る登録の所有者にする） |
+ * 
  * 段階ごとの決定と経緯（#307 / #309 / #310 など）は、root/programs/DesignNotes/ClientRegistrationProvider.md に在る。
  */
 
@@ -98,7 +104,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// | | |
     /// |---|---|
-    /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（**ROPC か `client_credentials` で取る**） |
+    /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（**ROPC か CC で取る**） |
     /// | 所有者 | **トークンの `sub` の利用者**、**利用者が居なければ認証したクライアントの所有者**（**1 利用者が n 件持てる**） |
     /// | 器 | **既存の `Saml2OAuth2Data`**（`DataProvider`） |
     ///
@@ -218,6 +224,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #region 認可（トークンの scope と、所有者）
 
+            // Tokenから、identity.Claimsを構築してある。
             if (identity == null)
             {
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
@@ -236,48 +243,42 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return 403;
             }
 
-            //  **所有者は、トークンの `sub` の利用者**である。
-            //    **`sub` は PPID になり得る**ので、`aud`（トークンを出した相手の client_id）と
-            //    組にして引く（`/userinfo` と同じ形）。
-            Claim aud = identity.Claims.FirstOrDefault(
-                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim);
+            // audはROPC、CC のグラント種別にかかわらずClientIDを返す。
+            Claim aud = identity.Claims.FirstOrDefault(x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim);
 
+            //  **`aud` の有無**（無いトークンは、この配備が出した物ではない・形が足りない）。
             if (aud == null)
             {
-                //  **`aud` の無いトークン**（この配備が出した物ではない・形が足りない）。
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
-                err.Add(OAuth2AndOIDCConst.error_description,
-                    "The access token is not valid.");
+                err.Add(OAuth2AndOIDCConst.error_description, "The access token is not valid.");
                 return 401;
             }
 
+            // aud.Value：トークンを取った client_id、identity.Name：トークンの sub
+            // ちなみにROPCであれば、aud（ClientId）でGetUserFromSubを実行した場合、ROのuserが取れる。
+            // aud は、sub が PPID の時に戻すため（pairwise は、クライアント毎に sub を変える機構がある）。
             ApplicationUser user = PPIDExtension.GetUserFromSub(aud.Value, identity.Name);
 
-            //  **利用者の居ないトークン**（`client_credentials` で取ったもの）。
-            //    **認証したクライアントの所有者を、作る登録の所有者にする。**
-            //
-            //  **見分けは `sub` でする。** **`client_credentials` のトークンは、
-            //    `sub` にクライアント名が入る**（`CmnEndpoints.GrantClientCredentials`）。
-            //    **「利用者が消えたトークン」を、クライアントの所有者に付け替えないため**に、
-            //    **そこまで確かめる**（**付け替えると、別人の持ち物として登録が増える**）。
-            if (user == null
-                && identity.Name == Helper.GetInstance().GetClientName(aud.Value))
+            // CCかどうかを確かめる。
+            // - userの居ないトークンは、CC で取ったものである可能性が高い。
+            // - aud（ClientId）でGetClientNameを実行した場合、sub（そのClientIdのClientName）が取れるハズ。
+            // - ROPCでuser削除された場合と区別するために、2番目のチェックまで行う必要がある。
+            //   （区別しないと、消えた利用者の要求が、クライアントの所有者の登録として増える）
+            if (user == null && identity.Name == Helper.GetInstance().GetClientName(aud.Value))
             {
+                // GetOwnerUserId が 空文字列（""） を返すケース
+                // - 構成ファイルのクライアントで、owner 属性を書いていない：配備全体のクライアントで、1 人の持ち物ではない
+                // - 構成ファイルの owner に書いた利用者が居ない：設定の誤り。利用者名を変えた後に直し忘れた場合など
+                // - 登録の表のクライアントで、OwnerUserId が空：E2E の種データなど（例外ケース）
                 string ownerUserId = Helper.GetInstance().GetOwnerUserId(aud.Value);
 
-                user = string.IsNullOrEmpty(ownerUserId)
-                    ? null : CmnUserStore.FindById(ownerUserId);
+                // FindByIdが null を返すケース：OwnerUserId の利用者が、引く直前に消された場合
+                user = string.IsNullOrEmpty(ownerUserId) ? null : CmnUserStore.FindById(ownerUserId);
             }
 
+            //  **所有者が決まらない。**
             if (user == null)
             {
-                //  **所有者が決まらない。**
-                //
-                //  | | |
-                //  |---|---|
-                //  | **利用者の居ないトークン ＋ 所有者の無いクライアント** | 構成ファイルに `owner` が無い／その利用者が居ない／種データ |
-                //  | **`sub` の利用者が引けない** | 利用者が消えた後のトークン |
-                //
                 //  **`403` にする。** **トークンは正しい**ので、
                 //  **`401` では「取り直せ」と読めて誤誘導になる**
                 //  （RFC 6749 §4.1.2.1 の `access_denied` ＝ 要求を容れない）。
@@ -350,7 +351,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **`ClientName` は、要求の `client_name` ではなく利用者名である。**
             //    **`Helper.GetClientName` が、この列を「登録が在るか」の判定と、
-            //    `client_credentials` の `sub` に使っている**ため、他の値を入れてはならない。
+            //    CC の `sub` に使っている**ため、他の値を入れてはならない。
             //    **`client_name` は受け取っても無視する**（RFC 7591 §3.2.1 が認めている）。
             //    **所有者の鍵は `OwnerUserId`**（下）。**名前は、ラベルである。**
             model.ClientName = user.UserName;
