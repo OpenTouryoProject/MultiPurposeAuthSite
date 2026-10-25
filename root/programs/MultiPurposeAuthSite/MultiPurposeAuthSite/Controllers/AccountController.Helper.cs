@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -165,7 +166,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 向けてある（**画面から入れた値が返ることを E2E で測り続けるため**。`RT-230.*`）。
         ///
         /// **`preferred_username` / `email` / `phone_number` も入れていない。**
-        /// **`user:` で `ApplicationUser` から直に取れる**ので、二重に持たない（#151 の段階 1）。
+        /// **`user:` で `ApplicationUser` から直に取れる**ので、二重に持たない（#151）。
         ///
         /// > **この JSON は、管理画面で保存すると消える。**
         /// > 画面（`ManageAddUnstructuredDataViewModel`）は `usd1` / `usd2` しか持たないので、
@@ -200,7 +201,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>Task</returns>
         /// <remarks>
-        /// **名前に接尾辞を付けられる**（`TestUserSuffix`。#260）。**空なら従来どおり。**
+        /// **名前に接尾辞を付けられる**（`TestUserSuffix`。#260）。**空なら付けない。**
         ///
         /// **E2E は net48 版と net10.0 版を同時に立てて、同じケースを両方に流す。**
         /// **DB ストアでは 1 つの DB を共有する**ため、分けないと
@@ -269,10 +270,8 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // **E2E 専用のクライアント登録**（#264）。
-            //   **以前は test.ps1 -Launch が環境変数で差し込んでいた**が、
-            //   **net48 版は一覧ごと 1 本の環境変数**で渡すため、**件数に上限があった**
-            //   （#262 で踏んだ。IIS Express が起動するのに全要求が 500 になる）。
-            //   **利用者の登録（saml2OAuth2Data）に寄せた**ので、**上限が無い。**
+            //   **利用者の登録（saml2OAuth2Data）に寄せてある**ので、**件数に上限が無い**
+            //   （環境変数で差し込むと、net48 版は一覧ごと 1 本になり、件数に上限が出る。#262）。
             //
             //   **接尾辞は付けない。** client_name は E2E が名前で引くため
             //   （Sts.TestClients の表と、E2E の KnownClients を同じ値で揃える）。
@@ -288,16 +287,11 @@ namespace MultiPurposeAuthSite.Controllers
                     continue;
                 }
 
-                //  **クライアントごとの利用者は、もう作らない**（#307 の段階 5-a）。
-                //
-                //  **以前は、外部キー**（`Saml2OAuth2Data.ClientID` → `Users.ClientID`）
-                //    **を満たすためだけに、クライアント 1 件につき利用者 1 人を作っていた。**
-                //    **所有者を `Saml2OAuth2Data.OwnerUserId` へ移し、
-                //    その外部キーを落としたので、要らなくなった。**
+                //  **クライアントごとの利用者は作らない**（所有者は `Saml2OAuth2Data.OwnerUserId`。#307）。
                 //
                 //  **種データの登録は、所有者を持たない**（`OwnerUserId` は空）。
                 //    **構成ファイルのクライアントと同じ立場**である（配備全体のもの）。
-                //    **`ClientName` は、従来どおり入る**（**ラベル**。E2E が名前で引く）。
+                //    **`ClientName` は入る**（**ラベル**。E2E が名前で引く）。
 
                 // **登録が無ければ入れる**（在れば触らない）。
                 //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、

@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -70,7 +71,7 @@ namespace MultiPurposeAuthSite.Controllers
             Response.Cookies.Set(Config.AuthTimeCookieName,
                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
 
-            // **OP のセッションの識別子を作る**（#310 の段階 1）。
+            // **OP のセッションの識別子を作る**（#310）。
             //   **ここがセッションの始まり**である（`sid` はこの値から引く）。
             this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
         }
@@ -149,16 +150,16 @@ namespace MultiPurposeAuthSite.Controllers
             string fido2Challenge = "";
             string sequenceNo = "";
 
-            // **WebAuthn の往復の段階**（#137）。
+            // **WebAuthn の往復の手順**（#137）。
             //   **challenge はここでは作らない。** 利用者名が決まってから
-            //   **`GetAssertionOptions` が作る**（段階 1）。
+            //   **`GetAssertionOptions` が作る**（手順 1）。
             if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
             {
                 sequenceNo = "0";
             }
 
-            // **Email 欄が「利用者名またはメアド」の入力である**（#151 の段階 3）。
-            //   **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の login_hint に波及するため、名前の整理は後の段階に回す。
+            // **Email 欄が「利用者名またはメアド」の入力である**（#151）。
+            //   **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の login_hint に波及するため。
             return View(new AccountLoginViewModel
             {
                 ReturnUrl = returnUrl,
@@ -192,7 +193,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     if (!string.IsNullOrWhiteSpace(model.Password))
                     {
-                        // **利用者名とメアドの、どちらでも受ける**（#151 の段階 3）。
+                        // **利用者名とメアドの、どちらでも受ける**（#151）。
                         //   **`@` を含むならメアド**として引く（利用者名に `@` は禁じている）。
                         string uid = model.Email;
 
@@ -212,7 +213,7 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // EmailConfirmed == true の場合、
                                 // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、lockoutOnFailure: true に変更する
-                                // **入力した値ではなく、引いた利用者の利用者名で署名する**（#151 の段階 3）。
+                                // **入力した値ではなく、引いた利用者の利用者名で署名する**（#151）。
                                 //   **メアドで引いた場合、入力値は利用者名ではない。**
                                 signInStatus = await SignInManager.PasswordSignInAsync(
                                     userName: user.UserName,                            // アカウント(UID)
@@ -241,11 +242,11 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else if (submitButtonName == "id_federation_signin")
                 {
-                    //  **OIDC の ID 連携**（#286 の段階 2 でメソッドに分けた）。
-                    //    **入力された値を、そのまま `login_hint` として上流へ渡す**（#151 の段階 3）。
+                    //  **OIDC の ID 連携**（#286 でメソッドに分けた）。
+                    //    **入力された値を、そのまま `login_hint` として上流へ渡す**（#151）。
                     //
-                    //  **どの上流へ委譲するかは `IdpKey`**（#292 の段階 1）。
-                    //    **空なら既定（先頭の 1 件）** — **従来の押し方と同じ結果になる。**
+                    //  **どの上流へ委譲するかは `IdpKey`**（#292）。
+                    //    **空なら既定（先頭の 1 件）。**
                     return this.StartIdFederationByOidc(
                         model.Email,
                         IdFederationUpstreams.GetOrDefault(
@@ -253,7 +254,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else if (submitButtonName == "id_federation_saml2_signin")
                 {
-                    //  **SAML2 の ID 連携**（#286 の段階 2）。
+                    //  **SAML2 の ID 連携**（#286）。
                     //    **押しても成立しない上流は、画面に出ていない**（`IsUsable`）。
                     return await this.StartIdFederationBySaml2(
                         IdFederationUpstreams.GetOrDefault(
@@ -288,7 +289,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         catch (Exception e)
                         {
-                            //  **障害対応のため、記録する**（#294）。**以前は画面へ返すだけだった。**
+                            //  **障害対応のため、記録する**（#294）。
                             Logging.MyOperationTrace(string.Format(
                                 Resources.Diagnostics.LogWebAuthnSignInFailed, LogSanitizer.Sanitize(e.Message, Const.LogDetailMaxLength)));
                             temp = FIDO.WebAuthnHelper.ToErrorJson(e);
@@ -340,7 +341,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         catch (Exception e)
                         {
-                            //  **障害対応のため、記録する**（#294）。**以前は画面へ返すだけだった。**
+                            //  **障害対応のため、記録する**（#294）。
                             Logging.MyOperationTrace(string.Format(
                                 Resources.Diagnostics.LogWebAuthnSignInFailed, LogSanitizer.Sanitize(e.Message, Const.LogDetailMaxLength)));
                             temp = FIDO.WebAuthnHelper.ToErrorJson(e);
@@ -442,7 +443,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (User.Identity.IsAuthenticated) // 空振りできるように。
             {
-                // **OP のセッションを終わらせる**（#310 の段階 1・2・3）
+                // **OP のセッションを終わらせる**（#310）
                 iframeUrls = this.ClearOpSession();
 
                 // サインアウト（Cookieの削除）
@@ -456,7 +457,7 @@ namespace MultiPurposeAuthSite.Controllers
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
             }
 
-            // **ブラウザ経由で伝える**（#310 の段階 3。**伝える先が無ければ、従来どおり戻る**）
+            // **ブラウザ経由で伝える**（#310。**伝える先が無ければ、そのまま戻る**）
             ActionResult frontChannel = this.FrontChannelLogoutView(
                 iframeUrls, Url.Action("Index", "Home"));
             if (frontChannel != null) return frontChannel;
@@ -577,7 +578,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (signedIn)
             {
-                // **OP のセッションを終わらせる**（#310 の段階 1・2・3）
+                // **OP のセッションを終わらせる**（#310）
                 iframeUrls = this.ClearOpSession();
 
                 // サインアウト（Cookieの削除）
@@ -590,9 +591,9 @@ namespace MultiPurposeAuthSite.Controllers
                         "{0}({1}) has signed out by RP-Initiated Logout.", user.Id, user.UserName));
             }
 
-            // **ブラウザ経由で伝える**（#310 の段階 3）。
+            // **ブラウザ経由で伝える**（#310）。
             //   **画面を挟んでから、戻り先へ進む**（**進む先は、ここで決める**）。
-            //   **伝える先が無ければ、従来どおり直に戻る。**
+            //   **伝える先が無ければ、直に戻る。**
             ActionResult frontChannel = this.FrontChannelLogoutView(
                 iframeUrls,
                 string.IsNullOrEmpty(redirectUri) ? Url.Action("Index", "Home") : redirectUri);

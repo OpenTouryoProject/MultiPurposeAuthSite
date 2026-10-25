@@ -11,6 +11,7 @@
 | ファイル | 対象のソース | 主な Issue |
 |---|---|---|
 | [ClientRegistrationProvider.md](ClientRegistrationProvider.md) | `CommonLibrary/Extensions/Sts/ClientRegistrationProvider.cs` | #307 / #309 / #310 / #294 |
+| [AccountController.md](AccountController.md) | 両アプリの `Controllers/AccountController*.cs`（partial の全ファイル） | #140 / #151 / #247 / #272 / #286 / #292 / #310 |
 
 ## 書き方
 

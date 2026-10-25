@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -135,7 +136,6 @@ namespace MultiPurposeAuthSite.Controllers
                     Resources.Diagnostics.LogSaml2ErrorResponseFailed, LogSanitizer.Sanitize(ex.Message, Const.LogDetailMaxLength)));
 
                 // **iss などが取れていないと返せない。**
-                //   **以前は null を返していた**が、
                 //   **MVC のアクションから null を返すと 500 になる**（#276）。
                 return View("Error");
             }
@@ -161,9 +161,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// | `HttpPost` | POST Binding で返す | 自動送信フォーム |
         /// | **`null`** | **応答を返す先が決まらない** | **エラー画面** |
         ///
-        /// **以前は `== HttpRedirect` の 2 分岐**だったので、
-        /// **`null` が POST 側に落ち、`action` も `SAMLResponse` も空の
-        /// 自動送信フォームが返っていた。**
+        /// **`null` を POST 側に落とすと、`action` も `SAMLResponse` も空の
+        /// 自動送信フォームが返る**ので、3 通りに分ける。
         /// </remarks>
         private ActionResult CreateSaml2Response(
             ClaimsIdentity identity, SAML2Enum.StatusCode statusCode,
@@ -210,11 +209,10 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult（Saml2Response 画面）</returns>
         /// <remarks>
         /// **検証の本体は Open棟梁 の `SAML2Client.VerifyResponseWithReason`**
-        /// （#246 で両アプリから寄せ、#286 の段階 1 で鍵と期待 Issuer を引数にし、#294 で移した）。
+        /// （鍵と期待 Issuer は引数で渡す。#246 / #286 / #294）。
         ///
         /// **アサーションを画面に出す**（#246 の項目 3）。
-        /// 以前は `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に移るだけで、
-        /// **どこで落ちたのかが分からず、読み取った属性も XML も捨てていた。**
+        /// **どこで落ちたのか、読み取った属性と XML を、画面で確かめられる。**
         /// </remarks>
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
@@ -282,7 +280,7 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.AuthnContextClassRef = result.AuthnContextClassRef?.ToString() ?? "";
             ViewBag.ResponseXml = SamlProviders.CmnSaml2Response.FormatXml(result.Response);
 
-            //  **アサーションの属性**（#286 の段階 4）。**目視のため**（判定には使わない）。
+            //  **アサーションの属性**（#286）。**目視のため**（判定には使わない）。
             ViewBag.Attributes = result.Attributes;
             ViewBag.AttrEmail = SAML2Attributes.GetEmail(result.Attributes);
             ViewBag.AttrUserName = SAML2Attributes.GetUserName(result.Attributes);

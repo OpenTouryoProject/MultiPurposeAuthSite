@@ -81,6 +81,7 @@
 //*  2026/10/25  玄人 幸道         認可エンドポイントと SAML2 のエラーを OPERATION に記録する（障害対応のため。#294）
 //*  2026/10/25  玄人 幸道         追加した OPERATION ログの文言を resx に、長さの上限を Const にした（#294）
 //*  2026/10/25  玄人 幸道         サインイン・認可エンドポイントなどを partial（AccountController.*.cs）に分けた（#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -92,6 +93,7 @@
   - SignInManager<ApplicationUser> _signInManager: サインイン管理のためのマネージャー。
   - IEmailSender _emailSender: メール送信サービス。
   - ISmsSender _smsSender: SMS送信サービス。
+- 段階ごとの決定と経緯（partial の全ファイル分）は、root/programs/DesignNotes/AccountController.md に在る。
 */
 
 using MultiPurposeAuthSite.Co;

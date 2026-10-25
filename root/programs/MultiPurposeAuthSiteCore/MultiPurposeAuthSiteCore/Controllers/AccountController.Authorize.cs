@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/25  玄人 幸道         auth で同意画面を飛ばすのを、登録に明記したクライアントだけにした（#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -169,8 +170,8 @@ namespace MultiPurposeAuthSite.Controllers
         ///
         /// | 伝え方 | ここで何をするか |
         /// |---|---|
-        /// | **Back-Channel**（段階 2） | **サーバから POST する**（背景。**待たない**） |
-        /// | **Front-Channel**（段階 3） | **URL を作って返すだけ。** **開くのはブラウザ**（`iframe`） |
+        /// | **Back-Channel** | **サーバから POST する**（背景。**待たない**） |
+        /// | **Front-Channel** | **URL を作って返すだけ。** **開くのはブラウザ**（`iframe`） |
         ///
         /// **呼ばれるのはサインアウトの 5 か所**
         /// （`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。
@@ -183,7 +184,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (!string.IsNullOrEmpty(sessionId))
             {
-                // **先に伝える**（#310 の段階 2）。
+                // **先に伝える**（#310）。
                 // BackChannelLogout
                 Sts.BackChannelLogout.NotifyBySession(sessionId);
                 // FrontChannelLogout
@@ -208,10 +209,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// **クライアント毎に別の sid** を、台帳から引く（無ければ作る）。
         ///
         /// **呼ぶのは「code / token を実際に作る直前」である**。
-        /// **以前は認可の経路の分岐より手前で呼んでいた**ので、
-        /// **同意画面を出しただけの相手・拒否された相手の行まで台帳に残り**、
-        /// **「トークンを一度も受けていない RP へログアウトを伝える」ことになった**
-        /// （**その RP に「この利用者が来た」ことを教えてしまう**）。
+        /// **同意画面を出しただけの相手・拒否された相手を、台帳に残さないため**である
+        /// （**残すと、トークンを一度も受けていない RP へログアウトを伝え、
+        /// その RP に「この利用者が来た」ことを教えてしまう**）。
         ///
         /// **Cookie は `EnsureOpSession` が用意する**（**認可の口の入口で呼ぶ**）。
         /// **それでも無ければ、ここで作る** — **同意応答（POST）は送り返せない**ため。
@@ -243,12 +243,12 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
-        /// <summary>Front-Channel Logout の画面を返す（#310 の段階 3）</summary>
+        /// <summary>Front-Channel Logout の画面を返す（#310）</summary>
         /// <param name="iframeUrls">`iframe` に入れる URL</param>
         /// <param name="continueUrl">`iframe` を並べた画面（親）が、その後に進む先（`iframe` の中は進まない）</param>
         /// <returns>画面（**伝える先が 1 件も無ければ null**）</returns>
         /// <remarks>
-        /// **1 件も無ければ null を返す** — **従来どおりリダイレクトで終わる。**
+        /// **1 件も無ければ null を返す** — **呼び出し側がリダイレクトで終える。**
         /// **登録している RP が無い配備では、画面が増えない**（**応答も変わらない**）。
         ///
         /// **進む先は、呼び出し側が決める。**
@@ -326,9 +326,7 @@ namespace MultiPurposeAuthSite.Controllers
             // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
             // Request Object が在れば、その値で上書きする（無ければクエリ文字列のまま）。
             
-            // **クエリ文字列は、デコードされた値で読む**。以前は GetEncodedUrl から生のまま取り出していたため、
-            // **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
-            // net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
+            // **クエリ文字列は、デコードされた値で読む**（パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼさないため）。
             
             string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
             string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
@@ -358,7 +356,6 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // **要求の検証を先に行う**（#247）。`redirect_uri` を照合できていないと、エラーを RP へ返せない。
-            // 以前は `max_age` の判定が先で、超過すると**valid_redirect_uri も err も空のまま、文面の無いエラー画面**になっていた。
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription, code_challenge, prompt))
@@ -415,7 +412,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 次の要求でも認証済みのままだった（実測）。既存の LogOff も SignInManager を使っている。
                         await this.SignInManager.SignOutAsync();
 
-                        // **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
+                        // **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。
                         ActionResult frontChannelForMaxAge = this.FrontChannelLogoutView(
                             iframeUrlsForMaxAge, UriHelper.GetEncodedUrl(Request));
                         if (frontChannelForMaxAge != null) { return frontChannelForMaxAge; }
@@ -425,7 +422,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else if (OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptLogin)
                     && string.IsNullOrEmpty(MyHttpContext.Current.Request.Cookies.Get(Config.ReAuthenticatedAtCookieName)))
                 {
-                    // **prompt=login は、再認証を求める**（OIDC Core §3.1.2.1。#272 の段階 2）。
+                    // **prompt=login は、再認証を求める**（OIDC Core §3.1.2.1。#272）。
                     // **印が無いときだけ再認証する**（印は繰り返しを防ぐため）。
                     //   戻ってきた要求にも prompt=login が付いているので、印が無いと永久に送り返す。
                     //   印は、認可を続ける所（else）で消す。次の新しい要求の prompt=login は、また再認証になる。
@@ -436,7 +433,7 @@ namespace MultiPurposeAuthSite.Controllers
                     List<string> iframeUrlsForPromptLogin = this.ClearOpSession();
                     await this.SignInManager.SignOutAsync();
 
-                    // **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
+                    // **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。
                     ActionResult frontChannelForPromptLogin = this.FrontChannelLogoutView(
                         iframeUrlsForPromptLogin, UriHelper.GetEncodedUrl(Request));
                     if (frontChannelForPromptLogin != null) { return frontChannelForPromptLogin; }
@@ -444,7 +441,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // **OpSessionの識別子を用意する**（#310 の段階 2）。
+                    // **OpSessionの識別子を用意する**（#310）。
                     //   **無ければ Cookie を置いて、同じ URL へ送り返す**（同時に来た要求を 1 つの識別子に揃えるため）。
                     ActionResult ensured = this.EnsureOpSession();
                     if (ensured != null) return ensured;
@@ -514,7 +511,7 @@ namespace MultiPurposeAuthSite.Controllers
                         #endregion
 
                         if (isAuth                              // OAuth2 拡張仕様
-                            || (hasConsent && !asksConsent))    // 同意済み（#272 の段階 2）
+                            || (hasConsent && !asksConsent))    // 同意済み（#272）
                         {
                             // 認可画面をスキップ
 
@@ -524,7 +521,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
                             }
 
-                            // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                            // **sid を足す**（#310。**発行の直前で台帳に書く**）
                             this.AddSidClaim(client_id, identity);
 
                             // ★ Codeの生成
@@ -541,10 +538,9 @@ namespace MultiPurposeAuthSite.Controllers
                             prompt, OAuth2AndOIDCConst.PromptNone))
                         {
                             // **UI を出せないので、エラーを RP へ返す**
-                            //   （OIDC Core §3.1.2.6 : consent_required。#272 の段階 2）。
-                            //   **ここが C-3 そのものである** — 以前は同意を飛ばして
-                            //   code を発行していたので、**セッションが生きていれば
-                            //   どのクライアントも無音で認可を取れた。**
+                            //   （OIDC Core §3.1.2.6 : consent_required。#272）。
+                            //   **ここで同意を飛ばすと、セッションが生きていれば
+                            //   どのクライアントも無音で認可を取れる**（C-3）。
                             err = OAuth2AndOIDCConst.consent_required;
                             errDescription = "Consent is required, but prompt=none was specified.";
                         }
@@ -560,7 +556,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // OAuth2/OIDC Implicit
 
-                        // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                        // **sid を足す**（#310。**発行の直前で台帳に書く**）
                         this.AddSidClaim(client_id, identity);
 
                         // ★ Tokenの生成
@@ -581,7 +577,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // OIDC Hybrid Flow
 
-                        // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                        // **sid を足す**（#310。**発行の直前で台帳に書く**）
                         this.AddSidClaim(client_id, identity);
 
                         // ★ Tokenの生成
@@ -674,10 +670,7 @@ namespace MultiPurposeAuthSite.Controllers
             string prompt = ""; // ダミー
             JObject claims = null;
             // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
-            // **クエリ文字列は、デコードされた値で読む**（#229）。
-            //   以前は GetEncodedUrl から生のまま取り出していたため、
-            //   **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
-            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
+            // **クエリ文字列は、デコードされた値で読む**（#229。パーセント エンコードされた request_uri を取りこぼさないため）。
             string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
             string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
@@ -737,11 +730,11 @@ namespace MultiPurposeAuthSite.Controllers
                     //   サインアウトしていなかった**（同じ利用者のまま戻っていた）。
                     //   net48 版は `SignOut(DefaultAuthenticationTypes.ApplicationCookie)` と
                     //   スキームを指定しているため、こちらだけの症状だった。
-                    // **OP のセッションを終わらせる**（#310 の段階 1）
+                    // **OP のセッションを終わらせる**（#310）
                     List<string> iframeUrlsForSwitch = this.ClearOpSession();
                     await this.SignInManager.SignOutAsync();
 
-                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310 の段階 3）。
+                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。
                     ActionResult frontChannelForSwitch = this.FrontChannelLogoutView(
                         iframeUrlsForSwitch, UriHelper.GetEncodedUrl(Request));
                     if (frontChannelForSwitch != null) return frontChannelForSwitch;
@@ -750,9 +743,8 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else if (!string.IsNullOrEmpty(MyHttpContext.Current.Request.Form["submit.Deny"]))
                 {
-                    // **拒否した**（E-6 / #272 の段階 2）。
+                    // **拒否した**（E-6 / #272）。
                     //   **RFC 6749 §4.1.2.1 : access_denied を redirect_uri へ返す。**
-                    //   **以前は拒否できず、access_denied を返す経路も無かった。**
                     //   **記録は残さない**（「拒否した」を覚えて、
                     //   次回以降自動で断ることはしない。利用者が気を変えられなくなる）。
                     err = OAuth2AndOIDCConst.access_denied;
@@ -762,10 +754,10 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // OAuth2/OIDC Authorization Code
 
-                    // **sid を足す**（#310 の段階 2。**発行の直前で台帳に書く**）
+                    // **sid を足す**（#310。**発行の直前で台帳に書く**）
                     this.AddSidClaim(client_id, identity);
 
-                    // **同意を記録する**（#272 の段階 2 / D-6）。
+                    // **同意を記録する**（#272 / D-6）。
                     //   **これが次回以降の `prompt=none` の判定の土台になる。**
                     //   **scope は足し込む**（増えた scope で同意し直しても、以前の分を失わない）。
                     Sts.ConsentProvider.Grant(
@@ -1439,7 +1431,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string userCode = formData[OAuth2AndOIDCConst.user_code];
                 string failureKey = Sts.AuthFailureProvider.DeviceVerifyKey(User.Identity.Name);
 
-                //  **続けて間違えている利用者は、断る**（#305 の段階 2。RFC 8628 §5.2）。
+                //  **続けて間違えている利用者は、断る**（#305。RFC 8628 §5.2）。
                 //    **間違えた `user_code` では、どの要求を狙ったか分からない**ので、
                 //    **投入した人で数える。**
                 //    **断っている間は、正しい `user_code` でも通さない。**

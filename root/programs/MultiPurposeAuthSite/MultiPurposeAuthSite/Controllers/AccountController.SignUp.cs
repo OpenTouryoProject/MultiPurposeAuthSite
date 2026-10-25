@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -88,8 +89,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // AccountRegisterViewModelの検証に成功
 
-                    // **利用者名とメアドの両方を受け取る**（#151 の段階 3）。
-                    //   以前はどちらか一方を `uid` に潰していた（画面には両方在ったのに）。
+                    // **利用者名とメアドの両方を受け取る**（#151）。
                     string userName = model.Name;
                     string email = model.Email;
 
@@ -132,9 +132,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 await this.UserManager.AddToRoleAsync(user.Id, Const.Role_Admin);
                             }
 
-                            // **メアドは常に在るので、必ず検証する**（#151 の段階 3）。
-                            //   以前は「メアド無し」の配備があり、そのときは
-                            //   約款画面またはサインイン画面へ直行していた。
+                            // **メアドは常に在るので、必ず検証する**（#151）。
                             //   **約款は、メアド検証のリンクを踏んだ後に出る**（下の Agreement）。
 
                             // サインインの前にメアド検証用のメールを送信して、
@@ -150,7 +148,7 @@ namespace MultiPurposeAuthSite.Controllers
                             #region サインアップ失敗
 
                             // サインアップ済みの可能性を探る
-                            //   **メアドで引く**（#151 の段階 3。鍵はメアド）。
+                            //   **メアドで引く**（#151。鍵はメアド）。
                             ApplicationUser oldUser = await UserManager.FindByEmailAsync(email);
 
                             if (oldUser == null)
@@ -209,8 +207,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         // 結果の確認
                                         if (result.Succeeded)
                                         {
-                                            // **メアドは常に在るので、必ず検証の再送をする**（#151 の段階 3）。
-                                            //   以前は「メアド無し」の配備があり、そのときは約款画面へ直行していた。
+                                            // **メアドは常に在るので、必ず検証の再送をする**（#151）。
 
                                             // メアド検証用のメールを送信して、
                                             this.SendConfirmEmail(user);
@@ -366,9 +363,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // AccountAgreementViewModelの検証に成功
 
-                    // **メアドのアクティベーションを必ず伴う**（#151 の段階 3）。
-                    //   以前は「メアド無し」の配備があり、そのときは EmailConfirmed を
-                    //   直に true にしてサインイン画面へ送っていた。
+                    // **メアドのアクティベーションを必ず伴う**（#151）。
                     if (model.AcceptedAgreement)
                     {
                         // 同意された。

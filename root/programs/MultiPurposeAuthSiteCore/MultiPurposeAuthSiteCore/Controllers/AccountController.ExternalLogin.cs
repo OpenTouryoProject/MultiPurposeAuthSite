@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -128,18 +129,17 @@ namespace MultiPurposeAuthSite.Controllers
                 string name = nameClaim.Value;
                 string email = emailClaim.Value;
 
-                // **上流が「検証済み」と言っているか**（#140 の段階 1）。
+                // **上流が「検証済み」と言っているか**（#140）。
                 //   **既定のプロバイダ構成では、このクレームは来ない。**
                 //   その場合は「言っていない」として扱う（無い ＝ false）。
                 //   Google なら ClaimActions.MapJsonKey で拾えるようにできる（Startup）。
                 string emailVerified = identity.FindFirst(OAuth2AndOIDCConst.email_verified)?.Value;
 
-                // **鍵はメアド**（#151 の段階 3）。
-                //   以前は RequireUniqueEmail で「メアド」か「上流の識別子」かを選んでいた。
+                // **鍵はメアド**（#151）。
                 //   **メアドは常に在って一意**なので、鍵はメアドで決まる。
                 string uid = email;
 
-                // **新規に作るときの利用者名**（#151 の段階 3）。
+                // **新規に作るときの利用者名**（#151）。
                 //   上流の識別子がそのまま使えるならそれを、
                 //   **`@` を含んで使えないならメアドから作る**（利用者名に `@` は禁じている）。
                 string newUserName = UserIdentifier.IsValidUserName(name)
@@ -191,14 +191,14 @@ namespace MultiPurposeAuthSite.Controllers
                         // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
 
                         // サインアップ済みの可能性を探る
-                        // **メアドで引く**（#151 の段階 3。鍵がメアドになった）。
+                        // **メアドで引く**（#151。鍵がメアドになった）。
                         user = await UserManager.FindByEmailAsync(uid);
 
                         if (user != null)
                         {
                             // サインアップ済み → 外部ログイン追加だけで済む
 
-                            // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
+                            // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140）。
                             if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
                                     == Sts.AccountLinkCheck.NeedsVerifiedEmail)
                             {
@@ -214,8 +214,7 @@ namespace MultiPurposeAuthSite.Controllers
                             }
 
                             // 外部ログイン（ = UserLoginInfo ）の追加
-                            // **メアドで引いているので、メアドの一致は自明**（#151 の段階 3）。
-                            //   以前は「鍵が上流の識別子」の場合に備えて、ここで突き合わせていた。
+                            // **メアドで引いているので、メアドの一致は自明**（#151）。
                             idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
 
                             // クレーム（emailClaim, nameClaim, etc.）の追加
@@ -264,12 +263,10 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewBag.LoginProvider = externalLoginInfo.LoginProvider;
 
                             // 外部ログイン プロバイダのユーザー情報でユーザを作成
-                            // **利用者名とメアドを別に渡す**（#151 の段階 3）。
-                            //   以前は uid を利用者名にしてから、メアドを後で入れ直していた。
+                            // **利用者名とメアドを別に渡す**（#151）。
                             user = ApplicationUser.CreateUser(newUserName, email, true);
 
-                            // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
-                            //   以前は言い値に関わらず true を入れていた。
+                            // **上流が検証していないメアドを「確認済み」として定着させない**（#140）。
                             user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
 
                             // ユーザの新規作成（パスワードは不要）

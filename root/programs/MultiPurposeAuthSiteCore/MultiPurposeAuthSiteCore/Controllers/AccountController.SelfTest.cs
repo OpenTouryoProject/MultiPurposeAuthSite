@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -263,11 +264,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // **private_key_jwt で交換する**（#246）。
                             //   FAPI 2.0 が認めるのは MTLS と private_key_jwt の 2 つ。
-                            //   以前は client_secret を空で送り、**クライアント証明書（TB）が付くことを前提**に
-                            //   していたが、自己テストのクライアントは
-                            //   ClientCertPfxFilePath が設定されていなければ証明書を添えない。
-                            //   **設定が無い配置では /token が 401（invalid_client）になり、
-                            //   自己テストが結果画面まで通らなかった**（/ros でも /par でも同じ）。
+                            //   **自己テストのクライアントは、ClientCertPfxFilePath が設定されていなければ証明書を添えない**ので、
+                            //   **証明書の配置を前提にすると、設定が無い配置では /token が 401（invalid_client）になる。**
                             //   **証明書の配置を前提にしない private_key_jwt に寄せる。**
                             //   mTLS の経路は E2E（FA-6）が測る。
 
@@ -642,7 +640,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Front-Channel Logout の受け口（自己テスト。#310 の段階 3）
+        #region Front-Channel Logout の受け口（自己テスト。#310）
 
         /// <summary>
         /// 自己テストの RP として、`iframe` で叩かれたことを覚える
@@ -715,7 +713,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Back-Channel Logout の受け口（自己テスト。#310 の段階 2）
+        #region Back-Channel Logout の受け口（自己テスト。#310）
 
         /// <summary>
         /// 自己テストの RP として logout_token を受け取る
