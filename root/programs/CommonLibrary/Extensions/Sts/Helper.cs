@@ -67,6 +67,7 @@
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
+//*  2026/10/25  玄人 幸道         auth を、登録に明記したクライアントにだけ出すようにした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -2079,18 +2080,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// クライアントの登録に scope があれば、その範囲にも収める（#198 の後半）。
         /// 登録が無いクライアントは、既存の登録を壊さないよう、ここでは制限しない。
         ///
-        /// **`Const.ScopeClientRegistration`（クライアント登録の管理 API）だけは、倒し方が逆**
-        /// （#307 の段階 1）。**登録に明記していなければ出さない。**
+        /// **`Const.ScopeClientRegistration`（クライアント登録の管理 API）と
+        /// `OAuth2AndOIDCConst.Scope_Auth`（同意画面を出さない）だけは、倒し方が逆**
+        /// （#307 の段階 1 / #294）。**登録に明記していなければ出さない。**
         ///
         /// | | 倒し方 |
         /// |---|---|
         /// | 普通の scope | **登録が無ければ制限しない**（従来どおり） |
         /// | **`client_registration`** | **登録に明記していなければ出さない** |
+        /// | **`auth`** | **登録に明記していなければ出さない** |
         ///
-        /// **理由** : **この scope は「クライアント登録を作れる」権限**である。
+        /// **理由** : どちらも、**要求する側が自分で付けてよい scope ではない。**
         /// **「登録が無ければ制限しない」を当てはめると、**
         /// **`scope` を登録していない既存のクライアントが全て、**
-        /// **ROPC で登録を作れることになる。**
+        ///
+        /// - `client_registration` : **ROPC で登録を作れることになる。**
+        /// - `auth` : **同意画面を飛ばせることになる**（同意を求めるかを、クライアントが決めてしまう）。
+        ///   **飛ばしてよいかは、登録を管理する人が決める**（Keycloak の「Consent Required」と同じ考え方）。
         /// </remarks>
         public static IEnumerable<string> FilterSupportedScopes(IEnumerable<string> scopes, string client_id)
         {
@@ -2099,9 +2105,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (string s in Helper.FilterSupportedScopes(scopes))
             {
-                if (s == Const.ScopeClientRegistration)
+                if (s == Const.ScopeClientRegistration
+                    || s == OAuth2AndOIDCConst.Scope_Auth)
                 {
-                    //  **明記されているときだけ通す**（#307 の段階 1）。
+                    //  **明記されているときだけ通す**（#307 の段階 1 / #294）。
                     if (permitted != null && permitted.Contains(s))
                     {
                         ret.Add(s);

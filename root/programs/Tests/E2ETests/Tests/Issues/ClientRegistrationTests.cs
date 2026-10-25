@@ -593,7 +593,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         + "権限を際限なく増やせる。** "
                         + "**配るのは、管理画面か構成ファイルからだけ**にしてある。");
 
-                    r.Step("(8) どの誤りでも、登録は作られていない");
+                    r.Step("(8) auth（同意画面を出さない）も、動的登録では付けられない");
+
+                    JsonResponse skipConsent = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid auth\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)skipConsent.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata",
+                        "invalid_client_metadata", skipConsent.String("error") ?? "（無い）");
+
+                    r.Note("**同意画面を飛ばすかは、登録を管理する人が決める**（#294）。"
+                        + "**自分で `auth` を登録できると、クライアントが決めることになる。**");
+
+                    r.Step("(9) どの誤りでも、登録は作られていない");
 
                     JsonResponse ok = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token, DynamicClientRegistration.Metadata(UriA));

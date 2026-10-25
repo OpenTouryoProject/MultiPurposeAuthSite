@@ -2759,6 +2759,36 @@ if (!string.IsNullOrEmpty(registeredDn)
 > **`Const` の整理（#294）で `StandardScopes` の中身を確かめたときに気付いた。**
 > **`roles` は残した** — **自前の資源サーバ（Web API）で使う可能性を考えて**である。
 > **ロールそのものは access_token に載らない**（`scopes` には scope 名だけが載る）ので、使うなら /userinfo から取る。
+
+### C-27. 独自 scope の `auth` で、どのクライアントも同意画面を飛ばせた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**`auth` は MPAS 独自の scope** で、**付けると同意画面を出さずに code を返す**（認証だけに使う。発行は `auth` と `openid` に絞る）。
+
+**`AccountController.OAuth2Authorize`（両版）が、要求された scope をそのまま見ていた。**
+**登録の scope の絞り（C-17。#198）は、その後の発行で掛かる**ので、判定には効いていなかった。
+**そのため、登録に `auth` が無いクライアントでも、要求に付けるだけで同意画面を飛ばせた。**
+**同意を求めるかを、要求する側が決めていた**ことになる（#272 の同意の記録とも無関係に飛ぶ）。
+
+| | |
+|---|---|
+| **渡るもの** | **`sub` など認証の結果だけ**（属性は `FilterClaimAtAuth` で落ちる） |
+| **それでも問題になる理由** | **利用者が同意していないクライアントに、誰がサインインしたかが伝わる**（`prompt=none` なら画面も出ない） |
+| **大文字小文字** | **小文字にしてから比べていた**ので、`AUTH` でも飛ばせた（scope は case-sensitive。RFC 6749 §3.3） |
+
+**`client_registration`（#307 の段階 1）と同じく、倒し方を逆にした** — **登録に明記したクライアントにだけ出す。**
+**同意画面を飛ばしてよいかは、登録を管理する人が決める**（Keycloak の「Consent Required」、Auth0 の first-party の同意の省略と同じ考え方）。
+
+- **判定** : `Helper.FilterSupportedScopes(scopes, client_id)` を通した後に `auth` が残るかで見る（両版の `OAuth2Authorize`）。**小文字化をやめた**
+- **発行** : `FilterSupportedScopes` が、`auth` を**登録に明記していなければ外す**（`client_registration` と同じ枝）
+- **動的登録** : `auth` を登録しようとすると `invalid_client_metadata` で断る（**自分で付けさせない**）
+- **下位互換** : **`auth` で同意画面を飛ばしていたクライアントは、登録の `scope` に `auth` を足す**。足さなければ初回に同意画面が出る（**`prompt=none` だけで動くなら、初回は `consent_required`**）。CONFIGURATION.md 4 節
+
+**E2E** : **`RT-294.1`〜`.3`**（登録に無ければ飛ばさない／明記すれば飛ばす／`AUTH` は別物）。
+**`RT-198.1`** の期待値から `auth` を外した（**`MVC_Sample` は登録に scope が無い**ので、外れるのが正しい）。
+**`RT-307.4`** に「`auth` も動的登録では付けられない」を足した。
+**種データに `TestClient_29`**（登録の scope に `openid auth`）を足した。
+
+> **`ConsentProvider` を読み直したときに、同意の判定の手前で `auth` が素通りしていることに気付いた。**
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -2855,6 +2885,7 @@ if (!string.IsNullOrEmpty(registeredDn)
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 | ✅ **C-25 mTLS で、登録が空のときに空の Subject DN が一致していた** #305 の段階 4 |
 | ✅ **C-26 独自 scope の `userid` が、`pairwise` のクライアントにも共通の利用者 Id を渡していた** #294 |
+| ✅ **C-27 独自 scope の `auth` で、どのクライアントも同意画面を飛ばせた** #294 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 

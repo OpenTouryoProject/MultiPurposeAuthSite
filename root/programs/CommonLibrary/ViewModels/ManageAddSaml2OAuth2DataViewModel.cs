@@ -43,6 +43,7 @@
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/24  玄人 幸道         選択肢の文言を resx にした（#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
+//*  2026/10/25  玄人 幸道         Scopes の注に auth を足した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -579,8 +580,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **以前は構成ファイルだけを見ており、画面から登録したクライアントには
         /// 「クライアントごとの絞り」が効いていなかった。**
         ///
-        /// > **`Const.ScopeClientRegistration` だけは、倒し方が逆である** —
-        /// > **ここに明記していなければ出さない**（`Helper.FilterSupportedScopes`）。
+        /// > **`Const.ScopeClientRegistration` と `OAuth2AndOIDCConst.Scope_Auth` だけは、倒し方が逆である** —
+        /// > **ここに明記していなければ出さない**（`Helper.FilterSupportedScopes`。#294）。
         /// </remarks>
         [Display(Name = "Scopes", Description = "ScopesDescription",
             ResourceType = typeof(Resources.CommonViewModels))]

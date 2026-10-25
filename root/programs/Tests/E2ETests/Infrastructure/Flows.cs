@@ -54,6 +54,7 @@
 //*  2026/10/19  玄人 幸道         private_key_jwtのTestClient_24を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
+//*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -314,6 +315,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>同意の取り消しを測るクライアント（#272 の段階 2）</summary>
         public const string TestClient_20 = "TestClient_20";
 
+        /// <summary>登録の scope に auth を明記したクライアント（#294）</summary>
+        /// <remarks>**`auth` で同意画面を飛ばせるのは、登録に明記したクライアントだけ**である。</remarks>
+        public const string TestClient_29 = "TestClient_29";
+
         /// <summary>SAML2 を測るクライアント（#275）</summary>
         /// <remarks>
         /// **`jwk_rsa_publickey` を持たない**（写す元が TestClient3）ので、
@@ -391,6 +396,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_18, "e2e0tc18000000000000000000000000" },
                 { KnownClients.TestClient_19, "e2e0tc19000000000000000000000000" },
                 { KnownClients.TestClient_20, "e2e0tc20000000000000000000000000" },
+                { KnownClients.TestClient_29, "e2e0tc29000000000000000000000000" },
                 { KnownClients.TestClient_21, "e2e0sa21000000000000000000000000" },
                 { KnownClients.TestClient_22, "e2e0sa22000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
@@ -935,6 +941,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient_19)
             {
                 // **同意を記録しないクライアント**（#272 の段階 2）。写すだけ。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_29)
+            {
+                // **登録の scope に `auth` を明記した**（#294）。client_secret は写す元のまま。
                 sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_18)

@@ -41,6 +41,7 @@
 //*  2026/10/24  玄人 幸道         受け付ける response_types を CmnEndpoints.SupportedResponseTypes に寄せた（#314）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
+//*  2026/10/25  玄人 幸道         auth も動的登録で付けさせない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -457,7 +458,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**`client_registration` だけは、明記しても断る** |
+        /// | **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**`client_registration` と `auth` だけは、明記しても断る** |
         /// | **`redirect_uris` は省けない** | OIDC DCR 1.0 §2 で必須。**うっかり全消しにはならない** |
         /// | **`grant_types` / `response_types` を省くと狭まる** | **RFC 7591 §2 の既定**（`authorization_code` / `code`）が書かれる |
         /// </remarks>
@@ -1209,10 +1210,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 foreach (string scope in scopes)
                 {
                     //  **自分と同じ強さの scope を、自分で配らせない**（#307 の段階 1）。
-                    //    **`client_registration` は「クライアント登録を作れる」権限**であり、
+                    //  **`client_registration` は「クライアント登録を作れる」権限**であり、
                     //    **動的登録で付けられるようにすると、権限を際限なく増やせる。**
                     //    **配るのは、管理画面か構成ファイルからだけ**にする。
-                    if (scope == Const.ScopeClientRegistration)
+                    //  **`auth`（同意画面を出さない）も同じ**（#294）。
+                    //    **自分で登録できると、同意画面を飛ばすかをクライアントが決めることになる。**
+                    if (scope == Const.ScopeClientRegistration
+                        || scope == OAuth2AndOIDCConst.Scope_Auth)
                     {
                         description = string.Format(
                             "The scope ({0}) cannot be granted by the dynamic client registration.",

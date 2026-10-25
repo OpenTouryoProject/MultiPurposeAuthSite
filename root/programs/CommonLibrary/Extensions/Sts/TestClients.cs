@@ -42,6 +42,7 @@
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
+//*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -399,6 +400,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **登録の scope に `auth` を明記したクライアント**（#294）。
+                //   **`auth` で同意画面を飛ばせるのは、登録に明記したクライアントだけ**である。
+                //   **明記していない側は `TestClient_19` で測る**（`RT-294.1`）。
+                ClientName = "TestClient_29", ClientId = "e2e0tc29000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.scope, OAuth2AndOIDCConst.Scope_Openid + " " + OAuth2AndOIDCConst.Scope_Auth }
+                }
+            },
+            new Entry()
+            {
                 // **登録で require_pkce を立てたクライアント**（#270）。
                 //   **構成ファイル側の TestClient6 と対をなす。**
                 //   `require_pkce` は**唯一の bool の登録項目**で、
@@ -620,6 +633,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case Const.ClientWebOrigins:
                     model.WebOrigins = value;
+                    break;
+
+                case OAuth2AndOIDCConst.scope:
+                    model.Scopes = value;
                     break;
 
                 case Const.ClientRequirePkce:

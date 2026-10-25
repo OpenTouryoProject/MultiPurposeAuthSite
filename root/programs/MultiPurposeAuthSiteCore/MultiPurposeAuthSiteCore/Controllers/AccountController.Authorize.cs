@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/25  玄人 幸道         auth で同意画面を飛ばすのを、登録に明記したクライアントだけにした（#294）
 //**********************************************************************************
 
 /*
@@ -486,14 +487,19 @@ namespace MultiPurposeAuthSite.Controllers
                         ViewBag.HasClaims = (claims != null);
 
                         // 認証の場合、余計なscopeをfilterする。
-                        bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
+                        //   **`auth` は、登録に明記したクライアントの要求だけを数える**（#294）。
+                        //   Keycloak の Consent Required のオフや、Auth0 の first-party の同意を飛ばすと同じ考え方。
+                        //   **要求に付けただけでは、同意画面を飛ばせない**（飛ばすかは、登録を管理する人が決める）。
+                        //   **scope は case-sensitive**（RFC 6749 §3.3）なので、小文字化しない。
+                        bool isAuth = Sts.Helper.FilterSupportedScopes(scopes, client_id)
+                            .Contains(OAuth2AndOIDCConst.Scope_Auth);
 
                         if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
                         #region 同意の判定
                         //   | 状況 | ここでの扱い |
                         //   |---|---|
-                        //   | scope に `auth`（独自の認証用） | **従来どおり飛ばす**（同意を求める対象でない） |
+                        //   | scope に `auth`（独自の認証用。**登録に明記したクライアントだけ**） | **飛ばす**（同意を求める対象でない） |
                         //   | 要求 scope が記録の部分集合 | **飛ばす** |
                         //   | `prompt=consent` | **記録が在っても出す**（§3.1.2.1） |
                         //   | `prompt=select_account` | **出す**（画面に「別のアカウントでログイン」が在る） |

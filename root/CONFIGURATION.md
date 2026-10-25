@@ -481,6 +481,21 @@ CreateJwkSetJson.exe
 要求を拒否（`invalid_scope`）するのではなく、許されないスコープを外して発行する。
 外したときは、トークン応答の `scope` に実際に発行したものを返す（RFC 6749 §5.1）。
 
+**次の 2 つだけは、倒し方が逆である** — **項目が無ければ出さない。** **登録に明記したクライアントにだけ出す。**
+
+| scope | 働き | 逆にする理由 |
+|---|---|---|
+| `client_registration` | クライアント登録の管理 API を叩ける（#307 の段階 1） | **登録を作れる強い権限**なので、既定で持たせない |
+| `auth` | **同意画面を出さずに code を返す**（認証だけ。発行は `auth` と `openid` に絞る）（#294） | **同意を求めるかを、クライアントに決めさせない**（決めるのは登録を管理する人。Keycloak の「Consent Required」と同じ考え方） |
+
+> **どちらも、動的登録では付けられない**（`invalid_client_metadata`）。
+> **配るのは、構成ファイルか管理画面（`/Manage/AddSaml2OAuth2Data`）からだけ。**
+
+> **`auth` は、以前は要求に付けるだけで効いた**（#294 で改めた）。
+> **`auth` で同意画面を飛ばしていたクライアントは、登録の `scope` に `auth` を足すこと。**
+> 足さなければ、**初回に同意画面が出る**（同意すれば、次からは同意の記録で飛ばす。#272）。
+> **`prompt=none` だけで動くクライアントは、初回が `consent_required` になる。**
+
 > `CreateClientsIdentity` はこの項目を出力しない。必要なクライアントにだけ、手で足す。
 
 ### `post_logout_redirect_uri` — ログアウト後の戻り先（任意。#232）
@@ -1293,6 +1308,7 @@ grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 > **管理画面（`/Manage/AddSaml2OAuth2Data` の `scope`）からだけ。**
 > **動的登録で `client_registration` を登録しようとすると `invalid_client_metadata` で断る**
 > （**自分と同じ強さの権限を、自分で配らせない**）。
+> **`auth`（同意画面を出さない）も同じく断る**（#294。**同意を求めるかを、自分で決めさせない**）。
 
 #### 1 利用者 n クライアント（#307 の段階 5-a）
 
@@ -1459,7 +1475,7 @@ Content-Type: application/json
 | **`redirect_uris`**（必須） | **絶対 URI で、フラグメント禁止**（RFC 6749 §3.1.2）。**ワイルドカードは受けない。** **`code` を使う登録は `redirect_uri_code`、`token` / `id_token` を使う登録は `redirect_uri_token` の列に入る**（両方使うなら両方に） |
 | **`grant_types`** | **既定は `authorization_code`**（§2）。**この配備が広告しているものだけ** |
 | **`response_types`** | **既定は `code`**。**`code` を使うなら `authorization_code`、`token` / `id_token` を使うなら `implicit` が要る**（§2 の対応） |
-| `scope` | **`scopes_supported` の範囲内**。**`client_registration` は断る** |
+| `scope` | **`scopes_supported` の範囲内**。**`client_registration` と `auth` は断る** |
 | `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
 | `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
 | **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
@@ -1709,7 +1725,7 @@ curl -X DELETE "https://localhost:44300/MultiPurposeAuthSite/register/<client_id
 
 | | |
 |---|---|
-| **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**省略は「狭める」ではなく「広がる」**（この配備が支える `scope` 全部になる）。**`client_registration` だけは、明記しても断る** |
+| **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**省略は「狭める」ではなく「広がる」**（この配備が支える `scope` 全部になる）。**`client_registration` と `auth` だけは、明記しても断る**（#294） |
 | **`redirect_uris` は省けない** | **OIDC DCR 1.0 §2 で REQUIRED**。省いたら `400` なので、**うっかり全消しは起こらない** |
 | **`grant_types` / `response_types` を省くと、狭まる** | **RFC 7591 §2 の既定**（`authorization_code` / `code`）**が書かれる。** `refresh_token` や `implicit` は、**書かなければ消える** |
 
