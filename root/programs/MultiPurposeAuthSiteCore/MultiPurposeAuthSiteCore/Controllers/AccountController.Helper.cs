@@ -16,9 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
-//*  2026/10/27  玄人 幸道         CreateTestUsers の呼び出しを、CreateData の末尾の 1 か所にまとめた（#294）
-//*  2026/10/27  玄人 幸道         テスト利用者とクライアントの作成を起動ごとに 1 回にした（毎回は WebAuthn の資格情報だけ。#294）
-//*  2026/10/27  玄人 幸道         テスト利用者は、接尾辞の super_tanaka が居るかで初期化済みを判定する（#294）
+//*  2026/10/27  玄人 幸道         テスト用の種まきを整理（利用者は接尾辞の super_tanaka で判定、クライアントは起動ごとに 1 回、WebAuthn は毎回。#294）
 //**********************************************************************************
 
 /*
@@ -142,18 +140,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// <remarks>メモリ ストアはプロセスと一緒に消えるので、static で覚えておける。</remarks>
         private static volatile bool HasInitializedMemoryStore = false;
 
-        /// <summary>このプロセスが E2E 専用のクライアント登録を済ませたか（起動毎に 1 回。#294）</summary>
+        /// <summary>このプロセスが E2E 専用のクライアント登録を済ませたか（起動ごとに 1 回。#294）</summary>
         /// <remarks>
         /// **メモリと DB の両方で使う。** 登録は「無ければ作る」なので、
         /// このフラグは**ストアに聞きに行くのを、プロセスごとに 1 回にする**ためのもの。
         /// </remarks>
         private static volatile bool HasCreatedTestClients = false;
 
-        /// <summary>
-        /// manager.PasswordHasher = new CustomPasswordHasher();
-        /// より後に動く処理の実装位置が不明だったので、巡り巡って
-        /// MvcApplication(Global.asax).Application_Startからコチラに移動してきた。
-        /// </summary>
         /// <summary>
         /// 2 人目のテスト利用者に仕込む、標準クレームのサンプル（#261）。
         /// </summary>
@@ -284,7 +277,8 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 // **既に居る利用者にも、空なら入れる**（#261）。
-                //   **#260 より前に作られた DB を、作り直させないため。**
+                //   **ここに来るのは、super_tanaka を消して tanaka だけが残っている場合だけ**
+                //   （両方居れば、IsTestUsersInitialized で先に戻る）。
                 //   **空のときだけ**なので、利用者が自分で入れた値は上書きしない。
                 ApplicationUser user = await this.UserManager.FindByNameAsync(normalName);
 
@@ -317,10 +311,14 @@ namespace MultiPurposeAuthSite.Controllers
 
             #region E2E 専用のクライアント登録
 
-            // E2E だけが使うクライアント登録を、構成ファイルの既存のクライアントを写して作り、user store に無ければ入れる
+            // E2E だけが使うクライアント登録を、構成ファイルの既存のクライアントを写して作り、user store に無ければ入れる。
+            //   **user store に寄せてある**ので、**件数に上限が無い**
+            //   （環境変数で差し込むと、net48 版は一覧ごと 1 本になり、件数に上限が出る。#262 / #264）。
+            //   **接尾辞は付けない。** E2E が client_name と固定の client_id で引くため
+            //   （Sts.TestClients の表と、E2E の KnownClients を同じ値で揃える）。
             foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
             {
-                // 入れ物に入れる
+                // 写す元（構成ファイル）から、登録を作る。
                 ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data = Sts.TestClients.CreateSaml2OAuth2Data(entry);
 
                 if (saml2OAuth2Data == null)
@@ -329,13 +327,15 @@ namespace MultiPurposeAuthSite.Controllers
                     continue;
                 }
 
-                // owner属性がない場合、ownerが無いレコードが出来るが、このようなレコードは、ココでしか作成されない。
-                // （E2Eテストのために作成されたレコード。E2Eテストでは、ownerが無いレコードを作成することがある）
+                // **所有者（OwnerUserId）は持たせない**（#307）。
+                //   構成ファイルの owner 無しのクライアントと同じく、**配備全体のもの**である。
+                //   **所有者の無い登録を作るのは、ここだけ**（管理画面と DCR は、必ず所有者を書く）。
 
-                // DBストアの場合初期化済みか？
+                // **この client_id の登録が無ければ入れる**（在れば触らない）。
+                //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
+                //   **書き込みを 1 回に閉じる。**
                 if (Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) == null)
                 {
-                    // 初期化済みで無いので登録
                     Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
                 }
             }
@@ -397,12 +397,17 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// テストデータの作成、Login か Register の画面を開くたびに走る。
-        /// - テストデータは、初期化済みでなければ作る（HasInitializedMemoryStore、IsDBMSInitialized）。
+        /// - ロールと管理者（初期データ）は、ストアが初期化済みでなければ作る（HasInitializedMemoryStore、IsDBMSInitialized）。
         /// - テストユーザは、この接尾辞で初期化済みでなければ作る（IsTestUsersInitialized）。
         /// - E2E 専用のクライアントは、起動ごとに 1 回だけ作る。
         /// - E2E が途中で消すユーザのWebAuthn資格情報は、次のテストが始まる前に毎回戻す。
         /// </summary>
         /// <returns>Task</returns>
+        /// <remarks>
+        /// manager.PasswordHasher = new CustomPasswordHasher();
+        /// より後に動く処理の実装位置が不明だったので、巡り巡って
+        /// MvcApplication(Global.asax).Application_Startからコチラに移動してきた。
+        /// </remarks>
         private async Task CreateData()
         {
             // ロックを取得する
@@ -475,7 +480,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (Config.IsDebug
                     && !string.IsNullOrWhiteSpace(Config.TestUserPWD))
                 {
-                    // 接尾辞の利用者を初期化（サイトの接尾辞毎、1 回 だけ実行）
+                    // #260：この接尾辞のテスト利用者を、初期化済みでなければ作る。
                     await this.CreateTestUsers();
 
                     // #264：E2E 専用のクライアントを、起動ごとに 1 回「無ければ作る」。
