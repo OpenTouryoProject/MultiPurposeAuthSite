@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/26  玄人 幸道         name / email のクレームが無いとき、例外で落ちないようにした（#294）
+//*  2026/10/27  玄人 幸道         外部ログインの失敗の出口ごとに、理由を OPERATION に記録する（#294）
 //**********************************************************************************
 
 /*
@@ -29,6 +30,8 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
+using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
@@ -39,6 +42,7 @@ using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -161,6 +165,15 @@ namespace MultiPurposeAuthSite.Controllers
                                                  loginInfo: externalLoginInfo,
                                                  isPersistent: false); // 外部ログインの Cookie 永続化は常に false.
 
+                            // **結果を見ていない**ので、成功しなかったら記録だけ残す（流れは変えない）。
+                            //   LockedOut / RequiresVerification など。
+                            if (signInStatus != SignInStatus.Success)
+                            {
+                                Logging.MyOperationTrace(string.Format(
+                                    Resources.Diagnostics.LogExternalLoginSignInFailed,
+                                    externalLoginInfo.Login.LoginProvider, user.Id, signInStatus.ToString()));
+                            }
+
                             // セッションの初期化
                             this.InitSessionAfterlogin();
 
@@ -208,6 +221,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 {
                                     result = await UserManager.AddClaimAsync(user.Id, emailClaim);
                                     result = await UserManager.AddClaimAsync(user.Id, nameClaim);
+                                    // 保存するクレームを足すなら、ここ
                                     // ・・・
                                     // ・・・
                                     // ・・・
@@ -238,6 +252,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 else
                                 {
                                     // 外部ログインの追加に失敗した場合
+                                    this.LogExternalLoginUserFailed(externalLoginInfo, "link to existing user", result);
 
                                     // 結果のエラー情報を追加
                                     this.AddErrors(result);
@@ -283,6 +298,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     {
                                         result = await UserManager.AddClaimAsync(user.Id, emailClaim);
                                         result = await UserManager.AddClaimAsync(user.Id, nameClaim);
+                                        // 保存するクレームを足すなら、ここ
                                         // ・・・
                                         // ・・・
                                         // ・・・
@@ -315,6 +331,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     else
                                     {
                                         // 外部ログインの追加に失敗した場合
+                                        this.LogExternalLoginUserFailed(externalLoginInfo, "link to new user", result);
 
                                         // 結果のエラー情報を追加
                                         this.AddErrors(result);
@@ -323,18 +340,86 @@ namespace MultiPurposeAuthSite.Controllers
                                 else
                                 {
                                     // ユーザの新規作成が失敗した場合
+                                    this.LogExternalLoginUserFailed(externalLoginInfo, "create user", result);
 
                                     // 結果のエラー情報を追加
                                     this.AddErrors(result);
                                 } // else処理済
                             } // else処理済
                         } // else処理済
-                    } // クレーム情報（e-mail, name情報）を取得できなかった。
-                } // クレーム情報（ID情報）を取得できなかった。
-            } // ログイン情報を取得できなかった。
+                    }
+                    else
+                    {
+                        // クレーム情報（e-mail, name情報）を取得できなかった。
+                        this.LogExternalLoginClaimsMissing(externalLoginInfo,
+                            string.IsNullOrWhiteSpace(email), string.IsNullOrWhiteSpace(name));
+                    }
+                }
+                else
+                {
+                    // クレーム情報（ID情報）を取得できなかった。
+                    this.LogExternalLoginClaimsMissing(externalLoginInfo, false, false);
+                }
+            }
+            else
+            {
+                // ログイン情報を取得できなかった。
+                // **失敗の出口ごとに、理由を記録する**（#294）。
+                //   **以前は、どの出口も画面を返すだけで、何が起きたのか残らなかった。**
+                // **外部ログインの Cookie（.AspNet.ExternalCookie）が届いていたか**も残す。
+                //   届いていなければ、プロバイダからの戻りで Cookie が送られなかった（SameSite など）。
+                //   届いていて読めなければ、Cookie の中身（machineKey など）を疑う。
+                bool hasExternalCookie = Request.Cookies.AllKeys.Any(
+                    x => x != null && x.EndsWith(DefaultAuthenticationTypes.ExternalCookie));
+
+                Logging.MyOperationTrace(string.Format(
+                    Resources.Diagnostics.LogExternalLoginInfoMissing,
+                    hasExternalCookie ? "present" : "absent"));
+            }
 
             // ログイン情報を受け取れなかった場合や、その他の問題が在った場合。
             return View("ExternalLoginFailure");
+        }
+
+        /// <summary>必要なクレームが揃わなかったことを記録する（#294）</summary>
+        /// <param name="externalLoginInfo">ExternalLoginInfo</param>
+        /// <param name="noEmail">email が無い</param>
+        /// <param name="noName">name が無い</param>
+        /// <remarks>
+        /// **無かったクレームの種類だけを書く。** 値は個人情報なので書かない。
+        /// noEmail と noName が両方 false なら、ID情報（NameIdentifier）が無かったことを表す。
+        /// </remarks>
+        private void LogExternalLoginClaimsMissing(
+            ExternalLoginInfo externalLoginInfo, bool noEmail, bool noName)
+        {
+            List<string> missing = new List<string>();
+
+            if (!noEmail && !noName) missing.Add(nameof(ClaimTypes.NameIdentifier));
+            if (noEmail) missing.Add(nameof(ClaimTypes.Email));
+            if (noName) missing.Add(nameof(ClaimTypes.Name));
+
+            Logging.MyOperationTrace(string.Format(
+                Resources.Diagnostics.LogExternalLoginClaimsMissing,
+                externalLoginInfo.Login.LoginProvider, string.Join(",", missing)));
+        }
+
+        /// <summary>利用者を作れなかった・結べなかったことを記録する（#294）</summary>
+        /// <param name="externalLoginInfo">ExternalLoginInfo</param>
+        /// <param name="step">どの段階で失敗したか</param>
+        /// <param name="result">IdentityResult</param>
+        /// <remarks>
+        /// **エラーの件数だけを書く。**
+        /// ASP.NET Identity 2 の IdentityResult には Code が無く、
+        /// Errors（説明文）には利用者名やメアドが入るので書かない。
+        /// どの段階で失敗したかが分かれば、DB と突き合わせて調べられる。
+        /// </remarks>
+        private void LogExternalLoginUserFailed(
+            ExternalLoginInfo externalLoginInfo, string step, IdentityResult result)
+        {
+            Logging.MyOperationTrace(string.Format(
+                Resources.Diagnostics.LogExternalLoginUserFailed,
+                externalLoginInfo.Login.LoginProvider, step,
+                result.Errors.Count() + " error(s)"));
         }
     }
 }

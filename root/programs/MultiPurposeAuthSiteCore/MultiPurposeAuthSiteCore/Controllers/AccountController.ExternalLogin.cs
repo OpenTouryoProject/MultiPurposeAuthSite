@@ -240,6 +240,7 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 idResult = await UserManager.AddClaimAsync(user, emailClaim);
                                 idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                // 保存するクレームを足すなら、ここ
                                 // ・・・
                                 // ・・・
                                 // ・・・
@@ -308,6 +309,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 {
                                     idResult = await UserManager.AddClaimAsync(user, emailClaim);
                                     idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                    // 保存するクレームを足すなら、ここ
                                     // ・・・
                                     // ・・・
                                     // ・・・
