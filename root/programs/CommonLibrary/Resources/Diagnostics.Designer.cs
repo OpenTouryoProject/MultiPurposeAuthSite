@@ -491,5 +491,59 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("LogWebAuthnRegistrationFailed", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   The external login provider callback failed. (provider: {0}, {1}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogExternalLoginRemoteFailure {
+            get {
+                return ResourceManager.GetString("LogExternalLoginRemoteFailure", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The external login provider returned an error. ({0}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogExternalLoginRemoteError {
+            get {
+                return ResourceManager.GetString("LogExternalLoginRemoteError", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The external login information could not be read. (external cookie: {0}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogExternalLoginInfoMissing {
+            get {
+                return ResourceManager.GetString("LogExternalLoginInfoMissing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The external login did not provide the required claims. (provider: {0}, missing: {1}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogExternalLoginClaimsMissing {
+            get {
+                return ResourceManager.GetString("LogExternalLoginClaimsMissing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The sign-in with the existing external login did not succeed. (provider: {0}, user: {1}, result: {2}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogExternalLoginSignInFailed {
+            get {
+                return ResourceManager.GetString("LogExternalLoginSignInFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The user for the external login could not be created or linked. (provider: {0}, step: {1}, errors: {2}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogExternalLoginUserFailed {
+            get {
+                return ResourceManager.GetString("LogExternalLoginUserFailed", resourceCulture);
+            }
+        }
     }
 }

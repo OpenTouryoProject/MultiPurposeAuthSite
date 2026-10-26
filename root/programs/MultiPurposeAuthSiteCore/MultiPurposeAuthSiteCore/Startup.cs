@@ -40,9 +40,12 @@
 //*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
 //*  2026/10/21  玄人 幸道         起動のときに jwks_uri を温める（#309 の段階 2）
+//*  2026/10/26  玄人 幸道         外部ログインの戻りの失敗を OPERATION に記録する（#294）
+//*  2026/10/27  玄人 幸道         利用者名の文字の制限を AllowOnlyAlphanumericUserNames に合わせた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
@@ -51,6 +54,7 @@ using Sts = MultiPurposeAuthSite.Extensions.Sts;   // RateLimitProvider（#305 �
 
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Net;   // IPAddress（#279）
 
 using Microsoft.AspNetCore.Builder;
@@ -79,6 +83,7 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Util;
 using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite
 {
@@ -819,7 +824,16 @@ namespace MultiPurposeAuthSite
                 {
                     // ユーザー
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#user
-                    //idOptions.SignIn.AllowedUserNameCharacters = false;
+                    // **利用者名の文字の制限を、net48 の AllowOnlyAlphanumericUserNames に合わせる**（#294）。
+                    //   以前は設定を読まず、常に枠組みの既定（英数字と -._@+）だった。
+                    //   **空白や日本語を含む上流の name で、外部ログインの利用者を作れなかった。**
+                    //   false なら制限しない（空にすると、UserValidator は文字を調べない）。
+                    //   true なら、枠組みの既定のまま。
+                    if (!Config.AllowOnlyAlphanumericUserNames)
+                    {
+                        idOptions.User.AllowedUserNameCharacters = "";
+                    }
+
                     // **メアドは常に一意**（#151 の段階 3）。
                     //   **利用者名とメアドの両方でサインインできる**ので、
                     //   **メアドが一意でないと FindByEmailAsync が成り立たない。**
@@ -917,12 +931,18 @@ namespace MultiPurposeAuthSite
             #endregion
 
             #region 外部ログイン
+
+            // **プロバイダからの戻り（/signin-*）での失敗を記録する**（#294）。
+            //   Correlation failed（相関 Cookie が届かない）や、code の交換の失敗はここで起きる。
+            //   **Controller（ExternalLoginCallback）までは届かない**ので、そこのログには出ない。
+            //   **記録するだけで、扱いは枠組みの既定のまま**（HandleResponse を呼ばない）。
             if (Config.MicrosoftAccountAuthentication)
             {
                 authenticationBuilder.AddMicrosoftAccount(options =>
                 {
                     options.ClientId = Config.MicrosoftAccountAuthenticationClientId;
                     options.ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret;
+                    options.Events.OnRemoteFailure = Startup.LogExternalLoginRemoteFailure;
                 });
             }
             if (Config.GoogleAuthentication)
@@ -931,6 +951,7 @@ namespace MultiPurposeAuthSite
                 {
                     options.ClientId = Config.GoogleAuthenticationClientId;
                     options.ClientSecret = Config.GoogleAuthenticationClientSecret;
+                    options.Events.OnRemoteFailure = Startup.LogExternalLoginRemoteFailure;
 
                     // **email_verified をクレームに写す**（#140 の段階 1）。
                     //   Google は userinfo で email_verified を返すが、
@@ -1016,5 +1037,19 @@ namespace MultiPurposeAuthSite
         }
 
         #endregion
+
+        /// <summary>外部ログインの戻り（/signin-*）での失敗を記録する（#294）</summary>
+        /// <param name="context">RemoteFailureContext</param>
+        /// <returns>Task</returns>
+        /// <remarks>**記録するだけ。** HandleResponse を呼ばないので、扱いは枠組みの既定のまま。</remarks>
+        private static Task LogExternalLoginRemoteFailure(RemoteFailureContext context)
+        {
+            Logging.MyOperationTrace(string.Format(
+                Resources.Diagnostics.LogExternalLoginRemoteFailure,
+                context.Scheme.Name,
+                LogSanitizer.Sanitize(context.Failure?.Message ?? "", Const.LogDetailMaxLength)));
+
+            return Task.CompletedTask;
+        }
     }
 }

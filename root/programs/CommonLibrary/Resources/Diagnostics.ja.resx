@@ -261,4 +261,22 @@
   <data name="LogWebAuthnRegistrationFailed" xml:space="preserve">
     <value>WebAuthn の登録に失敗した。（{0}）</value>
   </data>
+  <data name="LogExternalLoginRemoteFailure" xml:space="preserve">
+    <value>外部ログインのプロバイダからの戻りを処理できなかった。（provider: {0}, {1}）</value>
+  </data>
+  <data name="LogExternalLoginRemoteError" xml:space="preserve">
+    <value>外部ログインのプロバイダがエラーを返した。（{0}）</value>
+  </data>
+  <data name="LogExternalLoginInfoMissing" xml:space="preserve">
+    <value>外部ログインの情報を読めなかった。（外部ログインの Cookie: {0}）</value>
+  </data>
+  <data name="LogExternalLoginClaimsMissing" xml:space="preserve">
+    <value>外部ログインで必要なクレームが揃わなかった。（provider: {0}, 無いもの: {1}）</value>
+  </data>
+  <data name="LogExternalLoginSignInFailed" xml:space="preserve">
+    <value>既存の外部ログインでのサインインが成功しなかった。（provider: {0}, user: {1}, result: {2}）</value>
+  </data>
+  <data name="LogExternalLoginUserFailed" xml:space="preserve">
+    <value>外部ログインの利用者を作れなかった、または結べなかった。（provider: {0}, step: {1}, errors: {2}）</value>
+  </data>
 </root>

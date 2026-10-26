@@ -197,7 +197,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Grant
+        #region GrantでScopeを記録
 
         /// <summary>
         /// 同意を記録する（#272 の段階 2）
