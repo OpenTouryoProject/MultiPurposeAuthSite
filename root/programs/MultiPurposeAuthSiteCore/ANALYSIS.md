@@ -344,12 +344,15 @@ switch (Config.SessionStoreType)
 ```
 AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本に絞る）
    ├ STS 専用モードなら何もしない
-   ├ Memory Provider …… static フラグ HasCreated で 1 回だけ
+   ├ Memory Provider …… static フラグ HasInitializedMemoryStore で 1 回だけ
    ├ DBMS Provider  …… DataAccess.IsDBMSInitialized()（[Roles] の件数）で判定
    ├ ロール作成: SystemAdmin / Admin / User
    ├ 管理者作成: Config.AdministratorUID / AdministratorPWD → 3 ロール全付与
-   └ Config.IsDebug かつ TestUserPWD が非空なら
-        super_tanaka@gmail.com（User+Admin） / tanaka@gmail.com（User）を作成
+   └ Config.IsDebug かつ TestUserPWD が非空なら（ストアが初期化済みでも通る）
+        ├ テスト利用者: super_tanaka / tanaka（＋接尾辞）を作成
+        │    super_tanaka ＋ 接尾辞が居れば初期化済み（IsTestUsersInitialized）
+        ├ E2E 専用クライアント: 起動ごとに 1 回、無ければ作る（HasCreatedTestClients）
+        └ WebAuthn: webauthn_tanaka の資格情報を毎回まき直す（E2E が途中で消す）
 ```
 
 - **`IsDebug` を true のまま公開すると、テスト ユーザが作られる。**

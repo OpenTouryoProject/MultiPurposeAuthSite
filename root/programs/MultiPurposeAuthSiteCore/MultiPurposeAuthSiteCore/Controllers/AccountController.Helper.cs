@@ -16,6 +16,9 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/27  玄人 幸道         CreateTestUsers の呼び出しを、CreateData の末尾の 1 か所にまとめた（#294）
+//*  2026/10/27  玄人 幸道         テスト利用者とクライアントの作成を起動ごとに 1 回にした（毎回は WebAuthn の資格情報だけ。#294）
+//*  2026/10/27  玄人 幸道         テスト利用者は、接尾辞の super_tanaka が居るかで初期化済みを判定する（#294）
 //**********************************************************************************
 
 /*
@@ -45,11 +48,9 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の メール送信・初期化**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Helper
-
         #region メール送信処理
 
-        #region メアド検証、パスワード リセット
+        #region メアド検証、PWDリセット
 
         /// <summary>
         /// メアド検証で使用するメール送信処理。
@@ -130,13 +131,23 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region ユーザとロールの初期化（テストコード）
+        #region ユーザとロールの初期化（テスト）
+
+        #region メンバ変数
 
         /// <summary>初期化処理のクリティカルセクション化</summary>
         private static SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1, 1);
 
-        /// <summary>テストコード</summary>
-        private static volatile bool HasCreated = false;
+        /// <summary>メモリ ストアを初期化済みか（DB ストアは IsDBMSInitialized で DB に聞く）</summary>
+        /// <remarks>メモリ ストアはプロセスと一緒に消えるので、static で覚えておける。</remarks>
+        private static volatile bool HasInitializedMemoryStore = false;
+
+        /// <summary>このプロセスが E2E 専用のクライアント登録を済ませたか（起動毎に 1 回。#294）</summary>
+        /// <remarks>
+        /// **メモリと DB の両方で使う。** 登録は「無ければ作る」なので、
+        /// このフラグは**ストアに聞きに行くのを、プロセスごとに 1 回にする**ためのもの。
+        /// </remarks>
+        private static volatile bool HasCreatedTestClients = false;
 
         /// <summary>
         /// manager.PasswordHasher = new CustomPasswordHasher();
@@ -186,8 +197,31 @@ namespace MultiPurposeAuthSite.Controllers
             + "}"
             + "}";
 
+        #endregion
+
+        #region メソッド
+        
         /// <summary>
-        /// テスト利用者を作る（IsDebug ＋ TestUserPWD が在るときだけ）。
+        /// この接尾辞のテスト利用者を、初期化済みか（#294）
+        /// </summary>
+        /// <returns>初期化済みなら true</returns>
+        /// <remarks>
+        /// **最初に作る利用者（super_tanaka ＋ 接尾辞）が居れば、初期化済みとみなす。**
+        /// IsDBMSInitialized が、最初に入れる [Roles] の件数で判定するのと同じ考え方。
+        ///
+        /// - **ストアに聞く**ので、メモリと DB の両方で使え、起動し直しても答えが変わらない。
+        /// - **接尾辞を変えた・DB を共有する後発のサイト**では居ないので、作る（#260）。
+        /// - **super_tanaka 自身を消すと、その接尾辞の利用者は全部作り直す**
+        ///   （ロールを全部消すと、IsDBMSInitialized が初期化し直すのと同じ）。
+        /// </remarks>
+        private async Task<bool> IsTestUsersInitialized()
+        {
+            return await this.UserManager.FindByNameAsync(
+                "super_tanaka" + Config.TestUserSuffix) != null;
+        }
+
+        /// <summary>
+        /// テスト利用者を作る（呼ぶ側が IsDebug ＋ TestUserPWD を確かめる）。
         /// </summary>
         /// <returns>Task</returns>
         /// <remarks>
@@ -197,22 +231,25 @@ namespace MultiPurposeAuthSite.Controllers
         /// **DB ストアでは 1 つの DB を共有する**ため、分けないと
         /// **同じ利用者の属性（`DeviceToken` / `UnstructuredData`）を書き換え合う。**
         ///
-        /// **居なければ作る**（**初期化済みの DB でも呼ばれる**）。
-        /// **接尾辞を変えても、DB を作り直さなくてよい**ようにするため。
+        /// **この接尾辞の利用者が初期化済みなら、何もしない**（IsTestUsersInitialized。#294）。
+        /// **接尾辞を変えても、DB を作り直さなくてよい**（#260）。
+        /// **デバッグで消したテスト利用者を、起動し直しても戻さない**（#294）。
         /// </remarks>
         private async Task CreateTestUsers()
         {
-            string password = Config.TestUserPWD;
-
-            if (!Config.IsDebug
-                || string.IsNullOrWhiteSpace(password))
+            if (await this.IsTestUsersInitialized())
             {
+                // 接尾辞のテスト利用者を、初期化済み
                 return;
             }
 
+            // 接尾辞のテスト利用者を、初期化する。
+            string password = Config.TestUserPWD;
             string suffix = Config.TestUserSuffix;
             string superName = "super_tanaka" + suffix;
             string normalName = "tanaka" + suffix;
+
+            #region ユーザを作成
 
             // 管理者ユーザを作成
             if (await this.UserManager.FindByNameAsync(superName) == null)
@@ -258,6 +295,69 @@ namespace MultiPurposeAuthSite.Controllers
                     await this.UserManager.UpdateAsync(user);
                 }
             }
+            
+            #endregion
+        }
+
+        /// <summary>
+        /// E2E 専用のクライアントを登録する（呼ぶ側が IsDebug ＋ TestUserPWD を確かめる）。
+        /// </summary>
+        /// <remarks>
+        /// **起動ごとに 1 回だけ通す**（HasCreatedTestClients。#294）。
+        /// **IsTestUsersInitialized の判定には入れない。** 接尾辞が無く 2 つのサイトで共有し、
+        /// **TestClients に後から足したクライアントを、既存の DB に入れる役目もある**ため。
+        /// </remarks>
+        private void CreateTestClients()
+        {
+            if (AccountController.HasCreatedTestClients)
+            {
+                // 起動ごとの 1 回が済んでいる。
+                return;
+            }
+
+            #region E2E 専用のクライアント登録
+
+            // E2E だけが使うクライアント登録を、構成ファイルの既存のクライアントを写して作り、user store に無ければ入れる
+            foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
+            {
+                // 入れ物に入れる
+                ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data = Sts.TestClients.CreateSaml2OAuth2Data(entry);
+
+                if (saml2OAuth2Data == null)
+                {
+                    // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
+                    continue;
+                }
+
+                // owner属性がない場合、ownerが無いレコードが出来るが、このようなレコードは、ココでしか作成されない。
+                // （E2Eテストのために作成されたレコード。E2Eテストでは、ownerが無いレコードを作成することがある）
+
+                // DBストアの場合初期化済みか？
+                if (Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) == null)
+                {
+                    // 初期化済みで無いので登録
+                    Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
+                }
+            }
+
+            #endregion
+
+            // **最後まで通ってから立てる**（途中で例外なら、次の呼び出しでやり直す）。
+            AccountController.HasCreatedTestClients = true;
+        }
+
+        /// <summary>
+        /// WebAuthn の資格情報を持つテスト利用者を、まき直す（呼ぶ側が IsDebug ＋ TestUserPWD を確かめる）。
+        /// </summary>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **毎回通す**（#277）。**E2E が途中で資格情報を消す**ので、次のテストの前に戻す。
+        /// **触るのは専用の利用者（webauthn_tanaka）だけ**なので、
+        /// デバッグで他のテスト利用者を触っても戻されない（#294）。
+        /// </remarks>
+        private async Task SeedWebAuthnTestUser()
+        {
+            string password = Config.TestUserPWD;
 
             #region WebAuthn の資格情報（#277）
 
@@ -272,7 +372,7 @@ namespace MultiPurposeAuthSite.Controllers
             //    **何度通っても増えない**（`TestCredentials` が、消えた分だけ作り直す）。
             if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
             {
-                string webAuthnName = "webauthn_tanaka" + suffix;
+                string webAuthnName = "webauthn_tanaka" + Config.TestUserSuffix;
 
                 if (await this.UserManager.FindByNameAsync(webAuthnName) == null)
                 {
@@ -293,41 +393,16 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             #endregion
-
-            // **E2E 専用のクライアント登録**（#264）。
-            //   **利用者の登録（saml2OAuth2Data）に寄せてある**ので、**件数に上限が無い**
-            //   （環境変数で差し込むと、net48 版は一覧ごと 1 本になり、件数に上限が出る。#262）。
-            //
-            //   **接尾辞は付けない。** client_name は E2E が名前で引くため
-            //   （Sts.TestClients の表と、E2E の KnownClients を同じ値で揃える）。
-            //   **サイトごとに分ける必要も無い**（作った後は読むだけで、書き換え合わない。#260）。
-            foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
-            {
-                ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data
-                    = Sts.TestClients.CreateSaml2OAuth2Data(entry);
-
-                if (saml2OAuth2Data == null)
-                {
-                    // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
-                    continue;
-                }
-
-                //  **クライアントごとの利用者は作らない**（所有者は `Saml2OAuth2Data.OwnerUserId`。#307）。
-                //
-                //  **種データの登録は、所有者を持たない**（`OwnerUserId` は空）。
-                //    **構成ファイルのクライアントと同じ立場**である（配備全体のもの）。
-                //    **`ClientName` は入る**（**ラベル**。E2E が名前で引く）。
-
-                // **登録が無ければ入れる**（在れば触らない）。
-                //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
-                //   **書き込みを 1 回に閉じる。**
-                if (Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) == null)
-                {
-                    Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
-                }
-            }
         }
 
+        /// <summary>
+        /// テストデータの作成、Login か Register の画面を開くたびに走る。
+        /// - テストデータは、初期化済みでなければ作る（HasInitializedMemoryStore、IsDBMSInitialized）。
+        /// - テストユーザは、この接尾辞で初期化済みでなければ作る（IsTestUsersInitialized）。
+        /// - E2E 専用のクライアントは、起動ごとに 1 回だけ作る。
+        /// - E2E が途中で消すユーザのWebAuthn資格情報は、次のテストが始まる前に毎回戻す。
+        /// </summary>
+        /// <returns>Task</returns>
         private async Task CreateData()
         {
             // ロックを取得する
@@ -341,75 +416,74 @@ namespace MultiPurposeAuthSite.Controllers
                     return; // break;
                 }
 
+                // 初期化済みか？（mem、db）
+                bool initialized = false;
+
                 if (Config.UserStoreType == EnumUserStoreType.Memory)
                 {
                     // Memory Providerの場合、
-                    if (AccountController.HasCreated)
-                    {
-                        // **初期化済みでも、テスト用の種はまき直す**（#277）。
-                        //   **E2E が消すものがある**（WebAuthn の資格情報）ので、
-                        //   **DB ストアと同じく「居なければ作る」を毎回通す。**
-                        //   **本番では IsDebug が false なので、CreateTestUsers は即座に戻る。**
-                        await this.CreateTestUsers();
-
-                        // 初期化済み。
-                        return; // break;
-                    }
-                    else
-                    {
-                        AccountController.HasCreated = true; // 初期化済みに変更。
-                    }
+                    initialized = AccountController.HasInitializedMemoryStore;
+                    AccountController.HasInitializedMemoryStore = true;
                 }
                 else if (Config.UserStoreType == EnumUserStoreType.SqlServer
                     || Config.UserStoreType == EnumUserStoreType.ODPManagedDriver
                     || Config.UserStoreType == EnumUserStoreType.PostgreSQL)
                 {
                     // DBMS Providerの場合、
-                    if (await DataAccess.IsDBMSInitialized())
-                    {
-                        // **初期化済みでも、テスト利用者だけは作り足す**（#260）。
-                        //   **接尾辞（TestUserSuffix）を変えたら、その利用者は未作成**である。
-                        //   **DB を作り直させないため**に、足りなければここで作る。
-                        await this.CreateTestUsers();
-
-                        // 初期化済み。
-                        return; // break;
-                    }
+                    initialized = await DataAccess.IsDBMSInitialized();
                 }
 
-                #region 初期化コード
-
-                ApplicationUser user = null;
-                IdentityResult result = null;
-
-                #region ロール
-
-                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_SystemAdmin });
-                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_Admin });
-                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_User });
-
-                #endregion
-
-                #region 管理者ユーザ
-
-                user = ApplicationUser.CreateUser(
-                        UserIdentifier.UserNameFromEmail(Config.AdministratorUID),
-                        Config.AdministratorUID, true);
-                result = await this.UserManager.CreateAsync(user, Config.AdministratorPWD);
-                if (result.Succeeded)
+                // 初期化済みでない場合、初期化する。
+                if (!initialized)
                 {
-                    await this.UserManager.AddToRoleAsync(user, Const.Role_SystemAdmin);
-                    await this.UserManager.AddToRoleAsync(user, Const.Role_User);
-                    await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
-                }
+                    #region 初期化コード
 
-                #endregion
+                    ApplicationUser user = null;
+                    IdentityResult result = null;
+
+                    #region ロール
+
+                    await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_SystemAdmin });
+                    await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_Admin });
+                    await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_User });
+
+                    #endregion
+
+                    #region 管理者ユーザ
+
+                    user = ApplicationUser.CreateUser(
+                            UserIdentifier.UserNameFromEmail(Config.AdministratorUID),
+                            Config.AdministratorUID, true);
+                    result = await this.UserManager.CreateAsync(user, Config.AdministratorPWD);
+
+                    if (result.Succeeded)
+                    {
+                        await this.UserManager.AddToRoleAsync(user, Const.Role_SystemAdmin);
+                        await this.UserManager.AddToRoleAsync(user, Const.Role_User);
+                        await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
+                    }
+
+                    #endregion
+
+                    #endregion
+                }
 
                 #region テスト・ユーザ
 
-                await this.CreateTestUsers();
+                // **ロールを使うので、初期化コードの後に置く。**
+                // **本番では IsDebug が false なので、何もしない。**
+                if (Config.IsDebug
+                    && !string.IsNullOrWhiteSpace(Config.TestUserPWD))
+                {
+                    // 接尾辞の利用者を初期化（サイトの接尾辞毎、1 回 だけ実行）
+                    await this.CreateTestUsers();
 
-                #endregion
+                    // #264：E2E 専用のクライアントを、起動ごとに 1 回「無ければ作る」。
+                    this.CreateTestClients();
+
+                    // #277：E2E が消すもの（WebAuthn の資格情報）を、毎回まき直す。
+                    await this.SeedWebAuthnTestUser();
+                }
 
                 #endregion
             }
