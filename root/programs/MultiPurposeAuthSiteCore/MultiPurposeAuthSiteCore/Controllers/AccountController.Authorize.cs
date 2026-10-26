@@ -69,6 +69,10 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="max_age">string</param>
         /// <param name="claims">JObject（Request Object の claims（無ければ null））</param>
         /// <param name="identity">ClaimsIdentity（認証Cookieから取得）</param>
+        /// <remarks>
+        /// max_age か claims で求められたときだけ呼び出される。
+        /// 最終的に、access_token と id_token の payload に出る。
+        /// </remarks>
         private void AddAuthTimeClaim(string max_age, JObject claims, ClaimsIdentity identity)
         {
             // QueryString、Cookieなどに関連するのでController側で追加。
@@ -458,6 +462,8 @@ namespace MultiPurposeAuthSite.Controllers
                     MyHttpContext.Current.Response.Cookies.Delete(Config.ReAuthenticatedAtCookieName);
 
                     // auth_timeを追加
+                    /// - max_age か claims で求められたときだけ呼び出される。
+                    /// - 最終的に、access_token と id_token の payload に出る。
                     this.AddAuthTimeClaim(max_age, claims, identity);
 
                     // scopeパラメタ
@@ -501,16 +507,19 @@ namespace MultiPurposeAuthSite.Controllers
                         //   | `prompt=select_account` | **出す**（画面に「別のアカウントでログイン」が在る） |
                         //   | 記録が無い ＋ `prompt=none` | **`consent_required`**（§3.1.2.6。UI を出せない） |
                         //   | 記録が無い | 同意画面を出す |
+
                         string userId = this.UserManager.GetUserId(this.User);
 
+                        // この要求の scope を、前に同意しているか
                         bool hasConsent = Sts.ConsentProvider.HasConsent(userId, client_id, scopes);
+                        // RP が「同意画面を出せ」と求めている or RP が「別のアカウントでログイン」を求めている
                         bool asksConsent = OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptConsent)
                                            || OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptSelectAccount);
 
                         #endregion
 
-                        if (isAuth                              // OAuth2 拡張仕様
-                            || (hasConsent && !asksConsent))    // 同意済み（#272）
+                        if (isAuth                              // 認可画面スキップの独自仕様
+                            || (hasConsent && !asksConsent))    // 若しくは、同意済み / 要求がない
                         {
                             // 認可画面をスキップ
 
@@ -536,6 +545,8 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (OAuth2AndOIDCSpec.HasPrompt(
                             prompt, OAuth2AndOIDCConst.PromptNone))
                         {
+                            // 同意はないが、PromptNoneを要求している。
+
                             // **UI を出せないので、エラーを RP へ返す**
                             //   （OIDC Core §3.1.2.6 : consent_required。#272）。
                             //   **ここで同意を飛ばすと、セッションが生きていれば
@@ -613,7 +624,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (!string.IsNullOrEmpty(valid_redirect_uri))
             {
-                // valid_redirect_uri
+                // エラーのRedirect（valid_redirect_uriを使用する）
                 // RFC 6749 4.1.2.1 : error / error_description、stateは要求にあれば返す（#187）
                 return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(valid_redirect_uri,
                     new Dictionary<string, string>()
@@ -623,13 +634,6 @@ namespace MultiPurposeAuthSite.Controllers
                         { OAuth2AndOIDCConst.state, state }
                     }, false, CmnServerParams.IssuerId));
             }
-            //else if (!string.IsNullOrEmpty(redirect_uri))
-            //{
-            //    // redirect_uri//オープンリダイレクター
-            //    return new RedirectResult(
-            //        redirect_uri + string.Format(
-            //            "?err={0}&errDescription={1}", err, errDescription));
-            //}
             else
             {
                 // エラー画面
@@ -668,14 +672,19 @@ namespace MultiPurposeAuthSite.Controllers
         {
             string prompt = ""; // ダミー
             JObject claims = null;
-            // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
-            // **クエリ文字列は、デコードされた値で読む**（#229。パーセント エンコードされた request_uri を取りこぼさないため）。
+
+            // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
+            // Request Object が在れば、その値で上書きする（無ければクエリ文字列のまま）。
+
+            // **クエリ文字列は、デコードされた値で読む**（パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼさないため）。
+
             string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
             string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
                     request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+
                 // 存在しないrequest_uriではnullになる（#185）。
                 // その場合は上書きせず、後続のValidateAuthZReqParamでエラーにする。
                 JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
@@ -711,6 +720,8 @@ namespace MultiPurposeAuthSite.Controllers
                     ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
                 // auth_timeを追加
+                /// - max_age か claims で求められたときだけ呼び出される。
+                /// - 最終的に、access_token と id_token の payload に出る。
                 this.AddAuthTimeClaim(max_age, claims, identity);
 
                 // 次に、アクセス要求を保存して、仲介コードを発行する。
@@ -720,17 +731,14 @@ namespace MultiPurposeAuthSite.Controllers
 
                 if (!string.IsNullOrEmpty(MyHttpContext.Current.Request.Form["submit.Login"]))
                 {
-                    // 別のアカウントでログイン
-                    //（サインアウトしてリダイレクト）
+                    // 別のアカウントでログイン（サインアウトしてリダイレクト）
 
-                    // **SignInManager でサインアウトする（#247 で気付いた）。**
-                    //   `HttpContext.SignOutAsync()`（スキーム指定なし）では、
-                    //   **このサイトが使っているクッキー（Identity.Application）が消えず、
-                    //   サインアウトしていなかった**（同じ利用者のまま戻っていた）。
-                    //   net48 版は `SignOut(DefaultAuthenticationTypes.ApplicationCookie)` と
-                    //   スキームを指定しているため、こちらだけの症状だった。
-                    // **OP のセッションを終わらせる**（#310）
+                    // OpSessionを終わらせる（入り直すと新しい sid になる）
                     List<string> iframeUrlsForSwitch = this.ClearOpSession();
+
+                    // **SignInManager でサインアウトする。**
+                    // `HttpContext.SignOutAsync()` では、Cookie（Identity.Application）が消えず、
+                    // 次の要求でも認証済みのままだった（実測）。既存の LogOff も SignInManager を使っている。
                     await this.SignInManager.SignOutAsync();
 
                     //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。
@@ -789,7 +797,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else if (!string.IsNullOrEmpty(valid_redirect_uri))
             {
-                // valid_redirect_uri
+                // エラーのRedirect（valid_redirect_uriを使用する）
                 // RFC 6749 4.1.2.1 : error / error_description、stateは要求にあれば返す（#187）
                 return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(valid_redirect_uri,
                     new Dictionary<string, string>()
@@ -799,13 +807,6 @@ namespace MultiPurposeAuthSite.Controllers
                         { OAuth2AndOIDCConst.state, state }
                     }, false, CmnServerParams.IssuerId));
             }
-            //else if (!string.IsNullOrEmpty(redirect_uri))
-            //{
-            //    // redirect_uri//オープンリダイレクター
-            //    return new RedirectResult(
-            //        redirect_uri + string.Format(
-            //            "?err={0}&errDescription={1}", err, errDescription));
-            //}
             else
             {
                 // エラー画面
@@ -833,44 +834,58 @@ namespace MultiPurposeAuthSite.Controllers
             string response = ""; // JARM
             DateTimeOffset expiresUtc = this.CreateJarmExp();
 
-            if (string.IsNullOrEmpty(response_mode)
+            if (string.IsNullOrEmpty(response_mode) // 既定はqueryの意
                 || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit())
             {
                 // query
-                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { OAuth2AndOIDCConst.code, code }, { OAuth2AndOIDCConst.state, state } }, false, CmnServerParams.IssuerId));
+                return new RedirectResult(
+                    OAuth2AndOIDCSpec.BuildRedirectUrl(
+                        redirect_uri,
+                        new Dictionary<string, string>() {
+                            { OAuth2AndOIDCConst.code, code },
+                            { OAuth2AndOIDCConst.state, state } },
+                        false, CmnServerParams.IssuerId));
             }
-            else if (response_mode.ToLower() 
-                == OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit()
-                || response_mode.ToLower().Replace('.', '_')
-                == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit())
+            else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit()
+                || response_mode.ToLower().Replace('.', '_') == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit())
             {
                 // jwt or query.jwt
-                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                {
-                    { OAuth2AndOIDCConst.code , code },
-                    { OAuth2AndOIDCConst.state,  state }
-                }, client_id, expiresUtc);
-                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, false, CmnServerParams.IssuerId));
+                response = Token.CmnResponseObject.Create(
+                    new Dictionary<string, string>()
+                    {
+                        { OAuth2AndOIDCConst.code , code },
+                        { OAuth2AndOIDCConst.state,  state }
+                    }, client_id, expiresUtc);
+
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                    redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } },
+                    false, CmnServerParams.IssuerId));
             }
             else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
             {
                 // fragment
-                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { OAuth2AndOIDCConst.code, code }, { OAuth2AndOIDCConst.state, state } }, true, CmnServerParams.IssuerId));
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                    redirect_uri,
+                    new Dictionary<string, string>() {
+                        { OAuth2AndOIDCConst.code, code },
+                        { OAuth2AndOIDCConst.state, state }
+                    }, true, CmnServerParams.IssuerId));
             }
-            else if (response_mode.ToLower().Replace('.', '_')
-                == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+            else if (response_mode.ToLower().Replace('.', '_') == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
             {
                 // fragment.jwt
-                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                {
-                    { OAuth2AndOIDCConst.code , code },
-                    { OAuth2AndOIDCConst.state,  state }
-                }, client_id, expiresUtc);
-                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+                response = Token.CmnResponseObject.Create(
+                    new Dictionary<string, string>()
+                    {
+                        { OAuth2AndOIDCConst.code , code },
+                        { OAuth2AndOIDCConst.state,  state }
+                    }, client_id, expiresUtc);
+
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                    redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } },
+                    true, CmnServerParams.IssuerId));
             }
             else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
             {
@@ -884,11 +899,13 @@ namespace MultiPurposeAuthSite.Controllers
                 == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
             {
                 // form_post.jwt
-                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                {
-                    { OAuth2AndOIDCConst.code , code },
-                    { OAuth2AndOIDCConst.state,  state }
-                }, client_id, expiresUtc);
+                response = Token.CmnResponseObject.Create(
+                    new Dictionary<string, string>()
+                    {
+                        { OAuth2AndOIDCConst.code , code },
+                        { OAuth2AndOIDCConst.state,  state }
+                    }, client_id, expiresUtc);
+
                 ViewData["Action"] = redirect_uri;
                 ViewData["Response"] = response;
                 return View("FormPost");
@@ -923,18 +940,21 @@ namespace MultiPurposeAuthSite.Controllers
             // access_tokenを返す場合、token_type, expires_inが必要になる。
             switch (response_type)
             {
-                case OAuth2AndOIDCConst.ImplicitResponseType:
+                case OAuth2AndOIDCConst.ImplicitResponseType: // Token要求
                     if (string.IsNullOrEmpty(access_token))
                     {
+                        // Tokenなし
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
                     {
-                        if (string.IsNullOrEmpty(response_mode)
+                        // Tokenあり
+                        if (string.IsNullOrEmpty(response_mode) // 既定はfragmentの意
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.AccessToken, access_token },
@@ -943,19 +963,22 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                                 }, true, CmnServerParams.IssuerId));
                         }
-                        else if (response_mode.ToLower().Replace('.', '_')
-                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        else if (response_mode.ToLower().Replace('.', '_') == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                         {
                             // fragment.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, null, null);
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, null, null);
+
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
+                                new Dictionary<string, string>() { { "response", response } },
+                                true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -970,13 +993,15 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                         {
                             // form_post.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, null, null);
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, null, null);
+
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
                             return View("FormPost");
@@ -984,18 +1009,21 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     return null;
 
-                case OAuth2AndOIDCConst.OidcImplicit1_ResponseType:
+                case OAuth2AndOIDCConst.OidcImplicit1_ResponseType:　// ID Token要求
                     if (string.IsNullOrEmpty(id_token))
                     {
+                        // ID Tokenなし
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
                     {
-                        if (string.IsNullOrEmpty(response_mode)
+                        // ID Tokenあり
+                        if (string.IsNullOrEmpty(response_mode) // 既定はfragmentの意
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.IDToken, id_token },
@@ -1006,13 +1034,17 @@ namespace MultiPurposeAuthSite.Controllers
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                         {
                             // fragment.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.IDToken , id_token },
-                                { OAuth2AndOIDCConst.state,  state }
-                            }, null, null);
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.IDToken , id_token },
+                                    { OAuth2AndOIDCConst.state,  state }
+                                }, null, null);
+
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
+                                new Dictionary<string, string>() { { "response", response } },
+                                true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -1025,11 +1057,13 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                         {
                             // form_post.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.IDToken , id_token },
-                                { OAuth2AndOIDCConst.state,  state }
-                            }, null, null);
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.IDToken , id_token },
+                                    { OAuth2AndOIDCConst.state,  state }
+                                }, null, null);
+
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
                             return View("FormPost");
@@ -1037,18 +1071,21 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     return null;
 
-                case OAuth2AndOIDCConst.OidcImplicit2_ResponseType:
+                case OAuth2AndOIDCConst.OidcImplicit2_ResponseType: // ID Token & Token要求
                     if (string.IsNullOrEmpty(id_token) || string.IsNullOrEmpty(access_token))
                     {
+                        // ID Token & Tokenなし
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
                     {
-                        if (string.IsNullOrEmpty(response_mode)
+                        // ID Token & Tokenあり
+                        if (string.IsNullOrEmpty(response_mode) // 既定はfragmentの意
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.IDToken, id_token },
@@ -1062,16 +1099,20 @@ namespace MultiPurposeAuthSite.Controllers
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                         {
                             // fragment.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.IDToken , id_token },
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, null, null);
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.IDToken , id_token },
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, null, null);
+
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
+                                new Dictionary<string, string>() { { "response", response } },
+                                true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -1087,14 +1128,16 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                         {
                             // form_post.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.IDToken , id_token },
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, null, null);
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.IDToken , id_token },
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, null, null);
+
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
                             return View("FormPost");
@@ -1130,18 +1173,21 @@ namespace MultiPurposeAuthSite.Controllers
             // access_tokenを返す場合、token_type, expires_inが必要になる。
             switch (response_type)
             {
-                case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType:
+                case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType: // Code & Token要求
                     if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(access_token))
                     {
+                        // Code & Tokenなし
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
                     {
-                        if (string.IsNullOrEmpty(response_mode)
+                        // Code & Tokenあり
+                        if (string.IsNullOrEmpty(response_mode) // 既定はfragmentの意
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.code, code },
@@ -1151,20 +1197,23 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                                 }, true, CmnServerParams.IssuerId));
                         }
-                        else if (response_mode.ToLower().Replace('.', '_')
-                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        else if (response_mode.ToLower().Replace('.', '_') == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                         {
                             // fragment.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.code , code },
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, client_id, expiresUtc);
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.code , code },
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, client_id, expiresUtc);
+
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
+                                new Dictionary<string, string>() { { "response", response } },
+                                true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -1177,37 +1226,42 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
-                        else if (response_mode.ToLower().Replace('.', '_')
-                            == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+                        else if (response_mode.ToLower().Replace('.', '_') == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                         {
                             // form_post.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.code , code },
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, client_id, expiresUtc);
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.code , code },
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, client_id, expiresUtc);
+
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
                             return View("FormPost");
                         }
                     }
+
                     return null;
 
-                case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType:
+                case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType: // Code & ID Token要求
                     if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(id_token))
                     {
+                        // Code & ID Tokenなし
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
                     {
-                        if (string.IsNullOrEmpty(response_mode)
+                        // Code & ID Tokenあり
+                        if (string.IsNullOrEmpty(response_mode) // 既定はfragmentの意
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.code, code },
@@ -1225,8 +1279,11 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.IDToken , id_token },
                                 { OAuth2AndOIDCConst.state,  state }
                             }, client_id, expiresUtc);
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
+                                new Dictionary<string, string>() { { "response", response } },
+                                true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -1254,18 +1311,21 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     return null;
 
-                case OAuth2AndOIDCConst.OidcHybrid3_ResponseType:
+                case OAuth2AndOIDCConst.OidcHybrid3_ResponseType: // Code & ID Token & Token要求
                     if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(access_token) || string.IsNullOrEmpty(id_token))
                     {
+                        // Code & ID Token & Tokenなし
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
                     {
-                        if (string.IsNullOrEmpty(response_mode)
+                        // Code & ID Token & Tokenあり
+                        if (string.IsNullOrEmpty(response_mode) // 既定はfragmentの意
                             || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             // fragment
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
                                 new Dictionary<string, string>()
                                 {
                                     { OAuth2AndOIDCConst.code, code },
@@ -1276,21 +1336,24 @@ namespace MultiPurposeAuthSite.Controllers
                                     { OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                                 }, true, CmnServerParams.IssuerId));
                         }
-                        else if (response_mode.ToLower().Replace('.', '_')
-                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        else if (response_mode.ToLower().Replace('.', '_') == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                         {
                             // fragment.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.code , code },
-                                { OAuth2AndOIDCConst.IDToken , id_token },
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, client_id, expiresUtc);
-                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.code , code },
+                                    { OAuth2AndOIDCConst.IDToken , id_token },
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, client_id, expiresUtc);
+
+                            return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                                redirect_uri,
+                                new Dictionary<string, string>() { { "response", response } },
+                                true, CmnServerParams.IssuerId));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
@@ -1308,15 +1371,17 @@ namespace MultiPurposeAuthSite.Controllers
                             == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                         {
                             // form_post.jwt
-                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                            {
-                                { OAuth2AndOIDCConst.code , code },
-                                { OAuth2AndOIDCConst.IDToken , id_token },
-                                { OAuth2AndOIDCConst.AccessToken , access_token },
-                                { OAuth2AndOIDCConst.state,  state },
-                                { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
-                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
-                            }, client_id, expiresUtc);
+                            response = Token.CmnResponseObject.Create(
+                                new Dictionary<string, string>()
+                                {
+                                    { OAuth2AndOIDCConst.code , code },
+                                    { OAuth2AndOIDCConst.IDToken , id_token },
+                                    { OAuth2AndOIDCConst.AccessToken , access_token },
+                                    { OAuth2AndOIDCConst.state,  state },
+                                    { OAuth2AndOIDCConst.token_type , Const.TokenTypeBearer },
+                                    { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
+                                }, client_id, expiresUtc);
+
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
                             return View("FormPost");
@@ -1346,28 +1411,32 @@ namespace MultiPurposeAuthSite.Controllers
         {
             string response = "";
 
-            if (string.IsNullOrEmpty(response_mode)
+            if (string.IsNullOrEmpty(response_mode) // 既定はfragmentの意
                 || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
             {
                 // fragment
-                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                    redirect_uri,
                     new Dictionary<string, string>()
                     {
                         { OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied },
                         { OAuth2AndOIDCConst.state, state }
                     }, true, CmnServerParams.IssuerId));
             }
-            else if(response_mode.ToLower().Replace('.', '_')
-                == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+            else if(response_mode.ToLower().Replace('.', '_') == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
             {
                 // fragment.jwt
-                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                {
-                    { OAuth2AndOIDCConst.error , OAuth2AndOIDCConst.access_denied },
-                    { OAuth2AndOIDCConst.state,  state }
-                }, null, null);
-                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(redirect_uri,
-                    new Dictionary<string, string>() { { "response", response } }, true, CmnServerParams.IssuerId));
+                response = Token.CmnResponseObject.Create(
+                    new Dictionary<string, string>()
+                    {
+                        { OAuth2AndOIDCConst.error , OAuth2AndOIDCConst.access_denied },
+                        { OAuth2AndOIDCConst.state,  state }
+                    }, null, null);
+
+                return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
+                    redirect_uri,
+                    new Dictionary<string, string>() { { "response", response } },
+                    true, CmnServerParams.IssuerId));
             }
             else if(response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
             {
@@ -1380,11 +1449,13 @@ namespace MultiPurposeAuthSite.Controllers
             else if(response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
             {
                 // form_post.jwt
-                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
-                {
-                    { OAuth2AndOIDCConst.error , OAuth2AndOIDCConst.access_denied },
-                    { OAuth2AndOIDCConst.state,  state }
-                }, null, null);
+                response = Token.CmnResponseObject.Create(
+                    new Dictionary<string, string>()
+                    {
+                        { OAuth2AndOIDCConst.error , OAuth2AndOIDCConst.access_denied },
+                        { OAuth2AndOIDCConst.state,  state }
+                    }, null, null);
+
                 ViewData["Action"] = redirect_uri;
                 ViewData["Response"] = response;
                 return View("FormPost");

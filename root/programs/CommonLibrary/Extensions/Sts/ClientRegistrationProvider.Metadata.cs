@@ -50,7 +50,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// <summary>ClientRegistrationProvider（metadata の検査）</summary>
     public static partial class ClientRegistrationProvider
     {
-        #region metadataの検査
+        #region 検査
 
         /// <summary>要求のメタデータを検査して、保存する形にする</summary>
         /// <param name="metadata">要求の JSON</param>

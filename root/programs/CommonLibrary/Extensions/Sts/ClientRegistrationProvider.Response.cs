@@ -54,7 +54,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// <summary>ClientRegistrationProvider（管理 API の部品）</summary>
     public static partial class ClientRegistrationProvider
     {
-        #region 管理 API の部品（RFC 7592）
+        // 管理 API の部品（RFC 7592）
 
         #region registration_access_token
 
@@ -284,8 +284,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return ret;
         }
-
-        #endregion
 
         #endregion
     }
