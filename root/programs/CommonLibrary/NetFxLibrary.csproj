@@ -104,6 +104,15 @@
     <Compile Include="Data\CmnUserStore.cs" />
     <Compile Include="Extensions\Sts\AuthFailureProvider.cs" />
     <Compile Include="Extensions\Sts\ClientRegistrationProvider.cs" />
+    <Compile Include="Extensions\Sts\ClientRegistrationProvider.Crud.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\Sts\ClientRegistrationProvider.Metadata.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\Sts\ClientRegistrationProvider.Response.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
     <Compile Include="Extensions\Sts\AccountLink.cs" />
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
     <Compile Include="Extensions\Sts\IdFederationJwks.cs" />

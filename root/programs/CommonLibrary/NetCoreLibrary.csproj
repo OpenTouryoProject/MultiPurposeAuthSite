@@ -90,6 +90,11 @@
     <Compile Update="Co\Config.*.cs">
       <DependentUpon>Config.cs</DependentUpon>
     </Compile>
+
+    <!-- **ClientRegistrationProvider も partial に分けてある**（#294）。IDE で ClientRegistrationProvider.cs の下に畳んで見せる。 -->
+    <Compile Update="Extensions\Sts\ClientRegistrationProvider.*.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>

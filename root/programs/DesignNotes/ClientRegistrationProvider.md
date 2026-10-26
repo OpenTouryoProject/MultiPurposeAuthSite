@@ -1,6 +1,6 @@
 # ClientRegistrationProvider の設計メモ
 
-対象：`CommonLibrary/Extensions/Sts/ClientRegistrationProvider.cs`
+対象：`CommonLibrary/Extensions/Sts/ClientRegistrationProvider*.cs`（partial の全ファイル）
 （動的クライアント登録。RFC 7591 の登録、RFC 7592 の管理）
 
 **今の仕様は、ソースの冒頭の `/* */` と remarks を見ること。**
