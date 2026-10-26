@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 2）
 //*  2026/10/22  玄人 幸道         IssuerId を Open棟梁 の CmnServerParams から読むようにした（#294）
+//*  2026/10/26  玄人 幸道         events クレームの名前を Const へ移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -69,9 +70,6 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// </remarks>
     public class CmnLogoutToken
     {
-        /// <summary>events クレームの名前（Back-Channel Logout 1.0 §2.4）</summary>
-        public const string Events = "events";
-
         /// <summary>Back-Channel Logout の事象の型（Back-Channel Logout 1.0 §2.4）</summary>
         /// <remarks>**この URI は識別子である**（取りに行く先ではない）。</remarks>
         public const string BackChannelLogoutEvent
@@ -129,7 +127,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // **events**（§2.4。**値は空のオブジェクト**）。
             JObject events = new JObject();
             events.Add(CmnLogoutToken.BackChannelLogoutEvent, new JObject());
-            payload.Add(CmnLogoutToken.Events, events);
+            payload.Add(Const.EventsClaim, events);
 
             //  **`nonce` は入れない**（§2.4 : MUST NOT）。
             //    **入れると「認証の応答」と区別が付かなくなる** —

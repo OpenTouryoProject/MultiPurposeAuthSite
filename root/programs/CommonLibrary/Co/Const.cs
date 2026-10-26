@@ -61,6 +61,7 @@
 //*  2026/10/25  玄人 幸道         HTTP ヘッダ・Session のキー・要求の項目名・JARM・error・自己テストの判定などを追加（#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //*  2026/10/25  玄人 幸道         ログに出す説明の長さの上限（LogDetailMaxLength）を追加（#294）
+//*  2026/10/26  玄人 幸道         動的登録の誤りのコード・software_statement・post_logout_redirect_uri（要求）・events クレームを移した（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -371,6 +372,10 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>認証デバイスの FCM トークン（/SetDeviceToken。この IdP の独自）</summary>
         public const string ParamDeviceToken = "device_token";
 
+        /// <summary>post_logout_redirect_uri（RP-Initiated Logout 1.0 §2。/end_session の要求）</summary>
+        /// <remarks>登録の項目（<see cref="ClientPostLogoutRedirectUri"/>）と同じ名前だが、こちらは要求のパラメタである。</remarks>
+        public const string ParamPostLogoutRedirectUri = "post_logout_redirect_uri";
+
         #endregion
 
         #region Endpoint名
@@ -505,6 +510,9 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string LogoutJwtTyp = "logout+jwt";
 
+        /// <summary>events クレームの名前（Back-Channel Logout 1.0 §2.4）</summary>
+        public const string EventsClaim = "events";
+
         #endregion
 
         #region Error Code
@@ -513,6 +521,30 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>invalid_request_object（RFC 9101 §6.3）</summary>
         public const string InvalidRequestObject = "invalid_request_object";
+
+        /// <summary>invalid_redirect_uri（RFC 7591 §3.2.2 : redirect_uri が不正）</summary>
+        public const string InvalidRedirectUri = "invalid_redirect_uri";
+
+        /// <summary>invalid_client_metadata（RFC 7591 §3.2.2 : メタデータが不正）</summary>
+        public const string InvalidClientMetadata = "invalid_client_metadata";
+
+        /// <summary>invalid_software_statement（RFC 7591 §3.2.2 : software_statement が壊れている）</summary>
+        /// <remarks>
+        /// **JWT として読めない・署名が合わない・`iss` が無い・`exp` が切れている**とき。
+        /// **「中身は読めたが、信頼していない」のは <see cref="UnapprovedSoftwareStatement"/>** である。
+        /// </remarks>
+        public const string InvalidSoftwareStatement = "invalid_software_statement";
+
+        /// <summary>unapproved_software_statement（RFC 7591 §3.2.2 : software_statement を受け付けない）</summary>
+        /// <remarks>
+        /// **その発行者を信頼していない**とき（§3.2.2 の
+        /// "not approved for use by this authorization server"）。
+        /// **信頼する発行者を 1 件も設定していない配備では、常にこれ**である。
+        /// </remarks>
+        public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
+
+        /// <summary>insufficient_scope（RFC 6750 §3.1 : トークンの scope が足りない）</summary>
+        public const string InsufficientScope = "insufficient_scope";
 
         #endregion
 
@@ -558,6 +590,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>software_version</summary>
         public const string ClientSoftwareVersion = "software_version";
+
+        /// <summary>software_statement（RFC 7591 §2.3）</summary>
+        public const string ClientSoftwareStatement = "software_statement";
 
         #endregion
 

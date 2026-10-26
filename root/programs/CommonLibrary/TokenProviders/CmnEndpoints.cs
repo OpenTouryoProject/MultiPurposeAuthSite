@@ -135,6 +135,7 @@
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
+//*  2026/10/26  玄人 幸道         post_logout_redirect_uri（要求）の名前を Const へ移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1168,10 +1169,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region RP-Initiated Logout（#232）
-
-        /// <summary>post_logout_redirect_uri（RP-Initiated Logout 1.0 §2）</summary>
-        /// <remarks>Open棟梁 の定数に無いので、ここで定義する（#238 の client_assertion と同じ）。</remarks>
-        public const string PostLogoutRedirectUri = "post_logout_redirect_uri";
 
         /// <summary>
         /// RP からのログアウト要求（/end_session）を受ける（#232）

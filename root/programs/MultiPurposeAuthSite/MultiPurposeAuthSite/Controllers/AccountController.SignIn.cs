@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
+//*  2026/10/26  玄人 幸道         post_logout_redirect_uri の名前を Const から読むようにした（#294）
 //**********************************************************************************
 
 /*
@@ -331,7 +332,7 @@ namespace MultiPurposeAuthSite.Controllers
             return await this.EndSessionCore(
                 Request.QueryString[OAuth2AndOIDCConst.id_token_hint],
                 Request.QueryString[OAuth2AndOIDCConst.client_id],
-                Request.QueryString[Token.CmnEndpoints.PostLogoutRedirectUri],
+                Request.QueryString[Const.ParamPostLogoutRedirectUri],
                 Request.QueryString[OAuth2AndOIDCConst.state],
                 false);
         }
@@ -349,7 +350,7 @@ namespace MultiPurposeAuthSite.Controllers
             return await this.EndSessionCore(
                 Request.Form[OAuth2AndOIDCConst.id_token_hint],
                 Request.Form[OAuth2AndOIDCConst.client_id],
-                Request.Form[Token.CmnEndpoints.PostLogoutRedirectUri],
+                Request.Form[Const.ParamPostLogoutRedirectUri],
                 Request.Form[OAuth2AndOIDCConst.state],
                 false);
         }
@@ -378,7 +379,7 @@ namespace MultiPurposeAuthSite.Controllers
             return await this.EndSessionCore(
                 Request.Form[OAuth2AndOIDCConst.id_token_hint],
                 Request.Form[OAuth2AndOIDCConst.client_id],
-                Request.Form[Token.CmnEndpoints.PostLogoutRedirectUri],
+                Request.Form[Const.ParamPostLogoutRedirectUri],
                 Request.Form[OAuth2AndOIDCConst.state],
                 true);
         }

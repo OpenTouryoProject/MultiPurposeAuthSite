@@ -43,6 +43,7 @@
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //*  2026/10/25  玄人 幸道         auth も動的登録で付けさせない（#294）
 //*  2026/10/25  玄人 幸道         仕様の要諦を冒頭に書き、段階ごとの経緯を DesignNotes へ移した（#294）
+//*  2026/10/26  玄人 幸道         誤りのコードを Const へ移した（#294）
 //**********************************************************************************
 
 /*
@@ -158,37 +159,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// </remarks>
     public static class ClientRegistrationProvider
     {
-        #region 誤りのコード
-
-        //  **RFC 7591 §3.2.2 のコード。** **Open棟梁 側の `OAuth2AndOIDCConst` には無い**ので、
-        //    ここに置く（**この口でしか使わない**）。
-
-        /// <summary>RFC 7591 §3.2.2 : redirect_uri が不正</summary>
-        public const string invalid_redirect_uri = "invalid_redirect_uri";
-
-        /// <summary>RFC 7591 §3.2.2 : メタデータが不正</summary>
-        public const string invalid_client_metadata = "invalid_client_metadata";
-
-        /// <summary>RFC 7591 §3.2.2 : software_statement が壊れている</summary>
-        /// <remarks>
-        /// **JWT として読めない・署名が合わない・`iss` が無い・`exp` が切れている**とき。
-        /// **「中身は読めたが、信頼していない」のは <see cref="unapproved_software_statement"/>** である。
-        /// </remarks>
-        public const string invalid_software_statement = "invalid_software_statement";
-
-        /// <summary>RFC 7591 §3.2.2 : software_statement を受け付けない</summary>
-        /// <remarks>
-        /// **その発行者を信頼していない**とき（§3.2.2 の
-        /// "not approved for use by this authorization server"）。
-        /// **信頼する発行者を 1 件も設定していない配備では、常にこれ**である。
-        /// </remarks>
-        public const string unapproved_software_statement = "unapproved_software_statement";
-
-        /// <summary>RFC 6750 §3.1 : トークンの scope が足りない</summary>
-        public const string insufficient_scope = "insufficient_scope";
-
-        #endregion
-
         #region 登録（RFC 7591 §3.1）
 
         /// <summary>登録する</summary>
@@ -212,6 +182,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string requestBody, ClaimsIdentity identity,
             out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
+            // Register は ROPC と CC の 違いを意識する。
+            // Clientの出所（定義ファイル、DB）の違いは意識しない。
+            // 後者は「GetOwnerUserId が空を返すことがある」という 1 点ダケ。
+
             ret = null;
             err = new Dictionary<string, string>();
 
@@ -222,7 +196,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return 404;
             }
 
-            #region 認可（トークンの scope と、所有者）
+            #region 認可
 
             // Tokenから、identity.Claimsを構築してある。
             if (identity == null)
@@ -237,7 +211,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 x.Type == OAuth2AndOIDCConst.UrnScopesClaim
                 && x.Value == Const.ScopeClientRegistration))
             {
-                err.Add(OAuth2AndOIDCConst.error, ClientRegistrationProvider.insufficient_scope);
+                err.Add(OAuth2AndOIDCConst.error, Const.InsufficientScope);
                 err.Add(OAuth2AndOIDCConst.error_description, string.Format(
                     "The access token requires the {0} scope.", Const.ScopeClientRegistration));
                 return 403;
@@ -275,10 +249,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // FindByIdが null を返すケース：OwnerUserId の利用者が、引く直前に消された場合
                 user = string.IsNullOrEmpty(ownerUserId) ? null : CmnUserStore.FindById(ownerUserId);
             }
-
-            //  **所有者が決まらない。**
+            
             if (user == null)
             {
+                //  **所有者が決まらなかった。**
+
                 //  **`403` にする。** **トークンは正しい**ので、
                 //  **`401` では「取り直せ」と読めて誤誘導になる**
                 //  （RFC 6749 §4.1.2.1 の `access_denied` ＝ 要求を容れない）。
@@ -287,18 +262,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     "The owner of this registration cannot be determined.");
                 return 403;
             }
+            else
+            {
+                //  **所有者が決まった。**
+                // - ROPCの場合は、認証したROが所有者（user）になる。
+                // - CCの場合は、認証したClient（aud）の所有者が、user （登録の表なら OwnerUserId、構成ファイルなら owner 属性）。
+            }
 
-            //  **1 利用者 n クライアント。** **上限は設けていない**（設定キーも無い）。
-            //    **洪水はレート制限で受ける**（#305。口の名前 `register`）。
-            //
-            //  **`POST` を upsert にはしない** — **`client_secret` を作り直すか据え置くかの
-            //    判断が常について回り、間違えると既存の RP が止まる。**
-            //    **更新は RFC 7592 の `PUT` で行う。**
-            //    **2 回 `POST` すれば、2 件の別の登録になる**（それが n 件である）。
+            // ここで「既に登録を持っているか」は確かめない（1 人が何件でも登録できる）。
+            // - 件数の上限は無い。大量の登録は、レート制限（#305。口の名前 `register`）で防ぐ。
+            // - 同じ人が 2 回 POST すれば、別の登録が 2 件できる（前の登録を上書きしない）。
+            //   主キーの client_id は POST の度に採番するので、上書きする登録を指せない。
+            // - 登録を直すのは、RFC 7592 の PUT（registration_access_token で登録を指す）で行う。
 
             #endregion
 
-            #region メタデータ（RFC 7591 §2）
+            #region 本文
 
             JObject metadata = null;
 
@@ -315,45 +294,42 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (metadata == null)
             {
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                err.Add(OAuth2AndOIDCConst.error_description,
-                    "The request body must be a JSON object.");
+                err.Add(OAuth2AndOIDCConst.error_description, "The request body must be a JSON object.");
                 return 400;
             }
 
             ManageAddSaml2OAuth2DataViewModel model = new ManageAddSaml2OAuth2DataViewModel();
 
+            // Validate：登録するClientに関する内容の検査
             //  **`grant_types` / `response_types` は、応答では `model` の列から読む**
             //    （**`POST` / `GET` / `PUT` で同じ形にするため**）。
-            if (!ClientRegistrationProvider.Validate(metadata, model, out string code,
-                out string description, out _, out _))
+            if (!ClientRegistrationProvider.Validate(metadata, model,
+                out string code, out string description, out _, out _))
             {
                 err.Add(OAuth2AndOIDCConst.error, code);
                 err.Add(OAuth2AndOIDCConst.error_description, description);
                 return 400;
             }
 
-            #endregion
+            # endregion
 
             #region 保存
 
-            //  **`client_id` は作り直す**（画面の登録と同じ形）。
+            //  **`client_id` は、ここで払い出す**
+            //  （RFC 7591 §3.2.1。管理画面の「ClientID」ボタンと同じ形）。
             string client_id = Guid.NewGuid().ToString("N");
             string client_secret = GetPassword.Base64UrlSecret(32);
-
-            //  **管理 API のトークン**（RFC 7592 §2）。
-            //    **平文は、この応答で 1 回だけ返す。** **保管するのはハッシュ**である。
-            string registrationAccessToken = ClientRegistrationProvider.GenerateToken();
-
             model.ClientID = client_id;
             model.ClientSecret = client_secret;
-            model.RegistrationAccessToken =
-                ClientRegistrationProvider.Hash(registrationAccessToken);
 
-            //  **`ClientName` は、要求の `client_name` ではなく利用者名である。**
-            //    **`Helper.GetClientName` が、この列を「登録が在るか」の判定と、
-            //    CC の `sub` に使っている**ため、他の値を入れてはならない。
-            //    **`client_name` は受け取っても無視する**（RFC 7591 §3.2.1 が認めている）。
-            //    **所有者の鍵は `OwnerUserId`**（下）。**名前は、ラベルである。**
+            // **管理 API のトークン**（RFC 7592 §2）。
+            // **平文を作って渡すのは、この応答だけ**（`BuildClientInformation` が載せる）。
+            //  `GET` / `PUT` の応答は、相手が送ってきたトークンを、そのまま返すだけ。
+            string registrationAccessToken = ClientRegistrationProvider.GenerateToken();
+            // **保管するのはハッシュ**である。
+            model.RegistrationAccessToken = ClientRegistrationProvider.Hash(registrationAccessToken);
+
+            // DCRされるClientのClientNameには、所有者（user）の利用者名を入れる（要求の client_name は使わない）。
             model.ClientName = user.UserName;
 
             //  **所有者を列に書く。**
@@ -371,7 +347,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
-            #region 応答（RFC 7591 §3.2.1 / RFC 7592 §3）
+            #region 応答
 
             //  **登録の全体を返す**（§3.2.1）。
             //    **形は `GET` / `PUT` と同じ**にする（**RFC 7592 §3 の
@@ -505,7 +481,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (requestedClientId != client_id)
             {
-                err.Add(OAuth2AndOIDCConst.error, ClientRegistrationProvider.invalid_client_metadata);
+                err.Add(OAuth2AndOIDCConst.error, Const.InvalidClientMetadata);
                 err.Add(OAuth2AndOIDCConst.error_description,
                     "The client_id must be present and match the client_id of this registration.");
                 return 400;
@@ -522,7 +498,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 if (!ClientRegistrationProvider.FixedTimeEquals(requestedSecret, current.ClientSecret))
                 {
                     err.Add(OAuth2AndOIDCConst.error,
-                        ClientRegistrationProvider.invalid_client_metadata);
+                        Const.InvalidClientMetadata);
                     err.Add(OAuth2AndOIDCConst.error_description,
                         "The client_secret does not match the current client_secret.");
                     return 400;
@@ -782,7 +758,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
                 //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
                 JObject claims = JwtReader.TryReadPayload(
-                    ClientRegistrationProvider.GetString(metadata, SoftwareStatementProvider.SoftwareStatement));
+                    ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareStatement));
 
                 if (claims != null)
                 {
@@ -836,10 +812,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             out string code, out string description,
             out List<string> grantTypes, out List<string> responseTypes)
         {
-            code = ClientRegistrationProvider.invalid_client_metadata;
+            code = Const.InvalidClientMetadata;
             description = "";
             grantTypes = null;
             responseTypes = null;
+
+            // 以下、全て登録するClientに関する内容の検査
 
             #region software_statement（RFC 7591 §2.3 / §3.1.1）
 
@@ -847,20 +825,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **statement が勝つ**（§2.3 は MUST）。**以降の検査は、重ねた後の値で行う。**
             //
             //  **`POST` も `PUT` も、ここを通る**（**検査は 1 か所**）。
-            //    **黙って無視してはならない** — **クライアントは「主張した内容で
-            //    登録された」と考える。**
+            //    **黙って無視してはならない** — **クライアントは「主張した内容で登録された」と考える。**
             SoftwareStatementProvider.Result statement =
                 SoftwareStatementProvider.Apply(metadata, out description);
 
             if (statement == SoftwareStatementProvider.Result.Invalid)
             {
-                code = ClientRegistrationProvider.invalid_software_statement;
+                code = Const.InvalidSoftwareStatement;
                 return false;
             }
 
             if (statement == SoftwareStatementProvider.Result.Unapproved)
             {
-                code = ClientRegistrationProvider.unapproved_software_statement;
+                code = Const.UnapprovedSoftwareStatement;
                 return false;
             }
 
@@ -886,8 +863,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **両方を入れてはならない**（RFC 7591 §2 の MUST NOT）。
             //    **どちらの鍵で認証するのかが決まらない**ので、断る。
-            //    **`software_statement` を重ねた後で見る** — **statement が片方を
-            //    主張したときも、同じ検査を通す。**
+            //    **`software_statement` を重ねた後で見る** — **statement が片方を主張したときも、同じ検査を通す。**
             if (ClientRegistrationProvider.Has(metadata, Const.ClientJwks)
                 && !string.IsNullOrEmpty(
                     ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.jwks_uri)))
@@ -1130,6 +1106,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
+            #region redirect_uris / scope
+
             #region redirect_uris
 
             List<string> redirectUris = ClientRegistrationProvider.GetStrings(metadata, OAuth2AndOIDCConst.redirect_uris);
@@ -1139,7 +1117,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **折り返し先を使う経路なら、必須**（OIDC DCR 1.0 §2）。
                 if (redirectUris.Count == 0)
                 {
-                    code = ClientRegistrationProvider.invalid_redirect_uri;
+                    code = Const.InvalidRedirectUri;
                     description = "redirect_uris is required.";
                     return false;
                 }
@@ -1149,7 +1127,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 if (!ClientRegistrationProvider.IsValidRedirectUri(redirectUri))
                 {
-                    code = ClientRegistrationProvider.invalid_redirect_uri;
+                    code = Const.InvalidRedirectUri;
                     description = string.Format(
                         "The redirect_uri ({0}) must be an absolute URI without a fragment.",
                         redirectUri);
@@ -1161,7 +1139,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (Const.MaxLengthOfUriList < uriList.Length)
             {
-                code = ClientRegistrationProvider.invalid_redirect_uri;
+                code = Const.InvalidRedirectUri;
                 description = "The redirect_uris are too long.";
                 return false;
             }
@@ -1224,6 +1202,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
             }
+
+            #endregion
 
             #endregion
 
@@ -1361,7 +1341,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>この配備が扱う response_type</summary>
         /// <returns>response_type の一覧</returns>
-        /// <remarks>**Discovery の `response_types_supported` と同じ一覧**（`CmnEndpoints.SupportedResponseTypes`。#314）。</remarks>
+        /// <remarks>
+        /// **Discovery の `response_types_supported` と同じ一覧**
+        /// （`CmnEndpoints.SupportedResponseTypes`。#314）。
+        /// </remarks>
         private static List<string> SupportedResponseTypes()
         {
             return CmnEndpoints.SupportedResponseTypes();

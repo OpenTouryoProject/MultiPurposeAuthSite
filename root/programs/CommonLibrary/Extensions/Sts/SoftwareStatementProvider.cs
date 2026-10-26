@@ -31,6 +31,7 @@
 //*  2026/10/20  玄人 幸道         新規（#307 の段階 4）
 //*  2026/10/22  玄人 幸道         汎用部品を Open棟梁 の実装に置き換えた（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/26  玄人 幸道         software_statement の名前を Const へ移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -122,11 +123,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OAuth2AndOIDCConst.nbf,
             OAuth2AndOIDCConst.iat,
             OAuth2AndOIDCConst.jti,
-            SoftwareStatementProvider.SoftwareStatement
+            Const.ClientSoftwareStatement
         };
-
-        /// <summary>メタデータの名前（RFC 7591 §2.3）</summary>
-        public const string SoftwareStatement = "software_statement";
 
         #endregion
 
@@ -178,7 +176,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return Result.None;
             }
 
-            JToken token = metadata[SoftwareStatementProvider.SoftwareStatement];
+            JToken token = metadata[Const.ClientSoftwareStatement];
 
             if (token == null || token.Type == JTokenType.Null)
             {
@@ -186,7 +184,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  **本文からは外す**（§3.1.1）。**この後どの道を通っても、保存する形には入らない。**
-            metadata.Remove(SoftwareStatementProvider.SoftwareStatement);
+            metadata.Remove(Const.ClientSoftwareStatement);
 
             //  1. **信頼する発行者が 1 件も無い配備**（＝ 段階 4 の設定を書いていない配備）。
             //     **従来どおり断る。** **既定の配備の振る舞いを変えない**ためである。
