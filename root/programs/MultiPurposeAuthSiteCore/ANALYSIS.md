@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 主要部（MultiPurposeAuthSiteCore / net10.0）コード分析
 
 対象: `root/programs/MultiPurposeAuthSiteCore`（**ASP.NET Core MVC / net10.0**） / ブランチ: `develop`
-最終更新: 2026-09-30
+最終更新: 2026-10-27
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
@@ -28,7 +28,7 @@ SAML2 の IdP でもある。
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `.cs` 10 ファイル / 約 11,600 行、`.cshtml` 57 件。
+規模の目安: `.cs` 23 ファイル / 約 16,200 行、`.cshtml` 78 件（git 管理下。2026-10-27 実測）。
 
 ---
 
@@ -110,21 +110,24 @@ MultiPurposeAuthSiteCore/
 ├─ MultiPurposeAuthSiteCore.sln
 └─ MultiPurposeAuthSiteCore/
    ├─ Program.cs        … エントリポイント。OAuth2AndOIDCClient.HttpClient を差し込む
-   ├─ Startup.cs        … DI 登録・パイプライン・ルーティング（494 行）
-   ├─ Controllers/
-   │   ├─ AccountController.cs          4594 行  サインイン/アップ、2FA、外部ログイン、
-   │   │                                          ID 連携、SAML2/OAuth2 の認可エンドポイント
-   │   ├─ ManageController.cs           3263 行  ユーザ属性・2FA・決済情報・GDPR
-   │   ├─ HomeController.cs             1440 行  ★テスト用クライアント（Starters）
-   │   ├─ OAuth2EndpointController.cs   1343 行  token / userinfo / revoke / introspect /
+   ├─ Startup.cs        … DI 登録・パイプライン・ルーティング（1055 行）
+   ├─ Controllers/                       … 行数は 2026-10-27 の実測
+   │   ├─ AccountController.cs           301 行  本体（DI で受け取るマネージャ、共通処理）
+   │   ├─ AccountController.*.cs     計 6406 行  ★責務ごとの partial（下の表。#294）
+   │   ├─ ManageController.cs           2730 行  ユーザ属性・2FA・外部ログイン・
+   │   │                                          クライアント登録・WebAuthn・GDPR
+   │   ├─ HomeController.cs             1539 行  ★テスト用クライアント（Starters）
+   │   ├─ OAuth2EndpointController.cs   1711 行  token / userinfo / revoke / introspect /
    │   │                                          jwkcerts / ros / device_authz / ciba_* /
    │   │                                          .well-known / samlmetadata
-   │   ├─ OAuth2ResourceServerController.cs 223 行  リソース サーバ側の疎通用 WebAPI
-   │   ├─ UsersAdminController.cs        581 行  利用者の管理（#258 で net48 版から移植）
+   │   ├─ OAuth2ResourceServerController.cs 482 行  リソース サーバ側の疎通用 WebAPI
+   │   ├─ UsersAdminController.cs        582 行  利用者の管理（#258 で net48 版から移植）
    │   ├─ RolesAdminController.cs        401 行  ロールの管理（#258 で net48 版から移植）
-   │   ├─ ErrorController.cs             85 行
+   │   ├─ SoftwareStatementAdminController.cs 340 行  software_statement の発行者（ベンダ）の管理
+   │   ├─ IdFederationAdminController.cs 319 行  ID 連携の上流 IdP の管理
+   │   ├─ ErrorController.cs             90 行
    │   ├─ PingController.cs              54 行  死活監視
-   │   └─ ValuesController.cs            58 行  疎通確認（`api/values/get`）
+   │   └─ ValuesController.cs            67 行  疎通確認（`api/values/get`）
    ├─ Views/{Account,Manage,Home,UsersAdmin,RolesAdmin,Error,Shared}/*.cshtml
    ├─ wwwroot/{css,js,images,lib}/       … bootstrap / jQuery 等はリポジトリに直接格納
    ├─ _appsettings.json                  … テンプレート（git 管理下）
@@ -132,10 +135,32 @@ MultiPurposeAuthSiteCore/
    └─ appsettings.Development.json
 ```
 
-- `AccountController` / `ManageController` / `HomeController` / `ErrorController` は
+- `AccountController` / `ManageController` / `HomeController` / `ErrorController` と、
+  管理画面（`UsersAdmin` / `RolesAdmin` / `SoftwareStatementAdmin` / `IdFederationAdmin`）は
   **Open棟梁の `MyBaseMVControllerCore` を継承**（`Touryo.Infrastructure.Business.Presentation`）。
 - `OAuth2EndpointController` / `OAuth2ResourceServerController` は素の `ControllerBase`（WebAPI）。
 - `PingController` / `ValuesController` は素の `Controller`。
+- **`ErrorController` の基底は、系統で違う**（**net48 版は素の `Controller`**）。
+  **エラー処理を触るときは、両方を見る。** この非対称の説明は、ここに 1 つだけ置く。
+
+### `AccountController` は責務ごとの partial に分けてある（#294）
+
+**net48 版にも、同じファイル名・同じ分け方で在る**（net48 版の説明は、この表を指す）。
+
+| ファイル | 担うこと |
+|---|---|
+| `AccountController.cs` | 本体（DI で受け取るマネージャ、共通処理） |
+| `AccountController.SignIn.cs` | サインイン（ID・パスワード、WebAuthn、ID 連携の開始）とサインアウト、RP-Initiated Logout |
+| `AccountController.SignUp.cs` | サインアップ（利用者の登録・メアド検証）、パスワードの失念・リセット |
+| `AccountController.TwoFactor.cs` | 2 要素認証（Email・SMS・MobileApp のコード、TOTP の認証アプリ・回復コード） |
+| `AccountController.ExternalLogin.cs` | 外部ログインの開始とコールバック（連携・新規登録・ログイン） |
+| `AccountController.IdFederation.cs` | 上流の IdP との ID 連携（OIDC と SAML2） |
+| `AccountController.Authorize.cs` | OAuth 2.0 / OIDC の認可エンドポイント、Device Authorization の利用者コードの確認 |
+| `AccountController.Saml2.cs` | SAML2 の IdP としての口 |
+| `AccountController.SelfTest.cs` | 自己テストの RP（**本番の口ではない**） |
+| `AccountController.Helper.cs` | メール送信、初期データとテスト用データの作成（6 節） |
+
+**WebAuthn と TOTP は net10.0 版だけ**なので、net48 版の `SignIn` / `TwoFactor` には、その部分が無い（8 節）。
 
 ---
 
@@ -656,11 +681,10 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
     **Newtonsoft で読むと base64url の `byte[]` が壊れる**。
     **キー名の大文字小文字も区別される**ので、
     **JS 側も `attestationObject` / `clientDataJSON` に直してある**。
-11. **`AccountController.cs` は 5088 行、`ManageController.cs` は 3048 行と巨大**
-    （実測 2026/10/08。以前の記述は 4402 / 3262 で、古くなっていた）。
+11. **`AccountController` は責務ごとの partial に分けた**（#294。3 節）。
+    **`ManageController.cs` は 2730 行と大きいまま**（実測 2026-10-27）。
     変更は該当 `#region` に閉じ、全体リファクタは避ける。
-12. **`ErrorController` は `MyBaseMVControllerCore` を継承するが、net48 側は素の `Controller`。**
-    両系統でエラー処理の基底が違う。
+12. **`ErrorController` の基底が系統で違う**（3 節）。
 13. **`_appsettings.json` と `appsettings.json` の差分は「秘密情報」だけではない。**
     テスト用クライアントの `redirect_uri_code` も実環境向けに書き換えられている
     （SPA / Native の redirect_uri）。テンプレートを直すときに取り違えないこと。

@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 下位互換版（MultiPurposeAuthSite / net48）コード分析
 
 対象: `root/programs/MultiPurposeAuthSite`（**ASP.NET MVC5 + Web API2 + OWIN / net48**） / ブランチ: `develop`
-最終更新: 2026-09-29
+最終更新: 2026-10-27
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
@@ -30,7 +30,7 @@ Contributing.ja.md の「下位互換は高く維持し、破壊的な変更は�
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `.cs` 18 ファイル / 約 13,200 行、`.cshtml` 60 件。
+規模の目安: `.cs` 29 ファイル / 約 15,900 行、`.cshtml` 68 件（git 管理下。2026-10-27 実測）。
 
 ---
 
@@ -107,23 +107,27 @@ MultiPurposeAuthSite/
 ├─ MultiPurposeAuthSite.sln
 ├─ packages/                          … NuGet（.gitignore）
 └─ MultiPurposeAuthSite/
-   ├─ Global.asax(.cs)                349 行  Application_Error で ACCESS ログ、性能測定
+   ├─ Global.asax(.cs)                452 行  Application_Error で ACCESS ログ、性能測定
    ├─ Startup.cs                       65 行  OWIN のエントリ（StartupAuth.Configure を呼ぶ）
-   ├─ App_Start/
-   │   ├─ StartupAuth.cs              468 行  ★OWIN 認証ミドルウェアの設定
-   │   ├─ WebApiConfig.cs             179 行  Web API のルーティング
-   │   ├─ RouteConfig.cs               84 行  MVC のルーティング
-   │   ├─ BundleConfig.cs              91 行  バンドル＆ミニフィケーション
-   │   └─ FilterConfig.cs              50 行
-   ├─ Controllers/
-   │   ├─ AccountController.cs        4330 行
-   │   ├─ ManageController.cs         2981 行
-   │   ├─ HomeController.cs           1429 行  ★テスト用クライアント（Starters）
-   │   ├─ OAuth2EndpointController.cs 1332 行
+   ├─ App_Start/                       … 行数は 2026-10-27 の実測
+   │   ├─ StartupAuth.cs              589 行  ★OWIN 認証ミドルウェアの設定
+   │   ├─ WebApiConfig.cs             231 行  Web API のルーティング
+   │   ├─ MpasCorsPolicies.cs         133 行  CORS のポリシー（#265）
+   │   ├─ RouteConfig.cs               91 行  MVC のルーティング
+   │   ├─ BundleConfig.cs              92 行  バンドル＆ミニフィケーション
+   │   └─ FilterConfig.cs              49 行
+   ├─ Controllers/                     … 行数は 2026-10-27 の実測
+   │   ├─ AccountController.cs         220 行  本体
+   │   ├─ AccountController.*.cs   計 6013 行  ★責務ごとの partial（#294。net10.0 版の 3 節の表）
+   │   ├─ ManageController.cs         2212 行
+   │   ├─ HomeController.cs           1534 行  ★テスト用クライアント（Starters）
+   │   ├─ OAuth2EndpointController.cs 1714 行
    │   ├─ UsersAdminController.cs      610 行  ★net10.0 版へ移植済み（#258）
    │   ├─ RolesAdminController.cs      431 行  ★net10.0 版へ移植済み（#258）
+   │   ├─ SoftwareStatementAdminController.cs 335 行
+   │   ├─ IdFederationAdminController.cs 315 行
    │   ├─ ErrorController.cs           232 行
-   │   ├─ OAuth2ResourceServerController.cs 203 行
+   │   ├─ OAuth2ResourceServerController.cs 451 行
    │   └─ PingController.cs             56 行
    ├─ Views/{Account,Manage,Home,UsersAdmin,RolesAdmin,Error,Shared}/*.cshtml
    ├─ Content/ Scripts/ fonts/ images/  … NuGet で入る静的ファイル（リポジトリに直接格納）
@@ -132,12 +136,14 @@ MultiPurposeAuthSite/
    └─ app.config                        … 実ファイル（.gitignore）
 ```
 
-- `AccountController` / `ManageController` / `HomeController` /
-  `UsersAdminController` / `RolesAdminController` は
+- `AccountController` / `ManageController` / `HomeController` と、
+  管理画面（`UsersAdmin` / `RolesAdmin` / `SoftwareStatementAdmin` / `IdFederationAdmin`）は
   **Open棟梁の `MyBaseMVController` を継承**（`Touryo.Infrastructure.Business.Presentation`）。
 - `OAuth2EndpointController` / `OAuth2ResourceServerController` は
   `ApiController`（Web API2）。
-- **`ErrorController` は素の `Controller`**（net10.0 版は `MyBaseMVControllerCore` 継承。非対称）。
+- `ErrorController` / `PingController` は素の `Controller`
+  （**`ErrorController` の基底は net10.0 版と違う**。説明は net10.0 版の 3 節）。
+- **`AccountController` の partial の分け方は、net10.0 版と同じ**（説明は net10.0 版の 3 節）。
 
 ### テスト用クライアント（Starters）は、net10.0 版と同文である
 
@@ -255,6 +261,9 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
 `Config.IsDebug` が true なら テスト ユーザ 2 名を作る。
 詳細は [`../MultiPurposeAuthSiteCore/ANALYSIS.md`](../MultiPurposeAuthSiteCore/ANALYSIS.md) 6 節。
 
+**違いは 1 つだけ。** **WebAuthn の資格情報のまき直し（`webauthn_tanaka`。#277）は net10.0 版だけ**
+（net48 版は WebAuthn を持たない。10 節の 1）。
+
 ---
 
 ## 8. net10.0 版との機能差（重要）
@@ -328,7 +337,7 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
 11. **`.vs/` `bin/` `obj/` `packages/` が作業ツリーに残る。** いずれも `.gitignore` 済み。
 12. **`Startup.cs` に `MultiPurposeAuthSite/Startup.cs` と
     `App_Start/StartupAuth.cs` の 2 つがある。** 前者は OWIN のエントリだけで、中身は後者。
-13. **`ErrorController` の基底が系統で違う**（8 節）。エラー処理を触るときは両方を見る。
+13. **`ErrorController` の基底が系統で違う**（net10.0 版の 3 節）。エラー処理を触るときは両方を見る。
 14. **✅ 修正済み: プロフィール変更後の再サインインが、ブラウザ記憶(2FA)を発行していた。**
     `ManageController.ReSignInAsync` が
     `SignInManager.SignInAsync(user, isPersistent: false, rememberBrowser: true)` を呼んでおり、
