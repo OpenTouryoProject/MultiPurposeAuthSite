@@ -62,6 +62,7 @@
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //*  2026/10/25  玄人 幸道         ログに出す説明の長さの上限（LogDetailMaxLength）を追加（#294）
 //*  2026/10/26  玄人 幸道         動的登録の誤りのコード・software_statement・post_logout_redirect_uri（要求）・events クレームを移した（#294）
+//*  2026/10/26  玄人 幸道         動的登録の応答だけの項目と、JWK の use を移した（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -670,6 +671,32 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>管理用トークンのハッシュ（RFC 7592）</summary>
         public const string ClientRegistrationAccessTokenHash = "registration_access_token_hash";
+
+        #endregion
+
+        #region 応答だけの項目（RFC 7591 §3.2.1 / RFC 7592 §3）
+
+        /// <summary>client_id_issued_at（RFC 7591 §3.2.1）</summary>
+        public const string ClientIdIssuedAt = "client_id_issued_at";
+
+        /// <summary>client_secret_expires_at（RFC 7591 §3.2.1）</summary>
+        public const string ClientSecretExpiresAt = "client_secret_expires_at";
+
+        /// <summary>registration_access_token（RFC 7592 §3）</summary>
+        public const string ClientRegistrationAccessToken = "registration_access_token";
+
+        /// <summary>registration_client_uri（RFC 7592 §3）</summary>
+        public const string ClientRegistrationClientUri = "registration_client_uri";
+
+        #endregion
+
+        #region JWK のパラメタ（RFC 7517）
+
+        /// <summary>use（RFC 7517 §4.2 : 公開鍵の用途）</summary>
+        public const string JwkUse = "use";
+
+        /// <summary>sig（use の値 : 署名用。RFC 7517 §4.2）</summary>
+        public const string JwkUseSig = "sig";
 
         #endregion
 
