@@ -31,6 +31,7 @@
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
 //*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
 //*  2026/10/14  玄人 幸道         署名鍵の列を足した（#292 の段階 4-b）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -52,7 +53,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// ID 連携の上流 IdP の登録を、`IdFederationUpstreams` 表に保存する（#292 の段階 2）。
     /// </summary>
     /// <remarks>
-    /// **`Extensions/Sts/DataProvider`（クライアント登録）と同じ作り**である。
+    /// **`Extensions/Sts/Saml2OAuth2DataProvider`（クライアント登録）と同じ作り**である。
     /// **列の並びを 1 か所で持ち、方言ごとの書き方だけを分ける。**
     ///
     /// | | |

@@ -68,6 +68,7 @@
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //*  2026/10/25  玄人 幸道         auth を、登録に明記したクライアントにだけ出すようにした（#294）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -655,7 +656,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Credential( → DataProvider)
+        #region Credential( → Saml2OAuth2DataProvider)
 
         #region Client authentication
 
@@ -688,7 +689,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -730,7 +731,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            return DataProvider.Get(client_id) != null;
+            return Saml2OAuth2DataProvider.Get(client_id) != null;
         }
 
         #endregion
@@ -823,7 +824,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -880,7 +881,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -917,7 +918,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -953,7 +954,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -994,7 +995,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1038,7 +1039,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1080,7 +1081,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1173,7 +1174,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1237,7 +1238,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1297,7 +1298,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1356,7 +1357,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索（#307 の段階 1）
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null && !string.IsNullOrWhiteSpace(model.Scopes))
             {
@@ -1431,7 +1432,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1507,7 +1508,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1560,7 +1561,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1674,7 +1675,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1706,7 +1707,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | | |
         /// |---|---|
         /// | **public クライアントに限る** | `client_secret` が空のもの。**confidential は `/token` をサーバ間で呼ぶ**ので、ブラウザから叩かせる必要が無い |
-        /// | **構成ファイルに限る** | **画面登録（`saml2OAuth2Data`）は含めない。** プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、`DataProvider` に全件を列挙する口が無く、分散キャッシュも無い（E-2） |
+        /// | **構成ファイルに限る** | **画面登録（`saml2OAuth2Data`）は含めない。** プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、`Saml2OAuth2DataProvider` に全件を列挙する口が無く、分散キャッシュも無い（E-2） |
         ///
         /// **画面登録の SPA は、`Config.CorsAllowedOrigins` に足して通す。**
         /// </remarks>
@@ -1764,7 +1765,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | **`web_origins` が在れば、それを使う** | **書いたときは導出しない** |
         /// | **無ければ `redirect_uri_*`** | #265 の挙動 |
         ///
-        /// **`DataProvider.GetAllUris` を呼ぶので、毎回呼ばないこと。**
+        /// **`Saml2OAuth2DataProvider.GetAllUris` を呼ぶので、毎回呼ばないこと。**
         /// **読むのは URI 関連の列だけ**（#270 で列にしたので、絞れる）。
         /// 呼ぶ側（`CmnEndpoints.GetCorsAllowedOrigins`）がキャッシュする。
         /// </remarks>
@@ -1772,7 +1773,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             List<string> uris = new List<string>();
 
-            foreach (ManageAddSaml2OAuth2DataViewModel model in DataProvider.GetAllUris())
+            foreach (ManageAddSaml2OAuth2DataViewModel model in Saml2OAuth2DataProvider.GetAllUris())
             {
                 if (model == null)
                 {
@@ -1835,7 +1836,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1905,7 +1906,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             return (model == null || string.IsNullOrEmpty(model.OwnerUserId))
                 ? "" : model.OwnerUserId;
@@ -1935,7 +1936,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | **どれを返すか決めていない** | **`DataProvider.GetFirstByOwner`**（並びは決めていない） |
+        /// | **どれを返すか決めていない** | **`Saml2OAuth2DataProvider.GetFirstByOwner`**（並びは決めていない） |
         /// | **0 件なら空** | **以前は「宙に浮いた GUID」が返っていた**（登録が無くても値が入っていた） |
         ///
         /// **呼ぶ側は「その人のクライアント 1 つ」で足りる所だけ**である —
@@ -1983,7 +1984,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **その人の登録のうち 1 件**（#307 の段階 5-a）。
             //    **0 件なら空を返す** — **以前は「宙に浮いた GUID」が返っていた。**
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.GetFirstByOwner(user.Id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.GetFirstByOwner(user.Id);
 
             if (model == null)
             {

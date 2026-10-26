@@ -44,6 +44,7 @@
 //*  2026/10/25  玄人 幸道         auth も動的登録で付けさせない（#294）
 //*  2026/10/25  玄人 幸道         仕様の要諦を冒頭に書き、段階ごとの経緯を DesignNotes へ移した（#294）
 //*  2026/10/26  玄人 幸道         誤りのコードを Const へ移した（#294）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 /*
@@ -107,7 +108,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// |---|---|
     /// | 認可 | **`Const.ScopeClientRegistration` を持つアクセス トークン**（**ROPC か CC で取る**） |
     /// | 所有者 | **トークンの `sub` の利用者**、**利用者が居なければ認証したクライアントの所有者**（**1 利用者が n 件持てる**） |
-    /// | 器 | **既存の `Saml2OAuth2Data`**（`DataProvider`） |
+    /// | 器 | **既存の `Saml2OAuth2Data`**（`Saml2OAuth2DataProvider`） |
     ///
     /// **管理**（RFC 7592。`registration_client_uri` ＝ `…/register/{client_id}`）。
     ///
@@ -337,7 +338,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **利用者の行には触らない。**
             model.OwnerUserId = user.Id;
 
-            DataProvider.Create(client_id, model);
+            Saml2OAuth2DataProvider.Create(client_id, model);
 
             // オペレーション・トレース・ログ出力
             //   **誰がいつ登録したかを残す。** **`client_secret` は書かない。**
@@ -585,7 +586,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             model.TokenEndpointAuthSigningAlg = string.IsNullOrEmpty(model.TokenEndpointAuthSigningAlg)
                 ? current.TokenEndpointAuthSigningAlg : model.TokenEndpointAuthSigningAlg;
 
-            DataProvider.Update(client_id, model);
+            Saml2OAuth2DataProvider.Update(client_id, model);
 
             // オペレーション・トレース・ログ出力
             //   **誰がいつ直したかを残す。** **秘密もトークンも書かない。**
@@ -638,7 +639,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ConsentProvider.Revoke(model.OwnerUserId, client_id);
             }
 
-            DataProvider.Delete(client_id);
+            Saml2OAuth2DataProvider.Delete(client_id);
 
             // オペレーション・トレース・ログ出力
             Logging.MyOperationTrace(string.Format(
@@ -683,7 +684,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return 401;
             }
 
-            ManageAddSaml2OAuth2DataViewModel registration = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel registration = Saml2OAuth2DataProvider.Get(client_id);
 
             //  **登録が無い**（消された・そもそも無い）。
             //  **登録に `registration_access_token` が無い**（画面で作った登録）。

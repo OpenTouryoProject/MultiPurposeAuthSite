@@ -35,6 +35,7 @@
 //*  2026/10/18  玄人 幸道         画面の保存で registration_access_token を消さない（#307 の段階 2）
 //*  2026/10/20  玄人 幸道         所有者を列で持つようにした（#307 の段階 5-a-1）
 //*  2026/10/20  玄人 幸道         クライアント登録を一覧にした（#307 の段階 5-a-2）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -220,7 +221,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //    **1 利用者 n クライアント**になったので、**件数を数える** —
                 //    **「在る / 無い」だけでは、何件在るのかが分からない。**
                 //    **中身は一覧の画面（`Saml2OAuth2DataList`）で見せる。**
-                int saml2OAuth2DataCount = Sts.DataProvider.GetByOwner(user.Id).Count;
+                int saml2OAuth2DataCount = Sts.Saml2OAuth2DataProvider.GetByOwner(user.Id).Count;
                 bool hasSaml2OAuth2Data = (0 < saml2OAuth2DataCount);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
@@ -1667,7 +1668,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// **段階 5-a-1 までは、画面から触れるのは「所有者の先頭 1 件」だけだった** —
         /// **動的登録で 2 件目を作れても、画面には出てこなかった。**
         ///
-        /// **出すのは自分の登録だけ**（`DataProvider.GetByOwner`。**`client_id` の昇順**）。
+        /// **出すのは自分の登録だけ**（`Saml2OAuth2DataProvider.GetByOwner`。**`client_id` の昇順**）。
         /// **所有者の無い登録**（構成ファイル発の種データ）**は出ない。**
         ///
         /// **`client_secret` と `registration_access_token` は、行の VM が持たない** —
@@ -1692,7 +1693,7 @@ namespace MultiPurposeAuthSite.Controllers
                 List<Saml2OAuth2DataRowViewModel> rows = new List<Saml2OAuth2DataRowViewModel>();
 
                 foreach (ManageAddSaml2OAuth2DataViewModel owned
-                    in Sts.DataProvider.GetByOwner(user.Id))
+                    in Sts.Saml2OAuth2DataProvider.GetByOwner(user.Id))
                 {
                     rows.Add(new Saml2OAuth2DataRowViewModel()
                     {
@@ -1742,7 +1743,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //    **他人の（または無い）`client_id` では開かない** —
                     //    **新規として開くと、他人の行を上書きできてしまう。**
                     //    **動的登録の側は `registration_access_token` で守っている**（RFC 7592 §2）。
-                    model = Sts.DataProvider.GetByOwnerAndClientID(user.Id, clientId);
+                    model = Sts.Saml2OAuth2DataProvider.GetByOwnerAndClientID(user.Id, clientId);
 
                     if (model == null)
                     {
@@ -1827,7 +1828,7 @@ namespace MultiPurposeAuthSite.Controllers
                             //    **他人の行は、この経路でも書き換えられない**
                             //    （**`Create` は、既に在る `client_id` では通らない**）。
                             ManageAddSaml2OAuth2DataViewModel owned
-                                = Sts.DataProvider.GetByOwnerAndClientID(user.Id, model.ClientID);
+                                = Sts.Saml2OAuth2DataProvider.GetByOwnerAndClientID(user.Id, model.ClientID);
 
                             if (owned != null)
                             {
@@ -1868,7 +1869,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         user.Id, user.UserName, model.ClientID));
                                 }
 
-                                Sts.DataProvider.Update(model.ClientID, model);
+                                Sts.Saml2OAuth2DataProvider.Update(model.ClientID, model);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -1883,7 +1884,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 //    **利用者の行には触らない**（所有者は列が持つ）。
                                 //    **古い登録は消さない** — **1 人が n 件持てる**ようになった
                                 //    （**段階 5-a-1 までは、この画面が 1 件だけを扱うために消していた**）。
-                                Sts.DataProvider.Create(model.ClientID, model);
+                                Sts.Saml2OAuth2DataProvider.Create(model.ClientID, model);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -1948,7 +1949,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //    **「先頭 1 件を黙って消す」をしない**ためである
                 //    （**どれが消えるのかは、押す側に見えていなければならない**）。
                 ManageAddSaml2OAuth2DataViewModel owned
-                    = Sts.DataProvider.GetByOwnerAndClientID(user.Id, clientId);
+                    = Sts.Saml2OAuth2DataProvider.GetByOwnerAndClientID(user.Id, clientId);
 
                 if (owned == null)
                 {
@@ -1957,7 +1958,7 @@ namespace MultiPurposeAuthSite.Controllers
                         new { Message = EnumManageMessageId.Error });
                 }
 
-                Sts.DataProvider.Delete(owned.ClientID);
+                Sts.Saml2OAuth2DataProvider.Delete(owned.ClientID);
 
                 //  **利用者の行は触らない**（#307 の段階 5-a-1）。
                 //    **以前は `UserManager.UpdateAsync` を呼んでいた** —

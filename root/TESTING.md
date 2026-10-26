@@ -639,7 +639,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 
 > **「`DELETE` で `Users.ClientID` を空にしない」という歯抜けも測ったが、1 件も落ちなかった**
 > （26 件 / 成功 26）。**理由は、段階 1 の `Register` が「宙に浮いた `client_id`」を許容すること**で、
-> **`!string.IsNullOrEmpty(user.ClientID) && DataProvider.Get(user.ClientID) != null`**
+> **`!string.IsNullOrEmpty(user.ClientID) && Saml2OAuth2DataProvider.Get(user.ClientID) != null`**
 > という条件なので、**行が消えていれば、`Users.ClientID` が残っていても登録し直せる。**
 > **その後、空にしてはならないことが分かった**（下の「踏んだこと」）ので、
 > **段階 2 の実装は空にしなかった。**
@@ -914,7 +914,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 > **方言は `sql` だけでよい。** **この段階は DDL を変えていない**（**列を 1 つも足していない**）ので、
 > **`ora` / `npg` を取り直す理由が無い** — **`RT-307.18` 〜 `.21` が通る DB の道は、
-> `DataProvider.Create` / `Update` / `Get` で、段階 1 〜 3 のケースと同じ列**である。
+> `Saml2OAuth2DataProvider.Create` / `Update` / `Get` で、段階 1 〜 3 のケースと同じ列**である。
 > **`sql` を測るのは、制約が在る側で、登録の作成・更新・削除が通ることを見るため**である
 > （段階 2 でそこを踏んだ。**当時の制約は `Users.ClientID` の一意索引と外部キー**で、
 > **段階 5-a-1 でそれごと落とした**）。
@@ -947,7 +947,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 ###### 管理画面は、まだ 1 件だけを扱う（段階 5-a-1 の時点）
 
-**`DataProvider.GetFirstByOwner` で「所有者の先頭 1 件」を出していた。**
+**`Saml2OAuth2DataProvider.GetFirstByOwner` で「所有者の先頭 1 件」を出していた。**
 **この画面の UI テスト（`RT-277.1` / `RT-277.2` / `RT-297.1`）と、画面から登録するテスト**
 （`ManageClientRegistration.RegisterWithSecretAsync`）**の振る舞いは変わらなかった。**
 
@@ -1074,7 +1074,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **net10.0 版の呼び出し**（`Startup.Configure`）＋ **設定ファイルの列挙** | **`The jwks_uri warm-up read 1 of 1 JWK Sets.`**（上の手順で） |
 | **net48 版の呼び出し**（`Application_Start`） | **`read 0 of 0`**（**温める対象が無くても、呼ばれていることは分かる**） |
 | **user store の列挙**（`sql`） | **`read 0 of 0`** ＋ **「読めなかった」のログが出ない** ＝ **SQL は通っている**（**`jwks_uri` を持つ行が無いので 0 件**） |
-| **`ora` / `npg` の列挙** | **測っていない**（**同じコードで、列名の引用だけが方言ごと**。`DataProvider.ColumnList`） |
+| **`ora` / `npg` の列挙** | **測っていない**（**同じコードで、列名の引用だけが方言ごと**。`Saml2OAuth2DataProvider.ColumnList`） |
 
 ###### 歯抜け（実測 2026/10/21）
 
@@ -1521,7 +1521,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 >
 > **流したのは `BackChannelLogoutTests` ＋ `SessionIdTests` ＋ 登録の画面**
 > （`ManageSaml2OAuth2DataTests`）**＋ 利用者の削除**（`ManageGdprTests` / `UsersAdminTests`）。
-> **増えた列は `DataProvider` の INSERT / SELECT / UPDATE に入る**ので、
+> **増えた列は `Saml2OAuth2DataProvider` の INSERT / SELECT / UPDATE に入る**ので、
 > **DDL が揃っていなければ、クライアント登録の書き込みが全部落ちる**
 > （**種データの投入で落ちるため、サイトが上がらない**）。
 >

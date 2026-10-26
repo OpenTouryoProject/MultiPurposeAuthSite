@@ -135,7 +135,7 @@
     <Compile Include="SamlProviders\IdFederationSaml2Metadata.cs" />
     <Compile Include="SamlProviders\IdFederationSaml2Request.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
-    <Compile Include="Extensions\Sts\DataProvider.cs" />
+    <Compile Include="Extensions\Sts\Saml2OAuth2DataProvider.cs" />
     <Compile Include="Extensions\Sts\Helper.cs" />
     <Compile Include="TokenProviders\CmnAccessToken.cs" />
     <Compile Include="TokenProviders\CmnResponseObject.cs" />

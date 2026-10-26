@@ -112,7 +112,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Co/` | 設定と定数 | `Config`(1740 行) `Const` |
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
-| `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1553) `SelfTestClient`(800) `DeviceAuthZProvider`(646) `CibaProvider`(505) `DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
+| `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1553) `SelfTestClient`(800) `DeviceAuthZProvider`(646) `CibaProvider`(505) `Saml2OAuth2DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
 | `Extensions/FIDO/` | WebAuthn（**net10.0 版だけ**。#137） | `WebAuthnHelper` `DataProvider` `StoredCredential` `EnumFidoType` |
 | `Log/` | ロギングの façade | `Logging`（`ACCESS` / `SQLTRACE` ロガー） |
 | `Manager/` | ASP.NET Identity の Manager（**net48 のみ**） | `ApplicationUserManager` `ApplicationRoleManager` `ApplicationSignInManager` |

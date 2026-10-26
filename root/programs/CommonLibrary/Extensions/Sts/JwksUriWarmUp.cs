@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 2）
 //*  2026/10/22  玄人 幸道         鍵の取得を Open棟梁 の RemoteJwkSetStore に移した（#294）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -150,7 +151,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **user store**（**読めなければログに残して進む** — **起動を止めない**）。
             try
             {
-                JwksUriWarmUp.AddRange(urls, DataProvider.GetAllJwksUris());
+                JwksUriWarmUp.AddRange(urls, Saml2OAuth2DataProvider.GetAllJwksUris());
             }
             catch (Exception ex)
             {

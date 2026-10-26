@@ -44,6 +44,7 @@
 //*  2026/10/24  玄人 幸道         選択肢の文言を resx にした（#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //*  2026/10/25  玄人 幸道         Scopes の注に auth を足した（#294）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -563,7 +564,7 @@ namespace MultiPurposeAuthSite.ViewModels
 
         //  **RFC 7591 §2 の登録項目を、専用の列で持つ**（#307 の段階 1）。
         //
-        //  **宣言の順は、`DataProvider.Columns` の並びと同じに保つこと**（#270 の約束）。
+        //  **宣言の順は、`Saml2OAuth2DataProvider.Columns` の並びと同じに保つこと**（#270 の約束）。
         //    **末尾に足している**ので、**既存のデータベースは `ALTER … ADD` で
         //    物理的な並びも同じになる**（作り直した `CREATE` と食い違わない）。
         //

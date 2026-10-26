@@ -35,6 +35,7 @@
 //*  2026/10/20  玄人 幸道         RT-277.9〜.11（一覧）を足した（#307 の段階 5-a-2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri の入力欄も見る（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         frontchannel_logout_uri の入力欄も見る（#310 の段階 3）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -409,7 +410,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "昇順", (string.Join(",", listed) == string.Join(",", sorted))
                         ? "昇順だった" : "**並びが違う**");
 
-                r.Note("**並びを決めたのは段階 5-a-2**（`DataProvider.GetByOwner` の `ORDER BY`）。"
+                r.Note("**並びを決めたのは段階 5-a-2**（`Saml2OAuth2DataProvider.GetByOwner` の `ORDER BY`）。"
                     + "**`mem` も方言 3 つも同じ順**にしてある — "
                     + "**決めていないと、一覧の行が毎回入れ替わる。**");
 
@@ -507,7 +508,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**URL もフォームも書き換えられる**ので、**所有者の照合はサーバ側で行う。**"
                     + "**動的登録の側は `registration_access_token` で守っている**（RFC 7592 §2）が、"
                     + "**画面の側は「サインインしている利用者が所有者か」だけが頼り**である。",
-                    "#307 の段階 5-a-2 / DataProvider.GetByOwnerAndClientID");
+                    "#307 の段階 5-a-2 / Saml2OAuth2DataProvider.GetByOwnerAndClientID");
 
                 r.Target("GET /Manage/AddSaml2OAuth2Data?clientId=（他人の client_id）");
 

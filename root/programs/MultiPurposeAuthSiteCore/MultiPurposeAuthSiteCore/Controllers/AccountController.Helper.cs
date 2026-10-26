@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/25  玄人 幸道         段階ごとの経緯を DesignNotes へ移した（#294）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 /*
@@ -322,9 +323,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // **登録が無ければ入れる**（在れば触らない）。
                 //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
                 //   **書き込みを 1 回に閉じる。**
-                if (Sts.DataProvider.Get(entry.ClientId) == null)
+                if (Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) == null)
                 {
-                    Sts.DataProvider.Create(entry.ClientId, saml2OAuth2Data);
+                    Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
                 }
             }
         }

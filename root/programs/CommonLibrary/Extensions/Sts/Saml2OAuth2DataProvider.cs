@@ -19,7 +19,7 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：DataProvider
+//* クラス名        ：Saml2OAuth2DataProvider
 //* クラス日本語名  ：Saml2OAuth2Dataにクライアント登録を保存する。
 //*
 //* 作成日時        ：－
@@ -41,6 +41,7 @@
 //*  2026/10/21  玄人 幸道         BackChannelLogoutUri の列を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         FrontChannelLogoutUri の列を追加（#310 の段階 3）
 //*  2026/10/21  玄人 幸道         登録されている jwks_uri を全部返す口を追加（#309 の段階 2）
+//*  2026/10/26  玄人 幸道         DataProvider から Saml2OAuth2DataProvider に改名した（表の名前に揃えた。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -58,7 +59,7 @@ using Dapper;
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
-    /// DataProvider
+    /// Saml2OAuth2DataProvider
     /// Saml2OAuth2Dataにクライアント登録を保存する。
     /// </summary>
     /// <remarks>
@@ -82,7 +83,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// **読み出しの入口は `Helper` の各 `Get*` 1 か所に保たれている**
     /// （「構成ファイル → user store」の順に見る）。
     /// </remarks>
-    public class DataProvider
+    public class Saml2OAuth2DataProvider
     {
         /// <summary>
         /// Saml2OAuth2Data
@@ -205,7 +206,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             string p = (storeType == EnumUserStoreType.ODPManagedDriver) ? ":" : "@";
 
-            return string.Join(", ", DataProvider.Columns
+            return string.Join(", ", Saml2OAuth2DataProvider.Columns
                 .Where(c => c != "ClientID")
                 .Select(c =>
                 {
@@ -369,7 +370,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         private static ManageAddSaml2OAuth2DataViewModel Protect(
             string clientID, ManageAddSaml2OAuth2DataViewModel model)
         {
-            ManageAddSaml2OAuth2DataViewModel copy = DataProvider.Copy(clientID, model);
+            ManageAddSaml2OAuth2DataViewModel copy = Saml2OAuth2DataProvider.Copy(clientID, model);
 
             if (copy != null)
             {
@@ -462,12 +463,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public static void Create(string clientID, ManageAddSaml2OAuth2DataViewModel model)
         {
             //  **秘密は暗号化して保管する**（#297。**鍵が空なら平文のまま**）。
-            model = DataProvider.Protect(clientID, model);
+            model = Saml2OAuth2DataProvider.Protect(clientID, model);
 
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    DataProvider.Saml2OAuth2Data.TryAdd(clientID, DataProvider.Copy(clientID, model));
+                    Saml2OAuth2DataProvider.Saml2OAuth2Data.TryAdd(clientID, Saml2OAuth2DataProvider.Copy(clientID, model));
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -481,10 +482,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         EnumUserStoreType storeType = Config.UserStoreType;
 
                         cnn.Execute(
-                            "INSERT INTO " + DataProvider.TableName(storeType)
-                            + " (" + DataProvider.ColumnList(DataProvider.Columns, storeType) + ")"
-                            + " VALUES (" + DataProvider.ParameterList(DataProvider.Columns, storeType) + ")",
-                            DataProvider.ToParameters(clientID, model, storeType));
+                            "INSERT INTO " + Saml2OAuth2DataProvider.TableName(storeType)
+                            + " (" + Saml2OAuth2DataProvider.ColumnList(Saml2OAuth2DataProvider.Columns, storeType) + ")"
+                            + " VALUES (" + Saml2OAuth2DataProvider.ParameterList(Saml2OAuth2DataProvider.Columns, storeType) + ")",
+                            Saml2OAuth2DataProvider.ToParameters(clientID, model, storeType));
                     }
 
                     break;
@@ -508,10 +509,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    DataProvider.Saml2OAuth2Data.TryGetValue(clientID, out model);
+                    Saml2OAuth2DataProvider.Saml2OAuth2Data.TryGetValue(clientID, out model);
 
                     // **複製を返す。** 呼ぶ側が書き換えても、保存済みの登録は動かない。
-                    model = DataProvider.Copy(clientID, model);
+                    model = Saml2OAuth2DataProvider.Copy(clientID, model);
 
                     break;
 
@@ -526,9 +527,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         EnumUserStoreType storeType = Config.UserStoreType;
 
                         model = cnn.QuerySingleOrDefault<ManageAddSaml2OAuth2DataViewModel>(
-                            "SELECT " + DataProvider.ColumnList(DataProvider.Columns, storeType)
-                            + " FROM " + DataProvider.TableName(storeType)
-                            + DataProvider.WhereClientID(storeType),
+                            "SELECT " + Saml2OAuth2DataProvider.ColumnList(Saml2OAuth2DataProvider.Columns, storeType)
+                            + " FROM " + Saml2OAuth2DataProvider.TableName(storeType)
+                            + Saml2OAuth2DataProvider.WhereClientID(storeType),
                             new { ClientID = clientID });
                     }
 
@@ -536,7 +537,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  **使う形に戻す**（#297）。
-            return DataProvider.Unprotect(model);
+            return Saml2OAuth2DataProvider.Unprotect(model);
         }
 
         #endregion
@@ -565,8 +566,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    all.AddRange(DataProvider.Saml2OAuth2Data.Values
-                        .Select(m => DataProvider.Copy(null, m)));
+                    all.AddRange(Saml2OAuth2DataProvider.Saml2OAuth2Data.Values
+                        .Select(m => Saml2OAuth2DataProvider.Copy(null, m)));
 
                     break;
 
@@ -581,8 +582,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         EnumUserStoreType storeType = Config.UserStoreType;
 
                         all.AddRange(cnn.Query<ManageAddSaml2OAuth2DataViewModel>(
-                            "SELECT " + DataProvider.ColumnList(DataProvider.UriColumns, storeType)
-                            + " FROM " + DataProvider.TableName(storeType)));
+                            "SELECT " + Saml2OAuth2DataProvider.ColumnList(Saml2OAuth2DataProvider.UriColumns, storeType)
+                            + " FROM " + Saml2OAuth2DataProvider.TableName(storeType)));
                     }
 
                     break;
@@ -591,7 +592,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **使う形に戻す**（#297。**public クライアントの判定に使う**ので、ここも戻す）。
             for (int i = 0; i < all.Count; i++)
             {
-                all[i] = DataProvider.Unprotect(all[i]);
+                all[i] = Saml2OAuth2DataProvider.Unprotect(all[i]);
             }
 
             return all;
@@ -620,7 +621,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    urls.AddRange(DataProvider.Saml2OAuth2Data.Values
+                    urls.AddRange(Saml2OAuth2DataProvider.Saml2OAuth2Data.Values
                         .Select(m => m.JwksUri));
 
                     break;
@@ -636,9 +637,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         EnumUserStoreType storeType = Config.UserStoreType;
 
                         urls.AddRange(cnn.Query<string>(
-                            "SELECT " + DataProvider.ColumnList(
+                            "SELECT " + Saml2OAuth2DataProvider.ColumnList(
                                 new string[] { "JwksUri" }, storeType)
-                            + " FROM " + DataProvider.TableName(storeType)));
+                            + " FROM " + Saml2OAuth2DataProvider.TableName(storeType)));
                     }
 
                     break;
@@ -681,10 +682,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    all.AddRange(DataProvider.Saml2OAuth2Data.Values
+                    all.AddRange(Saml2OAuth2DataProvider.Saml2OAuth2Data.Values
                         .Where(m => m != null && m.OwnerUserId == ownerUserId)
                         .OrderBy(m => m.ClientID, StringComparer.Ordinal)
-                        .Select(m => DataProvider.Copy(null, m)));
+                        .Select(m => Saml2OAuth2DataProvider.Copy(null, m)));
 
                     break;
 
@@ -699,10 +700,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         EnumUserStoreType storeType = Config.UserStoreType;
 
                         all.AddRange(cnn.Query<ManageAddSaml2OAuth2DataViewModel>(
-                            "SELECT " + DataProvider.ColumnList(DataProvider.Columns, storeType)
-                            + " FROM " + DataProvider.TableName(storeType)
-                            + DataProvider.WhereOwnerUserId(storeType)
-                            + DataProvider.OrderByClientID(storeType),
+                            "SELECT " + Saml2OAuth2DataProvider.ColumnList(Saml2OAuth2DataProvider.Columns, storeType)
+                            + " FROM " + Saml2OAuth2DataProvider.TableName(storeType)
+                            + Saml2OAuth2DataProvider.WhereOwnerUserId(storeType)
+                            + Saml2OAuth2DataProvider.OrderByClientID(storeType),
                             new { OwnerUserId = ownerUserId }));
                     }
 
@@ -712,7 +713,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **使う形に戻す**（#297）。
             for (int i = 0; i < all.Count; i++)
             {
-                all[i] = DataProvider.Unprotect(all[i]);
+                all[i] = Saml2OAuth2DataProvider.Unprotect(all[i]);
             }
 
             return all;
@@ -730,7 +731,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public static ManageAddSaml2OAuth2DataViewModel GetFirstByOwner(string ownerUserId)
         {
-            List<ManageAddSaml2OAuth2DataViewModel> all = DataProvider.GetByOwner(ownerUserId);
+            List<ManageAddSaml2OAuth2DataViewModel> all = Saml2OAuth2DataProvider.GetByOwner(ownerUserId);
 
             return (all.Count == 0) ? null : all[0];
         }
@@ -757,7 +758,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return null;
             }
 
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(clientID);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(clientID);
 
             if (model == null || model.OwnerUserId != ownerUserId)
             {
@@ -787,9 +788,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             foreach (ManageAddSaml2OAuth2DataViewModel model
-                in DataProvider.GetByOwner(ownerUserId))
+                in Saml2OAuth2DataProvider.GetByOwner(ownerUserId))
             {
-                DataProvider.Delete(model.ClientID);
+                Saml2OAuth2DataProvider.Delete(model.ClientID);
             }
         }
 
@@ -803,15 +804,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public static void Update(string clientID, ManageAddSaml2OAuth2DataViewModel model)
         {
             //  **秘密は暗号化して保管する**（#297）。
-            model = DataProvider.Protect(clientID, model);
+            model = Saml2OAuth2DataProvider.Protect(clientID, model);
 
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     // TryUpdate が使えないので del -> ins にする。
                     ManageAddSaml2OAuth2DataViewModel temp = null;
-                    DataProvider.Saml2OAuth2Data.TryRemove(clientID, out temp);
-                    DataProvider.Saml2OAuth2Data.TryAdd(clientID, DataProvider.Copy(clientID, model));
+                    Saml2OAuth2DataProvider.Saml2OAuth2Data.TryRemove(clientID, out temp);
+                    Saml2OAuth2DataProvider.Saml2OAuth2Data.TryAdd(clientID, Saml2OAuth2DataProvider.Copy(clientID, model));
 
                     break;
 
@@ -826,10 +827,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         EnumUserStoreType storeType = Config.UserStoreType;
 
                         cnn.Execute(
-                            "UPDATE " + DataProvider.TableName(storeType)
-                            + " SET " + DataProvider.SetList(storeType)
-                            + DataProvider.WhereClientID(storeType),
-                            DataProvider.ToParameters(clientID, model, storeType));
+                            "UPDATE " + Saml2OAuth2DataProvider.TableName(storeType)
+                            + " SET " + Saml2OAuth2DataProvider.SetList(storeType)
+                            + Saml2OAuth2DataProvider.WhereClientID(storeType),
+                            Saml2OAuth2DataProvider.ToParameters(clientID, model, storeType));
                     }
 
                     break;
@@ -848,7 +849,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 case EnumUserStoreType.Memory:
                     ManageAddSaml2OAuth2DataViewModel model = null;
-                    DataProvider.Saml2OAuth2Data.TryRemove(clientID, out model);
+                    Saml2OAuth2DataProvider.Saml2OAuth2Data.TryRemove(clientID, out model);
 
                     break;
 
@@ -863,8 +864,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         EnumUserStoreType storeType = Config.UserStoreType;
 
                         cnn.Execute(
-                            "DELETE FROM " + DataProvider.TableName(storeType)
-                            + DataProvider.WhereClientID(storeType),
+                            "DELETE FROM " + Saml2OAuth2DataProvider.TableName(storeType)
+                            + Saml2OAuth2DataProvider.WhereClientID(storeType),
                             new { ClientID = clientID });
                     }
 

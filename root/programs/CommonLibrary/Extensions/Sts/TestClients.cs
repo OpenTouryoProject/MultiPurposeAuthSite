@@ -43,6 +43,7 @@
 //*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
 //*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -504,7 +505,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>クライアント登録（写す元が無ければ null）</returns>
         /// <remarks>
         /// **`AddSaml2OAuth2Data` 画面が保存するものと同じ形**にする
-        /// （同じ `ManageAddSaml2OAuth2DataViewModel` を `DataProvider` に渡す。#270）。
+        /// （同じ `ManageAddSaml2OAuth2DataViewModel` を `Saml2OAuth2DataProvider` に渡す。#270）。
         /// **読む側（`Helper` の各 `Get*`）も同じ型で受け取る**ため、
         /// **画面から登録したのと区別がつかない。**
         ///

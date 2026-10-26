@@ -41,6 +41,7 @@
 //*  2026/10/20  玄人 幸道         Users から ClientID 列を落とした（#307 の段階 5-a-1）
 //*  2026/10/21  玄人 幸道         利用者の削除で、セッション × クライアントの台帳も消す（#310 の段階 1）
 //*  2026/10/24  玄人 幸道         利用者名とメアドの規則の呼び先を Util.IdP.UserIdentifier にした（#294）
+//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1056,7 +1057,7 @@ namespace MultiPurposeAuthSite.Data
                         //   ON DELETE CASCADE** で、**DB では消えて、mem では残っていた。**
                         //   **1 利用者 n クライアントになり、`RT-307.3` の (6) が
                         //   正面から当たるので、ここで揃えた。**
-                        DataProvider.DeleteByOwner(user.Id);
+                        Saml2OAuth2DataProvider.DeleteByOwner(user.Id);
 
                         // **セッション × クライアントの台帳も消す**（#310 の段階 1）。
                         //   **DB では外部キー（UserId → Users.Id の ON DELETE CASCADE）が消す**

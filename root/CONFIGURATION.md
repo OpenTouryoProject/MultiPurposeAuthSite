@@ -1362,7 +1362,7 @@ POST /register   →  201（2 件目。**別の client_id / client_secret / regi
 
 ##### 管理画面は、n 件を並べる（段階 5-a-2）
 
-**`/Manage/Saml2OAuth2DataList` が、自分の登録を並べる**（`DataProvider.GetByOwner`）。
+**`/Manage/Saml2OAuth2DataList` が、自分の登録を並べる**（`Saml2OAuth2DataProvider.GetByOwner`）。
 
 | 画面 | 役 |
 |---|---|
@@ -1382,7 +1382,7 @@ POST /register   →  201（2 件目。**別の client_id / client_secret / regi
 ###### 他人の登録に触れないこと
 
 **`clientId` は URL とフォームから来る**ので、**所有者の照合はサーバ側で行う**
-（`DataProvider.GetByOwnerAndClientID`）。
+（`Saml2OAuth2DataProvider.GetByOwnerAndClientID`）。
 
 | 送られたもの | 画面 |
 |---|---|
@@ -1404,7 +1404,7 @@ POST /register   →  201（2 件目。**別の client_id / client_secret / regi
 | **認可ログの `User Account`** | 同上（**ログの 1 行**） |
 
 > **`client_id` の昇順で先頭**を使う（**段階 5-a-2 で並びを決めた**）。
-> **`mem` も方言 3 つも同じ順**にしてある（`DataProvider.GetByOwner` の `ORDER BY`）。
+> **`mem` も方言 3 つも同じ順**にしてある（`Saml2OAuth2DataProvider.GetByOwner` の `ORDER BY`）。
 > **決めていないと、一覧の行が毎回入れ替わる。**
 
 ##### DDL — 既存の配備は、4 つの文を流す（#307 の段階 5-a）
@@ -1896,7 +1896,7 @@ Post され、その順番を握っているのは、待っている自分**だ�
 
 | | |
 |---|---|
-| **何を集めるか** | **設定ファイルの `jwks_uri`**（`OAuth2ClientsInformation`）＋ **user store の `JwksUri` が空でない行**（`DataProvider.GetAllJwksUris`） |
+| **何を集めるか** | **設定ファイルの `jwks_uri`**（`OAuth2ClientsInformation`）＋ **user store の `JwksUri` が空でない行**（`Saml2OAuth2DataProvider.GetAllJwksUris`） |
 | **絞らない** | **`private_key_jwt` の登録だけに絞らない**（**Request Object（JAR）の検証にも使い得る**） |
 | **順と上限** | **設定を先に、次に user store。** **重複は除き、直列に読み、100 本で打ち切る**（**起動と同時に、外へ何十本も出さない**。**設定キーは増やしていない**） |
 | **読めないとき** | **ログに残して進む**（**起動は止めない** — **DB が落ちている配備でも立ち上がる**） |
