@@ -45,6 +45,7 @@
 //*  2026/10/25  玄人 幸道         仕様の要諦を冒頭に書き、段階ごとの経緯を DesignNotes へ移した（#294）
 //*  2026/10/26  玄人 幸道         誤りのコードを Const へ移した（#294）
 //*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
+//*  2026/10/26  玄人 幸道         PUT は現行の行を土台にし、動的登録が持つ列だけを置き換えるようにした（所有者が消えていた。#294）
 //**********************************************************************************
 
 /*
@@ -338,6 +339,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **利用者の行には触らない。**
             model.OwnerUserId = user.Id;
 
+            // UserのClientデータを新規作成
             Saml2OAuth2DataProvider.Create(client_id, model);
 
             // オペレーション・トレース・ログ出力
@@ -388,6 +390,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             ret = null;
 
+            // **`registration_access_token` の検証**（RFC 7592 §2.1）。
             int status = ClientRegistrationProvider.Authorize(
                 client_id, bearerToken,
                 out ManageAddSaml2OAuth2DataViewModel model, out err);
@@ -397,6 +400,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return status;
             }
 
+            // **登録の全体を返す**（§2.1）。
             ret = ClientRegistrationProvider.BuildClientInformation(client_id, model, bearerToken);
 
             return 200;
@@ -413,13 +417,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **全置換である**（§2.2 : クライアントは、返された全てのメタデータを入れること。
         /// **省いた項目は「消す要求」として扱われる**）。**差分更新（`PATCH`）は仕様に無い。**
         ///
-        /// | | 列 |
-        /// |---|---|
-        /// | **要求から作り直す**（**省いたら消える**） | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` |
-        /// | **要求から作り直す** | `TokenEndpointAuthMethod`（**省いたら、秘密ベースに戻る**） |
-        /// | **要求に在れば置き換え、無ければ持ち越す** | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` |
-        /// | **要求が片方を入れたら、もう片方は消える** | `Jwk*` ↔ `JwksUri`（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
-        /// | **持ち越す**（**要求では変えられない**） | `ClientID` / `ClientSecret` / `ClientName` / `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `BackChannelLogoutUri` / `FrontChannelLogoutUri` / `WebOrigins` / `RequestObjectSigningAlg`） |
+        /// **現行の行を土台にし、動的登録が持つ列だけを、要求の値で置き換える。**
+        /// **それ以外の列は、書かなくても持ち越される**（**表に列を足しても、ここを直さなくてよい**）。
+        /// 表の順は、`#region 保存` の処理の順である。
+        ///
+        /// | 順 | 列 | 扱い |
+        /// |---|---|---|
+        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**） |
+        /// | 2 | `Jwk*` ↔ `JwksUri` | **要求が片方を入れたら、もう片方は消える**（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
+        /// | 3 | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` | **要求に在れば置き換え、無ければ持ち越す** |
+        /// | 4 | `ClientMode` | **持ち越す**（**空のときだけ `normal`**。管理画面で FAPI の登録にしたものを、`PUT` で下げない） |
+        /// | — | **上の外の全て** : `ClientID` / `ClientSecret` / `ClientName` / `RequirePkce` / `OwnerUserId` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `BackChannelLogoutUri` / `FrontChannelLogoutUri` / `WebOrigins` / `RequestObjectSigningAlg`） | **持ち越す**（**要求では変えられない**。**土台が現行なので、コードには出てこない**） |
         ///
         /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
         /// > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
@@ -444,6 +452,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             ret = null;
 
+            // **`registration_access_token` の検証**（RFC 7592 §2.2）。
             int status = ClientRegistrationProvider.Authorize(
                 client_id, bearerToken,
                 out ManageAddSaml2OAuth2DataViewModel current, out err);
@@ -453,7 +462,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return status;
             }
 
-            #region メタデータ（RFC 7592 §2.2）
+            #region 本文
 
             JObject metadata = null;
 
@@ -512,9 +521,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    `registration_access_token` / `registration_client_uri` /
             //    `client_id_issued_at` / `client_secret_expires_at`
 
-            ManageAddSaml2OAuth2DataViewModel model = new ManageAddSaml2OAuth2DataViewModel();
+            //  **要求の値**（検査を通ったものだけ）。**保存するのは、これではない**（下の `model`）。
+            ManageAddSaml2OAuth2DataViewModel requested = new ManageAddSaml2OAuth2DataViewModel();
 
-            if (!ClientRegistrationProvider.Validate(metadata, model, out string code,
+            if (!ClientRegistrationProvider.Validate(metadata, requested, out string code,
                 out string description, out List<string> _, out List<string> __))
             {
                 err.Add(OAuth2AndOIDCConst.error, code);
@@ -524,67 +534,75 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
-            #region 保存（持ち越す列を、現行から移す）
+            #region 保存
 
-            model.ClientID = client_id;
-            model.ClientSecret = current.ClientSecret;
-            model.ClientName = current.ClientName;
-            model.RequirePkce = current.RequirePkce;
-            model.RegistrationAccessToken = current.RegistrationAccessToken;
+            //  **現行の行を土台にする**（`Authorize` が読んだ `current` は複製なので、書き換えてよい）。
+            //    **動的登録が持つ列だけを、要求の値で置き換える** —
+            //    **それ以外の列（所有者・秘密・画面から入れた列など）は、書かなくても持ち越される。**
+            //    **表に列を足しても、ここを直さなくてよい**
+            //    （**要求の値を土台にしていた頃は、持ち越しを足し忘れた列を `PUT` が消していた**）。
+            ManageAddSaml2OAuth2DataViewModel model = current;
 
-            //  **登録種別は変えない** — **`Validate` は `normal` を入れる**が、
-            //    **管理画面で FAPI の登録にしてあるものを、`PUT` で下げてはならない。**
-            if (!string.IsNullOrEmpty(current.ClientMode))
-            {
-                model.ClientMode = current.ClientMode;
-            }
+            //  1. **要求から作り直す**（**省いたら消える**。§2.2 の全置換）。
+            model.RedirectUriCode = requested.RedirectUriCode;
+            model.RedirectUriToken = requested.RedirectUriToken;
+            model.Scopes = requested.Scopes;
+            model.GrantTypes = requested.GrantTypes;
+            model.ResponseTypes = requested.ResponseTypes;
+            model.ClientUri = requested.ClientUri;
+            model.LogoUri = requested.LogoUri;
+            model.TosUri = requested.TosUri;
+            model.PolicyUri = requested.PolicyUri;
+            model.Contacts = requested.Contacts;
+            model.SoftwareId = requested.SoftwareId;
+            model.SoftwareVersion = requested.SoftwareVersion;
+            model.SubjectTypes = requested.SubjectTypes;
+            model.IdTokenSignedResponseAlg = requested.IdTokenSignedResponseAlg;
 
-            //  **動的登録では設定できない列**（管理画面から入れた値）。
-            model.RedirectUriSaml = current.RedirectUriSaml;
-            model.PostLogoutRedirectUri = current.PostLogoutRedirectUri;
-            //  **ログアウトの通知先も、動的登録では設定できない**（#310）。
-            //    **RFC 7591 のメタデータではない**ので、**画面と設定ファイルからだけ入れる。**
-            model.BackChannelLogoutUri = current.BackChannelLogoutUri;
-            model.FrontChannelLogoutUri = current.FrontChannelLogoutUri;
-            model.WebOrigins = current.WebOrigins;
-            model.RequestObjectSigningAlg = current.RequestObjectSigningAlg;
+            //    **省いたら、秘密ベース（`client_secret_basic` / `client_secret_post`）に戻る。**
+            model.TokenEndpointAuthMethod = requested.TokenEndpointAuthMethod;
 
-            //  **鍵・DN・alg は、要求に在れば `Validate` が入れている。**
-            //    **無ければ持ち越す** — **管理画面から入れた鍵を、`PUT` で消してはならない。**
+            //  2. **`jwks` と `jwks_uri` は排他**（RFC 7591 §2）なので、
+            //    **持ち越しで両方にならないようにする。**
+            //    **要求が片方を入れてきたら、もう片方は消す** —
+            //    **`PUT` で `jwks_uri` から列の鍵へ（その逆へも）移れる**ようにするためである。
+            //    **要求がどちらも入れていなければ、現行のまま**（**管理画面から入れた鍵を、`PUT` で消してはならない**）。
+            //
             //    **`private_key_jwt` / `tls_client_auth` を明記したなら、
             //    材料が無い要求は `Validate` が `400` で断っている**ので、
-            //    **ここで持ち越しても「方法だけ在って材料が無い」にはならない。**
-            //
-            //  **`jwks` と `jwks_uri` は排他**（RFC 7591 §2）なので、
-            //    **持ち越しで両方にならないようにする。**
-            //    **要求が片方を入れてきたら、もう片方は持ち越さない** —
-            //    **`PUT` で `jwks_uri` から列の鍵へ（その逆へも）移れる**ようにするためである。
-            bool requestHasJwks = !string.IsNullOrEmpty(model.JwkRsaPublickey)
-                || !string.IsNullOrEmpty(model.JwkECDsaPublickey);
-
-            if (!string.IsNullOrEmpty(model.JwksUri))
+            //    **持ち越しても「方法だけ在って材料が無い」にはならない。**
+            if (!string.IsNullOrEmpty(requested.JwksUri))
             {
-                //  **要求が `jwks_uri`** ＝ **列の鍵は持ち越さない。**
+                model.JwksUri = requested.JwksUri;
                 model.JwkRsaPublickey = "";
                 model.JwkECDsaPublickey = "";
             }
-            else if (requestHasJwks)
+            else if (!string.IsNullOrEmpty(requested.JwkRsaPublickey)
+                || !string.IsNullOrEmpty(requested.JwkECDsaPublickey))
             {
-                //  **要求が `jwks`** ＝ **URL は持ち越さない。**
+                model.JwkRsaPublickey = requested.JwkRsaPublickey;
+                model.JwkECDsaPublickey = requested.JwkECDsaPublickey;
                 model.JwksUri = "";
             }
-            else
+
+            //  3. **DN と alg は、要求に在れば置き換え、無ければ持ち越す**（鍵と同じ理由）。
+            if (!string.IsNullOrEmpty(requested.TlsClientAuthSubjectDn))
             {
-                //  **要求がどちらも入れていない** ＝ **現行をそのまま持ち越す。**
-                model.JwkRsaPublickey = current.JwkRsaPublickey;
-                model.JwkECDsaPublickey = current.JwkECDsaPublickey;
-                model.JwksUri = current.JwksUri;
+                model.TlsClientAuthSubjectDn = requested.TlsClientAuthSubjectDn;
             }
 
-            model.TlsClientAuthSubjectDn = string.IsNullOrEmpty(model.TlsClientAuthSubjectDn)
-                ? current.TlsClientAuthSubjectDn : model.TlsClientAuthSubjectDn;
-            model.TokenEndpointAuthSigningAlg = string.IsNullOrEmpty(model.TokenEndpointAuthSigningAlg)
-                ? current.TokenEndpointAuthSigningAlg : model.TokenEndpointAuthSigningAlg;
+            if (!string.IsNullOrEmpty(requested.TokenEndpointAuthSigningAlg))
+            {
+                model.TokenEndpointAuthSigningAlg = requested.TokenEndpointAuthSigningAlg;
+            }
+
+            //  4. **登録種別は変えない** — **`Validate` は `normal` を入れる**が、
+            //    **管理画面で FAPI の登録にしてあるものを、`PUT` で下げてはならない。**
+            //    **空のときだけ、要求の値（`normal`）にする。**
+            if (string.IsNullOrEmpty(model.ClientMode))
+            {
+                model.ClientMode = requested.ClientMode;
+            }
 
             Saml2OAuth2DataProvider.Update(client_id, model);
 
