@@ -39,6 +39,7 @@
 //*  2026/10/21  玄人 幸道         RT-307.4 の jwks_uri を「読めない URL は 400」にした（#309 の段階 1）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/26  玄人 幸道         RT-307.27（動的登録の CRUD の後で、保存された行を確かめる）を追加（#294）
+//*  2026/10/26  玄人 幸道         RT-307.28（管理画面で保存しても、画面に出ない列が残る）を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -3109,6 +3110,129 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Done();
             }
+        }
+
+        #endregion
+
+        #region RT-307.28
+
+        /// <summary>RT-307.28 管理画面で保存しても、画面に出ない列（EC の鍵）は残る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **管理画面の保存も、行を丸ごと書き換える**（`Saml2OAuth2DataProvider.Update`）。
+        /// **画面のフォームに欄が無い列は、呼ぶ側が現行の行から持ち越す必要がある** —
+        /// **`RT-307.27` の `PUT` と同じ形**である。
+        ///
+        /// **EC の公開鍵（`JwkECDsaPublickey`）は、画面に欄が無い**
+        /// （**入るのは動的登録の `jwks` か、構成ファイル**）。
+        /// **持ち越していなかったので、画面で保存するたびに消えていた。**
+        ///
+        /// **保存の後で、管理 API（`GET`）から読み直して確かめる。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30728_管理画面で保存しても画面に出ない列は残る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.28",
+                    "管理画面で保存しても、**画面に出ない列（EC の公開鍵）は残る**",
+                    "**画面の保存は行を丸ごと書き換える**ので、"
+                    + "**フォームに欄の無い列は、現行の行から持ち越さないと消える。** "
+                    + "**EC の鍵は画面に欄が無い**（動的登録の `jwks` か構成ファイルから入る）。"
+                    + "**保存の後で、管理 API から読み直して確かめる。**",
+                    "#307 の段階 3 / #294 / ManageController.AddSaml2OAuth2Data");
+
+                r.Target("POST /register（jwks に RSA と EC）→ 画面で保存 → GET registration_client_uri");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) jwks に RSA と EC の鍵を 1 本ずつ入れて登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"jwks\":{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + ","
+                        + JwsSigner.PublicEcJwk(client) + "]}}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    JsonResponse before = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    Assert.True(ClientRegistrationTests.HasJwkOf(before, "EC"),
+                        "前提: 登録した EC の鍵が読めること");
+
+                    r.Step("(2) 管理画面で redirect_uri を B に直して保存する");
+
+                    Dictionary<string, string> form = ManageClientRegistration.Harvest(
+                        await ManageClientRegistration.OpenEditAsync(client, clientId));
+
+                    r.Verify("画面には EC の鍵の欄が無い",
+                        !form.ContainsKey("JwkECDsaPublickey"),
+                        "無い", form.ContainsKey("JwkECDsaPublickey") ? "**在る**" : "無い");
+
+                    form["RedirectUriCode"] = UriB;
+
+                    await ManageClientRegistration.PostAsync(client, form, "submit.Add");
+
+                    r.Step("(3) 管理 API で読み直す");
+
+                    JsonResponse after = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 200（registration_access_token も残る）", "200",
+                        ((int)after.StatusCode).ToString());
+
+                    r.VerifyEqual("画面で直した redirect_uri（B）が返る", "True",
+                        after.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.VerifyEqual("RSA の鍵は残る（画面に欄が在る）", "True",
+                        ClientRegistrationTests.HasJwkOf(after, "RSA").ToString());
+
+                    r.VerifyEqual("EC の鍵も残る（画面に欄が無い）", "True",
+                        ClientRegistrationTests.HasJwkOf(after, "EC").ToString());
+
+                    r.Note("**画面に欄の無い列は、保存のときに現行の行から持ち越す**"
+                        + "（`registration_access_token` のハッシュと同じ扱い）。"
+                        + "**持ち越していなかった頃は、画面で保存するたびに EC の鍵が消えていた。**");
+                },
+
+                //  **所有者を Admin にする** — **一覧と編集の画面は Admin 以上**を要る。
+                "Admin");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>応答の `jwks` に、その `kty` の鍵が在るか</summary>
+        /// <param name="response">登録の応答（GET / PUT）</param>
+        /// <param name="kty">`RSA` / `EC`</param>
+        /// <returns>在れば true</returns>
+        private static bool HasJwkOf(JsonResponse response, string kty)
+        {
+            if (!response.IsJson
+                || !response.Json.TryGetProperty("jwks", out JsonElement jwks)
+                || !jwks.TryGetProperty("keys", out JsonElement keys)
+                || keys.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (JsonElement key in keys.EnumerateArray())
+            {
+                if (key.TryGetProperty("kty", out JsonElement value) && value.GetString() == kty)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         #endregion

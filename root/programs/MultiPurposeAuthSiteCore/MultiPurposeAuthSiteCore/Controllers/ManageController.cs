@@ -38,6 +38,7 @@
 //*  2026/10/25  玄人 幸道         WebAuthn の登録の失敗を OPERATION に記録する（障害対応のため。#294）
 //*  2026/10/25  玄人 幸道         追加した OPERATION ログの文言を resx に、長さの上限を Const にした（#294）
 //*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
+//*  2026/10/26  玄人 幸道         クライアント登録の保存で、画面に欄の無い EC の公開鍵を持ち越すようにした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2127,6 +2128,10 @@ namespace MultiPurposeAuthSite.Controllers
                                 //    （下の分岐。**別のクライアントになる**ので、
                                 //      **そのトークンは、もう効いてはならない**）。
                                 model.RegistrationAccessToken = owned.RegistrationAccessToken;
+
+                                //  **画面に欄の無い列も持ち越す**（行を丸ごと上書きするので、**持ち越さないと消える**）。
+                                //    **EC の公開鍵**は、動的登録の `jwks` か構成ファイルから入る（`RT-307.28`）。
+                                model.JwkECDsaPublickey = owned.JwkECDsaPublickey;
 
                                 //  **動的登録で作られた行を、画面から書き替えた**（#307 の段階 6）。
                                 //    **記録に残す** —
