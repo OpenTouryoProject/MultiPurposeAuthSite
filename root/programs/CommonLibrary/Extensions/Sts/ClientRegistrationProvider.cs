@@ -46,6 +46,7 @@
 //*  2026/10/26  玄人 幸道         誤りのコードを Const へ移した（#294）
 //*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //*  2026/10/26  玄人 幸道         PUT は現行の行を土台にし、動的登録が持つ列だけを置き換えるようにした（所有者が消えていた。#294）
+//*  2026/10/26  玄人 幸道         DELETE で、所有者だけでなく全利用者の同意を消すようにした（#294）
 //**********************************************************************************
 
 /*
@@ -400,7 +401,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return status;
             }
 
-            // **登録の全体を返す**（§2.1）。
+            // 応答：登録の全体を返す
             ret = ClientRegistrationProvider.BuildClientInformation(client_id, model, bearerToken);
 
             return 200;
@@ -604,6 +605,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 model.ClientMode = requested.ClientMode;
             }
 
+            // UserのClientデータを更新
             Saml2OAuth2DataProvider.Update(client_id, model);
 
             // オペレーション・トレース・ログ出力
@@ -614,6 +616,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
+            // 応答：登録の全体を返す
             ret = ClientRegistrationProvider.BuildClientInformation(client_id, model, bearerToken);
 
             return 200;
@@ -629,7 +632,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | **消える** | **登録の行**／**同意**（`ConsentProvider.Revoke`）／**`registration_access_token`**（**行が無くなるので、2 回目の要求は `401`**。§5） |
+        /// | **消える** | **登録の行**／**同意**（**全利用者の分**。`ConsentProvider.RevokeByClient`）／**`registration_access_token`**（**行が無くなるので、2 回目の要求は `401`**。§5） |
         /// | **残る** | **他の登録**（**同じ所有者の n 件のうち、消したものだけが消える**） |
         /// | **使えなくなる** | **既に発行されたアクセス トークン**（**登録が無くなると `Helper.HasClient` が false になる**）／**リフレッシュ トークン**（**クライアント認証が通らない**） |
         ///
@@ -650,13 +653,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  **同意を落とす**（§2.3 : 払い下げたクライアントへの許可を残さない）。
-            //    **所有者は列から引く。**
-            //    **空のことが在る**（構成ファイル発の種データ）ので、そのときは何もしない。
-            if (!string.IsNullOrEmpty(model.OwnerUserId))
-            {
-                ConsentProvider.Revoke(model.OwnerUserId, client_id);
-            }
+            //    **所有者だけでなく、このクライアントに同意した全利用者の分を消す**
+            //    （**同意の表の `ClientID` には外部キーが無い**ので、行を消しても残る）。
+            ConsentProvider.RevokeByClient(client_id);
 
+            // UserのClientデータを削除
             Saml2OAuth2DataProvider.Delete(client_id);
 
             // オペレーション・トレース・ログ出力

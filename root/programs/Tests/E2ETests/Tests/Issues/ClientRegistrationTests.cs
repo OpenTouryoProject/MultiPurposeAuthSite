@@ -40,6 +40,7 @@
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/26  玄人 幸道         RT-307.27（動的登録の CRUD の後で、保存された行を確かめる）を追加（#294）
 //*  2026/10/26  玄人 幸道         RT-307.28（管理画面で保存しても、画面に出ない列が残る）を追加（#294）
+//*  2026/10/26  玄人 幸道         RT-307.29（登録を消すと、全利用者の同意が消える）を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -3233,6 +3234,163 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
 
             return false;
+        }
+
+        #endregion
+
+        #region RT-307.29
+
+        /// <summary>RT-307.29 登録を消すと、全利用者の同意が消える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **同意の表の `ClientID` には外部キーが無い**（構成ファイルのクライアントの同意も記録するため）。
+        /// **登録の行を消しても、同意は自動では消えない。**
+        ///
+        /// | 消し方 | 以前 | 今 |
+        /// |---|---|---|
+        /// | **動的登録の `DELETE`** | **所有者の同意だけ**を消していた | **全利用者の分**を消す |
+        /// | **管理画面の削除** | **1 件も消していなかった** | **全利用者の分**を消す |
+        ///
+        /// **消した後で、利用者ごとの同意の一覧（`/Manage/ConsentGrants`）を読み直して確かめる。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30729_登録を消すと全利用者の同意が消える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.29",
+                    "登録を消すと、**所有者以外の利用者の同意も消える**（動的登録の `DELETE`・管理画面の削除）",
+                    "**同意の表の `ClientID` には外部キーが無い**ので、**登録を消しても同意は残る。** "
+                    + "**`DELETE` は所有者の同意だけを、管理画面の削除は 1 件も消していなかった。** "
+                    + "**消した後で、利用者ごとの同意の一覧を読み直して確かめる。**",
+                    "RFC 7592 §2.3 / #272 の段階 2 / #294 / ConsentProvider.RevokeByClient");
+
+                r.Target("DELETE registration_client_uri / POST /Manage/RemoveSaml2OAuth2Data → GET /Manage/ConsentGrants");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    //  **所有者とは別の利用者**（C）を作り、同意させる。
+                    string consumer = "e2e_rt307_csm_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+                    Assert.True(ClientRegistrationTests.IsRedirect(await UsersAdmin.CreateAsync(
+                        admin, consumer, consumer + "@example.com", "User")),
+                        "前提: 同意する利用者を作れること");
+
+                    try
+                    {
+                        using (IdPClient other = this.Client(targetKey))
+                        {
+                            Assert.True(await other.TrySignInAsync(consumer, ctx.Password),
+                                "前提: 同意する利用者でサインインできること");
+
+                            r.Step("(1) 登録 X を作り、所有者（B）と別の利用者（C）が同意する");
+
+                            (ClientRegistration x, string xUri, string xToken) =
+                                await ClientRegistrationTests.RegisterForConsentAsync(client, endpoint, token);
+
+                            await Flows.EnsureConsentAsync(client, x, "openid");
+                            await Flows.EnsureConsentAsync(other, x, "openid");
+
+                            Assert.True(await ClientRegistrationTests.HasConsentAsync(other, x.ClientId),
+                                "前提: C の同意の一覧に X が出ること");
+
+                            Assert.True(await ClientRegistrationTests.HasConsentAsync(client, x.ClientId),
+                                "前提: B の同意の一覧に X が出ること");
+
+                            r.Step("(2) 動的登録の DELETE で X を消し、同意の一覧を読み直す");
+
+                            JsonResponse deleted = await DynamicClientRegistration.DeleteAsync(
+                                client, xUri, xToken);
+
+                            r.VerifyEqual("HTTP の状態は 204", "204", ((int)deleted.StatusCode).ToString());
+
+                            bool ownerHasX = await ClientRegistrationTests.HasConsentAsync(client, x.ClientId);
+                            bool otherHasX = await ClientRegistrationTests.HasConsentAsync(other, x.ClientId);
+
+                            r.Verify("所有者（B）の同意は消える", !ownerHasX,
+                                "消える", ownerHasX ? "**残っている**" : "消えた");
+
+                            r.Verify("別の利用者（C）の同意も消える", !otherHasX,
+                                "消える", otherHasX ? "**残っている**" : "消えた");
+
+                            r.Step("(3) 登録 Y を作って C が同意し、管理画面から Y を消して、同意の一覧を読み直す");
+
+                            (ClientRegistration y, string _, string __) =
+                                await ClientRegistrationTests.RegisterForConsentAsync(client, endpoint, token);
+
+                            await Flows.EnsureConsentAsync(other, y, "openid");
+
+                            Assert.True(await ClientRegistrationTests.HasConsentAsync(other, y.ClientId),
+                                "前提: C の同意の一覧に Y が出ること");
+
+                            bool removed = await ManageClientRegistration.RemoveOneAsync(client, y.ClientId);
+
+                            r.Verify("管理画面から消せる", removed,
+                                "消せる", removed ? "消せた" : "**消せない**");
+
+                            bool otherHasY = await ClientRegistrationTests.HasConsentAsync(other, y.ClientId);
+
+                            r.Verify("別の利用者（C）の同意も消える", !otherHasY,
+                                "消える", otherHasY ? "**残っている**" : "消えた");
+
+                            r.Note("**`DELETE` は、以前は所有者の同意だけを消していた**"
+                                + "（`ConsentProvider.Revoke(所有者, client_id)`）。"
+                                + "**管理画面の削除は、同意を 1 件も消していなかった。** "
+                                + "**どちらも `ConsentProvider.RevokeByClient` で、全利用者の分を消すようにした。**");
+                        }
+                    }
+                    finally
+                    {
+                        await UsersAdmin.DeleteByUserNameAsync(admin, consumer);
+                    }
+                },
+
+                //  **所有者を Admin にする** — **管理画面の削除は Admin 以上**を要る。
+                "Admin");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>同意させるための登録を 1 件作る（#294）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="endpoint">registration_endpoint</param>
+        /// <param name="token">専用 scope のアクセス トークン</param>
+        /// <returns>クライアントと、registration_client_uri / registration_access_token</returns>
+        private static async Task<(ClientRegistration, string, string)> RegisterForConsentAsync(
+            IdPClient client, string endpoint, string token)
+        {
+            JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                client, endpoint, token,
+                "{\"redirect_uris\":[\"" + UriA + "\"],\"scope\":\"openid\"}");
+
+            Assert.Equal(201, (int)created.StatusCode);
+
+            ClientRegistration registration = new ClientRegistration()
+            {
+                ClientId = created.String("client_id"),
+                ClientSecret = created.String("client_secret"),
+                RedirectUri = UriA
+            };
+
+            return (registration,
+                created.String("registration_client_uri"),
+                created.String("registration_access_token"));
+        }
+
+        /// <summary>その利用者の同意の一覧に、そのクライアントが出るか（#294）</summary>
+        /// <param name="client">サインイン済みの IdPClient</param>
+        /// <param name="clientId">client_id</param>
+        /// <returns>出れば true</returns>
+        /// <remarks>**一覧の取り消しのフォームに、`client_id` が hidden で入っている。**</remarks>
+        private static async Task<bool> HasConsentAsync(IdPClient client, string clientId)
+        {
+            string html = await client.GetStringAsync("/Manage/ConsentGrants");
+
+            return html != null
+                && html.Contains("name=\"clientId\" value=\"" + clientId + "\"");
         }
 
         #endregion

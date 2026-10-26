@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/06  玄人 幸道         新規（#272 の段階 2 / D-6）
 //*  2026/10/25  玄人 幸道         仕様の要諦を拡充した（#294）
+//*  2026/10/26  玄人 幸道         クライアント単位で同意を消す RevokeByClient を追加（登録の削除で、全利用者の同意を消す。#294）
 //**********************************************************************************
 
 /*
@@ -44,7 +45,8 @@
  * 記録に無い scope が在れば同意画面を出し直し、prompt=none なら consent_required を返す。
  * prompt=consent / select_account なら、記録が在っても同意画面を出す。
  *
- * 取り消し（Revoke）は行ごと消す。呼ぶのは管理画面と、動的登録の DELETE（RFC 7592 §2.3）。
+ * 取り消し（Revoke）は行ごと消す。呼ぶのは管理画面（利用者が 1 件ずつ取り消す）。
+ * クライアントの登録を消すとき（動的登録の DELETE・管理画面の削除）は、RevokeByClient で全利用者の分を消す。
  * 発行済みのトークンは失効しない（そちらは /revoke の役目）。
  * 利用者を消すと、FK（ON DELETE CASCADE）で同意も消える。
  */
@@ -452,6 +454,80 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     "DELETE FROM \"consentgrant\""
                                     + " WHERE \"userid\" = @UserId AND \"clientid\" = @ClientID",
                                     new { UserId = userId, ClientID = clientId });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>そのクライアントへの同意を、全利用者の分取り消す（#294）</summary>
+        /// <param name="clientId">ClientID</param>
+        /// <remarks>
+        /// **クライアントの登録を消すときに呼ぶ**（動的登録の `DELETE`・管理画面の削除）。
+        /// **所有者だけでなく、そのクライアントに同意した全ての利用者の行を消す** —
+        /// **払い下げたクライアントへの許可を残さない**（RFC 7592 §2.3）。
+        ///
+        /// **`ClientID` には外部キーが無い**（構成ファイルのクライアントの同意も記録するため）ので、
+        /// **登録の行を消しても、同意は自動では消えない。**
+        /// </remarks>
+        public static void RevokeByClient(string clientId)
+        {
+            if (string.IsNullOrEmpty(clientId))
+            {
+                return;
+            }
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    string suffix = "\t" + clientId;
+
+                    foreach (string key in ConsentProvider.ConsentGrants.Keys)
+                    {
+                        if (key.EndsWith(suffix, StringComparison.Ordinal))
+                        {
+                            string removed = null;
+                            ConsentProvider.ConsentGrants.TryRemove(key, out removed);
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "DELETE FROM [ConsentGrant] WHERE [ClientID] = @ClientID",
+                                    new { ClientID = clientId });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"ConsentGrant\" WHERE \"ClientID\" = :ClientID",
+                                    new { ClientID = clientId });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"consentgrant\" WHERE \"clientid\" = @ClientID",
+                                    new { ClientID = clientId });
 
                                 break;
                         }

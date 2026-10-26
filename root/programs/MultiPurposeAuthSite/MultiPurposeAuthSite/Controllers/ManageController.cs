@@ -37,6 +37,7 @@
 //*  2026/10/20  玄人 幸道         クライアント登録を一覧にした（#307 の段階 5-a-2）
 //*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //*  2026/10/26  玄人 幸道         クライアント登録の保存で、画面に欄の無い EC の公開鍵を持ち越すようにした（#294）
+//*  2026/10/26  玄人 幸道         クライアント登録の削除で、全利用者の同意も消すようにした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1963,7 +1964,12 @@ namespace MultiPurposeAuthSite.Controllers
                         new { Message = EnumManageMessageId.Error });
                 }
 
+                // UserのClientデータを更新
                 Sts.Saml2OAuth2DataProvider.Delete(owned.ClientID);
+
+                //  **同意も消す**（全利用者の分。**動的登録の `DELETE` と同じ扱い**。`RT-307.29`）。
+                //    **同意の表の `ClientID` には外部キーが無い**ので、登録の行を消しても残る。
+                Sts.ConsentProvider.RevokeByClient(owned.ClientID);
 
                 //  **利用者の行は触らない**（#307 の段階 5-a-1）。
                 //    **以前は `UserManager.UpdateAsync` を呼んでいた** —
