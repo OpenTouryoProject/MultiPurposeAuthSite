@@ -32,7 +32,7 @@
 //*  2018/12/26  西野 大介         分割
 //*  2020/02/27  西野 大介         課金エンドポイント（テスト用→解放）
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
-//*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
+//*  2026/10/04  玄人 幸道         CORSを口ごとの属性にした（#265）
 //*  2026/10/09  西野 大介         オンライン決済サービス処理の削除
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の口を追加（#307 の段階 2）
@@ -40,6 +40,7 @@
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         Authorization ヘッダの読み取りを Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
+//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //*  2026/10/25  玄人 幸道         登録の失敗の応答を OPERATION に記録する（障害対応のため。#294）
 //**********************************************************************************
 
@@ -85,6 +86,8 @@ namespace MultiPurposeAuthSite.Controllers
         | EnumHttpAuthHeader.Bearer)] // Bearer認証の結果をGetClaimsで検証。
     public class OAuth2ResourceServerController : ApiController
     {
+        #region DI(CA)対応
+        
         #region constructor
 
         /// <summary>constructor</summary>
@@ -111,65 +114,51 @@ namespace MultiPurposeAuthSite.Controllers
                 return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationRoleManager>();
             }
         }
+
         #endregion
 
-        #region テスト用
+        #endregion
 
-        #region Hybrid Flow
+        #region DPoP
 
-        /// <summary>
-        /// Hybrid Flowのテスト用エンドポイント
-        /// POST: /TestHybridFlow
-        /// </summary>
-        /// <param name="formData">code</param>
-        /// <returns>Dictionary(string, string)</returns>
-        [HttpPost]
-        // **自己テストの画面（OAuth2ImplicitGrantClient）が jQuery で叩く。**
-        //   **既定では同一オリジン**（OAuth2AuthorizationServerEndpointsRootURI と
-        //   OAuth2ClientEndpointsRootURI が同じ値）なので、本来 CORS は要らない。
-        //   **2 つを別ホストにした配備では、クロス オリジンになる**ので開けておく。
-        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じる**（WebApiConfig）ため、
-        //   **本番では、このポリシーも届かない。**
-        //   **資格情報は許さない**（SupportsCredentials を付けない）。
-        [EnableCors(origins: "*", headers: "*", methods: "*")]
-        public async Task<Dictionary<string, object>> TestHybridFlow(FormDataCollection formData)
+        // 照合 (汎用)
+
+        /// <summary>DPoP に縛られたトークンなら、証明を照合する（#311 の段階 2）</summary>
+        /// <param name="identity">検証済みの ClaimsIdentity</param>
+        /// <param name="accessToken">提示された access_token</param>
+        /// <param name="isDPoP">**`DPoP` スキームで来たか**</param>
+        /// <param name="dpopError">out : error（**`use_dpop_nonce` のときだけ**。#311 の段階 4）</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり通る**
+        /// （**DPoP を知らないクライアントに影響しない**）。
+        ///
+        /// **`Bearer` スキームで来た要求には、証明を渡さない** ＝
+        /// **縛られたトークンなら断る**（RFC 9449 §7.1）。
+        /// **縛りを「使う側の出し方」で外せてはいけない。**
+        ///
+        /// **`htu` は、要求のパスから設定の URL を引く**（`CmnDPoP.EndpointUriOf`。
+        /// **`Host` ヘッダは見ない**）。**`htm` は、実際のメソッド**である。
+        ///
+        /// **`registration_access_token`（RFC 7592）には関わらない** —
+        /// **あちらは JWT ではなく、登録の行に突き合わせる資格情報**である。
+        /// </remarks>
+        private bool VerifyDPoP(
+            ClaimsIdentity identity, string accessToken, bool isDPoP, out string dpopError)
         {
-            // 変数
-            string code = formData[OAuth2AndOIDCConst.code];
-
-            // Tokenエンドポイントにアクセス
-            Uri tokenEndpointUri = new Uri(
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-
-            // 結果を格納する変数。
-            Dictionary<string, object> dic = null;
-
-            //  client_Idから、client_secretを取得。
-            string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-            string client_secret = Helper.GetInstance().GetClientSecret(client_id);
-
-            // Hybridは、Implicitのredirect_uriを使用
-            string redirect_uri 
-                = Config.OAuth2ClientEndpointsRootURI
-                + Config.OAuth2ImplicitGrantClient_Account;
-
-            // Tokenエンドポイントにアクセス
-            string response = await Helper.GetInstance()
-            .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
-            dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(response);
-
-            // UserInfoエンドポイントにアクセス
-            dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                await Helper.GetInstance().GetUserInfoAsync((string)dic[OAuth2AndOIDCConst.AccessToken]));
-
-            return dic;
+            return Token.CmnAccessToken.VerifyDPoPBinding(
+                identity, accessToken,
+                isDPoP ? HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_DPoP] : null,
+                HttpContext.Current.Request.HttpMethod,
+                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
+                out dpopError);
         }
 
         #endregion
 
-        #endregion
+        #region DCR用
 
-        #region Dynamic Client Registration（#307 の段階 1 / 段階 2）
+        #region CRUD (Public)
 
         /// <summary>
         /// 動的クライアント登録（RFC 7591 §3.1）
@@ -215,10 +204,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             //  **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 §3）。
             if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject _, out ClaimsIdentity verified)
-                && Token.CmnAccessToken.VerifyCertificateBinding(
-                    verified, this.Request.GetClientCertificate())
-                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
-                //    （RFC 9449 §7.1。#311 の段階 2）。
+                && Token.CmnAccessToken.VerifyCertificateBinding(verified, this.Request.GetClientCertificate())
+                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**（RFC 9449 §7.1。#311 の段階 2）。
                 && this.VerifyDPoP(verified, bearerToken, authScheme == OAuth2AndOIDCConst.DPoP, out dpopError))
             {
                 identity = verified;
@@ -337,41 +324,9 @@ namespace MultiPurposeAuthSite.Controllers
             return this.RegistrationError(status, err);
         }
 
-
-        #region DPoP の照合（#311 の段階 2）
-
-        /// <summary>DPoP に縛られたトークンなら、証明を照合する（#311 の段階 2）</summary>
-        /// <param name="identity">検証済みの ClaimsIdentity</param>
-        /// <param name="accessToken">提示された access_token</param>
-        /// <param name="isDPoP">**`DPoP` スキームで来たか**</param>
-        /// <param name="dpopError">out : error（**`use_dpop_nonce` のときだけ**。#311 の段階 4）</param>
-        /// <returns>使ってよければ true</returns>
-        /// <remarks>
-        /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり通る**
-        /// （**DPoP を知らないクライアントに影響しない**）。
-        ///
-        /// **`Bearer` スキームで来た要求には、証明を渡さない** ＝
-        /// **縛られたトークンなら断る**（RFC 9449 §7.1）。
-        /// **縛りを「使う側の出し方」で外せてはいけない。**
-        ///
-        /// **`htu` は、要求のパスから設定の URL を引く**（`CmnDPoP.EndpointUriOf`。
-        /// **`Host` ヘッダは見ない**）。**`htm` は、実際のメソッド**である。
-        ///
-        /// **`registration_access_token`（RFC 7592）には関わらない** —
-        /// **あちらは JWT ではなく、登録の行に突き合わせる資格情報**である。
-        /// </remarks>
-        private bool VerifyDPoP(
-            ClaimsIdentity identity, string accessToken, bool isDPoP, out string dpopError)
-        {
-            return Token.CmnAccessToken.VerifyDPoPBinding(
-                identity, accessToken,
-                isDPoP ? HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_DPoP] : null,
-                HttpContext.Current.Request.HttpMethod,
-                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
-                out dpopError);
-        }
-
         #endregion
+
+        #region 部品 (Private)
 
         /// <summary>registration_access_token を取り出す（RFC 6750 §2.1）</summary>
         /// <returns>トークン（無ければ null。出力しないこと）</returns>
@@ -384,6 +339,21 @@ namespace MultiPurposeAuthSite.Controllers
             return AuthenticationHeader.GetCredentials(
                 HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
                 out string bearerToken) ? bearerToken : null;
+        }
+
+        /// <summary>
+        /// トークンを含む応答が、キャッシュに残らないようにする（#218 と同じ）
+        /// </summary>
+        /// <remarks>
+        /// **System.Web の Response.Cache を使う。** ヘッダを直接書いても、
+        /// ASP.NET のキャッシュ モジュールに上書きされることがあるため。
+        /// </remarks>
+        private void SetNoStore()
+        {
+            HttpResponse response = HttpContext.Current.Response;
+
+            response.Cache.SetCacheability(HttpCacheability.NoCache);
+            response.Cache.SetNoStore();
         }
 
         /// <summary>登録の失敗の応答を作る</summary>
@@ -423,20 +393,63 @@ namespace MultiPurposeAuthSite.Controllers
             return this.ResponseMessage(res);
         }
 
-        /// <summary>
-        /// トークンを含む応答が、キャッシュに残らないようにする（#218 と同じ）
-        /// </summary>
-        /// <remarks>
-        /// **System.Web の Response.Cache を使う。** ヘッダを直接書いても、
-        /// ASP.NET のキャッシュ モジュールに上書きされることがあるため。
-        /// </remarks>
-        private void SetNoStore()
-        {
-            HttpResponse response = HttpContext.Current.Response;
+        #endregion
 
-            response.Cache.SetCacheability(HttpCacheability.NoCache);
-            response.Cache.SetNoStore();
+        #endregion
+
+        #region テスト用
+
+        #region Hybrid Flow
+
+        /// <summary>
+        /// Hybrid Flowのテスト用エンドポイント
+        /// POST: /TestHybridFlow
+        /// </summary>
+        /// <param name="formData">code</param>
+        /// <returns>Dictionary(string, string)</returns>
+        [HttpPost]
+        // **自己テストの画面（OAuth2ImplicitGrantClient）が jQuery で叩く。**
+        //   **既定では同一オリジン**（OAuth2AuthorizationServerEndpointsRootURI と
+        //   OAuth2ClientEndpointsRootURI が同じ値）なので、本来 CORS は要らない。
+        //   **2 つを別ホストにした配備では、クロス オリジンになる**ので開けておく。
+        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じる**（WebApiConfig）ため、
+        //   **本番では、このポリシーも届かない。**
+        //   **資格情報は許さない**（SupportsCredentials を付けない）。
+        [EnableCors(origins: "*", headers: "*", methods: "*")]
+        public async Task<Dictionary<string, object>> TestHybridFlow(FormDataCollection formData)
+        {
+            // 変数
+            string code = formData[OAuth2AndOIDCConst.code];
+
+            // Tokenエンドポイントにアクセス
+            Uri tokenEndpointUri = new Uri(
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
+
+            // 結果を格納する変数。
+            Dictionary<string, object> dic = null;
+
+            //  client_Idから、client_secretを取得。
+            string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
+            string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+
+            // Hybridは、Implicitのredirect_uriを使用
+            string redirect_uri 
+                = Config.OAuth2ClientEndpointsRootURI
+                + Config.OAuth2ImplicitGrantClient_Account;
+
+            // Tokenエンドポイントにアクセス
+            string response = await Helper.GetInstance()
+            .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
+            dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(response);
+
+            // UserInfoエンドポイントにアクセス
+            dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                await Helper.GetInstance().GetUserInfoAsync((string)dic[OAuth2AndOIDCConst.AccessToken]));
+
+            return dic;
         }
+
+        #endregion
 
         #endregion
     }

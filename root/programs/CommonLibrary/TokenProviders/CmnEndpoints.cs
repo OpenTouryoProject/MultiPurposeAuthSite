@@ -137,6 +137,7 @@
 //*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //*  2026/10/26  玄人 幸道         post_logout_redirect_uri（要求）の名前を Const へ移した（#294）
 //*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
+//*  2026/10/26  玄人 幸道         扱うグラントの一覧を SupportedGrantTypes にまとめ、Discovery と動的登録で使う（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -238,51 +239,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region grant and response_types
-            if (Config.EnableAuthorizationCodeGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
-            }
-
-            if (Config.EnableImplicitGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.ImplicitGrantType);
-            }
+            //  **扱うグラントの一覧は 1 か所から作る**（#294。動的登録の検査と同じ一覧）。
+            grant_types_supported.AddRange(CmnEndpoints.SupportedGrantTypes(true));
 
             //  **受け付ける response_type だけを広告する**（#314）。
             //    **Hybrid / OIDC の Implicit も、`code` / `token` を含むなら同じ設定に従う。**
             response_types_supported.AddRange(CmnEndpoints.SupportedResponseTypes());
-
-            if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
-            }
-
-            //  **動的登録を開けた配備では、この経路が使える**（#307 の段階 5-b）。
-            //    **`EnableClientCredentialsGrantType` が false でも、
-            //    専用 scope（`client_registration`）のトークンだけは出す**ので、
-            //    **口が受け付ける事実を広告に出す。**
-            //    **「その scope しか出ない」ことは、Discovery では表せない**
-            //    （**クライアントごとの `scope` の絞りと同じ事情**）ので、文書に書く。
-            if (Config.EnableClientCredentialsGrantType
-                || Config.EnableDynamicClientRegistration)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
-            }
-
-            if (Config.EnableRefreshToken)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
-            }
-
-            if (Config.EnableJwtBearerTokenFlowGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
-            }
-
-            if (Config.EnableCibaGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.CibaGrantType);
-            }
 
             // **Device Authorization Grant は、広告していなかった**（#189 の 6・7）。
             //   実装済み（/device_authz と device_code のグラント）なのに Discovery から
@@ -290,8 +252,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   RP の自動設定が通らなかった。
             if (Config.EnableDeviceAuthZGrantType)
             {
-                grant_types_supported.Add(OAuth2AndOIDCConst.DeviceAuthZGrantType);
-
                 // RFC 8628 §4
                 OpenIDConfig.Add("device_authorization_endpoint",
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.DeviceAuthZAuthorizeEndpoint);
@@ -941,6 +901,76 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 結果を返す。
             return false;
+        }
+
+        #endregion
+
+        #region 扱うグラント（#294）
+
+        /// <summary>この配備が扱うグラント（Discovery の `grant_types_supported`）</summary>
+        /// <param name="includeDcrPath">
+        /// **動的登録のための細い道を含めるか**（Discovery は true、動的登録の検査は false）
+        /// </param>
+        /// <returns>grant_type の一覧</returns>
+        /// <remarks>
+        /// **Discovery の広告と、動的クライアント登録で受け付ける `grant_types` が、この一覧を見る**
+        /// （**広告しているものだけ登録できる**）。
+        ///
+        /// **違いは `client_credentials` の 1 件だけ**である（#307 の段階 5-b）。
+        /// **`EnableClientCredentialsGrantType` が false でも、動的登録を開けた配備では、
+        /// 専用 scope（`client_registration`）のトークンだけは出す**ので、
+        /// **口が受け付ける事実を広告に出す**（`includeDcrPath` = true）。
+        /// **「その scope しか出ない」ことは、Discovery では表せない**
+        /// （**クライアントごとの `scope` の絞りと同じ事情**）ので、文書に書く。
+        /// **登録では、その経路を `grant_types` として受け付けない**（`includeDcrPath` = false） —
+        /// **登録の口を叩くための道であり、登録したクライアントが使うグラントではない。**
+        /// </remarks>
+        public static List<string> SupportedGrantTypes(bool includeDcrPath)
+        {
+            List<string> ret = new List<string>();
+
+            if (Config.EnableAuthorizationCodeGrantType)
+            {
+                ret.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
+            }
+
+            if (Config.EnableImplicitGrantType)
+            {
+                ret.Add(OAuth2AndOIDCConst.ImplicitGrantType);
+            }
+
+            if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
+            {
+                ret.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
+            }
+
+            if (Config.EnableClientCredentialsGrantType
+                || (includeDcrPath && Config.EnableDynamicClientRegistration))
+            {
+                ret.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
+            }
+
+            if (Config.EnableRefreshToken)
+            {
+                ret.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
+            }
+
+            if (Config.EnableJwtBearerTokenFlowGrantType)
+            {
+                ret.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
+            }
+
+            if (Config.EnableCibaGrantType)
+            {
+                ret.Add(OAuth2AndOIDCConst.CibaGrantType);
+            }
+
+            if (Config.EnableDeviceAuthZGrantType)
+            {
+                ret.Add(OAuth2AndOIDCConst.DeviceAuthZGrantType);
+            }
+
+            return ret;
         }
 
         #endregion

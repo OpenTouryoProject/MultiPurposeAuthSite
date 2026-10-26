@@ -47,6 +47,7 @@
 //*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //*  2026/10/26  玄人 幸道         PUT は現行の行を土台にし、動的登録が持つ列だけを置き換えるようにした（所有者が消えていた。#294）
 //*  2026/10/26  玄人 幸道         DELETE で、所有者だけでなく全利用者の同意を消すようにした（#294）
+//*  2026/10/26  玄人 幸道         扱うgrant_type・response_type の一覧は CmnEndpoints を直接呼ぶ（#294）
 //**********************************************************************************
 
 /*
@@ -643,6 +644,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public static int Delete(
             string client_id, string bearerToken, out Dictionary<string, string> err)
         {
+            // **`registration_access_token` の検証**（RFC 7592 §2.3）。
             int status = ClientRegistrationProvider.Authorize(
                 client_id, bearerToken,
                 out ManageAddSaml2OAuth2DataViewModel model, out err);
@@ -652,13 +654,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return status;
             }
 
+            // UserのClientデータを削除
+            Saml2OAuth2DataProvider.Delete(client_id);
+
             //  **同意を落とす**（§2.3 : 払い下げたクライアントへの許可を残さない）。
             //    **所有者だけでなく、このクライアントに同意した全利用者の分を消す**
             //    （**同意の表の `ClientID` には外部キーが無い**ので、行を消しても残る）。
+            //    **登録の行を先に消す**（管理画面の削除と同じ順）—
+            //    **行が無くなれば、間に新しい同意は作られない。**
             ConsentProvider.RevokeByClient(client_id);
-
-            // UserのClientデータを削除
-            Saml2OAuth2DataProvider.Delete(client_id);
 
             // オペレーション・トレース・ログ出力
             Logging.MyOperationTrace(string.Format(
@@ -711,9 +715,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **どれも同じ応答にする**（**どれだったかを教えない**）。
             if (registration == null
                 || string.IsNullOrEmpty(registration.RegistrationAccessToken)
-                || !ClientRegistrationProvider.FixedTimeEquals(
-                    ClientRegistrationProvider.Hash(bearerToken),
-                    registration.RegistrationAccessToken))
+                || !ClientRegistrationProvider.FixedTimeEquals( // FixedTimeはタイミング攻撃防止の意
+                    ClientRegistrationProvider.Hash(bearerToken), registration.RegistrationAccessToken))
             {
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
                 err.Add(OAuth2AndOIDCConst.error_description,
@@ -1049,8 +1052,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 responseTypes = new List<string>() { OAuth2AndOIDCConst.AuthorizationCodeResponseType };
             }
 
-            //  **この配備が扱うグラントか**（Discovery の `grant_types_supported` と同じ判定）。
-            List<string> supportedGrantTypes = ClientRegistrationProvider.SupportedGrantTypes();
+            //  **この配備が扱うグラントか**（Discovery の `grant_types_supported` と同じ一覧）。
+            //    **動的登録のための細い道（`client_credentials`）は、登録では受け付けない。**
+            List<string> supportedGrantTypes = CmnEndpoints.SupportedGrantTypes(false);
 
             foreach (string grantType in grantTypes)
             {
@@ -1063,7 +1067,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  **この配備が扱う response_type か。**
-            List<string> supportedResponseTypes = ClientRegistrationProvider.SupportedResponseTypes();
+            List<string> supportedResponseTypes = CmnEndpoints.SupportedResponseTypes();
 
             foreach (string responseType in responseTypes)
             {
@@ -1304,75 +1308,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region この配備が扱うもの
-
-        /// <summary>この配備が扱うグラント</summary>
-        /// <returns>grant_type の一覧</returns>
-        /// <remarks>
-        /// **Discovery の `grant_types_supported` と同じ設定を見る**
-        /// （**広告しているものだけ登録できる**）。
-        /// </remarks>
-        private static List<string> SupportedGrantTypes()
-        {
-            List<string> ret = new List<string>();
-
-            if (Config.EnableAuthorizationCodeGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
-            }
-
-            if (Config.EnableImplicitGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.ImplicitGrantType);
-            }
-
-            if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
-            }
-
-            if (Config.EnableClientCredentialsGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
-            }
-
-            if (Config.EnableRefreshToken)
-            {
-                ret.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
-            }
-
-            if (Config.EnableJwtBearerTokenFlowGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
-            }
-
-            if (Config.EnableCibaGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.CibaGrantType);
-            }
-
-            if (Config.EnableDeviceAuthZGrantType)
-            {
-                ret.Add(OAuth2AndOIDCConst.DeviceAuthZGrantType);
-            }
-
-            return ret;
-        }
-
-        /// <summary>この配備が扱う response_type</summary>
-        /// <returns>response_type の一覧</returns>
-        /// <remarks>
-        /// **Discovery の `response_types_supported` と同じ一覧**
-        /// （`CmnEndpoints.SupportedResponseTypes`。#314）。
-        /// </remarks>
-        private static List<string> SupportedResponseTypes()
-        {
-            return CmnEndpoints.SupportedResponseTypes();
-        }
-
-        #endregion
-
         #region 補助
+
+        #region metadataの読み書き
 
         /// <summary>そのメタデータが在るか（null でない値として）</summary>
         /// <param name="metadata">要求の JSON</param>
@@ -1470,6 +1408,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return true;
         }
 
+        #endregion
+
+        #region redirect_uri
+
         /// <summary>折り返し先として使える値か</summary>
         /// <param name="redirectUri">redirect_uri</param>
         /// <returns>使えるなら true</returns>
@@ -1495,6 +1437,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **フラグメントは禁止**（RFC 6749 §3.1.2）。
             return string.IsNullOrEmpty(uri.Fragment);
         }
+
+        #endregion
+
+        #region response_type
 
         /// <summary>response_type の要素に分ける</summary>
         /// <param name="responseType">response_type（空白か「+」で区切られている）</param>
@@ -1525,6 +1471,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return x.Length == y.Length && x.All(t => y.Contains(t));
         }
 
+        #endregion
+
+        #region 応答の形にする
+
         /// <summary>空白区切りの列挙を、応答の配列にする</summary>
         /// <param name="value">空白区切りの列挙</param>
         /// <returns>配列</returns>
@@ -1545,6 +1495,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 ret.Add(name, value);
             }
         }
+
+        #endregion
 
         #endregion
 
@@ -1584,14 +1536,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
         }
 
-        /// <summary>突き合わせる（長さが違えば false。時間で漏らさない）</summary>
+        /// <summary>突き合わせる（長さが違えば false）</summary>
         /// <param name="a">値</param>
         /// <param name="b">値</param>
         /// <returns>同じなら true</returns>
         /// <remarks>
         /// **先頭から 1 文字ずつ比べて、違った所で止めてはならない** —
         /// **掛かった時間から、どこまで合っていたかが分かる。**
-        /// **最後まで数えてから返す。**
+        /// **最後まで数えてから返す。**（タイミング攻撃防止）
         /// </remarks>
         private static bool FixedTimeEquals(string a, string b)
         {
