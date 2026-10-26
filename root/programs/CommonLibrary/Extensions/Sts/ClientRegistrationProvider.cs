@@ -315,7 +315,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return 400;
             }
 
-            # endregion
+            #endregion
 
             #region 保存
 
@@ -810,7 +810,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region メタデータの検査
+        #region metadataの検査
 
         /// <summary>要求のメタデータを検査して、保存する形にする</summary>
         /// <param name="metadata">要求の JSON</param>
@@ -1408,6 +1408,106 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return true;
         }
 
+        /// <summary>`jwks` を読んで、鍵の 2 列に入れる</summary>
+        /// <param name="metadata">要求の JSON</param>
+        /// <param name="model">保存する形（入出力）</param>
+        /// <param name="description">誤りの説明（出力）</param>
+        /// <returns>通してよいなら true</returns>
+        /// <remarks>
+        /// **列は「JWK 1 本を Base64URL にしたもの」が 2 本**
+        /// （`JwkRsaPublickey` / `JwkECDsaPublickey`）。**JWK Set は持てない。**
+        /// **`CmnEndpoints.ClientAuthentication` が、この 2 本を順に試す。**
+        ///
+        /// **断る形**（**どれも「黙って落とすと、後で認証に失敗する」もの**）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | `keys` が無い・空・配列でない | RFC 7517 §5 |
+        /// | **同じ `kty` が 2 本以上** | **列が 1 本しか持てない。** 先頭を採ると、**もう一方の鍵で署名したときに失敗する** |
+        /// | **`RSA` / `EC` 以外の `kty`** | **この実装が検証できない**（`JwtAssertion.Verify` が `kty` で RSA / EC を選ぶ） |
+        /// | **`use` が `sig` でない** | **クライアント認証に使う鍵である**（暗号用を黙って受けない。RFC 7517 §4.2） |
+        ///
+        /// ※ クライアント認証に使う、クライアントの公開鍵（サーバの鍵・software_statement の発行者の鍵とは別）
+        /// </remarks>
+        private static bool ParseJwks(JObject metadata,
+            ManageAddSaml2OAuth2DataViewModel model, out string description)
+        {
+            description = "";
+
+            JToken jwks = metadata[Const.ClientJwks];
+
+            if (jwks.Type != JTokenType.Object)
+            {
+                description = "The jwks must be a JSON object (RFC 7517 Section 5).";
+                return false;
+            }
+
+            JToken keys = jwks[JwtConst.keys];
+
+            if (keys == null || keys.Type != JTokenType.Array || !keys.Any())
+            {
+                description = "The jwks must have a non-empty keys array "
+                    + "(RFC 7517 Section 5).";
+                return false;
+            }
+
+            foreach (JToken key in keys)
+            {
+                if (key.Type != JTokenType.Object)
+                {
+                    description = "Each key in the jwks must be a JSON object.";
+                    return false;
+                }
+
+                JObject jwk = (JObject)key;
+
+                //  **署名の検証に使う鍵だけを受ける**（RFC 7517 §4.2。`use` は任意）。
+                string use = (string)jwk["use"];
+
+                if (!string.IsNullOrEmpty(use) && use != "sig")
+                {
+                    description = "This deployment uses the jwks for client authentication, "
+                        + "so each key must have use=sig (or no use).";
+                    return false;
+                }
+
+                string kty = (string)jwk[JwtConst.kty];
+                string encoded = CmnEndpoints.EncodeRegisteredJwk(jwk);
+
+                if (kty == JwtConst.RSA)
+                {
+                    if (!string.IsNullOrEmpty(model.JwkRsaPublickey))
+                    {
+                        description = "This deployment stores one RSA key per client, "
+                            + "so the jwks must not have two RSA keys.";
+                        return false;
+                    }
+
+                    model.JwkRsaPublickey = encoded;
+                }
+                else if (kty == JwtConst.EC)
+                {
+                    if (!string.IsNullOrEmpty(model.JwkECDsaPublickey))
+                    {
+                        description = "This deployment stores one EC key per client, "
+                            + "so the jwks must not have two EC keys.";
+                        return false;
+                    }
+
+                    model.JwkECDsaPublickey = encoded;
+                }
+                else
+                {
+                    description = string.Format(
+                        "The key type ({0}) is not supported by this deployment. "
+                        + "Use RSA or EC.", kty);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         #endregion
 
         #region redirect_uri
@@ -1500,7 +1600,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region 管理 API のトークンと、応答の形（RFC 7592）
+        #region registration_access_token と応答（RFC 7592）
+
+        #region registration_access_token
 
         /// <summary>registration_access_token を作る</summary>
         /// <returns>トークン（**平文。登録の応答で 1 回だけ返す**）</returns>
@@ -1562,111 +1664,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return diff == 0;
         }
 
-        /// <summary>`jwks` を読んで、鍵の 2 列に入れる</summary>
-        /// <param name="metadata">要求の JSON</param>
-        /// <param name="model">保存する形（入出力）</param>
-        /// <param name="description">誤りの説明（出力）</param>
-        /// <returns>通してよいなら true</returns>
-        /// <remarks>
-        /// **列は「JWK 1 本を Base64URL にしたもの」が 2 本**
-        /// （`JwkRsaPublickey` / `JwkECDsaPublickey`）。**JWK Set は持てない。**
-        /// **`CmnEndpoints.ClientAuthentication` が、この 2 本を順に試す。**
-        ///
-        /// **断る形**（**どれも「黙って落とすと、後で認証に失敗する」もの**）。
-        ///
-        /// | | |
-        /// |---|---|
-        /// | `keys` が無い・空・配列でない | RFC 7517 §5 |
-        /// | **同じ `kty` が 2 本以上** | **列が 1 本しか持てない。** 先頭を採ると、**もう一方の鍵で署名したときに失敗する** |
-        /// | **`RSA` / `EC` 以外の `kty`** | **この実装が検証できない**（`JwtAssertion.Verify` が `kty` で RSA / EC を選ぶ） |
-        /// | **`use` が `sig` でない** | **クライアント認証に使う鍵である**（暗号用を黙って受けない。RFC 7517 §4.2） |
-        /// </remarks>
-        private static bool ParseJwks(JObject metadata,
-            ManageAddSaml2OAuth2DataViewModel model, out string description)
-        {
-            description = "";
+        #endregion
 
-            JToken jwks = metadata[Const.ClientJwks];
-
-            if (jwks.Type != JTokenType.Object)
-            {
-                description = "The jwks must be a JSON object (RFC 7517 Section 5).";
-                return false;
-            }
-
-            JToken keys = jwks[JwtConst.keys];
-
-            if (keys == null || keys.Type != JTokenType.Array || !keys.Any())
-            {
-                description = "The jwks must have a non-empty keys array "
-                    + "(RFC 7517 Section 5).";
-                return false;
-            }
-
-            foreach (JToken key in keys)
-            {
-                if (key.Type != JTokenType.Object)
-                {
-                    description = "Each key in the jwks must be a JSON object.";
-                    return false;
-                }
-
-                JObject jwk = (JObject)key;
-
-                //  **署名の検証に使う鍵だけを受ける**（RFC 7517 §4.2。`use` は任意）。
-                string use = (string)jwk["use"];
-
-                if (!string.IsNullOrEmpty(use) && use != "sig")
-                {
-                    description = "This deployment uses the jwks for client authentication, "
-                        + "so each key must have use=sig (or no use).";
-                    return false;
-                }
-
-                string kty = (string)jwk[JwtConst.kty];
-                string encoded = CmnEndpoints.EncodeRegisteredJwk(jwk);
-
-                if (kty == JwtConst.RSA)
-                {
-                    if (!string.IsNullOrEmpty(model.JwkRsaPublickey))
-                    {
-                        description = "This deployment stores one RSA key per client, "
-                            + "so the jwks must not have two RSA keys.";
-                        return false;
-                    }
-
-                    model.JwkRsaPublickey = encoded;
-                }
-                else if (kty == JwtConst.EC)
-                {
-                    if (!string.IsNullOrEmpty(model.JwkECDsaPublickey))
-                    {
-                        description = "This deployment stores one EC key per client, "
-                            + "so the jwks must not have two EC keys.";
-                        return false;
-                    }
-
-                    model.JwkECDsaPublickey = encoded;
-                }
-                else
-                {
-                    description = string.Format(
-                        "The key type ({0}) is not supported by this deployment. "
-                        + "Use RSA or EC.", kty);
-                    return false;
-                }
-            }
-
-            return true;
-        }
+        #region jwksの応答
 
         /// <summary>登録された鍵を `jwks` にして返す（無ければ null）</summary>
         /// <param name="model">登録</param>
         /// <returns>JWK Set（鍵が 1 本も無ければ null）</returns>
         /// <remarks>
-        /// **`ParseJwks` の逆である。** **列に在る鍵だけを `keys` に並べる。**
+        /// **`ParseJwks`（`#region metadataの読み書き`）の逆である。** **列に在る鍵だけを `keys` に並べる。**
         /// **壊れた登録値は、黙って飛ばす**（**応答を 500 にしない**。
         /// **登録の時点で形は確かめている**ので、ここに来るのは運用で壊した値である）。
+        ///
+        /// ※ クライアント認証に使う、クライアントの公開鍵（サーバの鍵・software_statement の発行者の鍵とは別）
         /// </remarks>
         private static JObject BuildJwks(ManageAddSaml2OAuth2DataViewModel model)
         {
@@ -1702,6 +1712,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return jwks;
         }
+
+        #endregion
+
+        #region クライアント情報の応答（RFC 7592 §3）
 
         /// <summary>この登録の `registration_client_uri`（RFC 7592 §3）</summary>
         /// <param name="client_id">client_id</param>
@@ -1810,6 +1824,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return ret;
         }
+
+        #endregion
 
         #endregion
 
