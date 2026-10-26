@@ -163,6 +163,87 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// </remarks>
     public static class ClientRegistrationProvider
     {
+        #region 前処理（jwks_uri を先に取りに行く。#309）
+
+        // **本文の `jwks_uri` と、`software_statement` が主張した `jwks_uri` を見る。**
+
+        /// <summary>**本文の `jwks_uri` を、検査の前に 1 回取りに行く**</summary>
+        /// <param name="requestBody">要求の本文（JSON）</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **判定はしない。** **取れたかどうかは `Validate` がキャッシュを見て決める**
+        /// （**判定は 1 か所に置く**）。
+        ///
+        /// **ここだけが async である** — **登録の口（`POST` / `PUT`）は
+        /// `async Task&lt;…&gt;` なので待てる。**
+        /// **クライアント認証の経路（`/token` など）は同期なので、あちらでは待てない**
+        /// （**待つと net48 で止まる**）。
+        ///
+        /// **本文の `jwks_uri` と、`software_statement` が主張した `jwks_uri` を見る。**
+        ///
+        /// **statement の署名は、ここでは検証しない**（**検証は `Validate` の中**）。
+        /// **それでよい理由は 3 つある。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **増える能力が無い** | **同じ呼び出し元は、本文の `jwks_uri` に任意の URL を書ける**（そちらも取りに行く）。**statement の中に書いても、行き先の範囲は変わらない** |
+        /// | **キャッシュは信頼ではない** | **URL → 鍵の対応**でしかなく、**参照されるのは「その URL を登録したクライアント」だけ**である。**statement の検証が落ちれば登録は作られない**ので、**温めた分は誰にも使われない** |
+        /// | **叩ける回数に限りが在る** | **専用 scope のトークンが要り**、**レート制限も掛かっている**（#305） |
+        ///
+        /// **`https` でなければ、取りにも行かない**（**ループバックの `http` は許す**）。
+        /// </remarks>
+        public static async Task WarmUpJwksUriAsync(string requestBody)
+        {
+            if (!Config.EnableDynamicClientRegistration
+                || string.IsNullOrWhiteSpace(requestBody))
+            {
+                return;
+            }
+
+            List<string> urls = new List<string>();
+
+            try
+            {
+                JObject metadata = JsonConvert.DeserializeObject<JObject>(requestBody);
+
+                if (metadata == null)
+                {
+                    return;
+                }
+
+                urls.Add(ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.jwks_uri));
+
+                //  **statement が主張した分。**
+                //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
+                //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
+                JObject claims = JwtReader.TryReadPayload(
+                    ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareStatement));
+
+                if (claims != null)
+                {
+                    urls.Add((string)claims[OAuth2AndOIDCConst.jwks_uri]);
+                }
+            }
+            catch (JsonException)
+            {
+                //  **本文が JSON でない。** **`Register` / `Update` が `400` で断る。**
+                return;
+            }
+
+            foreach (string url in urls)
+            {
+                if (!string.IsNullOrEmpty(url)
+                    && RemoteJwkSetStore.IsUsableKeySource(url))
+                {
+                    //  **取れなくても例外にしない**（`RemoteJwkSetStore` が飲む）。
+                    //    **断るのは `Validate`** である。
+                    await RemoteJwkSetStore.WarmUpAsync(url);
+                }
+            }
+        }
+
+        #endregion
+
         #region 登録（RFC 7591 §3.1）
 
         /// <summary>登録する</summary>
@@ -728,85 +809,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return 0;
         }
-
-        #region jwks_uri を先に取りに行く
-
-        /// <summary>**本文の `jwks_uri` を、検査の前に 1 回取りに行く**</summary>
-        /// <param name="requestBody">要求の本文（JSON）</param>
-        /// <returns>Task</returns>
-        /// <remarks>
-        /// **判定はしない。** **取れたかどうかは `Validate` がキャッシュを見て決める**
-        /// （**判定は 1 か所に置く**）。
-        ///
-        /// **ここだけが async である** — **登録の口（`POST` / `PUT`）は
-        /// `async Task&lt;…&gt;` なので待てる。**
-        /// **クライアント認証の経路（`/token` など）は同期なので、あちらでは待てない**
-        /// （**待つと net48 で止まる**）。
-        ///
-        /// **本文の `jwks_uri` と、`software_statement` が主張した `jwks_uri` を見る。**
-        ///
-        /// **statement の署名は、ここでは検証しない**（**検証は `Validate` の中**）。
-        /// **それでよい理由は 3 つある。**
-        ///
-        /// | | |
-        /// |---|---|
-        /// | **増える能力が無い** | **同じ呼び出し元は、本文の `jwks_uri` に任意の URL を書ける**（そちらも取りに行く）。**statement の中に書いても、行き先の範囲は変わらない** |
-        /// | **キャッシュは信頼ではない** | **URL → 鍵の対応**でしかなく、**参照されるのは「その URL を登録したクライアント」だけ**である。**statement の検証が落ちれば登録は作られない**ので、**温めた分は誰にも使われない** |
-        /// | **叩ける回数に限りが在る** | **専用 scope のトークンが要り**、**レート制限も掛かっている**（#305） |
-        ///
-        /// **`https` でなければ、取りにも行かない**（**ループバックの `http` は許す**）。
-        /// </remarks>
-        public static async Task WarmUpJwksUriAsync(string requestBody)
-        {
-            if (!Config.EnableDynamicClientRegistration
-                || string.IsNullOrWhiteSpace(requestBody))
-            {
-                return;
-            }
-
-            List<string> urls = new List<string>();
-
-            try
-            {
-                JObject metadata = JsonConvert.DeserializeObject<JObject>(requestBody);
-
-                if (metadata == null)
-                {
-                    return;
-                }
-
-                urls.Add(ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.jwks_uri));
-
-                //  **statement が主張した分。**
-                //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
-                //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
-                JObject claims = JwtReader.TryReadPayload(
-                    ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareStatement));
-
-                if (claims != null)
-                {
-                    urls.Add((string)claims[OAuth2AndOIDCConst.jwks_uri]);
-                }
-            }
-            catch (JsonException)
-            {
-                //  **本文が JSON でない。** **`Register` / `Update` が `400` で断る。**
-                return;
-            }
-
-            foreach (string url in urls)
-            {
-                if (!string.IsNullOrEmpty(url)
-                    && RemoteJwkSetStore.IsUsableKeySource(url))
-                {
-                    //  **取れなくても例外にしない**（`RemoteJwkSetStore` が飲む）。
-                    //    **断るのは `Validate`** である。
-                    await RemoteJwkSetStore.WarmUpAsync(url);
-                }
-            }
-        }
-
-        #endregion
 
         #endregion
 
@@ -1666,7 +1668,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region jwksの応答
+        #region 応答（RFC 7592 §3）
+
+        /// <summary>この登録の `registration_client_uri`（RFC 7592 §3）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>絶対 URI</returns>
+        /// <remarks>
+        /// **絶対 URI で返す**（RFC 7592 Appendix B :
+        /// **サーバが URL を渡すこと。クライアントに組み立てさせない**）。
+        /// </remarks>
+        private static string RegistrationClientUri(string client_id)
+        {
+            return Config.OAuth2AuthorizationServerEndpointsRootURI
+                + Config.DcrRegistrationEndpoint + "/" + client_id;
+        }
 
         /// <summary>登録された鍵を `jwks` にして返す（無ければ null）</summary>
         /// <param name="model">登録</param>
@@ -1711,23 +1726,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             jwks.Add(JwtConst.keys, keys);
 
             return jwks;
-        }
-
-        #endregion
-
-        #region クライアント情報の応答（RFC 7592 §3）
-
-        /// <summary>この登録の `registration_client_uri`（RFC 7592 §3）</summary>
-        /// <param name="client_id">client_id</param>
-        /// <returns>絶対 URI</returns>
-        /// <remarks>
-        /// **絶対 URI で返す**（RFC 7592 Appendix B :
-        /// **サーバが URL を渡すこと。クライアントに組み立てさせない**）。
-        /// </remarks>
-        private static string RegistrationClientUri(string client_id)
-        {
-            return Config.OAuth2AuthorizationServerEndpointsRootURI
-                + Config.DcrRegistrationEndpoint + "/" + client_id;
         }
 
         /// <summary>クライアント情報の応答を作る（RFC 7592 §3）</summary>
@@ -1793,12 +1791,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareId, model.SoftwareId);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareVersion, model.SoftwareVersion);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSubjectType, model.SubjectTypes);
-            ClientRegistrationProvider.AddIfNotEmpty(
-                ret, Const.ClientIdTokenSignedResponseAlg, model.IdTokenSignedResponseAlg);
-            ClientRegistrationProvider.AddIfNotEmpty(
-                ret, Const.ClientTlsClientAuthSubjectDn, model.TlsClientAuthSubjectDn);
-            ClientRegistrationProvider.AddIfNotEmpty(
-                ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientIdTokenSignedResponseAlg, model.IdTokenSignedResponseAlg);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTlsClientAuthSubjectDn, model.TlsClientAuthSubjectDn);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
 
             //  **登録された鍵を `jwks` に戻して返す。**
             //    **列は 2 本に分かれている**ので、**在るものだけを `keys` に並べる。**
