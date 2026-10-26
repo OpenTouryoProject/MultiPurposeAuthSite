@@ -32,23 +32,14 @@
 //*  2026/09/10  玄人 幸道         Device Authorization Grant の検証画面の操作を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         client_secret_basic で /token を呼ぶ TokenWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         汎用の HTTP 関数を「素のHTTP」へ移し、デバイス認可（/device_authz）の要求を追加
-//*  2026/09/11  玄人 幸道         /userinfo を Authorization ヘッダを指定して呼ぶ UserInfoWithAuthorizationAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         client_secret_basic の POST を PostJsonWithBasicAuthAsync に一般化し、RevokeWithBasicAuthAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         /introspect を client_secret_basic で呼ぶ IntrospectWithBasicAuthAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
-//*  2026/09/12  玄人 幸道         Authorization ヘッダ付きの POST を一般化し、認証デバイスの代わりの要求（/SetDeviceToken・/ciba_result）を追加（#196）
 //*  2026/09/16  玄人 幸道         /2fa_result を呼ぶ TwoFactorPushResultAsync を追加（#213）
 //*  2026/09/22  玄人 幸道         クライアント証明書を添えてトークン エンドポイントを呼ぶ TokenWithCertificateAsync を追加（#226）
 //*  2026/09/23  玄人 幸道         クライアント証明書を添えて UserInfo を呼ぶ UserInfoWithCertificateAsync を追加
 //*  2026/09/25  玄人 幸道         Discovery の issuer を引く IssuerAsync を追加（#234 の段階 1）
-//*  2026/09/25  玄人 幸道         /ciba_authz をクライアント認証つきで呼べるようにした（#234 の段階 3）
 //*  2026/09/25  玄人 幸道         非構造化データを画面から設定する口を追加（#230）
 //*  2026/09/27  玄人 幸道         Basic を符号化せずに送る口（urlEncode）を追加（#237）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）の口を追加（#232）
-//*  2026/09/27  玄人 幸道         自己テストの画面が出すログアウトのフォームを送る口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
-//*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
 //*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
@@ -59,7 +50,6 @@
 //*  2026/10/16  玄人 幸道         ヘッダを付けて GET する口を足した（#303）
 //*  2026/10/17  玄人 幸道         ヘッダを付けて POST する口を追加（#305 の段階 4）
 //*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
-//*  2026/10/18  玄人 幸道         メソッドを選んで JSON を送る口にした（#307 の段階 2）
 //**********************************************************************************
 
 using System;

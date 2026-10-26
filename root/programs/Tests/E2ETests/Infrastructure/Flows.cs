@@ -31,19 +31,15 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         JWK Set の取得を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         scope を登録した TestClient5 を追加（#198 の後半）
-//*  2026/09/11  玄人 幸道         トークンの更新・失効・問い合わせ（RefreshAsync / RevokeAsync / IntrospectAsync）を、テスト クラスから移す
 //*  2026/09/18  玄人 幸道         既定で無効な機能を Skip する口を追加（#220）
 //*  2026/09/18  玄人 幸道         TestClient6 と、未登録なら Skip する口を追加（#221）
 //*  2026/09/22  玄人 幸道         環境変数で差し込む TestClient4_2 と、その登録を引く口を追加（#224）
-//*  2026/09/22  玄人 幸道         登録値が不正な TestClient4_3 を追加（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
 //*  2026/09/27  玄人 幸道         記号を含む client_secret の TestClient_2 / TestClient_3 を追加（#237）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を登録した TestClient_4 を追加（#232）
 //*  2026/09/30  玄人 幸道         subject_types=pairwise のクライアント（TestClient_5）を追加（#140 の段階 2）
 //*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         RS512 で署名する TestClient_8 を追加（#129 の段階 2）
-//*  2026/10/02  玄人 幸道         ES384 / ES512 で署名する TestClient_9 / _10 を追加（#129 の段階 3）
-//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 - _13 を追加（#129 の段階 4）
 //*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
 //*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
@@ -53,7 +49,6 @@
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22とACS URLを追加（#275）
 //*  2026/10/19  玄人 幸道         private_key_jwtのTestClient_24を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
-//*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
 //**********************************************************************************
 

@@ -35,15 +35,9 @@
 //*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
 //*  2026/10/06  玄人 幸道         同意を記録しないTestClient_19を追加（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22を追加（鍵なし。#275）
-//*  2026/10/09  玄人 幸道         TestClient_15 の折り返し先を、記号から実 URL に変えた（C-10）
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を写し、TestClient_24 を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
-//*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
-//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
-//*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
-//*  2026/10/25  玄人 幸道         クライアントの登録種別の名前を oauth2_oidc_mode から client_mode に改名した（#294）
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
-//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;

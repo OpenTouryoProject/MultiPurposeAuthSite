@@ -38,15 +38,12 @@
 //*  2026/09/12  玄人 幸道         FcmOutboxDirectory（プッシュ通知の送信箱。テスト用）を追加（#196）
 //*  2026/09/16  玄人 幸道         TwoFactorAuthPushResultWebAPI を削除（未実装のため）（#203）
 //*  2026/09/16  玄人 幸道         TwoFactorPushResultEndpoint を追加（#213）
-//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/17  玄人 幸道         PKCE で S256 だけを受け付ける設定を追加（#220）
-//*  2026/09/18  玄人 幸道         PKCE（code_challenge）を必須にする設定を追加（#220）
 //*  2026/09/24  玄人 幸道         Discovery の service_documentation を設定値にする（#228）
 //*  2026/09/24  玄人 幸道         認可コードと Request Object の有効期限の設定を追加（#188）
 //*  2026/09/24  玄人 幸道         PAR の口（PushedAuthorizationRequestEndpoint）を追加（#229）
 //*  2026/09/25  玄人 幸道         設定キーの改名と、旧キーの読み替え（#236）
 //*  2026/09/25  玄人 幸道         UserClaimsMapping（profile / address のクレームの対応付け）を追加（#230）
-//*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         OAuth2EndSessionEndpoint（RP-Initiated Logout）を追加（#232）
 //*  2026/09/29  玄人 幸道         RequireVerifiedEmailForAccountLinking を追加（#140 の段階 1）
 //*  2026/09/30  玄人 幸道         DataProtectionKeyPath を追加（#251）
@@ -63,7 +60,6 @@
 //*  2026/10/09  玄人 幸道         ChageToUserWebAPI（課金の口）の設定を削除
 //*  2026/10/09  玄人 幸道         OAuth2AuthorizationCodeGrantClient_Manage を削除
 //*  2026/10/10  玄人 幸道         SAML2のID連携の設定を追加（#286の段階1）
-//*  2026/10/10  玄人 幸道         ID連携の導線を設定の有無で出す（#286の段階2）
 //*  2026/10/13  玄人 幸道         自分の値と上流の値を、別の設定キーに分けた（#290）
 //*  2026/10/13  玄人 幸道         上流の SAML2 メタデータの URL を設定で与えられるようにした（#291）
 //*  2026/10/14  玄人 幸道         ID 連携の上流を n 件持てるようにした（IdFederationUpstreams）（#292 の段階 1）
@@ -71,12 +67,8 @@
 //*  2026/10/16  玄人 幸道         slow_down・失敗回数・レート制限の設定を追加（#305）
 //*  2026/10/16  玄人 幸道         /jwkcerts のキャッシュの秒数を追加（#303。E-7）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の設定を追加（#307 の段階 1）
-//*  2026/10/20  玄人 幸道         software_statement の設定を追加（#307 の段階 4）
 //*  2026/10/21  玄人 幸道         OP のセッションの Cookie 名を追加（#310 の段階 1）
 //*  2026/10/22  玄人 幸道         DPoP の nonce の設定を追加（#311 の段階 4）
-//*  2026/10/22  玄人 幸道         IssuerId などを Open棟梁 の CmnServerParams に移した（#294）
-//*  2026/10/22  玄人 幸道         region を処理区分ごとに並べ替えた（#294）
-//*  2026/10/23  玄人 幸道         partial クラスに分割した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;

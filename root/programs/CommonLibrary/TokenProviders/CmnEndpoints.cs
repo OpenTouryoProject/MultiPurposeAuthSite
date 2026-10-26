@@ -64,36 +64,18 @@
 //*  2026/09/11  玄人 幸道         device_code のエラーを RFC の値で返すよう修正（#199）
 //*  2026/09/11  玄人 幸道         revoke/introspectの本体を両アプリから移し、RFC 7009 / 7662 に合わせる（#200）
 //*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行せず、トークン応答に scope を返す（#198）
-//*  2026/09/11  玄人 幸道         クライアントの登録（scope）でも、発行するスコープを絞る（#198 の後半）
 //*  2026/09/11  玄人 幸道         エラー応答の HTTP ステータスを決める GetErrorStatusCode を追加（#196）
-//*  2026/09/11  玄人 幸道         #region の配置を整理（ClientAuthentication の下に置いていた #187 / #194 / #196 / #200 の追加分を移動）
-//*  2026/09/11  玄人 幸道         Public / Private の region を中身に合わせる（ClientAuthentication を Public へ、Token所有者の確認を private に）
-//*  2026/09/11  玄人 幸道         /userinfo の Bearer のエラー（invalid_token は 401、WWW-Authenticate の組み立て）を追加（#196）
-//*  2026/09/11  玄人 幸道         /ciba_authz の空のエラー コードを CIBA Core 13 のコードに（unknown_user_id を追加）（#196）
-//*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
-//*  2026/09/17  玄人 幸道         認可エラーを、可能ならリダイレクトで返す（#187 の残り）
 //*  2026/09/17  玄人 幸道         /introspect の token_type を RFC 7662 2.2 の意味に直す（#218）
-//*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
 //*  2026/09/17  玄人 幸道         PKCE : client_secret との同時送信を通し、検証を 1 箇所にまとめた（#220）
-//*  2026/09/18  玄人 幸道         PKCE : code_challenge の必須化を、認可エンドポイントに追加（#220）
-//*  2026/09/18  玄人 幸道         トークンのクレームを、permittedLevel から clientMode に分離（#220）
 //*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
-//*  2026/09/22  玄人 幸道         登録種別の判定を、permittedLevel の大小比較から ClientModePolicy の表に置き換える（#224 の段階 1）
-//*  2026/09/22  玄人 幸道         登録種別で拒否するときは unauthorized_client。認可エンドポイントと /ciba_authz でも先に判定する。
-//*                                使えない refresh_token は発行しない。既知でない登録値は不正として拒否する（#224 の段階 2）
 //*  2026/09/24  玄人 幸道         Discovery の誤りを直し、実装済みの項目を広告する（#189 の 2〜8）
 //*  2026/09/24  玄人 幸道         code_challenge_methods_supported を設定に合わせ、service_documentation を設定値にする（#228）
 //*  2026/09/24  玄人 幸道         Request Object を、認可応答を作った時点で消す（ワンタイム化。#188 の段階 2）
-//*  2026/09/24  玄人 幸道         refresh_token のローテーションで、一族（FamilyId）を引き継ぐ（#188 の段階 3）
 //*  2026/09/24  玄人 幸道         認可応答に iss を付ける（RFC 9207。#231）
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）のエンドポイントを追加（#229）
 //*  2026/09/24  玄人 幸道         CIBA の認証要求を request で直接受け取る（CIBA Core 7.1.1。#233）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を検証する（CIBA Core 7.1.1。#234 の段階 1）
-//*  2026/09/25  玄人 幸道         CIBA の認証要求を jti で使い切りにする（#234 の段階 2）
-//*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
-//*  2026/09/25  玄人 幸道         /ros の処理を、両アプリの Controller から移した（#235）
 //*  2026/09/25  玄人 幸道         client_assertion（RFC 7523 2.2）を読む（#238）
-//*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/25  玄人 幸道         claims_supported を、クレームの対応付けから作る（#230）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
 //*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
@@ -106,9 +88,6 @@
 //*  2026/09/29  玄人 幸道         code_challenge を送った code は code_verifier を必須にした（#245）
 //*  2026/09/30  玄人 幸道         client_assertion を ES256 でも検証できるようにし、広告を揃えた（#129 の段階 2）
 //*  2026/10/01  玄人 幸道         subject_types_supported の並びを public 先頭に（#151 の段階 4）
-//*  2026/10/02  玄人 幸道         subject_types_supported を OIDC の登録値だけにした（#151 の段階 5）
-//*  2026/10/02  玄人 幸道         登録された id_token_signed_response_alg で署名する（#129 の段階 2）
-//*  2026/10/02  玄人 幸道         id_token の鍵選択を alg 1 つに寄せた（#129 の段階 3）
 //*  2026/10/03  玄人 幸道         検証する側のalgを登録で絞る（#262）
 //*  2026/10/03  玄人 幸道         redirect_uriを単純文字列比較にした（#263）
 //*  2026/10/04  玄人 幸道         redirect_uriの登録迂回の分岐を削除（C-10）
@@ -117,27 +96,14 @@
 //*  2026/10/04  玄人 幸道         CORSのオリジンにweb_originsと画面登録を含める（#266）
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンをキャッシュしないようにした（#271）
 //*  2026/10/06  玄人 幸道         promptを空白区切りの集合として扱う（#272 の段階 1）
-//*  2026/10/06  玄人 幸道         promptのlogin/consent/select_accountの値を追加（#272 の段階 2）
 //*  2026/10/16  玄人 幸道         ポーリングが速すぎたら slow_down を返す（#305 の段階 1）
-//*  2026/10/16  玄人 幸道         クライアント認証の失敗を数える（#305 の段階 2）
 //*  2026/10/18  玄人 幸道         登録の grant_types / response_types を効かせ、registration_endpoint を広告（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         redirect_uri の事前登録を n 件にし、全件と照合する（#306）
-//*  2026/10/19  玄人 幸道         登録された token_endpoint_auth_method で絞る（#307 の段階 3）
-//*  2026/10/20  玄人 幸道         client_credentialsで専用scopeのトークンを出す（#307の段階5-b）
-//*  2026/10/20  玄人 幸道         TryReadJwtAlg を公開（software_statement の検証で使う。#307 の段階 4）
 //*  2026/10/21  玄人 幸道         client_assertion の鍵を jwks_uri からも引く（#309 の段階 1）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 2）
-//*  2026/10/21  玄人 幸道         Front-Channel Logout を広告し、受け口の記号を解決する（#310 の段階 3）
 //*  2026/10/21  玄人 幸道         DPoP の証明を /token で受け、cnf.jkt で発行する（#311 の段階 1）
-//*  2026/10/22  玄人 幸道         dpop_jkt と refresh_token を DPoP の鍵に縛る（#311 の段階 4）
-//*  2026/10/22  玄人 幸道         仕様の部品（prompt・PKCE・redirect URL 等）を Open棟梁 に移した（#294）
 //*  2026/10/24  玄人 幸道         Hybrid / OIDC の Implicit も Enable*GrantType に従わせ、EnableOpenIDConnect を廃止した（#314）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
-//*  2026/10/24  玄人 幸道         文字列リテラルを Const / OAuth2AndOIDCConst の定数にした（#294）
-//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
-//*  2026/10/26  玄人 幸道         post_logout_redirect_uri（要求）の名前を Const へ移した（#294）
-//*  2026/10/26  玄人 幸道         DataProvider の改名（Saml2OAuth2DataProvider）に追従した（#294）
-//*  2026/10/26  玄人 幸道         扱うグラントの一覧を SupportedGrantTypes にまとめ、Discovery と動的登録で使う（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;

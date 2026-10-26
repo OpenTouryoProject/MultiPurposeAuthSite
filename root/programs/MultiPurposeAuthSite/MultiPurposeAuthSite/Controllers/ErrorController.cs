@@ -32,7 +32,6 @@
 //*  2015/09/03  Supragyan         Rename Position data class to Exception data class
 //*  2015/09/03  Supragyan         Modified Index Action method
 //*  2015/09/04  Supragyan         Modified ArrayList to List of ExceptionData on Index action method
-//*  2026/10/24  玄人 幸道         診断文を resx にした（#294）
 //**********************************************************************************
 
 using System;

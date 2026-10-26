@@ -26,25 +26,17 @@
 //*  2020/11/12  西野 大介         SameSiteCookie対応 (.NET Fx側は対策不要)
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
-//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         require_pkce のクライアントを試す口を追加（#221）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
-//*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         自己テストに RP-Initiated Logout の口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストに PAR（/par）経路を追加（#246）
-//*  2026/09/28  玄人 幸道         組み立てを SelfTestClient へ寄せた（#246）
-//*  2026/09/28  玄人 幸道         CIBA の結果を画面に出し、interval に従わせた（#246 の 3-a / 3-b）
-//*  2026/09/28  玄人 幸道         Device AuthZ の結果も画面に出し、interval に従わせた（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         Device AuthZ の verification_uri のリンクが二重になっていたのを修正（#246）
-//*  2026/09/28  玄人 幸道         SAML2 の Post & Redirect Binding を追加（#246 の項目 2）
 //*  2026/09/29  玄人 幸道         OIDC ボタンの prompt=none を、画面の選択で上書きできるようにした（#247）
 //*  2026/09/29  玄人 幸道         FAPI1 PKCE のボタンが S256 の値を plain と宣言していた（#245）
 //*  2026/10/01  玄人 幸道         自己テストの宛先を、メアドではなく利用者名にした（#151 の段階 3）
 //*  2026/10/06  玄人 幸道         OIDCボタンの固定のprompt=noneを外した（#272 の段階 2）
 //*  2026/10/07  玄人 幸道         SAML2のAuthnRequestのIDを保存するようにした（#276）
 //*  2026/10/08  玄人 幸道         自己テストで NameIDFormat / ResponseMode を選べるようにした（#277 の段階 4）
-//*  2026/10/24  玄人 幸道         Const.StandardScopes を Const.SelfTestScopes にリネームした（#294）
-//*  2026/10/25  玄人 幸道         文字列リテラルを定数にした（2 回目の洗い出し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
