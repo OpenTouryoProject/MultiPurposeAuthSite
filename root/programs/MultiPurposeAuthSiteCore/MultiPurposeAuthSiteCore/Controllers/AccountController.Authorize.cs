@@ -70,7 +70,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="claims">JObject（Request Object の claims（無ければ null））</param>
         /// <param name="identity">ClaimsIdentity（認証Cookieから取得）</param>
         /// <remarks>
-        /// max_age か claims で求められたときだけ呼び出される。
+        /// max_age か claims で求められたときだけ、auth_time のクレームを足す。
         /// 最終的に、access_token と id_token の payload に出る。
         /// </remarks>
         private void AddAuthTimeClaim(string max_age, JObject claims, ClaimsIdentity identity)
@@ -98,7 +98,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 // **クレームとして持たせる**（値は W3C 形式）。
-                // CmnAccessToken がこのクレームを拾い、id_token の auth_time にする。
+                // CmnAccessToken がこのクレームを拾い、access_token と id_token の auth_time にする。
                 identity.AddClaim(new Claim(
                     OAuth2AndOIDCConst.UrnAuthTimeClaim,
                     FormatConverter.ToW3cTimestamp(DateTime.Parse(auth_time))));
@@ -327,7 +327,8 @@ namespace MultiPurposeAuthSite.Controllers
             JObject claims = null;
 
             // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
-            // Request Object が在れば、その値で上書きする（無ければクエリ文字列のまま）。
+            // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする
+            // （無ければクエリ文字列のまま）。
             
             // **クエリ文字列は、デコードされた値で読む**（パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼさないため）。
             
@@ -462,8 +463,6 @@ namespace MultiPurposeAuthSite.Controllers
                     MyHttpContext.Current.Response.Cookies.Delete(Config.ReAuthenticatedAtCookieName);
 
                     // auth_timeを追加
-                    /// - max_age か claims で求められたときだけ呼び出される。
-                    /// - 最終的に、access_token と id_token の payload に出る。
                     this.AddAuthTimeClaim(max_age, claims, identity);
 
                     // scopeパラメタ
@@ -512,14 +511,14 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // この要求の scope を、前に同意しているか
                         bool hasConsent = Sts.ConsentProvider.HasConsent(userId, client_id, scopes);
-                        // RP が「同意画面を出せ」と求めている or RP が「別のアカウントでログイン」を求めている
+                        // RP が同意画面（consent）か、同意画面でのアカウントの選択（select_account）を求めている。
                         bool asksConsent = OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptConsent)
                                            || OAuth2AndOIDCSpec.HasPrompt(prompt, OAuth2AndOIDCConst.PromptSelectAccount);
 
                         #endregion
 
                         if (isAuth                              // 認可画面スキップの独自仕様
-                            || (hasConsent && !asksConsent))    // 若しくは、同意済み / 要求がない
+                            || (hasConsent && !asksConsent))    // または、同意済みで、取り直しを求められていない
                         {
                             // 認可画面をスキップ
 
@@ -545,7 +544,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (OAuth2AndOIDCSpec.HasPrompt(
                             prompt, OAuth2AndOIDCConst.PromptNone))
                         {
-                            // 同意はないが、PromptNoneを要求している。
+                            // 同意画面を出す必要があるが、prompt=none（UI を出せない）。
 
                             // **UI を出せないので、エラーを RP へ返す**
                             //   （OIDC Core §3.1.2.6 : consent_required。#272）。
@@ -674,7 +673,8 @@ namespace MultiPurposeAuthSite.Controllers
             JObject claims = null;
 
             // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
-            // Request Object が在れば、その値で上書きする（無ければクエリ文字列のまま）。
+            // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする
+            // （無ければクエリ文字列のまま）。
 
             // **クエリ文字列は、デコードされた値で読む**（パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼさないため）。
 
@@ -720,8 +720,6 @@ namespace MultiPurposeAuthSite.Controllers
                     ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
                 // auth_timeを追加
-                /// - max_age か claims で求められたときだけ呼び出される。
-                /// - 最終的に、access_token と id_token の payload に出る。
                 this.AddAuthTimeClaim(max_age, claims, identity);
 
                 // 次に、アクセス要求を保存して、仲介コードを発行する。
@@ -841,9 +839,11 @@ namespace MultiPurposeAuthSite.Controllers
                 return new RedirectResult(
                     OAuth2AndOIDCSpec.BuildRedirectUrl(
                         redirect_uri,
-                        new Dictionary<string, string>() {
+                        new Dictionary<string, string>()
+                        {
                             { OAuth2AndOIDCConst.code, code },
-                            { OAuth2AndOIDCConst.state, state } },
+                            { OAuth2AndOIDCConst.state, state }
+                        },
                         false, CmnServerParams.IssuerId));
             }
             else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit()
@@ -867,7 +867,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // fragment
                 return new RedirectResult(OAuth2AndOIDCSpec.BuildRedirectUrl(
                     redirect_uri,
-                    new Dictionary<string, string>() {
+                    new Dictionary<string, string>()
+                    {
                         { OAuth2AndOIDCConst.code, code },
                         { OAuth2AndOIDCConst.state, state }
                     }, true, CmnServerParams.IssuerId));
@@ -943,7 +944,7 @@ namespace MultiPurposeAuthSite.Controllers
                 case OAuth2AndOIDCConst.ImplicitResponseType: // Token要求
                     if (string.IsNullOrEmpty(access_token))
                     {
-                        // Tokenなし
+                        // Tokenを発行できなかった
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
@@ -1009,10 +1010,10 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     return null;
 
-                case OAuth2AndOIDCConst.OidcImplicit1_ResponseType:　// ID Token要求
+                case OAuth2AndOIDCConst.OidcImplicit1_ResponseType: // ID Token要求
                     if (string.IsNullOrEmpty(id_token))
                     {
-                        // ID Tokenなし
+                        // ID Tokenを発行できなかった
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
@@ -1074,7 +1075,7 @@ namespace MultiPurposeAuthSite.Controllers
                 case OAuth2AndOIDCConst.OidcImplicit2_ResponseType: // ID Token & Token要求
                     if (string.IsNullOrEmpty(id_token) || string.IsNullOrEmpty(access_token))
                     {
-                        // ID Token & Tokenなし
+                        // ID Token & Tokenを発行できなかった
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
@@ -1176,7 +1177,7 @@ namespace MultiPurposeAuthSite.Controllers
                 case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType: // Code & Token要求
                     if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(access_token))
                     {
-                        // Code & Tokenなし
+                        // Code & Tokenを発行できなかった
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
@@ -1250,7 +1251,7 @@ namespace MultiPurposeAuthSite.Controllers
                 case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType: // Code & ID Token要求
                     if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(id_token))
                     {
-                        // Code & ID Tokenなし
+                        // Code & ID Tokenを発行できなかった
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
@@ -1314,7 +1315,7 @@ namespace MultiPurposeAuthSite.Controllers
                 case OAuth2AndOIDCConst.OidcHybrid3_ResponseType: // Code & ID Token & Token要求
                     if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(access_token) || string.IsNullOrEmpty(id_token))
                     {
-                        // Code & ID Token & Tokenなし
+                        // Code & ID Token & Tokenを発行できなかった
                         return CreateErrorResponseForToken(response_mode, redirect_uri, state);
                     }
                     else
