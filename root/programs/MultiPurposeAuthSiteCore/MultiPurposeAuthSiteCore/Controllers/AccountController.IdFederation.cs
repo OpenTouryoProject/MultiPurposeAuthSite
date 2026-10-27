@@ -673,7 +673,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 this.InitSessionAfterlogin();
 
                                 // オペレーション・トレース・ログ出力
-                                Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+                                Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
 
                                 // リダイレクトしてルートに戻る。
                                 return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
@@ -1120,7 +1120,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format(
-                            "{0}({1}) has signed in with a SAML2 ID federation.",
+                            "{0}({1}) has signed up with a SAML2 ID federation.",
                             user.Id, user.UserName));
 
                         // リダイレクトしてルートに戻る。

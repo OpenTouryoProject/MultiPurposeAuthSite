@@ -331,7 +331,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     this.InitSessionAfterlogin();
 
                                     // オペレーション・トレース・ログ出力
-                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
 
                                     // リダイレクト
                                     return RedirectToLocal(returnUrl);

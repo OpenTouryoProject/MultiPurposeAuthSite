@@ -1118,7 +1118,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format(
-                            "{0}({1}) has signed in with a SAML2 ID federation.",
+                            "{0}({1}) has signed up with a SAML2 ID federation.",
                             user.Id, user.UserName));
 
                         // リダイレクトしてルートに戻る。
