@@ -35,31 +35,34 @@
  * - 完了しなかった理由は、OPERATION ログに残す（#253）。
 */
 
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-using MultiPurposeAuthSite.ViewModels;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Npgsql.Internal.Postgres;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
+
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Threading.Tasks;
+
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using AspNetId = Microsoft.AspNetCore.Identity;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Log;
+using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Security.Pwd;
-using Touryo.Infrastructure.Public.Str;
-using AspNetId = Microsoft.AspNetCore.Identity;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
+using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -280,10 +283,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (!string.IsNullOrEmpty(upstream.Issuer))
                         {
-                            // discovery から jwks_uri をたどり、kid が合う JWK を RS256 の鍵にする。
+                            // 上流（IdFederationJwkSetUri / discovery_url → jwk_set_uri）の
+                            // JWK Setから kid で引き、RS256 の鍵にする（#289 / #290）。
                             upstreamKey = await Sts.IdFederationJwks.GetKeyAsync(id_token, upstream);
 
-                            // 上流の discovery が引けなかったときは、設定の .cer に倒す。
+                            // 引けなければ（届かない・kid が無い）、設定の .cer に倒す。
                             if (upstreamKey == null
                                 && !string.IsNullOrEmpty(upstream.CerFilePath))
                             {
@@ -293,12 +297,18 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (!string.IsNullOrEmpty(upstream.CerFilePath))
                         {
                             // **証明書だけ在って期待する `iss` が空**なら、渡せない。
-                            // issに対応する証明書である確証がないため。**理由を残す**（#253）。
+                            //   iss に対応する証明書である確証がなく、
+                            //   鍵を指定する版の IdToken.Verify は iss が空なら例外にする（Open棟梁 #601）。
+                            //   この後は、鍵を指定しない版に進む。**理由を残す**（#253）。
                             Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer.");
                         }
                         else
                         {
-                            // 鍵を指定しない版の IdToken.Verify に進む。
+                            // iss も .cer も無い。鍵を指定しない版の IdToken.Verify に進む（1:1 の構成）。
+                            //   **理由を残す**（#253）。一般の OP ならこの後の検証で必ず落ちるので、
+                            //   **設定漏れ（issuer / cer_file_path）と区別できるようにする。**
+                            Logging.MyOperationTrace(
+                                "The ID federation has neither an expected issuer nor a certificate. (verified with the client settings)");
                         }
 
                         // **結果を控えておく**（#253）。**失敗したときに、どちらで落ちたかを残すため。**
@@ -306,9 +316,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (upstreamKey == null)
                         {
-                            // 鍵を指定しない版（コレが残っているのは 1:1 の使用の名残）
-                            // - kid が無ければ、自分の CmnClientParams.RsaCerFilePath の証明書を試す
-                            // - kid があれば、自分の JWK Setから kid で引き、なければ、上と同じ自分の証明書を使います。
+                            // 鍵を指定しない版（1:1のテスト構成の名残）
+                            //   上流の鍵ではなく、この配備の設定の鍵で検証するので、通るのは上流・下流が同じ鍵を持つ構成のときだけ。
+                            //   - 鍵：kid があれば、自分の JWK Set ファイル（JwkSetFilePath）から kid で引く。
+                            //         kid が無い・引けなければ CmnClientParams.RsaCerFilePath (SpRp_RsaCerFilePath) を使う。
+                            //   - iss：SpRp_Isser
                             idTokenVerified = IdToken.Verify(
                                 id_token, access_token, code, state,
                                 out sub, out nonce, out jobj);
@@ -368,7 +380,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #region Userinfo処理
 
-                    // Userinfoエンドポイントにアクセス。Sts.Helper の WebAPI 呼び出しは使わない（#140）。
+                    // Userinfoエンドポイントにアクセス。Sts.Helper の WebAPI 呼び出しは使わない（#246）。
                     //   Sts.Helper は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
                     //   宛先のホストを自分の認可サーバへ書き換える。相手は上流の IdP なので、その配備では宛先が変わって壊れる。
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
@@ -478,9 +490,6 @@ namespace MultiPurposeAuthSite.Controllers
             Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
             Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
 
-            // **鍵はメアド**。**メアドは常に在って一意**なので。
-            //string uid = email; // 解り難いので「email」を使う。
-
             // **新規に作るときの利用者名**（#151）。
             //   **上流の sub は利用者名ではない**（既定が public = 利用者 ID）。
             //   **利用者名は preferred_username で受け取る**（上流が UserClaimsMapping で出す。#151）。
@@ -530,7 +539,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // AccountControllerで、ユーザーが既に外部ログインしていない場合は、
                     // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
 
-                    // サインアップ済みの可能性を探る。**鍵はメアド**。
+                    // サインアップ済みの可能性を探る。**鍵はメアド**（#151。メアドは常に在って一意）。
                     user = await UserManager.FindByEmailAsync(email);
 
                     if (user != null)
@@ -938,9 +947,6 @@ namespace MultiPurposeAuthSite.Controllers
         {
             IdentityResult idResult = null;
 
-            // **鍵はメアド**（OIDC 側と同じ）。
-            //string uid = email; // 解り難いので「email」を使う。
-
             //  **新規に作るときの名前は、属性の `uid` → メアドの `@` より前**（#286）。
             //    **OIDC 側の `preferred_username` と同じ扱い**である。
             //    **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く。**
@@ -977,7 +983,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
             }
 
-            // サインアップ済みの可能性を探る。**鍵はメアド**（OIDC 側と同じ）。
+            // サインアップ済みの可能性を探る。**鍵はメアド**（#151。OIDC 側と同じ）。
             user = await UserManager.FindByEmailAsync(email);
 
             UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
