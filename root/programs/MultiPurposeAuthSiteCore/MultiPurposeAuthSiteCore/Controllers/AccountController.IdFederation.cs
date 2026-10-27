@@ -276,18 +276,25 @@ namespace MultiPurposeAuthSite.Controllers
                         string access_token = dic[OAuth2AndOIDCConst.AccessToken];
 
                         // OIDCのID連携で、上流の id_token の署名を検証する鍵
-                        //   1. 上流の discovery → jwks_uri → kid（鍵のロールオーバーに追随する）
-                        //   2. 設定の .cer（引けなかったときの受け皿）
-                        //   3. 渡さない（自分の JWK Set を kid で引く枝に入る）
+                        //   上流の値は n 件設定（IdFederationUpstreams の行・管理画面の行）から来る。
+                        //   **n 件設定が無いときだけ**、1 件設定（IdFederation* の単数キー）から組み立てる（下位互換。#292）。
+                        //
+                        //   | 順 | 鍵 | n 件設定 | 1 件設定 |
+                        //   |---|---|---|---|
+                        //   | 1 | 上流の JWK Set を kid で引く（ロールオーバーに追随。#289 / #290） | jwk_set_uri、無ければ discovery_url → jwks_uri | IdFederationJwkSetUri、無ければ IdFederationOidcDiscoveryUrl → jwks_uri |
+                        //   | 2 | 上流の証明書（1 が引けなかったときの受け皿） | cer_file_path | IdFederationOidcCerFilePath |
+                        //   | 3 | 渡さない（この配備の設定の鍵で検証する。下の if） | － | － |
+                        //
+                        //   **期待する iss** は、n 件設定は issuer、1 件設定は SpRp_Isser。**空なら 1・2 は使えない**（3 に進む）。
+                        //   **自分の /jwkcerts（JwkSetUri）は、自分が発行するトークンの鍵を広告する口**で、ここでは使わない。
                         JWS upstreamKey = null;
 
                         if (!string.IsNullOrEmpty(upstream.Issuer))
                         {
-                            // 上流（IdFederationJwkSetUri / discovery_url → jwk_set_uri）の
-                            // JWK Setから kid で引き、RS256 の鍵にする（#289 / #290）。
+                            // 上流の JWK Set（上の表の 1）から kid で引き、RS256 の鍵にする（#289 / #290）。
                             upstreamKey = await Sts.IdFederationJwks.GetKeyAsync(id_token, upstream);
 
-                            // 引けなければ（届かない・kid が無い）、設定の .cer に倒す。
+                            // 引けなければ（届かない・kid が無い）、上流の証明書（上の表の 2）に倒す。
                             if (upstreamKey == null
                                 && !string.IsNullOrEmpty(upstream.CerFilePath))
                             {
@@ -306,7 +313,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // iss も .cer も無い。鍵を指定しない版の IdToken.Verify に進む（1:1 の構成）。
                             //   **理由を残す**（#253）。一般の OP ならこの後の検証で必ず落ちるので、
-                            //   **設定漏れ（issuer / cer_file_path）と区別できるようにする。**
+                            //   **設定漏れ（issuer / cer_file_path、1 件設定では SpRp_Isser / IdFederationOidcCerFilePath）と区別できるようにする。**
                             Logging.MyOperationTrace(
                                 "The ID federation has neither an expected issuer nor a certificate. (verified with the client settings)");
                         }
@@ -321,6 +328,7 @@ namespace MultiPurposeAuthSite.Controllers
                             //   - 鍵：kid があれば、自分の JWK Set ファイル（JwkSetFilePath）から kid で引く。
                             //         kid が無い・引けなければ CmnClientParams.RsaCerFilePath (SpRp_RsaCerFilePath) を使う。
                             //   - iss：SpRp_Isser
+                            //   **n 件設定でも、上流の鍵が決まらなければここに来る**（上の表の 3）。
                             idTokenVerified = IdToken.Verify(
                                 id_token, access_token, code, state,
                                 out sub, out nonce, out jobj);
@@ -495,7 +503,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   **利用者名は preferred_username で受け取る**（上流が UserClaimsMapping で出す。#151）。
             //   **無ければメアドの「@」より前**（利用者名に `@` は禁じている）。
             //   **sub は見ない**（利用者を指す識別子であって、名前ではない）。
-            //   **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く**（上の uid）。
+            //   **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く**（下の FindByEmailAsync はメアドで引く）。
             //   ここで決まるのは、**新規に作るときの名前だけ**である。
 
             string newUserName = UserIdentifier.IsValidUserName(preferredUserName)
