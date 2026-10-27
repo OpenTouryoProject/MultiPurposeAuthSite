@@ -19,8 +19,20 @@
 //**********************************************************************************
 
 /*
-上流の IdP との ID 連携（OIDC と SAML2）の開始とコールバック、
-トークン・アサーションの検証、利用者の登録・更新を担うAccountControllerの一部
+ * 上流の IdP との ID 連携（OIDC と SAML2）の開始とコールバック、
+ * トークン・アサーションの検証、利用者の登録・更新を担うAccountControllerの一部
+ * 
+ * - OIDC と SAML2 は、同じ 3 段の形に揃えてある（#286）。
+ *   開始（StartIdFederationByOidc / StartIdFederationBySaml2）
+ *   → 受け口（IDFederationRedirectEndPoint / IDFederationAssertionConsumerService。応答の検証まで）
+ *   → 利用者の結び付け（SignInByIdFederationOidc / SignInByIdFederationSaml2）
+ * 
+ * - 上流は複数持てる。どの上流へ送ったかを Session に控え、受け口（各 1 本）はそれで相手を引く。
+ * - 連携キーは (上流の Issuer, 主体の識別子)。OIDC は (iss, sub)、SAML2 は (EntityID, NameID)。
+ * - 利用者の鍵はメアド（#151）。既存の利用者に結ぶのは、メアドが検証済みのときだけ。
+ * - OIDC の認可要求には PKCE（S256）と 32 文字の state を付け、prompt=none は付けない。認可応答の iss を検証する（RFC 9207）。
+ * - SAML2 の応答の検証の本体は Open棟梁 の SAML2Client.VerifyResponseWithReason。鍵は、メタデータ → 設定の .cer の順で決める（#291）。
+ * - 完了しなかった理由は、OPERATION ログに残す。
 */
 
 using MultiPurposeAuthSite.Co;
@@ -58,6 +70,8 @@ namespace MultiPurposeAuthSite.Controllers
     public partial class AccountController
     {
         #region OIDC
+
+        // StartIdFederationByOidcは、新設のStartIdFederationBySaml2に合わせて切り出された。
 
         /// <summary>OIDC の ID 連携を始める（上流へ認可要求を送る）</summary>
         /// <param name="uid">サインイン画面に入力された値（`login_hint` にそのまま渡す）</param>
@@ -156,9 +170,10 @@ namespace MultiPurposeAuthSite.Controllers
         {
             if (!Config.IsLockedDownTestEndpoints)
             {
-                //  **どの上流から戻ってきたか**（#292）。
-                //    **開始処理が Session に控えた鍵**で引く（折り返し口は 1 本）。
-                //    **Session が切れていれば、既定の上流**（1 件の配備では、その 1 件）。
+                #region どの上流から戻ってきたか
+                
+                // **開始処理が Session に控えた鍵**で引く（折り返し口は 1 本）。
+                // **Session が切れていれば、既定の上流**（1 件の配備では、その 1 件）。
                 string upstreamKeyInSession =
                     HttpContext.Session.GetString(Const.IdFederationSigninUpstream);
 
@@ -203,6 +218,8 @@ namespace MultiPurposeAuthSite.Controllers
                     return View("Error");
                 }
 
+                #endregion
+
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
                 OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
@@ -215,41 +232,23 @@ namespace MultiPurposeAuthSite.Controllers
                 string client_id = upstream.ClientId;
                 string client_secret = upstream.ClientSecret;
 
-                // **合わないときに理由を残す**（#253）。
-                //   **この分岐には else が無く、末尾の View("Error") に落ちるだけだった**ので、
-                //   **「なぜ Error になったか」がログから分からなかった。**
-                //   **値そのものは出さない**（有無と長さだけ）。
-                if (state != (string)HttpContext.Session.GetString(Const.IdFederationSigninState))
-                {
-                    Logging.MyOperationTrace(string.Format(
-                        "The state of the authorization response did not match the session. (response: {0}, session: {1})",
-                        LogSanitizer.Describe(state),
-                        LogSanitizer.Describe(HttpContext.Session.GetString(Const.IdFederationSigninState))));
-                }
-
                 // stateの検証
                 if (state == (string)HttpContext.Session.GetString(Const.IdFederationSigninState))
                 {
+                    #region Code → Token
+                    
                     // state正常
                     HttpContext.Session.SetString(Const.IdFederationSigninState, ""); // 誤動作防止
 
-                    #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
+                    #region TokenRequest
 
-                    // 仲介コードからAccess Tokenを取得する。
+                    // codeからAccess Tokenを取得する。
                     string redirect_uri = Config.IdFederationRedirectEndpoint;
 
-                    // Tokenエンドポイントにアクセス
-                    //
-                    // **ここも Helper を通さない**（#140）。
-                    //   **Helper は宛先のホストをコンテナの認可サーバへ書き換える**
-                    //   （GetContainerizatedAuthZServerUri）。**ID フェデレーションの相手は他の IdP** なので、
-                    //   通すと宛先が変わって壊れる。/userinfo は #246 で外していたが、
-                    //   **こちらは残っていた。**
-                    //
-                    // **code_verifier を渡す**（#140）。
                     string codeVerifier = HttpContext.Session.GetString(Const.IdFederationSigninVerifier);
                     HttpContext.Session.SetString(Const.IdFederationSigninVerifier, ""); // 誤動作防止
 
+                    // 自己テスト用の「Sts.Helper」は使用せず、Tokenエンドポイントにアクセス
                     model.Response = await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                             new Uri(upstream.TokenEndpoint),
                             client_id, client_secret, redirect_uri, code, codeVerifier);
@@ -258,7 +257,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
-                    #region id_tokenの検証コード
+                    #endregion
+
+                    #region id_token検証
 
                     string sub = "";
                     string nonce = "";
@@ -361,27 +362,17 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #endregion
 
-                    #region /userinfoエンドポイント
-                    // /userinfoエンドポイントにアクセスする場合
+                    #region Userinfo処理
 
-                    // **ここは Helper を通さない**（#246 で確かめた）。
-                    //   Helper の WebAPI 呼び出しは、すべて GetContainerizatedAuthZServerUri を通し、
-                    //   **宛先のホストをコンテナの認可サーバへ書き換える。**
-                    //   ID フェデレーションの相手は**他の IdP** なので、通すと宛先が変わって壊れる。
-                    //   （Helper.GetUserInfoAsync は URI を引数に取らず、常に自分の /userinfo を向く）
+                    // 自己テスト用の「Sts.Helper」は使用せず、Userinfoエンドポイントにアクセス
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
                         new Uri(upstream.UserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
-                    #endregion
-
-                    #region ユーザの登録・更新
-
 
                     // クレーム情報（ID情報とe-mail, name情報）を抽出
                     jobj = (JObject)JsonConvert.DeserializeObject(response);
 
                     // **連携キーは (issuer, sub)**（#140）。
                     //   `sub` は OIDC の標準なので、**どの OP とも連携できる。**
-                    //
                     //   **`iss` と `sub` は、署名を検証した id_token から取る**
                     //   （/userinfo の値は、この後で一致を確かめるだけに使う）。
                     string idpIssuer = (string)idTokenPayload[OAuth2AndOIDCConst.iss];
@@ -425,6 +416,14 @@ namespace MultiPurposeAuthSite.Controllers
                         email, name, preferredUserName, emailVerified);
 
                     #endregion
+                }
+                else
+                {
+                    // **合わないときに理由を残す**。**値そのものは出さない**（有無と長さだけ）。                    
+                    Logging.MyOperationTrace(string.Format(
+                        "The state of the authorization response did not match the session. (response: {0}, session: {1})",
+                        LogSanitizer.Describe(state),
+                        LogSanitizer.Describe(HttpContext.Session.GetString(Const.IdFederationSigninState))));
                 }
             }
             else
@@ -473,31 +472,25 @@ namespace MultiPurposeAuthSite.Controllers
             Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
             Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
 
-            // **鍵はメアド**（#151）。
-            //   **メアドは常に在って一意**なので、鍵はメアドで決まる。
+            // **鍵はメアド**。**メアドは常に在って一意**なので。
             string uid = email;
 
             // **新規に作るときの利用者名**（#151）。
-            //   **上流の sub は利用者名ではない**（既定が public ＝ 利用者 ID）。
-            //   **利用者名は preferred_username で受け取る**
-            //   （上流が UserClaimsMapping で出す。#151）。
+            //   **上流の sub は利用者名ではない**（既定が public = 利用者 ID）。
+            //   **利用者名は preferred_username で受け取る**（上流が UserClaimsMapping で出す。#151）。
             //   **無ければメアドの「@」より前**（利用者名に `@` は禁じている）。
-            //
             //   **sub は見ない**（利用者を指す識別子であって、名前ではない）。
-            //
             //   **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く**（上の uid）。
             //   ここで決まるのは、**新規に作るときの名前だけ**である。
 
             string newUserName = UserIdentifier.IsValidUserName(preferredUserName)
                 ? preferredUserName : UserIdentifier.UserNameFromEmail(email);
 
-            if (!string.IsNullOrWhiteSpace(email)
-                && !string.IsNullOrWhiteSpace(name))
+            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(name))
             {
                 // クレーム情報（e-mail, name情報）を取得できた。
 
-                // 既存の外部ログインを確認する。
-                //   **新しい鍵（iss, sub）で引く**（#140）。
+                // 既存の外部ログインを確認する。**新しい鍵（iss, sub）で引く** sub = federationKey
                 ApplicationUser user = await UserManager.FindByLoginAsync(idpIssuer, federationKey);
 
                 if (user != null)
@@ -511,12 +504,7 @@ namespace MultiPurposeAuthSite.Controllers
                     idResult = await UserManager.AddClaimAsync(user, nameClaim);
 
                     // SignInAsyncより、ExternalSignInAsyncが適切。
-
-                    //// 通常のサインイン
-                    //await SignInManager.SignInAsync(
-
-                    // 既存の外部ログイン・プロバイダでサインイン
-                    //   **新しい鍵（iss, sub）で**（#140）。
+                    // 既存の外部ログインでサインイン **新しい鍵（iss, sub）で** sub = federationKey
                     siResult = await SignInManager.ExternalLoginSignInAsync(
                         idpIssuer, federationKey,
                         isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
@@ -526,7 +514,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
-
+                    // ルートにリダイレクト
                     return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
                 }
                 else
@@ -536,9 +524,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // AccountControllerで、ユーザーが既に外部ログインしていない場合は、
                     // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
 
-                    // サインアップ済みの可能性を探る
-                    // **メアドで引く**（#151。鍵がメアドになった）。
-                    user = await UserManager.FindByEmailAsync(uid);
+                    // サインアップ済みの可能性を探る。**メアドで引く**。
+                    user = await UserManager.FindByEmailAsync(email);//uid);
 
                     if (user != null)
                     {
@@ -572,6 +559,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             idResult = await UserManager.AddClaimAsync(user, emailClaim);
                             idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                            // 保存するクレームを足すなら、ここ
                             // ・・・
                             // ・・・
                             // ・・・
@@ -643,6 +631,7 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 idResult = await UserManager.AddClaimAsync(user, emailClaim);
                                 idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                // 保存するクレームを足すなら、ここ
                                 // ・・・
                                 // ・・・
                                 // ・・・
@@ -965,6 +954,10 @@ namespace MultiPurposeAuthSite.Controllers
                 idResult = await UserManager.AddClaimAsync(user, emailClaim);
                 idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
                 idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                // 保存するクレームを足すなら、ここ
+                // ・・・
+                // ・・・
+                // ・・・
 
                 await SignInManager.ExternalLoginSignInAsync(
                     idpIssuer, federationKey,
@@ -1007,6 +1000,10 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     idResult = await UserManager.AddClaimAsync(user, emailClaim);
                     idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                    // 保存するクレームを足すなら、ここ
+                    // ・・・
+                    // ・・・
+                    // ・・・
                 }
 
                 if (idResult.Succeeded)
@@ -1048,6 +1045,10 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         idResult = await UserManager.AddClaimAsync(user, emailClaim);
                         idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                        // 保存するクレームを足すなら、ここ
+                        // ・・・
+                        // ・・・
+                        // ・・・
                     }
 
                     if (idResult.Succeeded)
