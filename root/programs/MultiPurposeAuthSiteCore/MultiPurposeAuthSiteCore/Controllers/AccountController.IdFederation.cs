@@ -89,6 +89,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private ActionResult StartIdFederationByOidc(string uid, IdFederationUpstream upstream)
         {
+            // upstream には、ID連携の1件設定、n件設定の、いずれかの1件が入る。どちらも null なら、上流が引けない。
             if (upstream == null)
             {
                 //  **指定された上流が引けない**（登録が無い・無効・値が足りない）。
@@ -555,8 +556,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // サインアップ済み → 外部ログイン追加だけで済む
 
                         // **新しい鍵（iss, sub）で登録する**（#140）。
-                        UserLoginInfo externalLoginInfo = new UserLoginInfo(
-                            idpIssuer, federationKey, idpIssuer);
+                        UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
 
                         // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140）。
                         if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
@@ -604,7 +604,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
 
-                            // リダイレクト
+                            // リダイレクトしてルートに戻る。
                             return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
                         }
                         else
@@ -621,7 +621,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // If the user does not have an account, then prompt the user to create an account
                         // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
                         ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
-                        ViewBag.LoginProvider = "MultiPurposeAuthSite";
+                        ViewBag.LoginProvider = "MultiPurposeAuthSite"; // ★リテラル
 
                         // 外部ログイン プロバイダのユーザー情報でユーザを作成
                         // **利用者名とメアドを別に渡す**（#151）。
@@ -634,8 +634,7 @@ namespace MultiPurposeAuthSite.Controllers
                         idResult = await UserManager.CreateAsync(user);
 
                         // **新しい鍵（iss, sub）で登録する**（#140）。
-                        UserLoginInfo externalLoginInfo = new UserLoginInfo(
-                            idpIssuer, federationKey, idpIssuer);
+                        UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
 
                         // 結果の確認
                         if (idResult.Succeeded)
@@ -678,7 +677,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
 
-                                // リダイレクト
+                                // リダイレクトしてルートに戻る。
                                 return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
                             }
                             else
@@ -734,6 +733,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private async Task<ActionResult> StartIdFederationBySaml2(IdFederationUpstream upstream)
         {
+            // upstream には、ID連携の1件設定、n件設定の、いずれかの1件が入る。どちらも null なら、上流が引けない。
             if (upstream == null)
             {
                 //  **指定された上流が引けない**（#292）。**理由を残す**（#253）。
@@ -743,8 +743,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
 
-            //  **上流の SSO の口は、メタデータ → 設定の順で決める**（#291）。
-            //    **メタデータが引けなければ、設定の値。**
+            //  **上流の SSO の口は、メタデータ → 設定の順で決める**（#291）。**メタデータが引けなければ、設定の値。**
             string ssoUrl = await SamlProviders.IdFederationSaml2Metadata.GetSsoUrlAsync(upstream);
 
             if (string.IsNullOrEmpty(ssoUrl))
@@ -759,13 +758,11 @@ namespace MultiPurposeAuthSite.Controllers
             // **RelayState に入れる state**（#140 と同じ 32 文字）。記号は入れない。
             string state = GetPassword.Generate(32, 0);
 
-            //  **要求の組み立ては `IdFederationSaml2Request` に 1 か所だけ置いてある**
-            //    （#292。**両アプリに同文で置かない**）。
-            //    **署名鍵は、行に `signing_pfx_file_path` が在れば、その鍵**
-            //    （無ければ共通設定。Open棟梁 #606 の口で渡している）。
+            // **要求の組み立ては `IdFederationSaml2Request` に 1 か所だけ置いてある**（#292。**両アプリに同文で置かない**）。
+            // **署名鍵は、行に `signing_pfx_file_path` が在れば、その鍵**（無ければ共通設定。Open棟梁 #606 の口で渡している）。
             string id = "";
-            string queryString = SamlProviders.IdFederationSaml2Request.CreateRedirectRequest(
-                upstream, state, out id);
+            string queryString = SamlProviders.IdFederationSaml2Request
+                .CreateRedirectRequest(upstream, state, out id);
 
             HttpContext.Session.SetString(Const.IdFederationSaml2State, state);
 
@@ -802,8 +799,9 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> IDFederationAssertionConsumerService(
             string samlResponse, string relayState, string sigAlg)
         {
-            //  **どの上流から戻ってきたか**（#292）。
-            //    **開始処理が Session に控えた鍵**で引く（ACS は 1 本）。
+            #region どの上流から戻ってきたか
+
+            // **開始処理が Session に控えた鍵**で引く（ACS は 1 本）。
             IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
                 HttpContext.Session.GetString(Const.IdFederationSaml2Upstream),
                 IdFederationUpstream.Saml2);
@@ -818,6 +816,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 return View("Error");
             }
+
+            #endregion
+
+            #region 応答の検証
 
             bool isGet = (Request.Method.ToLower() == "get");
             string queryString = "";
@@ -836,22 +838,31 @@ namespace MultiPurposeAuthSite.Controllers
             HttpContext.Session.SetString(Const.IdFederationSaml2State, "");
             HttpContext.Session.SetString(Const.IdFederationSaml2RequestId, "");
 
-            //  **検証鍵は、メタデータ → 設定の `.cer` の順で集める**（#291 / #292）。
-            //    **ロールオーバー中は 2 本以上並ぶ**ので、**全部渡して試させる**
-            //    （SAML2 の署名には `kid` に当たるものが無く、選べない）。
+            //  上流の署名を検証する鍵（**全部集めて、順に試す**。#291 / #292）
+            //    上流の値は n 件設定（IdFederationUpstreams の行・管理画面の行）から来る。
+            //    **n 件設定が無いときだけ**、1 件設定（IdFederationSaml2* の単数キー）から組み立てる（下位互換。#292）。
+            //
+            //    | 順 | 鍵 | n 件設定 | 1 件設定 |
+            //    |---|---|---|---|
+            //    | 1 | 上流のメタデータの署名鍵（ロールオーバー中は 2 本以上並ぶ） | metadata_url | IdFederationSaml2MetadataUrl |
+            //    | 2 | 上流の証明書（いつでも最後の受け皿） | cer_file_path | IdFederationSaml2CerFilePath |
+            //
+            //    **期待する Issuer（entityID）** は、n 件設定は issuer、1 件設定は IdFederationSaml2IssuerId（無ければ上流として使えない）。
+            //    **SAML2 の署名には kid に当たるものが無く、選べない**ので、全部渡して試させる。
+            //    **1 本も無ければ通さない**（NoKey で落ち、理由が下のログに残る）。
+            //    **OIDC の「鍵を指定しない版」に当たる経路は無い。**
+            //    **自分の /samlmetadata は、自分が IdP として署名鍵を広告する口**で、ここでは使わない。
             List<RSA> upstreamKeys =
                 await SamlProviders.IdFederationSaml2Metadata.GetSigningKeysAsync(upstream);
 
             //  **POST Binding のときは、クエリ文字列を渡さない**（空なら POST として検証する）。
             SAML2VerifyResult result = SAML2Client.VerifyResponseWithReason(
-                queryString, isGet ? null : samlResponse, upstreamKeys,
-                upstream.Issuer, Config.IdFederationSaml2ResponseEndpoint, requestId,
-                relayState, state);
+                queryString, isGet ? null : samlResponse, upstreamKeys, upstream.Issuer,
+                Config.IdFederationSaml2ResponseEndpoint, requestId, relayState, state);
 
             if (!result.IsValid)
             {
-                //  **理由を残す**（#253 / #287 と同じ方針）。
-                //    **理由は自分で組み立てた文言**なので、そのまま出してよい。
+                //  **理由を残す**（#253 / #287 と同じ方針）。**理由は自分で組み立てた文言**なので、そのまま出してよい。
                 Logging.MyOperationTrace(string.Format(
                     "The SAML2 ID federation was not accepted. (reason: {0})",
                     SamlProviders.CmnSaml2Response.ReasonOf(
@@ -867,9 +878,12 @@ namespace MultiPurposeAuthSite.Controllers
                     "The SAML2 response was verified with key #{0}.", result.VerifiedKeyIndex + 1));
             }
 
+            #endregion
+
+            #region NameID・メアド・email_verified
+
             //  **連携キーは `NameID`**（上流の EntityID と組で使う）。
-            //    **`Transient` は受けない**（#286）—
-            //    **毎回変わる値を連携キーにできない**（SAML Core 8.3.8）。
+            //    **`Transient` は受けない**（#286）**毎回変わる値を連携キーにできない**（SAML Core 8.3.8）。
             if (string.IsNullOrEmpty(result.NameId)
                 || result.NameIdFormat == SAML2Enum.NameIDFormat.Transient)
             {
@@ -907,12 +921,9 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
 
-            //  **上流が「検証済み」と言っているか**（#286）。
-            //    **属性（`email_verified`）が在れば、それに従う。**
-            //
+            //  **上流が「検証済み」と言っているか**（#286）。**属性（`email_verified`）が在れば、それに従う。**
             //    **無ければ、`emailAddress` の `NameID` だけを検証済みとして扱う**
             //    （**上流が署名して主張した主体の識別子**である。SAML Core 8.3.2）。
-            //
             //    **それ以外は空のまま** — **既存アカウントには結ばず**（`AccountLink`）、
             //    **新規に作る利用者の `EmailConfirmed` も false になる。**
             string emailVerified = SAML2Attributes.GetEmailVerified(result.Attributes);
@@ -924,6 +935,9 @@ namespace MultiPurposeAuthSite.Controllers
                 emailVerified = "true";
             }
 
+            #endregion
+
+            //  **ここから先は、利用者の結び付けとサインイン**（#286 で分けた。OIDC 側と同じ形）。
             return await this.SignInByIdFederationSaml2(
                 result.Issuer, result.NameId, email, SAML2Attributes.GetUserName(result.Attributes), emailVerified);
         }
@@ -964,7 +978,7 @@ namespace MultiPurposeAuthSite.Controllers
             Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, federationKey);
             Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
 
-            // 既存の外部ログインを確認する。
+            // 既存の外部ログインを確認する。**連携キー（EntityID, NameID）で引く**（#286。federationKey = NameID）
             ApplicationUser user = await UserManager.FindByLoginAsync(idpIssuer, federationKey);
 
             if (user != null)
@@ -994,16 +1008,18 @@ namespace MultiPurposeAuthSite.Controllers
             // サインアップ済みの可能性を探る。**鍵はメアド**（#151。OIDC 側と同じ）。
             user = await UserManager.FindByEmailAsync(email);
 
-            UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
-
             if (user != null)
             {
                 // サインアップ済み → 外部ログイン追加だけで済む。
+
+                // **新しい鍵（iss, sub）で登録する**（#140）。
+                UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
 
                 // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140）。
                 if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
                         == Sts.AccountLinkCheck.NeedsVerifiedEmail)
                 {
+                    // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
                     Logging.MyOperationTrace(string.Format(
                         "Rejected linking a SAML2 ID federation login to {0}({1}) "
                         + "because the assertion did not assert a verified email.",
@@ -1014,8 +1030,11 @@ namespace MultiPurposeAuthSite.Controllers
                     return View("ExternalLoginFailure");
                 }
 
+                // 外部ログイン（ = UserLoginInfo ）の追加
+                // **メアドで引いているので、メアドの一致は自明**（#151）。
                 idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
 
+                // クレーム（emailClaim, nameClaim, etc.）の追加
                 if (idResult.Succeeded)
                 {
                     idResult = await UserManager.AddClaimAsync(user, emailClaim);
@@ -1028,39 +1047,60 @@ namespace MultiPurposeAuthSite.Controllers
 
                 if (idResult.Succeeded)
                 {
+                    // SignInAsync、ExternalSignInAsync
                     // 通常のサインイン（外部ログイン「追加」時は SignInAsync を使用する）。
                     await SignInManager.SignInAsync(user, isPersistent: false);
 
+                    // セッションの初期化
                     this.InitSessionAfterlogin();
 
+                    // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format(
                         "{0}({1}) has signed in with a SAML2 ID federation.", user.Id, user.UserName));
 
+                    // リダイレクトしてルートに戻る。
                     return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
                 }
+                else
+                {
+                    // 外部ログインの追加に失敗した場合
 
-                this.AddErrors(idResult);
+                    // 結果のエラー情報を追加
+                    this.AddErrors(idResult);
+                }
             }
             else
             {
-                // サインアップ済みでない → 作る。
+                // サインアップ済みでない → サインアップから行なう。
                 ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
                 ViewBag.LoginProvider = idpIssuer;
 
+                // 外部ログイン プロバイダのユーザー情報でユーザを作成
+                // **利用者名とメアドを別に渡す**（#151）。
                 user = ApplicationUser.CreateUser(newUserName, email, true);
 
                 // **上流が検証していないメアドを「確認済み」として定着させない**（#140）。
                 user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
 
+                // ユーザの新規作成（パスワードは不要）
                 idResult = await UserManager.CreateAsync(user);
 
+                // **新しい鍵（iss, sub）で登録する**（#140）。
+                UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
+
+                // 結果の確認
                 if (idResult.Succeeded)
                 {
-                    await this.UserManager.AddToRoleAsync(user, Const.Role_User);
-                    await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
+                    // ユーザの新規作成が成功した場合
 
+                    // ロールに追加。
+                    await this.UserManager.AddToRoleAsync(user, Const.Role_User);
+                    await this.UserManager.AddToRoleAsync(user, Const.Role_Admin); // ★なぜ？
+
+                    // 外部ログイン（ = idClaim）の追加
                     idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
 
+                    // クレーム（emailClaim, nameClaim, etc.）の追加
                     if (idResult.Succeeded)
                     {
                         idResult = await UserManager.AddClaimAsync(user, emailClaim);
@@ -1073,21 +1113,34 @@ namespace MultiPurposeAuthSite.Controllers
 
                     if (idResult.Succeeded)
                     {
+                        // 外部ログインの追加に成功した場合 → サインイン
+
+                        // SignInAsync、ExternalSignInAsync
+                        // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
                         await SignInManager.SignInAsync(user, isPersistent: false);
 
+                        // セッションの初期化
                         this.InitSessionAfterlogin();
 
+                        // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format(
                             "{0}({1}) has signed in with a SAML2 ID federation.",
                             user.Id, user.UserName));
 
+                        // リダイレクトしてルートに戻る。
                         return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
                     }
+                    else
+                    {
+                        // 外部ログインの追加に失敗した場合
 
-                    this.AddErrors(idResult);
+                        // 結果のエラー情報を追加
+                        this.AddErrors(idResult);
+                    }
                 }
                 else
                 {
+                    // 結果のエラー情報を追加
                     this.AddErrors(idResult);
                 }
             }

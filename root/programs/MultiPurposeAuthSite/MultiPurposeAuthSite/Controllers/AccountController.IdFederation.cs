@@ -802,8 +802,9 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> IDFederationAssertionConsumerService(
             string samlResponse, string relayState, string sigAlg)
         {
-            //  **どの上流から戻ってきたか**（#292）。
-            //    **開始処理が Session に控えた鍵**で引く（ACS は 1 本）。
+            #region どの上流から戻ってきたか
+
+            // **開始処理が Session に控えた鍵**で引く（ACS は 1 本）。
             IdFederationUpstream upstream = IdFederationUpstreams.GetOrDefault(
                 (string)Session[Const.IdFederationSaml2Upstream], IdFederationUpstream.Saml2);
 
@@ -817,6 +818,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 return View("Error");
             }
+
+            #endregion
+
+            #region 応答の検証
 
             bool isGet = (Request.HttpMethod.ToLower() == "get");
             string queryString = "";
@@ -835,9 +840,20 @@ namespace MultiPurposeAuthSite.Controllers
             Session[Const.IdFederationSaml2State] = "";
             Session[Const.IdFederationSaml2RequestId] = "";
 
-            //  **検証鍵は、メタデータ → 設定の `.cer` の順で決める**（#291）。
-            //    **ロールオーバー中は 2 本以上並ぶ**ので、**全部渡して試させる**（#292）
-            //    （SAML2 の署名には `kid` に当たるものが無く、選べない）。
+            //  上流の署名を検証する鍵（**全部集めて、順に試す**。#291 / #292）
+            //    上流の値は n 件設定（IdFederationUpstreams の行・管理画面の行）から来る。
+            //    **n 件設定が無いときだけ**、1 件設定（IdFederationSaml2* の単数キー）から組み立てる（下位互換。#292）。
+            //
+            //    | 順 | 鍵 | n 件設定 | 1 件設定 |
+            //    |---|---|---|---|
+            //    | 1 | 上流のメタデータの署名鍵（ロールオーバー中は 2 本以上並ぶ） | metadata_url | IdFederationSaml2MetadataUrl |
+            //    | 2 | 上流の証明書（いつでも最後の受け皿） | cer_file_path | IdFederationSaml2CerFilePath |
+            //
+            //    **期待する Issuer（entityID）** は、n 件設定は issuer、1 件設定は IdFederationSaml2IssuerId（無ければ上流として使えない）。
+            //    **SAML2 の署名には kid に当たるものが無く、選べない**ので、全部渡して試させる。
+            //    **1 本も無ければ通さない**（NoKey で落ち、理由が下のログに残る）。
+            //    **OIDC の「鍵を指定しない版」に当たる経路は無い。**
+            //    **自分の /samlmetadata は、自分が IdP として署名鍵を広告する口**で、ここでは使わない。
             List<RSA> upstreamKeys =
                 await SamlProviders.IdFederationSaml2Metadata.GetSigningKeysAsync(upstream);
 
@@ -865,6 +881,10 @@ namespace MultiPurposeAuthSite.Controllers
                 Logging.MyOperationTrace(string.Format(
                     "The SAML2 response was verified with key #{0}.", result.VerifiedKeyIndex + 1));
             }
+
+            #endregion
+
+            #region NameID・メアド・email_verified
 
             //  **連携キーは `NameID`**（上流の EntityID と組で使う）。
             //    **`Transient` は受けない**（#286）—
@@ -923,6 +943,9 @@ namespace MultiPurposeAuthSite.Controllers
                 emailVerified = "true";
             }
 
+            #endregion
+
+            //  **ここから先は、利用者の結び付けとサインイン**（#286 で分けた。OIDC 側と同じ形）。
             return await this.SignInByIdFederationSaml2(
                 result.Issuer, result.NameId, email, SAML2Attributes.GetUserName(result.Attributes), emailVerified);
         }
@@ -968,7 +991,7 @@ namespace MultiPurposeAuthSite.Controllers
             externalLoginInfo.Login = login;
             externalLoginInfo.Email = email;
 
-            // 既存の外部ログインを確認する。
+            // 既存の外部ログインを確認する。**連携キー（EntityID, NameID）で引く**（#286。federationKey = NameID）
             ApplicationUser user = await UserManager.FindAsync(login);
 
             if (user != null)
