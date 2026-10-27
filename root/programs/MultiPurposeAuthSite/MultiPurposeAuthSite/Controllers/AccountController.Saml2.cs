@@ -20,10 +20,10 @@
 //**********************************************************************************
 
 /*
-SAML2 の IdP としての口
-（AuthnRequest の受け付けと検証、SAMLResponse の作成）
-を担うAccountControllerの一部
-（自己テストの SP 側の受け口（AssertionConsumerService）は、SelfTest.cs に在る）
+ * SAML2 の IdP としての口
+ * （AuthnRequest の受け付けと検証、SAMLResponse の作成）
+ * を担うAccountControllerの一部
+ * （自己テストの SP 側の受け口（AssertionConsumerService）は、SelfTest.cs に在る）
 */
 
 using MultiPurposeAuthSite.Co;

@@ -52,7 +52,7 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の 自己テストの RP**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region テスト用（LoadRequestParameters）
+        #region テスト用（LoadTest*Parameters）
 
         /// <summary>LoadRequestParameters</summary>
         /// <param name="clientId">out string</param>
@@ -143,9 +143,41 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
         }
+
+        /// <summary>送った AuthnRequest の ID を取り出す（#276）</summary>
+        /// <returns>ID（無ければ空）</returns>
+        /// <remarks>
+        /// **`LoadRequestParameters` と同じ流儀**（Session → Cookie、読んだら消す）。
+        /// **あちらは 5 つの out を持っており、OAuth2 側からも呼ばれる**ので、
+        /// **SAML 専用のこれを別に立てている**（引数を増やさないため）。
+        /// </remarks>
+        private string LoadTestSamlRequestId()
+        {
+            IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
+            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+
+            string id = HttpContext.Session.GetString(Const.TestSamlRequestId);
+
+            if (!string.IsNullOrEmpty(id))
+            {
+                HttpContext.Session.SetString(Const.TestSamlRequestId, "");
+            }
+            else
+            {
+                id = requestCookies.Get(Const.TestSamlRequestId);
+
+                if (!string.IsNullOrEmpty(id))
+                {
+                    responseCookies.Set(Const.TestSamlRequestId, "", this._cookieOptions);
+                }
+            }
+
+            return id ?? "";
+        }
+
         #endregion
 
-        #region Client (Redirectエンドポイント)
+        #region OAuth2 / OIDC の Redirectエンドポイント
 
         #region Authorization Codeグラント種別
 
@@ -641,7 +673,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region SAML2 の ACS（自己テスト。#246 / #276）
+        #region SAML2 の AssertionConsumerService
 
         /// <summary>AssertionConsumerService</summary>
         /// <param name="samlResponse">string</param>
@@ -728,37 +760,6 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.AttrEmailVerified = SAML2Attributes.GetEmailVerified(result.Attributes);
 
             return View("Saml2Response");
-        }
-
-        /// <summary>送った AuthnRequest の ID を取り出す（#276）</summary>
-        /// <returns>ID（無ければ空）</returns>
-        /// <remarks>
-        /// **`LoadRequestParameters` と同じ流儀**（Session → Cookie、読んだら消す）。
-        /// **あちらは 5 つの out を持っており、OAuth2 側からも呼ばれる**ので、
-        /// **SAML 専用のこれを別に立てている**（引数を増やさないため）。
-        /// </remarks>
-        private string LoadTestSamlRequestId()
-        {
-            IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
-            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-
-            string id = HttpContext.Session.GetString(Const.TestSamlRequestId);
-
-            if (!string.IsNullOrEmpty(id))
-            {
-                HttpContext.Session.SetString(Const.TestSamlRequestId, "");
-            }
-            else
-            {
-                id = requestCookies.Get(Const.TestSamlRequestId);
-
-                if (!string.IsNullOrEmpty(id))
-                {
-                    responseCookies.Set(Const.TestSamlRequestId, "", this._cookieOptions);
-                }
-            }
-
-            return id ?? "";
         }
 
         #endregion

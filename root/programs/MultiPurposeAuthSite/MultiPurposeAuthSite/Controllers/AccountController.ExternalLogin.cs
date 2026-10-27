@@ -119,7 +119,7 @@ namespace MultiPurposeAuthSite.Controllers
                     UserLoginInfo login = new UserLoginInfo(idClaim.Issuer, idClaim.Value);
 
                     // クレーム情報（ID情報とe-mail, name情報）を抽出
-                    //   **name は返さないプロバイダがある**ので、null のまま進め、
+                    //   **name / email は返さないプロバイダがある**ので、null のまま進め、
                     //   後ろの「クレーム情報（e-mail, name情報）を取得できた」の判定で外す。
                     string id = idClaim.Value;
                     string name = nameClaim?.Value;
@@ -237,9 +237,6 @@ namespace MultiPurposeAuthSite.Controllers
                                         isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
                                         rememberBrowser: true); // rememberBrowser は true 固定
 
-                                    //// この外部ログイン・プロバイダでサインイン
-                                    //signInStatus = await SignInManager.ExternalSignInAsync(
-
                                     // セッションの初期化
                                     this.InitSessionAfterlogin();
 
@@ -265,11 +262,6 @@ namespace MultiPurposeAuthSite.Controllers
                                 // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
                                 ViewBag.ReturnUrl = returnUrl;
                                 ViewBag.LoginProvider = login.LoginProvider;
-
-                                //// メアドを返さないので、ExternalLoginConfirmationで
-                                //// メアドを手入力して外部ログインと関連付けを行なう。
-                                ////return View("ExternalLoginConfirmation");
-                                //return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
 
                                 // 外部ログイン プロバイダのユーザー情報でユーザを作成
                                 // **利用者名とメアドを別に渡す**（#151）。
@@ -315,9 +307,6 @@ namespace MultiPurposeAuthSite.Controllers
                                            user: user,
                                            isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
                                            rememberBrowser: true); // rememberBrowser は true 固定
-
-                                        //// この外部ログイン・プロバイダでサインイン
-                                        // signInStatus = await SignInManager.ExternalSignInAsync(
 
                                         // セッションの初期化
                                         this.InitSessionAfterlogin();
