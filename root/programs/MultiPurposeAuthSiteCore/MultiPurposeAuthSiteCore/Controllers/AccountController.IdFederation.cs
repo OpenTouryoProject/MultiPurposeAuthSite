@@ -620,8 +620,6 @@ namespace MultiPurposeAuthSite.Controllers
                         // サインアップ済みでない → サインアップから行なう。
                         // If the user does not have an account, then prompt the user to create an account
                         // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
-                        ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
-                        ViewBag.LoginProvider = "MultiPurposeAuthSite"; // ★リテラル
 
                         // 外部ログイン プロバイダのユーザー情報でユーザを作成
                         // **利用者名とメアドを別に渡す**（#151）。
@@ -1072,8 +1070,6 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 // サインアップ済みでない → サインアップから行なう。
-                ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
-                ViewBag.LoginProvider = idpIssuer;
 
                 // 外部ログイン プロバイダのユーザー情報でユーザを作成
                 // **利用者名とメアドを別に渡す**（#151）。
@@ -1095,7 +1091,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // ロールに追加。
                     await this.UserManager.AddToRoleAsync(user, Const.Role_User);
-                    await this.UserManager.AddToRoleAsync(user, Const.Role_Admin); // ★なぜ？
+                    await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
 
                     // 外部ログイン（ = idClaim）の追加
                     idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
