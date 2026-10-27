@@ -156,8 +156,8 @@ MultiPurposeAuthSiteCore/
 | `AccountController.ExternalLogin.cs` | 外部ログインの開始とコールバック（連携・新規登録・ログイン） |
 | `AccountController.IdFederation.cs` | 上流の IdP との ID 連携（OIDC と SAML2） |
 | `AccountController.Authorize.cs` | OAuth 2.0 / OIDC の認可エンドポイント、Device Authorization の利用者コードの確認 |
-| `AccountController.Saml2.cs` | SAML2 の IdP としての口 |
-| `AccountController.SelfTest.cs` | 自己テストの RP（**本番の口ではない**） |
+| `AccountController.Saml2.cs` | SAML2 の IdP としての口（`AuthnRequest` の受け付けと `SAMLResponse` の作成） |
+| `AccountController.SelfTest.cs` | 自己テストの RP と SP（SAML2 の ACS を含む。**本番の口ではない**） |
 | `AccountController.Helper.cs` | メール送信、初期データとテスト用データの作成（6 節） |
 
 **WebAuthn と TOTP は net10.0 版だけ**なので、net48 版の `SignIn` / `TwoFactor` には、その部分が無い（8 節）。

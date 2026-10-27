@@ -16,11 +16,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を Saml2.cs から移した（#294）
 //**********************************************************************************
 
 /*
 自己テストの RP（Redirect エンドポイントでのトークンの取得・検証・更新・失効・照会、
-Front-Channel / Back-Channel Logout の受け口）を担うAccountControllerの一部（本番の口ではない）
+SAML2 の ACS、Front-Channel / Back-Channel Logout の受け口）を担うAccountControllerの一部（本番の口ではない）
 */
 
 using MultiPurposeAuthSite.Co;
@@ -46,7 +47,7 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の 自己テストの RP**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region テスト用（LoadRequestParameters）
+        #region テスト用（LoadTest*Parameters）
 
         /// <summary>LoadRequestParameters</summary>
         /// <param name="clientId">out string</param>
@@ -54,7 +55,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="redirect_uri">out string</param>
         /// <param name="nonce">out string</param>
         /// <param name="code_verifier">out string</param>
-        private void LoadRequestParameters(
+        private void LoadTestOauth2OidcParameters(
             out string clientId,
             out string state, out string redirect_uri,
             out string nonce, out string code_verifier)
@@ -134,9 +135,38 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
         }
+
+        /// <summary>送った AuthnRequest の ID を取り出す（#276）</summary>
+        /// <returns>ID（無ければ空）</returns>
+        /// <remarks>
+        /// **`LoadRequestParameters` と同じ流儀**（Session → Cookie、読んだら消す）。
+        /// **あちらは 5 つの out を持っており、OAuth2 側からも呼ばれる**ので、
+        /// **SAML 専用のこれを別に立てている**（引数を増やさないため）。
+        /// </remarks>
+        private string LoadTestSamlRequestId()
+        {
+            string id = (string)Session[Const.TestSamlRequestId];
+
+            if (!string.IsNullOrEmpty(id))
+            {
+                Session.Remove(Const.TestSamlRequestId);
+            }
+            else
+            {
+                id = Request.Cookies[Const.TestSamlRequestId]?.Value;
+
+                if (!string.IsNullOrEmpty(id))
+                {
+                    Response.Cookies[Const.TestSamlRequestId].Value = "";
+                }
+            }
+
+            return id ?? "";
+        }
+
         #endregion
 
-        #region Client (Redirectエンドポイント)
+        #region OAuth2 / OIDC の Redirectエンドポイント
 
         #region Authorization Codeグラント種別
 
@@ -168,7 +198,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string redirect_uri_InSessionOrCookie = "";
                     string nonce_InSessionOrCookie = "";
                     string code_verifier_InSessionOrCookie = "";
-                    this.LoadRequestParameters(
+                    this.LoadTestOauth2OidcParameters(
                         out clientId_InSessionOrCookie,
                         out state_InSessionOrCookie,
                         out redirect_uri_InSessionOrCookie,
@@ -572,7 +602,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string redirect_uri_InSessionOrCookie = "";
                         string nonce_InSessionOrCookie = "";
                         string code_verifier_InSessionOrCookie = "";
-                        this.LoadRequestParameters(
+                        this.LoadTestOauth2OidcParameters(
                             out clientId_InSessionOrCookie,
                             out state_InSessionOrCookie,
                             out redirect_uri_InSessionOrCookie,
@@ -629,6 +659,97 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
+
+        #endregion
+
+        #region SAML2 の AssertionConsumerService
+
+        /// <summary>AssertionConsumerService</summary>
+        /// <param name="samlResponse">string</param>
+        /// <param name="relayState">string</param>
+        /// <param name="sigAlg">string</param>
+        /// <returns>ActionResult（Saml2Response 画面）</returns>
+        /// <remarks>
+        /// **検証の本体は Open棟梁 の `SAML2Client.VerifyResponseWithReason`**
+        /// （鍵と期待 Issuer は引数で渡す。#246 / #286 / #294）。
+        ///
+        /// **アサーションを画面に出す**（#246 の項目 3）。
+        /// **どこで落ちたのか、読み取った属性と XML を、画面で確かめられる。**
+        /// </remarks>
+        [AllowAnonymous]
+        public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
+        {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                // テスト用のエンドポイントを閉じている。
+                return View("Error");
+            }
+
+            bool isGet = (Request.HttpMethod.ToLower() == "get");
+            string queryString = "";
+
+            if (isGet)
+            {
+                // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。
+                string rawUrl = Request.RawUrl;
+                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+            }
+
+            // LoadRequestParameters（state と RelayState を照合するため）
+            string clientId_InSessionOrCookie = "";
+            string state_InSessionOrCookie = "";
+            string redirect_uri_InSessionOrCookie = "";
+            string nonce_InSessionOrCookie = "";
+            string code_verifier_InSessionOrCookie = "";
+            this.LoadTestOauth2OidcParameters(
+                out clientId_InSessionOrCookie,
+                out state_InSessionOrCookie,
+                out redirect_uri_InSessionOrCookie,
+                out nonce_InSessionOrCookie,
+                out code_verifier_InSessionOrCookie);
+
+            // **自分の ACS URL**（#276。Audience / Recipient と照合する）。
+            //   **IdP は登録値「test_self_saml」をこの形に展開して入れる**
+            //   （`SamlProviders/CmnEndpoints`）。
+            string acsUrl = Config.OAuth2ClientEndpointsRootURI + Config.Saml2ResponseEndpoint;
+
+            string requestId = this.LoadTestSamlRequestId();
+
+            SAML2VerifyResult result = Sts.SelfTestClient.VerifySaml2Response(
+                samlResponse, queryString, relayState,
+                state_InSessionOrCookie, isGet, acsUrl, requestId);
+
+            ViewBag.Verdict = SamlProviders.CmnSaml2Response.VerdictOf(result);
+            ViewBag.Reason = SamlProviders.CmnSaml2Response.ReasonOf(result, CmnServerParams.IssuerId, acsUrl, requestId);
+            ViewBag.Binding = SamlProviders.CmnSaml2Response.BindingOf(result);
+            ViewBag.SigAlg = result.SigAlg;
+            ViewBag.RelayState = result.RelayState;
+            ViewBag.RelayStateMatched = result.RelayStateMatched;
+            ViewBag.AudienceMatched = result.AudienceMatched;
+            ViewBag.RecipientMatched = result.RecipientMatched;
+            ViewBag.InResponseToMatched = result.InResponseToMatched;
+            ViewBag.NotExpired = result.NotExpired;
+            ViewBag.SignatureVerified = result.SignatureVerified;
+            ViewBag.IssuerMatched = result.IssuerMatched;
+            ViewBag.NameId = result.NameId;
+            ViewBag.Issuer = result.Issuer;
+            ViewBag.Audience = result.Audience;
+            ViewBag.InResponseTo = result.InResponseTo;
+            ViewBag.Recipient = result.Recipient;
+            ViewBag.NotOnOrAfter = SamlProviders.CmnSaml2Response.NotOnOrAfterOf(result);
+            ViewBag.StatusCode = result.StatusCode?.ToString() ?? "";
+            ViewBag.NameIdFormat = result.NameIdFormat?.ToString() ?? "";
+            ViewBag.AuthnContextClassRef = result.AuthnContextClassRef?.ToString() ?? "";
+            ViewBag.ResponseXml = SamlProviders.CmnSaml2Response.FormatXml(result.Response);
+
+            //  **アサーションの属性**（#286）。**目視のため**（判定には使わない）。
+            ViewBag.Attributes = result.Attributes;
+            ViewBag.AttrEmail = SAML2Attributes.GetEmail(result.Attributes);
+            ViewBag.AttrUserName = SAML2Attributes.GetUserName(result.Attributes);
+            ViewBag.AttrEmailVerified = SAML2Attributes.GetEmailVerified(result.Attributes);
+
+            return View("Saml2Response");
+        }
 
         #endregion
 
