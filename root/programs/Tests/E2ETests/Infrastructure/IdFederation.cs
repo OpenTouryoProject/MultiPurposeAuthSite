@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         上流の同意を 1 度だけ押して整える口を追加（#287）
 //*  2026/10/13  玄人 幸道         どの上流か（idpKey）を渡せるようにした（#292 の段階 1）
+//*  2026/10/29  玄人 幸道         FederateAsync に ReturnUrl を渡せるようにした（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -237,7 +238,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="downstreamUserName">下流の画面に入れる利用者名</param>
         /// <returns>FederationResult</returns>
         public static async Task<FederationResult> FederateAsync(
-            IdPClient client, string downstreamUserName, string idpKey = "")
+            IdPClient client, string downstreamUserName, string idpKey = "", string returnUrl = null)
         {
             FederationResult result = new FederationResult();
 
@@ -262,7 +263,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     { "submitButtonName", "id_federation_signin" },
                     //  **どの上流へ委譲するか**（#292 の段階 1）。
                     //    **空なら既定（先頭の 1 件）** — **従来の押し方と同じ結果になる。**
-                    { "IdpKey", idpKey }
+                    { "IdpKey", idpKey },
+                    //  **連携を始めた画面の ReturnUrl**（#294。戻ってきたら、ここへ返る）。
+                    { "ReturnUrl", returnUrl }
                 });
 
             if (start.Headers.Location == null)

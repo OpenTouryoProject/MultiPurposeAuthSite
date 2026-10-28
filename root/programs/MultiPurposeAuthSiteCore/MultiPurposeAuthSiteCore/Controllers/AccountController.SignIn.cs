@@ -20,6 +20,7 @@
 //*  2026/10/28  玄人 幸道         未確認メアドの確認メールはパスワードが合ったときだけ送る、WebAuthn のロックアウト判定を直した（#294）
 //*  2026/10/28  玄人 幸道         ReturnUrl と login_hint の取り出し方を net48 版に揃えた（#294）
 //*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
+//*  2026/10/29  玄人 幸道         ID 連携に ReturnUrl を渡す（#294）
 //**********************************************************************************
 
 /*
@@ -238,7 +239,8 @@ namespace MultiPurposeAuthSite.Controllers
                     return this.StartIdFederationByOidc(
                         model.Email,
                         IdFederationUpstreams.GetOrDefault(
-                            model.IdpKey, IdFederationUpstream.Oidc));
+                            model.IdpKey, IdFederationUpstream.Oidc),
+                        model.ReturnUrl);   // **戻ってきたら、ここへ返す**（#294）
                 }
                 else if (submitButtonName == "id_federation_saml2_signin")
                 {
@@ -246,7 +248,8 @@ namespace MultiPurposeAuthSite.Controllers
                     //    **押しても成立しない上流は、画面に出ていない**（`IsUsable`）。
                     return await this.StartIdFederationBySaml2(
                         IdFederationUpstreams.GetOrDefault(
-                            model.IdpKey, IdFederationUpstream.Saml2));
+                            model.IdpKey, IdFederationUpstream.Saml2),
+                        model.ReturnUrl);   // **戻ってきたら、ここへ返す**（#294）
                 }
                 else if (submitButtonName == "webauthn_signin"
                     && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)

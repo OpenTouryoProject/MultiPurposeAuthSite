@@ -18,6 +18,7 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/26  玄人 幸道         name / email のクレームが無いとき、例外で落ちないようにした（#294）
 //*  2026/10/26  玄人 幸道         外部ログインの失敗の出口ごとに、理由を OPERATION に記録する（#294）
+//*  2026/10/29  玄人 幸道         外部ログインの結果を見る、クレームの入れ替え、name を必須にしない、知らない provider を断る（#294）
 //**********************************************************************************
 
 /*
@@ -55,11 +56,23 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="provider">string</param>
         /// <param name="returnUrl">string</param>
         /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **登録されていない provider は、サインイン画面へ戻す**（#294）。
+        /// 以前は `Challenge` が例外を出し、500 になっていた。
+        /// </remarks>
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
-        public ActionResult ExternalLogin(string provider, string returnUrl)
+        public async Task<ActionResult> ExternalLogin(string provider, string returnUrl)
         {
+            if (!(await SignInManager.GetExternalAuthenticationSchemesAsync()).Any(x => x.Name == provider))
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "An unknown external login provider was requested. ({0})", LogSanitizer.Sanitize(provider)));
+
+                return RedirectToAction(nameof(Login));
+            }
+
             // Request a redirect to the external login provider
             string redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Account", new { returnUrl });
             AuthenticationProperties properties = SignInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
@@ -136,8 +149,8 @@ namespace MultiPurposeAuthSite.Controllers
             if (idClaim != null)
             {
                 // クレーム情報（ID情報とe-mail, name情報）を抽出
-                //   **name / email は返さないプロバイダがある**ので、null のまま進め、
-                //   後ろの「クレーム情報（e-mail, name情報）を取得できた」の判定で外す。
+                //   **name / email は返さないプロバイダがある**ので、null のまま進める。
+                //   **email は鍵なので必須、name は無くてよい**（#294。利用者名はメアドから作れる）。
                 string id = idClaim.Value;
                 string name = nameClaim?.Value;
                 string email = emailClaim?.Value;
@@ -158,10 +171,9 @@ namespace MultiPurposeAuthSite.Controllers
                 string newUserName = UserIdentifier.IsValidUserName(name)
                     ? name : UserIdentifier.UserNameFromEmail(email);
 
-                if (!string.IsNullOrWhiteSpace(email)
-                    && !string.IsNullOrWhiteSpace(name))
+                if (!string.IsNullOrWhiteSpace(email))
                 {
-                    // クレーム情報（e-mail, name情報）を取得できた。
+                    // クレーム情報（e-mail情報）を取得できた（name は無くてよい。#294）。
                     
                     // 既存の外部ログインを確認する。
                     ApplicationUser user = await UserManager.FindByLoginAsync(
@@ -173,10 +185,9 @@ namespace MultiPurposeAuthSite.Controllers
                         // 既存の外部ログインがある場合。
 
                         // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
-                        idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
-                        idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                        idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
-                        idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                        // **同じ種類の古いクレームを消してから足す**（#294）。
+                        idResult = await this.ReplaceClaimAsync(user, emailClaim);
+                        idResult = await this.ReplaceClaimAsync(user, nameClaim);
 
                         // SignInAsyncより、ExternalSignInAsyncが適切。
                         // 既存の外部ログイン・プロバイダでサインイン
@@ -184,13 +195,10 @@ namespace MultiPurposeAuthSite.Controllers
                             externalLoginInfo.LoginProvider, externalLoginInfo.ProviderKey,
                             isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
 
-                        // **結果を見ていない**ので、成功しなかったら記録だけ残す（流れは変えない）。
-                        //   NotAllowed（確認が要る）/ LockedOut など。
+                        //  **サインインできていなければ、先へ進めない**（#294。NotAllowed / LockedOut など）。
                         if (!siResult.Succeeded)
                         {
-                            Logging.MyOperationTrace(string.Format(
-                                Resources.Diagnostics.LogExternalLoginSignInFailed,
-                                externalLoginInfo.LoginProvider, user.Id, siResult.ToString()));
+                            return this.ExternalSignInFailed(externalLoginInfo.LoginProvider, user, siResult);
                         }
 
                         // セッションの初期化
@@ -239,7 +247,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (idResult.Succeeded)
                             {
                                 idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                                idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                idResult = await this.ReplaceClaimAsync(user, nameClaim); // name は無いことがある
                                 // 保存するクレームを足すなら、ここ
                                 // ・・・
                                 // ・・・
@@ -253,8 +261,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
                                 await SignInManager.SignInAsync(
                                     user,
-                                    isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
-                                    //rememberBrowser: true); // rememberBrowser は true 固定
+                                    isPersistent: false); // rememberMe は false 固定（外部ログインの場合）
 
                                 // セッションの初期化
                                 this.InitSessionAfterlogin();
@@ -308,7 +315,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (idResult.Succeeded)
                                 {
                                     idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                    idResult = await this.ReplaceClaimAsync(user, nameClaim); // name は無いことがある
                                     // 保存するクレームを足すなら、ここ
                                     // ・・・
                                     // ・・・
@@ -324,9 +331,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
                                     await SignInManager.SignInAsync(
                                        user: user,
-                                       isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
-                                       //rememberBrowser: true); // rememberBrowser は true 固定
-                                       
+                                       isPersistent: false); // rememberMe は false 固定（外部ログインの場合）
+
                                     // セッションの初期化
                                     this.InitSessionAfterlogin();
 
@@ -359,9 +365,8 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // クレーム情報（e-mail, name情報）を取得できなかった。
-                    this.LogExternalLoginClaimsMissing(externalLoginInfo,
-                        string.IsNullOrWhiteSpace(email), string.IsNullOrWhiteSpace(name));
+                    // クレーム情報（e-mail情報）を取得できなかった。
+                    this.LogExternalLoginClaimsMissing(externalLoginInfo, true, false);
                 }
             }
             else
@@ -373,6 +378,53 @@ namespace MultiPurposeAuthSite.Controllers
             // ログイン情報を受け取れなかった場合や、その他の問題が在った場合。
             return View("ExternalLoginFailure");
         }
+
+        #region 外部ログイン・ID 連携で共用する補助（#294）
+
+        /// <summary>同じ種類のクレームを、新しい値に入れ替える</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="claim">新しいクレーム（null なら何もしない）</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **以前は「新しい値を消して、新しい値を足す」だった**（`RemoveClaimAsync(user, 新しいクレーム)`）。
+        /// **値が変わると古いクレームが消えずに残り、たまっていった。**
+        /// **同じ種類の古いクレームを全部消してから足す。**
+        /// </remarks>
+        private async Task<IdentityResult> ReplaceClaimAsync(ApplicationUser user, Claim claim)
+        {
+            if (claim == null)
+            {
+                return IdentityResult.Success;
+            }
+
+            foreach (Claim old in (await UserManager.GetClaimsAsync(user)).Where(c => c.Type == claim.Type).ToList())
+            {
+                await UserManager.RemoveClaimAsync(user, old);
+            }
+
+            return await UserManager.AddClaimAsync(user, claim);
+        }
+
+        /// <summary>既存の結び付けで、サインインできなかったときの応答</summary>
+        /// <param name="loginProvider">外部ログイン・上流の名前</param>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="siResult">SignInResult</param>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **以前は結果を見ずに、セッションを初期化し「has signed in」を記録して先へ進んでいた**
+        /// （実際にはサインインしていないので、権限は渡らない）。
+        /// **ロックアウトならロックアウトの画面、それ以外は失敗の画面を返す。**
+        /// </remarks>
+        private ActionResult ExternalSignInFailed(string loginProvider, ApplicationUser user, AspNetId.SignInResult siResult)
+        {
+            Logging.MyOperationTrace(string.Format(
+                Resources.Diagnostics.LogExternalLoginSignInFailed,
+                loginProvider, user.Id, siResult.ToString()));
+
+            return siResult.IsLockedOut ? View("Lockout") : View("ExternalLoginFailure");
+        }
+
+        #endregion
 
         /// <summary>必要なクレームが揃わなかったことを記録する（#294）</summary>
         /// <param name="externalLoginInfo">ExternalLoginInfo</param>

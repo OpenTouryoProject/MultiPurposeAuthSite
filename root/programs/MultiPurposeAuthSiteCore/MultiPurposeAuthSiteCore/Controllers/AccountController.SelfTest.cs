@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を Saml2.cs から移した（#294）
+//*  2026/10/29  玄人 幸道         id_token の nonce の照合、Cookie を消す条件、JARM の検証の失敗を直した（#294）
 //**********************************************************************************
 
 /*
@@ -54,13 +55,13 @@ namespace MultiPurposeAuthSite.Controllers
     {
         #region テスト用（LoadTest*Parameters）
 
-        /// <summary>LoadRequestParameters</summary>
+        /// <summary>LoadTestOauth2OidcParameters</summary>
         /// <param name="clientId">out string</param>
         /// <param name="state">out string</param>
         /// <param name="redirect_uri">out string</param>
         /// <param name="nonce">out string</param>
         /// <param name="code_verifier">out string</param>
-        private void LoadRequestParameters(
+        private void LoadTestOauth2OidcParameters(
             out string clientId,
             out string state, out string redirect_uri,
             out string nonce, out string code_verifier)
@@ -92,7 +93,7 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 state = requestCookies.Get(Const.TestState);
-                if (!string.IsNullOrEmpty(clientId))
+                if (!string.IsNullOrEmpty(state)) // #294 : 以前は、どの値でも clientId で判定していた
                 {
                     responseCookies.Set(Const.TestState, "", this._cookieOptions);
                 }
@@ -107,7 +108,7 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 redirect_uri = requestCookies.Get(Const.TestRedirectUri);
-                if (!string.IsNullOrEmpty(clientId))
+                if (!string.IsNullOrEmpty(redirect_uri)) // #294 : 以前は、どの値でも clientId で判定していた
                 {
                     responseCookies.Set(Const.TestRedirectUri, "", this._cookieOptions);
                 }
@@ -122,7 +123,7 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 nonce = requestCookies.Get(Const.TestNonce);
-                if (!string.IsNullOrEmpty(clientId))
+                if (!string.IsNullOrEmpty(nonce)) // #294 : 以前は、どの値でも clientId で判定していた
                 {
                     responseCookies.Set(Const.TestNonce, "", this._cookieOptions);
                 }
@@ -137,7 +138,7 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 code_verifier = requestCookies.Get(Const.TestCodeVerifier);
-                if (!string.IsNullOrEmpty(clientId))
+                if (!string.IsNullOrEmpty(code_verifier)) // #294 : 以前は、どの値でも clientId で判定していた
                 {
                     responseCookies.Set(Const.TestCodeVerifier, "", this._cookieOptions);
                 }
@@ -147,7 +148,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>送った AuthnRequest の ID を取り出す（#276）</summary>
         /// <returns>ID（無ければ空）</returns>
         /// <remarks>
-        /// **`LoadRequestParameters` と同じ流儀**（Session → Cookie、読んだら消す）。
+        /// **`LoadTestOauth2OidcParameters` と同じ流儀**（Session → Cookie、読んだら消す）。
         /// **あちらは 5 つの out を持っており、OAuth2 側からも呼ばれる**ので、
         /// **SAML 専用のこれを別に立てている**（引数を増やさないため）。
         /// </remarks>
@@ -203,13 +204,13 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // query(.jwt)、form_post(.jwt)のカバレッジ
 
-                    // LoadRequestParameters
+                    // LoadTestOauth2OidcParameters
                     string clientId_InSessionOrCookie = "";
                     string state_InSessionOrCookie = "";
                     string redirect_uri_InSessionOrCookie = "";
                     string nonce_InSessionOrCookie = "";
                     string code_verifier_InSessionOrCookie = "";
-                    this.LoadRequestParameters(
+                    this.LoadTestOauth2OidcParameters(
                         out clientId_InSessionOrCookie,
                         out state_InSessionOrCookie,
                         out redirect_uri_InSessionOrCookie,
@@ -234,7 +235,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else
                         {
-                            // NG
+                            // NG（**検証できない応答の値は使わない**。#294。以前はそのまま先へ進んでいた）
+                            return View("Error");
                         }
                     }
 
@@ -392,7 +394,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     model.IdToken, model.AccessToken, code, state,
                                     null, CmnServerParams.IssuerId, clientId_InSessionOrCookie,
                                     out out_sub, out string out_nonce, out out_jobj)
-                                    && out_nonce == nonce_InSessionOrCookie)
+                                    || (!string.IsNullOrEmpty(nonce_InSessionOrCookie) && out_nonce != nonce_InSessionOrCookie)) // #294 : 以前は条件が逆（nonce の不一致を見逃した）
                                 {
                                     throw new Exception(Resources.AccountController.IdTokenVerificationError);
                                 }
@@ -613,7 +615,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string redirect_uri_InSessionOrCookie = "";
                         string nonce_InSessionOrCookie = "";
                         string code_verifier_InSessionOrCookie = "";
-                        this.LoadRequestParameters(
+                        this.LoadTestOauth2OidcParameters(
                             out clientId_InSessionOrCookie,
                             out state_InSessionOrCookie,
                             out redirect_uri_InSessionOrCookie,
@@ -636,7 +638,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else
                         {
-                            // NG
+                            // NG（**検証できない応答の値は使わない**。#294。以前はそのまま先へ進んでいた）
+                            return View("Error");
                         }
                     }
 
@@ -702,17 +705,17 @@ namespace MultiPurposeAuthSite.Controllers
             if (isGet)
             {
                 // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。
-                string rawUrl = Request.GetEncodedUrl();
-                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                //   **受け取ったままの値で読む**（#294。組み直した URL では符号化が変わり得る）。
+                queryString = (Request.QueryString.Value ?? "").TrimStart('?');
             }
 
-            // LoadRequestParameters（state と RelayState を照合するため）
+            // LoadTestOauth2OidcParameters（state と RelayState を照合するため）
             string clientId_InSessionOrCookie = "";
             string state_InSessionOrCookie = "";
             string redirect_uri_InSessionOrCookie = "";
             string nonce_InSessionOrCookie = "";
             string code_verifier_InSessionOrCookie = "";
-            this.LoadRequestParameters(
+            this.LoadTestOauth2OidcParameters(
                 out clientId_InSessionOrCookie,
                 out state_InSessionOrCookie,
                 out redirect_uri_InSessionOrCookie,

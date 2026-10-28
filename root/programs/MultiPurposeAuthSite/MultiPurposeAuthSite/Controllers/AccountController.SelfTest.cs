@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を Saml2.cs から移した（#294）
+//*  2026/10/29  玄人 幸道         id_token の nonce の照合、JARM の検証の失敗を直した（#294）
 //**********************************************************************************
 
 /*
@@ -223,7 +224,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else
                         {
-                            // NG
+                            // NG（**検証できない応答の値は使わない**。#294。以前はそのまま先へ進んでいた）
+                            return View("Error");
                         }
                     }
 
@@ -381,7 +383,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     model.IdToken, model.AccessToken, code, state,
                                     null, CmnServerParams.IssuerId, clientId_InSessionOrCookie,
                                     out out_sub, out string out_nonce, out out_jobj)
-                                    && out_nonce == nonce_InSessionOrCookie)
+                                    || (!string.IsNullOrEmpty(nonce_InSessionOrCookie) && out_nonce != nonce_InSessionOrCookie)) // #294 : 以前は条件が逆（nonce の不一致を見逃した）
                                 {
                                     throw new Exception(Resources.AccountController.IdTokenVerificationError);
                                 }
@@ -625,7 +627,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else
                         {
-                            // NG
+                            // NG（**検証できない応答の値は使わない**。#294。以前はそのまま先へ進んでいた）
+                            return View("Error");
                         }
                     }
 

@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を SelfTest.cs へ移した（#294）
+//*  2026/10/29  玄人 幸道         Redirect Binding の署名の対象を、受け取ったままのクエリにした（#294）
 //**********************************************************************************
 
 /*
@@ -35,7 +36,6 @@ using System.Xml;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 
@@ -79,8 +79,10 @@ namespace MultiPurposeAuthSite.Controllers
                 if (Request.Method.ToLower() == "get")
                 {
                     // DecodeRedirect
-                    string rawUrl = Request.GetEncodedUrl();
-                    queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                    //   **署名の対象は、受け取ったままのクエリ**（#294。SAML Bindings 3.4.4.1）。
+                    //   以前は `GetEncodedUrl()`（組み直した URL）から取っていたので、
+                    //   SP の符号化（`%2f` / `%2F` など）と違うと、署名の検証に失敗し得た（net48 版は RawUrl）。
+                    queryString = (Request.QueryString.Value ?? "").TrimStart('?');
 
                     // VerifySamlRequest（展開と読み込みも行う）
                     verified = Saml.CmnEndpoints.VerifySamlRequest(

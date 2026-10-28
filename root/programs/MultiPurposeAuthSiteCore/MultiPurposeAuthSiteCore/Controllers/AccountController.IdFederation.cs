@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         ID 連携の後は ReturnUrl へ戻す、同じ利用者を同時に作らない、サインインの結果を見る、クレームの入れ替え（#294）
 //**********************************************************************************
 
 /*
@@ -87,7 +88,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// | `prompt` | **付けない**（#287。利用者が押す導線で UI を禁じない） |
         /// | `login_hint` | **画面の入力値をそのまま渡す**（#151） |
         /// </remarks>
-        private ActionResult StartIdFederationByOidc(string uid, IdFederationUpstream upstream)
+        private ActionResult StartIdFederationByOidc(string uid, IdFederationUpstream upstream, string returnUrl)
         {
             // upstream には、ID連携の1件設定、n件設定の、いずれかの1件が入る。どちらも null なら、上流が引けない。
             if (upstream == null)
@@ -118,6 +119,9 @@ namespace MultiPurposeAuthSite.Controllers
             //  **どの上流へ送ったかを控える**（#292）。
             //    **折り返し口は 1 本**なので、**戻ってきた側はこれで相手を引く。**
             HttpContext.Session.SetString(Const.IdFederationSigninUpstream, upstream.Key);
+
+            //  **連携を始めた画面の ReturnUrl を控える**（#294。戻ってきたら、ここへ返す。以前は常に Home へ戻した）。
+            HttpContext.Session.SetString(Const.IdFederationSigninReturnUrl, returnUrl ?? "");
 
             // redirect_uri
             string redirect_uri = Config.IdFederationRedirectEndpoint;
@@ -491,6 +495,22 @@ namespace MultiPurposeAuthSite.Controllers
             string idpIssuer, string federationKey,
             string email, string name, string preferredUserName, string emailVerified)
         {
+            //  **戻り先は、先に読み出しておく**（#294）。**サインインの後のセッションの初期化（InitSessionAfterlogin）が、セッションを捨てる**ため。
+            this._idFederationReturnUrl = HttpContext.Session.GetString(Const.IdFederationSigninReturnUrl);
+            HttpContext.Session.SetString(Const.IdFederationSigninReturnUrl, ""); // 誤動作防止
+
+            //  **同じ利用者（メアド）を、同時に作らない**（#294。`Sts.UserCreationLock`。プロセスの中だけ）。
+            using (await Sts.UserCreationLock.AcquireAsync(email))
+            {
+                return await this.SignInByIdFederationOidcCore(idpIssuer, federationKey, email, name, preferredUserName, emailVerified);
+            }
+        }
+
+        /// <summary>OIDC の ID 連携の結び付けの本体（ロックの中で呼ぶ）</summary>
+        private async Task<ActionResult> SignInByIdFederationOidcCore(
+            string idpIssuer, string federationKey,
+            string email, string name, string preferredUserName, string emailVerified)
+        {
             IdentityResult idResult = null;
             AspNetId.SignInResult siResult = null;
 
@@ -522,10 +542,9 @@ namespace MultiPurposeAuthSite.Controllers
                     // 既存の外部ログインがある場合。
 
                     // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
-                    idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
-                    idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                    idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
-                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                    // **同じ種類の古いクレームを消してから足す**（#294）。
+                    idResult = await this.ReplaceClaimAsync(user, emailClaim);
+                    idResult = await this.ReplaceClaimAsync(user, nameClaim);
 
                     // SignInAsyncより、ExternalSignInAsyncが適切。
                     // 既存の外部ログインでサインイン。**新しい鍵（iss, sub）で**（#140。sub = federationKey）
@@ -533,13 +552,19 @@ namespace MultiPurposeAuthSite.Controllers
                         idpIssuer, federationKey,
                         isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
 
+                    //  **サインインできていなければ、先へ進めない**（#294。ロックアウトなど）。
+                    if (!siResult.Succeeded)
+                    {
+                        return this.ExternalSignInFailed(idpIssuer, user, siResult);
+                    }
+
                     // セッションの初期化
                     this.InitSessionAfterlogin();
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
-                    // ルートにリダイレクト
-                    return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                    // 連携を始めた画面の ReturnUrl へ戻る（#294。無ければ Home）
+                    return this.RedirectAfterIdFederation();
                 }
                 else
                 {
@@ -604,8 +629,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
 
-                            // リダイレクトしてルートに戻る。
-                            return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                            // 連携を始めた画面の ReturnUrl へ戻る（#294。無ければ Home）
+                            return this.RedirectAfterIdFederation();
                         }
                         else
                         {
@@ -675,8 +700,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
 
-                                // リダイレクトしてルートに戻る。
-                                return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                                // 連携を始めた画面の ReturnUrl へ戻る（#294。無ければ Home）
+                                return this.RedirectAfterIdFederation();
                             }
                             else
                             {
@@ -729,7 +754,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// **サインイン画面の入力値は使わない**（#286 の決め事）。
         /// **SAML に `login_hint` 相当は無く、独自の方法は作らないと決めてある。**
         /// </remarks>
-        private async Task<ActionResult> StartIdFederationBySaml2(IdFederationUpstream upstream)
+        private async Task<ActionResult> StartIdFederationBySaml2(IdFederationUpstream upstream, string returnUrl)
         {
             // upstream には、ID連携の1件設定、n件設定の、いずれかの1件が入る。どちらも null なら、上流が引けない。
             if (upstream == null)
@@ -766,6 +791,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             //  **どの上流へ送ったかを控える**（#292。ACS は 1 本）。
             HttpContext.Session.SetString(Const.IdFederationSaml2Upstream, upstream.Key);
+
+            //  **連携を始めた画面の ReturnUrl を控える**（#294。OIDC 側と同じ）。
+            HttpContext.Session.SetString(Const.IdFederationSigninReturnUrl, returnUrl ?? "");
 
             // **応答の InResponseTo と照合する**（#276 と同じ）。
             HttpContext.Session.SetString(Const.IdFederationSaml2RequestId, id);
@@ -965,6 +993,22 @@ namespace MultiPurposeAuthSite.Controllers
             string idpIssuer, string federationKey,
             string email, string preferredUserName, string emailVerified)
         {
+            //  **戻り先は、先に読み出しておく**（#294）。**サインインの後のセッションの初期化（InitSessionAfterlogin）が、セッションを捨てる**ため。
+            this._idFederationReturnUrl = HttpContext.Session.GetString(Const.IdFederationSigninReturnUrl);
+            HttpContext.Session.SetString(Const.IdFederationSigninReturnUrl, ""); // 誤動作防止
+
+            //  **同じ利用者（メアド）を、同時に作らない**（#294。`Sts.UserCreationLock`。プロセスの中だけ）。
+            using (await Sts.UserCreationLock.AcquireAsync(email))
+            {
+                return await this.SignInByIdFederationSaml2Core(idpIssuer, federationKey, email, preferredUserName, emailVerified);
+            }
+        }
+
+        /// <summary>SAML2 の ID 連携の結び付けの本体（ロックの中で呼ぶ）</summary>
+        private async Task<ActionResult> SignInByIdFederationSaml2Core(
+            string idpIssuer, string federationKey,
+            string email, string preferredUserName, string emailVerified)
+        {
             IdentityResult idResult = null;
 
             //  **新規に作るときの名前は、属性の `uid` → メアドの `@` より前**（#286）。
@@ -982,25 +1026,30 @@ namespace MultiPurposeAuthSite.Controllers
             if (user != null)
             {
                 // 既存の外部ログインがある場合。
-                idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
-                idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
-                idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                // **同じ種類の古いクレームを消してから足す**（#294）。
+                idResult = await this.ReplaceClaimAsync(user, emailClaim);
+                idResult = await this.ReplaceClaimAsync(user, nameClaim);
                 // 保存するクレームを足すなら、ここ
                 // ・・・
                 // ・・・
                 // ・・・
 
-                await SignInManager.ExternalLoginSignInAsync(
+                AspNetId.SignInResult saml2SignIn = await SignInManager.ExternalLoginSignInAsync(
                     idpIssuer, federationKey,
                     isPersistent: false, bypassTwoFactor: true);
+
+                //  **サインインできていなければ、先へ進めない**（#294。ロックアウトなど）。
+                if (!saml2SignIn.Succeeded)
+                {
+                    return this.ExternalSignInFailed(idpIssuer, user, saml2SignIn);
+                }
 
                 this.InitSessionAfterlogin();
 
                 Logging.MyOperationTrace(string.Format(
                     "{0}({1}) has signed in with a SAML2 ID federation.", user.Id, user.UserName));
 
-                return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                return this.RedirectAfterIdFederation();
             }
 
             // サインアップ済みの可能性を探る。**鍵はメアド**（#151。OIDC 側と同じ）。
@@ -1056,8 +1105,8 @@ namespace MultiPurposeAuthSite.Controllers
                     Logging.MyOperationTrace(string.Format(
                         "{0}({1}) has signed in with a SAML2 ID federation.", user.Id, user.UserName));
 
-                    // リダイレクトしてルートに戻る。
-                    return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                    // 連携を始めた画面の ReturnUrl へ戻る（#294。無ければ Home）
+                    return this.RedirectAfterIdFederation();
                 }
                 else
                 {
@@ -1123,8 +1172,8 @@ namespace MultiPurposeAuthSite.Controllers
                             "{0}({1}) has signed up with a SAML2 ID federation.",
                             user.Id, user.UserName));
 
-                        // リダイレクトしてルートに戻る。
-                        return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                        // 連携を始めた画面の ReturnUrl へ戻る（#294。無ければ Home）
+                        return this.RedirectAfterIdFederation();
                     }
                     else
                     {
@@ -1146,6 +1195,25 @@ namespace MultiPurposeAuthSite.Controllers
                 "The SAML2 ID federation did not complete. (the error view was returned)");
 
             return View("Error");
+        }
+
+        #endregion
+
+        #region 戻り先（#294）
+
+        /// <summary>ID 連携を始めた画面の ReturnUrl（結び付けの前に、セッションから読み出しておく）</summary>
+        private string _idFederationReturnUrl = null;
+
+        /// <summary>ID 連携でサインインした後、連携を始めた画面の ReturnUrl へ戻す</summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **以前は常に Home へ戻していた**（`RedirectToLocal(絶対 URL)` はローカルと判定されず、Home になる）。
+        /// **認可要求の途中で ID 連携を使うと、RP への認可が続かなかった。**
+        /// **ローカルの URL でなければ Home**（`RedirectToLocal`。オープン リダイレクタにしない）。
+        /// </remarks>
+        private ActionResult RedirectAfterIdFederation()
+        {
+            return RedirectToLocal(this._idFederationReturnUrl);
         }
 
         #endregion

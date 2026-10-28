@@ -61,6 +61,7 @@
 //*  2026/10/20  玄人 幸道         クライアントごとの利用者を作らなくした（#307 の段階 5-a-1）
 //*  2026/10/21  玄人 幸道         OP のセッションの識別子と sid クレームを追加（#310 の段階 1）
 //*  2026/10/25  玄人 幸道         認可エンドポイントと SAML2 のエラーを OPERATION に記録する（障害対応のため。#294）
+//*  2026/10/29  玄人 幸道         使われていない ErrorMessage・AddErrors(IEnumerable)・空の Dispose を消した（#294）
 //**********************************************************************************
 
 /*
@@ -98,11 +99,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region members
 
-        /// <summary>ErrorMessage</summary>
-        [TempData]
-        public string ErrorMessage { get; set; }
-
-        #region OwinContext
+        #region Identity のマネージャ
         /// <summary>UserManager</summary>
         private readonly UserManager<ApplicationUser> _userManager = null;
         /// <summary>UserManager</summary>
@@ -118,7 +115,7 @@ namespace MultiPurposeAuthSite.Controllers
         private readonly ISmsSender _smsSender = null;
         #endregion
 
-        //  <summary>CookieOptions</summary>
+        /// <summary>CookieOptions</summary>
         private readonly CookieOptions _cookieOptions = null;
 
         #endregion
@@ -234,22 +231,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Dispose
-
-        /// <summary>Dispose</summary>
-        /// <param name="disposing">bool</param>
-        protected override void Dispose(bool disposing)
-        {
-            // メンバのdisposingを実装しているらしい。
-            if (disposing)
-            {
-            }
-
-            base.Dispose(disposing);
-        }
-
-        #endregion
-
         #region Helper
 
         #region Controller → View
@@ -264,19 +245,6 @@ namespace MultiPurposeAuthSite.Controllers
             foreach (IdentityError error in result.Errors)
             {
                 ModelState.AddModelError("", error.Code + ": " + error.Description);
-            }
-        }
-
-        /// <summary>
-        /// ModelStateDictionaryに
-        /// IEnumerable(string)の情報を移送
-        /// </summary>
-        /// <param name="errors">IEnumerable<string></param>
-        private void AddErrors(IEnumerable<string> errors)
-        {
-            foreach (string error in errors)
-            {
-                ModelState.AddModelError("", error);
             }
         }
 

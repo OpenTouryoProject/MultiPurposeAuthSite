@@ -871,6 +871,9 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>OIDC の ID 連携の上流（キー）</summary>
         public const string IdFederationSigninUpstream = "id_federation_signin_upstream";
 
+        /// <summary>ID 連携を始めた画面の ReturnUrl（OIDC・SAML2 で共用。戻ってきたら、ここへ返す。#294）</summary>
+        public const string IdFederationSigninReturnUrl = "id_federation_signin_return_url";
+
         /// <summary>OIDC の ID 連携の nonce</summary>
         public const string IdFederationSigninNonce = "id_federation_signin_nonce";
 
