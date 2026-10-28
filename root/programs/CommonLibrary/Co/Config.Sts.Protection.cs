@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
+//*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールの間隔を足した（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Public.Util;
@@ -223,6 +224,38 @@ namespace MultiPurposeAuthSite.Co
 
                 int seconds = 0;
                 return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 60;
+            }
+        }
+
+        #endregion
+
+        #region メールの送り過ぎ
+
+        /// <summary>
+        /// メアド検証・パスワード リセットのメールを、1 人に送る間隔（秒。#294）
+        /// </summary>
+        /// <remarks>
+        /// **サインアップ・パスワードの失念は、誰でも何度でも押せる**ので、
+        /// **他人の受信箱をメールで埋められた**（`Extensions/Sts/MailThrottle`）。
+        ///
+        /// | 値 | 振る舞い |
+        /// |---|---|
+        /// | **0（または未設定）** | **絞らない**（従来どおり） |
+        /// | 正の秒数（雛形は 60） | **同じ利用者・同じ用途のメールは、この間隔に 1 通まで**（**画面は変えない**） |
+        /// </remarks>
+        public static int MailResendIntervalSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("MailResendIntervalSeconds");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    return 0;
+                }
+
+                int seconds = 0;
+                return (int.TryParse(value, out seconds) && 0 < seconds) ? seconds : 0;
             }
         }
 

@@ -16,6 +16,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/28  玄人 幸道         確認待ちの利用者を作り直さない、パスワードの失念で存在を明かさない、
+//*                                利用者が居ないときはエラー画面、リセットの code を確かめてから表示（#294）
 //**********************************************************************************
 
 /*
@@ -101,6 +103,32 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 利用者名もメアドも在る場合。
 
+                        #region サインアップ済み（メアドの確認待ち）
+
+                        //  **メアドの確認待ちの利用者が既に在れば、作り直さない**（#294）。
+                        //    以前は、消して、送られてきたパスワードで作り直していた。
+                        //    **それでは、確認待ちの利用者を他人が登録し直して、パスワードを差し替えられる**
+                        //    （確認のメールは本人に届くので、本人が踏むと、差し替えたパスワードのまま確認済みになる）。
+                        //    **また、作成の失敗の理由を見ずに消していたので、作り直しも失敗すると、利用者が消えるだけだった。**
+                        //
+                        //  **既存の利用者に、確認のメールを送り直すだけにする**（画面は成功のときと同じ）。
+                        //    **パスワードは変わらない。** 忘れていれば、パスワードの失念から戻せる（確認前でもリセットできる）。
+                        //    **確認済み・外部ログイン済みの利用者は、下の作成が重複で失敗する**（従来どおり）。
+                        ApplicationUser oldUser = await UserManager.FindByEmailAsync(email);
+
+                        if (oldUser != null
+                            && !oldUser.EmailConfirmed
+                            && oldUser.Logins.Count == 0)
+                        {
+                            // メアド検証用のメールを送信して、
+                            this.SendConfirmEmail(oldUser);
+
+                            // VerifyEmailAddress画面へ遷移
+                            return View("VerifyEmailAddress");
+                        }
+
+                        #endregion
+
                         #region サインアップ
 
                         // ユーザを作成
@@ -112,24 +140,15 @@ namespace MultiPurposeAuthSite.Controllers
                                 model.Password // Passwordはハッシュ化される。
                             );
 
-                        #endregion
-
-                        #region サインイン or メアド検証
-
                         // 結果の確認
                         if (result.Succeeded)
                         {
                             // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format("{0}({1}) has signed up.", user.Id, user.UserName));
 
-                            #region サインアップ成功
-
                             // ロールに追加。
-                            if (result.Succeeded)
-                            {
-                                await this.UserManager.AddToRoleAsync(user.Id, Const.Role_User);
-                                await this.UserManager.AddToRoleAsync(user.Id, Const.Role_Admin);
-                            }
+                            await this.UserManager.AddToRoleAsync(user.Id, Const.Role_User);
+                            await this.UserManager.AddToRoleAsync(user.Id, Const.Role_Admin);
 
                             // **メアドは常に在るので、必ず検証する**（#151）。
                             //   **約款は、メアド検証のリンクを踏んだ後に出る**（下の Agreement）。
@@ -139,110 +158,18 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // VerifyEmailAddress画面へ遷移
                             return View("VerifyEmailAddress");
-
-                            #endregion
                         }
                         else
                         {
-                            #region サインアップ失敗
-
-                            // サインアップ済みの可能性を探る
-                            //   **メアドで引く**（#151。鍵はメアド）。
-                            ApplicationUser oldUser = await UserManager.FindByEmailAsync(email);
-
-                            if (oldUser == null)
-                            {
-                                // サインアップ済みでない。
-
-                                // 作成(CreateAsync)に失敗
-                                this.AddErrors(result);
-                                // 再表示
-                                return View(model);
-                            }
-                            else
-                            {
-                                #region サインアップ済み
-
-                                // userを確認する。
-                                if (oldUser.EmailConfirmed)
-                                {
-                                    // EmailConfirmed済み。
-
-                                    // 作成(CreateAsync)に失敗
-                                    this.AddErrors(result);
-                                    // 再表示
-                                    return View(model);
-                                }
-                                else if (oldUser.Logins.Count != 0)
-                                {
-                                    // ExternalLogin済み。
-
-                                    // 作成(CreateAsync)に失敗
-                                    this.AddErrors(result);
-                                    // 再表示
-                                    return View(model);
-                                }
-                                else
-                                {
-                                    // oldUserは存在するが
-                                    // ・EmailConfirmed済みでない。
-                                    // 若しくは、
-                                    // ・ExternalLogin済みでない。
-
-                                    // 既存レコードを再作成
-
-                                    // 削除して
-                                    result = await UserManager.DeleteAsync(oldUser);
-
-                                    // 結果の確認
-                                    if (result.Succeeded)
-                                    {
-                                        // ApplicationUserManagerのCreateAsync
-                                        result = await UserManager.CreateAsync(
-                                                user,
-                                                model.Password // Passwordはハッシュ化される。
-                                            );
-
-                                        // 結果の確認
-                                        if (result.Succeeded)
-                                        {
-                                            // **メアドは常に在るので、必ず検証の再送をする**（#151）。
-
-                                            // メアド検証用のメールを送信して、
-                                            this.SendConfirmEmail(user);
-
-                                            // VerifyEmailAddress
-                                            return View("VerifyEmailAddress");
-                                        }
-                                        else
-                                        {
-                                            // 再作成(CreateAsync)に失敗
-                                            this.AddErrors(result);
-                                            // 再表示
-                                            return View(model);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // 削除(DeleteAsync)に失敗
-                                        this.AddErrors(result);
-                                        // 再表示
-                                        return View(model);
-                                    }
-                                }
-
-                                #endregion
-                            }
-
-
-                            #endregion
+                            // 作成(CreateAsync)に失敗（メアド・利用者名の重複、パスワードの規則など）
+                            this.AddErrors(result);
                         }
 
                         #endregion
                     }
                     else
                     {
-                        // uidが空文字列の場合。
+                        // メアドが空の場合（[Required] なので、通常は来ない）。
                         // todo: 必要に応じて、エラーメッセージの表示を検討してください。
                     }
                 }
@@ -323,6 +250,12 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     //　約款なし
 
+                    if (user == null)
+                    {
+                        // 削除済み・誤った userId（#294。500 にしない）
+                        return View("Error");
+                    }
+
                     // アクティベーション
                     IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
 
@@ -347,8 +280,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// メアド検証画面（約款）
         /// POST: /Account/EmailConfirmation
         /// </summary>
-        /// <param name="userId">string</param>
-        /// <param name="code">string</param>
+        /// <param name="model">AccountAgreementViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [AllowAnonymous]
@@ -367,6 +299,12 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 同意された。
                         ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+
+                        if (user == null)
+                        {
+                            // 削除済み・誤った userId（#294。500 にしない）
+                            return View("Error");
+                        }
 
                         // アクティベーション
                         IdentityResult result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
@@ -452,25 +390,19 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 補足 : EmailConfirmedされて無くても、PasswordResetを可能にした。
                 // 理由 : EmailConfirmed前にForgotPasswordすると、復帰する方法がなくなるので。
-                if (user == null) // || !(await UserManager.IsEmailConfirmedAsync(user.Id)))
-                {
-                    // ユーザが取得できなかった場合。
-
-                    // Security的な意味で
-                    //  - ユーザーが存在しないことや
-                    //  - E-mail未確認であることを
-                    // （UI経由で）公開しない。
-                }
-                else
+                if (user != null)
                 {
                     // ユーザが取得できた場合。
 
                     // パスワード リセット用のメールを送信
                     this.SendConfirmEmailForPasswordReset(user);
-
-                    // "パスワードの失念の確認"画面を表示 
-                    return View("ForgotPasswordConfirmation");
                 }
+
+                // "パスワードの失念の確認"画面を表示
+                //   **居ても居なくても、同じ画面を返す**（#294）。
+                //   Security的な意味で、ユーザーが存在しないことを（UI経由で）公開しない
+                //   （以前は、居なければ入力画面を出し直していたので、画面の違いで分かった）。
+                return View("ForgotPasswordConfirmation");
             }
             else
             {
@@ -508,6 +440,15 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 ApplicationUser user = await UserManager.FindByIdAsync(userId);
 
+                //  **code を確かめてから、利用者の情報（メアド）を画面に出す**（#294）。
+                //    以前は確かめなかったので、userId が分かれば、code が何でもメアドが出た。
+                //    **利用者が居ない・code が合わないときは、どちらもエラー画面**（500 にしない）。
+                if (user == null
+                    || !await UserManager.VerifyUserTokenAsync(user.Id, "ResetPassword", code))
+                {
+                    return View("Error");
+                }
+
                 // User情報をResetPassword画面に表示することも可能。
 
                 return View(new AccountResetPasswordViewModel
@@ -537,6 +478,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // パスワードのリセット
                 ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+
+                if (user == null)
+                {
+                    // 削除済み・誤った userId（#294。500 にしない）
+                    return View("Error");
+                }
+
                 IdentityResult result = await UserManager.ResetPasswordAsync(model.UserId, model.Code, model.Password);
 
                 // 結果の確認

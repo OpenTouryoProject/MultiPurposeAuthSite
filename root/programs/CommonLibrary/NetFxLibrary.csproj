@@ -118,6 +118,7 @@
     <Compile Include="Extensions\Sts\IdFederationJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationUpstreamProvider.cs" />
     <Compile Include="Extensions\Sts\JwksUriWarmUp.cs" />
+    <Compile Include="Extensions\Sts\MailThrottle.cs" />
     <Compile Include="Extensions\Sts\PollingThrottle.cs" />
     <Compile Include="Extensions\Sts\RateLimitProvider.cs" />
     <Compile Include="Extensions\Sts\IdTokenAudience.cs" />

@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/27  玄人 幸道         テスト用の種まきを整理（利用者は接尾辞の super_tanaka で判定、クライアントは起動ごとに 1 回、WebAuthn は毎回。#294）
+//*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールを、同じ利用者に続けて送らない（#294）
 //**********************************************************************************
 
 /*
@@ -56,6 +57,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="user">ApplicationUser</param>
         private async void SendConfirmEmail(ApplicationUser user)
         {
+            // **同じ利用者に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）
+            if (!Sts.MailThrottle.TryAcquire(Sts.MailThrottle.PurposeEmailConfirmation, user.Id))
+            {
+                return;
+            }
+
             string code;
             string callbackUrl;
 
@@ -79,6 +86,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="user">ApplicationUser</param>
         private async void SendConfirmEmailForPasswordReset(ApplicationUser user)
         {
+            // **同じ利用者に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）
+            if (!Sts.MailThrottle.TryAcquire(Sts.MailThrottle.PurposePasswordReset, user.Id))
+            {
+                return;
+            }
+
             string code;
             string callbackUrl;
 
