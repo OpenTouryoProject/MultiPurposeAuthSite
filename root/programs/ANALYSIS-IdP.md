@@ -2925,6 +2925,28 @@ if (user.LockoutEndDateUtc != null
 
 > **回復コードの E2E を足したところで、`CmnUserStore.UpdateTotpToken` の不具合も見つかった。**
 > **`case EnumUserStoreType.Memory:` に `break` が無く、DB の枝へ落ちていた**ので、**mem ストアでは回復コードを使うと 500 になった。**
+
+### C-35. 2FA のプッシュ承認を待つスクリプトが、`ReturnUrl` を符号化せずに埋め込んでいた **[Core][NetFx]** — **✅ 修正済み（#294）**
+
+**コードの入力画面（`Views/Account/VerifyCode.cshtml`。両版）は、手段が MobileApp のとき、**
+**承認を待つスクリプト（`TwoFactorPushStatus` へのポーリング）を出す**（#213 / #216）。
+**そのスクリプトが、`ReturnUrl` を JavaScript の文字列リテラルへ、符号化せずに埋め込んでいた。**
+
+```javascript
+// 修正前: MultiPurposeAuthSiteCore/Views/Account/VerifyCode.cshtml（net48 版も同じ）
++ '?returnUrl=' + encodeURIComponent('@Html.Raw(Model.ReturnUrl)')
+```
+
+**`ReturnUrl` は要求から来る値**（サインイン画面の URL から `SendCode` → `VerifyCode` へ引き継がれる）**で、**
+**`Html.Raw` は HTML の符号化も外す**ので、**値によってはスクリプトとして解釈され得た**（反射型のスクリプト注入）。
+
+**JavaScript の文字列として符号化して埋め込む**ようにした
+（net10.0 版は `Json.Serialize`、net48 版は `HttpUtility.JavaScriptStringEncode(…, true)`。**どちらも `<` `>` `&` `'` を逃がす**）。
+**あわせて、「ブラウザを記憶」のチェックボックスを、問い合わせのたびに読む**ようにした（読み込んだ時点の値に固定されていた）。
+
+**E2E では測れていない**（プッシュ承認の画面は、認証デバイスを登録した利用者でないと出ない）。
+
+> **`TwoFactor.cs` のレビューの指摘 6（`rememberMe` を渡す）で、同じ行を直すときに気付いた。**
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -3025,6 +3047,7 @@ if (user.LockoutEndDateUtc != null
 | ✅ **C-28〜C-31 サインアップ・パスワードの失念**（確認待ちの利用者の差し替え／存在の露見／リセット画面のメアド／メールの送り過ぎ） #294 |
 | ✅ **C-32 / C-33 サインイン**（WebAuthn のロックアウト判定／確認待ちの利用者へのメールと文言） #294 |
 | ✅ **C-34 TOTP・回復コードでサインインしたとき、セッションを初期化していなかった** #294 |
+| ✅ **C-35 2FA のプッシュ承認を待つスクリプトが、`ReturnUrl` を符号化せずに埋め込んでいた** #294 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 
