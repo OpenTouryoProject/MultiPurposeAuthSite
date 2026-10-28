@@ -18,6 +18,7 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         LogOff を Logout に改名した（Login と対にする。#294）
 //*  2026/10/28  玄人 幸道         未確認メアドの確認メールはパスワードが合ったときだけ送る、外部ログインに ReturnUrl を渡す（#294）
+//*  2026/10/28  玄人 幸道         サインイン画面の初期表示で外部ログインの Cookie を消す（net10.0 版に揃えた。#294）
 //**********************************************************************************
 
 /*
@@ -80,6 +81,9 @@ namespace MultiPurposeAuthSite.Controllers
             // データの生成
             await this.CreateData();
 
+            // Clear the existing external cookie to ensure a clean login process
+            AuthenticationManager.SignOut(DefaultAuthenticationTypes.ExternalCookie);
+
             string loginHint = "";
 
             if (!string.IsNullOrEmpty(returnUrl))
@@ -89,12 +93,13 @@ namespace MultiPurposeAuthSite.Controllers
                     UriOperator.GetParameterFromQueryString("ReturnUrl", Request.RawUrl));
 
                 // ReturnUrlからLoginHintを取得
+                //   **ReturnUrl の中の値は、もう 1 段エンコードされている**ので戻す。
                 loginHint = CustomEncode.UrlDecode(
                     UriOperator.GetParameterFromQueryString("login_hint", returnUrl));
             }
 
             // ReturnUrl
-            //   **外部ログインの部分ビュー（_ExternalLoginsListPartial）が戻り先として使う**（#294。net10.0 版と同じ）。
+            //   **外部ログインの部分ビュー（_ExternalLoginsListPartial）が戻り先として使う。**
             ViewBag.ReturnUrl = returnUrl;
 
             // サインイン画面（初期表示）
@@ -316,7 +321,7 @@ namespace MultiPurposeAuthSite.Controllers
                 AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
 
                 // オペレーション・トレース・ログ出力
-                //   **Cookie が残ったまま利用者が消されていることがある**（net10.0 版と同じく、居なければ書かない）。
+                //   **Cookie が残ったまま利用者が消されていることがある**（居なければ書かない）。
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 if (user != null)
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));

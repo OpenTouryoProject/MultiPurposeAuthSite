@@ -18,6 +18,7 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         LogOff を Logout に改名した（Login と対にする。#294）
 //*  2026/10/28  玄人 幸道         未確認メアドの確認メールはパスワードが合ったときだけ送る、WebAuthn のロックアウト判定を直した（#294）
+//*  2026/10/28  玄人 幸道         ReturnUrl と login_hint の取り出し方を net48 版に揃えた（#294）
 //**********************************************************************************
 
 /*
@@ -34,7 +35,6 @@ using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Stj = System.Text.Json;
 
@@ -95,55 +95,23 @@ namespace MultiPurposeAuthSite.Controllers
             // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
-            string cmnPattern = "";
+            string loginHint = "";
 
-            #region ReturnUrl
-
-            cmnPattern = "ReturnUrl=";
-
-            string rawUrl = UriHelper.GetEncodedUrl(Request);
-            
-            if (string.IsNullOrEmpty(returnUrl)
-                && rawUrl.IndexOf(cmnPattern) != -1)
+            if (!string.IsNullOrEmpty(returnUrl))
             {
-                if (rawUrl.Contains('&'))
-                {
-                    // 正規表現でreturnUrlを抜き出す。
-                    string regexPattern = "(" + cmnPattern + ")(?<returnUrl>.+?)(\\&)";
-                    returnUrl = CustomEncode.UrlDecode(Regex.Match(rawUrl, regexPattern).Groups["returnUrl"].Value);
-                }
-                else
-                {
-                    // IndexOf & SubstringでreturnUrlを抜き出す。
-                    returnUrl = CustomEncode.UrlDecode(rawUrl.Substring(rawUrl.IndexOf(cmnPattern) + cmnPattern.Length));
-                }
+                // RawUrlから、UrlデコードしたReturnUrlを取得
+                returnUrl = CustomEncode.UrlDecode(
+                    UriOperator.GetParameterFromQueryString("ReturnUrl", Request.GetEncodedUrl()));
+
+                // ReturnUrlからLoginHintを取得
+                //   **ReturnUrl の中の値は、もう 1 段エンコードされている**ので戻す。
+                loginHint = CustomEncode.UrlDecode(
+                    UriOperator.GetParameterFromQueryString("login_hint", returnUrl));
             }
 
             // ReturnUrl
+            //   **外部ログインの部分ビュー（_ExternalLoginsListPartial）が戻り先として使う。**
             ViewBag.ReturnUrl = returnUrl;
-
-            #endregion
-
-            #region LoginHint
-
-            string loginHint = "";
-            cmnPattern = "login_hint=";
-
-            if (!string.IsNullOrEmpty(returnUrl)
-                && returnUrl.IndexOf(cmnPattern) != -1)
-            {
-                // IndexOf & SubstringでloginHintを抜き出す。
-                loginHint = returnUrl.Substring(returnUrl.IndexOf(cmnPattern) + cmnPattern.Length);
-                if (loginHint.IndexOf('&') != -1)
-                {
-                    loginHint = loginHint.Substring(0, loginHint.IndexOf('&'));
-                }
-
-                // **ReturnUrl の中の値は、もう 1 段エンコードされている**ので戻す（net48 版と同じ）。
-                loginHint = CustomEncode.UrlDecode(loginHint);
-            }
-
-            #endregion
 
             // サインイン画面（初期表示）
             string sequenceNo = "";
@@ -466,10 +434,9 @@ namespace MultiPurposeAuthSite.Controllers
                 await SignInManager.SignOutAsync(); // DefaultAuthenticationTypes.ApplicationCookie);
 
                 // オペレーション・トレース・ログ出力
+                //   **Cookie が残ったまま利用者が消されていることがある**（居なければ書かない）。
                 ApplicationUser user = await UserManager.GetUserAsync(User);
                 if (user != null)
-                    // .NET Coreのデバッガが、Cookieが別スコープになるように上げないので、
-                    // 「デバッグ時にユーザ登録していない状態で、ログインしている状態になる」の対策コード
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
             }
 
