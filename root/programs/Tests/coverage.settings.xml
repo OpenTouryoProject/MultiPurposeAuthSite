@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  E2E のカバレッジ（dotnet-coverage）の設定（#294）。
+  test.ps1 -Coverage（2_RunAllTests.ps1 -Coverage）が、サイトを起動するときに渡す。
+
+  **測るのは、サイトの本体と共通ライブラリだけ**（Open棟梁 や NuGet の部品は数えない）。
+  **アセンブリ名は両版とも MultiPurposeAuthSite**（net10.0 版の exe は apphost で、コードは dll に在る）。
+  **net48 版は ASP.NET が一時フォルダへ写してから読む**ので、パスではなくファイル名で選ぶ。
+-->
+<Configuration>
+  <CodeCoverage>
+    <ModulePaths>
+      <Include>
+        <ModulePath>.*\\MultiPurposeAuthSite\.dll$</ModulePath>
+        <ModulePath>.*\\MultiPurposeAuthSite\.NetCoreLibrary\.dll$</ModulePath>
+        <ModulePath>.*\\MultiPurposeAuthSite\.NetFxLibrary\.dll$</ModulePath>
+      </Include>
+    </ModulePaths>
+    <IncludeTestAssembly>false</IncludeTestAssembly>
+  </CodeCoverage>
+</Configuration>

@@ -78,6 +78,11 @@
 .PARAMETER Filter
     dotnet test の --filter に渡す式（test.ps1 に渡す）。
 
+.PARAMETER Coverage
+    サイト（net10.0 版・net48 版）のコード カバレッジを取る（test.ps1 に渡す。-Launch と一緒に使う。#294）。
+    dotnet-coverage でサイトを包み、ReportGenerator で HTML にする。
+    出力は OutputDir\coverage\report\index.html（Summary.txt に要約）。
+
 .PARAMETER Configuration
     Debug（既定）または Release。
 
@@ -126,6 +131,7 @@ param(
     [switch]$DPoPNonce,
     [switch]$NoImplicit,
     [switch]$NoWebUI,
+    [switch]$Coverage,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
@@ -186,6 +192,7 @@ if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
 if ($DPoPNonce) { $splat.DPoPNonce = $true }
 if ($NoImplicit) { $splat.NoImplicit = $true }
 if ($NoWebUI) { $splat.NoWebUI = $true }
+if ($Coverage) { $splat.Coverage = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }

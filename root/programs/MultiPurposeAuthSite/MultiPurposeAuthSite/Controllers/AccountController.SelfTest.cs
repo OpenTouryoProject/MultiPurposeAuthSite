@@ -18,6 +18,7 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を Saml2.cs から移した（#294）
 //*  2026/10/29  玄人 幸道         id_token の nonce の照合、JARM の検証の失敗を直した（#294）
+//*  2026/10/29  玄人 幸道         自己テストを始めていない要求・壊れた JARM で、500 にしない（#294）
 //**********************************************************************************
 
 /*
@@ -167,6 +168,44 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region 自己テストの JARM の検証（#294）
+
+        /// <summary>自己テストが受け取った JARM（response）を検証する</summary>
+        /// <param name="response">response（JWT）</param>
+        /// <param name="clientId">その回の client_id（Session・Cookie から読んだもの）</param>
+        /// <param name="responseObject">検証できたら、その中身</param>
+        /// <returns>検証できたら true</returns>
+        /// <remarks>
+        /// **その回の client_id が無い（自己テストを始めていない）要求や、壊れた JWT は、検証できないとして扱う**（#294）。
+        /// 以前は `ResponseObject.Verify` が例外（`aud` が null など）を投げ、HTTP 500 になっていた。
+        /// </remarks>
+        private static bool VerifyTestResponseObject(string response, string clientId, out JObject responseObject)
+        {
+            responseObject = null;
+
+            if (string.IsNullOrEmpty(clientId))
+            {
+                return false;
+            }
+
+            try
+            {
+                return ResponseObject.Verify(response,
+                    null, CmnServerParams.IssuerId, clientId,
+                    out responseObject);
+            }
+            catch (Exception ex)
+            {
+                //  **原因は、記録に残す**（握りつぶさない）。
+                Logging.MyDebugLogForEx(ex);
+
+                responseObject = null;
+                return false;
+            }
+        }
+
+        #endregion
+
         #region OAuth2 / OIDC の Redirectエンドポイント
 
         #region Authorization Codeグラント種別
@@ -214,9 +253,8 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(response))
                     {
                         // responseObject検証
-                        if (ResponseObject.Verify(response,
-                            null, CmnServerParams.IssuerId, clientId_InSessionOrCookie,
-                            out JObject responseObject))
+                        if (AccountController.VerifyTestResponseObject(
+                            response, clientId_InSessionOrCookie, out JObject responseObject))
                         {
                             // OK
                             code = (string)responseObject[OAuth2AndOIDCConst.code];
@@ -612,9 +650,8 @@ namespace MultiPurposeAuthSite.Controllers
                             out code_verifier_InSessionOrCookie);
 
                         // responseObject検証
-                        if (ResponseObject.Verify(response,
-                            null, CmnServerParams.IssuerId, clientId_InSessionOrCookie,
-                            out JObject responseObject))
+                        if (AccountController.VerifyTestResponseObject(
+                            response, clientId_InSessionOrCookie, out JObject responseObject))
                         {
                             // OK
                             access_token = (string)responseObject[OAuth2AndOIDCConst.AccessToken];

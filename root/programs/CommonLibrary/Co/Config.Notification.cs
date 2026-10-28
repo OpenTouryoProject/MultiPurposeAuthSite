@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         MailOutboxDirectory（メールの送信箱。テスト用）を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -142,6 +143,20 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("FcmOutboxDirectory");
+            }
+        }
+
+        /// <summary>
+        /// MailOutboxDirectory（テスト用。#294）。
+        /// 設定すると、メールをこのディレクトリにファイルとして書く（`IsDebug` のときだけ。そのときは、もともと SMTP に送らない）。
+        /// E2E テスト（test.ps1 -Launch）が環境変数で設定する。本番では空のままにする。
+        /// **メールでしか届かない値**（メアドの確認・パスワードのリセットのリンク、2FA のコード）**を、E2E が読むために在る。**
+        /// </summary>
+        public static string MailOutboxDirectory
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("MailOutboxDirectory");
             }
         }
 

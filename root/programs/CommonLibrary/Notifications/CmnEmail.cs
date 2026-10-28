@@ -30,16 +30,21 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/05  西野 大介         新規
 //*  2026/10/28  玄人 幸道         IsDebug のとき、試験用のドメイン宛ての送信を失敗させる（#294）
+//*  2026/10/29  玄人 幸道         IsDebug のとき、送信箱（MailOutboxDirectory）が在れば、ファイルとして書く（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 using System.Net;
 using System.Net.Mail;
 using System.Diagnostics;
+
+using Newtonsoft.Json;
 
 /// <summary>MultiPurposeAuthSite.Notifications</summary>
 namespace MultiPurposeAuthSite.Notifications
@@ -52,6 +57,29 @@ namespace MultiPurposeAuthSite.Notifications
         /// </summary>
         /// <remarks>**E2E が、送信の失敗でサイトが落ちないことを測るために使う**（`RT-294.14`）。</remarks>
         public const string FailureDomainForTest = "e2e-mail-failure.invalid";
+
+        /// <summary>送信箱（テスト用）にメールを書く（#294）</summary>
+        /// <param name="outbox">ディレクトリ</param>
+        /// <param name="destination">宛先</param>
+        /// <param name="subject">件名</param>
+        /// <param name="body">本文</param>
+        /// <remarks>**書き終えてから名前を付け替える**（読む側が、書きかけのファイルを読まないように。FcmService と同じ）。</remarks>
+        private static void WriteToOutbox(string outbox, string destination, string subject, string body)
+        {
+            Directory.CreateDirectory(outbox);
+
+            string name = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "_" + Guid.NewGuid().ToString("N");
+            string temp = Path.Combine(outbox, name + ".tmp");
+
+            File.WriteAllText(temp, JsonConvert.SerializeObject(new Dictionary<string, string>()
+            {
+                { "destination", destination },
+                { "subject", subject },
+                { "body", body }
+            }, Formatting.Indented));
+
+            File.Move(temp, Path.Combine(outbox, name + ".json"));
+        }
 
         /// <summary>電子メール送信</summary>
         /// <param name="destination">string</param>
@@ -69,6 +97,15 @@ namespace MultiPurposeAuthSite.Notifications
                     && destination.EndsWith("@" + CmnEmail.FailureDomainForTest, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new SmtpException("The mail to the test failure domain was refused. (IsDebug)");
+                }
+
+                //  **送信箱（テスト用）が設定されていれば、ファイルとして書く**（#294。FcmOutboxDirectory と同じ形）。
+                //    **メールでしか届かない値**（確認・リセットのリンク、2FA のコード）**を、E2E が読む。**
+                string outbox = Config.MailOutboxDirectory;
+
+                if (!string.IsNullOrEmpty(outbox))
+                {
+                    CmnEmail.WriteToOutbox(outbox, destination, subject, body);
                 }
 
                 // Debug.WriteLine

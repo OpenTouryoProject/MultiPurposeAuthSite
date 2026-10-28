@@ -139,6 +139,14 @@
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
+.PARAMETER Coverage
+    サイト（net10.0 版・net48 版）のコード カバレッジを取る（#294。-Launch と一緒に使う）。
+    dotnet-coverage（root\dotnet-tools.json のローカル ツール）でサイトを包んで起動し、
+    止めるときに Cobertura 形式で書き出させ、ReportGenerator で HTML にする。
+    出力は LogDir\coverage（report\index.html と report\Summary.txt）。
+    **XPlat Code Coverage（coverlet.collector）では、サイトは測れない**
+    （dotnet test の中で読み込まれたコードしか数えない。サイトは別のプロセスである）。
+
 .PARAMETER LogDir
     サイトの起動ログ（MpasSite.*.log / IisExpress.*.log）の出力先。
     既定は E2ETests\Result（.gitignore 済み）。
@@ -181,6 +189,7 @@ param(
     [switch] $DPoPNonce,
     [switch] $NoImplicit,
     [switch] $NoWebUI,
+    [switch] $Coverage,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
@@ -725,6 +734,125 @@ function Set-IdFederationEnv
     $env:PreviousSigningCerFilePaths = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
 }
 
+# ------------------------------------------------------------------
+# カバレッジ（#294。-Coverage）
+# ------------------------------------------------------------------
+# **XPlat Code Coverage（coverlet.collector）では、サイトを測れない。**
+#   あれが数えるのは dotnet test の中で読み込まれたコードで、サイトは別のプロセスである。
+#   **dotnet-coverage でサイトを包んで起動し、止めるときに書き出させる。**
+#   ツールは root\dotnet-tools.json のローカル ツール（dotnet tool restore で揃う）。
+$script:CoverageSessions = @()
+
+function Get-ToolRoot
+{
+    # root（dotnet-tools.json の在り処）。dotnet tool run は、作業フォルダから上へ探す。
+    return (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent)
+}
+
+function ConvertTo-ArgumentString
+{
+    param([string[]] $Arguments)
+
+    # **Start-Process は、空白を含む引数を引用符で囲まない**（5.1）。自分で囲む。
+    return (($Arguments | ForEach-Object {
+        if ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
+    }) -join ' ')
+}
+
+function Start-CoveredProcess
+{
+    param(
+        [string]   $Session,
+        [string]   $Output,
+        [string]   $FilePath,
+        [string[]] $Arguments,
+        [string]   $WorkingDirectory,
+        [string]   $OutLog,
+        [string]   $ErrLog)
+
+    $collect = @('tool', 'run', 'dotnet-coverage', 'collect',
+        '--session-id', $Session,
+        '--output', $Output, '--output-format', 'cobertura',
+        '--settings', (Join-Path $PSScriptRoot 'coverage.settings.xml'),
+        $FilePath) + $Arguments
+
+    $script:CoverageSessions += $Session
+
+    return Start-Process -FilePath 'dotnet' -ArgumentList (ConvertTo-ArgumentString $collect) `
+        -WorkingDirectory $WorkingDirectory -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
+}
+
+function Get-DescendantProcessId
+{
+    param([int] $ParentId)
+
+    $ids = @()
+    foreach ($child in @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue))
+    {
+        $ids += [int]$child.ProcessId
+        $ids += Get-DescendantProcessId -ParentId ([int]$child.ProcessId)
+    }
+    return $ids
+}
+
+function Stop-CoverageSessions
+{
+    # **先に計測を閉じて、書き出させる**（サイトを先に止めると、数えた分を失う）。
+    Push-Location (Get-ToolRoot)
+    try {
+        foreach ($s in $script:CoverageSessions)
+        {
+            Write-Host "カバレッジを書き出します（$s）..." -ForegroundColor Cyan
+            & dotnet tool run dotnet-coverage shutdown $s --timeout 180000 2>&1 | ForEach-Object { "  $_" }
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function New-CoverageReport
+{
+    param([string] $CoverageDir)
+
+    $files = @(Get-ChildItem -Path $CoverageDir -Filter '*.cobertura.xml' -ErrorAction SilentlyContinue)
+
+    if ($files.Count -eq 0)
+    {
+        Write-Warning "カバレッジが書き出されていません（$CoverageDir）。"
+        return
+    }
+
+    $reportDir = Join-Path $CoverageDir 'report'
+
+    Push-Location (Get-ToolRoot)
+    try {
+        #  **両版を 1 つのレポートにまとめる**（共通ライブラリは同じファイルなので、行が合わさる）。
+        #  **Razor の生成クラスは除く**（画面のテンプレートで、手で書いたコードではない）。
+        & dotnet tool run reportgenerator `
+            ("-reports:" + (($files | ForEach-Object { $_.FullName }) -join ';')) `
+            ("-targetdir:" + $reportDir) `
+            '-reporttypes:Html;TextSummary;MarkdownSummaryGithub' `
+            '-title:MultiPurposeAuthSite (E2E)' `
+            '-classfilters:-AspNetCoreGeneratedDocument.*' 2>&1 | Out-Null
+    }
+    finally {
+        Pop-Location
+    }
+
+    $summary = Join-Path $reportDir 'Summary.txt'
+
+    if (Test-Path $summary)
+    {
+        Write-Host ''
+        Write-Host '================ カバレッジ ================' -ForegroundColor Cyan
+        Get-Content $summary -Encoding UTF8 | Select-Object -First 14 | ForEach-Object { "  $_" }
+        Write-Host ''
+        Write-Host ('  レポート : ' + (Join-Path $reportDir 'index.html'))
+    }
+}
+
 function Wait-Site
 {
     param(
@@ -1050,6 +1178,13 @@ public static class MpasTestTls
         Remove-Item (Join-Path $coreOutbox '*') -Force -ErrorAction SilentlyContinue
         $env:FcmOutboxDirectory = $coreOutbox
 
+        # **メールの送信箱（テスト用。#294）**。サイトは SMTP に送らず、ここへファイルとして書く。
+        #   **確認・リセットのリンクや 2FA のコード**を、テストがここから読む。サイトごとに分け、前回の残りは消す。
+        $coreMailOutbox = Join-Path $LogDir 'mail\core'
+        New-Item -ItemType Directory -Force $coreMailOutbox | Out-Null
+        Remove-Item (Join-Path $coreMailOutbox '*') -Force -ErrorAction SilentlyContinue
+        $env:MailOutboxDirectory = $coreMailOutbox
+
         # サイトの出力をファイルへ残す。
         # 起動に失敗したとき、これが無いと「応答しません」しか分からない。
         $coreOut = Join-Path $LogDir 'MpasSite.out.log'
@@ -1085,10 +1220,45 @@ public static class MpasTestTls
             $env:DOTNET_STARTUP_HOOKS = $mtlsHook.FullName
         }
 
-        $core = Start-Process -FilePath $coreExe.FullName `
-            -ArgumentList @('--urls', $Url) `
-            -WorkingDirectory $coreDir -PassThru -WindowStyle Hidden `
-            -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr
+        if ($Coverage) {
+            # **カバレッジを取る**（#294）。前回の分は消し、ツールを揃えてから包んで起動する。
+            $coverageDir = Join-Path $LogDir 'coverage'
+            New-Item -ItemType Directory -Force $coverageDir | Out-Null
+            Remove-Item (Join-Path $coverageDir '*') -Recurse -Force -ErrorAction SilentlyContinue
+
+            Push-Location (Get-ToolRoot)
+            try { & dotnet tool restore 2>&1 | Out-Null } finally { Pop-Location }
+
+            Write-Host '  カバレッジを取ります（dotnet-coverage）。' -ForegroundColor Cyan
+
+            #  **mTLS のフック（DOTNET_STARTUP_HOOKS）は、サイトにだけ渡す。**
+            #    **dotnet-coverage 自身も .NET のプロセス**なので、環境変数を引き継ぐと
+            #    **別の版の .NET でフックを読もうとして落ちる**（System.Runtime 10.0 が無い）。
+            #    **フックを立ててからサイトを起動する .cmd を作り、それを包む。**
+            $coreFile = $coreExe.FullName
+            $coreArgs = @('--urls', $Url)
+            if ($null -ne $mtlsHook) {
+                Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
+                $launcher = Join-Path $coverageDir 'launch-core.cmd'
+                Set-Content -Path $launcher -Encoding ASCII -Value @(
+                    '@echo off',
+                    ('set DOTNET_STARTUP_HOOKS=' + $mtlsHook.FullName),
+                    ('"' + $coreExe.FullName + '" --urls ' + $Url))
+                $coreFile = $env:ComSpec
+                $coreArgs = @('/c', $launcher)
+            }
+
+            $core = Start-CoveredProcess -Session 'mpas-core' `
+                -Output (Join-Path $coverageDir 'core.cobertura.xml') `
+                -FilePath $coreFile -Arguments $coreArgs `
+                -WorkingDirectory $coreDir -OutLog $coreOut -ErrLog $coreErr
+        }
+        else {
+            $core = Start-Process -FilePath $coreExe.FullName `
+                -ArgumentList @('--urls', $Url) `
+                -WorkingDirectory $coreDir -PassThru -WindowStyle Hidden `
+                -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr
+        }
 
         Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
 
@@ -1098,6 +1268,7 @@ public static class MpasTestTls
         Write-Host '起動しました。' -ForegroundColor Green
         $env:MPAS_CORE_BASEURL = $Url
         $env:MPAS_CORE_FCM_OUTBOX = $coreOutbox
+        $env:MPAS_CORE_MAIL_OUTBOX = $coreMailOutbox
         $env:MPAS_CORE_TESTUSER_SUFFIX = $script:TestUserSuffixCore
         if ($null -ne $mtlsHook) { $env:MPAS_CORE_MTLS = 'true' }   # FA-6 を回してよい（#226）
 
@@ -1166,10 +1337,24 @@ public static class MpasTestTls
             Remove-Item (Join-Path $netFxOutbox '*') -Force -ErrorAction SilentlyContinue
             $env:FcmOutboxDirectory = $netFxOutbox
 
-            $netFx = Start-Process -FilePath $iisExe `
-                -ArgumentList @("/config:$iisCfg", '/site:MPAS48') `
-                -PassThru -WindowStyle Hidden `
-                -RedirectStandardOutput $netFxOut -RedirectStandardError $netFxErr
+            $netFxMailOutbox = Join-Path $LogDir 'mail\netfx'
+            New-Item -ItemType Directory -Force $netFxMailOutbox | Out-Null
+            Remove-Item (Join-Path $netFxMailOutbox '*') -Force -ErrorAction SilentlyContinue
+            $env:MailOutboxDirectory = $netFxMailOutbox
+
+            if ($Coverage) {
+                # **IIS Express ごと包む**（#294）。**net48 版はプロファイラで測る**（dotnet-coverage が環境変数で渡す）。
+                $netFx = Start-CoveredProcess -Session 'mpas-netfx' `
+                    -Output (Join-Path $LogDir 'coverage\netfx.cobertura.xml') `
+                    -FilePath $iisExe -Arguments @("/config:$iisCfg", '/site:MPAS48') `
+                    -WorkingDirectory (Get-ToolRoot) -OutLog $netFxOut -ErrLog $netFxErr
+            }
+            else {
+                $netFx = Start-Process -FilePath $iisExe `
+                    -ArgumentList @("/config:$iisCfg", '/site:MPAS48') `
+                    -PassThru -WindowStyle Hidden `
+                    -RedirectStandardOutput $netFxOut -RedirectStandardError $netFxErr
+            }
 
             Wait-Site -Name 'net48 版' -SiteUrl $NetFxUrl -Process $netFx `
                 -OutLog $netFxOut -ErrLog $netFxErr
@@ -1177,6 +1362,7 @@ public static class MpasTestTls
             Write-Host '起動しました。' -ForegroundColor Green
             $env:MPAS_NETFX_BASEURL = $NetFxUrl
             $env:MPAS_NETFX_FCM_OUTBOX = $netFxOutbox
+            $env:MPAS_NETFX_MAIL_OUTBOX = $netFxMailOutbox
             $env:MPAS_NETFX_TESTUSER_SUFFIX = $script:TestUserSuffixNetFx
             if ($NetFxMtls) { $env:MPAS_NETFX_MTLS = 'true' }   # FA-6 を net48 版でも回す（#226）
         }
@@ -1220,6 +1406,7 @@ public static class MpasTestTls
         Remove-Item Env:\OAuth2AuthorizationServerEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\OAuth2ClientEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
+        Remove-Item Env:\MailOutboxDirectory -ErrorAction SilentlyContinue
 
         # **接続文字列を、テスト プロセスへ引き継がない。**
         # テストはサイトを HTTP で叩くだけで、DB へは触らない。
@@ -1303,11 +1490,29 @@ public static class MpasTestTls
     }
 }
 finally {
+    # **カバレッジを取っているときは、サイトは dotnet-coverage の子プロセス**である（#294）。
+    #   **子の番号を先に控え、計測を閉じて書き出させてから、子まで止める**
+    #   （親だけ止めると、サイトが残って次回の起動がポートを奪われる）。
+    $children = @()
+    if ($Coverage) {
+        foreach ($p in @($core, $netFx)) {
+            if ($null -ne $p) { $children += Get-DescendantProcessId -ParentId $p.Id }
+        }
+        Stop-CoverageSessions
+    }
+
     foreach ($p in @($core, $netFx)) {
         if ($null -ne $p -and -not $p.HasExited) {
             Write-Host 'サイトを停止します...' -ForegroundColor Cyan
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
         }
+    }
+    foreach ($id in $children) {
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($Coverage -and $LogDir) {
+        New-CoverageReport -CoverageDir (Join-Path $LogDir 'coverage')
     }
 
     # **自分が起動した DB コンテナだけを止める**（#305 の後）。
@@ -1324,6 +1529,9 @@ finally {
         Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_FCM_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_FCM_OUTBOX -ErrorAction SilentlyContinue
+        Remove-Item Env:\MailOutboxDirectory -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_MAIL_OUTBOX -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_NETFX_MAIL_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\TestUserSuffix -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_TESTUSER_SUFFIX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_TESTUSER_SUFFIX -ErrorAction SilentlyContinue

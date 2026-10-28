@@ -129,6 +129,19 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 
 > **ファイルには、device_token や 2FA のコードがそのまま書かれる。**
 
+### `MailOutboxDirectory` — メールの送信箱（テスト用）
+
+**本番では空のままにする。** **`IsDebug` が true のとき**に設定すると、サーバはメールを
+このディレクトリに JSON ファイル（`destination` / `subject` / `body`）として書く（#294）。
+（`IsDebug` のときは、もともと SMTP に送らず、デバッグ出力に書くだけである。）
+E2E テストが、**メールでしか届かない値**（メアドの確認・パスワードのリセットのリンク、2FA のコード）をそれから読む。
+`IsDebug` が false なら、設定しても書かない。
+
+`root/programs/Tests/test.ps1 -Launch` が、`FcmOutboxDirectory` と同じく**環境変数として**サイトごとに設定する
+（`Tests/E2ETests/Result/mail/core`・`…/netfx`）。構成ファイルに書く必要は無い。
+
+> **ファイルには、確認・リセットのリンク（code 入り）や 2FA のコードがそのまま書かれる。**
+
 ## 3. net48 — `app.config`
 
 **`Web.config` から取り込まれる外部 `appSettings` ファイルである。**
@@ -3707,6 +3720,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
 > 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
+| `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
 | `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。

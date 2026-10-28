@@ -182,6 +182,11 @@ OAuth2ClientEndpointsRootURI
 
 あわせて、プッシュ通知の送信箱 `FcmOutboxDirectory` を設定する（`Result/fcm/core`・`Result/fcm/netfx`）。
 サイトは FCM に送らずここへファイルを書き、テストが認証デバイスの代わりに読む（`EX-8`）。
+同じく、メールの送信箱 `MailOutboxDirectory` を設定する（`Result/mail/core`・`Result/mail/netfx`。#294）。
+テストは、確認・リセットのリンクや 2FA のコードをここから読む（`RT-294.26`〜`.29`・`.34`）。
+
+`-Coverage` を付けると、2 つのサイトを `dotnet-coverage` の下で起動し、
+終わったら ReportGenerator で報告を作る（`Result/coverage/report`。[`TESTING.md`](../../TESTING.md) 1 節）。
 
 `appSettings` の `FxContainerization` が `ON` のとき、Open棟梁 は
 **設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。

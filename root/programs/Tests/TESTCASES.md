@@ -6686,6 +6686,267 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **500 にならない**
 - **サインイン画面へ戻す**
 
+## RT-294.26 サインアップして、メールの確認のリンクを踏むと、サインインできるようになる
+
+| | |
+|---|---|
+| 観点 | **確認のリンクはメールでしか届かない**ので、**この流れは E2E で 1 度も通していなかった**（カバレッジで `EmailConfirmation` が通っていなかった）。**メールの送信箱（`MailOutbox`）から読む。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29426_メアドの確認のリンクを踏むとサインインできる` |
+
+**手順**
+
+1. サインアップする
+1. 送信箱から、確認のメールを読む
+1. リンクを踏む（約款を出す配備なら、同意して送る）
+1. サインインする
+
+**検証（合否を判定する）**
+
+- 確認の前は、サインインできない
+- 確認のメールが届く
+- HTTP 200
+- **エラー画面にならない**（確認が通る）
+- **確認の後は、サインインできる**
+
+## RT-294.27 パスワードの失念のメールのリンクから、パスワードをリセットできる
+
+| | |
+|---|---|
+| 観点 | **リセットのリンクはメールでしか届かない**ので、**この流れは E2E で 1 度も通していなかった。****正しい code のときは、画面に利用者のメアドが出る**（C-30 の裏返し）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29427_パスワードをリセットできる` |
+
+**手順**
+
+1. パスワードの失念を送る
+1. 送信箱から、リセットのメールを読む
+1. リンクを踏む
+1. 新しいパスワードを送る
+1. 新しいパスワードでサインインする
+
+**検証（合否を判定する）**
+
+- リセットのメールが届く
+- **リセットの画面が開く**（正しい code）
+- **画面に利用者のメアドが出る**（正しい code のときだけ。C-30）
+- **完了の画面になる**（入力欄もエラーも無い）
+- **新しいパスワードで入れる**
+- **古いパスワードでは入れない**
+
+## RT-294.28 確認待ちの利用者は、パスワードが合っても違っても、サインインできない（画面にエラーが出る）
+
+| | |
+|---|---|
+| 観点 | **確認待ちの利用者でサインインするテストが無かった**（C-33 の経路）。**パスワードが合えば確認のメールを送り直し、違えば利用者が居ないときと同じ応答にする。** |
+| 根拠 | #294（E2E の拡充 / C-33） |
+| テスト | `RT29428_確認待ちの利用者はサインインできない` |
+
+**手順**
+
+1. 正しいパスワードでサインインする
+1. 違うパスワードでサインインする
+
+**検証（合否を判定する）**
+
+- 正しいパスワード : **サインインしない**（画面を出し直し、エラーを出す）
+- 違うパスワード : **サインインしない**（画面を出し直し、エラーを出す）
+
+## RT-294.29 コードの 2FA（Email）で、メールのコードを入れるとサインインでき、戻り先へ戻る
+
+| | |
+|---|---|
+| 観点 | **コードはメールでしか届かない**ので、**コードの 2FA が成功する経路は E2E で通していなかった**（RT-294.13 は、間違ったコードの経路だけ）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29429_メールのコードで2FAを通る` |
+
+**手順**
+
+1. パスワードでサインインし、手段に Email を選ぶ
+1. 送信箱から、コードを読む
+1. コードを入れる
+
+**検証（合否を判定する）**
+
+- コードのメールが届く
+- **戻り先へリダイレクトする**（サインインできた）
+- `auth_time` の Cookie が書かれている（セッションの初期化）
+
+## RT-294.30 外部ログインの戻りの口（ExternalLoginCallback）は、失敗を 500 にせず、サインインもしない
+
+| | |
+|---|---|
+| 観点 | **外部プロバイダ（Google など）は E2E で動かせない**ので、**この口は 1 度も叩いていなかった。****失敗の口だけは叩ける**（プロバイダのエラー、外部ログインの Cookie が無い）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29430_外部ログインの戻りの失敗は500にしない` |
+
+**手順**
+
+1. GET /Account/ExternalLoginCallback?remoteError=access_denied
+1. GET /Account/ExternalLoginCallback
+
+**検証（合否を判定する）**
+
+- /Account/ExternalLoginCallback?remoteError=access_denied : **サインイン画面へ戻すか、失敗の画面を出す**（500 にしない）
+- /Account/ExternalLoginCallback : **サインイン画面へ戻すか、失敗の画面を出す**（500 にしない）
+- **サインインしていない**（保護された画面は開かない）
+
+## RT-294.31 ID 連携の受け口（OIDC の Redirect エンドポイント・SAML2 の ACS）は、連携を始めていない要求をエラー画面で断る
+
+| | |
+|---|---|
+| 観点 | **受け口の失敗の経路を叩いていなかった。****連携を始めた記録（セッションの state・上流）が無ければ、上流の応答を受け取らない。** |
+| 根拠 | #294（E2E の拡充）/ #253 |
+| テスト | `RT29431_ID連携の受け口は始めていない要求を断る` |
+
+**手順**
+
+1. GET /Account/IDFederationRedirectEndPoint?code=dummy&state=dummy
+1. GET /Account/IDFederationRedirectEndPoint?error=access_denied&state=dummy
+1. GET /Account/IDFederationAssertionConsumerService?SAMLResponse=dummy&RelayState=dummy
+
+**検証（合否を判定する）**
+
+- /Account/IDFederationRedirectEndPoint?code=dummy&state=dummy : HTTP 200（500 にならない）
+- /Account/IDFederationRedirectEndPoint?code=dummy&state=dummy : **エラー画面になる**（サインインしない）
+- /Account/IDFederationRedirectEndPoint?error=access_denied&state=dummy : HTTP 200（500 にならない）
+- /Account/IDFederationRedirectEndPoint?error=access_denied&state=dummy : **エラー画面になる**（サインインしない）
+- /Account/IDFederationAssertionConsumerService?SAMLResponse=dummy&RelayState=dummy : HTTP 200（500 にならない）
+- /Account/IDFederationAssertionConsumerService?SAMLResponse=dummy&RelayState=dummy : **エラー画面になる**（サインインしない）
+- **サインインしていない**（保護された画面は開かない）
+
+## RT-294.32 既に使われている利用者名でサインアップすると、画面にエラーを出し、利用者を作らない
+
+| | |
+|---|---|
+| 観点 | **利用者の作成（`CreateAsync`）が失敗する経路を通していなかった**（`AddErrors` が 1 度も通っていなかった）。**確認待ちのメアドの登録し直し（RT-294.4）とは別の経路である**（利用者名の重複は、作成で断られる）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29432_使われている利用者名ではサインアップできない` |
+
+**手順**
+
+1. 同じ利用者名・別のメアドでサインアップする
+
+**検証（合否を判定する）**
+
+- **サインアップの画面を出し直し、エラーを出す**
+- **先の利用者のメアドは変わらない**
+- **別のメアドの利用者は作られない**
+
+## RT-294.33 メアドの確認・パスワードのリセットは、パラメタが無い・code が違えば、通さない（パスワードは変わらない）
+
+| | |
+|---|---|
+| 観点 | **RT-294.6 / .7 は「利用者が居ない」経路だけ**で、**パラメタが無い・code が違う・入力が合わない経路は通していなかった。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29433_パラメタが無いかcodeが違えば確認もリセットも通さない` |
+
+**手順**
+
+1. GET /Account/EmailConfirmation
+1. GET /Account/EmailConfirmation?userId=1dcb5d65-ec4d-4435-8921-ccd25690d899&code=bogus
+1. GET /Account/ResetPassword
+1. POST /Account/ResetPassword（code が違う）
+1. POST /Account/ResetPassword（確認の入力が合わない）
+
+**検証（合否を判定する）**
+
+- /Account/EmailConfirmation : HTTP 200（500 にならない）
+- /Account/EmailConfirmation : **エラー画面になる**
+- /Account/EmailConfirmation?userId=1dcb5d65-ec4d-4435-8921-ccd25690d899&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=1dcb5d65-ec4d-4435-8921-ccd25690d899&code=bogus : **エラー画面になる**
+- /Account/ResetPassword : HTTP 200（500 にならない）
+- /Account/ResetPassword : **エラー画面になる**
+- code が違う : **リセットの画面を出し直し、エラーを出す**
+- 確認の入力が合わない : **リセットの画面を出し直し、エラーを出す**
+- **パスワードは変わらない**（元のパスワードで入れる）
+
+## RT-294.34 パスワードの失念を続けて送っても、リセットのメールは 1 通だけ（画面は同じ）
+
+| | |
+|---|---|
+| 観点 | **`MailResendIntervalSeconds` の絞り（C-31）を、パスワードの失念で確かめていなかった**（`SendConfirmEmailForPasswordReset` の絞りの分岐が通っていなかった）。**画面は変えない**ので、**数えられるのは送信箱だけ**である。 |
+| 根拠 | #294（E2E の拡充 / C-31） |
+| テスト | `RT29434_リセットのメールは続けて送らない` |
+
+**手順**
+
+1. パスワードの失念を送る
+1. パスワードの失念を送る
+
+**検証（合否を判定する）**
+
+- (1) **確認の画面になる**（入力欄もエラーも無い）
+- (2) **確認の画面になる**（入力欄もエラーも無い）
+- **リセットのメールは 1 通だけ**
+
+## RT-294.35 2FA の途中でなければ、コードの 2FA の口（手段の選択・コードの入力・プッシュの状態）は通さない
+
+| | |
+|---|---|
+| 観点 | **RT-294.10 は TOTP・回復コードの画面（GET）だけ**で、**コードの 2FA の口と、POST・プッシュの状態の口は、2FA の途中でない要求を通していなかった。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29435_2FAの途中でなければコードの口は通さない` |
+
+**手順**
+
+1. GET /Account/SendCode?rememberMe=false
+1. GET /Account/VerifyCode?provider=Email&rememberMe=false&rememberBrowser=false
+1. POST /Account/SendCode
+1. POST /Account/VerifyCode
+1. GET /Account/TwoFactorPushStatus
+1. POST /Account/LoginWithTwoFactorAuthenticator?rememberMe=false
+1. POST /Account/LoginWithTwoFactorAuthenticatorRecoveryCode
+
+**検証（合否を判定する）**
+
+- /Account/SendCode?rememberMe=false : HTTP 200
+- /Account/SendCode?rememberMe=false : **エラー画面になる**
+- /Account/VerifyCode?provider=Email&rememberMe=false&rememberBrowser=false : HTTP 200
+- /Account/VerifyCode?provider=Email&rememberMe=false&rememberBrowser=false : **エラー画面になる**
+- POST /Account/SendCode : **エラー画面になる**（コードを送らない）
+- POST /Account/VerifyCode : **リダイレクトしない**（サインインしない）
+- GET /Account/TwoFactorPushStatus : **承認されていない**（`approved` が false）
+- POST /Account/LoginWithTwoFactorAuthenticator?rememberMe=false : **エラー画面になる**
+- POST /Account/LoginWithTwoFactorAuthenticatorRecoveryCode : **エラー画面になる**
+- **サインインしていない**（保護された画面は開かない）
+
+## RT-294.36 2FA のコードのメールが送れなければ、手段の選択の画面を出し直し、文言を出す（500 にしない）
+
+| | |
+|---|---|
+| 観点 | **コードの送信に失敗する経路（#214 の catch）を通していなかった。****送信の失敗は、IsDebug のサイトが特定のドメイン宛てで起こす**（RT-294.14 と同じ）。 |
+| 根拠 | #294（E2E の拡充）/ #214 |
+| テスト | `RT29436_2FAのコードを送れなければ選び直しになる` |
+
+**手順**
+
+1. パスワードでサインインし、手段に Email を選ぶ
+
+**検証（合否を判定する）**
+
+- **手段の選択の画面を出し直し、文言を出す**（コードの入力へ進まない）
+
+## RT-294.37 パスワードを続けて間違えると、ロックアウトの画面になり、正しいパスワードでも入れない（確認済み・確認待ちとも）
+
+| | |
+|---|---|
+| 観点 | **パスワードのサインインでロックアウトする経路を通していなかった**（RT-294.11 は TOTP）。**確認待ちの利用者は、別の経路で失敗を数える**（C-33。`AccessFailedAsync`）。**確認待ちは、上限に達した次の要求でロックアウトの画面になる**（確認済みは、達した要求で）。 |
+| 根拠 | #294（E2E の拡充 / C-33） |
+| テスト | `RT29437_パスワードを続けて間違えるとロックアウトになる` |
+
+**手順**
+
+1. 確認済み : ロックアウトするまで、違うパスワードを送る（上限 20 回 ＋ 1）
+1. 確認待ち : ロックアウトするまで、違うパスワードを送る（上限 20 回 ＋ 1）
+
+**検証（合否を判定する）**
+
+- 確認済み : **ロックアウトの画面になる**
+- 確認済み : **正しいパスワードでも、ロックアウトの画面になる**
+- 確認待ち : **ロックアウトの画面になる**
+- 確認待ち : **正しいパスワードでも、ロックアウトの画面になる**
+
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 
 | | |

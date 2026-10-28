@@ -48,6 +48,40 @@ cd root\programs\Tests
 | `-UpdateTestCases` | テストケースの原本（`programs\Tests\TESTCASES.md`）を作り直す |
 | `-UserStoreType` | サイトが使うストア（`mem` 既定 / `sql` / `ora` / `npg`）。**`mem` 以外は下の「ストアを切り替える」を読む**（#207） |
 | `-ConnectionString` | `mem` 以外のときの接続文字列。省略時は環境変数から読む |
+| `-Coverage` | **サイトのコード カバレッジを測る**（`-Launch` と併用。下の「カバレッジを測る」）（#294） |
+
+### カバレッジを測る（#294）
+
+```powershell
+cd root
+.\2_RunAllTests.ps1 -Launch -Coverage
+# → programs\Tests\E2ETests\Result\coverage\report\index.html
+```
+
+**測るのは、テスト（`dotnet test`）ではなく、起動した 2 つのサイトである。**
+E2E はサイトを外から叩くので、テストのプロセスに付く収集器（`coverlet.collector` の `XPlat Code Coverage`）では、
+**サイトのコードは 1 行も数えられない。** そのため、**サイトのプロセスを `dotnet-coverage collect` の下で起動する。**
+
+| | net10.0 版 | net48 版 |
+|---|---|---|
+| 起動 | `dotnet-coverage collect` → Kestrel | `dotnet-coverage collect` → IIS Express |
+| セッション | `mpas-core` | `mpas-netfx` |
+| 出力 | `coverage\core.cobertura.xml` | `coverage\netfx.cobertura.xml` |
+
+- **道具は、ローカル ツールとして入れる**（`root/dotnet-tools.json`。`dotnet-coverage` と `dotnet-reportgenerator-globaltool`）。
+  `-Coverage` を付けると、`dotnet tool restore` を先に回す。グローバルには入れない
+- **数える DLL は `programs/Tests/coverage.settings.xml` で絞る**
+  （`MultiPurposeAuthSite.dll`・`MultiPurposeAuthSite.NetCoreLibrary.dll`・`MultiPurposeAuthSite.NetFxLibrary.dll`）。
+  Open棟梁 などの参照先は数えない
+- **テストが終わったら、セッションを `dotnet-coverage shutdown` で閉じてから**サイトを止める。
+  先にプロセスを止めると、結果が書かれない
+- 2 つの結果を **ReportGenerator** で 1 つの報告（HTML・`Summary.txt`・`SummaryGithub.md`）にまとめる。
+  Razor の生成コード（`AspNetCoreGeneratedDocument.*`）は除く。**要約（`Summary.txt`）は画面にも出す**
+- **net10.0 版の `DOTNET_STARTUP_HOOKS`（mTLS のテスト用フック）は、`coverage\launch-core.cmd` の中で設定する。**
+  `dotnet-coverage` 自身に継がれると、`System.Runtime, Version=10.0.0.0` を読めずに落ちる
+
+> **数字は E2E が届く範囲の目安である。** 外部プロバイダ（Google など）の戻りの経路のように、
+> **E2E では動かせない所は、測っても上がらない。** 低い所を見て、テストを足す・足せない理由を書く、の材料にする。
 
 ### ストアを切り替える（#207）
 
@@ -3266,10 +3300,17 @@ Visual Studio（IIS Express）で起動する分には、構成ファイルの�
 OAuth2AuthorizationServerEndpointsRootURI
 OAuth2ClientEndpointsRootURI
 FcmOutboxDirectory
+MailOutboxDirectory
 ```
 
 `FcmOutboxDirectory` は、プッシュ通知の送信箱（テスト用）。サイトは FCM に送らず、ここにファイルを書く。
 テストは `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` で場所を受け取り、認証デバイスの代わりに読む（CIBA の `EX-8`）。
+
+`MailOutboxDirectory` は、メールの送信箱（テスト用。#294）。**`IsDebug` のとき**、サイトはメールを JSON ファイル
+（`destination` / `subject` / `body`）としてここへ書く。テストは `MPAS_CORE_MAIL_OUTBOX` / `MPAS_NETFX_MAIL_OUTBOX` で
+場所を受け取り（`Result/mail/core`・`…/netfx`。起動のたびに空にする）、**メールでしか届かない値**
+（メアドの確認・パスワードのリセットのリンク、2FA のコード）を読む（`MailOutbox`。`RT-294.26`〜`.29`・`.34`）。
+**渡されていなければ、それを使うテストは Skip する**（起動済みのサイトを叩くとき）。
 
 Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization` が `ON` のとき
 **設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。
@@ -3985,6 +4026,40 @@ The ID federation did not complete. (the error view was returned)
 > **測れていないもの。** 外部ログイン（Google など）の戻りの経路（結果を見る・クレームの入れ替え・name が無い場合）は、E2E では動かせない。
 > **同じ利用者を同時に初めて連携したときの直列化**（`Sts.UserCreationLock`）は、上流の新しい利用者を作れないので測っていない
 > （**以前の通しで SA-6.6 が落ちた形**は、これで起きなくなるはずである）。
+
+#### メールを使う流れ・失敗の口・自己テスト（`RT-294.26`〜`.40`。#294）
+
+**カバレッジ（`-Coverage`）で、`AccountController` の通っていない所を見て足した**（`AccountFlowTests`。両版）。
+**修正を押さえるケースではなく、通していなかった経路を通すケースである。**
+
+| | 確かめること | 通していなかった理由 |
+|---|---|---|
+| `RT-294.26` | サインアップ → **確認のメールのリンク**を踏むと、サインインできるようになる（確認の前はできない） | **リンクはメールでしか届かない** |
+| `RT-294.27` | パスワードの失念 → **リセットのメールのリンク**で、新しいパスワードにできる（古いものでは入れない）。正しい code なら画面にメアドが出る | **同上** |
+| `RT-294.28` | **確認待ちの利用者**は、パスワードが合っても違っても、サインインしない（画面にエラー） | **確認待ちの利用者でサインインするテストが無かった**（C-33） |
+| `RT-294.29` | コードの 2FA（Email）で、**メールのコード**を入れると、戻り先へ戻り、`auth_time` が書かれる | **コードはメールでしか届かない**（`RT-294.13` は間違いの経路だけ） |
+| `RT-294.30` | 外部ログインの戻りの口は、**プロバイダのエラー・Cookie 無し**を 500 にせず、サインインもしない | **外部プロバイダは E2E で動かせない**（失敗の口だけは叩ける） |
+| `RT-294.31` | ID 連携の受け口（OIDC の Redirect エンドポイント・SAML2 の ACS）は、**連携を始めていない要求**をエラー画面で断る | **失敗の経路を叩いていなかった** |
+| `RT-294.32` | **使われている利用者名**でサインアップすると、画面にエラーを出し、**作らない**（先の利用者のメアドも変わらない） | **利用者の作成が失敗する経路**（`AddErrors`）を通していなかった |
+| `RT-294.33` | メアドの確認・リセットは、**パラメタが無い・code が違う・確認の入力が合わない**と通さない（パスワードは変わらない） | **`RT-294.6` / `.7` は「利用者が居ない」経路だけ** |
+| `RT-294.34` | パスワードの失念を続けて送っても、**リセットのメールは 1 通だけ**（画面は同じ） | **画面は変えない**ので、**送信箱でしか数えられない**（C-31） |
+| `RT-294.35` | 2FA の途中でなければ、**コードの 2FA の口**（`SendCode` / `VerifyCode` の GET・POST、`TwoFactorPushStatus`。net10.0 版は TOTP・回復コードの POST も）を通さない | **`RT-294.10` は TOTP・回復コードの GET だけ** |
+| `RT-294.36` | 2FA のコードのメールが**送れなければ**、手段の選択の画面を出し直し、文言を出す | **送信の失敗の経路**（#214 の catch）を通していなかった |
+| `RT-294.37` | パスワードを続けて間違えると、**ロックアウトの画面**になり、正しいパスワードでも入れない（**確認済み・確認待ちとも**） | **`RT-294.11` は TOTP だけ**。確認待ちの経路（C-33）は数えていなかった |
+| `RT-294.38` | 自己テストの結果画面のボタン（UserInfo・リフレッシュ・照会・取り消し）が動き、**取り消したトークンは照会で無効** | **自己テストは結果画面までしか通していなかった** |
+| `RT-294.39` | 自己テストの受け口（認可コード・Implicit）は、**検証できない JARM をエラー画面で断る**（500 にしない） | **Implicit の受け口は 1 度も叩いていなかった**。**叩いたら 500 だった**（B-10。直した） |
+| `RT-294.40` | プッシュの 2FA（MobileApp）で、**端末が `/2fa_result` で承認すると、待っているブラウザのサインインが完了する** | **`RT-213.1` は `/2fa_result` の失敗の口だけ** |
+
+> **`RT-294.26`〜`.29` と `.34` は、メールの送信箱（4 節の `MailOutboxDirectory`）を使う。** `-Launch` でなければ Skip する。
+> **`RT-294.40` は、プッシュ通知の送信箱（`FcmOutboxDirectory`）を使い、テストが端末の役をする**（宛先のデバイス・トークンで探す）。
+>
+> **`RT-294.37` の上限は、`-Launch` では 20 回である**（`MaxFailedAccessAttemptsBeforeLockout`。共用の利用者でわざと間違えるケースがあるため）。
+> **確認待ちの利用者は、上限に達した次の要求でロックアウトの画面になる**（確認済みは、達した要求で）。
+> **テストは上限を環境変数・構成ファイルから読み、上限 ＋ 1 回まで送る。**
+> 最初は 20 回で打ち切っていて、確認待ちだけ「ロックアウトしない」ように見えた（**作りの不具合ではなかった**）。
+>
+> **`RT-294.30` の出口は、版で違う。** net10.0 版はサインイン画面へリダイレクトし、
+> net48 版は失敗の画面（`ExternalLoginFailure`）を出す。**どちらも「500 にせず、サインインしない」ので、両方を受け入れる。**
 
 #### 認可は、付与の前後で測る（`RT-257.9`）
 
