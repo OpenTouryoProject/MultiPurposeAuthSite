@@ -14,7 +14,10 @@ rem   **DB は起動しない。** 3 つの DB には profiles が付いてい�
 rem   up -d では IdP のコンテナ（上流・上流 2・下流）だけが起動する。
 rem   **DB を 3 つ同時に起動すると、VM がメモリを使い切って固まることがある**ため
 rem   （docker-compose.yml の「メモリの節約」）。
-docker compose up -d
+rem
+rem   **--build を付ける**（#294）。付けないと、イメージが在る限り作り直さず、
+rem   **上で publish した成果物がコンテナに入らない**（古いアプリのまま動き続ける）。
+docker compose up -d --build
 if errorlevel 1 goto :error
 
 echo.

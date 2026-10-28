@@ -73,7 +73,7 @@ $env:MPAS_CONNSTR_SQL = '...'
 
 ```powershell
 cd store
-.\1_DockerComposeUp.bat      # DDL を流し込んでから、IdP のコンテナだけを起動する
+.\1_DockerComposeUp.bat      # DDL を流し込み、publish してから、IdP のコンテナだけを作り直して起動する（--build）
 .\2_DockerComposeDown.bat    # -v 付き。作り直せるように残さない
 ```
 
@@ -368,7 +368,7 @@ probe_auth_time                                 max_age の判定
 
 ```powershell
 cd store
-.\1_DockerComposeUp.bat    # DB 3 つ ＋ 上流 ＋ 下流をまとめて起動する
+.\1_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流を、作り直して起動する（DB は起動しない）
 ```
 
 **上流だけ・下流だけを建て直すなら、サービスを名指す。**
