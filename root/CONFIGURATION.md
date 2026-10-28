@@ -834,7 +834,7 @@ CREATE TABLE [DPoPProof](
 |---|---|
 | **Cookie の名前** | **`op_session`**（**接頭辞が掛かる**。#255 の `CookieNamePrefix`） |
 | **中身** | **guid。** **`sid` そのものではない** — **台帳を引くための鍵**である |
-| **作る / 消す** | **サインインで作り、サインアウトで消す**（`/Account/LogOff` / `/end_session` / 再認証） |
+| **作る / 消す** | **サインインで作り、サインアウトで消す**（`/Account/Logout` / `/end_session` / 再認証） |
 | **属性** | **`HttpOnly` ＋ `Secure`。** **期限を付けない**（セッション Cookie。**ブラウザを閉じれば終わる**） |
 | **無いとき** | **認可の口で作る** — **「次回から自動的にサインイン」で認証 Cookie だけが残っている**ことが在り、**そのときもセッションとして扱う**（**新しい `sid` になる**） |
 
@@ -906,7 +906,7 @@ ALTER TABLE [SessionClient] WITH CHECK ADD CONSTRAINT [FK.SessionClient.Users_Us
 | **何を送るか** | **`logout_token`**（署名付きの JWT）を、**`logout_token=…` の 1 項目**として POST する |
 | **どこへ** | **`backchannel_logout_uri` の登録が在る相手だけ**（**無ければ伝えない**） |
 | **誰に** | **そのセッションでトークンを発行した相手**（`SessionClient` の行。#310 の段階 1） |
-| **いつ** | **サインアウトの 5 か所**（`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン） |
+| **いつ** | **サインアウトの 5 か所**（`/Account/Logout` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン） |
 | **広告** | **`backchannel_logout_supported`** ＋ **`backchannel_logout_session_supported`**（どちらも true。**`sid` を必ず入れる**ため） |
 
 > **Front-Channel Logout も広告している**（段階 3。下の節）。
@@ -1003,7 +1003,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN BackChannelLogoutUri varchar(512) NULL;
 | 呼び出し元 | 画面の後に進む先 |
 |---|---|
 | `/end_session` | **登録された `post_logout_redirect_uri`**（`state` 付き。無ければ Home） |
-| `/Account/LogOff` | Home |
+| `/Account/Logout` | Home |
 | `prompt=login` / `max_age` の再認証・別のアカウントでログイン | **同じ認可要求の URL**（**そのまま続ける**） |
 
 > **登録が在る RP が 1 つも無ければ、画面は出ない。**

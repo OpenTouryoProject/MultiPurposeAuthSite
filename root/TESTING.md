@@ -1382,7 +1382,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 |---|---|
 | **`RT-310.7`** | **Discovery が `frontchannel_logout_supported` と `frontchannel_logout_session_supported` を広告する**。**`check_session_iframe` は出ていない**（Session Management は見送り） |
 | **`RT-310.8`** | **`/end_session` が `iframe` の画面を返す**（**302 ではなく 200**）。**URL に `iss` と `sid` が付く**。**その URL を叩くと RP に届く**。**登録が無い RP の `iframe` は無い**。**画面の後は、登録された戻り先へ `state` 付きで進む** |
-| **`RT-310.9`** | **`/Account/LogOff` でも画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**（**302 のまま**） |
+| **`RT-310.9`** | **`/Account/Logout` でも画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**（**302 のまま**） |
 
 ###### E2E はブラウザの代わりをする
 

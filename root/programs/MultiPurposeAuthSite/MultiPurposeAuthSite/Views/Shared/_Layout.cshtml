@@ -100,7 +100,7 @@
 @if (User.Identity.IsAuthenticated)
 {
             @* サインアウトボタンは、ユーザーが認証されている時だけ表示する *@
-            <button type="button" class="btn btn-primary float-right" onclick="window.location.href = '@Url.Action("Logoff", "Account")';">Sign-out</button>
+            <button type="button" class="btn btn-primary float-right" onclick="window.location.href = '@Url.Action("Logout", "Account")';">Sign-out</button>
 }
 else
 {

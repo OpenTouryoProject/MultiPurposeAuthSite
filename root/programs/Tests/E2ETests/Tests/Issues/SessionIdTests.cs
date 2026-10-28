@@ -245,13 +245,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 Assert.False(string.IsNullOrEmpty(sidBefore),
                     "前提: id_token に sid が在ること（" + before.ToString() + "）");
 
-                r.Step("(2) サインアウトする（/Account/LogOff）");
+                r.Step("(2) サインアウトする（/Account/Logout）");
 
-                HttpResponseMessage logOff = await client.GetAsync("/Account/LogOff");
+                HttpResponseMessage logout = await client.GetAsync("/Account/Logout");
 
                 r.Verify("サインアウトできた（リダイレクトで返る）",
-                    (int)logOff.StatusCode == 302,
-                    "302", ((int)logOff.StatusCode).ToString());
+                    (int)logout.StatusCode == 302,
+                    "302", ((int)logout.StatusCode).ToString());
 
                 r.Step("(3) 入り直して、同じ RP に id_token を取る");
 

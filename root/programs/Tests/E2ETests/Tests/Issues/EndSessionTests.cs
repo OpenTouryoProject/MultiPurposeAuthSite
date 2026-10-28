@@ -450,7 +450,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) 先に自サイトからサインアウトする");
 
-                await client.GetAsync("/Account/LogOff");
+                await client.GetAsync("/Account/Logout");
 
                 r.Verify("サインアウトできた", !await client.IsSessionAliveAsync(),
                     "セッション無し", "セッション無し");

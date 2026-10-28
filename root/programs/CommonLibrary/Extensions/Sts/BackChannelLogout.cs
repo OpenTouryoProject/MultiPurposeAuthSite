@@ -66,7 +66,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// |---|---|
     /// | **何を送るか** | **`logout_token`**（`CmnLogoutToken`）を、**`application/x-www-form-urlencoded` の本文**で POST する |
     /// | **どこへ** | **`backchannel_logout_uri` の登録が在る相手だけ**（**無ければ伝えない**） |
-    /// | **いつ** | **サインアウトの経路**（`/Account/LogOff` / `/end_session` / 再認証 / 別アカウントでログイン） |
+    /// | **いつ** | **サインアウトの経路**（`/Account/Logout` / `/end_session` / 再認証 / 別アカウントでログイン） |
     /// | **待つか** | **待たない**（下の「要求の経路では待たない」） |
     ///
     /// **要求の経路では待たない。**

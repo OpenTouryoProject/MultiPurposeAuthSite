@@ -60,7 +60,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// |---|---|
     /// | **`RT-310.7`** | **Discovery が `frontchannel_logout_supported` と `frontchannel_logout_session_supported` を広告する**（**`check_session_iframe` は出さない** — Session Management は見送り） |
     /// | **`RT-310.8`** | **`/end_session` が `iframe` の画面を返す**。**`iss` と `sid` が付く**。**その URL を叩くと RP に届く**。**登録が無い RP の `iframe` は無い**。**画面の後は、登録された戻り先へ進む** |
-    /// | **`RT-310.9`** | **`/Account/LogOff` でも画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**（**応答が変わらない**） |
+    /// | **`RT-310.9`** | **`/Account/Logout` でも画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**（**応答が変わらない**） |
     ///
     /// **E2E のクライアントは `iframe` を開かない**ので、
     /// **画面から URL を取り出して、自分で叩く**（**ブラウザの代わりをする**）。
@@ -302,17 +302,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region RT-310.9
 
-        /// <summary>RT-310.9 LogOff でも画面が出る（登録が無ければ出ない）</summary>
+        /// <summary>RT-310.9 Logout でも画面が出る（登録が無ければ出ない）</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT31009_LogOffでも画面が出る(string targetKey)
+        public async Task RT31009_Logoutでも画面が出る(string targetKey)
         {
             using (IdPClient client = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-310.9",
-                    "**`/Account/LogOff`（OP 主導のサインアウト）でも `iframe` の画面が出る**。"
+                    "**`/Account/Logout`（OP 主導のサインアウト）でも `iframe` の画面が出る**。"
                     + "**登録が在る RP が 1 つも無ければ、画面は出ない**",
                     "**伝えるのは「OP のセッションが終わるとき」である。**"
                     + "**RP から言われたときだけ伝えるのでは、足りない。**"
@@ -327,7 +327,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistration silent = Flows.Registration(
                     client, KnownClients.TestClient);
 
-                r.Target("GET /Account/LogOff");
+                r.Target("GET /Account/Logout");
 
                 r.Step("(1) 登録が無い RP だけのセッションでは、画面が出ない");
 
@@ -340,7 +340,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     !string.IsNullOrEmpty(otherIdToken),
                     "出た", string.IsNullOrEmpty(otherIdToken) ? "**出ない**" : "出た");
 
-                HttpResponseMessage plain = await client.GetAsync("/Account/LogOff");
+                HttpResponseMessage plain = await client.GetAsync("/Account/Logout");
 
                 r.VerifyEqual("従来どおりリダイレクトで返る（HTTP 302）",
                     "302", ((int)plain.StatusCode).ToString());
@@ -357,7 +357,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("前提: id_token に sid が在る", !string.IsNullOrEmpty(sid),
                     "sid 有り", string.IsNullOrEmpty(sid) ? "**無い**" : "有り");
 
-                HttpResponseMessage res = await client.GetAsync("/Account/LogOff");
+                HttpResponseMessage res = await client.GetAsync("/Account/Logout");
 
                 r.VerifyEqual("画面が返る（HTTP 200）",
                     "200", ((int)res.StatusCode).ToString());
@@ -389,7 +389,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "サインインが要る画面が開けない", "サインインが要る画面が開けない");
 
                 r.Note("**同じ口を、サインアウトの 5 か所から呼んでいる**"
-                    + "（`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / "
+                    + "（`/Account/Logout` / `/end_session` / `prompt=login` の再認証 / "
                     + "`max_age` の再認証 / 別のアカウントでログイン）。"
                     + "**再認証の経路では、画面の後に同じ認可要求へ戻る**（測っていない）。");
 

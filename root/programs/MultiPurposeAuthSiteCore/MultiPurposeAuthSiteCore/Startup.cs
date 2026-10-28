@@ -901,7 +901,7 @@ namespace MultiPurposeAuthSite
                     // **接頭辞を直書きしない。** PathBase は実行時に前置される
                     //   （IIS Express の仮想アプリでは /MultiPurposeAuthSite が付く）。
                     options.LoginPath = "/Account/Login";
-                    options.LogoutPath = "/Account/LogOff";
+                    options.LogoutPath = "/Account/Logout";
                     options.ReturnUrlParameter = CookieAuthenticationDefaults.ReturnUrlParameter;
 
                     // **net48 と同じ設定キーで揃える**（App_Start/StartupAuth.cs）。

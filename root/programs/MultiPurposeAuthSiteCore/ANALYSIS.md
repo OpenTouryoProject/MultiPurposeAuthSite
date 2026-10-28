@@ -256,7 +256,7 @@ services.AddTransient<ISmsSender, SmsSender>();
 services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";    // 接頭辞を直書きしない（PathBase が前置される）
-    options.LogoutPath = "/Account/LogOff";
+    options.LogoutPath = "/Account/Logout";
     options.ExpireTimeSpan = Config.AuthCookieExpiresFromHours;
     options.SlidingExpiration = Config.AuthCookieSlidingExpiration;
     options.Cookie.HttpOnly = true;

@@ -177,7 +177,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// | **Front-Channel** | **URL を作って返すだけ。** **開くのはブラウザ**（`iframe`） |
         ///
         /// **呼ばれるのはサインアウトの 5 か所**
-        /// （`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。
+        /// （`/Account/Logout` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。
         /// **どれも「OpSessionが終わる」場面**なので、**同じ扱いでよい。**
         /// </remarks>
         private List<string> ClearOpSession()
@@ -259,7 +259,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// | 呼び出し元 | 場面 | 進む先 |
         /// |---|---|---|
         /// | `EndSession`（`/end_session`） | RP-Initiated Logout | **`post_logout_redirect_uri`**（登録と一致したもの。無ければ Home） |
-        /// | `LogOff`（`/Account/LogOff`） | OP の画面でのサインアウト | Home |
+        /// | `Logout`（`/Account/Logout`） | OP の画面でのサインアウト | Home |
         /// | `OAuth2Authorize` | 認可の途中のサインアウト（`max_age` 超過・`prompt=login`・別アカウント） | **同じ認可要求の URL**（サインインし直して、**認可を続ける**） |
         ///
         /// **外から渡された URL は、ここへ来ない（オープン リダイレクタにしない）。**
@@ -413,7 +413,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // **SignInManager でサインアウトする。**
                         // `HttpContext.SignOutAsync()` では、Cookie（Identity.Application）が消えず、
-                        // 次の要求でも認証済みのままだった（実測）。既存の LogOff も SignInManager を使っている。
+                        // 次の要求でも認証済みのままだった（実測）。既存の Logout も SignInManager を使っている。
                         await this.SignInManager.SignOutAsync();
 
                         // **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。
@@ -736,7 +736,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // **SignInManager でサインアウトする。**
                     // `HttpContext.SignOutAsync()` では、Cookie（Identity.Application）が消えず、
-                    // 次の要求でも認証済みのままだった（実測）。既存の LogOff も SignInManager を使っている。
+                    // 次の要求でも認証済みのままだった（実測）。既存の Logout も SignInManager を使っている。
                     await this.SignInManager.SignOutAsync();
 
                     //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。

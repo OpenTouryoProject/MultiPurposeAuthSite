@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/28  玄人 幸道         LogOff を Logout に改名した（Login と対にする。#294）
 //**********************************************************************************
 
 /*
@@ -431,12 +432,12 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// サインアウト
-        /// Get: /Account/LogOff
+        /// Get: /Account/Logout
         /// </summary>
         /// <returns>ActionResult(RedirectToAction)</returns>
         [HttpGet]
         [AllowAnonymous] // 空振りできるように。
-        public async Task<ActionResult> LogOff()
+        public async Task<ActionResult> Logout()
         {
             List<string> iframeUrls = new List<string>();
 
