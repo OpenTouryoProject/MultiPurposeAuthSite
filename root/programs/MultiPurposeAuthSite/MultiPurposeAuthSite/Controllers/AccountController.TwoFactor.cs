@@ -16,12 +16,14 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/28  玄人 幸道         ブラウザ記憶の既定を外し、アカウント記憶は RememberMe で決める、2FA のサインインをログに残す（#294）
 //**********************************************************************************
 
 /*
 2 要素認証（コードの送信と検証）を担うAccountControllerの一部
 */
 
+using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Log;
@@ -142,12 +144,14 @@ namespace MultiPurposeAuthSite.Controllers
                     // 成功
 
                     // 2FA画面でコードの検証用のViewへ
+                    //   **ブラウザ記憶は、既定で入れない**（#294。利用者が画面で選ぶ）。
+                    //   以前は常に true を渡していたので、既定のままだと、そのブラウザでは次から 2FA を飛ばしていた。
                     return RedirectToAction("VerifyCode", new
                     {
                         Provider = model.SelectedProvider,  // 2FAプロバイダ
                         ReturnUrl = model.ReturnUrl,        // 戻り先のURL
                         RememberMe = model.RememberMe,      // アカウント記憶
-                        RememberBrowser = true              // ブラウザ記憶(2FA)
+                        RememberBrowser = false             // ブラウザ記憶(2FA)
                     });
                 }
                 else
@@ -238,10 +242,13 @@ namespace MultiPurposeAuthSite.Controllers
                 // 次のコードは、2FAコードに対するブルートフォース攻撃から保護します。
                 // 指定時間の間にコード入力の誤りが指定の回数に達すると、アカウントは、指定時間の間ロックアウトされる。
                 // IdentityConfig.cs(ApplicationUserManager.Create)でアカウントロックアウトの設定を行うことができる。
+                //   **ログに残すため、サインインの前に 2FA の途中の利用者を引いておく**（#294。後では User から引けない）。
+                string userId = await SignInManager.GetVerifiedUserIdAsync();
+
                 SignInStatus result = await SignInManager.TwoFactorSignInAsync(
                     provider: model.Provider,                                  // 2FAプロバイダ
                     code: model.Code,                                          // 2FAコ－ド
-                    isPersistent: model.RememberBrowser, // model.RememberMe,  // アカウント記憶 ( ・・・仕様として解り難いので、RememberBrowserを使用 )
+                    isPersistent: model.RememberMe,                            // アカウント記憶（#294。以前は RememberBrowser を使っていた）
                     rememberBrowser: model.RememberBrowser                     // ブラウザ記憶(2FA)
                     );
 
@@ -254,9 +261,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // セッションの初期化
                         this.InitSessionAfterlogin();
 
-                        //// オペレーション・トレース・ログ出力 できない（User.Identity.GetUserId() == null
-                        //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                        //Logging.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
+                        // オペレーション・トレース・ログ出力
+                        await this.LogTwoFactorSignInAsync(userId);
 
                         return RedirectToLocal(model.ReturnUrl);
 
@@ -287,6 +293,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// GET: /Account/TwoFactorPushStatus
         /// </summary>
         /// <param name="returnUrl">戻り先のURL</param>
+        /// <param name="rememberMe">アカウント記憶</param>
         /// <param name="rememberBrowser">ブラウザ記憶(2FA)</param>
         /// <returns>
         /// 承認済みなら { "approved": true, "redirectUrl": "..." }、まだなら { "approved": false }
@@ -302,7 +309,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         [HttpGet]
         [AllowAnonymous]
-        public async Task<ActionResult> TwoFactorPushStatus(string returnUrl, bool rememberBrowser)
+        public async Task<ActionResult> TwoFactorPushStatus(string returnUrl, bool rememberMe, bool rememberBrowser)
         {
             // 2FA のセッション（Cookie）から利用者を取る
             string userId = await SignInManager.GetVerifiedUserIdAsync();
@@ -327,7 +334,7 @@ namespace MultiPurposeAuthSite.Controllers
             SignInStatus result = await SignInManager.TwoFactorSignInAsync(
                 provider: MobileAppTokenProvider.ProviderName,   // 2FAプロバイダ
                 code: code,                                     // 2FAコ－ド
-                isPersistent: rememberBrowser,                  // アカウント記憶
+                isPersistent: rememberMe,                       // アカウント記憶（#294。以前は rememberBrowser を使っていた）
                 rememberBrowser: rememberBrowser                // ブラウザ記憶(2FA)
                 );
 
@@ -335,6 +342,9 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // セッションの初期化
                 this.InitSessionAfterlogin();
+
+                // オペレーション・トレース・ログ出力
+                await this.LogTwoFactorSignInAsync(userId);
 
                 return Json(new
                 {
@@ -351,6 +361,17 @@ namespace MultiPurposeAuthSite.Controllers
             return Json(new { approved = false }, JsonRequestBehavior.AllowGet);
         }
 
-        #endregion      
+        /// <summary>2FA でサインインしたことをログに残す（#294）</summary>
+        /// <param name="userId">サインインの前に引いた、2FA の途中の利用者の id</param>
+        /// <returns>Task</returns>
+        private async Task LogTwoFactorSignInAsync(string userId)
+        {
+            ApplicationUser user = string.IsNullOrEmpty(userId) ? null : await UserManager.FindByIdAsync(userId);
+
+            if (user != null)
+                Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with 2FA.", user.Id, user.UserName));
+        }
+
+        #endregion
     }
 }
