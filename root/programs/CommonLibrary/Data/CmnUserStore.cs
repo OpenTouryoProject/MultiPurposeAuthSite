@@ -39,6 +39,7 @@
 //*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
 //*  2026/10/20  玄人 幸道         Users から ClientID 列を落とした（#307 の段階 5-a-1）
 //*  2026/10/21  玄人 幸道         利用者の削除で、セッション × クライアントの台帳も消す（#310 の段階 1）
+//*  2026/10/28  玄人 幸道         mem ストアで TOTP のトークンの更新が DB の枝へ落ちていた（回復コードで 500。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2881,6 +2882,9 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
                         // なにもしない（更新済みのため
+                        //   **break が無く、下の DB の枝へ落ちていた**
+                        //   （#294。mem ストアで回復コードを使うと 500 になった）。
+                        break;
 
                     case EnumUserStoreType.SqlServer:
                     case EnumUserStoreType.ODPManagedDriver:

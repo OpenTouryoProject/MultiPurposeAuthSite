@@ -18,6 +18,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
     //*  2026/09/16  玄人 幸道         プッシュ承認の待ち受けを追加（#213）
+    //*  2026/10/28  玄人 幸道         ReturnUrl を JavaScript の文字列として符号化する、rememberMe を渡す（#294）
     //**********************************************************************************
 *@
 
@@ -76,12 +77,20 @@
             (function () {
                 // 承認されたか、認証サイトに定期的に尋ねる。
                 // **待っているのはブラウザ**で、認証デバイスは /2fa_result に承認を送るだけ。
-                var url = '@Url.Action("TwoFactorPushStatus", "Account")'
-                    + '?returnUrl=' + encodeURIComponent('@Html.Raw(Model.ReturnUrl)')
-                    + '&rememberBrowser=' + (document.getElementById('RememberBrowser') || {}).checked;
+                //   **値は JavaScript の文字列として符号化して埋め込む**（#294）。
+                //   **チェックボックスは、尋ねるたびに読む**（読み込んだ時点の値に固定しない）。
+                var returnUrl = @Json.Serialize(Model.ReturnUrl ?? "");
+                var rememberMe = '@(Model.RememberMe ? "true" : "false")';
+
+                function statusUrl() {
+                    return '@Url.Action("TwoFactorPushStatus", "Account")'
+                        + '?returnUrl=' + encodeURIComponent(returnUrl)
+                        + '&rememberMe=' + rememberMe
+                        + '&rememberBrowser=' + !!(document.getElementById('RememberBrowser') || {}).checked;
+                }
 
                 var timer = setInterval(function () {
-                    fetch(url, { credentials: 'same-origin' })
+                    fetch(statusUrl(), { credentials: 'same-origin' })
                         .then(function (res) { return res.ok ? res.json() : null; })
                         .then(function (data) {
                             if (data && data.approved && data.redirectUrl) {

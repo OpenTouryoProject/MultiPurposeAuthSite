@@ -16,6 +16,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
+//*  2026/10/28  玄人 幸道         TOTP・回復コードでセッションを初期化、コードの誤りの文言、ロックアウトの画面、
+//*                                戻り先の保持、選択肢の照合、ブラウザ記憶の既定を直した（#294）
 //**********************************************************************************
 
 /*
@@ -45,11 +47,17 @@ namespace MultiPurposeAuthSite.Controllers
     {
         #region Email, SMS, MobileApp
 
-        #region 
-        /// <summary>プッシュ通知</summary>
-        private string _2FA_Email = "Email";
-        private string _2FA_SMS = "Phone";
-        private string _2FA_MobileApp = "MobileApp";
+        #region 送る手段の名前
+
+        /// <summary>Email（トークンの生成と検証も、この名前に固定する）</summary>
+        private const string _2FA_Email = "Email";
+
+        /// <summary>SMS</summary>
+        private const string _2FA_SMS = "Phone";
+
+        /// <summary>認証デバイスへのプッシュ通知</summary>
+        private const string _2FA_MobileApp = "MobileApp";
+
         #endregion
 
         #region 2FA画面のコード送信
@@ -110,8 +118,8 @@ namespace MultiPurposeAuthSite.Controllers
             if (user.DeviceToken != null)
             {
                 factorOptions.Add(new SelectListItem {
-                    Text = this._2FA_MobileApp,
-                    Value = this._2FA_MobileApp });
+                    Text = _2FA_MobileApp,
+                    Value = _2FA_MobileApp });
             }
             // , etc.
             #endregion
@@ -130,7 +138,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <param name="model">SendCodeViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
-        // 
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
@@ -150,6 +157,28 @@ namespace MultiPurposeAuthSite.Controllers
                     return View("Error");
                 }
 
+                //  **画面に出した選択肢の中から選ばれたか**（#294）。
+                //    以前は確かめず、知らない値は「TOTP」として扱っていた
+                //    （認証アプリを登録していない利用者も、TOTP の画面へ送られた）。
+                AccountSendCodeViewModel offered = await this.CreateSendCodeViewModelAsync(
+                    user, model.ReturnUrl, model.RememberMe);
+
+                if (!offered.Providers.Any(p => p.Value == model.SelectedProvider))
+                {
+                    ModelState.AddModelError("", Resources.AccountController.SendCodeError);
+                    return View(offered);
+                }
+
+                //  **TOTP（認証アプリ）はコードを送らない**ので、そのまま入力画面へ。
+                if (model.SelectedProvider == UserManager.Options.Tokens.AuthenticatorTokenProvider)
+                {
+                    return RedirectToAction("LoginWithTwoFactorAuthenticator", new
+                    {
+                        ReturnUrl = model.ReturnUrl,        // 戻り先のURL
+                        RememberMe = model.RememberMe,      // アカウント記憶
+                    });
+                }
+
                 // **送信の失敗を、処理されない例外にしない**（#214）。
                 //   ネットワーク障害、資格情報の期限切れ、宛先の拒否などで失敗する。
                 //   **処理されない例外にすると、原因の分からないエラー画面になる。**
@@ -159,21 +188,21 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // Generate the token and send it. トークンを生成して送信します。
                     // SelectedProviderではなく、Emailに固定（MobileAppだとエラーになる。
-                    code = await UserManager.GenerateTwoFactorTokenAsync(user, this._2FA_Email); //model.SelectedProvider);
+                    code = await UserManager.GenerateTwoFactorTokenAsync(user, _2FA_Email); //model.SelectedProvider);
 
                     // Identity2.0 では、GenerateTwoFactorTokenAsyncの中で
                     // 自動送信されていたが3.0では手動送信に変更された模様。
-                    if (model.SelectedProvider == this._2FA_Email)
+                    if (model.SelectedProvider == _2FA_Email)
                     {
                         // Email
                         await EmailSender.SendAsync(user.Email, "Two factor authentication code", code);
                     }
-                    else if (model.SelectedProvider == this._2FA_SMS)
+                    else if (model.SelectedProvider == _2FA_SMS)
                     {
                         // SMS
                         await SmsSender.SendAsync(user.PhoneNumber, code);
                     }
-                    else if (model.SelectedProvider == this._2FA_MobileApp)
+                    else if (model.SelectedProvider == _2FA_MobileApp)
                     {
                         // MobileApp
                         await FcmService.GetInstance().SendAsync(
@@ -182,11 +211,6 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 { "code", code}
                             });
-                    }
-                    else
-                    {
-                        // TOTP authenticator
-                        code = "";
                     }
                 }
                 catch (Exception ex)
@@ -202,27 +226,17 @@ namespace MultiPurposeAuthSite.Controllers
                         user, model.ReturnUrl, model.RememberMe));
                 }
 
-                if (!string.IsNullOrEmpty(code))
+                // Email, SMS, MobileApp
+                // 2FA画面でコードの検証用のViewへ
+                //   **ブラウザ記憶は、既定で入れない**（#294。利用者が画面で選ぶ）。
+                //   以前は常に true を渡していたので、既定のままだと、そのブラウザでは次から 2FA を飛ばしていた。
+                return RedirectToAction("VerifyCode", new
                 {
-                    // Email or SMS
-                    // 2FA画面でコードの検証用のViewへ
-                    return RedirectToAction("VerifyCode", new
-                    {
-                        Provider = model.SelectedProvider,  // 2FAプロバイダ
-                        ReturnUrl = model.ReturnUrl,        // 戻り先のURL
-                        RememberMe = model.RememberMe,      // アカウント記憶
-                        RememberBrowser = true              // ブラウザ記憶(2FA)
-                    });
-                }
-                else
-                {
-                    // TOTP authenticator
-                    return RedirectToAction("LoginWithTwoFactorAuthenticator", new
-                    {
-                        ReturnUrl = model.ReturnUrl,        // 戻り先のURL
-                        RememberMe = model.RememberMe,      // アカウント記憶
-                    });
-                }
+                    Provider = model.SelectedProvider,  // 2FAプロバイダ
+                    ReturnUrl = model.ReturnUrl,        // 戻り先のURL
+                    RememberMe = model.RememberMe,      // アカウント記憶
+                    RememberBrowser = false             // ブラウザ記憶(2FA)
+                });
             }
             else
             {
@@ -305,10 +319,13 @@ namespace MultiPurposeAuthSite.Controllers
                 // 次のコードは、2FAコードに対するブルートフォース攻撃から保護します。
                 // 指定時間の間にコード入力の誤りが指定の回数に達すると、アカウントは、指定時間の間ロックアウトされる。
                 // IdentityConfig.cs(ApplicationUserManager.Create)でアカウントロックアウトの設定を行うことができる。
+                //   **ログに残すため、サインインの前に 2FA の途中の利用者を引いておく**（#294。後では User から引けない）。
+                ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
                 AspNetId.SignInResult result = await SignInManager.TwoFactorSignInAsync(
-                        provider: this._2FA_Email, // model.Provider,              // 2FAプロバイダ (固定
+                        provider: _2FA_Email, // model.Provider,                   // 2FAプロバイダ (固定
                         code: model.Code,                                          // 2FAコ－ド
-                        isPersistent: model.RememberBrowser, // model.RememberMe,  // アカウント記憶 ( ・・・仕様として解り難いので、RememberBrowserを使用 )
+                        isPersistent: model.RememberMe,                            // アカウント記憶（#294。以前は RememberBrowser を使っていた）
                         rememberClient: model.RememberBrowser                      // ブラウザ記憶 (2FA)
                     );
 
@@ -320,9 +337,9 @@ namespace MultiPurposeAuthSite.Controllers
                     // セッションの初期化
                     this.InitSessionAfterlogin();
 
-                    //// オペレーション・トレース・ログ出力 できない（User.Identity.GetUserId() == null
-                    //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    //Logging.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
+                    // オペレーション・トレース・ログ出力
+                    if (user != null)
+                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with 2FA.", user.Id, user.UserName));
 
                     return RedirectToLocal(model.ReturnUrl);
                 }
@@ -331,10 +348,10 @@ namespace MultiPurposeAuthSite.Controllers
                     // ロックアウト
                     return View("Lockout");
                 }
-                else if (result.IsNotAllowed)
+                else
                 {
-                    // サインイン失敗
-                    // その他 "無効なコード。"
+                    // サインイン失敗 or その他 "無効なコード。"
+                    //   **コードの誤りは Failed で返る**（#294。以前は IsNotAllowed だけを見ていたので、文言が出なかった）。
                     ModelState.AddModelError("", Resources.AccountController.InvalidCode);
                 }
             }
@@ -351,6 +368,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// 2FAのプッシュ承認の状態を返す（#213）
         /// GET: /Account/TwoFactorPushStatus
         /// </summary>
+        /// <param name="returnUrl">戻り先のURL</param>
+        /// <param name="rememberMe">アカウント記憶</param>
+        /// <param name="rememberBrowser">ブラウザ記憶(2FA)</param>
         /// <returns>
         /// 承認済みなら { "approved": true, "redirectUrl": "..." }、まだなら { "approved": false }
         /// </returns>
@@ -365,7 +385,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         [HttpGet]
         [AllowAnonymous]
-        public async Task<ActionResult> TwoFactorPushStatus(string returnUrl, bool rememberBrowser)
+        public async Task<ActionResult> TwoFactorPushStatus(string returnUrl, bool rememberMe, bool rememberBrowser)
         {
             // 2FA のセッション（Cookie）から利用者を取る
             ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
@@ -388,9 +408,9 @@ namespace MultiPurposeAuthSite.Controllers
             // 承認されたコードでサインインを完了させる。
             // **検証は、画面から入力された場合と同じ経路を通る**（プロバイダも同じく Email 固定）。
             AspNetId.SignInResult result = await SignInManager.TwoFactorSignInAsync(
-                    provider: this._2FA_Email,
+                    provider: _2FA_Email,
                     code: code,
-                    isPersistent: rememberBrowser,
+                    isPersistent: rememberMe,           // アカウント記憶（#294。以前は rememberBrowser を使っていた）
                     rememberClient: rememberBrowser
                 );
 
@@ -398,6 +418,9 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // セッションの初期化
                 this.InitSessionAfterlogin();
+
+                // オペレーション・トレース・ログ出力
+                Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with 2FA.", user.Id, user.UserName));
 
                 return this.Json(new
                 {
@@ -420,6 +443,23 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region TOTP
 
+        /// <summary>TOTP・回復コードでサインインできたときの後始末（#294）</summary>
+        /// <param name="user">2FA の途中の利用者（サインインの前に引いたもの）</param>
+        /// <param name="how">ログに書く手段</param>
+        /// <remarks>
+        /// **パスワード・コードの 2FA・プッシュ承認と同じく、セッションを初期化する。**
+        /// 以前は TOTP の 2 か所だけ呼んでいなかったので、
+        /// **セッション ID が切り替わらず、`auth_time` と OP のセッション（#310 の `sid`）の Cookie も書かれなかった。**
+        /// </remarks>
+        private void AfterTwoFactorAuthenticatorSignIn(ApplicationUser user, string how)
+        {
+            // セッションの初期化
+            this.InitSessionAfterlogin();
+
+            // オペレーション・トレース・ログ出力
+            Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with {2}.", user.Id, user.UserName, how));
+        }
+
         #region With authenticator
 
         /// <summary>LoginWithTwoFactorAuthenticator</summary>
@@ -428,12 +468,17 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult LoginWithTwoFactorAuthenticator(bool rememberMe, string returnUrl = null)
+        public async Task<ActionResult> LoginWithTwoFactorAuthenticator(bool rememberMe, string returnUrl = null)
         {
-            //// Ensure the user has gone through the username & password screen first
-            //var user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+            //  **パスワードを通った後（2FA の途中）でなければ、開かない**（#294。SendCode / VerifyCode と同じ）。
+            ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
 
-            AccountLoginWithTwoFactorAuthenticatorViewModel model 
+            if (user == null)
+            {
+                return View("Error");
+            }
+
+            AccountLoginWithTwoFactorAuthenticatorViewModel model
                 = new AccountLoginWithTwoFactorAuthenticatorViewModel { RememberMe = rememberMe };
 
             ViewData["ReturnUrl"] = returnUrl;
@@ -453,10 +498,19 @@ namespace MultiPurposeAuthSite.Controllers
             AccountLoginWithTwoFactorAuthenticatorViewModel model,
             bool rememberMe, string returnUrl = null)
         {
+            //  **再表示でも戻り先を失わない**（#294。フォームは ViewData["ReturnUrl"] から組み立てる）。
+            ViewData["ReturnUrl"] = returnUrl;
+
             if (ModelState.IsValid)
             {
-                //// Ensure the user has gone through the username & password screen first
-                //var user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+                //  **パスワードを通った後（2FA の途中）でなければ、受けない。**
+                //    **ログに残すため、サインインの前に引いておく**（後では User から引けない）。
+                ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+                if (user == null)
+                {
+                    return View("Error");
+                }
 
                 AspNetId.SignInResult result
                     = await SignInManager.TwoFactorAuthenticatorSignInAsync(
@@ -465,19 +519,19 @@ namespace MultiPurposeAuthSite.Controllers
 
                 if (result.Succeeded)
                 {
-                    //_logger.LogInformation("User with ID {UserId} logged in with 2fa.", user.Id);
+                    this.AfterTwoFactorAuthenticatorSignIn(user, "an authenticator app");
                     return RedirectToLocal(returnUrl);
                 }
                 else if (result.IsLockedOut)
                 {
-                    //_logger.LogWarning("User with ID {UserId} account locked out.", user.Id);
-                    return RedirectToAction("Lockout");
+                    // ロックアウト（#294。Lockout はアクションではなく画面なので、View で返す）
+                    return View("Lockout");
                 }
                 else
                 {
-                    //_logger.LogWarning("Invalid authenticator code entered for user with ID {UserId}.", user.Id);
-                    ModelState.AddModelError(string.Empty, "Invalid authenticator code.");
-                    return View();
+                    // "無効なコード。"
+                    ModelState.AddModelError(string.Empty, Resources.AccountController.InvalidCode);
+                    return View(model);
                 }
             }
             else
@@ -495,10 +549,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult LoginWithTwoFactorAuthenticatorRecoveryCode(string returnUrl = null)
+        public async Task<ActionResult> LoginWithTwoFactorAuthenticatorRecoveryCode(string returnUrl = null)
         {
-            //// Ensure the user has gone through the username & password screen first
-            //var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+            //  **パスワードを通った後（2FA の途中）でなければ、開かない**（#294）。
+            ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+            if (user == null)
+            {
+                return View("Error");
+            }
 
             ViewData["ReturnUrl"] = returnUrl;
             return View();
@@ -514,10 +573,18 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<IActionResult> LoginWithTwoFactorAuthenticatorRecoveryCode(
             AccountLoginWithTwoFactorAuthenticatorRecoveryCodeViewModel model, string returnUrl = null)
         {
+            //  **再表示でも戻り先を失わない**（#294）。
+            ViewData["ReturnUrl"] = returnUrl;
+
             if (ModelState.IsValid)
             {
-                //// Ensure the user has gone through the username & password screen first
-                //var user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+                //  **パスワードを通った後（2FA の途中）でなければ、受けない。**
+                ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+                if (user == null)
+                {
+                    return View("Error");
+                }
 
                 AspNetId.SignInResult result
                     = await SignInManager.TwoFactorRecoveryCodeSignInAsync(
@@ -525,19 +592,19 @@ namespace MultiPurposeAuthSite.Controllers
 
                 if (result.Succeeded)
                 {
-                    //_logger.LogInformation("User with ID {UserId} logged in with a recovery code.", user.Id);
+                    this.AfterTwoFactorAuthenticatorSignIn(user, "a recovery code");
                     return RedirectToLocal(returnUrl);
                 }
-                if (result.IsLockedOut)
+                else if (result.IsLockedOut)
                 {
-                    //_logger.LogWarning("User with ID {UserId} account locked out.", user.Id);
-                    return RedirectToAction("Lockout");
+                    // ロックアウト（#294。Lockout はアクションではなく画面なので、View で返す）
+                    return View("Lockout");
                 }
                 else
                 {
-                    //_logger.LogWarning("Invalid recovery code entered for user with ID {UserId}", user.Id);
-                    ModelState.AddModelError(string.Empty, "Invalid recovery code entered.");
-                    return View();
+                    // "無効なコード。"
+                    ModelState.AddModelError(string.Empty, Resources.AccountController.InvalidCode);
+                    return View(model);
                 }
             }
             else

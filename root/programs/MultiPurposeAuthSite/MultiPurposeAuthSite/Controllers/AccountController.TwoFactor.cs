@@ -17,10 +17,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         ブラウザ記憶の既定を外し、アカウント記憶は RememberMe で決める、2FA のサインインをログに残す（#294）
+//*  2026/10/28  玄人 幸道         SendCode で選択肢を照合する（net10.0 版に揃えた。#294）
 //**********************************************************************************
 
 /*
-2 要素認証（コードの送信と検証）を担うAccountControllerの一部
+2 要素認証（Email・SMS・MobileApp のコードの送信と検証）を担うAccountControllerの一部
+（TOTP の認証アプリ・回復コードは net10.0 版だけ）
 */
 
 using MultiPurposeAuthSite.Entity;
@@ -43,6 +45,8 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の 2 要素認証**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
+        #region Email, SMS, MobileApp
+
         #region 2FA画面のコード送信
 
         /// <summary>
@@ -110,7 +114,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <param name="model">SendCodeViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
-        // 
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
@@ -121,8 +124,27 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // AccountSendCodeViewModelの検証に成功
 
-                // Generate the token and send it
-                // トークンを生成して送信します。
+                // 検証されたアカウントのUIDを取得
+                string userId = await SignInManager.GetVerifiedUserIdAsync();
+
+                if (userId == null)
+                {
+                    // 2FA の途中ではない（GET と同じ扱い。#214）
+                    return View("Error");
+                }
+
+                //  **画面に出した選択肢の中から選ばれたか**（#294）。
+                //    以前は確かめず、そのまま SendTwoFactorCodeAsync に渡していた。
+                AccountSendCodeViewModel offered = await this.CreateSendCodeViewModelAsync(
+                    userId, model.ReturnUrl, model.RememberMe);
+
+                if (!offered.Providers.Any(p => p.Value == model.SelectedProvider))
+                {
+                    ModelState.AddModelError("", Resources.AccountController.SendCodeError);
+                    return View(offered);
+                }
+
+                // Generate the token and send it. トークンを生成して送信します。
                 // **送信の失敗を、処理されない例外にしない**（#214）。
                 //   SendTwoFactorCodeAsync の中でメール / SMS を送るため、
                 //   ネットワーク障害や資格情報の誤りで例外になりうる。
@@ -300,7 +322,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </returns>
         /// <remarks>
         /// **待っているのはブラウザである。**
-        /// 認証デバイスは /2fa_result に承認を送るだけで、サインインは完了できない
+        /// 認証デバイスは `/2fa_result` に承認を送るだけで、サインインは完了できない
         /// （2FA のセッションはブラウザの Cookie にあり、端末からは触れない）。
         /// そこで、コードの入力画面（VerifyCode）からこの口をポーリングし、
         /// 承認されていれば、そのコードでサインインを完了させる。
@@ -371,6 +393,8 @@ namespace MultiPurposeAuthSite.Controllers
             if (user != null)
                 Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with 2FA.", user.Id, user.UserName));
         }
+
+        #endregion
 
         #endregion
     }
