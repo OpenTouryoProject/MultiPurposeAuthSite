@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         LogOff を Logout に改名した（Login と対にする。#294）
+//*  2026/10/28  玄人 幸道         未確認メアドの確認メールはパスワードが合ったときだけ送る、外部ログインに ReturnUrl を渡す（#294）
 //**********************************************************************************
 
 /*
@@ -86,19 +87,20 @@ namespace MultiPurposeAuthSite.Controllers
                 // RawUrlから、UrlデコードしたReturnUrlを取得
                 returnUrl = CustomEncode.UrlDecode(
                     UriOperator.GetParameterFromQueryString("ReturnUrl", Request.RawUrl));
-                //ViewBag.ReturnUrl = returnUrl;
 
                 // ReturnUrlからLoginHintを取得
                 loginHint = CustomEncode.UrlDecode(
                     UriOperator.GetParameterFromQueryString("login_hint", returnUrl));
-                //ViewBag.LoginHint = loginHint;
             }
+
+            // ReturnUrl
+            //   **外部ログインの部分ビュー（_ExternalLoginsListPartial）が戻り先として使う**（#294。net10.0 版と同じ）。
+            ViewBag.ReturnUrl = returnUrl;
 
             // サインイン画面（初期表示）
             // **WebAuthn は net48 版では扱わない**（#137）。
             //   **現行版の WebAuthn ライブラリが netstandard2.0 を支えていない。**
             //   **ビューの欄は残す**（ViewModel を両系統で共有しているため）。
-            string fido2Challenge = "";
             string sequenceNo = "";
 
             // **Email 欄が「利用者名またはメアド」の入力である**（#151）。
@@ -107,7 +109,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 ReturnUrl = returnUrl,
                 Email = loginHint,
-                Fido2Data = fido2Challenge,
+                Fido2Data = "",
                 SequenceNo = sequenceNo
             });
         }
@@ -155,11 +157,11 @@ namespace MultiPurposeAuthSite.Controllers
                             if (await UserManager.IsEmailConfirmedAsync(user.Id))
                             {
                                 // EmailConfirmed == true の場合、
-                                // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
+                                // パスワード入力失敗回数でロックアウトするかは、設定（UserLockoutEnabledByDefault）で決める。
                                 // **入力した値ではなく、引いた利用者の利用者名で署名する**（#151）。
                                 //   **メアドで引いた場合、入力値は利用者名ではない。**
                                 signInStatus = await SignInManager.PasswordSignInAsync(
-                                    userName: user.UserName,                                      // アカウント(UID)
+                                    userName: user.UserName,                            // アカウント(UID)
                                     password: model.Password,                           // アカウント(PWD)
                                     isPersistent: model.RememberMe,                     // アカウント記憶
                                     shouldLockout: Config.UserLockoutEnabledByDefault); // ロックアウト
@@ -169,12 +171,32 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // EmailConfirmed == false の場合、
+                                //   **パスワードが合ったときだけ、メールを送って知らせる**（#294）。
+                                //   合わなければ、利用者が居ないときと同じ応答にする
+                                //   （**未確認のアカウントの有無を、パスワード無しで見分けさせない。メールも送らせない**）。
+                                //   **失敗回数とロックアウトは、PasswordSignInAsync と同じに扱う。**
+                                if (await UserManager.IsLockedOutAsync(user.Id))
+                                {
+                                    return View("Lockout");
+                                }
+                                else if (await UserManager.CheckPasswordAsync(user, model.Password))
+                                {
+                                    // メアド検証用のメールを送信して、
+                                    this.SendConfirmEmail(user);
 
-                                // メアド検証用のメールを送信して、
-                                this.SendConfirmEmail(user);
+                                    // メッセージを設定
+                                    ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
+                                }
+                                else
+                                {
+                                    if (Config.UserLockoutEnabledByDefault)
+                                    {
+                                        await UserManager.AccessFailedAsync(user.Id);
+                                    }
 
-                                // メッセージを設定
-                                ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
+                                    // メッセージを設定
+                                    ModelState.AddModelError("", Resources.AccountController.Login_Error);
+                                }
                             }
                         }
                     }
@@ -240,15 +262,8 @@ namespace MultiPurposeAuthSite.Controllers
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
 
                     // Open-Redirect対策
-                    if (!string.IsNullOrEmpty(model.ReturnUrl)
-                        && Config.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
-                    {
-                        return RedirectToLocal(model.ReturnUrl);
-                    }
-                    else
-                    {
-                        return RedirectToAction("Index", "Home");
-                    }
+                    //   **RedirectToLocal が Url.IsLocalUrl で判定する**（空や外部の URL なら Home へ）。
+                    return RedirectToLocal(model.ReturnUrl);
 
                 case SignInStatus.LockedOut:
                     // ロックアウト
@@ -301,8 +316,10 @@ namespace MultiPurposeAuthSite.Controllers
                 AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
 
                 // オペレーション・トレース・ログ出力
+                //   **Cookie が残ったまま利用者が消されていることがある**（net10.0 版と同じく、居なければ書かない）。
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
+                if (user != null)
+                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
             }
 
             // **ブラウザ経由で伝える**（#310。**伝える先が無ければ、そのまま戻る**）

@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         LogOff を Logout に改名した（Login と対にする。#294）
+//*  2026/10/28  玄人 幸道         未確認メアドの確認メールはパスワードが合ったときだけ送る、WebAuthn のロックアウト判定を直した（#294）
 //**********************************************************************************
 
 /*
@@ -128,26 +129,23 @@ namespace MultiPurposeAuthSite.Controllers
             string loginHint = "";
             cmnPattern = "login_hint=";
 
-            if (!string.IsNullOrEmpty(returnUrl))
+            if (!string.IsNullOrEmpty(returnUrl)
+                && returnUrl.IndexOf(cmnPattern) != -1)
             {
-                if (returnUrl.IndexOf(cmnPattern) != -1)
+                // IndexOf & SubstringでloginHintを抜き出す。
+                loginHint = returnUrl.Substring(returnUrl.IndexOf(cmnPattern) + cmnPattern.Length);
+                if (loginHint.IndexOf('&') != -1)
                 {
-                    // IndexOf & SubstringでloginHintを抜き出す。
-                    loginHint = returnUrl.Substring(returnUrl.IndexOf(cmnPattern) + cmnPattern.Length);
-                    if (loginHint.IndexOf('&') != -1)
-                    {
-                        loginHint = loginHint.Substring(0, loginHint.IndexOf('&'));
-                    }
+                    loginHint = loginHint.Substring(0, loginHint.IndexOf('&'));
                 }
 
-                // ReturnUrl
-                ViewBag.LoginHint = loginHint;
+                // **ReturnUrl の中の値は、もう 1 段エンコードされている**ので戻す（net48 版と同じ）。
+                loginHint = CustomEncode.UrlDecode(loginHint);
             }
 
             #endregion
 
             // サインイン画面（初期表示）
-            string fido2Challenge = "";
             string sequenceNo = "";
 
             // **WebAuthn の往復の手順**（#137）。
@@ -164,7 +162,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 ReturnUrl = returnUrl,
                 Email = loginHint,
-                Fido2Data = fido2Challenge,
+                Fido2Data = "",
                 SequenceNo = sequenceNo
             });
         }
@@ -212,7 +210,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (await UserManager.IsEmailConfirmedAsync(user))
                             {
                                 // EmailConfirmed == true の場合、
-                                // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、lockoutOnFailure: true に変更する
+                                // パスワード入力失敗回数でロックアウトするかは、設定（UserLockoutEnabledByDefault）で決める。
                                 // **入力した値ではなく、引いた利用者の利用者名で署名する**（#151）。
                                 //   **メアドで引いた場合、入力値は利用者名ではない。**
                                 signInStatus = await SignInManager.PasswordSignInAsync(
@@ -226,12 +224,32 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // EmailConfirmed == false の場合、
+                                //   **パスワードが合ったときだけ、メールを送って知らせる**（#294）。
+                                //   合わなければ、利用者が居ないときと同じ応答にする
+                                //   （**未確認のアカウントの有無を、パスワード無しで見分けさせない。メールも送らせない**）。
+                                //   **失敗回数とロックアウトは、PasswordSignInAsync と同じに扱う。**
+                                if (await UserManager.IsLockedOutAsync(user))
+                                {
+                                    return View("Lockout");
+                                }
+                                else if (await UserManager.CheckPasswordAsync(user, model.Password))
+                                {
+                                    // メアド検証用のメールを送信して、
+                                    this.SendConfirmEmail(user);
 
-                                // メアド検証用のメールを送信して、
-                                this.SendConfirmEmail(user);
+                                    // メッセージを設定
+                                    ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
+                                }
+                                else
+                                {
+                                    if (Config.UserLockoutEnabledByDefault)
+                                    {
+                                        await UserManager.AccessFailedAsync(user);
+                                    }
 
-                                // メッセージを設定
-                                ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
+                                    // メッセージを設定
+                                    ModelState.AddModelError("", Resources.AccountController.Login_Error);
+                                }
                             }
                         }
                     }
@@ -322,11 +340,16 @@ namespace MultiPurposeAuthSite.Controllers
                             HttpContext.Session.Remove(Const.WebAuthnSessionAssertionOptions);
 
                             Fido2User fido2User = FIDO.DataProvider.GetUserByCredential(clientResponse.RawId);
-                            ApplicationUser user = await UserManager.FindByNameAsync(fido2User.Name);
+                            ApplicationUser user = fido2User == null ? null : await UserManager.FindByNameAsync(fido2User.Name);
 
+                            if (user == null)
+                            {
+                                // 資格情報の持ち主が居ない（削除済みなど）
+                                signInStatus = AspNetId.SignInResult.Failed;
+                            }
                             // ロックアウト
-                            if (user.LockoutEndDateUtc != null
-                                && DateTime.Now <= user.LockoutEndDateUtc)
+                            //   **判定は UserManager に任せる**（#294。LockoutEndDateUtc は UTC なので、DateTime.Now と比べない）。
+                            else if (await UserManager.IsLockedOutAsync(user))
                             {
                                 signInStatus = AspNetId.SignInResult.LockedOut;
                             }
@@ -389,15 +412,8 @@ namespace MultiPurposeAuthSite.Controllers
                 Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
 
                 // Open-Redirect対策
-                if (!string.IsNullOrEmpty(model.ReturnUrl)
-                    && Config.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
-                {
-                    return RedirectToLocal(model.ReturnUrl);
-                }
-                else
-                {
-                    return RedirectToAction("Index", "Home");
-                }
+                //   **RedirectToLocal が Url.IsLocalUrl で判定する**（空や外部の URL なら Home へ）。
+                return RedirectToLocal(model.ReturnUrl);
             }
             else if (signInStatus.IsLockedOut)
             {
@@ -413,8 +429,8 @@ namespace MultiPurposeAuthSite.Controllers
                     "SendCode", new
                     {
                         ReturnUrl = model.ReturnUrl,  // 戻り先のURL
-                            RememberMe = model.RememberMe // アカウント記憶
-                        });
+                        RememberMe = model.RememberMe // アカウント記憶
+                    });
             }
             else // if (signInStatus.Failure)
             {
