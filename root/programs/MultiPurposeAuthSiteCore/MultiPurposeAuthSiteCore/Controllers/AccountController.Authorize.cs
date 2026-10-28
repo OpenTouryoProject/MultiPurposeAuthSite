@@ -20,6 +20,7 @@
 //*  2026/10/28  玄人 幸道         /device_verify の CSRF、Implicit・Hybrid の同意、auth_time・再認証の印の改ざん、
 //*                                JARM の aud・exp、response_mode の扱い、Request Object の client_id を直した。
 //*                                応答の組み立てを 1 か所にまとめ、本文を両版で同じにした（#294）
+//*  2026/10/29  玄人 幸道         OpSession と /device_verify の初期表示も、補助を使って両版で同じ本文にした（#294）
 //**********************************************************************************
 
 /*
@@ -115,7 +116,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>OpSessionの識別子（Cookie が無ければ空）</returns>
         private string GetOpSession()
         {
-            return MyHttpContext.Current.Request.Cookies.Get(Config.OpSessionCookieName) ?? "";
+            return this.ReadCookie(Config.OpSessionCookieName) ?? "";
         }
 
         /// <summary>OpSessionの識別子をCookieに書く</summary>
@@ -123,8 +124,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <remarks>**期限を付けない**（Session Cookie）。**ブラウザを閉じれば終わる。**</remarks>
         private void SetOpSessionCookie(string sessionId)
         {
-            MyHttpContext.Current.Response.Cookies.Set(
-                Config.OpSessionCookieName, sessionId, this._cookieOptions);
+            this.SetCookie(Config.OpSessionCookieName, sessionId);
         }
 
         /// <summary>
@@ -149,8 +149,7 @@ namespace MultiPurposeAuthSite.Controllers
             // 既に 1 回送り返している場合も、何もしない。
             // 1.送り返したのに、ブラウザが Cookie を戻さない（本来の想定）
             // 2.最初から URL に印が付いている（送り返していないのに）
-            if (!string.IsNullOrEmpty(HttpUtility.ParseQueryString(
-                Request.QueryString.Value)[Const.OpSessionRetry]))
+            if (!string.IsNullOrEmpty(this.AuthZRequestQuery()[Const.OpSessionRetry]))
             {
                 // 続けても失うのは「ログアウト補助」だけで、認証の安全性は下がらない。
                 return null;
@@ -160,7 +159,7 @@ namespace MultiPurposeAuthSite.Controllers
             this.SetOpSessionCookie(Guid.NewGuid().ToString("N"));
 
             // 印を付けて、元の URL へ送り返す（ブラウザは Cookie を受け取ってから戻ってくる）
-            string url = UriHelper.GetEncodedUrl(Request);
+            string url = this.CurrentRequestUrl();
             return new RedirectResult(url + (url.Contains("?") ? "&" : "?") + Const.OpSessionRetry + "=1");
         }
 
@@ -200,7 +199,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // OpSession の Cookie を落とす
-            MyHttpContext.Current.Response.Cookies.Delete(Config.OpSessionCookieName);
+            this.DeleteCookie(Config.OpSessionCookieName);
 
             return iframeUrls;
         }
@@ -1243,7 +1242,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             ViewBag.ReceiveResult = false;
             ViewBag.UserCode = UriOperator.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.user_code, Request.GetEncodedUrl());
+                OAuth2AndOIDCConst.user_code, this.CurrentRequestUrl());
 
             return View("DeviceAuthZVerify");
         }
