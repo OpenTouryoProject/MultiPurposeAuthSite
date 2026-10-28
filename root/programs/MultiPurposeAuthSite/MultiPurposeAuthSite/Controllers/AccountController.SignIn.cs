@@ -19,6 +19,7 @@
 //*  2026/10/28  玄人 幸道         LogOff を Logout に改名した（Login と対にする。#294）
 //*  2026/10/28  玄人 幸道         未確認メアドの確認メールはパスワードが合ったときだけ送る、外部ログインに ReturnUrl を渡す（#294）
 //*  2026/10/28  玄人 幸道         サインイン画面の初期表示で外部ログインの Cookie を消す（net10.0 版に揃えた。#294）
+//*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
 //**********************************************************************************
 
 /*
@@ -27,6 +28,7 @@ RP-Initiated Logout（end_session_endpoint）を担うAccountControllerの一部
 */
 
 using MultiPurposeAuthSite.Co;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
@@ -59,7 +61,7 @@ namespace MultiPurposeAuthSite.Controllers
             // SessionIDの切換にはこのコードが必要である模様。
             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
             Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
-            Response.Cookies[Config.AuthTimeCookieName].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+            Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
 
             // **OP のセッションの識別子を作る**（#310）。
             //   **ここがセッションの始まり**である（`sid` はこの値から引く）。

@@ -33,6 +33,7 @@
 //*  2026/10/25  玄人 幸道         WebAuthn の登録の失敗を OPERATION に記録する（障害対応のため。#294）
 //*  2026/10/26  玄人 幸道         クライアント登録の保存で、画面に欄の無い EC の公開鍵を持ち越すようにした（#294）
 //*  2026/10/26  玄人 幸道         クライアント登録の削除で、全利用者の同意も消すようにした（#294）
+//*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -456,7 +457,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
                             responseCookies.Set(Config.AuthTimeCookieName,
-                                FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+                                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
                         else
@@ -750,7 +751,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
                             responseCookies.Set(Config.AuthTimeCookieName,
-                                FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+                                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
                         else
@@ -1729,7 +1730,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
                                     responseCookies.Set(Config.AuthTimeCookieName,
-                                        FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+                                        Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
                             
                                     // リダイレクト
                                     return RedirectToAction("ManageLogins");
@@ -2606,7 +2607,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
                 responseCookies.Set(Config.AuthTimeCookieName,
-                    FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+                    Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
 
                 return true;
             }

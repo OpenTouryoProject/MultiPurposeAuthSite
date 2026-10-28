@@ -3949,6 +3949,27 @@ The ID federation did not complete. (the error view was returned)
 
 > **プッシュ承認（MobileApp）は測れない**（認証デバイスが要る）。
 
+#### 認可エンドポイント（`RT-294.15`〜`.22`。#294）
+
+**`AccountController.Authorize.cs` のレビューで見つけた穴を、直した形で押さえる**（`AuthorizeReviewTests`。両版）。
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.15` | `/device_verify` は、**AntiForgery トークンが無ければ承認しない**（機器は `authorization_pending` のまま） | **承認された**（トークンを検証していなかった） |
+| `RT-294.16` | **同意の記録が無い Hybrid** は、`prompt=none` なら **`consent_required`**（フラグメント）、無ければ**同意画面** | **同意を確かめずにトークンを発行した** |
+| `RT-294.17` | **`auth_time` の Cookie を平文に書き換えても**、`max_age` の再認証は飛ばせない | **飛ばせた**（平文の Cookie を信じていた） |
+| `RT-294.18` | **再認証の印の Cookie を平文で置いても**、`prompt=login` の再認証は飛ばせない | **飛ばせた**（有るか無いかしか見ていなかった） |
+| `RT-294.19` | Hybrid のエラーを `fragment.jwt` で求めると、**`iss` / `aud` / `exp` の入った JWT** で返る | **エラーは常に query の平文**。Implicit の JARM は `aud` / `exp` / `iss` を入れなかった |
+| `RT-294.20` | Hybrid に `response_mode=query` は使えない（**`invalid_request` がフラグメントで返る**） | **`error` が空のまま返った** |
+| `RT-294.21` | **Request Object（PAR）と違う `client_id`** を付けると、エラー画面になる | **確かめずに上書きした** |
+| `RT-294.22` | **同意画面のボタンを送らない POST** は、`invalid_request` を RP へ返す | **画面の値を組まずに画面を返した** |
+
+> **`TestClient_19` には、どのテストも「許可」を押さない**（同意の記録を残さない。#272 の段階 2）。
+>
+> **`RT-272.8` も変えた。** **再認証の印は、再認証を求めた要求に結び付けた**ので、
+> **再認証の後は同じ要求で戻ると認可コードが返り、別の要求（`state` が違う）の `prompt=login` は、また再認証になる。**
+> 以前は印がどの要求にも効いたので、別の要求で認可コードが返っていた。
+
 #### 認可は、付与の前後で測る（`RT-257.9`）
 
 **門番（`Authorize`）とメニューの出し分けは、どちらも `SystemAdmin` を見る。**

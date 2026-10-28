@@ -50,6 +50,7 @@
 //*  2026/10/16  玄人 幸道         ヘッダを付けて GET する口を足した（#303）
 //*  2026/10/17  玄人 幸道         ヘッダを付けて POST する口を追加（#305 の段階 4）
 //*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
+//*  2026/10/28  玄人 幸道         Cookie の値を書き換える口（OverwriteCookie）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -120,6 +121,34 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
                 return names;
             }
+        }
+
+        /// <summary>
+        /// ブラウザが持っている Cookie の値を、書き換える（#294）。
+        /// </summary>
+        /// <param name="nameSuffix">Cookie の名前の末尾（配備の接頭辞 `CookieNamePrefix` を除いた名前）</param>
+        /// <param name="value">値</param>
+        /// <remarks>
+        /// **利用者がブラウザで Cookie を書き換えることを、まねる**ために在る
+        /// （`auth_time` や再認証の印を、平文の値に差し替えても効かないことを測る。`RT-294.17` / `.18`）。
+        /// **名前は末尾で探す**（接頭辞は配備で変わる）。**無ければ、接頭辞なしの名前で足す。**
+        /// </remarks>
+        public void OverwriteCookie(string nameSuffix, string value)
+        {
+            Uri uri = new Uri(this.Target.BaseUrl);
+            string name = nameSuffix;
+            string path = "/";
+
+            foreach (Cookie cookie in this._handler.CookieContainer.GetCookies(uri))
+            {
+                if (cookie.Name.EndsWith(nameSuffix, StringComparison.Ordinal))
+                {
+                    name = cookie.Name;
+                    path = cookie.Path;
+                }
+            }
+
+            this._handler.CookieContainer.Add(uri, new Cookie(name, value, path));
         }
 
         /// <summary>コンストラクタ</summary>

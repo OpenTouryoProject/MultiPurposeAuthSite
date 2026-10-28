@@ -32,6 +32,7 @@
 //*  2026/10/18  玄人 幸道         画面の保存で registration_access_token を消さない（#307 の段階 2）
 //*  2026/10/26  玄人 幸道         クライアント登録の保存で、画面に欄の無い EC の公開鍵を持ち越すようにした（#294）
 //*  2026/10/26  玄人 幸道         クライアント登録の削除で、全利用者の同意も消すようにした（#294）
+//*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -313,7 +314,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (signInResult == SignInStatus.Success)
                         {
                             // Passwordが一致した。
-                            Response.Cookies[Config.AuthTimeCookieName].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+                            Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
                             // 処理を継続
                         }
                         else
@@ -605,7 +606,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result == SignInStatus.Success)
                         {
                             // Passwordが一致した。
-                            Response.Cookies[Config.AuthTimeCookieName].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+                            Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
                             // 処理を継続
                         }
                         else
@@ -1447,7 +1448,7 @@ namespace MultiPurposeAuthSite.Controllers
                                             isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
                                             rememberBrowser: true); // rememberBrowser は true 固定
 
-                                        Response.Cookies[Config.AuthTimeCookieName].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+                                        Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
 
                                         // リダイレクト
                                         return RedirectToAction("ManageLogins");
@@ -2132,7 +2133,7 @@ namespace MultiPurposeAuthSite.Controllers
                         isPersistent: false,        // アカウント記憶    // 既定値
                         rememberBrowser: false);    // ブラウザ記憶(2FA)
 
-                Response.Cookies[Config.AuthTimeCookieName].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+                Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
 
                 return true;
             }

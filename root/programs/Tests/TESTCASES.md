@@ -5689,6 +5689,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. prompt=login を付けて認可リクエストを送る
 1. 戻された先は、サインイン画面（サインアウトされている）
 1. 再認証すると先へ進む（繰り返しにならない）
+1. 別の要求の prompt=login は、また再認証を求める（印は要求ごと）
 
 **検証（合否を判定する）**
 
@@ -5696,10 +5697,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 同じ URL へ戻される（再認証の経路）
 - サインイン画面へ送られる
 - 認可コードが返る（印が効いている）
+- **別の要求には、印が効かない**（認可コードは発行されず、同じ URL へ戻される）
 
 **補足**
 
 - **印が無いと、ここで永久に送り返す。** `max_age=0` でも同じことが起きるので、**#247 で入れた印（`re_auth_at`）をそのまま使っている。**
+- **印は、再認証を求めた要求に結び付けてある**（#294）。**以前は、どの要求にも効いた**ので、途中でやめた再認証の印が残ると、**別の RP の `prompt=login` が再認証なしで通った。**
 - **`prompt=none login` は段階 1 で `invalid_request`** になる（`none` の併記）。**「UI を出せないのに再認証」にはならない。**
 
 ## RT-272.9 prompt=select_account は、同意済みでも同意画面を出す（アカウントを選べる画面へ）
@@ -6491,6 +6494,152 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **送信の失敗は、OPERATION ログに「could not be sent」として残る**（E2E では読まない）。
+
+## RT-294.15 /device_verify は、AntiForgery トークンが無ければ承認しない
+
+| | |
+|---|---|
+| 観点 | **画面はトークンを埋めていたが、アクションが検証していなかった。****認証の Cookie は `SameSite=None`** なので、**別のサイトからの POST にも Cookie が付く。****利用者が意図しない `user_code` の承認を送らせられた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S1）/ RFC 8628 §5.4 |
+| テスト | `RT29415_device_verifyはトークンが無ければ承認しない` |
+
+**手順**
+
+1. 機器 : デバイス認可を始める
+1. サインイン済みの利用者のブラウザから、トークン無しで承認を送る
+1. 機器 : トークンを要求する
+
+**検証（合否を判定する）**
+
+- **承認されない**（"Accepted." を出さない）
+- **まだ authorization_pending**（承認は通っていない）
+- トークンを発行しない
+
+## RT-294.16 同意の記録が無いクライアントの Hybrid は、同意を求める（prompt=none なら consent_required）
+
+| | |
+|---|---|
+| 観点 | **同意の判定は、code の分岐の中にしか無かった。****Implicit と Hybrid は、サインインしていれば同意を確かめずにトークンを発行した**（#272 の `consent_required` も効いていなかった）。**3 つのフローで共通にした。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S2）/ OIDC Core §3.1.2.6 |
+| テスト | `RT29416_同意の無いHybridは同意を求める` |
+
+**手順**
+
+1. prompt=none で要求する
+1. prompt を付けずに要求する
+
+**検証（合否を判定する）**
+
+- **consent_required が返る**
+- code も id_token も返さない
+- **フラグメントで返る**（トークンを含む応答の形）
+- **同意画面が出る**（トークンを返さない）
+
+**補足**
+
+- **「許可」は押さない**（`TestClient_19` に同意の記録を残さない）。
+
+## RT-294.17 auth_time の Cookie を書き換えても、max_age の再認証は飛ばせない
+
+| | |
+|---|---|
+| 観点 | **`max_age` の判定と id_token の `auth_time` は、平文の Cookie を読んでいた。****ブラウザ側で書き換えると、再認証を飛ばし、偽の時刻を RP に保証した。****値を改ざんできない形で包む**ようにした（DataProtection / MachineKey）。 |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S3）/ OIDC Core §3.1.2.1 |
+| テスト | `RT29417_auth_timeのCookieを書き換えても再認証は飛ばせない` |
+
+**手順**
+
+1. サインインから 2 秒待ち、auth_time の Cookie を「いま」の平文に書き換える
+1. max_age=1 で要求する
+
+**検証（合否を判定する）**
+
+- **認可コードは発行されない**（書き換えた時刻を信じない）
+- **再認証の経路へ送られる**（同じ URL へ戻される）
+
+## RT-294.18 再認証の印の Cookie を書き換えても、prompt=login の再認証は飛ばせない
+
+| | |
+|---|---|
+| 観点 | **`prompt=login` の印は、平文の Cookie が有るか無いかしか見ていなかった。****ブラウザ側で置くだけで、再認証を飛ばせた。****印は改ざんできない形で包み、再認証を求めた要求に結び付けた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S3）/ OIDC Core §3.1.2.1 |
+| テスト | `RT29418_再認証の印を書き換えてもprompt_loginは飛ばせない` |
+
+**手順**
+
+1. 再認証の印の Cookie を、平文で置く
+1. prompt=login で要求する
+
+**検証（合否を判定する）**
+
+- **認可コードは発行されない**（置いた印を信じない）
+- **再認証の経路へ送られる**（同じ URL へ戻される）
+
+## RT-294.19 Hybrid のエラーを JARM（fragment.jwt）で求めると、iss・aud・exp の入った JWT で返る
+
+| | |
+|---|---|
+| 観点 | **エラーは、response_mode に関係なく query の平文で返していた。****また、Implicit の JARM は aud / exp / iss を入れていなかった**（JARM §2.1 では必須）。**応答の組み立てを 1 か所にまとめ、エラーも response_mode に従うようにした。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 4・6）/ JARM §2.1 / §2.3 |
+| テスト | `RT29419_HybridのエラーはJARMで返る` |
+
+**検証（合否を判定する）**
+
+- **フラグメントに response（JWT）が返る**
+- error は consent_required
+- **iss が入る**
+- **aud は client_id**
+- **exp が数値で入る**
+
+## RT-294.20 Hybrid に response_mode=query は使えない（invalid_request が、フラグメントで返る）
+
+| | |
+|---|---|
+| 観点 | **トークンを含む応答に query は使わない**（OAuth 2.0 Multiple Response Types §5）。**以前は、発行した後で応答を作れず、`error` が空のまま RP へ返っていた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 6） |
+| テスト | `RT29420_Hybridにresponse_modeのqueryは使えない` |
+
+**検証（合否を判定する）**
+
+- **invalid_request が返る**（error が空でない）
+- **フラグメントで返る**（その response_type の既定の形）
+- code も id_token も返さない
+
+## RT-294.21 request_uri（PAR）の Request Object と違う client_id を付けると、断る
+
+| | |
+|---|---|
+| 観点 | **クエリの client_id を、Request Object の値で確かめずに上書きしていた**（RFC 9126 §4 / RFC 9101 §5 は一致を求める）。 |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 8） |
+| テスト | `RT29421_RequestObjectと違うclient_idは断る` |
+
+**手順**
+
+1. TestClient で、認可要求を預ける
+1. 別のクライアントの client_id と、その request_uri で認可する
+
+**検証（合否を判定する）**
+
+- **認可コードは発行されない**
+- **RP へ送らず、エラー画面になる**（どちらの redirect_uri も信じない）
+
+## RT-294.22 同意画面のボタン（許可・拒否・別のアカウント）を送らない POST は、invalid_request を RP へ返す
+
+| | |
+|---|---|
+| 観点 | **以前は画面を出し直していたが、画面の値（ViewBag）を組まずに返していた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 7） |
+| テスト | `RT29422_同意画面のボタンが無いPOSTはinvalid_request` |
+
+**手順**
+
+1. 同意画面を出す
+1. ボタンを付けずに POST する（トークンだけを送る）
+
+**検証（合否を判定する）**
+
+- **invalid_request を RP へ返す**
+- state がそのまま返る
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 
