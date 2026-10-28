@@ -30,8 +30,8 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;

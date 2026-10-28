@@ -459,7 +459,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>
-        /// WebAuthn の資格情報を持つテスト利用者を、まき直す（呼ぶ側が IsDebug ＋ TestUserPWD を確かめる）。
+        /// WebAuthn の資格情報を持つテスト利用者を、まき直す（呼ぶ側が SeedsTestData を確かめる）。
         /// </summary>
         /// <returns>Task</returns>
         /// <remarks>
