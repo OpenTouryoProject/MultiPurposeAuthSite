@@ -2988,6 +2988,69 @@ private async void SendConfirmEmail(ApplicationUser user)
 **そのメアドでサインアップとパスワードの失念を通し、画面が普段どおりで、その後もサイトが応えることを見る。**
 
 > **`AccountController.Helper.cs` のレビューで気付いた。** 完了メールは、文面のファイルが無いと空のメールを送っていたので、それも止めた（送らずに記録する）。
+
+### C-37. `/device_verify` の承認が、AntiForgery トークンを検証していなかった **[Core][NetFx]** — **✅ 修正済み（#294）**
+
+**Device Authorization Grant の利用者の画面（`AccountController.DeviceAuthZVerify` の POST。両版）は、**
+**画面にトークンを埋めていたが、アクションに `[ValidateAntiForgeryToken]` が無く、検証していなかった。**
+
+**認証まわりの Cookie は `SameSite=None` で出している**（CONFIGURATION.md の「https で動かすこと」）ので、
+**別のサイトから送られた POST にも Cookie が付く。**
+**サインインしている利用者のブラウザから、本人が意図しない `user_code` の承認を送らせることができた**
+（承認すると、その `user_code` の機器に、利用者の権限でトークンが出る。RFC 8628 §5.4 が挙げる類いの攻撃）。
+
+**属性を付けた**（画面は既にトークンを送っているので、正しい利用には影響しない）。
+
+**E2E** : **`RT-294.15`**（トークン無しの POST では承認されず、機器は `authorization_pending` のまま）。
+
+### C-38. Implicit と Hybrid は、同意を確かめずにトークンを発行していた **[Core][NetFx]** — **✅ 修正済み（#294）**
+
+**同意の判定**（`ConsentProvider.HasConsent`・`prompt=consent` / `none`・同意画面）**は、`OAuth2Authorize`（GET。両版）の**
+**`response_type=code` の分岐の中にしか無かった。**
+**Implicit と Hybrid の分岐は、サインインしていれば、同意の記録が無くてもそのままトークンを発行した。**
+
+| | |
+|---|---|
+| **C-3（#272）との関係** | **「同意していなければ `prompt=none` は `consent_required`」が、この 2 つには効いていなかった** |
+| **影響の範囲** | **Implicit は既定で無効**（#220）だが、**Hybrid は無効にできない**（#314） |
+
+**同意の判定を、3 つのフローで共通にした**（同意の記録が無ければ同意画面、`prompt=none` なら `consent_required`）。
+**同意画面の「許可」（POST）も、`response_type` に応じて発行する**ようにした（以前は code しか返さなかった）。
+
+**E2E** : **`RT-294.16`**（同意の記録が無い Hybrid は、`prompt=none` で `consent_required`、無ければ同意画面）。
+
+### C-39. `auth_time` と再認証の印を、署名の無い Cookie で持っていた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**`max_age` の判定（`CmnEndpoints.CheckAuthTime`）と、id_token / access_token に出す `auth_time` は、平文の Cookie（`auth_time`）から読んでいた。**
+**`prompt=login` / `max_age` の繰り返しを止める「再認証の印」（`re_auth_at`）も、平文の Cookie が有るか無いかしか見ていなかった。**
+
+```csharp
+// 修正前: MultiPurposeAuthSiteCore/Controllers/AccountController.SignIn.cs（net48 版・ManageController も同じ形）
+Response.Cookies.Set(Config.AuthTimeCookieName,
+    FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+```
+
+| | 起きること |
+|---|---|
+| **ブラウザ側で書き換えられる** | **`max_age` / `prompt=login` が求める再認証を飛ばし、偽の `auth_time` を RP に保証した** |
+| **印がどの要求にも効いた** | **再認証の途中でやめると印が残り、後で別の RP が送ってきた `prompt=login` が、再認証なしで通った** |
+| **壊れた値** | **`DateTime.Parse` が例外を出し、500 になった** |
+
+**どちらの Cookie も、改ざんできない形で包む**ようにした（`Extensions/Sts/AuthTimeCookie`。
+**net10.0 : DataProtection**（#251 で鍵を永続化）／**net48 : `MachineKey.Protect`**）。**開けない値は、無いものとして扱う。**
+**再認証の印は、それを求めた認可要求に結び付けた**（クエリから作る指紋。**別の要求の `prompt=login` には効かない**）。
+
+> **更新した直後は、平文の古い Cookie が開けない**ので、「認証時刻が分からない」として扱う
+> （`max_age` を付けた要求なら、一度だけ再認証になる）。
+
+**E2E** : **`RT-294.17`**（`auth_time` を平文に書き換えても `max_age` の再認証は飛ばせない）、
+**`RT-294.18`**（印を平文で置いても `prompt=login` の再認証は飛ばせない）、
+**`RT-272.8`**（再認証の後は同じ要求で戻るとコードが返り、別の要求の `prompt=login` はまた再認証になる）。
+
+> **`AccountController.Authorize.cs` のレビューで気付いた**（C-37〜C-39）。**同じレビューで、次も直した。**
+> **JARM の `aud` / `exp` / `iss`**（Implicit が入れていなかった。JARM §2.1）、**使えない `response_mode` で `error` が空のまま返る**、
+> **Request Object と違う `client_id` を確かめずに上書き**（RFC 9126 §4）、**同意画面のボタンが無い POST**。
+> **応答の組み立ては 1 か所にまとめ、認可エンドポイントの本文は両版で同じにした**（E2E : `RT-294.19`〜`.22`）。
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -3090,6 +3153,9 @@ private async void SendConfirmEmail(ApplicationUser user)
 | ✅ **C-34 TOTP・回復コードでサインインしたとき、セッションを初期化していなかった** #294 |
 | ✅ **C-35 2FA のプッシュ承認を待つスクリプトが、`ReturnUrl` を符号化せずに埋め込んでいた** #294 |
 | ✅ **C-36 メールの送信に失敗すると、プロセスが落ちえた（`async void`）** #294 |
+| ✅ **C-37 `/device_verify` の承認が、AntiForgery トークンを検証していなかった** #294 |
+| ✅ **C-38 Implicit と Hybrid は、同意を確かめずにトークンを発行していた** #294 |
+| ✅ **C-39 `auth_time` と再認証の印を、署名の無い Cookie で持っていた** #294 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 
