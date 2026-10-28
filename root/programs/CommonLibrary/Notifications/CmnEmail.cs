@@ -29,10 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/05  西野 大介         新規
+//*  2026/10/28  玄人 幸道         IsDebug のとき、試験用のドメイン宛ての送信を失敗させる（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
+using System;
 using System.Threading.Tasks;
 
 using System.Net;
@@ -45,6 +47,12 @@ namespace MultiPurposeAuthSite.Notifications
     /// <summary>CmnEmail</summary>
     public class CmnEmail
     {
+        /// <summary>
+        /// 送信を失敗させるドメイン（`IsDebug` のときだけ。#294）
+        /// </summary>
+        /// <remarks>**E2E が、送信の失敗でサイトが落ちないことを測るために使う**（`RT-294.14`）。</remarks>
+        public const string FailureDomainForTest = "e2e-mail-failure.invalid";
+
         /// <summary>電子メール送信</summary>
         /// <param name="destination">string</param>
         /// <param name="subject">string</param>
@@ -54,6 +62,15 @@ namespace MultiPurposeAuthSite.Notifications
         {
             if (Config.IsDebug)
             {
+                //  **送信の失敗を、E2E から起こせるようにする**（#294。`IsDebug` のときだけ）。
+                //    **このドメイン宛ては、SMTP の失敗と同じく例外にする**（RFC 2606 の `.invalid`。実在しない）。
+                //    **失敗してもサイトが落ちないこと**を `RT-294.14` が測る。
+                if (!string.IsNullOrEmpty(destination)
+                    && destination.EndsWith("@" + CmnEmail.FailureDomainForTest, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new SmtpException("The mail to the test failure domain was refused. (IsDebug)");
+                }
+
                 // Debug.WriteLine
                 Debug.WriteLine("< EmailService >");
                 Debug.WriteLine("Destination : " + destination);

@@ -187,7 +187,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 else if (await UserManager.CheckPasswordAsync(user, model.Password))
                                 {
                                     // メアド検証用のメールを送信して、
-                                    this.SendConfirmEmail(user);
+                                    await this.SendConfirmEmail(user);
 
                                     // メッセージを設定
                                     ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);

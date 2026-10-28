@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
+//*  2026/10/28  玄人 幸道         送れなかった分を返す Release を足した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -140,6 +141,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return false;
+        }
+
+        /// <summary>送れなかった分を、間隔に数えない（#294）</summary>
+        /// <param name="purpose">用途（`Purpose*`）</param>
+        /// <param name="userId">宛先の利用者の id</param>
+        /// <remarks>**枠は送る前に取る**ので、**送信が失敗したら返す**（すぐに送り直せるように）。</remarks>
+        public static void Release(string purpose, string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+            {
+                return;
+            }
+
+            Entry removed = null;
+            MailThrottle.Entries.TryRemove(purpose + "|" + userId, out removed);
         }
 
         /// <summary>間隔を過ぎた分を捨てる</summary>

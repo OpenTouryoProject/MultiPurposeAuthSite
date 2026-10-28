@@ -503,8 +503,8 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   あとから足した（A-7-2 / #214 と同じ考え方。両アプリ）
 - E2E テスト : `RT-210.1`（端末未登録 → 400 と `access_denied`）。
   **送信そのものの失敗は E2E では測れない。** `test.ps1 -Launch` は送信箱を使い、`FcmService` は宛先を検証せずファイルに書くため
-- テストの `login_hint` には `tanaka@gmail.com` を使う。
-  テスト ユーザ（`super_tanaka@gmail.com`）は `EX-8` が端末を登録するので、「端末が無い」状態を作れない
+- テストの `login_hint` には `tanaka@example.com` を使う。
+  テスト ユーザ（`super_tanaka@example.com`）は `EX-8` が端末を登録するので、「端末が無い」状態を作れない
 
 **対応（#196 の 7 つ目 : `/ciba_result`・`/SetDeviceToken`）:** 認証デバイス（`authentication_device`）が呼ぶ 2 つの口。
 
@@ -2947,6 +2947,47 @@ if (user.LockoutEndDateUtc != null
 **E2E では測れていない**（プッシュ承認の画面は、認証デバイスを登録した利用者でないと出ない）。
 
 > **`TwoFactor.cs` のレビューの指摘 6（`rememberMe` を渡す）で、同じ行を直すときに気付いた。**
+
+### C-36. メールの送信に失敗すると、プロセスが落ちえた（`async void`） **[Core][NetFx]** — **✅ 修正済み（#294）**
+
+**メアド検証・パスワード リセット・完了の通知のメールは、`AccountController.Helper`（両版）の 4 つのメソッドで送る。**
+**どれも `async void` で、呼ぶ側（サインイン・サインアップ・パスワードの失念とリセット）は待っていなかった。**
+
+```csharp
+// 修正前: MultiPurposeAuthSiteCore/Controllers/AccountController.Helper.cs（net48 版も同じ形）
+private async void SendConfirmEmail(ApplicationUser user)
+{
+    code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+    callbackUrl = this.Url.Action(..., protocol: HttpContext.Request.Scheme);
+    await EmailSender.SendAsync(user.Email, subject, ...);
+}
+```
+
+**本番（`IsDebug=false`）では、`CmnEmail.SendAsync` が `SmtpClient.Send` を同期で呼ぶ。**
+**SMTP の失敗**（サーバの停止・資格情報の誤り・宛先の拒否）**は例外になり、`async void` では呼ぶ側へ戻らない。**
+
+| | 起きること |
+|---|---|
+| **net10.0 版** | **同期コンテキストが無いので、スレッドプールの処理されない例外になり、プロセスが終了する** |
+| **net48 版** | **要求の完了と競合し、処理されない例外になる** |
+| **両版** | **トークンの生成が非同期のとき**（DB ストア）、**要求が終わった後に `HttpContext` / `Url` を触る** |
+
+**サインアップとパスワードの失念は、認証なしで誰でも押せる。**
+**SMTP が落ちている間は、押すだけで IdP を止められた**（可用性。2FA のコード送信は #214 で直していたが、こちらは残っていた）。
+
+**送信を要求から切り離した**（`SendMailInBackground`）。
+
+- **トークンと URL は、要求の中で作り終える**（呼ぶ側は `await` する。`HttpContext` / `UserManager` を後から触らない）
+- **送信だけを別のタスクで行い、失敗は受け止めて記録する**（OPERATION ログに「could not be sent」。利用者の id と例外の型だけ）
+- **応答の時間が、送ったかどうかで変わらない**（C-29 の「存在を明かさない」と両立する）
+- **送れなかった分は、`MailThrottle` の間隔に数えない**（C-31。`Release`）
+- **net48 版は `EmailService` を直接使う**（`UserManager` は要求の後に破棄されるので、`UserManager.SendEmailAsync` は使わない）
+
+**E2E** : **`RT-294.14`**（両版）。**`IsDebug` のとき、宛先が `@e2e-mail-failure.invalid` なら `CmnEmail` が送信を例外にする**
+（`CmnEmail.FailureDomainForTest`。RFC 2606 の `.invalid`。**本番では効かない**）。
+**そのメアドでサインアップとパスワードの失念を通し、画面が普段どおりで、その後もサイトが応えることを見る。**
+
+> **`AccountController.Helper.cs` のレビューで気付いた。** 完了メールは、文面のファイルが無いと空のメールを送っていたので、それも止めた（送らずに記録する）。
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -3048,6 +3089,7 @@ if (user.LockoutEndDateUtc != null
 | ✅ **C-32 / C-33 サインイン**（WebAuthn のロックアウト判定／確認待ちの利用者へのメールと文言） #294 |
 | ✅ **C-34 TOTP・回復コードでサインインしたとき、セッションを初期化していなかった** #294 |
 | ✅ **C-35 2FA のプッシュ承認を待つスクリプトが、`ReturnUrl` を符号化せずに埋め込んでいた** #294 |
+| ✅ **C-36 メールの送信に失敗すると、プロセスが落ちえた（`async void`）** #294 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 

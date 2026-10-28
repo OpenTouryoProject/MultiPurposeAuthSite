@@ -534,10 +534,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>テスト ユーザのメアド（#151 の段階 3 / #260）</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>メアド</returns>
-        /// <remarks>**メアドでのサインインを測るときに使う**（`SM-4.2`）。</remarks>
+        /// <remarks>**メアドでのサインインを測るときに使う**（`SM-4.2`）。**ドメインは `example.com`**（#294。認証サイトの種まきと揃える。以前は `gmail.com`）。</remarks>
         public static string TestUserEmail(string targetKey)
         {
-            return TestUserName(targetKey) + "@gmail.com";
+            return TestUserName(targetKey) + "@example.com";
         }
 
         /// <summary>

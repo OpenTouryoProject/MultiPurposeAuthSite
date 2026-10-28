@@ -220,9 +220,9 @@ OAuth2ClientEndpointsRootURI
 
 | 利用者 | 使い道 |
 |---|---|
-| `super_tanaka@gmail.com`（`TestEnv.TestUserName`） | 既定。`SignedInClientAsync` が何も指定しなければこちら |
-| `tanaka@gmail.com`（`TestEnv.SecondUserName`） | 「別の利用者」が要るとき（`EX-8.4`）と、「端末が無い利用者」が要るとき（`RT-210.1`） |
-| `webauthn_tanaka@gmail.com`（`TestEnv.WebAuthnUserName`） | **WebAuthn の資格情報を 3 件持つ**（`FIDO.TestCredentials`。#277 の段階 7）。**net10.0 版だけ**作られる |
+| `super_tanaka@example.com`（`TestEnv.TestUserName`） | 既定。`SignedInClientAsync` が何も指定しなければこちら |
+| `tanaka@example.com`（`TestEnv.SecondUserName`） | 「別の利用者」が要るとき（`EX-8.4`）と、「端末が無い利用者」が要るとき（`RT-210.1`） |
+| `webauthn_tanaka@example.com`（`TestEnv.WebAuthnUserName`） | **WebAuthn の資格情報を 3 件持つ**（`FIDO.TestCredentials`。#277 の段階 7）。**net10.0 版だけ**作られる |
 
 > **WebAuthn の資格情報は、種データが用意している。**
 > **作れるのは認証器だけ**で、**`navigator.credentials` を呼ぶのはブラウザ**だから、

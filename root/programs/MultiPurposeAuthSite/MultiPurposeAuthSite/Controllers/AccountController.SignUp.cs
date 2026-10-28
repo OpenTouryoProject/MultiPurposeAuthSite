@@ -121,7 +121,7 @@ namespace MultiPurposeAuthSite.Controllers
                             && oldUser.Logins.Count == 0)
                         {
                             // メアド検証用のメールを送信して、
-                            this.SendConfirmEmail(oldUser);
+                            await this.SendConfirmEmail(oldUser);
 
                             // VerifyEmailAddress画面へ遷移
                             return View("VerifyEmailAddress");
@@ -154,7 +154,7 @@ namespace MultiPurposeAuthSite.Controllers
                             //   **約款は、メアド検証のリンクを踏んだ後に出る**（下の Agreement）。
 
                             // サインインの前にメアド検証用のメールを送信して、
-                            this.SendConfirmEmail(user);
+                            await this.SendConfirmEmail(user);
 
                             // VerifyEmailAddress画面へ遷移
                             return View("VerifyEmailAddress");
@@ -395,7 +395,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ユーザが取得できた場合。
 
                     // パスワード リセット用のメールを送信
-                    this.SendConfirmEmailForPasswordReset(user);
+                    await this.SendConfirmEmailForPasswordReset(user);
                 }
 
                 // "パスワードの失念の確認"画面を表示

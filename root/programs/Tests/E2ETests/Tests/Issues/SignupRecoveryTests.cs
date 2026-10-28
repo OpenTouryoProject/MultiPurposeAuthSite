@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
+//*  2026/10/28  玄人 幸道         RT-294.14（メールの送信の失敗でサイトが落ちない）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -359,7 +360,83 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-294.14 メールの送信に失敗しても、画面は普段どおりで、サイトは落ちない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29414_メールの送信に失敗してもサイトは落ちない(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                string userName = SignupRecoveryTests.UniqueName();
+
+                //  **このドメイン宛ては、認証サイトが IsDebug のときに送信を失敗させる**
+                //    （`CmnEmail.FailureDomainForTest`。RFC 2606 の `.invalid`）。
+                string email = userName + "@" + MailFailureDomain;
+
+                TestReport r = this.Report("RT-294.14",
+                    "メールの送信に失敗しても、画面は普段どおりで、サイトは落ちない",
+                    "**メールの送信は `async void` で、呼ぶ側は待っていなかった。**"
+                    + "**SMTP の失敗が処理されない例外になり、net10.0 版ではプロセスが落ちた**"
+                    + "（サインアップ・パスワードの失念は、誰でも押せる）。"
+                    + "**送信を要求から切り離し、失敗は受け止めて記録する**ように直した。",
+                    "#294（AccountController.Helper.cs のレビュー 1）");
+
+                r.Target("利用者名 = " + userName + " / メアド = 送信が失敗するドメイン（" + MailFailureDomain + "）");
+
+                try
+                {
+                    r.Step("(1) サインアップする（確認のメールの送信が失敗する）");
+
+                    HttpResponseMessage reg = await SignupRecoveryTests.RegisterAsync(client, userName, email);
+                    string regBody = await reg.Content.ReadAsStringAsync();
+
+                    r.VerifyEqual("HTTP 200", "200", ((int)reg.StatusCode).ToString());
+
+                    r.Verify("**メアド検証の画面になる**（送信の失敗を画面に出さない）",
+                        !Html.HasField(regBody, "ConfirmPassword") && !Html.HasValidationError(regBody),
+                        "メアド検証の画面", Html.Describe(regBody));
+
+                    r.Step("(2) 同じメアドで、パスワードの失念を送る（リセットのメールの送信も失敗する）");
+
+                    HttpResponseMessage forgot = await SignupRecoveryTests.ForgotPasswordAsync(client, email);
+                    string forgotBody = await forgot.Content.ReadAsStringAsync();
+
+                    r.VerifyEqual("HTTP 200", "200", ((int)forgot.StatusCode).ToString());
+
+                    r.Verify("確認画面になる（入力欄が無い）",
+                        !Html.HasField(forgotBody, "Email"),
+                        "入力欄が無い", Html.Describe(forgotBody));
+
+                    r.Step("(3) 送信の失敗が起きるのを待ってから、サイトがまだ応えるかを見る");
+
+                    //  **送信は要求から切り離してある**ので、失敗は応答の後に起きる。
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+
+                    HttpResponseMessage alive = await client.GetAsync("/Account/Login");
+
+                    r.VerifyEqual("**サイトが応える**（プロセスが落ちていない）",
+                        "200", ((int)alive.StatusCode).ToString());
+
+                    r.Note("**送信の失敗は、OPERATION ログに「could not be sent」として残る**（E2E では読まない）。");
+                }
+                finally
+                {
+                    r.Step("(4) 後片付け : 管理画面から削除する");
+
+                    await client.SignInAsAdministratorAsync();
+                    await UsersAdmin.DeleteByUserNameAsync(client, userName);
+                }
+
+                r.Done();
+            }
+        }
+
         #region 補助
+
+        /// <summary>認証サイトが、IsDebug のときに送信を失敗させるドメイン（CmnEmail.FailureDomainForTest）</summary>
+        private const string MailFailureDomain = "e2e-mail-failure.invalid";
 
         /// <summary>この回だけの利用者名を作る（DB ストアでも衝突しない）</summary>
         /// <returns>利用者名</returns>
