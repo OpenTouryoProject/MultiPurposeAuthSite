@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
+//*  2026/10/29  玄人 幸道         RT-294.60（登録画面を開いただけでは TOTP は登録されない）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -65,6 +66,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | RT-294.11 TOTP を続けて間違える | **ロックアウトが 404**（`RedirectToAction("Lockout")` のアクションが無い） |
     /// | RT-294.12 画面に出していない手段を選ぶ | **知らない値は TOTP として扱っていた** |
     /// | RT-294.13 コードの 2FA で間違える | **文言が出なかった**（net10.0 版）。**ブラウザ記憶が既定で入っていた**（両版） |
+    /// | RT-294.60 認証アプリの登録画面を開く | **開いただけで鍵を保存していた**（`ManageController.*.cs` のレビュー） |
     /// </remarks>
     public class TwoFactorTests : TargetTestBase
     {
@@ -462,7 +464,167 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-294.60 認証アプリの登録画面を開いただけでは、TOTP は登録されない</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT29460_登録画面を開いただけではTOTPは登録されない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userName = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-294.60",
+                    "認証アプリの登録画面を開いただけでは、TOTP は登録されない（コードを確かめてから登録される）",
+                    "**以前は登録画面（GET）を開いただけで、鍵を保存していた。**"
+                    + "**そのため、コードを確かめていなくても、管理画面は TOTP を登録済みと出し、"
+                    + "サインインの手段にも認証アプリが出ていた。**"
+                    + "**鍵は TempData に置き、コードを確かめてから保存する**ようにした。"
+                    + "**間違えて出し直すときは、同じ鍵を出す。**",
+                    "#294（ManageController.*.cs のレビュー B10）");
+
+                r.Target("利用者名 = " + userName + "（2FA を有効にした使い捨ての利用者）");
+
+                try
+                {
+                    r.Step("(1) 利用者を作り、2FA を有効にする（認証アプリは、まだ登録しない）");
+
+                    await admin.SignInAsAdministratorAsync();
+                    await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                    HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                        admin, userName, userName + "@example.com", "User");
+
+                    Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                        "前提: 利用者を作れること");
+
+                    using (IdPClient user = this.Client(targetKey))
+                    {
+                        //  **2FA を有効にする前にサインインしておく**（有効にした後は、2FA を通さないと入れない）。
+                        Assert.True(await user.TrySignInAsync(userName, user.Config.Get("TestUserPWD")),
+                            "前提: 作った利用者でサインインできること");
+
+                        await TwoFactorTests.EnableTwoFactorAsync(user);
+
+                        r.Step("(2) 認証アプリの登録画面を開く");
+
+                        HttpResponseMessage get = await user.GetAsync("/Manage/EnableTwoFactorAuthenticator");
+                        string body = await get.Content.ReadAsStringAsync();
+                        string secret = TwoFactorTests.SecretOf(body);
+
+                        Skip.IfNot(get.StatusCode == HttpStatusCode.OK && secret != null,
+                            "認証アプリの登録画面が開きません（" + Html.Describe(body) + "）。");
+
+                        r.Step("(3) 管理画面と、サインインの手段を見る");
+
+                        string index = await user.GetStringAsync("/Manage/Index");
+
+                        r.Verify("管理画面は、TOTP を登録済みと出さない",
+                            !(index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator"),
+                            "出さない",
+                            (index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator") ? "**出している**" : "出さない");
+
+                        using (IdPClient other = this.Client(targetKey))
+                        {
+                            List<string> providers = await TwoFactorTests.ProvidersAsync(other, userName);
+
+                            r.Observe("サインインの手段", string.Join(", ", providers), null);
+
+                            r.Verify("サインインの手段に、認証アプリが出ない",
+                                !providers.Contains(AuthenticatorProvider),
+                                "出ない", providers.Contains(AuthenticatorProvider) ? "**出ている**" : "出ない");
+                        }
+
+                        r.Step("(4) 間違ったコードを送る");
+
+                        HttpResponseMessage wrong = await TwoFactorTests.PostFormFromAsync(user, body,
+                            new Dictionary<string, string>() { { "Code", "000000" } },
+                            "/Manage/EnableTwoFactorAuthenticator");
+                        string wrongBody = await wrong.Content.ReadAsStringAsync();
+
+                        r.Verify("エラーの文言が出る",
+                            Html.HasValidationError(wrongBody),
+                            "出ている", Html.HasValidationError(wrongBody) ? "出ている" : "**出ていない**");
+
+                        r.VerifyEqual("出し直した画面の鍵は、最初と同じ",
+                            secret, TwoFactorTests.SecretOf(wrongBody) ?? "（無し）");
+
+                        index = await user.GetStringAsync("/Manage/Index");
+
+                        r.Verify("間違えた後も、管理画面は TOTP を登録済みと出さない",
+                            !(index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator"),
+                            "出さない",
+                            (index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator") ? "**出している**" : "出さない");
+
+                        r.Step("(5) 正しいコードを送る");
+
+                        HttpResponseMessage verified = await TwoFactorTests.PostFormFromAsync(user, wrongBody,
+                            new Dictionary<string, string>() { { "Code", Totp.Compute(secret, DateTimeOffset.UtcNow) } },
+                            "/Manage/EnableTwoFactorAuthenticator");
+
+                        r.Verify("回復コードの画面へ進む",
+                            verified.Headers.Location != null
+                                && verified.Headers.Location.ToString().Contains("ShowTwoFactorAuthenticatorRecoveryCodes"),
+                            "ShowTwoFactorAuthenticatorRecoveryCodes", TwoFactorTests.Describe(verified));
+
+                        index = await user.GetStringAsync("/Manage/Index");
+
+                        r.Verify("管理画面は、TOTP を登録済みと出す",
+                            (index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator"),
+                            "出す",
+                            (index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator") ? "出す" : "**出さない**");
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userName);
+                }
+
+                r.Done();
+            }
+        }
+
         #region 補助
+
+        /// <summary>認証アプリの登録画面から、共有鍵を取る（`otpauth://totp/...?secret=...`）</summary>
+        /// <param name="body">画面の本文</param>
+        /// <returns>共有鍵（Base32。無ければ null）</returns>
+        private static string SecretOf(string body)
+        {
+            Match secret = Regex.Match(WebUtility.HtmlDecode(body ?? ""), "secret=(?<s>[A-Z2-7]+)");
+
+            return secret.Success ? secret.Groups["s"].Value : null;
+        }
+
+        /// <summary>パスワードでサインインし、2FA の手段の選択肢を返す</summary>
+        /// <param name="client">IdPClient（新しいもの）</param>
+        /// <param name="userName">利用者名</param>
+        /// <returns>選択肢の値</returns>
+        private static async Task<List<string>> ProvidersAsync(IdPClient client, string userName)
+        {
+            HttpResponseMessage get = await client.GetAsync("/Account/Login");
+            string loginBody = await get.Content.ReadAsStringAsync();
+
+            HttpResponseMessage post = await client.PostFormAsync("/Account/Login", new Dictionary<string, string>()
+            {
+                { "__RequestVerificationToken", Html.Antiforgery(loginBody) },
+                { "Email", userName },
+                { "Password", client.Config.Get("TestUserPWD") },
+                { "RememberMe", "false" },
+                { "ReturnUrl", TwoFactorTests.LocalPath(client, "/Manage/Index") },
+                { "submitButtonName", "normal_signin" }
+            });
+
+            Assert.True(post.Headers.Location != null && post.Headers.Location.ToString().Contains("/Account/SendCode"),
+                "前提: パスワードの後に 2FA の手段の選択へ送られること（" + TwoFactorTests.Describe(post) + "）");
+
+            HttpResponseMessage send = await client.GetAsync(TwoFactorTests.Resolve(client, post.Headers.Location));
+            string sendBody = await send.Content.ReadAsStringAsync();
+
+            return Regex.Matches(sendBody, "<option\\b[^>]*\\bvalue=\"(?<v>[^\"]*)\"", RegexOptions.IgnoreCase)
+                .Cast<Match>().Select(m => WebUtility.HtmlDecode(m.Groups["v"].Value)).ToList();
+        }
 
         /// <summary>TOTP を有効にした利用者</summary>
         private sealed class TotpUser

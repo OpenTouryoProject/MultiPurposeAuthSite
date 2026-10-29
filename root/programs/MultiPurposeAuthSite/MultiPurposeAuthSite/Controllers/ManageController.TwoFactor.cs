@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         SMS を続けて送らない（#294）
 //**********************************************************************************
 
 /*
@@ -25,6 +26,7 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Util.IdP;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System.Threading.Tasks;
 
@@ -87,7 +89,9 @@ namespace MultiPurposeAuthSite.Controllers
                     string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);
 
                     // メッセージをSMSで送信する。
-                    if (UserManager.SmsService != null)
+                    //   **同じ利用者に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
+                    if (UserManager.SmsService != null
+                        && Sts.MailThrottle.TryAcquire(Sts.MailThrottle.PurposePhoneNumber, User.Identity.GetUserId()))
                     {
                         IdentityMessage message = new IdentityMessage
                         {

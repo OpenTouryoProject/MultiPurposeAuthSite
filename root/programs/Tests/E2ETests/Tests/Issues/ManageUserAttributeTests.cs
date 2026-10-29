@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
+//*  2026/10/29  玄人 幸道         RT-294.61（同じメアド・他の利用者のメアドへの変更）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -411,6 +412,121 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**確認の後（メールの符号を使った先）は測っていない。**"
                     + "**E2E はメールを読めない。** 測っているのは**「押しただけでは変わらない」**ところまで。");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.61
+
+        /// <summary>RT-294.61 いまと同じメアドは断られ、他の利用者のメアドは、新しいメアドと同じ画面になる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29461_同じメアドは断られ他の利用者のメアドは区別されない(string targetKey)
+        {
+            using (IdPClient admin = await this.AdminClientAsync(targetKey))
+            {
+                string name = ManageUserAttributeTests.UniqueName();
+                string other = ManageUserAttributeTests.UniqueName();
+                string email = name + "@example.com";
+                string otherEmail = other + "@example.com";
+                string password = admin.Config.Get("TestUserPWD");
+
+                TestReport r = this.Report("RT-294.61",
+                    "メアドの変更で、いまと同じメアドは断られ、他の利用者のメアドは、新しいメアドと同じ画面になる",
+                    "**変わったかどうかを、利用者名と比べていた**（「利用者名＝メアド」だった頃の名残。#151）。"
+                    + "**いまと同じメアドを送っても、何も言わずに画面を出し直していた。**"
+                    + "**他の利用者のメアドを送ると、やはり何も言わずに出し直していた**ので、"
+                    + "**そのメアドが使われていることが、画面から分かった。**"
+                    + "**いまのメアドと比べ、同じなら文言を出し、他の利用者のメアドなら送らずに確認の画面を出す**ようにした。",
+                    "#294（ManageController.*.cs のレビュー B7） / ManageController.ChangeEmail");
+
+                r.Target("利用者 " + name + " と " + other + " を作り、" + name + " のメアドを変えようとする");
+
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                try
+                {
+                    r.Step("(1) 使い捨ての利用者を 2 人作る");
+
+                    Assert.True(ManageUserAttributeTests.IsRedirect(
+                        await UsersAdmin.CreateAsync(admin, name, email, "User")),
+                        "前提: 利用者を作れること");
+
+                    Assert.True(ManageUserAttributeTests.IsRedirect(
+                        await UsersAdmin.CreateAsync(admin, other, otherEmail, "User")),
+                        "前提: 2 人目の利用者を作れること");
+
+                    using (IdPClient user = this.Client(targetKey))
+                    {
+                        Assert.True(await user.TrySignInAsync(name, password),
+                            "前提: 作った利用者でサインインできること");
+
+                        r.Step("(2) いまと同じメアド（大文字にしたもの）を送る");
+
+                        HttpResponseMessage same = await ManageUserAttributeTests.PostAsync(
+                            user, "/Manage/ChangeEmail",
+                            new Dictionary<string, string>()
+                            {
+                                { "Email", email.ToUpperInvariant() },
+                                { "ConfirmEmail", email.ToUpperInvariant() },
+                                { "Password", password }
+                            });
+
+                        string sameBody = await same.Content.ReadAsStringAsync();
+
+                        r.Verify("入力の画面が出し直される",
+                            Html.HasField(sameBody, "ConfirmEmail"),
+                            "ConfirmEmail の欄が在る",
+                            Html.HasField(sameBody, "ConfirmEmail") ? "在る" : "**確認の画面に移った**");
+
+                        r.Verify("エラーの文言が出る",
+                            Html.HasValidationError(sameBody),
+                            "出ている", Html.HasValidationError(sameBody) ? "出ている" : "**出ていない**");
+
+                        r.Step("(3) 他の利用者のメアドを送る");
+
+                        HttpResponseMessage taken = await ManageUserAttributeTests.PostAsync(
+                            user, "/Manage/ChangeEmail",
+                            new Dictionary<string, string>()
+                            {
+                                { "Email", otherEmail },
+                                { "ConfirmEmail", otherEmail },
+                                { "Password", password }
+                            });
+
+                        string takenBody = await taken.Content.ReadAsStringAsync();
+
+                        r.VerifyEqual("HTTP 200（確認の画面）",
+                            "200", ((int)taken.StatusCode).ToString());
+
+                        r.Verify("新しいメアドを送ったときと同じ、確認の画面になる",
+                            !Html.HasField(takenBody, "ConfirmEmail"),
+                            "ConfirmEmail の欄が無い",
+                            Html.HasField(takenBody, "ConfirmEmail")
+                                ? "**入力の画面が出し直されている（使われていることが分かる）**" : "確認の画面");
+
+                        r.Step("(4) メアドは変わっていない");
+
+                        string index = await user.GetStringAsync("/Manage/Index");
+
+                        r.Verify("メアドは元のまま", (index ?? "").Contains(email),
+                            email, (index ?? "").Contains(email) ? email : "**変わっている**");
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                    await UsersAdmin.DeleteByUserNameAsync(admin, other);
+                }
+
+                r.Note("**パスワードの確認**（`RequirePasswordInEditingUserNameAndEmail`）**が有効な配備では、"
+                    + "2FA を有効にした利用者が必ず失敗していた**（サインインそのもので確かめていた）。"
+                    + "**既定の配備では確認しないので、ここでは測っていない**（読んで直した）。");
 
                 r.Done();
             }

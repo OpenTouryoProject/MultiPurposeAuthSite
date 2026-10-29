@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/06  玄人 幸道         新規（#272 の段階 2 / D-6）
 //*  2026/10/26  玄人 幸道         クライアント単位で同意を消す RevokeByClient を追加（登録の削除で、全利用者の同意を消す。#294）
+//*  2026/10/29  玄人 幸道         利用者単位で同意を消す DeleteByUser を追加（mem ストアで利用者の削除後に残っていた。#294）
 //**********************************************************************************
 
 /*
@@ -47,7 +48,7 @@
  * 取り消し（Revoke）は行ごと消す。呼ぶのは管理画面（利用者が 1 件ずつ取り消す）。
  * クライアントの登録を消すとき（動的登録の DELETE・管理画面の削除）は、RevokeByClient で全利用者の分を消す。
  * 発行済みのトークンは失効しない（そちらは /revoke の役目）。
- * 利用者を消すと、FK（ON DELETE CASCADE）で同意も消える。
+ * 利用者を消すと、FK（ON DELETE CASCADE）で同意も消える（mem は DeleteByUser が消す）。
  */
 
 using MultiPurposeAuthSite.Co;
@@ -533,6 +534,32 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     }
 
                     break;
+            }
+        }
+
+        /// <summary>その利用者の同意を、全て消す（#294）</summary>
+        /// <param name="userId">UserId</param>
+        /// <remarks>
+        /// **利用者を消すときに呼ぶ**（`CmnUserStore.Delete`）。
+        /// **DB では外部キー（`ON DELETE CASCADE`）が消す**ので、**mem だけ**を扱う。
+        /// </remarks>
+        public static void DeleteByUser(string userId)
+        {
+            if (string.IsNullOrEmpty(userId)
+                || Config.UserStoreType != EnumUserStoreType.Memory)
+            {
+                return;
+            }
+
+            string prefix = userId + "\t";
+
+            foreach (string key in ConsentProvider.ConsentGrants.Keys)
+            {
+                if (key.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    string removed = null;
+                    ConsentProvider.ConsentGrants.TryRemove(key, out removed);
+                }
             }
         }
 

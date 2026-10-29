@@ -16,11 +16,13 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（net48 版から移植。#258）
+//*  2026/10/29  玄人 幸道         利用者名の変更で WebAuthn の資格情報を移し、削除で消す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Util.IdP;
+using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 
 using System.Linq;
 using System.Collections.Generic;
@@ -411,6 +413,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //   この画面は RolesList を持つモデルを要するので、
                 //   **下の「再表示」に落として、そこで作らせる**（詰めずに返すとビューで落ちる）。
                 bool userNameIsValid = UserIdentifier.IsValidUserName(editUser.Name);
+                string oldUserName = user.UserName;
 
                 if (!userNameIsValid)
                 {
@@ -434,6 +437,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                     if (result.Succeeded)
                     {
+                        // **WebAuthn の資格情報を、新しい名前へ移す**（#294。ManageController.ChangeUserName と同じ）。
+                        if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+                        {
+                            FIDO.DataProvider.RenameUser(oldUserName, user.UserName);
+                        }
+
                         #region ロールの更新
 
                         IList<string> roles = await UserManager.GetRolesAsync(user);
@@ -561,6 +570,13 @@ namespace MultiPurposeAuthSite.Controllers
             if (result.Succeeded)
             {
                 // 削除の成功
+
+                // **WebAuthn の資格情報も消す**（#294。ManageController.DeleteGdprPersonalData と同じ）。
+                //   **FIDO2Data は利用者名で持っていて、Users への外部キーが無い**ので、残っていた。
+                if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+                {
+                    FIDO.DataProvider.DeleteByUser(user.UserName);
+                }
 
                 // リダイレクト（一覧へ）
                 return RedirectToAction("Index", new { Message = EnumAdminMessageId.DeleteSuccess });

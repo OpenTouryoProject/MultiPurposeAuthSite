@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
 //*  2026/10/28  玄人 幸道         送れなかった分を返す Release を足した（#294）
+//*  2026/10/29  玄人 幸道         管理画面のメアドの変更・電話番号の追加（SMS）の用途を足した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -91,6 +92,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>パスワード リセット</summary>
         public const string PurposePasswordReset = "PasswordReset";
+
+        /// <summary>メアドの変更（管理画面。新しいメアドへの確認）</summary>
+        public const string PurposeEmailChange = "EmailChange";
+
+        /// <summary>電話番号の追加（管理画面。**SMS も同じ数え方で絞る**）</summary>
+        public const string PurposePhoneNumber = "PhoneNumber";
 
         #endregion
 

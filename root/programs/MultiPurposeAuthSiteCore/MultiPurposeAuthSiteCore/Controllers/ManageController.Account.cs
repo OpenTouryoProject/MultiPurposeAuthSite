@@ -16,6 +16,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         パスワードの確認をサインインから切り離した・利用者名の変更で WebAuthn の資格情報を移す・
+//*                                メアドの変更の判定をメアドで行う（#294）
 //**********************************************************************************
 
 /*
@@ -27,18 +29,13 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
+using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
 using System.Threading.Tasks;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using AspNetId = Microsoft.AspNetCore.Identity;
-
-using Touryo.Infrastructure.Framework.StdMigration;
-using Touryo.Infrastructure.Public.Security.Pwd;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -82,7 +79,6 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> ChangeUserName(ManageChangeUserNameViewModel model)
         {
             ApplicationUser user = null;
-            Microsoft.AspNetCore.Identity.SignInResult signInResult = null;
 
             // **利用者名の編集は、常に出せる**（#151 の段階 3）。
             //   以前は「利用者名＝メアド」の配備では出せなかった（メアドの編集で兼ねていた）。
@@ -94,29 +90,20 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageChangeUserNameViewModelの検証に成功
 
+                    // ユーザの取得
+                    user = await UserManager.GetUserAsync(User);
+
                     // Passwordチェック
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
                     {
-                        // パスワードのチェック
-                        user = await UserManager.GetUserAsync(User);
-                        signInResult = await SignInManager.PasswordSignInAsync(
-                            userName: user.UserName,                                          // アカウント(UID)
-                            password: model.Password,                                         // アカウント(PWD)
-                            isPersistent: false,                                              // アカウント記憶
-                            lockoutOnFailure: Config.UserLockoutEnabledByDefault);            // ロックアウト
+                        // パスワードのチェック（サインインはしない。#294）
+                        string error = await this.CheckPasswordForEditingAsync(user, model.Password);
 
-                        if (signInResult.Succeeded)
-                        {
-                            // Passwordが一致した。
-                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(Config.AuthTimeCookieName,
-                                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
-                            // 処理を継続
-                        }
-                        else
+                        if (error != null)
                         {
                             // Passwordが一致しない。
                             // 再表示
+                            ModelState.AddModelError("", error);
                             return View(model);
                         }
                     }
@@ -126,8 +113,6 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    // ユーザの取得
-                    user = await UserManager.GetUserAsync(User);
                     string oldUserName = user.UserName;
 
                     // UserNameの更新
@@ -137,6 +122,13 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果の確認
                     if (result.Succeeded)
                     {
+                        // **WebAuthn の資格情報を、新しい名前へ移す**（#294）。
+                        //   **資格情報は利用者名で持っている**ので、移さないと元の名前に残る。
+                        if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+                        {
+                            FIDO.DataProvider.RenameUser(oldUserName, user.UserName);
+                        }
+
                         // 再ログイン
                         if (await this.ReSignInAsync(user.Id))
                         {
@@ -392,25 +384,14 @@ namespace MultiPurposeAuthSite.Controllers
                     // Passwordチェック
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
                     {
-                        // パスワードのチェック
-                        AspNetId.SignInResult result = await SignInManager.PasswordSignInAsync(
-                            userName: user.UserName,                                // アカウント(UID)
-                            password: model.Password,                               // アカウント(PWD)
-                            isPersistent: false,                                    // アカウント記憶
-                            lockoutOnFailure: Config.UserLockoutEnabledByDefault);  // ロックアウト
+                        // パスワードのチェック（サインインはしない。#294）
+                        string error = await this.CheckPasswordForEditingAsync(user, model.Password);
 
-                        if (result.Succeeded)
-                        {
-                            // Passwordが一致した。
-                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(Config.AuthTimeCookieName,
-                                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
-                            // 処理を継続
-                        }
-                        else
+                        if (error != null)
                         {
                             // Passwordが一致しない。
                             // 再表示
+                            ModelState.AddModelError("", error);
                             return View(model);
                         }
                     }
@@ -420,7 +401,9 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    if (user.UserName != model.Email)
+                    // **いまのメアドと比べる**（#294）。
+                    //   **以前は利用者名と比べていた**（「利用者名＝メアド」だった頃の名残。#151）。
+                    if (!string.Equals(user.Email, model.Email, StringComparison.OrdinalIgnoreCase))
                     {
                         // メアドが更新された場合。
 
@@ -431,29 +414,25 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // 既存のメアドでない場合。
 
-                            // DB ストアに保存
-                            CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
-                            {
-                                Code = GetPassword.Base64UrlSecret(128),
-                                Email = model.Email // 更新後のメアド
-                            };
-                            CustomizedConfirmationProvider.GetInstance()
-                                .CreateCustomizedConfirmationData(user.Id, customizedConfirmationJson);
-
-                            // 確認メールの送信
-                            this.SendConfirmEmail(user.Id, customizedConfirmationJson.Email, customizedConfirmationJson.Code);
-
-                            // 表示
-                            return View("VerifyEmailAddress");
+                            // 確認メールの送信（確認の符号の保存も、ここで行う）
+                            this.SendConfirmEmail(user, model.Email);
                         }
                         else
                         {
                             // 既存のメアドの場合。
+                            //   **送らずに、送った場合と同じ画面を出す**（#294）。
+                            //   **他の利用者のメアドかどうかを、画面から分からせない。**
+                            Logging.MyOperationTrace(string.Format(
+                                "{0}({1}) requested an e-mail address that is already in use.", user.Id, user.UserName));
                         }
+
+                        // 表示
+                        return View("VerifyEmailAddress");
                     }
                     else
                     {
                         // メアドが更新されていない場合。
+                        ModelState.AddModelError("", Resources.ManageController.EmailNotChanged);
                     }
                 }
                 else

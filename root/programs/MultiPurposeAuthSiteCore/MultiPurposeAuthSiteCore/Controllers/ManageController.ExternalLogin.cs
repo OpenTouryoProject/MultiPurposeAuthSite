@@ -16,6 +16,9 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         外部ログインの結び付けを AccountController に揃えた（name / email が無い・
+//*                                メアドで照合・クレームの入れ替え・他人の結び付け・未登録の provider）、
+//*                                最後のサインインの手段を消させない（#294）
 //**********************************************************************************
 
 /*
@@ -25,6 +28,7 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Log;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -39,6 +43,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 using Touryo.Infrastructure.Framework.StdMigration;
+using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -142,7 +147,8 @@ namespace MultiPurposeAuthSite.Controllers
                     bool flg = true;
                     foreach (UserLoginInfo ul in userLogins)
                     {
-                        if (auth.DisplayName == ul.ProviderDisplayName)
+                        // **スキーム名で突き合わせる**（#294。以前は表示名で比べていた）。
+                        if (auth.Name == ul.LoginProvider)
                         {
                             flg = false;
                         }
@@ -190,21 +196,16 @@ namespace MultiPurposeAuthSite.Controllers
 
                 IdentityResult result = null;
 
-                // クレームを削除
-                // Memory Provider使用の時
-                // 「コレクションが変更されました。列挙操作は実行されない可能性があります。」
-                // 問題で若干冗長なコードに。
-                List<Claim> lc = new List<Claim>();
-                foreach (Claim c in user.Claims)
+                // **最後のサインインの手段は消させない**（#294）。
+                //   **パスワードが無く、外部ログインが 1 つだけなら断る。**
+                //   **以前は画面で削除ボタンを隠すだけ**（`ShowRemoveButton`）で、要求を送れば消せた。
+                if (!await UserManager.HasPasswordAsync(user)
+                    && (await UserManager.GetLoginsAsync(user)).Count <= 1)
                 {
-                    if (c.Issuer == loginProvider)
-                    {
-                        lc.Add(c);
-                    }
-                }
-                foreach (Claim c in lc)
-                {
-                    result = await UserManager.RemoveClaimAsync(user, c);
+                    Logging.MyOperationTrace(string.Format(
+                        "{0}({1}) tried to remove the last way to sign in.", user.Id, user.UserName));
+
+                    return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.Error });
                 }
 
                 // ログインを削除
@@ -214,6 +215,23 @@ namespace MultiPurposeAuthSite.Controllers
                 if (result.Succeeded)
                 {
                     // ログイン削除の成功
+
+                    // クレームを削除（**ログインを消せてから**。#294）
+                    // Memory Provider使用の時
+                    // 「コレクションが変更されました。列挙操作は実行されない可能性があります。」
+                    // 問題で若干冗長なコードに。
+                    List<Claim> lc = new List<Claim>();
+                    foreach (Claim c in user.Claims)
+                    {
+                        if (c.Issuer == loginProvider)
+                        {
+                            lc.Add(c);
+                        }
+                    }
+                    foreach (Claim c in lc)
+                    {
+                        await UserManager.RemoveClaimAsync(user, c);
+                    }
 
                     // 再ログイン
                     if (await this.ReSignInAsync(user.Id))
@@ -258,6 +276,16 @@ namespace MultiPurposeAuthSite.Controllers
             if (Config.CanEditExtLogin
                 && Config.EnableEditingOfUserAttribute)
             {
+                // **登録されていない provider は、外部ログインの管理画面へ戻す**（#294）。
+                //   以前は `Challenge` が例外を出し、500 になっていた（AccountController と同じ）。
+                if (!(await SignInManager.GetExternalAuthenticationSchemesAsync()).Any(x => x.Name == provider))
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "An unknown external login provider was requested. ({0})", LogSanitizer.Sanitize(provider)));
+
+                    return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.Error });
+                }
+
                 // Request a redirect to the external login provider
                 string redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Manage");
                 AuthenticationProperties properties = SignInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
@@ -326,17 +354,21 @@ namespace MultiPurposeAuthSite.Controllers
                 if (idClaim != null)
                 {
                     // クレーム情報（ID情報とe-mail, name情報）を抽出
+                    //   **name / email は返さないプロバイダがある**ので、null のまま進める。
+                    //   **email は鍵なので必須、name は無くてよい**（#294。AccountController と同じ）。
                     string id = idClaim.Value;
-                    string name = nameClaim.Value;
-                    string email = emailClaim.Value;
+                    string name = nameClaim?.Value;
+                    string email = emailClaim?.Value;
 
                     // **鍵はメアド**（#151 の段階 3）。
                     string uid = email;
 
-                    if (!string.IsNullOrWhiteSpace(email)
-                        && !string.IsNullOrWhiteSpace(name))
+                    if (!string.IsNullOrWhiteSpace(email))
                     {
-                        // クレーム情報（e-mail, name情報）を取得できた。
+                        // クレーム情報（e-mail情報）を取得できた（name は無くてよい。#294）。
+
+                        // サインイン中のユーザ
+                        ApplicationUser currentUser = await UserManager.GetUserAsync(User);
 
                         // 既存の外部ログインを確認する。
                         user = await UserManager.FindByLoginAsync(
@@ -347,11 +379,18 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // 既存の外部ログインがある場合。
 
-                            // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
-                            idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
-                            idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                            idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
-                            idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                            if (user.Id != currentUser.Id)
+                            {
+                                // **ほかの利用者に結び付いている**（#294）。
+                                //   **以前は、その利用者のクレームを書き換え、成功したように戻っていた。**
+                                return RedirectToAction("ManageLogins",
+                                    new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
+                            }
+
+                            // ユーザーが既に外部ログインしている場合は、クレームを更新する。
+                            //   **同じ種類の古いクレームを消してから足す**（#294）。
+                            idResult = await this.ReplaceClaimAsync(user, emailClaim);
+                            idResult = await this.ReplaceClaimAsync(user, nameClaim);
 
                             //// SignInAsyncより、ExternalSignInAsyncが適切。
 
@@ -364,14 +403,15 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // ManageControllerではサインアップ・サインイン
                             // 済みなので、外部ログインの追加のみ行なう。
-                            user = await UserManager.GetUserAsync(User);
+                            user = currentUser;
 
-                            // uid（e-mail or name情報）が一致している必要がある。
-                            //   Manage（サインイン済み）なので、
-                            //   RequireUniqueEmail == false時のname and e-mailまでの一致は不要。
-                            if (user.NormalizedUserName == uid.ToUpper()) // ★ これでイイのか？
+                            // uid（e-mail情報）が一致している必要がある。
+                            //   **利用者名ではなく、メアドと比べる**（#294）。
+                            //   **利用者名とメアドを分けた**（#151）**後も利用者名と比べていた**ので、
+                            //   **利用者名がメアドと違う利用者は、外部ログインを結び付けられなかった。**
+                            if (string.Equals(user.Email, uid, StringComparison.OrdinalIgnoreCase))
                             {
-                                // uid（e-mail, name情報）が一致している。
+                                // uid（e-mail情報）が一致している。
 
                                 // 外部ログイン（ = UserLoginInfo ）の追加
                                 idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
@@ -380,7 +420,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (idResult.Succeeded)
                                 {
                                     idResult = await UserManager.AddClaimAsync(user, emailClaim);
-                                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                    idResult = await this.ReplaceClaimAsync(user, nameClaim); // name は無いことがある
                                     // ・・・
                                     // ・・・
                                     // ・・・
@@ -415,14 +455,14 @@ namespace MultiPurposeAuthSite.Controllers
                             }
                             else
                             {
-                                // uid（e-mail, name情報）が一致していない。
+                                // uid（e-mail情報）が一致していない。
                                 // 外部ログインのアカウントを間違えている。
                                 return RedirectToAction("ManageLogins",
                                     new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
 
                             } // else処理済
                         } // else処理済
-                    } // クレーム情報（e-mail, name情報）を取得できなかった。
+                    } // クレーム情報（e-mail情報）を取得できなかった。
                 } // クレーム情報（ID情報）を取得できなかった。
 
                 // ログイン情報を受け取れなかった場合や、その他の問題が在った場合。

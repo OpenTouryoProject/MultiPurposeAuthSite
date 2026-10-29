@@ -16,6 +16,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         パスワードの確認をサインインから切り離した・
+//*                                メアドの変更の判定をメアドで行う（#294）
 //**********************************************************************************
 
 /*
@@ -28,7 +30,6 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Threading.Tasks;
@@ -36,9 +37,6 @@ using System.Threading.Tasks;
 using System.Web.Mvc;
 
 using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
-
-using Touryo.Infrastructure.Public.Security.Pwd;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -93,27 +91,20 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageChangeUserNameViewModelの検証に成功
 
+                    // ユーザの取得
+                    user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
                     // Passwordチェック
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
                     {
-                        // パスワードのチェック
-                        user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                        SignInStatus signInResult = await SignInManager.PasswordSignInAsync(
-                            userName: user.UserName,                                          // アカウント(UID)
-                            password: model.Password,                                         // アカウント(PWD)
-                            isPersistent: false,                                              // アカウント記憶
-                            shouldLockout: Config.UserLockoutEnabledByDefault);               // ロックアウト
+                        // パスワードのチェック（サインインはしない。#294）
+                        string error = await this.CheckPasswordForEditingAsync(user, model.Password);
 
-                        if (signInResult == SignInStatus.Success)
-                        {
-                            // Passwordが一致した。
-                            Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
-                            // 処理を継続
-                        }
-                        else
+                        if (error != null)
                         {
                             // Passwordが一致しない。
                             // 再表示
+                            ModelState.AddModelError("", error);
                             return View(model);
                         }
                     }
@@ -123,8 +114,6 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    // ユーザの取得
-                    user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     string oldUserName = user.UserName;
 
                     // UserNameの更新
@@ -389,23 +378,14 @@ namespace MultiPurposeAuthSite.Controllers
                     // Passwordチェック
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
                     {
-                        // パスワードのチェック
-                        SignInStatus result = await SignInManager.PasswordSignInAsync(
-                            userName: user.UserName,                                          // アカウント(UID)
-                            password: model.Password,                                         // アカウント(PWD)
-                            isPersistent: false,                                              // アカウント記憶
-                            shouldLockout: Config.UserLockoutEnabledByDefault); // ロックアウト
+                        // パスワードのチェック（サインインはしない。#294）
+                        string error = await this.CheckPasswordForEditingAsync(user, model.Password);
 
-                        if (result == SignInStatus.Success)
-                        {
-                            // Passwordが一致した。
-                            Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
-                            // 処理を継続
-                        }
-                        else
+                        if (error != null)
                         {
                             // Passwordが一致しない。
                             // 再表示
+                            ModelState.AddModelError("", error);
                             return View(model);
                         }
                     }
@@ -415,7 +395,9 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    if (user.UserName != model.Email)
+                    // **いまのメアドと比べる**（#294）。
+                    //   **以前は利用者名と比べていた**（「利用者名＝メアド」だった頃の名残。#151）。
+                    if (!string.Equals(user.Email, model.Email, StringComparison.OrdinalIgnoreCase))
                     {
                         // メアドが更新された場合。
 
@@ -426,29 +408,25 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // 既存のメアドでない場合。
 
-                            // DB ストアに保存
-                            CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
-                            {
-                                Code = GetPassword.Base64UrlSecret(128),
-                                Email = model.Email // 更新後のメアド
-                            };
-                            CustomizedConfirmationProvider.GetInstance()
-                                .CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
-
-                            // 確認メールの送信
-                            this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
-
-                            // 表示
-                            return View("VerifyEmailAddress");
+                            // 確認メールの送信（確認の符号の保存も、ここで行う）
+                            this.SendConfirmEmail(user, model.Email);
                         }
                         else
                         {
                             // 既存のメアドの場合。
+                            //   **送らずに、送った場合と同じ画面を出す**（#294）。
+                            //   **他の利用者のメアドかどうかを、画面から分からせない。**
+                            Logging.MyOperationTrace(string.Format(
+                                "{0}({1}) requested an e-mail address that is already in use.", user.Id, user.UserName));
                         }
+
+                        // 表示
+                        return View("VerifyEmailAddress");
                     }
                     else
                     {
                         // メアドが更新されていない場合。
+                        ModelState.AddModelError("", Resources.ManageController.EmailNotChanged);
                     }
                 }
                 else

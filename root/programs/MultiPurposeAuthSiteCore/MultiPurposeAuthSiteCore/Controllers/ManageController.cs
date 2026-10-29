@@ -35,6 +35,7 @@
 //*  2026/10/26  玄人 幸道         クライアント登録の削除で、全利用者の同意も消すようにした（#294）
 //*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
 //*  2026/10/29  玄人 幸道         partial に分割（Account / TwoFactor / ExternalLogin / Data / OAuth2Data / Helper。#294）
+//*  2026/10/29  玄人 幸道         ManageController.*.cs のレビュー指摘を反映（各ファイルの履歴を参照。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -114,6 +115,9 @@ namespace MultiPurposeAuthSite.Controllers
 
         private const string AuthenticatorUriFormat = "otpauth://totp/{0}:{1}?secret={2}&issuer={0}&digits=6";
         private const string RecoveryCodesKey = nameof(RecoveryCodesKey);
+
+        /// <summary>コードを確かめる前の、認証アプリの鍵（TempData。#294）</summary>
+        private const string PendingAuthenticatorKey = nameof(PendingAuthenticatorKey);
 
         /// <summary>StatusMessage</summary>
         [TempData]

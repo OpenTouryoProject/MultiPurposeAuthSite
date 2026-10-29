@@ -356,6 +356,8 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
     - **E2E では測れない**（2FA を有効にすると、共用のテスト ユーザで他の全テストのサインインが変わるため）。
       修正の前後で同じ手順（`Manage` で有効化 → サインアウト → サインイン。クッキーは触らない）を踏み、
       **前は 2FA が飛ばされ、後は要求される**ことを手で確認した（2026-09-17）
+    - **✅ 同じ形が `ManageController.ExternalLoginCallback`（外部ログインの結び付け）にも残っていた。**
+      **2026-10-29 に `rememberBrowser: false` にした**（#294。`../ANALYSIS-IdP.md` の C-48。**読んで直した**）
 
 ---
 

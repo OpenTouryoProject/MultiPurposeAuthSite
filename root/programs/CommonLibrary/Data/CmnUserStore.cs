@@ -40,6 +40,7 @@
 //*  2026/10/20  玄人 幸道         Users から ClientID 列を落とした（#307 の段階 5-a-1）
 //*  2026/10/21  玄人 幸道         利用者の削除で、セッション × クライアントの台帳も消す（#310 の段階 1）
 //*  2026/10/28  玄人 幸道         mem ストアで TOTP のトークンの更新が DB の枝へ落ちていた（回復コードで 500。#294）
+//*  2026/10/29  玄人 幸道         利用者の削除で、同意（mem）と、持っていたクライアントへの全利用者の同意も消す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1032,6 +1033,16 @@ namespace MultiPurposeAuthSite.Data
 
             try
             {
+                // **その人が持つクライアントへの同意を、全利用者の分消す**（#294）。
+                //   **登録の行は消える**（mem は下で、DB は外部キーで）が、
+                //   **同意の ClientID には外部キーが無い**ので、ほかの利用者の同意が残っていた。
+                //   **管理画面でクライアントを消すときと同じ扱いにする**（`ManageController.OAuth2Data`）。
+                foreach (ViewModels.ManageAddSaml2OAuth2DataViewModel owned
+                    in Saml2OAuth2DataProvider.GetByOwner(user.Id))
+                {
+                    ConsentProvider.RevokeByClient(owned.ClientID);
+                }
+
                 // ユーザの論理削除
                 switch (Config.UserStoreType)
                 {
@@ -1061,6 +1072,11 @@ namespace MultiPurposeAuthSite.Data
                         //   **DB では外部キー（UserId → Users.Id の ON DELETE CASCADE）が消す**
                         //   ので、**ここも mem だけ**である（上の 2 つと同じ事情）。
                         SessionClientProvider.DeleteByUser(user.Id);
+
+                        // **その人の同意も消す**（#294）。
+                        //   **DB では外部キー（UserId → Users.Id の ON DELETE CASCADE）が消す**
+                        //   ので、**ここも mem だけ**である（上の 3 つと同じ事情）。
+                        ConsentProvider.DeleteByUser(user.Id);
 
                         break;
 

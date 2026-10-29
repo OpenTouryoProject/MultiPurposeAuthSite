@@ -180,4 +180,16 @@
   <data name="RevokeConsentSuccess" xml:space="preserve">
     <value>The consent has been revoked.</value>
   </data>
+  <data name="PasswordIncorrect" xml:space="preserve">
+    <value>The password is incorrect.</value>
+  </data>
+  <data name="PasswordNotSet" xml:space="preserve">
+    <value>Set a password before making this change.</value>
+  </data>
+  <data name="EmailNotChanged" xml:space="preserve">
+    <value>The e-mail address is the same as the current one.</value>
+  </data>
+  <data name="InvalidVerificationCode" xml:space="preserve">
+    <value>Verification code is invalid.</value>
+  </data>
 </root>
