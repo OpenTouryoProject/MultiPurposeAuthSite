@@ -3273,7 +3273,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | E-5 | **✅ 解消済み**。`log4net` を **3.2.0 → 3.3.0** に上げた（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節。**`NU1902` は解消**し、**版の割れ（実行時の `FileNotFoundException`）も直った**）。**net48 側は `OpenTouryoAssemblies` の 3.3.0 を使う**ので、元から対象外 |
 | E-6 | **✅ Deny ボタンは入れた（#272 の段階 2）**。認可画面で拒否でき、**`access_denied` を `redirect_uri` へ返す**（RFC 6749 §4.1.2.1。`RT-272.6`）。**拒否は記録しない**。残るのは **scope が生の識別子のまま**であること |
 | E-7 | **✅ 解けた（#303）。** **ファイルの更新だけを見て覚える**（`Extensions/Sts/JwkSetDocument`）。**`ETag` を常に付け、`If-None-Match` に `304`**。**`Cache-Control` は `JwkSetCacheMaxAgeSeconds`**（0 なら `no-store` ＝ 従来どおり）。**鍵の入れ替えに追随する**（`RT-303.2`） |
-| E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
+| E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる。**#294 で両方を責務ごとの partial に分けた**（`AccountController.*.cs` / `ManageController.*.cs`。**別 Controller への切り出しはしていない**） |
 | E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
 | E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |
 | E-11 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションが **認可応答の `iss`（RFC 9207）を見ていなかった。** `id_token` の `iss` は照合していたが、**OAuth 2.1 が Mix-Up 対策として挙げているのは応答パラメタの方。** いまは `SpRp_Isser` と照合する（**来なければ通す** — 実装していない OP があるため） |

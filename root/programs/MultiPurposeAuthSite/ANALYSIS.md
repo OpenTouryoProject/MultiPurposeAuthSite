@@ -119,7 +119,8 @@ MultiPurposeAuthSite/
    ├─ Controllers/                     … 行数は 2026-10-27 の実測
    │   ├─ AccountController.cs         220 行  本体
    │   ├─ AccountController.*.cs   計 6013 行  ★責務ごとの partial（#294。net10.0 版の 3 節の表）
-   │   ├─ ManageController.cs         2212 行
+   │   ├─ ManageController.cs          252 行  本体
+   │   ├─ ManageController.*.cs    計 2212 行  ★責務ごとの partial（#294。net10.0 版の 3 節の表）
    │   ├─ HomeController.cs           1534 行  ★テスト用クライアント（Starters）
    │   ├─ OAuth2EndpointController.cs 1714 行
    │   ├─ UsersAdminController.cs      610 行  ★net10.0 版へ移植済み（#258）
@@ -350,7 +351,7 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
     - `ReSignInAsync` は `ManageController` の **11 箇所**（メール アドレス・電話番号・パスワードの変更ほか）
       から呼ばれるので、影響は 2FA の有効化に限らなかった
     - ブラウザ記憶を付けてよいのは、利用者が 2FA を通して選んだときだけ（`Account/VerifyCode`）
-    - **net10.0 版は元から渡していない**（`../MultiPurposeAuthSiteCore/Controllers/ManageController.cs`）。
+    - **net10.0 版は元から渡していない**（`../MultiPurposeAuthSiteCore/Controllers/ManageController.Helper.cs`）。
       net48 版だけ取り残されていた
     - **E2E では測れない**（2FA を有効にすると、共用のテスト ユーザで他の全テストのサインインが変わるため）。
       修正の前後で同じ手順（`Manage` で有効化 → サインアウト → サインイン。クッキーは触らない）を踏み、

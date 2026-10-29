@@ -64,6 +64,10 @@
     <Compile Update="Controllers\AccountController.*.cs">
       <DependentUpon>AccountController.cs</DependentUpon>
     </Compile>
+    <!-- **ManageController も partial に分けてある**（#294）。ManageController.cs の下に畳んで見せる。 -->
+    <Compile Update="Controllers\ManageController.*.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
   
 </Project>

@@ -114,8 +114,8 @@ MultiPurposeAuthSiteCore/
    ├─ Controllers/                       … 行数は 2026-10-27 の実測
    │   ├─ AccountController.cs           301 行  本体（DI で受け取るマネージャ、共通処理）
    │   ├─ AccountController.*.cs     計 6406 行  ★責務ごとの partial（下の表。#294）
-   │   ├─ ManageController.cs           2730 行  ユーザ属性・2FA・外部ログイン・
-   │   │                                          クライアント登録・WebAuthn・GDPR
+   │   ├─ ManageController.cs            361 行  本体（DI で受け取るマネージャ、管理画面の初期表示）
+   │   ├─ ManageController.*.cs     計 2619 行  ★責務ごとの partial（下の表。#294）
    │   ├─ HomeController.cs             1539 行  ★テスト用クライアント（Starters）
    │   ├─ OAuth2EndpointController.cs   1711 行  token / userinfo / revoke / introspect /
    │   │                                          jwkcerts / ros / device_authz / ciba_* /
@@ -161,6 +161,23 @@ MultiPurposeAuthSiteCore/
 | `AccountController.Helper.cs` | メール送信、初期データとテスト用データの作成（6 節） |
 
 **WebAuthn と TOTP は net10.0 版だけ**なので、net48 版の `SignIn` / `TwoFactor` には、その部分が無い（8 節）。
+
+### `ManageController` も責務ごとの partial に分けてある（#294）
+
+**net48 版にも、同じファイル名・同じ分け方で在る**（net48 版の説明は、この表を指す）。
+**分けたのは `#region` の単位で、中身は変えていない。**
+
+| ファイル | 担うこと |
+|---|---|
+| `ManageController.cs` | 本体（DI で受け取るマネージャ、管理画面の初期表示。net48 版は `Dispose` も） |
+| `ManageController.Account.cs` | 利用者名の変更、パスワードの設定・変更、メアドの変更・検証 |
+| `ManageController.TwoFactor.cs` | 電話番号の登録・検証・削除、2 要素認証の有効化・無効化、TOTP の認証アプリ・回復コード |
+| `ManageController.ExternalLogin.cs` | 外部ログインの関連付け・解除、同意の一覧・取り消し |
+| `ManageController.OAuth2Data.cs` | 利用者が持つクライアント（SAML2 / OAuth2）の登録の一覧・追加・削除 |
+| `ManageController.Data.cs` | 非構造化データ、FIDO（WebAuthn）の資格情報、GDPR の参照・削除 |
+| `ManageController.Helper.cs` | 再サインイン、エラーの表示、メールの送信、TOTP の鍵と QR コード |
+
+**TOTP と WebAuthn は net10.0 版だけ**なので、net48 版の `TwoFactor` / `Data` / `Helper` には、その部分が無い。
 
 ---
 
@@ -681,8 +698,7 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
     **Newtonsoft で読むと base64url の `byte[]` が壊れる**。
     **キー名の大文字小文字も区別される**ので、
     **JS 側も `attestationObject` / `clientDataJSON` に直してある**。
-11. **`AccountController` は責務ごとの partial に分けた**（#294。3 節）。
-    **`ManageController.cs` は 2730 行と大きいまま**（実測 2026-10-27）。
+11. **`AccountController` と `ManageController` は責務ごとの partial に分けた**（#294。3 節）。
     変更は該当 `#region` に閉じ、全体リファクタは避ける。
 12. **`ErrorController` の基底が系統で違う**（3 節）。
 13. **`_appsettings.json` と `appsettings.json` の差分は「秘密情報」だけではない。**

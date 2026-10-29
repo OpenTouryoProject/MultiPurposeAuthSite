@@ -297,6 +297,24 @@
     <Compile Include="Controllers\ErrorController.cs" />
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ManageController.cs" />
+    <Compile Include="Controllers\ManageController.Account.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.TwoFactor.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.ExternalLogin.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.Data.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.OAuth2Data.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.Helper.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\OAuth2EndpointController.cs" />
     <Compile Include="Controllers\OAuth2ResourceServerController.cs" />
     <Compile Include="Controllers\PingController.cs" />
