@@ -29,43 +29,21 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         照会の cnf に jkt を入れる。using を整理した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
@@ -214,8 +192,22 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 string scopes = "";
+
+                //  **`cnf` は 1 つのオブジェクトにまとめる**（RFC 7800 §3.1 / RFC 8705 §3.2 / RFC 9449 §6.2）。
+                //    **mTLS（`x5t#S256`）と DPoP（`jkt`）は両方在ることが在る**（#311 の段階 2）。
+                //    **以前は `jkt` を返していなかった**（#294）。
+                Dictionary<string, string> cnf = new Dictionary<string, string>();
+
                 foreach (Claim claim in identity.Claims)
                 {
+                    //  **DPoP の縛りは、`urn:oauth:` の外の名前で持っている**（`Const.UrnCnfJktClaim`）ので、
+                    //    **下の絞り込みより前に拾う。**
+                    if (claim.Type == Const.UrnCnfJktClaim)
+                    {
+                        cnf[OAuth2AndOIDCConst.jkt] = claim.Value;
+                        continue;
+                    }
+
                     if (!claim.Type.StartsWith(OAuth2AndOIDCConst.UrnClaimBase))
                     {
                         continue;
@@ -227,12 +219,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
                     else if (claim.Type.StartsWith(OAuth2AndOIDCConst.UrnCnfX5tClaim))
                     {
-                        string temp = OAuth2AndOIDCConst.x5t
-                            + claim.Type.Substring(OAuth2AndOIDCConst.UrnCnfX5tClaim.Length);
-                        ret.Add(OAuth2AndOIDCConst.cnf, new Dictionary<string, string>()
-                        {
-                            { temp, claim.Value }
-                        });
+                        cnf[OAuth2AndOIDCConst.x5t
+                            + claim.Type.Substring(OAuth2AndOIDCConst.UrnCnfX5tClaim.Length)] = claim.Value;
                     }
                     else
                     {
@@ -249,6 +237,11 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                         ret.Add(name, claim.Value);
                     }
+                }
+
+                if (cnf.Count > 0)
+                {
+                    ret.Add(OAuth2AndOIDCConst.cnf, cnf);
                 }
 
                 ret.Add(OAuth2AndOIDCConst.UrnScopesClaim.Substring(

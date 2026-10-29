@@ -29,43 +29,24 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         ログの文言を経路に合わせ、using を整理した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text;
 using System.Collections.Specialized;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
@@ -136,7 +117,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // オペレーション・トレース・ログ出力
             string name = Helper.GetInstance().GetClientName(client_id);
             Logging.MyOperationTrace(string.Format(
-                "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
+                "{0}({1}) passed the authorization endpoint of Authorization Code by {2}({3}).",
                 client_id, name,                                                        // Client Account
                 Helper.GetInstance().GetClientIdByName(identity.Name), identity.Name)); // User Account
 
@@ -231,7 +212,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // オペレーション・トレース・ログ出力
                 string name = Helper.GetInstance().GetClientName(client_id);
                 Logging.MyOperationTrace(string.Format(
-                    "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
+                    "{0}({1}) passed the authorization endpoint of Implicit by {2}({3}).",
                     client_id, name,                                                        // Client Account
                     Helper.GetInstance().GetClientIdByName(identity.Name), identity.Name)); // User Account
 

@@ -50,6 +50,7 @@
 //*  2026/10/19  玄人 幸道         private_key_jwtのTestClient_24を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
+//*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -104,6 +105,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **構成ファイルには無い。** TestClient4_2 と同じく test.ps1 -Launch が差し込む。
         /// </summary>
         public const string TestClient4_3 = "TestClient4_3";
+
+        /// <summary>
+        /// TestClient4（fapi_ciba）を写し、**`token_endpoint_auth_method` を `private_key_jwt`** にしたクライアント（#294）。
+        /// </summary>
+        /// <remarks>
+        /// **CIBA の `/ciba_authz` と `/token` を、`client_assertion` で通すことを測る**（`RT-294.43`）。
+        /// **アサーションは ES256**（写し元の ECDSA の公開鍵で検証される）。
+        /// **構成ファイルには無い。** 種データ（`Sts.TestClients`）で登録される。
+        /// </remarks>
+        public const string TestClient4_4 = "TestClient4_4";
 
         /// <summary>
         /// TestClient2（fapi2）を写し、tls_client_auth_subject_dn をテスト専用の値（MtlsSubjectDn）にしたクライアント（#226）。
@@ -397,6 +408,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
+                { KnownClients.TestClient4_4, "e2e0tc44000000000000000000000000" },
                 { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
                 { KnownClients.TestClient2_3, "e2e0tc23000000000000000000000000" },
                 { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
@@ -856,8 +868,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             // **redirect_uri を差し替えたものも、写す元の値では通らない**（C-10）。
             string overriddenRedirectUri = null;
 
-            if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3)
+            if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3
+                || clientName == KnownClients.TestClient4_4)
             {
+                // TestClient4_4 は **`private_key_jwt` で認証する**（#294）。client_secret は写す元のまま（使わない）。
                 sourceName = KnownClients.TestClient4;
             }
             else if (clientName == KnownClients.TestClient2_2 || clientName == KnownClients.TestClient2_3)

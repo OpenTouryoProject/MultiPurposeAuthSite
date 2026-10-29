@@ -29,42 +29,21 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         壊れた request で 500 にしない。文言・定数の置き場所・using を直した（#294）
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;
-using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.TokenProviders
@@ -143,31 +122,28 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (!string.IsNullOrEmpty(request))
             {
                 // **CIBA Core §7.1.1 : 署名した認証要求を request で受け取る。**
-                string json = "";
+                //   **JWT でない・payload がオブジェクトでない値を渡されても、例外にしない**（#185 / #241 と同じ方針）。
+                //   **以前は base64 の復号だけを守っていて、JSON の配列や文字列でない `iss` で 500 になった**（#294）。
+                JObject unverified = JwtReader.TryReadPayload(request);
 
-                try
+                if (unverified == null)
                 {
-                    json = CustomEncode.ByteToString(
-                        CustomEncode.FromBase64UrlString(request.Split('.')[1]), CustomEncode.us_ascii);
-                }
-                catch
-                {
-                    // JWT でない文字列を渡されても、例外にしない（#185 と同じ方針）。
                     errDescription = "The request is not a JWT.";
                     return false;
                 }
 
-                JObject unverified = (JObject)JsonConvert.DeserializeObject(json);
+                string unverifiedIss = CmnEndpoints.StringClaimOf(unverified, OAuth2AndOIDCConst.iss);
 
-                if (unverified == null || unverified[OAuth2AndOIDCConst.iss] == null)
+                if (string.IsNullOrEmpty(unverifiedIss))
                 {
                     errDescription = "The request has no iss.";
                     return false;
                 }
 
                 // 署名の検証に使う公開鍵は、登録（iss ＝ client_id）から引く。
-                string pubKey = Helper.GetInstance().GetJwkECDsaPublickey(
-                    (string)unverified[OAuth2AndOIDCConst.iss]);
+                //   **登録の値が壊れていても例外にしない**（`DecodeRegisteredJwk` は空を返す。#294）。
+                string pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                    Helper.GetInstance().GetJwkECDsaPublickey(unverifiedIss));
 
                 if (string.IsNullOrEmpty(pubKey))
                 {
@@ -176,9 +152,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
                     return false;
                 }
-
-                pubKey = CustomEncode.ByteToString(
-                    CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                 if (!RequestObject.VerifyCiba(request, out string _, pubKey))
                 {
@@ -198,6 +171,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
 
                 // 存在しない・期限切れの request_uri では空になる（#185 / #188）。
+                //   **預けたものは /ros が検証した JSON**なので、オブジェクトである。
                 payload = (JObject)JsonConvert.DeserializeObject(json ?? "");
 
                 if (payload == null)
@@ -215,13 +189,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         #endregion
-
-        /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2 / #243）</summary>
-        /// <remarks>
-        /// **短くしてある**（`ciba:jti:` から `ciba:` へ。#243）。
-        /// 記録先の `Urn` は **38 文字**（GUID 用）なので、桁を使い切らないようにする。
-        /// </remarks>
-        private const string CibaJtiKeyPrefix = "ciba:";
 
         #region VerifyCibaRequestIssuer
 
@@ -254,6 +221,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region ConsumeCibaJti
+
+        /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2 / #243）</summary>
+        /// <remarks>
+        /// **短くしてある**（`ciba:jti:` から `ciba:` へ。#243）。
+        /// 記録先の `Urn` は **38 文字**（GUID 用）なので、桁を使い切らないようにする。
+        /// </remarks>
+        private const string CibaJtiKeyPrefix = "ciba:";
 
         /// <summary>CIBA の認証要求を使い切りにする（#234 の段階 2）</summary>
         /// <param name="jti">署名した認証要求の一意な識別子</param>
@@ -445,7 +419,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // CIBA Core 13 : invalid_request。以前はコードが空だった（#196）。
                     err = OAuth2AndOIDCConst.invalid_request;
-                    errDescription = "This PAR is expired.";
+                    errDescription = "The request is expired.";
                     return false;
                 }
             }
@@ -463,7 +437,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // CIBA Core 13 : invalid_request。以前はコードが空だった（#196）。
                     err = OAuth2AndOIDCConst.invalid_request;
-                    errDescription = "This PAR is before enabled.";
+                    errDescription = "The request is not yet valid.";
                     return false;
                 }
             }

@@ -29,43 +29,18 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         CheckAuthTime の記述を実装に合わせ、using を整理した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
-using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
@@ -106,7 +81,9 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`reAuthenticatedAt` は繰り返しを防ぐための印。**
         /// `max_age=0` は「毎回再認証」を意味するが、再認証の直後でも
         /// 経過時間は 0 より大きくなるため、印が無いと延々と送り返すことになる。
-        /// **印より後に認証されていれば、一度は再認証したと見て続ける。**
+        /// **印が新しければ（求めてから `ReAuthenticationMarkerLifetimeSeconds` 以内）、一度は再認証したと見て続ける。**
+        /// **`auth_time` と印の時刻は比べていない** — **印を残すとき、Controller はサインアウトさせる**ので、
+        /// 印が在って、なおサインインしているなら、その間に認証し直している（#294 で記述を実装に合わせた）。
         /// </remarks>
         public static OAuth2AndOIDCEnum.AuthTimeCheck CheckAuthTime(string max_age, string authTime, string reAuthenticatedAt)
         {

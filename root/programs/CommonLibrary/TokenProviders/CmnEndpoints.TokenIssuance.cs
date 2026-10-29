@@ -29,35 +29,19 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         expires_in を実際の期間で返し、登録の鍵を安全に読む。using を整理した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 #if NETFX
 using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
 #endif
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -256,8 +240,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
             {
                 // fapi2 の登録は、JWK（RSA 公開鍵）も読む
-                jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                    Helper.GetInstance().GetJwkRsaPublickey(client_id)), CustomEncode.us_ascii);
+                //   **登録が無い・壊れていれば空**（#294。以前は列が NULL だと 500 だった）。
+                //   **空なら JWE にせず JWS で返す**（`CreateAccessTokenResponse`）。
+                jwkString = CmnEndpoints.DecodeRegisteredJwk(
+                    Helper.GetInstance().GetJwkRsaPublickey(client_id));
             }
 
             if (ClientModePolicy.IsAllowed(clientMode, flow, proof))
@@ -411,8 +397,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="refresh_token">string</param>
         /// <param name="jwkString">string</param>
         /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
+        /// <param name="expiresIn">access_token に付けた有効期間（null なら `OAuth2AccessTokenExpireTimeSpanFromMinutes`）</param>
         /// <returns>Dictionary(string, string)</returns>
         /// <remarks>
+        /// **`expires_in` は、実際に付けた期間で返す**（#294）。
+        /// **`client_registration` 専用のトークンは期間が短い**（`DcrAccessTokenExpireTimeSpanFromSeconds`）が、
+        /// 以前は常に通常の期間を返していた。**クライアントが、切れたトークンを使い続ける**ことになる。
+        ///
         /// **`token_type` は、縛ったかどうかで変わる**（RFC 9449 §5）。
         ///
         /// | | `token_type` |
@@ -424,7 +415,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// （`Authorization: DPoP …` ＋ 証明。**段階 2 で照合する**）。
         /// </remarks>
         private static Dictionary<string, string> CreateAccessTokenResponse(
-            string access_token, string refresh_token, string jwkString, string jkt = null)
+            string access_token, string refresh_token, string jwkString, string jkt = null,
+            TimeSpan? expiresIn = null)
         {
             Dictionary<string, string> ret = new Dictionary<string, string>();
 
@@ -486,7 +478,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // expires_in
-            ret.Add(OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString());
+            ret.Add(OAuth2AndOIDCConst.expires_in, ((int)(expiresIn
+                ?? Config.OAuth2AccessTokenExpireTimeSpanFromMinutes).TotalSeconds).ToString());
 
             // scope
             // 発行したスコープを返す。要求と異なる場合は必須（RFC 6749 5.1）。

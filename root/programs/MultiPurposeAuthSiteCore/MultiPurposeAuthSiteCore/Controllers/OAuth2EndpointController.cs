@@ -70,6 +70,7 @@
 //*  2026/10/21  玄人 幸道         /token で DPoP の証明を受け取る（#311 の段階 1）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/25  玄人 幸道         エラー応答（OAuth2Error / NGResult / /userinfo）を OPERATION に記録する（障害対応のため。#294）
+//*  2026/10/29  玄人 幸道         CIBA を client_assertion（private_key_jwt）で通す（/ciba_authz の client_id・/token。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -342,7 +343,7 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.CibaGrantType:
                             string auth_req_id = formData[OAuth2AndOIDCConst.auth_req_id];
                             if (Token.CmnEndpoints.GrantCiba(grant_type,
-                                client_id, client_secret, x509,
+                                client_id, client_secret, clientAssertion, x509,
                                 dPoPProof, auth_req_id, out ret, out err))
                             {
                                 return this.Ok(ret);
@@ -970,8 +971,10 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 受け取れなかった（err, errDescriptionは設定済み）。
                     }
+                    // **client_id は、要求の iss（＝認証したクライアント。ReceiveCibaRequest が照合済み）から取る**（#294）。
+                    //   **private_key_jwt ではフォームに client_id が無い**ので、以前は空のまま code を作り、500 になっていた。
                     else if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
-                        jsonObj, out string _, out scope,
+                        jsonObj, out client_id, out scope,
                         out client_notification_token, out binding_message,
                         out user_code, out requested_expiry, out login_hint,
                         out err, out errDescription))

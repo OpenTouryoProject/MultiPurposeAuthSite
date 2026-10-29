@@ -4061,6 +4061,31 @@ The ID federation did not complete. (the error view was returned)
 > **`RT-294.30` の出口は、版で違う。** net10.0 版はサインイン画面へリダイレクトし、
 > net48 版は失敗の画面（`ExternalLoginFailure`）を出す。**どちらも「500 にせず、サインインしない」ので、両方を受け入れる。**
 
+#### `CmnEndpoints.*.cs` のレビューで見つけた不具合（`RT-294.41`〜`.49`。#294）
+
+**`CmnEndpoints.*.cs` のレビューで見つけ、直したものを押さえる**（`CmnEndpointsReviewTests`。両版）。
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.41` | normal の登録のクライアントは、**Device グラントでも refresh_token を受け取り**、それで更新できる | **作って保存するだけで、応答に入れていなかった** |
+| `RT-294.42` | DPoP で縛ったトークンを `/introspect` で照会すると、**`cnf.jkt` が証明の鍵の指紋**である | **`jkt` を返していなかった**（mTLS の `x5t#S256` だけ返していた） |
+| `RT-294.43` | **CIBA を `/ciba_authz` から `/token` まで `client_assertion`（private_key_jwt）で通せる** | **`/ciba_authz` は 500**（フォームに無い `client_id` で code を作っていた）、**`/token` は `client_assertion` を読まなかった** |
+| `RT-294.44` | CIBA の**発行していない `auth_req_id`** は `invalid_grant` | **内部の状態名（`not_found`）を error に入れていた** |
+| `RT-294.45` | **JWT Bearer の壊れた assertion**（JWT でない・`iss` が文字列でない・登録の無い `iss`）は 400 / 401 | **JWT でない値と、`iss` が文字列でない値で 500** |
+| `RT-294.46` | **scope を省いた**トークン要求（client_credentials / password / JWT Bearer）でもトークンが取れる | **500**（null の `Split`） |
+| `RT-294.47` | **CIBA の壊れた request**（payload が配列・`iss` がオブジェクト）は 400 | **500** |
+| `RT-294.48` | **他のクライアントが出した refresh_token** は、消費せずに断る（**持ち主はその後も更新できる**） | **消費してから断っていた**（持ち主が次に使うと、一族ごと失効した） |
+| `RT-294.49` | Discovery の **revoke / introspect の認証方法**が、トークン エンドポイントと同じ一覧 | **秘密の 2 つしか広告していなかった** |
+
+> **`client_registration` 専用トークンの `expires_in`**（以前は配備ぜんたいの期限を返していた）は、**`RT-307.5` に足した。**
+> **`RT-294.43` は TestClient4_4**（種データ。fapi_ciba ＋ `private_key_jwt`。アサーションは ES256）を使い、
+> **プッシュ通知の送信箱を使う**ので、`-Launch` でなければ Skip する。
+>
+> **測れていないもの。** **Basic の照合で失敗を 2 回数えていた**こと（`GetBasicCredentials`）は、
+> 上限の手前の数を外から読めないので測っていない（**読んで直した**）。
+> **JWT Bearer の alg の名乗りの照合**（RS256 以外を名乗る assertion を断る）も、
+> 名乗りを変えると署名も合わなくなるので、E2E では区別できない。
+
 #### 認可は、付与の前後で測る（`RT-257.9`）
 
 **門番（`Authorize`）とメニューの出し分けは、どちらも `SystemAdmin` を見る。**

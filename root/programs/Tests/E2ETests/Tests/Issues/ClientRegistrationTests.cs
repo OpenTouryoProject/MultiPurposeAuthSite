@@ -34,6 +34,7 @@
 //*  2026/10/26  玄人 幸道         RT-307.27（動的登録の CRUD の後で、保存された行を確かめる）を追加（#294）
 //*  2026/10/26  玄人 幸道         RT-307.28（管理画面で保存しても、画面に出ない列が残る）を追加（#294）
 //*  2026/10/26  玄人 幸道         RT-307.29（登録を消すと、全利用者の同意が消える）を追加（#294）
+//*  2026/10/29  玄人 幸道         RT-307.5 で expires_in も絞った期限であることを見る（#294）
 //**********************************************************************************
 
 using System;
@@ -73,7 +74,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-307.2`** | **トークンが無ければ 401／scope が足りなければ 403** |
     /// | **`RT-307.3`** | **2 件目以降も登録できる**（**1 利用者 n クライアント**。#307 の段階 5-a） |
     /// | **`RT-307.4`** | **メタデータの誤りは `400`**（`jwks_uri` / `redirect_uris` 無し / 対応しない組み合わせ） |
-    /// | **`RT-307.5`** | **専用トークンは scope も有効期限も絞られている** |
+    /// | **`RT-307.5`** | **専用トークンは scope も有効期限も絞られている**（**応答の `expires_in` も**。#294） |
     /// | **`RT-307.6`** | **登録した `response_types` が効く** |
     /// | **`RT-307.7`** | **登録した `grant_types` が効く** |
     /// | **`RT-307.8`** | **登録した `scope` が効く**（DB に登録したクライアントでも） |
@@ -674,6 +675,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.Note("**既定は 300 秒**（`DcrAccessTokenExpireTimeSpanFromSeconds`。"
                         + "**未設定・0 以下なら既定値に倒す**）。"
                         + "**ここで値そのものを突き合わせないのは、配備で変えられる設定だから**である。");
+
+                    r.Step("(3) 応答の expires_in も、絞った期限を言う（#294）");
+
+                    //  **以前は常に配備ぜんたいの期限（既定 360 分）を返していた。**
+                    //    **クライアントは expires_in を見て使い続けるので、切れたトークンを出すことになる。**
+                    string expiresIn = res.String("expires_in");
+                    bool parsed = long.TryParse(expiresIn, out long seconds);
+
+                    r.Verify("expires_in が exp - iat と一致する（差が 5 秒以内）",
+                        parsed && Math.Abs(seconds - lifetime) <= 5,
+                        lifetime.ToString() + " 秒",
+                        "expires_in = " + (expiresIn ?? "なし"));
                 });
 
                 r.Done();

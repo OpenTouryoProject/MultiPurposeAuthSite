@@ -105,42 +105,16 @@
 //*  2026/10/24  玄人 幸道         Hybrid / OIDC の Implicit も Enable*GrantType に従わせ、EnableOpenIDConnect を廃止した（#314）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/29  玄人 幸道         partial に分割した（CmnEndpoints.*.cs。#294）
+//*  2026/10/29  玄人 幸道         using を整理した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.TokenProviders

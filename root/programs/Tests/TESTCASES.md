@@ -982,7 +982,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - refresh_token / id_token
-  - この実装は refresh_token を生成・保存するが、応答には含めていない（CmnEndpoints.GrantDeviceAuthZ）。渡さないなら、生成しない方がよい。
+  - **device の登録には refresh_token を発行しない**（ClientModePolicy の表。#224）。**normal の登録には返す**（以前は生成・保存するだけで返していなかった。RT-294.41）。
 
 **補足**
 
@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=44a2e5d7-fde0-41bc-865d-f7d6a2dfbf96&code=bogus
+1. GET /Account/EmailConfirmation?userId=bf3c1311-a301-4582-a5eb-b02e1ffa9db4&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=44a2e5d7-fde0-41bc-865d-f7d6a2dfbf96&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=44a2e5d7-fde0-41bc-865d-f7d6a2dfbf96&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=bf3c1311-a301-4582-a5eb-b02e1ffa9db4&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=bf3c1311-a301-4582-a5eb-b02e1ffa9db4&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7020,6 +7020,178 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 承認の前 : **`approved` は false**
 - 承認の後 : **`approved` が true で、戻り先が返る**
 - **サインインが完了している**（保護された画面が開く）
+
+## RT-294.41 **normal の登録のクライアントは、Device グラントでも refresh_token を受け取り、それで更新できる**
+
+| | |
+|---|---|
+| 観点 | **以前は refresh_token を作って保存するだけで、応答に入れていなかった**（**使われない行が溜まり、機器は期限が切れるたびに利用者の承認からやり直していた**）。**device の登録には、従来どおり発行しない**（ClientModePolicy の表。EX-4.3）。 |
+| 根拠 | RFC 8628 §3.5 / RFC 6749 §5.1 / #294 |
+| テスト | `RT29441_Deviceグラントでrefresh_tokenが返る` |
+
+**手順**
+
+1. 機器 : POST /device_authz
+1. 利用者 : /device_verify で許可する
+1. 機器 : grant_type=device_code でトークンを取る
+1. その refresh_token で更新できる
+
+**検証（合否を判定する）**
+
+- access_token が返る
+- refresh_token が返る
+- 更新で access_token が返る
+
+## RT-294.42 **DPoP で縛ったトークンを /introspect で照会すると、`cnf` の中に `jkt` が返る**
+
+| | |
+|---|---|
+| 観点 | **リソース サーバは照会の `cnf.jkt` を見て、証明の鍵と突き合わせる**（RFC 9449 §6.2）。**以前は `jkt` を返していなかった**ので、**照会で確かめるリソース サーバは、縛りに気付けなかった**（mTLS の `x5t#S256` だけ入っていた）。 |
+| 根拠 | RFC 7662 §2.2 / RFC 7800 §3.1 / RFC 9449 §6.2 / #294 |
+| テスト | `RT29442_DPoPで縛ったトークンの照会でcnfのjktが返る` |
+
+**手順**
+
+1. 証明を添えて、認可コードを交換する
+1. 発行先の資格情報で照会する
+
+**検証（合否を判定する）**
+
+- active が true
+- cnf.jkt が、証明の鍵の指紋と一致する
+
+## RT-294.43 **CIBA を、`/ciba_authz` から `/token` まで `client_assertion`（private_key_jwt）で通せる**
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA は、クライアント認証に private_key_jwt か mTLS を求める。****以前は `/ciba_authz` は `client_assertion` を受けるのに、`/token` は読まなかった**ので、**利用者が承認した後で `invalid_client` になっていた。** |
+| 根拠 | CIBA Core §7.1 / §10.1 / RFC 7523 §2.2 / #294 |
+| テスト | `RT29443_CIBAをprivate_key_jwtで最後まで通せる` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する
+1. クライアント : client_assertion で POST /ciba_authz
+1. 利用者 : 認証デバイスで許可する
+1. クライアント : client_assertion で POST /token
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- access_token が返る
+
+## RT-294.44 **発行していない auth_req_id でポーリングすると、`invalid_grant` が返る**
+
+| | |
+|---|---|
+| 観点 | **以前は内部の状態名（`not_found`）を、そのまま error に入れていた**（仕様に無い値で、RP は意味を読めない）。**Device グラントは #199 で直してあった**ので、それに揃えた。 |
+| 根拠 | CIBA Core §11 / RFC 6749 §5.2 / #294 |
+| テスト | `RT29444_CIBAの知らないauth_req_idはinvalid_grant` |
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- error が invalid_grant
+
+## RT-294.45 **JWT Bearer グラントに壊れた assertion を渡しても、HTTP 500 にしない**
+
+| | |
+|---|---|
+| 観点 | **以前は `Split('.')[1]`・`dic[iss]`・登録の無い鍵の復号を、確かめずに行っていた**ので、**外から来た値で 500 に落とせた**（他の口は #241 で直してあった）。 |
+| 根拠 | RFC 7523 §3.1 / RFC 6749 §5.2 / #241 / #294 |
+| テスト | `RT29445_JWTBearerの壊れたassertionで500にしない` |
+
+**手順**
+
+1. JWT でない値
+1. iss が文字列でない JWT
+1. 登録されていない iss
+
+**検証（合否を判定する）**
+
+- HTTP 400 か 401（500 にしない）
+- error が返る
+- HTTP 400 か 401（500 にしない）
+- error が返る
+- HTTP 400 か 401（500 にしない）
+- error が返る
+
+## RT-294.46 **scope を省いたトークン要求でも、HTTP 500 にしない**（client_credentials / password / JWT Bearer）
+
+| | |
+|---|---|
+| 観点 | **scope は OPTIONAL である**（RFC 6749 §4.3.2 / §4.4.2）。**以前は null の `Split` で 500 になっていた**（client_credentials は、上の方では null を守っていた）。 |
+| 根拠 | RFC 6749 §3.3 / §4.3.2 / §4.4.2 / RFC 7523 §2.1 / #294 |
+| テスト | `RT29446_scopeを省いてもトークンが取れる` |
+
+**手順**
+
+1. client_credentials
+1. password
+1. JWT Bearer（assertion にも scope を入れない）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token が返る
+- HTTP 200
+- access_token が返る
+- HTTP 200
+- access_token が返る
+
+## RT-294.47 **CIBA の request が、payload がオブジェクトでない・iss が文字列でない JWT でも、HTTP 400 で返す**
+
+| | |
+|---|---|
+| 観点 | **以前は Base64URL の復号だけを守っていて、その後の JSON の読み取りで 500 になっていた。** |
+| 根拠 | CIBA Core §13 / RFC 6749 §5.2 / #241 / #294 |
+| テスト | `RT29447_CIBAの壊れたrequestで500にしない` |
+
+**手順**
+
+1. payload が配列の JWT
+1. iss がオブジェクトの JWT
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- HTTP 400
+
+## RT-294.48 **他のクライアントが出した refresh_token は、消費せずに断る**（持ち主はその後も使える）
+
+| | |
+|---|---|
+| 観点 | **以前は消費（ローテーション）してから、発行先が違うと断っていた。****持ち主が次に使うと「使用済みの再提示」と見なされ、一族ごと失効した**（#188 の段階 3）。 |
+| 根拠 | RFC 6749 §6 / RFC 9700 §4.14 / #294 |
+| テスト | `RT29448_他のクライアントのrefresh_tokenは消費せずに断る` |
+
+**手順**
+
+1. 持ち主（MVC_Sample）が refresh_token を得る
+1. 他のクライアント（TestClient）が出す
+1. 持ち主は、その後も更新できる
+
+**検証（合否を判定する）**
+
+- error が invalid_grant
+- access_token が返る
+
+## RT-294.49 **revoke / introspect の認証方法は、トークン エンドポイントと同じ一覧を広告する**
+
+| | |
+|---|---|
+| 観点 | **#239 から、revoke / introspect も private_key_jwt と mTLS で通る**のに、**広告は秘密の 2 つのままだった**（広告を見て方法を選ぶ RP は、使えないと判断する）。**一覧は 1 か所（`TokenEndpointAuthMethods`）から作る。** |
+| 根拠 | RFC 8414 §2 / RFC 7009 §2.1 / RFC 7662 §2.1 / #294 |
+| テスト | `RT29449_Discoveryが受け付ける認証方法を広告する` |
+
+**検証（合否を判定する）**
+
+- revocation_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported と同じ
+- introspection_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported と同じ
+- request_object_signing_alg_values_supported に RS256 が在る
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 
@@ -7590,11 +7762,13 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 1. 専用 scope を、他の scope と一緒に要求する
 1. 有効期限が、配備ぜんたいの値より短い
+1. 応答の expires_in も、絞った期限を言う（#294）
 
 **検証（合否を判定する）**
 
 - scope は専用の 1 本だけ
 - 1 時間より短い
+- expires_in が exp - iat と一致する（差が 5 秒以内）
 
 **観測（判定しない）**
 

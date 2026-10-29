@@ -29,41 +29,20 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         Basic の照合で失敗を数えない。JWT Bearer の alg の一覧を足し、using を整理した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;
-using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
-using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
-
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
@@ -502,6 +481,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// **切り替えは Open棟梁 の `AuthenticationHeader.GetCredentials`（照合を渡す版）が行う**（#294）。
         /// ここで渡すのは**照合**で、**読むだけ**（設定・ストアの参照）なので、副作用は無い。
+        /// **照合は `ClientAuthentication` を呼ばない**（#294）。
+        /// **あちらは失敗を数え、成功で数えた分を消す**（#305 の段階 2）ので、
+        /// **ここで呼ぶと、記号を含む値の 1 回の失敗が 2 回と数えられていた**（この後に呼び出し側がもう一度認証する）。
+        /// **方法（`token_endpoint_auth_method`）とロックアウトは、その本番の認証で見る。**
         /// **フォーム（`client_secret_post`）の値は復号しない。**
         /// そちらは枠組みが既に復号しており、二重に復号すると壊れる。
         /// </remarks>
@@ -509,12 +492,29 @@ namespace MultiPurposeAuthSite.TokenProviders
             string authHeader, out string client_id, out string client_secret)
         {
             return AuthenticationHeader.GetCredentials(authHeader,
-                (id, secret) =>
-                {
-                    X509Certificate2 none = null;
-                    return CmnEndpoints.ClientAuthentication(id, secret, ref none, out ClientModePolicy.Proof _);
-                },
+                CmnEndpoints.MatchesClientSecret,
                 out client_id, out client_secret);
+        }
+
+        /// <summary>登録された client_secret と一致するか（数えない・記録しない）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <returns>一致すれば true</returns>
+        /// <remarks>
+        /// **`GetBasicCredentials` が、復号の前後のどちらを使うかを決めるためだけに使う。**
+        /// **登録が空なら一致としない**（`ClientAuthentication` と同じく、空と空の一致を作らない）。
+        /// </remarks>
+        private static bool MatchesClientSecret(string client_id, string client_secret)
+        {
+            if (string.IsNullOrEmpty(client_id) || string.IsNullOrEmpty(client_secret))
+            {
+                return false;
+            }
+
+            string registeredSecret = Helper.GetInstance().GetClientSecret(client_id);
+
+            return !string.IsNullOrEmpty(registeredSecret)
+                && client_secret == registeredSecret;
         }
 
         #endregion
@@ -533,6 +533,16 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static readonly string[] TokenEndpointAuthSigningAlgs = new string[]
         {
             JwtConst.RS256, JwtConst.ES256
+        };
+
+        /// <summary>JWT Bearer グラント（RFC 7523 §2.1）の `assertion` で受ける alg（#294）</summary>
+        /// <remarks>
+        /// **検証の鍵は登録の RSA 公開鍵だけ**（`GrantJwtBearerTokenCredentials`）なので、いまは `RS256` だけ。
+        /// **`JwtAssertion.Verify` はヘッダの alg を見ない**ので、**名乗りを、ここで揃える。**
+        /// </remarks>
+        public static readonly string[] JwtBearerSigningAlgs = new string[]
+        {
+            JwtConst.RS256
         };
 
         /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262）</summary>

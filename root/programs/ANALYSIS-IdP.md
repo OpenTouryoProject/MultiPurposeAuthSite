@@ -43,13 +43,13 @@
 「最新の IdP に近づける」うえでの最短経路は、**新機能の追加ではなく、
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
-### 対応状況（2026/10/16 時点）
+### 対応状況（2026/10/29 時点）
 
 | グループ | |
 |---|---|
-| **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**） |
-| **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294） |
-| **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った） |
+| **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
+| **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
+| **C. セキュリティ** | **2 件 残り** : **C-40**（コンフィデンシャル クライアントの code を `code_verifier` だけで引き換えられる）／**C-41**（PAR の Request Object の `client_id`）。**どちらも `CmnEndpoints.*.cs` のレビューで見つかった**（#294）。**他は全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。C-42 / C-43 は同じレビューで見つかり #294） |
 | **D. 機能不足** | **1 件 残り** : **D-14**（適合性テスト）。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
 | **E. 品質** | **2 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
@@ -888,6 +888,23 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 > **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、
 > **秘密を替えても、発行済みの値は動かない**（表から引くため）。詳細は下記。
 
+### A-15. トークン エンドポイントと照会・広告に、取りこぼしが残っていた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**`CmnEndpoints.*.cs`（分割した後）のレビューで見つけた。** どれも「動くが、返すべきものを返していない」形である。
+
+| 口 | 修正前 | 修正後 |
+|---|---|---|
+| **Device グラントの `/token`** | **refresh_token を作って保存するだけで、応答に入れていなかった**（使われない行が溜まる） | **返す**（device の登録には、従来どおり発行しない） |
+| **`client_registration` 専用トークンの `expires_in`** | **配備ぜんたいの期限（既定 360 分）を返していた**（実際の期限は既定 300 秒） | **実際に付けた期限を返す**（`CreateAccessTokenResponse` の `expiresIn`） |
+| **`/introspect` の `cnf`** | **DPoP の `jkt` を返していなかった**（mTLS の `x5t#S256` だけ。`urn:oauth:` の絞り込みで落ちていた） | **`cnf` を 1 つのオブジェクトにまとめ、`jkt` も入れる**（RFC 9449 §6.2） |
+| **CIBA の `/token`** | **`client_assertion` を読まなかった**（`/ciba_authz` は読む。FAPI-CIBA は private_key_jwt か mTLS を求める） | **`ClientAuthentication` の、どの方式でも受ける版を使う** |
+| **CIBA の知らない `auth_req_id`** | **内部の状態名（`not_found` / `irregularity_data`）を `error` に入れていた** | **`invalid_grant`**（Device グラントは #199 で直してあった） |
+| **JWT Bearer が無効のとき** | **`error` を入れずに返していた** | **`unsupported_grant_type`** |
+| **Discovery** | **revoke / introspect の認証方法を、秘密の 2 つしか広告していなかった**（#239 から 4 つとも通る）。**`request_object_signing_alg_values_supported` を値で直に書いていた** | **`TokenEndpointAuthMethods` / `RequestObjectSigningAlgs` から作る** |
+
+**E2E** : **`RT-294.41`**（Device の refresh_token）、**`RT-307.5`**（`expires_in`）、**`RT-294.42`**（`cnf.jkt`）、
+**`RT-294.43`**（CIBA を private_key_jwt で通す）、**`RT-294.44`**（`invalid_grant`）、**`RT-294.49`**（Discovery）。
+
 ### `sub` の対応表（`SubjectIdentifier`）**[Lib]** — **✅ 実装（#151 の段階 2）**
 
 **`sub` が「導出」から「データ」になった。**
@@ -1156,6 +1173,25 @@ E2E : `RT-241.1`（`/ros`）/ `RT-241.2`（`client_assertion`）/ `RT-241.3`（`
 > **E2E の拡充（カバレッジで通っていない所を叩いた）で見つかった。** 自己テストの口は `IsLockedDownTestEndpoints` で閉じられる、テスト用の口である。
 
 **E2E** : **`RT-294.39`**（両版。2 つの受け口とも 200 のエラー画面）。
+
+### B-11. 外から来た値・登録の値を確かめずに読み、HTTP 500 になっていた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**#241 で他の口は直してあったが、次は取り残されていた**（`CmnEndpoints.*.cs` のレビューで見つけた）。
+
+| 口 | 500 になった入力 |
+|---|---|
+| **JWT Bearer グラント**（`GrantJwtBearerTokenCredentials`） | **JWT でない assertion**（`Split('.')[1]`）、**`iss` が文字列でない**（`Dictionary<string, string>` への逆直列化）、**登録の無い鍵**（null の復号） |
+| **scope を省いたトークン要求**（client_credentials / password / JWT Bearer） | **null の `Split`**（scope は OPTIONAL。RFC 6749 §4.3.2 / §4.4.2） |
+| **CIBA の `request`**（`ReceiveCibaRequest`） | **payload がオブジェクトでない・`iss` が文字列でない JWT**（Base64URL の復号だけを守っていた） |
+| **CIBA の `/ciba_authz` を private_key_jwt で** | **フォームに `client_id` が無い**ので、**空の `client_id` で code を作ろうとした**（両版の Controller） |
+| **PAR の `request`・fapi2 の登録・`/ros` の `iss`** | **登録の鍵の列が NULL・壊れている**、**`iss` が文字列でない**（読んで直した。E2E では作れない） |
+
+**外から来た JWT のクレームは `StringClaimOf` で読み、登録の鍵は `DecodeRegisteredJwk` で読む**ようにそろえた。
+**CIBA の Controller は、`client_id` を要求の `iss`（認証したクライアントと照合済み）から取る。**
+**JWT Bearer は、ヘッダの alg が受ける集合（`JwtBearerSigningAlgs`。RS256）にあることも見る**
+（`JwtAssertion.Verify` は JWK の `kty` で検証器を選び、名乗りを見ない）。
+
+**E2E** : **`RT-294.45`**（JWT Bearer）、**`RT-294.46`**（scope の省略）、**`RT-294.47`**（CIBA の `request`）、**`RT-294.43`**（private_key_jwt の `/ciba_authz`）。
 
 ---
 
@@ -3069,6 +3105,50 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > **JARM の `aud` / `exp` / `iss`**（Implicit が入れていなかった。JARM §2.1）、**使えない `response_mode` で `error` が空のまま返る**、
 > **Request Object と違う `client_id` を確かめずに上書き**（RFC 9126 §4）、**同意画面のボタンが無い POST**。
 > **応答の組み立ては 1 か所にまとめ、認可エンドポイントの本文は両版で同じにした**（E2E : `RT-294.19`〜`.22`）。
+
+### C-40. コンフィデンシャル クライアントの code を、`code_verifier` だけで引き換えられる **[Lib]** — **⚠️ 未修正（#294 のレビューで記録）**
+
+**`CmnEndpoints.GrantAuthorizationCodeCredentials`** は、**`code_verifier` が在り `client_secret` が無い要求を、PKCE だけで認証が済んだものとして扱う。**
+この分岐は **`ClientAuthentication` も `AllowsAuthMethod` も呼ばない。**
+`ClientModePolicy` の表は「認可コード × PKCE S256 → normal / fapi1 / device」を通すので、
+**`client_secret`（や鍵）を登録したクライアントの code も、この分岐で引き換えられる。**
+
+| | |
+|---|---|
+| **抜けている確認** | **そのクライアントがコンフィデンシャルか**（秘密・鍵・DN・`jwks_uri` を登録しているか）。RFC 6749 §4.1.3 は、コンフィデンシャル クライアントの認証を MUST としている |
+| **影響** | **code が漏れたとき、クライアント認証という 1 枚の防御が無くなる**（PKCE は「要求を始めた者」を縛るが、「正規のクライアント」を縛らない） |
+| **直し方の案** | **コンフィデンシャルなら、PKCE だけの分岐に入れない**（`DeviceAuthZClientAuthentication` と同じ「コンフィデンシャルかどうか」の見方を使う）。**fapi1 の登録を PKCE だけで通している利用者が居ないかを、先に確かめる** |
+
+### C-41. PAR に預けた Request Object の `client_id` を、認証したクライアントと照合していない **[Lib]** — **⚠️ 未修正（#294 のレビューで記録）**
+
+**`CmnEndpoints.PushedAuthorizationRequest`** は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめる**が、
+**中の `client_id` は確かめない。** その後の検証（`ValidateAuthZReqParam`）と保存は、**中の `client_id` で行う。**
+
+| | |
+|---|---|
+| **抜けている確認** | **Request Object の `client_id` ＝ 認証したクライアント**（RFC 9126 §2.1 / RFC 9101 §6.3） |
+| **影響** | **別のクライアントの名義で、PAR に預けた要求を作れる。** その名義の `redirect_uri` の登録は効くので、**`/authorize` へ直接送って作れる要求と、範囲は変わらない。** **PAR を必須にする（`require_pushed_authorization_requests`）ときには穴になる** |
+| **直し方の案** | **中の `client_id` が在れば、認証したクライアントと一致しなければ `invalid_request_object`** にする。**無ければ、認証したクライアントで埋める**（フォームの経路と同じ） |
+
+### C-42. 他のクライアントが出した refresh_token を、消費してから断っていた **[Lib]** — **✅ 修正済み（#294）**
+
+**`GrantRefreshTokenCredentials` は、`RefreshTokenProvider.Receive`（消費・ローテーション）の後で、`aud`（発行先）を見ていた。**
+**他のクライアントが出しただけで使用済みになり、持ち主が次に使うと「使用済みの再提示」と見なされ、一族ごと失効した**（#188 の段階 3）。
+
+**消費する前に、`Refer`（読むだけ）で発行先を照合する**ようにした。**使用済み・存在しないものは、従来どおり後の `Receive` が断る。**
+
+**E2E** : **`RT-294.48`**（他のクライアントが出すと `invalid_grant`、持ち主はその後も更新できる）。
+
+### C-43. Basic の資格情報の照合で、失敗を 2 回数えていた **[Lib]** — **✅ 修正済み（#294）**
+
+**`CmnEndpoints.GetBasicCredentials`** は、復号の前後どちらを使うかを決める照合に **`ClientAuthentication` を渡していた。**
+**あちらは失敗を数え、成功で数えた分を消す**（#305 の段階 2）ので、**記号を含む値で 1 回間違えると、2 回と数えられていた**
+（**この後に呼び出し側が、もう一度認証する**）。**remarks には「副作用は無い」と書いてあった。**
+
+**照合は数えない `MatchesClientSecret` にした。** **方法（`token_endpoint_auth_method`）とロックアウトは、その後の本番の認証で見る。**
+
+> **E2E では測っていない**（上限の手前の数を外から読めない）。**読んで直した。**
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能

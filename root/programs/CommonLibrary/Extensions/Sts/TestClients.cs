@@ -38,6 +38,7 @@
 //*  2026/10/19  玄人 幸道         token_endpoint_auth_method を写し、TestClient_24 を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
+//*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -128,6 +129,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 ClientName = "TestClient4_3", ClientId = "e2e0tc43000000000000000000000000",
                 ClientMode = "fapi_1", SourceName = "TestClient4"
+            },
+            new Entry()
+            {
+                // **`private_key_jwt` で認証する fapi_ciba のクライアント**（#294）。
+                //   **CIBA の `/token` で `client_assertion` を受けることを測る**（`RT-294.43`）。
+                //   **`TestClient4` は秘密で認証する**ので、**鍵で認証する分はこちらで測る**
+                //   （**登録された方法でなければ通さない**。#307 の段階 3）。
+                //   **写し元は `TestClient4`** なので、**ECDSA の公開鍵を持つ**（アサーションは ES256 で作る）。
+                ClientName = "TestClient4_4", ClientId = "e2e0tc44000000000000000000000000",
+                ClientMode = "fapi_ciba", SourceName = "TestClient4",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                }
             },
             new Entry()
             {

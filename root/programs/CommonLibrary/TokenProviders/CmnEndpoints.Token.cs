@@ -29,13 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         Device の refresh_token を返し、異常系・CIBA の client_assertion・refresh_token の照合を直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 #if NETFX
 using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
 #endif
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Util;
@@ -47,10 +46,7 @@ using MultiPurposeAuthSite.Extensions.Sts;
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 #if NETFX
@@ -59,11 +55,9 @@ using Microsoft.AspNet.Identity;
 using Microsoft.AspNetCore.Identity;
 # endif
 
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
@@ -298,9 +292,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        // 以下は、AuthZAuthNEndpointを参照。
-        // GrantImplicitCredentials
-        // GrantHybridCredentials
+        // Implicit / Hybrid は、認可エンドポイントで発行する（CmnEndpoints.AuthorizeResponse.cs）。
+        // CreateAuthZRes4ImplicitFlow
+        // CreateAuthNRes4HybridFlow
 
         #region GrantRefreshTokenCredentials
 
@@ -359,6 +353,24 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
+                //  **他のクライアントの refresh_token なら、消費する前に断る**（#294）。
+                //    **以前は `Receive`（消費）の後で `aud` を見ていた**ので、
+                //    **他のクライアントが出しただけで使用済みになり**、
+                //    **持ち主が次に使うと「再利用」として一族ごと失効した。**
+                //    **使用済み・存在しないものは空で通り、後の `Receive` が断る**（断り方は変えない）。
+                if (authned)
+                {
+                    string referred = RefreshTokenProvider.Refer(refresh_token);
+
+                    if (!string.IsNullOrEmpty(referred)
+                        && !CmnEndpoints.CheckRefreshTokenOwner(client_id, referred))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "The refresh_token was not issued to this client.");
+                        return false;
+                    }
+                }
+
                 if (authned)
                 {
                     #region CheckClientMode
@@ -412,14 +424,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                             return false;
                         }
 
-                        string new_refresh_token = "";
-                        if (Config.EnableRefreshToken)
-                        {
-                            // **縛りは、ローテーションしても引き継ぐ**（#311 の段階 4）。
-                            //   **引き継がないと、1 回更新するだけで縛りが外れる。**
-                            new_refresh_token = RefreshTokenProvider.Create(
-                                CmnAccessToken.BindJkt(tokenPayload, jkt), familyId);
-                        }
+                        // **縛りは、ローテーションしても引き継ぐ**（#311 の段階 4）。
+                        //   **引き継がないと、1 回更新するだけで縛りが外れる。**
+                        //   （`EnableRefreshToken` は、この関数の入口で見ている）
+                        string new_refresh_token = RefreshTokenProvider.Create(
+                            CmnAccessToken.BindJkt(tokenPayload, jkt), familyId);
 
                         // オペレーション・トレース・ログ出力
                         string name = Helper.GetInstance().GetClientName(client_id);
@@ -593,8 +602,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
                             // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                            //   **`scope` は省略できる**（RFC 6749 §4.3.2。#294 で null を受けるようにした）。
                             List<string> issuedScopes = new List<string>(
-                                Helper.FilterSupportedScopes(scopes.Split(' '), client_id));
+                                Helper.FilterSupportedScopes((scopes ?? "").Split(' '), client_id));
 
                             //  **クライアント登録の管理 API 専用のトークンは、scope も期限も絞る**
                             //    （#307 の段階 1）。
@@ -632,8 +642,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 user.Id, user.UserName, // User Account
                                 client_id, name));      // Client Account
 
+                            // **`expires_in` は、実際に付けた期限で返す**（#294。専用 scope のトークンは短い）。
                             ret = CmnEndpoints.CreateAccessTokenResponse(
-                                access_token, "", jwkString, jkt);
+                                access_token, "", jwkString, jkt, expires);
                             return true;
                         }
                         else
@@ -770,8 +781,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
 
                     // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                    //   **`scope` は省略できる**（RFC 6749 §4.4.2。#294 で null を受けるようにした）。
                     List<string> issuedScopes = new List<string>(
-                        Helper.FilterSupportedScopes(scopes.Split(' '), client_id));
+                        Helper.FilterSupportedScopes((scopes ?? "").Split(' '), client_id));
 
                     //  **クライアント登録の管理 API 専用のトークンは、scope も期限も絞る**
                     //    （#307 の段階 5-b。**ROPC と同じ規則**。段階 1）。
@@ -816,8 +828,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         "Passed the 'client credentials flow' by {0}({1}).",
                         client_id, sub)); // Client Account
 
+                    // **`expires_in` は、実際に付けた期限で返す**（#294。専用 scope のトークンは短い）。
                     ret = CmnEndpoints.CreateAccessTokenResponse(
-                        access_token, "", jwkString, jkt);
+                        access_token, "", jwkString, jkt, expires);
                     return true;
 
                     #endregion
@@ -875,16 +888,24 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (Config.EnableJwtBearerTokenFlowGrantType &&
                 grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
             {
-                Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                        assertion.Split('.')[1]), CustomEncode.us_ascii));
+                //  **外から来た値なので、読めなくても例外にしない**（#241 と同じ方針。#294）。
+                //    **以前は `Split('.')[1]`・`dic[iss]`・未登録の鍵の復号で 500 になっていた。**
+                string assertionIss = CmnEndpoints.StringClaimOf(
+                    string.IsNullOrEmpty(assertion) ? null : JwtReader.TryReadPayload(assertion),
+                    OAuth2AndOIDCConst.iss);
 
-                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(dic[OAuth2AndOIDCConst.iss]);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+                string pubKey = string.IsNullOrEmpty(assertionIss)
+                    ? "" : CmnEndpoints.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
 
                 if (!string.IsNullOrEmpty(pubKey))
                 {
-                    if (JwtAssertion.Verify(
+                    //  **ヘッダの alg も、受ける集合に入っていること**（#294）。
+                    //    `JwtAssertion.Verify` は **JWK の `kty` で検証器を選び、ヘッダの alg を見ない。**
+                    //    **鍵は RSA だけ**なので、**RS256 以外を名乗る JWT は通さない**（名乗りと検証を揃える）。
+                    bool algOk = Array.IndexOf(
+                        CmnEndpoints.JwtBearerSigningAlgs, JwtReader.TryReadAlg(assertion)) >= 0;
+
+                    if (algOk && JwtAssertion.Verify(
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
@@ -909,7 +930,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 //   （RFC 7521 4.1 / RFC 7523 2.1。#218）。
                                 //   要求に無ければ、これまでどおり assertion の値を使う
                                 //   （要求に scope を付けていない利用者を壊さないため）。
-                                string requested = string.IsNullOrEmpty(scope) ? scopes : scope;
+                                //   **どちらにも無ければ空**（#294。以前は null の `Split` で 500 だった）。
+                                string requested = (string.IsNullOrEmpty(scope) ? scopes : scope) ?? "";
 
                                 // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
                                 identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(requested.Split(' '), iss), null, "");
@@ -956,6 +978,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential or pubkey is not set.");
                 }
+            }
+            else if (!Config.EnableJwtBearerTokenFlowGrantType)
+            {
+                // サポートされていない
+                //   **以前は error を入れずに返していた**（#294。応答の `error` が空だった）。
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableJwtBearerTokenFlowGrantType);
             }
 
             return false;
@@ -1084,11 +1113,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // オペレーション・トレース・ログ出力
                     string name = Helper.GetInstance().GetClientName(client_id);
                     Logging.MyOperationTrace(string.Format(
-                        "{0}({1}) passed the 'Authorization Code flow' by {2}({3}).",
+                        "{0}({1}) passed the 'Device Authorization Grant' by {2}({3}).",
                         client_id, name,                                         // Client Account
                         PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "", jkt);
+                    // **作った refresh_token を返す**（#294）。
+                    //   **以前は作って保存するだけで、応答に入れていなかった**（使われない行が溜まっていた）。
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, "", jkt);
 
                     return true;
                 }
@@ -1140,7 +1171,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // サポートされていない
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
-                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableCibaGrantType);
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableDeviceAuthZGrantType);
             }
 
             return false;
@@ -1154,6 +1185,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
+        /// <param name="clientAssertion">client_assertion（private_key_jwt。#294）</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="auth_req_id">string</param>
         /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
@@ -1161,8 +1193,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantCiba(
-            string grant_type, string client_id, string client_secret, X509Certificate2 x509, 
-            string dPoPProof, string auth_req_id,
+            string grant_type, string client_id, string client_secret, string clientAssertion,
+            X509Certificate2 x509, string dPoPProof, string auth_req_id,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -1185,9 +1217,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.CibaGrantType)
                 {
-                    // client_id & (client_secret or x509)
-                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out proof);
+                    // client_secret / mTLS / private_key_jwt（#294）
+                    //   **以前は `client_assertion` を読んでいなかった。**
+                    //   **`/ciba_authz` は受けるのに、ここで断られた**（FAPI-CIBA は private_key_jwt か mTLS を求める）。
+                    authned = CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out proof);
                 }
 
                 #endregion
@@ -1266,7 +1301,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // オペレーション・トレース・ログ出力
                         string name = Helper.GetInstance().GetClientName(client_id);
                         Logging.MyOperationTrace(string.Format(
-                            "{0}({1}) passed the 'Authorization Code flow' by {2}({3}).",
+                            "{0}({1}) passed the 'CIBA flow' by {2}({3}).",
                             client_id, name,                                         // Client Account
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
@@ -1291,8 +1326,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.slow_down.ToStringByEmit());
                                 break;
 
-                            default:
+                            case OAuth2AndOIDCEnum.CibaState.access_denied:
+                            case OAuth2AndOIDCEnum.CibaState.expired_token:
+                                // CIBA Core §11 の値そのもの
                                 err.Add(OAuth2AndOIDCConst.error, cibaState.ToStringByEmit());
+                                break;
+
+                            default:
+                                // not_found（使用済み・発行していない）/ irregularity_data は仕様外の値。
+                                // enum 名をそのまま返さず、RFC 6749 §5.2 の invalid_grant で返す（#294。Device は #199 で直した）。
+                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                                err.Add(OAuth2AndOIDCConst.error_description, "Invalid auth_req_id.");
                                 break;
                         }
                     }

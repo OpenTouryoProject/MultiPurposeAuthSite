@@ -156,4 +156,10 @@
   <data name="EnableCibaGrantType" xml:space="preserve">
     <value>CIBA grant type is not enabled.</value>
   </data>
+  <data name="EnableDeviceAuthZGrantType" xml:space="preserve">
+    <value>Device Authorization grant type is not enabled.</value>
+  </data>
+  <data name="EnableJwtBearerTokenFlowGrantType" xml:space="preserve">
+    <value>JWT Bearer Token Flow grant type is not enabled.</value>
+  </data>
 </root>

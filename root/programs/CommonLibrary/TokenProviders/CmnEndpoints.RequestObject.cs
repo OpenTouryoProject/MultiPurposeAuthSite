@@ -29,42 +29,22 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         文字列でない iss・壊れた鍵の登録で 500 にしない。using を整理した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text;
 using System.Collections.Specialized;
-using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.TokenProviders
@@ -124,6 +104,21 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
         }
 
+        /// <summary>JWT の payload から、文字列のクレームを取り出す（無い・文字列でなければ空）</summary>
+        /// <param name="payload">payload（null 可）</param>
+        /// <param name="name">クレーム名</param>
+        /// <returns>値（無ければ空）</returns>
+        /// <remarks>
+        /// **`(string)payload[name]` は、値がオブジェクトや配列だと例外になる**（#294）。
+        /// **外から来た JWT の `iss` などを読むときは、こちらを使う**（#241 と同じ方針）。
+        /// </remarks>
+        private static string StringClaimOf(JObject payload, string name)
+        {
+            JToken value = (payload == null) ? null : payload[name];
+
+            return (value != null && value.Type == JTokenType.String) ? (string)value : "";
+        }
+
         #endregion
 
         #region RegisterRequestObject
@@ -169,7 +164,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             string requestObjectString = payload.ToString(Formatting.None);
-            string iss = (string)payload[OAuth2AndOIDCConst.iss];
+            // **文字列でない iss で例外にしない**（#294）。
+            string iss = CmnEndpoints.StringClaimOf(payload, OAuth2AndOIDCConst.iss);
             string pubKey = "";
             bool result = false;
 
@@ -317,7 +313,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (!string.IsNullOrEmpty(request))
             {
                 // **署名付き Request Object（JAR）。** /ros と同じ鍵で検証する。
-                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(client_id);
+                //   **登録の値が壊れていても例外にしない**（#294。`DecodeRegisteredJwk` は空を返す）。
+                string pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                    Helper.GetInstance().GetJwkRsaPublickey(client_id));
 
                 if (string.IsNullOrEmpty(pubKey))
                 {
@@ -325,8 +323,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                     err.Add(OAuth2AndOIDCConst.error_description, "This client has no registered key for the request object.");
                     return false;
                 }
-
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                 // **登録 request_object_signing_alg で絞る**（#262）。
                 if (!CmnEndpoints.AllowsVerifyingAlg(

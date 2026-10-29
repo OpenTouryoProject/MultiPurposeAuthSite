@@ -29,41 +29,15 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
+//*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、region の入れ子と using を直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-#else
-using MultiPurposeAuthSite;
-#endif
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-
-using MultiPurposeAuthSite.Password;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
-using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text;
-using System.Collections.Specialized;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
-#if NETFX
-using Microsoft.AspNet.Identity;
-#else
-using Microsoft.AspNetCore.Identity;
-# endif
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
@@ -222,10 +196,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region RequestObject
-            //   **一覧は 1 か所から作る**（#262）。
-            OpenIDConfig.Add("request_object_signing_alg_values_supported", new List<string> {
-                "RS256"
-            });
+            //   **一覧は 1 か所から作る**（#262）。**以前は、ここに値を直に書いていた**（#294 で揃えた）。
+            OpenIDConfig.Add("request_object_signing_alg_values_supported",
+                new List<string>(CmnEndpoints.RequestObjectSigningAlgs));
             OpenIDConfig.Add("request_parameter_supported", false);
             OpenIDConfig.Add("request_uri_parameter_supported", true);
             OpenIDConfig.Add("request_object_endpoint",
@@ -246,6 +219,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             response_modes_supported.Add(Const.ResponseModeQueryJwt);
             response_modes_supported.Add(Const.ResponseModeFragmentJwt);
             response_modes_supported.Add(Const.ResponseModeFormPostJwt);
+
+            // **応答の署名アルゴリズムを広告していなかった**（JARM §7。#189 の 8）。
+            //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
+            //   実装は CmnResponseObject の JWS(RS256)。
+            OpenIDConfig.Add("authorization_signing_alg_values_supported", new List<string> {
+                "RS256"
+            });
+            #endregion
 
             #region RP-Initiated Logout（#232）
 
@@ -280,14 +261,6 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #endregion
 
-            // **応答の署名アルゴリズムを広告していなかった**（JARM §7。#189 の 8）。
-            //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
-            //   実装は CmnResponseObject の JWS(RS256)。
-            OpenIDConfig.Add("authorization_signing_alg_values_supported", new List<string> {
-                "RS256"
-            });
-            #endregion
-
             // **認可応答に iss を付けることを広告する**（RFC 9207 §3。#231）
             OpenIDConfig.Add("authorization_response_iss_parameter_supported", true);
 
@@ -315,20 +288,20 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("revocation_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint);
 
-            OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit()
-            });
+            //  **トークン エンドポイントと同じ一覧**（RFC 7009 §2.1 / RFC 7662 §2.1。#294）。
+            //    **#239 から private_key_jwt / mTLS でも通る**のに、秘密の 2 つしか広告していなかった。
+            OpenIDConfig.Add("revocation_endpoint_auth_methods_supported",
+                new List<string>(CmnEndpoints.TokenEndpointAuthMethods));
             #endregion
 
             #region Introspect
             OpenIDConfig.Add("introspection_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint);
 
-            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit()
-            });
+            //  **トークン エンドポイントと同じ一覧**（RFC 7009 §2.1 / RFC 7662 §2.1。#294）。
+            //    **#239 から private_key_jwt / mTLS でも通る**のに、秘密の 2 つしか広告していなかった。
+            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported",
+                new List<string>(CmnEndpoints.TokenEndpointAuthMethods));
             #endregion
 
             #region OAuth PKCE
