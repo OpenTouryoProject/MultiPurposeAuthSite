@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         Device の refresh_token を返し、異常系・CIBA の client_assertion・refresh_token の照合を直した（#294）
+//*  2026/10/29  玄人 幸道         PKCE と private_key_jwt / mTLS を併用できるようにし、PKCE だけの引き換えを登録で絞る。client_credentials / JWT Bearer の sub をクライアントにする。Device の登録種別・ROPC の時間差を直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -116,51 +117,81 @@ namespace MultiPurposeAuthSite.TokenProviders
                 bool authned = false;
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
                 {
-                    if (string.IsNullOrEmpty(code_verifier) && string.IsNullOrEmpty(assertion))
+                    //  **まず、送られてきた資格情報でクライアントを認証する。PKCE は、その後で別に検証する**（#294）。
+                    //    **以前は「code_verifier が在り、client_secret が無い」を先に見て、PKCE だけで認証していた**ので、
+                    //    **client_assertion（private_key_jwt）と mTLS が無視された**（FAPI 2.0 は PKCE と、そのどちらかを両方求める）。
+                    //
+                    //    | 送られてきたもの | 認証 | 証明（ClientModePolicy） |
+                    //    |---|---|---|
+                    //    | client_assertion | private_key_jwt | PrivateKeyJwt |
+                    //    | client_secret | 秘密 | ClientSecret（PKCE も在れば ClientSecretAndPkce） |
+                    //    | 証明書（登録が tls_client_auth） | mTLS | Mtls |
+                    //    | code_verifier だけ | **PKCE だけ**（登録が空か none のときだけ。C-40） | PkceS256 / PkcePlain |
+                    //
+                    //    **証明書は、登録が tls_client_auth のときだけ見る** — 他の登録で証明書を出しても、
+                    //    **以前と同じく、PKCE だけの経路に進める**（証明書を出すかどうかは、TLS の設定次第のため）。
+                    bool pkceVerified = false;
+
+                    if (!string.IsNullOrEmpty(assertion))
                     {
-                        // client_id & (client_secret or x509)
+                        // private_key_jwt（client_id はアサーションから得る）
+                        authned = CmnEndpoints.ClientAuthentication(
+                            assertion, out client_id, ref x509, out proof);
+                    }
+                    else if (!string.IsNullOrEmpty(client_secret)
+                        || (x509 != null
+                            && Helper.GetInstance().GetTokenEndpointAuthMethod(client_id)
+                                == OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()))
+                    {
+                        // client_secret（basic / post）または mTLS
                         authned = CmnEndpoints.ClientAuthentication(
                             client_id, client_secret, ref x509, out proof);
                     }
-                    else if (!string.IsNullOrEmpty(code_verifier)
-                        && string.IsNullOrEmpty(client_secret))
+                    else if (!string.IsNullOrEmpty(code_verifier))
                     {
-                        // パブリック クライアント : PKCE だけで認証する（client_id & code_verifier）
-                        authned = CmnEndpoints.VerifyPkce(
-                            code, client_id, redirect_uri, code_verifier, out bool usedS256);
-
-                        // S256 か plain か（#224）。通す登録種別は ClientModePolicy の表で決まる。
-                        //   以前は S256 のとき水準を fapi1 に格上げしていた。表では
-                        //   「認可コード × PKCE S256 → normal / fapi1 / device」の 1 行にあたる。
-                        proof = usedS256
-                            ? ClientModePolicy.Proof.PkceS256 : ClientModePolicy.Proof.PkcePlain;
-                    }
-                    else if (!string.IsNullOrEmpty(code_verifier)
-                        && !string.IsNullOrEmpty(client_secret))
-                    {
-                        // **コンフィデンシャル クライアント ＋ PKCE**（client_id & client_secret & code_verifier）（#220）
-                        //
-                        //   PKCE は当初「client_secret を持てないクライアントの代わり」だったが、
-                        //   いまは**種別によらない標準的な防壁**で、client_secret と併用される
-                        //   （OAuth 2.1 / 最近の RP ライブラリ）。
-                        //   **認証は client_secret、PKCE はそれとは別に検証する。両方が通ること。**
-                        //   以前はこの分岐が空実装で、必ず invalid_client になっていた。
-                        authned = CmnEndpoints.ClientAuthentication(
-                            client_id, client_secret, ref x509, out ClientModePolicy.Proof _);
-
-                        if (authned)
+                        // **パブリック クライアント : PKCE だけで認証する**（client_id & code_verifier）
+                        //   **登録で認証の方法を明示したクライアントには許さない**（C-40。#294）。
+                        //   **空（明示しない）は、従来どおり許す**（`MayUsePkceOnly`）。
+                        if (CmnEndpoints.MayUsePkceOnly(client_id))
                         {
                             authned = CmnEndpoints.VerifyPkce(
-                                code, client_id, redirect_uri, code_verifier, out bool _);
-                        }
+                                code, client_id, redirect_uri, code_verifier, out bool usedS256);
 
-                        proof = ClientModePolicy.Proof.ClientSecretAndPkce;
+                            // S256 か plain か（#224）。通す登録種別は ClientModePolicy の表で決まる。
+                            //   以前は S256 のとき水準を fapi1 に格上げしていた。表では
+                            //   「認可コード × PKCE S256 → normal / fapi1 / device」の 1 行にあたる。
+                            proof = usedS256
+                                ? ClientModePolicy.Proof.PkceS256 : ClientModePolicy.Proof.PkcePlain;
+
+                            pkceVerified = true;
+                        }
+                        else
+                        {
+                            Logging.MyOperationTrace(string.Format(
+                                "The client authentication of {0} was refused. "
+                                + "(PKCE alone is not allowed for the registered token_endpoint_auth_method)",
+                                client_id));
+                        }
                     }
-                    else if (!string.IsNullOrEmpty(assertion))
+                    else
                     {
-                        // assertion
+                        // 資格情報が何も無い（従来どおり、認証の失敗として扱う）
                         authned = CmnEndpoints.ClientAuthentication(
-                            assertion, out client_id, ref x509, out proof);
+                            client_id, client_secret, ref x509, out proof);
+                    }
+
+                    //  **認証に加えて、PKCE を検証する**（#220 / #294）。
+                    //    **PKCE は種別によらない標準的な防壁**で、クライアント認証と併用される（OAuth 2.1 / FAPI 2.0）。
+                    //    **認証は資格情報、PKCE はそれとは別に検証する。両方が通ること。**
+                    if (authned && !pkceVerified && !string.IsNullOrEmpty(code_verifier))
+                    {
+                        authned = CmnEndpoints.VerifyPkce(
+                            code, client_id, redirect_uri, code_verifier, out bool _);
+
+                        if (proof == ClientModePolicy.Proof.ClientSecret)
+                        {
+                            proof = ClientModePolicy.Proof.ClientSecretAndPkce;
+                        }
                     }
                 }
 
@@ -661,6 +692,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                     else
                     {
                         // ユーザーが見つからない場合。
+                        //   **パスワードの照合と同じだけ時間を掛ける**（#294）。
+                        //   **掛けないと、応答の速さで利用者が居るかどうかが分かる**（応答の文面は揃えてある。TC-4.2）。
+                        CmnEndpoints.VerifyDummyPassword(password);
+
                         err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
                         err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.access_denied);
                     }
@@ -682,6 +717,31 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return false;
+        }
+
+        /// <summary>照合に使うだけの、誰のものでもないハッシュ（#294）</summary>
+        /// <remarks>**最初に要るときに 1 回だけ作る**（ストレッチを掛けるので安くない）。</remarks>
+        private static readonly Lazy<string> DummyPasswordHash = new Lazy<string>(() =>
+#if NETFX
+            (new CustomPasswordHasher()).HashPassword(Guid.NewGuid().ToString("N")));
+#else
+            (new CustomPasswordHasher<ApplicationUser>()).HashPassword(null, Guid.NewGuid().ToString("N")));
+#endif
+
+        /// <summary>利用者が居ないときにも、パスワードの照合と同じだけ時間を掛ける（#294）</summary>
+        /// <param name="password">送られてきたパスワード</param>
+        /// <remarks>
+        /// **結果は使わない。** **応答の速さで「利用者が居るか」を分からせないため**だけに照合する。
+        /// </remarks>
+        private static void VerifyDummyPassword(string password)
+        {
+#if NETFX
+            (new CustomPasswordHasher()).VerifyHashedPassword(
+                CmnEndpoints.DummyPasswordHash.Value, password ?? "");
+#else
+            (new CustomPasswordHasher<ApplicationUser>()).VerifyHashedPassword(
+                null, CmnEndpoints.DummyPasswordHash.Value, password ?? "");
+#endif
         }
 
         #endregion
@@ -815,8 +875,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     identity = Helper.AddClaim(identity, client_id, issuedScopes, null, "");
 
                     // access_token
+                    //   **利用者名を渡さない**（S3。#294）。**sub はクライアント（ClientName）になる。**
+                    //   **以前は ClientName と同じ名前の利用者を引き、居ればその利用者の sub にしていた。**
+                    //   **ClientName はラベル**（登録の時点の所有者の利用者名）なので、
+                    //   **名前を付け替えた後に同じ名前を取った別の利用者に、トークンが結び付いた。**
+                    //   **資源所有者の居ないトークン**（RFC 6749 §4.4）である。所有者が要る口は OwnerUserId から引く。
                     string access_token = CmnAccessToken.CreateFromClaims(
-                        client_id, identity.Name, identity.Claims,
+                        client_id, "", identity.Claims,
                         DateTimeOffset.Now.Add(expires),
                         // **登録された署名 alg で署名する**（#129 の段階 2）
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
@@ -890,9 +955,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 //  **外から来た値なので、読めなくても例外にしない**（#241 と同じ方針。#294）。
                 //    **以前は `Split('.')[1]`・`dic[iss]`・未登録の鍵の復号で 500 になっていた。**
-                string assertionIss = CmnEndpoints.StringClaimOf(
-                    string.IsNullOrEmpty(assertion) ? null : JwtReader.TryReadPayload(assertion),
-                    OAuth2AndOIDCConst.iss);
+                JObject assertionPayload =
+                    string.IsNullOrEmpty(assertion) ? null : JwtReader.TryReadPayload(assertion);
+
+                string assertionIss = CmnEndpoints.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.iss);
 
                 string pubKey = string.IsNullOrEmpty(assertionIss)
                     ? "" : CmnEndpoints.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
@@ -905,11 +971,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                     bool algOk = Array.IndexOf(
                         CmnEndpoints.JwtBearerSigningAlgs, JwtReader.TryReadAlg(assertion)) >= 0;
 
-                    if (algOk && JwtAssertion.Verify(
-                        assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
+                    //  **読めない形（配列の aud など）でも例外にしない**（#294。`TryVerifyAssertion`）。
+                    //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
+                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, out string iss))
                     {
+                        string scopes = CmnEndpoints.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.scope);
+
                         // aud 検証
-                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
+                        //   **トークン エンドポイントの URL か issuer**（RFC 7523 §3。#294）。配列は受けない（`IsAssertionAudience`）。
+                        if (CmnEndpoints.IsAssertionAudience(assertionPayload))
                         {
                             // このフローが認められるか？
                             if (CmnEndpoints.CheckClientMode(iss,
@@ -937,8 +1007,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(requested.Split(' '), iss), null, "");
 
                                 // access_token
+                                //   **利用者名を渡さない**（S3。#294。client_credentials と同じ理由）。
                                 string access_token = CmnAccessToken.CreateFromClaims(
-                                    iss, identity.Name, identity.Claims,
+                                    iss, "", identity.Claims,
                                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                                     // **登録された署名 alg で署名する**（#129 の段階 2。client_id は iss）
                                     Helper.GetInstance().GetIdTokenSignedResponseAlg(iss),
@@ -1074,10 +1145,19 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
 
                     // access_token
+                    //   **クレームは、登録された種別で書く**（#220 と同じ。#294）。
+                    //   **以前は device を固定で書いていた**ので、normal の登録のトークンも device を名乗った。
+                    //   （`IsDeviceAuthZAllowed` が normal / device だけを通しているので、読めなければ device に倒す）
+                    if (!ClientModePolicy.TryParse(
+                        Helper.GetInstance().GetClientMode(client_id), out OAuth2AndOIDCEnum.ClientMode deviceClientMode))
+                    {
+                        deviceClientMode = OAuth2AndOIDCEnum.ClientMode.device;
+                    }
+
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub,
+                        null, deviceClientMode, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                         // **DPoP の鍵に縛る**（#311 の段階 1）

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         Basic の照合で失敗を数えない。JWT Bearer の alg の一覧を足し、using を整理した（#294）
+//*  2026/10/29  玄人 幸道         none（パブリック）を受け、PKCE だけで引き換えられる登録を絞る。assertion の aud に issuer を受け、秘密を定数時間で比べる（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -144,7 +145,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //  **登録された方法でなければ通さない**（#307 の段階 3）。
                     //    **明示が無ければ、秘密ベースの 2 つを暗黙に許す。**
                     if (!string.IsNullOrEmpty(registeredSecret)
-                        && client_secret == registeredSecret
+                        && CmnEndpoints.FixedTimeEquals(client_secret, registeredSecret)
                         && CmnEndpoints.AllowsAuthMethod(
                             client_id, ClientModePolicy.Proof.ClientSecret))
                     {
@@ -275,6 +276,10 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 未登録のclient_idは拒否
             if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
+
+            //  **`token_endpoint_auth_method` が `none` なら、パブリック クライアント**（RFC 7591 §2。#294）。
+            //    **秘密を持っていても使えない**（`AllowsAuthMethod` が断る）ので、client_id の確認だけにする。
+            if (CmnEndpoints.IsRegisteredAsPublic(client_id)) return true;
 
             // コンフィデンシャル クライアントは認証必須
             // - client_secretを登録済み
@@ -424,15 +429,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
 
                     // 署名検証 ≒ クライアント認証
-                    if (JwtAssertion.Verify(
-                        assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
+                    if (CmnEndpoints.TryVerifyAssertion(assertion, pubKey, out string iss))
                     {
                         // aud 検証
                         //
                         //  **登録された方法でなければ通さない**（#307 の段階 3）。
                         //    **`private_key_jwt` の明示が要る** — **鍵を登録しただけでは通らない。**
                         //    **`client_id` はアサーションの `iss`**（RFC 7523 §3）なので、それで引く。
-                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint
+                        //  **aud は、トークン エンドポイントの URL か、この IdP の issuer**（#294）。
+                        //    RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1（issuer を受けること）。
+                        if (CmnEndpoints.IsAssertionAudience(payload)
                             && CmnEndpoints.AllowsAuthMethod(
                                 iss, ClientModePolicy.Proof.PrivateKeyJwt))
                         {
@@ -514,7 +520,33 @@ namespace MultiPurposeAuthSite.TokenProviders
             string registeredSecret = Helper.GetInstance().GetClientSecret(client_id);
 
             return !string.IsNullOrEmpty(registeredSecret)
-                && client_secret == registeredSecret;
+                && CmnEndpoints.FixedTimeEquals(client_secret, registeredSecret);
+        }
+
+        /// <summary>2 つの文字列を、一致した長さで時間が変わらないように比べる（#294）</summary>
+        /// <param name="a">文字列</param>
+        /// <param name="b">文字列</param>
+        /// <returns>一致すれば true</returns>
+        /// <remarks>
+        /// **`==` は最初に食い違った所で止まる**ので、**応答の時間から一致した長さを推し量れる。**
+        /// **秘密の照合には、全部を比べてから答える比較を使う**（`CryptographicOperations.FixedTimeEquals` は net48 に無い）。
+        /// **長さの違いは隠さない**（秘密の長さは、それだけでは手掛かりにならない）。
+        /// </remarks>
+        private static bool FixedTimeEquals(string a, string b)
+        {
+            if (a == null || b == null || a.Length != b.Length)
+            {
+                return false;
+            }
+
+            int diff = 0;
+
+            for (int i = 0; i < a.Length; i++)
+            {
+                diff |= a[i] ^ b[i];
+            }
+
+            return diff == 0;
         }
 
         #endregion
@@ -567,14 +599,106 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **4 つとも、検証する側は実装済みである**
         /// （秘密は `ClientAuthentication`、`private_key_jwt` は #239 / #129 の段階 2、
         /// `tls_client_auth` は #226）。
+        ///
+        /// **`none`（パブリック クライアント。RFC 7591 §2）も受ける**（#294）。
+        /// **認証しないことの明示**で、**認可コードは PKCE だけで引き換える**（`MayUsePkceOnly`）。
+        /// **認証を要する口（revoke / introspect）の広告には出さない**（`AuthenticatingMethods`）。
         /// </remarks>
         public static readonly string[] TokenEndpointAuthMethods = new string[]
         {
             OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
             OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit(),
             OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
-            OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
+            OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit(),
+            CmnEndpoints.TokenEndpointAuthMethodNone
         };
+
+        /// <summary>`token_endpoint_auth_method` の `none`（パブリック クライアント。RFC 7591 §2。#294）</summary>
+        public const string TokenEndpointAuthMethodNone = "none";
+
+        /// <summary>認証する方法だけ（`none` を除く。revoke / introspect の広告。#294）</summary>
+        public static string[] AuthenticatingMethods
+        {
+            get
+            {
+                return CmnEndpoints.TokenEndpointAuthMethods
+                    .Where(x => x != CmnEndpoints.TokenEndpointAuthMethodNone).ToArray();
+            }
+        }
+
+        /// <summary>`token_endpoint_auth_method` に `none` を登録したクライアントか（#294）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>`none` なら true</returns>
+        private static bool IsRegisteredAsPublic(string client_id)
+        {
+            return Helper.GetInstance().GetTokenEndpointAuthMethod(client_id)
+                == CmnEndpoints.TokenEndpointAuthMethodNone;
+        }
+
+        /// <summary>認可コードを、PKCE だけで（クライアント認証なしに）引き換えてよいか（C-40。#294）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>よければ true</returns>
+        /// <remarks>
+        /// | 登録の `token_endpoint_auth_method` | PKCE だけ |
+        /// |---|---|
+        /// | **`none`**（パブリックの明示） | **通す** |
+        /// | **空**（明示しない） | **通す**（**従来どおり**。雛形の SPA / ネイティブは秘密を持ったまま PKCE だけで引き換えている） |
+        /// | **それ以外**（認証の方法を明示した） | **通さない**（RFC 6749 §4.1.3 : コンフィデンシャル クライアントは認証する） |
+        ///
+        /// **空を通すのは、既定の挙動を変えないため**である。**閉じたいクライアントは、方法を明示する。**
+        /// </remarks>
+        private static bool MayUsePkceOnly(string client_id)
+        {
+            string registered = Helper.GetInstance().GetTokenEndpointAuthMethod(client_id);
+
+            return string.IsNullOrEmpty(registered)
+                || registered == CmnEndpoints.TokenEndpointAuthMethodNone;
+        }
+
+        /// <summary>assertion の aud が、この IdP を指しているか（#294）</summary>
+        /// <param name="payload">assertion の payload（署名は別に確かめること）</param>
+        /// <returns>指していれば true</returns>
+        /// <remarks>
+        /// **トークン エンドポイントの URL か、issuer**（RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1）。
+        ///
+        /// **配列の aud は受けない。** RFC 7519 §4.1.3 は配列を認めるが、
+        /// **Open棟梁 の `JwtAssertion.Verify` が aud を文字列として読む**ので、配列だと検証そのものができない
+        /// （`TryVerifyAssertion` が断る）。**受けるには上流の対応が要る。**
+        /// </remarks>
+        private static bool IsAssertionAudience(JObject payload)
+        {
+            string aud = CmnEndpoints.StringClaimOf(payload, OAuth2AndOIDCConst.aud);
+
+            return !string.IsNullOrEmpty(aud)
+                && (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint
+                    || aud == CmnServerParams.IssuerId);
+        }
+
+        /// <summary>assertion の署名と期限を検証する（読めない形なら false。#294）</summary>
+        /// <param name="assertion">assertion（JWT）</param>
+        /// <param name="pubKey">公開鍵（JWK）</param>
+        /// <param name="iss">iss</param>
+        /// <returns>検証できれば true</returns>
+        /// <remarks>
+        /// **`JwtAssertion.Verify`（Open棟梁）は、`aud` などを文字列として読み、配列だと例外を投げる。**
+        /// **外から来た値なので、例外にしない**（#241 と同じ方針）。**以前は HTTP 500 だった。**
+        /// </remarks>
+        private static bool TryVerifyAssertion(string assertion, string pubKey, out string iss)
+        {
+            try
+            {
+                return JwtAssertion.Verify(
+                    assertion, out iss, out string _, out string _, out JObject _, pubKey);
+            }
+            catch (Exception ex)
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The assertion could not be verified. ({0})", ex.GetType().Name));
+
+                iss = "";
+                return false;
+            }
+        }
 
         /// <summary>この証明で、このクライアントを通してよいか（#307 の段階 3）</summary>
         /// <param name="client_id">client_id</param>
@@ -589,6 +713,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// | `client_secret_basic` / `client_secret_post` | **`ClientSecret`** |
         /// | **`private_key_jwt`** | **`PrivateKeyJwt`** |
         /// | **`tls_client_auth`** | **`Mtls`** |
+        /// | **`none`** | **通さない**（パブリック クライアント。#294） |
         /// | **既知でない値** | **通さない**（登録の誤り。#224 の段階 2 と同じ方針） |
         ///
         /// **つまり「強い方法は明示が要る」。** **鍵や DN を登録しただけでは、その方法では通らない。**
@@ -621,6 +746,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // **既知でない値が登録されている**（設定の誤り）。
                 allowed = false;
             }
+            else if (registered == CmnEndpoints.TokenEndpointAuthMethodNone)
+            {
+                // **パブリック クライアントは認証しない**（#294）。**秘密を持っていても、それでは通さない。**
+                allowed = false;
+            }
             else if (registered == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit())
             {
                 allowed = (proof == ClientModePolicy.Proof.PrivateKeyJwt);
@@ -641,7 +771,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     "The client authentication of {0} was refused. "
                     + "(the registered token_endpoint_auth_method is \"{1}\", but the client proved \"{2}\")",
                     client_id,
-                    string.IsNullOrEmpty(registered) ? "(none)" : registered,
+                    string.IsNullOrEmpty(registered) ? "(empty)" : registered,
                     proof.ToString()));
             }
 

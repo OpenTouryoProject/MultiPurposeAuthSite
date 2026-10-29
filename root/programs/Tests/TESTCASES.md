@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=bf3c1311-a301-4582-a5eb-b02e1ffa9db4&code=bogus
+1. GET /Account/EmailConfirmation?userId=4de89376-dff3-401f-99e0-0c5a1eef98c9&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=bf3c1311-a301-4582-a5eb-b02e1ffa9db4&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=bf3c1311-a301-4582-a5eb-b02e1ffa9db4&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=4de89376-dff3-401f-99e0-0c5a1eef98c9&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=4de89376-dff3-401f-99e0-0c5a1eef98c9&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7040,6 +7040,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - access_token が返る
 - refresh_token が返る
+- normal の登録のトークンは device を名乗らない
 - 更新で access_token が返る
 
 ## RT-294.42 **DPoP で縛ったトークンを /introspect で照会すると、`cnf` の中に `jkt` が返る**
@@ -7189,9 +7190,147 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **検証（合否を判定する）**
 
-- revocation_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported と同じ
-- introspection_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported と同じ
+- token_endpoint_auth_methods_supported に none（パブリック）が在る
+- revocation_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported から none を除いたもの
+- introspection_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported から none を除いたもの
 - request_object_signing_alg_values_supported に RS256 が在る
+
+## RT-294.50 **client_credentials のトークンは、クライアントと同じ名前の利用者が居ても、その利用者に結び付かない**
+
+| | |
+|---|---|
+| 観点 | **以前は ClientName と同じ名前の利用者を引き、居ればその利用者の sub にしていた。****ClientName はラベル**（登録の時点の所有者の利用者名）なので、**名前を付け替えた後に同じ名前を取った別の利用者に、トークンが結び付いた**（S3）。**client_credentials は資源所有者の居ないトークン**である。 |
+| 根拠 | RFC 6749 §4.4 / #294 |
+| テスト | `RT29450_client_credentialsのsubは同じ名前の利用者に結び付かない` |
+
+**手順**
+
+1. 管理者 : クライアントと同じ名前の利用者を作る
+1. クライアント : client_credentials でトークンを取る
+1. /userinfo は、その利用者のメアドを返さない
+
+**検証（合否を判定する）**
+
+- sub はクライアント名
+- 利用者のメアドを返さない
+
+## RT-294.51 **fapi2 のクライアントが、PKCE と client_assertion（private_key_jwt）を併用して、認可コードを引き換えられる**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、PKCE と、private_key_jwt か mTLS の両方を求める。****以前は code_verifier が在ると、client_assertion を見ずに PKCE だけで認証した**ので、**証明が PKCE になり、fapi2 の登録は通らなかった**（N1）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 7636 / RFC 7523 §2.2 / #294 |
+| テスト | `RT29451_PKCEとprivate_key_jwtを併用できる` |
+
+**手順**
+
+1. PKCE（S256）で認可コードを取る
+1. code_verifier と client_assertion を送って交換する
+1. 違う code_verifier では、client_assertion が正しくても通らない
+
+**検証（合否を判定する）**
+
+- access_token が返る
+- access_token を返さない
+
+## RT-294.52 **認証の方法を明示したクライアントは、PKCE だけでは認可コードを引き換えられない**（`none` を明示したクライアントは引き換えられ、秘密では認証できない）
+
+| | |
+|---|---|
+| 観点 | **RFC 6749 §4.1.3 は、コンフィデンシャル クライアントの認証を MUST としている。****以前は code_verifier が在り client_secret が無ければ、登録に関わらず PKCE だけで通した**（C-40）。**登録が空のクライアントは、従来どおり PKCE だけで通す**（既定の挙動を変えない）。 |
+| 根拠 | RFC 6749 §4.1.3 / RFC 7591 §2（token_endpoint_auth_method）/ #294 |
+| テスト | `RT29452_PKCEだけの引き換えは明示していないクライアントだけ` |
+
+**手順**
+
+1. client_secret_basic を明示したクライアント : PKCE だけでは通らない
+1. 同じクライアント : client_secret ＋ PKCE なら通る
+1. none を明示したクライアント : PKCE だけで通る
+1. none を明示したクライアント : 秘密では認証できない
+
+**検証（合否を判定する）**
+
+- invalid_client
+- access_token が返る
+- access_token が返る
+- invalid_client
+
+## RT-294.53 **scope を省いた認可要求（OAuth 2.0 の code）でも、HTTP 500 にしない**
+
+| | |
+|---|---|
+| 観点 | **scope は省略できる**（RFC 6749 §3.3）。**以前は null の `Split` で 500 になっていた**（N2）。 |
+| 根拠 | RFC 6749 §3.3 / §4.1.1 / #294 |
+| テスト | `RT29453_scopeを省いた認可要求で500にしない` |
+
+**検証（合否を判定する）**
+
+- HTTP 500 にならない
+- code が返る
+
+## RT-294.54 **client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**（配列は、500 にせず invalid_client で断る）
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、issuer を aud として受けることを求める**（RFC 7523 §3 も issuer を認める）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**（**以前は HTTP 500** だった）。 |
+| 根拠 | RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.3 / #294 |
+| テスト | `RT29454_client_assertionのaudにissuerを受ける` |
+
+**手順**
+
+1. aud = issuer
+1. aud = トークン エンドポイント
+1. aud = 他の値
+1. aud = [issuer]（配列）
+
+**検証（合否を判定する）**
+
+- 認証が通る（HTTP 200）
+- 認証が通る（HTTP 200）
+- invalid_client（500 にしない）
+- invalid_client（500 にしない）
+
+## RT-294.55 **登録の grant_types に implicit が無いクライアントの Hybrid（code id_token）の要求は、同意の前に unauthorized_client で断る**
+
+| | |
+|---|---|
+| 観点 | **認可エンドポイントで発行する経路は、発行の時点（`CheckClientMode`）で grant_types を見ていた**が、**要求の検査では見ていなかった**ので、**利用者に同意させた後で server_error になっていた。****動的登録は組み合わせを揃えるが、構成ファイル・画面の登録は揃っているとは限らない。****code は従来どおり /token で見る**（#307 の段階 1。`RT-307.7`）。 |
+| 根拠 | RFC 7591 §2（grant_types）/ RFC 6749 §4.1.2.1 / #294 |
+| テスト | `RT29455_grant_typesにimplicitが無ければHybridは同意の前に断る` |
+
+**検証（合否を判定する）**
+
+- 同意画面を出さない
+- unauthorized_client
+
+## RT-294.56 **poll の CIBA は、client_notification_token も binding_message も無い request で受け付ける**
+
+| | |
+|---|---|
+| 観点 | **client_notification_token は ping / push のときだけ REQUIRED、binding_message は OPTIONAL**（CIBA Core §7.1）。**この実装は poll だけを扱う**のに、**以前は両方を必須にしていた**ので、**標準の poll のクライアントは invalid_request で断られた**（N5）。 |
+| 根拠 | CIBA Core §7.1 / #294 |
+| テスト | `RT29456_pollのCIBAはclient_notification_tokenを要らない` |
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+
+## RT-294.57 **PAR に預ける Request Object の client_id が、認証したクライアントと違えば、invalid_request_object で断る**
+
+| | |
+|---|---|
+| 観点 | **RFC 9126 §2.1 は、Request Object の client_id が認証したクライアントであることを求める。****以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、**別のクライアントの名義で、預けた要求を作れた**（C-41）。 |
+| 根拠 | RFC 9126 §2.1 / RFC 9101 §6.3 / #294 |
+| テスト | `RT29457_PARのRequestObjectのclient_idを照合する` |
+
+**検証（合否を判定する）**
+
+- invalid_request_object
+- request_uri を返さない
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 
@@ -9476,11 +9615,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - client_secret では通らない
 - PKCE(S256) でも通らない
-- エラーは unauthorized_client
+- エラーは invalid_client（認証の方法を明示した登録は、PKCE だけでは認証しない）
 
 **補足**
 
-- **これは設計どおり。** fapi2 の登録は、証明書（x509）を伴う経路でだけ通る。**通る側は FA-6.1 で測る**（net10.0 版のみ。net48 版は手動。#226）。
+- **これは設計どおり。** fapi2 の登録は、証明書（x509）か private_key_jwt を伴う経路でだけ通る（**PKCE との併用は `RT-294.51`**）。**通る側は FA-6.1 で測る**（net10.0 版のみ。net48 版は手動。#226）。
 
 ## FA-3.1 client_mode=device のクライアントは、PKCE(S256) の認可コードが通る
 

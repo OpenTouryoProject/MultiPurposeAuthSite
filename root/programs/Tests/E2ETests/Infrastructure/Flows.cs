@@ -51,6 +51,7 @@
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
 //*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
+//*  2026/10/29  玄人 幸道         TestClient_30 〜 _34 を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -359,6 +360,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public const string TestClient_25 = "TestClient_25";
 
+        /// <summary>TestClient を写し、**`token_endpoint_auth_method` を `client_secret_basic` と明示**したクライアント（C-40。#294）</summary>
+        public const string TestClient_30 = "TestClient_30";
+
+        /// <summary>TestClient を写し、**`token_endpoint_auth_method` を `none`（パブリック）**にしたクライアント（C-40。#294）</summary>
+        public const string TestClient_31 = "TestClient_31";
+
+        /// <summary>TestClient2（fapi2）を写し、**`private_key_jwt` で認証する**クライアント（N1。#294）</summary>
+        public const string TestClient_32 = "TestClient_32";
+
+        /// <summary>TestClient を写しただけのクライアント（S3。**同じ名前の利用者をテストが作る**。#294）</summary>
+        public const string TestClient_33 = "TestClient_33";
+
+        /// <summary>TestClient を写し、**grant_types を client_credentials だけ**にしたクライアント（implicit 無し。#294）</summary>
+        public const string TestClient_34 = "TestClient_34";
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -421,7 +437,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_10, "e2e0tc10000000000000000000000000" },
                 { KnownClients.TestClient_11, "e2e0tc11000000000000000000000000" },
                 { KnownClients.TestClient_12, "e2e0tc12000000000000000000000000" },
-                { KnownClients.TestClient_13, "e2e0tc13000000000000000000000000" }
+                { KnownClients.TestClient_13, "e2e0tc13000000000000000000000000" },
+                { KnownClients.TestClient_30, "e2e0tc30000000000000000000000000" },
+                { KnownClients.TestClient_31, "e2e0tc31000000000000000000000000" },
+                { KnownClients.TestClient_32, "e2e0tc32000000000000000000000000" },
+                { KnownClients.TestClient_33, "e2e0tc33000000000000000000000000" },
+                { KnownClients.TestClient_34, "e2e0tc34000000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -951,6 +972,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 // **同意を記録しないクライアント**（#272 の段階 2）。写すだけ。
                 sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_30
+                || clientName == KnownClients.TestClient_31
+                || clientName == KnownClients.TestClient_33
+                || clientName == KnownClients.TestClient_34)
+            {
+                // **写し元のまま**（変えたのは方法・grant_types だけ。#294）。
+                //   TestClient_31（none）は、**秘密を持っていても、それでは認証できない。**
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_32)
+            {
+                // **fapi2 ＋ private_key_jwt**（#294）。鍵は写し元（TestClient2）のもの。
+                sourceName = KnownClients.TestClient2;
             }
             else if (clientName == KnownClients.TestClient_29)
             {

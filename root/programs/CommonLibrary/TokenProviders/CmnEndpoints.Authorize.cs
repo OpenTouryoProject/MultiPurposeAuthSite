@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         CheckAuthTime の記述を実装に合わせ、using を整理した（#294）
+//*  2026/10/29  玄人 幸道         scope の省略で 500 にしない。id_token 単独と、登録の grant_types に無い Implicit / Hybrid を、同意の前に断る（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -175,6 +176,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   （コンパイラが全ての呼び出し元に `ref` を書かせる）。
             response_type = OAuth2AndOIDCSpec.NormalizeResponseType(response_type);
 
+            // **scope は省略できる**（RFC 6749 §3.3。OIDC なら openid が要るが、それは下で断る）。
+            //   **以前は null の `Split` で 500 になっていた**（#294）。
+            scope = scope ?? "";
+
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription, code_challenge, prompt);
@@ -287,6 +292,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
+                //  **`id_token` 単独も Implicit である**（OIDC Core §3.2。#294）。
+                //    **発行する側（`CreateAuthZRes4ImplicitFlow`）は `EnableImplicitGrantType` を見る**ので、
+                //    **ここで断らないと、利用者が同意した後で server_error になっていた。**
+                if (CmnEndpoints.GetFlowOfResponseType(rt) == ClientModePolicy.Flow.Implicit
+                    && !Config.EnableImplicitGrantType)
+                {
+                    err = OAuth2AndOIDCConst.unsupported_response_type;
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType;
+                    return false;
+                }
+
                 // OIDCチェック１（`code` / `token` 単独以外は、OIDC の response_type）
                 if (isOidc && !scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
                 {
@@ -322,6 +338,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err = OAuth2AndOIDCConst.unauthorized_client;
                     errDescription = "This response_type is not registered for this client.";
+                    return false;
+                }
+
+                //  **認可エンドポイントで発行する経路（Implicit / Hybrid）は、登録の grant_types（implicit）も、ここで見る**（RFC 7591 §2。#294）。
+                //    **発行の時点（`CheckClientMode`）でも見ている**ので、**ここで断らないと、
+                //    利用者が同意した後で失敗していた**（応答は server_error）。
+                //    **code は、従来どおり /token で見る**（#307 の段階 1 の決め。`RT-307.7`）。
+                //    **動的登録は、この組み合わせを登録の時点で揃える**（構成ファイル・画面の登録は揃っているとは限らない）。
+                ClientModePolicy.Flow flow = CmnEndpoints.GetFlowOfResponseType(response_type);
+
+                if (flow != ClientModePolicy.Flow.AuthorizationCode
+                    && !CmnEndpoints.CheckClientGrantType(client_id, flow))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This grant_type is not registered for this client.";
                     return false;
                 }
 

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         文字列でない iss・壊れた鍵の登録で 500 にしない。using を整理した（#294）
+//*  2026/10/29  玄人 幸道         PAR の Request Object の client_id を、認証したクライアントと照合する（C-41。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -354,6 +355,23 @@ namespace MultiPurposeAuthSite.TokenProviders
                 payload = (JObject)JsonConvert.DeserializeObject(
                     CustomEncode.ByteToString(
                         CustomEncode.FromBase64UrlString(request.Split('.')[1]), CustomEncode.us_ascii));
+
+                //  **中の client_id も、認証したクライアントであること**（RFC 9126 §2.1 / RFC 9101 §6.3。C-41。#294）。
+                //    **以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、
+                //    **別のクライアントの名義で、預けた要求を作れた。**
+                //    **無ければ、認証したクライアントで埋める**（フォームの経路と同じ）。
+                JToken roClientId = payload[OAuth2AndOIDCConst.client_id];
+
+                if (roClientId == null)
+                {
+                    payload[OAuth2AndOIDCConst.client_id] = client_id;
+                }
+                else if (roClientId.Type != JTokenType.String || (string)roClientId != client_id)
+                {
+                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error_description, "The client_id in the request object does not match the authenticated client.");
+                    return false;
+                }
             }
             else
             {

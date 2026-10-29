@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/24  玄人 幸道         新規（#314）
+//*  2026/10/29  玄人 幸道         RT-314.4（id_token 単独も断る）を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -53,6 +54,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-314.1`** | **Discovery が `token` を含む response_type を広告しない**（`code` / `code id_token` は広告する） |
     /// | **`RT-314.2`** | **`token` を含む response_type を `unsupported_response_type` で断り、access_token を返さない** |
     /// | **`RT-314.3`** | **`code id_token` は従来どおり通る**（access_token をフロント チャネルで返さない） |
+    /// | **`RT-314.4`** | **`id_token` 単独も `unsupported_response_type` で断る**（同意の後で server_error にしない。#294） |
     ///
     /// **以前は `token` 単独しか断っておらず、Hybrid（`code token` など）で access_token を返していた**（#314）。
     ///
@@ -232,6 +234,42 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Verify("access_token は返さない", string.IsNullOrEmpty(res.Get("access_token")),
                     "返さない", res.Get("access_token") == null ? "返さなかった" : "**返してしまった**");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-314.4
+
+        /// <summary>RT-314.4 id_token 単独も断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(NoImplicitTargets))]
+        public async Task RT31404_id_token単独も断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-314.4",
+                    "**Implicit を閉じた配備では、`id_token` 単独も `unsupported_response_type` で断る**",
+                    "**`id_token` 単独は OIDC の Implicit である**（OIDC Core §3.2）。"
+                    + "**発行する側は `EnableImplicitGrantType` を見ている**ので、"
+                    + "**以前は検査を通り、利用者が同意した後で server_error になっていた**（#294）。",
+                    "OIDC Core §3.2 / RFC 6749 §4.1.2.1 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + " / response_type=id_token / scope=openid");
+                r.Step("GET /authorize に response_type=id_token を付けて送る");
+
+                AuthZResponse res = await ImplicitDisabledTests.AuthorizeAsync(client, reg, "id_token");
+
+                r.VerifyEqual("unsupported_response_type", "unsupported_response_type", res.Error ?? "なし");
+
+                r.Verify("id_token を返さない", string.IsNullOrEmpty(res.Get("id_token")),
+                    "返さない", res.Get("id_token") == null ? "返さなかった" : "**返してしまった**");
 
                 r.Done();
             }

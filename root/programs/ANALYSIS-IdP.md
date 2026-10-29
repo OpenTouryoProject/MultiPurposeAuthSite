@@ -47,11 +47,11 @@
 
 | グループ | |
 |---|---|
-| **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
-| **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
-| **C. セキュリティ** | **2 件 残り** : **C-40**（コンフィデンシャル クライアントの code を `code_verifier` だけで引き換えられる）／**C-41**（PAR の Request Object の `client_id`）。**どちらも `CmnEndpoints.*.cs` のレビューで見つかった**（#294）。**他は全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。C-42 / C-43 は同じレビューで見つかり #294） |
+| **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15 / A-16 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
+| **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 / B-12 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
+| **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。**C-40〜C-45 は `CmnEndpoints.*.cs` のレビューで見つかり #294**。**C-40 は「方法を明示した登録」で閉じ、空の登録は従来どおり**） |
 | **D. 機能不足** | **1 件 残り** : **D-14**（適合性テスト）。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
-| **E. 品質** | **2 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
+| **E. 品質** | **4 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）／**E-13**（refresh_token の失効で access_token も）／**E-14**（ROPC の失敗の数えを原子的に）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
 **7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
 **残っているものは フェーズ 4・5（機能の追加と土台）に寄っている。**
@@ -905,6 +905,22 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 **E2E** : **`RT-294.41`**（Device の refresh_token）、**`RT-307.5`**（`expires_in`）、**`RT-294.42`**（`cnf.jkt`）、
 **`RT-294.43`**（CIBA を private_key_jwt で通す）、**`RT-294.44`**（`invalid_grant`）、**`RT-294.49`**（Discovery）。
 
+### A-16. 標準のクライアントが通らない・同意の後で失敗する経路が残っていた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**`CmnEndpoints.*.cs` の 2 回目のレビューで見つけた。**
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| **N1 : PKCE と private_key_jwt / mTLS の併用** | **`code_verifier` が在ると `client_assertion` と証明書を見ず、PKCE だけで認証した** → **証明が PKCE になり、fapi2（FAPI 2.0 は PKCE と鍵か証明書の両方を求める）が通らなかった**。`RequirePkce` を有効にすると、鍵・証明書のクライアントは全く通らなかった | **まず資格情報で認証し、PKCE は別に検証する**（証明は PrivateKeyJwt / Mtls） |
+| **N3 : `response_type=id_token`** | **Implicit を閉じても検査を通り、同意の後で `server_error`** | **`unsupported_response_type`**（Implicit の経路として扱う） |
+| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（FAPI 2.0 は issuer も受けることを求める）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
+| **N5 : poll の CIBA** | **`client_notification_token`（ping / push のときだけ REQUIRED）と `binding_message`（OPTIONAL）を必須にしていた** | **省略できる**（`/ros` は前者の有無で CIBA を見分けるので、`request_uri` の経路では在ることになる） |
+| **N6 : Device グラントの登録種別** | **`device` を固定で書いていた**（normal の登録のトークンも `device` を名乗った） | **登録された種別で書く**（#220 と同じ） |
+| **登録の `grant_types` と Implicit / Hybrid** | **認可エンドポイントで見ず、同意の後で `server_error`** | **認可エンドポイントで発行する経路（`implicit`）は、同意の前に `unauthorized_client`**。**code は従来どおり `/token` で見る**（#307 の段階 1 の決め。`RT-307.7`） |
+| **Discovery** | **CIBA を、`EnableCibaGrantType` を見ずに広告していた。** `token_endpoint_auth_signing_alg_values_supported` を値で直に書いていた | **開けた配備だけ広告する。** **一覧から作る。** **`token_endpoint_auth_methods_supported` に `none` を足し、revoke / introspect の一覧からは除いた**（認証を要する口のため） |
+
+**E2E** : **`RT-294.51`**（N1）、**`RT-314.4`**（N3。`-NoImplicit`）、**`RT-294.54`**（N4）、**`RT-294.56`**（N5）、**`RT-294.41`**（N6）、**`RT-294.55`**（grant_types）、**`RT-294.49`**（Discovery）。
+
 ### `sub` の対応表（`SubjectIdentifier`）**[Lib]** — **✅ 実装（#151 の段階 2）**
 
 **`sub` が「導出」から「データ」になった。**
@@ -1192,6 +1208,17 @@ E2E : `RT-241.1`（`/ros`）/ `RT-241.2`（`client_assertion`）/ `RT-241.3`（`
 （`JwtAssertion.Verify` は JWK の `kty` で検証器を選び、名乗りを見ない）。
 
 **E2E** : **`RT-294.45`**（JWT Bearer）、**`RT-294.46`**（scope の省略）、**`RT-294.47`**（CIBA の `request`）、**`RT-294.43`**（private_key_jwt の `/ciba_authz`）。
+
+### B-12. scope を省いた認可要求と、配列の `aud` の assertion で HTTP 500 になっていた **[Lib]** — **✅ 修正済み（#294）**
+
+| 口 | 500 になった入力 |
+|---|---|
+| **認可エンドポイント**（`ValidateAuthZReqParam`） | **scope を省いた要求**（null の `Split`。scope は RFC 6749 §3.3 で省略できる） |
+| **`client_assertion` / JWT Bearer の `assertion`** | **`aud` が配列**（上流の `JwtAssertion.Verify` が文字列として読み、例外を投げた） |
+
+**scope は空として扱い、assertion の検証は例外を失敗として扱う**（`TryVerifyAssertion`）ようにした。
+
+**E2E** : **`RT-294.53`**（scope の省略）、**`RT-294.54`**（配列の `aud`）。
 
 ---
 
@@ -3106,29 +3133,42 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > **Request Object と違う `client_id` を確かめずに上書き**（RFC 9126 §4）、**同意画面のボタンが無い POST**。
 > **応答の組み立ては 1 か所にまとめ、認可エンドポイントの本文は両版で同じにした**（E2E : `RT-294.19`〜`.22`）。
 
-### C-40. コンフィデンシャル クライアントの code を、`code_verifier` だけで引き換えられる **[Lib]** — **⚠️ 未修正（#294 のレビューで記録）**
+### C-40. コンフィデンシャル クライアントの code を、`code_verifier` だけで引き換えられた **[Lib]** — **✅ 修正済み（#294。方法を明示した登録で閉じる）**
 
-**`CmnEndpoints.GrantAuthorizationCodeCredentials`** は、**`code_verifier` が在り `client_secret` が無い要求を、PKCE だけで認証が済んだものとして扱う。**
+**`CmnEndpoints.GrantAuthorizationCodeCredentials`** は、**`code_verifier` が在り `client_secret` が無い要求を、PKCE だけで認証が済んだものとして扱っていた。**
 この分岐は **`ClientAuthentication` も `AllowsAuthMethod` も呼ばない。**
 `ClientModePolicy` の表は「認可コード × PKCE S256 → normal / fapi1 / device」を通すので、
-**`client_secret`（や鍵）を登録したクライアントの code も、この分岐で引き換えられる。**
+**`client_secret`（や鍵）を登録したクライアントの code も、この分岐で引き換えられた**
+（RFC 6749 §4.1.3 は、コンフィデンシャル クライアントの認証を MUST としている）。
 
-| | |
+**対応 : PKCE だけで引き換えられるのは、`token_endpoint_auth_method` が空か `none` の登録だけにした**（`MayUsePkceOnly`）。
+
+| 登録 | `code_verifier` だけ |
 |---|---|
-| **抜けている確認** | **そのクライアントがコンフィデンシャルか**（秘密・鍵・DN・`jwks_uri` を登録しているか）。RFC 6749 §4.1.3 は、コンフィデンシャル クライアントの認証を MUST としている |
-| **影響** | **code が漏れたとき、クライアント認証という 1 枚の防御が無くなる**（PKCE は「要求を始めた者」を縛るが、「正規のクライアント」を縛らない） |
-| **直し方の案** | **コンフィデンシャルなら、PKCE だけの分岐に入れない**（`DeviceAuthZClientAuthentication` と同じ「コンフィデンシャルかどうか」の見方を使う）。**fapi1 の登録を PKCE だけで通している利用者が居ないかを、先に確かめる** |
+| **`none`**（パブリックの明示。#294 で受けるようにした） | **通す** |
+| **空**（明示しない） | **通す**（**従来どおり**） |
+| **それ以外**（認証の方法を明示した） | **通さない**（`invalid_client`） |
 
-### C-41. PAR に預けた Request Object の `client_id` を、認証したクライアントと照合していない **[Lib]** — **⚠️ 未修正（#294 のレビューで記録）**
+**空を通すのは、既定の挙動を変えないため**である。**雛形の SPA / ネイティブ アプリのクライアントは、秘密を持ったまま PKCE だけで引き換えている**
+（E2E の `FA-1.1` や `PkceTests` も同じ）。**閉じたいクライアントは、方法を明示する**（`CONFIGURATION.md`）。
 
-**`CmnEndpoints.PushedAuthorizationRequest`** は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめる**が、
-**中の `client_id` は確かめない。** その後の検証（`ValidateAuthZReqParam`）と保存は、**中の `client_id` で行う。**
+> **残り : 方法が空の登録は、秘密を持っていても PKCE だけで通る。**
+> **雛形の SPA / ネイティブから秘密を外し `none` を登録すれば、既定でも閉じられる**（雛形と E2E の書き換えを伴う）。
 
-| | |
-|---|---|
-| **抜けている確認** | **Request Object の `client_id` ＝ 認証したクライアント**（RFC 9126 §2.1 / RFC 9101 §6.3） |
-| **影響** | **別のクライアントの名義で、PAR に預けた要求を作れる。** その名義の `redirect_uri` の登録は効くので、**`/authorize` へ直接送って作れる要求と、範囲は変わらない。** **PAR を必須にする（`require_pushed_authorization_requests`）ときには穴になる** |
-| **直し方の案** | **中の `client_id` が在れば、認証したクライアントと一致しなければ `invalid_request_object`** にする。**無ければ、認証したクライアントで埋める**（フォームの経路と同じ） |
+**同じ分岐に、逆向きの不具合も在った**（`code_verifier` が在ると `client_assertion` と証明書を見なかった）。A-16 の N1。
+
+**E2E** : **`RT-294.52`**（方法を明示した登録は PKCE だけでは `invalid_client`、`none` は PKCE だけで通り、秘密では通らない）、
+**`FA-2.1`**（fapi2 の PKCE だけの拒否が `unauthorized_client` から `invalid_client` に変わった）。
+
+### C-41. PAR に預けた Request Object の `client_id` を、認証したクライアントと照合していなかった **[Lib]** — **✅ 修正済み（#294）**
+
+**`CmnEndpoints.PushedAuthorizationRequest`** は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめていた**が、
+**中の `client_id` は確かめていなかった。** その後の検証（`ValidateAuthZReqParam`）と保存は、**中の `client_id` で行っていた**ので、
+**別のクライアントの名義で、PAR に預けた要求を作れた**（RFC 9126 §2.1 / RFC 9101 §6.3）。
+
+**中の `client_id` が認証したクライアントと違えば `invalid_request_object`、無ければ認証したクライアントで埋める**（フォームの経路と同じ）ようにした。
+
+**E2E** : **`RT-294.57`**。
 
 ### C-42. 他のクライアントが出した refresh_token を、消費してから断っていた **[Lib]** — **✅ 修正済み（#294）**
 
@@ -3148,6 +3188,34 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 **照合は数えない `MatchesClientSecret` にした。** **方法（`token_endpoint_auth_method`）とロックアウトは、その後の本番の認証で見る。**
 
 > **E2E では測っていない**（上限の手前の数を外から読めない）。**読んで直した。**
+
+### C-44. client_credentials / JWT Bearer のトークンが、クライアントと同じ名前の利用者に結び付いていた **[Lib]** — **✅ 修正済み（#294）**
+
+**`GrantClientCredentials` / `GrantJwtBearerTokenCredentials` は、トークンの主体にクライアント名（`ClientName`）を渡し、**
+**`PPIDExtension.GetSubForOIDC` がその名前で利用者を引いていた。** **居れば、その利用者の `sub` になった。**
+
+**`ClientName` はラベルである。** 動的登録・管理画面の登録では**登録の時点の所有者の利用者名**が入り、**名前を付け替えても追従しない**（#307 の段階 5-a の決め）。
+そのため、**付け替えた後に同じ名前を取った別の利用者に、クライアントのトークンが結び付いた**（`/userinfo` やリソース サーバは、その利用者として扱う）。
+**構成ファイルのクライアント名**（`MVC_Sample` など）**と同じ名前で利用者が登録された場合も**同じである。
+
+**利用者名を渡さないようにした**（**`sub` は常にクライアント名**）。**client_credentials は資源所有者の居ないトークン**である（RFC 6749 §4.4）。
+**動的登録の client_credentials 経路**（#307 の段階 5-b）は、**所有者を `OwnerUserId` / `owner` 属性から引く**ので、影響しない。
+
+**E2E** : **`RT-294.50`**（同じ名前の利用者を作っても、`sub` はクライアント名で、`/userinfo` はその利用者のメアドを返さない）。
+
+### C-45. 秘密の照合と利用者の有無で、応答の時間に差が出ていた **[Lib]** — **✅ 修正済み（#294）**
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| **`client_secret` の照合** | `==`（**最初に食い違った所で止まる**） | **全部を比べてから答える**（`FixedTimeEquals`。net48 に `CryptographicOperations` が無いので自前） |
+| **ROPC で利用者が居ない** | **パスワードを照合せずに返す**（ストレッチの分だけ速い） | **誰のものでもないハッシュと照合してから返す**（`VerifyDummyPassword`。応答の文面は以前から揃っている。TC-4.2） |
+
+> **E2E では測っていない**（時間の差は環境で揺れる）。**読んで直した。**
+
+> **`CmnEndpoints.*.cs` の 2 回目のレビュー（C-40〜C-45・A-16・B-12）で、判断して見送ったもの。**
+> **`client_assertion` / JWT Bearer の `assertion` の `jti` による使い切り**（RFC 7523 §3 は MAY）、
+> **パブリック クライアントの PAR**（RFC 9126 §2 は認める）、**Hybrid の `code token` の `nonce` を任意にする**（OIDC Core §3.3.2.1 は OPTIONAL。#190 で必須にした）。
+> **設計の変更が要るものは E-13 / E-14 に残した。**
 
 ---
 
@@ -3191,6 +3259,8 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |
 | E-11 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションが **認可応答の `iss`（RFC 9207）を見ていなかった。** `id_token` の `iss` は照合していたが、**OAuth 2.1 が Mix-Up 対策として挙げているのは応答パラメタの方。** いまは `SpRp_Isser` と照合する（**来なければ通す** — 実装していない OP があるため） |
 | E-12 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの要求スコープに**独自の `userid` / `roles`** が入っていた。**厳格な OP では `invalid_scope` になりうる**（この IdP 自身も #198 でスコープを絞る）。**標準だけにした。** `userid` は連携キーでなくなったので不要（`(iss, sub)` へ移行済み）。`state` も 10 → 32 文字にした |
+| E-13 | **refresh_token を失効させても、そこから出た access_token は期限まで使える**（RFC 7009 §2.1 は SHOULD で、同じ認可グラントのトークンも無効にすることを求める）。**refresh_token の一族は失効させている**（#188 の段階 3）が、**access_token の `jti` と一族を結び付ける列が無い。** **列（または表）と DDL（3 方言 ＋ `mem`）が要る**ので、#294 では見送った |
+| E-14 | **ROPC のパスワードの失敗の数えが、読み・足し・書きの 3 手で、原子的でない**（`RecordUserAccessFailed`）。**同時に送られた試行は、少なく数えられることがある**（レート制限（#305 の段階 3）が頭を打つ）。**DB の更新 1 文で数える**には、user store の口を足す必要があるので、#294 では見送った |
 
 ---
 

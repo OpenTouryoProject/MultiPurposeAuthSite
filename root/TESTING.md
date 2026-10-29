@@ -976,7 +976,8 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 **張り替えたので、その利用者はもう作らない**（**`OwnerUserId` は空**）。
 
 > **`ClientName` は、従来どおり入る**（**ラベル**）。
-> **`Helper.GetClientName` が「登録が在るか」の判定と、`client_credentials` の `sub` に使う**ため、
+> **`Helper.GetClientName` が「登録が在るか」の判定と、`client_credentials` の `sub` に使う**
+> （**同じ名前の利用者は引かない**。#294）ため、
 > **消してはならない。**
 
 ###### 管理画面は、まだ 1 件だけを扱う（段階 5-a-1 の時点）
@@ -4061,7 +4062,7 @@ The ID federation did not complete. (the error view was returned)
 > **`RT-294.30` の出口は、版で違う。** net10.0 版はサインイン画面へリダイレクトし、
 > net48 版は失敗の画面（`ExternalLoginFailure`）を出す。**どちらも「500 にせず、サインインしない」ので、両方を受け入れる。**
 
-#### `CmnEndpoints.*.cs` のレビューで見つけた不具合（`RT-294.41`〜`.49`。#294）
+#### `CmnEndpoints.*.cs` のレビューで見つけた不具合（`RT-294.41`〜`.57`。#294）
 
 **`CmnEndpoints.*.cs` のレビューで見つけ、直したものを押さえる**（`CmnEndpointsReviewTests`。両版）。
 
@@ -4075,9 +4076,22 @@ The ID federation did not complete. (the error view was returned)
 | `RT-294.46` | **scope を省いた**トークン要求（client_credentials / password / JWT Bearer）でもトークンが取れる | **500**（null の `Split`） |
 | `RT-294.47` | **CIBA の壊れた request**（payload が配列・`iss` がオブジェクト）は 400 | **500** |
 | `RT-294.48` | **他のクライアントが出した refresh_token** は、消費せずに断る（**持ち主はその後も更新できる**） | **消費してから断っていた**（持ち主が次に使うと、一族ごと失効した） |
-| `RT-294.49` | Discovery の **revoke / introspect の認証方法**が、トークン エンドポイントと同じ一覧 | **秘密の 2 つしか広告していなかった** |
+| `RT-294.49` | Discovery の **revoke / introspect の認証方法**が、トークン エンドポイントの一覧から `none` を除いたもの | **秘密の 2 つしか広告していなかった** |
+| `RT-294.50` | **client_credentials のトークンは、クライアントと同じ名前の利用者が居ても、その利用者に結び付かない**（`sub` はクライアント名。`/userinfo` は利用者のメアドを返さない） | **同じ名前の利用者の `sub` になった**（S3） |
+| `RT-294.51` | **fapi2 のクライアントが、PKCE と private_key_jwt を併用して認可コードを引き換えられる**（違う `code_verifier` では通らない） | **`code_verifier` が在ると `client_assertion` を無視した**（fapi2 は通らなかった） |
+| `RT-294.52` | **方法を明示したクライアントは PKCE だけでは引き換えられず、`none` のクライアントは PKCE だけで引き換えられる**（秘密では通らない） | **登録に関わらず PKCE だけで引き換えられた**（C-40） |
+| `RT-294.53` | **scope を省いた認可要求**でも code が返る | **500** |
+| `RT-294.54` | **client_assertion の `aud` に issuer を受ける**（配列は 500 にせず `invalid_client`） | **issuer は `invalid_client`、配列は 500** |
+| `RT-294.55` | **grant_types に `implicit` が無いクライアントの Hybrid** は、同意の前に `unauthorized_client` | **同意の後で `server_error`** |
+| `RT-294.56` | **poll の CIBA は、`client_notification_token` も `binding_message` も無い request で受け付ける** | **`invalid_request`** |
+| `RT-294.57` | **PAR の Request Object の `client_id` が、認証したクライアントと違えば `invalid_request_object`** | **受け付けて、別のクライアントの名義で預けた**（C-41） |
 
 > **`client_registration` 専用トークンの `expires_in`**（以前は配備ぜんたいの期限を返していた）は、**`RT-307.5` に足した。**
+> **`response_type=id_token` を Implicit を閉じた配備で断る**ことは、**`RT-314.4`**（`-NoImplicit` で回す）。
+> **`FA-2.1` の PKCE だけの拒否は、`unauthorized_client` から `invalid_client` に変わった**
+> （**方法を明示した登録は、認証の段で断られる**。C-40）。
+> **`RT-294.50` / `.52` / `.55` / `.57` は種データの `TestClient_30`〜`_34` を使う**
+> （`.50` は**管理画面で同じ名前の利用者を作り、終わったら消す**）。
 > **`RT-294.43` は TestClient4_4**（種データ。fapi_ciba ＋ `private_key_jwt`。アサーションは ES256）を使い、
 > **プッシュ通知の送信箱を使う**ので、`-Launch` でなければ Skip する。
 >

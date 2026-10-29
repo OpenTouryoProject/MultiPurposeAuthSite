@@ -34,6 +34,7 @@
 //*  2026/09/26  玄人 幸道         FA-1.2 を、refresh_token を「非対称の証明でだけ使える」に改めた（#239 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/19  玄人 幸道         FA-4.1 の fapi2 を、認証の段で断られる形に改めた（#307 の段階 3）
+//*  2026/10/29  玄人 幸道         FA-2.1 の PKCE だけの拒否を invalid_client にした（C-40。#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -491,12 +492,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     withPkce != null && string.IsNullOrEmpty(withPkce.AccessToken),
                     "拒否される", ClientModeTests.Outcome(withPkce));
 
-                r.Verify("エラーは unauthorized_client",
-                    withPkce != null && withPkce.Error == "unauthorized_client",
-                    "unauthorized_client",
+                //  **TestClient2 は、登録で認証の方法を明示している**ので、
+                //    **PKCE だけの引き換えは、認証の段で断られる**（invalid_client。C-40。#294）。
+                //    **以前は PKCE で認証が通り、登録種別の段で断られていた**（unauthorized_client）。
+                r.Verify("エラーは invalid_client（認証の方法を明示した登録は、PKCE だけでは認証しない）",
+                    withPkce != null && withPkce.Error == "invalid_client",
+                    "invalid_client",
                     withPkce == null ? "（認可で失敗）" : (withPkce.Error ?? "（無し）"));
 
-                r.Note("**これは設計どおり。** fapi2 の登録は、証明書（x509）を伴う経路でだけ通る。"
+                r.Note("**これは設計どおり。** fapi2 の登録は、証明書（x509）か private_key_jwt を伴う経路でだけ通る"
+                    + "（**PKCE との併用は `RT-294.51`**）。"
                     + "**通る側は FA-6.1 で測る**（net10.0 版のみ。net48 版は手動。#226）。");
 
                 r.Done();

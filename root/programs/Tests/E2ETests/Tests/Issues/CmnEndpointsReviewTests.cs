@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：CmnEndpointsReviewTests
-//* クラス日本語名  ：RT-294.41 〜 .49 CmnEndpoints.*.cs のレビューで見つけた不具合
+//* クラス日本語名  ：RT-294.41 〜 .57 CmnEndpoints.*.cs のレビューで見つけた不具合
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（#294）
+//*  2026/10/29  玄人 幸道         RT-294.50 〜 .57 を追加し、.41（登録種別）と .49（none）を見直した（#294）
 //**********************************************************************************
 
 using System;
@@ -46,7 +47,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-294.41 〜 .49 `CmnEndpoints.*.cs` のレビューで見つけた不具合（#294）。
+    /// RT-294.41 〜 .57 `CmnEndpoints.*.cs` のレビュー（2 回）で見つけた不具合（#294）。
     /// </summary>
     /// <remarks>
     /// | ケース | 以前の振る舞い |
@@ -60,6 +61,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | RT-294.47 CIBA の壊れた request | **HTTP 500**（payload が配列・`iss` が文字列でない） |
     /// | RT-294.48 他のクライアントの refresh_token | **消費してから断っていた**（持ち主が次に使うと、一族ごと失効した） |
     /// | RT-294.49 Discovery の一覧 | **revoke / introspect の認証方法を、秘密の 2 つしか広告していなかった** |
+    /// | RT-294.50 client_credentials の sub | **ClientName と同じ名前の利用者が居ると、その利用者の sub になった**（S3） |
+    /// | RT-294.51 PKCE と private_key_jwt の併用 | **code_verifier が在ると client_assertion を無視し、fapi2 が通らなかった**（N1） |
+    /// | RT-294.52 PKCE だけの引き換え | **認証の方法を明示したクライアントでも、PKCE だけで引き換えられた**（C-40） |
+    /// | RT-294.53 scope を省いた認可要求 | **HTTP 500**（N2） |
+    /// | RT-294.54 client_assertion の aud | **トークン エンドポイントの URL しか受けなかった**（issuer を断った。配列は 500。N4） |
+    /// | RT-294.55 登録の grant_types（Implicit / Hybrid） | **認可エンドポイントで見ず、同意の後で server_error になった** |
+    /// | RT-294.56 poll の CIBA | **client_notification_token と binding_message を必須にしていた**（N5） |
+    /// | RT-294.57 PAR の Request Object の client_id | **iss だけを照合し、中の client_id は照合していなかった**（C-41） |
     ///
     /// **`client_registration` 専用トークンの `expires_in`** は、`RT-307.5` に足した。
     ///
@@ -145,6 +154,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Verify("refresh_token が返る", !string.IsNullOrEmpty(token.RefreshToken),
                     "あり", string.IsNullOrEmpty(token.RefreshToken) ? "**無い**" : "あり（値は伏せる）");
+
+                if (!string.IsNullOrEmpty(token.AccessToken))
+                {
+                    //  **登録された種別で書く**（N6。#294）。**以前は device を固定で書いていた。**
+                    JsonElement payload = Jwt.Payload(token.AccessToken);
+
+                    r.Verify("normal の登録のトークンは device を名乗らない",
+                        !payload.TryGetProperty("device", out JsonElement _),
+                        "device クレーム無し",
+                        payload.TryGetProperty("device", out JsonElement d) ? "**device=" + d.ToString() + "**" : "無し");
+                }
 
                 if (!string.IsNullOrEmpty(token.RefreshToken))
                 {
@@ -608,14 +628,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 string[] token = res.Strings("token_endpoint_auth_methods_supported") ?? new string[0];
 
+                r.Verify("token_endpoint_auth_methods_supported に none（パブリック）が在る",
+                    Array.IndexOf(token, "none") >= 0, "在る", string.Join(" ", token));
+
+                //  **revoke / introspect は認証を要する**ので、**none を除いた一覧**である（#294）。
+                string expected = string.Join(" ", Array.FindAll(token, x => x != "none"));
+
                 foreach (string name in new string[] {
                     "revocation_endpoint_auth_methods_supported",
                     "introspection_endpoint_auth_methods_supported" })
                 {
                     string[] methods = res.Strings(name) ?? new string[0];
 
-                    r.VerifyEqual(name + " が token_endpoint_auth_methods_supported と同じ",
-                        string.Join(" ", token), string.Join(" ", methods));
+                    r.VerifyEqual(name + " が token_endpoint_auth_methods_supported から none を除いたもの",
+                        expected, string.Join(" ", methods));
                 }
 
                 r.Verify("request_object_signing_alg_values_supported に RS256 が在る",
@@ -628,7 +654,546 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-294.50
+
+        /// <summary>RT-294.50 client_credentials の sub は、同じ名前の利用者に結び付かない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29450_client_credentialsのsubは同じ名前の利用者に結び付かない(string targetKey)
+        {
+            using (IdPClient admin = await this.AdminClientAsync(targetKey))
+            {
+                await Flows.SkipIfGrantTypeNotSupportedAsync(admin, "client_credentials");
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                TestReport r = this.Report("RT-294.50",
+                    "**client_credentials のトークンは、クライアントと同じ名前の利用者が居ても、その利用者に結び付かない**",
+                    "**以前は ClientName と同じ名前の利用者を引き、居ればその利用者の sub にしていた。**"
+                    + "**ClientName はラベル**（登録の時点の所有者の利用者名）なので、"
+                    + "**名前を付け替えた後に同じ名前を取った別の利用者に、トークンが結び付いた**（S3）。"
+                    + "**client_credentials は資源所有者の居ないトークン**である。",
+                    "RFC 6749 §4.4 / #294");
+
+                ClientRegistration reg = Flows.InjectedRegistration(admin, KnownClients.TestClient_33);
+                string email = "rt29450-" + Guid.NewGuid().ToString("N").Substring(0, 8) + "@example.invalid";
+
+                r.Target("client_name=" + KnownClients.TestClient_33 + "（同じ名前の利用者を、管理画面で作る）");
+
+                try
+                {
+                    r.Step("(1) 管理者 : クライアントと同じ名前の利用者を作る");
+
+                    await UsersAdmin.CreateAsync(admin, KnownClients.TestClient_33, email, null);
+
+                    string body = await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                    Assert.False(string.IsNullOrEmpty(UsersAdmin.FindId(body, KnownClients.TestClient_33)),
+                        "前提: 同じ名前の利用者が作られること");
+
+                    r.Step("(2) クライアント : client_credentials でトークンを取る");
+
+                    JsonResponse token = await admin.TokenAsync(new Dictionary<string, string>()
+                    {
+                        { "grant_type", "client_credentials" },
+                        { "scope", "email" },
+                        { "client_id", reg.ClientId },
+                        { "client_secret", reg.ClientSecret }
+                    });
+
+                    Assert.False(string.IsNullOrEmpty(token.AccessToken),
+                        "前提: トークンが取れること（" + token.ToString() + "）");
+
+                    r.VerifyEqual("sub はクライアント名", KnownClients.TestClient_33,
+                        Jwt.String(Jwt.Payload(token.AccessToken), "sub") ?? "（無い）");
+
+                    r.Step("(3) /userinfo は、その利用者のメアドを返さない");
+
+                    JsonResponse userinfo = await admin.UserInfoAsync(token.AccessToken);
+
+                    r.Verify("利用者のメアドを返さない", userinfo.String("email") != email,
+                        "返さない", userinfo.String("email") == email ? "**返した**" : "返さない");
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, KnownClients.TestClient_33);
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.51
+
+        /// <summary>RT-294.51 PKCE と private_key_jwt を併用して、fapi2 の認可コードを引き換えられる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29451_PKCEとprivate_key_jwtを併用できる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.51",
+                    "**fapi2 のクライアントが、PKCE と client_assertion（private_key_jwt）を併用して、認可コードを引き換えられる**",
+                    "**FAPI 2.0 は、PKCE と、private_key_jwt か mTLS の両方を求める。**"
+                    + "**以前は code_verifier が在ると、client_assertion を見ずに PKCE だけで認証した**ので、"
+                    + "**証明が PKCE になり、fapi2 の登録は通らなかった**（N1）。",
+                    "FAPI 2.0 Security Profile §5.3.2.1 / RFC 7636 / RFC 7523 §2.2 / #294");
+
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_32);
+
+                r.Target("client_name=" + KnownClients.TestClient_32 + "（fapi2。token_endpoint_auth_method=private_key_jwt）");
+
+                r.Step("(1) PKCE（S256）で認可コードを取る");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri, extra: CmnEndpointsReviewTests.Pkce());
+
+                Assert.False(string.IsNullOrEmpty(authz.Code),
+                    "前提: 認可コードが取得できること（" + authz.ToString() + "）");
+
+                r.Step("(2) code_verifier と client_assertion を送って交換する");
+
+                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "authorization_code" },
+                    { "code", authz.Code },
+                    { "code_verifier", CmnEndpointsReviewTests.Verifier },
+                    { "redirect_uri", reg.RedirectUri },
+                    { "client_assertion_type", JwtBearerAssertionType },
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, null) }
+                });
+
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(token.AccessToken),
+                    "あり", string.IsNullOrEmpty(token.AccessToken) ? "**無い**（" + token.ToString() + "）" : "あり");
+
+                r.Step("(3) 違う code_verifier では、client_assertion が正しくても通らない");
+
+                AuthZResponse authz2 = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri, extra: CmnEndpointsReviewTests.Pkce());
+
+                Assert.False(string.IsNullOrEmpty(authz2.Code), "前提: 認可コードが取得できること");
+
+                JsonResponse wrong = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "authorization_code" },
+                    { "code", authz2.Code },
+                    { "code_verifier", CmnEndpointsReviewTests.Verifier + "x" },
+                    { "redirect_uri", reg.RedirectUri },
+                    { "client_assertion_type", JwtBearerAssertionType },
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, null) }
+                });
+
+                r.Verify("access_token を返さない", string.IsNullOrEmpty(wrong.AccessToken),
+                    "返さない", string.IsNullOrEmpty(wrong.AccessToken) ? "返さない（error=" + (wrong.Error ?? "なし") + "）" : "**返した**");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.52
+
+        /// <summary>RT-294.52 PKCE だけの引き換えは、登録で認証の方法を明示していないクライアントだけ</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29452_PKCEだけの引き換えは明示していないクライアントだけ(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.52",
+                    "**認証の方法を明示したクライアントは、PKCE だけでは認可コードを引き換えられない**"
+                    + "（`none` を明示したクライアントは引き換えられ、秘密では認証できない）",
+                    "**RFC 6749 §4.1.3 は、コンフィデンシャル クライアントの認証を MUST としている。**"
+                    + "**以前は code_verifier が在り client_secret が無ければ、登録に関わらず PKCE だけで通した**（C-40）。"
+                    + "**登録が空のクライアントは、従来どおり PKCE だけで通す**（既定の挙動を変えない）。",
+                    "RFC 6749 §4.1.3 / RFC 7591 §2（token_endpoint_auth_method）/ #294");
+
+                ClientRegistration secretBasic = Flows.InjectedRegistration(client, KnownClients.TestClient_30);
+                ClientRegistration none = Flows.InjectedRegistration(client, KnownClients.TestClient_31);
+
+                r.Target(KnownClients.TestClient_30 + "（client_secret_basic を明示）／"
+                    + KnownClients.TestClient_31 + "（none を明示）");
+
+                r.Step("(1) client_secret_basic を明示したクライアント : PKCE だけでは通らない");
+
+                JsonResponse pkceOnly = await CmnEndpointsReviewTests.ExchangeWithPkceAsync(client, secretBasic, false);
+
+                r.VerifyEqual("invalid_client", "invalid_client", pkceOnly.Error ?? "（無い）");
+
+                r.Step("(2) 同じクライアント : client_secret ＋ PKCE なら通る");
+
+                JsonResponse withSecret = await CmnEndpointsReviewTests.ExchangeWithPkceAsync(client, secretBasic, true);
+
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(withSecret.AccessToken),
+                    "あり", string.IsNullOrEmpty(withSecret.AccessToken) ? "**無い**（" + withSecret.ToString() + "）" : "あり");
+
+                r.Step("(3) none を明示したクライアント : PKCE だけで通る");
+
+                JsonResponse publicPkce = await CmnEndpointsReviewTests.ExchangeWithPkceAsync(client, none, false);
+
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(publicPkce.AccessToken),
+                    "あり", string.IsNullOrEmpty(publicPkce.AccessToken) ? "**無い**（" + publicPkce.ToString() + "）" : "あり");
+
+                r.Step("(4) none を明示したクライアント : 秘密では認証できない");
+
+                JsonResponse publicSecret = await CmnEndpointsReviewTests.ExchangeWithPkceAsync(client, none, true);
+
+                r.VerifyEqual("invalid_client", "invalid_client", publicSecret.Error ?? "（無い）");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.53
+
+        /// <summary>RT-294.53 scope を省いた認可要求で 500 にしない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29453_scopeを省いた認可要求で500にしない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.53",
+                    "**scope を省いた認可要求（OAuth 2.0 の code）でも、HTTP 500 にしない**",
+                    "**scope は省略できる**（RFC 6749 §3.3）。**以前は null の `Split` で 500 になっていた**（N2）。",
+                    "RFC 6749 §3.3 / §4.1.1 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("GET /authorize（response_type=code。scope を送らない）");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, scope: null, nonce: null, redirectUri: reg.RedirectUri);
+
+                r.Verify("HTTP 500 にならない", (int)authz.StatusCode != 500,
+                    "500 以外", ((int)authz.StatusCode).ToString());
+
+                r.Verify("code が返る", !string.IsNullOrEmpty(authz.Code),
+                    "あり", string.IsNullOrEmpty(authz.Code) ? "**無い**（" + authz.ToString() + "）" : "あり");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.54
+
+        /// <summary>RT-294.54 client_assertion の aud に issuer を受ける</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29454_client_assertionのaudにissuerを受ける(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-294.54",
+                    "**client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**"
+                    + "（配列は、500 にせず invalid_client で断る）",
+                    "**FAPI 2.0 は、issuer を aud として受けることを求める**（RFC 7523 §3 も issuer を認める）。"
+                    + "**以前はトークン エンドポイントの URL との完全一致だけ**だったので、"
+                    + "**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。"
+                    + "**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**"
+                    + "（**以前は HTTP 500** だった）。",
+                    "RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.3 / #294");
+
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_24);
+                string issuer = await client.IssuerAsync();
+
+                r.Target("POST /revoke（client_name=" + KnownClients.TestClient_24 + "。private_key_jwt で認証する）");
+
+                foreach (KeyValuePair<string, object> aud in new Dictionary<string, object>()
+                {
+                    { "issuer", issuer },
+                    { "トークン エンドポイント", client.Target.BaseUrl + "/token" }
+                })
+                {
+                    r.Step("aud = " + aud.Key);
+
+                    JsonResponse res = await CmnEndpointsReviewTests.RevokeWithAssertionAsync(client, reg, aud.Value);
+
+                    r.VerifyEqual("認証が通る（HTTP 200）", "200", ((int)res.StatusCode).ToString());
+                }
+
+                foreach (KeyValuePair<string, object> aud in new Dictionary<string, object>()
+                {
+                    { "他の値", "https://other.example" },
+                    { "[issuer]（配列）", new string[] { issuer } }
+                })
+                {
+                    r.Step("aud = " + aud.Key);
+
+                    JsonResponse res = await CmnEndpointsReviewTests.RevokeWithAssertionAsync(client, reg, aud.Value);
+
+                    r.VerifyEqual("invalid_client（500 にしない）", "invalid_client", res.Error ?? "（無い）");
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.55
+
+        /// <summary>RT-294.55 登録の grant_types に implicit が無ければ、Hybrid は同意の前に断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29455_grant_typesにimplicitが無ければHybridは同意の前に断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.55",
+                    "**登録の grant_types に implicit が無いクライアントの Hybrid（code id_token）の要求は、"
+                    + "同意の前に unauthorized_client で断る**",
+                    "**認可エンドポイントで発行する経路は、発行の時点（`CheckClientMode`）で grant_types を見ていた**が、"
+                    + "**要求の検査では見ていなかった**ので、**利用者に同意させた後で server_error になっていた。**"
+                    + "**動的登録は組み合わせを揃えるが、構成ファイル・画面の登録は揃っているとは限らない。**"
+                    + "**code は従来どおり /token で見る**（#307 の段階 1。`RT-307.7`）。",
+                    "RFC 7591 §2（grant_types）/ RFC 6749 §4.1.2.1 / #294");
+
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_34);
+
+                r.Target("client_name=" + KnownClients.TestClient_34 + "（grant_types=client_credentials）/ response_type=code id_token");
+
+                AuthZResponse authz = await client.AuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "response_type", "code id_token" },
+                    { "client_id", reg.ClientId },
+                    { "scope", "openid" },
+                    { "state", "state-rt29455" },
+                    { "nonce", "nonce-rt29455" },
+                    { "redirect_uri", reg.RedirectUriToken }
+                });
+
+                r.Verify("同意画面を出さない", !authz.NeedsConsent,
+                    "出さない", authz.NeedsConsent ? "**出した**" : "出さない");
+
+                r.VerifyEqual("unauthorized_client", "unauthorized_client", authz.Error ?? "（無い）");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.56
+
+        /// <summary>RT-294.56 poll の CIBA は、client_notification_token も binding_message も要らない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29456_pollのCIBAはclient_notification_tokenを要らない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                FcmOutbox.SkipIfUnavailable(client.Target);
+
+                TestReport r = this.Report("RT-294.56",
+                    "**poll の CIBA は、client_notification_token も binding_message も無い request で受け付ける**",
+                    "**client_notification_token は ping / push のときだけ REQUIRED、binding_message は OPTIONAL**（CIBA Core §7.1）。"
+                    + "**この実装は poll だけを扱う**のに、**以前は両方を必須にしていた**ので、"
+                    + "**標準の poll のクライアントは invalid_request で断られた**（N5）。",
+                    "CIBA Core §7.1 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+                r.Target("POST /ciba_authz（client_name=" + KnownClients.TestClient4 + "。request に 2 つを入れない）");
+
+                (string AccessToken, string DeviceToken) device = await CibaTests.RegisterDeviceAsync(r, client);
+
+                string request = JwsSigner.SignES256(client, new Dictionary<string, object>()
+                {
+                    { "iss", reg.ClientId },
+                    { "aud", await client.IssuerAsync() },
+                    { "iat", now },
+                    { "nbf", now },
+                    { "exp", now + 600 },
+                    { "jti", Guid.NewGuid().ToString("N") },
+                    { "scope", "openid" },
+                    { "login_hint", TestEnv.TestUserName(targetKey) }
+                });
+
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>() { { "request", request } },
+                    reg.ClientId, reg.ClientSecret);
+
+                string authReqId = start.String("auth_req_id");
+
+                r.Verify("auth_req_id が返る", !string.IsNullOrEmpty(authReqId),
+                    "あり", string.IsNullOrEmpty(authReqId) ? "**無い**（" + start.ToString() + "）" : "あり");
+
+                if (!string.IsNullOrEmpty(authReqId))
+                {
+                    // **後始末**（利用者は拒否する。端末の登録は、同じコレクションの次のテストが上書きする）。
+                    await CibaTests.ReceivePushAsync(r, client, authReqId, device.DeviceToken);
+                    await client.CibaPushResultAsync(device.AccessToken, authReqId, "false");
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.57
+
+        /// <summary>RT-294.57 PAR の Request Object の client_id は、認証したクライアントであること</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29457_PARのRequestObjectのclient_idを照合する(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-294.57",
+                    "**PAR に預ける Request Object の client_id が、認証したクライアントと違えば、invalid_request_object で断る**",
+                    "**RFC 9126 §2.1 は、Request Object の client_id が認証したクライアントであることを求める。**"
+                    + "**以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、"
+                    + "**別のクライアントの名義で、預けた要求を作れた**（C-41）。",
+                    "RFC 9126 §2.1 / RFC 9101 §6.3 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("POST /par（client_name=" + KnownClients.TestClient2 + "。request の client_id だけを他のクライアントにする）");
+
+                string request = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                {
+                    { "client_id", other.ClientId },
+                    { "response_type", "code" },
+                    { "scope", "openid" },
+                    { "redirect_uri", other.RedirectUri },
+                    { "state", "state-rt29457" },
+                    { "nonce", "nonce-rt29457" }
+                });
+
+                JsonResponse res = await client.PostJsonAsync("/par", new Dictionary<string, string>()
+                {
+                    { "request", request },
+                    { "client_assertion_type", JwtBearerAssertionType },
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, null) }
+                });
+
+                r.VerifyEqual("invalid_request_object", "invalid_request_object", res.Error ?? "（無い）");
+
+                r.Verify("request_uri を返さない", string.IsNullOrEmpty(res.String("request_uri")),
+                    "返さない", string.IsNullOrEmpty(res.String("request_uri")) ? "返さない" : "**返した**");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 補助
+
+        /// <summary>管理者でサインインした client を作る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>IdPClient</returns>
+        private async Task<IdPClient> AdminClientAsync(string targetKey)
+        {
+            IdPClient client = this.Client(targetKey);
+            await client.SignInAsAdministratorAsync();
+
+            return client;
+        }
+
+        /// <summary>RFC 7636 附録 B の例</summary>
+        private const string Verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+
+        /// <summary>RFC 7636 附録 B の例（SHA256(verifier) を BASE64URL したもの）</summary>
+        private const string Challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+        /// <summary>PKCE（S256）の認可リクエストのパラメタ</summary>
+        /// <returns>パラメタ</returns>
+        private static Dictionary<string, string> Pkce()
+        {
+            return new Dictionary<string, string>()
+            {
+                { "code_challenge", CmnEndpointsReviewTests.Challenge },
+                { "code_challenge_method", "S256" }
+            };
+        }
+
+        /// <summary>PKCE で認可コードを取り、交換する</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">クライアント</param>
+        /// <param name="withSecret">client_secret も送るか</param>
+        /// <returns>トークン応答</returns>
+        private static async Task<JsonResponse> ExchangeWithPkceAsync(
+            IdPClient client, ClientRegistration reg, bool withSecret)
+        {
+            AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                client, reg, redirectUri: reg.RedirectUri, extra: CmnEndpointsReviewTests.Pkce());
+
+            Assert.False(string.IsNullOrEmpty(authz.Code),
+                "前提: 認可コードが取得できること（" + authz.ToString() + "）");
+
+            return await client.TokenAsync(new Dictionary<string, string>()
+            {
+                { "grant_type", "authorization_code" },
+                { "code", authz.Code },
+                { "client_id", reg.ClientId },
+                { "client_secret", withSecret ? reg.ClientSecret : null },
+                { "code_verifier", CmnEndpointsReviewTests.Verifier },
+                { "redirect_uri", reg.RedirectUri }
+            });
+        }
+
+        /// <summary>client_assertion で認証して /revoke を叩く（認証が通れば 200）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">クライアント</param>
+        /// <param name="aud">client_assertion の aud</param>
+        /// <returns>JsonResponse</returns>
+        private static Task<JsonResponse> RevokeWithAssertionAsync(
+            IdPClient client, ClientRegistration reg, object aud)
+        {
+            return client.RevokeAsync(new Dictionary<string, string>()
+            {
+                { "token", "not-a-token" },
+                { "client_assertion_type", JwtBearerAssertionType },
+                { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, aud) }
+            });
+        }
+
+        /// <summary>RS256 の client_assertion を作る（RFC 7523 §2.2）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="aud">aud（null ならトークン エンドポイントの URL）</param>
+        /// <returns>client_assertion</returns>
+        private static string ClientAssertionRS256(IdPClient client, string clientId, object aud)
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            {
+                { "iss", clientId },
+                { "sub", clientId },
+                { "aud", aud ?? (client.Target.BaseUrl + "/token") },
+                { "jti", Guid.NewGuid().ToString("N") },
+                { "iat", now },
+                { "exp", now + 300 }
+            });
+        }
 
         /// <summary>Discovery が広告する token_endpoint（DPoP の `htu`）</summary>
         /// <param name="client">IdPClient</param>

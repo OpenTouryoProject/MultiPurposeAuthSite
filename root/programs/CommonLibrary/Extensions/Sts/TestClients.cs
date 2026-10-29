@@ -39,6 +39,7 @@
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
 //*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
+//*  2026/10/29  玄人 幸道         TestClient_30 〜 _34（C-40・N1・S3・grant_types の絞り）を追加（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -422,6 +423,58 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **認証の方法を `client_secret_basic` と明示したクライアント**（C-40。#294）。
+                //   **明示すると、PKCE だけでは認可コードを引き換えられない**（`RT-294.52`）。
+                ClientName = "TestClient_30", ClientId = "e2e0tc30000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientTokenEndpointAuthMethod, "client_secret_basic" }
+                }
+            },
+            new Entry()
+            {
+                // **`token_endpoint_auth_method` を `none`（パブリック）にしたクライアント**（C-40。#294）。
+                //   **PKCE だけで引き換えられ、秘密では認証できない**（`RT-294.52`）。
+                ClientName = "TestClient_31", ClientId = "e2e0tc31000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientTokenEndpointAuthMethod, "none" }
+                }
+            },
+            new Entry()
+            {
+                // **`private_key_jwt` で認証する fapi2 のクライアント**（N1。#294）。
+                //   **PKCE と client_assertion を併用して、認可コードを引き換える**（`RT-294.51`。FAPI 2.0）。
+                //   **写し元は `TestClient2`**（RSA の公開鍵を持つ）。
+                ClientName = "TestClient_32", ClientId = "e2e0tc32000000000000000000000000",
+                ClientMode = "fapi2", SourceName = "TestClient2",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                }
+            },
+            new Entry()
+            {
+                // **client_credentials の sub を測るクライアント**（S3。#294）。
+                //   **テストが同じ名前の利用者を作り、トークンがその利用者に結び付かないことを見る**（`RT-294.50`）。
+                ClientName = "TestClient_33", ClientId = "e2e0tc33000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient"
+            },
+            new Entry()
+            {
+                // **grant_types に implicit を登録していないクライアント**（#294）。
+                //   **Hybrid の要求を、認可エンドポイントで、同意の前に断る**ことを測る（`RT-294.55`）。
+                ClientName = "TestClient_34", ClientId = "e2e0tc34000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientGrantTypes, OAuth2AndOIDCConst.ClientCredentialsGrantType }
+                }
+            },
+            new Entry()
+            {
                 // **登録で require_pkce を立てたクライアント**（#270）。
                 //   **構成ファイル側の TestClient6 と対をなす。**
                 //   `require_pkce` は**唯一の bool の登録項目**で、
@@ -647,6 +700,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case OAuth2AndOIDCConst.scope:
                     model.Scopes = value;
+                    break;
+
+                case Const.ClientGrantTypes:
+                    model.GrantTypes = value;
                     break;
 
                 case Const.ClientRequirePkce:

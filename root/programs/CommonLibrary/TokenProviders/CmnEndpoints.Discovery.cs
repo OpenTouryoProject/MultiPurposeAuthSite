@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、region の入れ子と using を直した（#294）
+//*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、none を認証の口から外し、CIBA を開けた配備だけ広告する（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -92,9 +93,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   ようにしたため（`CmnEndpoints.ClientAuthentication`）。
             //   **クライアントが ECDSA の公開鍵（jwk_ecdsa_publickey）を登録していれば ES256 が通る。**
             //   **一覧は 1 か所から作る**（#262）。広告と、登録値の検証が同じものを見る。
-            OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
-                "RS256", "ES256"
-            });
+            //   **以前は、ここに値を直に書いていた**（#294 で `TokenEndpointAuthSigningAlgs` から作るようにした）。
+            OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported",
+                new List<string>(CmnEndpoints.TokenEndpointAuthSigningAlgs));
             #endregion
 
             #region scopes
@@ -288,20 +289,22 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("revocation_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint);
 
-            //  **トークン エンドポイントと同じ一覧**（RFC 7009 §2.1 / RFC 7662 §2.1。#294）。
+            //  **トークン エンドポイントと同じ一覧から、`none` を除いたもの**（RFC 7009 §2.1 / RFC 7662 §2.1。#294）。
             //    **#239 から private_key_jwt / mTLS でも通る**のに、秘密の 2 つしか広告していなかった。
+            //    **この口は認証を要する**ので、**パブリック（`none`）は出さない。**
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported",
-                new List<string>(CmnEndpoints.TokenEndpointAuthMethods));
+                new List<string>(CmnEndpoints.AuthenticatingMethods));
             #endregion
 
             #region Introspect
             OpenIDConfig.Add("introspection_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint);
 
-            //  **トークン エンドポイントと同じ一覧**（RFC 7009 §2.1 / RFC 7662 §2.1。#294）。
+            //  **トークン エンドポイントと同じ一覧から、`none` を除いたもの**（RFC 7009 §2.1 / RFC 7662 §2.1。#294）。
             //    **#239 から private_key_jwt / mTLS でも通る**のに、秘密の 2 つしか広告していなかった。
+            //    **この口は認証を要する**ので、**パブリック（`none`）は出さない。**
             OpenIDConfig.Add("introspection_endpoint_auth_methods_supported",
-                new List<string>(CmnEndpoints.TokenEndpointAuthMethods));
+                new List<string>(CmnEndpoints.AuthenticatingMethods));
             #endregion
 
             #region OAuth PKCE
@@ -342,31 +345,36 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region CIBA
 
-            OpenIDConfig.Add("backchannel_authentication_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint);
+            //  **CIBA を開けた配備だけ広告する**（#294）。
+            //    **以前は `EnableCibaGrantType` を見ずに、常に広告していた**（Device AuthZ と動的登録は見ていた）。
+            if (Config.EnableCibaGrantType)
+            {
+                OpenIDConfig.Add("backchannel_authentication_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint);
 
-            OpenIDConfig.Add("backchannel_token_delivery_modes_supported", new List<string> {
-               OAuth2AndOIDCEnum.CibaMode.poll.ToStringByEmit(),
-               //OAuth2AndOIDCEnum.CibaMode.ping.ToStringByEmit(),
-               //OAuth2AndOIDCEnum.CibaMode.push.ToStringByEmit()
-            });
+                OpenIDConfig.Add("backchannel_token_delivery_modes_supported", new List<string> {
+                   OAuth2AndOIDCEnum.CibaMode.poll.ToStringByEmit(),
+                   //OAuth2AndOIDCEnum.CibaMode.ping.ToStringByEmit(),
+                   //OAuth2AndOIDCEnum.CibaMode.push.ToStringByEmit()
+                });
 
-            // **FAPI-CIBA が求める Request Object の署名は ES256 または PS256 だが、
-            //   この実装は ES256 だけを受け付ける**（#129 の段階 0 で、記述を実装に合わせた）。
-            //
-            //   **以前は「ES256 と PS256のみ許可」と書いてあったが、PS256 は通らない。**
-            //   `RequestObject.VerifyCiba` は ES256 に固定されており、
-            //   **Open棟梁 に `JWS_PS*` が無い**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
-            //   PS256 を通すには上流の対応が要る（#129）。
-            //
-            //   ちなみに、Tokenの署名は、FAPI2に準拠する。
-            //
-            // **配列と boolean で広告する**（CIBA Core §4。#189 の 3・4）。
-            //   以前は文字列だったため、素直に読む RP は型で落ちる。
-            OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", new List<string> {
-                "ES256"
-            });
-            OpenIDConfig.Add("backchannel_user_code_parameter_supported", false);
+                // **FAPI-CIBA が求める Request Object の署名は ES256 または PS256 だが、
+                //   この実装は ES256 だけを受け付ける**（#129 の段階 0 で、記述を実装に合わせた）。
+                //
+                //   **以前は「ES256 と PS256のみ許可」と書いてあったが、PS256 は通らない。**
+                //   `RequestObject.VerifyCiba` は ES256 に固定されており、
+                //   **Open棟梁 に `JWS_PS*` が無い**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
+                //   PS256 を通すには上流の対応が要る（#129）。
+                //
+                //   ちなみに、Tokenの署名は、FAPI2に準拠する。
+                //
+                // **配列と boolean で広告する**（CIBA Core §4。#189 の 3・4）。
+                //   以前は文字列だったため、素直に読む RP は型で落ちる。
+                OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", new List<string> {
+                    "ES256"
+                });
+                OpenIDConfig.Add("backchannel_user_code_parameter_supported", false);
+            }
 
             #endregion
 

@@ -1306,6 +1306,7 @@ grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 > **`401`（取り直せ）では誤誘導になる。**
 >
 > **見分けは `sub` でしている** — **`client_credentials` のトークンは `sub` にクライアント名が入る。**
+> **同じ名前の利用者が居ても、その利用者の `sub` にはならない**（#294。以前はなっていた）。
 > **そこまで確かめるのは、「利用者が消えたトークン」を
 > クライアントの所有者に付け替えないため**である（**別人の持ち物として登録が増えてしまう**）。
 
@@ -1491,7 +1492,7 @@ Content-Type: application/json
 | `scope` | **`scopes_supported` の範囲内**。**`client_registration` と `auth` は断る** |
 | `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
 | `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
-| **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
+| **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`none`（パブリック）も登録できる**（#294）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
 | **`jwks`** | **受け付ける**（段階 3）。**RSA 1 本 ＋ EC 1 本まで**（列が 1 本ずつ）。**同じ種類が 2 本来たら断る** |
 | **`tls_client_auth_subject_dn`** | **受け付ける**（段階 3。RFC 8705 §2.1.2）。**照合は完全一致** |
 | **`token_endpoint_auth_signing_alg`** | **受け付ける**（段階 3）。**`RS256` / `ES256`**。**空なら絞らない**（#262） |
@@ -1561,6 +1562,7 @@ Content-Type: application/json
 | `client_secret_basic` / `client_secret_post` | 同じ（**明示しても変わらない**） |
 | **`private_key_jwt`** | **`client_assertion` だけ**（**秘密では通らない**） |
 | **`tls_client_auth`** | **クライアント証明書だけ**（同じ） |
+| **`none`**（#294） | **認証しない**（**パブリック クライアント**。**秘密を持っていても、それでは通らない**） |
 | **既知でない値** | **通さない**（登録の誤り。#224 の段階 2 と同じ方針） |
 
 > **つまり「強い方法は明示が要る」。**
@@ -1577,7 +1579,28 @@ Content-Type: application/json
 | **SAML2 の `AuthnRequest` の署名検証** | **クライアント認証ではない**（登録された鍵を、別の用途で使っている） |
 | **Request Object（JAR）の署名検証** | 同じ（`request_object_signing_alg` の側） |
 | **JWT Bearer の認可グラント**（RFC 7523 §2.1） | **自前で署名を検証する経路**で、クライアント認証を通らない |
-| **秘密を持たないクライアント**（public ＋ PKCE） | **認証しない**（RFC 6749 §3.2.1）。**扱いは変えていない** |
+| **秘密を持たないクライアント**（public ＋ PKCE） | **認証しない**（RFC 6749 §3.2.1）。**PKCE だけで引き換えられるのは、方法が空か `none` の登録だけ**（下。#294） |
+
+##### PKCE だけで認可コードを引き換えられる登録（C-40。#294）
+
+**`code_verifier` だけ（資格情報なし）で認可コードを引き換えられるのは、方法が空か `none` の登録だけ**である。
+**方法を明示した登録（`client_secret_basic` / `client_secret_post` / `private_key_jwt` / `tls_client_auth`）は、
+PKCE だけでは引き換えられない**（`invalid_client`）。**PKCE と資格情報を一緒に送る。**
+
+| 登録 | `code_verifier` だけ | 資格情報 ＋ `code_verifier` |
+|---|---|---|
+| **空** | **通る**（**従来どおり**） | 通る |
+| **`none`** | **通る** | **秘密では通らない**（パブリック） |
+| **それ以外** | **通らない** | **通る**（**`private_key_jwt` / mTLS と PKCE の併用も通る**。FAPI 2.0） |
+
+> **空を通すのは、既定の挙動を変えないためである。** 雛形の SPA / ネイティブ アプリのクライアントは、
+> **秘密を持ったまま PKCE だけで引き換えている。**
+> **コンフィデンシャル クライアントを PKCE だけで引き換えさせたくなければ、方法を明示する**
+> （RFC 6749 §4.1.3 : コンフィデンシャル クライアントは認証する）。
+> **パブリック クライアントには `none` を登録する**のが仕様どおりである（RFC 7591 §2）。
+>
+> **以前は `code_verifier` を送ると、`client_assertion` と証明書が無視された**（PKCE だけで認証していた）。
+> **fapi2 の登録は PKCE と鍵（または証明書）の併用で通らなかった**が、いまは通る。
 
 ##### :warning: 既存の配備は、設定に 1 行足す必要がある
 

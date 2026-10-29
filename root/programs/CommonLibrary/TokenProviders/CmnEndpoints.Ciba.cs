@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         壊れた request で 500 にしない。文言・定数の置き場所・using を直した（#294）
+//*  2026/10/29  玄人 幸道         poll では client_notification_token を要らず、binding_message を任意にした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Extensions.Sts;
@@ -482,19 +483,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
             // client_notification_token
-            if (!CmnEndpoints.GetCibaClaim(
+            //   **poll では要らない**（CIBA Core §7.1 : ping / push のときだけ REQUIRED）。
+            //   **この実装は poll だけを扱う**（Discovery の `backchannel_token_delivery_modes_supported`）。
+            //   **以前は必須にしていた**ので、**標準の poll のクライアントが invalid_request で断られた**（#294）。
+            //   ※ `/ros` は、これの有無で CIBA かどうかを見分ける（`RegisterRequestObject`）ので、
+            //     **`request_uri` の経路では、在ることになる。**
+            CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.client_notification_token,
-                out client_notification_token, out err, out errDescription))
-            {
-                return false;
-            }
+                out client_notification_token, out err, out errDescription, nullable: true);
+            client_notification_token = client_notification_token ?? "";
             // binding_message
-            if (!CmnEndpoints.GetCibaClaim(
+            //   **OPTIONAL**（CIBA Core §7.1。#294。以前は必須にしていた）。
+            CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.binding_message,
-                out binding_message, out err, out errDescription))
-            {
-                return false;
-            }
+                out binding_message, out err, out errDescription, nullable: true);
+            binding_message = binding_message ?? "";
             // user_code
             CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.user_code,
