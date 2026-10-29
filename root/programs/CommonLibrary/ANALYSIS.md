@@ -304,7 +304,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 
 | ファイル | 役割 |
 |---|---|
-| `TokenProviders/CmnEndpoints.cs`（2787 行） | **本体。** `.well-known/openid-configuration` の生成、認可要求の検証（`ValidateAuthZReqParam` / `ValidateCibaAuthZReqParam` / `CheckRedirectUri`）、応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`）、Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` ほか） |
+| `TokenProviders/CmnEndpoints.cs` ＋ `CmnEndpoints.*.cs`（partial。#294 で 11 ファイルに分割） | **本体。** 下の表のとおり、口ごとにファイルを分けてある。本体の `CmnEndpoints.cs` には、どの口からも使う公開の部品（redirect_uri の定数・CORS・エラー応答）と、分割の索引を置く |
 | `TokenProviders/CmnAccessToken.cs` | アクセス トークンの生成（Claim 集合の組み立て → JWS 化）と検証 |
 | `TokenProviders/CmnIdToken.cs` | id_token |
 | `TokenProviders/CmnResponseObject.cs` | JARM（Response Object） |
@@ -318,6 +318,21 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `Extensions/Sts/RequestObjectProvider.cs` | Request Object の登録（`/ros`） |
 | `SamlProviders/CmnEndpoints.cs` | SAML2 の Request / Response |
 | `Util/PPIDExtension.cs` | `subject_types`（`public` / `pairwise`）に応じた sub の生成。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
+
+`CmnEndpoints` の分割（IDE では `CmnEndpoints.cs` の下に畳んで見える。`NetCoreLibrary.csproj` / `NetFxLibrary.csproj` の `DependentUpon`）:
+
+| ファイル | 中身 |
+|---|---|
+| `CmnEndpoints.Discovery.cs` | `.well-known/openid-configuration` の生成（`OpenIDConfig`） |
+| `CmnEndpoints.Authorize.cs` | 認可要求の検証（`ValidateAuthZReqParam` / `CheckRedirectUri` / `ResolveErrorRedirectUri`）、`max_age`、受け付ける grant / response_type、登録の grant_types / response_types、PKCE |
+| `CmnEndpoints.AuthorizeResponse.cs` | 応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`） |
+| `CmnEndpoints.RequestObject.cs` | Request Object（`RegisterRequestObject`）、PAR、登録の JWK の読み書き |
+| `CmnEndpoints.Ciba.cs` | CIBA の受付（`ReceiveCibaRequest` / `ValidateCibaAuthZReqParam`、jti の使い切り） |
+| `CmnEndpoints.Logout.cs` | RP-Initiated Logout（`ReceiveEndSessionRequest`） |
+| `CmnEndpoints.Token.cs` | Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` / `GrantClientCredentials` / `GrantJwtBearerTokenCredentials` / `GrantDeviceAuthZ` / `GrantCiba`） |
+| `CmnEndpoints.Revocation.cs` | 取り消し・照会（`RevokeToken` / `IntrospectToken`） |
+| `CmnEndpoints.ClientAuthentication.cs` | クライアント認証（`ClientAuthentication`。secret・x509・device・assertion）、Basic の資格情報、登録された認証の方法、検証する側の alg |
+| `CmnEndpoints.TokenIssuance.cs` | 発行の共通部品（利用者のロックアウト・`CheckClientMode`・DPoP・`CreateAccessTokenResponse`） |
 
 ### 7.2 対応しているグラント / 拡張
 

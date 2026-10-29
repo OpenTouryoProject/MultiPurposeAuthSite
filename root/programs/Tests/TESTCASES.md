@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=1dcb5d65-ec4d-4435-8921-ccd25690d899&code=bogus
+1. GET /Account/EmailConfirmation?userId=44a2e5d7-fde0-41bc-865d-f7d6a2dfbf96&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=1dcb5d65-ec4d-4435-8921-ccd25690d899&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=1dcb5d65-ec4d-4435-8921-ccd25690d899&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=44a2e5d7-fde0-41bc-865d-f7d6a2dfbf96&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=44a2e5d7-fde0-41bc-865d-f7d6a2dfbf96&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -6946,6 +6946,80 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 確認済み : **正しいパスワードでも、ロックアウトの画面になる**
 - 確認待ち : **ロックアウトの画面になる**
 - 確認待ち : **正しいパスワードでも、ロックアウトの画面になる**
+
+## RT-294.38 自己テストの結果画面のボタン（UserInfo・リフレッシュ・照会・取り消し）が動き、取り消したトークンは照会で無効になる
+
+| | |
+|---|---|
+| 観点 | **自己テストは結果画面までしか通していなかった**（`OAuth2AuthorizationCodeGrantClient2` が 1 度も通っていなかった）。**画面のボタンは、トークン・UserInfo・照会・取り消しの各エンドポイントを、サイト自身が叩く。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29438_自己テストの結果画面のボタンが動く` |
+
+**手順**
+
+1. 自己テストを通し、結果画面まで進む
+1. 「GetUserClaims」を押す
+1. 「IntrospectAccess」を押す
+1. 「Refresh」を押す
+1. 「IntrospectRefresh」を押す
+1. 「RevokeAccess」を押す
+1. 「IntrospectAccess」を押す
+1. 「RevokeRefresh」を押す
+1. 「IntrospectRefresh」を押す
+
+**検証（合否を判定する）**
+
+- UserInfo : **`sub` が返る**
+- 照会（access_token）: **有効**
+- リフレッシュ : **新しい access_token が画面に出る**
+- 照会（refresh_token）: **有効**
+- **取り消した access_token は、照会で無効**
+- **取り消した refresh_token は、照会で無効**
+
+## RT-294.39 自己テストの受け口は、fragment・form_post の値を画面に出し、検証できない JARM はエラー画面で断る（500 にしない）
+
+| | |
+|---|---|
+| 観点 | **自己テストの Implicit の受け口（`OAuth2ImplicitGrantClient`）を 1 度も叩いていなかった。****叩いたら、自己テストを始めていない要求の JARM で 500 になった**（net48 版は 302）。**JARM の検証に失敗したら先へ進めない**（#294 の B7）。 |
+| 根拠 | #294（E2E の拡充 / B7） |
+| テスト | `RT29439_自己テストのImplicitの受け口は検証できないJARMを断る` |
+
+**手順**
+
+1. 値なし（fragment で返る場合。値は画面のスクリプトが読む）
+1. state ＋ 値（form_post・query で返る場合）
+1. 検証できない JARM : GET /Account/OAuth2ImplicitGrantClient?response=not.a.jwt
+1. 検証できない JARM : GET /Account/OAuth2AuthorizationCodeGrantClient?response=not.a.jwt
+
+**検証（合否を判定する）**
+
+- 値なし : HTTP 200（画面を出す）
+- state あり : **受け取った値を画面に出す**
+- /Account/OAuth2ImplicitGrantClient?response=not.a.jwt : **エラー画面になる**（値を使わない。500 にしない）
+- /Account/OAuth2AuthorizationCodeGrantClient?response=not.a.jwt : **エラー画面になる**（値を使わない。500 にしない）
+
+## RT-294.40 プッシュの 2FA（MobileApp）で、端末が承認すると、待っているブラウザのサインインが完了する
+
+| | |
+|---|---|
+| 観点 | **プッシュの 2FA の成功の経路を、E2E で通していなかった**（RT-213.1 は `/2fa_result` の失敗の口だけ）。**端末の役は、送信箱（`FcmOutbox`）を読んで `/2fa_result` を叩くテストがする。** |
+| 根拠 | #294（E2E の拡充）/ #213 |
+| テスト | `RT29440_プッシュの2FAで端末が承認するとサインインできる` |
+
+**手順**
+
+1. パスワードでサインインし、手段に MobileApp を選ぶ
+1. 端末の役 : 送信箱から、プッシュ通知のコードを読む
+1. 端末の役 : `/2fa_result` で承認する
+1. ブラウザの役 : 承認の状態を問い合わせる
+
+**検証（合否を判定する）**
+
+- **端末を登録した利用者には、手段に MobileApp が出る**
+- **登録した端末へ、コードのプッシュ通知が届く**
+- 承認の前 : **`approved` は false**
+- 承認の後 : **`approved` が true で、戻り先が返る**
+- **サインインが完了している**（保護された画面が開く）
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

@@ -95,6 +95,12 @@
     <Compile Update="Extensions\Sts\ClientRegistrationProvider.*.cs">
       <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
     </Compile>
+
+    <!-- **CmnEndpoints も partial に分けてある**（#294）。IDE で CmnEndpoints.cs の下に畳んで見せる。
+         **SamlProviders にも同名の CmnEndpoints.cs が在る**ので、フォルダまで指定する。 -->
+    <Compile Update="TokenProviders\CmnEndpoints.*.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>

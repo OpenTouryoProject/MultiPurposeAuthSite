@@ -161,6 +161,36 @@
     <Compile Include="Notifications\SmsService.cs" />
     <Compile Include="TokenProviders\ClientModePolicy.cs" />
     <Compile Include="TokenProviders\CmnEndpoints.cs" />
+    <Compile Include="TokenProviders\CmnEndpoints.Authorize.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.AuthorizeResponse.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Ciba.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.ClientAuthentication.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Discovery.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Logout.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.RequestObject.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Revocation.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Token.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.TokenIssuance.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
     <Compile Include="TokenProviders\CmnIdToken.cs" />
     <Compile Include="TokenProviders\CmnLogoutToken.cs" />
     <Compile Include="TokenProviders\CmnDPoP.cs" />
