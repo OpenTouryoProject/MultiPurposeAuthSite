@@ -50,6 +50,8 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の 外部ログイン**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
+        #region 送信と受信
+
         /// <summary>
         /// 外部Login（Redirect）の開始
         /// POST: /Account/ExternalLogin
@@ -374,6 +376,53 @@ namespace MultiPurposeAuthSite.Controllers
             return View("ExternalLoginFailure");
         }
 
+        #endregion
+
+        #region 問題の記録
+
+        /// <summary>必要なクレームが揃わなかったことを記録する（#294）</summary>
+        /// <param name="externalLoginInfo">ExternalLoginInfo</param>
+        /// <param name="noEmail">email が無い</param>
+        /// <param name="noName">name が無い</param>
+        /// <remarks>
+        /// **無かったクレームの種類だけを書く。** 値は個人情報なので書かない。
+        /// noEmail と noName が両方 false なら、ID情報（NameIdentifier）が無かったことを表す。
+        /// </remarks>
+        private void LogExternalLoginClaimsMissing(
+            ExternalLoginInfo externalLoginInfo, bool noEmail, bool noName)
+        {
+            List<string> missing = new List<string>();
+
+            if (!noEmail && !noName) missing.Add(nameof(ClaimTypes.NameIdentifier));
+            if (noEmail) missing.Add(nameof(ClaimTypes.Email));
+            if (noName) missing.Add(nameof(ClaimTypes.Name));
+
+            Logging.MyOperationTrace(string.Format(
+                Resources.Diagnostics.LogExternalLoginClaimsMissing,
+                externalLoginInfo.Login.LoginProvider, string.Join(",", missing)));
+        }
+
+        /// <summary>利用者を作れなかった・結べなかったことを記録する（#294）</summary>
+        /// <param name="externalLoginInfo">ExternalLoginInfo</param>
+        /// <param name="step">どの段階で失敗したか</param>
+        /// <param name="result">IdentityResult</param>
+        /// <remarks>
+        /// **エラーの件数だけを書く。**
+        /// ASP.NET Identity 2 の IdentityResult には Code が無く、
+        /// Errors（説明文）には利用者名やメアドが入るので書かない。
+        /// どの段階で失敗したかが分かれば、DB と突き合わせて調べられる。
+        /// </remarks>
+        private void LogExternalLoginUserFailed(
+            ExternalLoginInfo externalLoginInfo, string step, IdentityResult result)
+        {
+            Logging.MyOperationTrace(string.Format(
+                Resources.Diagnostics.LogExternalLoginUserFailed,
+                externalLoginInfo.Login.LoginProvider, step,
+                result.Errors.Count() + " error(s)"));
+        }
+
+        #endregion
+
         #region 外部ログイン・ID 連携で共用する補助（#294）
 
         /// <summary>同じ種類のクレームを、新しい値に入れ替える</summary>
@@ -420,46 +469,5 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
-
-        /// <summary>必要なクレームが揃わなかったことを記録する（#294）</summary>
-        /// <param name="externalLoginInfo">ExternalLoginInfo</param>
-        /// <param name="noEmail">email が無い</param>
-        /// <param name="noName">name が無い</param>
-        /// <remarks>
-        /// **無かったクレームの種類だけを書く。** 値は個人情報なので書かない。
-        /// noEmail と noName が両方 false なら、ID情報（NameIdentifier）が無かったことを表す。
-        /// </remarks>
-        private void LogExternalLoginClaimsMissing(
-            ExternalLoginInfo externalLoginInfo, bool noEmail, bool noName)
-        {
-            List<string> missing = new List<string>();
-
-            if (!noEmail && !noName) missing.Add(nameof(ClaimTypes.NameIdentifier));
-            if (noEmail) missing.Add(nameof(ClaimTypes.Email));
-            if (noName) missing.Add(nameof(ClaimTypes.Name));
-
-            Logging.MyOperationTrace(string.Format(
-                Resources.Diagnostics.LogExternalLoginClaimsMissing,
-                externalLoginInfo.Login.LoginProvider, string.Join(",", missing)));
-        }
-
-        /// <summary>利用者を作れなかった・結べなかったことを記録する（#294）</summary>
-        /// <param name="externalLoginInfo">ExternalLoginInfo</param>
-        /// <param name="step">どの段階で失敗したか</param>
-        /// <param name="result">IdentityResult</param>
-        /// <remarks>
-        /// **エラーの件数だけを書く。**
-        /// ASP.NET Identity 2 の IdentityResult には Code が無く、
-        /// Errors（説明文）には利用者名やメアドが入るので書かない。
-        /// どの段階で失敗したかが分かれば、DB と突き合わせて調べられる。
-        /// </remarks>
-        private void LogExternalLoginUserFailed(
-            ExternalLoginInfo externalLoginInfo, string step, IdentityResult result)
-        {
-            Logging.MyOperationTrace(string.Format(
-                Resources.Diagnostics.LogExternalLoginUserFailed,
-                externalLoginInfo.Login.LoginProvider, step,
-                result.Errors.Count() + " error(s)"));
-        }
     }
 }

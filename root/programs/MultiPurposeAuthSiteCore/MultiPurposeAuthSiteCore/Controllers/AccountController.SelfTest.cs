@@ -54,7 +54,7 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の 自己テストの RP**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region テスト用（LoadTest*Parameters）
+        #region LoadTest*Parameters
 
         /// <summary>LoadTestOauth2OidcParameters</summary>
         /// <param name="clientId">out string</param>
@@ -179,7 +179,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region 自己テストの JARM の検証（#294）
+        #region JARM の検証
 
         /// <summary>自己テストが受け取った JARM（response）を検証する</summary>
         /// <param name="response">response（JWT）</param>
@@ -217,7 +217,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region OAuth2 / OIDC の Redirectエンドポイント
+        #region OAuth2 / OIDC の Redirect Endpoint
 
         #region Authorization Codeグラント種別
 
@@ -804,7 +804,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Front-Channel Logout の受け口（自己テスト。#310）
+        #region Front-Channel Logout の受け口
 
         /// <summary>
         /// 自己テストの RP として、`iframe` で叩かれたことを覚える
@@ -877,7 +877,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Back-Channel Logout の受け口（自己テスト。#310）
+        #region Back-Channel Logout の受け口
 
         /// <summary>
         /// 自己テストの RP として logout_token を受け取る

@@ -60,7 +60,7 @@ namespace MultiPurposeAuthSite.Controllers
     // **AccountController の 認可エンドポイント**（partial。本体は AccountController.cs）
     public partial class AccountController
     {
-        #region Authorize（認可エンドポイント）
+        #region Authorize
 
         #region max_age & auth_time
 
@@ -1138,6 +1138,72 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region Device AuthZ
+        /// <summary>
+        /// DeviceAuthZVerify画面（初期表示）
+        /// GET: /device_verify
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult DeviceAuthZVerify()
+        {
+            ViewBag.ReceiveResult = false;
+            ViewBag.UserCode = UriOperator.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.user_code, this.CurrentRequestUrl());
+
+            return View("DeviceAuthZVerify");
+        }
+
+        /// <summary>
+        /// DeviceAuthZVerify画面
+        /// POST: /device_verify
+        /// </summary>
+        /// <param name="formData">FormDataCollection</param>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **AntiForgery トークンを検証する**（#294）。
+        /// 以前は画面にトークンを埋めていたが、検証していなかった（認証 Cookie は `SameSite=None`）。
+        /// </remarks>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult DeviceAuthZVerify(string dummy)
+        {
+            // FormDataCollectionは、WebAPI専用らしい。
+            ViewBag.ReceiveResult = false;
+
+            if (2 <= Request.Form.Count)
+            {
+                string userCode = Request.Form[OAuth2AndOIDCConst.user_code];
+                string failureKey = Sts.AuthFailureProvider.DeviceVerifyKey(User.Identity.Name);
+
+                //  **続けて間違えている利用者は、断る**（#305。RFC 8628 §5.2）。
+                //    **間違えた `user_code` では、どの要求を狙ったか分からない**ので、
+                //    **投入した人で数える。**
+                //    **断っている間は、正しい `user_code` でも通さない。**
+                if (Sts.AuthFailureProvider.IsLockedOut(failureKey))
+                {
+                    ViewBag.ReceiveResult = false;
+                }
+                else
+                {
+                    ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(
+                        userCode, User.Identity.Name, !string.IsNullOrEmpty(Request.Form["allow"]));
+
+                    if (ViewBag.ReceiveResult)
+                    {
+                        Sts.AuthFailureProvider.Clear(failureKey);
+                    }
+                    else
+                    {
+                        Sts.AuthFailureProvider.Record(failureKey);
+                    }
+                }
+            }
+
+            return View("DeviceAuthZVerify");
+        }
+        #endregion
+
         #region 版の違いを吸収する補助（net48 版。#294）
 
         //  **認可エンドポイントの本文は、両版で同じにしてある。**
@@ -1237,72 +1303,6 @@ namespace MultiPurposeAuthSite.Controllers
             return new HttpUnauthorizedResult();
         }
 
-        #endregion
-
-        #region Device AuthZ
-        /// <summary>
-        /// DeviceAuthZVerify画面（初期表示）
-        /// GET: /device_verify
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        public ActionResult DeviceAuthZVerify()
-        {
-            ViewBag.ReceiveResult = false;
-            ViewBag.UserCode = UriOperator.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.user_code, this.CurrentRequestUrl());
-
-            return View("DeviceAuthZVerify");
-        }
-
-        /// <summary>
-        /// DeviceAuthZVerify画面
-        /// POST: /device_verify
-        /// </summary>
-        /// <param name="formData">FormDataCollection</param>
-        /// <returns>ActionResult</returns>
-        /// <remarks>
-        /// **AntiForgery トークンを検証する**（#294）。
-        /// 以前は画面にトークンを埋めていたが、検証していなかった（認証 Cookie は `SameSite=None`）。
-        /// </remarks>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public ActionResult DeviceAuthZVerify(string dummy)
-        {
-            // FormDataCollectionは、WebAPI専用らしい。
-            ViewBag.ReceiveResult = false;
-
-            if (2 <= Request.Form.Count)
-            {
-                string userCode = Request.Form[OAuth2AndOIDCConst.user_code];
-                string failureKey = Sts.AuthFailureProvider.DeviceVerifyKey(User.Identity.Name);
-
-                //  **続けて間違えている利用者は、断る**（#305。RFC 8628 §5.2）。
-                //    **間違えた `user_code` では、どの要求を狙ったか分からない**ので、
-                //    **投入した人で数える。**
-                //    **断っている間は、正しい `user_code` でも通さない。**
-                if (Sts.AuthFailureProvider.IsLockedOut(failureKey))
-                {
-                    ViewBag.ReceiveResult = false;
-                }
-                else
-                {
-                    ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(
-                        userCode, User.Identity.Name, !string.IsNullOrEmpty(Request.Form["allow"]));
-
-                    if (ViewBag.ReceiveResult)
-                    {
-                        Sts.AuthFailureProvider.Clear(failureKey);
-                    }
-                    else
-                    {
-                        Sts.AuthFailureProvider.Record(failureKey);
-                    }
-                }
-            }
-
-            return View("DeviceAuthZVerify");
-        }
         #endregion
     }
 }
