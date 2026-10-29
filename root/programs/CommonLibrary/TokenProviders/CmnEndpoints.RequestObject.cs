@@ -31,6 +31,7 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         文字列でない iss・壊れた鍵の登録で 500 にしない。using を整理した（#294）
 //*  2026/10/29  玄人 幸道         PAR の Request Object の client_id を、認証したクライアントと照合する（C-41。#294）
+//*  2026/10/29  玄人 幸道         /ros の Request Object の client_id を、署名したクライアントと照合する（F5。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -212,6 +213,23 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             if (!result)
+            {
+                return false;
+            }
+
+            //  **中の client_id も、署名したクライアント（iss）であること**（RFC 9101 §6.3。F5。#294）。
+            //    **以前は署名（iss）だけを確かめ、中の client_id は確かめていなかった**ので、
+            //    **自分の鍵で署名した Request Object を、別のクライアントの名義で預けられた**
+            //    （`/authorize` は、要求の client_id と Request Object の client_id だけを突き合わせる）。
+            //    **PAR（C-41）と同じ扱い** — **無ければ iss で埋める。**
+            JToken roClientId = payload[OAuth2AndOIDCConst.client_id];
+
+            if (roClientId == null)
+            {
+                payload[OAuth2AndOIDCConst.client_id] = iss;
+                requestObjectString = payload.ToString(Formatting.None);
+            }
+            else if (roClientId.Type != JTokenType.String || (string)roClientId != iss)
             {
                 return false;
             }

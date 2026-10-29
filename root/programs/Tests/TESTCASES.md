@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=4de89376-dff3-401f-99e0-0c5a1eef98c9&code=bogus
+1. GET /Account/EmailConfirmation?userId=35a3b77d-4258-41e4-85cf-51c1a6156bbb&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=4de89376-dff3-401f-99e0-0c5a1eef98c9&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=4de89376-dff3-401f-99e0-0c5a1eef98c9&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=35a3b77d-4258-41e4-85cf-51c1a6156bbb&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=35a3b77d-4258-41e4-85cf-51c1a6156bbb&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7232,6 +7232,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - access_token が返る
 - access_token を返さない
+- error は invalid_grant（RFC 7636 §4.6。F1）
 
 ## RT-294.52 **認証の方法を明示したクライアントは、PKCE だけでは認可コードを引き換えられない**（`none` を明示したクライアントは引き換えられ、秘密では認証できない）
 
@@ -7331,6 +7332,44 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - invalid_request_object
 - request_uri を返さない
+
+## RT-294.58 **code_verifier が合わなければ、invalid_grant で断る**（PKCE だけでも、client_secret と併せても）
+
+| | |
+|---|---|
+| 観点 | **RFC 7636 §4.6 は、code_verifier の不一致を invalid_grant とする。****以前は invalid_client で返していた**ので、**クライアントは「資格情報が違う」のか「code_verifier が違う」のかを区別できなかった**（F1）。 |
+| 根拠 | RFC 7636 §4.6 / RFC 6749 §5.2 / #294 |
+| テスト | `RT29458_合わないcode_verifierはinvalid_grant` |
+
+**手順**
+
+1. PKCE だけ（TestClient_31。none）
+1. client_secret ＋ PKCE（TestClient_30。client_secret_basic）
+1. 秘密が違えば、従来どおり invalid_client
+
+**検証（合否を判定する）**
+
+- invalid_grant
+- invalid_grant
+- invalid_client
+
+## RT-294.59 **/ros に預ける Request Object の client_id が、署名したクライアント（iss）と違えば、預からない**
+
+| | |
+|---|---|
+| 観点 | **RFC 9101 §6.3 は、Request Object の client_id が要求したクライアントであることを求める。****以前は署名（iss）だけを確かめていた**ので、**自分の鍵で署名した Request Object を、別のクライアントの名義で預けられた**（PAR は C-41 で直した。F5）。 |
+| 根拠 | RFC 9101 §6.3 / #294 |
+| テスト | `RT29459_rosのRequestObjectのclient_idを照合する` |
+
+**手順**
+
+1. client_id が他のクライアント
+1. client_id が署名したクライアント（従来どおり預かる）
+
+**検証（合否を判定する）**
+
+- request_uri を返さない
+- request_uri を返す
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

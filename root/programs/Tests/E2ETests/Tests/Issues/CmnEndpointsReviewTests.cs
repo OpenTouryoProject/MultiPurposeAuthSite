@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：CmnEndpointsReviewTests
-//* クラス日本語名  ：RT-294.41 〜 .57 CmnEndpoints.*.cs のレビューで見つけた不具合
+//* クラス日本語名  ：RT-294.41 〜 .59 CmnEndpoints.*.cs のレビューで見つけた不具合
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（#294）
 //*  2026/10/29  玄人 幸道         RT-294.50 〜 .57 を追加し、.41（登録種別）と .49（none）を見直した（#294）
+//*  2026/10/29  玄人 幸道         RT-294.58 / .59 を追加し、.51 で invalid_grant を見る（#294）
 //**********************************************************************************
 
 using System;
@@ -47,7 +48,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-294.41 〜 .57 `CmnEndpoints.*.cs` のレビュー（2 回）で見つけた不具合（#294）。
+    /// RT-294.41 〜 .59 `CmnEndpoints.*.cs` のレビュー（3 回）で見つけた不具合（#294）。
     /// </summary>
     /// <remarks>
     /// | ケース | 以前の振る舞い |
@@ -69,6 +70,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | RT-294.55 登録の grant_types（Implicit / Hybrid） | **認可エンドポイントで見ず、同意の後で server_error になった** |
     /// | RT-294.56 poll の CIBA | **client_notification_token と binding_message を必須にしていた**（N5） |
     /// | RT-294.57 PAR の Request Object の client_id | **iss だけを照合し、中の client_id は照合していなかった**（C-41） |
+    /// | RT-294.58 合わない code_verifier | **invalid_client で返していた**（RFC 7636 §4.6 は invalid_grant。F1） |
+    /// | RT-294.59 /ros の Request Object の client_id | **署名（iss）だけを確かめ、中の client_id は照合していなかった**（F5） |
     ///
     /// **`client_registration` 専用トークンの `expires_in`** は、`RT-307.5` に足した。
     ///
@@ -791,6 +794,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("access_token を返さない", string.IsNullOrEmpty(wrong.AccessToken),
                     "返さない", string.IsNullOrEmpty(wrong.AccessToken) ? "返さない（error=" + (wrong.Error ?? "なし") + "）" : "**返した**");
 
+                r.VerifyEqual("error は invalid_grant（RFC 7636 §4.6。F1）", "invalid_grant", wrong.Error ?? "（無い）");
+
                 r.Done();
             }
         }
@@ -1104,6 +1109,124 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-294.58
+
+        /// <summary>RT-294.58 合わない code_verifier は invalid_grant</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29458_合わないcode_verifierはinvalid_grant(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.58",
+                    "**code_verifier が合わなければ、invalid_grant で断る**（PKCE だけでも、client_secret と併せても）",
+                    "**RFC 7636 §4.6 は、code_verifier の不一致を invalid_grant とする。**"
+                    + "**以前は invalid_client で返していた**ので、"
+                    + "**クライアントは「資格情報が違う」のか「code_verifier が違う」のかを区別できなかった**（F1）。",
+                    "RFC 7636 §4.6 / RFC 6749 §5.2 / #294");
+
+                ClientRegistration secretBasic = Flows.InjectedRegistration(client, KnownClients.TestClient_30);
+                ClientRegistration none = Flows.InjectedRegistration(client, KnownClients.TestClient_31);
+
+                r.Target("POST /token（grant_type=authorization_code。code_verifier を 1 文字変える）");
+
+                r.Step("(1) PKCE だけ（" + KnownClients.TestClient_31 + "。none）");
+
+                JsonResponse pkceOnly = await CmnEndpointsReviewTests.ExchangeWithPkceAsync(
+                    client, none, false, CmnEndpointsReviewTests.Verifier + "x");
+
+                r.VerifyEqual("invalid_grant", "invalid_grant", pkceOnly.Error ?? "（無い）");
+
+                r.Step("(2) client_secret ＋ PKCE（" + KnownClients.TestClient_30 + "。client_secret_basic）");
+
+                JsonResponse withSecret = await CmnEndpointsReviewTests.ExchangeWithPkceAsync(
+                    client, secretBasic, true, CmnEndpointsReviewTests.Verifier + "x");
+
+                r.VerifyEqual("invalid_grant", "invalid_grant", withSecret.Error ?? "（無い）");
+
+                r.Step("(3) 秘密が違えば、従来どおり invalid_client");
+
+                JsonResponse badSecret = await CmnEndpointsReviewTests.ExchangeWithPkceAsync(
+                    client, new ClientRegistration()
+                    {
+                        ClientId = secretBasic.ClientId,
+                        ClientSecret = "wrong-" + Guid.NewGuid().ToString("N"),
+                        RedirectUri = secretBasic.RedirectUri,
+                        RedirectUriToken = secretBasic.RedirectUriToken
+                    }, true, CmnEndpointsReviewTests.Verifier);
+
+                r.VerifyEqual("invalid_client", "invalid_client", badSecret.Error ?? "（無い）");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.59
+
+        /// <summary>RT-294.59 /ros の Request Object の client_id は、署名したクライアントであること</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29459_rosのRequestObjectのclient_idを照合する(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-294.59",
+                    "**/ros に預ける Request Object の client_id が、署名したクライアント（iss）と違えば、預からない**",
+                    "**RFC 9101 §6.3 は、Request Object の client_id が要求したクライアントであることを求める。**"
+                    + "**以前は署名（iss）だけを確かめていた**ので、**自分の鍵で署名した Request Object を、"
+                    + "別のクライアントの名義で預けられた**（PAR は C-41 で直した。F5）。",
+                    "RFC 9101 §6.3 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("POST /ros（iss=" + KnownClients.TestClient2 + "。client_id だけを他のクライアントにする）");
+
+                r.Step("(1) client_id が他のクライアント");
+
+                string mismatched = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                {
+                    { "client_id", other.ClientId },
+                    { "response_type", "code" },
+                    { "scope", "openid" },
+                    { "redirect_uri", other.RedirectUri },
+                    { "state", "state-rt29459" },
+                    { "nonce", "nonce-rt29459" }
+                });
+
+                string rejected = await RequestObjectBuilder.RegisterAsync(client, mismatched);
+
+                r.Verify("request_uri を返さない", string.IsNullOrEmpty(rejected),
+                    "返さない", string.IsNullOrEmpty(rejected) ? "返さない" : "**返した**");
+
+                r.Step("(2) client_id が署名したクライアント（従来どおり預かる）");
+
+                string matched = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                {
+                    { "response_type", "code" },
+                    { "scope", "openid" },
+                    { "redirect_uri", reg.RedirectUri },
+                    { "state", "state-rt29459" },
+                    { "nonce", "nonce-rt29459" }
+                });
+
+                string accepted = await RequestObjectBuilder.RegisterAsync(client, matched);
+
+                r.Verify("request_uri を返す", !string.IsNullOrEmpty(accepted),
+                    "返す", string.IsNullOrEmpty(accepted) ? "**返さない**" : "返した");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 補助
 
         /// <summary>管理者でサインインした client を作る</summary>
@@ -1138,9 +1261,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="reg">クライアント</param>
         /// <param name="withSecret">client_secret も送るか</param>
+        /// <param name="verifier">送る code_verifier（null なら正しいもの）</param>
         /// <returns>トークン応答</returns>
         private static async Task<JsonResponse> ExchangeWithPkceAsync(
-            IdPClient client, ClientRegistration reg, bool withSecret)
+            IdPClient client, ClientRegistration reg, bool withSecret, string verifier = null)
         {
             AuthZResponse authz = await Flows.AuthorizeCodeAsync(
                 client, reg, redirectUri: reg.RedirectUri, extra: CmnEndpointsReviewTests.Pkce());
@@ -1154,7 +1278,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 { "code", authz.Code },
                 { "client_id", reg.ClientId },
                 { "client_secret", withSecret ? reg.ClientSecret : null },
-                { "code_verifier", CmnEndpointsReviewTests.Verifier },
+                { "code_verifier", verifier ?? CmnEndpointsReviewTests.Verifier },
                 { "redirect_uri", reg.RedirectUri }
             });
         }

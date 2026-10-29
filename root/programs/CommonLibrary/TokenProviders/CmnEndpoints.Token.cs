@@ -31,6 +31,7 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         Device の refresh_token を返し、異常系・CIBA の client_assertion・refresh_token の照合を直した（#294）
 //*  2026/10/29  玄人 幸道         PKCE と private_key_jwt / mTLS を併用できるようにし、PKCE だけの引き換えを登録で絞る。client_credentials / JWT Bearer の sub をクライアントにする。Device の登録種別・ROPC の時間差を直した（#294）
+//*  2026/10/29  玄人 幸道         code_verifier の不一致を invalid_grant で返す（RFC 7636 §4.6。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -132,6 +133,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //    **以前と同じく、PKCE だけの経路に進める**（証明書を出すかどうかは、TLS の設定次第のため）。
                     bool pkceVerified = false;
 
+                    //  **PKCE の検証に落ちたか**（F1。#294）。**クライアント認証の失敗とは分けて返す**（下）。
+                    bool pkceFailed = false;
+
                     if (!string.IsNullOrEmpty(assertion))
                     {
                         // private_key_jwt（client_id はアサーションから得る）
@@ -156,6 +160,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         {
                             authned = CmnEndpoints.VerifyPkce(
                                 code, client_id, redirect_uri, code_verifier, out bool usedS256);
+
+                            pkceFailed = !authned;
 
                             // S256 か plain か（#224）。通す登録種別は ClientModePolicy の表で決まる。
                             //   以前は S256 のとき水準を fapi1 に格上げしていた。表では
@@ -188,10 +194,23 @@ namespace MultiPurposeAuthSite.TokenProviders
                         authned = CmnEndpoints.VerifyPkce(
                             code, client_id, redirect_uri, code_verifier, out bool _);
 
+                        pkceFailed = !authned;
+
                         if (proof == ClientModePolicy.Proof.ClientSecret)
                         {
                             proof = ClientModePolicy.Proof.ClientSecretAndPkce;
                         }
+                    }
+
+                    //  **code_verifier が合わなければ invalid_grant**（RFC 7636 §4.6。F1。#294）。
+                    //    **以前は invalid_client で返していた**（クライアント認証の失敗と区別できなかった）。
+                    //    **使用済み・別のクライアントの code・code_challenge の無い code に code_verifier を送った場合も、ここになる**
+                    //    （どれも grant の側の誤りである）。
+                    if (pkceFailed)
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid code_verifier.");
+                        return false;
                     }
                 }
 

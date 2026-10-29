@@ -47,9 +47,9 @@
 
 | グループ | |
 |---|---|
-| **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15 / A-16 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
+| **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15〜A-17 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 / B-12 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
-| **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。**C-40〜C-45 は `CmnEndpoints.*.cs` のレビューで見つかり #294**。**C-40 は「方法を明示した登録」で閉じ、空の登録は従来どおり**） |
+| **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。**C-40〜C-46 は `CmnEndpoints.*.cs` のレビューで見つかり #294**。**C-40 は「方法を明示した登録」で閉じ、空の登録は従来どおり**） |
 | **D. 機能不足** | **1 件 残り** : **D-14**（適合性テスト）。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
 | **E. 品質** | **4 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）／**E-13**（refresh_token の失効で access_token も）／**E-14**（ROPC の失敗の数えを原子的に）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
@@ -920,6 +920,16 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 | **Discovery** | **CIBA を、`EnableCibaGrantType` を見ずに広告していた。** `token_endpoint_auth_signing_alg_values_supported` を値で直に書いていた | **開けた配備だけ広告する。** **一覧から作る。** **`token_endpoint_auth_methods_supported` に `none` を足し、revoke / introspect の一覧からは除いた**（認証を要する口のため） |
 
 **E2E** : **`RT-294.51`**（N1）、**`RT-314.4`**（N3。`-NoImplicit`）、**`RT-294.54`**（N4）、**`RT-294.56`**（N5）、**`RT-294.41`**（N6）、**`RT-294.55`**（grant_types）、**`RT-294.49`**（Discovery）。
+
+### A-17. 合わない `code_verifier` を `invalid_client` で返していた **[Lib]** — **✅ 修正済み（#294）**
+
+**`GrantAuthorizationCodeCredentials` は、PKCE の検証に落ちると、クライアント認証の失敗と同じ `invalid_client` を返していた。**
+**RFC 7636 §4.6 は `invalid_grant` とする。** **クライアントは「資格情報が違う」のか「`code_verifier` が違う」のかを区別できなかった。**
+（PKCE だけの経路は以前から、資格情報との併用は A-16 の N1 で広げた経路が、どちらもそうなっていた）
+
+**PKCE の検証に落ちたことを別に持ち、`invalid_grant` で返す**ようにした。**資格情報の誤りは、従来どおり `invalid_client`。**
+
+**E2E** : **`RT-294.58`**（PKCE だけ・`client_secret` ＋ PKCE とも `invalid_grant`、秘密が違えば `invalid_client`）、**`RT-294.51`**（private_key_jwt ＋ PKCE でも `invalid_grant`）。
 
 ### `sub` の対応表（`SubjectIdentifier`）**[Lib]** — **✅ 実装（#151 の段階 2）**
 
@@ -3211,6 +3221,15 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | **ROPC で利用者が居ない** | **パスワードを照合せずに返す**（ストレッチの分だけ速い） | **誰のものでもないハッシュと照合してから返す**（`VerifyDummyPassword`。応答の文面は以前から揃っている。TC-4.2） |
 
 > **E2E では測っていない**（時間の差は環境で揺れる）。**読んで直した。**
+
+### C-46. `/ros` に預けた Request Object の `client_id` を、署名したクライアントと照合していなかった **[Lib]** — **✅ 修正済み（#294）**
+
+**C-41（PAR）と同じ形が、`/ros`（`RegisterRequestObject`）にも残っていた。** **署名（`iss`）だけを確かめ、中の `client_id` は確かめていなかった**ので、
+**自分の鍵で署名した Request Object を、別のクライアントの名義で預けられた**（`/authorize` は、要求の `client_id` と Request Object の `client_id` だけを突き合わせる）。
+
+**中の `client_id` が `iss` と違えば預からない（400）、無ければ `iss` で埋める**ようにした（PAR と同じ扱い。RFC 9101 §6.3）。
+
+**E2E** : **`RT-294.59`**。
 
 > **`CmnEndpoints.*.cs` の 2 回目のレビュー（C-40〜C-45・A-16・B-12）で、判断して見送ったもの。**
 > **`client_assertion` / JWT Bearer の `assertion` の `jti` による使い切り**（RFC 7523 §3 は MAY）、

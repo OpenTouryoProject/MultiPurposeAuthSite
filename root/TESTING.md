@@ -4062,7 +4062,7 @@ The ID federation did not complete. (the error view was returned)
 > **`RT-294.30` の出口は、版で違う。** net10.0 版はサインイン画面へリダイレクトし、
 > net48 版は失敗の画面（`ExternalLoginFailure`）を出す。**どちらも「500 にせず、サインインしない」ので、両方を受け入れる。**
 
-#### `CmnEndpoints.*.cs` のレビューで見つけた不具合（`RT-294.41`〜`.57`。#294）
+#### `CmnEndpoints.*.cs` のレビューで見つけた不具合（`RT-294.41`〜`.59`。#294）
 
 **`CmnEndpoints.*.cs` のレビューで見つけ、直したものを押さえる**（`CmnEndpointsReviewTests`。両版）。
 
@@ -4085,6 +4085,8 @@ The ID federation did not complete. (the error view was returned)
 | `RT-294.55` | **grant_types に `implicit` が無いクライアントの Hybrid** は、同意の前に `unauthorized_client` | **同意の後で `server_error`** |
 | `RT-294.56` | **poll の CIBA は、`client_notification_token` も `binding_message` も無い request で受け付ける** | **`invalid_request`** |
 | `RT-294.57` | **PAR の Request Object の `client_id` が、認証したクライアントと違えば `invalid_request_object`** | **受け付けて、別のクライアントの名義で預けた**（C-41） |
+| `RT-294.58` | **合わない `code_verifier` は `invalid_grant`**（PKCE だけ・`client_secret` ＋ PKCE とも。秘密が違えば `invalid_client`） | **`invalid_client`**（A-17） |
+| `RT-294.59` | **`/ros` の Request Object の `client_id` が、署名したクライアント（`iss`）と違えば預からない**（同じなら従来どおり） | **預けて、別のクライアントの名義になった**（C-46） |
 
 > **`client_registration` 専用トークンの `expires_in`**（以前は配備ぜんたいの期限を返していた）は、**`RT-307.5` に足した。**
 > **`response_type=id_token` を Implicit を閉じた配備で断る**ことは、**`RT-314.4`**（`-NoImplicit` で回す）。
