@@ -492,4 +492,7 @@
   <data name="AddWebAuthnDataResidentCredentialsDescription" xml:space="preserve">
     <value>認証器側に資格情報を保存する（discoverable credential）。**利用者名を入れずにサインインする**形に使う。</value>
   </data>
+  <data name="CurrentPasswordPlaceholder" xml:space="preserve">
+    <value>現在のパスワード</value>
+  </data>
 </root>

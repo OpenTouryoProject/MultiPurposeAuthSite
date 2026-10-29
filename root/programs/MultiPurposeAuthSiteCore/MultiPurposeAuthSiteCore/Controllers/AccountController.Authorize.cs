@@ -21,6 +21,7 @@
 //*                                JARM の aud・exp、response_mode の扱い、Request Object の client_id を直した。
 //*                                応答の組み立てを 1 か所にまとめ、本文を両版で同じにした（#294）
 //*  2026/10/29  玄人 幸道         OpSession と /device_verify の初期表示も、補助を使って両版で同じ本文にした（#294）
+//*  2026/10/30  玄人 幸道         auth_time を書く所の注を直した（管理画面の再サインインでは書かない。#294）
 //**********************************************************************************
 
 /*
@@ -89,7 +90,8 @@ namespace MultiPurposeAuthSite.Controllers
                 && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
             {
                 // **前回の認証時刻は Cookie から読む**（**改ざんできない形で包んである**。#294。`Sts.AuthTimeCookie`）。
-                // サインイン時（InitSessionAfterlogin）と、ManageController でパスワードを確かめた時・サインインし直した時に書く。
+                // サインイン時（InitSessionAfterlogin）と、ManageController で資格情報を確かめた時（パスワードの再確認・変更、外部ログインの結び付け）に書く。
+                // **サインインし直しただけでは書かない**（#294。資格情報を確かめていないので、認証したことにはならない）。
                 // **以前は平文の Cookie で、ブラウザ側で書き換えると、偽の auth_time を RP に保証していた。**
                 string auth_time = this.ReadAuthTime();
 

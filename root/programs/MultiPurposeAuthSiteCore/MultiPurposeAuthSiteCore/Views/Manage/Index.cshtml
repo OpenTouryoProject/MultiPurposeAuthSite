@@ -24,6 +24,7 @@
     //*  2026/10/09  玄人 幸道         SAML2 のテスト ボタンを追加（#277 の段階 5）
     //*  2026/10/09  西野 大介         決済・トークン取得・SAML2 テストの導線を削除（#277）
     //*  2026/10/20  玄人 幸道         クライアント登録を件数＋一覧への導線にした（#307 の段階 5-a-2）
+    //*  2026/10/30  玄人 幸道         2FA の無効化・電話番号の削除に、パスワードの入力欄を足した（#294）
     //**********************************************************************************
 *@
 
@@ -137,6 +138,10 @@
                         using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
+                            if (Model.HasPassword)
+                            {
+                                <input type="password" name="password" placeholder="@ManageViews.CurrentPasswordPlaceholder" autocomplete="current-password" />
+                            }
                             <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn btn-link" />]</text>
                         }
                     }
@@ -159,6 +164,10 @@
                         using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
+                            if (Model.HasPassword)
+                            {
+                                <input type="password" name="password" placeholder="@ManageViews.CurrentPasswordPlaceholder" autocomplete="current-password" />
+                            }
                             <text>
                                 @ManageViews.IndexTwoFactorAuthEnableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabledButton" class="btn btn-link" />]
                             </text>

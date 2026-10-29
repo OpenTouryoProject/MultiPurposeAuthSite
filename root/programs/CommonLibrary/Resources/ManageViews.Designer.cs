@@ -1086,6 +1086,15 @@ namespace MultiPurposeAuthSite.Resources {
             }
         }
         /// <summary>
+        ///   Current password に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string CurrentPasswordPlaceholder {
+            get {
+                return ResourceManager.GetString("CurrentPasswordPlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Client に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ConsentGrantsClient {

@@ -18,6 +18,9 @@
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         パスワードの確認をサインインから切り離した・利用者名の変更で WebAuthn の資格情報を移す・
 //*                                メアドの変更の判定をメアドで行う（#294）
+//*  2026/10/30  玄人 幸道         更新に失敗したら元の値に戻す・利用者名の変更の失敗の理由を出す・
+//*                                パスワードの変更で auth_time を書く・メアドの変更で SecurityStamp を更新し、
+//*                                変更前のメアドにも知らせる（#294）
 //**********************************************************************************
 
 /*
@@ -146,7 +149,14 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else
                     {
-                        // E-mail更新に失敗
+                        // UserName更新に失敗
+                        //   **元の名前に戻す**（#294）。**mem ストアでは、引いた利用者がそのまま保存の実体**なので、
+                        //   戻さないと、**保存に失敗した名前が残る。**
+                        user.UserName = oldUserName;
+
+                        // **理由（重複など）を出して、再表示する**（#294。以前は汎用のメッセージだけだった）。
+                        this.AddErrors(result);
+                        return View(model);
                     }
 
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeUserNameFailure });
@@ -298,6 +308,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // 再ログイン
                         await this.ReSignInAsync(user.Id);
+
+                        // **今のパスワードを確かめた**ので、auth_time を書く（#294）。
+                        this.WriteAuthTime();
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) has changed own password.", user.Id, user.UserName));
@@ -488,6 +501,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // **メアドを変えても、利用者名は変えない**（#151 の段階 3）。
                             //   以前は「利用者名＝メアド」だったので、両方を書き換えていた。
                             string oldUserName = user.UserName;
+                            string oldEmail = user.Email;
                             user.Email = email;
 
                             // 場合によっては、Email & UserName を更新するため。
@@ -499,12 +513,17 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // メアド検証の成功
 
+                                // **SecurityStamp を更新する**（#294。`ChangeEmailAsync` と同じ）。
+                                //   **以前は更新しておらず、変更前のメアドに送ったパスワード リセットのリンクや、
+                                //   ほかのセッションが、そのまま使えた。**
+                                await UserManager.UpdateSecurityStampAsync(user);
+
                                 // 再ログイン
                                 if (await this.ReSignInAsync(user.Id))
                                 {
                                     // 再ログインに成功
-                                    // メールの送信
-                                    this.SendChangeCompletedEmail(user);
+                                    // メールの送信（**変更前のメアドにも知らせる**。#294）
+                                    this.SendChangeCompletedEmail(user, oldEmail);
 
                                     // オペレーション・トレース・ログ出力
                                     //   **利用者名ではなくメアドが変わった**ので、新しいメアドを出す（#151 の段階 3）。
@@ -520,6 +539,8 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // E-mail更新に失敗
+                                //   **元のメアドに戻す**（#294。mem ストアでは、戻さないと失敗した値が残る）。
+                                user.Email = oldEmail;
                                 return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
                             }
                         }

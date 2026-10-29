@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         GDPR 削除で、WebAuthn の資格情報を利用者を消せてから消す（#294）
 //**********************************************************************************
 
 /*
@@ -499,14 +500,15 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの検索
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
-                // **WebAuthnを消す ※ `mem` ストアでログインできないように対策
-                FIDO.DataProvider.DeleteByUser(user.UserName);
-
                 // 物理削除 DBストアなら `ON DELETE CASCADE` で関連明細も消える。
                 IdentityResult result = await UserManager.DeleteAsync(user);
 
                 if (result.Succeeded)
                 {
+                    // **WebAuthnを消す ※ `mem` ストアでログインできないように対策
+                    //   **利用者を消せてから消す**（#294。以前は先に消していたので、削除に失敗すると資格情報だけが無くなった）。
+                    FIDO.DataProvider.DeleteByUser(user.UserName);
+
                     // サインアウト（Cookieの削除）
                     await SignInManager.SignOutAsync();
                     //// オペレーション・トレース・ログ出力

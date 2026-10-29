@@ -19,6 +19,7 @@
 //*  2026/10/26  玄人 幸道         name / email のクレームが無いとき、例外で落ちないようにした（#294）
 //*  2026/10/26  玄人 幸道         外部ログインの失敗の出口ごとに、理由を OPERATION に記録する（#294）
 //*  2026/10/29  玄人 幸道         外部ログインの結果を見る、クレームの入れ替え、name を必須にしない、知らない provider を断る（#294）
+//*  2026/10/30  玄人 幸道         クレームの入れ替えを、同じ発行元の分だけにした（#294）
 //**********************************************************************************
 
 /*
@@ -444,7 +445,9 @@ namespace MultiPurposeAuthSite.Controllers
                 return IdentityResult.Success;
             }
 
-            foreach (Claim old in (await UserManager.GetClaimsAsync(user)).Where(c => c.Type == claim.Type).ToList())
+            //  **消すのは同じ発行元（プロバイダ）の分だけ**（#294）。種類だけで消すと、ほかのプロバイダのクレームまで消えた。
+            foreach (Claim old in (await UserManager.GetClaimsAsync(user))
+                .Where(c => c.Type == claim.Type && c.Issuer == claim.Issuer).ToList())
             {
                 await UserManager.RemoveClaimAsync(user, old);
             }

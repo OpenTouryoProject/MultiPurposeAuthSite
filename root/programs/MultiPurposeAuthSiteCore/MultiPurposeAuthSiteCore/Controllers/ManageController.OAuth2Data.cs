@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         ほかで使われている client_id では、登録を作らない（#294）
 //**********************************************************************************
 
 /*
@@ -269,6 +270,15 @@ namespace MultiPurposeAuthSite.Controllers
                                 //  **戻り先は一覧**（#307 の段階 5-a-2）。
                                 //    **直した行が、その場で見える。**
                                 return RedirectToAction("Saml2OAuth2DataList", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
+                            }
+                            else if (!string.IsNullOrEmpty(model.ClientID)
+                                && (Sts.Saml2OAuth2DataProvider.Get(model.ClientID) != null
+                                    || !string.IsNullOrEmpty(Sts.Helper.GetInstance().GetClientName(model.ClientID))))
+                            {
+                                //  **ほかで使われている `client_id` では作らない**（#294）。
+                                //    **以前は、mem では何もせずに「成功」と出し、DB では主キーの違反で 500 になっていた。**
+                                //    **構成ファイルのクライアントとも重ねない**（引くときは構成ファイルが勝つので、作っても効かない）。
+                                ModelState.AddModelError("ClientID", Resources.ManageController.ClientIdAlreadyExists);
                             }
                             else if (!string.IsNullOrEmpty(model.ClientID))
                             {

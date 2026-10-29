@@ -19,6 +19,8 @@
 //*  2026/10/29  玄人 幸道         外部ログインの結び付けでブラウザ記憶(2FA)を付けない・
 //*                                AccountController に揃えた（name が無い・メアドで照合・クレームの入れ替え・
 //*                                他人の結び付け・未登録の provider）、最後のサインインの手段を消させない（#294）
+//*  2026/10/30  玄人 幸道         外部ログインの解除でパスワードを確かめる・結び付けを始めた利用者と照合する・
+//*                                外部ログインの Cookie を捨てる（#294）
 //**********************************************************************************
 
 /*
@@ -131,10 +133,15 @@ namespace MultiPurposeAuthSite.Controllers
                     message == EnumManageMessageId.Error ? Resources.ManageController.Error
                     : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
                     : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
+                    : message == EnumManageMessageId.PasswordIncorrect ? Resources.ManageController.PasswordIncorrect
+                    : message == EnumManageMessageId.PasswordNotSet ? Resources.ManageController.PasswordNotSet
                     : "";
 
                 // 認証されたユーザを取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                // **解除にはパスワードが要る**（#294）。持っていれば、入力欄を出す。
+                ViewBag.HasPassword = await UserManager.HasPasswordAsync(user.Id);
 
                 // 現在の認証ユーザが外部ログイン済みの外部ログイン情報を取得
                 IList<UserLoginInfo> userLogins = await UserManager.GetLoginsAsync(User.Identity.GetUserId());
@@ -191,10 +198,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <param name="loginProvider">loginProvider</param>
         /// <param name="providerKey">providerKey</param>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey)
+        public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey, string password)
         {
             if (Config.CanEditExtLogin && Config.EnableEditingOfUserAttribute)
             {
@@ -215,6 +223,13 @@ namespace MultiPurposeAuthSite.Controllers
                         "{0}({1}) tried to remove the last way to sign in.", user.Id, user.UserName));
 
                     return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.Error });
+                }
+
+                // **パスワードを確かめる**（#294。以前はセッションだけで外せた）。
+                EnumManageMessageId? error = await this.VerifyPasswordAsync(user, password);
+                if (error != null)
+                {
+                    return RedirectToAction("ManageLogins", new { Message = error });
                 }
 
                 // ログインを削除
@@ -333,7 +348,13 @@ namespace MultiPurposeAuthSite.Controllers
                 // ログイン プロバイダーが公開している認証済みユーザーに関する情報を受け取る。
                 AuthenticateResult authenticateResult = await AuthenticationManager.AuthenticateAsync(DefaultAuthenticationTypes.ExternalCookie);
                 // 外部ログイン・プロバイダからユーザに関する情報を取得する。
-                ExternalLoginInfo externalLoginInfo = await AuthenticationManager.GetExternalLoginInfoAsync();
+                //   **始めた利用者の id と照合する**（#294。`ExternalLoginStarter` が入れた値）。
+                //   **以前は入れるだけで照合しておらず**、ほかの経路・ほかの利用者が始めた外部ログインも受けていた。
+                ExternalLoginInfo externalLoginInfo = await AuthenticationManager.GetExternalLoginInfoAsync(
+                    Config.SaltParameter, User.Identity.GetUserId());
+
+                // **外部ログインの Cookie は、ここで捨てる**（#294。読んだ後は要らない）。
+                AuthenticationManager.SignOut(DefaultAuthenticationTypes.ExternalCookie);
 
                 IdentityResult result = null;
                 //SignInStatus signInStatus = SignInStatus.Failure;
@@ -472,7 +493,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     // クレーム（emailClaim, nameClaim, etc.）の追加
                                     if (result.Succeeded)
                                     {
-                                        result = await UserManager.AddClaimAsync(user.Id, emailClaim);
+                                        result = await this.ReplaceClaimAsync(user, emailClaim);
                                         result = await this.ReplaceClaimAsync(user, nameClaim); // name は無いことがある
                                         // ・・・
                                         // ・・・
@@ -494,7 +515,8 @@ namespace MultiPurposeAuthSite.Controllers
                                             isPersistent: false,     // rememberMe は false 固定（外部ログインの場合）
                                             rememberBrowser: false); // ブラウザ記憶(2FA)
 
-                                        Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
+                                        // **外部ログインで認証した**ので、auth_time を書く。
+                                        this.WriteAuthTime();
 
                                         // リダイレクト
                                         return RedirectToAction("ManageLogins");

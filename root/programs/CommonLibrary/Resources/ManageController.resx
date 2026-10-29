@@ -192,4 +192,7 @@
   <data name="InvalidVerificationCode" xml:space="preserve">
     <value>Verification code is invalid.</value>
   </data>
+  <data name="ClientIdAlreadyExists" xml:space="preserve">
+    <value>This client_id is already in use.</value>
+  </data>
 </root>

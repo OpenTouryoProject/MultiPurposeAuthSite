@@ -18,6 +18,9 @@
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         メールを要求から切り離して送る・パスワードの確認・クレームの入れ替え・
 //*                                TOTP の鍵をコードの確認まで保存しない（#294）
+//*  2026/10/30  玄人 幸道         再サインインで auth_time を書かない・アカウント記憶を引き継ぐ・パスワードの確認を
+//*                                ほかの操作でも使う・メールの間隔を宛先ごとに数える・メアドの変更を変更前のメアドにも
+//*                                知らせる・クレームの入れ替えを発行元ごとに・TOTP の鍵を利用者に結び付ける（#294）
 //**********************************************************************************
 
 /*
@@ -41,6 +44,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using AspNetId = Microsoft.AspNetCore.Identity;
@@ -61,6 +65,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// Cookie再設定 or SecurityStamp対応
         /// </summary>
         /// <returns>Task</returns>
+        /// <remarks>
+        /// **auth_time は書かない**（#294）。**資格情報を確かめていない**ので、認証したことにはならない。
+        /// **以前は書いていた**ので、**2FA の有効化などの操作だけで `max_age` の再認証が要らなくなっていた。**
+        /// 書くのは、資格情報を確かめた所だけ（`WriteAuthTime`）。
+        /// </remarks>
         private async Task<bool> ReSignInAsync(string userId)
         {
             // 認証されたユーザを取得
@@ -69,16 +78,16 @@ namespace MultiPurposeAuthSite.Controllers
             // ユーザの確認
             if (user != null)
             {
-                // 認証されたユーザが無い
+                // **いまのサインインの「アカウント記憶」を引き継ぐ**（#294）。
+                //   以前は false 固定で、管理画面で何か操作すると、ブラウザを閉じれば切れるサインインに変わっていた。
+                AuthenticateResult current = await HttpContext.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+                bool isPersistent = current?.Properties?.IsPersistent ?? false;
+
                 // 再度サインイン
                 await SignInManager.SignInAsync(
                         user,
-                        isPersistent: false);//,      // アカウント記憶    // 既定値
+                        isPersistent: isPersistent);  // アカウント記憶
                         //rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
-
-                IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                responseCookies.Set(Config.AuthTimeCookieName,
-                    Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
 
                 return true;
             }
@@ -88,16 +97,24 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
+        /// <summary>auth_time を、いまの時刻にする（資格情報を確かめた所だけで呼ぶ。#294）</summary>
+        private void WriteAuthTime()
+        {
+            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+            responseCookies.Set(Config.AuthTimeCookieName,
+                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
+        }
+
         #endregion
 
         #region パスワードの確認
 
         /// <summary>
-        /// 利用者名・メアドの変更の前に、パスワードを確かめる（#294）。
+        /// 操作の前に、パスワードを確かめる（#294）。
         /// </summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="password">入力されたパスワード</param>
-        /// <returns>確かめられたら null、そうでなければ画面に出す文言</returns>
+        /// <returns>確かめられたら null、そうでなければ断る理由</returns>
         /// <remarks>
         /// **以前は `PasswordSignInAsync`（サインインそのもの）で確かめていた。**
         /// - **2FA を有効にした利用者は、必ず失敗していた**（`RequiresTwoFactor` が返る）
@@ -105,13 +122,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// - **間違えても、何も言わずに画面を出し直していた**
         ///
         /// **`CheckPasswordSignInAsync` はサインインしない**（2FA に関わらない）。**ロックアウトは数える。**
+        /// **パスワードを持たない利用者は断る**（先に設定してもらう）。
+        /// **確かめられたら auth_time を書く**（資格情報を確かめたため）。
         /// </remarks>
-        private async Task<string> CheckPasswordForEditingAsync(ApplicationUser user, string password)
+        private async Task<EnumManageMessageId?> VerifyPasswordAsync(ApplicationUser user, string password)
         {
             if (!await UserManager.HasPasswordAsync(user))
             {
                 // パスワードを持たない（先に設定してもらう）
-                return Resources.ManageController.PasswordNotSet;
+                return EnumManageMessageId.PasswordNotSet;
             }
 
             AspNetId.SignInResult result = await SignInManager.CheckPasswordSignInAsync(
@@ -120,15 +139,31 @@ namespace MultiPurposeAuthSite.Controllers
             if (!result.Succeeded)
             {
                 // Passwordが一致しない（ロックアウト中も同じ文言）
-                return Resources.ManageController.PasswordIncorrect;
+                Logging.MyOperationTrace(string.Format(
+                    "{0}({1}) failed to confirm the password.", user.Id, user.UserName));
+
+                return EnumManageMessageId.PasswordIncorrect;
             }
 
             // Passwordが一致した。
-            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-            responseCookies.Set(Config.AuthTimeCookieName,
-                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
+            this.WriteAuthTime();
 
             return null;
+        }
+
+        /// <summary>
+        /// 利用者名・メアドの変更の前に、パスワードを確かめる（#294）。
+        /// </summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="password">入力されたパスワード</param>
+        /// <returns>確かめられたら null、そうでなければ画面に出す文言</returns>
+        private async Task<string> CheckPasswordForEditingAsync(ApplicationUser user, string password)
+        {
+            EnumManageMessageId? error = await this.VerifyPasswordAsync(user, password);
+
+            return error == null ? null
+                : error == EnumManageMessageId.PasswordNotSet ? Resources.ManageController.PasswordNotSet
+                : Resources.ManageController.PasswordIncorrect;
         }
 
         #endregion
@@ -163,6 +198,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <remarks>
         /// **`AccountController.SendMailInBackground` と同じ**（理由もそちらに書いた）。
         /// **以前は `async void` で送っていて、SMTP の失敗でプロセスが落ちることがあった。**
+        /// **管理画面の間隔は、宛先ごとに数える**（`MailThrottle.TryAcquireForDestination`）。
         /// </remarks>
         private void SendMailInBackground(
             string purpose, string userId, string destination, string subject, string body)
@@ -185,7 +221,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // **送れなかった分は、間隔に数えない**（すぐに送り直せるように）。
                     if (purpose != null)
                     {
-                        Sts.MailThrottle.Release(purpose, userId);
+                        Sts.MailThrottle.ReleaseForDestination(purpose, destination);
                     }
                 }
             });
@@ -197,13 +233,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="user">ApplicationUser</param>
         /// <param name="newEmail">更新後のメアド</param>
         /// <remarks>
-        /// **同じ利用者に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
-        /// **そのときは確認の符号も作り直さない** —
+        /// **同じ宛先に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
+        /// **宛先ごとに数える** — 打ち間違いを直した宛先へは、すぐに送れる。
+        /// **断ったときは確認の符号も作り直さない** —
         /// 作り直すと、先に送ったリンクが使えなくなり、新しいリンクも届かない。
         /// </remarks>
         private void SendConfirmEmail(ApplicationUser user, string newEmail)
         {
-            if (!Sts.MailThrottle.TryAcquire(Sts.MailThrottle.PurposeEmailChange, user.Id))
+            if (!Sts.MailThrottle.TryAcquireForDestination(Sts.MailThrottle.PurposeEmailChange, newEmail, user.Id))
             {
                 return;
             }
@@ -232,11 +269,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// アカウント変更の完了メール送信処理（文面が無ければ送らない。#294）。
         /// </summary>
         /// <param name="user">ApplicationUser</param>
+        /// <param name="oldEmail">変更前のメアド（メアドの変更のとき。それ以外は null）</param>
         /// <remarks>
         /// **完了メールの文面には、既定値（リソース）が無い。**
         /// **以前は、文面のファイルが無いと、件名も本文も空のメールを送っていた。**
+        ///
+        /// **メアドを変えたときは、変更前のメアドにも送る**（#294）。
+        /// **変えたのが本人でなければ、本人が気付けるのは、変更前のメアドだけである。**
         /// </remarks>
-        private void SendChangeCompletedEmail(ApplicationUser user)
+        private void SendChangeCompletedEmail(ApplicationUser user, string oldEmail = null)
         {
             string subject = GetContentOfLetter.Get("AccountChangeWasCompletedEmailTitle", CustomEncode.UTF_8, "");
             string body = GetContentOfLetter.Get("AccountChangeWasCompletedEmailMsg", CustomEncode.UTF_8, "");
@@ -249,19 +290,27 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             this.SendMailInBackground(null, user.Id, user.Email, subject, string.Format(body, user.UserName));
+
+            if (!string.IsNullOrWhiteSpace(oldEmail)
+                && !string.Equals(oldEmail, user.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                this.SendMailInBackground(null, user.Id, oldEmail, subject, string.Format(body, user.UserName));
+            }
         }
 
         #endregion
 
         #region 外部ログイン
 
-        /// <summary>同じ種類のクレームを、新しい値に入れ替える（#294）</summary>
+        /// <summary>同じ発行元・同じ種類のクレームを、新しい値に入れ替える（#294）</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">新しいクレーム（null なら何もしない）</param>
         /// <returns>IdentityResult</returns>
         /// <remarks>
         /// **`AccountController.ReplaceClaimAsync` と同じ。**
         /// **以前は「新しい値を消して、新しい値を足す」だった**ので、**値が変わると古いクレームがたまっていった。**
+        /// **消すのは同じ発行元（外部ログインのプロバイダ）の分だけ** —
+        /// 種類だけで消すと、**ほかのプロバイダのクレームまで消えていた。**
         /// </remarks>
         private async Task<IdentityResult> ReplaceClaimAsync(ApplicationUser user, Claim claim)
         {
@@ -270,7 +319,8 @@ namespace MultiPurposeAuthSite.Controllers
                 return IdentityResult.Success;
             }
 
-            foreach (Claim old in (await UserManager.GetClaimsAsync(user)).Where(c => c.Type == claim.Type).ToList())
+            foreach (Claim old in (await UserManager.GetClaimsAsync(user))
+                .Where(c => c.Type == claim.Type && c.Issuer == claim.Issuer).ToList())
             {
                 await UserManager.RemoveClaimAsync(user, old);
             }
@@ -297,17 +347,43 @@ namespace MultiPurposeAuthSite.Controllers
             string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
             if (string.IsNullOrEmpty(totpAuthenticatorKey))
             {
-                totpAuthenticatorKey = TempData.Peek(PendingAuthenticatorKey) as string;
+                totpAuthenticatorKey = this.PeekPendingAuthenticatorKey(user);
 
                 if (string.IsNullOrEmpty(totpAuthenticatorKey))
                 {
                     totpAuthenticatorKey = UserManager.GenerateNewAuthenticatorKey();
-                    TempData[PendingAuthenticatorKey] = totpAuthenticatorKey;
+                    TempData[PendingAuthenticatorKey] = user.Id + "\t" + totpAuthenticatorKey;
                 }
             }
 
             model.SharedKey = this.FormatKey(totpAuthenticatorKey);
             model.AuthenticatorUri = this.GenerateQrCodeUri(user.Email, totpAuthenticatorKey);
+        }
+
+        /// <summary>この利用者のために作った、保存する前の鍵を読む（#294）</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>鍵（無い・ほかの利用者のために作った鍵なら null）</returns>
+        /// <remarks>
+        /// **鍵は利用者の id と組にして置く。** TempData（Cookie）は**サインアウトしても残る**ので、
+        /// 組にしないと、**同じブラウザで後からサインインした利用者に、前の利用者が見た鍵を保存させてしまう。**
+        /// </remarks>
+        private string PeekPendingAuthenticatorKey(ApplicationUser user)
+        {
+            string pending = TempData.Peek(PendingAuthenticatorKey) as string;
+
+            if (string.IsNullOrEmpty(pending))
+            {
+                return null;
+            }
+
+            int separator = pending.IndexOf('\t');
+
+            if (separator <= 0 || pending.Substring(0, separator) != user.Id)
+            {
+                return null;
+            }
+
+            return pending.Substring(separator + 1);
         }
 
         /// <summary>保存する前の鍵で、コードを確かめる（#294）</summary>

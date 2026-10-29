@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
 //*  2026/10/29  玄人 幸道         RT-294.60（登録画面を開いただけでは TOTP は登録されない）を足した（#294）
+//*  2026/10/30  玄人 幸道         RT-294.63（再サインインで auth_time を新しくしない）・.64（2FA の無効化でパスワードを確かめる）・
+//*                                .65（未確定の TOTP の鍵をほかの利用者に使わない）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -67,6 +69,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | RT-294.12 画面に出していない手段を選ぶ | **知らない値は TOTP として扱っていた** |
     /// | RT-294.13 コードの 2FA で間違える | **文言が出なかった**（net10.0 版）。**ブラウザ記憶が既定で入っていた**（両版） |
     /// | RT-294.60 認証アプリの登録画面を開く | **開いただけで鍵を保存していた**（`ManageController.*.cs` のレビュー） |
+    /// | RT-294.63 管理画面でサインインし直す | **auth_time を「いま」にしていた**（`max_age` の再認証が効かない。2 回目のレビュー） |
+    /// | RT-294.64 2FA を無効にする | **パスワードを確かめていなかった**（2 回目のレビュー） |
+    /// | RT-294.65 同じブラウザで別の利用者が登録画面を開く | **前の利用者が見た鍵を出していた**（2 回目のレビュー） |
     /// </remarks>
     public class TwoFactorTests : TargetTestBase
     {
@@ -585,7 +590,332 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-294.63 管理画面でサインインし直しただけでは、auth_time は新しくならない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29463_管理画面の再サインインではauth_timeを新しくしない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userName = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-294.63",
+                    "管理画面でサインインし直しただけでは、auth_time は新しくならない（max_age の再認証が効く）",
+                    "**以前は、管理画面の操作のたびにサインインし直し、auth_time を「いま」にしていた。**"
+                    + "**資格情報を確かめない操作（2FA の有効化など）でも新しくなる**ので、"
+                    + "RP が `max_age` で求めた再認証が、行われないまま通っていた。"
+                    + "**auth_time を書くのは、資格情報を確かめた所だけ**にした（パスワードの再確認など）。",
+                    "OIDC Core §2 auth_time / §3.1.2.1 / #294（ManageController.*.cs の 2 回目のレビュー S1）");
+
+                r.Target("利用者名 = " + userName + " / client_name=" + KnownClients.TestClient + " / max_age=2");
+
+                try
+                {
+                    await admin.SignInAsAdministratorAsync();
+                    await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                    HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                        admin, userName, userName + "@example.com", "User");
+
+                    Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                        "前提: 利用者を作れること");
+
+                    using (IdPClient user = this.Client(targetKey))
+                    {
+                        string password = user.Config.Get("TestUserPWD");
+                        ClientRegistration reg = Flows.Registration(user, KnownClients.TestClient);
+
+                        r.Step("(1) サインインし、2FA を有効にしておく（手順 2 で、パスワードを確かめて無効にするため）");
+
+                        Assert.True(await user.TrySignInAsync(userName, password),
+                            "前提: 作った利用者でサインインできること");
+
+                        await TwoFactorTests.EnableTwoFactorAsync(user);
+
+                        //  **秒単位で判定する**ので、max_age を超えるまで待つ（RT-247.1 と同じ）。
+                        await Task.Delay(3000);
+
+                        r.Step("(2) パスワードを確かめて 2FA を無効にし、すぐに max_age=2 で認可リクエストを送る");
+
+                        HttpResponseMessage disabled = await TwoFactorTests.PostIndexFormAsync(
+                            user, "/Manage/DisableTwoFactorAuthentication", password);
+
+                        Assert.True(disabled.Headers.Location != null,
+                            "前提: 2FA を無効にできること（" + TwoFactorTests.Describe(disabled) + "）");
+
+                        AuthZResponse afterPassword = await user.AuthorizeAsync(
+                            TwoFactorTests.AuthZParameters(reg, "state-rt29463-1", "2"));
+
+                        bool wentOn = afterPassword.NeedsConsent || !string.IsNullOrEmpty(afterPassword.Code);
+
+                        r.Verify("パスワードを確かめた直後は、再認証を求めない（先へ進む）", wentOn,
+                            "同意画面 または 認可コード",
+                            afterPassword.NeedsConsent ? "同意画面"
+                                : (!string.IsNullOrEmpty(afterPassword.Code) ? "認可コード"
+                                    : "**進まない**（" + afterPassword.ToString() + "）"));
+
+                        await Task.Delay(3000);
+
+                        r.Step("(3) 2FA を有効にし（サインインし直すだけで、資格情報は確かめない）、すぐに max_age=2 で送る");
+
+                        await TwoFactorTests.EnableTwoFactorAsync(user);
+
+                        AuthZResponse afterReSignIn = await user.AuthorizeAsync(
+                            TwoFactorTests.AuthZParameters(reg, "state-rt29463-2", "2"));
+
+                        bool reAuth = afterReSignIn.Redirected
+                            && !afterReSignIn.NeedsConsent && string.IsNullOrEmpty(afterReSignIn.Code);
+
+                        r.Verify("再認証を求める（同意画面にも、認可コードにも進まない）", reAuth,
+                            "再認証へのリダイレクト",
+                            reAuth ? afterReSignIn.RedirectTo
+                                : (afterReSignIn.NeedsConsent ? "**同意画面へ進んだ**"
+                                    : (!string.IsNullOrEmpty(afterReSignIn.Code) ? "**認可コードが出た**"
+                                        : "**" + afterReSignIn.ToString() + "**")));
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userName);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-294.64 2FA の無効化と電話番号の削除は、パスワードを確かめる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29464_2FAの無効化はパスワードを確かめる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userName = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-294.64",
+                    "2FA の無効化は、パスワードを確かめる（無い・間違いなら無効にしない）",
+                    "**以前は、セッションさえあれば 2FA を無効にできた**（電話番号の削除・外部ログインの解除も同じ）。"
+                    + "**パスワードの再確認を求める**ようにした。"
+                    + "**電話番号の削除・外部ログインの解除も、同じ補助（`VerifyPasswordAsync`）で確かめる**"
+                    + "（電話番号は SMS が、外部ログインは上流が要るので、E2E では 2FA の無効化で測る）。",
+                    "#294（ManageController.*.cs の 2 回目のレビュー）");
+
+                r.Target("利用者名 = " + userName + "（2FA を有効にした使い捨ての利用者）");
+
+                try
+                {
+                    await admin.SignInAsAdministratorAsync();
+                    await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                    HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                        admin, userName, userName + "@example.com", "User");
+
+                    Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                        "前提: 利用者を作れること");
+
+                    using (IdPClient user = this.Client(targetKey))
+                    {
+                        string password = user.Config.Get("TestUserPWD");
+
+                        Assert.True(await user.TrySignInAsync(userName, password),
+                            "前提: 作った利用者でサインインできること");
+
+                        await TwoFactorTests.EnableTwoFactorAsync(user);
+
+                        string index = await user.GetStringAsync("/Manage/Index");
+
+                        r.Verify("無効化のフォームに、パスワードの入力欄がある",
+                            TwoFactorTests.HasPasswordInput(index, "DisableTwoFactorAuthentication"),
+                            "在る",
+                            TwoFactorTests.HasPasswordInput(index, "DisableTwoFactorAuthentication") ? "在る" : "**無い**");
+
+                        r.Step("(1) パスワードを送らずに無効にする");
+
+                        await TwoFactorTests.PostIndexFormAsync(user, "/Manage/DisableTwoFactorAuthentication", null);
+
+                        bool stillOn = TwoFactorTests.IsTwoFactorEnabled(await user.GetStringAsync("/Manage/Index"));
+
+                        r.Verify("2FA は有効のまま", stillOn, "有効", stillOn ? "有効" : "**無効になった**");
+
+                        r.Step("(2) 間違ったパスワードで無効にする");
+
+                        await TwoFactorTests.PostIndexFormAsync(user, "/Manage/DisableTwoFactorAuthentication", password + "x");
+
+                        stillOn = TwoFactorTests.IsTwoFactorEnabled(await user.GetStringAsync("/Manage/Index"));
+
+                        r.Verify("2FA は有効のまま", stillOn, "有効", stillOn ? "有効" : "**無効になった**");
+
+                        r.Step("(3) 正しいパスワードで無効にする");
+
+                        await TwoFactorTests.PostIndexFormAsync(user, "/Manage/DisableTwoFactorAuthentication", password);
+
+                        bool off = !TwoFactorTests.IsTwoFactorEnabled(await user.GetStringAsync("/Manage/Index"));
+
+                        r.Verify("2FA が無効になる", off, "無効", off ? "無効" : "**有効のまま**");
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userName);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-294.65 認証アプリの未確定の鍵は、作った利用者にしか使われない</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT29465_未確定のTOTPの鍵はほかの利用者に使われない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userA = TwoFactorTests.UniqueName();
+                string userB = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-294.65",
+                    "認証アプリの未確定の鍵は、同じブラウザで後からサインインした利用者に使われない",
+                    "**未確定の鍵は TempData（Cookie）に置く**（RT-294.60）。**TempData はサインアウトしても残る**ので、"
+                    + "**以前は、同じブラウザで後からサインインした利用者に、前の利用者が見た鍵を出していた**"
+                    + "（そのまま登録すると、前の利用者がコードを作れる）。"
+                    + "**鍵を利用者の id と組にして置き、id が合うときだけ使う**ようにした。",
+                    "#294（ManageController.*.cs の 2 回目のレビュー）");
+
+                r.Target("利用者名 = " + userA + " → " + userB + "（同じ IdPClient = 同じブラウザ）");
+
+                try
+                {
+                    await admin.SignInAsAdministratorAsync();
+                    await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                    foreach (string name in new[] { userA, userB })
+                    {
+                        HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                            admin, name, name + "@example.com", "User");
+
+                        Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                            "前提: 利用者を作れること");
+                    }
+
+                    using (IdPClient browser = this.Client(targetKey))
+                    {
+                        string password = browser.Config.Get("TestUserPWD");
+
+                        r.Step("(1) 利用者 A で、認証アプリの登録画面を開く（登録はしない）");
+
+                        Assert.True(await browser.TrySignInAsync(userA, password), "前提: A でサインインできること");
+
+                        string bodyA = await browser.GetStringAsync("/Manage/EnableTwoFactorAuthenticator");
+                        string secretA = TwoFactorTests.SecretOf(bodyA);
+
+                        Skip.If(secretA == null, "認証アプリの登録画面が開きません（" + Html.Describe(bodyA) + "）。");
+
+                        r.Step("(2) 同じブラウザで利用者 B としてサインインし直し、登録画面を開く");
+
+                        //  **サインアウトを挟んでも同じ**（TempData の Cookie は、サインアウトでは消えない）。
+                        Assert.True(await browser.TrySignInAsync(userB, password), "前提: B でサインインできること");
+
+                        string bodyB = await browser.GetStringAsync("/Manage/EnableTwoFactorAuthenticator");
+                        string secretB = TwoFactorTests.SecretOf(bodyB);
+
+                        r.Verify("B には、A に出した鍵を出さない",
+                            secretB != null && secretB != secretA,
+                            "別の鍵",
+                            secretB == null ? "**鍵が無い**" : (secretB == secretA ? "**A と同じ鍵**" : "別の鍵"));
+
+                        r.Step("(3) A の鍵で作ったコードを、B の登録に送る");
+
+                        HttpResponseMessage posted = await TwoFactorTests.PostFormFromAsync(browser, bodyB,
+                            new Dictionary<string, string>() { { "Code", Totp.Compute(secretA, DateTimeOffset.UtcNow) } },
+                            "/Manage/EnableTwoFactorAuthenticator");
+
+                        bool refused = posted.Headers.Location == null
+                            || !posted.Headers.Location.ToString().Contains("ShowTwoFactorAuthenticatorRecoveryCodes");
+
+                        r.Verify("登録されない", refused, "登録されない", refused ? "登録されない" : "**登録された**");
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userA);
+                    await TwoFactorTests.CleanUpAsync(admin, userB);
+                }
+
+                r.Done();
+            }
+        }
+
         #region 補助
+
+        /// <summary>認可リクエストのパラメタ（max_age 付き。`MaxAgeTests` と同じ形）</summary>
+        /// <param name="reg">ClientRegistration</param>
+        /// <param name="state">state</param>
+        /// <param name="maxAge">max_age</param>
+        /// <returns>パラメタ</returns>
+        private static Dictionary<string, string> AuthZParameters(ClientRegistration reg, string state, string maxAge)
+        {
+            return new Dictionary<string, string>()
+            {
+                { "client_id", reg.ClientId },
+                { "response_type", "code" },
+                { "redirect_uri", reg.RedirectUri },
+                { "scope", "openid email" },
+                { "state", state },
+                { "nonce", "nonce-" + state },
+                { "max_age", maxAge }
+            };
+        }
+
+        /// <summary>管理画面（Index）のボタンのフォームを、パスワードを付けて送る</summary>
+        /// <param name="user">利用者でサインインした IdPClient</param>
+        /// <param name="action">送り先</param>
+        /// <param name="password">パスワード（null なら送らない）</param>
+        /// <returns>応答</returns>
+        private static async Task<HttpResponseMessage> PostIndexFormAsync(IdPClient user, string action, string password)
+        {
+            string indexBody = await user.GetStringAsync("/Manage/Index");
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "__RequestVerificationToken", Html.Antiforgery(indexBody) }
+            };
+
+            if (password != null)
+            {
+                form["password"] = password;
+            }
+
+            return await user.PostFormAsync(action, form);
+        }
+
+        /// <summary>管理画面が、2FA を有効と出しているか（無効化のフォームが在るか）</summary>
+        /// <param name="index">管理画面の本文</param>
+        /// <returns>有効なら true</returns>
+        private static bool IsTwoFactorEnabled(string index)
+        {
+            return (index ?? "").Contains("DisableTwoFactorAuthentication");
+        }
+
+        /// <summary>そのフォームに、パスワードの入力欄が在るか</summary>
+        /// <param name="body">画面の本文</param>
+        /// <param name="action">フォームの送り先（の一部）</param>
+        /// <returns>在れば true</returns>
+        private static bool HasPasswordInput(string body, string action)
+        {
+            Match form = Regex.Match(body ?? "",
+                "<form\\b[^>]*action=\"[^\"]*" + action + "[^\"]*\"[^>]*>(?<f>.*?)</form>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            return form.Success
+                && Regex.IsMatch(form.Groups["f"].Value, "<input\\b[^>]*type=\"password\"[^>]*name=\"password\"",
+                    RegexOptions.IgnoreCase);
+        }
 
         /// <summary>認証アプリの登録画面から、共有鍵を取る（`otpauth://totp/...?secret=...`）</summary>
         /// <param name="body">画面の本文</param>

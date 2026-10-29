@@ -151,6 +151,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   This client_id is already in use. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientIdAlreadyExists {
+            get {
+                return ResourceManager.GetString("ClientIdAlreadyExists", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Your security code is: に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string CodeForAddPhoneNumber {

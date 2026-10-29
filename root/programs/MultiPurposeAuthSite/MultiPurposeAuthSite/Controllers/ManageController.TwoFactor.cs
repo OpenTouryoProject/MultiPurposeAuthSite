@@ -17,6 +17,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         SMS を続けて送らない（#294）
+//*  2026/10/30  玄人 幸道         2FA の無効化・電話番号の削除でパスワードを確かめる・SMS の間隔を電話番号ごとに・
+//*                                SMS の失敗で 500 にしない（#294）
 //**********************************************************************************
 
 /*
@@ -25,9 +27,11 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
+using System;
 using System.Threading.Tasks;
 
 using System.Web.Mvc;
@@ -89,9 +93,11 @@ namespace MultiPurposeAuthSite.Controllers
                     string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);
 
                     // メッセージをSMSで送信する。
-                    //   **同じ利用者に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
+                    //   **同じ電話番号に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
+                    //   **電話番号ごとに数える** — 打ち間違いを直した番号へは、すぐに送れる。
                     if (UserManager.SmsService != null
-                        && Sts.MailThrottle.TryAcquire(Sts.MailThrottle.PurposePhoneNumber, User.Identity.GetUserId()))
+                        && Sts.MailThrottle.TryAcquireForDestination(
+                            Sts.MailThrottle.PurposePhoneNumber, model.Number, User.Identity.GetUserId()))
                     {
                         IdentityMessage message = new IdentityMessage
                         {
@@ -99,7 +105,21 @@ namespace MultiPurposeAuthSite.Controllers
                             Body = GetContentOfLetter.Get(
                                 "AddPhoneNumber", CustomEncode.UTF_8, Resources.ManageController.CodeForAddPhoneNumber) + code
                         };
-                        await UserManager.SmsService.SendAsync(message);
+
+                        //   **送れなくても 500 にしない**（#294。メールと同じく記録して、間隔に数えない）。
+                        try
+                        {
+                            await UserManager.SmsService.SendAsync(message);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logging.MyOperationTrace(string.Format(
+                                "The {0} SMS to {1} could not be sent. ({2})",
+                                Sts.MailThrottle.PurposePhoneNumber, User.Identity.GetUserId(), ex.GetType().Name));
+                            Logging.MyDebugLogForEx(ex);
+
+                            Sts.MailThrottle.ReleaseForDestination(Sts.MailThrottle.PurposePhoneNumber, model.Number);
+                        }
                     }
 
                     // 電話番号の検証画面に進む
@@ -211,13 +231,22 @@ namespace MultiPurposeAuthSite.Controllers
         /// 電話番号の削除
         /// POST: /Manage/RemovePhoneNumber
         /// </summary>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemovePhoneNumber()
+        public async Task<ActionResult> RemovePhoneNumber(string password)
         {
             if (Config.CanEditPhone && Config.EnableEditingOfUserAttribute)
             {
+                // **パスワードを確かめる**（#294。2 要素認証の手段を減らす操作なので）。
+                EnumManageMessageId? error = await this.VerifyPasswordAsync(
+                    await UserManager.FindByIdAsync(User.Identity.GetUserId()), password);
+                if (error != null)
+                {
+                    return RedirectToAction("Index", new { Message = error });
+                }
+
                 // null クリア
                 IdentityResult result = await UserManager.SetPhoneNumberAsync(User.Identity.GetUserId(), "");
 
@@ -289,14 +318,23 @@ namespace MultiPurposeAuthSite.Controllers
         /// 2FAの無効化
         /// POST: /Manage/DisableTwoFactorAuthentication
         /// </summary>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> DisableTwoFactorAuthentication()
+        public async Task<ActionResult> DisableTwoFactorAuthentication(string password)
         {
             if (Config.CanEdit2FA
                 && Config.EnableEditingOfUserAttribute)
             {
+                // **パスワードを確かめる**（#294。以前はセッションだけで 2FA を外せた）。
+                EnumManageMessageId? error = await this.VerifyPasswordAsync(
+                    await UserManager.FindByIdAsync(User.Identity.GetUserId()), password);
+                if (error != null)
+                {
+                    return RedirectToAction("Index", new { Message = error });
+                }
+
                 // 2FAの無効化
                 await UserManager.SetTwoFactorEnabledAsync(User.Identity.GetUserId(), false);
 

@@ -36,6 +36,7 @@
 //*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
 //*  2026/10/29  玄人 幸道         partial に分割（Account / TwoFactor / ExternalLogin / Data / OAuth2Data / Helper。#294）
 //*  2026/10/29  玄人 幸道         ManageController.*.cs のレビュー指摘を反映（各ファイルの履歴を参照。#294）
+//*  2026/10/30  玄人 幸道         ManageController.*.cs の 2 回目のレビュー指摘を反映（各ファイルの履歴を参照。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -103,6 +104,10 @@ namespace MultiPurposeAuthSite.Controllers
             AddWebAuthnDataSuccess,
             /// <summary>RemoveWebAuthnDataSuccess</summary>
             RemoveWebAuthnDataSuccess,
+            /// <summary>PasswordIncorrect（パスワードの再確認に失敗。#294）</summary>
+            PasswordIncorrect,
+            /// <summary>PasswordNotSet（再確認するパスワードが無い。#294）</summary>
+            PasswordNotSet,
             /// <summary>Error</summary>
             Error
         }
@@ -307,6 +312,8 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemoveSaml2OAuth2DataSuccess ? Resources.ManageController.RemoveSaml2OAuth2DataSuccess
                 : message == EnumManageMessageId.AddWebAuthnDataSuccess ? Resources.ManageController.AddWebAuthnDataSuccess
                 : message == EnumManageMessageId.RemoveWebAuthnDataSuccess ? Resources.ManageController.RemoveWebAuthnDataSuccess
+                : message == EnumManageMessageId.PasswordIncorrect ? Resources.ManageController.PasswordIncorrect
+                : message == EnumManageMessageId.PasswordNotSet ? Resources.ManageController.PasswordNotSet
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
 

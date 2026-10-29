@@ -19,6 +19,8 @@
 //*  2026/10/29  玄人 幸道         外部ログインの結び付けを AccountController に揃えた（name / email が無い・
 //*                                メアドで照合・クレームの入れ替え・他人の結び付け・未登録の provider）、
 //*                                最後のサインインの手段を消させない（#294）
+//*  2026/10/30  玄人 幸道         外部ログインの解除でパスワードを確かめる・結び付けを始めた利用者と照合する・
+//*                                外部ログインの Cookie を捨てる（#294）
 //**********************************************************************************
 
 /*
@@ -37,12 +39,10 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
-using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Controllers
@@ -131,7 +131,12 @@ namespace MultiPurposeAuthSite.Controllers
                     message == EnumManageMessageId.Error ? Resources.ManageController.Error
                     : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
                     : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
+                    : message == EnumManageMessageId.PasswordIncorrect ? Resources.ManageController.PasswordIncorrect
+                    : message == EnumManageMessageId.PasswordNotSet ? Resources.ManageController.PasswordNotSet
                     : "";
+
+                // **解除にはパスワードが要る**（#294）。持っていれば、入力欄を出す。
+                ViewBag.HasPassword = await UserManager.HasPasswordAsync(user);
 
                 // 全ての外部ログイン情報
                 IEnumerable<AuthenticationScheme> loginProviders = await SignInManager.GetExternalAuthenticationSchemesAsync();
@@ -182,10 +187,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <param name="loginProvider">loginProvider</param>
         /// <param name="providerKey">providerKey</param>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey)
+        public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey, string password)
         {
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
@@ -206,6 +212,13 @@ namespace MultiPurposeAuthSite.Controllers
                         "{0}({1}) tried to remove the last way to sign in.", user.Id, user.UserName));
 
                     return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.Error });
+                }
+
+                // **パスワードを確かめる**（#294。以前はセッションだけで外せた）。
+                EnumManageMessageId? error = await this.VerifyPasswordAsync(user, password);
+                if (error != null)
+                {
+                    return RedirectToAction("ManageLogins", new { Message = error });
                 }
 
                 // ログインを削除
@@ -287,8 +300,10 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 // Request a redirect to the external login provider
+                //   **サインイン中の利用者の id を入れる**（#294）。戻りで照合し、**この利用者が始めた結び付けだけ**を受ける。
                 string redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Manage");
-                AuthenticationProperties properties = SignInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
+                AuthenticationProperties properties = SignInManager.ConfigureExternalAuthenticationProperties(
+                    provider, redirectUrl, user.Id);
                 return this.Challenge(properties, provider);
             }
             else
@@ -329,11 +344,17 @@ namespace MultiPurposeAuthSite.Controllers
                 //// ログイン プロバイダーが公開している認証済みユーザーに関する情報を受け取る。
                 //AuthenticateResult authenticateResult = await AuthenticationManager.AuthenticateAsync(DefaultAuthenticationTypes.ExternalCookie);
                 // 外部ログイン・プロバイダからユーザに関する情報を取得する。
-                ExternalLoginInfo externalLoginInfo = await SignInManager.GetExternalLoginInfoAsync();
+                //   **始めた利用者の id と照合する**（#294。`ExternalLogin` で入れた値）。
+                //   **合わなければ null**（ほかの経路・ほかの利用者が始めた外部ログインは受けない）。
+                ExternalLoginInfo externalLoginInfo = await SignInManager.GetExternalLoginInfoAsync(
+                    UserManager.GetUserId(User));
                 if (externalLoginInfo == null)
                 {
                     return RedirectToAction(nameof(Index));
                 }
+
+                // **外部ログインの Cookie は、ここで捨てる**（#294。読んだ後は要らない）。
+                await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
                 ApplicationUser user = null;
                 IdentityResult idResult = null;
@@ -419,7 +440,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // クレーム（emailClaim, nameClaim, etc.）の追加
                                 if (idResult.Succeeded)
                                 {
-                                    idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                                    idResult = await this.ReplaceClaimAsync(user, emailClaim);
                                     idResult = await this.ReplaceClaimAsync(user, nameClaim); // name は無いことがある
                                     // ・・・
                                     // ・・・
@@ -438,10 +459,9 @@ namespace MultiPurposeAuthSite.Controllers
                                         isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
                                         //rememberBrowser: true); // rememberBrowser は true 固定
 
-                                    IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                                    responseCookies.Set(Config.AuthTimeCookieName,
-                                        Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
-                            
+                                    // **外部ログインで認証した**ので、auth_time を書く。
+                                    this.WriteAuthTime();
+
                                     // リダイレクト
                                     return RedirectToAction("ManageLogins");
                                 }
