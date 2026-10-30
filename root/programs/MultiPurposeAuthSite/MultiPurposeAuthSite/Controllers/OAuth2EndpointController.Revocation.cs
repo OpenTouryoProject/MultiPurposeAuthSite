@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         クライアント認証を、token の有無より先に行う（認証していない要求に 400 を返していた。#294）
+//*  2026/10/30  玄人 幸道         認証を先に行うようにした所の、if の無いブロックを外した（動作は同じ。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -77,62 +78,60 @@ namespace MultiPurposeAuthSite.Controllers
                 //  **クライアント認証を先に行う**（#294）。**token の有無は、認証できた後で見る。**
                 //    **以前は token の有無を先に見ており、認証していない要求にも 400 を返していた**
                 //    （RFC 6749 §5.2 : 認証の失敗は 401）。
+                // クライアント証明書
+                X509Certificate2 x509 = Request.GetClientCertificate();
+
+                // Credentials (client_id, client_secret)
+
+                // client_secret_basic
+                if (!Token.CmnEndpoints.GetBasicCredentials(
+                        HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                        out string client_id, out string client_secret))
                 {
-                    // クライアント証明書
-                    X509Certificate2 x509 = Request.GetClientCertificate();
+                    // client_secret_post
+                    client_id = formData[OAuth2AndOIDCConst.client_id];
+                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
+                }
 
-                    // Credentials (client_id, client_secret)
+                // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
+                //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
+                //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
+                string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
+                    formData[OAuth2AndOIDCConst.client_assertion],
+                    formData[OAuth2AndOIDCConst.client_assertion_type],
+                    formData[OAuth2AndOIDCConst.assertion]);
 
-                    // client_secret_basic
-                    if (!Token.CmnEndpoints.GetBasicCredentials(
-                            HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                            out string client_id, out string client_secret))
+                if (Token.CmnEndpoints.ClientAuthentication(
+                    client_id, client_secret, clientAssertion,
+                    ref x509, out client_id, out Token.ClientModePolicy.Proof _))
+                {
+                    // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
+                    if (string.IsNullOrEmpty(token))
                     {
-                        // client_secret_post
-                        client_id = formData[OAuth2AndOIDCConst.client_id];
-                        client_secret = formData[OAuth2AndOIDCConst.client_secret];
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                        err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
+
+                        return this.OAuth2Error(err, Const.EndpointRevoke);
                     }
 
-                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
-                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
-                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
-                    string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
-                        formData[OAuth2AndOIDCConst.client_assertion],
-                        formData[OAuth2AndOIDCConst.client_assertion_type],
-                        formData[OAuth2AndOIDCConst.assertion]);
+                    // 失効（#200）
+                    // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
+                    // ・無効なトークンはエラーにしない（RFC 7009 2.2）
+                    // ・成功は空の JSON（HTTP 200）で返し、両アプリで揃える
+                    err = Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
 
-                    if (Token.CmnEndpoints.ClientAuthentication(
-                        client_id, client_secret, clientAssertion,
-                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
+                    if (err.Count == 0)
                     {
-                        // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
-                        if (string.IsNullOrEmpty(token))
-                        {
-                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                            err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
-
-                            return this.OAuth2Error(err, Const.EndpointRevoke);
-                        }
-
-                        // 失効（#200）
-                        // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
-                        // ・無効なトークンはエラーにしない（RFC 7009 2.2）
-                        // ・成功は空の JSON（HTTP 200）で返し、両アプリで揃える
-                        err = Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
-
-                        if (err.Count == 0)
-                        {
-                            return this.Ok(err); // 成功（RFC 7009 2.2 : 200）
-                        }
-
-                        // 他のクライアントのトークン（invalid_grant）は、下でエラーとして返す（#196）。
+                        return this.Ok(err); // 成功（RFC 7009 2.2 : 200）
                     }
-                    else
-                    {
-                        // クライアント認証エラー（Credential不正
-                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
-                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
-                    }
+
+                    // 他のクライアントのトークン（invalid_grant）は、下でエラーとして返す（#196）。
+                }
+                else
+                {
+                    // クライアント認証エラー（Credential不正
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
@@ -177,55 +176,53 @@ namespace MultiPurposeAuthSite.Controllers
                 //  **クライアント認証を先に行う**（#294）。**token の有無は、認証できた後で見る。**
                 //    **以前は token の有無を先に見ており、認証していない要求にも 400 を返していた**
                 //    （RFC 6749 §5.2 : 認証の失敗は 401）。
+                // クライアント証明書
+                X509Certificate2 x509 = Request.GetClientCertificate();
+
+                // Credentials (client_id, client_secret)
+
+                // client_secret_basic
+                if (!Token.CmnEndpoints.GetBasicCredentials(
+                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                    out string client_id, out string client_secret))
                 {
-                    // クライアント証明書
-                    X509Certificate2 x509 = Request.GetClientCertificate();
+                    // client_secret_post
+                    client_id = formData[OAuth2AndOIDCConst.client_id];
+                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
+                }
 
-                    // Credentials (client_id, client_secret)
+                // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
+                //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
+                //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
+                string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
+                    formData[OAuth2AndOIDCConst.client_assertion],
+                    formData[OAuth2AndOIDCConst.client_assertion_type],
+                    formData[OAuth2AndOIDCConst.assertion]);
 
-                    // client_secret_basic
-                    if (!Token.CmnEndpoints.GetBasicCredentials(
-                        HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                        out string client_id, out string client_secret))
+                if (Token.CmnEndpoints.ClientAuthentication(
+                    client_id, client_secret, clientAssertion,
+                    ref x509, out client_id, out Token.ClientModePolicy.Proof _))
+                {
+                    // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
+                    if (string.IsNullOrEmpty(token))
                     {
-                        // client_secret_post
-                        client_id = formData[OAuth2AndOIDCConst.client_id];
-                        client_secret = formData[OAuth2AndOIDCConst.client_secret];
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                        err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
+
+                        return this.OAuth2Error(err, Const.EndpointIntrospect);
                     }
 
-                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
-                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
-                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
-                    string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
-                        formData[OAuth2AndOIDCConst.client_assertion],
-                        formData[OAuth2AndOIDCConst.client_assertion_type],
-                        formData[OAuth2AndOIDCConst.assertion]);
-
-                    if (Token.CmnEndpoints.ClientAuthentication(
-                        client_id, client_secret, clientAssertion,
-                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
-                    {
-                        // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
-                        if (string.IsNullOrEmpty(token))
-                        {
-                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                            err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
-
-                            return this.OAuth2Error(err, Const.EndpointIntrospect);
-                        }
-
-                        // 問い合わせ（#200）
-                        // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）
-                        // ・無効なトークン（存在しない・失効済み・期限切れ）は active=false で答える（RFC 7662 2.2）
-                        // ・active=false もエラーではなく、問い合わせへの正常な答えなので 200（RFC 7662 2.2）（#196）
-                        return this.Ok(Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint));
-                    }
-                    else
-                    {
-                        // クライアント認証エラー（Credential不正
-                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
-                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
-                    }
+                    // 問い合わせ（#200）
+                    // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）
+                    // ・無効なトークン（存在しない・失効済み・期限切れ）は active=false で答える（RFC 7662 2.2）
+                    // ・active=false もエラーではなく、問い合わせへの正常な答えなので 200（RFC 7662 2.2）（#196）
+                    return this.Ok(Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint));
+                }
+                else
+                {
+                    // クライアント認証エラー（Credential不正
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else

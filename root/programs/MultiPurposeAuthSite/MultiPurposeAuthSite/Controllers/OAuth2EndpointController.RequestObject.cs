@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         /ros の summary を POST に直し、失敗を JSON のエラーで返す（#294）
+//*  2026/10/30  玄人 幸道         /par で同じ名前のパラメタが 2 回来たら invalid_request で断る（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -103,6 +104,21 @@ namespace MultiPurposeAuthSite.Controllers
             X509Certificate2 x509 = Request.GetClientCertificate();
 
             NameValueCollection parameters = formData.ReadAsNameValueCollection();
+
+            //  **同じ名前のパラメタが 2 回来たら断る**（RFC 6749 §3.1 / RFC 9126 §2.1。#294）。
+            //    **以前はカンマでつないだ 1 つの値として受けていた。**
+            foreach (string key in parameters.AllKeys)
+            {
+                string[] values = parameters.GetValues(key);
+
+                if (values != null && 1 < values.Length)
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    err.Add(OAuth2AndOIDCConst.error_description, "A parameter is included more than once.");
+
+                    return this.OAuth2Error(err, Const.EndpointPar);
+                }
+            }
 
             if (Token.CmnEndpoints.PushedAuthorizationRequest(
                 client_id, client_secret, assertion, x509, parameters,

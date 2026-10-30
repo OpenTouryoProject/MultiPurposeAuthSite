@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         /ros の summary を POST に直し、失敗を JSON のエラーで返す（#294）
+//*  2026/10/30  玄人 幸道         /par で同じ名前のパラメタが 2 回来たら invalid_request で断る（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -81,6 +82,19 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
 
                 return this.OAuth2Error(err, Const.EndpointPar);
+            }
+
+            //  **同じ名前のパラメタが 2 回来たら断る**（RFC 6749 §3.1 / RFC 9126 §2.1。#294）。
+            //    **以前はカンマでつないだ 1 つの値として受けていた。**
+            foreach (string key in formData.Keys)
+            {
+                if (1 < formData[key].Count)
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    err.Add(OAuth2AndOIDCConst.error_description, "A parameter is included more than once.");
+
+                    return this.OAuth2Error(err, Const.EndpointPar);
+                }
             }
 
             // client_secret_basic

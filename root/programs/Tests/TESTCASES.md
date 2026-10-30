@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=d5d03d0d-2a18-4357-9535-75dca009b54f&code=bogus
+1. GET /Account/EmailConfirmation?userId=e633f01a-c619-4df1-be9e-80d8f792e9af&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=d5d03d0d-2a18-4357-9535-75dca009b54f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=d5d03d0d-2a18-4357-9535-75dca009b54f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=e633f01a-c619-4df1-be9e-80d8f792e9af&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=e633f01a-c619-4df1-be9e-80d8f792e9af&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7778,6 +7778,24 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - /introspect : 401
 - /revoke : 400 / invalid_request
 - /introspect : 400 / invalid_request
+
+## RT-294.79 /par : 同じ名前のパラメタが 2 回来たら invalid_request で断る（1 回なら受ける）
+
+| | |
+|---|---|
+| 観点 | **以前はカンマでつないだ 1 つの値として受けていた**（例 : scope を 2 回送ると "openid,email"）。**認可要求のパラメタは、1 回までしか含めてはならない。** |
+| 根拠 | RFC 6749 §3.1 / RFC 9126 §2.1 / #294 |
+| テスト | `RT29479_parは同じ名前のパラメタを断る` |
+
+**手順**
+
+1. scope を 2 回送る
+1. 対照 : 1 回なら受ける
+
+**検証（合否を判定する）**
+
+- 400 / invalid_request
+- 201（request_uri が返る）
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

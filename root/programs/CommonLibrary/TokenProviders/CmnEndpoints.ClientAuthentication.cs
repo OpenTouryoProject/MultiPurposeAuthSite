@@ -32,6 +32,7 @@
 //*  2026/10/29  玄人 幸道         Basic の照合で失敗を数えない。JWT Bearer の alg の一覧を足し、using を整理した（#294）
 //*  2026/10/29  玄人 幸道         none（パブリック）を受け、PKCE だけで引き換えられる登録を絞る。assertion の aud に issuer を受け、秘密を定数時間で比べる（#294）
 //*  2026/10/30  玄人 幸道         デバイス認可のクライアント認証で client_assertion（private_key_jwt）も受ける（#294）
+//*  2026/10/30  玄人 幸道         使われなくなった DeviceAuthZClientAuthentication（引数 3 つの版）を消した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -258,24 +259,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.DeviceAuthZ);
         }
 
-        /// <summary>Device AuthZのクライアント認証</summary>
-        /// <param name="client_id">string</param>
-        /// <param name="client_secret">string</param>
-        /// <param name="x509">X509Certificate2</param>
-        /// <returns>bool</returns>
-        /// <remarks>
-        /// RFC 8628
-        /// - 3.1 : デバイス認可要求で、クライアントを識別する。
-        /// - 3.4 : トークン要求で、コンフィデンシャル クライアントは認証する。
-        /// パブリック クライアント（client_secret未登録）は、client_idの確認だけを行う。
-        /// </remarks>
-        public static bool DeviceAuthZClientAuthentication(
-            string client_id, string client_secret, ref X509Certificate2 x509)
-        {
-            return CmnEndpoints.DeviceAuthZClientAuthentication(
-                client_id, client_secret, "", ref x509, out string _);
-        }
-
         /// <summary>Device AuthZのクライアント認証（`client_assertion` も受ける。#294）</summary>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
@@ -284,6 +267,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="authnedClientId">認証できたクライアントの client_id</param>
         /// <returns>bool</returns>
         /// <remarks>
+        /// RFC 8628
+        /// - 3.1 : デバイス認可要求で、クライアントを識別する。
+        /// - 3.4 : トークン要求で、コンフィデンシャル クライアントは認証する。
+        /// パブリック クライアント（client_secret未登録）は、client_idの確認だけを行う。
+        ///
         /// **`client_assertion` が在れば、他の口と同じく `private_key_jwt` で認証する**（#294）。
         /// **client_id はアサーションの `iss` から得る**（RFC 7523 §3）。
         /// **フォームの client_id も送られていれば、食い違いを断る。**

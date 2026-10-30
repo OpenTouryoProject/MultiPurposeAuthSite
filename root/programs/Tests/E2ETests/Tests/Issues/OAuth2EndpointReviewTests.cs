@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：OAuth2EndpointReviewTests
-//* クラス日本語名  ：RT-294.73 〜 .78 OAuth2EndpointController.*.cs のレビューで見つけた不具合
+//* クラス日本語名  ：RT-294.73 〜 .79 OAuth2EndpointController.*.cs のレビューで見つけた不具合
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,11 +29,13 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（#294）
+//*  2026/10/30  玄人 幸道         RT-294.79（/par は同じ名前のパラメタを断る）を足した・既定の利用者の行を書くので CIBA と同じコレクションに入れた（#294）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -46,7 +48,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-294.73 〜 .78 `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（#294）。
+    /// RT-294.73 〜 .79 `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（#294）。
     /// </summary>
     /// <remarks>
     /// | | 確かめること |
@@ -57,7 +59,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | `RT-294.76` | **CIBA の `requested_expiry` を検証し、上限で頭を打つ。応答の数値も見る** |
     /// | `RT-294.77` | **デバイス認可で `private_key_jwt` が通る** |
     /// | `RT-294.78` | **`/revoke`・`/introspect` は、クライアント認証を `token` の有無より先に行う** |
+    /// | `RT-294.79` | **`/par` は、同じ名前のパラメタが 2 回来たら断る** |
+    ///
+    /// **既定の利用者の行（端末の登録）を書く**（`RT-294.73` / `.76`）ので、CIBA のテストと同じコレクションに入れる
+    /// （並行すると、プッシュの宛先を上書きし合う）。
     /// </remarks>
+    [Collection(CibaTests.DeviceCollection)]
     public class OAuth2EndpointReviewTests : TargetTestBase
     {
         /// <summary>コンストラクタ</summary>
@@ -406,6 +413,66 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     (int)revokeNoToken.StatusCode + " / " + revokeNoToken.Error);
                 r.VerifyEqual("/introspect : 400 / invalid_request", "400 / invalid_request",
                     (int)introspectNoToken.StatusCode + " / " + introspectNoToken.Error);
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.79
+
+        /// <summary>RT-294.79 /par は、同じ名前のパラメタが 2 回来たら断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29479_parは同じ名前のパラメタを断る(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-294.79",
+                    "/par : 同じ名前のパラメタが 2 回来たら invalid_request で断る（1 回なら受ける）",
+                    "**以前はカンマでつないだ 1 つの値として受けていた**"
+                    + "（例 : scope を 2 回送ると \"openid,email\"）。"
+                    + "**認可要求のパラメタは、1 回までしか含めてはならない。**",
+                    "RFC 6749 §3.1 / RFC 9126 §2.1 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient);
+
+                r.Step("(1) scope を 2 回送る");
+
+                HttpResponseMessage dup = await client.PostFormAsync("/par", new List<KeyValuePair<string, string>>()
+                {
+                    new KeyValuePair<string, string>("response_type", "code"),
+                    new KeyValuePair<string, string>("client_id", reg.ClientId),
+                    new KeyValuePair<string, string>("client_secret", reg.ClientSecret),
+                    new KeyValuePair<string, string>("redirect_uri", reg.RedirectUri),
+                    new KeyValuePair<string, string>("scope", "openid"),
+                    new KeyValuePair<string, string>("scope", "email"),
+                    new KeyValuePair<string, string>("state", "state-rt29479")
+                });
+
+                JsonResponse dupRes = await IdPClient.ToJsonResponseAsync(dup);
+
+                r.VerifyEqual("400 / invalid_request", "400 / invalid_request",
+                    (int)dupRes.StatusCode + " / " + dupRes.Error);
+
+                r.Step("(2) 対照 : 1 回なら受ける");
+
+                JsonResponse once = await client.PostJsonWithBasicAuthAsync("/par",
+                    new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", reg.ClientId },
+                        { "redirect_uri", reg.RedirectUri },
+                        { "scope", "openid email" },
+                        { "state", "state-rt29479" }
+                    }, reg.ClientId, reg.ClientSecret);
+
+                r.VerifyEqual("201（request_uri が返る）", "201", ((int)once.StatusCode).ToString());
 
                 r.Done();
             }
