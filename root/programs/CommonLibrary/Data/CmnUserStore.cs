@@ -43,6 +43,7 @@
 //*  2026/10/29  玄人 幸道         利用者の削除で、同意（mem）と、持っていたクライアントへの全利用者の同意も消す（#294）
 //*  2026/10/30  玄人 幸道         partial に分割（Find / Roles / UserAttributes / LoginAttributes / Logins / Claims / Tokens。#294）
 //*  2026/10/30  玄人 幸道         利用者の削除で、同意の取り消しを削除の後へ・メアド変更の確認待ちも消す・子の表を親より先に消す（#294）
+//*  2026/10/30  玄人 幸道         消した UpdateRoles などを指すコメントを直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -338,9 +339,8 @@ namespace MultiPurposeAuthSite.Data
                             // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
                             //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
                             //    その際、二重実行により二重登録（制約により例外になる）が起き得るので、以下は、ココに実装しないことにした。
-                            // await this.UpdateRoles(user, tgtUser);    
-                            // await this.UpdateLogins(user, tgtUser);
-                            // await this.UpdateClaims(user, tgtUser);
+                            //    （Roles / Logins / Claims は、それぞれの口（AddToRole / AddLogin / AddClaim など）で更新する。
+                            //      以前ここに在った UpdateRoles などの呼び出しは、#294 で UpdateRoles ごと消した）
                         }
 
                         break;

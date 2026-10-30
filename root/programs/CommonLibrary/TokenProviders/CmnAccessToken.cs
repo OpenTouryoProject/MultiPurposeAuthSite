@@ -45,6 +45,7 @@
 //*  2026/10/21  玄人 幸道         sid クレームを載せ替えるようにした（#310 の段階 1）
 //*  2026/10/21  玄人 幸道         cnf に jkt（DPoP）も書けるようにした（#311 の段階 1）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/30  玄人 幸道         預ける refresh_token の payload に、利用者の SecurityStamp のハッシュを書く口を追加（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -851,6 +852,103 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // **読めなければ、縛られていないものとして扱う**（従来の挙動に倒す）。
                 return "";
+            }
+        }
+
+        /// <summary>預ける refresh_token の payload に書く、利用者の SecurityStamp のハッシュの名前（#294）</summary>
+        /// <remarks>
+        /// **access_token には載せない**（`TakeSecurityStamp` で外してから `ProtectFromPayload` に渡す）。
+        /// </remarks>
+        private const string SecurityStampHashName = "urn:mpas:refresh_token:security_stamp";
+
+        /// <summary>預ける payload に、利用者の SecurityStamp のハッシュを書く（#294）</summary>
+        /// <param name="payload">access_token の payload（JSON の文字列）</param>
+        /// <param name="securityStamp">利用者の SecurityStamp（**空なら書かない**）</param>
+        /// <returns>書き換えた payload（読めなければ、受け取ったものをそのまま返す）</returns>
+        /// <remarks>
+        /// **パスワードの変更などで SecurityStamp が変わったら、refresh_token を使えなくする**ためである。
+        /// **値そのものは書かない**（ハッシュにする。SecurityStamp は Cookie の検証にも使う値である）。
+        /// </remarks>
+        public static string BindSecurityStamp(string payload, string securityStamp)
+        {
+            if (string.IsNullOrEmpty(payload))
+            {
+                return payload;
+            }
+
+            try
+            {
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
+
+                if (jobj == null)
+                {
+                    return payload;
+                }
+
+                if (string.IsNullOrEmpty(securityStamp))
+                {
+                    jobj.Remove(CmnAccessToken.SecurityStampHashName);
+                }
+                else
+                {
+                    jobj[CmnAccessToken.SecurityStampHashName] = CmnAccessToken.HashSecurityStamp(securityStamp);
+                }
+
+                return JsonConvert.SerializeObject(jobj);
+            }
+            catch (Exception)
+            {
+                // **読めない payload は、そのまま返す**（この関数で要求を止めない）。
+                return payload;
+            }
+        }
+
+        /// <summary>預かった payload から、利用者の SecurityStamp のハッシュを取り出して外す（#294）</summary>
+        /// <param name="payload">access_token の payload（JSON の文字列）</param>
+        /// <param name="securityStampHash">書かれていたハッシュ（無ければ空）</param>
+        /// <returns>ハッシュを外した payload（読めなければ、受け取ったものをそのまま返す）</returns>
+        /// <remarks>
+        /// **外してから `ProtectFromPayload` に渡す**（payload の項目は、そのまま access_token に載るため）。
+        /// </remarks>
+        public static string TakeSecurityStamp(string payload, out string securityStampHash)
+        {
+            securityStampHash = "";
+
+            if (string.IsNullOrEmpty(payload))
+            {
+                return payload;
+            }
+
+            try
+            {
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
+
+                if (jobj == null || jobj[CmnAccessToken.SecurityStampHashName] == null)
+                {
+                    return payload;
+                }
+
+                securityStampHash = (string)jobj[CmnAccessToken.SecurityStampHashName] ?? "";
+                jobj.Remove(CmnAccessToken.SecurityStampHashName);
+
+                return JsonConvert.SerializeObject(jobj);
+            }
+            catch (Exception)
+            {
+                // **読めなければ、書かれていないものとして扱う**（従来の挙動に倒す）。
+                return payload;
+            }
+        }
+
+        /// <summary>SecurityStamp の SHA-256 を BASE64URL した値（#294）</summary>
+        /// <param name="securityStamp">SecurityStamp</param>
+        /// <returns>BASE64URL の文字列</returns>
+        public static string HashSecurityStamp(string securityStamp)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                return CustomEncode.ToBase64UrlString(
+                    sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(securityStamp ?? "")));
             }
         }
 

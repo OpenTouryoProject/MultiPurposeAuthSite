@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=67004e0f-d42d-4c3a-b08c-85b07760201e&code=bogus
+1. GET /Account/EmailConfirmation?userId=dc3a7341-a51f-4156-bc9c-2ce1b7886dc1&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=67004e0f-d42d-4c3a-b08c-85b07760201e&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=67004e0f-d42d-4c3a-b08c-85b07760201e&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=dc3a7341-a51f-4156-bc9c-2ce1b7886dc1&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=dc3a7341-a51f-4156-bc9c-2ce1b7886dc1&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7614,6 +7614,56 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **一覧が開かない**（SystemAdmin が外れている）
 - メニューに導線が出ない
 - 削除できた（SystemAdmin を持つかもしれない利用者を残さない）
+
+## RT-294.71 利用者を消したら、その人の refresh_token では access_token を取れない
+
+| | |
+|---|---|
+| 観点 | **利用者の削除（管理画面・GDPR の削除）は、その人への発行を止めることでもある。****以前は `RefreshTokenDictionary` に利用者の列が無く、更新は利用者を確かめなかった**ので、**消された利用者の access_token を、RP が取り続けられた。** |
+| 根拠 | #294（CmnEndpoints.GrantRefreshTokenCredentials。ANALYSIS-IdP.md の C-54） |
+| テスト | `RT29471_消された利用者のrefresh_tokenは使えない` |
+
+**手順**
+
+1. 使い捨ての利用者を作り、その人で refresh_token を得る
+1. 管理者が、その利用者を消す
+1. 消された利用者の refresh_token で更新する
+
+**検証（合否を判定する）**
+
+- 消す前は、更新できる
+- invalid_grant で断る
+- **access_token を返さない**
+
+**補足**
+
+- **発行済みの access_token は、期限まで残る**（短命なので、ここでは失効させない）。
+
+## RT-294.72 パスワードを変えたら、それより前に発行した refresh_token は使えない（照会も active=false）
+
+| | |
+|---|---|
+| 観点 | **パスワードを変えるのは、漏れたと思ったときである。****そのとき、漏れた先で取られた refresh_token も止まらなければならない。****SecurityStamp のハッシュを refresh_token に預け、更新と照会で照合する**（パスワードの変更・リセットなど、Identity が SecurityStamp を変える操作で止まる）。 |
+| 根拠 | #294（CmnEndpoints.CheckUserOfRefreshToken。ANALYSIS-IdP.md の C-54） |
+| テスト | `RT29472_パスワードを変えたら前のrefresh_tokenは使えない` |
+
+**手順**
+
+1. 使い捨ての利用者を作り、その人で refresh_token を得る
+1. 本人がパスワードを変える
+1. 変える前の refresh_token を照会し、更新する
+
+**検証（合否を判定する）**
+
+- 変える前は、照会が active=true
+- **照会に、預けた SecurityStamp のハッシュが出ない**
+- 照会が active=false
+- 更新は invalid_grant で断る
+- **access_token を返さない**
+
+**補足**
+
+- **値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`TESTING.md` 9 節）。
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

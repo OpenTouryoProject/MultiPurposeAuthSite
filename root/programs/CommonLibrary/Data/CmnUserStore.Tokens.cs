@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         回復コードで空のコードを断る・トークンを渡された user の一覧で扱う（読み直さない・重ねない）・INSERT / UPDATE を Execute で（#294）
+//*  2026/10/30  玄人 幸道         トークンを、DB に入れた後で一覧に足す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -106,15 +107,6 @@ namespace MultiPurposeAuthSite.Data
 
             try
             {
-                //  **渡された user の一覧に足す**（#294）。**mem では、これが保存そのもの**（共有の実体）。
-                //    以前は `FindById` で読み直していて、**DB では別の実体に足していた**（渡された user には見えなかった）。
-                if (user.TotpTokens == null)
-                {
-                    user.TotpTokens = new List<IdentityUserToken<string>>();
-                }
-
-                user.TotpTokens.Add(token);
-
                 switch (Config.UserStoreType)
                 {
                     //case EnumUserStoreType.Memory:
@@ -161,6 +153,16 @@ namespace MultiPurposeAuthSite.Data
 
                         break;
                 }
+
+                //  **渡された user の一覧に足す**（#294）。**mem では、これが保存そのもの**（共有の実体）。
+                //    以前は `FindById` で読み直していて、**DB では別の実体に足していた**（渡された user には見えなかった）。
+                //    **DB に入れた後で足す**（入れられなかったときに、保存されていないトークンを見せない）。
+                if (user.TotpTokens == null)
+                {
+                    user.TotpTokens = new List<IdentityUserToken<string>>();
+                }
+
+                user.TotpTokens.Add(token);
             }
             catch (Exception ex)
             {
@@ -625,6 +627,8 @@ namespace MultiPurposeAuthSite.Data
                 return false;
             }
 
+            //  **読んで書き戻すので、同時に送ると、同じコードを 2 回使える。**
+            //    **楽観排他（#316）で解く**（`Update` の後勝ちと同じ根）。
             string[] splitCodes = mergedCodes.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             if (splitCodes.Contains(code))
             {

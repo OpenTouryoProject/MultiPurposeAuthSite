@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         STS 専用モードでの FindByEmail の扱いを記した（#294）
+//*  2026/10/30  玄人 幸道         net48 の mem で、メアドを大文字小文字を区別せずに引く（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -152,7 +153,9 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
 #if NETFX
-                        user = CmnStore._users.FirstOrDefault(x => x.Email == email);
+                        //  **大文字小文字を区別しない**（#294。SQL Server の既定の照合順序に揃える）。
+                        user = CmnStore._users.FirstOrDefault(
+                            x => string.Equals(x.Email, email, StringComparison.OrdinalIgnoreCase));
 #else
                         user = CmnStore._users.FirstOrDefault(x => x.NormalizedEmail == email);
 #endif

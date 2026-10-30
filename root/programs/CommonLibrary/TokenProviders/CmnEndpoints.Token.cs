@@ -32,6 +32,7 @@
 //*  2026/10/29  玄人 幸道         Device の refresh_token を返し、異常系・CIBA の client_assertion・refresh_token の照合を直した（#294）
 //*  2026/10/29  玄人 幸道         PKCE と private_key_jwt / mTLS を併用できるようにし、PKCE だけの引き換えを登録で絞る。client_credentials / JWT Bearer の sub をクライアントにする。Device の登録種別・ROPC の時間差を直した（#294）
 //*  2026/10/29  玄人 幸道         code_verifier の不一致を invalid_grant で返す（RFC 7636 §4.6。#294）
+//*  2026/10/30  玄人 幸道         消された利用者・SecurityStamp が変わった利用者の refresh_token を断る（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -305,8 +306,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // **access_token を縛ったなら、refresh_token も同じ鍵に縛る**
                         //   （RFC 9449 §5。#311 の段階 4）。
                         //   **access_token だけを縛っても、更新で縛りの無いものに乗り換えられる。**
+                        // **利用者の SecurityStamp も書く**（#294。更新のときに照合する）。
                         refresh_token = RefreshTokenProvider.Create(
-                            CmnAccessToken.BindJkt(tokenPayload, jkt));
+                            CmnEndpoints.BindUserOfRefreshToken(client_id, sub,
+                                CmnAccessToken.BindJkt(tokenPayload, jkt)));
                     }
 
                     // オペレーション・トレース・ログ出力
@@ -448,6 +451,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //   使用済みが再び提示されたら、Receive の中で一族ごと失効させ、空を返す。
                     string tokenPayload = RefreshTokenProvider.Receive(refresh_token, out string familyId);
 
+                    //  **利用者が消された・SecurityStamp が変わった（パスワードの変更など）なら、断る**（#294）。
+                    //    **以前は確かめず、預けた payload から作り直していた**ので、
+                    //    **利用者を消しても、パスワードを変えても、取り続けられた。**
+                    //    **消費（`Receive`）の後で断る** — **新しいものを出さないので、一族はここで終わる。**
+                    if (!string.IsNullOrEmpty(tokenPayload)
+                        && !CmnEndpoints.CheckUserOfRefreshToken(client_id, ref tokenPayload))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "The refresh_token is no longer valid for the user.");
+                        return false;
+                    }
+
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
                         // access_token
@@ -478,7 +493,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **引き継がないと、1 回更新するだけで縛りが外れる。**
                         //   （`EnableRefreshToken` は、この関数の入口で見ている）
                         string new_refresh_token = RefreshTokenProvider.Create(
-                            CmnAccessToken.BindJkt(tokenPayload, jkt), familyId);
+                            CmnEndpoints.BindUserOfRefreshToken(client_id, sub,
+                                CmnAccessToken.BindJkt(tokenPayload, jkt)), familyId);
 
                         // オペレーション・トレース・ログ出力
                         string name = Helper.GetInstance().GetClientName(client_id);
@@ -1205,8 +1221,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **デバイスの経路に `dpop_jkt` は無い**（認可要求がブラウザを通らない）が、
                         //   **`/token` で証明を受けていれば、access_token は縛られている** —
                         //   **refresh_token だけ縛られないのは、穴になる。**
+                        // **利用者の SecurityStamp も書く**（#294。更新のときに照合する）。
                         refresh_token = RefreshTokenProvider.Create(
-                            CmnAccessToken.BindJkt(tokenPayload, jkt));
+                            CmnEndpoints.BindUserOfRefreshToken(client_id, sub,
+                                CmnAccessToken.BindJkt(tokenPayload, jkt)));
                     }
 
                     // オペレーション・トレース・ログ出力

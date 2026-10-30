@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         expires_in を実際の期間で返し、登録の鍵を安全に読む。using を整理した（#294）
+//*  2026/10/30  玄人 幸道         refresh_token の利用者が居るか・SecurityStamp が変わっていないかを確かめる口を追加（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -37,6 +38,8 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 #endif
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
 
@@ -345,6 +348,79 @@ namespace MultiPurposeAuthSite.TokenProviders
             return CmnEndpoints.CheckDPoPJkt(
                 CmnAccessToken.JktOfPayload(RefreshTokenProvider.Refer(refresh_token)),
                 jkt, "refresh_token", err);
+        }
+
+        /// <summary>預ける refresh_token の payload に、利用者の SecurityStamp を書く（#294）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="sub">payload の sub</param>
+        /// <param name="payload">預ける payload</param>
+        /// <returns>書き換えた payload</returns>
+        /// <remarks>
+        /// **更新のときに `CheckUserOfRefreshToken` が照合する。**
+        /// **利用者を引けなければ書かない**（書いていなければ、照合は利用者が居るかだけになる）。
+        /// **STS 専用モードでは書かない**（`FindById` が毎回作り直す試験用の利用者で、SecurityStamp が定まらない）。
+        /// </remarks>
+        private static string BindUserOfRefreshToken(string client_id, string sub, string payload)
+        {
+            if (OnlySts.STSOnly_P)
+            {
+                return payload;
+            }
+
+            ApplicationUser user = PPIDExtension.GetUserFromSub(client_id, sub);
+
+            return CmnAccessToken.BindSecurityStamp(payload, user?.SecurityStamp);
+        }
+
+        /// <summary>預かった refresh_token の利用者が居て、SecurityStamp が変わっていないか（#294）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="payload">預かった payload（**SecurityStamp のハッシュを外して返す**）</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **以前は、利用者を消しても、パスワードを変えても、refresh_token で access_token を取り続けられた**
+        /// （`RefreshTokenDictionary` には利用者の列が無く、更新は預けた payload から作り直すだけだった）。
+        ///
+        /// | 断る場合 | |
+        /// |---|---|
+        /// | **利用者が居ない** | **消された**（sub の対応表は、利用者と一緒に消える） |
+        /// | **SecurityStamp が変わった** | **パスワードの変更・リセット**など（Identity が更新する操作） |
+        ///
+        /// **ハッシュが書かれていない refresh_token**（この確認を入れる前に発行したもの）は、
+        /// **利用者が居るかだけを見る**（次の更新で、ハッシュの書かれたものに入れ替わる）。
+        /// **STS 専用モードでは見ない**（`BindUserOfRefreshToken` と同じ理由）。
+        /// </remarks>
+        private static bool CheckUserOfRefreshToken(string client_id, ref string payload)
+        {
+            payload = CmnAccessToken.TakeSecurityStamp(payload, out string securityStampHash);
+
+            if (OnlySts.STSOnly_P || string.IsNullOrEmpty(payload))
+            {
+                return true;
+            }
+
+            string sub = "";
+
+            try
+            {
+                JObject jobj = (JObject)JsonConvert.DeserializeObject(payload);
+                sub = (jobj == null) ? "" : ((string)jobj[OAuth2AndOIDCConst.sub] ?? "");
+            }
+            catch (Exception)
+            {
+                sub = "";
+            }
+
+            ApplicationUser user = string.IsNullOrEmpty(sub)
+                ? null : PPIDExtension.GetUserFromSub(client_id, sub);
+
+            if (user == null)
+            {
+                return false;
+            }
+
+            return string.IsNullOrEmpty(securityStampHash)
+                || string.Equals(securityStampHash,
+                    CmnAccessToken.HashSecurityStamp(user.SecurityStamp), StringComparison.Ordinal);
         }
 
         /// <summary>縛られているなら、同じ鍵の証明が在るか（#311 の段階 4）</summary>

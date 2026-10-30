@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         照会の cnf に jkt を入れる。using を整理した（#294）
+//*  2026/10/30  玄人 幸道         照会で、消された利用者・SecurityStamp が変わった利用者の refresh_token を active=false にする（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -152,6 +153,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string tokenPayload = RefreshTokenProvider.Refer(token);
 
                     if (string.IsNullOrEmpty(tokenPayload))
+                    {
+                        continue;
+                    }
+
+                    //  **更新で断られるものは、active=false にする**（#294。`GrantRefreshTokenCredentials` と同じ確認）。
+                    //    **SecurityStamp のハッシュも、ここで外れる**（メタデータに出さない）。
+                    if (!CmnEndpoints.CheckUserOfRefreshToken(client_id, ref tokenPayload))
                     {
                         continue;
                     }

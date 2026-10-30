@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         net10.0 の mem でロールを外せなかった（正規化名で突き合わせる）・GetRoles の失敗で null を返さない・使われていない UpdateRoles を削除（#294）
+//*  2026/10/30  玄人 幸道         DB でも、渡された user のロールの一覧を揃える（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -97,6 +98,23 @@ namespace MultiPurposeAuthSite.Data
         #region ユーザ属性
 
         #region IUserRoleStore
+
+        /// <summary>ロールの名前が、渡された名前と同じか</summary>
+        /// <param name="role">ApplicationRole</param>
+        /// <param name="roleName">ストアに渡された名前（net10.0 は正規化した名前）</param>
+        /// <returns>同じなら true</returns>
+        /// <remarks>
+        /// **DB から読んだロールは `Id` と `Name` しか持たない**（`CmnStore.SelectChildTablesOfUser`）ので、
+        /// net10.0 では `Name` を正規化して比べる。
+        /// </remarks>
+        private static bool IsSameRoleName(ApplicationRole role, string roleName)
+        {
+#if NETCORE
+            return (role.Name ?? "").ToUpperInvariant() == roleName;
+#else
+            return role.Name == roleName;
+#endif
+        }
 
         /// <summary>ロールにユーザを追加</summary>
         /// <param name="user">ApplicationUser</param>
@@ -192,6 +210,19 @@ namespace MultiPurposeAuthSite.Data
                         }
 
                         break;
+                }
+
+                //  **DB のときも、渡された user の一覧に足す**（#294。同じ要求の中で見えるように）。
+                //    **mem は、一覧ではなく `_userRoleMap` が保存そのもの**なので、触らない。
+                if (Config.UserStoreType != EnumUserStoreType.Memory && user.Roles != null
+                    && !user.Roles.Any(x => CmnUserStore.IsSameRoleName(x, roleName)))
+                {
+                    ApplicationRole added = CmnRoleStore.FindByName(roleName);
+
+                    if (added != null)
+                    {
+                        user.Roles.Add(added);
+                    }
                 }
             }
             catch (Exception ex)
@@ -438,6 +469,19 @@ namespace MultiPurposeAuthSite.Data
                         }
 
                         break;
+                }
+
+                //  **DB のときも、渡された user の一覧から消す**（#294。同じ要求の中で見えるように）。
+                //    **mem は、一覧ではなく `_userRoleMap` が保存そのもの**なので、触らない。
+                if (Config.UserStoreType != EnumUserStoreType.Memory && user.Roles != null)
+                {
+                    for (int i = user.Roles.Count - 1; i >= 0; i--)
+                    {
+                        if (CmnUserStore.IsSameRoleName(user.Roles[i], roleName))
+                        {
+                            user.Roles.RemoveAt(i);
+                        }
+                    }
                 }
             }
             catch (Exception ex)

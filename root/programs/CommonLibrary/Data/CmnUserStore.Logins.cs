@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         外部ログインを大文字小文字まで比べる（SQL Server の照合順序で、違う sub が一致していた）・DB でも渡された user の一覧を揃える・mem の削除で隣り合う組を飛ばさない（#294）
+//*  2026/10/30  玄人 幸道         SQL Server で、外部ログインを外すときも大文字小文字まで比べる（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -343,8 +344,14 @@ namespace MultiPurposeAuthSite.Data
                             {
                                 case EnumUserStoreType.SqlServer:
 
+                                    //  **大文字小文字まで比べる**（#294）。**既定の照合順序（CI）では、
+                                    //    大文字小文字だけが違う組も一緒に消えていた。**
+                                    //    （**足す側の PK は照合順序に従う**ので、同じ利用者に大文字小文字だけが違う組は足せない。
+                                    //      変えるには DDL が要る）
                                     cnn.Execute(
-                                        "DELETE FROM [UserLogins] WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [ProviderKey] = @ProviderKey ",
+                                        "DELETE FROM [UserLogins] WHERE [UserId] = @UserId" +
+                                        "    AND [LoginProvider] = @LoginProvider COLLATE Latin1_General_BIN2" +
+                                        "    AND [ProviderKey] = @ProviderKey COLLATE Latin1_General_BIN2 ",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
                                     break;

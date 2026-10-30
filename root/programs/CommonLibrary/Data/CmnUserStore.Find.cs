@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         利用者の一覧で、失敗しても 500 にせず、mem でも検索条件と件数を効かせる・ToUpperInvariant に揃える（#294）
+//*  2026/10/30  玄人 幸道         net48 の mem で、利用者名を大文字小文字を区別せずに引く（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -233,7 +234,10 @@ namespace MultiPurposeAuthSite.Data
                         case EnumUserStoreType.Memory:
 
 #if NETFX
-                            user = CmnStore._users.FirstOrDefault(x => x.UserName == userName);
+                            //  **大文字小文字を区別しない**（#294。SQL Server の既定の照合順序に揃える。
+                            //    以前は区別していて、大文字小文字だけが違う利用者を作れた）。
+                            user = CmnStore._users.FirstOrDefault(
+                                x => string.Equals(x.UserName, userName, StringComparison.OrdinalIgnoreCase));
 #else
                             user = CmnStore._users.FirstOrDefault(x => x.NormalizedUserName == userName.ToUpperInvariant());
 #endif
