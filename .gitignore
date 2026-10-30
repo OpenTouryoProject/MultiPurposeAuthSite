@@ -332,3 +332,13 @@ __pycache__/
 # 相手（RP）の JWK Set を配るコンテナに置くもの（#309 の段階 1）
 #   E2E が書いて、同じテストの中で消す（Infrastructure/JwksUri）
 /store/jwks/*.json
+
+# テストのスタブ（stub\。1_PublishStub.ps1 が作る。#294）
+#   cert/ はホストの開発用証明書の秘密鍵とパスワード。.env は起動側のパラメタ（.env.sample を写したもの）
+/stub/cert/
+/stub/.env
+/stub/app/publish/
+/stub/app/artifacts/
+/stub/app/LogConf.xml
+/stub/keys/
+/stub/logs/

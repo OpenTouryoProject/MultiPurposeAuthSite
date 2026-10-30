@@ -1,0 +1,77 @@
+# ##################################################################################################
+# MPAS を、テストのスタブ（OAuth2 / OIDC / SAML2 の IdP）として起動する（#294）
+#
+#   **Open棟梁 や、その他のクライアントのテストから使う。** 使い方は README.md。
+#
+#   **E2E 用の store\ とは別のもの。** プロジェクト名・ポート・鍵の置き場を分けてある
+#   （同じホストで、E2E のコンテナと同時に動かせる）。
+#
+#   **パラメタは 2 つのファイルで渡す。**
+#     .env（--env-file）           ポート・公開 URL・iss・管理者とテスト利用者・証明書・設定ファイルの場所
+#     appsettings.Stub.json         アプリの設定（クライアントの登録など）。appsettings.json と同じ書き方
+#
+#   **設定の重なり方**（ASP.NET Core の既定。後ろほど強い）:
+#     1. appsettings.json       … 雛形（_appsettings.json）。1_PublishStub.ps1 が入れる
+#     2. appsettings.Stub.json  … 起動側の JSON（STUB_SETTINGS をマウントする）
+#     3. 環境変数                … 下の environment（.env の値）。**JSON より強い**
+#   **下の environment に在るキーは、JSON では変えられない。** .env で変える。
+# ##################################################################################################
+
+name: mpas-stub
+
+services:
+  mpas:
+    build: ./app
+    # **自動で復帰させない**（store\ のコンテナと同じ）。
+    restart: "no"
+    ports:
+      - ${STUB_PORT:-44310}:8081
+    env_file:
+      # **証明書・署名鍵のパスなど、コンテナの共通の設定**（store\ と共用する）。
+      - ../store/mpas-common.env
+      # **HTTPS の証明書のパスワード**（Kestrel__Certificates__Default__Password=...）。
+      #   既定は 1_PublishStub.ps1 が書き出したもの。**自分の pfx を使うなら、その行を書いたファイルを指す。**
+      - ${STUB_CERT_ENV_FILE:-./cert/cert.env}
+    environment:
+      # **Development ではない環境名にする**（appsettings.Stub.json を読ませるため）。
+      #   開発者向けの例外画面は出ず、/Home/Error になる。
+      - ASPNETCORE_ENVIRONMENT=Stub
+      - ASPNETCORE_HTTPS_PORTS=8081
+      - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+
+      # **状態はプロセスの中だけに持つ**（再起動で消える。テストのたびにまっさらで始まる）。
+      - appSettings__UserStoreType=mem
+
+      # **公開 URL と iss。** **RP が使う URL と iss を、ここで揃える**
+      #   （厳密な RP は、Discovery の issuer と取得した URL の一致を見る。OIDC Discovery §4.3）。
+      #   **仮想パスは無い**（UsePathBase を呼んでいない）。
+      - appSettings__OAuth2AuthorizationServerEndpointsRootURI=${STUB_PUBLIC_URL:-https://localhost:44310}
+      - appSettings__OAuth2ClientEndpointsRootURI=${STUB_PUBLIC_URL:-https://localhost:44310}
+      - appSettings__IssuerId=${STUB_ISSUER:-https://localhost:44310}
+      # **自分自身を呼ぶときの宛先**（コンテナの中から。store\ と同じ理由。#250）。
+      - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
+
+      # **管理者とテスト利用者**（最初のアクセスで作られる）。**テスト専用の値を使うこと。**
+      - appSettings__AdministratorUID=${STUB_ADMIN_UID:-admin@stub.example.com}
+      - appSettings__AdministratorPWD=${STUB_ADMIN_PWD:-Stub_Admin_Pa55word!}
+      - appSettings__TestUserPWD=${STUB_TEST_USER_PWD:-Stub_User_Pa55word!}
+
+      # **テスト用の口（自己テストの画面など）を開けておくか。**
+      - appSettings__IsLockedDownTestEndpoints=${STUB_LOCKDOWN_TEST_ENDPOINTS:-false}
+
+      # **DataProtection の鍵の置き場**（下の keys をマウントする）。
+      - appSettings__DataProtectionKeyPath=/keys
+    volumes:
+      # **起動側の設定**（無ければサンプル）。**appsettings.json と同じ書き方。**
+      - ${STUB_SETTINGS:-./appsettings.Stub.sample.json}:/app/appsettings.Stub.json:ro
+      # **HTTPS の証明書**（aspnetapp.pfx を置いたディレクトリ）。
+      - ${STUB_CERT_DIR:-./cert}:/https:ro
+      # **署名鍵などのリソース**（X509 の pfx、JwkSet.json）。**イメージには入れない**（store\ と同じ）。
+      - ${STUB_RESOURCE_DIR:-C:/root/files/resource}:/resource:ro
+      - ./keys:/keys
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "dotnet", "--info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

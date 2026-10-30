@@ -7,6 +7,62 @@
 
 ---
 
+## 0. ワンライナー集
+
+**断りの無いものは `root` で実行する**（`cd root`）。詳しくは右端の節。
+
+### 検証する
+
+| やりたいこと | コマンド | 節 |
+|---|---|---|
+| 全部を通しで（ビルド → E2E。両版を起動する） | `.\0_RunAll.ps1` | 1 |
+| ビルドだけ（両版） | `.\1_BuildAll.ps1` | 1 |
+| 片方だけビルドする（クリーンを省いて速く） | `.\1_BuildAll.ps1 -Only net10.0 -SkipClean` | 1 |
+| 指定できるステップ名を見る | `.\1_BuildAll.ps1 -List` | 1 |
+| 警告の内訳を出す（**警告が増えていないかを見る**） | `.\1_BuildAll.ps1 -Only net -SkipClean -WarnDetail` | [`BUILDING.md`](BUILDING.md) 3 節 |
+| OpenTouryo のアセンブリを取り直す | `.\1_BuildAll.ps1 -Libs Force` | 5 |
+| E2E を両版で通す（サイトを起動 → テスト → 停止） | `.\2_RunAllTests.ps1 -Launch` | 1 |
+| 起動済みのサイトを叩く | `.\2_RunAllTests.ps1` | 1 |
+| 一部だけ回す | `.\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RequestObjectTests"` | 1 |
+| net10.0 版だけ起動して回す（net48 版の分は Skip） | `.\2_RunAllTests.ps1 -Launch -NoNetFx` | [`TESTING.md`](TESTING.md) 1 節 |
+| ブラウザで測るもの（`UI-n.n`）を外す | `cd programs\Tests; .\test.ps1 -Launch -NoWebUI` | 1 |
+| **テストを足した・変えた**ので、テストケースの原本を作り直す | `.\2_RunAllTests.ps1 -Launch -UpdateTestCases` | [`TESTING.md`](TESTING.md) 10 節 |
+| サイトのコード カバレッジを測る | `.\2_RunAllTests.ps1 -Launch -Coverage` | [`TESTING.md`](TESTING.md) 1 節 |
+
+### 特別な構成で回す（`-Filter` と併せて使う。`-UpdateTestCases` は付けない）
+
+| やりたいこと | コマンド | 節 |
+|---|---|---|
+| 有効期限（`RT-188`）を、寿命を短くして回す | `.\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"` | 1 |
+| DPoP の nonce（`RT-311.13` / `.14`）を回す | `.\2_RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"` | [`TESTING.md`](TESTING.md) 5 節 |
+| Implicit を閉じた配備（`RT-314`）を回す | `.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"` | [`TESTING.md`](TESTING.md) 5 節 |
+| net48 版でも mTLS（`FA-6`）を回す（証明書の準備・後片付けが要る） | `.\SetupNetFxMtls.ps1 -Action Prepare` → （管理者）`-Action Trust` → `.\2_RunAllTests.ps1 -Launch -NetFxMtls` → （管理者）`-Action Cleanup` | 1 |
+| 証明書の準備ができているかを見る | `.\SetupNetFxMtls.ps1 -Action Check` | 1 |
+| DB のストアで回す（`sql` / `ora` / `npg`。`store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`TESTING.md`](TESTING.md) 1 節 |
+| 別ホストの DB を指す（`store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`TESTING.md`](TESTING.md) 1 節 |
+
+### コンテナ（`store\`。ID 連携の上流・下流 IdP と DB）
+
+| やりたいこと | コマンド | 節 |
+|---|---|---|
+| IdP のコンテナを作り直して起動する（DDL の流し込み → publish → `up -d --build`） | `..\store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| **一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
+| **消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\store\2_DockerComposeDown.bat` | — |
+| 動いているコンテナを見る | `docker ps --filter "label=com.docker.compose.project=store"` | — |
+| **テストのスタブ**として MPAS を起動する（Open棟梁 などのテストから使う。パラメタは `.env` と JSON） | `cd ..\stub; .\1_PublishStub.ps1; docker compose --env-file <パラメタ> up -d --build` | [`../stub/README.md`](../stub/README.md) |
+
+### その他
+
+| やりたいこと | コマンド | 節 |
+|---|---|---|
+| 3 つの RDB の DDL を突き合わせる（差があれば終了コード 1） | `.\CompareDdl.ps1` / `.\CompareDdl.ps1 -Detail` | [`CONFIGURATION.md`](CONFIGURATION.md) 7 節 |
+| 失敗したビルド・テストのログを読む | `programs\Tests\E2ETests\Result` の `net48.log` / `net10_0.log` / `E2ETests.log` / `MpasSite.out.log` | 2 |
+| net10.0 版を Kestrel で起動する（**先に 4 節の環境変数を設定する**。ルート URI と待ち受け URL を揃えるため） | `cd programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore; dotnet run --urls https://localhost:44300` | 4 |
+| 未コミットの変更を見る（**報告の直前に取り直す**） | `git status --porcelain` | [`../AGENTS.md`](../AGENTS.md) |
+| Issue を見る | `gh issue view <番号> --repo OpenTouryoProject/MultiPurposeAuthSite` | 7 |
+
+---
+
 ## 1. 検証（変更したら必ず）
 
 ```powershell
