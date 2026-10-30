@@ -34,6 +34,7 @@
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/09/30  玄人 幸道         非対話にし、Oracle を追加した（#250 の段階 1）
+     2026/10/31  玄人 幸道         store\ から Container\Store\ へ移した（#318）
 #>
 [CmdletBinding()]
 param()
@@ -42,7 +43,7 @@ $ErrorActionPreference = 'Stop'
 
 # パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
 $here = Split-Path -Parent $PSCommandPath
-$sqlRoot = Join-Path $here '..\root\files\resource\MultiPurposeAuthSite\Sql'
+$sqlRoot = Join-Path $here '..\..\root\files\resource\MultiPurposeAuthSite\Sql'
 
 # 方言 → コピー先（コンテナの初期化ディレクトリ）
 $targets = @(

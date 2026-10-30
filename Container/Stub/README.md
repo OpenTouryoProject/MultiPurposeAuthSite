@@ -3,7 +3,7 @@
 **Open棟梁 や、その他のクライアントのテストから、MPAS を IdP のスタブとして起動する**ためのもの（#294）。
 OAuth2 / OIDC / SAML2 の IdP として動く（**中身は net10.0 版の MPAS そのもの**で、応答を偽装するスタブではない）。
 
-**E2E 用の `store\` とは別のもの**である。プロジェクト名（`mpas-stub`）・ポート（既定 44310）・鍵の置き場を分けてあり、
+**E2E 用の `..\E2E\` とは別のもの**である。プロジェクト名（`mpas-stub`）・ポート（既定 44310）・鍵の置き場を分けてあり、
 **同じホストで E2E のコンテナと同時に動かせる。**
 
 ## 1. 使い方
@@ -12,7 +12,7 @@ OAuth2 / OIDC / SAML2 の IdP として動く（**中身は net10.0 版の MPAS 
 OpenTouryo のアセンブリ（`root\1_BuildAll.ps1` が取得する）。
 
 ```powershell
-cd stub
+cd Container\Stub
 .\1_PublishStub.ps1                                    # publish と証明書（最初と、MPAS を更新したとき）
 copy .env.sample my-stub.env                           # パラメタを写して直す（下の 2 節・3 節）
 docker compose --env-file my-stub.env up -d --build    # 起動
@@ -24,7 +24,7 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 ## 2. パラメタ（`.env`）
 
 **`docker compose --env-file <ファイル>` で渡す。** 書いていないキーは `docker-compose.yml` の既定値になる。
-**相対パスは `stub\`（`docker-compose.yml` の在る所）から見たもの。**
+**相対パスは `Container\Stub\`（`docker-compose.yml` の在る所）から見たもの。**
 
 | キー | 既定 | 意味 |
 |---|---|---|
@@ -73,10 +73,10 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 **`-f` で `docker-compose.yml` を指せば、どこからでも起動できる。** パラメタのファイルは、使う側のリポジトリに置いてよい。
 
 ```powershell
-docker compose -f C:\MultiPurposeAuthSite\stub\docker-compose.yml --env-file .\mpas-stub.env up -d --build
+docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file .\mpas-stub.env up -d --build
 ```
 
-**`--env-file` の中の相対パスは `stub\` から見たもの**なので、使う側のファイル（`STUB_SETTINGS` など）は**絶対パス**で書く。
+**`--env-file` の中の相対パスは `Container\Stub\` から見たもの**なので、使う側のファイル（`STUB_SETTINGS` など）は**絶対パス**で書く。
 **同じホストで 2 つ以上動かす**なら、`-p <プロジェクト名>` と `STUB_PORT` を分ける（鍵の置き場 `keys\` は共有になる）。
 
 ## 6. 知っておくこと
@@ -85,6 +85,6 @@ docker compose -f C:\MultiPurposeAuthSite\stub\docker-compose.yml --env-file .\m
 |---|---|
 | **状態は残らない** | `UserStoreType=mem`。**再起動で、利用者・同意・セッション・管理画面で足した登録が消える**（テストのたびにまっさらで始まる） |
 | **net10.0 版だけ** | net48 版に固有の振る舞いは再現しない |
-| **コンテナ間** | **別のコンテナで動く RP からは `localhost:44310` に届かない**（証明書の名前も合わない）。`store\docker-compose.yml` の上流・下流のように、宛先と公開 URL を分ける工夫が要る |
+| **コンテナ間** | **別のコンテナで動く RP からは `localhost:44310` に届かない**（証明書の名前も合わない）。`..\E2E\docker-compose.yml` の上流・下流のように、宛先と公開 URL を分ける工夫が要る |
 | **異常系** | 本物の IdP なので、任意のエラー応答は返せない（同意の拒否・`prompt=none`・期限切れなど、自然に出るものは出せる） |
 | **イメージの中身** | **`appsettings.json` は雛形**（開発者の手元の設定は入らない）。署名鍵などはマウントで渡し、イメージに焼かない |

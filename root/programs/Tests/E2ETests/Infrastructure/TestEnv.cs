@@ -584,7 +584,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **接尾辞を付けない**（#260）。
         ///
-        /// **上流は `store/` のコンテナ 1 つで、自分のストアを持つ。**
+        /// **上流は `Container/E2E/` のコンテナ 1 つで、自分のストアを持つ。**
         /// 下流（net48 版 / net10.0 版）とは**別の DB** なので、**分ける必要が無い。**
         /// **`docker-compose.yml` に `TestUserSuffix` を与えていない**ので、
         /// **上流の種データは `super_tanaka` である。**

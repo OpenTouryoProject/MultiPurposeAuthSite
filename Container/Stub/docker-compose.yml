@@ -3,7 +3,7 @@
 #
 #   **Open棟梁 や、その他のクライアントのテストから使う。** 使い方は README.md。
 #
-#   **E2E 用の store\ とは別のもの。** プロジェクト名・ポート・鍵の置き場を分けてある
+#   **E2E 用の ..\E2E\ とは別のもの。** プロジェクト名・ポート・鍵の置き場を分けてある
 #   （同じホストで、E2E のコンテナと同時に動かせる）。
 #
 #   **パラメタは 2 つのファイルで渡す。**
@@ -22,13 +22,13 @@ name: mpas-stub
 services:
   mpas:
     build: ./app
-    # **自動で復帰させない**（store\ のコンテナと同じ）。
+    # **自動で復帰させない**（..\E2E\ のコンテナと同じ）。
     restart: "no"
     ports:
       - ${STUB_PORT:-44310}:8081
     env_file:
-      # **証明書・署名鍵のパスなど、コンテナの共通の設定**（store\ と共用する）。
-      - ../store/mpas-common.env
+      # **証明書・署名鍵のパスなど、コンテナの共通の設定**（..\E2E\ と共用する）。
+      - ../Common/mpas-common.env
       # **HTTPS の証明書のパスワード**（Kestrel__Certificates__Default__Password=...）。
       #   既定は 1_PublishStub.ps1 が書き出したもの。**自分の pfx を使うなら、その行を書いたファイルを指す。**
       - ${STUB_CERT_ENV_FILE:-./cert/cert.env}
@@ -48,7 +48,7 @@ services:
       - appSettings__OAuth2AuthorizationServerEndpointsRootURI=${STUB_PUBLIC_URL:-https://localhost:44310}
       - appSettings__OAuth2ClientEndpointsRootURI=${STUB_PUBLIC_URL:-https://localhost:44310}
       - appSettings__IssuerId=${STUB_ISSUER:-https://localhost:44310}
-      # **自分自身を呼ぶときの宛先**（コンテナの中から。store\ と同じ理由。#250）。
+      # **自分自身を呼ぶときの宛先**（コンテナの中から。..\E2E\ と同じ理由。#250）。
       - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
 
       # **管理者とテスト利用者**（最初のアクセスで作られる）。**テスト専用の値を使うこと。**
@@ -66,7 +66,7 @@ services:
       - ${STUB_SETTINGS:-./appsettings.Stub.sample.json}:/app/appsettings.Stub.json:ro
       # **HTTPS の証明書**（aspnetapp.pfx を置いたディレクトリ）。
       - ${STUB_CERT_DIR:-./cert}:/https:ro
-      # **署名鍵などのリソース**（X509 の pfx、JwkSet.json）。**イメージには入れない**（store\ と同じ）。
+      # **署名鍵などのリソース**（X509 の pfx、JwkSet.json）。**イメージには入れない**（..\E2E\ と同じ）。
       - ${STUB_RESOURCE_DIR:-C:/root/files/resource}:/resource:ro
       - ./keys:/keys
       - ./logs:/app/logs

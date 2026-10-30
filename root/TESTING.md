@@ -101,13 +101,14 @@ $env:MPAS_CONNSTR_SQL = '...'
 .\2_RunAllTests.ps1 -Launch -UserStoreType sql
 ```
 
-#### E2E 用の DBMS は `store/` で立てる（#250 の段階 1）
+#### E2E 用の DBMS は `Container/Store/` で立てる（#250 の段階 1）
 
-**このリポジトリの `store/` が、3 方言を定義している**（SQL Server / Oracle / PostgreSQL）。
+**このリポジトリの `Container/Store/` が、3 方言を定義している**（SQL Server / Oracle / PostgreSQL）。
+**ID 連携の IdP 群は `Container/E2E/` に在る**（下の「上流の IdP は `Container/E2E/` で立てる」。#318 で `store/` から分けた）。
 
 ```powershell
-cd store
-.\1_DockerComposeUp.bat      # DDL を流し込み、publish してから、IdP のコンテナだけを作り直して起動する（--build）
+cd Container\Store
+.\1_DockerComposeUp.bat      # DDL を流し込む（DB は起動しない）
 .\2_DockerComposeDown.bat    # -v 付き。作り直せるように残さない
 ```
 
@@ -121,7 +122,7 @@ $env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;...'
 
 | | |
 |---|---|
-| **対象の決め方** | **接続文字列から読めたポートが `store/` のもの（1434 / 1522 / 5433）なら、その DB を扱う** |
+| **対象の決め方** | **接続文字列から読めたポートが `Container/Store/` のもの（1434 / 1522 / 5433）なら、その DB を扱う** |
 | **触らないとき** | **ポートが読めない**（＝ 既定ポート。手動確認の LocalServicesOnDocker）**や、別の番号のとき** |
 | **停めるのは自分が起動したときだけ** | **先に人が起動していた DB は、そのまま残す** |
 | **切る口** | **`-NoStoreContainer`**（別ホストの DB を指すときなど） |
@@ -177,7 +178,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 > **3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある**
 > （方針は LocalServicesOnDocker の `CHEATSHEET.md` に倣った）。
 
-**メモリの抑え方**（`store/docker-compose.yml` の頭に同じ表が在る）。
+**メモリの抑え方**（`Container/Store/docker-compose.yml` の頭に同じ表が在る）。
 
 | サービス | パラメタ | 既定 | 変える変数 |
 |---|---|---|---|
@@ -205,7 +206,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 > （**実測** : `sga_target` **1536M** ＋ `pga_aggregate_target` **512M** = ちょうど 2GB）。
 > **メモリを空けたいときは、使わない間は止めること。**
 
-> **`restart` は、`store/` のすべてのサービスで `"no"` にしてある**
+> **`restart` は、`Container/Store/` と `Container/E2E/` のすべてのサービスで `"no"` にしてある**
 > （DB の 3 つと IdP の 3 つ。**以前は `always`**）。
 > **Docker エンジンを起動した拍子に、6 つとも一斉に復帰してメモリを食い切るのを防ぐ**
 > （**実測で踏んだ** : Docker を起動しただけで 6 つとも起きていた）。
@@ -220,7 +221,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 
 **ポートは +1 にしてある。**
 
-| | `store/`（E2E） | 既定のポート |
+| | `Container/Store/`（E2E） | 既定のポート |
 |---|---|---|
 | SQL Server | **1434** | 1433 |
 | Oracle | **1522** | 1521 |
@@ -244,7 +245,7 @@ $env:MPAS_CONNSTR_NPS = 'HOST=localhost;PORT=5433;DATABASE=UserStore;USER ID=pos
 
 - **DDL は `0_CopyInitSql.ps1` が repo から流し込む**（`1_DockerComposeUp.bat` が先に呼ぶ）。
   コピー先は**生成物**で `.gitignore` 済み。**原本は `root/files/resource/.../Sql/` だけ**
-- **`store/` の DB は使い捨てにできる。** そのため、下の
+- **`Container/Store/` の DB は使い捨てにできる。** そのため、下の
   「古いデータベースを使い回すと、列が足りない」は **E2E 側では起きない**
   （手動側＝LocalServicesOnDocker では引き続き起こりうる）
 - **Oracle の初回起動は数分かかる**（`docker compose ps` が healthy になるまで待つ）
@@ -283,7 +284,7 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > （この値を書くのは `UserClaimsTests` だけで、同じクラスのケースは並列に走らない。
 > 利用者の行が重複しているわけでもない）。**落ちたら、まず 1 クラスだけで回して切り分ける。**
 >
-> **実測（#250 の段階 1。`store/` の 3 方言）** : 同じ型が**別のテストでも出た。**
+> **実測（#250 の段階 1。`Container/Store/` の 3 方言）** : 同じ型が**別のテストでも出た。**
 >
 > | ストア | 落ちたもの | 1 クラスだけで回すと |
 > |---|---|---|
@@ -295,14 +296,14 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > **落ちるテストは毎回違う**（`RT-230.1` / `RT-230.3` / `RT-233.2`）。
 > **`mem` では出ない**（各サイトが別の入れ物のため）。**原因は依然として未特定。**
 
-#### 上流の IdP も `store/` で立てる（#250 の段階 2〜3）
+#### 上流の IdP は `Container/E2E/` で立てる（#250 の段階 2〜3）
 
 **ハイブリッド ID フェデレーションの「上流側」を、コンテナで 1 つ建てる。**
 **下流（連携する側）はホストで動かす**（Visual Studio / `test.ps1 -Launch`）。
 
 ```powershell
-cd store
-.\3_PublishUpstream.ps1      # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
+cd Container\E2E
+.\0_PublishIdP.ps1           # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
 docker compose up -d upstream
 ```
 
@@ -312,7 +313,7 @@ docker compose up -d upstream
 | パス | **root**（`/authorize`） | `UsePathBase` を呼んでいない |
 | ストア | **`mem`（固定）** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない。**下流は `-UserStoreType` で切り替わるが、上流は常に `mem`**（つまり **`sql` で回すとクロス ストアになる**。5 節の対応表） |
 | 証明書 | **ホストの `dotnet dev-certs`** を書き出したもの | 既に信頼済み。**ブラウザが警告を出さない** |
-| ログ | `store/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
+| ログ | `Container/E2E/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
 
 **net48 版はコンテナ化しない。** 上流は 1 つあればよく、**net10.0 版で足りる**。
 
@@ -359,7 +360,7 @@ docker compose up -d upstream
 > `appsettings.json` を `"C:/root/files` で grep した数と突き合わせること。
 >
 > **`log4net` だけは中身（出力先）も Windows のパス**なので、
-> **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
+> **差し替えた構成**（`Container/Common/LogConf.xml`。publish の際に `app/` へ写す）をイメージに入れてある。
 
 #### 接頭辞を付けた配備を測る（#282 / #283）
 
@@ -401,14 +402,14 @@ probe_auth_time                                 max_age の判定
 **これでコンテナ 2 つだけでハイブリッド IdP 構成が取れる。**
 
 ```powershell
-cd store
-.\1_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流を、作り直して起動する（DB は起動しない）
+cd Container\E2E
+.\1_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流 ＋ jwks を、作り直して起動する（DB は Container\Store\）
 ```
 
 **上流だけ・下流だけを建て直すなら、サービスを名指す。**
 
 ```powershell
-.\3_PublishUpstream.ps1          # 成果物は 1 つ。上流も下流も同じイメージ
+.\0_PublishIdP.ps1              # 成果物は 1 つ。上流も下流も同じイメージ
 docker compose up -d --build upstream downstream
 ```
 
@@ -424,9 +425,9 @@ docker compose up -d --build upstream downstream
 | `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
 | `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
 | `IdFederationJwkSetUri` / `IdFederationSaml2MetadataUrl` | **`http://upstream:8080/...`**（#293 の段階 3） | **鍵を引くのもサーバである。** **`https://localhost:44301` には届かない** |
-| 鍵の置き場 / ログ | `store/keys-downstream` / `store/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
+| 鍵の置き場 / ログ | `Container/E2E/keys-downstream` / `Container/E2E/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
 
-**どのコンテナにも要る設定は `store/mpas-common.env` に 1 か所だけ置いてある**
+**どのコンテナにも要る設定は `Container/Common/mpas-common.env` に 1 か所だけ置いてある**（スタブも読む）
 （リソースのパス 19 件 ＋ log4net）。
 **サービスごとに書くと 2 回書くことになり、片方だけ直す事故が起きる。**
 
@@ -447,8 +448,8 @@ docker compose up -d --build upstream downstream
 **DB に平文が残っていないことは、SELECT して確かめる**（**E2E からは DB を見ない** — 9 節）。
 
 ```powershell
-# SQL Server（store/ のコンテナ）
-docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+# SQL Server（Container/Store/ のコンテナ）
+docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
   -Q "SELECT TOP 4 LEFT(ClientSecret, 24), LEN(ClientSecret) FROM Saml2OAuth2Data WHERE ClientSecret IS NOT NULL"
 ```
 
@@ -479,7 +480,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 | | |
 |---|---|
 | ホスト（core / netfx） | `test.ps1` が `PreviousSigningCerFilePaths` を渡す（**2 本広告する状態**を作る） |
-| 上流コンテナ | `store/docker-compose.yml` の `PreviousSigningCerFilePaths`（`*_Server.cer`） |
+| 上流コンテナ | `Container/E2E/docker-compose.yml` の `PreviousSigningCerFilePaths`（`*_Server.cer`） |
 | 上流コンテナの **JWK Set** | **RSA が 2 本**（`JwkSet_Upstream.json`。**新旧を並べた状態**） |
 
 **歯抜け（実測 2026/10/14）。**
@@ -521,7 +522,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 **`RT-292.4` は行を消して戻す**ので、**後片付けだけを止めて 1 行残し、見てから消した。**
 
 ```powershell
-docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
   -Q "SELECT LEFT(SigningPfxPassword, 12), LEN(SigningPfxPassword) FROM IdFederationUpstreams"
 ```
 
@@ -719,7 +720,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **登録の時点でハッシュを保存できず、`GET` が `401` になる。**
 > **方言ごとに通ったことが、そのまま「列が在る」ことの確認になっている。**
 
-###### 踏んだこと : DDL を変えたら `store\0_CopyInitSql.ps1` を回す
+###### 踏んだこと : DDL を変えたら `Container\Store\0_CopyInitSql.ps1` を回す
 
 **3 方言の通しが、1 回目は全件落ちた**（実測 : `sql` と `ora` は 26 件すべて、`npg` は core の 13 件すべて）。
 **症状は「ログイン画面が HTTP 500」**で、**サイトのログに
@@ -728,8 +729,8 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 | | |
 |---|---|
 | **DDL の原本** | `root\files\resource\MultiPurposeAuthSite\Sql\{sqlserver,oracle,pstgrs}` |
-| **コンテナが読むもの** | `store\{sqlserver,oracle,postgres}\init`（**複写。`.gitignore` 済み**） |
-| **複写するもの** | **`store\0_CopyInitSql.ps1`**（**`1_DockerComposeUp.bat` は起動の前に必ず呼ぶ**が、**`test.ps1` 経由の起動は呼ばない**） |
+| **コンテナが読むもの** | `Container\Store\{sqlserver,oracle,postgres}\init`（**複写。`.gitignore` 済み**） |
+| **複写するもの** | **`Container\Store\0_CopyInitSql.ps1`**（**`1_DockerComposeUp.bat` は起動の前に必ず呼ぶ**が、**`test.ps1` 経由の起動は呼ばない**） |
 
 > **`sqlserver` は毎回 init を流し直す**ので、**古い複写のまま DB を作り直す** —
 > **「作り直したのに古い」**という形で出る。
@@ -836,12 +837,12 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > `RT-245.5` / `RT-129.3` の向き先だけ）。
 >
 > **1 回目の取り直しは、機械のメモリ不足で打ち切られた**（`sql` の途中）。
-> **DB を 3 つ同時に起動しないこと**は `store\docker-compose.yml` の頭にも書いてあるが、
+> **DB を 3 つ同時に起動しないこと**は `Container\Store\docker-compose.yml` の頭にも書いてあるが、
 > **`mem` の通しの直後に方言を続けると、それだけでも足りなくなることがある** —
 > **1 つずつ、間でサイトを止めて回すこと。**
 
 > **DDL を 1 列足した**（`TokenEndpointAuthMethod`）ので、**3 方言でも測る。**
-> **`store\0_CopyInitSql.ps1` を回すこと**（下の「踏んだこと」と同じ理由）。
+> **`Container\Store\0_CopyInitSql.ps1` を回すこと**（下の「踏んだこと」と同じ理由）。
 
 ##### `software_statement`（`RT-307.18` 〜 `.21`。#307 の段階 4）
 
@@ -1031,7 +1032,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 | `npg`（PostgreSQL） | **21 件 / 成功 21 / 失敗 0 ＋ Skip 20**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**列 1 つ ＋ 一意索引 ＋ 外部キーの張り替え ＋ 列の削除**）。
-> **`store\0_CopyInitSql.ps1` を回すこと**（段階 1・3 と同じ理由）。
+> **`Container\Store\0_CopyInitSql.ps1` を回すこと**（段階 1・3 と同じ理由）。
 >
 > **`Users` と `Saml2OAuth2Data` を跨いだ変更**なので、**`mem` では出ない失敗が在り得る** —
 > **段階 2 でそこを踏んだ**（`Users.ClientID` を空にして `sql` で `DELETE` が `500`）。
@@ -1051,18 +1052,18 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 **`jwks_uri` が指す先は、本来クライアント（RP）が公開する。**
 **E2E のクライアントは `HttpClient` のコードで、HTTP サーバを持たない** —
-**配るだけのものを 1 つ置いた**（`store/docker-compose.yml` の `jwks`。**44305**）。
+**配るだけのものを 1 つ置いた**（`Container/E2E/docker-compose.yml` の `jwks`。**44305**）。
 
 | | |
 |---|---|
-| **中身を書くのはテスト** | **ホストの `store/jwks` に `.json` を置く**（**同じテストの中で消す**。`.json` は `.gitignore`） |
+| **中身を書くのはテスト** | **ホストの `Container/E2E/jwks` に `.json` を置く**（**同じテストの中で消す**。`.json` は `.gitignore`） |
 | **URL はケースごとに分ける** | **キャッシュはプロセスの中で URL ごと**なので、**同じ URL では「空の状態」を測れない** |
 | **既存の `/jwkcerts` は使わない** | **あれは `JwkSet_Upstream.json` を配っており、`RT-140.*` / `CN-5.*` も見ている共有のファイル**である（**書き替える測りを入れると、戻し忘れが ID 連携を壊す**） |
-| **`sendfile off`** | **bind mount したファイルを書き替えると、古い中身を返すことがある**ので、落としてある（`store/jwks-nginx.conf`） |
+| **`sendfile off`** | **bind mount したファイルを書き替えると、古い中身を返すことがある**ので、落としてある（`Container/E2E/jwks-nginx.conf`） |
 | **平文の http** | **実装は `https` を要求するが、ループバックだけは許している**ので、**証明書を用意していない** |
 
 > **コンテナが上がっていなければ Skip する**（`Infrastructure/JwksUri.SkipIfNotAvailableAsync`）。
-> **`store\1_DockerComposeUp.bat` は、これも一緒に起動する。**
+> **`Container\E2E\1_DockerComposeUp.bat` は、これも一緒に起動する。**
 
 ###### 測るのは `/revoke`（`RT-309.2` / `.3`）
 
@@ -1095,7 +1096,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 ```powershell
 # **相手の JWK Set を置く**（鍵が 1 本でも入っていること — 空の keys では「read 0」になる）
-Copy-Item C:\root\files\resource\MultiPurposeAuthSite\JwkSet.json C:\MultiPurposeAuthSite\store\jwks\warm.json
+Copy-Item C:\root\files\resource\MultiPurposeAuthSite\JwkSet.json C:\MultiPurposeAuthSite\Container\E2E\jwks\warm.json
 $env:appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri = 'http://localhost:44305/warm.json'
 cd root\programs\Tests
 .\test.ps1 -Launch -NoNetFx -Filter "FullyQualifiedName~DiscoveryTests"
@@ -1472,7 +1473,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 | `npg`（PostgreSQL） | **44 件 / 成功 22 / 失敗 0 ＋ Skip 22**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**`Saml2OAuth2Data` に列がもう 1 つ**）。
-> **`store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
+> **`Container\Store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
 >
 > **`RT-232.*` も一緒に回す** — **「Front-Channel は広告しない」を見ていた検証**を、
 > **広告するようになったことに合わせて直した**ためである（#232 の測りの更新）。
@@ -1552,7 +1553,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 | `npg`（PostgreSQL） | **38 件 / 成功 19 / 失敗 0 ＋ Skip 19**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**`Saml2OAuth2Data` に列が 1 つ増えた**）。
-> **`store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
+> **`Container\Store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
 >
 > **流したのは `BackChannelLogoutTests` ＋ `SessionIdTests` ＋ 登録の画面**
 > （`ManageSaml2OAuth2DataTests`）**＋ 利用者の削除**（`ManageGdprTests` / `UsersAdminTests`）。
@@ -1612,7 +1613,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 | `npg`（PostgreSQL） | **20 件 / 成功 10 / 失敗 0 ＋ Skip 10**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**表 1 つ ＋ 一意索引 1 つ ＋ 索引 1 つ ＋ 外部キー 1 つ**）。
-> **`store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと**（**新しい DDL で初期化される**）。
+> **`Container\Store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと**（**新しい DDL で初期化される**）。
 >
 > **流したのは `SessionIdTests` ＋ 利用者の削除**（`ManageGdprTests` / `UsersAdminTests`）。
 > **新しい表は `Users.Id` への外部キー（`ON DELETE CASCADE`）を持つ** ＝ **「跨いで書く変更」**なので、
@@ -1679,7 +1680,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 > **方言は `RT-307.*` ＋ `RT-308.*` を流した** — **表を足した影響は、
 > `software_statement` の既存の経路にも出得る**ためである。
 
-> **表を新設したので、3 方言とも DB を作り直して測る**（`store\0_CopyInitSql.ps1` → コンテナを作り直し）。
+> **表を新設したので、3 方言とも DB を作り直して測る**（`Container\Store\0_CopyInitSql.ps1` → コンテナを作り直し）。
 > **回すときは 1 つずつ、間でサイトを止めること**（#307 で踏んだメモリ不足）。
 > **回し終えた方言のコンテナも止めること**（上の「表を足したら」の囲みと同じ）。
 
@@ -2212,7 +2213,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **`UserStore` が出来ていなければ、初期化スクリプトを手で叩く。**
 >
 > ```powershell
-> docker exec store-sqlserver-1 bash /init/0_start-up.sh
+> docker exec mpas-store-sqlserver-1 bash /init/0_start-up.sh
 > ```
 
 ##### `/jwkcerts` のキャッシュ（`RT-303.*`。#303）
@@ -2274,7 +2275,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **配備のとき、発行済みの access_token は検証に通らなくなる**（`typ` が `JWT` のため）。
 > **有効期限が切れるまでの間だけ**で、**`refresh_token` で取り直せば新しい `typ` になる**
 > （`refresh_token` は JWS ではなく `RefreshTokenProvider` が持つ）。
-> **コンテナ（`store/`）は公開済みのイメージで動く**ので、**作り直すまでは `JWT` のまま**である
+> **コンテナ（`Container/E2E/`）は公開済みのイメージで動く**ので、**作り直すまでは `JWT` のまま**である
 > （**上流・下流とも自分で出して自分で検証する**ので、混在していても通る）。
 
 ##### 書き込みの失敗を握らなくした（#300）
@@ -2416,7 +2417,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **コンテナを起動し直しても、足した表は増えない**（実測）。
 >
 > ```powershell
-> cd store
+> cd Container\Store
 > .\0_CopyInitSql.ps1                      # repo の DDL を init に流し込む
 > docker compose rm -sfv postgres oracle    # **作り直す**（sqlserver は毎回流れる）
 > docker compose up -d postgres oracle
@@ -2443,7 +2444,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 | `IssuerId` | **`https://upstream2.ssoauth.opentouryo.com`** | **3 つの IdP が同じ `iss` を名乗らない**ようにする |
 | 署名鍵 | **`SHA256RSA_Upstream2.*` ＋ `JwkSet_Upstream2.json`** | **上流 1 とも下流とも別の鍵**（`CN-1.5` が 3 つとも違うことを見る） |
 | `CookieNamePrefix` | **`upstream2_`** | Cookie はポートで分かれない（RFC 6265 §8.5） |
-| 鍵・ログの置き場 | `store/keys-upstream2` / `store/logs-upstream2` | 他と分ける（#279） |
+| 鍵・ログの置き場 | `Container/E2E/keys-upstream2` / `Container/E2E/logs-upstream2` | 他と分ける（#279） |
 
 **下流コンテナには、上流 2 件が登録してある**（`IdFederationUpstreams__upstream1*` / `__upstream2*`）。
 **鍵とメタデータを引く宛先は、コンテナの中から届くもの**（`http://upstream2:8080/...`。#293 の段階 3）。
@@ -2504,7 +2505,7 @@ GenRsaCertForUpstreamByOpenSSL.bat Upstream2
 
 ##### (2) の署名鍵を上流ごとに指定する（#292 の段階 4-a）
 
-**`store/docker-compose.yml` の下流コンテナは、上流 2（SAML2）の行に
+**`Container/E2E/docker-compose.yml` の下流コンテナは、上流 2（SAML2）の行に
 `signing_pfx_file_path` を書いてある**（**値は共通設定と同じ `*_Client.pfx`** だが、
 **明示指定の経路を通すため**である）。
 
@@ -2624,7 +2625,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 **`jwkcerts` が返れば、マウントした署名鍵まで読めている。**
 
 > **DataProtection の鍵の置き場（#251）も、ここで効いている。**
-> `appSettings__DataProtectionKeyPath=/keys` を `store/keys` にマウントしてあるので、
+> `appSettings__DataProtectionKeyPath=/keys` を `Container/E2E/keys` にマウントしてあるので、
 > **コンテナを作り直してもサインインが切れない。**
 >
 > **実測** : サインインしてから `docker restart` / `docker compose rm -sf` + `up` を
@@ -2708,7 +2709,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 - **E2E** : **`RT-269.1`**（`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つで
   **2000 文字を超える登録**を作り、**先頭と末尾のオリジンの両方で CORS が通る**ことを見る）
 - **`mem` では幅の問題を測れない**（辞書なので上限が無い）。**効くのは `sql` / `ora` / `npg`**
-- **既存のデータベースは作り直すのが早い**（`store/` は使い捨て）。
+- **既存のデータベースは作り直すのが早い**（`Container/Store/` は使い捨て）。
   **`ALTER` で広げるなら**、PostgreSQL は `ALTER TABLE ... ALTER COLUMN ... TYPE text`、
   **Oracle は `NVARCHAR2` から `NCLOB` へ直接変更できない**ので
   **列を足して移してから入れ替える**
@@ -2752,7 +2753,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
   `RT-272.7`（**管理画面からの取り消し**） /
   `RT-272.8`（**`prompt=login`**。再認証と、印で繰り返しにならないこと）/
   `RT-272.9`（**`prompt=select_account`**。同意画面と「別のアカウントでログイン」）
-- **DDL 3 方言に `ConsentGrant` 表を足した。** **`store/` は作り直す**こと
+- **DDL 3 方言に `ConsentGrant` 表を足した。** **`Container/Store/` は作り直す**こと
 
 ##### 「認可の後は管理画面が 302 になる」は、調べたら誤りだった
 
@@ -2795,7 +2796,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 
 #### SAML2 の E2E を足した（#275 / #276）
 
-**DDL は変えていないが、種データの `client_id` を変えたので `store/` は作り直す**こと。
+**DDL は変えていないが、種データの `client_id` を変えたので `Container/Store/` は作り直す**こと。
 
 **種データの `client_id` を変えたら、必ず作り直す。**
 **古い `client_id` の登録が残り、テストが古い値を引く**（**種データは init SQL が入れる**）。
@@ -2833,7 +2834,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 
 #### オンライン決済サービスを取り下げ、`Users.PaymentInformation` を落とした
 
-**DDL が変わったので、`store/` は作り直すこと**
+**DDL が変わったので、`Container/Store/` は作り直すこと**
 （`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
 
 | | |
@@ -2854,7 +2855,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 > **`npg` だけ `RT-C10.1` が落ちた。**
 > **DB を見ると `TestClient_15` の `redirect_uri_code` が
 > `test_self_code_manage` のまま**だった（`sql` 側は新しい値が入っていた）。
-> **コードの不具合ではなく、作り直していない `store/` の側である。**
+> **コードの不具合ではなく、作り直していない `Container/Store/` の側である。**
 
 **列が残っていても、アプリは動く**（`SELECT *` で読み、INSERT・UPDATE では触らない）。
 **実測 : 列が在る `sql` の DB に対して 561/0/1 で通った。**
@@ -2862,7 +2863,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 
 #### WebAuthn を復活させ、`Users.FIDO2PublicKey` を落とした（#137）
 
-**DDL が変わったので、`store/` は作り直すこと**
+**DDL が変わったので、`Container/Store/` は作り直すこと**
 （`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
 
 | | |
@@ -2872,7 +2873,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 | **入れ物の形が変わった** | `UnstructuredData` に入れる JSON は**自前の `StoredCredential`** になった（以前は `Fido2NetLib.Development.StoredCredential`。**`Development` 名前空間は 3.0 で消えた**） |
 
 **古い行は読めない。** とはいえ、**測った時点で `FIDO2Data` は 0 行だった**
-（`store/` の `sql`。#270 の調査）ので、**実際に読む行は存在しない。**
+（`Container/Store/` の `sql`。#270 の調査）ので、**実際に読む行は存在しない。**
 
 - **E2E** : `RT-137.1`（登録の要求）/ `RT-137.2`（認証の要求）/
   `RT-137.3`（壊れた入力を封筒に入れて 200 で返す）/ `RT-137.4`（challenge を使い回していない）
@@ -2925,7 +2926,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 | `UserStoreType` | 引かない | 引く | **差** |
 |---|---|---|---|
 | `mem` | 0.22 ms（p50 0.20） | 0.29 ms（p50 0.28） | **＋0.07 ms** |
-| `sql`（`store/` 1434、19 行） | 0.22 ms（p50 0.20） | **2.10 ms**（p50 2.05 / p95 2.80 / 最大 7.86） | **＋1.9 ms** |
+| `sql`（`Container/Store/` 1434、19 行） | 0.22 ms（p50 0.20） | **2.10 ms**（p50 2.05 / p95 2.80 / 最大 7.86） | **＋1.9 ms** |
 
 **尺度の参考** : 同じ機械で `GET /.well-known/openid-configuration`（200。
 Discovery の JSON を組む）が **平均 0.96 ms**（p95 1.26）。
@@ -3027,7 +3028,7 @@ curl.exe --config preflight.cfg
 **製品の既定は空**（＝ `super_tanaka` / `tanaka`）。**接尾辞を与えるのは `test.ps1` だけ**である。
 
 > **上流（ID フェデレーションの IdP）には渡さない。**
-> 上流は `store/` のコンテナで**自分のストアを持つ**ので、分ける必要が無い。
+> 上流は `Container/E2E/` のコンテナで**自分のストアを持つ**ので、分ける必要が無い。
 > 渡すと「上流に居ない利用者」でサインインしようとして落ちる（`TestEnv.UpstreamUserName`）。
 
 > **DB を作り直さなくてよい。**
@@ -3098,7 +3099,7 @@ ORA-01400: ("SCOTT"."UserRoles"."RoleId")にはNULLは挿入できません。
 
 > **列だけでなく、表が増えることもある。**
 > **#151 の段階 2 で `SubjectIdentifier` を足した**（16 表 → **17 表**）。
-> **`store/`（E2E）は `2_DockerComposeDown.bat` → `1_DockerComposeUp.bat` で作り直せば済む。**
+> **`Container/Store/`（E2E）は `2_DockerComposeDown.bat` → `1_DockerComposeUp.bat` で作り直せば済む。**
 > **手動確認の DB（LocalServicesOnDocker）は、自分で `Create_UserStore.sql` を流し直すこと。**
 > 表が無いと、**サインイン（`sub` の記録）で落ちる。**
 
@@ -3116,7 +3117,7 @@ ORA-01400: ("SCOTT"."UserRoles"."RoleId")にはNULLは挿入できません。
 > **古い DB のテスト利用者は `@gmail.com` のまま**で、メアドでのサインイン（`SM-4.2`）などが落ちる。**同じく、DB を作り直す。**
 > **症状は「サインインに失敗しました（HTTP 200）」が全件**に出る
 > （実測 : `sql` で **339 件 失敗**）。**列が足りないときより分かりにくい。**
-> **`store/` は作り直すこと**（`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
+> **`Container/Store/` は作り直すこと**（`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
 
 - 症状は **HTTP 500 が 67 件**（`42703: column "familyid" ... does not exist`）。
   **トークンが出ないので、関係の無いケースまで巻き添えで落ちる**（85 件 失敗）
@@ -3422,7 +3423,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 > | **メタデータの URL**を届かない口に | **8/8 通る**（ログに `The SAML2 metadata could not be read.`） |
 > | **メタデータと鍵の両方**を壊す | **`SA-6.1` / `SA-6.2` / `SA-6.4` が落ちる**（`SA-6.3` は署名に依存しないので通る） |
 
-> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `3_PublishUpstream.ps1` → `docker compose up -d --build`）。
+> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `0_PublishIdP.ps1` → `docker compose up -d --build`）。
 > **実測（Open棟梁 #603 / #604 の取り込み。2026/10/12）** : **複製だけを更新して回すと 20 件が落ちた** — **`SigAlg` の扱い**（`SA-1.1` / `SA-1.3` / `RT-246.4` / `RT-246.7` / `SA-6.*`）と、**自己テストの `aud` の確認**（`RT-246.1` / `RT-246.6` / `RT-232.9`）である。
 > **どちらも「確認するようになった」ことによる失敗**であり、緩む方向ではない。
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
@@ -3484,7 +3485,7 @@ TC が倒れている状態の EX は、拡張の問題なのか土台の問題�
 ```
 
 > **原本を作り直すときは、IdP の 3 コンテナも起こしておくこと**
-> （`store\1_DockerComposeUp.bat`。**アプリを直したなら `docker compose up -d --build`**）。
+> （`Container\E2E\1_DockerComposeUp.bat`。**アプリを直したなら `docker compose up -d --build`**）。
 > **止めたまま作り直すと、`CN-*` と `RT-140.4` 以降が原本から消える** —
 > **通しで Skip されたケースは記録が出ないので、載らない**（上の `Skip` の話と同じ）。
 >
@@ -3616,7 +3617,7 @@ cd root
 | `RT-140.7` | 連携の認可応答にも **`iss`** が付く（#252 が実経路で効いていること） |
 
 > **上流は、下流と別の RSA 鍵を使う**（#293 の段階 1）。
-> **`store/docker-compose.yml` の upstream が `*_Upstream.pfx` / `.cer` と
+> **`Container/E2E/docker-compose.yml` の upstream が `*_Upstream.pfx` / `.cer` と
 > `JwkSet_Upstream.json` に向けている**（**EC の 3 本は共有**）。
 >
 > | | 公開している RSA の `kid`（実測 2026/10/13） |
@@ -3633,7 +3634,7 @@ cd root
 > **鍵が同じだった頃は、この取り違えが通っていた。**
 >
 > **上流は (2)（下流が送る `AuthnRequest`）の署名も検証する**（#293 の段階 2）。
-> **`store/docker-compose.yml` の E2E クライアント 3 件に `jwk_rsa_publickey` を登録してある**
+> **`Container/E2E/docker-compose.yml` の E2E クライアント 3 件に `jwk_rsa_publickey` を登録してある**
 > （値は `*_Client.cer` の JWK）。
 >
 > **歯抜け（署名が検証されているか）** : **登録鍵を別の鍵に差し替える**と、
@@ -3690,8 +3691,8 @@ cd root
 **上流を先に建てておくこと。** 建っていなければ、**この 4 件（×2 ターゲット）だけが Skip される。**
 
 ```powershell
-cd store
-.\3_PublishUpstream.ps1
+cd Container\E2E
+.\0_PublishIdP.ps1
 docker compose up -d upstream
 ```
 
@@ -3699,7 +3700,7 @@ docker compose up -d upstream
 > **Skip の件数**（サマリに出る）と、**Skip の理由**で気付くこと。
 
 > **上流は「作り直さないと古いまま」である。** ここが一番踏みやすい。
-> **アプリを直したら、必ず `3_PublishUpstream.ps1` と `docker compose up -d --build upstream` を回す。**
+> **アプリを直したら、必ず `0_PublishIdP.ps1` と `docker compose up -d --build upstream` を回す。**
 >
 > **実測（#250 の段階 5）** : `FormPost.cshtml` を直した（#252）あと、**上流を作り直さずに**
 > `RT-140.7` を回して落ちた。**下流は新しく、上流だけが古い**という状態で、
@@ -3751,7 +3752,7 @@ docker compose up -d upstream
 **構成ファイルの値が、そのままサイトの向き先である。**
 **テストはその値を読んで上流を探す**ので、上書きすると、両者がずれたときに気付けなくなる。
 
-**上流側のクライアント登録は `store/docker-compose.yml` にある**（`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
+**上流側のクライアント登録は `Container/E2E/docker-compose.yml` にある**（`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
 **雛形の `IdFederation` クライアントは手動確認（VS）用**で、`/MultiPurposeAuthSite` 付きのまま残してある。
 
 **SAML2 の ID 連携は、同じクライアントに `redirect_uri_saml` を足して使う**（#286 の段階 2）。
@@ -3776,7 +3777,7 @@ docker compose up -d upstream
 **ビルドと通し（414 件）で「他を壊していないこと」までは確かめたが、
 経路そのものは動かしていない。**
 
-**上流のコンテナは #250 の段階 2〜3 で建った**（1 節「上流の IdP も `store/` で立てる」）。
+**上流のコンテナは #250 の段階 2〜3 で建った**（1 節「上流の IdP は `Container/E2E/` で立てる」）。
 **段階 4 で、下流の設定をそこへ向け、目視が net48 版・net10.0 版の両方で通った。**
 **段階 5 で E2E に入れた**（`RT-140.4` 〜 `RT-140.7`。5 節「ID フェデレーション」）。
 **上流を建て忘れると Skip される**ので、そこだけは人が見ること。
@@ -3786,8 +3787,8 @@ docker compose up -d upstream
 1. **上流を建てる。**
 
    ```powershell
-   cd store
-   .\3_PublishUpstream.ps1
+   cd Container\E2E
+   .\0_PublishIdP.ps1
    docker compose up -d upstream
    ```
 

@@ -4,19 +4,20 @@
 
     **成果物は 1 つで、上流も下流も同じイメージを使う**（#281）。
     役の違いは docker-compose.yml の設定だけであるので、ここでは分けない。
-    （名前は従来のままにしてある。人と 1_DockerComposeUp.bat が叩くため）
+    （#318 で 3_PublishUpstream.ps1 から改名した。上流だけのものではないため）
 
 .DESCRIPTION
     ＜何を用意するか＞
-      1. **アプリの publish 成果物**（store\app\publish）
-      2. **HTTPS の証明書**（store\cert\aspnetapp.pfx）と、そのパスワード（store\.env）
+      1. **アプリの publish 成果物**（app\publish）
+      2. **HTTPS の証明書**（cert\aspnetapp.pfx）と、そのパスワード（.env）
+      3. **log4net の構成**（..\Common\LogConf.xml を app\ に写す。Stub と共用する。#318）
 
     ＜証明書は、ホストの開発用証明書を書き出す＞
       **毎回作り直すと、ブラウザが毎回「信頼されていない」と言う。**
       **ホストの `dotnet dev-certs` の証明書は既に信頼されている**ので、それを書き出して使う。
       **自己テスト（ブラウザで叩く）が警告なしで通る。**
 
-      **パスワードは自動生成し、store\.env に保存する。**
+      **パスワードは自動生成し、.env に保存する。**
       pfx とパスワードは対なので、**pfx を残すならパスワードも残す**。
       **人が覚える必要は無い**（このスクリプトが作り、compose が読む）。
 
@@ -27,11 +28,11 @@
       ビルド済みの成果物とも揃う。
 
 .EXAMPLE
-    .\3_PublishUpstream.ps1
+    .\0_PublishIdP.ps1
 
 .EXAMPLE
     # 証明書を作り直す（期限切れなど）
-    .\3_PublishUpstream.ps1 -NewCertificate
+    .\0_PublishIdP.ps1 -NewCertificate
 
 .NOTES
     作成者          ：玄人 幸道
@@ -39,6 +40,7 @@
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/09/30  玄人 幸道         新規（#250 の段階 2）
+     2026/10/31  玄人 幸道         store\ から Container\E2E\ へ移し、改名した（#318）
 #>
 [CmdletBinding()]
 param(
@@ -49,9 +51,10 @@ $ErrorActionPreference = 'Stop'
 
 # パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
 $here = Split-Path -Parent $PSCommandPath
-$proj = Join-Path $here '..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.csproj'
+$proj = Join-Path $here '..\..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.csproj'
 $pub = Join-Path $here 'app\publish'
 $art = Join-Path $here 'app\artifacts'
+$logConf = Join-Path $here '..\Common\LogConf.xml'
 $certDir = Join-Path $here 'cert'
 $pfx = Join-Path $certDir 'aspnetapp.pfx'
 $envFile = Join-Path $here '.env'
@@ -109,6 +112,9 @@ if ($LASTEXITCODE -ne 0)
 {
     throw "publish に失敗しました。"
 }
+
+# **log4net の構成**（Dockerfile が写す。原本は ..\Common\ に 1 つだけ置く。#318）
+Copy-Item $logConf (Join-Path $here 'app\LogConf.xml') -Force
 
 Write-Output "  publish しました : app\publish"
 Write-Output ""

@@ -55,7 +55,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **この経路は、長いあいだ E2E で駆動していなかった**（`TESTING.md` 5 節）。
     /// **上流の IdP が要る**ためで、#250 の段階 2〜4 でコンテナとして建てられるようにした。
     ///
-    /// **上流は `store/` のコンテナ**（既定 `https://localhost:44301`）で、
+    /// **上流は `Container/E2E/` のコンテナ**（既定 `https://localhost:44301`）で、
     /// **`test.ps1` の管理外**である。**建っていなければ Skip する**
     /// （DB ストアや IIS Express と同じ扱い）。
     ///

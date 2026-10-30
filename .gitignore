@@ -307,38 +307,44 @@ __pycache__/
 *.odx.cs
 *.xsd.cs
 
-# E2E 用 UserStore の初期化 SQL（0_CopyInitSql.ps1 が repo の DDL からコピーする生成物。#250）
-/store/postgres/init/*.sql
-/store/sqlserver/init/*.sql
-/store/oracle/init/*.sql
+# コンテナの定義（Container\。#318 で store\ と stub\ から移した）
 
-# 上流 IdP コンテナの生成物（3_PublishUpstream.ps1 が作る。#250）
+# E2E 用 UserStore の初期化 SQL（0_CopyInitSql.ps1 が repo の DDL からコピーする生成物。#250）
+#   .env は DB のキャッシュの上限などを手元で変えるときのもの
+/Container/Store/postgres/init/*.sql
+/Container/Store/sqlserver/init/*.sql
+/Container/Store/oracle/init/*.sql
+/Container/Store/.env
+
+# ID 連携の IdP コンテナの生成物（0_PublishIdP.ps1 が作る。#250）
 #   cert/ はホストの開発用証明書の秘密鍵、.env はそのパスワード
-/store/cert/
-/store/.env
-/store/app/publish/
-/store/keys/
-/store/logs/
-/store/app/artifacts/
+#   app/LogConf.xml は ..\Common\ の原本を写したもの（#318）
+/Container/E2E/cert/
+/Container/E2E/.env
+/Container/E2E/app/publish/
+/Container/E2E/app/artifacts/
+/Container/E2E/app/LogConf.xml
+/Container/E2E/keys/
+/Container/E2E/logs/
 
 # 下流 IdP コンテナの生成物（#281。上流とは別の置き場にする）
-/store/keys-downstream/
-/store/logs-downstream/
+/Container/E2E/keys-downstream/
+/Container/E2E/logs-downstream/
 
 # 2 つ目の上流 IdP コンテナの生成物（#292 の段階 1）
-/store/keys-upstream2/
-/store/logs-upstream2/
+/Container/E2E/keys-upstream2/
+/Container/E2E/logs-upstream2/
 
 # 相手（RP）の JWK Set を配るコンテナに置くもの（#309 の段階 1）
 #   E2E が書いて、同じテストの中で消す（Infrastructure/JwksUri）
-/store/jwks/*.json
+/Container/E2E/jwks/*.json
 
-# テストのスタブ（stub\。1_PublishStub.ps1 が作る。#294）
+# テストのスタブ（1_PublishStub.ps1 が作る。#294）
 #   cert/ はホストの開発用証明書の秘密鍵とパスワード。.env は起動側のパラメタ（.env.sample を写したもの）
-/stub/cert/
-/stub/.env
-/stub/app/publish/
-/stub/app/artifacts/
-/stub/app/LogConf.xml
-/stub/keys/
-/stub/logs/
+/Container/Stub/cert/
+/Container/Stub/.env
+/Container/Stub/app/publish/
+/Container/Stub/app/artifacts/
+/Container/Stub/app/LogConf.xml
+/Container/Stub/keys/
+/Container/Stub/logs/

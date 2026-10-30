@@ -117,7 +117,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
                 //  **`prompt` は、もう付けない**（#287）。
                 //    **ここはコンテナの中のアプリを測る**ので、
-                //    **イメージが古いと「付いている」になる**（`store\1_DockerComposeUp.bat` で作り直す）。
+                //    **イメージが古いと「付いている」になる**（`Container\E2E\1_DockerComposeUp.bat` で作り直す）。
                 bool prompt = (fed.AuthorizeUrl ?? "").Contains("prompt=");
 
                 r.Verify("prompt は付けない（上流が画面を出してよい）", !prompt,
@@ -641,7 +641,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
             Skip.IfNot(up,
                 "2 つ目の上流（" + origin + "）が起動していません。"
-                + "store\\1_DockerComposeUp.bat で建ててください（#292 の段階 1）。");
+                + "Container\\E2E\\1_DockerComposeUp.bat で建ててください（#292 の段階 1）。");
 
             return origin;
         }

@@ -10985,7 +10985,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **このケースが通らなくなったら、まず登録を見ること**（`store/docker-compose.yml` の `jwk_rsa_publickey`）。**鍵が無いと「通す」ので、`Success` が返って落ちる。**
+- **このケースが通らなくなったら、まず登録を見ること**（`Container/E2E/docker-compose.yml` の `jwk_rsa_publickey`）。**鍵が無いと「通す」ので、`Success` が返って落ちる。**
 
 ## SA-6.6 上流が署名証明書を 2 本広告していても、SAML2 の ID 連携ができる
 

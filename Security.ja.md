@@ -58,7 +58,7 @@
 | `root/programs/authentication_device/` | サンプル（Flutter）。**報告は歓迎する**が、CIBA とプッシュ 2FA の相手方として用意したテスト用であり、配布物ではない |
 | `root/files/resource/X509/` | **対象外。** **テスト専用**の自己署名証明書と秘密鍵。パスフレーズが `test` なのは意図的 |
 | `_appsettings.json` / `_app.config` | **対象外。** これらはテンプレートであり、含まれる `client_id` / `client_secret` / JWK は**サンプル値**。実ファイル（`appsettings.json` / `app.config`）は `.gitignore` 対象 |
-| `store/` | **対象外。** 開発用 DB を立てる `docker-compose` 一式。パスワードは固定値 |
+| `Container/` | **対象外。** テスト用の `docker-compose` 一式（開発用 DB、E2E 用の IdP コンテナ、テストのスタブ）。パスワードや秘密は固定のテスト用の値 |
 
 本サイトが土台にしているフレームワークは別リポジトリである。
 `OpenTouryo.*` の問題は、そちらへ報告してください。

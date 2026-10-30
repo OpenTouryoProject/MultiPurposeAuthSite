@@ -70,16 +70,16 @@
     省略した場合は、上記の環境変数から読む。
 
 .PARAMETER NoStoreContainer
-    **store\ の DB コンテナを、起動も停止もしない。**
+    **Container\Store\ の DB コンテナを、起動も停止もしない。**
 
-    既定では、-UserStoreType が mem 以外のとき、**接続文字列が store\ の
+    既定では、-UserStoreType が mem 以外のとき、**接続文字列が Container\Store\ の
     ポート（1434 / 1522 / 5433）を指していれば、その DB コンテナを起動し、
     終わったら停止する**（3 つ同時に起動するとメモリを使い切るため。
-    store\docker-compose.yml の「メモリの節約」）。
+    Container\Store\docker-compose.yml の「メモリの節約」）。
 
     **自分が起動したものだけを止める。** 既に起動していれば、そのまま残す。
 
-    **接続文字列が store\ のポートを指していなければ、何もしない**
+    **接続文字列が Container\Store\ のポートを指していなければ、何もしない**
     （手動確認の LocalServicesOnDocker は既定ポートなので、自動で対象外になる）。
     このスイッチは、それでも触らせたくないときに使う。
 
@@ -217,19 +217,19 @@ if (-not $LogDir) {
 }
 
 # ------------------------------------------------------------------
-# store\ の DB コンテナ（#305 の後）
+# Container\Store\ の DB コンテナ（#305 の後）
 # ------------------------------------------------------------------
 # **DB を 3 つ同時に起動すると、Docker の VM がメモリを使い切って固まることがある。**
 #   **使うストアの DB だけを、テストの間だけ起動する**
-#   （store\docker-compose.yml の「メモリの節約」。方針は LocalServicesOnDocker の CHEATSHEET）。
+#   （Container\Store\docker-compose.yml の「メモリの節約」。方針は LocalServicesOnDocker の CHEATSHEET）。
 #
 # **自分が起動したものだけを止める。** **人が自分で上げていた DB は、そのまま残す。**
 #
-# **対象かどうかは、接続文字列のポートで決める**（store\ は +1 にしてある）。
+# **対象かどうかは、接続文字列のポートで決める**（Container\Store\ は +1 にしてある）。
 #   **既定ポート（＝ 手動確認の LocalServicesOnDocker）なら、触らない。**
 
 $script:StoreDir = Join-Path `
-    (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'store'
+    (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'Container\Store'
 
 function Get-StorePortFromConnStr
 {
@@ -274,7 +274,8 @@ function Invoke-StoreDocker
 {
     param([Parameter(ValueFromRemainingArguments = $true)] [string[]] $DockerArgs)
 
-    #  **store\ で実行する。** compose のプロジェクト名をフォルダ名（store）に合わせるため。
+    #  **Container\Store\ で実行する。** docker-compose.yml を見つけるため
+    #  （プロジェクト名は、その name: で mpas-store に決まる。#318）。
     #  **profiles が付いたサービスは、名前を明示すれば起動できる**（--profile は要らない）。
     Push-Location $script:StoreDir
     try {
@@ -397,7 +398,7 @@ function Stop-StoreContainer
 #
 # **接続文字列の既定値は持たない。** 引数か環境変数で受ける。
 #
-# **Service / Port は store\docker-compose.yml のもの**（#305 の後）。
+# **Service / Port は Container\Store\docker-compose.yml のもの**（#305 の後）。
 #   **接続文字列がこのポートを指していれば、その DB コンテナを都度 起動・停止する。**
 #   **指していなければ触らない**（手動確認の LocalServicesOnDocker は既定ポート）。
 $storeKeys = @{
@@ -434,8 +435,8 @@ if ($UserStoreType -ne 'mem') {
     Write-Host ("UserStore : {0}（{1}）" -f $UserStoreType, $info.Name) -ForegroundColor Cyan
     Write-Host ("  接続文字列は {0} として渡します（内容は表示しません）。" -f $storeConnKey)
 
-    # **store\ の DB コンテナを、都度 起動・停止するか**（#305 の後）。
-    #   **接続文字列から読めたポートが store\ のものなら、対象にする。**
+    # **Container\Store\ の DB コンテナを、都度 起動・停止するか**（#305 の後）。
+    #   **接続文字列から読めたポートが Container\Store\ のものなら、対象にする。**
     #   **読めない（＝ 既定ポート）/ 違う番号なら、別の DBMS を指している**ので触らない。
     if (-not $NoStoreContainer) {
 
@@ -448,10 +449,10 @@ if ($UserStoreType -ne 'mem') {
         }
         elseif ($null -eq $foundPort) {
             Write-Host '  接続文字列にポートがありません（既定ポート）。' -ForegroundColor Yellow
-            Write-Host '    store\ の DB ではないと判断し、コンテナは触りません。' -ForegroundColor Yellow
+            Write-Host '    Container\Store\ の DB ではないと判断し、コンテナは触りません。' -ForegroundColor Yellow
         }
         else {
-            Write-Host ('  接続文字列のポートは {0} で、store\ の {1} ではありません。' -f $foundPort, $info.Port) -ForegroundColor Yellow
+            Write-Host ('  接続文字列のポートは {0} で、Container\Store\ の {1} ではありません。' -f $foundPort, $info.Port) -ForegroundColor Yellow
             Write-Host '    コンテナは触りません。' -ForegroundColor Yellow
         }
     }
@@ -594,11 +595,11 @@ $script:DcrCcNoOwnerSecret     = 'e2e_307_5b_dcr_cc_noowner_secret_do_not_use'
 
 
 # **ID フェデレーションの下流として振る舞うための設定（#250 の段階 5）。**
-#   上流は store\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
+#   上流は Container\E2E\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
 #   （建っていなければ、連携のテストは Skip される）。
 #
 #   **redirect_uri はクライアント 1 件に 1 つ**なので、**下流ごとに別のクライアント**を使う。
-#   登録は store\docker-compose.yml にある（上流に環境変数で差し込んでいる）。
+#   登録は Container\E2E\docker-compose.yml にある（上流に環境変数で差し込んでいる）。
 #
 #   **上流のエンドポイント（IdFederation{Authorize,Token,UserInfo}Endpoint）は上書きしない。**
 #   構成ファイルが既に 44301 を指しており、**テストはその値を読んで上流を探す**ため、

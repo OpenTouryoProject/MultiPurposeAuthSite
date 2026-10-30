@@ -40,8 +40,8 @@
     省略した場合は、test.ps1 が環境変数から読む。
 
 .PARAMETER NoStoreContainer
-    store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
-    既定では、接続文字列が store\ のポートを指していれば、
+    Container\Store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
+    既定では、接続文字列が Container\Store\ のポートを指していれば、
     その DB だけをテストの間だけ起動する。詳細は test.ps1 の説明を参照。
 
 .PARAMETER Url
@@ -114,6 +114,7 @@
      2026/09/24  玄人 幸道         -ShortLifetimes を追加（有効期限のテストを回す。#188）
      2026/10/22  玄人 幸道         -DPoPNonce を追加（nonce のテストを回す。#311 の段階 4）
      2026/10/24  玄人 幸道         -NoImplicit を追加（Implicit を閉じた配備のテストを回す。#314）
+     2026/10/31  玄人 幸道         store\ を Container\Store\ に読み替えた（#318）
 #>
 [CmdletBinding()]
 param(

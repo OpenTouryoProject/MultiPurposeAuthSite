@@ -1,149 +1,27 @@
 # ##################################################################################################
-# E2E テスト用の UserStore（SQL Server / Oracle / PostgreSQL）
+# ID 連携の E2E で使う IdP 群（ハイブリッド IdP 構成。#250 / #281 / #284 / #292）と、jwks の配信（#309）
 #
-#   **これは E2E 専用である。** 手動確認は LocalServicesOnDocker を使う。
-#   そのため **ポートを +1 にしてある**（同時に起動できるように）。
+#   上流 IdP    : https://localhost:44301
+#   上流 IdP 2  : https://localhost:44304
+#   下流 IdP    : https://localhost:44303
+#   JWK Set     : http://localhost:44305
 #
-#     SQL Server : 1434 → 1433    （LocalServicesOnDocker は 1433）
-#     Oracle     : 1522 → 1521    （同 1521）
-#     PostgreSQL : 5433 → 5432    （同 5432）
+#   **E2E 用の UserStore（DB）は ..\Store\ に在る**（#318 で分けた。もとは同じ store\docker-compose.yml）。
+#   **どの IdP も UserStoreType は mem** なので、DB は要らない。
 #
-#   **接続文字列は、設定ファイルではなく環境変数で E2E に渡す**（#250 の段階 1）。
-#   コミット済みの ConnectionString_* はポートを書いていないので**既定ポート**を指し、
-#   そのまま LocalServicesOnDocker（手動確認）を向く。
-#
-#   使い方は root/TESTING.md 1 節「ストアを切り替える」を見ること。
-#
-#   **DDL は 0_CopyInitSql.ps1 が repo から流し込む。** 起動時に各コンテナが実行する。
-#   （1_DockerComposeUp.bat が、先に 0_CopyInitSql.ps1 を呼ぶ）
+#   **起動は 1_DockerComposeUp.bat。** publish（0_PublishIdP.ps1）をしてから `up -d --build` する。
 #
 # --------------------------------------------------------------------------------------------------
 # メモリの節約
 #
-#   **DB を 3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある。**
-#   方針は LocalServicesOnDocker の CHEATSHEET.md に倣う（別リポジトリ）。
-#
-#     1. **3 つの DB には profiles を付けてある。**
-#        **`docker compose up -d` では起動しない**（上流・上流 2・下流の 3 つだけが起動する）。
-#        **使う 1 つだけを、名前を指定して起動する。**
-#
-#          docker compose up -d sqlserver      ← sql で回すとき
-#          docker compose up -d oracle         ← ora で回すとき
-#          docker compose up -d postgres       ← npg で回すとき
-#
-#        **同時に 2 つ以上を起動しないこと。** E2E は 1 回に 1 つのストアしか使わない。
-#
-#     2. **使い終わったら止める**（docker compose stop <サービス名>）。
-#        **データを残さず作り直してよいなら** down -v（2_DockerComposeDown.bat）。
-#
-#     3. **restart は、すべてのサービスで "no"。** **エンジンを起動した拍子に
-#        コンテナが一斉に復帰するのを防ぐ**
-#        （**以前は always だったので、Docker を起動するたびに 6 つとも戻っていた**）。
-#        **起動は、いつでも明示的に行う**（up -d / start）。
-#        **以前の always で作られたコンテナは古い設定のまま**なので、
-#        **一度 down で消す**か、**docker update --restart=no で変えること**
-#        （**update ならデータを壊さない** — Oracle は再作成に数分かかる）。
-#
-#     4. **キャッシュに上限を付けてある。** 既定を変えるなら .env か環境変数で。
-#
-#          | サービス | パラメタ | 既定 | 変える変数 |
-#          |---|---|---|---|
-#          | sqlserver | max server memory (MB) | 300 | SQLSERVER_BUFFER_POOL_MB |
-#          | postgres  | shared_buffers         | 128 | POSTGRES_BUFFER_POOL_MB  |
-#          | oracle    | **変更しない**（下の註） | —  | —                        |
-#
-#   **VM 全体にも上限を付けられる**（%UserProfile%\.wslconfig の [wsl2] memory=6GB など)。
-#   **こちらは機械の設定**なので、このリポジトリでは触らない。
+#   **restart は、すべてのサービスで "no"。** **エンジンを起動した拍子に
+#   コンテナが一斉に復帰するのを防ぐ。** **起動は、いつでも明示的に行う**（up -d / start）。
+#   **使い終わったら止める**（docker compose stop、または 2_DockerComposeDown.bat）。
 # ##################################################################################################
 
+name: mpas-e2e
+
 services:
-
-  # ------------------------------------------------------------------ PostgreSQL
-  #   **profiles が付いているので `docker compose up -d` では起動しない**（下の「メモリの節約」）。
-  #   起動するときは名前を指定する : docker compose up -d postgres
-  postgres:
-    image: postgres
-    # **自動で復帰させない。** エンジンを起動した拍子に DB が一斉に戻ると、メモリを食い切る。
-    restart: "no"
-    profiles:
-      - postgres
-    # **キャッシュ（shared_buffers）に上限を付ける。**
-    #   イメージ本来の既定も 128MB だが、**明示しておけば変えられる**。
-    command: >
-      postgres
-      -c shared_buffers=${POSTGRES_BUFFER_POOL_MB:-128}MB
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=seigi@123
-      - POSTGRES_DB=UserStore
-    ports:
-      - 5433:5432
-    volumes:
-      # **データは持たせない。** E2E 用なので、作り直せる方がよい。
-      #- ./postgres/data:/var/lib/postgresql/data
-      - ./postgres/init:/docker-entrypoint-initdb.d
-
-  # ------------------------------------------------------------------ SQL Server
-  #   **profiles が付いているので `docker compose up -d` では起動しない。**
-  #   起動するときは名前を指定する : docker compose up -d sqlserver
-  sqlserver:
-    # **イメージ名を直した**（microsoft/mssql-server-linux は廃止。#250 の段階 1）
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    restart: "no"
-    profiles:
-      - sqlserver
-    command: "sh -c '/init/0_start-up.sh & /opt/mssql/bin/sqlservr;'"
-    environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=seigi@123
-      - MSSQL_PID=Express
-      - MSSQL_LCID=1041
-      - MSSQL_COLLATION=Japanese_CI_AS
-      # **`max server memory (MB)` の上限**（`init/0_start-up.sh` が起動の度に設定する）。
-      #   **イメージ本来の既定は上限なし**で、**VM のメモリに比例して大きく使う** —
-      #   **3 つの DB の中で、ここが一番効く。**
-      #   **128 未満は設定できない**（SQL Server の制限）。
-      #   **バッファプール等の上限**なので、プロセス全体はこれより大きくなる。
-      - SQLSERVER_BUFFER_POOL_MB=${SQLSERVER_BUFFER_POOL_MB:-300}
-    ports:
-      - 1434:1433
-    volumes:
-      #- ./sqlserver/mssql-db:/var/opt/mssql
-      - ./sqlserver/init:/init
-
-  # ------------------------------------------------------------------ Oracle
-  #   **#250 の段階 1 で追加した。** これが無かったため、3 方言の通し（#245 の段階 3）は
-  #   LocalServicesOnDocker（別リポジトリ）で測っていた。
-  #
-  #   **初回起動は数分かかる**（データベースの作成）。健全性を見てから使うこと。
-  #   PDB は FREEPDB1（XEPDB1 ではない）。
-  #
-  #   **profiles が付いているので `docker compose up -d` では起動しない。**
-  #   起動するときは名前を指定する : docker compose up -d oracle
-  #
-  #   **SGA は小さくしない。** **小さくしすぎると DB が起動しなくなる**ため、
-  #   **自動では変更しない**（LocalServicesOnDocker の CHEATSHEET と同じ判断）。
-  #   **23ai Free は製品の制限で SGA ＋ PGA が 2GB まで**なので、それ以上は使わない。
-  #   **メモリを空けたいときは、使わない間は止めておくこと**（docker compose stop oracle）。
-  oracle:
-    image: gvenzl/oracle-free:23-slim
-    restart: "no"
-    profiles:
-      - oracle
-    environment:
-      - ORACLE_PASSWORD=seigi@123
-      # **APP_USER で SCOTT を作らせる**（DDL は SCOTT のスキーマに作る）
-      - APP_USER=SCOTT
-      - APP_USER_PASSWORD=tiger
-    ports:
-      - 1522:1521
-    volumes:
-      - ./oracle/init:/container-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD", "healthcheck.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 60
 
   # ------------------------------------------------------------------ 上流の IdP（#250 の段階 2〜3）
   #   **ハイブリッド IdP の上流側**だけを動かす。
@@ -160,7 +38,7 @@ services:
   #   （IdFederation{Authorize,Token,UserInfo}Endpoint が https://localhost:44301/... を指す）。
   upstream:
     build: ./app
-    # **自動で復帰させない**（DB と同じ。頭の「メモリの節約」）。
+    # **自動で復帰させない**（頭の「メモリの節約」）。
     restart: "no"
     ports:
       - 44301:8081
@@ -168,7 +46,7 @@ services:
     #   リソースのパス 19 件（C:/root/files/... → /resource）と log4net の差し替え。
     #   **サービスごとに書くと 2 回書くことになり、片方だけ直す事故が起きる。**
     env_file:
-      - ./mpas-common.env
+      - ../Common/mpas-common.env
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTPS_PORTS=8081
@@ -192,7 +70,7 @@ services:
       #   **SP はメタデータをキャッシュする**ので、**1 本だけでは替えた瞬間に検証できなくなる。**
       #   **ここは「以前この配備が使っていた鍵」**（*_Server.cer）を指している。
       - appSettings__PreviousSigningCerFilePaths=/resource/X509/SHA256RSA_Server.cer
-      # **ホストの開発用証明書を書き出したもの**（3_PublishUpstream.ps1 が用意する）。
+      # **ホストの開発用証明書を書き出したもの**（0_PublishIdP.ps1 が用意する）。
       #   既に信頼されているので、**自己テストでブラウザが警告を出さない。**
       - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
       - Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
@@ -327,12 +205,12 @@ services:
   #   **イメージは同じ**（3 コンテナとも `./app`）。**違うのは設定だけである。**
   upstream2:
     build: ./app
-    # **自動で復帰させない**（DB と同じ。頭の「メモリの節約」）。
+    # **自動で復帰させない**（頭の「メモリの節約」）。
     restart: "no"
     ports:
       - 44304:8081
     env_file:
-      - ./mpas-common.env
+      - ../Common/mpas-common.env
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTPS_PORTS=8081
@@ -398,12 +276,12 @@ services:
   #   **手順と目視の見方は root\TESTING.md 1 節。**
   downstream:
     build: ./app
-    # **自動で復帰させない**（DB と同じ。頭の「メモリの節約」）。
+    # **自動で復帰させない**（頭の「メモリの節約」）。
     restart: "no"
     ports:
       - 44303:8081
     env_file:
-      - ./mpas-common.env
+      - ../Common/mpas-common.env
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTPS_PORTS=8081
@@ -592,7 +470,7 @@ services:
   #   **E2E のクライアントは HttpClient のコードで、HTTP サーバを持たない** —
   #   **`jwks_uri` に書ける URL が無い**ので、**静的に配るだけのものを 1 つ置く。**
   #
-  #   **中身はホストの `store/jwks` に置く**（**テストが書き替える** —
+  #   **中身はホストの `Container/E2E/jwks` に置く**（**テストが書き替える** —
   #   **同じ URL の鍵が入れ替わったことを測る**ため。`RT-309.*`）。
   #
   #   **既存のコンテナの `/jwkcerts` は使わない**（#309 の決め）。

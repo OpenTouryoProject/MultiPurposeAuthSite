@@ -38,18 +38,21 @@
 | Implicit を閉じた配備（`RT-314`）を回す | `.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"` | [`TESTING.md`](TESTING.md) 5 節 |
 | net48 版でも mTLS（`FA-6`）を回す（証明書の準備・後片付けが要る） | `.\SetupNetFxMtls.ps1 -Action Prepare` → （管理者）`-Action Trust` → `.\2_RunAllTests.ps1 -Launch -NetFxMtls` → （管理者）`-Action Cleanup` | 1 |
 | 証明書の準備ができているかを見る | `.\SetupNetFxMtls.ps1 -Action Check` | 1 |
-| DB のストアで回す（`sql` / `ora` / `npg`。`store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`TESTING.md`](TESTING.md) 1 節 |
-| 別ホストの DB を指す（`store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`TESTING.md`](TESTING.md) 1 節 |
+| DB のストアで回す（`sql` / `ora` / `npg`。`Container\Store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`TESTING.md`](TESTING.md) 1 節 |
+| 別ホストの DB を指す（`Container\Store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`TESTING.md`](TESTING.md) 1 節 |
 
-### コンテナ（`store\`。ID 連携の上流・下流 IdP と DB）
+### コンテナ（`Container\`。#318）
 
 | やりたいこと | コマンド | 節 |
 |---|---|---|
-| IdP のコンテナを作り直して起動する（DDL の流し込み → publish → `up -d --build`） | `..\store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
-| **一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
-| **消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\store\2_DockerComposeDown.bat` | — |
-| 動いているコンテナを見る | `docker ps --filter "label=com.docker.compose.project=store"` | — |
-| **テストのスタブ**として MPAS を起動する（Open棟梁 などのテストから使う。パラメタは `.env` と JSON） | `cd ..\stub; .\1_PublishStub.ps1; docker compose --env-file <パラメタ> up -d --build` | [`../stub/README.md`](../stub/README.md) |
+| ID 連携の IdP 群（上流・上流 2・下流）と jwks を作り直して起動する（publish → `up -d --build`） | `..\Container\E2E\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| IdP 群を**一旦止める**（`start` で戻せる） | `cd ..\Container\E2E; docker compose stop` | — |
+| IdP 群を**消す** | `..\Container\E2E\2_DockerComposeDown.bat` | — |
+| E2E 用の DB に DDL を流し込む（DB は起動しない。通しでは `test.ps1` が起動・停止する） | `..\Container\Store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| DB を**一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\Container\Store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
+| DB を**消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\Container\Store\2_DockerComposeDown.bat` | — |
+| 動いているコンテナを見る | `docker ps --filter "label=com.docker.compose.project=mpas-e2e"`（DB は `mpas-store`、スタブは `mpas-stub`） | — |
+| **テストのスタブ**として MPAS を起動する（Open棟梁 などのテストから使う。パラメタは `.env` と JSON） | `cd ..\Container\Stub; .\1_PublishStub.ps1; docker compose --env-file <パラメタ> up -d --build` | [`../Container/Stub/README.md`](../Container/Stub/README.md) |
 
 ### その他
 

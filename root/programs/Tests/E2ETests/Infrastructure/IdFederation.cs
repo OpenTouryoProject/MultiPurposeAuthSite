@@ -118,7 +118,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             Skip.IfNot(up,
                 "上流の IdP（" + origin + "）が起動していません。"
-                + "store\\1_DockerComposeUp.bat で建ててください（#250 の段階 5）。");
+                + "Container\\E2E\\1_DockerComposeUp.bat で建ててください（#250 の段階 5）。");
 
             return origin;
         }
@@ -172,7 +172,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **どこでも「許可」を押さない**ため、**記録が無い上流では同意画面で止まる。**
         ///
         /// **それはテストの前提が整っていないだけ**なので、ここで整える。
-        /// **`store/` の DBMS や IIS Express と同じ扱い**である。
+        /// **`Container/Store/` の DBMS や IIS Express と同じ扱い**である。
         ///
         /// **測りたいのは ID 連携の一巡であって、「許可」が押せることではない。**
         /// そのため、**ここでの成否は判定に出さない**（整えられなければ、

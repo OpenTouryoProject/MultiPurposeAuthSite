@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/08  玄人 幸道         新規（#284）
 //*  2026/10/13  玄人 幸道         2つ目の上流コンテナを足した（#292 の段階 1）
+//*  2026/10/31  玄人 幸道         store\ から Container\E2E\ へ移したのに合わせた（#318）
 //**********************************************************************************
 
 using System;
@@ -45,14 +46,14 @@ using Xunit;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 {
     /// <summary>
-    /// `store/` のコンテナ（上流 / 下流）を、テスト対象として扱う（#284）。
+    /// `Container/E2E/` のコンテナ（上流 / 下流）を、テスト対象として扱う（#284）。
     /// </summary>
     /// <remarks>
     /// **ホストの core / netfx（`TestEnv`）とは別に持つ。**
     /// **`AllTargets` に混ぜない** — 混ぜると既存の全テストが増え、
     /// **その大半は同じコードの再計測**になる。**ここで測るのは配備の差だけである。**
     ///
-    /// **実効設定は「`store/app/publish/appsettings.json` ＋ compose の環境変数」**である。
+    /// **実効設定は「`Container/E2E/app/publish/appsettings.json` ＋ compose の環境変数」**である。
     /// **ファイルだけ読むと、compose が上書きした分が分からない**ので、
     /// **`docker inspect` で稼働中コンテナの環境変数を読み、重ねる**（`AppConfig.Overlay`）。
     ///
@@ -84,8 +85,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
         /// </remarks>
         public const string Upstream2Key = "upstream2";
 
-        /// <summary>compose のプロジェクト名（`store/` ディレクトリの名前）</summary>
-        private const string ComposeProject = "store";
+        /// <summary>compose のプロジェクト名（`Container/E2E/docker-compose.yml` の `name:`。#318）</summary>
+        private const string ComposeProject = "mpas-e2e";
 
         private static readonly object _lock = new object();
 
@@ -177,14 +178,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
         {
             reason = null;
 
-            // **publish の成果物を構成として読む**（`3_PublishUpstream.ps1` が作る）。
+            // **publish の成果物を構成として読む**（`0_PublishIdP.ps1` が作る）。
             string configPath = Path.GetFullPath(Path.Combine(
-                TestEnv.ProgramsDir, "..", "..", "store", "app", "publish", "appsettings.json"));
+                TestEnv.ProgramsDir, "..", "..", "Container", "E2E", "app", "publish", "appsettings.json"));
 
             if (!File.Exists(configPath))
             {
                 reason = "コンテナの構成が見つかりません（" + configPath + "）。"
-                    + "store\\3_PublishUpstream.ps1 を実行してください（#284）。";
+                    + "Container\\E2E\\0_PublishIdP.ps1 を実行してください（#284）。";
                 return null;
             }
 
@@ -193,7 +194,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
             if (string.IsNullOrEmpty(containerName))
             {
                 reason = key + " のコンテナが起動していません。"
-                    + "store\\1_DockerComposeUp.bat で建ててください（#284）。";
+                    + "Container\\E2E\\1_DockerComposeUp.bat で建ててください（#284）。";
                 return null;
             }
 
@@ -244,7 +245,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
         /// <param name="service">サービス名（upstream / downstream）</param>
         /// <returns>コンテナ名。無ければ null</returns>
         /// <remarks>
-        /// **名前（`store-upstream-1`）を直書きしない。**
+        /// **名前（`mpas-e2e-upstream-1`）を直書きしない。**
         /// **compose が付けるラベルで引く**ので、プロジェクト名の付け方が変わっても動く。
         /// </remarks>
         private static string FindContainerName(string service)

@@ -4,19 +4,19 @@
 
 .DESCRIPTION
     ＜何を用意するか＞
-      1. **アプリの publish 成果物**（stub\app\publish）
+      1. **アプリの publish 成果物**（app\publish）
          **appsettings.json は、雛形（_appsettings.json）に差し替える。**
          **開発者の手元の appsettings.json（秘密を含む）を、イメージに入れないため。**
-      2. **HTTPS の証明書**（stub\cert\aspnetapp.pfx）と、そのパスワード（stub\cert\cert.env）
-      3. **log4net の構成**（store\app\LogConf.xml を写す。二重に持たない）
+      2. **HTTPS の証明書**（cert\aspnetapp.pfx）と、そのパスワード（cert\cert.env）
+      3. **log4net の構成**（..\Common\LogConf.xml を写す。二重に持たない）
 
     ＜証明書は、ホストの開発用証明書を書き出す＞
-      **store\3_PublishUpstream.ps1 と同じ。** ホストで既に信頼されているので、ブラウザが警告を出さない。
+      **..\E2E\0_PublishIdP.ps1 と同じ。** ホストで既に信頼されているので、ブラウザが警告を出さない。
       **パスワードは自動生成し、cert.env に書く**（compose が env_file として読む）。
       **自分の証明書を使うなら、.env の STUB_CERT_DIR / STUB_CERT_ENV_FILE で差し替える**（README.md）。
 
     ＜publish は Debug のまま＞
-      **テストのスタブ**なので、Release にする理由が無い（store\ と同じ）。
+      **テストのスタブ**なので、Release にする理由が無い（..\E2E\ と同じ）。
 
 .PARAMETER NewCertificate
     証明書を作り直す（期限切れなど）。
@@ -33,6 +33,7 @@
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/10/30  玄人 幸道         新規（#294）
+     2026/10/31  玄人 幸道         stub\ から Container\Stub\ へ移した（#318）
 #>
 [CmdletBinding()]
 param(
@@ -43,10 +44,10 @@ $ErrorActionPreference = 'Stop'
 
 # パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
 $here = Split-Path -Parent $PSCommandPath
-$coreDir = Join-Path $here '..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore'
+$coreDir = Join-Path $here '..\..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore'
 $proj = Join-Path $coreDir 'MultiPurposeAuthSiteCore.csproj'
 $template = Join-Path $coreDir '_appsettings.json'
-$logConf = Join-Path $here '..\store\app\LogConf.xml'
+$logConf = Join-Path $here '..\Common\LogConf.xml'
 $pub = Join-Path $here 'app\publish'
 $art = Join-Path $here 'app\artifacts'
 $certDir = Join-Path $here 'cert'
@@ -89,7 +90,7 @@ Write-Output "  publish しています ..."
 
 Remove-Item -Recurse -Force $pub -ErrorAction SilentlyContinue
 
-# **中間出力を Visual Studio と共用しない**（--artifacts-path。store\3_PublishUpstream.ps1 と同じ理由）。
+# **中間出力を Visual Studio と共用しない**（--artifacts-path。..\E2E\0_PublishIdP.ps1 と同じ理由）。
 dotnet publish $proj -c Debug -o $pub --artifacts-path $art --nologo -v quiet
 
 if ($LASTEXITCODE -ne 0)
@@ -111,4 +112,4 @@ New-Item -ItemType Directory -Force (Join-Path $here 'keys'), (Join-Path $here '
 Write-Output "  publish しました : app\publish（appsettings.json は雛形）"
 Write-Output ""
 Write-Output "  起動 : docker compose --env-file <パラメタのファイル> up -d --build"
-Write-Output "         （stub\ で実行する。パラメタのファイルは .env.sample を写して作る）"
+Write-Output "         （Container\Stub\ で実行する。パラメタのファイルは .env.sample を写して作る）"

@@ -2463,7 +2463,7 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 >
 > **移行用のスクリプトは置いていない。** 既存のデータベースは次のどちらか。
 >
-> - **`Create_UserStore.sql` を流し直す**（E2E 用の `store/` は使い捨てなのでこれ）
+> - **`Create_UserStore.sql` を流し直す**（E2E 用の `Container/Store/` は使い捨てなのでこれ）
 > - **`ALTER` で 16 列を足し、画面から再登録する**
 >
 > **列を足しただけでは、登録済みのクライアントは読めない**
@@ -2533,7 +2533,7 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 > **SQL Server 2016 以降が前提**である（索引キーの上限が 1700 バイト）。
 > **2014 以前の上限は 900 バイト**なので、**この定義は上限を超える**
 > （可変長の列なので、作成は警告で通り、**長い値を入れたときに失敗する**）。
-> **2014 以前では未検証**である。**実機で測ったのは 2022**（`store/` のコンテナ）。
+> **2014 以前では未検証**である。**実機で測ったのは 2022**（`Container/Store/` のコンテナ）。
 >
 > **Oracle・PostgreSQL は、既定の設定のまま収まる**
 > （Oracle は `db_block_size` 8192 で索引キーが約 6398 バイトまで、
@@ -2669,7 +2669,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **SAML2 は要求にも応答にも署名が在り、OIDC は応答だけ**である。
 
 > **E2E では、上流だけ別の RSA 鍵を使う**（#293 の段階 1）。
-> **`store/docker-compose.yml` の upstream が `RsaPfxFilePath` / `SpRp_RsaCerFilePath` /
+> **`Container/E2E/docker-compose.yml` の upstream が `RsaPfxFilePath` / `SpRp_RsaCerFilePath` /
 > `JwkSetFilePath` を `*_Upstream` に向けている。**
 >
 > | | 公開している RSA の `kid`（実測 2026/10/13） |
@@ -2682,7 +2682,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **EC の 3 本は共有のまま**（RSA だけを分けた）。
 
 > **(2) の署名も、上流が検証する**（#293 の段階 2）。
-> **雛形の `IdFederation` クライアントと、`store/` の E2E のクライアント 3 件に
+> **雛形の `IdFederation` クライアントと、`Container/E2E/` の E2E のクライアント 3 件に
 > `jwk_rsa_publickey` を登録した**（値は **`*_Client.cer` の JWK** ＝ 下流が (2) の署名に使う鍵の対）。
 >
 > **以前は登録していなかったので、上流は「鍵がない場合は、通す」経路に入り、
@@ -2894,7 +2894,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | `IdFederationSaml2CerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の署名を検証する証明書**（`.cer` のパス） |
 
 **雛形の既定は、OIDC の `IdFederation*Endpoint` と同じ**
-（**上流は `store/` のコンテナ**。`https://localhost:44301`。**E2E は環境変数で上書きする**）。
+（**上流は `Container/E2E/` のコンテナ**。`https://localhost:44301`。**E2E は環境変数で上書きする**）。
 
 **1 本でも空なら、SAML2 の ID 連携は無効**である（`IdFederationUpstream.IsUsable`。#292 の段階 1 までは `Config.CanIdFederationBySaml2`）。
 **押しても成立しない導線を出さない**ため、**サインイン画面のボタンも出さない。**
@@ -2934,7 +2934,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 
 > **上流には、下流の ACS を `redirect_uri_saml` として登録する**こと。
 > **1 文字も違ってはならない**（#263 と同じ照合）。
-> 雛形は `IdFederation` クライアントに登録済みで、`store/docker-compose.yml` は
+> 雛形は `IdFederation` クライアントに登録済みで、`Container/E2E/docker-compose.yml` は
 > E2E の 3 つの下流（ホスト core / netfx / 下流コンテナ）の分を持っている。
 
 #### アサーションの属性（`AttributeStatement`）で、メアドと利用者名を運ぶ（#286 の段階 4）
@@ -3103,7 +3103,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **discovery は読めても、その先の `jwks_uri` に届かない**ことがある。
 > **その配備では `IdFederationJwkSetUri` を直接与える**（#290 の順番で、これが最も先に見られる）。
 
-**例**（`store/docker-compose.yml` の下流コンテナ）。
+**例**（`Container/E2E/docker-compose.yml` の下流コンテナ）。
 
 ```
 appSettings__IdFederationJwkSetUri=http://upstream:8080/jwkcerts
@@ -3734,7 +3734,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `CookieSecurePolicy` | `""`（空） | **`always`** | **すべての Cookie に `Secure` を付ける**（#279）。空なら、各 Cookie 自身の宣言に従う（認証まわりは元から `Secure`）。**`always` にすると、平文 HTTP ではサインインできなくなる**ので、開発では空のままにする。**net10.0 版だけ**（net48 版は `Web.config` の `<httpCookies requireSSL>`） |
 | `UseForwardedHeaders` | `""`（空＝取り込まない） | **リバース プロキシの背後なら `on`** | **`X-Forwarded-Proto` / `X-Forwarded-For` を取り込む**（#279。上流 Open棟梁 #549）。**取り込まないと、プロキシが https で受けていてもアプリは http だと思う** → `issuer`・リダイレクト先の URI・`Secure` の判定がずれる。**パイプラインの先頭で呼んでいる。** **net10.0 版だけ** |
 | `ForwardedHeadersKnownProxies` | `""`（空） | **プロキシの IP を列挙する** | **転送ヘッダを信じるプロキシの IP**（#279。カンマ区切り）。**`UseForwardedHeaders` が `on` のときだけ読む。** 空なら、**送った相手を問わない**（`KnownProxies` / `KnownIPNetworks` を空にしてあるため）。**プロキシを経由せずアプリに直接届く経路があるなら、必ず列挙する。** **net10.0 版だけ** |
-| `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
+| `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`Container/E2E/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at` / `op_session`（#310 の段階 1）、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**`AuthCookieName` が空でも、枠組みの既定名に接頭辞が付く**（`.probe_AspNetCore.Identity.Application` など。#283。**以前はこの組み合わせだけで 500 になっていた**）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。**AntiForgery にも掛かる**（#282）。名前は net10.0 版では **DataProtection の識別子から導かれ**、**#279 でそれを固定したので、`DataProtectionKeyPath` を設定した配備同士はパスが違っても同名になる**（**実測 2026/10/08**。[`TESTING.md`](TESTING.md) 1 節）。net48 版は `AntiForgeryConfig.CookieName`。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
 | `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4）。**サンプルは下の「標準クレームを返す」**（#261） |

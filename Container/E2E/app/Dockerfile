@@ -4,7 +4,7 @@
 #   **下流（連携する側）はホストで動かす**（Visual Studio / test.ps1 -Launch）。
 #   **このコンテナは上流（連携される側）だけを受け持つ。**
 #
-#   **ホストビルド型である。** `3_PublishUpstream.ps1` が publish した成果物を写すだけ。
+#   **ホストビルド型である。** `0_PublishIdP.ps1` が publish した成果物を写すだけ。
 #   コンテナ内ビルド型にしなかったのは、**Open棟梁 のアセンブリを HintPath で参照している**ため
 #   （`root/programs/OpenTouryoAssemblies/Build_netcore100`）。
 #   コンテナの中で建てるには、そこまで持ち込む必要がある。**必要になったら足す。**
@@ -21,13 +21,14 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 
 WORKDIR /app
 
-# **publish 済みの成果物を写す**（3_PublishUpstream.ps1 が用意する）
+# **publish 済みの成果物を写す**（0_PublishIdP.ps1 が用意する）
 COPY publish/ ./
 
 # **log4net の構成だけは差し替える**（雛形は Windows のパスを書いているため）。
 #   雛形の "C:\root\files\..." は Linux では区切り文字と見なされず、
 #   **その名前のファイルが /app に出来てしまい、読めない。**
-#   これは **/app/logs に出す**（compose が store/logs にマウントする）。
+#   これは **/app/logs に出す**（compose が logs*/ にマウントする）。
+#   **原本は ../../Common/LogConf.xml**（Stub と共用する。#318）。0_PublishIdP.ps1 が app/ に写して置く。
 COPY LogConf.xml ./
 RUN mkdir -p /app/logs
 

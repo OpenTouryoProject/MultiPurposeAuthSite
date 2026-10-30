@@ -85,7 +85,7 @@ _appsettings.json  →  コピーして appsettings.json を作り、各自の�
 
 既定は `"UserStoreType": "mem"`（プロセス内メモリ）で、**DB 無しで起動できる**。
 DBMS を使うなら `sql` / `ora` / `npg` に変え、`root/files/resource/MultiPurposeAuthSite/Sql/`
-の DDL を流す。Docker で立てる一式は `store/`（`docker-compose.yml`）。
+の DDL を流す。Docker で立てる一式は `Container/Store/`（`docker-compose.yml`）。
 
 ### 2.5 起動 URL
 
@@ -238,9 +238,9 @@ public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 > **`MinimumSameSitePolicy = None` の明示は外していない** —
 > **外すと `samesite` 属性ごと出なくなる**（実測。`RT-279.1` で固定）。
 
-> **上流 IdP コンテナ（`store/`）でも測った**（#279）。
+> **上流 IdP コンテナ（`Container/E2E/`）でも測った**（#279）。
 > **4 つの設定はどれも空のまま**なので、挙動は従来どおりである。
-> **既定の鍵リング（`store/keys`）はそのまま使われ、作り直されない**（実測）。
+> **既定の鍵リング（`Container/E2E/keys`）はそのまま使われ、作り直されない**（実測）。
 > ただし **`SetApplicationName` を入れる前に発行した Cookie は復号できなくなる**ので、
 > **入れ替えの際に 1 度だけ全員がサインアウトする**（仕様上。ここは実測していない）。
 

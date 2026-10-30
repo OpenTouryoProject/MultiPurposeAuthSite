@@ -233,8 +233,8 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   `AuthenticationCodeDictionary` `RefreshTokenDictionary` `CustomizedConfirmation`
   `Saml2OAuth2Data` `FIDO2Data` `DeviceAuthZData` `CibaData` `OAuth2Revocation`
   `IssuedToken` `RequestObject`）。**3 方言すべてを直すこと。**
-- Docker で DBMS を立てる一式は `store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
-  `0_CopyInitSql.ps1` が上記 DDL を `store/*/init/` へコピーし、**CRLF を LF に変換**する
+- Docker で DBMS を立てる一式は `Container/Store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
+  `0_CopyInitSql.ps1` が上記 DDL を `Container/Store/*/init/` へコピーし、**CRLF を LF に変換**する
   （Linux コンテナの初期化スクリプトが読むため）。
 
 ### 4.3 STS 専用モード（機能ロックダウン）
