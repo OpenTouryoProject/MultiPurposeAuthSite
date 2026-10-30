@@ -35,6 +35,7 @@
 //*  2026/10/26  玄人 幸道         RT-307.28（管理画面で保存しても、画面に出ない列が残る）を追加（#294）
 //*  2026/10/26  玄人 幸道         RT-307.29（登録を消すと、全利用者の同意が消える）を追加（#294）
 //*  2026/10/29  玄人 幸道         RT-307.5 で expires_in も絞った期限であることを見る（#294）
+//*  2026/10/30  玄人 幸道         RT-307.16 の (6)（device_code × private_key_jwt を断る）を外した（受けるようにした。#294）
 //**********************************************************************************
 
 using System;
@@ -1834,14 +1835,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         head + "\"jwks_uri\":\"https://rp.example/jwks.json\"}",
                         "クライアント認証の経路が同期なので、取得を差し込めない（別 Issue）");
 
-                    r.Step("(6) device_code グラント × private_key_jwt");
-
-                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
-                        head + "\"grant_types\":[\"urn:ietf:params:oauth:grant-type:device_code\"],"
-                        + "\"response_types\":[],"
-                        + "\"token_endpoint_auth_method\":\"private_key_jwt\","
-                        + "\"jwks\":{\"keys\":[" + rsaJwk + "]}}",
-                        "RFC 8628 の口は client_assertion を読まないので、永久に認証できない");
+                    //  **(6) device_code グラント × private_key_jwt は、断らなくなった**（#294）。
+                    //    **RFC 8628 の口（/device_authz と /token）が client_assertion を受けるようにした**ので、
+                    //    **その組み合わせでも認証できる**（`RT-294.77`）。
 
                     r.Note("**`jwks` と `jwks_uri` を同時に送ることも断る**"
                         + "（RFC 7591 §2 は、どちらか一方としている）。"

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         aud の無いトークンで落ちない・何もしていなかった claims のループを削除（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -115,9 +116,9 @@ namespace MultiPurposeAuthSite.Controllers
                     Claim ClientId = identity.Claims.Where(
                         x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
 
-                    ApplicationUser user =
-                        //CmnUserStore.FindByName(identity.Name);
-                        PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+                    //  **aud が無ければ、利用者を引かない**（#294。以前は NullReferenceException になった）。
+                    ApplicationUser user = (ClientId == null)
+                        ? null : PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
 
                     // Client認証、Resource Owner認証、何れの場合も...
                     string sub = identity.Name;
@@ -173,21 +174,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                     }
 
-                    // claims
-                    if (claims != null)
-                    {
-                        foreach (KeyValuePair<string, JToken> item in claims)
-                        {
-                            if (item.Key == OAuth2AndOIDCConst.claims_userinfo)
-                            {
-                                // userinfoで追加する値
-                            }
-                            else if (item.Key == OAuth2AndOIDCConst.claims_id_token)
-                            {
-                                // ...
-                            }
-                        }
-                    }
+                    // claims パラメタ（OIDC Core 5.5）には対応しない（Discovery の claims_parameter_supported は false）。
+                    //   **以前はここに、何もしないループが在った**（#294 で削除）。
 
                     return this.Ok(userinfoClaimSet);
 

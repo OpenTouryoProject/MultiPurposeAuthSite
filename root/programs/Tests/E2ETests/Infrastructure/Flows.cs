@@ -52,6 +52,7 @@
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
 //*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
 //*  2026/10/29  玄人 幸道         TestClient_30 〜 _34 を追加（#294）
+//*  2026/10/30  玄人 幸道         認証デバイスのクライアントでトークンを取る RunAuthenticationDeviceFlowAsync を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -87,6 +88,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>CIBA 用</summary>
         public const string TestClient4 = "TestClient4";
+
+        /// <summary>
+        /// 同梱の認証デバイス（web ビルド。パブリック クライアント ＋ PKCE）（#294）。
+        /// **`/SetDeviceToken`・`/ciba_result`・`/2fa_result` は、このクライアントに発行したトークンだけを受ける**
+        /// （`AuthenticationDeviceClientIds`）。
+        /// </summary>
+        public const string AuthenticationDeviceWeb = "AuthenticationDevice_Web";
 
         /// <summary>登録の scope で、要求してよいスコープを制限したクライアント（#198）</summary>
         public const string TestClient5 = "TestClient5";
@@ -748,6 +756,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return await ExchangeCodeAsync(client, registration, authz.Code, registration.RedirectUri);
+        }
+
+        /// <summary>RFC 7636 附録 B の code_verifier（認証デバイスの PKCE に使う）</summary>
+        private const string PkceVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+
+        /// <summary>RFC 7636 附録 B の code_challenge（SHA256(verifier) を BASE64URL したもの）</summary>
+        private const string PkceChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+        /// <summary>
+        /// 認証デバイスのクライアント（`AuthenticationDevice_Web`）で、認可コード フローを最後まで通す（#294）。
+        /// </summary>
+        /// <param name="client">IdPClient（サインイン済み）</param>
+        /// <param name="scope">スコープ（認証デバイスと同じ `openid email`）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **認証デバイスの役をするテストは、これでトークンを取る。**
+        /// **`/SetDeviceToken`・`/ciba_result`・`/2fa_result` は、認証デバイスのクライアントに発行したトークンだけを受ける**
+        /// （#294。以前はどの RP のトークンでも通った）。
+        /// **パブリック クライアントなので、client_secret ではなく PKCE（S256）で引き換える。**
+        /// </remarks>
+        public static async Task<JsonResponse> RunAuthenticationDeviceFlowAsync(
+            IdPClient client, string scope = "openid email")
+        {
+            ClientRegistration registration = Registration(client, KnownClients.AuthenticationDeviceWeb);
+
+            AuthZResponse authz = await AuthorizeCodeAsync(
+                client, registration, scope, "state1", "nonce1", registration.RedirectUri,
+                new Dictionary<string, string>()
+                {
+                    { "code_challenge", Flows.PkceChallenge },
+                    { "code_challenge_method", "S256" }
+                });
+
+            if (string.IsNullOrEmpty(authz.Code))
+            {
+                throw new InvalidOperationException(
+                    "認可コードを取得できませんでした: " + authz.ToString());
+            }
+
+            return await client.TokenAsync(new Dictionary<string, string>()
+            {
+                { "grant_type", "authorization_code" },
+                { "code", authz.Code },
+                { "client_id", registration.ClientId },
+                { "code_verifier", Flows.PkceVerifier },
+                { "redirect_uri", registration.RedirectUri }
+            });
         }
 
         /// <summary>grant_type=refresh_token でトークンを取り直す</summary>

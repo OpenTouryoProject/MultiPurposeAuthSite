@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         認証デバイスのクライアントに発行したトークンだけを受ける（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -82,7 +83,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (string.IsNullOrEmpty(device_token))
             {
                 // パラメタの不備（#196 : 400）
-                return this.NGResult(400, "SetDeviceToken", null);
+                return this.NGResult(400, Const.EndpointSetDeviceToken, null);
             }
 
             // クライアント認証（Bearer トークン）
@@ -91,7 +92,7 @@ namespace MultiPurposeAuthSite.Controllers
                 out string bearerToken, out string authScheme))
             {
                 // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
-                return this.NGResult(401, "SetDeviceToken", null);
+                return this.NGResult(401, Const.EndpointSetDeviceToken, null);
             }
 
             // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
@@ -110,9 +111,9 @@ namespace MultiPurposeAuthSite.Controllers
                 Claim ClientId = identity.Claims.Where(
                     x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
 
-                ApplicationUser user =
-                    //CmnUserStore.FindByName(identity.Name);
-                    PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+                //  **認証デバイスのクライアントに発行したトークンだけを受ける**（#294。`IsAuthenticationDeviceToken`）。
+                ApplicationUser user = OAuth2EndpointController.IsAuthenticationDeviceToken(ClientId)
+                    ? PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name) : null;
 
                 if (user != null)
                 {
@@ -125,7 +126,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-            return this.NGResult(401, "SetDeviceToken",
+            return this.NGResult(401, Const.EndpointSetDeviceToken,
                 dpopError ?? OAuth2AndOIDCConst.invalid_token);
         }
 
@@ -175,7 +176,11 @@ namespace MultiPurposeAuthSite.Controllers
                 Claim ClientId = identity.Claims.Where(
                     x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
 
-                user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+                //  **認証デバイスのクライアントに発行したトークンだけを受ける**（#294。`IsAuthenticationDeviceToken`）。
+                if (OAuth2EndpointController.IsAuthenticationDeviceToken(ClientId))
+                {
+                    user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+                }
             }
 
             if (user == null)

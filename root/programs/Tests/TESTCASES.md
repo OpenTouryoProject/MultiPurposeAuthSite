@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=dc3a7341-a51f-4156-bc9c-2ce1b7886dc1&code=bogus
+1. GET /Account/EmailConfirmation?userId=d5d03d0d-2a18-4357-9535-75dca009b54f&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=dc3a7341-a51f-4156-bc9c-2ce1b7886dc1&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=dc3a7341-a51f-4156-bc9c-2ce1b7886dc1&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=d5d03d0d-2a18-4357-9535-75dca009b54f&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=d5d03d0d-2a18-4357-9535-75dca009b54f&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7664,6 +7664,120 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`TESTING.md` 9 節）。
+
+## RT-294.73 /SetDeviceToken・/ciba_result・/2fa_result は、認証デバイスのクライアントに発行したトークンだけを受ける
+
+| | |
+|---|---|
+| 観点 | **以前はトークンの発行先を見ておらず、利用者が同意したどの RP のトークンでも通った。****RP が、利用者の端末の登録を差し替え、CIBA の要求を「許可」し、2FA のプッシュ承認を記録できた。****`AuthenticationDeviceClientIds`（既定は同梱の AuthenticationDevice_Web）に挙げたクライアントだけ**を受ける。 |
+| 根拠 | #294（ANALYSIS-IdP.md の C-55） |
+| テスト | `RT29473_認証デバイスの口は認証デバイスのトークンだけを受ける` |
+
+**手順**
+
+1. 同じ利用者で、RP のトークンと、認証デバイスのトークンを取る
+1. RP のトークンで、3 つの口を叩く
+1. 認証デバイスのトークンなら、通る（対照）
+
+**検証（合否を判定する）**
+
+- /SetDeviceToken : **RP のトークンは 401 で断る**
+- /ciba_result : **RP のトークンは 401 で断る**
+- /2fa_result : **RP のトークンは 401 で断る**
+- /SetDeviceToken : HTTP 200（端末を登録できる）
+- /ciba_result : トークンは受ける（合わない auth_req_id なので 400）
+- /2fa_result : トークンは受ける（合わないコードなので 400）
+
+## RT-294.74 /token : grant_type が無ければ invalid_request、未知・大文字小文字の違う値なら unsupported_grant_type
+
+| | |
+|---|---|
+| 観点 | **以前はどちらも invalid_grant だった**（RFC 6749 §5.2 では、invalid_grant は「グラントそのものが無効」）。**grant_type は大文字小文字を区別する値**なので、`AUTHORIZATION_CODE` も知らない値として扱う（以前は ToLower で通していた）。`RT-196.3` は HTTP ステータスだけを判定し、値は記録していた。 |
+| 根拠 | RFC 6749 §5.2 / #294 |
+| テスト | `RT29474_grant_typeの誤りをRFCのコードで返す` |
+
+**手順**
+
+1. grant_type を付けずに送る
+1. 未知の grant_type を送る
+1. 大文字の grant_type（AUTHORIZATION_CODE）を送る
+
+**検証（合否を判定する）**
+
+- invalid_request
+- unsupported_grant_type
+- unsupported_grant_type（大文字小文字まで比べる）
+
+## RT-294.75 /device_authz の expires_in / interval は、JSON の数値で返る
+
+| | |
+|---|---|
+| 観点 | **以前は文字列（"1800"）だった。** RFC 8628 §3.2 は数値を求めている。**型に厳しいクライアントは、文字列を読めない。** `EX-4.1` は型を記録するだけだった。 |
+| 根拠 | RFC 8628 §3.2 / #294 |
+| テスト | `RT29475_device_authzのexpires_inとintervalは数値` |
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- expires_in は数値
+- interval は数値
+
+## RT-294.76 CIBA : requested_expiry が正の整数でなければ invalid_request、大きすぎれば設定の上限で返す
+
+| | |
+|---|---|
+| 観点 | **以前は検証も上限も無かった。** 読めない値は `int.TryParse` が 0 にして、**要求は作った瞬間に期限が切れた。** 大きな値なら、**待ちの要求をいくらでも長く残せた。****応答の expires_in / interval も、JSON の数値で返す**（以前は文字列）。 |
+| 根拠 | CIBA Core §7.1 / §7.3 / #294 |
+| テスト | `RT29476_CIBAのrequested_expiryを検証し上限で頭を打つ` |
+
+**手順**
+
+1. 認証デバイスを登録する（宛先が無いと access_denied になるため）
+1. requested_expiry に数値でない値を送る
+1. requested_expiry に上限より大きな値を送る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- invalid_request
+- HTTP 200
+- expires_in は数値
+- interval は数値
+- **expires_in は上限で頭を打つ**
+
+## RT-294.77 /device_authz を、private_key_jwt（client_assertion）のクライアント認証で通せる
+
+| | |
+|---|---|
+| 観点 | **以前は RFC 8628 の口（/device_authz と /token）が client_assertion を読んでおらず、****private_key_jwt で登録したクライアントは、デバイス フローを使えなかった**（動的登録は、その組み合わせを登録の時点で断っていた）。 |
+| 根拠 | RFC 8628 §3.1 / RFC 7523 / #294 |
+| テスト | `RT29477_デバイス認可でprivate_key_jwtが通る` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（以前は 401 / invalid_client）
+- device_code が返る
+
+## RT-294.78 /revoke・/introspect : 資格情報も token も無ければ 401（認証の失敗）、資格情報が正しく token が無ければ 400
+
+| | |
+|---|---|
+| 観点 | **以前は token の有無を先に見ていた**ので、**認証していない要求にも 400 を返していた**（RFC 6749 §5.2 : クライアント認証の失敗は 401）。 |
+| 根拠 | RFC 7009 §2.1 / RFC 7662 §2.1 / RFC 6749 §5.2 / #294 |
+| テスト | `RT29478_revokeとintrospectは認証を先に行う` |
+
+**手順**
+
+1. 資格情報も token も付けずに送る
+1. 資格情報だけを付けて送る（token なし）
+
+**検証（合否を判定する）**
+
+- /revoke : 401
+- /introspect : 401
+- /revoke : 400 / invalid_request
+- /introspect : 400 / invalid_request
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 
@@ -8576,7 +8690,6 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. 知らない token_endpoint_auth_method
 1. jwks に RSA が 2 本
 1. jwks_uri（鍵を URL から引く）は、受け付けない
-1. device_code グラント × private_key_jwt
 
 **検証（合否を判定する）**
 
@@ -8590,12 +8703,9 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - error は invalid_client_metadata
 - HTTP の状態は 400（クライアント認証の経路が同期なので、取得を差し込めない（別 Issue））
 - error は invalid_client_metadata
-- HTTP の状態は 400（RFC 8628 の口は client_assertion を読まないので、永久に認証できない）
-- error は invalid_client_metadata
 
 **観測（判定しない）**
 
-- error_description
 - error_description
 - error_description
 - error_description

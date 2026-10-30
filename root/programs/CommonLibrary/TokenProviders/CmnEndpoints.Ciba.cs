@@ -31,8 +31,10 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         壊れた request で 500 にしない。文言・定数の置き場所・using を直した（#294）
 //*  2026/10/29  玄人 幸道         poll では client_notification_token を要らず、binding_message を任意にした（#294）
+//*  2026/10/30  玄人 幸道         CIBA の requested_expiry を検証し、上限で頭を打つ（CibaExpiresIn）（#294）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -305,6 +307,26 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region ValidateAuthZCibaReqParam
 
+        /// <summary>auth_req_id の有効期間（秒）を決める（#294）</summary>
+        /// <param name="requested_expiry">要求の requested_expiry（`ValidateCibaAuthZReqParam` で検証済み。無ければ空）</param>
+        /// <returns>有効期間（秒）</returns>
+        /// <remarks>
+        /// **`CibaExpireTimeSpanFromSeconds` を上限にする**（CIBA Core §7.1 は、要求の値を「望み」としている）。
+        /// **無ければ、その上限を使う**（従来どおり）。
+        /// </remarks>
+        public static int CibaExpiresIn(string requested_expiry)
+        {
+            int max = Config.CibaExpireTimeSpanFromSeconds;
+
+            if (!string.IsNullOrEmpty(requested_expiry)
+                && int.TryParse(requested_expiry, out int seconds) && 0 < seconds)
+            {
+                return Math.Min(seconds, max);
+            }
+
+            return max;
+        }
+
         /// <summary>ValidateCibaAuthZReqParam</summary>
         /// <param name="json">JObject</param>
         /// <param name="client_id">string</param>
@@ -506,6 +528,17 @@ namespace MultiPurposeAuthSite.TokenProviders
             CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.requested_expiry,
                 out requested_expiry, out err, out errDescription, nullable: true);
+
+            //  **正の整数でなければ断る**（CIBA Core §7.1 : 秒数の正の整数。#294）。
+            //    **以前は検証せず**、読めない値は `int.TryParse` が 0 にして、**作った瞬間に期限が切れていた。**
+            //    **上限は `CibaExpiresIn` で頭を打つ**（大きな値で、待ちの要求を長く残させない）。
+            if (!string.IsNullOrEmpty(requested_expiry)
+                && (!int.TryParse(requested_expiry, out int requestedSeconds) || requestedSeconds <= 0))
+            {
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "requested_expiry must be a positive integer.";
+                return false;
+            }
             // login_hint
             if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.login_hint,

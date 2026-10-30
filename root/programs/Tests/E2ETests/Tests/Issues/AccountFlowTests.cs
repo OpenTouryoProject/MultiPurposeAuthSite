@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（#294）
+//*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
 //**********************************************************************************
 
 using System;
@@ -1148,7 +1149,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             "前提: 作った利用者でサインインできること");
 
                         //  **端末の登録は、2FA を有効にする前に**（有効にした後のサインインは 2FA を求められる）。
-                        JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(user);
+                        //  **認証デバイスのクライアントでトークンを取る**（#294。この口は、それ以外のクライアントのトークンを断る）。
+                        JsonResponse token = await Flows.RunAuthenticationDeviceFlowAsync(user);
                         accessToken = token.AccessToken;
 
                         Assert.False(string.IsNullOrEmpty(accessToken), "前提: 利用者の access_token が取れること");

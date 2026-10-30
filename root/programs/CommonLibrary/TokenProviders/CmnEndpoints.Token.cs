@@ -33,6 +33,7 @@
 //*  2026/10/29  玄人 幸道         PKCE と private_key_jwt / mTLS を併用できるようにし、PKCE だけの引き換えを登録で絞る。client_credentials / JWT Bearer の sub をクライアントにする。Device の登録種別・ROPC の時間差を直した（#294）
 //*  2026/10/29  玄人 幸道         code_verifier の不一致を invalid_grant で返す（RFC 7636 §4.6。#294）
 //*  2026/10/30  玄人 幸道         消された利用者・SecurityStamp が変わった利用者の refresh_token を断る（#294）
+//*  2026/10/30  玄人 幸道         device_code の引き換えで client_assertion（private_key_jwt）も受ける（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1109,7 +1110,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantDeviceAuthZ(
-            string grant_type, string client_id, string client_secret,
+            string grant_type, string client_id, string client_secret, string clientAssertion,
             X509Certificate2 x509, string dPoPProof, string device_code,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
@@ -1130,7 +1131,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // RFC 8628 3.4 : コンフィデンシャル クライアントは認証する（#193）。
                 // ※ device_codeとclient_idの紐付けは、この先の
                 //    AuthorizationCodeProvider.Receive(code, client_id, "")で確認される。
-                if (!CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
+                //  **`client_assertion`（private_key_jwt）も受ける**（#294）。**client_id は認証できたもの**を使う。
+                if (!CmnEndpoints.DeviceAuthZClientAuthentication(
+                    client_id, client_secret, clientAssertion, ref x509, out client_id))
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);

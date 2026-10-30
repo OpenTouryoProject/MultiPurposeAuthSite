@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         /jwkcerts の If-None-Match で、弱い ETag と * も一致とみなす（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -90,9 +91,12 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (!string.IsNullOrEmpty(ifNoneMatch))
             {
+                //    **弱い ETag（`W/"…"`）と `*` も一致とみなす**（#294。If-None-Match は弱い比較。RFC 9110 §13.1.2）。
                 foreach (string candidate in ifNoneMatch.Split(','))
                 {
-                    if (candidate.Trim() == etag)
+                    string c = candidate.Trim();
+
+                    if (c == "*" || c == etag || c == "W/" + etag)
                     {
                         return this.StatusCode(304);
                     }

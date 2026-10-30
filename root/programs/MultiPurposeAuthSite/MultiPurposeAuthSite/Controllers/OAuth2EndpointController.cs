@@ -71,6 +71,7 @@
 //*  2026/10/25  玄人 幸道         エラー応答（OAuth2Error / NGResult / /userinfo）を OPERATION に記録する（障害対応のため。#294）
 //*  2026/10/29  玄人 幸道         CIBA を client_assertion（private_key_jwt）で通す（/ciba_authz の client_id・/token。#294）
 //*  2026/10/30  玄人 幸道         partial に分割（Token / UserInfo / Revocation / DeviceAuthZ / Ciba / RequestObject / Metadata / Push。#294）
+//*  2026/10/30  玄人 幸道         認証デバイス用の口を、認証デバイスのクライアントに発行したトークンに限る判定を追加（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -80,7 +81,10 @@ using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Log;
 
+using System;
+using System.Linq;
 using System.Collections.Generic;
+using System.Security.Claims;
 
 using System.Web;
 using System.Web.Http;
@@ -161,6 +165,25 @@ namespace MultiPurposeAuthSite.Controllers
 
             response.Cache.SetCacheability(HttpCacheability.NoCache);
             response.Cache.SetNoStore();
+        }
+
+        #endregion
+
+        #region 認証デバイスのトークン（#294）
+
+        /// <summary>認証デバイスのクライアントに発行したトークンか（#294）</summary>
+        /// <param name="audience">トークンの aud（`UrnAudienceClaim`。無ければ null）</param>
+        /// <returns>認証デバイスのものなら true</returns>
+        /// <remarks>
+        /// **`/SetDeviceToken`・`/ciba_result`・`/2fa_result` は、このトークンだけを受ける**（`AuthenticationDeviceClientIds`）。
+        /// **以前は発行先を見ておらず**、利用者が同意した**どの RP のトークンでも**、
+        /// 端末の登録を差し替え、CIBA の要求を「許可」し、2FA のプッシュ承認を記録できた。
+        /// **aud が無いトークンも断る**（自分が発行するトークンには必ず載る）。
+        /// </remarks>
+        private static bool IsAuthenticationDeviceToken(Claim audience)
+        {
+            return audience != null
+                && Config.AuthenticationDeviceClientIds.Contains(audience.Value, StringComparer.Ordinal);
         }
 
         #endregion

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         動的登録で device_code × private_key_jwt を断らない（両方の口が受けるようにした。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -349,19 +350,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
-            //  **デバイス フロー × `private_key_jwt` は断る。**
-            //    **RFC 8628 の口（`/device_authz` と `/token`）は `client_assertion` を
-            //    読んでいない**（両アプリの呼び出しに引数が無い）ので、
-            //    **その組み合わせでは、永久に認証できない。**
-            //    **`tls_client_auth` は通る**（証明書は口に渡っている）。
-            if (model.TokenEndpointAuthMethod
-                    == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit()
-                && grantTypes.Contains(OAuth2AndOIDCConst.DeviceAuthZGrantType))
-            {
-                description = "The device_code grant_type cannot be used with "
-                    + "the token_endpoint_auth_method private_key_jwt in this deployment.";
-                return false;
-            }
+            //  **デバイス フロー × `private_key_jwt` は、断らない**（#294）。
+            //    **以前は RFC 8628 の口（`/device_authz` と `/token`）が `client_assertion` を読んでおらず、
+            //    その組み合わせでは永久に認証できなかったので、登録の時点で断っていた。**
+            //    **いまは両方の口が受ける**（`CmnEndpoints.DeviceAuthZClientAuthentication`）。
 
             #endregion
 

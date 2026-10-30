@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         client_assertion（private_key_jwt）も受ける・expires_in / interval を数値で返す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -88,7 +89,15 @@ namespace MultiPurposeAuthSite.Controllers
                 // クライアント認証（RFC 8628 3.1）（#193）
                 // パブリック クライアントは、client_idの確認のみ。
                 X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
-                if (!Token.CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
+                //  **private_key_jwt も受ける**（#294。/token・/par と同じ取り出し方）。
+                //    **client_id は、認証できたクライアント**（アサーションのときは `iss`）を使う。
+                string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
+                    formData[OAuth2AndOIDCConst.client_assertion],
+                    formData[OAuth2AndOIDCConst.client_assertion_type],
+                    formData[OAuth2AndOIDCConst.assertion]);
+
+                if (!Token.CmnEndpoints.DeviceAuthZClientAuthentication(
+                    client_id, client_secret, clientAssertion, ref x509, out client_id))
                 {
                     // RFC 6749 5.2 : invalid_client は 401（#196）
                     return this.OAuth2Error(new Dictionary<string, string>()
@@ -139,15 +148,16 @@ namespace MultiPurposeAuthSite.Controllers
                 Sts.DeviceAuthZProvider.Create(authReqExp, tempData, out deviceCode, out userCode);
 
                 // ココまでの結果をレスポンス（RFC 8628 3.2 : 200）
-                return this.Ok(new Dictionary<string, string>()
+                //   **expires_in / interval は JSON の数値**（RFC 8628 §3.2。#294。以前は文字列だった）。
+                return this.Ok(new Dictionary<string, object>()
                 {
                     {OAuth2AndOIDCConst.device_code, deviceCode},
                     {OAuth2AndOIDCConst.user_code, userCode},
                     // RFC 8628 3.2 : ユーザが辿れるURIを返す（#193）。
                     {OAuth2AndOIDCConst.verification_uri, verificationUri},
                     {OAuth2AndOIDCConst.verification_uri_complete, verificationUri + "?user_code=" + userCode},
-                    {OAuth2AndOIDCConst.expires_in, requested_expiry.ToString()},
-                    {OAuth2AndOIDCConst.PollingInterval, Config.DeviceAuthZPollingIntervalSeconds.ToString()}
+                    {OAuth2AndOIDCConst.expires_in, requested_expiry},
+                    {OAuth2AndOIDCConst.PollingInterval, Config.DeviceAuthZPollingIntervalSeconds}
                 });
             }
             else

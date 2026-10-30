@@ -1227,6 +1227,20 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
 > **公開情報の口は全開なので、この一覧を引かない。**
 
+### 認証デバイスのクライアント — `AuthenticationDeviceClientIds`（#294）
+
+**認証デバイス用の口（`/SetDeviceToken`・`/ciba_result`・`/2fa_result`）は、ここに挙げたクライアントに発行した
+アクセス トークンだけを受ける。** client_id をカンマ（または空白）で区切って書く。
+
+```
+"AuthenticationDeviceClientIds": "aad529f7f9b6428a84c59ac15aef0cdb",          appsettings.json
+<add key="AuthenticationDeviceClientIds" value="aad529f7f9b6428a84c59ac15aef0cdb" />   app.config
+```
+
+- **未設定・空なら、同梱の認証デバイス（`AuthenticationDevice_Web`）の client_id に倒す**（既存の配備にはこのキーが無い）
+- **認証デバイスを別の client_id で登録したなら、その client_id を書く**（書かないと、端末の登録も承認も 401 になる）
+- **以前は発行先を見ておらず、利用者が同意したどの RP のトークンでも通った**（`ANALYSIS-IdP.md` の C-55）
+
 ### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1〜5-a）
 
 **クライアント登録を WebAPI で行う。** **既定は無効**で、**開けると `/register` が出来る。**
@@ -3743,6 +3757,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
 > 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
+| `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
 | `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
 | `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 

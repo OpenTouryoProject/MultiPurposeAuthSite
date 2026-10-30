@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         /jwkcerts の If-None-Match で、弱い ETag と * も一致とみなす（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -83,9 +84,11 @@ namespace MultiPurposeAuthSite.Controllers
             EntityTagHeaderValue tag = new EntityTagHeaderValue(etag);
 
             //  **同じものを持っている相手には、本文を送らない**（`304`）。
+            //    **弱い ETag（`W/"…"`）と `*` も一致とみなす**（#294。If-None-Match は弱い比較。RFC 9110 §13.1.2）。
+            //    **`Tag` は `W/` を除いた値**なので、弱い ETag もここで一致する。
             foreach (EntityTagHeaderValue candidate in this.Request.Headers.IfNoneMatch)
             {
-                if (candidate.Tag == etag)
+                if (candidate.Tag == etag || candidate.Tag == "*")
                 {
                     HttpResponseMessage notModified =
                         new HttpResponseMessage(HttpStatusCode.NotModified);

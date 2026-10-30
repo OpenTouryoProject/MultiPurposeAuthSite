@@ -31,6 +31,7 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         Basic の照合で失敗を数えない。JWT Bearer の alg の一覧を足し、using を整理した（#294）
 //*  2026/10/29  玄人 幸道         none（パブリック）を受け、PKCE だけで引き換えられる登録を絞る。assertion の aud に issuer を受け、秘密を定数時間で比べる（#294）
+//*  2026/10/30  玄人 幸道         デバイス認可のクライアント認証で client_assertion（private_key_jwt）も受ける（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -271,6 +272,42 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool DeviceAuthZClientAuthentication(
             string client_id, string client_secret, ref X509Certificate2 x509)
         {
+            return CmnEndpoints.DeviceAuthZClientAuthentication(
+                client_id, client_secret, "", ref x509, out string _);
+        }
+
+        /// <summary>Device AuthZのクライアント認証（`client_assertion` も受ける。#294）</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="clientAssertion">client_assertion（private_key_jwt。無ければ空）</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="authnedClientId">認証できたクライアントの client_id</param>
+        /// <returns>bool</returns>
+        /// <remarks>
+        /// **`client_assertion` が在れば、他の口と同じく `private_key_jwt` で認証する**（#294）。
+        /// **client_id はアサーションの `iss` から得る**（RFC 7523 §3）。
+        /// **フォームの client_id も送られていれば、食い違いを断る。**
+        /// **以前は読んでおらず、`private_key_jwt` で登録したクライアントはデバイス フローを使えなかった**
+        /// （動的登録は、その組み合わせを登録の時点で断っていた）。
+        /// </remarks>
+        public static bool DeviceAuthZClientAuthentication(
+            string client_id, string client_secret, string clientAssertion,
+            ref X509Certificate2 x509, out string authnedClientId)
+        {
+            authnedClientId = client_id;
+
+            if (!string.IsNullOrEmpty(clientAssertion))
+            {
+                if (!CmnEndpoints.ClientAuthentication(
+                    "", "", clientAssertion, ref x509, out authnedClientId, out ClientModePolicy.Proof _))
+                {
+                    return false;
+                }
+
+                return string.IsNullOrEmpty(client_id)
+                    || string.Equals(client_id, authnedClientId, StringComparison.Ordinal);
+            }
+
             // client_idは必須
             if (string.IsNullOrEmpty(client_id)) return false;
 
@@ -293,11 +330,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             //    **`IsDeviceAuthZAllowed` のコメントが警戒しているのと同じこと**が、
             //    **逆向き（強い方法を登録した側）で起きていた。**
             //
-            //  **この口は `client_assertion` を読んでいない**（RFC 8628 の `/device_authz` /
-            //    `/token`。両アプリの呼び出しに引数が無い）ので、
-            //    **鍵だけのクライアントは、ここで認証に失敗して断られる** — **出さない側に転ぶ。**
-            //    **デバイス フローを使うなら、秘密ベースの方法を登録すること**
-            //    （**動的登録は、その組み合わせを登録の時点で断る**）。
+            //  **`client_assertion` で来た要求は、上で認証を済ませている**（#294）。
+            //    **ここに来るのは、秘密・証明書で来た要求か、何も送らなかった要求**である。
+            //    **鍵だけのクライアントが何も送らなければ、ここで認証に失敗して断られる** — **出さない側に転ぶ。**
             //  **`jwks_uri` を登録したクライアントも、コンフィデンシャルである**（#309 の段階 1）。
             //    **数えないと、鍵を URL で登録したクライアントが
             //    「パブリック」とみなされ、`client_id` の確認だけで通ってしまう**

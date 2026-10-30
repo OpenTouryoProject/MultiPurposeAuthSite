@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         /ros の summary を POST に直し、失敗を JSON のエラーで返す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -121,7 +122,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// RequestObjectを登録するWebAPI
-        /// GET: /ros
+        /// POST: /ros
         /// </summary>
         /// <returns>HttpResponseMessage</returns>
         [HttpPost]
@@ -144,7 +145,15 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 失敗
-            return new HttpResponseMessage(HttpStatusCode.BadRequest);
+            //   **JSON のエラーで返す**（#294。以前は本文の無い 400 だった）。
+            return new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new JsonContent(JsonConvert.SerializeObject(new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.error, Const.InvalidRequestObject },
+                    { OAuth2AndOIDCConst.error_description, "The request object is not accepted." }
+                }))
+            };
         }
 
         #endregion

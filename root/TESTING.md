@@ -4171,6 +4171,24 @@ The ID federation did not complete. (the error view was returned)
 >
 > **測れていないもの。** **Oracle の空のクレーム**・**SQL Server の外部ログインの照合**は、mem で回す E2E では測れない。**読んで直した。**
 
+#### `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（`RT-294.73`〜`.78`。#294）
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.73` | **認証デバイス用の 3 つの口は、RP のトークンを 401 で断り、認証デバイスのトークンは受ける**（両版） | **どの RP のトークンでも通った**（C-55） |
+| `RT-294.74` | **`/token` : `grant_type` が無ければ `invalid_request`、未知・大文字なら `unsupported_grant_type`**（両版） | **どちらも `invalid_grant`** |
+| `RT-294.75` | **`/device_authz` の `expires_in` / `interval` は JSON の数値**（両版） | 文字列 |
+| `RT-294.76` | **CIBA : `requested_expiry` が数値でなければ `invalid_request`、大きすぎれば上限で返す。応答の数値**（両版） | 検証・上限が無く、応答は文字列 |
+| `RT-294.77` | **`/device_authz` を `private_key_jwt` で通せる**（両版） | **401（`client_assertion` を読まなかった）** |
+| `RT-294.78` | **`/revoke`・`/introspect` : 資格情報も token も無ければ 401、資格情報だけなら 400**（両版） | 認証していなくても 400 |
+
+> **`RT-294.73` は、判定を外した実装で、net10.0 版が落ちることを確かめた。**
+>
+> **認証デバイスの役をするテストは、認証デバイスのクライアント（`AuthenticationDevice_Web`。PKCE）でトークンを取る**
+> （`Flows.RunAuthenticationDeviceFlowAsync`）。**それ以外のトークンは、もう通らない。**
+>
+> **`RT-307.16` の (6)（動的登録で `device_code` × `private_key_jwt` を断る）は外した**（受けるようにしたため）。
+
 #### 認可は、付与の前後で測る（`RT-257.9`）
 
 **門番（`Authorize`）とメニューの出し分けは、どちらも `SystemAdmin` を見る。**

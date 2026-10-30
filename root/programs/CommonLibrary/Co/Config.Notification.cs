@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         MailOutboxDirectory（メールの送信箱。テスト用）を追加（#294）
+//*  2026/10/30  玄人 幸道         AuthenticationDeviceClientIds（認証デバイスのクライアント）を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -130,6 +131,37 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("FirebaseServiceAccountKey");
+            }
+        }
+
+        /// <summary>同梱の認証デバイス（`AuthenticationDevice_Web`）の client_id</summary>
+        private const string BundledAuthenticationDeviceClientId = "aad529f7f9b6428a84c59ac15aef0cdb";
+
+        /// <summary>
+        /// 認証デバイスのクライアント（client_id。カンマ・空白区切り）（#294）
+        /// </summary>
+        /// <remarks>
+        /// **`/SetDeviceToken`・`/ciba_result`・`/2fa_result` は、ここに挙げたクライアントに発行した
+        /// アクセス トークンだけを受ける。**
+        /// **以前はトークンの発行先を見ておらず**、利用者が同意した**どの RP のトークンでも**、
+        /// 端末の登録を差し替えたり、CIBA の要求を「許可」したりできた。
+        ///
+        /// **未設定・空なら、同梱の認証デバイス（`AuthenticationDevice_Web`）の client_id に倒す**
+        /// （**既存の配備にはこのキーが無い**）。**認証デバイスを別の client_id で登録したなら、ここに書く。**
+        /// </remarks>
+        public static string[] AuthenticationDeviceClientIds
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue("AuthenticationDeviceClientIds");
+
+                if (string.IsNullOrWhiteSpace(temp))
+                {
+                    //  **既定値**（キーが無い配備でも動く）。
+                    temp = Config.BundledAuthenticationDeviceClientId;
+                }
+
+                return temp.Split(new char[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
             }
         }
 

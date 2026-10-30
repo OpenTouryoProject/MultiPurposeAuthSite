@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         /ciba_result を認証デバイスのトークンに限る・expires_in / interval を数値で返す・requested_expiry を上限で頭打ちにする（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -164,9 +165,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 client_id, "", scopes, null, "");
 
                             // requested_expiry → UnixTime化
-                            int _requested_expiry = Config.CibaExpireTimeSpanFromSeconds; // 初期値
-                            if (!string.IsNullOrEmpty(requested_expiry))                  // requested_expiry値
-                                int.TryParse(requested_expiry, out _requested_expiry);
+                            //   **`CibaExpireTimeSpanFromSeconds` を上限にする**（#294。値は `ValidateCibaAuthZReqParam` が検証済み）。
+                            //   **以前は上限が無く**、読めない値は 0 になって、作った瞬間に期限が切れていた。
+                            int _requested_expiry = Token.CmnEndpoints.CibaExpiresIn(requested_expiry);
 
                             long authReqExp = DateTimeOffset.Now.AddSeconds(_requested_expiry).ToUnixTimeSeconds();
 
@@ -249,11 +250,12 @@ namespace MultiPurposeAuthSite.Controllers
 #pragma warning restore 162
 
                             // ココまでの結果をレスポンス（CIBA Core 7.3 : 200）
-                            return this.Ok(new Dictionary<string, string>()
+                            //   **expires_in / interval は JSON の数値**（CIBA Core 7.3。#294。以前は文字列だった）。
+                            return this.Ok(new Dictionary<string, object>()
                             {
                                 {OAuth2AndOIDCConst.auth_req_id, authReqId},
-                                {OAuth2AndOIDCConst.expires_in, _requested_expiry.ToString()},
-                                {OAuth2AndOIDCConst.PollingInterval, Config.CibaPollingIntervalSeconds.ToString()}
+                                {OAuth2AndOIDCConst.expires_in, _requested_expiry},
+                                {OAuth2AndOIDCConst.PollingInterval, Config.CibaPollingIntervalSeconds}
                             });
                         }
                         else
@@ -343,7 +345,12 @@ namespace MultiPurposeAuthSite.Controllers
                 Claim ClientId = identity.Claims.Where(
                     x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
 
-                user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+                //  **認証デバイスのクライアントに発行したトークンだけを受ける**（#294。`IsAuthenticationDeviceToken`）。
+                //    **以前は、どの RP のトークンでも、CIBA の要求を「許可」できた。**
+                if (OAuth2EndpointController.IsAuthenticationDeviceToken(ClientId))
+                {
+                    user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+                }
             }
 
             if (user == null)

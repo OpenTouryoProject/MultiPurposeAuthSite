@@ -49,6 +49,7 @@
 //*  2026/10/21  玄人 幸道         cnf.jkt のクレーム型を追加（#311 の段階 2）
 //*  2026/10/24  玄人 幸道         StandardScopes から userid を外した（独自 scope の userid を廃止。#294）
 //*  2026/10/24  玄人 幸道         OidcScopes / SelfTestScopes / IdFederationScopes を const にした（宣言の順で初期化が欠けないように。#294）
+//*  2026/10/30  玄人 幸道         EndpointSetDeviceToken を追加（#294）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -404,6 +405,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>/2fa_result（認証デバイスからの結果）</summary>
         public const string EndpointTwoFactorResult = "2fa_result";
+
+        /// <summary>/SetDeviceToken（認証デバイスの登録）</summary>
+        public const string EndpointSetDeviceToken = "SetDeviceToken";
 
         #endregion
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         未知の grant_type を unsupported_grant_type、無いときを invalid_request で返す・grant_type を大文字小文字まで比べる・device_code で client_assertion も渡す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -144,7 +145,8 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     string scope = "";
 
-                    switch (grant_type.ToLower())
+                    //  **大文字小文字まで比べる**（#294。grant_type の値は大文字小文字を区別する。以前は ToLower していた）。
+                    switch (grant_type)
                     {
                         case OAuth2AndOIDCConst.AuthorizationCodeGrantType:
                             string code = formData[OAuth2AndOIDCConst.code];
@@ -203,8 +205,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         case OAuth2AndOIDCConst.DeviceAuthZGrantType:
                             string device_code = formData[OAuth2AndOIDCConst.device_code];
+                            //  **private_key_jwt も受ける**（#294）。
                             if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
-                                client_id, client_secret, x509, dPoPProof, device_code,
+                                client_id, client_secret, clientAssertion, x509, dPoPProof, device_code,
                                 out ret, out err))
                             {
                                 return this.Ok(ret);
@@ -222,14 +225,16 @@ namespace MultiPurposeAuthSite.Controllers
                             break;
 
                         default:
-                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                            //  **unsupported_grant_type**（RFC 6749 §5.2。#294。以前は invalid_grant だった）。
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
                             err.Add(OAuth2AndOIDCConst.error_description, "Invalid grant_type.");
                             break;
                     }
                 }
                 else
                 {
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                    //  **invalid_request**（RFC 6749 §5.2 : 必須のパラメタが無い。#294。以前は invalid_grant だった）。
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
                     err.Add(OAuth2AndOIDCConst.error_description, "grant_type is null or empty.");
                 }
 
