@@ -36,6 +36,7 @@
 //*  2026/10/29  玄人 幸道         partial に分割（Account / TwoFactor / ExternalLogin / Data / OAuth2Data / Helper。#294）
 //*  2026/10/29  玄人 幸道         ManageController.*.cs のレビュー指摘を反映（各ファイルの履歴を参照。#294）
 //*  2026/10/30  玄人 幸道         ManageController.*.cs の 2 回目のレビュー指摘を反映（各ファイルの履歴を参照。#294）
+//*  2026/10/30  玄人 幸道         利用者を引けなければ、管理画面をエラー画面にする（net10.0 版に揃えた。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -200,41 +201,44 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                // モデルの生成
-                //  **所有者の登録の件数**（#307 の段階 5-a-2）。
-                //    **1 利用者 n クライアント**になったので、**件数を数える** —
-                //    **「在る / 無い」だけでは、何件在るのかが分からない。**
-                //    **中身は一覧の画面（`Saml2OAuth2DataList`）で見せる。**
-                int saml2OAuth2DataCount = Sts.Saml2OAuth2DataProvider.GetByOwner(user.Id).Count;
-                bool hasSaml2OAuth2Data = (0 < saml2OAuth2DataCount);
-
-                ManageIndexViewModel model = new ManageIndexViewModel
+                //  **利用者を引けなければ、エラー画面にする**（#294。net10.0 版と同じ）。
+                //    **Cookie が有効なまま利用者が消された**ときに、以前は 500 になっていた。
+                if (user != null)
                 {
-                    // パスワード
-                    HasPassword = await UserManager.HasPasswordAsync(user.Id),
-                    // ログイン
-                    Logins = user.Logins,
-                    // E-mail
-                    Email = user.Email,
-                    // 電話番号
-                    PhoneNumber = user.PhoneNumber,
-                    // 2FA
-                    TwoFactor = user.TwoFactorEnabled,
-                    // 非構造化データ
-                    HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
-                    // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = hasSaml2OAuth2Data,
-                    Saml2OAuth2DataCount = saml2OAuth2DataCount
-                };
+                    // モデルの生成
+                    //  **所有者の登録の件数**（#307 の段階 5-a-2）。
+                    //    **1 利用者 n クライアント**になったので、**件数を数える** —
+                    //    **「在る / 無い」だけでは、何件在るのかが分からない。**
+                    //    **中身は一覧の画面（`Saml2OAuth2DataList`）で見せる。**
+                    int saml2OAuth2DataCount = Sts.Saml2OAuth2DataProvider.GetByOwner(user.Id).Count;
+                    bool hasSaml2OAuth2Data = (0 < saml2OAuth2DataCount);
 
-                // 管理画面の表示
-                return View(model);
+                    ManageIndexViewModel model = new ManageIndexViewModel
+                    {
+                        // パスワード
+                        HasPassword = await UserManager.HasPasswordAsync(user.Id),
+                        // ログイン
+                        Logins = user.Logins,
+                        // E-mail
+                        Email = user.Email,
+                        // 電話番号
+                        PhoneNumber = user.PhoneNumber,
+                        // 2FA
+                        TwoFactor = user.TwoFactorEnabled,
+                        // 非構造化データ
+                        HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
+                        // Saml2OAuth2Data
+                        HasSaml2OAuth2Data = hasSaml2OAuth2Data,
+                        Saml2OAuth2DataCount = saml2OAuth2DataCount
+                    };
+
+                    // 管理画面の表示
+                    return View(model);
+                }
             }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion

@@ -20,6 +20,7 @@
 //*  2026/10/30  玄人 幸道         2FA の無効化・電話番号の削除でパスワードを確かめる・SMS の間隔を電話番号ごとに・
 //*                                SMS の失敗で 500 にしない（#294）
 //*  2026/10/30  玄人 幸道         電話番号の追加でパスワードを確かめる（#294）
+//*  2026/10/30  玄人 幸道         電話番号の追加で、送ると決めてから検証コードを作る（net10.0 版に揃えた。#294）
 //**********************************************************************************
 
 /*
@@ -101,9 +102,6 @@ namespace MultiPurposeAuthSite.Controllers
                         return View(model);
                     }
 
-                    // 検証コード生成
-                    string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);
-
                     // メッセージをSMSで送信する。
                     //   **同じ電話番号に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
                     //   **電話番号ごとに数える** — 打ち間違いを直した番号へは、すぐに送れる。
@@ -111,6 +109,10 @@ namespace MultiPurposeAuthSite.Controllers
                         && Sts.MailThrottle.TryAcquireForDestination(
                             Sts.MailThrottle.PurposePhoneNumber, model.Number, User.Identity.GetUserId()))
                     {
+                        // 検証コード生成
+                        //   **送ると決めてから作る**（#294。net10.0 版と同じ。以前は送らないときも作っていた）。
+                        string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);
+
                         IdentityMessage message = new IdentityMessage
                         {
                             Destination = model.Number,
