@@ -19,6 +19,7 @@
 //*  2026/10/29  玄人 幸道         SMS を続けて送らない（#294）
 //*  2026/10/30  玄人 幸道         2FA の無効化・電話番号の削除でパスワードを確かめる・SMS の間隔を電話番号ごとに・
 //*                                SMS の失敗で 500 にしない（#294）
+//*  2026/10/30  玄人 幸道         電話番号の追加でパスワードを確かめる（#294）
 //**********************************************************************************
 
 /*
@@ -76,10 +77,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /Manage/AddPhoneNumber
         /// </summary>
         /// <param name="model">ManageAddPhoneNumberViewModel</param>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model)
+        public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model, string password)
         {
             if (Config.CanEditPhone
                 && Config.EnableEditingOfUserAttribute)
@@ -88,6 +90,16 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageAddPhoneNumberViewModelの検証に成功
+
+                    // **パスワードを確かめる**（#294。2 要素認証の手段を足す操作なので）。
+                    //   **検証コードは、ここを通った後でしか作らない**（`VerifyPhoneNumber` は、そのコードが無いと通らない）。
+                    string error = await this.CheckPasswordForEditingAsync(
+                        await UserManager.FindByIdAsync(User.Identity.GetUserId()), password);
+                    if (error != null)
+                    {
+                        ModelState.AddModelError("", error);
+                        return View(model);
+                    }
 
                     // 検証コード生成
                     string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);

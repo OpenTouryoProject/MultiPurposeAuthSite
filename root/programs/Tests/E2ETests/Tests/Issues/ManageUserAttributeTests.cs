@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
 //*  2026/10/29  玄人 幸道         RT-294.61（同じメアド・他の利用者のメアドへの変更）を足した（#294）
+//*  2026/10/30  玄人 幸道         RT-294.68（メアドの変更はパスワードを確かめる）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -524,9 +525,103 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     await UsersAdmin.DeleteByUserNameAsync(admin, other);
                 }
 
-                r.Note("**パスワードの確認**（`RequirePasswordInEditingUserNameAndEmail`）**が有効な配備では、"
-                    + "2FA を有効にした利用者が必ず失敗していた**（サインインそのもので確かめていた）。"
-                    + "**既定の配備では確認しないので、ここでは測っていない**（読んで直した）。");
+                r.Note("**パスワードの確認は、2FA を有効にした利用者が必ず失敗していた**（サインインそのもので確かめていた）。"
+                    + "**メアドの変更は、設定によらず確かめるようになった**（`RT-294.68`）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-294.68 メアドの変更は、設定によらずパスワードを確かめる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29468_メアドの変更はパスワードを確かめる(string targetKey)
+        {
+            using (IdPClient admin = await this.AdminClientAsync(targetKey))
+            {
+                string name = ManageUserAttributeTests.UniqueName();
+                string email = name + "@example.com";
+                string newEmail = name + "_new@example.com";
+                string password = admin.Config.Get("TestUserPWD");
+
+                TestReport r = this.Report("RT-294.68",
+                    "メアドの変更は、設定によらずパスワードを確かめる（無い・間違いなら確認の画面へ進まない）",
+                    "**以前は `RequirePasswordInEditingUserNameAndEmail` が false（既定）だと確かめなかった。**"
+                    + "**メアドを変えられると、パスワード リセットで乗っ取れる**ので、"
+                    + "**メアドの変更だけは、設定によらず確かめる**ようにした（利用者名の変更は、従来どおり設定に従う）。",
+                    "#294（ManageController.*.cs の 3 回目のレビュー S2） / ManageController.ChangeEmail");
+
+                r.Target("利用者 " + name + " のメアドを " + newEmail + " へ変えようとする");
+
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                try
+                {
+                    Assert.True(ManageUserAttributeTests.IsRedirect(
+                        await UsersAdmin.CreateAsync(admin, name, email, "User")),
+                        "前提: 利用者を作れること");
+
+                    using (IdPClient user = this.Client(targetKey))
+                    {
+                        Assert.True(await user.TrySignInAsync(name, password),
+                            "前提: 作った利用者でサインインできること");
+
+                        string form = await user.GetStringAsync("/Manage/ChangeEmail");
+
+                        r.Verify("パスワードの入力欄が在る（設定によらず）",
+                            form.Contains("type=\"password\""),
+                            "在る", form.Contains("type=\"password\"") ? "在る" : "**無い**");
+
+                        int step = 1;
+
+                        foreach (string wrong in new[] { "", password + "x" })
+                        {
+                            r.Step("(" + step++ + ") " + (wrong == "" ? "パスワードを空で送る" : "間違ったパスワードで送る"));
+
+                            HttpResponseMessage refused = await ManageUserAttributeTests.PostAsync(
+                                user, "/Manage/ChangeEmail",
+                                new Dictionary<string, string>()
+                                {
+                                    { "Email", newEmail },
+                                    { "ConfirmEmail", newEmail },
+                                    { "Password", wrong }
+                                });
+
+                            string body = await refused.Content.ReadAsStringAsync();
+
+                            r.Verify("入力の画面が出し直される（確認の画面へ進まない）",
+                                Html.HasField(body, "ConfirmEmail"),
+                                "ConfirmEmail の欄が在る",
+                                Html.HasField(body, "ConfirmEmail") ? "在る" : "**確認の画面に移った**");
+
+                            r.Verify("エラーの文言が出る", Html.HasValidationError(body),
+                                "出ている", Html.HasValidationError(body) ? "出ている" : "**出ていない**");
+                        }
+
+                        r.Step("(" + step + ") 正しいパスワードで送る");
+
+                        HttpResponseMessage accepted = await ManageUserAttributeTests.PostAsync(
+                            user, "/Manage/ChangeEmail",
+                            new Dictionary<string, string>()
+                            {
+                                { "Email", newEmail },
+                                { "ConfirmEmail", newEmail },
+                                { "Password", password }
+                            });
+
+                        string acceptedBody = await accepted.Content.ReadAsStringAsync();
+
+                        r.Verify("確認の画面へ進む", !Html.HasField(acceptedBody, "ConfirmEmail"),
+                            "確認の画面", !Html.HasField(acceptedBody, "ConfirmEmail") ? "確認の画面"
+                                : "**出し直された**（" + Html.ErrorSummary(acceptedBody) + "）");
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
 
                 r.Done();
             }

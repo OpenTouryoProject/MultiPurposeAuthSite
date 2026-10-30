@@ -51,6 +51,7 @@
 //*  2026/10/17  玄人 幸道         ヘッダを付けて POST する口を追加（#305 の段階 4）
 //*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
 //*  2026/10/28  玄人 幸道         Cookie の値を書き換える口（OverwriteCookie）を足した（#294）
+//*  2026/10/30  玄人 幸道         WebAuthn の登録の段階 0 で、パスワードを送る（#294）
 //**********************************************************************************
 
 using System;
@@ -1683,11 +1684,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="authenticatorAttachment">platform / cross-platform / 空</param>
         /// <param name="userVerification">required / preferred / discouraged</param>
         /// <param name="attestation">none / indirect / direct</param>
+        /// <param name="password">今のパスワード（段階 0 で確かめる。#294。null ならテスト利用者のパスワード）</param>
         /// <returns>応答の HTML（画面が無ければ null）</returns>
         public async Task<string> WebAuthnCreationOptionsAsync(
             string userName, bool residentKey = false,
             string authenticatorAttachment = "", string userVerification = "preferred",
-            string attestation = "none")
+            string attestation = "none", string password = null)
         {
             HttpResponseMessage get = await this.GetAsync("/Manage/AddWebAuthnData");
 
@@ -1707,7 +1709,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 + ",\"userVerification\":\"" + userVerification + "\"}"
                 + ",\"attestation\":\"" + attestation + "\"}";
 
-            return await this.PostWebAuthnRegisterAsync(html, "0", fido2Data);
+            return await this.PostWebAuthnRegisterAsync(html, "0", fido2Data,
+                password ?? this.Config.Get("TestUserPWD"));
         }
 
         /// <summary>WebAuthn の登録画面へ、段階 1（attestation）を送る（#137）</summary>
@@ -1723,9 +1726,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="html">トークンを含む HTML</param>
         /// <param name="sequenceNo">段階番号</param>
         /// <param name="fido2Data">送る JSON</param>
+        /// <param name="password">今のパスワード（段階 0 だけ送る。#294）</param>
         /// <returns>応答の HTML</returns>
         private async Task<string> PostWebAuthnRegisterAsync(
-            string html, string sequenceNo, string fido2Data)
+            string html, string sequenceNo, string fido2Data, string password = null)
         {
             if (string.IsNullOrEmpty(html))
             {
@@ -1737,6 +1741,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { "sequenceNo", sequenceNo },
                 { "fido2Data", fido2Data }
             };
+
+            if (password != null)
+            {
+                form.Add("password", password);
+            }
 
             Match m = AntiforgeryRegex.Match(html);
 

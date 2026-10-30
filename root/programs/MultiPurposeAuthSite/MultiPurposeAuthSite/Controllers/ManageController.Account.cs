@@ -21,6 +21,7 @@
 //*  2026/10/30  玄人 幸道         更新に失敗したら元の値に戻す・利用者名の変更の失敗の理由を出す・
 //*                                パスワードの変更で auth_time を書く・メアドの変更で SecurityStamp を更新し、
 //*                                変更前のメアドにも知らせる（#294）
+//*  2026/10/30  玄人 幸道         メアドの変更は、設定によらずパスワードを確かめる（#294）
 //**********************************************************************************
 
 /*
@@ -389,23 +390,17 @@ namespace MultiPurposeAuthSite.Controllers
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                     // Passwordチェック
-                    if (Config.RequirePasswordInEditingUserNameAndEmail)
-                    {
-                        // パスワードのチェック（サインインはしない。#294）
-                        string error = await this.CheckPasswordForEditingAsync(user, model.Password);
+                    //   **設定（`RequirePasswordInEditingUserNameAndEmail`）によらず、常に確かめる**（#294）。
+                    //   **メアドを変えられると、パスワード リセットで乗っ取れる**ので、セッションだけでは変えさせない。
+                    //   （利用者名の変更は、従来どおり設定に従う）
+                    string error = await this.CheckPasswordForEditingAsync(user, model.Password);
 
-                        if (error != null)
-                        {
-                            // Passwordが一致しない。
-                            // 再表示
-                            ModelState.AddModelError("", error);
-                            return View(model);
-                        }
-                    }
-                    else
+                    if (error != null)
                     {
-                        // ノーチェック
-                        // 処理を継続
+                        // Passwordが一致しない。
+                        // 再表示
+                        ModelState.AddModelError("", error);
+                        return View(model);
                     }
 
                     // **いまのメアドと比べる**（#294）。

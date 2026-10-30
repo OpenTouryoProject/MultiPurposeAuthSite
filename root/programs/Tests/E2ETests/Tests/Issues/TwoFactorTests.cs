@@ -32,6 +32,8 @@
 //*  2026/10/29  玄人 幸道         RT-294.60（登録画面を開いただけでは TOTP は登録されない）を足した（#294）
 //*  2026/10/30  玄人 幸道         RT-294.63（再サインインで auth_time を新しくしない）・.64（2FA の無効化でパスワードを確かめる）・
 //*                                .65（未確定の TOTP の鍵をほかの利用者に使わない）を足した（#294）
+//*  2026/10/30  玄人 幸道         RT-294.66（登録済みの TOTP の鍵を出さない）・.67（回復コードの再発行とリセットで
+//*                                パスワードを確かめる）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -72,6 +74,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | RT-294.63 管理画面でサインインし直す | **auth_time を「いま」にしていた**（`max_age` の再認証が効かない。2 回目のレビュー） |
     /// | RT-294.64 2FA を無効にする | **パスワードを確かめていなかった**（2 回目のレビュー） |
     /// | RT-294.65 同じブラウザで別の利用者が登録画面を開く | **前の利用者が見た鍵を出していた**（2 回目のレビュー） |
+    /// | RT-294.66 登録済みのときに登録画面を開く | **保存済みの鍵を何度でも出していた**（3 回目のレビュー） |
+    /// | RT-294.67 回復コードの再発行・認証アプリのリセット | **パスワードを確かめていなかった**（3 回目のレビュー） |
     /// </remarks>
     public class TwoFactorTests : TargetTestBase
     {
@@ -851,7 +855,207 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-294.66 登録済みの認証アプリの鍵は、登録画面に出さない</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT29466_登録済みのTOTPの鍵は出さない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userName = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-294.66",
+                    "認証アプリを登録した後は、登録画面を開いても鍵を出さない（管理の画面へ戻す）",
+                    "**以前は、登録済みの鍵を登録画面に何度でも出していた**（共有鍵と QR コード）。"
+                    + "**セッションさえあれば、認証アプリと同じコードを作れるようになった。**"
+                    + "**登録済みなら、登録画面は出さずに管理の画面へ戻す。** 登録し直すときは、リセットを通す。",
+                    "#294（ManageController.*.cs の 3 回目のレビュー S1）");
+
+                r.Target("利用者名 = " + userName + "（認証アプリを登録した使い捨ての利用者）");
+
+                try
+                {
+                    using (IdPClient user = await this.TotpEnrolledClientAsync(admin, targetKey, userName))
+                    {
+                        r.Step("(1) 登録画面を開く（GET）");
+
+                        HttpResponseMessage get = await user.GetAsync("/Manage/EnableTwoFactorAuthenticator");
+                        string body = await get.Content.ReadAsStringAsync();
+
+                        r.Verify("管理の画面へ戻す",
+                            get.Headers.Location != null
+                                && get.Headers.Location.ToString().Contains("ManageTwoFactorAuthenticator"),
+                            "ManageTwoFactorAuthenticator へ", TwoFactorTests.Describe(get));
+
+                        r.Verify("鍵を出さない", TwoFactorTests.SecretOf(body) == null,
+                            "出さない", TwoFactorTests.SecretOf(body) == null ? "出さない" : "**出した**");
+
+                        r.Step("(2) 登録の POST を直接送る");
+
+                        string indexBody = await user.GetStringAsync("/Manage/Index");
+
+                        HttpResponseMessage post = await user.PostFormAsync("/Manage/EnableTwoFactorAuthenticator",
+                            new Dictionary<string, string>()
+                            {
+                                { "__RequestVerificationToken", Html.Antiforgery(indexBody) },
+                                { "Code", "000000" }
+                            });
+
+                        r.Verify("受けずに、管理の画面へ戻す",
+                            post.Headers.Location != null
+                                && post.Headers.Location.ToString().Contains("ManageTwoFactorAuthenticator"),
+                            "ManageTwoFactorAuthenticator へ", TwoFactorTests.Describe(post));
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userName);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-294.67 回復コードの再発行と、認証アプリのリセットは、パスワードを確かめる</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT29467_回復コードの再発行とリセットはパスワードを確かめる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userName = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-294.67",
+                    "回復コードの再発行と、認証アプリのリセットは、パスワードを確かめる（無い・間違いなら行わない）",
+                    "**以前は、セッションさえあれば、新しい回復コードを画面に出せ、認証アプリを外せた。**"
+                    + "**回復コードは、それだけで 2FA を通れる。**"
+                    + "**どちらもパスワードを確かめる**ようにした。",
+                    "#294（ManageController.*.cs の 3 回目のレビュー S2）");
+
+                r.Target("利用者名 = " + userName + "（認証アプリを登録した使い捨ての利用者）");
+
+                try
+                {
+                    using (IdPClient user = await this.TotpEnrolledClientAsync(admin, targetKey, userName))
+                    {
+                        string password = user.Config.Get("TestUserPWD");
+
+                        r.Step("(1) 回復コードの再発行 : パスワード無し → 間違い → 正しい");
+
+                        foreach (string wrong in new[] { null, password + "x" })
+                        {
+                            HttpResponseMessage refused = await TwoFactorTests.PostPageFormAsync(user,
+                                "/Manage/GenerateTwoFactorAuthenticatorRecoveryCodes", wrong);
+                            string refusedBody = await refused.Content.ReadAsStringAsync();
+
+                            r.Verify(wrong == null ? "パスワード無しでは、回復コードを出さない" : "間違ったパスワードでは、回復コードを出さない",
+                                !refusedBody.Contains("<code>"),
+                                "出さない", refusedBody.Contains("<code>") ? "**出した**" : "出さない");
+                        }
+
+                        HttpResponseMessage generated = await TwoFactorTests.PostPageFormAsync(user,
+                            "/Manage/GenerateTwoFactorAuthenticatorRecoveryCodes", password);
+                        string generatedBody = await generated.Content.ReadAsStringAsync();
+
+                        r.Verify("正しいパスワードなら、回復コードを出す", generatedBody.Contains("<code>"),
+                            "出す", generatedBody.Contains("<code>") ? "出した" : "**出さない**（" + TwoFactorTests.Describe(generated) + "）");
+
+                        r.Step("(2) 認証アプリのリセット : 間違い → 正しい");
+
+                        await TwoFactorTests.PostPageFormAsync(user, "/Manage/ResetTwoFactorAuthenticator", password + "x");
+
+                        string index = await user.GetStringAsync("/Manage/Index");
+
+                        r.Verify("間違ったパスワードでは、認証アプリは登録済みのまま",
+                            (index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator"),
+                            "登録済み", (index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator") ? "登録済み" : "**外れた**");
+
+                        await TwoFactorTests.PostPageFormAsync(user, "/Manage/ResetTwoFactorAuthenticator", password);
+
+                        index = await user.GetStringAsync("/Manage/Index");
+
+                        r.Verify("正しいパスワードなら、認証アプリが外れる",
+                            !(index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator"),
+                            "外れる", !(index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator") ? "外れた" : "**登録済みのまま**");
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userName);
+                }
+
+                r.Done();
+            }
+        }
+
         #region 補助
+
+        /// <summary>利用者を作ってサインインし、認証アプリを登録した IdPClient を返す（net10.0 版だけ）</summary>
+        /// <param name="admin">管理者の IdPClient（中でサインインする）</param>
+        /// <param name="targetKey">対象</param>
+        /// <param name="userName">利用者名</param>
+        /// <returns>サインインしたままの IdPClient（呼ぶ側で Dispose する）</returns>
+        private async Task<IdPClient> TotpEnrolledClientAsync(IdPClient admin, string targetKey, string userName)
+        {
+            await admin.SignInAsAdministratorAsync();
+            await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+            HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                admin, userName, userName + "@example.com", "User");
+
+            Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                "前提: 利用者を作れること");
+
+            IdPClient user = this.Client(targetKey);
+
+            Assert.True(await user.TrySignInAsync(userName, user.Config.Get("TestUserPWD")),
+                "前提: 作った利用者でサインインできること");
+
+            await TwoFactorTests.EnableTwoFactorAsync(user);
+
+            HttpResponseMessage get = await user.GetAsync("/Manage/EnableTwoFactorAuthenticator");
+            string body = await get.Content.ReadAsStringAsync();
+            string secret = TwoFactorTests.SecretOf(body);
+
+            Skip.IfNot(get.StatusCode == HttpStatusCode.OK && secret != null,
+                "認証アプリの登録画面が開きません（" + Html.Describe(body) + "）。");
+
+            HttpResponseMessage verified = await TwoFactorTests.PostFormFromAsync(user, body,
+                new Dictionary<string, string>() { { "Code", Totp.Compute(secret, DateTimeOffset.UtcNow) } },
+                "/Manage/EnableTwoFactorAuthenticator");
+
+            Assert.True(verified.Headers.Location != null
+                && verified.Headers.Location.ToString().Contains("ShowTwoFactorAuthenticatorRecoveryCodes"),
+                "前提: 認証アプリを登録できること（" + TwoFactorTests.Describe(verified) + "）");
+
+            return user;
+        }
+
+        /// <summary>その画面を開き、トークンとパスワードを付けて、同じ URL へ POST する</summary>
+        /// <param name="user">利用者でサインインした IdPClient</param>
+        /// <param name="path">画面の URL（POST 先も同じ）</param>
+        /// <param name="password">パスワード（null なら送らない）</param>
+        /// <returns>応答</returns>
+        private static async Task<HttpResponseMessage> PostPageFormAsync(IdPClient user, string path, string password)
+        {
+            string page = await user.GetStringAsync(path);
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "__RequestVerificationToken", Html.Antiforgery(page) }
+            };
+
+            if (password != null)
+            {
+                form["password"] = password;
+            }
+
+            return await user.PostFormAsync(path, form);
+        }
 
         /// <summary>認可リクエストのパラメタ（max_age 付き。`MaxAgeTests` と同じ形）</summary>
         /// <param name="reg">ClientRegistration</param>

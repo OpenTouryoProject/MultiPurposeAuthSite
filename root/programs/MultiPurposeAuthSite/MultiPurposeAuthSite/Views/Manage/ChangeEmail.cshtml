@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/10/30  玄人 幸道         設定によらず、パスワードの入力欄を出す（#294）
     //**********************************************************************************
 *@
 
@@ -55,19 +56,13 @@
             @Html.TextBoxFor(m => m.ConfirmEmail, new { @class = "form-control" })
         </div>
     </div>
-    if (Config.RequirePasswordInEditingUserNameAndEmail)
-    {
-        <div class="form-group">
-            @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
-            <div class="col-md-10">
-                @Html.PasswordFor(m => m.Password, new { @class = "form-control" })
-            </div>
+    @* **設定によらず、常にパスワードを求める**（#294。メアドを変えられると、パスワード リセットで乗っ取れる） *@
+    <div class="form-group">
+        @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.PasswordFor(m => m.Password, new { @class = "form-control", autocomplete = "current-password" })
         </div>
-    }
-    else
-    {
-        @Html.Hidden("Password", "dummy")
-    }
+    </div>
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
             <input type="submit" class="btn btn-primary" value="@ManageViews.ChangeEmailSubmit" />

@@ -20,6 +20,8 @@
 //*                                鍵のリセットで SecurityStamp を更新・SMS を続けて送らない（#294）
 //*  2026/10/30  玄人 幸道         2FA の無効化・電話番号の削除でパスワードを確かめる・SMS の間隔を電話番号ごとに・
 //*                                SMS の失敗で 500 にしない・TOTP の鍵を利用者に結び付ける（#294）
+//*  2026/10/30  玄人 幸道         登録済みの TOTP の鍵を出さない・電話番号の追加・認証アプリのリセット・
+//*                                回復コードの再発行でパスワードを確かめる（#294）
 //**********************************************************************************
 
 /*
@@ -79,10 +81,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /Manage/AddPhoneNumber
         /// </summary>
         /// <param name="model">ManageAddPhoneNumberViewModel</param>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model)
+        public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model, string password)
         {
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
@@ -93,6 +96,15 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageAddPhoneNumberViewModelの検証に成功
+
+                    // **パスワードを確かめる**（#294。2 要素認証の手段を足す操作なので）。
+                    //   **検証コードは、ここを通った後でしか作らない**（`VerifyPhoneNumber` は、そのコードが無いと通らない）。
+                    string error = await this.CheckPasswordForEditingAsync(user, password);
+                    if (error != null)
+                    {
+                        ModelState.AddModelError("", error);
+                        return View(model);
+                    }
 
                     // **同じ電話番号に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
                     //   **電話番号ごとに数える** — 打ち間違いを直した番号へは、すぐに送れる。
@@ -364,7 +376,11 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>EnableTwoFactorAuthenticator（初期表示）</summary>
         /// <returns>ActionResult</returns>
-        /// <remarks>**鍵は、ここでは保存しない**（#294。`LoadSharedKeyAndQrCodeUriAsync`）。</remarks>
+        /// <remarks>
+        /// **鍵は、ここでは保存しない**（#294。`LoadSharedKeyAndQrCodeUri`）。
+        /// **登録済みなら、この画面は出さない**（#294）。**以前は保存済みの鍵を何度でも出していた**ので、
+        /// セッションさえあれば、認証アプリと同じコードを作れるようになった。**登録し直すときは、リセットを通す。**
+        /// </remarks>
         [HttpGet]
         public async Task<ActionResult> EnableTwoFactorAuthenticator()
         {
@@ -378,11 +394,17 @@ namespace MultiPurposeAuthSite.Controllers
 
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
+            if (!string.IsNullOrEmpty(await UserManager.GetAuthenticatorKeyAsync(user)))
+            {
+                // 登録済み
+                return RedirectToAction(nameof(ManageTwoFactorAuthenticator));
+            }
+
             // QRコード生成
             ManageEnableTwoFactorAuthenticatorViewModel model
                 = new ManageEnableTwoFactorAuthenticatorViewModel();
 
-            await LoadSharedKeyAndQrCodeUriAsync(user, model);
+            this.LoadSharedKeyAndQrCodeUri(user, model);
 
             return View(model);
         }
@@ -407,37 +429,30 @@ namespace MultiPurposeAuthSite.Controllers
 
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
+            if (!string.IsNullOrEmpty(await UserManager.GetAuthenticatorKeyAsync(user)))
+            {
+                // **登録済みなら受けない**（#294。GET と同じ。登録し直すときは、リセットを通す）。
+                return RedirectToAction(nameof(ManageTwoFactorAuthenticator));
+            }
+
             if (ModelState.IsValid)
             {
                 string code = model.Code.Replace(" ", string.Empty).Replace("-", string.Empty);
 
                 // トークン検証
-                //   **鍵が保存済みなら、その鍵で。まだなら、画面に出した鍵（TempData）で。**
-                bool hasStoredKey = !string.IsNullOrEmpty(await UserManager.GetAuthenticatorKeyAsync(user));
-                string pendingKey = this.PeekPendingAuthenticatorKey(user); // **この利用者のために作った鍵だけ**（#294）
+                //   **画面に出した鍵（TempData）で確かめる。** **この利用者のために作った鍵だけ**（#294）。
+                string pendingKey = this.PeekPendingAuthenticatorKey(user);
 
-                bool is2faTokenValid = false;
-
-                if (hasStoredKey)
-                {
-                    is2faTokenValid = await UserManager.VerifyTwoFactorTokenAsync(
-                        user, UserManager.Options.Tokens.AuthenticatorTokenProvider, code);
-                }
-                else if (!string.IsNullOrEmpty(pendingKey))
-                {
-                    is2faTokenValid = await this.VerifyPendingAuthenticatorCodeAsync(user, pendingKey, code);
-                }
+                bool is2faTokenValid = !string.IsNullOrEmpty(pendingKey)
+                    && await this.VerifyPendingAuthenticatorCodeAsync(user, pendingKey, code);
 
                 if (is2faTokenValid)
                 {
                     // valid
-                    if (!hasStoredKey)
-                    {
-                        // **ここで初めて鍵を保存する**（SecurityStamp も更新する。ResetAuthenticatorKeyAsync と同じ）。
-                        user.TotpAuthenticatorKey = pendingKey;
-                        await UserManager.UpdateSecurityStampAsync(user);
-                        TempData.Remove(PendingAuthenticatorKey);
-                    }
+                    // **ここで初めて鍵を保存する**（SecurityStamp も更新する。ResetAuthenticatorKeyAsync と同じ）。
+                    user.TotpAuthenticatorKey = pendingKey;
+                    await UserManager.UpdateSecurityStampAsync(user);
+                    TempData.Remove(PendingAuthenticatorKey);
 
                     await UserManager.SetTwoFactorEnabledAsync(user, true);
 
@@ -456,14 +471,14 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // invalid
                     ModelState.AddModelError("Code", Resources.ManageController.InvalidVerificationCode);
-                    await LoadSharedKeyAndQrCodeUriAsync(user, model);
+                    this.LoadSharedKeyAndQrCodeUri(user, model);
                     return View(model);
                 }
             }
             else
             {
                 // リトライ
-                await LoadSharedKeyAndQrCodeUriAsync(user, model);
+                this.LoadSharedKeyAndQrCodeUri(user, model);
                 return View(model);
             }
         }
@@ -537,10 +552,11 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>ResetTwoFactorAuthenticator</summary>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResult</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> ResetTwoFactorAuthenticator(string x)
+        public async Task<ActionResult> ResetTwoFactorAuthenticator(string password)
         {
             if (!(Config.CanEdit2FA
                 && Config.EnableEditingOfUserAttribute))
@@ -550,6 +566,14 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             ApplicationUser user = await UserManager.GetUserAsync(User);
+
+            // **パスワードを確かめる**（#294。2 要素認証の手段を外す操作なので）。
+            string error = await this.CheckPasswordForEditingAsync(user, password);
+            if (error != null)
+            {
+                ModelState.AddModelError("", error);
+                return View();
+            }
 
             //await UserManager.SetTwoFactorEnabledAsync(user, false); // これ要る？
             // 確かにAuthenticatorKeyはRollingする（が、nullにはならない）。
@@ -592,11 +616,11 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>GenerateTwoFactorAuthenticatorRecoveryCodes</summary>
-        /// <param name="s">dummy</param>
+        /// <param name="password">今のパスワード（#294）</param>
         /// <returns>ActionResult</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> GenerateTwoFactorAuthenticatorRecoveryCodes(string s)
+        public async Task<ActionResult> GenerateTwoFactorAuthenticatorRecoveryCodes(string password)
         {
             if (!(Config.CanEdit2FA
                 && Config.EnableEditingOfUserAttribute))
@@ -609,6 +633,15 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (user.TwoFactorEnabled)
             {
+                // **パスワードを確かめる**（#294）。
+                //   **回復コードは、それだけで 2FA を通れる**ので、セッションだけでは出さない。
+                string error = await this.CheckPasswordForEditingAsync(user, password);
+                if (error != null)
+                {
+                    ModelState.AddModelError("", error);
+                    return View();
+                }
+
                 IEnumerable<string> recoveryCodes = await UserManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
                 Logging.MyOperationTrace(string.Format(
                             "User with ID {0} has generated new 2FA recovery codes.", user.Id));

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#137）
+//*  2026/10/30  玄人 幸道         RT-294.69（資格情報の登録はパスワードを確かめる）を足した（#294）
 //**********************************************************************************
 
 using System.Text.Json;
@@ -426,6 +427,61 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "22 文字以上", ((c1 ?? "").Length) + " 文字");
 
                 r.Note("**値そのものは出さない。** 長さだけを記録する。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-294.69 WebAuthn の資格情報の登録は、パスワードを確かめる</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT29469_資格情報の登録はパスワードを確かめる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.69",
+                    "WebAuthn の資格情報（パスキー）の登録は、パスワードを確かめる（段階 0）",
+                    "**以前は、セッションさえあれば資格情報を足せた。**"
+                    + "**パスキーは、それだけでサインインできる**ので、足した側がずっと入れるようになった。"
+                    + "**段階 0（options を作る段）でパスワードを確かめる。** "
+                    + "**段階 1 は、段階 0 で Session に置いた options が無いと通らない。**",
+                    "#294（ManageController.*.cs の 3 回目のレビュー S2）");
+
+                r.Target("POST /Manage/AddWebAuthnData（sequenceNo=0）");
+
+                foreach (string wrong in new[] { "", "wrong-password-rt29469" })
+                {
+                    r.Step(wrong == "" ? "(1) パスワードを空で送る" : "(2) 間違ったパスワードで送る");
+
+                    string html = await client.WebAuthnCreationOptionsAsync(
+                        TestEnv.TestUserName(targetKey), password: wrong);
+
+                    Assert.NotNull(html);
+
+                    string json = Html.FieldValue(html, "fido2Data") ?? "";
+                    string status = "";
+
+                    if (json != "")
+                    {
+                        JsonElement o = JsonDocument.Parse(json).RootElement;
+                        status = o.TryGetProperty("status", out JsonElement st) ? st.GetString() : "";
+                    }
+
+                    r.VerifyEqual("options を返さない（status が error）", "error", status);
+
+                    r.Verify("challenge を返さない", !json.Contains("challenge"),
+                        "返さない", json.Contains("challenge") ? "**返した**" : "返さない");
+                }
+
+                r.Step("(3) 正しいパスワードで送る");
+
+                string ok = await client.WebAuthnCreationOptionsAsync(TestEnv.TestUserName(targetKey));
+                string okJson = Html.FieldValue(ok ?? "", "fido2Data") ?? "";
+
+                r.Verify("options を返す（challenge が在る）", okJson.Contains("challenge"),
+                    "返す", okJson.Contains("challenge") ? "返した" : "**返さない**（" + okJson + "）");
 
                 r.Done();
             }

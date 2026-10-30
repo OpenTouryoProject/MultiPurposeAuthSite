@@ -21,6 +21,7 @@
 //*  2026/10/30  玄人 幸道         再サインインで auth_time を書かない・アカウント記憶を引き継ぐ・パスワードの確認を
 //*                                ほかの操作でも使う・メールの間隔を宛先ごとに数える・メアドの変更を変更前のメアドにも
 //*                                知らせる・クレームの入れ替えを発行元ごとに・TOTP の鍵を利用者に結び付ける（#294）
+//*  2026/10/30  玄人 幸道         TOTP の登録画面に、保存済みの鍵を出さない（#294）
 //**********************************************************************************
 
 /*
@@ -332,28 +333,25 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 2FA(TOTP)
 
-        /// <summary>LoadSharedKeyAndQrCodeUriAsync</summary>
+        /// <summary>LoadSharedKeyAndQrCodeUri</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="model">EnableAuthenticatorViewModel</param>
-        /// <returns>－</returns>
         /// <remarks>
         /// **鍵が無ければ作るが、保存はしない**（#294）。**コードを確かめてから保存する**（`EnableTwoFactorAuthenticator` の POST）。
         /// **以前は画面を開いただけで鍵を保存していた**ので、**登録を終えていなくても**、
         /// 管理画面は TOTP を「有効」と出し、サインインの手段にも認証アプリが出ていた。
         /// **作った鍵は TempData に置く**（Cookie。Data Protection で守られる）。**やり直しでも同じ鍵を出す。**
+        ///
+        /// **出すのは、保存する前の鍵だけ**（#294）。**保存済みの鍵は出さない**（登録済みなら、呼ぶ側が画面ごと出さない）。
         /// </remarks>
-        private async Task LoadSharedKeyAndQrCodeUriAsync(ApplicationUser user, ManageEnableTwoFactorAuthenticatorViewModel model)
+        private void LoadSharedKeyAndQrCodeUri(ApplicationUser user, ManageEnableTwoFactorAuthenticatorViewModel model)
         {
-            string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
+            string totpAuthenticatorKey = this.PeekPendingAuthenticatorKey(user);
+
             if (string.IsNullOrEmpty(totpAuthenticatorKey))
             {
-                totpAuthenticatorKey = this.PeekPendingAuthenticatorKey(user);
-
-                if (string.IsNullOrEmpty(totpAuthenticatorKey))
-                {
-                    totpAuthenticatorKey = UserManager.GenerateNewAuthenticatorKey();
-                    TempData[PendingAuthenticatorKey] = user.Id + "\t" + totpAuthenticatorKey;
-                }
+                totpAuthenticatorKey = UserManager.GenerateNewAuthenticatorKey();
+                TempData[PendingAuthenticatorKey] = user.Id + "\t" + totpAuthenticatorKey;
             }
 
             model.SharedKey = this.FormatKey(totpAuthenticatorKey);

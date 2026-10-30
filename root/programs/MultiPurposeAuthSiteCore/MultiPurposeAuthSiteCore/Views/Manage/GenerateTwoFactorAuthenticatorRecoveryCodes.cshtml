@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2018/11/30  西野 大介         新規
+    //*  2026/10/30  玄人 幸道         パスワードの入力欄を足した（#294）
     //**********************************************************************************
 *@
 
@@ -46,6 +47,8 @@
 
 <div>
     <form asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes" method="post" class="form-group">
+        <div asp-validation-summary="All" class="text-danger"></div>
+        <input type="password" name="password" placeholder="@ManageViews.CurrentPasswordPlaceholder" autocomplete="current-password" />
         <button class="btn btn-danger" type="submit">@ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesSubmit</button>
     </form>
 </div>

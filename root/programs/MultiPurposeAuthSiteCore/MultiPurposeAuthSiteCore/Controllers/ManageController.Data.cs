@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         GDPR 削除で、WebAuthn の資格情報を利用者を消せてから消す（#294）
+//*  2026/10/30  玄人 幸道         WebAuthn の資格情報の登録で、パスワードを確かめる（#294）
 //**********************************************************************************
 
 /*
@@ -255,6 +256,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <param name="fido2Data">string</param>
         /// <param name="sequenceNo">string</param>
+        /// <param name="password">今のパスワード（段階 0 だけ。#294）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         //  **画面とは form post で 3 往復する**（`ffWebauthn.js`）。
         //    - sequenceNo=0 : 画面からの条件 → CredentialCreateOptions を返す
@@ -262,7 +264,7 @@ namespace MultiPurposeAuthSite.Controllers
         //    - sequenceNo=2 : 結果を見せた後、Index へ戻る
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddWebAuthnData(string fido2Data, string sequenceNo)
+        public async Task<ActionResult> AddWebAuthnData(string fido2Data, string sequenceNo, string password)
         {
             if ((Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
                 && Config.EnableEditingOfUserAttribute)
@@ -291,6 +293,15 @@ namespace MultiPurposeAuthSite.Controllers
                         if (username != user.UserName)
                         {
                             throw new Exception("The username does not match the signed-in user.");
+                        }
+
+                        // **パスワードを確かめる**（#294）。
+                        //   **パスキーは、それだけでサインインできる**ので、セッションだけでは足させない。
+                        //   **確かめるのは段階 0 だけ** — 段階 1 は、ここで Session に置いた options が無いと通らない。
+                        string error = await this.CheckPasswordForEditingAsync(user, password);
+                        if (error != null)
+                        {
+                            throw new Exception(error);
                         }
 
                         FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
