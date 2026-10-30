@@ -31,6 +31,7 @@
 //*  2019/06/26  西野 大介         新規
 //*  2026/09/11  玄人 幸道         exp を NumericDate（JSON の数値）で出すよう修正（#201）
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
+//*  2026/10/31  玄人 幸道         clientId を必須にし、iss・aud・exp の無い応答を作らないようにした（JARM 2.1。#317）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -52,29 +53,34 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>Create (CmnAccessTokenを踏襲)</summary>
         /// <param name="responseDictionary">Dictionary(string, string)</param>
         /// <param name="clientId">string</param>
-        /// <param name="expiresUtc">DateTimeOffset</param>
+        /// <param name="expiresUtc">DateTimeOffset（exp）</param>
         /// <returns>response(JARM)</returns>
         /// <remarks>
         /// **組み立ては Open棟梁 の `ResponseObject.Create`**（iss / aud / exp を足して署名する。#294）。
         /// **exp は RFC 7519 の NumericDate（JSON の数値）**で入る（#201）。
         ///
-        /// **`clientId` が空の経路は、ここに残す**（**iss / aud / exp を入れずに署名する**）。
-        /// **`ResponseObject.Create` は aud を必須にしている**（空なら `ArgumentNullException`）ので、
-        /// **呼ぶ前に分ける**（Open棟梁 #634 の補足 3-3）。
+        /// **JARM 2.1 : JWT は、成功でもエラーでも常に `iss` / `aud` / `exp` を持つ**（#317）。
+        /// **`clientId` は必須**（空なら `ArgumentNullException`）。
+        /// 以前は空のとき **iss / aud / exp を入れずに署名していた**が、
+        /// **JARM 2.4 どおりに検証する RP（OpenTouryo#644 の後の Open棟梁 など）は、それを断る。**
+        /// **呼び出し側の漏れを、実行時に気付けるようにする**（黙って欠けた JWT を返さない）。
+        ///
+        /// **呼び出しは `AccountController.CreateAuthorizationResponse` の 1 か所**（両版。#294）で、
+        /// **照合済みの `redirect_uri` へ返すときだけ**通る（`client_id` は確かめ済み）。
         /// </remarks>
         public static string Create(
             Dictionary<string, string> responseDictionary,
-            string clientId, DateTimeOffset? expiresUtc)
+            string clientId, DateTimeOffset expiresUtc)
         {
-            JWS jws = CmnResponseObject.CreateJws();
-
             if (string.IsNullOrEmpty(clientId))
             {
-                return jws.Create(JsonConvert.SerializeObject(responseDictionary));
+                throw new ArgumentNullException(nameof(clientId),
+                    "JARM requires aud (client_id). JARM 2.1");
             }
 
             return ResponseObject.Create(
-                responseDictionary, jws, CmnServerParams.IssuerId, clientId, expiresUtc.Value);
+                responseDictionary, CmnResponseObject.CreateJws(),
+                CmnServerParams.IssuerId, clientId, expiresUtc);
         }
 
         /// <summary>署名に使う JWS（RS256。kid は、その鍵の JWK の kid）</summary>
