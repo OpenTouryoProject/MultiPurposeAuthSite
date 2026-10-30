@@ -102,6 +102,27 @@
     <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
     <Compile Include="Data\CmnUserStore.cs" />
+    <Compile Include="Data\CmnUserStore.Find.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Roles.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.UserAttributes.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.LoginAttributes.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Logins.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Claims.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Tokens.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
     <Compile Include="Extensions\Sts\AuthFailureProvider.cs" />
     <Compile Include="Extensions\Sts\AuthTimeCookie.cs" />
     <Compile Include="Extensions\Sts\UserCreationLock.cs" />

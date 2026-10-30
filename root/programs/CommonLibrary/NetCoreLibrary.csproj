@@ -101,6 +101,11 @@
     <Compile Update="TokenProviders\CmnEndpoints.*.cs">
       <DependentUpon>CmnEndpoints.cs</DependentUpon>
     </Compile>
+
+    <!-- **CmnUserStore も partial に分けてある**（#294）。IDE で CmnUserStore.cs の下に畳んで見せる。 -->
+    <Compile Update="Data\CmnUserStore.*.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
