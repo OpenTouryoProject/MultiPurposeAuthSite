@@ -348,3 +348,5 @@ __pycache__/
 /Container/Stub/app/LogConf.xml
 /Container/Stub/keys/
 /Container/Stub/logs/
+#   起動側のパラメタと設定（.env.sample / appsettings.Stub.sample.json を写したもの）。my- で始めれば追跡しない
+/Container/Stub/my-*

@@ -41,7 +41,25 @@
 | DB のストアで回す（`sql` / `ora` / `npg`。`Container\Store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`TESTING.md`](TESTING.md) 1 節 |
 | 別ホストの DB を指す（`Container\Store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`TESTING.md`](TESTING.md) 1 節 |
 
-### コンテナ（`Container\`。#318）
+### テストのスタブ（MPAS を IdP として起動する。`Container\Stub\` で実行する）
+
+**Open棟梁 などのクライアント（RP / SP）のテストから使う。** 流れと設定値は 10 節。
+
+| やりたいこと | コマンド | 節 |
+|---|---|---|
+| **最初に 1 回**（と、MPAS を更新したとき）: publish と証明書の書き出し | `cd ..\Container\Stub; .\1_PublishStub.ps1` | 10.1 |
+| パラメタのファイルを作る（写して直す） | `copy .env.sample my-stub.env` | 10.2 |
+| **起動する** | `docker compose --env-file my-stub.env up -d --build` | 10.1 |
+| 起動を確かめる（200 と JSON が返ればよい） | `curl.exe -s https://localhost:44310/.well-known/openid-configuration` | 10.1 |
+| **まっさらに戻す**（利用者・同意・セッションが消える） | `docker compose --env-file my-stub.env restart` | 10.1 |
+| **止めて消す** | `docker compose --env-file my-stub.env down` | 10.1 |
+| ログを見る | `docker compose --env-file my-stub.env logs -f`（アプリのログは `Container\Stub\logs\`） | 10.6 |
+| 証明書を作り直す（期限切れなど） | `.\1_PublishStub.ps1 -NewCertificate` | 10.1 |
+| **他のリポジトリから起動する**（パラメタのファイルは使う側に置く） | `docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file <絶対パス> up -d --build` | 10.5 |
+| 2 つ目を同時に起動する（`.env` のポート・URL・`iss` を変える） | `docker compose -p mpas-stub2 --env-file stub2.env up -d --build` | 10.5 |
+| 動いているスタブを見る | `docker ps --filter "label=com.docker.compose.project=mpas-stub"` | — |
+
+### E2E 用のコンテナ（`Container\E2E\` / `Container\Store\`。このリポジトリのテストが使う）
 
 | やりたいこと | コマンド | 節 |
 |---|---|---|
@@ -51,8 +69,7 @@
 | E2E 用の DB に DDL を流し込む（DB は起動しない。通しでは `test.ps1` が起動・停止する） | `..\Container\Store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
 | DB を**一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\Container\Store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
 | DB を**消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\Container\Store\2_DockerComposeDown.bat` | — |
-| 動いているコンテナを見る | `docker ps --filter "label=com.docker.compose.project=mpas-e2e"`（DB は `mpas-store`、スタブは `mpas-stub`） | — |
-| **テストのスタブ**として MPAS を起動する（Open棟梁 などのテストから使う。パラメタは `.env` と JSON） | `cd ..\Container\Stub; .\1_PublishStub.ps1; docker compose --env-file <パラメタ> up -d --build` | [`../Container/Stub/README.md`](../Container/Stub/README.md) |
+| 動いているコンテナを見る | `docker ps --filter "label=com.docker.compose.project=mpas-e2e"`（DB は `mpas-store`） | — |
 
 ### その他
 
@@ -324,3 +341,128 @@ Data Protection の鍵も作り直される**ので、古いクッキーはも�
 - **秘密を転記しない。** 設定の変更は雛形側に書く
 - **回さなかった検証は、「回していない」と報告する。** どこまで回すかの目安は [`../AGENTS.md`](../AGENTS.md)
 - ヘッダの更新者は **「玄人 幸道」**
+
+## 10. テストのスタブとして MPAS を使う（`Container\Stub\`）
+
+**Open棟梁 などのクライアント（RP / SP）のテストで、相手の IdP として MPAS を起動する。**
+**中身は net10.0 版の MPAS そのもの**（応答を偽装するスタブではない）。OAuth2 / OIDC / SAML2 の IdP として動く。
+一次情報 → [`../Container/Stub/README.md`](../Container/Stub/README.md)
+
+**前提** : Docker（compose v2）、.NET 10 SDK、`C:\root\files\resource`（[`Readme.ja.md`](Readme.ja.md) の手順）、
+OpenTouryo のアセンブリ（`.\1_BuildAll.ps1` が取得する）。
+
+### 10.1 流れ
+
+```powershell
+cd Container\Stub                                     # リポジトリのルートから
+.\1_PublishStub.ps1                                   # 最初に 1 回（MPAS を更新したら、もう一度）
+copy .env.sample my-stub.env                          # パラメタ（10.2）
+copy appsettings.Stub.sample.json my-stub.json        # クライアントの登録（10.3）。my-stub.env の STUB_SETTINGS で指す
+docker compose --env-file my-stub.env up -d --build   # 起動
+curl.exe -s https://localhost:44310/.well-known/openid-configuration   # 200 と JSON が返ればよい
+
+# ……ここでクライアントのテストを回す（10.4 の値を RP / SP に設定する）……
+
+docker compose --env-file my-stub.env restart         # まっさらに戻す（テストの間で状態を消したいとき）
+docker compose --env-file my-stub.env down            # 止めて消す
+```
+
+- **自分のファイルは `my-` で始める**（`.gitignore` 済み。テスト用の秘密を書いてもコミットされない）
+- **状態は残らない**（`UserStoreType=mem`）。**再起動で、利用者・同意・セッション・管理画面で足した登録が消える**
+- **`--env-file` は、どのコマンドにも同じものを付ける**（付けないと既定値で解釈される）
+- **MPAS のコードを更新したら、`1_PublishStub.ps1` からやり直す**（`--build` でイメージに入る）
+- **証明書はホストの開発用証明書**なので、同じホストのテストなら警告なしで信頼される。作り直すなら `-NewCertificate`
+
+### 10.2 パラメタ（`.env`）
+
+**書いていないキーは既定値になる。** **相対パスは `Container\Stub\` から見たもの。**
+
+| キー | 既定 | 変えるとき |
+|---|---|---|
+| `STUB_PORT` | `44310` | ポートが塞がっているとき・2 つ目を起動するとき |
+| `STUB_PUBLIC_URL` | `https://localhost:44310` | **`STUB_PORT` を変えたら、必ずこれも変える** |
+| `STUB_ISSUER` | `https://localhost:44310` | **RP の期待する `issuer` に合わせる** |
+| `STUB_SETTINGS` | `./appsettings.Stub.sample.json` | **自分のクライアントを登録した JSON を指す**（10.3） |
+| `STUB_ADMIN_UID` / `STUB_ADMIN_PWD` | テスト用の値 | 管理画面を使うとき |
+| `STUB_TEST_USER_PWD` | テスト用の値 | テスト利用者のパスワードを変えるとき |
+| `STUB_LOCKDOWN_TEST_ENDPOINTS` | `false` | 自己テストの画面などを閉じるなら `true` |
+| `STUB_CERT_DIR` / `STUB_CERT_ENV_FILE` | `./cert` / `./cert/cert.env` | 自分の証明書を使うとき（README 4 節） |
+| `STUB_RESOURCE_DIR` | `C:/root/files/resource` | リソースを別の場所に置いたとき |
+
+**値はテスト専用にすること**（管理者・テスト利用者・`client_secret`）。
+
+### 10.3 クライアントを登録する（JSON）
+
+**`appsettings.json` と同じ書き方。** 雛形の値に重ねて効き、**書いたキーだけが変わる。**
+
+```json
+{
+  "appSettings": {
+    "OAuth2ClientsInformation": {
+      "57ab0000000000000000000000000001": {
+        "client_secret": "<テスト用の秘密>",
+        "redirect_uri_code": "https://localhost:5001/signin-oidc",
+        "redirect_uri_token": "-",
+        "client_name": "MyTestRP"
+      }
+    }
+  }
+}
+```
+
+| 項目 | 書くこと |
+|---|---|
+| キー（`client_id`） | **32 桁の 16 進** |
+| `redirect_uri_code` | 認可コード フローの戻り先。**RP の値と 1 文字も違ってはならない** |
+| `redirect_uri_token` | Implicit の戻り先（使わなければ `-`） |
+| `redirect_uri_saml` | SAML2 の ACS（使わなければ書かない） |
+| `client_name` | 名前（**他のクライアントと重ねない**） |
+
+**既存の `appsettings.json` を丸ごと渡してもよい。** `.env` に、そのパスを書く。
+
+```
+STUB_SETTINGS=C:/MultiPurposeAuthSite/root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
+```
+
+**公開 URL・`iss`・管理者は JSON では変えられない**（環境変数の方が強い）。**`.env` で変える。**
+**`UserStoreType`（常に `mem`）・リソースのパス・`DataProtectionKeyPath` も、JSON に書いても変わらない**（README 3 節）。
+
+### 10.4 RP / SP に設定する値
+
+| 項目 | 値（既定のとき） |
+|---|---|
+| Authority / Issuer | `https://localhost:44310`（`STUB_ISSUER`） |
+| Discovery | `https://localhost:44310/.well-known/openid-configuration`（**各エンドポイントはここから引く**） |
+| `client_id` / `client_secret` | 10.3 で登録した値 |
+| `redirect_uri` | 10.3 で登録した値と同じもの |
+| サインインする利用者 | `super_tanaka@example.com` / `tanaka@example.com`（パスワードは `STUB_TEST_USER_PWD`） |
+
+### 10.5 他のリポジトリから使う・複数起動する
+
+```powershell
+# **パラメタのファイルは、使う側のリポジトリに置いてよい。** その中のパスは絶対パスで書く
+docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file C:\work\my-repo\mpas-stub.env up -d --build
+docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file C:\work\my-repo\mpas-stub.env down
+
+# **同じホストで 2 つ目**: -p でプロジェクト名を、.env で STUB_PORT / STUB_PUBLIC_URL / STUB_ISSUER を分ける
+docker compose -p mpas-stub2 --env-file stub2.env up -d --build
+docker compose -p mpas-stub2 --env-file stub2.env down
+```
+
+**E2E 用のコンテナ（44301〜44305）とは、ポートもプロジェクト名も別**なので、同時に動かせる。
+
+### 10.6 困ったとき
+
+| 症状 | 原因・直し方 |
+|---|---|
+| `up` が「port is already allocated」 | **ポートが使われている。** `STUB_PORT` と `STUB_PUBLIC_URL` を変える |
+| RP が「issuer が違う」と言う | **`STUB_ISSUER` が RP の期待と違う**（末尾の `/` の有無も見る） |
+| 認可でエラー画面になる | **`redirect_uri` が登録値と違う**（10.3）。または `client_id` が 32 桁の 16 進でない |
+| トークンの取得が 401 | **`client_secret` が違う** |
+| サインインで画面に戻される | **パスワードが `STUB_TEST_USER_PWD` と違う** |
+| 別のコンテナで動く RP から届かない | **`localhost:44310` はそのコンテナ自身を指す**（証明書の名前も合わない）。README 6 節 |
+| MPAS を直したのに振る舞いが変わらない | **`1_PublishStub.ps1` を回していない**（`--build` だけでは古い成果物が入る） |
+| 起動直後に応答しない | **起動中。** `docker compose --env-file my-stub.env logs -f` で `Now listening on` を待つ |
+| 原因が分からない | `docker compose --env-file my-stub.env logs`、アプリのログは `Container\Stub\logs\` |
+
+**net48 版の振る舞いは再現しない**（中身は net10.0 版）。**任意のエラー応答は返せない**（本物の IdP なので、同意の拒否・`prompt=none`・期限切れなど、自然に出るものだけ）。

@@ -21,6 +21,9 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 
 **起動の確認** : `https://localhost:44310/.well-known/openid-configuration` が 200 を返せばよい。
 
+**このディレクトリに置く自分のファイルは `my-` で始める**（`my-stub.env`・`my-stub.json` など）。
+**`.gitignore` 済みなので、テスト用の秘密を書いてもコミットされない。** 他の名前にすると追跡の対象になる。
+
 ## 2. パラメタ（`.env`）
 
 **`docker compose --env-file <ファイル>` で渡す。** 書いていないキーは `docker-compose.yml` の既定値になる。
@@ -56,6 +59,19 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 | `client_name` | 名前 |
 
 ほかの項目と、機能の切り替え（`EnableDynamicClientRegistration` など）は `root\CONFIGURATION.md` を参照。
+
+**既存の `appsettings.json` を丸ごと渡してもよい**（`STUB_SETTINGS` にそのパスを書く）。
+**雛形のキーはすべて上書きされる**（雛形に配列は無いので、要素が残ることもない）。**イメージには入らない**（起動時にマウントするだけ）。
+ただし、**次の値は環境変数が勝つので、そこに書いても変わらない。**
+
+| 値 | 決めているもの |
+|---|---|
+| 公開 URL・`IssuerId`・管理者・`TestUserPWD`・テスト用の口 | `.env` の `STUB_*` |
+| `UserStoreType` | **常に `mem`** |
+| リソースのパス（19 件）と log4net の構成 | `..\Common\mpas-common.env`（`C:/root/files/...` をコンテナの `/resource` へ振り替える） |
+| `DataProtectionKeyPath` | `/keys` |
+
+**この 19 件のほかに Windows のパスを書いた設定があると、その機能はコンテナの中では動かない。**
 
 > **`docker-compose.yml` の `environment` に在るキー（公開 URL・`iss`・管理者など）は、JSON では変えられない**
 > （環境変数の方が強い）。**それらは `.env` で変える。**
