@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：OAuth2EndpointReviewTests
-//* クラス日本語名  ：RT-294.73 〜 .79 OAuth2EndpointController.*.cs のレビューで見つけた不具合
+//* クラス日本語名  ：RT-294.73 〜 .80 OAuth2EndpointController.*.cs のレビューで見つけた不具合
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（#294）
 //*  2026/10/30  玄人 幸道         RT-294.79（/par は同じ名前のパラメタを断る）を足した・既定の利用者の行を書くので CIBA と同じコレクションに入れた（#294）
+//*  2026/10/30  玄人 幸道         RT-294.80（/userinfo の POST と openid の無いトークン）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -48,7 +49,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-294.73 〜 .79 `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（#294）。
+    /// RT-294.73 〜 .80 `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（#294）。
     /// </summary>
     /// <remarks>
     /// | | 確かめること |
@@ -60,6 +61,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | `RT-294.77` | **デバイス認可で `private_key_jwt` が通る** |
     /// | `RT-294.78` | **`/revoke`・`/introspect` は、クライアント認証を `token` の有無より先に行う** |
     /// | `RT-294.79` | **`/par` は、同じ名前のパラメタが 2 回来たら断る** |
+    /// | `RT-294.80` | **`/userinfo` は POST も受け、openid の無いトークンを 403 で断る** |
     ///
     /// **既定の利用者の行（端末の登録）を書く**（`RT-294.73` / `.76`）ので、CIBA のテストと同じコレクションに入れる
     /// （並行すると、プッシュの宛先を上書きし合う）。
@@ -473,6 +475,69 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     }, reg.ClientId, reg.ClientSecret);
 
                 r.VerifyEqual("201（request_uri が返る）", "201", ((int)once.StatusCode).ToString());
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.80
+
+        /// <summary>RT-294.80 /userinfo は POST も受け、openid の無いトークンを 403 で断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29480_userinfoはPOSTも受けopenidの無いトークンを断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.80",
+                    "/userinfo : POST でも答える。openid スコープの無いトークンには 403 / insufficient_scope",
+                    "**以前は GET しか受けず**（OIDC Core 5.3.1 は GET と POST の両方を MUST としている）、"
+                    + "**openid の無いトークン（client_credentials など）にも 200 で sub を返していた**"
+                    + "（UserInfo は、OIDC の認証要求で得たトークンで問い合わせる口。RFC 6750 §3.1）。",
+                    "OIDC Core 5.3 / 5.3.1 / RFC 6750 §3.1 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+
+                r.Step("(1) openid を含むトークンで、POST で問い合わせる");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client, KnownClients.MvcSample, "openid email");
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                JsonResponse posted = await client.PostJsonWithAuthorizationAsync(
+                    "/userinfo", new Dictionary<string, string>(), "Bearer " + token.AccessToken);
+
+                r.VerifyEqual("POST : HTTP 200", "200", ((int)posted.StatusCode).ToString());
+                r.Verify("POST : sub と email が返る",
+                    !string.IsNullOrEmpty(posted.String("sub")) && posted.String("email") == TestEnv.TestUserEmail(targetKey),
+                    "sub あり / email 一致",
+                    (string.IsNullOrEmpty(posted.String("sub")) ? "sub なし" : "sub あり") + " / email=" + (posted.String("email") ?? "（無し）"));
+
+                r.Step("(2) openid の無いトークン（client_credentials）で問い合わせる");
+
+                JsonResponse cc = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "client_credentials" },
+                    { "scope", "profile" },
+                    { "client_id", reg.ClientId },
+                    { "client_secret", reg.ClientSecret }
+                });
+
+                Assert.False(string.IsNullOrEmpty(cc.AccessToken), "前提: client_credentials の access_token が返ること");
+
+                JsonResponse denied = await client.UserInfoAsync(cc.AccessToken);
+                string www = denied.Header("WWW-Authenticate") ?? "";
+
+                r.Verify("**403 / insufficient_scope**",
+                    denied.StatusCode == HttpStatusCode.Forbidden && www.Contains("insufficient_scope"),
+                    "403 / insufficient_scope",
+                    (int)denied.StatusCode + " / " + (string.IsNullOrEmpty(www) ? "WWW-Authenticate なし" : www));
 
                 r.Done();
             }

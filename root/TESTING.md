@@ -4171,7 +4171,7 @@ The ID federation did not complete. (the error view was returned)
 >
 > **測れていないもの。** **Oracle の空のクレーム**・**SQL Server の外部ログインの照合**は、mem で回す E2E では測れない。**読んで直した。**
 
-#### `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（`RT-294.73`〜`.79`。#294）
+#### `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（`RT-294.73`〜`.80`。#294）
 
 | | 確かめること | 以前の振る舞い |
 |---|---|---|
@@ -4182,6 +4182,7 @@ The ID federation did not complete. (the error view was returned)
 | `RT-294.77` | **`/device_authz` を `private_key_jwt` で通せる**（両版） | **401（`client_assertion` を読まなかった）** |
 | `RT-294.78` | **`/revoke`・`/introspect` : 資格情報も token も無ければ 401、資格情報だけなら 400**（両版） | 認証していなくても 400 |
 | `RT-294.79` | **`/par` : 同じ名前のパラメタが 2 回来たら `invalid_request`、1 回なら 201**（両版） | **カンマでつないで受けた** |
+| `RT-294.80` | **`/userinfo` : POST でも 200 とクレーム。openid の無いトークン（client_credentials）には 403 / `insufficient_scope`**（両版） | **GET だけ。openid 無しでも 200** |
 
 > **`RT-294.73` は、判定を外した実装で、net10.0 版が落ちることを確かめた。**
 >
@@ -4189,6 +4190,9 @@ The ID federation did not complete. (the error view was returned)
 > （`Flows.RunAuthenticationDeviceFlowAsync`）。**それ以外のトークンは、もう通らない。**
 >
 > **`RT-307.16` の (6)（動的登録で `device_code` × `private_key_jwt` を断る）は外した**（受けるようにしたため）。
+>
+> **`/userinfo` が openid の無いトークンを断るようにした**ので、**`EX-4.3`（デバイス フロー）は要求に openid を含め、
+> `RT-294.38`（自己テストの結果画面のボタン）は自己テストの OIDC の経路（`AuthorizationCode_OIDC`）で通す**ようにした。
 
 #### 認可は、付与の前後で測る（`RT-257.9`）
 

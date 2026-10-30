@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=e633f01a-c619-4df1-be9e-80d8f792e9af&code=bogus
+1. GET /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=e633f01a-c619-4df1-be9e-80d8f792e9af&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=e633f01a-c619-4df1-be9e-80d8f792e9af&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7796,6 +7796,25 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - 400 / invalid_request
 - 201（request_uri が返る）
+
+## RT-294.80 /userinfo : POST でも答える。openid スコープの無いトークンには 403 / insufficient_scope
+
+| | |
+|---|---|
+| 観点 | **以前は GET しか受けず**（OIDC Core 5.3.1 は GET と POST の両方を MUST としている）、**openid の無いトークン（client_credentials など）にも 200 で sub を返していた**（UserInfo は、OIDC の認証要求で得たトークンで問い合わせる口。RFC 6750 §3.1）。 |
+| 根拠 | OIDC Core 5.3 / 5.3.1 / RFC 6750 §3.1 / #294 |
+| テスト | `RT29480_userinfoはPOSTも受けopenidの無いトークンを断る` |
+
+**手順**
+
+1. openid を含むトークンで、POST で問い合わせる
+1. openid の無いトークン（client_credentials）で問い合わせる
+
+**検証（合否を判定する）**
+
+- POST : HTTP 200
+- POST : sub と email が返る
+- **403 / insufficient_scope**
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

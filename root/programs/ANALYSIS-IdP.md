@@ -51,7 +51,7 @@
 | **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 / B-12 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。**C-40〜C-46 は `CmnEndpoints.*.cs` のレビューで見つかり #294**。**C-47 / C-48 は `ManageController.*.cs` のレビューで、C-49 は 2 回目、C-50 / C-51 は 3 回目のレビューで見つかり #294**。**C-52 / C-53 は `CmnUserStore.*.cs` のレビューで、C-54 は 2 回目のレビューで見つかり #294**。**C-55 は `OAuth2EndpointController.*.cs` のレビューで見つかり #294**。**C-40 は「方法を明示した登録」で閉じ、空の登録は従来どおり**） |
 | **D. 機能不足** | **1 件 残り** : **D-14**（適合性テスト）。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
-| **E. 品質** | **5 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）／**E-13**（refresh_token の失効で access_token も）／**E-14**（ROPC の失敗の数えを原子的に）／**E-15**（クライアント認証の方法を 1 要求に 1 つへ）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
+| **E. 品質** | **7 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）／**E-13**（refresh_token の失効で access_token も）／**E-14**（ROPC の失敗の数えを原子的に）／**E-15**（クライアント認証の方法を 1 要求に 1 つへ）／**E-16**（CIBA の送れなかった要求の後始末）／**E-17**（`user_code` の大文字小文字）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
 **7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
 **残っているものは フェーズ 4・5（機能の追加と土台）に寄っている。**
@@ -3441,6 +3441,8 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > | **`/revoke`・`/introspect`** | **`token` の有無を先に見て**、認証していない要求にも 400 | **認証を先に行い、失敗は 401**（`RT-294.78`） |
 > | **`/ros` の失敗** | 本文の無い 400 | **`invalid_request_object` の JSON** |
 > | **`/par` の重複したパラメタ** | **カンマでつないだ 1 つの値として受けた** | **`invalid_request` で断る**（RFC 6749 §3.1 / RFC 9126 §2.1。`RT-294.79`。最後のレビューで追加） |
+> | **`/userinfo` のメソッド** | **GET だけ**（OIDC Core 5.3.1 は GET と POST の両方を MUST） | **POST も受ける**（トークンはどちらも Authorization ヘッダ。`RT-294.80`。3 回目のレビューで追加） |
+> | **`/userinfo` と `openid` の無いトークン** | **client_credentials のトークンなどにも、200 で `sub` を返した** | **403 / `insufficient_scope`**（OIDC Core 5.3 / RFC 6750 §3.1。`RT-294.80`）。**自己テストの OAuth2 の経路（`SelfTestScopes`）では、結果画面の UserInfo が 403 を示す**（OIDC の経路は従来どおり） |
 > | **`/jwkcerts` の `If-None-Match`** | 弱い ETag（`W/"…"`。net10.0）と `*` を一致とみなさなかった | **一致とみなす**（RFC 9110 §13.1.2） |
 > | **`/userinfo`** | **aud の無いトークンで NullReferenceException**。`claims` の何もしないループ | **利用者を引かずに `sub` だけ返す**。ループは消した |
 
@@ -3489,6 +3491,8 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | E-13 | **refresh_token を失効させても、そこから出た access_token は期限まで使える**（RFC 7009 §2.1 は SHOULD で、同じ認可グラントのトークンも無効にすることを求める）。**refresh_token の一族は失効させている**（#188 の段階 3）が、**access_token の `jti` と一族を結び付ける列が無い。** **列（または表）と DDL（3 方言 ＋ `mem`）が要る**ので、#294 では見送った |
 | E-14 | **ROPC のパスワードの失敗の数えが、読み・足し・書きの 3 手で、原子的でない**（`RecordUserAccessFailed`）。**同時に送られた試行は、少なく数えられることがある**（レート制限（#305 の段階 3）が頭を打つ）。**DB の更新 1 文で数える**には、user store の口を足す必要があるので、#294 では見送った。**画面のサインインの失敗の数えも同じ**（`CmnUserStore.Update` が行全体を上書きするので、並行した要求の書き込みが消し合う）。**楽観排他の列を足す方向で、#316 で検討する**（**回復コードを同時に使うと 2 回使える件も、同じ根なので含める**） |
 | E-15 | **1 つの要求で、複数のクライアント認証の方法を送っても断らない**（RFC 6749 §2.3 : 1 要求に 1 つ。MUST NOT）。**Basic とフォームの `client_secret`、Basic と `client_assertion` などが同時に来ると、優先順位で 1 つを使い、残りは黙って無視する**（`/token`・`/revoke`・`/introspect`・`/par`・`/device_authz`・`/ciba_authz`）。**認証を素通りできる穴ではない**（使う 1 つは必ず検証する）。**断ると、混ぜて送ってくる既存のクライアントが通らなくなる**ので、#294（`OAuth2EndpointController.*.cs` の最後のレビュー）では記録に留めた |
+| E-16 | **CIBA でプッシュを送れなかったとき、保存した要求が期限まで残る**（`OAuth2EndpointController.CibaAuthorizeAsync`）。**クライアントには `server_error` を返し、`auth_req_id` を渡さない**ので、**誰も使えない要求が残るだけで実害は無い。****消すには `CibaProvider` に削除の口（mem と DB の 3 方言）が要る**ので、#294 では記録に留めた |
+| E-17 | **デバイス認可の `user_code` を、mem・Oracle・PostgreSQL では大文字小文字を区別して照合する**（SQL Server は照合順序で区別しない）。**`user_code` は英数字 8 文字（大文字と小文字が混ざる）**で、RFC 8628 §6.1 は**区別しない入力を推奨（SHOULD）**している。**場所は `DeviceAuthZProvider` と検証画面**（`OAuth2EndpointController` の範囲外）なので、#294 では記録に留めた |
 
 ---
 

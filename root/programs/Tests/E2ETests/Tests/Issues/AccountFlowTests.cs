@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（#294）
 //*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
+//*  2026/10/30  玄人 幸道         RT-294.38 は自己テストの OIDC の経路で通す（UserInfo が openid の無いトークンを断るようにしたため。#294）
 //**********************************************************************************
 
 using System;
@@ -980,7 +981,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) 自己テストを通し、結果画面まで進む");
 
-                HttpResponseMessage starter = await client.StartSelfTestAsync("AuthorizationCode", "normal");
+                //  **OIDC の経路で通す**（#294）。**UserInfo ボタンは、openid の無いトークンでは 403 になる**
+                //    （OAuth2 の経路の `SelfTestScopes` には openid が無い）。
+                HttpResponseMessage starter = await client.StartSelfTestAsync("AuthorizationCode_OIDC", "normal");
                 string authorizeUrl = (starter.Headers.Location == null) ? null : starter.Headers.Location.OriginalString;
 
                 Skip.If(string.IsNullOrEmpty(authorizeUrl),

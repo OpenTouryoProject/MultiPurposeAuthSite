@@ -35,6 +35,7 @@
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/16  玄人 幸道         Start/Poll を internal に（RT-305 が使う。#305 の段階 1）
 //*  2026/10/29  玄人 幸道         EX-4.3 の refresh_token の観測を、直した実装に合わせた（#294）
+//*  2026/10/30  玄人 幸道         デバイス フローの要求に openid を含める（/userinfo が openid の無いトークンを断るようにしたため。#294）
 //**********************************************************************************
 
 using System;
@@ -82,7 +83,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
             return client.DeviceAuthorizationAsync(new Dictionary<string, string>()
             {
                 { "client_id", clientId },
-                { "scope", "profile email" }
+                //  **openid を含める**（#294）。承認した利用者を `/userinfo` で確かめるため
+                //    （`/userinfo` は、openid の無いトークンを 403 で断る）。
+                { "scope", "openid profile email" }
             });
         }
 

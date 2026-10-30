@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         aud の無いトークンで落ちない・何もしていなかった claims のループを削除（#294）
+//*  2026/10/30  玄人 幸道         POST も受ける（OIDC Core 5.3.1）・openid スコープの無いトークンを 403（insufficient_scope）で断る（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -63,10 +64,13 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
-        /// GET: /userinfo
+        /// GET / POST: /userinfo
         /// </summary>
         /// <returns>成功は 200、エラーは 401 と WWW-Authenticate: Bearer（RFC 6750 3）（#196）</returns>
+        //  **GET と POST の両方を受ける**（OIDC Core 5.3.1 : MUST。#294。以前は GET だけだった）。
+        //    **トークンは、どちらも Authorization ヘッダから読む**（RFC 6750 §2.1）。
         [HttpGet]
+        [HttpPost]
         [EnableCors(Const.CorsPolicyBrowserApi)]   // ブラウザから読む口（#265）
         public async Task<IActionResult> GetUserClaims()
         {
@@ -108,6 +112,19 @@ namespace MultiPurposeAuthSite.Controllers
                             (dpopError == OAuth2AndOIDCConst.use_dpop_nonce)
                                 ? "A DPoP proof with a new nonce is required."
                                 : "The access token is bound to a DPoP key.");
+
+                        return this.UserInfoError(err);
+                    }
+
+                    //  **openid スコープの無いトークンは断る**（#294）。
+                    //    **UserInfo は、OIDC の認証要求で得たトークンで問い合わせる口**である（OIDC Core 5.3）。
+                    //    **以前は client_credentials のトークンなどにも、200 で sub を返していた。**
+                    //    RFC 6750 §3.1 : スコープが足りなければ 403 / insufficient_scope。
+                    if (!identity.Claims.Any(x => x.Type == OAuth2AndOIDCConst.UrnScopesClaim
+                        && x.Value == OAuth2AndOIDCConst.Scope_Openid))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.insufficient_scope);
+                        err.Add(OAuth2AndOIDCConst.error_description, "The access token does not have the openid scope.");
 
                         return this.UserInfoError(err);
                     }
