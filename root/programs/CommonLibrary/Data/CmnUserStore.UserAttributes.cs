@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         STS 専用モードでの FindByEmail の扱いを記した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -132,6 +133,7 @@ namespace MultiPurposeAuthSite.Data
         public static ApplicationUser FindByEmail(string email)
         {
             // 参照系の機能のため、
+            //   **STS 専用モードでは例外を投げる**（`FindById` / `FindByName` と違い、テスト用の分岐を持たない）。
             OnlySts.STSOnly_M();
 
             // Debug

@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：BaseUserStore
-//* クラス日本語名  ：BaseUserStore（ライブラリ）
+//* クラス名        ：CmnUserStore
+//* クラス日本語名  ：CmnUserStore（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -42,6 +42,7 @@
 //*  2026/10/28  玄人 幸道         mem ストアで TOTP のトークンの更新が DB の枝へ落ちていた（回復コードで 500。#294）
 //*  2026/10/29  玄人 幸道         利用者の削除で、同意（mem）と、持っていたクライアントへの全利用者の同意も消す（#294）
 //*  2026/10/30  玄人 幸道         partial に分割（Find / Roles / UserAttributes / LoginAttributes / Logins / Claims / Tokens。#294）
+//*  2026/10/30  玄人 幸道         利用者の削除で、同意の取り消しを削除の後へ・メアド変更の確認待ちも消す・子の表を親より先に消す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -52,11 +53,13 @@ using MultiPurposeAuthSite;
 #endif
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Data;
 using System.Linq;
+using System.Collections.Generic;
 
 using System.Reflection;
 
@@ -65,7 +68,7 @@ using Dapper;
 /// <summary>MultiPurposeAuthSite.Data</summary>
 namespace MultiPurposeAuthSite.Data
 {
-    /// <summary>BaseUserStore</summary>
+    /// <summary>CmnUserStore</summary>
     /// <remarks>
     /// **例外の扱い**（#300）。
     ///
@@ -85,6 +88,9 @@ namespace MultiPurposeAuthSite.Data
     /// **読み取りを握るのを止めるかは、この Issue の外**である。
     /// **Skip や「居ない」で成り立っている経路**（種データの作成など）が在るため、
     /// **1 件ずつ意味を決める必要がある。**
+    ///
+    /// **mem ストアの入れ物（`CmnStore._users` など）は `List` で、排他していない。**
+    /// **開発・試験用**であり、同時に書き込む使い方は想定していない。
     /// </remarks>
     internal partial class CmnUserStore : CmnStore
     {
@@ -204,6 +210,7 @@ namespace MultiPurposeAuthSite.Data
 
                 }
 
+                //  **UserName はメアドのことがある**（ログに個人情報が残る。Update / Delete も同じ。扱いは別に決める）。
                 Logging.MyOperationTrace(string.Format("{0}({1}) was created.", user.Id, user.UserName));
             }
             catch (Exception ex)
@@ -377,15 +384,10 @@ namespace MultiPurposeAuthSite.Data
 
             try
             {
-                // **その人が持つクライアントへの同意を、全利用者の分消す**（#294）。
-                //   **登録の行は消える**（mem は下で、DB は外部キーで）が、
-                //   **同意の ClientID には外部キーが無い**ので、ほかの利用者の同意が残っていた。
-                //   **管理画面でクライアントを消すときと同じ扱いにする**（`ManageController.OAuth2Data`）。
-                foreach (ViewModels.ManageAddSaml2OAuth2DataViewModel owned
-                    in Saml2OAuth2DataProvider.GetByOwner(user.Id))
-                {
-                    ConsentProvider.RevokeByClient(owned.ClientID);
-                }
+                // **その人が持つクライアントを、先に控える**（#294）。
+                //   **登録の行は下で消える**（mem は `DeleteByOwner`、DB は外部キー）ので、消す前に読む。
+                List<string> ownedClientIds = Saml2OAuth2DataProvider.GetByOwner(user.Id)
+                    .Select(x => x.ClientID).ToList();
 
                 // ユーザの論理削除
                 switch (Config.UserStoreType)
@@ -422,6 +424,10 @@ namespace MultiPurposeAuthSite.Data
                         //   ので、**ここも mem だけ**である（上の 3 つと同じ事情）。
                         ConsentProvider.DeleteByUser(user.Id);
 
+                        // **メアド変更の確認待ち（新しいメアド）も消す**（#294）。
+                        //   **外部キーが無い**ので、mem でも DB でも残っていた（DB は下で消す）。
+                        CustomizedConfirmationProvider.GetInstance().DeleteCustomizedConfirmationData(user.Id);
+
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -437,37 +443,40 @@ namespace MultiPurposeAuthSite.Data
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        // ユーザの情報を削除
-                                        cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
-
-                                        // ユーザの関連情報を削除
+                                        // ユーザの関連情報を削除（**子を親より先に**。以前は親の後で、CASCADE の後の空振りだった）
                                         cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
                                         cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
                                         cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM [CustomizedConfirmation] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+
+                                        // ユーザの情報を削除
+                                        cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
 
                                         break;
 
                                     case EnumUserStoreType.ODPManagedDriver:
 
-                                        // ユーザの情報を削除
-                                        cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
-
-                                        // ユーザの関連情報を削除
+                                        // ユーザの関連情報を削除（子を親より先に）
                                         cnn.Execute("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
                                         cnn.Execute("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
                                         cnn.Execute("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM \"CustomizedConfirmation\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+
+                                        // ユーザの情報を削除
+                                        cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
 
                                         break;
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        // ユーザの情報を削除
-                                        cnn.Execute("DELETE FROM \"users\" WHERE \"id\" = @UserId", new { UserId = user.Id }, tr);
-
-                                        // ユーザの関連情報を削除
+                                        // ユーザの関連情報を削除（子を親より先に）
                                         cnn.Execute("DELETE FROM \"userroles\"  WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
                                         cnn.Execute("DELETE FROM \"userlogins\" WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
                                         cnn.Execute("DELETE FROM \"userclaims\" WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM \"customizedconfirmation\" WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
+
+                                        // ユーザの情報を削除
+                                        cnn.Execute("DELETE FROM \"users\" WHERE \"id\" = @UserId", new { UserId = user.Id }, tr);
 
                                         break;
                                 }
@@ -477,6 +486,15 @@ namespace MultiPurposeAuthSite.Data
                         }
 
                         break;
+                }
+
+                // **その人が持っていたクライアントへの同意を、全利用者の分消す**（#294）。
+                //   **同意の ClientID には外部キーが無い**ので、ほかの利用者の同意が残っていた。
+                //   **管理画面でクライアントを消すときと同じ扱いにする**（`ManageController.OAuth2Data`）。
+                //   **利用者を消せた後に回す**（以前は先に回していて、削除が失敗しても同意は戻らなかった）。
+                foreach (string clientId in ownedClientIds)
+                {
+                    ConsentProvider.RevokeByClient(clientId);
                 }
 
                 Logging.MyOperationTrace(string.Format("{0}({1}) was deleted.", user.Id, user.UserName));

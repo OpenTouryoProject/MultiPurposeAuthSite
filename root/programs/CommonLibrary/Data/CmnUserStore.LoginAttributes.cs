@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         ロックアウトの終了日時を UTC で保存する（#294）
 //**********************************************************************************
 
 #if NETFX
@@ -218,7 +219,8 @@ namespace MultiPurposeAuthSite.Data
             // https://msdn.microsoft.com/ja-jp/library/bb546101.aspx
             if (lockoutEnd.HasValue)
             {
-                user.LockoutEndDateUtc = lockoutEnd.Value.DateTime;
+                //  **UTC に直して保存する**（#294。以前は `.DateTime` で、UTC 以外の時差を渡されるとずれた）。
+                user.LockoutEndDateUtc = lockoutEnd.Value.UtcDateTime;
             }
             else
             {

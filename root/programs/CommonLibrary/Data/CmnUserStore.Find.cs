@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         利用者の一覧で、失敗しても 500 にせず、mem でも検索条件と件数を効かせる・ToUpperInvariant に揃える（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -95,6 +96,8 @@ namespace MultiPurposeAuthSite.Data
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
+                    //   **どの Id でも管理者を返す**（テスト用のコード）。
+                    //   **STS 専用の配備で使うなら、既存のユーザストアを引く実装に置き換える。**
                     user = ApplicationUser.CreateUser(
                         UserIdentifier.UserNameFromEmail(Config.AdministratorUID),
                         Config.AdministratorUID, true);
@@ -207,7 +210,7 @@ namespace MultiPurposeAuthSite.Data
 #if NETFX
                     if (userName == Config.AdministratorUID)
 #else
-                    if (userName.ToUpper() == Config.AdministratorUID.ToUpper())
+                    if (userName.ToUpperInvariant() == Config.AdministratorUID.ToUpperInvariant())
 #endif
                     {
                         user = ApplicationUser.CreateUser(
@@ -232,7 +235,7 @@ namespace MultiPurposeAuthSite.Data
 #if NETFX
                             user = CmnStore._users.FirstOrDefault(x => x.UserName == userName);
 #else
-                            user = CmnStore._users.FirstOrDefault(x => x.NormalizedUserName == userName.ToUpper());
+                            user = CmnStore._users.FirstOrDefault(x => x.NormalizedUserName == userName.ToUpperInvariant());
 #endif
 
                             break;
@@ -254,7 +257,7 @@ namespace MultiPurposeAuthSite.Data
                                             "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
 #else
                                         users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM [Users] WHERE [NormalizedUserName] = @userName", new { userName = userName.ToUpper() });
+                                            "SELECT * FROM [Users] WHERE [NormalizedUserName] = @userName", new { userName = userName.ToUpperInvariant() });
 #endif
                                         break;
 
@@ -264,17 +267,17 @@ namespace MultiPurposeAuthSite.Data
                                             "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
 #else
                                         users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM \"Users\" WHERE \"NormalizedUserName\" = :userName", new { userName = userName.ToUpper() });
+                                            "SELECT * FROM \"Users\" WHERE \"NormalizedUserName\" = :userName", new { userName = userName.ToUpperInvariant() });
 #endif
                                         break;
 
                                     case EnumUserStoreType.PostgreSQL:
 #if NETFX
                                         users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM \"users\" WHERE \"username\" = :userName", new { userName = userName });
+                                            "SELECT * FROM \"users\" WHERE \"username\" = @userName", new { userName = userName });
 #else
                                         users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM \"users\" WHERE \"normalizedusername\" = :userName", new { userName = userName.ToUpper() });
+                                            "SELECT * FROM \"users\" WHERE \"normalizedusername\" = @userName", new { userName = userName.ToUpperInvariant() });
 #endif
                                         break;
                                 }
@@ -337,8 +340,13 @@ namespace MultiPurposeAuthSite.Data
                     {
                         case EnumUserStoreType.Memory:
 
-                            IEnumerable<ApplicationUser> _users = CmnStore._users;
-                            users = _users.ToList();
+                            //  **検索条件と件数を、DB と同じく効かせる**（#294。以前は全件を返していた）。
+                            //    `Like` と同じく部分一致。**大文字小文字は区別しない**（SQL Server の既定の照合順序に揃える）。
+                            users = CmnStore._users
+                                .Where(x => string.IsNullOrEmpty(searchConditionOfUsers)
+                                    || (x.UserName ?? "").IndexOf(searchConditionOfUsers, StringComparison.OrdinalIgnoreCase) >= 0)
+                                .Take(Config.UserListCount)
+                                .ToList();
 
                             break;
 
@@ -366,15 +374,8 @@ namespace MultiPurposeAuthSite.Data
                                             sql += " [UserName] Like CONCAT('%', @searchConditionOfUsers, '%')";
                                         }
 
-                                        // TOP
-                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
-                                        {
-                                            sql = string.Format(sql, "" + Config.UserListCount);
-                                        }
-                                        else
-                                        {
-                                            sql = string.Format(sql, 100);
-                                        }
+                                        // TOP（`UserListCount` は int なので、空の場合は無い）
+                                        sql = string.Format(sql, Config.UserListCount);
 
                                         break;
 
@@ -386,15 +387,8 @@ namespace MultiPurposeAuthSite.Data
                                         if (!string.IsNullOrEmpty(searchConditionOfUsers))
                                             sql += " AND \"UserName\" Like '%' || :searchConditionOfUsers || '%'";
 
-                                        // TOP
-                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
-                                        {
-                                            sql = string.Format(sql, Config.UserListCount);
-                                        }
-                                        else
-                                        {
-                                            sql = string.Format(sql, 100);
-                                        }
+                                        // TOP（`UserListCount` は int なので、空の場合は無い）
+                                        sql = string.Format(sql, Config.UserListCount);
 
                                         break;
 
@@ -415,14 +409,7 @@ namespace MultiPurposeAuthSite.Data
 
                                         // TOP
                                         sql += " LIMIT {0}";
-                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
-                                        {
-                                            sql = string.Format(sql, Config.UserListCount);
-                                        }
-                                        else
-                                        {
-                                            sql = string.Format(sql, 100);
-                                        }
+                                        sql = string.Format(sql, Config.UserListCount);
 
                                         break;
                                 }
@@ -443,7 +430,8 @@ namespace MultiPurposeAuthSite.Data
                 }
 
                 // IQueryableとして戻す。
-                return users.AsQueryable();
+                //   **読み取りの失敗は、空の一覧にする**（#294。以前は null のまま `AsQueryable` を呼び、500 になっていた）。
+                return (users ?? new List<ApplicationUser>()).AsQueryable();
             }
         }
 

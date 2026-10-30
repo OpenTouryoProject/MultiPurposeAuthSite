@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         net10.0 の mem でロールを外せなかった（正規化名で突き合わせる）・GetRoles の失敗で null を返さない・使われていない UpdateRoles を削除（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -64,7 +65,7 @@ namespace MultiPurposeAuthSite.Data
         ///
         /// | ストア | 以前の挙動 |
         /// |---|---|
-        /// | `mem` | **正しかった**（`NormalizedName` と突き合わせていた） |
+        /// | `mem` | **正しかった**（`NormalizedName` と突き合わせていた）。**ただし `RemoveFromRole` は #294 まで `Name` と比べていた** |
         /// | `sql` | **偶然通っていた**（照合順序が大文字小文字を区別しない） |
         /// | `ora` / `npg` | **一致せず、副問い合わせが NULL になり、挿入が失敗していた** |
         ///
@@ -90,235 +91,6 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ロール名の突き合わせに使う列（PostgreSQL）</summary>
         private const string RoleNameCol_Npg = "\"name\"";
 #endif
-
-        #endregion
-
-        #region CRUD(共通)
-
-        #region U (Update)
-
-        #region ユーザの関連情報の更新（ Roles, Logins, Claims ）
-
-        /// <summary>Rolesの更新</summary>
-        /// <param name="user">更新</param>
-        /// <param name="tgtUser">ターゲット</param>
-        public static void UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
-        {
-            // 更新系の機能のため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " +
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // Rolesの更新
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // tgtUserに含まれないApplicationRoleは削除対象。
-                        IList<ApplicationRole> toRmvRoles = user.Roles.Except(tgtUser.Roles).ToList<ApplicationRole>();
-                        // userに含まれないApplicationRoleは追加対象。
-                        IList<ApplicationRole> toAddRoles = tgtUser.Roles.Except(user.Roles).ToList<ApplicationRole>();
-
-                        foreach (ApplicationRole role in toRmvRoles)
-                        {
-                            tgtUser.Roles.Remove(role);
-                        }
-
-                        foreach (ApplicationRole role in toAddRoles)
-                        {
-                            tgtUser.Roles.Add(role);
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        // ここはSQLが無いので分岐も無い。
-
-                        // .Except(が上手く動かないので手組する。
-
-                        // LINQ・Except　参照型は要注意 | 猫に紙袋かぶせたらぎゃーって鳴いた
-                        // http://nekokan333.blog.fc2.com/blog-entry-373.html?sp
-
-                        // tgtUserに含まれないApplicationRoleは削除対象。
-                        List<string> toRmvRolesName = new List<string>();
-                        foreach (ApplicationRole r1 in user.Roles)
-                        {
-                            // userのロールが、
-                            bool exist = false;
-                            foreach (ApplicationRole r2 in tgtUser.Roles)
-                            {
-                                // tgtUserのロールに、
-                                if (r1.Id == r2.Id)
-                                {
-                                    // 含まれる。
-                                    exist = true;
-                                }
-                                else
-                                {
-                                    // 含まれない。
-                                }
-                            }
-
-                            if (exist)
-                            {
-                                // （userのロールが、）tgtUser（のロール）に（、）含まれる。
-                            }
-                            else
-                            {
-                                // （userのロールが、）tgtUser（のロール）に（、）含まれない。
-                                toRmvRolesName.Add(r1.Name);
-                            }
-                        }
-
-                        // userに含まれないApplicationRoleは追加対象。
-                        List<string> toAddRolesName = new List<string>();
-                        foreach (ApplicationRole r1 in tgtUser.Roles)
-                        {
-                            // tgtUserのロールが、
-                            bool exist = false;
-                            foreach (ApplicationRole r2 in user.Roles)
-                            {
-                                // userのロールに、
-                                if (r1.Id == r2.Id)
-                                {
-                                    // 含まれる。
-                                    exist = true;
-                                }
-                                else
-                                {
-                                    // 含まれない。
-                                }
-                            }
-
-                            if (exist)
-                            {
-                                // （tgtUserのロールが、）user（のロール）に（、）含まれる。
-                            }
-                            else
-                            {
-                                // （tgtUserのロールが、）user（のロール）に（、）含まれない。
-                                toAddRolesName.Add(r1.Name);
-                            }
-                        }
-
-                        // 原子性に問題があるのでやはり修正する。
-
-                        //foreach (string roleName in toRmvRolesName)
-                        //{
-                        //    // 効率悪いが品質的に、RemoveFromRole使用する。
-                        //    await RemoveFromRole(user, roleName);
-                        //}
-                        //foreach (string roleName in toAddRolesName)
-                        //{
-                        //    // 効率悪いが品質的に、AddToRoleを使用する。
-                        //    await AddToRole(user, roleName);
-                        //}
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-                            using (IDbTransaction tr = cnn.BeginTransaction())
-                            {
-                                // ロール・マップを削除（ロール情報を取得する。
-                                foreach (string roleName in toRmvRolesName)
-                                {
-                                    switch (Config.UserStoreType)
-                                    {
-                                        case EnumUserStoreType.SqlServer:
-
-                                            cnn.Execute(
-                                                "DELETE FROM [UserRoles] " +
-                                                "WHERE [UserRoles].[UserId] = @UserId " +
-                                                "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles]." + RoleNameCol_Sql + " = @roleName)",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.ODPManagedDriver:
-
-                                            cnn.Execute(
-                                                "DELETE FROM \"UserRoles\" " +
-                                                "WHERE \"UserRoles\".\"UserId\" = :UserId " +
-                                                "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\"." + RoleNameCol_Ora + " = :roleName)",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.PostgreSQL:
-
-                                            cnn.Execute(
-                                                "DELETE FROM \"userroles\" " +
-                                                "WHERE \"userroles\".\"userid\" = @UserId " +
-                                                "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\"." + RoleNameCol_Npg + " = @roleName)",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-                                    }
-                                }
-
-                                // ロール・マップを追加（ロール情報を取得する。
-                                foreach (string roleName in toAddRolesName)
-                                {
-                                    switch (Config.UserStoreType)
-                                    {
-                                        case EnumUserStoreType.SqlServer:
-
-                                            cnn.Execute(
-                                                "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
-                                                "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles]." + RoleNameCol_Sql + " = @roleName))",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.ODPManagedDriver:
-
-                                            cnn.Execute(
-                                                "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
-                                                "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\"." + RoleNameCol_Ora + " = :roleName))",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.PostgreSQL:
-
-                                            cnn.Execute(
-                                                "INSERT INTO \"userroles\" (\"userid\", \"roleid\") " +
-                                                "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE " + RoleNameCol_Npg + " = @roleName))",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-                                    }
-                                }
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
-                Logging.MySQLLogForEx(ex);
-                throw;
-            }
-
-            return;
-        }
-
-        //Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
-
-        #endregion
-
-        #endregion
 
         #endregion
 
@@ -453,7 +225,7 @@ namespace MultiPurposeAuthSite.Data
             IList<string> roles = CmnUserStore.GetRoles(user);
 
             // bool (ユーザのロール一覧から、一致するロール名を取得できたら真、できなかったら偽
-            return roles.FirstOrDefault(x => x.ToUpper() == roleName.ToUpper()) != null;
+            return roles.FirstOrDefault(x => x.ToUpperInvariant() == roleName.ToUpperInvariant()) != null;
         }
 
         /// <summary>ユーザのロール一覧を取得</summary>
@@ -561,6 +333,9 @@ namespace MultiPurposeAuthSite.Data
             catch (Exception ex)
             {
                 Logging.MySQLLogForEx(ex);
+
+                //  **読み取りの失敗は、空の一覧にする**（#294。以前は null を返し、`IsInRole` が落ちていた）。
+                roleNames = new List<string>();
             }
 
             // ユーザのロール一覧を返す。
@@ -590,7 +365,14 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // 名称の一致するロールを取得
+                        //   **Identity Core は正規化した名前（大文字）を渡す**ので、`NormalizedName` と突き合わせる（#294）。
+                        //   **以前は `Name` と比べて見つからず、何もせずに成功していた** —
+                        //   **net10.0 の mem では、管理画面でロールを外しても外れなかった**（`AddToRole` は #257 で直っていた）。
+#if NETCORE
+                        role = CmnStore._roles.FirstOrDefault(x => x.NormalizedName == roleName);
+#else
                         role = CmnStore._roles.FirstOrDefault(x => x.Name == roleName);
+#endif
 
                         if (role == null)
                         {

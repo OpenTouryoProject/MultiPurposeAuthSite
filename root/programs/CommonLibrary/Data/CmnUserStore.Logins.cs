@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         外部ログインを大文字小文字まで比べる（SQL Server の照合順序で、違う sub が一致していた）・DB でも渡された user の一覧を揃える・mem の削除で隣り合う組を飛ばさない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -64,6 +65,20 @@ namespace MultiPurposeAuthSite.Data
 
         #region Logins: IUserLoginStore
 
+        /// <summary>外部ログインの組が同じか</summary>
+        /// <param name="x">UserLoginInfo</param>
+        /// <param name="y">UserLoginInfo</param>
+        /// <returns>同じなら true</returns>
+        /// <remarks>
+        /// **大文字小文字まで比べる**（#294）。`LoginProvider` は相手の `iss` / entityID、
+        /// `ProviderKey` は相手の `sub` / NameID で、**どちらも大文字小文字を区別する値**である。
+        /// </remarks>
+        private static bool IsSameLogin(UserLoginInfo x, UserLoginInfo y)
+        {
+            return string.Equals(x.LoginProvider, y.LoginProvider, StringComparison.Ordinal)
+                && string.Equals(x.ProviderKey, y.ProviderKey, StringComparison.Ordinal);
+        }
+
         /// <summary>ユーザーに外部ログインを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
@@ -85,7 +100,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        user.Logins.Add(login);
+                        // 下で、一覧に足す。
 
                         break;
 
@@ -130,6 +145,11 @@ namespace MultiPurposeAuthSite.Data
 
                         break;
                 }
+
+                //  **渡された user の一覧に足す**（#294）。
+                //    **mem では、これが保存そのもの**（共有の実体）。
+                //    **DB では、同じ要求の中で見えるようにする**（以前は足しておらず、古い一覧が見えていた）。
+                user.Logins.Add(login);
             }
             catch (Exception ex)
             {
@@ -175,8 +195,7 @@ namespace MultiPurposeAuthSite.Data
                             {
                                 foreach (UserLoginInfo y in x.Logins)
                                 {
-                                    if (y.LoginProvider == login.LoginProvider
-                                         && y.ProviderKey == login.ProviderKey)
+                                    if (CmnUserStore.IsSameLogin(y, login))
                                     {
                                         user = x;
 
@@ -234,12 +253,20 @@ namespace MultiPurposeAuthSite.Data
                                     break;
                             }
 
-                            if (users.Count() != 0)
+                            //  **大文字小文字まで一致するものだけを採る**（#294）。
+                            //    **照合は DB の照合順序に従う** — SQL Server の既定（CI）では、
+                            //    **大文字小文字だけが違う `sub` / NameID も一致していた**（mem / ora / npg は区別する）。
+                            //    **結び付けた値を読み直して、C# の側で Ordinal に比べ直す。**
+                            foreach (ApplicationUser candidate in users)
                             {
-                                user = users.First();
-
                                 // ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）
-                                CmnStore.SelectChildTablesOfUser(cnn, user);
+                                CmnStore.SelectChildTablesOfUser(cnn, candidate);
+
+                                if (candidate.Logins.Any(x => CmnUserStore.IsSameLogin(x, login)))
+                                {
+                                    user = candidate;
+                                    break;
+                                }
                             }
                         }
 
@@ -300,14 +327,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        for (int i = 0; i < user.Logins.Count; i++)
-                        {
-                            if (user.Logins[i].LoginProvider == login.LoginProvider
-                                && user.Logins[i].ProviderKey == login.ProviderKey)
-                            {
-                                user.Logins.RemoveAt(i);
-                            }
-                        }
+                        // 下で、一覧から消す。
 
                         break;
 
@@ -348,6 +368,17 @@ namespace MultiPurposeAuthSite.Data
                         }
 
                         break;
+                }
+
+                //  **渡された user の一覧から消す**（#294。mem では、これが保存そのもの）。
+                //    **後ろから消す** — 以前は前から `RemoveAt` して、隣り合う同じ組を飛ばしていた。
+                //    **DB でも消す**（以前は消しておらず、同じ要求の中で古い一覧が見えていた）。
+                for (int i = user.Logins.Count - 1; i >= 0; i--)
+                {
+                    if (CmnUserStore.IsSameLogin(user.Logins[i], login))
+                    {
+                        user.Logins.RemoveAt(i);
+                    }
                 }
             }
             catch (Exception ex)

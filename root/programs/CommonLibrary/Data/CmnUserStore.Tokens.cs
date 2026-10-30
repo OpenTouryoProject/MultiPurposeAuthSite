@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         回復コードで空のコードを断る・トークンを渡された user の一覧で扱う（読み直さない・重ねない）・INSERT / UPDATE を Execute で（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -89,9 +90,10 @@ namespace MultiPurposeAuthSite.Data
         }
 
         /// <summary>AddTotpTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
         /// <param name="token">IdentityUserToken(string)</param>
         /// <returns>－</returns>
-        private static void AddTotpToken(IdentityUserToken<string> token)
+        private static void AddTotpToken(ApplicationUser user, IdentityUserToken<string> token)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -104,8 +106,8 @@ namespace MultiPurposeAuthSite.Data
 
             try
             {
-                ApplicationUser user = CmnUserStore.FindById(token.UserId);
-
+                //  **渡された user の一覧に足す**（#294）。**mem では、これが保存そのもの**（共有の実体）。
+                //    以前は `FindById` で読み直していて、**DB では別の実体に足していた**（渡された user には見えなかった）。
                 if (user.TotpTokens == null)
                 {
                     user.TotpTokens = new List<IdentityUserToken<string>>();
@@ -126,14 +128,11 @@ namespace MultiPurposeAuthSite.Data
                         {
                             cnn.Open();
 
-                            // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = null;
-
                             switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    cnn.Execute(
                                         "INSERT INTO [TotpTokens] ([UserId], [LoginProvider], [Name], [Value]) " +
                                         "  VALUES (@UserId, @LoginProvider, @Name, @Value)",
                                         new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
@@ -142,7 +141,7 @@ namespace MultiPurposeAuthSite.Data
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    cnn.Execute(
                                         "INSERT INTO \"TotpTokens\" (\"UserId\", \"LoginProvider\", \"Name\", \"Value\") " +
                                         "  VALUES (:UserId, :LoginProvider, :Name, :Value)",
                                         new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
@@ -151,7 +150,7 @@ namespace MultiPurposeAuthSite.Data
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    cnn.Execute(
                                         "INSERT INTO \"totptokens\" (\"userid\", \"loginprovider\", \"name\", \"value\") " +
                                         "  VALUES (@UserId, @LoginProvider, @Name, @Value)",
                                         new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
@@ -261,6 +260,16 @@ namespace MultiPurposeAuthSite.Data
                                     user.TotpTokens = new List<IdentityUserToken<string>>();
                                 }
 
+                                //  **同じ組の古い物を外してから足す**（#294。以前は読むたびに重なっていた）。
+                                for (int i = user.TotpTokens.Count - 1; i >= 0; i--)
+                                {
+                                    if (user.TotpTokens[i].LoginProvider == loginProvider
+                                        && user.TotpTokens[i].Name == name)
+                                    {
+                                        user.TotpTokens.RemoveAt(i);
+                                    }
+                                }
+
                                 user.TotpTokens.Add(token);
 
                                 return token;
@@ -309,13 +318,11 @@ namespace MultiPurposeAuthSite.Data
                         {
                             cnn.Open();
 
-                            IEnumerable<string> values = null;
-
                             switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    values = cnn.Query<string>(
+                                    cnn.Execute(
                                         "UPDATE [TotpTokens] " +
                                         "  SET [Value] = @Value " +
                                         "  WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [Name] = @Name",
@@ -331,7 +338,7 @@ namespace MultiPurposeAuthSite.Data
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
-                                    values = cnn.Query<string>(
+                                    cnn.Execute(
                                         "UPDATE \"TotpTokens\" " +
                                         "  SET \"Value\" = :Value " +
                                         "  WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"Name\" = :Name",
@@ -347,7 +354,7 @@ namespace MultiPurposeAuthSite.Data
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    values = cnn.Query<string>(
+                                    cnn.Execute(
                                         "UPDATE \"totptokens\" " +
                                         "  SET \"value\" = @Value " +
                                         "  WHERE \"userid\" = @UserId AND \"loginprovider\" = @LoginProvider AND \"name\" = @Name",
@@ -377,9 +384,10 @@ namespace MultiPurposeAuthSite.Data
         }
 
         /// <summary>RemoveTotpTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
         /// <param name="token">IdentityUserToken(string)</param>
         /// <returns>－</returns>
-        public static void RemoveTotpToken(IdentityUserToken<string> token)
+        private static void RemoveTotpToken(ApplicationUser user, IdentityUserToken<string> token)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -395,7 +403,7 @@ namespace MultiPurposeAuthSite.Data
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        CmnUserStore.FindById(token.UserId).TotpTokens.Remove(token);
+                        // 下で、一覧から消す。
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -439,6 +447,10 @@ namespace MultiPurposeAuthSite.Data
 
                         break;
                 }
+
+                //  **渡された user の一覧から消す**（#294。mem では、これが保存そのもの）。
+                //    以前は `FindById` で読み直していた（DB では、渡された user に残っていた）。
+                user.TotpTokens?.Remove(token);
             }
             catch (Exception ex)
             {
@@ -476,7 +488,7 @@ namespace MultiPurposeAuthSite.Data
             if (token == null)
             {
                 
-                CmnUserStore.AddTotpToken( // (2) Memory and DBMS
+                CmnUserStore.AddTotpToken(user, // (2) Memory and DBMS
                     CmnUserStore.CreateTotpToken( // (1) Memory only
                         user, loginProvider, name, value));
             }
@@ -528,7 +540,7 @@ namespace MultiPurposeAuthSite.Data
 
             if (token != null)
             {
-                CmnUserStore.RemoveTotpToken(token);
+                CmnUserStore.RemoveTotpToken(user, token);
             }
 
             return;
@@ -567,7 +579,7 @@ namespace MultiPurposeAuthSite.Data
             }
             else
             {
-                return mergedCodes.Split(';').Length;
+                return mergedCodes.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Length;
             }
         }
 
@@ -605,7 +617,15 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             string mergedCodes = CmnUserStore.GetToken(user, InternalLoginProvider, RecoveryCodeTokenName) ?? "";
-            string[] splitCodes = mergedCodes.Split(';');
+            //  **空のコードは断る**（#294）。
+            //    **コードが 0 件だと `"".Split(';')` が `[""]` になり、空のコードが一致していた**
+            //    （画面は `[Required]` で止めているが、ストアの側でも断る）。
+            if (string.IsNullOrEmpty(code))
+            {
+                return false;
+            }
+
+            string[] splitCodes = mergedCodes.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             if (splitCodes.Contains(code))
             {
                 // ココで使用されたRecoveryCodeが削除される。

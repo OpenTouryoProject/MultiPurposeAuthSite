@@ -6844,7 +6844,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=62e09a34-b835-4734-9557-6daa7991f55f&code=bogus
+1. GET /Account/EmailConfirmation?userId=67004e0f-d42d-4c3a-b08c-85b07760201e&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6853,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=62e09a34-b835-4734-9557-6daa7991f55f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=62e09a34-b835-4734-9557-6daa7991f55f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=67004e0f-d42d-4c3a-b08c-85b07760201e&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=67004e0f-d42d-4c3a-b08c-85b07760201e&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7592,6 +7592,28 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - options を返さない（status が error）
 - challenge を返さない
 - options を返す（challenge が在る）
+
+## RT-294.70 管理画面で外したロールは外れる（SystemAdmin を外すと、管理画面が開かなくなる）
+
+| | |
+|---|---|
+| 観点 | **権限を取り上げられることの確認である。****net10.0 版の mem ストアでは、外しても外れなかった** — Identity Core は正規化した名前（大文字）をストアに渡すが、**ストアは `Name` と突き合わせて見つけられず、何もせずに成功を返していた**（付ける方は #257 で直っていた）。**RT-257.9 は「付ける」しか測っていなかった**ので、見つからなかった。 |
+| 根拠 | #294（CmnUserStore.RemoveFromRole。ANALYSIS-IdP.md の C-52） |
+| テスト | `RT29470_外したロールは外れる` |
+
+**手順**
+
+1. 管理者が、使い捨ての利用者を SystemAdmin で作る
+1. 管理者が、ロールを User だけにする（SystemAdmin を外す）
+1. 入り直して、開けなくなる
+1. 後片付け : 使い捨ての利用者を削除する
+
+**検証（合否を判定する）**
+
+- 編集できた（一覧へリダイレクトする）
+- **一覧が開かない**（SystemAdmin が外れている）
+- メニューに導線が出ない
+- 削除できた（SystemAdmin を持つかもしれない利用者を残さない）
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

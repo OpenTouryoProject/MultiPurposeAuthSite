@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（#257）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/30  玄人 幸道         RT-294.70（外したロールは外れる）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -45,7 +46,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-257.5 〜 .8 利用者管理の画面（#257）。
+    /// RT-257.5 〜 .9 利用者管理の画面（#257）・RT-294.70 ロールを外す（#294）。
     /// </summary>
     /// <remarks>
     /// **この画面も、一度も叩いていなかった。**
@@ -478,6 +479,100 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Note("**種データの利用者には付与しない。** 戻し忘れると、"
                     + "**DB ストアで権限が残り続け、他のテストの前提が変わる。**"
                     + "**使い捨ての利用者なら、消せば終わる。**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-294.70 外したロールは外れる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29470_外したロールは外れる(string targetKey)
+        {
+            using (IdPClient admin = await this.AdminClientAsync(targetKey))
+            using (IdPClient user = this.Client(targetKey))
+            {
+                string userName = UsersAdminTests.UniqueName();
+                string email = userName + "@example.com";
+
+                TestReport r = this.Report("RT-294.70",
+                    "管理画面で外したロールは外れる（SystemAdmin を外すと、管理画面が開かなくなる）",
+                    "**権限を取り上げられることの確認である。**"
+                    + "**net10.0 版の mem ストアでは、外しても外れなかった** — "
+                    + "Identity Core は正規化した名前（大文字）をストアに渡すが、"
+                    + "**ストアは `Name` と突き合わせて見つけられず、何もせずに成功を返していた**"
+                    + "（付ける方は #257 で直っていた）。"
+                    + "**RT-257.9 は「付ける」しか測っていなかった**ので、見つからなかった。",
+                    "#294（CmnUserStore.RemoveFromRole。ANALYSIS-IdP.md の C-52）");
+
+                r.Target("使い捨ての利用者 = " + userName);
+
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                try
+                {
+                    r.Step("(1) 管理者が、使い捨ての利用者を SystemAdmin で作る");
+
+                    HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                        admin, userName, email, Const.RoleSystemAdmin);
+
+                    Assert.True(created.StatusCode == HttpStatusCode.Found
+                        || created.StatusCode == HttpStatusCode.Redirect,
+                        "前提: 利用者を作れること（HTTP " + (int)created.StatusCode + "）");
+
+                    HttpResponseMessage list = await UsersAdmin.IndexAsync(admin);
+                    string id = UsersAdmin.FindId(await list.Content.ReadAsStringAsync(), userName);
+
+                    Assert.False(string.IsNullOrEmpty(id), "前提: 作った利用者の id を引けること");
+
+                    await user.SignInAsync(userName);
+
+                    HttpResponseMessage before = await UsersAdmin.IndexAsync(user);
+                    Assert.True(Html.HasField(await before.Content.ReadAsStringAsync(), "UserNameforSearch"),
+                        "前提: SystemAdmin なら一覧が開くこと");
+
+                    r.Step("(2) 管理者が、ロールを User だけにする（SystemAdmin を外す）");
+
+                    HttpResponseMessage revoked = await UsersAdmin.EditAsync(
+                        admin, id, userName, email, Const.RoleUser);
+
+                    r.Verify("編集できた（一覧へリダイレクトする）",
+                        revoked.StatusCode == HttpStatusCode.Found
+                        || revoked.StatusCode == HttpStatusCode.Redirect,
+                        "リダイレクト", ((int)revoked.StatusCode).ToString());
+
+                    r.Step("(3) 入り直して、開けなくなる");
+
+                    await user.SignInAsync(userName, force: true);
+
+                    HttpResponseMessage after = await UsersAdmin.IndexAsync(user);
+                    string afterBody = await after.Content.ReadAsStringAsync();
+
+                    r.Verify("**一覧が開かない**（SystemAdmin が外れている）",
+                        !Html.HasField(afterBody, "UserNameforSearch"),
+                        "開かない",
+                        Html.HasField(afterBody, "UserNameforSearch")
+                            ? "**開いてしまった**（外したロールが残っている）" : "開かない");
+
+                    HttpResponseMessage menu = await user.GetAsync("/Manage/Index");
+                    string menuBody = await menu.Content.ReadAsStringAsync();
+
+                    r.Verify("メニューに導線が出ない",
+                        !menuBody.Contains("UsersAdmin Screen"),
+                        "出ない",
+                        menuBody.Contains("UsersAdmin Screen") ? "**出ている**" : "出ない");
+                }
+                finally
+                {
+                    r.Step("(4) 後片付け : 使い捨ての利用者を削除する");
+
+                    bool deleted = await UsersAdmin.DeleteByUserNameAsync(admin, userName);
+
+                    r.Verify("削除できた（SystemAdmin を持つかもしれない利用者を残さない）",
+                        deleted, "削除できた", deleted ? "削除できた" : "**削除できなかった**");
+                }
 
                 r.Done();
             }

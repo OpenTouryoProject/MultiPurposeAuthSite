@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
+//*  2026/10/30  玄人 幸道         クレームの削除を型・値・発行元で揃える（DB は値を見ず、mem は参照で比べていた）・DB でも渡された user の一覧を揃える（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -58,6 +59,20 @@ namespace MultiPurposeAuthSite.Data
 
         #region Claims: IUserClaimStore
 
+        /// <summary>クレームが同じか（型・値・発行元）</summary>
+        /// <param name="x">Claim</param>
+        /// <param name="y">Claim</param>
+        /// <returns>同じなら true</returns>
+        /// <remarks>
+        /// **`Claim` は参照で比べられる**ので、**中身で比べる**（#294）。
+        /// </remarks>
+        private static bool IsSameClaim(Claim x, Claim y)
+        {
+            return string.Equals(x.Type, y.Type, StringComparison.Ordinal)
+                && string.Equals(x.Value, y.Value, StringComparison.Ordinal)
+                && string.Equals(x.Issuer, y.Issuer, StringComparison.Ordinal);
+        }
+
         /// <summary>ユーザに外部ログインのクレームを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
@@ -79,7 +94,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        user.Claims.Add(claim);
+                        // 下で、一覧に足す。
 
                         break;
 
@@ -129,6 +144,11 @@ namespace MultiPurposeAuthSite.Data
 
                         break;
                 }
+
+                //  **渡された user の一覧に足す**（#294）。
+                //    **mem では、これが保存そのもの**（共有の実体）。
+                //    **DB では、同じ要求の中で見えるようにする**（以前は足しておらず、古い一覧が見えていた）。
+                user.Claims.Add(claim);
             }
             catch (Exception ex)
             {
@@ -185,7 +205,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        user.Claims.Remove(claim);
+                        // 下で、一覧から消す。
 
                         break;
 
@@ -202,30 +222,42 @@ namespace MultiPurposeAuthSite.Data
                                 case EnumUserStoreType.SqlServer:
 
                                     cnn.Execute(
-                                        "DELETE FROM [UserClaims] WHERE [UserId] = @UserId AND [Issuer] = @Issuer AND [ClaimType] = @ClaimType",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
+                                        "DELETE FROM [UserClaims] WHERE [UserId] = @UserId AND [Issuer] = @Issuer AND [ClaimType] = @ClaimType AND [ClaimValue] = @ClaimValue",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
-                                        "DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId AND \"Issuer\" = :Issuer AND \"ClaimType\" = :ClaimType",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
+                                        "DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId AND \"Issuer\" = :Issuer AND \"ClaimType\" = :ClaimType" +
+                                        "    AND (\"ClaimValue\" = :ClaimValue OR (\"ClaimValue\" IS NULL AND :ClaimValue IS NULL))",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
                                     cnn.Execute(
-                                        "DELETE FROM \"userclaims\" WHERE \"userid\" = @UserId AND \"issuer\" = @Issuer AND \"claimtype\" = @ClaimType",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
+                                        "DELETE FROM \"userclaims\" WHERE \"userid\" = @UserId AND \"issuer\" = @Issuer AND \"claimtype\" = @ClaimType AND \"claimvalue\" = @ClaimValue",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
 
                                     break;
                             }
                         }
 
                         break;
+                }
+
+                //  **渡された user の一覧から消す**（#294。mem では、これが保存そのもの）。
+                //    **型・値・発行元で比べる** — 以前の mem は参照で比べ、同じ中身の別の実体を消せなかった。
+                //    **DB も値まで見る**（以前は型と発行元だけで、同じ型の値をすべて消していた）。
+                for (int i = user.Claims.Count - 1; i >= 0; i--)
+                {
+                    if (CmnUserStore.IsSameClaim(user.Claims[i], claim))
+                    {
+                        user.Claims.RemoveAt(i);
+                    }
                 }
             }
             catch (Exception ex)
