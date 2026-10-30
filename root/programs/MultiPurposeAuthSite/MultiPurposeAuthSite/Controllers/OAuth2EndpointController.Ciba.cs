@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         /ciba_result を認証デバイスのトークンに限る・expires_in / interval を数値で返す・requested_expiry を上限で頭打ちにする（#294）
+//*  2026/10/30  玄人 幸道         CIBA のプッシュ送信で使われていない変数を外した（net10.0 版に揃えた。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -213,10 +214,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 //   CIBA 情報は上の Create で保存済みなので、失敗しても期限切れまで残る。
                                 try
                                 {
-                                    string deviceToken = user.DeviceToken;
-
                                     // - DeviceTokenを使用してプッシュ通知
-                                    string temp = await FcmService.GetInstance().SendAsync(
+                                    //   **戻り値は使わない**（net10.0 版と同じ。#294 で、使われていない変数を外した）。
+                                    await FcmService.GetInstance().SendAsync(
                                         user.DeviceToken, "CIBA", "Allow / Deny",
                                         new Dictionary<string, string>()
                                         {
