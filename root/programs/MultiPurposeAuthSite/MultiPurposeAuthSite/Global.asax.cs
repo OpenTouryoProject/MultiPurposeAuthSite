@@ -122,7 +122,7 @@ namespace MultiPurposeAuthSite
             if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
             {
                 AntiForgeryConfig.CookieName =
-                    Config.PrefixCookieName(AntiForgeryConfig.CookieName);
+                    Config.PrefixedCookieName(AntiForgeryConfig.CookieName);
             }
         }
 
@@ -267,7 +267,7 @@ namespace MultiPurposeAuthSite
             // 2. client_idの抽出（RFC 6749 §2.3.1）に則った優先順位で
             // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
             string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
-                this.Request.Headers["Authorization"]);
+                this.Request.Headers[Const.HeaderAuthorization]);
 
             if (string.IsNullOrEmpty(clientId))
             {
@@ -278,12 +278,12 @@ namespace MultiPurposeAuthSite
                         "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
                     {
                         // 優先度 2: フォームデータ（client_secret_post 等）から取得
-                        clientId = this.Request.Form["client_id"];
+                        clientId = this.Request.Form[OAuth2AndOIDCConst.client_id];
                     }
                     else
                     {
                         // 優先度 3: クエリ文字列から取得
-                        clientId = this.Request.QueryString["client_id"];
+                        clientId = this.Request.QueryString[OAuth2AndOIDCConst.client_id];
                     }
                 }
                 catch
@@ -302,7 +302,7 @@ namespace MultiPurposeAuthSite
                 //  **429 ＋ `Retry-After`**（RFC 6585 §4）。**本体は返さない。**
                 //    **IIS の独自エラー ページに差し替えさせない**（`TrySkipIisCustomErrors`）。
                 this.Response.StatusCode = 429;
-                this.Response.AddHeader("Retry-After", retryAfter.Value.ToString());
+                this.Response.AddHeader(Const.HeaderRetryAfter, retryAfter.Value.ToString());
                 this.Response.TrySkipIisCustomErrors = true;
                 this.Response.SuppressContent = true;
 

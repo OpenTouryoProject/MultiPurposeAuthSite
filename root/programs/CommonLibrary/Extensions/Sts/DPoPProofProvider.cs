@@ -56,7 +56,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// | | |
     /// |---|---|
-    /// | **何を記録するか** | **証明の指紋**（`CmnDPoP.ProofId` ＝ **鍵の指紋（`jkt`）と `jti` を組にしてハッシュしたもの**） |
+    /// | **何を記録するか** | **証明の指紋**（`DPoPProof.CreateProofId` ＝ **鍵の指紋（`jkt`）と `jti` を組にしてハッシュしたもの**） |
     /// | **いつ記録するか** | **検証に通った後**（`CmnDPoP.Verify` の最後）。**壊れた証明で `jti` を焼かせない** |
     /// | **どう判定するか** | **記録できたら初回、できなかったら 2 回目。** **読んでから書くと競走に負ける**（下の節） |
     /// | **どこで効くか** | **`/token` と保護されたリソースの両方**（**同じ `Verify` を通る**ので、口ごとの抜けが無い） |
@@ -105,7 +105,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region 公開
 
         /// <summary>この証明を初めて使ったことを記録する（#311 の段階 3）</summary>
-        /// <param name="proofId">証明の指紋（`CmnDPoP.ProofId`）</param>
+        /// <param name="proofId">証明の指紋（`DPoPProof.CreateProofId`）</param>
         /// <returns>**初めてなら true。** **2 回目、または記録できなければ false**</returns>
         /// <remarks>
         /// **記録できたかどうかで判定する**（この型の注を参照）。

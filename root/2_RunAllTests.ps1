@@ -40,8 +40,8 @@
     省略した場合は、test.ps1 が環境変数から読む。
 
 .PARAMETER NoStoreContainer
-    store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
-    既定では、接続文字列が store\ のポートを指していれば、
+    Container\Store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
+    既定では、接続文字列が Container\Store\ のポートを指していれば、
     その DB だけをテストの間だけ起動する。詳細は test.ps1 の説明を参照。
 
 .PARAMETER Url
@@ -64,12 +64,24 @@
     **-Filter と併せて使うこと**（nonce を知らない証明は全部断られる）。
       ._RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"
 
+.PARAMETER NoImplicit
+    **Implicit を閉じた配備のテスト（RT-314）専用。**
+    **`EnableImplicitGrantType` を false にしてサイトを起動する**（test.ps1 に渡す。#314）。
+
+    **-Filter と併せて使うこと**（Implicit / Hybrid（token を含むもの）のテストは落ちる）。
+      .\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"
+
 .PARAMETER ShortLifetimes
     有効期限のテスト（RT-188）専用。寿命をごく短くしてサイトを起動する（test.ps1 に渡す。#188）。
     **-Filter と併せて使うこと**（寿命が短いので、他のテストは落ちる）。
 
 .PARAMETER Filter
     dotnet test の --filter に渡す式（test.ps1 に渡す）。
+
+.PARAMETER Coverage
+    サイト（net10.0 版・net48 版）のコード カバレッジを取る（test.ps1 に渡す。-Launch と一緒に使う。#294）。
+    dotnet-coverage でサイトを包み、ReportGenerator で HTML にする。
+    出力は OutputDir\coverage\report\index.html（Summary.txt に要約）。
 
 .PARAMETER Configuration
     Debug（既定）または Release。
@@ -101,6 +113,8 @@
      2026/09/23  玄人 幸道         -NetFxMtls を追加（net48 版でも mTLS のテストを回す。#226）
      2026/09/24  玄人 幸道         -ShortLifetimes を追加（有効期限のテストを回す。#188）
      2026/10/22  玄人 幸道         -DPoPNonce を追加（nonce のテストを回す。#311 の段階 4）
+     2026/10/24  玄人 幸道         -NoImplicit を追加（Implicit を閉じた配備のテストを回す。#314）
+     2026/10/31  玄人 幸道         store\ を Container\Store\ に読み替えた（#318）
 #>
 [CmdletBinding()]
 param(
@@ -116,7 +130,9 @@ param(
     [switch]$NetFxMtls,
     [switch]$ShortLifetimes,
     [switch]$DPoPNonce,
+    [switch]$NoImplicit,
     [switch]$NoWebUI,
+    [switch]$Coverage,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
@@ -175,7 +191,9 @@ if ($NoNetFx)  { $splat.NoNetFx  = $true }
 if ($NetFxMtls) { $splat.NetFxMtls = $true }
 if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
 if ($DPoPNonce) { $splat.DPoPNonce = $true }
+if ($NoImplicit) { $splat.NoImplicit = $true }
 if ($NoWebUI) { $splat.NoWebUI = $true }
+if ($Coverage) { $splat.Coverage = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#137）
+//*  2026/10/29  玄人 幸道         利用者名を変えると UserId と UserHandle が分かれる旨を書いた（#294）
 //**********************************************************************************
 
 using System;
@@ -62,7 +63,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// <summary>公開鍵（COSE_Key）</summary>
         public byte[] PublicKey { get; set; }
 
-        /// <summary>userHandle（この実装では UserId と同じ）</summary>
+        /// <summary>userHandle（登録したときは UserId と同じ。**利用者名を変えても、こちらは変えない**。#294）</summary>
         public byte[] UserHandle { get; set; }
 
         /// <summary>署名カウンタ</summary>

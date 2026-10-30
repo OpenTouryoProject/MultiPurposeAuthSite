@@ -17,7 +17,6 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2026/09/11  玄人 幸道         OAuth2 / OIDC の API の 401 を、ログイン画面への 302 に変えない（#196）
-//*  2026/09/11  玄人 幸道         401 を 302 に変えない対象を、Web API に登録済みのルートから判定する（一覧を二重に持たない）
 //*  2026/09/30  玄人 幸道         Google の email_verified をクレームに写す（#140 の段階 1）
 //*  2026/09/30  玄人 幸道         Facebook / Twitter の外部ログインの登録を削除（#249）
 //*  2026/09/30  玄人 幸道         認証 Cookie の名前を設定できるようにした（#250 の段階 4）
@@ -254,7 +253,7 @@ namespace MultiPurposeAuthSite
                     ? CookieAuthenticationDefaults.CookiePrefix + cookieOptions.AuthenticationType
                     : cookieOptions.CookieName;
 
-                cookieOptions.CookieName = Config.PrefixCookieName(baseCookieName);
+                cookieOptions.CookieName = Config.PrefixedCookieName(baseCookieName);
             }
 
             app.UseCookieAuthentication(cookieOptions);

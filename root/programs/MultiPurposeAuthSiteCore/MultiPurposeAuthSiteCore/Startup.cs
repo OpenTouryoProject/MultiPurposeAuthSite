@@ -21,16 +21,12 @@
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）のルートを追加（#213）
 //*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
-//*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
 //*  2026/09/19  玄人 幸道         認証クッキーの設定を、実際に使うスキームへ移す（#223）
-//*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
-//*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）のルートを追加（#232）
 //*  2026/09/30  玄人 幸道         Google の email_verified をクレームに写す（#140 の段階 1）
 //*  2026/09/30  玄人 幸道         AuthCookieName で認証 Cookie の名前を変えられるようにした（#250 の段階 4）
 //*  2026/09/30  玄人 幸道         Facebook / Twitter の外部ログインの登録を削除（#249）
 //*  2026/09/30  玄人 幸道         DataProtection の鍵の置き場を設定できるようにした（#251）
-//*  2026/09/30  玄人 幸道         認証 Cookie の名前を設定できるようにした（#250 の段階 4）
 //*  2026/10/01  玄人 幸道         TempData の Cookie にも接頭辞を付ける（#255）
 //*  2026/10/01  玄人 幸道         メアドの一意を常に必須にした（#151 の段階 3）
 //*  2026/10/04  玄人 幸道         CORSをエンドポイント単位にした（#265）
@@ -43,11 +39,13 @@
 //*  2026/10/08  玄人 幸道         AuthCookieName が空のときも接頭辞を掛ける（#283）
 //*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
-//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）の経路を追加（#307 の段階 2）
 //*  2026/10/21  玄人 幸道         起動のときに jwks_uri を温める（#309 の段階 2）
+//*  2026/10/26  玄人 幸道         外部ログインの戻りの失敗を OPERATION に記録する（#294）
+//*  2026/10/27  玄人 幸道         利用者名の文字の制限を AllowOnlyAlphanumericUserNames に合わせた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
@@ -56,6 +54,7 @@ using Sts = MultiPurposeAuthSite.Extensions.Sts;   // RateLimitProvider（#305 �
 
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Net;   // IPAddress（#279）
 
 using Microsoft.AspNetCore.Builder;
@@ -84,6 +83,7 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Util;
 using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite
 {
@@ -245,7 +245,7 @@ namespace MultiPurposeAuthSite
                 // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
                 // **`ReadFormAsync` の結果は要求に残る**ので、後のモデル バインドは読み直さない。
                 string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
-                    context.Request.Headers["Authorization"]);
+                    context.Request.Headers[Const.HeaderAuthorization]);
 
                 if (string.IsNullOrEmpty(clientId))
                 {
@@ -253,12 +253,12 @@ namespace MultiPurposeAuthSite
                         "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
                     {
                         // 優先度 2: フォームデータ（client_secret_post 等）から取得
-                        clientId = (await context.Request.ReadFormAsync())["client_id"];
+                        clientId = (await context.Request.ReadFormAsync())[OAuth2AndOIDCConst.client_id];
                     }
                     else
                     {
                         // 優先度 3: クエリ文字列から取得
-                        clientId = context.Request.Query["client_id"];
+                        clientId = context.Request.Query[OAuth2AndOIDCConst.client_id];
                     }
                 }
 
@@ -272,7 +272,7 @@ namespace MultiPurposeAuthSite
                 {
                     //  **429 ＋ `Retry-After`**（RFC 6585 §4）。**本体は返さない。**
                     context.Response.StatusCode = 429;
-                    context.Response.Headers["Retry-After"] = retryAfter.Value.ToString();
+                    context.Response.Headers[Const.HeaderRetryAfter] = retryAfter.Value.ToString();
 
                     return;
                 }
@@ -308,7 +308,7 @@ namespace MultiPurposeAuthSite
                     //   **持続時間を変えたいなら、上の `IdleTimeout` を使う。**
                     HttpOnly = true,
                     // **接頭辞を掛ける**（#255。同じホストに 2 つ立てたときに分けるため）
-                    Name = Config.PrefixCookieName(
+                    Name = Config.PrefixedCookieName(
                         GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName")),
                     Path = "/",
                     SameSite = SameSiteMode.Strict,
@@ -602,9 +602,8 @@ namespace MultiPurposeAuthSite
                 // **ここで落とす。** 接続文字列が無いと、
                 //   `IDistributedCache` は**最初にセッションを触った時に**落ちる。
                 //   起動は通ってしまうので、**画面が 500 を返すだけで理由が分からない。**
-                throw new InvalidOperationException(
-                    "SessionStoreType が " + Config.SessionStoreType
-                    + " なので、SessionStoreConnectionString が必要です。");
+                throw new InvalidOperationException(string.Format(
+                    Resources.Diagnostics.SessionStoreConnectionStringRequired, Config.SessionStoreType));
             }
 
             switch (Config.SessionStoreType)
@@ -679,7 +678,7 @@ namespace MultiPurposeAuthSite
             {
                 services.PostConfigure<CookieTempDataProviderOptions>(options =>
                 {
-                    options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                    options.Cookie.Name = Config.PrefixedCookieName(options.Cookie.Name);
                 });
 
                 // **AntiForgery の Cookie にも掛ける**（#282）。
@@ -694,7 +693,7 @@ namespace MultiPurposeAuthSite
                 //   **CSRF の穴にはならないが、正しい POST が 400 になる。**
                 services.PostConfigure<AntiforgeryOptions>(options =>
                 {
-                    options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                    options.Cookie.Name = Config.PrefixedCookieName(options.Cookie.Name);
                 });
 
                 // **Identity が使う Cookie すべてに掛ける**（#255）。
@@ -741,7 +740,7 @@ namespace MultiPurposeAuthSite
                                 ? CookieAuthenticationDefaults.CookiePrefix + scheme
                                 : options.Cookie.Name;
 
-                            options.Cookie.Name = Config.PrefixCookieName(baseCookieName);
+                            options.Cookie.Name = Config.PrefixedCookieName(baseCookieName);
                         });
                 }
             }
@@ -825,7 +824,16 @@ namespace MultiPurposeAuthSite
                 {
                     // ユーザー
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#user
-                    //idOptions.SignIn.AllowedUserNameCharacters = false;
+                    // **利用者名の文字の制限を、net48 の AllowOnlyAlphanumericUserNames に合わせる**（#294）。
+                    //   以前は設定を読まず、常に枠組みの既定（英数字と -._@+）だった。
+                    //   **空白や日本語を含む上流の name で、外部ログインの利用者を作れなかった。**
+                    //   false なら制限しない（空にすると、UserValidator は文字を調べない）。
+                    //   true なら、枠組みの既定のまま。
+                    if (!Config.AllowOnlyAlphanumericUserNames)
+                    {
+                        idOptions.User.AllowedUserNameCharacters = "";
+                    }
+
                     // **メアドは常に一意**（#151 の段階 3）。
                     //   **利用者名とメアドの両方でサインインできる**ので、
                     //   **メアドが一意でないと FindByEmailAsync が成り立たない。**
@@ -893,7 +901,7 @@ namespace MultiPurposeAuthSite
                     // **接頭辞を直書きしない。** PathBase は実行時に前置される
                     //   （IIS Express の仮想アプリでは /MultiPurposeAuthSite が付く）。
                     options.LoginPath = "/Account/Login";
-                    options.LogoutPath = "/Account/LogOff";
+                    options.LogoutPath = "/Account/Logout";
                     options.ReturnUrlParameter = CookieAuthenticationDefaults.ReturnUrlParameter;
 
                     // **net48 と同じ設定キーで揃える**（App_Start/StartupAuth.cs）。
@@ -923,12 +931,18 @@ namespace MultiPurposeAuthSite
             #endregion
 
             #region 外部ログイン
+
+            // **プロバイダからの戻り（/signin-*）での失敗を記録する**（#294）。
+            //   Correlation failed（相関 Cookie が届かない）や、code の交換の失敗はここで起きる。
+            //   **Controller（ExternalLoginCallback）までは届かない**ので、そこのログには出ない。
+            //   **記録するだけで、扱いは枠組みの既定のまま**（HandleResponse を呼ばない）。
             if (Config.MicrosoftAccountAuthentication)
             {
                 authenticationBuilder.AddMicrosoftAccount(options =>
                 {
                     options.ClientId = Config.MicrosoftAccountAuthenticationClientId;
                     options.ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret;
+                    options.Events.OnRemoteFailure = Startup.LogExternalLoginRemoteFailure;
                 });
             }
             if (Config.GoogleAuthentication)
@@ -937,6 +951,7 @@ namespace MultiPurposeAuthSite
                 {
                     options.ClientId = Config.GoogleAuthenticationClientId;
                     options.ClientSecret = Config.GoogleAuthenticationClientSecret;
+                    options.Events.OnRemoteFailure = Startup.LogExternalLoginRemoteFailure;
 
                     // **email_verified をクレームに写す**（#140 の段階 1）。
                     //   Google は userinfo で email_verified を返すが、
@@ -1022,5 +1037,19 @@ namespace MultiPurposeAuthSite
         }
 
         #endregion
+
+        /// <summary>外部ログインの戻り（/signin-*）での失敗を記録する（#294）</summary>
+        /// <param name="context">RemoteFailureContext</param>
+        /// <returns>Task</returns>
+        /// <remarks>**記録するだけ。** HandleResponse を呼ばないので、扱いは枠組みの既定のまま。</remarks>
+        private static Task LogExternalLoginRemoteFailure(RemoteFailureContext context)
+        {
+            Logging.MyOperationTrace(string.Format(
+                Resources.Diagnostics.LogExternalLoginRemoteFailure,
+                context.Scheme.Name,
+                LogSanitizer.Sanitize(context.Failure?.Message ?? "", Const.LogDetailMaxLength)));
+
+            return Task.CompletedTask;
+        }
     }
 }

@@ -29,7 +29,27 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/06  玄人 幸道         新規（#272 の段階 2 / D-6）
+//*  2026/10/26  玄人 幸道         クライアント単位で同意を消す RevokeByClient を追加（登録の削除で、全利用者の同意を消す。#294）
+//*  2026/10/29  玄人 幸道         利用者単位で同意を消す DeleteByUser を追加（mem ストアで利用者の削除後に残っていた。#294）
 //**********************************************************************************
+
+/*
+ * 本Providerは、「この利用者が、このクライアントに、どの scope を許したか」を記録する。
+ * 本Providerの主キーはUserIDとClientIDで、コレ毎にScopeが許可される。
+ * Scopeは許可の度に追加される可能性があるが、削除はされない。
+ *
+ * 記録するのは同意画面で許可したときだけで、拒否は記録しない（利用者が気を変えられるように）。
+ * 許可の度に scope を足し込み、辞書順に並べて持つ（大文字小文字は区別する。RFC 6749 §3.3）。
+ *
+ * 要求の scope が記録の部分集合なら、同意済みとして同意画面を飛ばす。
+ * 記録に無い scope が在れば同意画面を出し直し、prompt=none なら consent_required を返す。
+ * prompt=consent / select_account なら、記録が在っても同意画面を出す。
+ *
+ * 取り消し（Revoke）は行ごと消す。呼ぶのは管理画面（利用者が 1 件ずつ取り消す）。
+ * クライアントの登録を消すとき（動的登録の DELETE・管理画面の削除）は、RevokeByClient で全利用者の分を消す。
+ * 発行済みのトークンは失効しない（そちらは /revoke の役目）。
+ * 利用者を消すと、FK（ON DELETE CASCADE）で同意も消える（mem は DeleteByUser が消す）。
+ */
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
@@ -45,18 +65,14 @@ using Dapper;
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
-    /// ConsentProvider
     /// 同意（consent grant）を記録する。
     /// </summary>
     /// <remarks>
-    /// **「この利用者が、このクライアントに、どの scope を許したか」を持つ**（#272 の段階 2 / D-6）。
+    /// **「この利用者が、このクライアントに、どの scope を許したか」を持つ**
     ///
     /// **これが無いと `prompt=none` の判定ができない。**
     /// OIDC Core §3.1.2.1 の `prompt=none` は「UI を出すな。出す必要があるならエラーを返せ」
     /// という意味だが、**「出す必要があるか」は「以前に同意済みか」で決まる。**
-    /// 記録が無ければ、**同意画面を出さずに code を発行する**か、
-    /// **毎回同意画面を出す**かの二択しかなかった（C-3 の根本原因）。
-    ///
     /// **粒度は (利用者, クライアント) で 1 行。** scope は**集合として足し込む**。
     ///
     /// | | |
@@ -64,11 +80,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | 要求 scope が記録の**部分集合** | **同意済み**（同意画面を出さない） |
     /// | 要求 scope に**記録に無いものが在る** | **同意を取り直す**（許可されたら記録に足す） |
     ///
-    /// **並びは辞書順に正規化して持つ**（`response_type` の #267 と同じ理由。
-    /// **"openid email" と "email openid" を別物にしない**）。
-    ///
-    /// **`Users.Id` への FK（`ON DELETE CASCADE`）を張ってある**ので、
-    /// **利用者を消せば同意も消える。**
+    /// **並びは辞書順に正規化して持つ**（**"openid email" と "email openid" を別物にしない**）。
+    /// **`Users.Id` への FK（`ON DELETE CASCADE`）を張ってある**ので、**利用者を消せば同意も消える。**
     /// </remarks>
     public class ConsentProvider
     {
@@ -99,7 +112,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **`scope` の値は case-sensitive**（RFC 6749 §3.3）なので、**ここでは小文字化しない。**
         /// `response_type` と違い、**以前から小文字化していない**ので、変える理由が無い。
         /// </remarks>
-        public static string NormalizeScopes(IEnumerable<string> scopes)
+        private static string NormalizeScopes(IEnumerable<string> scopes)
         {
             List<string> normalized = new List<string>();
 
@@ -185,16 +198,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Grant
+        #region GrantでScopeを記録
 
-        /// <summary>同意を記録する（#272 の段階 2）</summary>
+        /// <summary>
+        /// 同意を記録する（#272 の段階 2）
+        /// 許可した「scope（権限の範囲）の同意履歴」をDBなどに記録・更新するためのメソッド。
+        /// </summary>
         /// <param name="userId">UserId</param>
         /// <param name="clientId">ClientID</param>
         /// <param name="scopes">許可された scope</param>
         /// <remarks>
         /// **在れば足し込み、無ければ作る。**
-        /// **足し込みにするのは、scope を増やす要求で同意し直したときに、
-        /// 以前の分を失わないため**である。
+        /// **足し込みにするのは、scope を増やす要求で同意し直したときに、以前の分を失わないため**である。
         /// </remarks>
         public static void Grant(string userId, string clientId, IEnumerable<string> scopes)
         {
@@ -233,7 +248,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Get
+        #region Get (SELECT)
 
         /// <summary>記録した scope を返す（#272 の段階 2）</summary>
         /// <param name="userId">UserId</param>
@@ -290,10 +305,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return null;
         }
-
-        #endregion
-
-        #region GetByUser
 
         /// <summary>その利用者の同意を全部返す（#272 の段階 2）</summary>
         /// <param name="userId">UserId</param>
@@ -386,7 +397,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Revoke
+        #region Revoke (DELETE)
 
         /// <summary>同意を取り消す（#272 の段階 2）</summary>
         /// <param name="userId">UserId</param>
@@ -449,6 +460,106 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     }
 
                     break;
+            }
+        }
+
+        /// <summary>そのクライアントへの同意を、全利用者の分取り消す（#294）</summary>
+        /// <param name="clientId">ClientID</param>
+        /// <remarks>
+        /// **クライアントの登録を消すときに呼ぶ**（動的登録の `DELETE`・管理画面の削除）。
+        /// **所有者だけでなく、そのクライアントに同意した全ての利用者の行を消す** —
+        /// **払い下げたクライアントへの許可を残さない**（RFC 7592 §2.3）。
+        ///
+        /// **`ClientID` には外部キーが無い**（構成ファイルのクライアントの同意も記録するため）ので、
+        /// **登録の行を消しても、同意は自動では消えない。**
+        /// </remarks>
+        public static void RevokeByClient(string clientId)
+        {
+            if (string.IsNullOrEmpty(clientId))
+            {
+                return;
+            }
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    string suffix = "\t" + clientId;
+
+                    foreach (string key in ConsentProvider.ConsentGrants.Keys)
+                    {
+                        if (key.EndsWith(suffix, StringComparison.Ordinal))
+                        {
+                            string removed = null;
+                            ConsentProvider.ConsentGrants.TryRemove(key, out removed);
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "DELETE FROM [ConsentGrant] WHERE [ClientID] = @ClientID",
+                                    new { ClientID = clientId });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"ConsentGrant\" WHERE \"ClientID\" = :ClientID",
+                                    new { ClientID = clientId });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"consentgrant\" WHERE \"clientid\" = @ClientID",
+                                    new { ClientID = clientId });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>その利用者の同意を、全て消す（#294）</summary>
+        /// <param name="userId">UserId</param>
+        /// <remarks>
+        /// **利用者を消すときに呼ぶ**（`CmnUserStore.Delete`）。
+        /// **DB では外部キー（`ON DELETE CASCADE`）が消す**ので、**mem だけ**を扱う。
+        /// </remarks>
+        public static void DeleteByUser(string userId)
+        {
+            if (string.IsNullOrEmpty(userId)
+                || Config.UserStoreType != EnumUserStoreType.Memory)
+            {
+                return;
+            }
+
+            string prefix = userId + "\t";
+
+            foreach (string key in ConsentProvider.ConsentGrants.Keys)
+            {
+                if (key.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    string removed = null;
+                    ConsentProvider.ConsentGrants.TryRemove(key, out removed);
+                }
             }
         }
 

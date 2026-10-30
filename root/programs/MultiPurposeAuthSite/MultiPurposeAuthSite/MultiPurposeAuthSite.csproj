@@ -267,10 +267,79 @@
     <Compile Include="App_Start\RouteConfig.cs" />
     <Compile Include="App_Start\WebApiConfig.cs" />
     <Compile Include="Controllers\AccountController.cs" />
+    <Compile Include="Controllers\AccountController.SignIn.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.SignUp.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.TwoFactor.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.ExternalLogin.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.IdFederation.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.Saml2.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.Authorize.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.SelfTest.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\AccountController.Helper.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\ErrorController.cs" />
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ManageController.cs" />
+    <Compile Include="Controllers\ManageController.Account.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.TwoFactor.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.ExternalLogin.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.Data.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.OAuth2Data.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\ManageController.Helper.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\OAuth2EndpointController.cs" />
+    <Compile Include="Controllers\OAuth2EndpointController.Token.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\OAuth2EndpointController.UserInfo.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\OAuth2EndpointController.Revocation.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\OAuth2EndpointController.DeviceAuthZ.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\OAuth2EndpointController.Ciba.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\OAuth2EndpointController.RequestObject.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\OAuth2EndpointController.Metadata.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\OAuth2EndpointController.Push.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\OAuth2ResourceServerController.cs" />
     <Compile Include="Controllers\PingController.cs" />
     <Compile Include="Controllers\RolesAdminController.cs" />

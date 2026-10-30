@@ -129,6 +129,19 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 
 > **ファイルには、device_token や 2FA のコードがそのまま書かれる。**
 
+### `MailOutboxDirectory` — メールの送信箱（テスト用）
+
+**本番では空のままにする。** **`IsDebug` が true のとき**に設定すると、サーバはメールを
+このディレクトリに JSON ファイル（`destination` / `subject` / `body`）として書く（#294）。
+（`IsDebug` のときは、もともと SMTP に送らず、デバッグ出力に書くだけである。）
+E2E テストが、**メールでしか届かない値**（メアドの確認・パスワードのリセットのリンク、2FA のコード）をそれから読む。
+`IsDebug` が false なら、設定しても書かない。
+
+`root/programs/Tests/test.ps1 -Launch` が、`FcmOutboxDirectory` と同じく**環境変数として**サイトごとに設定する
+（`Tests/E2ETests/Result/mail/core`・`…/netfx`）。構成ファイルに書く必要は無い。
+
+> **ファイルには、確認・リセットのリンク（code 入り）や 2FA のコードがそのまま書かれる。**
+
 ## 3. net48 — `app.config`
 
 **`Web.config` から取り込まれる外部 `appSettings` ファイルである。**
@@ -307,7 +320,7 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 **alg → 鍵の対応は `SigningKeys`（`CommonLibrary/TokenProviders`）の表 1 か所**にあり、
 **発行・検証・Discovery の広告・`jwkcerts` の生成が、すべてその表を見る**（#129 の段階 3 / D-9）。
 
-> **CIBA（`oauth2_oidc_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
+> **CIBA（`client_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
 > **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
 
@@ -480,6 +493,21 @@ CreateJwkSetJson.exe
 
 要求を拒否（`invalid_scope`）するのではなく、許されないスコープを外して発行する。
 外したときは、トークン応答の `scope` に実際に発行したものを返す（RFC 6749 §5.1）。
+
+**次の 2 つだけは、倒し方が逆である** — **項目が無ければ出さない。** **登録に明記したクライアントにだけ出す。**
+
+| scope | 働き | 逆にする理由 |
+|---|---|---|
+| `client_registration` | クライアント登録の管理 API を叩ける（#307 の段階 1） | **登録を作れる強い権限**なので、既定で持たせない |
+| `auth` | **同意画面を出さずに code を返す**（認証だけ。発行は `auth` と `openid` に絞る）（#294） | **同意を求めるかを、クライアントに決めさせない**（決めるのは登録を管理する人。Keycloak の「Consent Required」と同じ考え方） |
+
+> **どちらも、動的登録では付けられない**（`invalid_client_metadata`）。
+> **配るのは、構成ファイルか管理画面（`/Manage/AddSaml2OAuth2Data`）からだけ。**
+
+> **`auth` は、以前は要求に付けるだけで効いた**（#294 で改めた）。
+> **`auth` で同意画面を飛ばしていたクライアントは、登録の `scope` に `auth` を足すこと。**
+> 足さなければ、**初回に同意画面が出る**（同意すれば、次からは同意の記録で飛ばす。#272）。
+> **`prompt=none` だけで動くクライアントは、初回が `consent_required` になる。**
 
 > `CreateClientsIdentity` はこの項目を出力しない。必要なクライアントにだけ、手で足す。
 
@@ -819,7 +847,7 @@ CREATE TABLE [DPoPProof](
 |---|---|
 | **Cookie の名前** | **`op_session`**（**接頭辞が掛かる**。#255 の `CookieNamePrefix`） |
 | **中身** | **guid。** **`sid` そのものではない** — **台帳を引くための鍵**である |
-| **作る / 消す** | **サインインで作り、サインアウトで消す**（`/Account/LogOff` / `/end_session` / 再認証） |
+| **作る / 消す** | **サインインで作り、サインアウトで消す**（`/Account/Logout` / `/end_session` / 再認証） |
 | **属性** | **`HttpOnly` ＋ `Secure`。** **期限を付けない**（セッション Cookie。**ブラウザを閉じれば終わる**） |
 | **無いとき** | **認可の口で作る** — **「次回から自動的にサインイン」で認証 Cookie だけが残っている**ことが在り、**そのときもセッションとして扱う**（**新しい `sid` になる**） |
 
@@ -891,7 +919,7 @@ ALTER TABLE [SessionClient] WITH CHECK ADD CONSTRAINT [FK.SessionClient.Users_Us
 | **何を送るか** | **`logout_token`**（署名付きの JWT）を、**`logout_token=…` の 1 項目**として POST する |
 | **どこへ** | **`backchannel_logout_uri` の登録が在る相手だけ**（**無ければ伝えない**） |
 | **誰に** | **そのセッションでトークンを発行した相手**（`SessionClient` の行。#310 の段階 1） |
-| **いつ** | **サインアウトの 5 か所**（`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン） |
+| **いつ** | **サインアウトの 5 か所**（`/Account/Logout` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン） |
 | **広告** | **`backchannel_logout_supported`** ＋ **`backchannel_logout_session_supported`**（どちらも true。**`sid` を必ず入れる**ため） |
 
 > **Front-Channel Logout も広告している**（段階 3。下の節）。
@@ -988,7 +1016,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN BackChannelLogoutUri varchar(512) NULL;
 | 呼び出し元 | 画面の後に進む先 |
 |---|---|
 | `/end_session` | **登録された `post_logout_redirect_uri`**（`state` 付き。無ければ Home） |
-| `/Account/LogOff` | Home |
+| `/Account/Logout` | Home |
 | `prompt=login` / `max_age` の再認証・別のアカウントでログイン | **同じ認可要求の URL**（**そのまま続ける**） |
 
 > **登録が在る RP が 1 つも無ければ、画面は出ない。**
@@ -1199,6 +1227,20 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **引くのは `Origin` 付きの要求のときだけ**で、**読むのは URI 関連の 6 列だけ**（#270）。
 > **公開情報の口は全開なので、この一覧を引かない。**
 
+### 認証デバイスのクライアント — `AuthenticationDeviceClientIds`（#294）
+
+**認証デバイス用の口（`/SetDeviceToken`・`/ciba_result`・`/2fa_result`）は、ここに挙げたクライアントに発行した
+アクセス トークンだけを受ける。** client_id をカンマ（または空白）で区切って書く。
+
+```
+"AuthenticationDeviceClientIds": "aad529f7f9b6428a84c59ac15aef0cdb",          appsettings.json
+<add key="AuthenticationDeviceClientIds" value="aad529f7f9b6428a84c59ac15aef0cdb" />   app.config
+```
+
+- **未設定・空なら、同梱の認証デバイス（`AuthenticationDevice_Web`）の client_id に倒す**（既存の配備にはこのキーが無い）
+- **認証デバイスを別の client_id で登録したなら、その client_id を書く**（書かないと、端末の登録も承認も 401 になる）
+- **以前は発行先を見ておらず、利用者が同意したどの RP のトークンでも通った**（`ANALYSIS-IdP.md` の C-55）
+
 ### 動的クライアント登録（RFC 7591 / 7592）— `EnableDynamicClientRegistration`（#307 の段階 1〜5-a）
 
 **クライアント登録を WebAPI で行う。** **既定は無効**で、**開けると `/register` が出来る。**
@@ -1278,6 +1320,7 @@ grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 > **`401`（取り直せ）では誤誘導になる。**
 >
 > **見分けは `sub` でしている** — **`client_credentials` のトークンは `sub` にクライアント名が入る。**
+> **同じ名前の利用者が居ても、その利用者の `sub` にはならない**（#294。以前はなっていた）。
 > **そこまで確かめるのは、「利用者が消えたトークン」を
 > クライアントの所有者に付け替えないため**である（**別人の持ち物として登録が増えてしまう**）。
 
@@ -1293,6 +1336,7 @@ grant_type=password&client_id=<管理 API 用>&client_secret=<秘密>
 > **管理画面（`/Manage/AddSaml2OAuth2Data` の `scope`）からだけ。**
 > **動的登録で `client_registration` を登録しようとすると `invalid_client_metadata` で断る**
 > （**自分と同じ強さの権限を、自分で配らせない**）。
+> **`auth`（同意画面を出さない）も同じく断る**（#294。**同意を求めるかを、自分で決めさせない**）。
 
 #### 1 利用者 n クライアント（#307 の段階 5-a）
 
@@ -1346,7 +1390,7 @@ POST /register   →  201（2 件目。**別の client_id / client_secret / regi
 
 ##### 管理画面は、n 件を並べる（段階 5-a-2）
 
-**`/Manage/Saml2OAuth2DataList` が、自分の登録を並べる**（`DataProvider.GetByOwner`）。
+**`/Manage/Saml2OAuth2DataList` が、自分の登録を並べる**（`Saml2OAuth2DataProvider.GetByOwner`）。
 
 | 画面 | 役 |
 |---|---|
@@ -1366,7 +1410,7 @@ POST /register   →  201（2 件目。**別の client_id / client_secret / regi
 ###### 他人の登録に触れないこと
 
 **`clientId` は URL とフォームから来る**ので、**所有者の照合はサーバ側で行う**
-（`DataProvider.GetByOwnerAndClientID`）。
+（`Saml2OAuth2DataProvider.GetByOwnerAndClientID`）。
 
 | 送られたもの | 画面 |
 |---|---|
@@ -1388,7 +1432,7 @@ POST /register   →  201（2 件目。**別の client_id / client_secret / regi
 | **認可ログの `User Account`** | 同上（**ログの 1 行**） |
 
 > **`client_id` の昇順で先頭**を使う（**段階 5-a-2 で並びを決めた**）。
-> **`mem` も方言 3 つも同じ順**にしてある（`DataProvider.GetByOwner` の `ORDER BY`）。
+> **`mem` も方言 3 つも同じ順**にしてある（`Saml2OAuth2DataProvider.GetByOwner` の `ORDER BY`）。
 > **決めていないと、一覧の行が毎回入れ替わる。**
 
 ##### DDL — 既存の配備は、4 つの文を流す（#307 の段階 5-a）
@@ -1459,10 +1503,10 @@ Content-Type: application/json
 | **`redirect_uris`**（必須） | **絶対 URI で、フラグメント禁止**（RFC 6749 §3.1.2）。**ワイルドカードは受けない。** **`code` を使う登録は `redirect_uri_code`、`token` / `id_token` を使う登録は `redirect_uri_token` の列に入る**（両方使うなら両方に） |
 | **`grant_types`** | **既定は `authorization_code`**（§2）。**この配備が広告しているものだけ** |
 | **`response_types`** | **既定は `code`**。**`code` を使うなら `authorization_code`、`token` / `id_token` を使うなら `implicit` が要る**（§2 の対応） |
-| `scope` | **`scopes_supported` の範囲内**。**`client_registration` は断る** |
+| `scope` | **`scopes_supported` の範囲内**。**`client_registration` と `auth` は断る** |
 | `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
 | `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
-| **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
+| **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`none`（パブリック）も登録できる**（#294）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
 | **`jwks`** | **受け付ける**（段階 3）。**RSA 1 本 ＋ EC 1 本まで**（列が 1 本ずつ）。**同じ種類が 2 本来たら断る** |
 | **`tls_client_auth_subject_dn`** | **受け付ける**（段階 3。RFC 8705 §2.1.2）。**照合は完全一致** |
 | **`token_endpoint_auth_signing_alg`** | **受け付ける**（段階 3）。**`RS256` / `ES256`**。**空なら絞らない**（#262） |
@@ -1496,7 +1540,7 @@ Content-Type: application/json
 | **`response_types`** | **認可エンドポイント**（`CmnEndpoints.CheckAuthZEndpoint`）。**利用者を操作させる前に `unauthorized_client` で断る** |
 | **`grant_types`** | **トークン エンドポイント**（`CmnEndpoints.CheckClientMode` の手前）。`unauthorized_client` |
 
-> **`ClientModePolicy`（`oauth2_oidc_mode`）とは役割が違う。**
+> **`ClientModePolicy`（`client_mode`）とは役割が違う。**
 >
 > | | 何を見るか |
 > |---|---|
@@ -1514,6 +1558,13 @@ Content-Type: application/json
 > **#198 の後半（クライアントごとの絞り）が一切効いていなかった**
 > （`scopes_supported` の絞りだけが効いていた）。**#307 の段階 1 で、DB も見るようにした。**
 
+##### :warning: 登録種別の項目名を `client_mode` に改めた（#294）
+
+- **以前の名前は `oauth2_oidc_mode`。旧い名前は読まない**（下位互換は取らない）。
+- **旧い名前のまま残すと、`normal` として扱われる**（`fapi1` / `fapi2` などの制約が外れる）。
+  **構成ファイル（`OAuth2ClientsInformation`）の項目名を書き換えること。**
+- **管理画面から登録したクライアント**（`Saml2OAuth2Data`）は、DB の `ClientMode` 列に入っているので**影響しない。**
+
 #### クライアント認証の方法 — `token_endpoint_auth_method`（#307 の段階 3）
 
 **このクライアントが自分を証明する方法**である（RFC 7591 §2。**値は 1 つ**）。
@@ -1525,6 +1576,7 @@ Content-Type: application/json
 | `client_secret_basic` / `client_secret_post` | 同じ（**明示しても変わらない**） |
 | **`private_key_jwt`** | **`client_assertion` だけ**（**秘密では通らない**） |
 | **`tls_client_auth`** | **クライアント証明書だけ**（同じ） |
+| **`none`**（#294） | **認証しない**（**パブリック クライアント**。**秘密を持っていても、それでは通らない**） |
 | **既知でない値** | **通さない**（登録の誤り。#224 の段階 2 と同じ方針） |
 
 > **つまり「強い方法は明示が要る」。**
@@ -1541,7 +1593,28 @@ Content-Type: application/json
 | **SAML2 の `AuthnRequest` の署名検証** | **クライアント認証ではない**（登録された鍵を、別の用途で使っている） |
 | **Request Object（JAR）の署名検証** | 同じ（`request_object_signing_alg` の側） |
 | **JWT Bearer の認可グラント**（RFC 7523 §2.1） | **自前で署名を検証する経路**で、クライアント認証を通らない |
-| **秘密を持たないクライアント**（public ＋ PKCE） | **認証しない**（RFC 6749 §3.2.1）。**扱いは変えていない** |
+| **秘密を持たないクライアント**（public ＋ PKCE） | **認証しない**（RFC 6749 §3.2.1）。**PKCE だけで引き換えられるのは、方法が空か `none` の登録だけ**（下。#294） |
+
+##### PKCE だけで認可コードを引き換えられる登録（C-40。#294）
+
+**`code_verifier` だけ（資格情報なし）で認可コードを引き換えられるのは、方法が空か `none` の登録だけ**である。
+**方法を明示した登録（`client_secret_basic` / `client_secret_post` / `private_key_jwt` / `tls_client_auth`）は、
+PKCE だけでは引き換えられない**（`invalid_client`）。**PKCE と資格情報を一緒に送る。**
+
+| 登録 | `code_verifier` だけ | 資格情報 ＋ `code_verifier` |
+|---|---|---|
+| **空** | **通る**（**従来どおり**） | 通る |
+| **`none`** | **通る** | **秘密では通らない**（パブリック） |
+| **それ以外** | **通らない** | **通る**（**`private_key_jwt` / mTLS と PKCE の併用も通る**。FAPI 2.0） |
+
+> **空を通すのは、既定の挙動を変えないためである。** 雛形の SPA / ネイティブ アプリのクライアントは、
+> **秘密を持ったまま PKCE だけで引き換えている。**
+> **コンフィデンシャル クライアントを PKCE だけで引き換えさせたくなければ、方法を明示する**
+> （RFC 6749 §4.1.3 : コンフィデンシャル クライアントは認証する）。
+> **パブリック クライアントには `none` を登録する**のが仕様どおりである（RFC 7591 §2）。
+>
+> **以前は `code_verifier` を送ると、`client_assertion` と証明書が無視された**（PKCE だけで認証していた）。
+> **fapi2 の登録は PKCE と鍵（または証明書）の併用で通らなかった**が、いまは通る。
 
 ##### :warning: 既存の配備は、設定に 1 行足す必要がある
 
@@ -1551,7 +1624,7 @@ Content-Type: application/json
 ```jsonc
 "6336f8ff137044c4a30bbbdcd6c2cf5b": {
   "client_name": "TestClient2",
-  "oauth2_oidc_mode": "fapi2",
+  "client_mode": "fapi2",
   "token_endpoint_auth_method": "private_key_jwt",   // ← 足す（段階 3）
   "jwk_rsa_publickey": "..."
 }
@@ -1702,7 +1775,7 @@ curl -X DELETE "https://localhost:44300/MultiPurposeAuthSite/register/<client_id
 
 | | |
 |---|---|
-| **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**省略は「狭める」ではなく「広がる」**（この配備が支える `scope` 全部になる）。**`client_registration` だけは、明記しても断る** |
+| **`scope` を省くと、絞りが消える** | **列が空 ＝ 絞らない**（段階 1 の決め）。**省略は「狭める」ではなく「広がる」**（この配備が支える `scope` 全部になる）。**`client_registration` と `auth` だけは、明記しても断る**（#294） |
 | **`redirect_uris` は省けない** | **OIDC DCR 1.0 §2 で REQUIRED**。省いたら `400` なので、**うっかり全消しは起こらない** |
 | **`grant_types` / `response_types` を省くと、狭まる** | **RFC 7591 §2 の既定**（`authorization_code` / `code`）**が書かれる。** `refresh_token` や `implicit` は、**書かなければ消える** |
 
@@ -1846,7 +1919,7 @@ Post され、その順番を握っているのは、待っている自分**だ�
 |---|---|
 | **登録**（`POST` / `PUT`） | **取りに行って待つ**（**口が `async`**）。**読めなければ `400` ＋ `invalid_client_metadata`** |
 | **要求**（`/token` など） | **キャッシュを読むだけ。** **引けなければ `invalid_client` で断り、背景で取り直す** |
-| **背景** | **取り直しの下限は 1 分**（`DiscoveryJwks.MinRefetchInterval`）。**取得中は 1 本だけ**（**`kid` を偽った要求を並べれば、外から起こせる**） |
+| **背景** | **取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`。Open棟梁）。**取得中は 1 本だけ**（**`kid` を偽った要求を並べれば、外から起こせる**） |
 
 > **プロセスを起こし直した直後・画面から登録した直後は、1 回断られる**（**次の試行で通る**）。
 > **キャッシュはプロセスの中に在る**ためである。
@@ -1873,7 +1946,7 @@ Post され、その順番を握っているのは、待っている自分**だ�
 
 | | |
 |---|---|
-| **何を集めるか** | **設定ファイルの `jwks_uri`**（`OAuth2ClientsInformation`）＋ **user store の `JwksUri` が空でない行**（`DataProvider.GetAllJwksUris`） |
+| **何を集めるか** | **設定ファイルの `jwks_uri`**（`OAuth2ClientsInformation`）＋ **user store の `JwksUri` が空でない行**（`Saml2OAuth2DataProvider.GetAllJwksUris`） |
 | **絞らない** | **`private_key_jwt` の登録だけに絞らない**（**Request Object（JAR）の検証にも使い得る**） |
 | **順と上限** | **設定を先に、次に user store。** **重複は除き、直列に読み、100 本で打ち切る**（**起動と同時に、外へ何十本も出さない**。**設定キーは増やしていない**） |
 | **読めないとき** | **ログに残して進む**（**起動は止めない** — **DB が落ちている配備でも立ち上がる**） |
@@ -2390,7 +2463,7 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 >
 > **移行用のスクリプトは置いていない。** 既存のデータベースは次のどちらか。
 >
-> - **`Create_UserStore.sql` を流し直す**（E2E 用の `store/` は使い捨てなのでこれ）
+> - **`Create_UserStore.sql` を流し直す**（E2E 用の `Container/Store/` は使い捨てなのでこれ）
 > - **`ALTER` で 16 列を足し、画面から再登録する**
 >
 > **列を足しただけでは、登録済みのクライアントは読めない**
@@ -2460,7 +2533,7 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 > **SQL Server 2016 以降が前提**である（索引キーの上限が 1700 バイト）。
 > **2014 以前の上限は 900 バイト**なので、**この定義は上限を超える**
 > （可変長の列なので、作成は警告で通り、**長い値を入れたときに失敗する**）。
-> **2014 以前では未検証**である。**実機で測ったのは 2022**（`store/` のコンテナ）。
+> **2014 以前では未検証**である。**実機で測ったのは 2022**（`Container/Store/` のコンテナ）。
 >
 > **Oracle・PostgreSQL は、既定の設定のまま収まる**
 > （Oracle は `db_block_size` 8192 で索引キーが約 6398 バイトまで、
@@ -2596,7 +2669,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **SAML2 は要求にも応答にも署名が在り、OIDC は応答だけ**である。
 
 > **E2E では、上流だけ別の RSA 鍵を使う**（#293 の段階 1）。
-> **`store/docker-compose.yml` の upstream が `RsaPfxFilePath` / `SpRp_RsaCerFilePath` /
+> **`Container/E2E/docker-compose.yml` の upstream が `RsaPfxFilePath` / `SpRp_RsaCerFilePath` /
 > `JwkSetFilePath` を `*_Upstream` に向けている。**
 >
 > | | 公開している RSA の `kid`（実測 2026/10/13） |
@@ -2609,7 +2682,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **EC の 3 本は共有のまま**（RSA だけを分けた）。
 
 > **(2) の署名も、上流が検証する**（#293 の段階 2）。
-> **雛形の `IdFederation` クライアントと、`store/` の E2E のクライアント 3 件に
+> **雛形の `IdFederation` クライアントと、`Container/E2E/` の E2E のクライアント 3 件に
 > `jwk_rsa_publickey` を登録した**（値は **`*_Client.cer` の JWK** ＝ 下流が (2) の署名に使う鍵の対）。
 >
 > **以前は登録していなかったので、上流は「鍵がない場合は、通す」経路に入り、
@@ -2768,7 +2841,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > （**失敗側に倒れる**ので安全性の問題ではないが、**連携できない**）。
 > **このキーを書くのが、その対処である。**
 
-**`CanIdFederationByOidc` には入れていない** — **空でも ID 連携は成立する**ためである
+**導線を出す判定（`IdFederationUpstream.IsUsable`）には入れていない** — **空でも ID 連携は成立する**ためである
 （SAML2 側の 4 本とは扱いが違う）。
 
 **鍵の出どころは 4 段**である。
@@ -2821,9 +2894,9 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | `IdFederationSaml2CerFilePath` | `…/X509/SHA256RSA_Server.cer` | **上流の署名を検証する証明書**（`.cer` のパス） |
 
 **雛形の既定は、OIDC の `IdFederation*Endpoint` と同じ**
-（**上流は `store/` のコンテナ**。`https://localhost:44301`。**E2E は環境変数で上書きする**）。
+（**上流は `Container/E2E/` のコンテナ**。`https://localhost:44301`。**E2E は環境変数で上書きする**）。
 
-**1 本でも空なら、SAML2 の ID 連携は無効**である（`Config.CanIdFederationBySaml2`）。
+**1 本でも空なら、SAML2 の ID 連携は無効**である（`IdFederationUpstream.IsUsable`。#292 の段階 1 までは `Config.CanIdFederationBySaml2`）。
 **押しても成立しない導線を出さない**ため、**サインイン画面のボタンも出さない。**
 
 > **証明書は、開発用の上流が同じ雛形の鍵を使っているので、結果として
@@ -2852,7 +2925,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 
 | | |
 |---|---|
-| **サインイン画面のボタン** | **設定が揃っているときだけ出す**（`CanIdFederationBySaml2`）。**OIDC 側も同じにした**（`CanIdFederationByOidc`） |
+| **サインイン画面のボタン** | **設定が揃っているときだけ出す**（`IdFederationUpstream.IsUsable`）。**OIDC 側も同じにした**（#292 の段階 1 までは `CanIdFederationBySaml2` / `CanIdFederationByOidc`） |
 | **口** | `/Account/IDFederationAssertionConsumerService`（**`IsLockedDownTestEndpoints` で閉じない**。本番の導線） |
 | 自己テストの口 | `/Account/AssertionConsumerService`（**閉じる**。結果を画面に出すだけ） |
 | `AuthnRequest` | `NameIDFormat=emailAddress`、`Issuer` ＝ **`http://` ＋ 上流に登録された `client_id`**、**ACS URL は入れない**（上流が登録値から解決する） |
@@ -2861,14 +2934,14 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 
 > **上流には、下流の ACS を `redirect_uri_saml` として登録する**こと。
 > **1 文字も違ってはならない**（#263 と同じ照合）。
-> 雛形は `IdFederation` クライアントに登録済みで、`store/docker-compose.yml` は
+> 雛形は `IdFederation` クライアントに登録済みで、`Container/E2E/docker-compose.yml` は
 > E2E の 3 つの下流（ホスト core / netfx / 下流コンテナ）の分を持っている。
 
 #### アサーションの属性（`AttributeStatement`）で、メアドと利用者名を運ぶ（#286 の段階 4）
 
 **`NameID` だけでは、メアドと利用者名を運べない。**
 **段階 4 で、OIDC 側のクレームに 1 対 1 で対応する属性を出すようにした**
-（`CommonLibrary/SamlProviders/CmnSamlAttributes.cs`）。
+（**出す側は `CommonLibrary/SamlProviders/CmnEndpoints.cs` が属性を決め、名前と読み取りは Open棟梁 の `SAML2Const` / `SAML2Attributes`**。#294）。
 
 | OIDC | SAML2 の `Name` | `FriendlyName` | `NameFormat` |
 |---|---|---|---|
@@ -2991,7 +3064,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **メタデータは署名されていない**（実測）。**信頼の根拠は TLS と `entityID` の照合だけ**である。
 > **署名されたメタデータを検証する形は、まだ無い**（その鍵をどこから得るかを決める必要がある）。
 
-**導線（サインイン画面のボタン）の出し方も変わった**（`Config.CanIdFederationBySaml2`）。
+**導線（サインイン画面のボタン）の出し方も変わった**（いまは `IdFederationUpstream.IsUsable`）。
 
 | | |
 |---|---|
@@ -3030,7 +3103,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **discovery は読めても、その先の `jwks_uri` に届かない**ことがある。
 > **その配備では `IdFederationJwkSetUri` を直接与える**（#290 の順番で、これが最も先に見られる）。
 
-**例**（`store/docker-compose.yml` の下流コンテナ）。
+**例**（`Container/E2E/docker-compose.yml` の下流コンテナ）。
 
 ```
 appSettings__IdFederationJwkSetUri=http://upstream:8080/jwkcerts
@@ -3336,6 +3409,23 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 > **雛形の 120 回 / 60 秒は、正しいクライアント 10 本分に当たる。**
 > **足りなければ上げる。** **0 にすれば、従来どおり無制限である。**
 
+#### メールの送り過ぎ — `MailResendIntervalSeconds`（#294）
+
+**サインアップとパスワードの失念は、利用者名かメアドが分かれば、誰でも何度でも押せる。**
+**押すたびにメールが飛ぶので、他人の受信箱をメールで埋められた。**
+**上の口ごとのレート制限は送信元ごとに数える**ので、**宛先が 1 つでも、送信元を変えれば止まらない。**
+
+| 設定 | |
+|---|---|
+| **`MailResendIntervalSeconds`** | **同じ利用者・同じ用途のメールを送る間隔**（秒。雛形は **60**。**0（未設定）なら絞らない**） |
+
+| | |
+|---|---|
+| 対象のメール | **メアド検証**（サインアップ・確認待ちの登録し直し・確認待ちのサインイン）と、**パスワード リセット** |
+| 数える単位 | **用途 × 利用者**（**メアド検証とリセットは別に数える**） |
+| 断るとき | **送らないだけで、画面は変えない**（**送ったかどうかを画面から分からせない**）。**ログには最初の 1 回だけ残す** |
+| 覚える場所 | **プロセスの中**（`Extensions/Sts/MailThrottle`。**インスタンスを増やすと、その数だけ緩くなる**） |
+
 #### 認証の失敗を数える — `AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds` / `AuthFailureWindowSeconds`（#305 の段階 2・段階 4）
 
 **総当たりを「回数」で止める。**
@@ -3532,7 +3622,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 **`ETag` は、値に関係なく常に付く**（中身の SHA-256。**同じ中身なら同じ値**）。
 **`If-None-Match` が一致すれば `304`** を返し、**本文を送らない。**
 
-**サーバ側でも覚える**（`Extensions/Sts/JwkSetDocument`）。
+**サーバ側でも覚える**（Open棟梁 の `JwkSetDocument`）。
 **ファイルの最終更新時刻と長さだけを見て**、変わっていなければ覚えている分を返す
 （**`stat` だけで済ませ、中身は読まない**）。
 
@@ -3644,16 +3734,16 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `CookieSecurePolicy` | `""`（空） | **`always`** | **すべての Cookie に `Secure` を付ける**（#279）。空なら、各 Cookie 自身の宣言に従う（認証まわりは元から `Secure`）。**`always` にすると、平文 HTTP ではサインインできなくなる**ので、開発では空のままにする。**net10.0 版だけ**（net48 版は `Web.config` の `<httpCookies requireSSL>`） |
 | `UseForwardedHeaders` | `""`（空＝取り込まない） | **リバース プロキシの背後なら `on`** | **`X-Forwarded-Proto` / `X-Forwarded-For` を取り込む**（#279。上流 Open棟梁 #549）。**取り込まないと、プロキシが https で受けていてもアプリは http だと思う** → `issuer`・リダイレクト先の URI・`Secure` の判定がずれる。**パイプラインの先頭で呼んでいる。** **net10.0 版だけ** |
 | `ForwardedHeadersKnownProxies` | `""`（空） | **プロキシの IP を列挙する** | **転送ヘッダを信じるプロキシの IP**（#279。カンマ区切り）。**`UseForwardedHeaders` が `on` のときだけ読む。** 空なら、**送った相手を問わない**（`KnownProxies` / `KnownIPNetworks` を空にしてあるため）。**プロキシを経由せずアプリに直接届く経路があるなら、必ず列挙する。** **net10.0 版だけ** |
-| `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
+| `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`Container/E2E/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at` / `op_session`（#310 の段階 1）、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**`AuthCookieName` が空でも、枠組みの既定名に接頭辞が付く**（`.probe_AspNetCore.Identity.Application` など。#283。**以前はこの組み合わせだけで 500 になっていた**）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。**AntiForgery にも掛かる**（#282）。名前は net10.0 版では **DataProtection の識別子から導かれ**、**#279 でそれを固定したので、`DataProtectionKeyPath` を設定した配備同士はパスが違っても同名になる**（**実測 2026/10/08**。[`TESTING.md`](TESTING.md) 1 節）。net48 版は `AntiForgeryConfig.CookieName`。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
 | `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4）。**サンプルは下の「標準クレームを返す」**（#261） |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
-| `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
+| `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@example.com` / `tanaka@example.com`）を**作らない** |
 | `TestUserSuffix` | `""`（空） | **E2E が渡す。手で設定しない** | **テスト利用者の名前に付ける接尾辞**（#260）。空なら `super_tanaka` / `tanaka`。**E2E は 2 つのサイトを同時に立てる**ので、**DB ストアでは同じ利用者の行を書き換え合う。**`test.ps1` がサイトごとに `_core` / `_netfx` を渡して分ける。**初期化済みの DB でも、居なければ作る**ので、接尾辞を変えても DB を作り直さなくてよい |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
-| `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
+| `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる。**`EnableImplicitGrantType` が `false` なら、access_token をフロント チャネルで返す Hybrid / OIDC の Implicit（`code token` / `code id_token token` / `id_token token`）も断り、広告しない**（#314。`code id_token` は通る） |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
 | `RequireVerifiedEmailForAccountLinking` | **`true`**（#140 の段階 1 で追加） | `true` のまま | **外部 ID を既存アカウントに結び付けるとき、上流が `email_verified: true` と言ったメアドだけを鍵にする。** **未設定でも `true`**（他の `Require*` と既定の向きが違う）。`false` にすると従来どおり（上流の言い値で結び付ける）。**Google は `email_verified` を写すようにしたので自動リンクできる。Microsoft Account は示せないので、`/Manage/ManageLogins` での明示的な追加になる** |
 | `FacebookAuthentication` / `TwitterAuthentication` | `false` | **触らない** | **サポートを取り下げた**（#249）。**`true` にしても有効にならない**（アプリ側の登録をコメント アウトしてある）。**動かないからではなく、維持コストが便益に見合わないため。** キーを残してあるのは戻せるようにするため（`CommonLibrary/ANALYSIS.md` 12 節） |
@@ -3667,6 +3757,8 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
 > 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
+| `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
+| `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
 | `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
@@ -3708,6 +3800,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 **このチェックリストの読み落としを拾うため、起動時にも確かめている**（`Co/ProductionCheck`。両アプリ）。
 
 - 該当すると、`OPERATION` ログに `[設定の確認] …（CONFIGURATION.md 11 節）` が出る
+  （**文言は resx**（`Resources/Diagnostics`）。**日本語以外のカルチャでは** `[Configuration check] … (CONFIGURATION.md section 11)`）
 - **起動は止めない。** 設定を直せない状況で復旧できなくなるため
 - **`UserStoreType` が `mem` のときは何も言わない**（開発・テスト専用の構成なので、雑音にしかならない）。
   ただし `AdministratorUID` / `AdministratorPWD` が雛形の値のままのときだけは、ストアによらず言う
@@ -3759,7 +3852,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    **移行では、締められるクライアントから順に `require_pkce` を立て、
    全部揃ったらサーバの `RequirePkce` を `true` にする**、という順序が取れる。
 
-   > **`oauth2_oidc_mode` を `fapi1` にしても PKCE は必須になるが、そちらは重い。**
+   > **`client_mode` を `fapi1` にしても PKCE は必須になるが、そちらは重い。**
    > **ROPC / `client_credentials` / `refresh_token` も巻き添えで塞がる**（実測。#222）。
    > 「PKCE だけ必須にしたい」なら `require_pkce` を使う。
 

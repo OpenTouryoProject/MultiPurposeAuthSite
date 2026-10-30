@@ -34,7 +34,6 @@
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
 //*  2026/09/11  玄人 幸道         request_uri 経路でも redirect_uri / PKCE を code に紐付ける（#197）
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
-//*  2026/09/24  玄人 幸道         期限切れの行を、書き込みのついでにまとめて消す（#188 の案 4）
 //*  2026/10/22  玄人 幸道         認可要求の dpop_jkt を code に紐付ける（#311 の段階 4）
 //**********************************************************************************
 
@@ -266,7 +265,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // **DPoP の鍵の申告も、Request Object の中から読む**（#311 の段階 4）。
             //   **ここに足し忘れると、JAR / PAR の経路だけ縛りが外れる**（#197 と同じ落ち方）。
-            ret[CmnDPoP.JktParam] = (string)requestObjectPayload[CmnDPoP.JktParam];
+            ret[OAuth2AndOIDCConst.dpop_jkt] = (string)requestObjectPayload[OAuth2AndOIDCConst.dpop_jkt];
 
             return ret;
         }
@@ -282,7 +281,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 有効期限が無効なtokenのペイロードだけ作成
             string access_token_payload = CmnAccessToken.CreatePayloadForCode(identity, DateTimeOffset.Now);
-            temp.Add("access_token_payload", access_token_payload);
+            temp.Add(Const.AuthZCodeAccessTokenPayload, access_token_payload);
 
             // redirect_uri 対応
             // 認可リクエストのredirect_uriをcodeに紐付ける（#186）。
@@ -304,7 +303,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   **認可要求で申告された鍵の指紋を、コードに紐付ける**（RFC 9449 §10。#311 の段階 4）。
             //   **`/token` での照合は GetDPoPJkt を読む側が行う**（`CmnEndpoints`）。
             //   **指定が無ければ null が入り、照合はスキップされる**（PKCE と同じ扱い）。
-            temp.Add(CmnDPoP.JktParam, authZReq[CmnDPoP.JktParam]);
+            temp.Add(OAuth2AndOIDCConst.dpop_jkt, authZReq[OAuth2AndOIDCConst.dpop_jkt]);
 
             // 新しいCodeのticketをストアに保存
             string jsonString = JsonConvert.SerializeObject(temp);
@@ -537,7 +536,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             // payload
             JObject payload = (JObject)JsonConvert.
-                DeserializeObject((string)jobj["access_token_payload"]);
+                DeserializeObject((string)jobj[Const.AuthZCodeAccessTokenPayload]);
 
             // client_idチェック
             if (client_id == (string)payload[OAuth2AndOIDCConst.aud])
@@ -624,7 +623,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
-            return temp["access_token_payload"];
+            return temp[Const.AuthZCodeAccessTokenPayload];
         }
 
         #endregion
@@ -697,7 +696,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
             if (temp == null
-                || !temp.TryGetValue(CmnDPoP.JktParam, out string jkt)
+                || !temp.TryGetValue(OAuth2AndOIDCConst.dpop_jkt, out string jkt)
                 || string.IsNullOrEmpty(jkt))
             {
                 return "";

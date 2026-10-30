@@ -21,7 +21,6 @@
 //*  2026/09/28  玄人 幸道         prompt / max_age を画面から選べるようにした（#246 の項目 3）
 //*  2026/10/06  玄人 幸道         promptの選択肢から「未対応」を外した（#272 の段階 2）
 //*  2026/10/09  玄人 幸道         各オプションの説明を追加（#277 の段階 2）
-//*  2026/10/09  玄人 幸道         NameIDFormat を画面で選べるようにした（#277 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -73,25 +72,25 @@ namespace MultiPurposeAuthSite.ViewModels
                 return new List<SelectListItem>()
                 {
                     new SelectListItem() {
-                        Text = "Saml2 / OAuth2.0 / OIDC用 Client",
+                        Text = Resources.CommonViewModels.DdlClientTypeNormal,
                         Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
-                        Text = "PKCE 必須 (require_pkce) の Client (OAuth2.1)",
+                        Text = Resources.CommonViewModels.DdlClientTypeRequirePkce,
                         Value = HomeSaml2OAuth2StartersViewModel.RequirePkceClientType },                    
                     new SelectListItem() {
-                        Text = "Device Authorization Grant用 Client",
+                        Text = Resources.CommonViewModels.DdlClientTypeDevice,
                         Value = OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit() },
                     new SelectListItem() {
-                        Text = "Financial-grade API - Part1用 Client",
+                        Text = Resources.CommonViewModels.DdlClientTypeFapi1,
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() },
                     new SelectListItem() {
-                        Text = "Financial-grade API - Part2用 Client",
+                        Text = Resources.CommonViewModels.DdlClientTypeFapi2,
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() },
                     new SelectListItem() {
-                        Text = "Financial-grade API - CIBA用 Client",
+                        Text = Resources.CommonViewModels.DdlClientTypeFapiCiba,
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit() },
                     new SelectListItem() {
-                        Text = "ログイン・ユーザの Client",
+                        Text = Resources.CommonViewModels.DdlClientTypeLoginUser,
                         Value = "login User" }
                 };
             }
@@ -122,11 +121,11 @@ namespace MultiPurposeAuthSite.ViewModels
             {
                 return new List<SelectListItem>()
                 {
-                    new SelectListItem() { Text = "指定しない", Value = "" },
-                    new SelectListItem() { Text = "none（UI を出さない）", Value = "none" },
-                    new SelectListItem() { Text = "login（再認証）", Value = "login" },
-                    new SelectListItem() { Text = "consent（再同意）", Value = "consent" },
-                    new SelectListItem() { Text = "select_account（同意画面を出す）", Value = "select_account" }
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNotSpecified, Value = "" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlPromptNone, Value = "none" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlPromptLogin, Value = "login" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlPromptConsent, Value = "consent" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlPromptSelectAccount, Value = "select_account" }
                 };
             }
         }
@@ -147,10 +146,10 @@ namespace MultiPurposeAuthSite.ViewModels
             {
                 return new List<SelectListItem>()
                 {
-                    new SelectListItem() { Text = "指定しない", Value = "" },
-                    new SelectListItem() { Text = "0（毎回、再認証）", Value = "0" },
-                    new SelectListItem() { Text = "60（1 分）", Value = "60" },
-                    new SelectListItem() { Text = "600（10 分。OIDC のボタンの既定）", Value = "600" }
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNotSpecified, Value = "" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlMaxAge0, Value = "0" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlMaxAge60, Value = "60" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlMaxAge600, Value = "600" }
                 };
             }
         }
@@ -183,10 +182,10 @@ namespace MultiPurposeAuthSite.ViewModels
             {
                 return new List<SelectListItem>()
                 {
-                    new SelectListItem() { Text = "指定しない（IdP は unspecified に倒す）", Value = "" },
-                    new SelectListItem() { Text = "unspecified（利用者名）", Value = "unspecified" },
-                    new SelectListItem() { Text = "emailAddress（メアド）", Value = "emailAddress" },
-                    new SelectListItem() { Text = "persistent（RP ごとの PPID）", Value = "persistent" }
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatNone, Value = "" },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatUnspecified, Value = Const.NameIdFormatUnspecified },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatEmailAddress, Value = Const.NameIdFormatEmailAddress },
+                    new SelectListItem() { Text = Resources.CommonViewModels.DdlNameIdFormatPersistent, Value = Const.NameIdFormatPersistent }
                 };
             }
         }

@@ -29,7 +29,6 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#226 : mTLS の経路を E2E で確かめる）
-//*  2026/09/23  玄人 幸道         -NetFxMtls のとき、net48 版でも回す（#226）
 //*  2026/09/23  玄人 幸道         FA-6.4（cnf の形式と、/userinfo での照合）を追加
 //*  2026/09/26  玄人 幸道         fapi2 でも refresh_token が発行される期待に改めた（#239 の段階 3）
 //*  2026/09/29  玄人 幸道         FA-6.5（mTLS で refresh_token を使える）を追加（#245 の段階 1）
@@ -169,7 +168,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient2_2);
 
                 TestReport r = this.Report("FA-6.1",
-                    "oauth2_oidc_mode=fapi2 のクライアントは、mTLS（Subject が一致する証明書）の認可コードで通る",
+                    "client_mode=fapi2 のクライアントは、mTLS（Subject が一致する証明書）の認可コードで通る",
                     "**fapi2 を通すのは、ClientModePolicy の表の「認可コード × mTLS」の行だけ。**"
                     + "FA-2.1 は client_secret / PKCE では通らないことを測っており、"
                     + "本テストは**その対照（通る側）**。"
@@ -273,7 +272,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient2_3);
 
                 TestReport r = this.Report("FA-6.3",
-                    "oauth2_oidc_mode が既知でない値（fapi_1）のクライアントは、Subject が一致する証明書でも通らない",
+                    "client_mode が既知でない値（fapi_1）のクライアントは、Subject が一致する証明書でも通らない",
                     "**既知でない登録値は、不正な登録として拒否する**（#224 の段階 2 の E）。"
                     + "以前は fapi2 とみなしていたので、**この経路（認可コード × mTLS）では通っていた**。"
                     + "FA-5.2（CIBA）は以前の扱いでも拒否されるため区別できず、違いが出るのはここだけ。",
@@ -405,7 +404,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient2_2);
 
                 TestReport r = this.Report("FA-6.5",
-                    "oauth2_oidc_mode=fapi2 のクライアントは、mTLS で refresh_token を使える",
+                    "client_mode=fapi2 のクライアントは、mTLS で refresh_token を使える",
                     "**`ClientModePolicy` の表で、E2E が無かった唯一の行**（`refresh_token × mTLS`。#245 の段階 1）。"
                     + "#239 の段階 3 で **fapi1 / fapi2 にも refresh_token を開いた**が、"
                     + "**開いたのは `private_key_jwt`（`RT-239.5`）と mTLS の 2 つ**で、"

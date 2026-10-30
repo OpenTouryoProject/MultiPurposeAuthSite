@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/10/30  玄人 幸道         使われていない UpdateRoles を削除（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Entity;
@@ -144,20 +145,9 @@ namespace MultiPurposeAuthSite.Data
             return Task.FromResult(0);
         }
 
-        #region ユーザの関連情報の更新（ Roles, Logins, Claims ）
-
-        /// <summary>Rolesの更新</summary>
-        /// <param name="user">更新</param>
-        /// <param name="tgtUser">ターゲット</param>
-        private Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
-        {
-            CmnUserStore.UpdateRoles(user, tgtUser);
-            return Task.FromResult(0);
-        }
-
-        // Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
-
-        #endregion
+        // Roles は IUserRoleStore（AddToRoleAsync / RemoveFromRoleAsync）、Logins, Claims は Del-Ins で対応するため、
+        // UpdateRoles, UpdateLogins, UpdateClaims のメソッドは不要
+        // （UpdateRoles は呼ばれておらず、トランザクションを確定しない実装だったので、#294 で削除した）
 
         #endregion
 

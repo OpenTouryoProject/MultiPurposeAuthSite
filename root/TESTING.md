@@ -48,6 +48,40 @@ cd root\programs\Tests
 | `-UpdateTestCases` | テストケースの原本（`programs\Tests\TESTCASES.md`）を作り直す |
 | `-UserStoreType` | サイトが使うストア（`mem` 既定 / `sql` / `ora` / `npg`）。**`mem` 以外は下の「ストアを切り替える」を読む**（#207） |
 | `-ConnectionString` | `mem` 以外のときの接続文字列。省略時は環境変数から読む |
+| `-Coverage` | **サイトのコード カバレッジを測る**（`-Launch` と併用。下の「カバレッジを測る」）（#294） |
+
+### カバレッジを測る（#294）
+
+```powershell
+cd root
+.\2_RunAllTests.ps1 -Launch -Coverage
+# → programs\Tests\E2ETests\Result\coverage\report\index.html
+```
+
+**測るのは、テスト（`dotnet test`）ではなく、起動した 2 つのサイトである。**
+E2E はサイトを外から叩くので、テストのプロセスに付く収集器（`coverlet.collector` の `XPlat Code Coverage`）では、
+**サイトのコードは 1 行も数えられない。** そのため、**サイトのプロセスを `dotnet-coverage collect` の下で起動する。**
+
+| | net10.0 版 | net48 版 |
+|---|---|---|
+| 起動 | `dotnet-coverage collect` → Kestrel | `dotnet-coverage collect` → IIS Express |
+| セッション | `mpas-core` | `mpas-netfx` |
+| 出力 | `coverage\core.cobertura.xml` | `coverage\netfx.cobertura.xml` |
+
+- **道具は、ローカル ツールとして入れる**（`root/dotnet-tools.json`。`dotnet-coverage` と `dotnet-reportgenerator-globaltool`）。
+  `-Coverage` を付けると、`dotnet tool restore` を先に回す。グローバルには入れない
+- **数える DLL は `programs/Tests/coverage.settings.xml` で絞る**
+  （`MultiPurposeAuthSite.dll`・`MultiPurposeAuthSite.NetCoreLibrary.dll`・`MultiPurposeAuthSite.NetFxLibrary.dll`）。
+  Open棟梁 などの参照先は数えない
+- **テストが終わったら、セッションを `dotnet-coverage shutdown` で閉じてから**サイトを止める。
+  先にプロセスを止めると、結果が書かれない
+- 2 つの結果を **ReportGenerator** で 1 つの報告（HTML・`Summary.txt`・`SummaryGithub.md`）にまとめる。
+  Razor の生成コード（`AspNetCoreGeneratedDocument.*`）は除く。**要約（`Summary.txt`）は画面にも出す**
+- **net10.0 版の `DOTNET_STARTUP_HOOKS`（mTLS のテスト用フック）は、`coverage\launch-core.cmd` の中で設定する。**
+  `dotnet-coverage` 自身に継がれると、`System.Runtime, Version=10.0.0.0` を読めずに落ちる
+
+> **数字は E2E が届く範囲の目安である。** 外部プロバイダ（Google など）の戻りの経路のように、
+> **E2E では動かせない所は、測っても上がらない。** 低い所を見て、テストを足す・足せない理由を書く、の材料にする。
 
 ### ストアを切り替える（#207）
 
@@ -67,13 +101,14 @@ $env:MPAS_CONNSTR_SQL = '...'
 .\2_RunAllTests.ps1 -Launch -UserStoreType sql
 ```
 
-#### E2E 用の DBMS は `store/` で立てる（#250 の段階 1）
+#### E2E 用の DBMS は `Container/Store/` で立てる（#250 の段階 1）
 
-**このリポジトリの `store/` が、3 方言を定義している**（SQL Server / Oracle / PostgreSQL）。
+**このリポジトリの `Container/Store/` が、3 方言を定義している**（SQL Server / Oracle / PostgreSQL）。
+**ID 連携の IdP 群は `Container/E2E/` に在る**（下の「上流の IdP は `Container/E2E/` で立てる」。#318 で `store/` から分けた）。
 
 ```powershell
-cd store
-.\1_DockerComposeUp.bat      # DDL を流し込んでから、IdP のコンテナだけを起動する
+cd Container\Store
+.\1_DockerComposeUp.bat      # DDL を流し込む（DB は起動しない）
 .\2_DockerComposeDown.bat    # -v 付き。作り直せるように残さない
 ```
 
@@ -87,7 +122,7 @@ $env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;...'
 
 | | |
 |---|---|
-| **対象の決め方** | **接続文字列から読めたポートが `store/` のもの（1434 / 1522 / 5433）なら、その DB を扱う** |
+| **対象の決め方** | **接続文字列から読めたポートが `Container/Store/` のもの（1434 / 1522 / 5433）なら、その DB を扱う** |
 | **触らないとき** | **ポートが読めない**（＝ 既定ポート。手動確認の LocalServicesOnDocker）**や、別の番号のとき** |
 | **停めるのは自分が起動したときだけ** | **先に人が起動していた DB は、そのまま残す** |
 | **切る口** | **`-NoStoreContainer`**（別ホストの DB を指すときなど） |
@@ -143,7 +178,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 > **3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある**
 > （方針は LocalServicesOnDocker の `CHEATSHEET.md` に倣った）。
 
-**メモリの抑え方**（`store/docker-compose.yml` の頭に同じ表が在る）。
+**メモリの抑え方**（`Container/Store/docker-compose.yml` の頭に同じ表が在る）。
 
 | サービス | パラメタ | 既定 | 変える変数 |
 |---|---|---|---|
@@ -171,7 +206,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 > （**実測** : `sga_target` **1536M** ＋ `pga_aggregate_target` **512M** = ちょうど 2GB）。
 > **メモリを空けたいときは、使わない間は止めること。**
 
-> **`restart` は、`store/` のすべてのサービスで `"no"` にしてある**
+> **`restart` は、`Container/Store/` と `Container/E2E/` のすべてのサービスで `"no"` にしてある**
 > （DB の 3 つと IdP の 3 つ。**以前は `always`**）。
 > **Docker エンジンを起動した拍子に、6 つとも一斉に復帰してメモリを食い切るのを防ぐ**
 > （**実測で踏んだ** : Docker を起動しただけで 6 つとも起きていた）。
@@ -186,7 +221,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 
 **ポートは +1 にしてある。**
 
-| | `store/`（E2E） | 既定のポート |
+| | `Container/Store/`（E2E） | 既定のポート |
 |---|---|---|
 | SQL Server | **1434** | 1433 |
 | Oracle | **1522** | 1521 |
@@ -210,7 +245,7 @@ $env:MPAS_CONNSTR_NPS = 'HOST=localhost;PORT=5433;DATABASE=UserStore;USER ID=pos
 
 - **DDL は `0_CopyInitSql.ps1` が repo から流し込む**（`1_DockerComposeUp.bat` が先に呼ぶ）。
   コピー先は**生成物**で `.gitignore` 済み。**原本は `root/files/resource/.../Sql/` だけ**
-- **`store/` の DB は使い捨てにできる。** そのため、下の
+- **`Container/Store/` の DB は使い捨てにできる。** そのため、下の
   「古いデータベースを使い回すと、列が足りない」は **E2E 側では起きない**
   （手動側＝LocalServicesOnDocker では引き続き起こりうる）
 - **Oracle の初回起動は数分かかる**（`docker compose ps` が healthy になるまで待つ）
@@ -249,7 +284,7 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > （この値を書くのは `UserClaimsTests` だけで、同じクラスのケースは並列に走らない。
 > 利用者の行が重複しているわけでもない）。**落ちたら、まず 1 クラスだけで回して切り分ける。**
 >
-> **実測（#250 の段階 1。`store/` の 3 方言）** : 同じ型が**別のテストでも出た。**
+> **実測（#250 の段階 1。`Container/Store/` の 3 方言）** : 同じ型が**別のテストでも出た。**
 >
 > | ストア | 落ちたもの | 1 クラスだけで回すと |
 > |---|---|---|
@@ -261,14 +296,14 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > **落ちるテストは毎回違う**（`RT-230.1` / `RT-230.3` / `RT-233.2`）。
 > **`mem` では出ない**（各サイトが別の入れ物のため）。**原因は依然として未特定。**
 
-#### 上流の IdP も `store/` で立てる（#250 の段階 2〜3）
+#### 上流の IdP は `Container/E2E/` で立てる（#250 の段階 2〜3）
 
 **ハイブリッド ID フェデレーションの「上流側」を、コンテナで 1 つ建てる。**
 **下流（連携する側）はホストで動かす**（Visual Studio / `test.ps1 -Launch`）。
 
 ```powershell
-cd store
-.\3_PublishUpstream.ps1      # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
+cd Container\E2E
+.\0_PublishIdP.ps1           # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
 docker compose up -d upstream
 ```
 
@@ -278,7 +313,7 @@ docker compose up -d upstream
 | パス | **root**（`/authorize`） | `UsePathBase` を呼んでいない |
 | ストア | **`mem`（固定）** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない。**下流は `-UserStoreType` で切り替わるが、上流は常に `mem`**（つまり **`sql` で回すとクロス ストアになる**。5 節の対応表） |
 | 証明書 | **ホストの `dotnet dev-certs`** を書き出したもの | 既に信頼済み。**ブラウザが警告を出さない** |
-| ログ | `store/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
+| ログ | `Container/E2E/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
 
 **net48 版はコンテナ化しない。** 上流は 1 つあればよく、**net10.0 版で足りる**。
 
@@ -325,7 +360,7 @@ docker compose up -d upstream
 > `appsettings.json` を `"C:/root/files` で grep した数と突き合わせること。
 >
 > **`log4net` だけは中身（出力先）も Windows のパス**なので、
-> **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
+> **差し替えた構成**（`Container/Common/LogConf.xml`。publish の際に `app/` へ写す）をイメージに入れてある。
 
 #### 接頭辞を付けた配備を測る（#282 / #283）
 
@@ -367,14 +402,14 @@ probe_auth_time                                 max_age の判定
 **これでコンテナ 2 つだけでハイブリッド IdP 構成が取れる。**
 
 ```powershell
-cd store
-.\1_DockerComposeUp.bat    # DB 3 つ ＋ 上流 ＋ 下流をまとめて起動する
+cd Container\E2E
+.\1_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流 ＋ jwks を、作り直して起動する（DB は Container\Store\）
 ```
 
 **上流だけ・下流だけを建て直すなら、サービスを名指す。**
 
 ```powershell
-.\3_PublishUpstream.ps1          # 成果物は 1 つ。上流も下流も同じイメージ
+.\0_PublishIdP.ps1              # 成果物は 1 つ。上流も下流も同じイメージ
 docker compose up -d --build upstream downstream
 ```
 
@@ -390,9 +425,9 @@ docker compose up -d --build upstream downstream
 | `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
 | `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
 | `IdFederationJwkSetUri` / `IdFederationSaml2MetadataUrl` | **`http://upstream:8080/...`**（#293 の段階 3） | **鍵を引くのもサーバである。** **`https://localhost:44301` には届かない** |
-| 鍵の置き場 / ログ | `store/keys-downstream` / `store/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
+| 鍵の置き場 / ログ | `Container/E2E/keys-downstream` / `Container/E2E/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
 
-**どのコンテナにも要る設定は `store/mpas-common.env` に 1 か所だけ置いてある**
+**どのコンテナにも要る設定は `Container/Common/mpas-common.env` に 1 か所だけ置いてある**（スタブも読む）
 （リソースのパス 19 件 ＋ log4net）。
 **サービスごとに書くと 2 回書くことになり、片方だけ直す事故が起きる。**
 
@@ -413,8 +448,8 @@ docker compose up -d --build upstream downstream
 **DB に平文が残っていないことは、SELECT して確かめる**（**E2E からは DB を見ない** — 9 節）。
 
 ```powershell
-# SQL Server（store/ のコンテナ）
-docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+# SQL Server（Container/Store/ のコンテナ）
+docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
   -Q "SELECT TOP 4 LEFT(ClientSecret, 24), LEN(ClientSecret) FROM Saml2OAuth2Data WHERE ClientSecret IS NOT NULL"
 ```
 
@@ -445,7 +480,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 | | |
 |---|---|
 | ホスト（core / netfx） | `test.ps1` が `PreviousSigningCerFilePaths` を渡す（**2 本広告する状態**を作る） |
-| 上流コンテナ | `store/docker-compose.yml` の `PreviousSigningCerFilePaths`（`*_Server.cer`） |
+| 上流コンテナ | `Container/E2E/docker-compose.yml` の `PreviousSigningCerFilePaths`（`*_Server.cer`） |
 | 上流コンテナの **JWK Set** | **RSA が 2 本**（`JwkSet_Upstream.json`。**新旧を並べた状態**） |
 
 **歯抜け（実測 2026/10/14）。**
@@ -487,7 +522,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 **`RT-292.4` は行を消して戻す**ので、**後片付けだけを止めて 1 行残し、見てから消した。**
 
 ```powershell
-docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
+docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '<pw>' -C -d UserStore `
   -Q "SELECT LEFT(SigningPfxPassword, 12), LEN(SigningPfxPassword) FROM IdFederationUpstreams"
 ```
 
@@ -639,7 +674,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 
 > **「`DELETE` で `Users.ClientID` を空にしない」という歯抜けも測ったが、1 件も落ちなかった**
 > （26 件 / 成功 26）。**理由は、段階 1 の `Register` が「宙に浮いた `client_id`」を許容すること**で、
-> **`!string.IsNullOrEmpty(user.ClientID) && DataProvider.Get(user.ClientID) != null`**
+> **`!string.IsNullOrEmpty(user.ClientID) && Saml2OAuth2DataProvider.Get(user.ClientID) != null`**
 > という条件なので、**行が消えていれば、`Users.ClientID` が残っていても登録し直せる。**
 > **その後、空にしてはならないことが分かった**（下の「踏んだこと」）ので、
 > **段階 2 の実装は空にしなかった。**
@@ -685,7 +720,7 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > **登録の時点でハッシュを保存できず、`GET` が `401` になる。**
 > **方言ごとに通ったことが、そのまま「列が在る」ことの確認になっている。**
 
-###### 踏んだこと : DDL を変えたら `store\0_CopyInitSql.ps1` を回す
+###### 踏んだこと : DDL を変えたら `Container\Store\0_CopyInitSql.ps1` を回す
 
 **3 方言の通しが、1 回目は全件落ちた**（実測 : `sql` と `ora` は 26 件すべて、`npg` は core の 13 件すべて）。
 **症状は「ログイン画面が HTTP 500」**で、**サイトのログに
@@ -694,8 +729,8 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 | | |
 |---|---|
 | **DDL の原本** | `root\files\resource\MultiPurposeAuthSite\Sql\{sqlserver,oracle,pstgrs}` |
-| **コンテナが読むもの** | `store\{sqlserver,oracle,postgres}\init`（**複写。`.gitignore` 済み**） |
-| **複写するもの** | **`store\0_CopyInitSql.ps1`**（**`1_DockerComposeUp.bat` は起動の前に必ず呼ぶ**が、**`test.ps1` 経由の起動は呼ばない**） |
+| **コンテナが読むもの** | `Container\Store\{sqlserver,oracle,postgres}\init`（**複写。`.gitignore` 済み**） |
+| **複写するもの** | **`Container\Store\0_CopyInitSql.ps1`**（**`1_DockerComposeUp.bat` は起動の前に必ず呼ぶ**が、**`test.ps1` 経由の起動は呼ばない**） |
 
 > **`sqlserver` は毎回 init を流し直す**ので、**古い複写のまま DB を作り直す** —
 > **「作り直したのに古い」**という形で出る。
@@ -802,12 +837,12 @@ docker exec store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -
 > `RT-245.5` / `RT-129.3` の向き先だけ）。
 >
 > **1 回目の取り直しは、機械のメモリ不足で打ち切られた**（`sql` の途中）。
-> **DB を 3 つ同時に起動しないこと**は `store\docker-compose.yml` の頭にも書いてあるが、
+> **DB を 3 つ同時に起動しないこと**は `Container\Store\docker-compose.yml` の頭にも書いてあるが、
 > **`mem` の通しの直後に方言を続けると、それだけでも足りなくなることがある** —
 > **1 つずつ、間でサイトを止めて回すこと。**
 
 > **DDL を 1 列足した**（`TokenEndpointAuthMethod`）ので、**3 方言でも測る。**
-> **`store\0_CopyInitSql.ps1` を回すこと**（下の「踏んだこと」と同じ理由）。
+> **`Container\Store\0_CopyInitSql.ps1` を回すこと**（下の「踏んだこと」と同じ理由）。
 
 ##### `software_statement`（`RT-307.18` 〜 `.21`。#307 の段階 4）
 
@@ -914,7 +949,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 > **方言は `sql` だけでよい。** **この段階は DDL を変えていない**（**列を 1 つも足していない**）ので、
 > **`ora` / `npg` を取り直す理由が無い** — **`RT-307.18` 〜 `.21` が通る DB の道は、
-> `DataProvider.Create` / `Update` / `Get` で、段階 1 〜 3 のケースと同じ列**である。
+> `Saml2OAuth2DataProvider.Create` / `Update` / `Get` で、段階 1 〜 3 のケースと同じ列**である。
 > **`sql` を測るのは、制約が在る側で、登録の作成・更新・削除が通ることを見るため**である
 > （段階 2 でそこを踏んだ。**当時の制約は `Users.ClientID` の一意索引と外部キー**で、
 > **段階 5-a-1 でそれごと落とした**）。
@@ -942,12 +977,13 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 **張り替えたので、その利用者はもう作らない**（**`OwnerUserId` は空**）。
 
 > **`ClientName` は、従来どおり入る**（**ラベル**）。
-> **`Helper.GetClientName` が「登録が在るか」の判定と、`client_credentials` の `sub` に使う**ため、
+> **`Helper.GetClientName` が「登録が在るか」の判定と、`client_credentials` の `sub` に使う**
+> （**同じ名前の利用者は引かない**。#294）ため、
 > **消してはならない。**
 
 ###### 管理画面は、まだ 1 件だけを扱う（段階 5-a-1 の時点）
 
-**`DataProvider.GetFirstByOwner` で「所有者の先頭 1 件」を出していた。**
+**`Saml2OAuth2DataProvider.GetFirstByOwner` で「所有者の先頭 1 件」を出していた。**
 **この画面の UI テスト（`RT-277.1` / `RT-277.2` / `RT-297.1`）と、画面から登録するテスト**
 （`ManageClientRegistration.RegisterWithSecretAsync`）**の振る舞いは変わらなかった。**
 
@@ -996,7 +1032,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 | `npg`（PostgreSQL） | **21 件 / 成功 21 / 失敗 0 ＋ Skip 20**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**列 1 つ ＋ 一意索引 ＋ 外部キーの張り替え ＋ 列の削除**）。
-> **`store\0_CopyInitSql.ps1` を回すこと**（段階 1・3 と同じ理由）。
+> **`Container\Store\0_CopyInitSql.ps1` を回すこと**（段階 1・3 と同じ理由）。
 >
 > **`Users` と `Saml2OAuth2Data` を跨いだ変更**なので、**`mem` では出ない失敗が在り得る** —
 > **段階 2 でそこを踏んだ**（`Users.ClientID` を空にして `sql` で `DELETE` が `500`）。
@@ -1016,18 +1052,18 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 **`jwks_uri` が指す先は、本来クライアント（RP）が公開する。**
 **E2E のクライアントは `HttpClient` のコードで、HTTP サーバを持たない** —
-**配るだけのものを 1 つ置いた**（`store/docker-compose.yml` の `jwks`。**44305**）。
+**配るだけのものを 1 つ置いた**（`Container/E2E/docker-compose.yml` の `jwks`。**44305**）。
 
 | | |
 |---|---|
-| **中身を書くのはテスト** | **ホストの `store/jwks` に `.json` を置く**（**同じテストの中で消す**。`.json` は `.gitignore`） |
+| **中身を書くのはテスト** | **ホストの `Container/E2E/jwks` に `.json` を置く**（**同じテストの中で消す**。`.json` は `.gitignore`） |
 | **URL はケースごとに分ける** | **キャッシュはプロセスの中で URL ごと**なので、**同じ URL では「空の状態」を測れない** |
 | **既存の `/jwkcerts` は使わない** | **あれは `JwkSet_Upstream.json` を配っており、`RT-140.*` / `CN-5.*` も見ている共有のファイル**である（**書き替える測りを入れると、戻し忘れが ID 連携を壊す**） |
-| **`sendfile off`** | **bind mount したファイルを書き替えると、古い中身を返すことがある**ので、落としてある（`store/jwks-nginx.conf`） |
+| **`sendfile off`** | **bind mount したファイルを書き替えると、古い中身を返すことがある**ので、落としてある（`Container/E2E/jwks-nginx.conf`） |
 | **平文の http** | **実装は `https` を要求するが、ループバックだけは許している**ので、**証明書を用意していない** |
 
 > **コンテナが上がっていなければ Skip する**（`Infrastructure/JwksUri.SkipIfNotAvailableAsync`）。
-> **`store\1_DockerComposeUp.bat` は、これも一緒に起動する。**
+> **`Container\E2E\1_DockerComposeUp.bat` は、これも一緒に起動する。**
 
 ###### 測るのは `/revoke`（`RT-309.2` / `.3`）
 
@@ -1060,7 +1096,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 ```powershell
 # **相手の JWK Set を置く**（鍵が 1 本でも入っていること — 空の keys では「read 0」になる）
-Copy-Item C:\root\files\resource\MultiPurposeAuthSite\JwkSet.json C:\MultiPurposeAuthSite\store\jwks\warm.json
+Copy-Item C:\root\files\resource\MultiPurposeAuthSite\JwkSet.json C:\MultiPurposeAuthSite\Container\E2E\jwks\warm.json
 $env:appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri = 'http://localhost:44305/warm.json'
 cd root\programs\Tests
 .\test.ps1 -Launch -NoNetFx -Filter "FullyQualifiedName~DiscoveryTests"
@@ -1074,7 +1110,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **net10.0 版の呼び出し**（`Startup.Configure`）＋ **設定ファイルの列挙** | **`The jwks_uri warm-up read 1 of 1 JWK Sets.`**（上の手順で） |
 | **net48 版の呼び出し**（`Application_Start`） | **`read 0 of 0`**（**温める対象が無くても、呼ばれていることは分かる**） |
 | **user store の列挙**（`sql`） | **`read 0 of 0`** ＋ **「読めなかった」のログが出ない** ＝ **SQL は通っている**（**`jwks_uri` を持つ行が無いので 0 件**） |
-| **`ora` / `npg` の列挙** | **測っていない**（**同じコードで、列名の引用だけが方言ごと**。`DataProvider.ColumnList`） |
+| **`ora` / `npg` の列挙** | **測っていない**（**同じコードで、列名の引用だけが方言ごと**。`Saml2OAuth2DataProvider.ColumnList`） |
 
 ###### 歯抜け（実測 2026/10/21）
 
@@ -1382,7 +1418,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 |---|---|
 | **`RT-310.7`** | **Discovery が `frontchannel_logout_supported` と `frontchannel_logout_session_supported` を広告する**。**`check_session_iframe` は出ていない**（Session Management は見送り） |
 | **`RT-310.8`** | **`/end_session` が `iframe` の画面を返す**（**302 ではなく 200**）。**URL に `iss` と `sid` が付く**。**その URL を叩くと RP に届く**。**登録が無い RP の `iframe` は無い**。**画面の後は、登録された戻り先へ `state` 付きで進む** |
-| **`RT-310.9`** | **`/Account/LogOff` でも画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**（**302 のまま**） |
+| **`RT-310.9`** | **`/Account/Logout` でも画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**（**302 のまま**） |
 
 ###### E2E はブラウザの代わりをする
 
@@ -1437,7 +1473,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 | `npg`（PostgreSQL） | **44 件 / 成功 22 / 失敗 0 ＋ Skip 22**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**`Saml2OAuth2Data` に列がもう 1 つ**）。
-> **`store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
+> **`Container\Store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
 >
 > **`RT-232.*` も一緒に回す** — **「Front-Channel は広告しない」を見ていた検証**を、
 > **広告するようになったことに合わせて直した**ためである（#232 の測りの更新）。
@@ -1517,11 +1553,11 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 | `npg`（PostgreSQL） | **38 件 / 成功 19 / 失敗 0 ＋ Skip 19**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**`Saml2OAuth2Data` に列が 1 つ増えた**）。
-> **`store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
+> **`Container\Store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと。**
 >
 > **流したのは `BackChannelLogoutTests` ＋ `SessionIdTests` ＋ 登録の画面**
 > （`ManageSaml2OAuth2DataTests`）**＋ 利用者の削除**（`ManageGdprTests` / `UsersAdminTests`）。
-> **増えた列は `DataProvider` の INSERT / SELECT / UPDATE に入る**ので、
+> **増えた列は `Saml2OAuth2DataProvider` の INSERT / SELECT / UPDATE に入る**ので、
 > **DDL が揃っていなければ、クライアント登録の書き込みが全部落ちる**
 > （**種データの投入で落ちるため、サイトが上がらない**）。
 >
@@ -1577,7 +1613,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 | `npg`（PostgreSQL） | **20 件 / 成功 10 / 失敗 0 ＋ Skip 10**（netfx は PostgreSQL を使えない。従来どおり） |
 
 > **DDL を変えたので 3 方言とも測る**（**表 1 つ ＋ 一意索引 1 つ ＋ 索引 1 つ ＋ 外部キー 1 つ**）。
-> **`store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと**（**新しい DDL で初期化される**）。
+> **`Container\Store\0_CopyInitSql.ps1` を回し、コンテナを作り直すこと**（**新しい DDL で初期化される**）。
 >
 > **流したのは `SessionIdTests` ＋ 利用者の削除**（`ManageGdprTests` / `UsersAdminTests`）。
 > **新しい表は `Users.Id` への外部キー（`ON DELETE CASCADE`）を持つ** ＝ **「跨いで書く変更」**なので、
@@ -1644,7 +1680,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 > **方言は `RT-307.*` ＋ `RT-308.*` を流した** — **表を足した影響は、
 > `software_statement` の既存の経路にも出得る**ためである。
 
-> **表を新設したので、3 方言とも DB を作り直して測る**（`store\0_CopyInitSql.ps1` → コンテナを作り直し）。
+> **表を新設したので、3 方言とも DB を作り直して測る**（`Container\Store\0_CopyInitSql.ps1` → コンテナを作り直し）。
 > **回すときは 1 つずつ、間でサイトを止めること**（#307 で踏んだメモリ不足）。
 > **回し終えた方言のコンテナも止めること**（上の「表を足したら」の囲みと同じ）。
 
@@ -2177,7 +2213,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **`UserStore` が出来ていなければ、初期化スクリプトを手で叩く。**
 >
 > ```powershell
-> docker exec store-sqlserver-1 bash /init/0_start-up.sh
+> docker exec mpas-store-sqlserver-1 bash /init/0_start-up.sh
 > ```
 
 ##### `/jwkcerts` のキャッシュ（`RT-303.*`。#303）
@@ -2239,7 +2275,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **配備のとき、発行済みの access_token は検証に通らなくなる**（`typ` が `JWT` のため）。
 > **有効期限が切れるまでの間だけ**で、**`refresh_token` で取り直せば新しい `typ` になる**
 > （`refresh_token` は JWS ではなく `RefreshTokenProvider` が持つ）。
-> **コンテナ（`store/`）は公開済みのイメージで動く**ので、**作り直すまでは `JWT` のまま**である
+> **コンテナ（`Container/E2E/`）は公開済みのイメージで動く**ので、**作り直すまでは `JWT` のまま**である
 > （**上流・下流とも自分で出して自分で検証する**ので、混在していても通る）。
 
 ##### 書き込みの失敗を握らなくした（#300）
@@ -2381,7 +2417,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **コンテナを起動し直しても、足した表は増えない**（実測）。
 >
 > ```powershell
-> cd store
+> cd Container\Store
 > .\0_CopyInitSql.ps1                      # repo の DDL を init に流し込む
 > docker compose rm -sfv postgres oracle    # **作り直す**（sqlserver は毎回流れる）
 > docker compose up -d postgres oracle
@@ -2408,7 +2444,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 | `IssuerId` | **`https://upstream2.ssoauth.opentouryo.com`** | **3 つの IdP が同じ `iss` を名乗らない**ようにする |
 | 署名鍵 | **`SHA256RSA_Upstream2.*` ＋ `JwkSet_Upstream2.json`** | **上流 1 とも下流とも別の鍵**（`CN-1.5` が 3 つとも違うことを見る） |
 | `CookieNamePrefix` | **`upstream2_`** | Cookie はポートで分かれない（RFC 6265 §8.5） |
-| 鍵・ログの置き場 | `store/keys-upstream2` / `store/logs-upstream2` | 他と分ける（#279） |
+| 鍵・ログの置き場 | `Container/E2E/keys-upstream2` / `Container/E2E/logs-upstream2` | 他と分ける（#279） |
 
 **下流コンテナには、上流 2 件が登録してある**（`IdFederationUpstreams__upstream1*` / `__upstream2*`）。
 **鍵とメタデータを引く宛先は、コンテナの中から届くもの**（`http://upstream2:8080/...`。#293 の段階 3）。
@@ -2469,7 +2505,7 @@ GenRsaCertForUpstreamByOpenSSL.bat Upstream2
 
 ##### (2) の署名鍵を上流ごとに指定する（#292 の段階 4-a）
 
-**`store/docker-compose.yml` の下流コンテナは、上流 2（SAML2）の行に
+**`Container/E2E/docker-compose.yml` の下流コンテナは、上流 2（SAML2）の行に
 `signing_pfx_file_path` を書いてある**（**値は共通設定と同じ `*_Client.pfx`** だが、
 **明示指定の経路を通すため**である）。
 
@@ -2589,7 +2625,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 **`jwkcerts` が返れば、マウントした署名鍵まで読めている。**
 
 > **DataProtection の鍵の置き場（#251）も、ここで効いている。**
-> `appSettings__DataProtectionKeyPath=/keys` を `store/keys` にマウントしてあるので、
+> `appSettings__DataProtectionKeyPath=/keys` を `Container/E2E/keys` にマウントしてあるので、
 > **コンテナを作り直してもサインインが切れない。**
 >
 > **実測** : サインインしてから `docker restart` / `docker compose rm -sf` + `up` を
@@ -2673,7 +2709,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 - **E2E** : **`RT-269.1`**（`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つで
   **2000 文字を超える登録**を作り、**先頭と末尾のオリジンの両方で CORS が通る**ことを見る）
 - **`mem` では幅の問題を測れない**（辞書なので上限が無い）。**効くのは `sql` / `ora` / `npg`**
-- **既存のデータベースは作り直すのが早い**（`store/` は使い捨て）。
+- **既存のデータベースは作り直すのが早い**（`Container/Store/` は使い捨て）。
   **`ALTER` で広げるなら**、PostgreSQL は `ALTER TABLE ... ALTER COLUMN ... TYPE text`、
   **Oracle は `NVARCHAR2` から `NCLOB` へ直接変更できない**ので
   **列を足して移してから入れ替える**
@@ -2717,7 +2753,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
   `RT-272.7`（**管理画面からの取り消し**） /
   `RT-272.8`（**`prompt=login`**。再認証と、印で繰り返しにならないこと）/
   `RT-272.9`（**`prompt=select_account`**。同意画面と「別のアカウントでログイン」）
-- **DDL 3 方言に `ConsentGrant` 表を足した。** **`store/` は作り直す**こと
+- **DDL 3 方言に `ConsentGrant` 表を足した。** **`Container/Store/` は作り直す**こと
 
 ##### 「認可の後は管理画面が 302 になる」は、調べたら誤りだった
 
@@ -2760,7 +2796,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 
 #### SAML2 の E2E を足した（#275 / #276）
 
-**DDL は変えていないが、種データの `client_id` を変えたので `store/` は作り直す**こと。
+**DDL は変えていないが、種データの `client_id` を変えたので `Container/Store/` は作り直す**こと。
 
 **種データの `client_id` を変えたら、必ず作り直す。**
 **古い `client_id` の登録が残り、テストが古い値を引く**（**種データは init SQL が入れる**）。
@@ -2798,7 +2834,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 
 #### オンライン決済サービスを取り下げ、`Users.PaymentInformation` を落とした
 
-**DDL が変わったので、`store/` は作り直すこと**
+**DDL が変わったので、`Container/Store/` は作り直すこと**
 （`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
 
 | | |
@@ -2819,7 +2855,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 > **`npg` だけ `RT-C10.1` が落ちた。**
 > **DB を見ると `TestClient_15` の `redirect_uri_code` が
 > `test_self_code_manage` のまま**だった（`sql` 側は新しい値が入っていた）。
-> **コードの不具合ではなく、作り直していない `store/` の側である。**
+> **コードの不具合ではなく、作り直していない `Container/Store/` の側である。**
 
 **列が残っていても、アプリは動く**（`SELECT *` で読み、INSERT・UPDATE では触らない）。
 **実測 : 列が在る `sql` の DB に対して 561/0/1 で通った。**
@@ -2827,7 +2863,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 
 #### WebAuthn を復活させ、`Users.FIDO2PublicKey` を落とした（#137）
 
-**DDL が変わったので、`store/` は作り直すこと**
+**DDL が変わったので、`Container/Store/` は作り直すこと**
 （`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
 
 | | |
@@ -2837,7 +2873,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 | **入れ物の形が変わった** | `UnstructuredData` に入れる JSON は**自前の `StoredCredential`** になった（以前は `Fido2NetLib.Development.StoredCredential`。**`Development` 名前空間は 3.0 で消えた**） |
 
 **古い行は読めない。** とはいえ、**測った時点で `FIDO2Data` は 0 行だった**
-（`store/` の `sql`。#270 の調査）ので、**実際に読む行は存在しない。**
+（`Container/Store/` の `sql`。#270 の調査）ので、**実際に読む行は存在しない。**
 
 - **E2E** : `RT-137.1`（登録の要求）/ `RT-137.2`（認証の要求）/
   `RT-137.3`（壊れた入力を封筒に入れて 200 で返す）/ `RT-137.4`（challenge を使い回していない）
@@ -2890,7 +2926,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実�
 | `UserStoreType` | 引かない | 引く | **差** |
 |---|---|---|---|
 | `mem` | 0.22 ms（p50 0.20） | 0.29 ms（p50 0.28） | **＋0.07 ms** |
-| `sql`（`store/` 1434、19 行） | 0.22 ms（p50 0.20） | **2.10 ms**（p50 2.05 / p95 2.80 / 最大 7.86） | **＋1.9 ms** |
+| `sql`（`Container/Store/` 1434、19 行） | 0.22 ms（p50 0.20） | **2.10 ms**（p50 2.05 / p95 2.80 / 最大 7.86） | **＋1.9 ms** |
 
 **尺度の参考** : 同じ機械で `GET /.well-known/openid-configuration`（200。
 Discovery の JSON を組む）が **平均 0.96 ms**（p95 1.26）。
@@ -2992,7 +3028,7 @@ curl.exe --config preflight.cfg
 **製品の既定は空**（＝ `super_tanaka` / `tanaka`）。**接尾辞を与えるのは `test.ps1` だけ**である。
 
 > **上流（ID フェデレーションの IdP）には渡さない。**
-> 上流は `store/` のコンテナで**自分のストアを持つ**ので、分ける必要が無い。
+> 上流は `Container/E2E/` のコンテナで**自分のストアを持つ**ので、分ける必要が無い。
 > 渡すと「上流に居ない利用者」でサインインしようとして落ちる（`TestEnv.UpstreamUserName`）。
 
 > **DB を作り直さなくてよい。**
@@ -3063,7 +3099,7 @@ ORA-01400: ("SCOTT"."UserRoles"."RoleId")にはNULLは挿入できません。
 
 > **列だけでなく、表が増えることもある。**
 > **#151 の段階 2 で `SubjectIdentifier` を足した**（16 表 → **17 表**）。
-> **`store/`（E2E）は `2_DockerComposeDown.bat` → `1_DockerComposeUp.bat` で作り直せば済む。**
+> **`Container/Store/`（E2E）は `2_DockerComposeDown.bat` → `1_DockerComposeUp.bat` で作り直せば済む。**
 > **手動確認の DB（LocalServicesOnDocker）は、自分で `Create_UserStore.sql` を流し直すこと。**
 > 表が無いと、**サインイン（`sub` の記録）で落ちる。**
 
@@ -3076,9 +3112,12 @@ ORA-01400: ("SCOTT"."UserRoles"."RoleId")にはNULLは挿入できません。
 > | 管理者 | `daisuke...@...`（メアド全体） | **メアドの `@` より前** |
 >
 > **`CreateData` は「初期化済みなら何もしない」**ので、**作り直さない限り直らない。**
+>
+> **#294 で、テスト利用者のメアドのドメインも `@gmail.com` から `@example.com` に変えた**（実在するドメインを避けるため）。
+> **古い DB のテスト利用者は `@gmail.com` のまま**で、メアドでのサインイン（`SM-4.2`）などが落ちる。**同じく、DB を作り直す。**
 > **症状は「サインインに失敗しました（HTTP 200）」が全件**に出る
 > （実測 : `sql` で **339 件 失敗**）。**列が足りないときより分かりにくい。**
-> **`store/` は作り直すこと**（`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
+> **`Container/Store/` は作り直すこと**（`2_DockerComposeDown.bat` → `1_DockerComposeUp.bat`）。
 
 - 症状は **HTTP 500 が 67 件**（`42703: column "familyid" ... does not exist`）。
   **トークンが出ないので、関係の無いケースまで巻き添えで落ちる**（85 件 失敗）
@@ -3263,10 +3302,17 @@ Visual Studio（IIS Express）で起動する分には、構成ファイルの�
 OAuth2AuthorizationServerEndpointsRootURI
 OAuth2ClientEndpointsRootURI
 FcmOutboxDirectory
+MailOutboxDirectory
 ```
 
 `FcmOutboxDirectory` は、プッシュ通知の送信箱（テスト用）。サイトは FCM に送らず、ここにファイルを書く。
 テストは `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` で場所を受け取り、認証デバイスの代わりに読む（CIBA の `EX-8`）。
+
+`MailOutboxDirectory` は、メールの送信箱（テスト用。#294）。**`IsDebug` のとき**、サイトはメールを JSON ファイル
+（`destination` / `subject` / `body`）としてここへ書く。テストは `MPAS_CORE_MAIL_OUTBOX` / `MPAS_NETFX_MAIL_OUTBOX` で
+場所を受け取り（`Result/mail/core`・`…/netfx`。起動のたびに空にする）、**メールでしか届かない値**
+（メアドの確認・パスワードのリセットのリンク、2FA のコード）を読む（`MailOutbox`。`RT-294.26`〜`.29`・`.34`）。
+**渡されていなければ、それを使うテストは Skip する**（起動済みのサイトを叩くとき）。
 
 Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization` が `ON` のとき
 **設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。
@@ -3294,7 +3340,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer / CIBA） | `Tests/Extended/` |
 | `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/Issues/` |
 | `RT-C<n>.n` | **公開の Issue を持たない項目**の回帰（`RT-C10.1` なら `ANALYSIS-IdP.md` の C-10） | `Tests/Issues/` |
-| `FA-n.n` | FAPI（クライアント登録 ＝ `oauth2_oidc_mode` ごとに通る経路） | `Tests/Fapi/` |
+| `FA-n.n` | FAPI（クライアント登録 ＝ `client_mode` ごとに通る経路） | `Tests/Fapi/` |
 | `21-n.n` | OAuth 2.1（許されない経路の抑止） | `Tests/OAuth21/` |
 | `SA-n.n` | **SAML2**（Web Browser SSO。#275） | `Tests/Saml/` |
 | `CN-n.n` | **コンテナ配備**（疎通と配備固有。#284） | `Tests/Container/` |
@@ -3377,7 +3423,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 > | **メタデータの URL**を届かない口に | **8/8 通る**（ログに `The SAML2 metadata could not be read.`） |
 > | **メタデータと鍵の両方**を壊す | **`SA-6.1` / `SA-6.2` / `SA-6.4` が落ちる**（`SA-6.3` は署名に依存しないので通る） |
 
-> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `3_PublishUpstream.ps1` → `docker compose up -d --build`）。
+> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `0_PublishIdP.ps1` → `docker compose up -d --build`）。
 > **実測（Open棟梁 #603 / #604 の取り込み。2026/10/12）** : **複製だけを更新して回すと 20 件が落ちた** — **`SigAlg` の扱い**（`SA-1.1` / `SA-1.3` / `RT-246.4` / `RT-246.7` / `SA-6.*`）と、**自己テストの `aud` の確認**（`RT-246.1` / `RT-246.6` / `RT-232.9`）である。
 > **どちらも「確認するようになった」ことによる失敗**であり、緩む方向ではない。
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
@@ -3439,7 +3485,7 @@ TC が倒れている状態の EX は、拡張の問題なのか土台の問題�
 ```
 
 > **原本を作り直すときは、IdP の 3 コンテナも起こしておくこと**
-> （`store\1_DockerComposeUp.bat`。**アプリを直したなら `docker compose up -d --build`**）。
+> （`Container\E2E\1_DockerComposeUp.bat`。**アプリを直したなら `docker compose up -d --build`**）。
 > **止めたまま作り直すと、`CN-*` と `RT-140.4` 以降が原本から消える** —
 > **通しで Skip されたケースは記録が出ないので、載らない**（上の `Skip` の話と同じ）。
 >
@@ -3571,7 +3617,7 @@ cd root
 | `RT-140.7` | 連携の認可応答にも **`iss`** が付く（#252 が実経路で効いていること） |
 
 > **上流は、下流と別の RSA 鍵を使う**（#293 の段階 1）。
-> **`store/docker-compose.yml` の upstream が `*_Upstream.pfx` / `.cer` と
+> **`Container/E2E/docker-compose.yml` の upstream が `*_Upstream.pfx` / `.cer` と
 > `JwkSet_Upstream.json` に向けている**（**EC の 3 本は共有**）。
 >
 > | | 公開している RSA の `kid`（実測 2026/10/13） |
@@ -3588,7 +3634,7 @@ cd root
 > **鍵が同じだった頃は、この取り違えが通っていた。**
 >
 > **上流は (2)（下流が送る `AuthnRequest`）の署名も検証する**（#293 の段階 2）。
-> **`store/docker-compose.yml` の E2E クライアント 3 件に `jwk_rsa_publickey` を登録してある**
+> **`Container/E2E/docker-compose.yml` の E2E クライアント 3 件に `jwk_rsa_publickey` を登録してある**
 > （値は `*_Client.cer` の JWK）。
 >
 > **歯抜け（署名が検証されているか）** : **登録鍵を別の鍵に差し替える**と、
@@ -3645,8 +3691,8 @@ cd root
 **上流を先に建てておくこと。** 建っていなければ、**この 4 件（×2 ターゲット）だけが Skip される。**
 
 ```powershell
-cd store
-.\3_PublishUpstream.ps1
+cd Container\E2E
+.\0_PublishIdP.ps1
 docker compose up -d upstream
 ```
 
@@ -3654,7 +3700,7 @@ docker compose up -d upstream
 > **Skip の件数**（サマリに出る）と、**Skip の理由**で気付くこと。
 
 > **上流は「作り直さないと古いまま」である。** ここが一番踏みやすい。
-> **アプリを直したら、必ず `3_PublishUpstream.ps1` と `docker compose up -d --build upstream` を回す。**
+> **アプリを直したら、必ず `0_PublishIdP.ps1` と `docker compose up -d --build upstream` を回す。**
 >
 > **実測（#250 の段階 5）** : `FormPost.cshtml` を直した（#252）あと、**上流を作り直さずに**
 > `RT-140.7` を回して落ちた。**下流は新しく、上流だけが古い**という状態で、
@@ -3706,7 +3752,7 @@ docker compose up -d upstream
 **構成ファイルの値が、そのままサイトの向き先である。**
 **テストはその値を読んで上流を探す**ので、上書きすると、両者がずれたときに気付けなくなる。
 
-**上流側のクライアント登録は `store/docker-compose.yml` にある**（`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
+**上流側のクライアント登録は `Container/E2E/docker-compose.yml` にある**（`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
 **雛形の `IdFederation` クライアントは手動確認（VS）用**で、`/MultiPurposeAuthSite` 付きのまま残してある。
 
 **SAML2 の ID 連携は、同じクライアントに `redirect_uri_saml` を足して使う**（#286 の段階 2）。
@@ -3731,7 +3777,7 @@ docker compose up -d upstream
 **ビルドと通し（414 件）で「他を壊していないこと」までは確かめたが、
 経路そのものは動かしていない。**
 
-**上流のコンテナは #250 の段階 2〜3 で建った**（1 節「上流の IdP も `store/` で立てる」）。
+**上流のコンテナは #250 の段階 2〜3 で建った**（1 節「上流の IdP は `Container/E2E/` で立てる」）。
 **段階 4 で、下流の設定をそこへ向け、目視が net48 版・net10.0 版の両方で通った。**
 **段階 5 で E2E に入れた**（`RT-140.4` 〜 `RT-140.7`。5 節「ID フェデレーション」）。
 **上流を建て忘れると Skip される**ので、そこだけは人が見ること。
@@ -3741,8 +3787,8 @@ docker compose up -d upstream
 1. **上流を建てる。**
 
    ```powershell
-   cd store
-   .\3_PublishUpstream.ps1
+   cd Container\E2E
+   .\0_PublishIdP.ps1
    docker compose up -d upstream
    ```
 
@@ -3907,6 +3953,248 @@ The ID federation did not complete. (the error view was returned)
 
 **#258 で管理画面を net10.0 版へ移植したので、`AllTargets` で両系統を測っている。**
 
+#### 登録し直し・パスワードの失念・リセット（`RT-294.4`〜`.7`。#294）
+
+**`AccountController.SignUp.cs` のレビューで見つけた穴を、直した形で押さえる**（`SignupRecoveryTests`）。
+**どれも、それまで 1 度も踏んでいなかった経路である。**
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.4` | 確認待ちのメアドで登録し直しても、**既存の利用者が残り、新しい利用者は作られない**（画面は成功のときと同じ） | **古い利用者を消して、送られてきたパスワードで作り直していた** |
+| `RT-294.5` | パスワードの失念は、**居ないメアドでも、居るメアドと同じ確認画面**になる | **居なければ入力画面を出し直していた**（画面の違いで存在が分かった） |
+| `RT-294.6` | 利用者が居ないメアド検証・リセット（GET / POST の 4 か所）は、**500 にならずエラー画面**になる | **500** |
+| `RT-294.7` | リセット画面は、**code が合わなければエラー画面**で、**メアドを出さない** | **code を見ずにメアドを出していた** |
+| `RT-294.14` | **メールの送信に失敗しても**、サインアップ・パスワードの失念は**普段どおりの画面**になり、**サイトは落ちない**（両版） | **`async void` で送っていて、失敗が処理されない例外になった**（net10.0 版はプロセスが落ちた） |
+
+> **メールの中身は測れない**（`IsDebug` では送らずにデバッグ出力へ書くだけ）。
+> **そのため、画面と利用者の一覧（`/UsersAdmin`）で判定する。**
+> **同じ利用者へのメールの間隔**（`MailResendIntervalSeconds`）**も、送ったかどうかを画面に出さない作りなので、E2E では測れない。**
+>
+> **`RT-294.14` は、送信の失敗を認証サイトに起こさせる**（#294）。
+> **`IsDebug` のとき、宛先が `@e2e-mail-failure.invalid`（`CmnEmail.FailureDomainForTest`。RFC 2606 の `.invalid`）なら、送信を例外にする。**
+> **本番（`IsDebug=false`）では効かない。** 失敗は OPERATION ログに「could not be sent」として残る（E2E では読まない）。
+
+#### 2 要素認証（`RT-294.8`〜`.13`。#294）
+
+**`AccountController.TwoFactor.cs` のレビューで見つけた穴を、直した形で押さえる**（`TwoFactorTests`）。
+**2FA の画面は、それまで 1 度も通していなかった。**
+**TOTP（認証アプリ）は net10.0 版にしかない**ので、TOTP を使うケースは `CoreOnly` である。
+**認証アプリの役は、テストが RFC 6238 で計算して務める**（共有鍵は登録画面の `otpauth://` から取る）。
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.8` | TOTP でサインインすると **`auth_time` と OP のセッションの Cookie が書かれ**、**1 回間違えても戻り先へ戻る** | **セッションを初期化していなかった**／**再表示で戻り先を失った** |
+| `RT-294.9` | 回復コードでサインインしても同じ | **同上**。**mem ストアでは 500**（`CmnUserStore.UpdateTotpToken` の `break` 抜け） |
+| `RT-294.10` | 2FA の途中でなければ、TOTP・回復コードの画面は**エラー画面** | **誰でも開けた** |
+| `RT-294.11` | TOTP を続けて間違えると、**ロックアウトの画面**（404 にならない） | **404**（`Lockout` のアクションが無い） |
+| `RT-294.12` | 画面に出していない手段を選ぶと、**送らずに選び直し** | **知らない値は TOTP として扱っていた** |
+| `RT-294.13` | コードの 2FA（Email）で間違えると**文言が出て**、**ブラウザ記憶は既定で入っていない**（両版） | **net10.0 版は文言が出なかった**／**両版ともブラウザ記憶が既定で入っていた** |
+
+> **プッシュ承認（MobileApp）は測れない**（認証デバイスが要る）。
+
+#### 認可エンドポイント（`RT-294.15`〜`.22`。#294）
+
+**`AccountController.Authorize.cs` のレビューで見つけた穴を、直した形で押さえる**（`AuthorizeReviewTests`。両版）。
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.15` | `/device_verify` は、**AntiForgery トークンが無ければ承認しない**（機器は `authorization_pending` のまま） | **承認された**（トークンを検証していなかった） |
+| `RT-294.16` | **同意の記録が無い Hybrid** は、`prompt=none` なら **`consent_required`**（フラグメント）、無ければ**同意画面** | **同意を確かめずにトークンを発行した** |
+| `RT-294.17` | **`auth_time` の Cookie を平文に書き換えても**、`max_age` の再認証は飛ばせない | **飛ばせた**（平文の Cookie を信じていた） |
+| `RT-294.18` | **再認証の印の Cookie を平文で置いても**、`prompt=login` の再認証は飛ばせない | **飛ばせた**（有るか無いかしか見ていなかった） |
+| `RT-294.19` | Hybrid のエラーを `fragment.jwt` で求めると、**`iss` / `aud` / `exp` の入った JWT** で返る | **エラーは常に query の平文**。Implicit の JARM は `aud` / `exp` / `iss` を入れなかった |
+| `RT-294.20` | Hybrid に `response_mode=query` は使えない（**`invalid_request` がフラグメントで返る**） | **`error` が空のまま返った** |
+| `RT-294.21` | **Request Object（PAR）と違う `client_id`** を付けると、エラー画面になる | **確かめずに上書きした** |
+| `RT-294.22` | **同意画面のボタンを送らない POST** は、`invalid_request` を RP へ返す | **画面の値を組まずに画面を返した** |
+
+> **`TestClient_19` には、どのテストも「許可」を押さない**（同意の記録を残さない。#272 の段階 2）。
+>
+> **`RT-272.8` も変えた。** **再認証の印は、再認証を求めた要求に結び付けた**ので、
+> **再認証の後は同じ要求で戻ると認可コードが返り、別の要求（`state` が違う）の `prompt=login` は、また再認証になる。**
+> 以前は印がどの要求にも効いたので、別の要求で認可コードが返っていた。
+
+#### ID 連携の戻り先・外部ログイン（`RT-294.23`〜`.25`。#294）
+
+**`AccountController.*.cs` の全体のレビューで見つけた穴を、直した形で押さえる**（`AccountReviewTests`。両版）。
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.23` | OIDC の ID 連携でサインインすると、**連携を始めた画面の ReturnUrl へ戻る** | **常に Home へ戻した**（認可要求の途中で使うと、RP への認可が続かなかった） |
+| `RT-294.24` | SAML2 の ID 連携でも同じ | **同上** |
+| `RT-294.25` | **登録されていない外部ログインの provider** は、500 にならずサインイン画面へ戻す | **500**（net10.0 版） |
+
+> **`IdFederation.FederateAsync` / `Saml2Federation.FederateAsync` に ReturnUrl を渡せるようにした**（渡さなければ、従来どおり）。
+>
+> **測れていないもの。** 外部ログイン（Google など）の戻りの経路（結果を見る・クレームの入れ替え・name が無い場合）は、E2E では動かせない。
+> **同じ利用者を同時に初めて連携したときの直列化**（`Sts.UserCreationLock`）は、上流の新しい利用者を作れないので測っていない
+> （**以前の通しで SA-6.6 が落ちた形**は、これで起きなくなるはずである）。
+
+#### メールを使う流れ・失敗の口・自己テスト（`RT-294.26`〜`.40`。#294）
+
+**カバレッジ（`-Coverage`）で、`AccountController` の通っていない所を見て足した**（`AccountFlowTests`。両版）。
+**修正を押さえるケースではなく、通していなかった経路を通すケースである。**
+
+| | 確かめること | 通していなかった理由 |
+|---|---|---|
+| `RT-294.26` | サインアップ → **確認のメールのリンク**を踏むと、サインインできるようになる（確認の前はできない） | **リンクはメールでしか届かない** |
+| `RT-294.27` | パスワードの失念 → **リセットのメールのリンク**で、新しいパスワードにできる（古いものでは入れない）。正しい code なら画面にメアドが出る | **同上** |
+| `RT-294.28` | **確認待ちの利用者**は、パスワードが合っても違っても、サインインしない（画面にエラー） | **確認待ちの利用者でサインインするテストが無かった**（C-33） |
+| `RT-294.29` | コードの 2FA（Email）で、**メールのコード**を入れると、戻り先へ戻り、`auth_time` が書かれる | **コードはメールでしか届かない**（`RT-294.13` は間違いの経路だけ） |
+| `RT-294.30` | 外部ログインの戻りの口は、**プロバイダのエラー・Cookie 無し**を 500 にせず、サインインもしない | **外部プロバイダは E2E で動かせない**（失敗の口だけは叩ける） |
+| `RT-294.31` | ID 連携の受け口（OIDC の Redirect エンドポイント・SAML2 の ACS）は、**連携を始めていない要求**をエラー画面で断る | **失敗の経路を叩いていなかった** |
+| `RT-294.32` | **使われている利用者名**でサインアップすると、画面にエラーを出し、**作らない**（先の利用者のメアドも変わらない） | **利用者の作成が失敗する経路**（`AddErrors`）を通していなかった |
+| `RT-294.33` | メアドの確認・リセットは、**パラメタが無い・code が違う・確認の入力が合わない**と通さない（パスワードは変わらない） | **`RT-294.6` / `.7` は「利用者が居ない」経路だけ** |
+| `RT-294.34` | パスワードの失念を続けて送っても、**リセットのメールは 1 通だけ**（画面は同じ） | **画面は変えない**ので、**送信箱でしか数えられない**（C-31） |
+| `RT-294.35` | 2FA の途中でなければ、**コードの 2FA の口**（`SendCode` / `VerifyCode` の GET・POST、`TwoFactorPushStatus`。net10.0 版は TOTP・回復コードの POST も）を通さない | **`RT-294.10` は TOTP・回復コードの GET だけ** |
+| `RT-294.36` | 2FA のコードのメールが**送れなければ**、手段の選択の画面を出し直し、文言を出す | **送信の失敗の経路**（#214 の catch）を通していなかった |
+| `RT-294.37` | パスワードを続けて間違えると、**ロックアウトの画面**になり、正しいパスワードでも入れない（**確認済み・確認待ちとも**） | **`RT-294.11` は TOTP だけ**。確認待ちの経路（C-33）は数えていなかった |
+| `RT-294.38` | 自己テストの結果画面のボタン（UserInfo・リフレッシュ・照会・取り消し）が動き、**取り消したトークンは照会で無効** | **自己テストは結果画面までしか通していなかった** |
+| `RT-294.39` | 自己テストの受け口（認可コード・Implicit）は、**検証できない JARM をエラー画面で断る**（500 にしない） | **Implicit の受け口は 1 度も叩いていなかった**。**叩いたら 500 だった**（B-10。直した） |
+| `RT-294.40` | プッシュの 2FA（MobileApp）で、**端末が `/2fa_result` で承認すると、待っているブラウザのサインインが完了する** | **`RT-213.1` は `/2fa_result` の失敗の口だけ** |
+
+> **`RT-294.26`〜`.29` と `.34` は、メールの送信箱（4 節の `MailOutboxDirectory`）を使う。** `-Launch` でなければ Skip する。
+> **`RT-294.40` は、プッシュ通知の送信箱（`FcmOutboxDirectory`）を使い、テストが端末の役をする**（宛先のデバイス・トークンで探す）。
+>
+> **`RT-294.37` の上限は、`-Launch` では 20 回である**（`MaxFailedAccessAttemptsBeforeLockout`。共用の利用者でわざと間違えるケースがあるため）。
+> **確認待ちの利用者は、上限に達した次の要求でロックアウトの画面になる**（確認済みは、達した要求で）。
+> **テストは上限を環境変数・構成ファイルから読み、上限 ＋ 1 回まで送る。**
+> 最初は 20 回で打ち切っていて、確認待ちだけ「ロックアウトしない」ように見えた（**作りの不具合ではなかった**）。
+>
+> **`RT-294.30` の出口は、版で違う。** net10.0 版はサインイン画面へリダイレクトし、
+> net48 版は失敗の画面（`ExternalLoginFailure`）を出す。**どちらも「500 にせず、サインインしない」ので、両方を受け入れる。**
+
+#### `CmnEndpoints.*.cs` のレビューで見つけた不具合（`RT-294.41`〜`.59`。#294）
+
+**`CmnEndpoints.*.cs` のレビューで見つけ、直したものを押さえる**（`CmnEndpointsReviewTests`。両版）。
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.41` | normal の登録のクライアントは、**Device グラントでも refresh_token を受け取り**、それで更新できる | **作って保存するだけで、応答に入れていなかった** |
+| `RT-294.42` | DPoP で縛ったトークンを `/introspect` で照会すると、**`cnf.jkt` が証明の鍵の指紋**である | **`jkt` を返していなかった**（mTLS の `x5t#S256` だけ返していた） |
+| `RT-294.43` | **CIBA を `/ciba_authz` から `/token` まで `client_assertion`（private_key_jwt）で通せる** | **`/ciba_authz` は 500**（フォームに無い `client_id` で code を作っていた）、**`/token` は `client_assertion` を読まなかった** |
+| `RT-294.44` | CIBA の**発行していない `auth_req_id`** は `invalid_grant` | **内部の状態名（`not_found`）を error に入れていた** |
+| `RT-294.45` | **JWT Bearer の壊れた assertion**（JWT でない・`iss` が文字列でない・登録の無い `iss`）は 400 / 401 | **JWT でない値と、`iss` が文字列でない値で 500** |
+| `RT-294.46` | **scope を省いた**トークン要求（client_credentials / password / JWT Bearer）でもトークンが取れる | **500**（null の `Split`） |
+| `RT-294.47` | **CIBA の壊れた request**（payload が配列・`iss` がオブジェクト）は 400 | **500** |
+| `RT-294.48` | **他のクライアントが出した refresh_token** は、消費せずに断る（**持ち主はその後も更新できる**） | **消費してから断っていた**（持ち主が次に使うと、一族ごと失効した） |
+| `RT-294.49` | Discovery の **revoke / introspect の認証方法**が、トークン エンドポイントの一覧から `none` を除いたもの | **秘密の 2 つしか広告していなかった** |
+| `RT-294.50` | **client_credentials のトークンは、クライアントと同じ名前の利用者が居ても、その利用者に結び付かない**（`sub` はクライアント名。`/userinfo` は利用者のメアドを返さない） | **同じ名前の利用者の `sub` になった**（S3） |
+| `RT-294.51` | **fapi2 のクライアントが、PKCE と private_key_jwt を併用して認可コードを引き換えられる**（違う `code_verifier` では通らない） | **`code_verifier` が在ると `client_assertion` を無視した**（fapi2 は通らなかった） |
+| `RT-294.52` | **方法を明示したクライアントは PKCE だけでは引き換えられず、`none` のクライアントは PKCE だけで引き換えられる**（秘密では通らない） | **登録に関わらず PKCE だけで引き換えられた**（C-40） |
+| `RT-294.53` | **scope を省いた認可要求**でも code が返る | **500** |
+| `RT-294.54` | **client_assertion の `aud` に issuer を受ける**（配列は 500 にせず `invalid_client`） | **issuer は `invalid_client`、配列は 500** |
+| `RT-294.55` | **grant_types に `implicit` が無いクライアントの Hybrid** は、同意の前に `unauthorized_client` | **同意の後で `server_error`** |
+| `RT-294.56` | **poll の CIBA は、`client_notification_token` も `binding_message` も無い request で受け付ける** | **`invalid_request`** |
+| `RT-294.57` | **PAR の Request Object の `client_id` が、認証したクライアントと違えば `invalid_request_object`** | **受け付けて、別のクライアントの名義で預けた**（C-41） |
+| `RT-294.58` | **合わない `code_verifier` は `invalid_grant`**（PKCE だけ・`client_secret` ＋ PKCE とも。秘密が違えば `invalid_client`） | **`invalid_client`**（A-17） |
+| `RT-294.59` | **`/ros` の Request Object の `client_id` が、署名したクライアント（`iss`）と違えば預からない**（同じなら従来どおり） | **預けて、別のクライアントの名義になった**（C-46） |
+
+> **`client_registration` 専用トークンの `expires_in`**（以前は配備ぜんたいの期限を返していた）は、**`RT-307.5` に足した。**
+> **`response_type=id_token` を Implicit を閉じた配備で断る**ことは、**`RT-314.4`**（`-NoImplicit` で回す）。
+> **`FA-2.1` の PKCE だけの拒否は、`unauthorized_client` から `invalid_client` に変わった**
+> （**方法を明示した登録は、認証の段で断られる**。C-40）。
+> **`RT-294.50` / `.52` / `.55` / `.57` は種データの `TestClient_30`〜`_34` を使う**
+> （`.50` は**管理画面で同じ名前の利用者を作り、終わったら消す**）。
+> **`RT-294.43` は TestClient4_4**（種データ。fapi_ciba ＋ `private_key_jwt`。アサーションは ES256）を使い、
+> **プッシュ通知の送信箱を使う**ので、`-Launch` でなければ Skip する。
+>
+> **測れていないもの。** **Basic の照合で失敗を 2 回数えていた**こと（`GetBasicCredentials`）は、
+> 上限の手前の数を外から読めないので測っていない（**読んで直した**）。
+> **JWT Bearer の alg の名乗りの照合**（RS256 以外を名乗る assertion を断る）も、
+> 名乗りを変えると署名も合わなくなるので、E2E では区別できない。
+
+#### `ManageController.*.cs` のレビューで見つけた不具合（`RT-294.60`〜`.62`。#294）
+
+**管理画面（`ManageController.*.cs`）のレビューで見つけ、直したものを押さえる。**
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.60` | **認証アプリの登録画面を開いただけでは、TOTP は登録されない**（管理画面は登録済みと出さず、サインインの手段にも出ない）。**間違えて出し直しても同じ鍵**、正しいコードで登録される（net10.0 版。`TwoFactorTests`） | **開いただけで鍵を保存していた** |
+| `RT-294.61` | **いまと同じメアドへの変更は、文言付きで断られる**。**他の利用者のメアドは、新しいメアドと同じ確認の画面**になる（両版。`ManageUserAttributeTests`） | **利用者名と比べていた**。**どちらも何も言わずに出し直した**（使われているメアドが分かった） |
+| `RT-294.62` | **利用者名を変えると、WebAuthn の資格情報が付いて来て、元の名前には残らない**（net10.0 版。`ManageWebAuthnTests`） | **資格情報を移していなかった**（C-47） |
+
+> **`RT-294.62` は種データの利用者（`webauthn_tanaka`）の名前を変え、元の名前で利用者を作り直す**
+> （**メアドは別にする** — 変えた利用者が元のメアドを持ったままなので、種データでは作り直せない）。
+> **終わったら両方を消し**、**元の名前の利用者と資格情報は、次にサインイン画面を開いたときに種データが作り直す。**
+> **同じ利用者を使う `RT-277.3`・`UI` の描画のテストとは、同じコレクションに入れて並べない**（`ManageWebAuthnTests.WebAuthnUserCollection`）。
+>
+> **測れていないもの。** **パスワードの確認**（2FA を有効にした利用者が必ず失敗していた）は、
+> **既定の配備では確認しない**（`RequirePasswordInEditingUserNameAndEmail`）ので測っていない。
+> **外部ログインの結び付け・解除**（C-48、最後の手段の保護、他の利用者の結び付け）は、上流の外部ログインが要るので測っていない。**読んで直した。**
+
+#### `ManageController.*.cs` の 2 回目のレビューで見つけた不具合（`RT-294.63`〜`.65`。#294）
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.63` | **パスワードを確かめた直後は `max_age=2` で先へ進み、2FA の有効化（サインインし直すだけ）の直後は再認証を求める**（両版。`TwoFactorTests`） | **サインインし直すたびに `auth_time` を「いま」にしていた**（C-49） |
+| `RT-294.64` | **2FA の無効化は、パスワードが無い・間違いなら行わず、正しければ行う**。無効化のフォームにパスワードの入力欄が在る（両版。`TwoFactorTests`） | **セッションだけで無効にできた** |
+| `RT-294.65` | **同じブラウザで、利用者 A の後に B がサインインすると、B の登録画面には A と別の鍵が出る**。A の鍵のコードでは B は登録されない（net10.0 版。`TwoFactorTests`） | **前の利用者が見た鍵を出していた** |
+
+> **`RT-294.63` は秒単位の判定を待つ**（3 秒を 2 回。`RT-247.1` と同じ事情）。
+>
+> **測れていないもの。** **電話番号の削除・外部ログインの解除のパスワード**は、SMS・上流が要るので測っていない
+> （**2FA の無効化と同じ補助（`VerifyPasswordAsync`）を通る**）。
+> **メアドの変更の通知（変更前のメアドへも）と SecurityStamp の更新、宛先ごとの間隔、SMS の失敗、mem での値の戻し、
+> クレームの入れ替え（発行元ごと）、結び付けの照合、`client_id` の重複、アカウント記憶の引き継ぎ**も測っていない。**読んで直した。**
+
+#### `ManageController.*.cs` の 3 回目のレビューで見つけた不具合（`RT-294.66`〜`.69`。#294）
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.66` | **認証アプリを登録した後は、登録画面を開いても鍵を出さず、管理の画面へ戻す**（POST も受けない）（net10.0 版。`TwoFactorTests`） | **保存済みの鍵を何度でも出していた**（C-50） |
+| `RT-294.67` | **回復コードの再発行と認証アプリのリセットは、パスワードが無い・間違いなら行わず、正しければ行う**（net10.0 版。`TwoFactorTests`） | **セッションだけで行えた**（C-51） |
+| `RT-294.68` | **メアドの変更は、設定によらずパスワードを確かめる**（入力欄が在り、無い・間違いなら確認の画面へ進まない）（両版。`ManageUserAttributeTests`） | **既定の設定では確かめなかった**（C-51） |
+| `RT-294.69` | **パスキーの登録の段階 0 は、パスワードが無い・間違いなら options を返さない**（net10.0 版。`WebAuthnTests`） | **セッションだけで足せた**（C-51） |
+
+> **パスキーの登録の段階 0 は、パスワードを送るようになった**（`IdPClient.WebAuthnCreationOptionsAsync`。既定はテスト利用者のパスワード）。
+>
+> **測れていないもの。** **電話番号の追加のパスワード**は、SMS が要るので測っていない（**同じ補助を通る**）。**読んで直した。**
+
+#### `CmnUserStore.*.cs` のレビューで見つけた不具合（`RT-294.70`。#294）
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.70` | **管理画面で SystemAdmin を外すと、入り直した後は管理画面が開かない**（両版。`UsersAdminTests`） | **net10.0 版の mem では、外しても外れなかった**（C-52） |
+
+> **直す前の実装で、net10.0 版が落ちることを確かめた**（net48 版は、もともと通る）。
+>
+> **測れていないもの。** **外部ログインの照合の大文字小文字**（C-53）は SQL Server の照合順序で起きるので、mem で回す E2E では測れない。
+> **クレームの削除・一覧の揃え・回復コードの空入力・ロックアウトの終了日時・利用者の削除の後始末**も測っていない。**読んで直した。**
+
+#### `CmnUserStore.*.cs` の 2 回目のレビューで見つけた不具合（`RT-294.71`・`.72`。#294）
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.71` | **利用者を消したら、その人の refresh_token で更新できない**（`invalid_grant`）（両版。`RefreshTokenUserTests`） | **消された利用者の access_token を取り続けられた**（C-54） |
+| `RT-294.72` | **パスワードを変えたら、それより前の refresh_token は照会が `active=false`、更新は `invalid_grant`**。**照会に、預けたハッシュが出ない**（両版。`RefreshTokenUserTests`） | **パスワードを変えても使えた**（C-54） |
+
+> **確認を外した実装で、両版とも落ちることを確かめた。**
+>
+> **測れていないもの。** **Oracle の空のクレーム**・**SQL Server の外部ログインの照合**は、mem で回す E2E では測れない。**読んで直した。**
+
+#### `OAuth2EndpointController.*.cs` のレビューで見つけた不具合（`RT-294.73`〜`.80`。#294）
+
+| | 確かめること | 以前の振る舞い |
+|---|---|---|
+| `RT-294.73` | **認証デバイス用の 3 つの口は、RP のトークンを 401 で断り、認証デバイスのトークンは受ける**（両版） | **どの RP のトークンでも通った**（C-55） |
+| `RT-294.74` | **`/token` : `grant_type` が無ければ `invalid_request`、未知・大文字なら `unsupported_grant_type`**（両版） | **どちらも `invalid_grant`** |
+| `RT-294.75` | **`/device_authz` の `expires_in` / `interval` は JSON の数値**（両版） | 文字列 |
+| `RT-294.76` | **CIBA : `requested_expiry` が数値でなければ `invalid_request`、大きすぎれば上限で返す。応答の数値**（両版） | 検証・上限が無く、応答は文字列 |
+| `RT-294.77` | **`/device_authz` を `private_key_jwt` で通せる**（両版） | **401（`client_assertion` を読まなかった）** |
+| `RT-294.78` | **`/revoke`・`/introspect` : 資格情報も token も無ければ 401、資格情報だけなら 400**（両版） | 認証していなくても 400 |
+| `RT-294.79` | **`/par` : 同じ名前のパラメタが 2 回来たら `invalid_request`、1 回なら 201**（両版） | **カンマでつないで受けた** |
+| `RT-294.80` | **`/userinfo` : POST でも 200 とクレーム。openid の無いトークン（client_credentials）には 403 / `insufficient_scope`**（両版） | **GET だけ。openid 無しでも 200** |
+
+> **`RT-294.73` は、判定を外した実装で、net10.0 版が落ちることを確かめた。**
+>
+> **認証デバイスの役をするテストは、認証デバイスのクライアント（`AuthenticationDevice_Web`。PKCE）でトークンを取る**
+> （`Flows.RunAuthenticationDeviceFlowAsync`）。**それ以外のトークンは、もう通らない。**
+>
+> **`RT-307.16` の (6)（動的登録で `device_code` × `private_key_jwt` を断る）は外した**（受けるようにしたため）。
+>
+> **`/userinfo` が openid の無いトークンを断るようにした**ので、**`EX-4.3`（デバイス フロー）は要求に openid を含め、
+> `RT-294.38`（自己テストの結果画面のボタン）は自己テストの OIDC の経路（`AuthorizationCode_OIDC`）で通す**ようにした。
+
 #### 認可は、付与の前後で測る（`RT-257.9`）
 
 **門番（`Authorize`）とメニューの出し分けは、どちらも `SystemAdmin` を見る。**
@@ -4012,6 +4300,30 @@ E2E で 2 件測っている。
 
 > **実測 2026/10/22（#311 の段階 4）** : **4 成功 / 失敗 0 / Skip 0**（`mem`。net48 版も 44302 で起動した）。
 > **鍵（`DPoPNonceSecret`）も渡している** — **渡さないとプロセスごとのランダムになる。**
+
+### Implicit を閉じた配備（`RT-314`）と `-NoImplicit`
+
+**通しは Implicit を開けて起動する**（廃止したフローの回帰を測るため。#220）。
+そのため、**閉じた配備の振る舞いは通しでは測れない。**
+`-NoImplicit` が、**`EnableImplicitGrantType` を false にしてサイトを起動する**（#314）。
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"
+```
+
+| | 測ること |
+|---|---|
+| **`RT-314.1`** | **Discovery が `token` を含む response_type を広告しない**（`code` / `code id_token` は広告する） |
+| **`RT-314.2`** | **`token` / `id_token token` / `code token` / `code id_token token` を `unsupported_response_type` で断り、access_token を返さない** |
+| **`RT-314.3`** | **`code id_token` は従来どおり通る**（閉じすぎていないこと） |
+
+- **`-Filter` と併せて使う。** **Implicit / Hybrid（`token` を含むもの）のテストは落ちる**
+- **既定の通しでは除外している**（`test.ps1` が `FullyQualifiedName!~ImplicitDisabledTests` を足す。`-DPoPNonce` と同じ事情）
+- そのため **この 3 件は `TESTCASES.md`（原本）に載らない。** **`-NoImplicit` の実行で `-UpdateTestCases` を付けないこと**
+
+> **実測 2026/10/24（#314）** : **6 成功 / 失敗 0 / Skip 0**（`mem`。net10.0 版・net48 版の両方）。
+> **直す前のコードでは測っていない**（`RT-314.2` の `code token` / `code id_token token` は、
+> 直す前は access_token を返していた — コードを読んで確かめた）。
 
 ### 有効期限（`RT-188`）と `-ShortLifetimes`
 

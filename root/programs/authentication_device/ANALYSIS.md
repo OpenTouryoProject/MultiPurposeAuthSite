@@ -270,8 +270,8 @@ authentication_device/
     2FA では、通知が届く瞬間に**認証サイトのウィンドウを操作している**ので、認証デバイスは必ず裏に回る。
     実測（2026-09-17、PWA を最小化せず他のウィンドウの裏に置いた状態）:
     `clients=1 / visibilityState=hidden / focused=false`。**CIBA も同じ配置なら同じになる。**
-17. **CIBA の自己テストは、宛先が `tanaka@gmail.com` に固定**（認証サイトの `HomeController.AssembleFAPICibaProfileStarterAsync`）。
-    認証デバイスも `tanaka@gmail.com` でサインインして端末を登録しておく。登録が無いと `/ciba_authz` が HTTP 500（例外の平文）を返し、
+17. **CIBA の自己テストは、宛先が `tanaka@example.com` に固定**（認証サイトの `HomeController.AssembleFAPICibaProfileStarterAsync`）。
+    認証デバイスも `tanaka@example.com` でサインインして端末を登録しておく。登録が無いと `/ciba_authz` が HTTP 500（例外の平文）を返し、
     自己テストは `JsonReaderException` で落ちる。ユーザ ストアが `mem` だと、認証サイトの再起動でユーザも端末の登録も消える。
 18. **web のサインインは、ブラウザに残った認証サイトのサインイン状態で、サインイン画面を出さずに前のユーザのまま通る可能性がある**（実測はしていない）。
     ユーザを切り替えるときは、先に認証サイトでサインアウトする。宛先と違うユーザで応答すると、`/ciba_result` は 400 を返す。

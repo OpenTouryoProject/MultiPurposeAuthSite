@@ -249,7 +249,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <returns>Task</returns>
         /// <remarks>
         /// **#231 で対応したとき、form_post だけ抜けていた**（#252）。
-        /// `iss` は `CmnEndpoints.BuildRedirectUrl`（URL を組む経路）で付けており、
+        /// `iss` は `OAuth2AndOIDCSpec.BuildRedirectUrl`（URL を組む経路。Open棟梁）で付けており、
         /// **form_post はそこを通らない**（`ViewData` を組んで `FormPost` を返す）。
         ///
         /// **エラー応答の form_post は、ここでは測っていない。**

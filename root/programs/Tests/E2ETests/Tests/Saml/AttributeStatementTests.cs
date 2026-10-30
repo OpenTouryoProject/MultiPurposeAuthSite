@@ -57,7 +57,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     ///
     /// **`Persistent`（PPID）の `NameID` を返す配備とも連携できる**ようになった（`SA-7.2`）。
     ///
-    /// **名前は `CommonLibrary` の `CmnSamlAttributes` が持つ**（出す側と読む側で同じものを使う）。
+    /// **名前は Open棟梁 の `SAML2Const` が持つ**（出す側と読む側（`SAML2Attributes`）で同じものを使う）。
     /// **ここでは、出てきた XML の名前を直に書いて測る**（製品側の定数を参照しない。
     /// **定数ごと変わってしまったら、テストが気付かない**ため）。
     /// </remarks>

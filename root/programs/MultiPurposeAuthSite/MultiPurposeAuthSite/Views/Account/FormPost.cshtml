@@ -18,6 +18,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
     //*  2026/09/30  玄人 幸道         認可応答の iss を出す（RFC 9207。#252）
+    //*  2026/10/28  玄人 幸道         error_description も送る（エラー応答も response_mode に従うようにした。#294）
     //**********************************************************************************
 *@
 @{
@@ -49,10 +50,14 @@
 {
         <input type="hidden" name="error" value="@ViewData["Error"]" />
 }
+@if (!string.IsNullOrEmpty((string)ViewData["ErrorDescription"]))
+{
+        <input type="hidden" name="error_description" value="@ViewData["ErrorDescription"]" />
+}
 @*
     **どの認可サーバからの応答かを示す**（RFC 9207。#252）。
 
-    **query / fragment は CmnEndpoints.BuildRedirectUrl が付けている。**
+    **query / fragment は OAuth2AndOIDCSpec.BuildRedirectUrl が付けている。**
     **form_post はそこを通らない**（ViewData を組んで、この View を返す）ため、
     **#231 で対応したつもりが、form_post だけ抜けていた。**
 
@@ -65,7 +70,7 @@
 *@
 @if (string.IsNullOrEmpty((string)ViewData["Response"]))
 {
-        <input type="hidden" name="iss" value="@MultiPurposeAuthSite.Co.Config.IssuerId" />
+        <input type="hidden" name="iss" value="@Touryo.Infrastructure.Framework.Authentication.CmnServerParams.IssuerId" />
 }
         <input type="hidden" name="state" value="@ViewData["State"]" />
     </form>

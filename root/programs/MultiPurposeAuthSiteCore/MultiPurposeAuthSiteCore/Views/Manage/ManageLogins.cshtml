@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/10/30  玄人 幸道         外部ログインの解除に、パスワードの入力欄を足した（#294）
     //**********************************************************************************
 *@
 
@@ -77,6 +78,10 @@
                                         <div>
                                             @Html.Hidden("loginProvider", account.LoginProvider)
                                             @Html.Hidden("providerKey", account.ProviderKey)
+                                            @if (ViewBag.HasPassword)
+                                            {
+                                                <input type="password" name="password" placeholder="@ManageViews.CurrentPasswordPlaceholder" autocomplete="current-password" />
+                                            }
                                             <input type="submit" class="btn btn-primary" value="@ManageViews.ManageLoginsRemoveButton" title="@string.Format(ManageViews.ManageLoginsRemoveButtonTitle, account.LoginProvider)" />
                                         </div>
                                     }

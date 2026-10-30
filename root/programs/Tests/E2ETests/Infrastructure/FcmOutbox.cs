@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/12  玄人 幸道         新規（認証デバイスの代わりに、プッシュ通知を受け取る）（#196）
+//*  2026/10/29  玄人 幸道         宛先（デバイス・トークン）で待つ WaitForTokenAsync を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -102,6 +103,41 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                         string value;
 
                         if (message.Data.TryGetValue(dataKey, out value) && value == dataValue)
+                        {
+                            return message;
+                        }
+                    }
+                }
+
+                if (limit < DateTime.UtcNow)
+                {
+                    return null;
+                }
+
+                await Task.Delay(200);
+            }
+        }
+
+        /// <summary>宛先（デバイス・トークン）が一致するプッシュ通知を待つ（届かなければ null）</summary>
+        /// <param name="target">テスト対象</param>
+        /// <param name="token">宛先のデバイス・トークン</param>
+        /// <param name="timeout">待つ時間</param>
+        /// <returns>Message</returns>
+        /// <remarks>**2FA のプッシュは、data に識別子が無い**（`code` だけ）ので、宛先で探す（#294）。</remarks>
+        public static async Task<Message> WaitForTokenAsync(
+            TargetInfo target, string token, TimeSpan timeout)
+        {
+            DateTime limit = DateTime.UtcNow + timeout;
+
+            while (true)
+            {
+                if (Directory.Exists(target.FcmOutbox))
+                {
+                    foreach (string path in Directory.GetFiles(target.FcmOutbox, "*.json"))
+                    {
+                        Message message = Read(path);
+
+                        if (message.Token == token)
                         {
                             return message;
                         }

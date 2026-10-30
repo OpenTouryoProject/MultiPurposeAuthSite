@@ -75,7 +75,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // エラー発生時
                         // このカバレージを通過する場合、
                         // おそらく起動した画面のパスが間違っている。
-                        Console.WriteLine("このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。");
+                        Console.WriteLine(Resources.Diagnostics.ErrorScreenPathWrong);
                         Console.WriteLine(ex.Message);
                     }
                 }

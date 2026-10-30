@@ -31,10 +31,9 @@
 //*  2026/09/12  玄人 幸道         新規（プッシュ通知を送信箱で受け、認証デバイスの返答をテストが送る）（#196）
 //*  2026/09/13  玄人 幸道         EX-8.3（返答の及ぶ範囲）・EX-8.4（別の利用者は承認できない）を追加
 //*  2026/09/16  玄人 幸道         EX-8.4 の Skip を解消（2 人目の利用者でサインインできるようにした）
-//*  2026/09/22  玄人 幸道         補助処理を internal にして、FA-5（#224）からも使う
 //*  2026/09/25  玄人 幸道         認証要求を request で送り、クライアント認証を添えるようにした（#234）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
-//*  2026/10/03  玄人 幸道         コレクションの意味を「既定の利用者の行を書く」に広げた（#260）
+//*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
 //**********************************************************************************
 
 using System;
@@ -108,7 +107,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
             TestReport r, IdPClient client)
         {
             // 認証デバイスは、サインインして得たユーザのトークンで、自分の宛先（device_token）を登録する。
-            JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+            //  **認証デバイスのクライアントでトークンを取る**（#294。この口は、それ以外のクライアントのトークンを断る）。
+            JsonResponse token = await Flows.RunAuthenticationDeviceFlowAsync(client);
 
             Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: ユーザの access_token が返ること");
 
@@ -437,7 +437,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 //   ここで要るのはアクセス トークンだけで、端末の登録は要らない。
                 using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.SecondUserName(targetKey)))
                 {
-                    JsonResponse otherToken = await Flows.RunAuthorizationCodeFlowAsync(other);
+                    //  **認証デバイスのクライアントでトークンを取る**（#294。この口は、それ以外のクライアントのトークンを断る）。
+                    JsonResponse otherToken = await Flows.RunAuthenticationDeviceFlowAsync(other);
 
                     Assert.False(string.IsNullOrEmpty(otherToken.AccessToken),
                         "前提: 別の利用者の access_token が返ること");

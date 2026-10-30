@@ -25,18 +25,11 @@
 //*  2020/11/12  西野 大介         redirect_uri、ROへの対策漏れ。
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
-//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         require_pkce のクライアントを試す口を追加（#221）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
-//*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
-//*  2026/09/25  玄人 幸道         CIBA の自己テストの結果文字列を net10.0 版に揃えた
 //*  2026/09/27  玄人 幸道         自己テストに RP-Initiated Logout の口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストに PAR（/par）経路を追加（#246）
-//*  2026/09/28  玄人 幸道         組み立てを SelfTestClient へ寄せた（#246）
-//*  2026/09/28  玄人 幸道         CIBA の結果を画面に出し、interval に従わせた（#246 の 3-a / 3-b）
-//*  2026/09/28  玄人 幸道         Device AuthZ の結果も画面に出し、interval に従わせた（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         Device AuthZ の verification_uri のリンクが二重になっていたのを修正（#246）
-//*  2026/09/28  玄人 幸道         SAML2 の Post & Redirect Binding を追加（#246 の項目 2）
 //*  2026/09/29  玄人 幸道         OIDC ボタンの prompt=none を、画面の選択で上書きできるようにした（#247）
 //*  2026/09/29  玄人 幸道         FAPI1 PKCE のボタンが S256 の値を plain と宣言していた（#245）
 //*  2026/10/01  玄人 幸道         自己テストの宛先を、メアドではなく利用者名にした（#151 の段階 3）
@@ -345,10 +338,10 @@ namespace MultiPurposeAuthSite.Controllers
         {
             switch (this.NameIdFormat)
             {
-                case "emailAddress":
+                case Const.NameIdFormatEmailAddress:
                     return SAML2Enum.NameIDFormat.EmailAddress;
 
-                case "persistent":
+                case Const.NameIdFormatPersistent:
                     return SAML2Enum.NameIDFormat.Persistent;
 
                 default:
@@ -406,7 +399,7 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.StandardScopes, this.State);
+                    this.ClientId, response_type, Const.SelfTestScopes, this.State);
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
@@ -446,7 +439,7 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.StandardScopes,
+                    this.ClientId, response_type, Const.SelfTestScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
 
@@ -748,17 +741,17 @@ namespace MultiPurposeAuthSite.Controllers
                     else if (model.ResponseMode.ToLower().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit())
                     {
-                        this.ResponseMode = "query.jwt";
+                        this.ResponseMode = Const.ResponseModeQueryJwt;
                     }
                     else if (model.ResponseMode.ToLower().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                     {
-                        this.ResponseMode = "fragment.jwt";
+                        this.ResponseMode = Const.ResponseModeFragmentJwt;
                     }
                     else if (model.ResponseMode.ToLower().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                     {
-                        this.ResponseMode = "form_post.jwt";
+                        this.ResponseMode = Const.ResponseModeFormPostJwt;
                     }
                     else
                     {
@@ -1435,7 +1428,7 @@ namespace MultiPurposeAuthSite.Controllers
             string response = await Helper.GetInstance()
                 .ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                    client_id, client_secret, Config.AdministratorUID, Config.AdministratorPWD, Const.StandardScopes);
+                    client_id, client_secret, Config.AdministratorUID, Config.AdministratorPWD, Const.SelfTestScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
@@ -1461,7 +1454,7 @@ namespace MultiPurposeAuthSite.Controllers
             string response = await Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                    client_id, client_secret, Const.StandardScopes);
+                    client_id, client_secret, Const.SelfTestScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
@@ -1484,7 +1477,7 @@ namespace MultiPurposeAuthSite.Controllers
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
                 SelfTestClient.CreateClientAssertion(
-                    iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes));
+                    iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.SelfTestScopes));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];

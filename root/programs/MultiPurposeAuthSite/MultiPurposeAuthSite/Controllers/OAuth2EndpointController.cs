@@ -47,27 +47,17 @@
 //*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //*  2026/09/11  玄人 幸道         /revoke /introspect を RFC 7009 / 7662 に合わせて修正（#200）
 //*  2026/09/11  玄人 幸道         /token のエラー応答を 400 / 401 で返す（#196）
-//*  2026/09/11  玄人 幸道         /userinfo のエラー応答を 401 ＋ WWW-Authenticate: Bearer で返す（#196）
 //*  2026/09/11  玄人 幸道         /revoke のエラー応答を 400 / 401 で返す。/token と共用するエラー応答を共通の region へ（#196）
-//*  2026/09/11  玄人 幸道         /introspect のエラー応答を 400 / 401 で返す（#196）
-//*  2026/09/11  玄人 幸道         /device_authz のエラー応答を 400 / 401 で返す（#196）
-//*  2026/09/11  玄人 幸道         /ciba_authz のエラー応答を 400 / 401 で返し、ユーザ不明を unknown_user_id に（#196）
-//*  2026/09/12  玄人 幸道         /ciba_result・/SetDeviceToken の失敗を 400 / 401 で返す（本文の NG は変えない）（#196）
-//*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
 //*  2026/09/13  玄人 幸道         CIBAの返答に所有者確認を追加。メモリ ストアの取り違えも修正
 //*  2026/09/16  玄人 幸道         /ciba_authz : 端末未登録・FCM送信失敗を JSON のエラー応答にする（#210）
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）を追加（#216）
-//*  2026/09/17  玄人 幸道         /ciba_authz : プッシュ通知の送信失敗の原因を、ACCESSログに残す（#210）
 //*  2026/09/17  玄人 幸道         トークン応答に Cache-Control: no-store / Pragma: no-cache を付ける（#218）
-//*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
-//*  2026/09/17  玄人 幸道         /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御を付ける（#218）
 //*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
 //*  2026/09/23  玄人 幸道         証明書に紐づくトークン（cnf）を、提示された証明書と照合する
 //*  2026/09/24  玄人 幸道         /ros の応答に有効期限（exp）を入れ、CIBA では使い終わった Request Object を消す（#188）
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）の /par を追加（#229）
 //*  2026/09/24  玄人 幸道         /ciba_authz で request を直接受け取る（CIBA Core 7.1.1。#233）
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
-//*  2026/09/25  玄人 幸道         /ros の処理を CommonLibrary へ移した（#235）
 //*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
 //*  2026/09/25  玄人 幸道         client_assertion を読む（グラント用の assertion とは別に持つ）（#238）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials と /revoke・/introspect で非対称の認証を受ける（#239）
@@ -77,51 +67,35 @@
 //*  2026/10/14  玄人 幸道         /samlmetadata の組み立てを CmnSamlMetadata へ寄せた（#292 の段階 3）
 //*  2026/10/16  玄人 幸道         /jwkcerts を覚えて返す（Cache-Control / ETag / 304）（#303）
 //*  2026/10/21  玄人 幸道         /token で DPoP の証明を受け取る（#311 の段階 1）
-//*  2026/10/21  玄人 幸道         保護されたリソースで DPoP の証明を照合する（#311 の段階 2）
-//*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/25  玄人 幸道         エラー応答（OAuth2Error / NGResult / /userinfo）を OPERATION に記録する（障害対応のため。#294）
+//*  2026/10/29  玄人 幸道         CIBA を client_assertion（private_key_jwt）で通す（/ciba_authz の client_id・/token。#294）
+//*  2026/10/30  玄人 幸道         partial に分割（Token / UserInfo / Revocation / DeviceAuthZ / Ciba / RequestObject / Metadata / Push。#294）
+//*  2026/10/30  玄人 幸道         認証デバイス用の口を、認証デバイスのクライアントに発行したトークンに限る判定を追加（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Util;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
-using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
 
 using System;
-using System.IO;
-using System.Xml;
-using System.Text;
 using System.Linq;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Security.Claims;
-using System.Security.Principal;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
 
 using System.Web;
 using System.Web.Http;
-using System.Web.Http.Cors;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Formatting;
 using System.Net.Http.Headers;   // ETag / Cache-Control（#303）
 
 using Microsoft.AspNet.Identity.Owin;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
-
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Framework.Presentation;
-using Touryo.Infrastructure.Public.IO;
-using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -138,7 +112,7 @@ namespace MultiPurposeAuthSite.Controllers
     //  **付けていない口は CORS 無し**（ブラウザから叩く口ではない）。
     //    /revoke /introspect /device_authz /ciba_authz /par /ros
     [MyBaseAsyncApiController(httpAuthHeader: EnumHttpAuthHeader.None)] // 認証無し（自前）
-    public class OAuth2EndpointController : ApiController
+    public partial class OAuth2EndpointController : ApiController
     {
         #region constructor
 
@@ -169,1409 +143,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region /token
-
-        /// <summary>
-        /// Tokenエンドポイント
-        /// POST: /token
-        /// </summary>
-        /// <param name="formData">FormDataCollection</param>
-        /// <returns>成功は 200、エラーは 400 / 401（RFC 6749 5.1 / 5.2）（#196）</returns>
-        [HttpPost]
-        [MpasBrowserApiCors]   // SPA（public クライアント ＋ PKCE）が叩く
-        public IHttpActionResult OAuth2Token(FormDataCollection formData)
-        {
-            // **トークンを含む応答は、キャッシュに残してはならない**（RFC 6749 5.1 / 5.2 の MUST）（#218）。
-            //   成功・エラーのどちらの経路でも返すので、入口で付ける。
-            this.SetNoStore();
-
-            //// エラーにならないことを確認
-            //var v = formData["hoge"];
-
-            Dictionary<string, string> ret = null;
-            // grant_typeが未知・未指定、フォームデータ無しの経路でも使うので初期化する（#185）。
-            Dictionary<string, string> err = new Dictionary<string, string>();
-
-            if (formData != null)
-            {
-                #region credentials
-
-                // client_id, client_secret
-
-                // client_secret_basic
-                if (!Token.CmnEndpoints.GetBasicCredentials(
-                        HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                        out string client_id, out string client_secret))
-                {
-                    // client_secret_post
-                    client_id = formData[OAuth2AndOIDCConst.client_id];
-                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
-                }
-
-                // **JWT アサーションは 2 種類ある。混ぜないこと（#238）。**
-                //
-                //   client_assertion（RFC 7523 §2.2）: **クライアント認証**。client_secret の代わり。
-                //   assertion        （RFC 7523 §2.1）: **グラントそのもの**。誰の認可かを表す。
-                //
-                //   両方を同時に送れる（グラントは assertion、認証は client_assertion）。
-                //   **この実装は従来どちらも assertion で受けていた**ので、
-                //   client_assertion を優先しつつ、無ければ assertion も読む（後方互換）。
-
-                // クライアント認証のアサーション
-                string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
-                    formData[Token.CmnEndpoints.ClientAssertion],
-                    formData[Token.CmnEndpoints.ClientAssertionType],
-                    formData[OAuth2AndOIDCConst.assertion]);
-
-                // グラントのアサーション（grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer）
-                string assertion = formData[OAuth2AndOIDCConst.assertion];
-
-                // クライアント証明書
-                X509Certificate2 x509 = Request.GetClientCertificate();
-                //if (x509 != null)
-                //{
-                //    //string thumbprint = x509.Thumbprint;
-                //    //string subject = x509.Subject;
-                //    //string subjectName = x509.SubjectName.Name;                     // Subjectと同じ
-                //    //string algFriendlyName = x509.SignatureAlgorithm.FriendlyName;　// sha256RSA, etc.
-                //}
-
-                #endregion
-
-
-                #region DPoP（#311 の段階 1）
-
-                //  **DPoP の証明**（RFC 9449 §4）。
-                //    **ヘッダで来る**（本文のパラメタではない）。
-                //    **無ければ従来どおり bearer** で発行する（既定の挙動を変えない）。
-                //    **検証は `CmnEndpoints` 側**（グラントの入口で、code を使う前に見る）。
-                //  **この口は Web API（`ApiController`）**なので、`Request.Headers` は
-                //    `HttpRequestHeaders` である（添字で引けない）。
-                //    **`Authorization` を読んでいる口と同じ流儀**で、`HttpContext` から引く。
-                string dPoPProof =
-                    HttpContext.Current.Request.Headers[Token.CmnDPoP.HttpHeader];
-
-                #endregion
-
-                #region grant_type
-
-                string grant_type = "";
-                grant_type = formData[OAuth2AndOIDCConst.grant_type];
-
-                if (!string.IsNullOrEmpty(grant_type))
-                {
-                    string scope = "";
-
-                    switch (grant_type.ToLower())
-                    {
-                        case OAuth2AndOIDCConst.AuthorizationCodeGrantType:
-                            string code = formData[OAuth2AndOIDCConst.code];
-                            string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
-                            string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
-
-                            if (Token.CmnEndpoints.GrantAuthorizationCodeCredentials(
-                                grant_type, client_id, client_secret, clientAssertion, x509,
-                                dPoPProof, code, code_verifier, redirect_uri, out ret, out err))
-                            {
-                                return this.Ok(ret);
-                            }
-                            break;
-
-                        case OAuth2AndOIDCConst.RefreshTokenGrantType:
-                            string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
-                            if (Token.CmnEndpoints.GrantRefreshTokenCredentials(
-                                grant_type, client_id, client_secret, clientAssertion,
-                                x509, dPoPProof, refresh_token, out ret, out err))
-                            {
-                                return this.Ok(ret);
-                            }
-                            break;
-
-                        case OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType:
-                            string username = formData["username"];
-                            string password = formData["password"];
-                            scope = formData[OAuth2AndOIDCConst.scope];
-                            if (Token.CmnEndpoints.GrantResourceOwnerCredentials(
-                                grant_type, client_id, client_secret, clientAssertion, x509,
-                                dPoPProof, username, password, scope, out ret, out err))
-                            {
-                                return this.Ok(ret);
-                            }
-                            break;
-
-                        case OAuth2AndOIDCConst.ClientCredentialsGrantType:
-                            scope = formData[OAuth2AndOIDCConst.scope];
-                            if (Token.CmnEndpoints.GrantClientCredentials(
-                                grant_type, client_id, client_secret, clientAssertion,
-                                x509, dPoPProof, scope, out ret, out err))
-                            {
-                                return this.Ok(ret);
-                            }
-                            break;
-
-                        case OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType:
-                            // トークン要求の scope を渡す（RFC 7521 4.1 / RFC 7523 2.1）（#218）
-                            scope = formData[OAuth2AndOIDCConst.scope];
-                            if (Token.CmnEndpoints.GrantJwtBearerTokenCredentials(
-                            grant_type, assertion, x509, dPoPProof, scope, out ret, out err))
-                            {
-                                return this.Ok(ret);
-                            }
-                            break;
-
-                        case OAuth2AndOIDCConst.DeviceAuthZGrantType:
-                            string device_code = formData[OAuth2AndOIDCConst.device_code];
-                            if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
-                                client_id, client_secret, x509, dPoPProof, device_code,
-                                out ret, out err))
-                            {
-                                return this.Ok(ret);
-                            }
-                            break;
-
-                        case OAuth2AndOIDCConst.CibaGrantType:
-                            string auth_req_id = formData[OAuth2AndOIDCConst.auth_req_id];
-                            if (Token.CmnEndpoints.GrantCiba(grant_type, 
-                                client_id, client_secret, x509,
-                                dPoPProof, auth_req_id, out ret, out err))
-                            {
-                                return this.Ok(ret);
-                            }
-                            break;
-
-                        default:
-                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
-                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid grant_type.");
-                            break;
-                    }
-                }
-                else
-                {
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
-                    err.Add(OAuth2AndOIDCConst.error_description, "grant_type is null or empty.");
-                }
-
-                #endregion
-            }
-            else
-            {
-                // FormDataCollection無し
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
-            }
-
-            return this.OAuth2Error(err, "token"); // 失敗（RFC 6749 5.2 : 400 / 401）（#196）
-        }
-
-        #endregion
-
-
-        #region DPoP の照合（#311 の段階 2）
-
-        /// <summary>DPoP に縛られたトークンなら、証明を照合する（#311 の段階 2）</summary>
-        /// <param name="identity">検証済みの ClaimsIdentity</param>
-        /// <param name="accessToken">提示された access_token</param>
-        /// <param name="isDPoP">**`DPoP` スキームで来たか**</param>
-        /// <param name="dpopError">out : error（**`use_dpop_nonce` のときだけ**。#311 の段階 4）</param>
-        /// <returns>使ってよければ true</returns>
-        /// <remarks>
-        /// **縛っていないトークン（`cnf.jkt` 無し）は、これまでどおり通る**
-        /// （**DPoP を知らないクライアントに影響しない**）。
-        ///
-        /// **`Bearer` スキームで来た要求には、証明を渡さない** ＝
-        /// **縛られたトークンなら断る**（RFC 9449 §7.1）。
-        /// **縛りを「使う側の出し方」で外せてはいけない。**
-        ///
-        /// **`htu` は、要求のパスから設定の URL を引く**（`CmnDPoP.EndpointUriOf`。
-        /// **`Host` ヘッダは見ない**）。**`htm` は、実際のメソッド**である。
-        /// </remarks>
-        private bool VerifyDPoP(
-            ClaimsIdentity identity, string accessToken, bool isDPoP, out string dpopError)
-        {
-            return Token.CmnAccessToken.VerifyDPoPBinding(
-                identity, accessToken,
-                isDPoP ? HttpContext.Current.Request.Headers[Token.CmnDPoP.HttpHeader] : null,
-                HttpContext.Current.Request.HttpMethod,
-                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
-                out dpopError);
-        }
-
-        #endregion
-
-        #region /userinfo
-
-        /// <summary>
-        /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
-        /// GET: /userinfo
-        /// </summary>
-        /// <returns>成功は 200、エラーは 401 と WWW-Authenticate: Bearer（RFC 6750 3）（#196）</returns>
-        [HttpGet]
-        [MpasBrowserApiCors]   // ブラウザから読む口
-        public async Task<IHttpActionResult> GetUserClaims()
-        {
-            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
-            //   RFC は MUST としていないが、困る性質は /token と同じ。
-            this.SetNoStore();
-
-            // 戻り値（エラー）
-            Dictionary<string, string> err = new Dictionary<string, string>();
-
-            // クライアント認証
-            if (Token.CmnDPoP.GetToken(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                out string bearerToken, out bool isDPoP))
-            {
-                if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
-                {
-                    // **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 3）。
-                    //   紐づいていないトークン（cnf 無し）は、これまでどおり bearer として扱う。
-                    if (!Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
-                    {
-                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
-                        err.Add(OAuth2AndOIDCConst.error_description,
-                            "The access token is bound to a client certificate.");
-
-                        return this.UserInfoError(err);
-                    }
-
-                    //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
-                    //    （RFC 9449 §7.1。#311 の段階 2）。
-                    //    **縛っていないトークンは、これまでどおり通る。**
-                    if (!this.VerifyDPoP(identity, bearerToken, isDPoP, out string dpopError))
-                    {
-                        //  **nonce を貰い直させる断りは、区別して返す**
-                        //    （RFC 9449 §9。#311 の段階 4）。
-                        err.Add(OAuth2AndOIDCConst.error,
-                            dpopError ?? OAuth2AndOIDCConst.invalid_token);
-                        err.Add(OAuth2AndOIDCConst.error_description,
-                            (dpopError == Token.CmnDPoP.UseDPoPNonce)
-                                ? "A DPoP proof with a new nonce is required."
-                                : "The access token is bound to a DPoP key.");
-
-                        return this.UserInfoError(err);
-                    }
-
-                    // ClientIdの取り出し
-                    Claim ClientId = identity.Claims.Where(
-                        x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-                    ApplicationUser user =
-                        //CmnUserStore.FindByName(identity.Name);
-                        PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-
-                    // Client認証、Resource Owner認証、何れの場合も...
-                    string sub = identity.Name;
-
-                    Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
-                    userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, sub);
-
-                    // scope
-                    IEnumerable<Claim> scopes = identity.Claims.Where(
-                        x => x.Type == OAuth2AndOIDCConst.UrnScopesClaim);
-
-                    // scope値によって、返す値を変更する。
-                    foreach (Claim claim in scopes)
-                    {
-                        string scope = claim.Value;
-                        if (user != null)
-                        {
-                            switch (scope.ToLower())
-                            {
-                                #region OpenID Connect
-
-                                case OAuth2AndOIDCConst.Scope_Profile:
-                                    // **返す項目は設定で決まる**（#230。UserClaims）。
-                                    Sts.UserClaims.AddClaims(
-                                        userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Profile);
-                                    break;
-                                case OAuth2AndOIDCConst.Scope_Email:
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed);
-                                    break;
-                                case OAuth2AndOIDCConst.Scope_Phone:
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed);
-                                    break;
-                                case OAuth2AndOIDCConst.Scope_Address:
-                                    // **返す項目は設定で決まる**（#230。UserClaims）。
-                                    Sts.UserClaims.AddClaims(
-                                        userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Address);
-                                    break;
-
-                                #endregion
-
-                                #region Else
-
-                                case OAuth2AndOIDCConst.Scope_UserID:
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
-                                    break;
-                                case OAuth2AndOIDCConst.Scope_Roles:
-                                    userinfoClaimSet.Add(
-                                        OAuth2AndOIDCConst.Scope_Roles,
-                                        await UserManager.GetRolesAsync(user.Id));
-                                    break;
-
-                                #endregion
-                            }
-                        }
-                    }
-
-                    // claims
-                    if (claims != null)
-                    {
-                        foreach (KeyValuePair<string, JToken> item in claims)
-                        {
-                            if (item.Key == OAuth2AndOIDCConst.claims_userinfo)
-                            {
-                                // userinfoで追加する値
-                            }
-                            else if (item.Key == OAuth2AndOIDCConst.claims_id_token)
-                            {
-                                // ...
-                            }
-                        }
-                    }
-
-                    return this.Ok(userinfoClaimSet);
-
-                }
-                else
-                {
-                    // 無効なトークン（JWT でない、改竄・失効・期限切れなど）。
-                    // RFC 6750 3.1 : invalid_token（401）。以前は invalid_request（400 に当たる）だった（#196）。
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
-                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
-                }
-            }
-
-            // Bearer トークンが無い（Authorization ヘッダ無し、または他の方式）場合、err は空のまま。
-            // RFC 6750 3.1 : エラー情報を付けず、Bearer が要ることだけを示す（#196）。
-
-            return this.UserInfoError(err); // 失敗（RFC 6750 3 : 401 ＋ WWW-Authenticate）（#196）
-        }
-
-        /// <summary>/userinfo のエラー応答を作る（RFC 6750 3 / OIDC Core 5.3.3）</summary>
-        /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
-        /// <returns>401 と WWW-Authenticate: Bearer</returns>
-        /// <remarks>
-        /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
-        /// トークンが無かった場合は、本文を返さない（RFC 6750 3.1 : エラー情報を含めない）。
-        /// </remarks>
-        private IHttpActionResult UserInfoError(Dictionary<string, string> err)
-        {
-            HttpResponseMessage res = (err.Count == 0)
-                ? this.Request.CreateResponse(HttpStatusCode.Unauthorized)
-                : this.Request.CreateResponse(
-                    (HttpStatusCode)Token.CmnEndpoints.GetResourceErrorStatusCode(err), err);
-
-            //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
-            string scheme = Token.CmnEndpoints.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
-
-            res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
-                scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, "userinfo", err)));
-
-            //  **nonce を要求する配備では、新しい値を渡す**（§9）。
-            //    **これが無いと、クライアントは出し直せない。**
-            string nonce = Token.CmnDPoP.NonceForChallenge(scheme == Token.CmnDPoP.TokenType);
-
-            if (nonce != null)
-            {
-                res.Headers.Add(Token.CmnDPoP.NonceHeader, nonce);
-            }
-
-            return this.ResponseMessage(res);
-        }
-
-        #endregion
-
-        #region /revoke 
-
-        /// <summary>
-        /// AccessTokenとRefreshTokenの取り消し
-        /// POST: /revoke
-        /// </summary>
-        /// <param name="formData">
-        /// token
-        /// token_type_hint
-        /// </param>
-        /// <returns>成功（無効なトークンを含む）は 200、エラーは 400 / 401（RFC 7009 2.2 / 2.2.1）（#196）</returns>
-        [HttpPost]
-        public IHttpActionResult RevokeToken(FormDataCollection formData)
-        {
-            // 戻り値（エラー）
-            Dictionary<string, string> err = new Dictionary<string, string>();
-
-            if (formData != null)
-            {
-                // 変数
-                string token = formData[OAuth2AndOIDCConst.token];
-                string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
-
-                // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
-                if (!string.IsNullOrEmpty(token))
-                {
-                    // クライアント証明書
-                    X509Certificate2 x509 = Request.GetClientCertificate();
-
-                    // Credentials (client_id, client_secret)
-
-                    // client_secret_basic
-                    if (!Token.CmnEndpoints.GetBasicCredentials(
-                            HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                            out string client_id, out string client_secret))
-                    {
-                        // client_secret_post
-                        client_id = formData[OAuth2AndOIDCConst.client_id];
-                        client_secret = formData[OAuth2AndOIDCConst.client_secret];
-                    }
-
-                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
-                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
-                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
-                    string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
-                        formData[Token.CmnEndpoints.ClientAssertion],
-                        formData[Token.CmnEndpoints.ClientAssertionType],
-                        formData[OAuth2AndOIDCConst.assertion]);
-
-                    if (Token.CmnEndpoints.ClientAuthentication(
-                        client_id, client_secret, clientAssertion,
-                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
-                    {
-                        // 失効（#200）
-                        // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
-                        // ・無効なトークンはエラーにしない（RFC 7009 2.2）
-                        // ・成功は空の JSON（HTTP 200）で返し、両アプリで揃える
-                        err = Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
-
-                        if (err.Count == 0)
-                        {
-                            return this.Ok(err); // 成功（RFC 7009 2.2 : 200）
-                        }
-
-                        // 他のクライアントのトークン（invalid_grant）は、下でエラーとして返す（#196）。
-                    }
-                    else
-                    {
-                        // クライアント認証エラー（Credential不正
-                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
-                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
-                    }
-                }
-                else
-                {
-                    // token が無い
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                    err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
-                }
-            }
-            else
-            {
-                // FormDataCollection無し
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
-            }
-
-            return this.OAuth2Error(err, "revoke"); // 失敗（RFC 7009 2.2.1 : RFC 6749 5.2 のとおり 400 / 401）（#196）
-        }
-
-        #endregion
-
-        #region /introspect 
-
-        /// <summary>
-        /// AccessTokenとRefreshTokenのメタデータを返す。
-        /// POST: /introspect
-        /// </summary>
-        /// <param name="formData">
-        /// token
-        /// token_type_hint
-        /// </param>
-        /// <returns>問い合わせへの答え（active=false を含む）は 200、エラーは 400 / 401（RFC 7662 2.2 / 2.3）（#196）</returns>
-        [HttpPost]
-        public IHttpActionResult IntrospectToken(FormDataCollection formData)
-        {
-            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
-            //   RFC は MUST としていないが、困る性質は /token と同じ。
-            this.SetNoStore();
-
-            // 戻り値（エラー）
-            Dictionary<string, string> err = new Dictionary<string, string>();
-
-            if (formData != null)
-            {
-                // 変数
-                string token = formData[OAuth2AndOIDCConst.token];
-                string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
-
-                // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
-                if (!string.IsNullOrEmpty(token))
-                {
-                    // クライアント証明書
-                    X509Certificate2 x509 = Request.GetClientCertificate();
-
-                    // Credentials (client_id, client_secret)
-
-                    // client_secret_basic
-                    if (!Token.CmnEndpoints.GetBasicCredentials(
-                        HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                        out string client_id, out string client_secret))
-                    {
-                        // client_secret_post
-                        client_id = formData[OAuth2AndOIDCConst.client_id];
-                        client_secret = formData[OAuth2AndOIDCConst.client_secret];
-                    }
-
-                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
-                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
-                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
-                    string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
-                        formData[Token.CmnEndpoints.ClientAssertion],
-                        formData[Token.CmnEndpoints.ClientAssertionType],
-                        formData[OAuth2AndOIDCConst.assertion]);
-
-                    if (Token.CmnEndpoints.ClientAuthentication(
-                        client_id, client_secret, clientAssertion,
-                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
-                    {
-                        // 問い合わせ（#200）
-                        // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）
-                        // ・無効なトークン（存在しない・失効済み・期限切れ）は active=false で答える（RFC 7662 2.2）
-                        // ・active=false もエラーではなく、問い合わせへの正常な答えなので 200（RFC 7662 2.2）（#196）
-                        return this.Ok(Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint));
-                    }
-                    else
-                    {
-                        // クライアント認証エラー（Credential不正
-                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
-                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
-                    }
-                }
-                else
-                {
-                    // token が無い
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                    err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
-                }
-            }
-            else
-            {
-                // FormDataCollection無し
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
-            }
-
-            return this.OAuth2Error(err, "introspect"); // 失敗（RFC 7662 2.3 : RFC 6749 5.2 のとおり 400 / 401）（#196）
-        }
-
-        #endregion
-
-        #region /device
-
-        /// <summary>
-        /// Device AuthZの認可リクエストを受信
-        /// POST: /device_authz
-        /// </summary>
-        /// <param name="formData">FormDataCollection</param>
-        /// <returns>成功は 200、エラーは 400 / 401（RFC 8628 3.1 / RFC 6749 5.2）（#196）</returns>
-        [HttpPost]
-        public async Task<IHttpActionResult> DeviceAuthZAuthorize(FormDataCollection formData)
-        {
-            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
-            //   RFC は MUST としていないが、困る性質は /token と同じ。
-            this.SetNoStore();
-
-            string err = "";
-            string errDescription = "";
-
-            if (formData != null)
-            {
-                // client_id, client_secret
-
-                // client_secret_basic
-                if (!Token.CmnEndpoints.GetBasicCredentials(
-                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                    out string client_id, out string client_secret))
-                {
-                    // client_secret_post
-                    client_id = formData[OAuth2AndOIDCConst.client_id];
-                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
-                }
-
-                // クライアント認証（RFC 8628 3.1）（#193）
-                // パブリック クライアントは、client_idの確認のみ。
-                X509Certificate2 x509 = Request.GetClientCertificate();
-                if (!Token.CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
-                {
-                    // RFC 6749 5.2 : invalid_client は 401（#196）
-                    return this.OAuth2Error(new Dictionary<string, string>()
-                    {
-                        {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client},
-                        {OAuth2AndOIDCConst.error_description, "Invalid credential."}
-                    }, "device_authz");
-                }
-
-                // **登録種別で、このグラントを許すか**（normal と device だけ）。
-                //   利用者が user_code を承認した後で失敗させないよう、開始の時点で弾く。
-                //   トークン発行（CmnEndpoints.GrantDeviceAuthZ）でも同じ判定をしている。
-                if (!Token.CmnEndpoints.IsDeviceAuthZAllowed(client_id))
-                {
-                    return this.OAuth2Error(new Dictionary<string, string>()
-                    {
-                        {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client},
-                        {OAuth2AndOIDCConst.error_description,
-                            "This client is not allowed to use the device authorization grant."}
-                    }, "device_authz");
-                }
-
-                // scopeパラメタ
-                string scope = formData[OAuth2AndOIDCConst.scope];
-
-                // codeの生成は先送り
-                Dictionary<string, string> tempDic = new Dictionary<string, string>()
-                {
-                    {"client_id", client_id},
-                    {"scope", scope}
-                };
-
-                //string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(...);
-                string tempData = JsonConvert.SerializeObject(tempDic);
-
-                // authReqExp
-                int requested_expiry = Config.DeviceAuthZExpireTimeSpanFromSeconds;
-                long authReqExp = DateTimeOffset.Now.AddSeconds(
-                    Config.DeviceAuthZExpireTimeSpanFromSeconds).ToUnixTimeSeconds();
-
-                // 検証用エンドポイントの絶対URI
-                string verificationUri =
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.DeviceAuthZVerifyEndpoint;
-
-                // DeviceAuthZ情報をストア
-                string deviceCode;
-                string userCode;
-                Sts.DeviceAuthZProvider.Create(authReqExp, tempData, out deviceCode, out userCode);
-
-                // ココまでの結果をレスポンス（RFC 8628 3.2 : 200）
-                return this.Ok(new Dictionary<string, string>()
-                {
-                    {OAuth2AndOIDCConst.device_code, deviceCode},
-                    {OAuth2AndOIDCConst.user_code, userCode},
-                    // RFC 8628 3.2 : ユーザが辿れるURIを返す（#193）。
-                    {OAuth2AndOIDCConst.verification_uri, verificationUri},
-                    {OAuth2AndOIDCConst.verification_uri_complete, verificationUri + "?user_code=" + userCode},
-                    {OAuth2AndOIDCConst.expires_in, requested_expiry.ToString()},
-                    {OAuth2AndOIDCConst.PollingInterval, Config.DeviceAuthZPollingIntervalSeconds.ToString()}
-                });
-            }
-            else
-            {
-                // フォームデータ無し（#193）
-                err = OAuth2AndOIDCConst.invalid_request;
-                errDescription = "Form data is null.";
-            }
-
-            // エラー（RFC 6749 5.2 : 400）（#196）
-            return this.OAuth2Error(new Dictionary<string, string>()
-            {
-                {OAuth2AndOIDCConst.error, err},
-                {OAuth2AndOIDCConst.error_description, errDescription}
-            }, "device_authz");
-        }
-
-        // DeviceAuthZResponse画面 → HomeControllerに。
-        // DeviceAuthZVerify画面 → AccountControllerに。
-
-        #endregion
-
-        #region /ciba
-
-        /// <summary>
-        /// FAPI CIBAの認可リクエストを受信
-        /// POST: /ciba_authz
-        /// </summary>
-        /// <param name="formData">
-        /// request（CIBA Core 7.1.1）または request_uri（独自拡張。後方互換）
-        /// </param>
-        /// <returns>成功は 200、エラーは 400 / 401（CIBA Core 7.3 / 13）（#196）</returns>
-        [HttpPost]
-        public async Task<IHttpActionResult> CibaAuthorizeAsync(FormDataCollection formData)
-        {
-            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
-            //   RFC は MUST としていないが、困る性質は /token と同じ。
-            this.SetNoStore();
-
-            string err = "";
-            string errDescription = "";
-
-            if (formData != null)
-            {
-                // **CIBA Core 7.1.1 : 署名した認証要求を request で直接受け取る（#233）。**
-                //   request_uri（/ros に預ける形）は独自拡張で、CIBA Core には無い。
-                //   後方互換のため当面残す（両方あれば request を優先する）。
-                string request = formData[OAuth2AndOIDCConst.request];
-                string request_uri = formData[OAuth2AndOIDCConst.request_uri];
-
-                // **クライアント認証の資格情報を取り出す（CIBA Core 7.1 : MUST。#234 の段階 3）。**
-                //   /par・/token と同じ取り出し方。
-                // client_secret_basic
-                if (!Token.CmnEndpoints.GetBasicCredentials(
-                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                    out string client_id, out string client_secret))
-                {
-                    // client_secret_post
-                    client_id = formData[OAuth2AndOIDCConst.client_id];
-                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
-                }
-
-                // private_key_jwt / mTLS
-                string assertion = Token.CmnEndpoints.GetClientAssertion(
-                    formData[Token.CmnEndpoints.ClientAssertion],
-                    formData[Token.CmnEndpoints.ClientAssertionType],
-                    formData[OAuth2AndOIDCConst.assertion]);
-                X509Certificate2 x509 = Request.GetClientCertificate();
-
-                string authReqId = "";
-
-                if (!string.IsNullOrEmpty(request) || !string.IsNullOrEmpty(request_uri))
-                {
-                    // 受け取りと署名検証は、両アプリで同じ（CommonLibrary）。
-                    bool received = Token.CmnEndpoints.ReceiveCibaRequest(
-                        client_id, client_secret, assertion, x509,
-                        request, request_uri, out JObject jsonObj, out err, out errDescription);
-
-                    string scope = "";
-                    string client_notification_token = "";
-                    string binding_message = "";
-                    string user_code = "";
-                    string requested_expiry = "";
-                    string login_hint = "";
-
-                    if (!received)
-                    {
-                        // 受け取れなかった（err, errDescriptionは設定済み）。
-                    }
-                    else if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
-                        jsonObj, out string _, out scope,
-                        out client_notification_token, out binding_message,
-                        out user_code, out requested_expiry, out login_hint,
-                        out err, out errDescription))
-                    {
-                        // 検証成功
-
-                        // AccountControllerからの移行なので...。
-                        string name = Sts.Helper.GetInstance().GetClientName(client_id);
-
-                        // scopeパラメタ
-                        string[] scopes = (scope ?? "").Split(' ');
-
-                        // **login_hint から利用者を引く**（#151 の段階 4）。
-                        //   **identity.Name は「利用者名」として扱われる**
-                        //   （CmnAccessToken が、ここから改めて sub を作る）。
-                        //   **sub を入れてはいけない**（利用者 ID や PPID なので、引けなくなる）。
-                        //
-                        //   **ここでは利用者の解決だけに使う**（戻り値の sub は使わない）。
-                        ApplicationUser user = null;
-                        PPIDExtension.GetSubForOIDC(client_id, login_hint, out user);
-
-                        if (user != null)
-                        {
-                            // codeの生成
-                            string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                                new ClaimsIdentity(new GenericIdentity(user.UserName)),
-                                new NameValueCollection(),
-                                client_id, "", scopes, null, "");
-
-                            // requested_expiry → UnixTime化
-                            int _requested_expiry = Config.CibaExpireTimeSpanFromSeconds; // 初期値
-                            if (!string.IsNullOrEmpty(requested_expiry))                  // requested_expiry値
-                                int.TryParse(requested_expiry, out _requested_expiry);
-
-                            long authReqExp = DateTimeOffset.Now.AddSeconds(_requested_expiry).ToUnixTimeSeconds();
-
-                            // **承認する手段（認証デバイス）があるかを、送る前に確かめる（#210）。**
-                            //   以前は空の宛先のまま送信し、処理されない例外で HTTP 500 になっていた。
-                            //   ユーザは見つかっているので unknown_user_id ではなく access_denied を返す。
-                            //   Create の前に確かめ、保留中のレコードを作らない。
-                            if (!Sts.CibaProvider.DebugModeWithOutAD
-                                && string.IsNullOrEmpty(user.DeviceToken))
-                            {
-                                err = OAuth2AndOIDCConst.access_denied;
-                                errDescription = "The authentication device is not registered.";
-
-                                return this.OAuth2Error(new Dictionary<string, string>()
-                                {
-                                    {OAuth2AndOIDCConst.error, err},
-                                    {OAuth2AndOIDCConst.error_description, errDescription}
-                                }, null);
-                            }
-
-                            // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
-                            //   CIBA は認可エンドポイントを通らないので、ここで消す。
-                            //   request で直接受け取ったときは預けたものが無いので、消す対象も無い（#233）。
-                            if (!string.IsNullOrEmpty(request_uri))
-                            {
-                                Sts.RequestObjectProvider.Delete(
-                                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
-                            }
-
-                            // CIBA情報をストア
-                            // **誰宛ての要求かを記録する**（user は login_hint で解決した利用者）。
-                            Sts.CibaProvider.Create(
-                               client_notification_token,
-                               authReqExp, code, binding_message, user.Id, out authReqId);
-
-#pragma warning disable 162
-
-                            // プッシュ通知を、userに送信
-                            if (!Sts.CibaProvider.DebugModeWithOutAD)
-                            {
-                                // **送信の失敗を、処理されない例外にしない（#210）。**
-                                //   以前はここで例外が外に出て、HTTP 500 と JSON でない本文（開発モードでは例外の平文）を返していた。
-                                //   CIBA 情報は上の Create で保存済みなので、失敗しても期限切れまで残る。
-                                try
-                                {
-                                    string deviceToken = user.DeviceToken;
-
-                                    // - DeviceTokenを使用してプッシュ通知
-                                    string temp = await FcmService.GetInstance().SendAsync(
-                                        user.DeviceToken, "CIBA", "Allow / Deny",
-                                        new Dictionary<string, string>()
-                                        {
-                                            { OAuth2AndOIDCConst.auth_req_id, authReqId},
-                                            { OAuth2AndOIDCConst.binding_message, binding_message}
-                                        });
-                                }
-                                catch (Exception ex)
-                                {
-                                    // **原因は、記録に残す。** 例外を受け止めると、
-                                    //   これまで OnException が ACCESS ログに書いていた内容が失われるため。
-                                    Logging.MyDebugLogForEx(ex);
-
-                                    // 資格情報の誤り、宛先の拒否、通信障害など。
-                                    // **ここで返す。** 後続は成功のレスポンス（200 と auth_req_id）で、
-                                    // err を見ないため、設定するだけでは成功として返ってしまう。
-                                    err = OAuth2AndOIDCConst.server_error;
-                                    errDescription = "Failed to send the push notification.";
-
-                                    return this.OAuth2Error(new Dictionary<string, string>()
-                                    {
-                                        {OAuth2AndOIDCConst.error, err},
-                                        {OAuth2AndOIDCConst.error_description, errDescription}
-                                    }, null);
-                                }
-                            }
-                            else
-                            {
-                                // テストを通すため追加
-                                Sts.CibaProvider.ReceiveResult(authReqId, user.Id, true);
-                            }
-
-#pragma warning restore 162
-
-                            // ココまでの結果をレスポンス（CIBA Core 7.3 : 200）
-                            return this.Ok(new Dictionary<string, string>()
-                            {
-                                {OAuth2AndOIDCConst.auth_req_id, authReqId},
-                                {OAuth2AndOIDCConst.expires_in, _requested_expiry.ToString()},
-                                {OAuth2AndOIDCConst.PollingInterval, Config.CibaPollingIntervalSeconds.ToString()}
-                            });
-                        }
-                        else
-                        {
-                            // login_hint のユーザが見つからない（CIBA Core 13 : unknown_user_id）。
-                            // 以前は err / errDescription が空のまま返っていた（#196）。
-                            err = OAuth2AndOIDCConst.unknown_user_id;
-                            errDescription = "The user identified by login_hint was not found.";
-                        }
-                        // 以降で、下記を束ねる。
-                        // - プッシュ通知の応答結果
-                        // - Tokenリクエスト（polling）
-                    }
-                    else
-                    {
-                        // 検証失敗
-                        // err, errDescriptionは設定済み。
-                    }
-                }
-                else
-                {
-                    // 不正なRequest
-                    err = OAuth2AndOIDCConst.invalid_request;
-                    errDescription = "request or request_uri is required.";
-                }
-            }
-            else
-            {
-                // FormDataCollection無し
-                err = OAuth2AndOIDCConst.invalid_request;
-                errDescription = "Form data is null.";
-            }
-
-            // エラー（CIBA Core 13 : invalid_client は 401、それ以外は 400）（#196）
-            // **クライアント認証を行うようになったので、401 には WWW-Authenticate を付ける**
-            //   （Authorization ヘッダで認証を試みたクライアントには必須。RFC 6749 5.2。#234 の段階 3）。
-            return this.OAuth2Error(new Dictionary<string, string>()
-            {
-                {OAuth2AndOIDCConst.error, err},
-                {OAuth2AndOIDCConst.error_description, errDescription}
-            }, "ciba_authz");
-        }
-
-        /// <summary>
-        /// CIBAのプッッシュ結果を受信
-        /// POST: /ciba_result
-        /// </summary>
-        /// <param name="formData">
-        /// - auth_req_id
-        /// - result
-        /// </param>
-        /// <returns>
-        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
-        /// トークンの不備は 401（WWW-Authenticate: Bearer）、パラメタの不備は 400（#196）
-        /// </returns>
-        /// <remarks>
-        /// 認証デバイス（authentication_device）が、プッシュ通知を受けて「許可 / 拒否」を押したときに呼ぶ。
-        /// </remarks>
-        [HttpPost]
-        [MpasBrowserApiCors]   // 認証デバイスの web ビルド（PWA）が叩く
-        public IHttpActionResult CibaPushResult(FormDataCollection formData)
-        {
-            // クライアント認証（Bearer トークン）
-            if (!Token.CmnDPoP.GetToken(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                out string bearerToken, out bool isDPoP))
-            {
-                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
-                return this.NGResult(401, "ciba_result", null);
-            }
-
-            ApplicationUser user = null;
-
-            // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
-            //  **`out` の変数は、条件の前で宣言する**（#311 の段階 4）。
-            //    **`&&` で呼ばれないことが在る**ので、
-            //    **条件の中で宣言すると「代入されていない」ことになる。**
-            string dpopError = null;
-
-            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
-                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
-                //    （RFC 9449 §7.1。#311 の段階 2）。
-                && this.VerifyDPoP(identity, bearerToken, isDPoP, out dpopError))
-            {
-                // ClientIdの取り出し
-                Claim ClientId = identity.Claims.Where(
-                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-                user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-            }
-
-            if (user == null)
-            {
-                // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-                return this.NGResult(401, "ciba_result",
-                dpopError ?? OAuth2AndOIDCConst.invalid_token);
-            }
-
-            // 変数
-            string auth_req_id = (formData == null) ? null : (string)formData["auth_req_id"];
-            string temp = (formData == null) ? null : (string)formData["result"];
-
-            if (!string.IsNullOrEmpty(auth_req_id)
-                && bool.TryParse(temp, out bool result))
-            {
-                if (Sts.CibaProvider.ReceiveResult(auth_req_id, user.Id, result))
-                {
-                    return this.Ok("OK");
-                }
-
-                // **自分宛ての要求ではない（または、その要求が無い）。**
-                //   区別して返すと、auth_req_id の存在を推測させるので、同じ応答にする。
-                return this.NGResult(400, "ciba_result", null);
-            }
-
-            // パラメタの不備（#196 : 400）
-            return this.NGResult(400, "ciba_result", null);
-        }
-
-        #endregion
-
-        #region /jwks.json
-
-        /// <summary>
-        /// JWK Set documentを返すWebAPI
-        /// GET: /jwkcerts
-        /// </summary>
-        /// <returns>HttpResponseMessage</returns>
-        /// <remarks>
-        /// **覚えて返す**（#303。E-7）。**要求ごとにファイルを開いて読んでいた。**
-        /// **内容は鍵を入れ替えるまで変わらない**ので、
-        /// **ファイルの更新を見て、変わっていなければ覚えている分を返す**
-        /// （`Extensions/Sts/JwkSetDocument`）。
-        ///
-        /// **`Cache-Control` と `ETag` も付ける。**
-        /// **`JwkSetCacheMaxAgeSeconds` が 0（既定）なら `no-store`** ＝ 従来どおり。
-        /// **`If-None-Match` が一致すれば `304`**（本文を送らない）。
-        /// </remarks>
-        [HttpGet]
-        [MpasPublicDocsCors]   // jwkcerts（公開情報）
-        public HttpResponseMessage JwksUri()
-        {
-            string body = Sts.JwkSetDocument.Get(out string etag);
-            int maxAge = Sts.JwkSetDocument.MaxAgeSeconds;
-
-            EntityTagHeaderValue tag = new EntityTagHeaderValue(etag);
-
-            //  **同じものを持っている相手には、本文を送らない**（`304`）。
-            foreach (EntityTagHeaderValue candidate in this.Request.Headers.IfNoneMatch)
-            {
-                if (candidate.Tag == etag)
-                {
-                    HttpResponseMessage notModified =
-                        new HttpResponseMessage(HttpStatusCode.NotModified);
-
-                    notModified.Headers.ETag = tag;
-                    JwksUriCache(notModified, maxAge);
-
-                    return notModified;
-                }
-            }
-
-            HttpResponseMessage res = new HttpResponseMessage()
-            {
-                Content = new JsonContent(body)
-            };
-
-            res.Headers.ETag = tag;
-            JwksUriCache(res, maxAge);
-
-            return res;
-        }
-
-        /// <summary>`/jwkcerts` の `Cache-Control` を付ける（#303）</summary>
-        /// <param name="res">HttpResponseMessage</param>
-        /// <param name="maxAge">秒数（0 なら no-store）</param>
-        private static void JwksUriCache(HttpResponseMessage res, int maxAge)
-        {
-            res.Headers.CacheControl = (0 < maxAge)
-                ? new CacheControlHeaderValue()
-                {
-                    Public = true,
-                    MaxAge = TimeSpan.FromSeconds(maxAge)
-                }
-                : new CacheControlHeaderValue() { NoStore = true };
-        }
-
-        #endregion
-
-        #region /par (PAR : RFC 9126)
-
-        /// <summary>
-        /// 認可要求を先に預かり、request_uri を払い出す WebAPI（PAR。RFC 9126）（#229）
-        /// POST: /par
-        /// </summary>
-        /// <param name="formData">FormDataCollection</param>
-        /// <returns>成功は 201、エラーは 400 / 401</returns>
-        /// <remarks>
-        /// **独自の /ros とは別の口。** /ros は署名付き JWT を生の本文で受け、クライアント認証をしない
-        /// （後方互換のため残している）。こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
-        /// </remarks>
-        [HttpPost]
-        public IHttpActionResult PushedAuthorizationRequest(FormDataCollection formData)
-        {
-            // **資格情報を受け取るので、キャッシュに残さない**（#218 と同じ理由）。
-            this.SetNoStore();
-
-            Dictionary<string, string> err = new Dictionary<string, string>();
-
-            if (formData == null)
-            {
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
-
-                return this.OAuth2Error(err, "par");
-            }
-
-            // client_secret_basic
-            if (!Token.CmnEndpoints.GetBasicCredentials(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                out string client_id, out string client_secret))
-            {
-                // client_secret_post
-                client_id = formData[OAuth2AndOIDCConst.client_id];
-                client_secret = formData[OAuth2AndOIDCConst.client_secret];
-            }
-
-            // private_key_jwt / mTLS
-            string assertion = Token.CmnEndpoints.GetClientAssertion(
-                formData[Token.CmnEndpoints.ClientAssertion],
-                formData[Token.CmnEndpoints.ClientAssertionType],
-                formData[OAuth2AndOIDCConst.assertion]);
-            X509Certificate2 x509 = Request.GetClientCertificate();
-
-            NameValueCollection parameters = formData.ReadAsNameValueCollection();
-
-            if (Token.CmnEndpoints.PushedAuthorizationRequest(
-                client_id, client_secret, assertion, x509, parameters,
-                out Dictionary<string, string> ret, out err))
-            {
-                // RFC 9126 §2.2 : 成功は 201
-                return this.Content(HttpStatusCode.Created,
-                    ret, new System.Net.Http.Formatting.JsonMediaTypeFormatter());
-            }
-
-            return this.OAuth2Error(err, "par");
-        }
-
-        #endregion
-
-        #region /ros (RequestObject)
-
-        /// <summary>
-        /// RequestObjectを登録するWebAPI
-        /// GET: /ros
-        /// </summary>
-        /// <returns>HttpResponseMessage</returns>
-        [HttpPost]
-        public HttpResponseMessage RequestObjectUri()
-        {
-            // RequestObjectを取り出す。
-            string body = new StreamReader(HttpContext.Current.Request.InputStream).ReadToEnd();
-
-            // **処理は CommonLibrary（#235）。** 両アプリに同じものを書いていた。
-            //   ここは、本文を渡して応答を包むだけ。
-            if (Token.CmnEndpoints.RegisterRequestObject(body, out Dictionary<string, object> ret))
-            {
-                // 成功
-                return new HttpResponseMessage()
-                {
-                    Content = new JsonContent(JsonConvert.SerializeObject(
-                        ret, Newtonsoft.Json.Formatting.None)),
-                    StatusCode = HttpStatusCode.Created
-                };
-            }
-
-            // 失敗
-            return new HttpResponseMessage(HttpStatusCode.BadRequest);
-        }
-
-        #endregion
-
-        #region /.well-known/openid-configuration
-
-        /// <summary>
-        /// OpenID Provider Configurationを返すWebAPI
-        /// GET: /.well-known/openid-configuration
-        /// </summary>
-        /// <returns>HttpResponseMessage</returns>
-        [HttpGet]
-        [Route(".well-known/openid-configuration")]  // ココは固定
-        [MpasPublicDocsCors]   // .well-known/openid-configuration（公開情報）
-        public HttpResponseMessage OpenIDConfig()
-        {
-            // JsonSerializerSettingsを指定して、可読性の高いJSONを返す。
-            return new HttpResponseMessage()
-            {
-                Content = new JsonContent(
-                    Token.CmnEndpoints.OpenIDConfig(),
-                    new JsonSerializerSettings
-                    {
-                        Formatting = Newtonsoft.Json.Formatting.Indented,
-                        ContractResolver = new CamelCasePropertyNamesContractResolver()
-                    })
-            };
-        }
-
-        #endregion
-
-        #region /samlmetadata
-
-        /// <summary>
-        /// SamlMetadataを返すWebAPI
-        /// GET: /samlmetadata
-        /// </summary>
-        /// <returns>HttpResponseMessage</returns>
-        [HttpGet]
-        [Route("samlmetadata")]  // ココは固定
-        [MpasPublicDocsCors]   // samlmetadata（公開情報）
-        public HttpResponseMessage SamlMetadata()
-        {
-            //  **組み立ては `CmnSamlMetadata` に 1 か所だけ置いてある**（#292 の段階 3）。
-            //    **両アプリに同文で在った**ので寄せた。
-            //    **退役前の署名証明書も並べて広告する**（`PreviousSigningCerFilePaths`）。
-            XmlDocument samlMetadata = SamlProviders.CmnSamlMetadata.CreateForThisDeployment();
-
-            return new HttpResponseMessage()
-            {
-                Content = new StringContent(
-                    samlMetadata.XmlToString(
-                        new XmlWriterSettings()
-                        {
-                            Encoding = Encoding.UTF8,
-                            Indent = true
-                        }),
-                    Encoding.UTF8,
-                    "application/xml"),
-            };
-        }
-        #endregion
-
-        #region プッシュ通知
-
-        /// <summary>
-        /// ユーザ情報にデバイス・トークンを追加
-        /// POST: /SetDeviceToken
-        /// </summary>
-        /// <param name="formData">
-        /// - device_token
-        /// </param>
-        /// <returns>
-        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
-        /// トークンの不備は 401（WWW-Authenticate: Bearer）、パラメタの不備は 400（#196）
-        /// </returns>
-        /// <remarks>
-        /// 認証デバイス（authentication_device）が、サインインの後に呼ぶ（端末の登録）。
-        /// </remarks>
-        [HttpPost]
-        [MpasBrowserApiCors]   // 同上
-        public async Task<IHttpActionResult> SetDeviceToken(FormDataCollection formData)
-        {
-            string device_token = (formData == null) ? null : (string)formData["device_token"];
-
-            if (string.IsNullOrEmpty(device_token))
-            {
-                // パラメタの不備（#196 : 400）
-                return this.NGResult(400, "SetDeviceToken", null);
-            }
-
-            // クライアント認証（Bearer トークン）
-            if (!Token.CmnDPoP.GetToken(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                out string bearerToken, out bool isDPoP))
-            {
-                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
-                return this.NGResult(401, "SetDeviceToken", null);
-            }
-
-            // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
-            //  **`out` の変数は、条件の前で宣言する**（#311 の段階 4）。
-            //    **`&&` で呼ばれないことが在る**ので、
-            //    **条件の中で宣言すると「代入されていない」ことになる。**
-            string dpopError = null;
-
-            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
-                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
-                //    （RFC 9449 §7.1。#311 の段階 2）。
-                && this.VerifyDPoP(identity, bearerToken, isDPoP, out dpopError))
-            {
-                // ClientIdの取り出し
-                Claim ClientId = identity.Claims.Where(
-                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-                ApplicationUser user =
-                    //CmnUserStore.FindByName(identity.Name);
-                    PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-
-                if (user != null)
-                {
-                    // デバイストークンの保存
-                    user.DeviceToken = device_token;
-                    await UserManager.UpdateAsync(user);
-
-                    return this.Ok("OK");
-                }
-            }
-
-            // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-            return this.NGResult(401, "SetDeviceToken",
-                dpopError ?? OAuth2AndOIDCConst.invalid_token);
-        }
-
-        /// <summary>
-        /// 2FAのプッシュ承認を受信
-        /// POST: /2fa_result
-        /// </summary>
-        /// <param name="formData">code</param>
-        /// <returns>
-        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
-        /// トークンの不備は 401（WWW-Authenticate: Bearer）、コードの不備は 400（#216）
-        /// </returns>
-        /// <remarks>
-        /// 認証デバイス（authentication_device）が、プッシュ通知で受け取った 2FA のコードを送り返す。
-        /// **ブラウザの 2FA セッションは Cookie にあり、端末からは触れない**ので、
-        /// ここでは「誰がどのコードを承認したか」を記録するだけ。
-        /// サインインを完了させるのは、待っているブラウザ側（Account/TwoFactorPushStatus）。
-        ///
-        /// net10.0 版（#213）との違いは、コードを作ったプロバイダの名前だけ。
-        /// net48 版は MobileApp のプロバイダを登録しているので、それで検証する。
-        /// </remarks>
-        [HttpPost]
-        [MpasBrowserApiCors]   // 同上
-        public async Task<IHttpActionResult> TwoFactorPushResult(FormDataCollection formData)
-        {
-            // クライアント認証（Bearer トークン）
-            if (!Token.CmnDPoP.GetToken(
-                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
-                out string bearerToken, out bool isDPoP))
-            {
-                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）
-                return this.NGResult(401, "2fa_result", null);
-            }
-
-            ApplicationUser user = null;
-
-            // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
-            //  **`out` の変数は、条件の前で宣言する**（#311 の段階 4）。
-            //    **`&&` で呼ばれないことが在る**ので、
-            //    **条件の中で宣言すると「代入されていない」ことになる。**
-            string dpopError = null;
-
-            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
-                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate())
-                //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**
-                //    （RFC 9449 §7.1。#311 の段階 2）。
-                && this.VerifyDPoP(identity, bearerToken, isDPoP, out dpopError))
-            {
-                // ClientIdの取り出し
-                Claim ClientId = identity.Claims.Where(
-                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-                user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-            }
-
-            if (user == null)
-            {
-                // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）
-                return this.NGResult(401, "2fa_result",
-                dpopError ?? OAuth2AndOIDCConst.invalid_token);
-            }
-
-            string code = (formData == null) ? null : (string)formData["code"];
-
-            if (string.IsNullOrEmpty(code))
-            {
-                // パラメタの不備
-                return this.NGResult(400, "2fa_result", null);
-            }
-
-            // **保存する前に、そのコードがこの利用者のものかを確かめる。**
-            //   他人のコードや、期限切れ・でたらめなコードを記録させないため。
-            //   プロバイダは、送信時（MobileAppTokenProvider）と揃える。
-            if (!await UserManager.VerifyTwoFactorTokenAsync(
-                user.Id, MobileAppTokenProvider.ProviderName, code))
-            {
-                // 合わないコード（存在を推測させないよう、パラメタの不備と同じ応答にする）
-                return this.NGResult(400, "2fa_result", null);
-            }
-
-            // 承認を記録する（待っているブラウザが拾う）
-            Sts.TwoFactorPushProvider.Create(user.Id, code);
-
-            return this.Ok("OK");
-        }
-
-        #endregion
-
         #region キャッシュ制御
 
         /// <summary>
@@ -1598,7 +169,59 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region 認証デバイスのトークン（#294）
+
+        /// <summary>認証デバイスのクライアントに発行したトークンか（#294）</summary>
+        /// <param name="audience">トークンの aud（`UrnAudienceClaim`。無ければ null）</param>
+        /// <returns>認証デバイスのものなら true</returns>
+        /// <remarks>
+        /// **`/SetDeviceToken`・`/ciba_result`・`/2fa_result` は、このトークンだけを受ける**（`AuthenticationDeviceClientIds`）。
+        /// **以前は発行先を見ておらず**、利用者が同意した**どの RP のトークンでも**、
+        /// 端末の登録を差し替え、CIBA の要求を「許可」し、2FA のプッシュ承認を記録できた。
+        /// **aud が無いトークンも断る**（自分が発行するトークンには必ず載る）。
+        /// </remarks>
+        private static bool IsAuthenticationDeviceToken(Claim audience)
+        {
+            return audience != null
+                && Config.AuthenticationDeviceClientIds.Contains(audience.Value, StringComparer.Ordinal);
+        }
+
+        #endregion
+
         #region 共通のエラー応答
+
+        /// <summary>エラー応答を記録する（障害対応のため。#294）</summary>
+        /// <param name="status">HTTP ステータス</param>
+        /// <param name="err">error / error_description（無ければ null）</param>
+        private void TraceErrorResponse(int status, Dictionary<string, string> err)
+        {
+            Logging.MyOperationTraceForErrorResponse(
+                HttpContext.Current.Request.Path, status, err, this.ClientIdForLog());
+        }
+
+        /// <summary>ログに出す client_id（Basic 認証 → フォームの順。分からなければ空）</summary>
+        /// <returns>client_id</returns>
+        private string ClientIdForLog()
+        {
+            try
+            {
+                HttpRequest request = HttpContext.Current.Request;
+                string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+                    request.Headers[Const.HeaderAuthorization]);
+
+                if (string.IsNullOrEmpty(clientId))
+                {
+                    clientId = request.Form[OAuth2AndOIDCConst.client_id];
+                }
+
+                return clientId ?? "";
+            }
+            catch
+            {
+                //  **記録のために、応答を落とさない。**
+                return "";
+            }
+        }
 
         /// <summary>
         /// クライアント認証を行うエンドポイント（/token・/revoke・/introspect・/device_authz・/ciba_authz）のエラー応答を作る（RFC 6749 5.2）
@@ -1619,6 +242,8 @@ namespace MultiPurposeAuthSite.Controllers
             HttpStatusCode status = (HttpStatusCode)Token.CmnEndpoints.GetErrorStatusCode(err);
             HttpResponseMessage res = this.Request.CreateResponse(status, err);
 
+            this.TraceErrorResponse((int)status, err);
+
             if (status == HttpStatusCode.Unauthorized && realm != null)
             {
                 // クライアント認証の失敗。受け付ける認証方式を示す。
@@ -1631,9 +256,9 @@ namespace MultiPurposeAuthSite.Controllers
             //    **成功応答には付けない** — **窓（5〜10 分）が切れたら 1 往復増える。**
             if (err != null
                 && err.TryGetValue(OAuth2AndOIDCConst.error, out string error)
-                && error == Token.CmnDPoP.UseDPoPNonce)
+                && error == OAuth2AndOIDCConst.use_dpop_nonce)
             {
-                res.Headers.Add(Token.CmnDPoP.NonceHeader,
+                res.Headers.Add(OAuth2AndOIDCConst.HttpHeader_DPoPNonce,
                     Token.CmnDPoP.CurrentNonce(Token.CmnDPoP.PurposeAs));
             }
 
@@ -1656,6 +281,9 @@ namespace MultiPurposeAuthSite.Controllers
         {
             HttpResponseMessage res = this.Request.CreateResponse((HttpStatusCode)status, "NG");
 
+            this.TraceErrorResponse(status,
+                (error == null) ? null : new Dictionary<string, string>() { { OAuth2AndOIDCConst.error, error } });
+
             if (status == 401)
             {
                 Dictionary<string, string> err = new Dictionary<string, string>();
@@ -1666,16 +294,16 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 //  **`DPoP` スキームで来た要求には、`DPoP` で答える**（RFC 9449 §7.1。#311 の段階 4）。
-                string scheme = Token.CmnEndpoints.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
+                string scheme = AuthenticationHeader.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
 
                 res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
                     scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, realm, err)));
 
-                string nonce = Token.CmnDPoP.NonceForChallenge(scheme == Token.CmnDPoP.TokenType);
+                string nonce = Token.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
 
                 if (nonce != null)
                 {
-                    res.Headers.Add(Token.CmnDPoP.NonceHeader, nonce);
+                    res.Headers.Add(OAuth2AndOIDCConst.HttpHeader_DPoPNonce, nonce);
                 }
             }
 

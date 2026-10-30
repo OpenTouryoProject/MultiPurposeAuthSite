@@ -156,4 +156,10 @@
   <data name="EnableCibaGrantType" xml:space="preserve">
     <value>CIBAグラント種別は有効化されていません。</value>
   </data>
+  <data name="EnableDeviceAuthZGrantType" xml:space="preserve">
+    <value>Device Authorizationグラント種別は有効化されていません。</value>
+  </data>
+  <data name="EnableJwtBearerTokenFlowGrantType" xml:space="preserve">
+    <value>JWT Bearer Token Flowグラント種別は有効化されていません。</value>
+  </data>
 </root>

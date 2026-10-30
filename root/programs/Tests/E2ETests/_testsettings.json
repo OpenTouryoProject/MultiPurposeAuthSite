@@ -41,5 +41,5 @@
   },
 
   // 既定で作成されるテスト ユーザ（UserStoreType=mem のとき初回アクセスで作られる）
-  "testUserName": "super_tanaka@gmail.com"
+  "testUserName": "super_tanaka@example.com"
 }

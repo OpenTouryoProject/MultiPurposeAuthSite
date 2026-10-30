@@ -29,7 +29,6 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/27  玄人 幸道         新規（#232）
-//*  2026/10/03  玄人 幸道         redirect_uriの照合を揃えた旨に直した（#263）
 //*  2026/10/21  玄人 幸道         Front-Channel Logout が広告されるようになった（#310 の段階 3）
 //**********************************************************************************
 
@@ -451,7 +450,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) 先に自サイトからサインアウトする");
 
-                await client.GetAsync("/Account/LogOff");
+                await client.GetAsync("/Account/Logout");
 
                 r.Verify("サインアウトできた", !await client.IsSessionAliveAsync(),
                     "セッション無し", "セッション無し");

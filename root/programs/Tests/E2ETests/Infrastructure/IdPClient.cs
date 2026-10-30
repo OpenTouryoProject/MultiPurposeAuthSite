@@ -32,23 +32,14 @@
 //*  2026/09/10  玄人 幸道         Device Authorization Grant の検証画面の操作を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         client_secret_basic で /token を呼ぶ TokenWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         汎用の HTTP 関数を「素のHTTP」へ移し、デバイス認可（/device_authz）の要求を追加
-//*  2026/09/11  玄人 幸道         /userinfo を Authorization ヘッダを指定して呼ぶ UserInfoWithAuthorizationAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         client_secret_basic の POST を PostJsonWithBasicAuthAsync に一般化し、RevokeWithBasicAuthAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         /introspect を client_secret_basic で呼ぶ IntrospectWithBasicAuthAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
-//*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
-//*  2026/09/12  玄人 幸道         Authorization ヘッダ付きの POST を一般化し、認証デバイスの代わりの要求（/SetDeviceToken・/ciba_result）を追加（#196）
 //*  2026/09/16  玄人 幸道         /2fa_result を呼ぶ TwoFactorPushResultAsync を追加（#213）
 //*  2026/09/22  玄人 幸道         クライアント証明書を添えてトークン エンドポイントを呼ぶ TokenWithCertificateAsync を追加（#226）
 //*  2026/09/23  玄人 幸道         クライアント証明書を添えて UserInfo を呼ぶ UserInfoWithCertificateAsync を追加
 //*  2026/09/25  玄人 幸道         Discovery の issuer を引く IssuerAsync を追加（#234 の段階 1）
-//*  2026/09/25  玄人 幸道         /ciba_authz をクライアント認証つきで呼べるようにした（#234 の段階 3）
 //*  2026/09/25  玄人 幸道         非構造化データを画面から設定する口を追加（#230）
 //*  2026/09/27  玄人 幸道         Basic を符号化せずに送る口（urlEncode）を追加（#237）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）の口を追加（#232）
-//*  2026/09/27  玄人 幸道         自己テストの画面が出すログアウトのフォームを送る口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
-//*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
 //*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
@@ -59,7 +50,8 @@
 //*  2026/10/16  玄人 幸道         ヘッダを付けて GET する口を足した（#303）
 //*  2026/10/17  玄人 幸道         ヘッダを付けて POST する口を追加（#305 の段階 4）
 //*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
-//*  2026/10/18  玄人 幸道         メソッドを選んで JSON を送る口にした（#307 の段階 2）
+//*  2026/10/28  玄人 幸道         Cookie の値を書き換える口（OverwriteCookie）を足した（#294）
+//*  2026/10/30  玄人 幸道         WebAuthn の登録の段階 0 で、パスワードを送る（#294）
 //**********************************************************************************
 
 using System;
@@ -130,6 +122,34 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
                 return names;
             }
+        }
+
+        /// <summary>
+        /// ブラウザが持っている Cookie の値を、書き換える（#294）。
+        /// </summary>
+        /// <param name="nameSuffix">Cookie の名前の末尾（配備の接頭辞 `CookieNamePrefix` を除いた名前）</param>
+        /// <param name="value">値</param>
+        /// <remarks>
+        /// **利用者がブラウザで Cookie を書き換えることを、まねる**ために在る
+        /// （`auth_time` や再認証の印を、平文の値に差し替えても効かないことを測る。`RT-294.17` / `.18`）。
+        /// **名前は末尾で探す**（接頭辞は配備で変わる）。**無ければ、接頭辞なしの名前で足す。**
+        /// </remarks>
+        public void OverwriteCookie(string nameSuffix, string value)
+        {
+            Uri uri = new Uri(this.Target.BaseUrl);
+            string name = nameSuffix;
+            string path = "/";
+
+            foreach (Cookie cookie in this._handler.CookieContainer.GetCookies(uri))
+            {
+                if (cookie.Name.EndsWith(nameSuffix, StringComparison.Ordinal))
+                {
+                    name = cookie.Name;
+                    path = cookie.Path;
+                }
+            }
+
+            this._handler.CookieContainer.Add(uri, new Cookie(name, value, path));
         }
 
         /// <summary>コンストラクタ</summary>
@@ -1664,11 +1684,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="authenticatorAttachment">platform / cross-platform / 空</param>
         /// <param name="userVerification">required / preferred / discouraged</param>
         /// <param name="attestation">none / indirect / direct</param>
+        /// <param name="password">今のパスワード（段階 0 で確かめる。#294。null ならテスト利用者のパスワード）</param>
         /// <returns>応答の HTML（画面が無ければ null）</returns>
         public async Task<string> WebAuthnCreationOptionsAsync(
             string userName, bool residentKey = false,
             string authenticatorAttachment = "", string userVerification = "preferred",
-            string attestation = "none")
+            string attestation = "none", string password = null)
         {
             HttpResponseMessage get = await this.GetAsync("/Manage/AddWebAuthnData");
 
@@ -1688,7 +1709,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 + ",\"userVerification\":\"" + userVerification + "\"}"
                 + ",\"attestation\":\"" + attestation + "\"}";
 
-            return await this.PostWebAuthnRegisterAsync(html, "0", fido2Data);
+            return await this.PostWebAuthnRegisterAsync(html, "0", fido2Data,
+                password ?? this.Config.Get("TestUserPWD"));
         }
 
         /// <summary>WebAuthn の登録画面へ、段階 1（attestation）を送る（#137）</summary>
@@ -1704,9 +1726,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="html">トークンを含む HTML</param>
         /// <param name="sequenceNo">段階番号</param>
         /// <param name="fido2Data">送る JSON</param>
+        /// <param name="password">今のパスワード（段階 0 だけ送る。#294）</param>
         /// <returns>応答の HTML</returns>
         private async Task<string> PostWebAuthnRegisterAsync(
-            string html, string sequenceNo, string fido2Data)
+            string html, string sequenceNo, string fido2Data, string password = null)
         {
             if (string.IsNullOrEmpty(html))
             {
@@ -1718,6 +1741,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { "sequenceNo", sequenceNo },
                 { "fido2Data", fido2Data }
             };
+
+            if (password != null)
+            {
+                form.Add("password", password);
+            }
 
             Match m = AntiforgeryRegex.Match(html);
 

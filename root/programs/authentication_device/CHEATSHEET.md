@@ -264,10 +264,10 @@ flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.
 | **接続先を切り替えてビルドし直したのに、前の版（net48 / net10.0）に遷移する** | **ブラウザが前のビルドを使っている。** `http://localhost:5610` は両方で同じオリジンなので、HTTP キャッシュと service worker がそのまま効く（`python -m http.server` は `Cache-Control` を付けない） | 下の「接続先を切り替えたら」 |
 | 「16 packages have newer versions…」 | `firebase_core_web` を 3.10.x に固定している（#209） | 想定どおり。`pubspec.yaml` のコメント |
 | Android から認証サイトに届かない | 接続先を渡していない（既定は `localhost`） | 3 節 |
-| 自己テストが `JsonReaderException: Unexpected character … S` | 宛先（`tanaka@gmail.com`）に端末が登録されていない。`/ciba_authz` が例外の平文を返した | 8 節の前提 |
+| 自己テストが `JsonReaderException: Unexpected character … S` | 宛先（`tanaka@example.com`）に端末が登録されていない。`/ciba_authz` が例外の平文を返した | 8 節の前提 |
 | OS の通知が出て、Message Stream に届かない | 通知が届いたとき、Flutter のタブが見えていなかった（重なっていた / 最小化していた） | 想定どおり。OS の通知をクリックする（8 節「バックグラウンドで確かめる」）か、8 節の手順 2 |
 | OS の通知をクリックしても何も起きない | `flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれない | 8 節「バックグラウンドで確かめる」（普段の Chrome で開く） |
-| Allow / Deny で `/ciba_result` が 400 | 要求の期限切れ、または宛先と違うユーザで応答した | 認証サイトでサインアウトし、`tanaka@gmail.com` でサインインし直す |
+| Allow / Deny で `/ciba_result` が 400 | 要求の期限切れ、または宛先と違うユーザで応答した | 認証サイトでサインアウトし、`tanaka@example.com` でサインインし直す |
 | Installability に「`name` が無い」「`display` が不正」「アイコンが無い」がまとめて出る | `flutter run` は manifest を生成しない（`manifest.json` は正しい） | 8 節「PWA としてインストールして確かめる」 |
 
 ### 接続先を切り替えたら（`mpas.core.json` ⇄ `mpas.netfx.json`）
@@ -298,13 +298,13 @@ python -c "import io; b = io.open(r'build\web\main.dart.js','rb').read(); print(
 
 - 認証サイトを 5 節の手順で起動してある（送信箱 `FcmOutboxDirectory` を指定しない＝本物の FCM に送る）
 - 通知を送る鍵を置いてある（4 節）
-- **自己テストの宛先は `tanaka@gmail.com` に固定。** 認証デバイスも `tanaka@gmail.com` でサインインする
+- **自己テストの宛先は `tanaka@example.com` に固定。** 認証デバイスも `tanaka@example.com` でサインインする
   （パスワードは、実際に読まれる設定の `TestUserPWD`）
 - **ユーザ ストアが `mem` のときは、認証サイトを起動し直すと、ユーザも端末の登録も消える。** 起動し直したら、サインインからやり直す
 
 **手順**
 
-1. 認証デバイスを起動し（5 節）、`tanaka@gmail.com` でサインインする →「Flutter My Page」
+1. 認証デバイスを起動し（5 節）、`tanaka@example.com` でサインインする →「Flutter My Page」
 2. Flutter のウィンドウと、認証サイトのウィンドウを**重ならないように並べる**（Flutter のタブが見えている状態にする）
 3. 認証サイト側で `https://localhost:44300/Home/Saml2OAuth2Starters` を開く
    （net48 版は `https://localhost:44302/…` で `mpas.netfx.json`。
@@ -343,7 +343,7 @@ cd root\programs\authentication_device
 flutter run -d web-server --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
 ```
 
-1. 普段の Chrome の**新しいウィンドウ**で `http://localhost:5610/` を開き、通知を許可して `tanaka@gmail.com` でサインインする
+1. 普段の Chrome の**新しいウィンドウ**で `http://localhost:5610/` を開き、通知を許可して `tanaka@example.com` でサインインする
    （ブラウザが変わると、保存されたサインインは無い。端末の登録も、この Chrome のものに置き換わる）
 2. アプリのウィンドウを最小化する
 3. 別のウィンドウで、上の手順 3・4 のとおり自己テストを押す
@@ -381,7 +381,7 @@ python -m http.server 5610
 
 **前提**
 
-- 8 節と同じ（認証サイトを起動、通知の鍵を置く、`tanaka@gmail.com` で揃える）
+- 8 節と同じ（認証サイトを起動、通知の鍵を置く、`tanaka@example.com` で揃える）
 - **2FA を有効にしてある。** 既定は無効（`TwoFactorEnabled` の既定が `"false"`）。
   認証サイトにサインインし、`/Manage/Index`（ユーザ情報の管理）の 2 要素認証の行で有効にする
   （`Config.CanEdit2FA` が true のときだけ出る）
@@ -390,7 +390,7 @@ python -m http.server 5610
 
 **手順**
 
-1. 認証サイトからサインアウトし、`tanaka@gmail.com` でサインインし直す
+1. 認証サイトからサインアウトし、`tanaka@example.com` でサインインし直す
 2. コードの送り先を選ぶ画面で **`MobileApp`** を選び、送信する
 3. コードの入力画面（`VerifyCode`）が出る。**この画面のまま待つ**
    （画面は 2 秒ごとに `/Account/TwoFactorPushStatus` を見ている。手で入力して完了させることもできる）

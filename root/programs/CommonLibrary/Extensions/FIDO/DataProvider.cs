@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/03/13  西野 大介         新規
 //*  2026/10/07  玄人 幸道         fido2-net-lib 4.2.0 に合わせた（#137）
+//*  2026/10/29  玄人 幸道         利用者名の変更で、資格情報を新しい名前へ移す RenameUser を足した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -394,6 +395,111 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                                     new { PublicKeyId = publicKeyId, UnstructuredData = unstructuredData });
 
                                 break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>RenameUser</summary>
+        /// <param name="oldUserName">変更前の利用者名</param>
+        /// <param name="newUserName">変更後の利用者名</param>
+        //  **利用者名を変えたら、資格情報も新しい名前へ移す**（#294）。
+        //    **資格情報は利用者名で持っている**（`UserName` 列と `StoredCredential.UserId`）ので、
+        //    **移さないと、資格情報が元の名前に残る。**
+        //
+        //    **`UserHandle` は変えない。** 認証器が持っている値（登録したときの利用者名）であり、
+        //    サインインで照合する（`WebAuthnHelper` の `IsUserHandleOwnerOfCredentialIdCallback`）。
+        public static void RenameUser(string oldUserName, string newUserName)
+        {
+            if (string.IsNullOrEmpty(oldUserName)
+                || string.IsNullOrEmpty(newUserName)
+                || oldUserName == newUserName)
+            {
+                return;
+            }
+
+            byte[] newUserId = CustomEncode.StringToByte(newUserName, CustomEncode.UTF_8);
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    foreach (string key in DataProvider.FIDO2Data.Keys)
+                    {
+                        string unstructuredData = "";
+                        if (DataProvider.FIDO2Data.TryGetValue(key, out unstructuredData)
+                            && !string.IsNullOrEmpty(unstructuredData))
+                        {
+                            StoredCredential storedCredential =
+                                JsonConvert.DeserializeObject<StoredCredential>(unstructuredData);
+
+                            if (storedCredential != null
+                                && CustomEncode.ByteToString(
+                                    storedCredential.UserId, CustomEncode.UTF_8) == oldUserName)
+                            {
+                                storedCredential.UserId = newUserId;
+                                DataProvider.FIDO2Data[key] = JsonConvert.SerializeObject(storedCredential);
+                            }
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        using (IDbTransaction tr = cnn.BeginTransaction())
+                        {
+                            string select = "";
+                            string update = "";
+
+                            switch (Config.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+                                    select = "SELECT [UnstructuredData] FROM [FIDO2Data] WHERE [UserName] = @UserName";
+                                    update = "UPDATE [FIDO2Data] SET [UserName] = @UserName, [UnstructuredData] = @UnstructuredData WHERE [PublicKeyId] = @PublicKeyId";
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+                                    select = "SELECT \"UnstructuredData\" FROM \"FIDO2Data\" WHERE \"UserName\" = :UserName";
+                                    update = "UPDATE \"FIDO2Data\" SET \"UserName\" = :UserName, \"UnstructuredData\" = :UnstructuredData WHERE \"PublicKeyId\" = :PublicKeyId";
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+                                    select = "SELECT \"unstructureddata\" FROM \"fido2data\" WHERE \"username\" = @UserName";
+                                    update = "UPDATE \"fido2data\" SET \"username\" = @UserName, \"unstructureddata\" = @UnstructuredData WHERE \"publickeyid\" = @PublicKeyId";
+                                    break;
+                            }
+
+                            foreach (string unstructuredData in
+                                cnn.Query<string>(select, new { UserName = oldUserName }, tr).ToList())
+                            {
+                                StoredCredential storedCredential =
+                                    JsonConvert.DeserializeObject<StoredCredential>(unstructuredData);
+
+                                if (storedCredential == null)
+                                {
+                                    continue;
+                                }
+
+                                storedCredential.UserId = newUserId;
+
+                                cnn.Execute(update, new
+                                {
+                                    PublicKeyId = CustomEncode.ToBase64UrlString(storedCredential.CredentialId),
+                                    UserName = newUserName,
+                                    UnstructuredData = JsonConvert.SerializeObject(storedCredential)
+                                }, tr);
+                            }
+
+                            tr.Commit();
                         }
                     }
 

@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/10/30  玄人 幸道         パスワードの入力欄を足した（#294）
     //**********************************************************************************
 *@
 
@@ -47,6 +48,12 @@
         @Html.LabelFor(m => m.Number, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
             @Html.TextBoxFor(m => m.Number, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="col-md-2 control-label" for="password">@ManageViews.CurrentPasswordPlaceholder</label>
+        <div class="col-md-10">
+            <input type="password" id="password" name="password" class="form-control" autocomplete="current-password" />
         </div>
     </div>
     <div class="form-group">

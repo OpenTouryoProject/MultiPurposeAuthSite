@@ -106,11 +106,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Device Authorization grant type is not enabled. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableDeviceAuthZGrantType {
+            get {
+                return ResourceManager.GetString("EnableDeviceAuthZGrantType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Implicit grant type is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string EnableImplicitGrantType {
             get {
                 return ResourceManager.GetString("EnableImplicitGrantType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   JWT Bearer Token Flow grant type is not enabled. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableJwtBearerTokenFlowGrantType {
+            get {
+                return ResourceManager.GetString("EnableJwtBearerTokenFlowGrantType", resourceCulture);
             }
         }
         

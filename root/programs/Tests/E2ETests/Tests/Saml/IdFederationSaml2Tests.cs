@@ -29,7 +29,6 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
-//*  2026/10/12  玄人 幸道         SA-6.4（属性を使う）を足した（#286 の段階 4）
 //*  2026/10/13  玄人 幸道         SA-6.5（署名を壊した要求）を足した（#293 の段階 4）
 //*  2026/10/14  玄人 幸道         SA-6.6（上流の証明書が2本）を足した（#292 の段階 3）
 //**********************************************************************************
@@ -48,7 +47,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     /// SA-6. **SAML2 の ID 連携**（この IdP が、上流の IdP に対して SP になる）。
     /// </summary>
     /// <remarks>
-    /// **#286 で足した経路**である。**上流は `store/` のコンテナ**（`RT-140.*` と同じ）。
+    /// **#286 で足した経路**である。**上流は `Container/E2E/` のコンテナ**（`RT-140.*` と同じ）。
     ///
     /// | | OIDC（`RT-140.*`） | SAML2（ここ） |
     /// |---|---|---|
@@ -59,7 +58,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     /// | 期待する発行者 | `SpRp_Isser` | **`IdFederationSaml2IssuerId`** |
     ///
     /// **上流に、下流の ACS を `redirect_uri_saml` として登録してある**
-    /// （`store/docker-compose.yml`。`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
+    /// （`Container/E2E/docker-compose.yml`。`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
     ///
     /// **同意は要らない**（SAML の口は同意を通らない）ので、
     /// **`RT-140.*` の `EnsureUpstreamConsentAsync` に当たる迂回が無い。**
@@ -339,7 +338,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         /// <remarks>
-        /// **段階 4 で足した経路**である（`CmnSamlAttributes`）。
+        /// **段階 4 で足した経路**である（Open棟梁 の `SAML2Attributes`）。
         ///
         /// | | 段階 3 まで | 段階 4 |
         /// |---|---|---|
@@ -444,7 +443,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         /// （#293 の段階 2 を常設のケースにしたもの。段階 4）。
         ///
         /// **歯抜けを、配備を壊さずに測る。**
-        /// **上流の登録鍵を差し替える**手は、**`store/docker-compose.yml` を書き換えて
+        /// **上流の登録鍵を差し替える**手は、**`Container/E2E/docker-compose.yml` を書き換えて
         /// コンテナを作り直す**ことになり、通しには入れられない。
         /// **ここでは、製品が署名した本物の要求の、署名だけを 1 バイト変える。**
         ///
@@ -541,7 +540,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                     broken.Authorized ? "**サインインした**" : "しなかった");
 
                 r.Note("**このケースが通らなくなったら、まず登録を見ること**"
-                    + "（`store/docker-compose.yml` の `jwk_rsa_publickey`）。"
+                    + "（`Container/E2E/docker-compose.yml` の `jwk_rsa_publickey`）。"
                     + "**鍵が無いと「通す」ので、`Success` が返って落ちる。**");
 
                 r.Done();
@@ -564,7 +563,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         /// **SAML2 の署名には `kid` に当たるものが無い**
         /// （`KeyInfo` は任意で、相手が入れていなければ選べない）ので、**全部試す。**
         ///
-        /// **上流コンテナは 2 本広告している**（`store/docker-compose.yml` の
+        /// **上流コンテナは 2 本広告している**（`Container/E2E/docker-compose.yml` の
         /// `PreviousSigningCerFilePaths`）。**1 本目が、いま署名に使っている鍵**である。
         /// </remarks>
         [SkippableTheory]

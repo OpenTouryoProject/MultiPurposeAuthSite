@@ -120,7 +120,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 urls.Add(uri
                     + (uri.Contains("?") ? "&" : "?")
-                    + OAuth2AndOIDCConst.iss + "=" + Uri.EscapeDataString(Config.IssuerId ?? "")
+                    + OAuth2AndOIDCConst.iss + "=" + Uri.EscapeDataString(CmnServerParams.IssuerId ?? "")
                     + "&" + Const.Sid + "=" + Uri.EscapeDataString(target.Sid ?? ""));
             }
 
@@ -141,7 +141,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>URL（登録が無い・使えない URL なら空）</returns>
         /// <remarks>
         /// **`https` を求め、ループバックの `http` だけ許す**
-        /// （**Back-Channel と同じ規則**。`DiscoveryJwks.IsUsableKeySource`）。
+        /// （**Back-Channel と同じ規則**。`RemoteJwkSetStore.IsUsableKeySource`）。
         /// **ブラウザが開く URL** なので、**平文だと混在コンテンツとして止められることも在る。**
         /// </remarks>
         private static string GetUri(string clientId)
@@ -156,7 +156,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // **記号を実 URL に直す**（`test_self_fclogout`）。
             string uri = CmnEndpoints.GetRedirectUriFromConstr(registered);
 
-            return DiscoveryJwks.IsUsableKeySource(uri) ? uri : "";
+            return RemoteJwkSetStore.IsUsableKeySource(uri) ? uri : "";
         }
     }
 }

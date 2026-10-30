@@ -149,7 +149,7 @@ net10.0 では通るのに net48 でだけ「型が無い」になる。
 |---|---|
 | `CommonLibrary/TokenProviders/CmnAccessToken.cs` | CRLF |
 | `CommonLibrary/TokenProviders/CmnIdToken.cs` | CRLF |
-| `CommonLibrary/TokenProviders/CmnEndpoints.cs` | **LF** |
+| `CommonLibrary/TokenProviders/CmnEndpoints.cs`（と、partial の `CmnEndpoints.*.cs`） | **LF** |
 | `MultiPurposeAuthSiteCore/.../AccountController.cs` | **LF** |
 
 **変えてはならない。** 改行を変えると git がファイル全体を差分として扱い、レビューできなくなる。

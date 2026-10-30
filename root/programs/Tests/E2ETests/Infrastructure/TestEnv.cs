@@ -33,10 +33,10 @@
 //*  2026/10/01  玄人 幸道         テスト利用者の利用者名とメアドを分けた（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに分けた（#260）
 //*  2026/10/04  玄人 幸道         到達性のプローブを数回試す（#266。DBストアで踏んだ）
-//*  2026/10/04  玄人 幸道         種データを作らせる口をここへ移した（#264）
 //*  2026/10/06  玄人 幸道         構成ファイルのクライアントの同意を先に通す（#272 の段階 2）
 //*  2026/10/10  玄人 幸道         WebAuthn の資格情報を持つ利用者を追加（#277 の段階 7）
 //*  2026/10/14  玄人 幸道         到達性の記憶を読み直さない（並行したときに落ちていた）
+//*  2026/10/29  玄人 幸道         メールの送信箱（MPAS_CORE_MAIL_OUTBOX / MPAS_NETFX_MAIL_OUTBOX）を受け取る（#294）
 //**********************************************************************************
 
 using System;
@@ -123,6 +123,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// test.ps1 -Launch が、サイトごとに設定する（MPAS_CORE_FCM_OUTBOX / MPAS_NETFX_FCM_OUTBOX）（#196）。
         /// </summary>
         public string FcmOutbox { get; set; }
+
+        /// <summary>
+        /// メールの送信箱（テスト用）のディレクトリ。設定されていなければ null。
+        /// test.ps1 -Launch が、サイトごとに設定する（MPAS_CORE_MAIL_OUTBOX / MPAS_NETFX_MAIL_OUTBOX）（#294）。
+        /// </summary>
+        public string MailOutbox { get; set; }
 
         /// <summary>net48版か</summary>
         public bool IsNetFx
@@ -535,10 +541,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>テスト ユーザのメアド（#151 の段階 3 / #260）</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>メアド</returns>
-        /// <remarks>**メアドでのサインインを測るときに使う**（`SM-4.2`）。</remarks>
+        /// <remarks>**メアドでのサインインを測るときに使う**（`SM-4.2`）。**ドメインは `example.com`**（#294。認証サイトの種まきと揃える。以前は `gmail.com`）。</remarks>
         public static string TestUserEmail(string targetKey)
         {
-            return TestUserName(targetKey) + "@gmail.com";
+            return TestUserName(targetKey) + "@example.com";
         }
 
         /// <summary>
@@ -578,7 +584,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **接尾辞を付けない**（#260）。
         ///
-        /// **上流は `store/` のコンテナ 1 つで、自分のストアを持つ。**
+        /// **上流は `Container/E2E/` のコンテナ 1 つで、自分のストアを持つ。**
         /// 下流（net48 版 / net10.0 版）とは**別の DB** なので、**分ける必要が無い。**
         /// **`docker-compose.yml` に `TestUserSuffix` を与えていない**ので、
         /// **上流の種データは `super_tanaka` である。**
@@ -747,9 +753,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         private static void ApplyEnvironmentVariables()
         {
             Override(CoreKey, "MPAS_CORE_BASEURL", "MPAS_CORE_CONFIG", "MPAS_CORE_FCM_OUTBOX",
-                "MPAS_CORE_TESTUSER_SUFFIX");
+                "MPAS_CORE_TESTUSER_SUFFIX", "MPAS_CORE_MAIL_OUTBOX");
             Override(NetFxKey, "MPAS_NETFX_BASEURL", "MPAS_NETFX_CONFIG", "MPAS_NETFX_FCM_OUTBOX",
-                "MPAS_NETFX_TESTUSER_SUFFIX");
+                "MPAS_NETFX_TESTUSER_SUFFIX", "MPAS_NETFX_MAIL_OUTBOX");
 
             // **両ターゲットに効く上書き**（手で 1 人の利用者を指すとき）。
             //   **接尾辞より強い**ので、DB ストアでは書き換え合いが起きうる（#260）。
@@ -758,7 +764,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>環境変数1組でテスト対象を上書きする</summary>
         private static void Override(string key, string baseUrlVar, string configVar,
-            string fcmOutboxVar, string testUserSuffixVar)
+            string fcmOutboxVar, string testUserSuffixVar, string mailOutboxVar)
         {
             TargetInfo target = _targets[key];
 
@@ -778,6 +784,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             if (!string.IsNullOrEmpty(outbox))
             {
                 target.FcmOutbox = outbox;
+            }
+
+            string mailOutbox = Environment.GetEnvironmentVariable(mailOutboxVar);
+            if (!string.IsNullOrEmpty(mailOutbox))
+            {
+                target.MailOutbox = mailOutbox;
             }
 
             // **接尾辞は空文字も意味を持つ**ので、null かどうかで判定する（#260）。

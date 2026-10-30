@@ -94,7 +94,7 @@ namespace CreateJwkSetJson
 
             // **署名に使う鍵を、すべて載せる**（#129 の段階 3）。
             //   RS256 / RS384 / RS512 は同じ鍵（kid も同じ）なので、2 つ目以降は追記されない。
-            foreach (string alg in SigningKeys.SupportedAlgs)
+            foreach (string alg in JwsFactory.SupportedAlgs)
             {
                 SigningKeys.Entry key = SigningKeys.Of(alg);
                 JObject jwkObject = key.JwkFromCer();

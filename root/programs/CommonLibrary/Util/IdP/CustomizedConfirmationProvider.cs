@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
+//*  2026/10/30  玄人 幸道         利用者の削除で、確認待ちを消す DeleteCustomizedConfirmationData を追加（mem。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -143,6 +144,29 @@ namespace MultiPurposeAuthSite.Util.IdP
 
                     break;
             }
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>DeleteCustomizedConfirmationData</summary>
+        /// <param name="userID">string</param>
+        /// <remarks>
+        /// **利用者を消すときに呼ぶ**（`CmnUserStore.Delete`。#294）。
+        /// **確認待ちは新しいメアドを持つ**が、**外部キーが無い**ので、利用者を消しても残っていた。
+        /// **DB では `CmnUserStore.Delete` が同じトランザクションで消す**ので、**mem だけ**を扱う。
+        /// </remarks>
+        public void DeleteCustomizedConfirmationData(string userID)
+        {
+            if (string.IsNullOrEmpty(userID)
+                || Config.UserStoreType != EnumUserStoreType.Memory)
+            {
+                return;
+            }
+
+            string temp = "";
+            CustomizedConfirmationProvider.CustomizedConfirmationData.TryRemove(userID, out temp);
         }
 
         #endregion

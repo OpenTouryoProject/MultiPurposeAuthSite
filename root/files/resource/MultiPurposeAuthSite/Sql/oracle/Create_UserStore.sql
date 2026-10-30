@@ -149,7 +149,7 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "IdTokenSignedResponseAlg" NVARCHAR2(16) NULL,
     "TokenEndpointAuthSigningAlg" NVARCHAR2(16) NULL,
     "RequestObjectSigningAlg" NVARCHAR2(16) NULL,
-    "ClientMode" NVARCHAR2(32) NULL,                 -- oauth2_oidc_mode
+    "ClientMode" NVARCHAR2(32) NULL,                 -- client_mode
     "RequirePkce" NUMBER(3) NOT NULL,                -- 真は -1（Users の bool 列と同じ）
     "ClientName" NVARCHAR2(256) NULL,                -- Users.UserName と同じ幅
     -- RFC 7591 §2 のクライアント メタデータ（#307 の段階 1）。末尾に足してある（ALTER … ADD で揃う）

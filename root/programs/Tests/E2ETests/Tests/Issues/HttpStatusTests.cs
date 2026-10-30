@@ -29,20 +29,13 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/11  玄人 幸道         新規（#196 の 1 つ目 : /token）
-//*  2026/09/11  玄人 幸道         /userinfo（RT-196.5 〜 196.7）を追加（#196 の 2 つ目）
-//*  2026/09/11  玄人 幸道         /revoke（RT-196.8 〜 196.10）を追加（#196 の 3 つ目）
-//*  2026/09/11  玄人 幸道         /introspect（RT-196.11 〜 196.13）を追加（#196 の 4 つ目）
-//*  2026/09/11  玄人 幸道         /device_authz（RT-196.14 〜 196.15）を追加（#196 の 5 つ目）
-//*  2026/09/11  玄人 幸道         /ciba_authz（RT-196.16 〜 196.18）を追加（#196 の 6 つ目）
-//*  2026/09/12  玄人 幸道         /SetDeviceToken・/ciba_result（RT-196.19 〜 196.20）を追加（#196 の 7 つ目）
-//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-196）
 //*  2026/09/16  玄人 幸道         /ciba_authz の端末未登録（RT-210.1）を追加（#210）
 //*  2026/09/16  玄人 幸道         /2fa_result の失敗（RT-213.1）を追加（#213）
 //*  2026/09/16  玄人 幸道         RT-213.1 を net48 版でも測る（#216）
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を添えた（#234 の段階 3）
 //*  2026/10/01  玄人 幸道         sub の期待値を利用者名にした（#151 の段階 3）
-//*  2026/10/01  玄人 幸道         sub の判定を id_token との一致に替えた（#151 の段階 4）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -1082,7 +1075,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 VerifyNG(r, "無効なトークン",
                     await client.CibaPushResultAsync("NOT-A-REAL-TOKEN", "dummy", "true"), 401, "invalid_token");
 
-                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+                //  **認証デバイスのクライアントでトークンを取る**（#294。この口は、それ以外のクライアントのトークンを断る）。
+                JsonResponse token = await Flows.RunAuthenticationDeviceFlowAsync(client);
 
                 Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
 
@@ -1182,7 +1176,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 VerifyNG(r, "無効なトークン",
                     await client.TwoFactorPushResultAsync("NOT-A-REAL-TOKEN", "123456"), 401, "invalid_token");
 
-                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+                //  **認証デバイスのクライアントでトークンを取る**（#294。この口は、それ以外のクライアントのトークンを断る）。
+                JsonResponse token = await Flows.RunAuthenticationDeviceFlowAsync(client);
 
                 Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
 

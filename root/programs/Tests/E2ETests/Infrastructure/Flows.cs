@@ -31,19 +31,15 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         JWK Set の取得を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         scope を登録した TestClient5 を追加（#198 の後半）
-//*  2026/09/11  玄人 幸道         トークンの更新・失効・問い合わせ（RefreshAsync / RevokeAsync / IntrospectAsync）を、テスト クラスから移す
 //*  2026/09/18  玄人 幸道         既定で無効な機能を Skip する口を追加（#220）
 //*  2026/09/18  玄人 幸道         TestClient6 と、未登録なら Skip する口を追加（#221）
 //*  2026/09/22  玄人 幸道         環境変数で差し込む TestClient4_2 と、その登録を引く口を追加（#224）
-//*  2026/09/22  玄人 幸道         登録値が不正な TestClient4_3 を追加（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
 //*  2026/09/27  玄人 幸道         記号を含む client_secret の TestClient_2 / TestClient_3 を追加（#237）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を登録した TestClient_4 を追加（#232）
 //*  2026/09/30  玄人 幸道         subject_types=pairwise のクライアント（TestClient_5）を追加（#140 の段階 2）
 //*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         RS512 で署名する TestClient_8 を追加（#129 の段階 2）
-//*  2026/10/02  玄人 幸道         ES384 / ES512 で署名する TestClient_9 / _10 を追加（#129 の段階 3）
-//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 - _13 を追加（#129 の段階 4）
 //*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
 //*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
@@ -53,7 +49,10 @@
 //*  2026/10/07  玄人 幸道         SAML2用のTestClient_21/_22とACS URLを追加（#275）
 //*  2026/10/19  玄人 幸道         private_key_jwtのTestClient_24を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         Back-Channel Logout の TestClient_26 / _27 を追加（#310 の段階 2）
-//*  2026/10/21  玄人 幸道         Front-Channel Logout の TestClient_28 を追加（#310 の段階 3）
+//*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
+//*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
+//*  2026/10/29  玄人 幸道         TestClient_30 〜 _34 を追加（#294）
+//*  2026/10/30  玄人 幸道         認証デバイスのクライアントでトークンを取る RunAuthenticationDeviceFlowAsync を追加（#294）
 //**********************************************************************************
 
 using System;
@@ -90,6 +89,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>CIBA 用</summary>
         public const string TestClient4 = "TestClient4";
 
+        /// <summary>
+        /// 同梱の認証デバイス（web ビルド。パブリック クライアント ＋ PKCE）（#294）。
+        /// **`/SetDeviceToken`・`/ciba_result`・`/2fa_result` は、このクライアントに発行したトークンだけを受ける**
+        /// （`AuthenticationDeviceClientIds`）。
+        /// </summary>
+        public const string AuthenticationDeviceWeb = "AuthenticationDevice_Web";
+
         /// <summary>登録の scope で、要求してよいスコープを制限したクライアント（#198）</summary>
         public const string TestClient5 = "TestClient5";
 
@@ -108,6 +114,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **構成ファイルには無い。** TestClient4_2 と同じく test.ps1 -Launch が差し込む。
         /// </summary>
         public const string TestClient4_3 = "TestClient4_3";
+
+        /// <summary>
+        /// TestClient4（fapi_ciba）を写し、**`token_endpoint_auth_method` を `private_key_jwt`** にしたクライアント（#294）。
+        /// </summary>
+        /// <remarks>
+        /// **CIBA の `/ciba_authz` と `/token` を、`client_assertion` で通すことを測る**（`RT-294.43`）。
+        /// **アサーションは ES256**（写し元の ECDSA の公開鍵で検証される）。
+        /// **構成ファイルには無い。** 種データ（`Sts.TestClients`）で登録される。
+        /// </remarks>
+        public const string TestClient4_4 = "TestClient4_4";
 
         /// <summary>
         /// TestClient2（fapi2）を写し、tls_client_auth_subject_dn をテスト専用の値（MtlsSubjectDn）にしたクライアント（#226）。
@@ -314,6 +330,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>同意の取り消しを測るクライアント（#272 の段階 2）</summary>
         public const string TestClient_20 = "TestClient_20";
 
+        /// <summary>登録の scope に auth を明記したクライアント（#294）</summary>
+        /// <remarks>**`auth` で同意画面を飛ばせるのは、登録に明記したクライアントだけ**である。</remarks>
+        public const string TestClient_29 = "TestClient_29";
+
         /// <summary>SAML2 を測るクライアント（#275）</summary>
         /// <remarks>
         /// **`jwk_rsa_publickey` を持たない**（写す元が TestClient3）ので、
@@ -347,6 +367,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
         /// </remarks>
         public const string TestClient_25 = "TestClient_25";
+
+        /// <summary>TestClient を写し、**`token_endpoint_auth_method` を `client_secret_basic` と明示**したクライアント（C-40。#294）</summary>
+        public const string TestClient_30 = "TestClient_30";
+
+        /// <summary>TestClient を写し、**`token_endpoint_auth_method` を `none`（パブリック）**にしたクライアント（C-40。#294）</summary>
+        public const string TestClient_31 = "TestClient_31";
+
+        /// <summary>TestClient2（fapi2）を写し、**`private_key_jwt` で認証する**クライアント（N1。#294）</summary>
+        public const string TestClient_32 = "TestClient_32";
+
+        /// <summary>TestClient を写しただけのクライアント（S3。**同じ名前の利用者をテストが作る**。#294）</summary>
+        public const string TestClient_33 = "TestClient_33";
+
+        /// <summary>TestClient を写し、**grant_types を client_credentials だけ**にしたクライアント（implicit 無し。#294）</summary>
+        public const string TestClient_34 = "TestClient_34";
 
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
@@ -391,11 +426,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_18, "e2e0tc18000000000000000000000000" },
                 { KnownClients.TestClient_19, "e2e0tc19000000000000000000000000" },
                 { KnownClients.TestClient_20, "e2e0tc20000000000000000000000000" },
+                { KnownClients.TestClient_29, "e2e0tc29000000000000000000000000" },
                 { KnownClients.TestClient_21, "e2e0sa21000000000000000000000000" },
                 { KnownClients.TestClient_22, "e2e0sa22000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
+                { KnownClients.TestClient4_4, "e2e0tc44000000000000000000000000" },
                 { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
                 { KnownClients.TestClient2_3, "e2e0tc23000000000000000000000000" },
                 { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
@@ -408,7 +445,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_10, "e2e0tc10000000000000000000000000" },
                 { KnownClients.TestClient_11, "e2e0tc11000000000000000000000000" },
                 { KnownClients.TestClient_12, "e2e0tc12000000000000000000000000" },
-                { KnownClients.TestClient_13, "e2e0tc13000000000000000000000000" }
+                { KnownClients.TestClient_13, "e2e0tc13000000000000000000000000" },
+                { KnownClients.TestClient_30, "e2e0tc30000000000000000000000000" },
+                { KnownClients.TestClient_31, "e2e0tc31000000000000000000000000" },
+                { KnownClients.TestClient_32, "e2e0tc32000000000000000000000000" },
+                { KnownClients.TestClient_33, "e2e0tc33000000000000000000000000" },
+                { KnownClients.TestClient_34, "e2e0tc34000000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -716,6 +758,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return await ExchangeCodeAsync(client, registration, authz.Code, registration.RedirectUri);
         }
 
+        /// <summary>RFC 7636 附録 B の code_verifier（認証デバイスの PKCE に使う）</summary>
+        private const string PkceVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+
+        /// <summary>RFC 7636 附録 B の code_challenge（SHA256(verifier) を BASE64URL したもの）</summary>
+        private const string PkceChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+        /// <summary>
+        /// 認証デバイスのクライアント（`AuthenticationDevice_Web`）で、認可コード フローを最後まで通す（#294）。
+        /// </summary>
+        /// <param name="client">IdPClient（サインイン済み）</param>
+        /// <param name="scope">スコープ（認証デバイスと同じ `openid email`）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **認証デバイスの役をするテストは、これでトークンを取る。**
+        /// **`/SetDeviceToken`・`/ciba_result`・`/2fa_result` は、認証デバイスのクライアントに発行したトークンだけを受ける**
+        /// （#294。以前はどの RP のトークンでも通った）。
+        /// **パブリック クライアントなので、client_secret ではなく PKCE（S256）で引き換える。**
+        /// </remarks>
+        public static async Task<JsonResponse> RunAuthenticationDeviceFlowAsync(
+            IdPClient client, string scope = "openid email")
+        {
+            ClientRegistration registration = Registration(client, KnownClients.AuthenticationDeviceWeb);
+
+            AuthZResponse authz = await AuthorizeCodeAsync(
+                client, registration, scope, "state1", "nonce1", registration.RedirectUri,
+                new Dictionary<string, string>()
+                {
+                    { "code_challenge", Flows.PkceChallenge },
+                    { "code_challenge_method", "S256" }
+                });
+
+            if (string.IsNullOrEmpty(authz.Code))
+            {
+                throw new InvalidOperationException(
+                    "認可コードを取得できませんでした: " + authz.ToString());
+            }
+
+            return await client.TokenAsync(new Dictionary<string, string>()
+            {
+                { "grant_type", "authorization_code" },
+                { "code", authz.Code },
+                { "client_id", registration.ClientId },
+                { "code_verifier", Flows.PkceVerifier },
+                { "redirect_uri", registration.RedirectUri }
+            });
+        }
+
         /// <summary>grant_type=refresh_token でトークンを取り直す</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="registration">認証に使うクライアント</param>
@@ -855,8 +944,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             // **redirect_uri を差し替えたものも、写す元の値では通らない**（C-10）。
             string overriddenRedirectUri = null;
 
-            if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3)
+            if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3
+                || clientName == KnownClients.TestClient4_4)
             {
+                // TestClient4_4 は **`private_key_jwt` で認証する**（#294）。client_secret は写す元のまま（使わない）。
                 sourceName = KnownClients.TestClient4;
             }
             else if (clientName == KnownClients.TestClient2_2 || clientName == KnownClients.TestClient2_3)
@@ -935,6 +1026,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient_19)
             {
                 // **同意を記録しないクライアント**（#272 の段階 2）。写すだけ。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_30
+                || clientName == KnownClients.TestClient_31
+                || clientName == KnownClients.TestClient_33
+                || clientName == KnownClients.TestClient_34)
+            {
+                // **写し元のまま**（変えたのは方法・grant_types だけ。#294）。
+                //   TestClient_31（none）は、**秘密を持っていても、それでは認証できない。**
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_32)
+            {
+                // **fapi2 ＋ private_key_jwt**（#294）。鍵は写し元（TestClient2）のもの。
+                sourceName = KnownClients.TestClient2;
+            }
+            else if (clientName == KnownClients.TestClient_29)
+            {
+                // **登録の scope に `auth` を明記した**（#294）。client_secret は写す元のまま。
                 sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_18)

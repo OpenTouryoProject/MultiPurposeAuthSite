@@ -30,7 +30,6 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
 //*  2026/10/11  玄人 幸道         FromRedirectQuery でSAMLRequestも読めるようにした（#286 の段階 3）
-//*  2026/10/12  玄人 幸道         アサーションの属性を読むようにした（#286 の段階 4）
 //*  2026/10/13  玄人 幸道         クエリ文字列の 1 つの値を差し替える口を追加（#293 の段階 4）
 //**********************************************************************************
 
@@ -378,7 +377,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **`Name` だけを鍵にする**（`FriendlyName` は別に持つ）。
         /// **出す側が何を名乗っているかを測る**ので、
-        /// **製品側（`CmnSamlAttributes.Read`）のような別名の解決はしない。**
+        /// **製品側（Open棟梁 の `SAML2Attributes.Read`）のような別名の解決はしない。**
         /// </remarks>
         private static Dictionary<string, string> ReadAttributes(
             XmlDocument doc, XmlNamespaceManager ns)

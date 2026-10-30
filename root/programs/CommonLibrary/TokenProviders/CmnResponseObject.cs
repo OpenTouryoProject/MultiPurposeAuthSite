@@ -54,39 +54,37 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="clientId">string</param>
         /// <param name="expiresUtc">DateTimeOffset</param>
         /// <returns>response(JARM)</returns>
+        /// <remarks>
+        /// **組み立ては Open棟梁 の `ResponseObject.Create`**（iss / aud / exp を足して署名する。#294）。
+        /// **exp は RFC 7519 の NumericDate（JSON の数値）**で入る（#201）。
+        ///
+        /// **`clientId` が空の経路は、ここに残す**（**iss / aud / exp を入れずに署名する**）。
+        /// **`ResponseObject.Create` は aud を必須にしている**（空なら `ArgumentNullException`）ので、
+        /// **呼ぶ前に分ける**（Open棟梁 #634 の補足 3-3）。
+        /// </remarks>
         public static string Create(
             Dictionary<string, string> responseDictionary,
             string clientId, DateTimeOffset? expiresUtc)
         {
-            // 応答パラメタ（code / state など）は文字列のまま、
-            // exp だけは RFC 7519 の NumericDate（JSON の数値）で入れる（#201）。
-            // 引数は Dictionary<string, string> のまま、ここで object の辞書に写す。
-            // こうすれば、両アプリの呼び出し側（30 箇所余り）を変えずに済む。
-            Dictionary<string, object> payload = new Dictionary<string, object>();
-
-            foreach (KeyValuePair<string, string> item in responseDictionary)
-            {
-                payload[item.Key] = item.Value;
-            }
+            JWS jws = CmnResponseObject.CreateJws();
 
             if (string.IsNullOrEmpty(clientId))
             {
-                // error
-            }
-            else
-            {
-                payload[OAuth2AndOIDCConst.iss] = Config.IssuerId;
-                payload[OAuth2AndOIDCConst.aud] = clientId;
-
-                // 文字列にしない（#184 と同じ）。
-                // 検証側（Open棟梁 の ResponseObject.Verify）は (string) で読むが、
-                // JSON の数値も文字列として読めるので、変更は要らない。
-                payload[OAuth2AndOIDCConst.exp] = expiresUtc.Value.ToUnixTimeSeconds();
+                return jws.Create(JsonConvert.SerializeObject(responseDictionary));
             }
 
+            return ResponseObject.Create(
+                responseDictionary, jws, CmnServerParams.IssuerId, clientId, expiresUtc.Value);
+        }
+
+        /// <summary>署名に使う JWS（RS256。kid は、その鍵の JWK の kid）</summary>
+        /// <returns>JWS</returns>
+        /// <remarks>**`jku` は入れない**（#302）。**鍵は `kid` で引く。**</remarks>
+        private static JWS CreateJws()
+        {
             // 秘密鍵
-            string pfxFilePath = Config.RsaPfxFilePath;
-            string pfxPassword = Config.RsaPfxPassword;
+            string pfxFilePath = CmnServerParams.RsaPfxFilePath;
+            string pfxPassword = CmnServerParams.RsaPfxPassword;
 
             // JWS(RS256)
             JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(pfxFilePath, pfxPassword);
@@ -97,14 +95,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             // JWSHeaderのセット
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
+                    rpkc.X509PfxToJwk(pfxFilePath, pfxPassword));
 
-            //  **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
 
-            // Create
-            return jwsRS256.Create(
-                JsonConvert.SerializeObject(payload));
+            return jwsRS256;
         }
 
         // VerifyはClient側のみなので、

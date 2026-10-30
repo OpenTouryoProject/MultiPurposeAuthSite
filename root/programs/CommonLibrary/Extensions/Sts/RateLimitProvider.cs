@@ -30,7 +30,6 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 3）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を対象に足した（#307 の段階 1）
-//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）を別の口として数える（#307 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -144,18 +143,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         Dictionary<string, string> map =
                             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-                        RateLimitProvider.Add(map, Config.OAuth2TokenEndpoint, "token");
-                        RateLimitProvider.Add(map, Config.OAuth2RevokeTokenEndpoint, "revoke");
-                        RateLimitProvider.Add(map, Config.OAuth2IntrospectTokenEndpoint, "introspect");
-                        RateLimitProvider.Add(map, Config.DeviceAuthZAuthorizeEndpoint, "device_authz");
-                        RateLimitProvider.Add(map, Config.DeviceAuthZVerifyEndpoint, "device_verify");
-                        RateLimitProvider.Add(map, Config.CibaAuthorizeEndpoint, "ciba_authz");
-                        RateLimitProvider.Add(map, OAuth2AndOIDCParams.AuthRequestPushUri, "par");
-                        RateLimitProvider.Add(map, OAuth2AndOIDCParams.JwkSetUri, "jwkcerts");
+                        RateLimitProvider.Add(map, Config.OAuth2TokenEndpoint, Const.EndpointToken);
+                        RateLimitProvider.Add(map, Config.OAuth2RevokeTokenEndpoint, Const.EndpointRevoke);
+                        RateLimitProvider.Add(map, Config.OAuth2IntrospectTokenEndpoint, Const.EndpointIntrospect);
+                        RateLimitProvider.Add(map, Config.DeviceAuthZAuthorizeEndpoint, Const.EndpointDeviceAuthZ);
+                        RateLimitProvider.Add(map, Config.DeviceAuthZVerifyEndpoint, Const.EndpointDeviceVerify);
+                        RateLimitProvider.Add(map, Config.CibaAuthorizeEndpoint, Const.EndpointCibaAuthZ);
+                        RateLimitProvider.Add(map, OAuth2AndOIDCParams.AuthRequestPushUri, Const.EndpointPar);
+                        RateLimitProvider.Add(map, OAuth2AndOIDCParams.JwkSetUri, Const.EndpointJwkCerts);
 
                         //  **動的クライアント登録**（#307 の段階 1）。
                         //    **開けていない配備でも表には入る**（口が無ければ、そもそも来ない）。
-                        RateLimitProvider.Add(map, Config.DcrRegistrationEndpoint, "register");
+                        RateLimitProvider.Add(map, Config.DcrRegistrationEndpoint, Const.EndpointRegister);
 
                         RateLimitProvider.endpoints = map;
                     }

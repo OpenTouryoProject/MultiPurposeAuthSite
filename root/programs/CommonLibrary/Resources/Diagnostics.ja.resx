@@ -1,0 +1,282 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Saml2Valid" xml:space="preserve">
+    <value>署名、Issuer、Audience、Recipient、InResponseTo、RelayState を照合した。</value>
+  </data>
+  <data name="Saml2NoResponse" xml:space="preserve">
+    <value>SAMLResponse が無い。</value>
+  </data>
+  <data name="Saml2NoSigAlg" xml:space="preserve">
+    <value>SigAlg が無いため、検証していない。</value>
+  </data>
+  <data name="Saml2NoKey" xml:space="preserve">
+    <value>署名を検証する証明書が設定されていない。</value>
+  </data>
+  <data name="Saml2Unreadable" xml:space="preserve">
+    <value>応答を読めなかった。</value>
+  </data>
+  <data name="Saml2ErrorStatus" xml:space="preserve">
+    <value>エラー応答である（StatusCode={0}）。</value>
+  </data>
+  <data name="Saml2Expired" xml:space="preserve">
+    <value>アサーションの有効期限が切れている（NotOnOrAfter={0}）。</value>
+  </data>
+  <data name="Saml2SignatureInvalid" xml:space="preserve">
+    <value>署名または XML（スキーマ）の検証で落ちた。</value>
+  </data>
+  <data name="Saml2IssuerMismatch" xml:space="preserve">
+    <value>Issuer が期待値と違う : {0}（期待 : {1}）</value>
+  </data>
+  <data name="Saml2AudienceMismatch" xml:space="preserve">
+    <value>Audience が自分の ACS URL と違う : {0}（期待 : {1}）</value>
+  </data>
+  <data name="Saml2RecipientMismatch" xml:space="preserve">
+    <value>Recipient が自分の ACS URL と違う : {0}（期待 : {1}）</value>
+  </data>
+  <data name="Saml2InResponseToMismatch" xml:space="preserve">
+    <value>InResponseTo が、送った要求の ID と違う : {0}（期待 : {1}）</value>
+  </data>
+  <data name="Saml2RelayStateMismatch" xml:space="preserve">
+    <value>RelayState が、送った state と違う。</value>
+  </data>
+  <data name="Saml2BindingRedirect" xml:space="preserve">
+    <value>Redirect（GET。署名はクエリ文字列に付く）</value>
+  </data>
+  <data name="Saml2BindingPost" xml:space="preserve">
+    <value>POST（署名は XML の中）</value>
+  </data>
+  <data name="ValueNone" xml:space="preserve">
+    <value>（無し）</value>
+  </data>
+  <data name="SelfTestCibaRequestObjectInvalid" xml:space="preserve">
+    <value>認証要求（署名付き JWT）の自己検証に失敗した。送っていない。</value>
+  </data>
+  <data name="SelfTestCibaNotAccepted" xml:space="preserve">
+    <value>認証要求が受け付けられなかった（auth_req_id が返らない） : {0}</value>
+  </data>
+  <data name="SelfTestResponseNotJson" xml:space="preserve">
+    <value>応答が JSON ではない</value>
+  </data>
+  <data name="SelfTestDeviceCodeMissing" xml:space="preserve">
+    <value>client_id か device_code が渡されていない。問い合わせていない。</value>
+  </data>
+  <data name="SelfTestReachedUserInfo" xml:space="preserve">
+    <value>トークンを取得し、/userinfo まで通った。</value>
+  </data>
+  <data name="SelfTestPollingEnded" xml:space="preserve">
+    <value>ポーリングが終了した : {0}</value>
+  </data>
+  <data name="SelfTestPollingTimedOut" xml:space="preserve">
+    <value>承認を待つ上限（{0} 秒）に達した。承認されなかった（authorization_pending のまま）。</value>
+  </data>
+  <data name="SelfTestNoError" xml:space="preserve">
+    <value>（error なし）</value>
+  </data>
+  <data name="CheckFormat" xml:space="preserve">
+    <value>[設定の確認] {0}（CONFIGURATION.md 11 節）</value>
+  </data>
+  <data name="CheckAdministratorNotFilledIn" xml:space="preserve">
+    <value>AdministratorUID / AdministratorPWD が雛形の値のままです。</value>
+  </data>
+  <data name="CheckIsDebug" xml:space="preserve">
+    <value>IsDebug が true です。テスト利用者の生成や、メール / SMS の送信の代替が有効になります。</value>
+  </data>
+  <data name="CheckTestUserPwd" xml:space="preserve">
+    <value>TestUserPWD が設定されています。IsDebug が true なら、テスト利用者が作られます。</value>
+  </data>
+  <data name="CheckTestEndpointsOpen" xml:space="preserve">
+    <value>IsLockedDownTestEndpoints が false です。自己テスト画面（/Home/Saml2OAuth2Starters）が開いています。</value>
+  </data>
+  <data name="CheckCorsWildcard" xml:space="preserve">
+    <value>CorsAllowedOrigins に * が含まれています。オリジンとして扱えない値は落とすので、その分は許可されません。https://host[:port] の形で書いてください。</value>
+  </data>
+  <data name="CheckFcmOutbox" xml:space="preserve">
+    <value>FcmOutboxDirectory が設定されています。プッシュ通知は FCM に送られず、ファイルに書かれます。</value>
+  </data>
+  <data name="CheckCibaDebugMode" xml:space="preserve">
+    <value>CibaProvider.DebugModeWithOutAD が true でビルドされています。CIBA が、認証デバイスの登録と承認なしに成立します。</value>
+  </data>
+  <data name="CheckRenamedKey" xml:space="preserve">
+    <value>改名前のキー名（{0}）が使われています。{1} に直してください。</value>
+  </data>
+  <data name="CheckDebugTraceLog" xml:space="preserve">
+    <value>EnableDebugTraceLog が true です。</value>
+  </data>
+  <data name="CheckLoosePkce" xml:space="preserve">
+    <value>{0} が false です。OAuth 2.1 に寄せるなら true にしてください（PKCE を使っていない、または plain のクライアントは通らなくなります）。</value>
+  </data>
+  <data name="SessionStoreConnectionStringRequired" xml:space="preserve">
+    <value>SessionStoreType が {0} なので、SessionStoreConnectionString が必要です。</value>
+  </data>
+  <data name="TestClientsUnknownKey" xml:space="preserve">
+    <value>TestClients.Override: 知らない項目名です: {0}</value>
+  </data>
+  <data name="ErrorScreenPathWrong" xml:space="preserve">
+    <value>このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。</value>
+  </data>
+  <data name="ErrorScreenSuppressed" xml:space="preserve">
+    <value>開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。</value>
+  </data>
+  <data name="LogErrorResponse" xml:space="preserve">
+    <value>エンドポイントがエラー応答を返した。（path: {0}, status: {1}, client_id: {2}, error: {3}, description: {4}）</value>
+  </data>
+  <data name="LogAuthorizeError" xml:space="preserve">
+    <value>認可エンドポイントがエラーを返した。（client_id: {0}, error: {1}, description: {2}, 応答: {3}）</value>
+  </data>
+  <data name="LogAuthorizeErrorToErrorPage" xml:space="preserve">
+    <value>エラー画面</value>
+  </data>
+  <data name="LogAuthorizeErrorToRedirectUri" xml:space="preserve">
+    <value>redirect_uri へ返した</value>
+  </data>
+  <data name="LogSaml2RequestNotVerified" xml:space="preserve">
+    <value>SAML2 の要求を検証できなかった。（issuer: {0}）</value>
+  </data>
+  <data name="LogSaml2RequestFailed" xml:space="preserve">
+    <value>SAML2 の要求を処理できなかった。（issuer: {0}, {1}）</value>
+  </data>
+  <data name="LogSaml2ErrorResponseFailed" xml:space="preserve">
+    <value>SAML2 のエラー応答を作れなかった。（{0}）</value>
+  </data>
+  <data name="LogWebAuthnSignInFailed" xml:space="preserve">
+    <value>WebAuthn のサインインに失敗した。（{0}）</value>
+  </data>
+  <data name="LogWebAuthnRegistrationFailed" xml:space="preserve">
+    <value>WebAuthn の登録に失敗した。（{0}）</value>
+  </data>
+  <data name="LogExternalLoginRemoteFailure" xml:space="preserve">
+    <value>外部ログインのプロバイダからの戻りを処理できなかった。（provider: {0}, {1}）</value>
+  </data>
+  <data name="LogExternalLoginRemoteError" xml:space="preserve">
+    <value>外部ログインのプロバイダがエラーを返した。（{0}）</value>
+  </data>
+  <data name="LogExternalLoginInfoMissing" xml:space="preserve">
+    <value>外部ログインの情報を読めなかった。（外部ログインの Cookie: {0}）</value>
+  </data>
+  <data name="LogExternalLoginClaimsMissing" xml:space="preserve">
+    <value>外部ログインで必要なクレームが揃わなかった。（provider: {0}, 無いもの: {1}）</value>
+  </data>
+  <data name="LogExternalLoginSignInFailed" xml:space="preserve">
+    <value>既存の外部ログインでのサインインが成功しなかった。（provider: {0}, user: {1}, result: {2}）</value>
+  </data>
+  <data name="LogExternalLoginUserFailed" xml:space="preserve">
+    <value>外部ログインの利用者を作れなかった、または結べなかった。（provider: {0}, step: {1}, errors: {2}）</value>
+  </data>
+</root>

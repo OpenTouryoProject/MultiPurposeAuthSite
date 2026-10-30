@@ -39,7 +39,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **この欄は利用者名も受ける**ので、メアド形式を強いると利用者名で入れなくなる
         /// （`ModelState` が不正になり、画面が出し戻される）。
         ///
-        /// **どちらとして扱うかは `Const.LooksLikeEmail` が決める**（`@` を含むか）。
+        /// **どちらとして扱うかは `UserIdentifier.LooksLikeEmail` が決める**（`@` を含むか）。
         /// **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の `login_hint` に
         /// 波及するため、名前の整理は後の段階に回す。
         /// </remarks>

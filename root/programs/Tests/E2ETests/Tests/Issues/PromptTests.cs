@@ -29,7 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/06  玄人 幸道         新規（#272 の段階 1）
-//*  2026/10/06  玄人 幸道         RT-272.8 / RT-272.9（prompt=login / select_account）を追加（#272）
+//*  2026/10/28  玄人 幸道         RT-272.8 : 再認証の後は同じ要求で戻り、別の要求には印が効かないことを見る（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -543,8 +543,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //   **force 無しでは素通りする**（実測で踏んだ）。
                 await client.SignInAsync(force: true);
 
+                //  **サインインの後は、同じ要求（同じ URL）へ戻る**（ブラウザの動きと同じ）。
                 AuthZResponse after = await client.AuthorizeAsync(
-                    PromptTests.Parameters(reg, "state-rt2728b", "login"));
+                    PromptTests.Parameters(reg, "state-rt2728", "login"));
 
                 r.Verify("認可コードが返る（印が効いている）",
                     !string.IsNullOrEmpty(after.Code),
@@ -552,8 +553,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     string.IsNullOrEmpty(after.Code)
                         ? "**返らなかった**（" + after.ToString() + "）" : "あり（値は伏せる）");
 
+                r.Step("(4) 別の要求の prompt=login は、また再認証を求める（印は要求ごと）");
+
+                AuthZResponse another = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2728b", "login"));
+
+                r.Verify("**別の要求には、印が効かない**（認可コードは発行されず、同じ URL へ戻される）",
+                    string.IsNullOrEmpty(another.Code)
+                        && !string.IsNullOrEmpty(another.Location) && another.Location.Contains("/authorize"),
+                    "code なし ＋ /authorize へ戻る",
+                    !string.IsNullOrEmpty(another.Code) ? "**発行された**（印が別の要求に効いた）" : (another.Location ?? another.ToString()));
+
                 r.Note("**印が無いと、ここで永久に送り返す。** `max_age=0` でも同じことが起きるので、"
                     + "**#247 で入れた印（`re_auth_at`）をそのまま使っている。**");
+
+                r.Note("**印は、再認証を求めた要求に結び付けてある**（#294）。"
+                    + "**以前は、どの要求にも効いた**ので、途中でやめた再認証の印が残ると、"
+                    + "**別の RP の `prompt=login` が再認証なしで通った。**");
 
                 r.Note("**`prompt=none login` は段階 1 で `invalid_request`** になる（`none` の併記）。"
                     + "**「UI を出せないのに再認証」にはならない。**");

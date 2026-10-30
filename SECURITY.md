@@ -58,7 +58,7 @@ but we cannot promise a fixed turnaround time.
 | `root/programs/authentication_device/` | Sample (Flutter). **Reports are welcome**, but it is a test peer for CIBA and push-based 2FA, not a shipped product |
 | `root/files/resource/X509/` | **Out of scope.** Self-signed certificates and private keys **for tests only**. The passphrase is `test`, on purpose |
 | `_appsettings.json` / `_app.config` | **Out of scope.** These are the templates. The `client_id` / `client_secret` / JWK values in them are **sample values**, and the real files (`appsettings.json` / `app.config`) are in `.gitignore` |
-| `store/` | **Out of scope.** A `docker-compose` setup for a local development database, with fixed passwords |
+| `Container/` | **Out of scope.** `docker-compose` setups for local testing (development databases, IdP containers for E2E, a test stub), with fixed passwords and test-only secrets |
 
 The framework this site is built on is a separate repository. Problems in
 `OpenTouryo.*` belong there:

@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="test.ps1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Facebook" Version="10.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.2" />
@@ -53,6 +57,21 @@
     <Reference Include="OpenTouryo.Public.Security">
       <HintPath>..\..\OpenTouryoAssemblies\Build_netcore100\net10.0\OpenTouryo.Public.Security.dll</HintPath>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- **AccountController は partial に分けてある**（#294）。IDE で AccountController.cs の下に畳んで見せる。 -->
+    <Compile Update="Controllers\AccountController.*.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
+    <!-- **ManageController も partial に分けてある**（#294）。ManageController.cs の下に畳んで見せる。 -->
+    <Compile Update="Controllers\ManageController.*.cs">
+      <DependentUpon>ManageController.cs</DependentUpon>
+    </Compile>
+    <!-- **OAuth2EndpointController も partial に分けてある**（#294）。OAuth2EndpointController.cs の下に畳んで見せる。 -->
+    <Compile Update="Controllers\OAuth2EndpointController.*.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
   
 </Project>

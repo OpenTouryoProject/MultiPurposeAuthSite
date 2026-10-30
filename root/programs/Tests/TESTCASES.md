@@ -237,7 +237,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## TC-1.5 アクセス トークンの exp と expires_in が整合する
 
@@ -982,7 +982,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - refresh_token / id_token
-  - この実装は refresh_token を生成・保存するが、応答には含めていない（CmnEndpoints.GrantDeviceAuthZ）。渡さないなら、生成しない方がよい。
+  - **device の登録には refresh_token を発行しない**（ClientModePolicy の表。#224）。**normal の登録には返す**（以前は生成・保存するだけで返していなかった。RT-294.41）。
 
 **補足**
 
@@ -1545,7 +1545,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **この認可サーバが発行する alg は `SigningKeys.SupportedAlgs`** で、`jwkcerts` と Discovery も、その一覧から作っている。**以前は、知らない alg を RS256 として扱っていた**（C-8）。**関門は 3 つ**で、**発行しない alg は即、拒否**し、**発行する alg でも、鍵（kty / crv）が合わなければ拒否**し（#129 の段階 3）、**鍵まで合っても、署名が合わなければ拒否**する（#129 の段階 4）。 |
+| 観点 | **この認可サーバが発行する alg は `JwsFactory.SupportedAlgs`** で、`jwkcerts` と Discovery も、その一覧から作っている。**以前は、知らない alg を RS256 として扱っていた**（C-8）。**関門は 3 つ**で、**発行しない alg は即、拒否**し、**発行する alg でも、鍵（kty / crv）が合わなければ拒否**し（#129 の段階 3）、**鍵まで合っても、署名が合わなければ拒否**する（#129 の段階 4）。 |
 | 根拠 | JWT BCP（RFC 8725）§3.1 / OIDC Core §3.1.3.7 / C-8 |
 | テスト | `RT12902_受けるalgは自分が発行するものだけ` |
 
@@ -1602,7 +1602,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **C-8 で「受ける alg」を固定した**（#129 の段階 1）。**段階 2 で RS384 / RS512 を足した**ので、**ここが通ることが、その証拠**になる。**受ける集合は `CmnAccessToken.SupportedAlgs` の 1 か所**で、**Discovery の `id_token_signing_alg_values_supported` も、そこから作っている。**
+- **C-8 で「受ける alg」を固定した**（#129 の段階 1）。**段階 2 で RS384 / RS512 を足した**ので、**ここが通ることが、その証拠**になる。**受ける集合は `JwsFactory.SupportedAlgs` の 1 か所**で、**Discovery の `id_token_signing_alg_values_supported` も、そこから作っている。**
 
 ## RT-129.4 Discovery の id_token_signing_alg_values_supported が、実際に発行する alg と一致する
 
@@ -1657,7 +1657,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **`RS256` / `RS384` / `RS512` は kid が同じ**（1 本の鍵で、ダイジェストだけが違う。`RT-129.3` で見ている）。**EC は曲線ごとに鍵が違う**ので、**kid も違う。**＝ **`jwkcerts` に載る鍵は 4 本**（RSA 1 本 ＋ EC 3 本。`RT-129.6`）。
-- **`kty` だけで判定していると、ここが通ってしまう**（どちらも `kty=EC`）。**`crv` まで突き合わせる**ようにした（`CmnAccessToken.IsSameKeyType`）。**実害が出る前に入れた**（ES384 / ES512 を発行し始めるのと同じ段階）。
+- **`kty` だけで判定していると、ここが通ってしまう**（どちらも `kty=EC`）。**`crv` まで突き合わせる**ようにした（`JwsFactory.IsSameKeyType`）。**実害が出る前に入れた**（ES384 / ES512 を発行し始めるのと同じ段階）。
 
 ## RT-129.6 Discovery が広告する alg すべてについて、jwkcerts に検証できる鍵が在る
 
@@ -2988,7 +2988,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | `oauth2_oidc_mode=fapi2` のクライアントは、より強いクライアント認証（mTLS / private_key_jwt）を要求する。**この性質のため、FAPI2 の経路では redirect_uri の照合まで到達しない。**照合そのものは RT-197.4 で、normal モードのクライアントを使って測る。 |
+| 観点 | `client_mode=fapi2` のクライアントは、より強いクライアント認証（mTLS / private_key_jwt）を要求する。**この性質のため、FAPI2 の経路では redirect_uri の照合まで到達しない。**照合そのものは RT-197.4 で、normal モードのクライアントを使って測る。 |
 | 根拠 | FAPI 2.0 Security Profile（クライアント認証は mTLS または private_key_jwt）/ RFC 6749 §5.2 |
 | テスト | `RT197_02_FAPI2クライアントはclient_secretのトークン要求を拒否する` |
 
@@ -3098,10 +3098,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 発行されたスコープが scopes_supported の範囲に収まる
 - 宣言済みのスコープは落とさない（絞り込みすぎない）
 - トークン応答の scope が、発行したスコープと一致する
+- auth は発行されない（登録に明記していない）
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## RT-198.2 password : scopes_supported に無いスコープを発行しない
 
@@ -3123,7 +3124,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## RT-198.3 クライアントの登録（scope）の範囲に収める : client_credentials
 
@@ -3146,7 +3147,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid, client_registration]
+- Discovery の scopes_supported = [profile, email, phone, address, auth, roles, openid, client_registration]
 
 ## RT-198.4 クライアントの登録（scope）の範囲に収める : 認可コード フロー
 
@@ -3347,7 +3348,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **サーバ全体の RequirePkce（#220）は、全クライアントが揃わないと有効にできない。**移行の途中でも、**締められるクライアントから順に締められる**必要がある。oauth2_oidc_mode=fapi1 でも PKCE は必須になるが、**そちらは ROPC / client_credentials / refresh_token も巻き添えで塞ぐ**（#222）。 |
+| 観点 | **サーバ全体の RequirePkce（#220）は、全クライアントが揃わないと有効にできない。**移行の途中でも、**締められるクライアントから順に締められる**必要がある。client_mode=fapi1 でも PKCE は必須になるが、**そちらは ROPC / client_credentials / refresh_token も巻き添えで塞ぐ**（#222）。 |
 | 根拠 | OAuth 2.1 draft §4.1.1 / #221 |
 | テスト | `RT221_01_クライアント単位でPKCEを必須にできる` |
 
@@ -3364,7 +3365,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **認可エンドポイントで弾いている。** oauth2_oidc_mode=fapi1 の経路は認可コードを発行してから /token で拒否するので、**利用者が同意まで進んだ後に失敗する**（#222）。
+- **認可エンドポイントで弾いている。** client_mode=fapi1 の経路は認可コードを発行してから /token で拒否するので、**利用者が同意まで進んだ後に失敗する**（#222）。
 
 ## RT-221.2 require_pkce は、そのクライアントにだけ効く
 
@@ -5688,6 +5689,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. prompt=login を付けて認可リクエストを送る
 1. 戻された先は、サインイン画面（サインアウトされている）
 1. 再認証すると先へ進む（繰り返しにならない）
+1. 別の要求の prompt=login は、また再認証を求める（印は要求ごと）
 
 **検証（合否を判定する）**
 
@@ -5695,10 +5697,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 同じ URL へ戻される（再認証の経路）
 - サインイン画面へ送られる
 - 認可コードが返る（印が効いている）
+- **別の要求には、印が効かない**（認可コードは発行されず、同じ URL へ戻される）
 
 **補足**
 
 - **印が無いと、ここで永久に送り返す。** `max_age=0` でも同じことが起きるので、**#247 で入れた印（`re_auth_at`）をそのまま使っている。**
+- **印は、再認証を求めた要求に結び付けてある**（#294）。**以前は、どの要求にも効いた**ので、途中でやめた再認証の印が残ると、**別の RP の `prompt=login` が再認証なしで通った。**
 - **`prompt=none login` は段階 1 で `invalid_request`** になる（`none` の併記）。**「UI を出せないのに再認証」にはならない。**
 
 ## RT-272.9 prompt=select_account は、同意済みでも同意画面を出す（アカウントを選べる画面へ）
@@ -6003,7 +6007,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **段階 5-a-2 より前は、2 件目の保存で 1 件目が消えていた** — **画面が 1 件だけを扱うために、古い行を消していた**ためである。
-- **並びを決めたのは段階 5-a-2**（`DataProvider.GetByOwner` の `ORDER BY`）。**`mem` も方言 3 つも同じ順**にしてある — **決めていないと、一覧の行が毎回入れ替わる。**
+- **並びを決めたのは段階 5-a-2**（`Saml2OAuth2DataProvider.GetByOwner` の `ORDER BY`）。**`mem` も方言 3 つも同じ順**にしてある — **決めていないと、一覧の行が毎回入れ替わる。**
 - **作り直すと別のクライアントになり、更新ではなく新規の登録になる。****`registration_access_token` も引き継げない**ので、**動的登録で作られた行は、管理 API（RFC 7592）から触れなくなる。**
 
 ## RT-277.10 **他人の `client_id` は、画面から編集も削除もできない**
@@ -6011,7 +6015,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | | |
 |---|---|
 | 観点 | **一覧から `clientId` を受ける**ようにした（#307 の段階 5-a-2）。**URL もフォームも書き換えられる**ので、**所有者の照合はサーバ側で行う。****動的登録の側は `registration_access_token` で守っている**（RFC 7592 §2）が、**画面の側は「サインインしている利用者が所有者か」だけが頼り**である。 |
-| 根拠 | #307 の段階 5-a-2 / DataProvider.GetByOwnerAndClientID |
+| 根拠 | #307 の段階 5-a-2 / Saml2OAuth2DataProvider.GetByOwnerAndClientID |
 | テスト | `RT27710_他人のclient_idは画面から触れない` |
 
 **手順**
@@ -6181,6 +6185,1636 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **このケースが測るのは、入れ物（表・辞書）と画面である。****DB の行の鍵で実際に署名するところまでは測っていない** — **配備の `.pfx` のパスワードをテストに持たせない**ためである（`TESTING.md` 9 節）。**指定した鍵で署名していることは、`CN-5.5`（コンテナ。設定の行）とその歯抜けで測っている。**
+
+## RT-294.1 登録に auth を明記していないクライアントは、scope=auth を付けても同意画面を飛ばせない
+
+| | |
+|---|---|
+| 観点 | **以前は、要求に `auth` を付けるだけで同意画面を飛ばせた**（`AccountController.OAuth2Authorize` が、要求された scope をそのまま見ていた）。**同意を求めるかを、クライアントが決めていた**ことになる。**いまは、登録に明記したクライアントの要求だけを数える。** |
+| 根拠 | OIDC Core §3.1.2.4 / §3.1.2.6（consent_required）/ #294 |
+| テスト | `RT29401_登録にauthが無ければ同意画面を飛ばさない` |
+
+**手順**
+
+1. scope=openid auth、prompt=none を指定して認可リクエストを送る
+
+**検証（合否を判定する）**
+
+- エラーは consent_required
+- 認可コードは発行されない
+
+**補足**
+
+- **このテストは「許可」を押さない。** 押すと記録が残り、**DB ストアでは 2 回目の実行から測れなくなる**（`TestClients` の表に注記してある）。
+
+## RT-294.2 登録に auth を明記したクライアントは、同意画面を出さずに code を返し、scope を auth と openid に絞る
+
+| | |
+|---|---|
+| 観点 | **`auth` の働きそのものは残す**（認証だけをしたいクライアント向け）。**登録で絞った結果、明記したクライアントで効かなくなっていない**ことを確かめる。**属性は渡さない**ので、`email` を一緒に要求しても発行されない（`FilterClaimAtAuth`）。 |
+| 根拠 | OIDC Core §3.1.2.4 / #294 |
+| テスト | `RT29402_登録にauthを明記すれば同意画面を飛ばす` |
+
+**手順**
+
+1. scope=openid auth email、prompt=none を指定して認可リクエストを送る
+1. code をトークンに交換し、発行された scope を見る
+
+**検証（合否を判定する）**
+
+- 認可コードが返る（同意画面を飛ばした）
+- auth が発行される
+- email は発行されない（属性を渡さない）
+
+## RT-294.3 scope=AUTH は auth として扱わない（登録に auth を明記したクライアントでも、同意画面を飛ばさない）
+
+| | |
+|---|---|
+| 観点 | **以前は小文字にしてから比べていた**ので、`AUTH` でも同意画面を飛ばした。**scope の値は case-sensitive**（RFC 6749 §3.3）。**`AUTH` は、この配備が扱わない別の scope** である。 |
+| 根拠 | RFC 6749 §3.3 / #294 |
+| テスト | `RT29403_authは大文字小文字を区別する` |
+
+**手順**
+
+1. scope=openid AUTH、prompt=none を指定して認可リクエストを送る
+
+**検証（合否を判定する）**
+
+- エラーは consent_required
+- 認可コードは発行されない
+
+## RT-294.4 確認待ちのメアドで登録し直しても、既存の利用者は作り直されない
+
+| | |
+|---|---|
+| 観点 | **以前は、確認待ちの利用者を消して、送られてきたパスワードで作り直していた。****他人が登録し直すとパスワードを差し替えられ**、**確認のメールは本人に届くので、本人が踏むと差し替えたパスワードのまま確認済みになった。****作り直しをやめ、既存の利用者に確認のメールを送り直すだけにした**（画面は成功のときと同じ）。 |
+| 根拠 | #294（AccountController.SignUp.cs のレビュー 1・3・4） |
+| テスト | `RT29404_確認待ちのメアドで登録し直しても作り直されない` |
+
+**手順**
+
+1. 1 人目をサインアップする（メアドは確認待ちのまま）
+1. 同じメアドで、別の利用者名で登録し直す
+1. 管理画面の一覧で、利用者を確かめる
+1. 後片付け : 管理画面から削除する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- **成功のときと同じ画面**（メアド検証の画面。入力欄もエラーも無い）
+- **1 人目が残っている**（消して作り直していない）
+- **2 人目は作られていない**
+
+**補足**
+
+- **パスワードは変わらない。** 忘れていれば、パスワードの失念から戻せる（確認前でもリセットできる）。**確認のメールは 1 人目に送り直される**（中身は測れない）。
+
+## RT-294.5 パスワードの失念は、居ないメアドでも、居るメアドと同じ画面になる
+
+| | |
+|---|---|
+| 観点 | **コメントには「ユーザーが存在しないことを（UI経由で）公開しない」と書いてあった**が、**居なければ入力画面を出し直し、居れば確認画面を出していた。****画面の違いで、メアドが登録されているかが分かった。****どちらも確認画面を返す**ように直した（メールは居るときだけ送る）。 |
+| 根拠 | #294（AccountController.SignUp.cs のレビュー 2） |
+| テスト | `RT29405_パスワードの失念は居ないメアドでも同じ画面になる` |
+
+**手順**
+
+1. 居る利用者を作る（サインアップ。確認待ちでもリセットできる）
+1. 居るメアドで、パスワードの失念を送る
+1. 居ないメアドで、パスワードの失念を送る
+1. 後片付け : 管理画面から削除する
+
+**検証（合否を判定する）**
+
+- HTTP 200（居る）
+- 確認画面になる（入力欄が無い）
+- HTTP 200（居ない）
+- **確認画面になる**（入力画面を出し直さない）
+- **居るときと同じ画面である**（題名・見出し・欄）
+
+## RT-294.6 利用者が居ないメアド検証・リセットは、500 にならずエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **メールのリンクは、利用者が消えた後にも踏まれる**（古いメール・書き換えた URL）。**以前は、引けなかった利用者（null）をそのまま Identity に渡し、500 になっていた。****4 か所とも、エラー画面を返す**ように直した。 |
+| 根拠 | #294（AccountController.SignUp.cs のレビュー 5） |
+| テスト | `RT29406_利用者が居ないときはエラー画面になる` |
+
+**手順**
+
+1. GET /Account/EmailConfirmation
+1. POST /Account/EmailConfirmation（約款に同意）
+1. GET /Account/ResetPassword
+1. POST /Account/ResetPassword
+
+**検証（合否を判定する）**
+
+- GET /Account/EmailConfirmation : HTTP 200（500 にならない）
+- GET /Account/EmailConfirmation : エラー画面になる
+- POST /Account/EmailConfirmation : HTTP 200（500 にならない）
+- POST /Account/EmailConfirmation : エラー画面になる
+- GET /Account/ResetPassword : HTTP 200（500 にならない）
+- GET /Account/ResetPassword : エラー画面になる
+- POST /Account/ResetPassword : HTTP 200（500 にならない）
+- POST /Account/ResetPassword : エラー画面になる
+
+**補足**
+
+- **(2) は約款を出す配備（DisplayAgreementScreen）でだけ、利用者を引く枝に入る。****出さない配備では、入口でエラー画面になる**（どちらでもエラー画面であることは同じ）。
+
+## RT-294.7 リセット画面は、code が合わなければメアドを出さない（エラー画面になる）
+
+| | |
+|---|---|
+| 観点 | **以前は code を確かめずに、userId の利用者のメアドを画面に出していた。****userId が分かれば、code が何でもメアドが読めた。****code を確かめてから画面を出す**ように直した（合わなければエラー画面）。 |
+| 根拠 | #294（AccountController.SignUp.cs のレビュー 6） |
+| テスト | `RT29407_リセット画面はcodeが合わなければメアドを出さない` |
+
+**手順**
+
+1. 利用者を作り、管理画面の一覧で id を引く
+1. でたらめな code で、リセット画面を開く
+1. 後片付け : 管理画面から削除する
+
+**検証（合否を判定する）**
+
+- HTTP 200（500 にならない）
+- **エラー画面になる**
+- **メアドが画面に出ない**
+
+**補足**
+
+- **正しい code での表示は測れない**（code はメールでしか届かない）。
+
+## RT-294.8 TOTP でサインインすると、セッションが初期化され、1 回間違えても戻り先へ戻る
+
+| | |
+|---|---|
+| 観点 | **パスワード・コードの 2FA・プッシュ承認は、サインインの後にセッションを初期化する**（セッション ID の切り替え、`auth_time` と OP のセッション（#310 の `sid`）の Cookie）。**TOTP の 2 か所だけ、それを呼んでいなかった。****また、1 回間違えると画面を出し直すときに戻り先を渡さず、認可要求の続きに戻れなかった。** |
+| 根拠 | #294（AccountController.TwoFactor.cs のレビュー 1・4） |
+| テスト | `RT29408_TOTPでサインインするとセッションが初期化される` |
+
+**手順**
+
+1. 利用者を作り、認証アプリを登録して 2FA を有効にする
+1. パスワードでサインインし、手段に認証アプリを選ぶ
+1. まず、間違ったコードを送る
+1. 正しいコードを送る（再表示されたフォームから）
+
+**検証（合否を判定する）**
+
+- TOTP の入力画面へ送られる
+- HTTP 200（再表示）
+- エラーが出ている
+- **再表示のフォームが、戻り先を持っている**
+- **戻り先へリダイレクトする**
+- **`auth_time` の Cookie が書かれている**（InitSessionAfterlogin）
+- **OP のセッションの Cookie が書かれている**（#310 の `sid` の元）
+- 保護された画面が開く
+
+## RT-294.9 回復コードでサインインしても、セッションが初期化され、戻り先へ戻る
+
+| | |
+|---|---|
+| 観点 | **RT-294.8 と同じ穴が、回復コードの口にもあった。** |
+| 根拠 | #294（AccountController.TwoFactor.cs のレビュー 1） |
+| テスト | `RT29409_回復コードでサインインするとセッションが初期化される` |
+
+**手順**
+
+1. 利用者を作り、認証アプリを登録して 2FA を有効にする（回復コードも受け取る）
+1. パスワードでサインインし、認証アプリを選んだ後、回復コードの画面へ
+1. 回復コードを送る
+
+**検証（合否を判定する）**
+
+- 回復コードの入力画面が開く
+- **戻り先へリダイレクトする**
+- **`auth_time` の Cookie が書かれている**（InitSessionAfterlogin）
+- **OP のセッションの Cookie が書かれている**（#310 の `sid` の元）
+
+## RT-294.10 2FA の途中でなければ、TOTP・回復コードの画面はエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **コードの 2FA（SendCode / VerifyCode）は、パスワードを通った後でなければエラー画面を返す。****TOTP・回復コードの画面だけ、確かめるコードがコメントアウトされていて、誰でも開けた。** |
+| 根拠 | #294（AccountController.TwoFactor.cs のレビュー 5） |
+| テスト | `RT29410_2FAの途中でなければTOTPの画面は開かない` |
+
+**手順**
+
+1. GET /Account/LoginWithTwoFactorAuthenticator?rememberMe=false
+1. GET /Account/LoginWithTwoFactorAuthenticatorRecoveryCode
+
+**検証（合否を判定する）**
+
+- /Account/LoginWithTwoFactorAuthenticator?rememberMe=false : HTTP 200
+- /Account/LoginWithTwoFactorAuthenticator?rememberMe=false : **エラー画面になる**（入力画面を出さない）
+- /Account/LoginWithTwoFactorAuthenticatorRecoveryCode : HTTP 200
+- /Account/LoginWithTwoFactorAuthenticatorRecoveryCode : **エラー画面になる**（入力画面を出さない）
+
+## RT-294.11 TOTP を続けて間違えると、ロックアウトの画面になる（404 にならない）
+
+| | |
+|---|---|
+| 観点 | **`Lockout` はアクションではなく画面である**（`Views/Shared/Lockout.cshtml`）。**TOTP・回復コードの 2 か所だけ `RedirectToAction("Lockout")` で、行き先が 404 だった。** |
+| 根拠 | #294（AccountController.TwoFactor.cs のレビュー 3） |
+| テスト | `RT29411_TOTPを続けて間違えるとロックアウトの画面になる` |
+
+**手順**
+
+1. パスワードでサインインし、認証アプリを選ぶ
+1. ロックアウトするまで、間違ったコードを送る（上限 20 回）
+
+**検証（合否を判定する）**
+
+- HTTP 200（404 にならない）
+- **ロックアウトの画面になる**
+
+## RT-294.12 画面に出していない手段を選ぶと、送らずに選び直しになる
+
+| | |
+|---|---|
+| 観点 | **選ばれた手段を、画面に出した選択肢と突き合わせていなかった。****知らない値は TOTP として扱い、認証アプリを登録していない利用者も TOTP の画面へ送っていた。** |
+| 根拠 | #294（AccountController.TwoFactor.cs のレビュー 9） |
+| テスト | `RT29412_画面に出していない手段は選べない` |
+
+**手順**
+
+1. パスワードでサインインし、存在しない手段を選ぶ
+
+**検証（合否を判定する）**
+
+- HTTP 200（選び直しの画面）
+- **手段の選択画面が、エラー付きで出し直される**
+
+## RT-294.13 コードの 2FA（Email）で間違えると文言が出て、ブラウザ記憶は既定で入っていない
+
+| | |
+|---|---|
+| 観点 | **net10.0 版は、コードの誤り（`Failed`）で文言を出していなかった**（`IsNotAllowed` だけを見ていた）。**両版とも、ブラウザ記憶を常に入れた状態で画面を出していた**（既定のままだと、そのブラウザでは次から 2FA を飛ばした）。 |
+| 根拠 | #294（AccountController.TwoFactor.cs のレビュー 2・6） |
+| テスト | `RT29413_コードの2FAで間違えると文言が出る` |
+
+**手順**
+
+1. 利用者を作り、2FA を有効にする
+1. パスワードでサインインし、手段に Email を選ぶ
+1. 間違ったコードを送る
+
+**検証（合否を判定する）**
+
+- **ブラウザ記憶のチェックボックスが、既定で入っていない**
+- HTTP 200（再表示）
+- **エラーの文言が出る**
+
+## RT-294.14 メールの送信に失敗しても、画面は普段どおりで、サイトは落ちない
+
+| | |
+|---|---|
+| 観点 | **メールの送信は `async void` で、呼ぶ側は待っていなかった。****SMTP の失敗が処理されない例外になり、net10.0 版ではプロセスが落ちた**（サインアップ・パスワードの失念は、誰でも押せる）。**送信を要求から切り離し、失敗は受け止めて記録する**ように直した。 |
+| 根拠 | #294（AccountController.Helper.cs のレビュー 1） |
+| テスト | `RT29414_メールの送信に失敗してもサイトは落ちない` |
+
+**手順**
+
+1. サインアップする（確認のメールの送信が失敗する）
+1. 同じメアドで、パスワードの失念を送る（リセットのメールの送信も失敗する）
+1. 送信の失敗が起きるのを待ってから、サイトがまだ応えるかを見る
+1. 後片付け : 管理画面から削除する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- **メアド検証の画面になる**（送信の失敗を画面に出さない）
+- HTTP 200
+- 確認画面になる（入力欄が無い）
+- **サイトが応える**（プロセスが落ちていない）
+
+**補足**
+
+- **送信の失敗は、OPERATION ログに「could not be sent」として残る**（E2E では読まない）。
+
+## RT-294.15 /device_verify は、AntiForgery トークンが無ければ承認しない
+
+| | |
+|---|---|
+| 観点 | **画面はトークンを埋めていたが、アクションが検証していなかった。****認証の Cookie は `SameSite=None`** なので、**別のサイトからの POST にも Cookie が付く。****利用者が意図しない `user_code` の承認を送らせられた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S1）/ RFC 8628 §5.4 |
+| テスト | `RT29415_device_verifyはトークンが無ければ承認しない` |
+
+**手順**
+
+1. 機器 : デバイス認可を始める
+1. サインイン済みの利用者のブラウザから、トークン無しで承認を送る
+1. 機器 : トークンを要求する
+
+**検証（合否を判定する）**
+
+- **承認されない**（"Accepted." を出さない）
+- **まだ authorization_pending**（承認は通っていない）
+- トークンを発行しない
+
+## RT-294.16 同意の記録が無いクライアントの Hybrid は、同意を求める（prompt=none なら consent_required）
+
+| | |
+|---|---|
+| 観点 | **同意の判定は、code の分岐の中にしか無かった。****Implicit と Hybrid は、サインインしていれば同意を確かめずにトークンを発行した**（#272 の `consent_required` も効いていなかった）。**3 つのフローで共通にした。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S2）/ OIDC Core §3.1.2.6 |
+| テスト | `RT29416_同意の無いHybridは同意を求める` |
+
+**手順**
+
+1. prompt=none で要求する
+1. prompt を付けずに要求する
+
+**検証（合否を判定する）**
+
+- **consent_required が返る**
+- code も id_token も返さない
+- **フラグメントで返る**（トークンを含む応答の形）
+- **同意画面が出る**（トークンを返さない）
+
+**補足**
+
+- **「許可」は押さない**（`TestClient_19` に同意の記録を残さない）。
+
+## RT-294.17 auth_time の Cookie を書き換えても、max_age の再認証は飛ばせない
+
+| | |
+|---|---|
+| 観点 | **`max_age` の判定と id_token の `auth_time` は、平文の Cookie を読んでいた。****ブラウザ側で書き換えると、再認証を飛ばし、偽の時刻を RP に保証した。****値を改ざんできない形で包む**ようにした（DataProtection / MachineKey）。 |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S3）/ OIDC Core §3.1.2.1 |
+| テスト | `RT29417_auth_timeのCookieを書き換えても再認証は飛ばせない` |
+
+**手順**
+
+1. サインインから 2 秒待ち、auth_time の Cookie を「いま」の平文に書き換える
+1. max_age=1 で要求する
+
+**検証（合否を判定する）**
+
+- **認可コードは発行されない**（書き換えた時刻を信じない）
+- **再認証の経路へ送られる**（同じ URL へ戻される）
+
+## RT-294.18 再認証の印の Cookie を書き換えても、prompt=login の再認証は飛ばせない
+
+| | |
+|---|---|
+| 観点 | **`prompt=login` の印は、平文の Cookie が有るか無いかしか見ていなかった。****ブラウザ側で置くだけで、再認証を飛ばせた。****印は改ざんできない形で包み、再認証を求めた要求に結び付けた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー S3）/ OIDC Core §3.1.2.1 |
+| テスト | `RT29418_再認証の印を書き換えてもprompt_loginは飛ばせない` |
+
+**手順**
+
+1. 再認証の印の Cookie を、平文で置く
+1. prompt=login で要求する
+
+**検証（合否を判定する）**
+
+- **認可コードは発行されない**（置いた印を信じない）
+- **再認証の経路へ送られる**（同じ URL へ戻される）
+
+## RT-294.19 Hybrid のエラーを JARM（fragment.jwt）で求めると、iss・aud・exp の入った JWT で返る
+
+| | |
+|---|---|
+| 観点 | **エラーは、response_mode に関係なく query の平文で返していた。****また、Implicit の JARM は aud / exp / iss を入れていなかった**（JARM §2.1 では必須）。**応答の組み立てを 1 か所にまとめ、エラーも response_mode に従うようにした。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 4・6）/ JARM §2.1 / §2.3 |
+| テスト | `RT29419_HybridのエラーはJARMで返る` |
+
+**検証（合否を判定する）**
+
+- **フラグメントに response（JWT）が返る**
+- error は consent_required
+- **iss が入る**
+- **aud は client_id**
+- **exp が数値で入る**
+
+## RT-294.20 Hybrid に response_mode=query は使えない（invalid_request が、フラグメントで返る）
+
+| | |
+|---|---|
+| 観点 | **トークンを含む応答に query は使わない**（OAuth 2.0 Multiple Response Types §5）。**以前は、発行した後で応答を作れず、`error` が空のまま RP へ返っていた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 6） |
+| テスト | `RT29420_Hybridにresponse_modeのqueryは使えない` |
+
+**検証（合否を判定する）**
+
+- **invalid_request が返る**（error が空でない）
+- **フラグメントで返る**（その response_type の既定の形）
+- code も id_token も返さない
+
+## RT-294.21 request_uri（PAR）の Request Object と違う client_id を付けると、断る
+
+| | |
+|---|---|
+| 観点 | **クエリの client_id を、Request Object の値で確かめずに上書きしていた**（RFC 9126 §4 / RFC 9101 §5 は一致を求める）。 |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 8） |
+| テスト | `RT29421_RequestObjectと違うclient_idは断る` |
+
+**手順**
+
+1. TestClient で、認可要求を預ける
+1. 別のクライアントの client_id と、その request_uri で認可する
+
+**検証（合否を判定する）**
+
+- **認可コードは発行されない**
+- **RP へ送らず、エラー画面になる**（どちらの redirect_uri も信じない）
+
+## RT-294.22 同意画面のボタン（許可・拒否・別のアカウント）を送らない POST は、invalid_request を RP へ返す
+
+| | |
+|---|---|
+| 観点 | **以前は画面を出し直していたが、画面の値（ViewBag）を組まずに返していた。** |
+| 根拠 | #294（AccountController.Authorize.cs のレビュー 7） |
+| テスト | `RT29422_同意画面のボタンが無いPOSTはinvalid_request` |
+
+**手順**
+
+1. 同意画面を出す
+1. ボタンを付けずに POST する（トークンだけを送る）
+
+**検証（合否を判定する）**
+
+- **invalid_request を RP へ返す**
+- state がそのまま返る
+
+## RT-294.23 OIDC の ID 連携でサインインすると、連携を始めた画面の ReturnUrl へ戻る
+
+| | |
+|---|---|
+| 観点 | **以前は、ID 連携の後は常に Home へ戻していた**（`RedirectToLocal(絶対 URL)` はローカルと判定されず Home になる）。**認可要求の途中で ID 連携を使うと、RP への認可が続かなかった。****連携を始めるときに ReturnUrl を控え、戻ってきたら、そこへ返す**ようにした。 |
+| 根拠 | #294（AccountController.*.cs のレビュー：ID 連携の戻り先） |
+| テスト | `RT29423_OIDCのID連携の後はReturnUrlへ戻る` |
+
+**手順**
+
+1. ReturnUrl を付けて「ID連携でサインイン」を押し、最後まで流す
+
+**検証（合否を判定する）**
+
+- **ReturnUrl へ戻る**（Home ではない）
+
+## RT-294.24 SAML2 の ID 連携でサインインすると、連携を始めた画面の ReturnUrl へ戻る
+
+| | |
+|---|---|
+| 観点 | **RT-294.23 と同じ穴が、SAML2 の ID 連携にもあった。** |
+| 根拠 | #294（AccountController.*.cs のレビュー：ID 連携の戻り先） |
+| テスト | `RT29424_SAML2のID連携の後はReturnUrlへ戻る` |
+
+**手順**
+
+1. ReturnUrl を付けて「SAML2 の ID 連携」を押し、最後まで流す
+
+**検証（合否を判定する）**
+
+- **ReturnUrl へ戻る**（Home ではない）
+
+## RT-294.25 登録されていない外部ログインの provider は、500 にならず、サインイン画面へ戻す
+
+| | |
+|---|---|
+| 観点 | **net10.0 版は、知らない provider で `Challenge` が例外を出し、500 になっていた。****登録されている provider かを確かめてから始める**ようにした（両版）。 |
+| 根拠 | #294（AccountController.*.cs のレビュー B4） |
+| テスト | `RT29425_知らない外部ログインのproviderはサインイン画面へ戻す` |
+
+**検証（合否を判定する）**
+
+- **500 にならない**
+- **サインイン画面へ戻す**
+
+## RT-294.26 サインアップして、メールの確認のリンクを踏むと、サインインできるようになる
+
+| | |
+|---|---|
+| 観点 | **確認のリンクはメールでしか届かない**ので、**この流れは E2E で 1 度も通していなかった**（カバレッジで `EmailConfirmation` が通っていなかった）。**メールの送信箱（`MailOutbox`）から読む。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29426_メアドの確認のリンクを踏むとサインインできる` |
+
+**手順**
+
+1. サインアップする
+1. 送信箱から、確認のメールを読む
+1. リンクを踏む（約款を出す配備なら、同意して送る）
+1. サインインする
+
+**検証（合否を判定する）**
+
+- 確認の前は、サインインできない
+- 確認のメールが届く
+- HTTP 200
+- **エラー画面にならない**（確認が通る）
+- **確認の後は、サインインできる**
+
+## RT-294.27 パスワードの失念のメールのリンクから、パスワードをリセットできる
+
+| | |
+|---|---|
+| 観点 | **リセットのリンクはメールでしか届かない**ので、**この流れは E2E で 1 度も通していなかった。****正しい code のときは、画面に利用者のメアドが出る**（C-30 の裏返し）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29427_パスワードをリセットできる` |
+
+**手順**
+
+1. パスワードの失念を送る
+1. 送信箱から、リセットのメールを読む
+1. リンクを踏む
+1. 新しいパスワードを送る
+1. 新しいパスワードでサインインする
+
+**検証（合否を判定する）**
+
+- リセットのメールが届く
+- **リセットの画面が開く**（正しい code）
+- **画面に利用者のメアドが出る**（正しい code のときだけ。C-30）
+- **完了の画面になる**（入力欄もエラーも無い）
+- **新しいパスワードで入れる**
+- **古いパスワードでは入れない**
+
+## RT-294.28 確認待ちの利用者は、パスワードが合っても違っても、サインインできない（画面にエラーが出る）
+
+| | |
+|---|---|
+| 観点 | **確認待ちの利用者でサインインするテストが無かった**（C-33 の経路）。**パスワードが合えば確認のメールを送り直し、違えば利用者が居ないときと同じ応答にする。** |
+| 根拠 | #294（E2E の拡充 / C-33） |
+| テスト | `RT29428_確認待ちの利用者はサインインできない` |
+
+**手順**
+
+1. 正しいパスワードでサインインする
+1. 違うパスワードでサインインする
+
+**検証（合否を判定する）**
+
+- 正しいパスワード : **サインインしない**（画面を出し直し、エラーを出す）
+- 違うパスワード : **サインインしない**（画面を出し直し、エラーを出す）
+
+## RT-294.29 コードの 2FA（Email）で、メールのコードを入れるとサインインでき、戻り先へ戻る
+
+| | |
+|---|---|
+| 観点 | **コードはメールでしか届かない**ので、**コードの 2FA が成功する経路は E2E で通していなかった**（RT-294.13 は、間違ったコードの経路だけ）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29429_メールのコードで2FAを通る` |
+
+**手順**
+
+1. パスワードでサインインし、手段に Email を選ぶ
+1. 送信箱から、コードを読む
+1. コードを入れる
+
+**検証（合否を判定する）**
+
+- コードのメールが届く
+- **戻り先へリダイレクトする**（サインインできた）
+- `auth_time` の Cookie が書かれている（セッションの初期化）
+
+## RT-294.30 外部ログインの戻りの口（ExternalLoginCallback）は、失敗を 500 にせず、サインインもしない
+
+| | |
+|---|---|
+| 観点 | **外部プロバイダ（Google など）は E2E で動かせない**ので、**この口は 1 度も叩いていなかった。****失敗の口だけは叩ける**（プロバイダのエラー、外部ログインの Cookie が無い）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29430_外部ログインの戻りの失敗は500にしない` |
+
+**手順**
+
+1. GET /Account/ExternalLoginCallback?remoteError=access_denied
+1. GET /Account/ExternalLoginCallback
+
+**検証（合否を判定する）**
+
+- /Account/ExternalLoginCallback?remoteError=access_denied : **サインイン画面へ戻すか、失敗の画面を出す**（500 にしない）
+- /Account/ExternalLoginCallback : **サインイン画面へ戻すか、失敗の画面を出す**（500 にしない）
+- **サインインしていない**（保護された画面は開かない）
+
+## RT-294.31 ID 連携の受け口（OIDC の Redirect エンドポイント・SAML2 の ACS）は、連携を始めていない要求をエラー画面で断る
+
+| | |
+|---|---|
+| 観点 | **受け口の失敗の経路を叩いていなかった。****連携を始めた記録（セッションの state・上流）が無ければ、上流の応答を受け取らない。** |
+| 根拠 | #294（E2E の拡充）/ #253 |
+| テスト | `RT29431_ID連携の受け口は始めていない要求を断る` |
+
+**手順**
+
+1. GET /Account/IDFederationRedirectEndPoint?code=dummy&state=dummy
+1. GET /Account/IDFederationRedirectEndPoint?error=access_denied&state=dummy
+1. GET /Account/IDFederationAssertionConsumerService?SAMLResponse=dummy&RelayState=dummy
+
+**検証（合否を判定する）**
+
+- /Account/IDFederationRedirectEndPoint?code=dummy&state=dummy : HTTP 200（500 にならない）
+- /Account/IDFederationRedirectEndPoint?code=dummy&state=dummy : **エラー画面になる**（サインインしない）
+- /Account/IDFederationRedirectEndPoint?error=access_denied&state=dummy : HTTP 200（500 にならない）
+- /Account/IDFederationRedirectEndPoint?error=access_denied&state=dummy : **エラー画面になる**（サインインしない）
+- /Account/IDFederationAssertionConsumerService?SAMLResponse=dummy&RelayState=dummy : HTTP 200（500 にならない）
+- /Account/IDFederationAssertionConsumerService?SAMLResponse=dummy&RelayState=dummy : **エラー画面になる**（サインインしない）
+- **サインインしていない**（保護された画面は開かない）
+
+## RT-294.32 既に使われている利用者名でサインアップすると、画面にエラーを出し、利用者を作らない
+
+| | |
+|---|---|
+| 観点 | **利用者の作成（`CreateAsync`）が失敗する経路を通していなかった**（`AddErrors` が 1 度も通っていなかった）。**確認待ちのメアドの登録し直し（RT-294.4）とは別の経路である**（利用者名の重複は、作成で断られる）。 |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29432_使われている利用者名ではサインアップできない` |
+
+**手順**
+
+1. 同じ利用者名・別のメアドでサインアップする
+
+**検証（合否を判定する）**
+
+- **サインアップの画面を出し直し、エラーを出す**
+- **先の利用者のメアドは変わらない**
+- **別のメアドの利用者は作られない**
+
+## RT-294.33 メアドの確認・パスワードのリセットは、パラメタが無い・code が違えば、通さない（パスワードは変わらない）
+
+| | |
+|---|---|
+| 観点 | **RT-294.6 / .7 は「利用者が居ない」経路だけ**で、**パラメタが無い・code が違う・入力が合わない経路は通していなかった。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29433_パラメタが無いかcodeが違えば確認もリセットも通さない` |
+
+**手順**
+
+1. GET /Account/EmailConfirmation
+1. GET /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus
+1. GET /Account/ResetPassword
+1. POST /Account/ResetPassword（code が違う）
+1. POST /Account/ResetPassword（確認の入力が合わない）
+
+**検証（合否を判定する）**
+
+- /Account/EmailConfirmation : HTTP 200（500 にならない）
+- /Account/EmailConfirmation : **エラー画面になる**
+- /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus : **エラー画面になる**
+- /Account/ResetPassword : HTTP 200（500 にならない）
+- /Account/ResetPassword : **エラー画面になる**
+- code が違う : **リセットの画面を出し直し、エラーを出す**
+- 確認の入力が合わない : **リセットの画面を出し直し、エラーを出す**
+- **パスワードは変わらない**（元のパスワードで入れる）
+
+## RT-294.34 パスワードの失念を続けて送っても、リセットのメールは 1 通だけ（画面は同じ）
+
+| | |
+|---|---|
+| 観点 | **`MailResendIntervalSeconds` の絞り（C-31）を、パスワードの失念で確かめていなかった**（`SendConfirmEmailForPasswordReset` の絞りの分岐が通っていなかった）。**画面は変えない**ので、**数えられるのは送信箱だけ**である。 |
+| 根拠 | #294（E2E の拡充 / C-31） |
+| テスト | `RT29434_リセットのメールは続けて送らない` |
+
+**手順**
+
+1. パスワードの失念を送る
+1. パスワードの失念を送る
+
+**検証（合否を判定する）**
+
+- (1) **確認の画面になる**（入力欄もエラーも無い）
+- (2) **確認の画面になる**（入力欄もエラーも無い）
+- **リセットのメールは 1 通だけ**
+
+## RT-294.35 2FA の途中でなければ、コードの 2FA の口（手段の選択・コードの入力・プッシュの状態）は通さない
+
+| | |
+|---|---|
+| 観点 | **RT-294.10 は TOTP・回復コードの画面（GET）だけ**で、**コードの 2FA の口と、POST・プッシュの状態の口は、2FA の途中でない要求を通していなかった。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29435_2FAの途中でなければコードの口は通さない` |
+
+**手順**
+
+1. GET /Account/SendCode?rememberMe=false
+1. GET /Account/VerifyCode?provider=Email&rememberMe=false&rememberBrowser=false
+1. POST /Account/SendCode
+1. POST /Account/VerifyCode
+1. GET /Account/TwoFactorPushStatus
+1. POST /Account/LoginWithTwoFactorAuthenticator?rememberMe=false
+1. POST /Account/LoginWithTwoFactorAuthenticatorRecoveryCode
+
+**検証（合否を判定する）**
+
+- /Account/SendCode?rememberMe=false : HTTP 200
+- /Account/SendCode?rememberMe=false : **エラー画面になる**
+- /Account/VerifyCode?provider=Email&rememberMe=false&rememberBrowser=false : HTTP 200
+- /Account/VerifyCode?provider=Email&rememberMe=false&rememberBrowser=false : **エラー画面になる**
+- POST /Account/SendCode : **エラー画面になる**（コードを送らない）
+- POST /Account/VerifyCode : **リダイレクトしない**（サインインしない）
+- GET /Account/TwoFactorPushStatus : **承認されていない**（`approved` が false）
+- POST /Account/LoginWithTwoFactorAuthenticator?rememberMe=false : **エラー画面になる**
+- POST /Account/LoginWithTwoFactorAuthenticatorRecoveryCode : **エラー画面になる**
+- **サインインしていない**（保護された画面は開かない）
+
+## RT-294.36 2FA のコードのメールが送れなければ、手段の選択の画面を出し直し、文言を出す（500 にしない）
+
+| | |
+|---|---|
+| 観点 | **コードの送信に失敗する経路（#214 の catch）を通していなかった。****送信の失敗は、IsDebug のサイトが特定のドメイン宛てで起こす**（RT-294.14 と同じ）。 |
+| 根拠 | #294（E2E の拡充）/ #214 |
+| テスト | `RT29436_2FAのコードを送れなければ選び直しになる` |
+
+**手順**
+
+1. パスワードでサインインし、手段に Email を選ぶ
+
+**検証（合否を判定する）**
+
+- **手段の選択の画面を出し直し、文言を出す**（コードの入力へ進まない）
+
+## RT-294.37 パスワードを続けて間違えると、ロックアウトの画面になり、正しいパスワードでも入れない（確認済み・確認待ちとも）
+
+| | |
+|---|---|
+| 観点 | **パスワードのサインインでロックアウトする経路を通していなかった**（RT-294.11 は TOTP）。**確認待ちの利用者は、別の経路で失敗を数える**（C-33。`AccessFailedAsync`）。**確認待ちは、上限に達した次の要求でロックアウトの画面になる**（確認済みは、達した要求で）。 |
+| 根拠 | #294（E2E の拡充 / C-33） |
+| テスト | `RT29437_パスワードを続けて間違えるとロックアウトになる` |
+
+**手順**
+
+1. 確認済み : ロックアウトするまで、違うパスワードを送る（上限 20 回 ＋ 1）
+1. 確認待ち : ロックアウトするまで、違うパスワードを送る（上限 20 回 ＋ 1）
+
+**検証（合否を判定する）**
+
+- 確認済み : **ロックアウトの画面になる**
+- 確認済み : **正しいパスワードでも、ロックアウトの画面になる**
+- 確認待ち : **ロックアウトの画面になる**
+- 確認待ち : **正しいパスワードでも、ロックアウトの画面になる**
+
+## RT-294.38 自己テストの結果画面のボタン（UserInfo・リフレッシュ・照会・取り消し）が動き、取り消したトークンは照会で無効になる
+
+| | |
+|---|---|
+| 観点 | **自己テストは結果画面までしか通していなかった**（`OAuth2AuthorizationCodeGrantClient2` が 1 度も通っていなかった）。**画面のボタンは、トークン・UserInfo・照会・取り消しの各エンドポイントを、サイト自身が叩く。** |
+| 根拠 | #294（E2E の拡充） |
+| テスト | `RT29438_自己テストの結果画面のボタンが動く` |
+
+**手順**
+
+1. 自己テストを通し、結果画面まで進む
+1. 「GetUserClaims」を押す
+1. 「IntrospectAccess」を押す
+1. 「Refresh」を押す
+1. 「IntrospectRefresh」を押す
+1. 「RevokeAccess」を押す
+1. 「IntrospectAccess」を押す
+1. 「RevokeRefresh」を押す
+1. 「IntrospectRefresh」を押す
+
+**検証（合否を判定する）**
+
+- UserInfo : **`sub` が返る**
+- 照会（access_token）: **有効**
+- リフレッシュ : **新しい access_token が画面に出る**
+- 照会（refresh_token）: **有効**
+- **取り消した access_token は、照会で無効**
+- **取り消した refresh_token は、照会で無効**
+
+## RT-294.39 自己テストの受け口は、fragment・form_post の値を画面に出し、検証できない JARM はエラー画面で断る（500 にしない）
+
+| | |
+|---|---|
+| 観点 | **自己テストの Implicit の受け口（`OAuth2ImplicitGrantClient`）を 1 度も叩いていなかった。****叩いたら、自己テストを始めていない要求の JARM で 500 になった**（net48 版は 302）。**JARM の検証に失敗したら先へ進めない**（#294 の B7）。 |
+| 根拠 | #294（E2E の拡充 / B7） |
+| テスト | `RT29439_自己テストのImplicitの受け口は検証できないJARMを断る` |
+
+**手順**
+
+1. 値なし（fragment で返る場合。値は画面のスクリプトが読む）
+1. state ＋ 値（form_post・query で返る場合）
+1. 検証できない JARM : GET /Account/OAuth2ImplicitGrantClient?response=not.a.jwt
+1. 検証できない JARM : GET /Account/OAuth2AuthorizationCodeGrantClient?response=not.a.jwt
+
+**検証（合否を判定する）**
+
+- 値なし : HTTP 200（画面を出す）
+- state あり : **受け取った値を画面に出す**
+- /Account/OAuth2ImplicitGrantClient?response=not.a.jwt : **エラー画面になる**（値を使わない。500 にしない）
+- /Account/OAuth2AuthorizationCodeGrantClient?response=not.a.jwt : **エラー画面になる**（値を使わない。500 にしない）
+
+## RT-294.40 プッシュの 2FA（MobileApp）で、端末が承認すると、待っているブラウザのサインインが完了する
+
+| | |
+|---|---|
+| 観点 | **プッシュの 2FA の成功の経路を、E2E で通していなかった**（RT-213.1 は `/2fa_result` の失敗の口だけ）。**端末の役は、送信箱（`FcmOutbox`）を読んで `/2fa_result` を叩くテストがする。** |
+| 根拠 | #294（E2E の拡充）/ #213 |
+| テスト | `RT29440_プッシュの2FAで端末が承認するとサインインできる` |
+
+**手順**
+
+1. パスワードでサインインし、手段に MobileApp を選ぶ
+1. 端末の役 : 送信箱から、プッシュ通知のコードを読む
+1. 端末の役 : `/2fa_result` で承認する
+1. ブラウザの役 : 承認の状態を問い合わせる
+
+**検証（合否を判定する）**
+
+- **端末を登録した利用者には、手段に MobileApp が出る**
+- **登録した端末へ、コードのプッシュ通知が届く**
+- 承認の前 : **`approved` は false**
+- 承認の後 : **`approved` が true で、戻り先が返る**
+- **サインインが完了している**（保護された画面が開く）
+
+## RT-294.41 **normal の登録のクライアントは、Device グラントでも refresh_token を受け取り、それで更新できる**
+
+| | |
+|---|---|
+| 観点 | **以前は refresh_token を作って保存するだけで、応答に入れていなかった**（**使われない行が溜まり、機器は期限が切れるたびに利用者の承認からやり直していた**）。**device の登録には、従来どおり発行しない**（ClientModePolicy の表。EX-4.3）。 |
+| 根拠 | RFC 8628 §3.5 / RFC 6749 §5.1 / #294 |
+| テスト | `RT29441_Deviceグラントでrefresh_tokenが返る` |
+
+**手順**
+
+1. 機器 : POST /device_authz
+1. 利用者 : /device_verify で許可する
+1. 機器 : grant_type=device_code でトークンを取る
+1. その refresh_token で更新できる
+
+**検証（合否を判定する）**
+
+- access_token が返る
+- refresh_token が返る
+- normal の登録のトークンは device を名乗らない
+- 更新で access_token が返る
+
+## RT-294.42 **DPoP で縛ったトークンを /introspect で照会すると、`cnf` の中に `jkt` が返る**
+
+| | |
+|---|---|
+| 観点 | **リソース サーバは照会の `cnf.jkt` を見て、証明の鍵と突き合わせる**（RFC 9449 §6.2）。**以前は `jkt` を返していなかった**ので、**照会で確かめるリソース サーバは、縛りに気付けなかった**（mTLS の `x5t#S256` だけ入っていた）。 |
+| 根拠 | RFC 7662 §2.2 / RFC 7800 §3.1 / RFC 9449 §6.2 / #294 |
+| テスト | `RT29442_DPoPで縛ったトークンの照会でcnfのjktが返る` |
+
+**手順**
+
+1. 証明を添えて、認可コードを交換する
+1. 発行先の資格情報で照会する
+
+**検証（合否を判定する）**
+
+- active が true
+- cnf.jkt が、証明の鍵の指紋と一致する
+
+## RT-294.43 **CIBA を、`/ciba_authz` から `/token` まで `client_assertion`（private_key_jwt）で通せる**
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA は、クライアント認証に private_key_jwt か mTLS を求める。****以前は `/ciba_authz` は `client_assertion` を受けるのに、`/token` は読まなかった**ので、**利用者が承認した後で `invalid_client` になっていた。** |
+| 根拠 | CIBA Core §7.1 / §10.1 / RFC 7523 §2.2 / #294 |
+| テスト | `RT29443_CIBAをprivate_key_jwtで最後まで通せる` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する
+1. クライアント : client_assertion で POST /ciba_authz
+1. 利用者 : 認証デバイスで許可する
+1. クライアント : client_assertion で POST /token
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- access_token が返る
+
+## RT-294.44 **発行していない auth_req_id でポーリングすると、`invalid_grant` が返る**
+
+| | |
+|---|---|
+| 観点 | **以前は内部の状態名（`not_found`）を、そのまま error に入れていた**（仕様に無い値で、RP は意味を読めない）。**Device グラントは #199 で直してあった**ので、それに揃えた。 |
+| 根拠 | CIBA Core §11 / RFC 6749 §5.2 / #294 |
+| テスト | `RT29444_CIBAの知らないauth_req_idはinvalid_grant` |
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- error が invalid_grant
+
+## RT-294.45 **JWT Bearer グラントに壊れた assertion を渡しても、HTTP 500 にしない**
+
+| | |
+|---|---|
+| 観点 | **以前は `Split('.')[1]`・`dic[iss]`・登録の無い鍵の復号を、確かめずに行っていた**ので、**外から来た値で 500 に落とせた**（他の口は #241 で直してあった）。 |
+| 根拠 | RFC 7523 §3.1 / RFC 6749 §5.2 / #241 / #294 |
+| テスト | `RT29445_JWTBearerの壊れたassertionで500にしない` |
+
+**手順**
+
+1. JWT でない値
+1. iss が文字列でない JWT
+1. 登録されていない iss
+
+**検証（合否を判定する）**
+
+- HTTP 400 か 401（500 にしない）
+- error が返る
+- HTTP 400 か 401（500 にしない）
+- error が返る
+- HTTP 400 か 401（500 にしない）
+- error が返る
+
+## RT-294.46 **scope を省いたトークン要求でも、HTTP 500 にしない**（client_credentials / password / JWT Bearer）
+
+| | |
+|---|---|
+| 観点 | **scope は OPTIONAL である**（RFC 6749 §4.3.2 / §4.4.2）。**以前は null の `Split` で 500 になっていた**（client_credentials は、上の方では null を守っていた）。 |
+| 根拠 | RFC 6749 §3.3 / §4.3.2 / §4.4.2 / RFC 7523 §2.1 / #294 |
+| テスト | `RT29446_scopeを省いてもトークンが取れる` |
+
+**手順**
+
+1. client_credentials
+1. password
+1. JWT Bearer（assertion にも scope を入れない）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token が返る
+- HTTP 200
+- access_token が返る
+- HTTP 200
+- access_token が返る
+
+## RT-294.47 **CIBA の request が、payload がオブジェクトでない・iss が文字列でない JWT でも、HTTP 400 で返す**
+
+| | |
+|---|---|
+| 観点 | **以前は Base64URL の復号だけを守っていて、その後の JSON の読み取りで 500 になっていた。** |
+| 根拠 | CIBA Core §13 / RFC 6749 §5.2 / #241 / #294 |
+| テスト | `RT29447_CIBAの壊れたrequestで500にしない` |
+
+**手順**
+
+1. payload が配列の JWT
+1. iss がオブジェクトの JWT
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- HTTP 400
+
+## RT-294.48 **他のクライアントが出した refresh_token は、消費せずに断る**（持ち主はその後も使える）
+
+| | |
+|---|---|
+| 観点 | **以前は消費（ローテーション）してから、発行先が違うと断っていた。****持ち主が次に使うと「使用済みの再提示」と見なされ、一族ごと失効した**（#188 の段階 3）。 |
+| 根拠 | RFC 6749 §6 / RFC 9700 §4.14 / #294 |
+| テスト | `RT29448_他のクライアントのrefresh_tokenは消費せずに断る` |
+
+**手順**
+
+1. 持ち主（MVC_Sample）が refresh_token を得る
+1. 他のクライアント（TestClient）が出す
+1. 持ち主は、その後も更新できる
+
+**検証（合否を判定する）**
+
+- error が invalid_grant
+- access_token が返る
+
+## RT-294.49 **revoke / introspect の認証方法は、トークン エンドポイントと同じ一覧を広告する**
+
+| | |
+|---|---|
+| 観点 | **#239 から、revoke / introspect も private_key_jwt と mTLS で通る**のに、**広告は秘密の 2 つのままだった**（広告を見て方法を選ぶ RP は、使えないと判断する）。**一覧は 1 か所（`TokenEndpointAuthMethods`）から作る。** |
+| 根拠 | RFC 8414 §2 / RFC 7009 §2.1 / RFC 7662 §2.1 / #294 |
+| テスト | `RT29449_Discoveryが受け付ける認証方法を広告する` |
+
+**検証（合否を判定する）**
+
+- token_endpoint_auth_methods_supported に none（パブリック）が在る
+- revocation_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported から none を除いたもの
+- introspection_endpoint_auth_methods_supported が token_endpoint_auth_methods_supported から none を除いたもの
+- request_object_signing_alg_values_supported に RS256 が在る
+
+## RT-294.50 **client_credentials のトークンは、クライアントと同じ名前の利用者が居ても、その利用者に結び付かない**
+
+| | |
+|---|---|
+| 観点 | **以前は ClientName と同じ名前の利用者を引き、居ればその利用者の sub にしていた。****ClientName はラベル**（登録の時点の所有者の利用者名）なので、**名前を付け替えた後に同じ名前を取った別の利用者に、トークンが結び付いた**（S3）。**client_credentials は資源所有者の居ないトークン**である。 |
+| 根拠 | RFC 6749 §4.4 / #294 |
+| テスト | `RT29450_client_credentialsのsubは同じ名前の利用者に結び付かない` |
+
+**手順**
+
+1. 管理者 : クライアントと同じ名前の利用者を作る
+1. クライアント : client_credentials でトークンを取る
+1. /userinfo は、その利用者のメアドを返さない
+
+**検証（合否を判定する）**
+
+- sub はクライアント名
+- 利用者のメアドを返さない
+
+## RT-294.51 **fapi2 のクライアントが、PKCE と client_assertion（private_key_jwt）を併用して、認可コードを引き換えられる**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、PKCE と、private_key_jwt か mTLS の両方を求める。****以前は code_verifier が在ると、client_assertion を見ずに PKCE だけで認証した**ので、**証明が PKCE になり、fapi2 の登録は通らなかった**（N1）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 7636 / RFC 7523 §2.2 / #294 |
+| テスト | `RT29451_PKCEとprivate_key_jwtを併用できる` |
+
+**手順**
+
+1. PKCE（S256）で認可コードを取る
+1. code_verifier と client_assertion を送って交換する
+1. 違う code_verifier では、client_assertion が正しくても通らない
+
+**検証（合否を判定する）**
+
+- access_token が返る
+- access_token を返さない
+- error は invalid_grant（RFC 7636 §4.6。F1）
+
+## RT-294.52 **認証の方法を明示したクライアントは、PKCE だけでは認可コードを引き換えられない**（`none` を明示したクライアントは引き換えられ、秘密では認証できない）
+
+| | |
+|---|---|
+| 観点 | **RFC 6749 §4.1.3 は、コンフィデンシャル クライアントの認証を MUST としている。****以前は code_verifier が在り client_secret が無ければ、登録に関わらず PKCE だけで通した**（C-40）。**登録が空のクライアントは、従来どおり PKCE だけで通す**（既定の挙動を変えない）。 |
+| 根拠 | RFC 6749 §4.1.3 / RFC 7591 §2（token_endpoint_auth_method）/ #294 |
+| テスト | `RT29452_PKCEだけの引き換えは明示していないクライアントだけ` |
+
+**手順**
+
+1. client_secret_basic を明示したクライアント : PKCE だけでは通らない
+1. 同じクライアント : client_secret ＋ PKCE なら通る
+1. none を明示したクライアント : PKCE だけで通る
+1. none を明示したクライアント : 秘密では認証できない
+
+**検証（合否を判定する）**
+
+- invalid_client
+- access_token が返る
+- access_token が返る
+- invalid_client
+
+## RT-294.53 **scope を省いた認可要求（OAuth 2.0 の code）でも、HTTP 500 にしない**
+
+| | |
+|---|---|
+| 観点 | **scope は省略できる**（RFC 6749 §3.3）。**以前は null の `Split` で 500 になっていた**（N2）。 |
+| 根拠 | RFC 6749 §3.3 / §4.1.1 / #294 |
+| テスト | `RT29453_scopeを省いた認可要求で500にしない` |
+
+**検証（合否を判定する）**
+
+- HTTP 500 にならない
+- code が返る
+
+## RT-294.54 **client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**（配列は、500 にせず invalid_client で断る）
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、issuer を aud として受けることを求める**（RFC 7523 §3 も issuer を認める）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**（**以前は HTTP 500** だった）。 |
+| 根拠 | RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.3 / #294 |
+| テスト | `RT29454_client_assertionのaudにissuerを受ける` |
+
+**手順**
+
+1. aud = issuer
+1. aud = トークン エンドポイント
+1. aud = 他の値
+1. aud = [issuer]（配列）
+
+**検証（合否を判定する）**
+
+- 認証が通る（HTTP 200）
+- 認証が通る（HTTP 200）
+- invalid_client（500 にしない）
+- invalid_client（500 にしない）
+
+## RT-294.55 **登録の grant_types に implicit が無いクライアントの Hybrid（code id_token）の要求は、同意の前に unauthorized_client で断る**
+
+| | |
+|---|---|
+| 観点 | **認可エンドポイントで発行する経路は、発行の時点（`CheckClientMode`）で grant_types を見ていた**が、**要求の検査では見ていなかった**ので、**利用者に同意させた後で server_error になっていた。****動的登録は組み合わせを揃えるが、構成ファイル・画面の登録は揃っているとは限らない。****code は従来どおり /token で見る**（#307 の段階 1。`RT-307.7`）。 |
+| 根拠 | RFC 7591 §2（grant_types）/ RFC 6749 §4.1.2.1 / #294 |
+| テスト | `RT29455_grant_typesにimplicitが無ければHybridは同意の前に断る` |
+
+**検証（合否を判定する）**
+
+- 同意画面を出さない
+- unauthorized_client
+
+## RT-294.56 **poll の CIBA は、client_notification_token も binding_message も無い request で受け付ける**
+
+| | |
+|---|---|
+| 観点 | **client_notification_token は ping / push のときだけ REQUIRED、binding_message は OPTIONAL**（CIBA Core §7.1）。**この実装は poll だけを扱う**のに、**以前は両方を必須にしていた**ので、**標準の poll のクライアントは invalid_request で断られた**（N5）。 |
+| 根拠 | CIBA Core §7.1 / #294 |
+| テスト | `RT29456_pollのCIBAはclient_notification_tokenを要らない` |
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+
+## RT-294.57 **PAR に預ける Request Object の client_id が、認証したクライアントと違えば、invalid_request_object で断る**
+
+| | |
+|---|---|
+| 観点 | **RFC 9126 §2.1 は、Request Object の client_id が認証したクライアントであることを求める。****以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、**別のクライアントの名義で、預けた要求を作れた**（C-41）。 |
+| 根拠 | RFC 9126 §2.1 / RFC 9101 §6.3 / #294 |
+| テスト | `RT29457_PARのRequestObjectのclient_idを照合する` |
+
+**検証（合否を判定する）**
+
+- invalid_request_object
+- request_uri を返さない
+
+## RT-294.58 **code_verifier が合わなければ、invalid_grant で断る**（PKCE だけでも、client_secret と併せても）
+
+| | |
+|---|---|
+| 観点 | **RFC 7636 §4.6 は、code_verifier の不一致を invalid_grant とする。****以前は invalid_client で返していた**ので、**クライアントは「資格情報が違う」のか「code_verifier が違う」のかを区別できなかった**（F1）。 |
+| 根拠 | RFC 7636 §4.6 / RFC 6749 §5.2 / #294 |
+| テスト | `RT29458_合わないcode_verifierはinvalid_grant` |
+
+**手順**
+
+1. PKCE だけ（TestClient_31。none）
+1. client_secret ＋ PKCE（TestClient_30。client_secret_basic）
+1. 秘密が違えば、従来どおり invalid_client
+
+**検証（合否を判定する）**
+
+- invalid_grant
+- invalid_grant
+- invalid_client
+
+## RT-294.59 **/ros に預ける Request Object の client_id が、署名したクライアント（iss）と違えば、預からない**
+
+| | |
+|---|---|
+| 観点 | **RFC 9101 §6.3 は、Request Object の client_id が要求したクライアントであることを求める。****以前は署名（iss）だけを確かめていた**ので、**自分の鍵で署名した Request Object を、別のクライアントの名義で預けられた**（PAR は C-41 で直した。F5）。 |
+| 根拠 | RFC 9101 §6.3 / #294 |
+| テスト | `RT29459_rosのRequestObjectのclient_idを照合する` |
+
+**手順**
+
+1. client_id が他のクライアント
+1. client_id が署名したクライアント（従来どおり預かる）
+
+**検証（合否を判定する）**
+
+- request_uri を返さない
+- request_uri を返す
+
+## RT-294.60 認証アプリの登録画面を開いただけでは、TOTP は登録されない（コードを確かめてから登録される）
+
+| | |
+|---|---|
+| 観点 | **以前は登録画面（GET）を開いただけで、鍵を保存していた。****そのため、コードを確かめていなくても、管理画面は TOTP を登録済みと出し、サインインの手段にも認証アプリが出ていた。****鍵は TempData に置き、コードを確かめてから保存する**ようにした。**間違えて出し直すときは、同じ鍵を出す。** |
+| 根拠 | #294（ManageController.*.cs のレビュー B10） |
+| テスト | `RT29460_登録画面を開いただけではTOTPは登録されない` |
+
+**手順**
+
+1. 利用者を作り、2FA を有効にする（認証アプリは、まだ登録しない）
+1. 認証アプリの登録画面を開く
+1. 管理画面と、サインインの手段を見る
+1. 間違ったコードを送る
+1. 正しいコードを送る
+
+**検証（合否を判定する）**
+
+- 管理画面は、TOTP を登録済みと出さない
+- サインインの手段に、認証アプリが出ない
+- エラーの文言が出る
+- 出し直した画面の鍵は、最初と同じ
+- 間違えた後も、管理画面は TOTP を登録済みと出さない
+- 回復コードの画面へ進む
+- 管理画面は、TOTP を登録済みと出す
+
+**観測（判定しない）**
+
+- サインインの手段
+
+## RT-294.61 メアドの変更で、いまと同じメアドは断られ、他の利用者のメアドは、新しいメアドと同じ画面になる
+
+| | |
+|---|---|
+| 観点 | **変わったかどうかを、利用者名と比べていた**（「利用者名＝メアド」だった頃の名残。#151）。**いまと同じメアドを送っても、何も言わずに画面を出し直していた。****他の利用者のメアドを送ると、やはり何も言わずに出し直していた**ので、**そのメアドが使われていることが、画面から分かった。****いまのメアドと比べ、同じなら文言を出し、他の利用者のメアドなら送らずに確認の画面を出す**ようにした。 |
+| 根拠 | #294（ManageController.*.cs のレビュー B7） / ManageController.ChangeEmail |
+| テスト | `RT29461_同じメアドは断られ他の利用者のメアドは区別されない` |
+
+**手順**
+
+1. 使い捨ての利用者を 2 人作る
+1. いまと同じメアド（大文字にしたもの）を送る
+1. 他の利用者のメアドを送る
+1. メアドは変わっていない
+
+**検証（合否を判定する）**
+
+- 入力の画面が出し直される
+- エラーの文言が出る
+- HTTP 200（確認の画面）
+- 新しいメアドを送ったときと同じ、確認の画面になる
+- メアドは元のまま
+
+**補足**
+
+- **パスワードの確認は、2FA を有効にした利用者が必ず失敗していた**（サインインそのもので確かめていた）。**メアドの変更は、設定によらず確かめるようになった**（`RT-294.68`）。
+
+## RT-294.62 利用者名を変えると、WebAuthn の資格情報も新しい名前へ移り、元の名前には残らない
+
+| | |
+|---|---|
+| 観点 | **資格情報は利用者名で持っている**（`FIDO2Data.UserName` と `StoredCredential.UserId`）。**以前は利用者名を変えても、資格情報を移していなかった。****本人は自分の資格情報を使えなくなり、資格情報は元の名前に残っていた。****名前を変えるときに、資格情報も移す**ようにした（`FIDO.DataProvider.RenameUser`）。 |
+| 根拠 | #294（ManageController.*.cs のレビュー S1） / ManageController.ChangeUserName |
+| テスト | `RT29462_利用者名を変えると資格情報も移る` |
+
+**手順**
+
+1. 一覧を開く（種データが入っている）
+1. 利用者名を変える
+1. 変えた後の一覧
+1. 元の名前で利用者を作り直しても、資格情報は付いていない
+
+**検証（合否を判定する）**
+
+- 1 件以上ある（前提）
+- 資格情報が、新しい名前に付いて来る
+- 元の名前に残った資格情報
+
+## RT-294.63 管理画面でサインインし直しただけでは、auth_time は新しくならない（max_age の再認証が効く）
+
+| | |
+|---|---|
+| 観点 | **以前は、管理画面の操作のたびにサインインし直し、auth_time を「いま」にしていた。****資格情報を確かめない操作（2FA の有効化など）でも新しくなる**ので、RP が `max_age` で求めた再認証が、行われないまま通っていた。**auth_time を書くのは、資格情報を確かめた所だけ**にした（パスワードの再確認など）。 |
+| 根拠 | OIDC Core §2 auth_time / §3.1.2.1 / #294（ManageController.*.cs の 2 回目のレビュー S1） |
+| テスト | `RT29463_管理画面の再サインインではauth_timeを新しくしない` |
+
+**手順**
+
+1. サインインし、2FA を有効にしておく（手順 2 で、パスワードを確かめて無効にするため）
+1. パスワードを確かめて 2FA を無効にし、すぐに max_age=2 で認可リクエストを送る
+1. 2FA を有効にし（サインインし直すだけで、資格情報は確かめない）、すぐに max_age=2 で送る
+
+**検証（合否を判定する）**
+
+- パスワードを確かめた直後は、再認証を求めない（先へ進む）
+- 再認証を求める（同意画面にも、認可コードにも進まない）
+
+## RT-294.64 2FA の無効化は、パスワードを確かめる（無い・間違いなら無効にしない）
+
+| | |
+|---|---|
+| 観点 | **以前は、セッションさえあれば 2FA を無効にできた**（電話番号の削除・外部ログインの解除も同じ）。**パスワードの再確認を求める**ようにした。**電話番号の削除・外部ログインの解除も、同じ補助（`VerifyPasswordAsync`）で確かめる**（電話番号は SMS が、外部ログインは上流が要るので、E2E では 2FA の無効化で測る）。 |
+| 根拠 | #294（ManageController.*.cs の 2 回目のレビュー） |
+| テスト | `RT29464_2FAの無効化はパスワードを確かめる` |
+
+**手順**
+
+1. パスワードを送らずに無効にする
+1. 間違ったパスワードで無効にする
+1. 正しいパスワードで無効にする
+
+**検証（合否を判定する）**
+
+- 無効化のフォームに、パスワードの入力欄がある
+- 2FA は有効のまま
+- 2FA は有効のまま
+- 2FA が無効になる
+
+## RT-294.65 認証アプリの未確定の鍵は、同じブラウザで後からサインインした利用者に使われない
+
+| | |
+|---|---|
+| 観点 | **未確定の鍵は TempData（Cookie）に置く**（RT-294.60）。**TempData はサインアウトしても残る**ので、**以前は、同じブラウザで後からサインインした利用者に、前の利用者が見た鍵を出していた**（そのまま登録すると、前の利用者がコードを作れる）。**鍵を利用者の id と組にして置き、id が合うときだけ使う**ようにした。 |
+| 根拠 | #294（ManageController.*.cs の 2 回目のレビュー） |
+| テスト | `RT29465_未確定のTOTPの鍵はほかの利用者に使われない` |
+
+**手順**
+
+1. 利用者 A で、認証アプリの登録画面を開く（登録はしない）
+1. 同じブラウザで利用者 B としてサインインし直し、登録画面を開く
+1. A の鍵で作ったコードを、B の登録に送る
+
+**検証（合否を判定する）**
+
+- B には、A に出した鍵を出さない
+- 登録されない
+
+## RT-294.66 認証アプリを登録した後は、登録画面を開いても鍵を出さない（管理の画面へ戻す）
+
+| | |
+|---|---|
+| 観点 | **以前は、登録済みの鍵を登録画面に何度でも出していた**（共有鍵と QR コード）。**セッションさえあれば、認証アプリと同じコードを作れるようになった。****登録済みなら、登録画面は出さずに管理の画面へ戻す。** 登録し直すときは、リセットを通す。 |
+| 根拠 | #294（ManageController.*.cs の 3 回目のレビュー S1） |
+| テスト | `RT29466_登録済みのTOTPの鍵は出さない` |
+
+**手順**
+
+1. 登録画面を開く（GET）
+1. 登録の POST を直接送る
+
+**検証（合否を判定する）**
+
+- 管理の画面へ戻す
+- 鍵を出さない
+- 受けずに、管理の画面へ戻す
+
+## RT-294.67 回復コードの再発行と、認証アプリのリセットは、パスワードを確かめる（無い・間違いなら行わない）
+
+| | |
+|---|---|
+| 観点 | **以前は、セッションさえあれば、新しい回復コードを画面に出せ、認証アプリを外せた。****回復コードは、それだけで 2FA を通れる。****どちらもパスワードを確かめる**ようにした。 |
+| 根拠 | #294（ManageController.*.cs の 3 回目のレビュー S2） |
+| テスト | `RT29467_回復コードの再発行とリセットはパスワードを確かめる` |
+
+**手順**
+
+1. 回復コードの再発行 : パスワード無し → 間違い → 正しい
+1. 認証アプリのリセット : 間違い → 正しい
+
+**検証（合否を判定する）**
+
+- パスワード無しでは、回復コードを出さない
+- 間違ったパスワードでは、回復コードを出さない
+- 正しいパスワードなら、回復コードを出す
+- 間違ったパスワードでは、認証アプリは登録済みのまま
+- 正しいパスワードなら、認証アプリが外れる
+
+## RT-294.68 メアドの変更は、設定によらずパスワードを確かめる（無い・間違いなら確認の画面へ進まない）
+
+| | |
+|---|---|
+| 観点 | **以前は `RequirePasswordInEditingUserNameAndEmail` が false（既定）だと確かめなかった。****メアドを変えられると、パスワード リセットで乗っ取れる**ので、**メアドの変更だけは、設定によらず確かめる**ようにした（利用者名の変更は、従来どおり設定に従う）。 |
+| 根拠 | #294（ManageController.*.cs の 3 回目のレビュー S2） / ManageController.ChangeEmail |
+| テスト | `RT29468_メアドの変更はパスワードを確かめる` |
+
+**手順**
+
+1. パスワードを空で送る
+1. 間違ったパスワードで送る
+1. 正しいパスワードで送る
+
+**検証（合否を判定する）**
+
+- パスワードの入力欄が在る（設定によらず）
+- 入力の画面が出し直される（確認の画面へ進まない）
+- エラーの文言が出る
+- 入力の画面が出し直される（確認の画面へ進まない）
+- エラーの文言が出る
+- 確認の画面へ進む
+
+## RT-294.69 WebAuthn の資格情報（パスキー）の登録は、パスワードを確かめる（段階 0）
+
+| | |
+|---|---|
+| 観点 | **以前は、セッションさえあれば資格情報を足せた。****パスキーは、それだけでサインインできる**ので、足した側がずっと入れるようになった。**段階 0（options を作る段）でパスワードを確かめる。** **段階 1 は、段階 0 で Session に置いた options が無いと通らない。** |
+| 根拠 | #294（ManageController.*.cs の 3 回目のレビュー S2） |
+| テスト | `RT29469_資格情報の登録はパスワードを確かめる` |
+
+**手順**
+
+1. パスワードを空で送る
+1. 間違ったパスワードで送る
+1. 正しいパスワードで送る
+
+**検証（合否を判定する）**
+
+- options を返さない（status が error）
+- challenge を返さない
+- options を返さない（status が error）
+- challenge を返さない
+- options を返す（challenge が在る）
+
+## RT-294.70 管理画面で外したロールは外れる（SystemAdmin を外すと、管理画面が開かなくなる）
+
+| | |
+|---|---|
+| 観点 | **権限を取り上げられることの確認である。****net10.0 版の mem ストアでは、外しても外れなかった** — Identity Core は正規化した名前（大文字）をストアに渡すが、**ストアは `Name` と突き合わせて見つけられず、何もせずに成功を返していた**（付ける方は #257 で直っていた）。**RT-257.9 は「付ける」しか測っていなかった**ので、見つからなかった。 |
+| 根拠 | #294（CmnUserStore.RemoveFromRole。ANALYSIS-IdP.md の C-52） |
+| テスト | `RT29470_外したロールは外れる` |
+
+**手順**
+
+1. 管理者が、使い捨ての利用者を SystemAdmin で作る
+1. 管理者が、ロールを User だけにする（SystemAdmin を外す）
+1. 入り直して、開けなくなる
+1. 後片付け : 使い捨ての利用者を削除する
+
+**検証（合否を判定する）**
+
+- 編集できた（一覧へリダイレクトする）
+- **一覧が開かない**（SystemAdmin が外れている）
+- メニューに導線が出ない
+- 削除できた（SystemAdmin を持つかもしれない利用者を残さない）
+
+## RT-294.71 利用者を消したら、その人の refresh_token では access_token を取れない
+
+| | |
+|---|---|
+| 観点 | **利用者の削除（管理画面・GDPR の削除）は、その人への発行を止めることでもある。****以前は `RefreshTokenDictionary` に利用者の列が無く、更新は利用者を確かめなかった**ので、**消された利用者の access_token を、RP が取り続けられた。** |
+| 根拠 | #294（CmnEndpoints.GrantRefreshTokenCredentials。ANALYSIS-IdP.md の C-54） |
+| テスト | `RT29471_消された利用者のrefresh_tokenは使えない` |
+
+**手順**
+
+1. 使い捨ての利用者を作り、その人で refresh_token を得る
+1. 管理者が、その利用者を消す
+1. 消された利用者の refresh_token で更新する
+
+**検証（合否を判定する）**
+
+- 消す前は、更新できる
+- invalid_grant で断る
+- **access_token を返さない**
+
+**補足**
+
+- **発行済みの access_token は、期限まで残る**（短命なので、ここでは失効させない）。
+
+## RT-294.72 パスワードを変えたら、それより前に発行した refresh_token は使えない（照会も active=false）
+
+| | |
+|---|---|
+| 観点 | **パスワードを変えるのは、漏れたと思ったときである。****そのとき、漏れた先で取られた refresh_token も止まらなければならない。****SecurityStamp のハッシュを refresh_token に預け、更新と照会で照合する**（パスワードの変更・リセットなど、Identity が SecurityStamp を変える操作で止まる）。 |
+| 根拠 | #294（CmnEndpoints.CheckUserOfRefreshToken。ANALYSIS-IdP.md の C-54） |
+| テスト | `RT29472_パスワードを変えたら前のrefresh_tokenは使えない` |
+
+**手順**
+
+1. 使い捨ての利用者を作り、その人で refresh_token を得る
+1. 本人がパスワードを変える
+1. 変える前の refresh_token を照会し、更新する
+
+**検証（合否を判定する）**
+
+- 変える前は、照会が active=true
+- **照会に、預けた SecurityStamp のハッシュが出ない**
+- 照会が active=false
+- 更新は invalid_grant で断る
+- **access_token を返さない**
+
+**補足**
+
+- **値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`TESTING.md` 9 節）。
+
+## RT-294.73 /SetDeviceToken・/ciba_result・/2fa_result は、認証デバイスのクライアントに発行したトークンだけを受ける
+
+| | |
+|---|---|
+| 観点 | **以前はトークンの発行先を見ておらず、利用者が同意したどの RP のトークンでも通った。****RP が、利用者の端末の登録を差し替え、CIBA の要求を「許可」し、2FA のプッシュ承認を記録できた。****`AuthenticationDeviceClientIds`（既定は同梱の AuthenticationDevice_Web）に挙げたクライアントだけ**を受ける。 |
+| 根拠 | #294（ANALYSIS-IdP.md の C-55） |
+| テスト | `RT29473_認証デバイスの口は認証デバイスのトークンだけを受ける` |
+
+**手順**
+
+1. 同じ利用者で、RP のトークンと、認証デバイスのトークンを取る
+1. RP のトークンで、3 つの口を叩く
+1. 認証デバイスのトークンなら、通る（対照）
+
+**検証（合否を判定する）**
+
+- /SetDeviceToken : **RP のトークンは 401 で断る**
+- /ciba_result : **RP のトークンは 401 で断る**
+- /2fa_result : **RP のトークンは 401 で断る**
+- /SetDeviceToken : HTTP 200（端末を登録できる）
+- /ciba_result : トークンは受ける（合わない auth_req_id なので 400）
+- /2fa_result : トークンは受ける（合わないコードなので 400）
+
+## RT-294.74 /token : grant_type が無ければ invalid_request、未知・大文字小文字の違う値なら unsupported_grant_type
+
+| | |
+|---|---|
+| 観点 | **以前はどちらも invalid_grant だった**（RFC 6749 §5.2 では、invalid_grant は「グラントそのものが無効」）。**grant_type は大文字小文字を区別する値**なので、`AUTHORIZATION_CODE` も知らない値として扱う（以前は ToLower で通していた）。`RT-196.3` は HTTP ステータスだけを判定し、値は記録していた。 |
+| 根拠 | RFC 6749 §5.2 / #294 |
+| テスト | `RT29474_grant_typeの誤りをRFCのコードで返す` |
+
+**手順**
+
+1. grant_type を付けずに送る
+1. 未知の grant_type を送る
+1. 大文字の grant_type（AUTHORIZATION_CODE）を送る
+
+**検証（合否を判定する）**
+
+- invalid_request
+- unsupported_grant_type
+- unsupported_grant_type（大文字小文字まで比べる）
+
+## RT-294.75 /device_authz の expires_in / interval は、JSON の数値で返る
+
+| | |
+|---|---|
+| 観点 | **以前は文字列（"1800"）だった。** RFC 8628 §3.2 は数値を求めている。**型に厳しいクライアントは、文字列を読めない。** `EX-4.1` は型を記録するだけだった。 |
+| 根拠 | RFC 8628 §3.2 / #294 |
+| テスト | `RT29475_device_authzのexpires_inとintervalは数値` |
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- expires_in は数値
+- interval は数値
+
+## RT-294.76 CIBA : requested_expiry が正の整数でなければ invalid_request、大きすぎれば設定の上限で返す
+
+| | |
+|---|---|
+| 観点 | **以前は検証も上限も無かった。** 読めない値は `int.TryParse` が 0 にして、**要求は作った瞬間に期限が切れた。** 大きな値なら、**待ちの要求をいくらでも長く残せた。****応答の expires_in / interval も、JSON の数値で返す**（以前は文字列）。 |
+| 根拠 | CIBA Core §7.1 / §7.3 / #294 |
+| テスト | `RT29476_CIBAのrequested_expiryを検証し上限で頭を打つ` |
+
+**手順**
+
+1. 認証デバイスを登録する（宛先が無いと access_denied になるため）
+1. requested_expiry に数値でない値を送る
+1. requested_expiry に上限より大きな値を送る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- invalid_request
+- HTTP 200
+- expires_in は数値
+- interval は数値
+- **expires_in は上限で頭を打つ**
+
+## RT-294.77 /device_authz を、private_key_jwt（client_assertion）のクライアント認証で通せる
+
+| | |
+|---|---|
+| 観点 | **以前は RFC 8628 の口（/device_authz と /token）が client_assertion を読んでおらず、****private_key_jwt で登録したクライアントは、デバイス フローを使えなかった**（動的登録は、その組み合わせを登録の時点で断っていた）。 |
+| 根拠 | RFC 8628 §3.1 / RFC 7523 / #294 |
+| テスト | `RT29477_デバイス認可でprivate_key_jwtが通る` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（以前は 401 / invalid_client）
+- device_code が返る
+
+## RT-294.78 /revoke・/introspect : 資格情報も token も無ければ 401（認証の失敗）、資格情報が正しく token が無ければ 400
+
+| | |
+|---|---|
+| 観点 | **以前は token の有無を先に見ていた**ので、**認証していない要求にも 400 を返していた**（RFC 6749 §5.2 : クライアント認証の失敗は 401）。 |
+| 根拠 | RFC 7009 §2.1 / RFC 7662 §2.1 / RFC 6749 §5.2 / #294 |
+| テスト | `RT29478_revokeとintrospectは認証を先に行う` |
+
+**手順**
+
+1. 資格情報も token も付けずに送る
+1. 資格情報だけを付けて送る（token なし）
+
+**検証（合否を判定する）**
+
+- /revoke : 401
+- /introspect : 401
+- /revoke : 400 / invalid_request
+- /introspect : 400 / invalid_request
+
+## RT-294.79 /par : 同じ名前のパラメタが 2 回来たら invalid_request で断る（1 回なら受ける）
+
+| | |
+|---|---|
+| 観点 | **以前はカンマでつないだ 1 つの値として受けていた**（例 : scope を 2 回送ると "openid,email"）。**認可要求のパラメタは、1 回までしか含めてはならない。** |
+| 根拠 | RFC 6749 §3.1 / RFC 9126 §2.1 / #294 |
+| テスト | `RT29479_parは同じ名前のパラメタを断る` |
+
+**手順**
+
+1. scope を 2 回送る
+1. 対照 : 1 回なら受ける
+
+**検証（合否を判定する）**
+
+- 400 / invalid_request
+- 201（request_uri が返る）
+
+## RT-294.80 /userinfo : POST でも答える。openid スコープの無いトークンには 403 / insufficient_scope
+
+| | |
+|---|---|
+| 観点 | **以前は GET しか受けず**（OIDC Core 5.3.1 は GET と POST の両方を MUST としている）、**openid の無いトークン（client_credentials など）にも 200 で sub を返していた**（UserInfo は、OIDC の認証要求で得たトークンで問い合わせる口。RFC 6750 §3.1）。 |
+| 根拠 | OIDC Core 5.3 / 5.3.1 / RFC 6750 §3.1 / #294 |
+| テスト | `RT29480_userinfoはPOSTも受けopenidの無いトークンを断る` |
+
+**手順**
+
+1. openid を含むトークンで、POST で問い合わせる
+1. openid の無いトークン（client_credentials）で問い合わせる
+
+**検証（合否を判定する）**
+
+- POST : HTTP 200
+- POST : sub と email が返る
+- **403 / insufficient_scope**
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 
@@ -6711,6 +8345,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. 壊れた software_statement は受け付けない（段階 4）
 1. response_types と grant_types が噛み合っていない
 1. 専用 scope は、動的登録では付けられない
+1. auth（同意画面を出さない）も、動的登録では付けられない
 1. どの誤りでも、登録は作られていない
 
 **検証（合否を判定する）**
@@ -6728,12 +8363,15 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - error は invalid_client_metadata
 - HTTP の状態は 400
 - error は invalid_client_metadata
+- HTTP の状態は 400
+- error は invalid_client_metadata
 - この後で、正しい要求は 201 になる
 
 **補足**
 
 - **この URL には JWK Set が無い**（この配備自身の、存在しないパス）。**登録の口は取りに行って、読めなければ断る**（#309 の決め (B)）。**読める `jwks_uri` を登録して使うところは `RT-309.*`** で測る。
 - **自分と同じ強さの scope を、自分で配らせない。** **`client_registration` を動的登録で付けられるようにすると、権限を際限なく増やせる。** **配るのは、管理画面か構成ファイルからだけ**にしてある。
+- **同意画面を飛ばすかは、登録を管理する人が決める**（#294）。**自分で `auth` を登録できると、クライアントが決めることになる。**
 
 ## RT-307.5 管理 API 専用のアクセス トークンは、scope も有効期限も絞られている
 
@@ -6747,11 +8385,13 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 1. 専用 scope を、他の scope と一緒に要求する
 1. 有効期限が、配備ぜんたいの値より短い
+1. 応答の expires_in も、絞った期限を言う（#294）
 
 **検証（合否を判定する）**
 
 - scope は専用の 1 本だけ
 - 1 時間より短い
+- expires_in が exp - iat と一致する（差が 5 秒以内）
 
 **観測（判定しない）**
 
@@ -7087,7 +8727,6 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. 知らない token_endpoint_auth_method
 1. jwks に RSA が 2 本
 1. jwks_uri（鍵を URL から引く）は、受け付けない
-1. device_code グラント × private_key_jwt
 
 **検証（合否を判定する）**
 
@@ -7101,12 +8740,9 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - error は invalid_client_metadata
 - HTTP の状態は 400（クライアント認証の経路が同期なので、取得を差し込めない（別 Issue））
 - error は invalid_client_metadata
-- HTTP の状態は 400（RFC 8628 の口は client_assertion を読まないので、永久に認証できない）
-- error は invalid_client_metadata
 
 **観測（判定しない）**
 
-- error_description
 - error_description
 - error_description
 - error_description
@@ -7425,6 +9061,99 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **試す順は、書いた順**である。**1 本目以外で通ったときは、ログに残す** — **運用者が「古い鍵をいつ消せるか」を判断する材料**になる。
 - **`iss` は合っていて、署名だけが合わない**ので **`invalid_software_statement`** である（**知らない発行者なら `unapproved_software_statement`**。`RT-307.20`）。
 
+## RT-307.27 動的登録で作り・読み・直し・消した後も、**保存された登録の行が正しい**
+
+| | |
+|---|---|
+| 観点 | **`PUT` は全置換**だが、**置き換えるのは動的登録が持つ列だけ**である — **所有者（`OwnerUserId`）や、管理画面から入れた列は持ち越す。** **応答だけを見ても分からない**（所有者は応答に出ない）ので、**所有者の一覧と編集の画面から、行そのものを読む。** |
+| 根拠 | RFC 7591 §3.1 / RFC 7592 §2.1〜§2.3 / #307 の段階 2・5-a / #294 |
+| テスト | `RT30727_動的登録のCRUDの後も登録の行が正しい` |
+
+**手順**
+
+1. 作る : redirect_uris = A、scope = openid email で登録する
+1. 動的登録では設定できない列を、管理画面から入れる
+1. 直す : redirect_uris = B、scope = openid に置き換える
+1. 読む : 直した値が返る
+1. 消す : 一覧から消え、もう読めない
+1. 直した登録は、所有者を消すと一緒に消える
+
+**検証（合否を判定する）**
+
+- 所有者の一覧に出る
+- 行の redirect_uri は A
+- 行の scope は openid email
+- HTTP の状態は 200
+- 所有者の一覧に、まだ出る（所有者が保たれている）
+- 行の redirect_uri は B（置き換わる）
+- 行の scope は openid（置き換わる）
+- 行の post_logout_redirect_uri は残る（画面から入れた列）
+- 行の web_origins は残る（画面から入れた列）
+- HTTP の状態は 200
+- redirect_uris は B
+- scope は openid
+- HTTP の状態は 204
+- 所有者の一覧から消える
+- もう読めない（401）
+- 所有者を消すと、もう読めない（401）
+
+**補足**
+
+- **`PUT` は、現行の行を土台にして、動的登録が持つ列だけを置き換える。** **要求の値を土台にしていた頃は、持ち越しを書き忘れた列が消えていた** — **所有者（`OwnerUserId`）がそれで、一覧から外れ、所有者を消しても登録が残った。**
+- **所有者が `PUT` で消えていると、ここで `200` が返る** — **所有者で消す仕掛け**（DB は `OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`、`mem` は `CmnUserStore` の削除）が、**空の所有者には効かない**ためである。
+
+## RT-307.28 管理画面で保存しても、**画面に出ない列（EC の公開鍵）は残る**
+
+| | |
+|---|---|
+| 観点 | **画面の保存は行を丸ごと書き換える**ので、**フォームに欄の無い列は、現行の行から持ち越さないと消える。** **EC の鍵は画面に欄が無い**（動的登録の `jwks` か構成ファイルから入る）。**保存の後で、管理 API から読み直して確かめる。** |
+| 根拠 | #307 の段階 3 / #294 / ManageController.AddSaml2OAuth2Data |
+| テスト | `RT30728_管理画面で保存しても画面に出ない列は残る` |
+
+**手順**
+
+1. jwks に RSA と EC の鍵を 1 本ずつ入れて登録する
+1. 管理画面で redirect_uri を B に直して保存する
+1. 管理 API で読み直す
+
+**検証（合否を判定する）**
+
+- 画面には EC の鍵の欄が無い
+- HTTP の状態は 200（registration_access_token も残る）
+- 画面で直した redirect_uri（B）が返る
+- RSA の鍵は残る（画面に欄が在る）
+- EC の鍵も残る（画面に欄が無い）
+
+**補足**
+
+- **画面に欄の無い列は、保存のときに現行の行から持ち越す**（`registration_access_token` のハッシュと同じ扱い）。**持ち越していなかった頃は、画面で保存するたびに EC の鍵が消えていた。**
+
+## RT-307.29 登録を消すと、**所有者以外の利用者の同意も消える**（動的登録の `DELETE`・管理画面の削除）
+
+| | |
+|---|---|
+| 観点 | **同意の表の `ClientID` には外部キーが無い**ので、**登録を消しても同意は残る。** **`DELETE` は所有者の同意だけを、管理画面の削除は 1 件も消していなかった。** **消した後で、利用者ごとの同意の一覧を読み直して確かめる。** |
+| 根拠 | RFC 7592 §2.3 / #272 の段階 2 / #294 / ConsentProvider.RevokeByClient |
+| テスト | `RT30729_登録を消すと全利用者の同意が消える` |
+
+**手順**
+
+1. 登録 X を作り、所有者（B）と別の利用者（C）が同意する
+1. 動的登録の DELETE で X を消し、同意の一覧を読み直す
+1. 登録 Y を作って C が同意し、管理画面から Y を消して、同意の一覧を読み直す
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 204
+- 所有者（B）の同意は消える
+- 別の利用者（C）の同意も消える
+- 管理画面から消せる
+- 別の利用者（C）の同意も消える
+
+**補足**
+
+- **`DELETE` は、以前は所有者の同意だけを消していた**（`ConsentProvider.Revoke(所有者, client_id)`）。**管理画面の削除は、同意を 1 件も消していなかった。** **どちらも `ConsentProvider.RevokeByClient` で、全利用者の分を消すようにした。**
+
 ## RT-308.1 **発行者（ベンダ）の台帳を、画面から足して・直して・消せる**
 
 | | |
@@ -7550,7 +9279,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | | |
 |---|---|
 | 観点 | **要求の経路ではキャッシュを読むだけ**にしてある（#309 の決め (A)）。**クライアント認証は同期の鎖**で、**そこで取得を待つと net48 で止まる** — **継続が `AspNetSynchronizationContext` へ Post され、その順番を握っているのは待っている自分**だからである。**キャッシュはプロセスの中に在る**ので、**画面から登録した直後・再起動の直後は、空である。****そのときは断って、背景で取り直す**（決め (C)(1)）。 |
-| 根拠 | #309 の段階 1 / RFC 7009 §2.1 / DiscoveryJwks.RefillInBackground |
+| 根拠 | #309 の段階 1 / RFC 7009 §2.1 / RemoteJwkSetStore.RefillInBackground |
 | テスト | `RT30902_取りに行っていないjwks_uriは1回目に断られる` |
 
 **手順**
@@ -7583,7 +9312,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | | |
 |---|---|
 | 観点 | **これが `jwks_uri` の存在理由**である — **鍵を入れ替えても、登録のメタデータを書き換えずに済む。****登録の時点で 1 回引いて列に焼く形**（起票時の案 (c)）**では、この性質が消える**ので、**「対応した」と言えない。** |
-| 根拠 | RFC 7591 §2 / #309 の段階 1 / DiscoveryJwks.WarmUpAsync |
+| 根拠 | RFC 7591 §2 / #309 の段階 1 / RemoteJwkSetStore.WarmUpAsync |
 | テスト | `RT30903_同じURLの鍵を入れ替えるとPUTで読み直す` |
 
 **手順**
@@ -7602,7 +9331,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **取り直しの下限は 1 分**（`DiscoveryJwks.MinRefetchInterval`）。**`kid` を偽った要求を並べれば、外から取得を起こせる**ので、**背景の補充には下限を置いてある。****何もしなくても、最大でその下限ぶんで追随する** — **E2E では 1 分待たない**ので、ここは `PUT` で測る。
+- **取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）。**`kid` を偽った要求を並べれば、外から取得を起こせる**ので、**背景の補充には下限を置いてある。****何もしなくても、最大でその下限ぶんで追随する** — **E2E では 1 分待たない**ので、ここは `PUT` で測る。
 - **登録の口は、取り直しの下限を見ない**（**毎回取りに行く**）。**認可が要り**（専用 scope のトークン）**レート制限も掛かっている**ので、**外から叩く経路にはならない。****鍵を入れ替えた相手は、`PUT` でその場で反映できる。**
 
 ## RT-309.4 **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**その URL の鍵で、1 回目のクライアント認証から通る**
@@ -7688,7 +9417,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. サインアウトの前に id_token を取る
-1. サインアウトする（/Account/LogOff）
+1. サインアウトする（/Account/Logout）
 1. 入り直して、同じ RP に id_token を取る
 
 **検証（合否を判定する）**
@@ -7858,13 +9587,13 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **E2E のクライアントは `iframe` を開かない**ので、**画面から URL を取り出して自分で叩いた**（ブラウザの代わり）。**本物の RP は、この要求で自分のセッションを閉じる。**
 - **Back-Channel（段階 2）も同時に動く**（登録が在れば）。**この RP には `backchannel_logout_uri` を登録していない**ので、**ここで測っているのは Front-Channel だけ**である。
 
-## RT-310.9 **`/Account/LogOff`（OP 主導のサインアウト）でも `iframe` の画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**
+## RT-310.9 **`/Account/Logout`（OP 主導のサインアウト）でも `iframe` の画面が出る**。**登録が在る RP が 1 つも無ければ、画面は出ない**
 
 | | |
 |---|---|
 | 観点 | **伝えるのは「OP のセッションが終わるとき」である。****RP から言われたときだけ伝えるのでは、足りない。****一方で、登録している RP が 1 つも無い配備では、画面が増えてはならない** — **応答が変わると、既存の導線が壊れる。** |
 | 根拠 | OIDC Front-Channel Logout 1.0 §2 / #310 の段階 3 |
-| テスト | `RT31009_LogOffでも画面が出る` |
+| テスト | `RT31009_Logoutでも画面が出る` |
 
 **手順**
 
@@ -7886,7 +9615,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **受信箱を空にしてから測る**（前のケースの記録が混ざらないように）。
-- **同じ口を、サインアウトの 5 か所から呼んでいる**（`/Account/LogOff` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。**再認証の経路では、画面の後に同じ認可要求へ戻る**（測っていない）。
+- **同じ口を、サインアウトの 5 か所から呼んでいる**（`/Account/Logout` / `/end_session` / `prompt=login` の再認証 / `max_age` の再認証 / 別のアカウントでログイン）。**再認証の経路では、画面の後に同じ認可要求へ戻る**（測っていない）。
 
 ## RT-311.1 **Discovery が `dpop_signing_alg_values_supported` を広告する**
 
@@ -8254,7 +9983,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
-## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
+## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
 
 | | |
 |---|---|
@@ -8349,7 +10078,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - RP へリダイレクトで返す
 - エラーは unauthorized_client
 
-## FA-2.1 oauth2_oidc_mode=fapi2 のクライアントは、client_secret でも PKCE でも通らない
+## FA-2.1 client_mode=fapi2 のクライアントは、client_secret でも PKCE でも通らない
 
 | | |
 |---|---|
@@ -8366,13 +10095,13 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - client_secret では通らない
 - PKCE(S256) でも通らない
-- エラーは unauthorized_client
+- エラーは invalid_client（認証の方法を明示した登録は、PKCE だけでは認証しない）
 
 **補足**
 
-- **これは設計どおり。** fapi2 の登録は、証明書（x509）を伴う経路でだけ通る。**通る側は FA-6.1 で測る**（net10.0 版のみ。net48 版は手動。#226）。
+- **これは設計どおり。** fapi2 の登録は、証明書（x509）か private_key_jwt を伴う経路でだけ通る（**PKCE との併用は `RT-294.51`**）。**通る側は FA-6.1 で測る**（net10.0 版のみ。net48 版は手動。#226）。
 
-## FA-3.1 oauth2_oidc_mode=device のクライアントは、PKCE(S256) の認可コードが通る
+## FA-3.1 client_mode=device のクライアントは、PKCE(S256) の認可コードが通る
 
 | | |
 |---|---|
@@ -8447,11 +10176,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **(1) で端末を登録してあるので、以前の実装なら通知が送られていた。**開始で断ったので、auth_req_id は発行されず、利用者は何も操作しない。
 
-## FA-5.2 oauth2_oidc_mode が既知でない値（fapi_1）のクライアントは、開始（/ciba_authz）で unauthorized_client になる
+## FA-5.2 client_mode が既知でない値（fapi_1）のクライアントは、開始（/ciba_authz）で unauthorized_client になる
 
 | | |
 |---|---|
-| 観点 | **既知でない登録値は、不正な登録として拒否する**（#224 の段階 2）。以前は fapi2 とみなしていた。「一番厳しい種別」に倒す作りは、種別が増えると意味が変わるため、やめた。なお oauth2_oidc_mode を書いていない登録は normal で、これには当たらない。 |
+| 観点 | **既知でない登録値は、不正な登録として拒否する**（#224 の段階 2）。以前は fapi2 とみなしていた。「一番厳しい種別」に倒す作りは、種別が増えると意味が変わるため、やめた。なお client_mode を書いていない登録は normal で、これには当たらない。 |
 | 根拠 | #224 |
 | テスト | `FA0502_登録種別が既知でない値ならCIBAを断る` |
 
@@ -8468,7 +10197,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 400
 - エラーは unauthorized_client
 
-## FA-6.1 oauth2_oidc_mode=fapi2 のクライアントは、mTLS（Subject が一致する証明書）の認可コードで通る
+## FA-6.1 client_mode=fapi2 のクライアントは、mTLS（Subject が一致する証明書）の認可コードで通る
 
 | | |
 |---|---|
@@ -8513,7 +10242,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 401
 - エラーは invalid_client
 
-## FA-6.3 oauth2_oidc_mode が既知でない値（fapi_1）のクライアントは、Subject が一致する証明書でも通らない
+## FA-6.3 client_mode が既知でない値（fapi_1）のクライアントは、Subject が一致する証明書でも通らない
 
 | | |
 |---|---|
@@ -8560,7 +10289,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 401
 - エラーは invalid_token
 
-## FA-6.5 oauth2_oidc_mode=fapi2 のクライアントは、mTLS で refresh_token を使える
+## FA-6.5 client_mode=fapi2 のクライアントは、mTLS で refresh_token を使える
 
 | | |
 |---|---|
@@ -8861,7 +10590,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **鍵を入れ替えられること**（#292 の段階 3）。**SP はメタデータをキャッシュする**ので、**1 本だけ広告していると、替えた瞬間に検証できなくなる。****2 本並べておけば、SP がどちらでも検証できる**（**受け取る側は全部試す**。`CmnSaml2Response` の鍵の列を受ける版）。 |
+| 観点 | **鍵を入れ替えられること**（#292 の段階 3）。**SP はメタデータをキャッシュする**ので、**1 本だけ広告していると、替えた瞬間に検証できなくなる。****2 本並べておけば、SP がどちらでも検証できる**（**受け取る側は全部試す**。`SAML2Client.VerifyResponseWithReason` の鍵の列を受ける版）。 |
 | 根拠 | SAML 2.0 Metadata 2.4.1.1 / #292 の段階 3 |
 | テスト | `SA0202_メタデータが退役前の証明書も広告する` |
 
@@ -9256,7 +10985,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **このケースが通らなくなったら、まず登録を見ること**（`store/docker-compose.yml` の `jwk_rsa_publickey`）。**鍵が無いと「通す」ので、`Success` が返って落ちる。**
+- **このケースが通らなくなったら、まず登録を見ること**（`Container/E2E/docker-compose.yml` の `jwk_rsa_publickey`）。**鍵が無いと「通す」ので、`Success` が返って落ちる。**
 
 ## SA-6.6 上流が署名証明書を 2 本広告していても、SAML2 の ID 連携ができる
 

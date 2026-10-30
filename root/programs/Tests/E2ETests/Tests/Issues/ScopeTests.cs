@@ -29,11 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/11  玄人 幸道         新規（#198 の前半）
-//*  2026/09/11  玄人 幸道         クライアントごとの制限（RT-198.3 / 198.4）を追加（#198 の後半）
-//*  2026/09/11  玄人 幸道         scopes の読み取りを Jwt.Strings へ移し、補助関数を先頭にまとめる
-//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-198）
 //*  2026/09/18  玄人 幸道         既定で無効にした機能に依存するテストを Skip 対象にした（#220）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/25  玄人 幸道         auth は登録に明記したクライアントにしか出さない（RT-198.1 の期待値。#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -200,7 +199,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 Assert.False(string.IsNullOrEmpty(token.AccessToken),
                     "前提: トークンが発行されること（" + token.ToString() + "）");
 
-                VerifyIssuedScopes(r, token, supported, new string[] { "roles", "userid", "auth" });
+                VerifyIssuedScopes(r, token, supported, new string[] { "roles" });
+
+                // **`auth` は宣言済みだが、登録に明記したクライアントにしか出さない**（#294）。
+                //   **MVC_Sample は登録に scope が無い**ので、落ちるのが正しい。
+                List<string> granted = Jwt.Strings(Jwt.Payload(token.AccessToken), "scopes");
+
+                r.Verify("auth は発行されない（登録に明記していない）", !granted.Contains("auth"),
+                    "auth を含まない", "発行 = [" + string.Join(", ", granted) + "]");
 
                 r.Done();
             }

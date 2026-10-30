@@ -29,8 +29,6 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
-//*  2026/09/10  玄人 幸道         署名鍵の読み込みを JwtBearerAssertion と共用（internal 化）
-//*  2026/09/11  玄人 幸道         署名と BASE64URL を JwsSigner / Base64Url へ移す（JwtBearerAssertion と共用）
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（ES256 で署名）を作る CreateCiba を追加（#196）
 //*  2026/09/25  玄人 幸道         aud に Discovery の issuer を使うため CreateCibaAsync に改めた（#234 の段階 1）
 //**********************************************************************************
@@ -186,7 +184,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             // request_uri は URL エンコードしない。
-            // サーバは StringExtractor.GetParameterFromQueryString で
+            // サーバは UriOperator.GetParameterFromQueryString で
             // 生のクエリ文字列から取り出しており、デコードしないため、
             // エンコードすると urn:oauth:request: の接頭辞を外せず、見つからない。
             // アプリ同梱の自己テスト（HomeController）も、そのまま連結している。

@@ -66,7 +66,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// |---|---|
     /// | **何を送るか** | **`logout_token`**（`CmnLogoutToken`）を、**`application/x-www-form-urlencoded` の本文**で POST する |
     /// | **どこへ** | **`backchannel_logout_uri` の登録が在る相手だけ**（**無ければ伝えない**） |
-    /// | **いつ** | **サインアウトの経路**（`/Account/LogOff` / `/end_session` / 再認証 / 別アカウントでログイン） |
+    /// | **いつ** | **サインアウトの経路**（`/Account/Logout` / `/end_session` / 再認証 / 別アカウントでログイン） |
     /// | **待つか** | **待たない**（下の「要求の経路では待たない」） |
     ///
     /// **要求の経路では待たない。**
@@ -193,7 +193,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>URL（登録が無い・使えない URL なら空）</returns>
         /// <remarks>
         /// **`https` を求め、ループバックの `http` だけ許す**
-        /// （**鍵の出どころと同じ規則**。`DiscoveryJwks.IsUsableKeySource`）。
+        /// （**鍵の出どころと同じ規則**。`RemoteJwkSetStore.IsUsableKeySource`）。
         /// **`logout_token` は署名してあるが、平文で運べば「誰がいつ抜けたか」が漏れる。**
         /// **開発と試験では証明書を用意できないことが在る**ので、ループバックだけ許す。
         /// </remarks>
@@ -209,7 +209,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // **記号を実 URL に直す**（`test_self_bclogout`。#232 の戻り先と同じ扱い）。
             string uri = CmnEndpoints.GetRedirectUriFromConstr(registered);
 
-            return DiscoveryJwks.IsUsableKeySource(uri) ? uri : "";
+            return RemoteJwkSetStore.IsUsableKeySource(uri) ? uri : "";
         }
 
         /// <summary>その相手に名乗った sub（引けなければ空）</summary>
@@ -256,7 +256,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             try
             {
                 // **ID 連携や /token と同じ HttpClient**（TLS・プロキシの扱いが揃う）。
-                HttpClient client = Helper.GetInstance().GetOAuth2HttpClient();
+                //   **`Helper` の初期化が設定する**ので、先に初期化させてから読む。
+                Helper.GetInstance();
+                HttpClient client = OAuth2AndOIDCClient.HttpClient;
 
                 if (client == null)
                 {

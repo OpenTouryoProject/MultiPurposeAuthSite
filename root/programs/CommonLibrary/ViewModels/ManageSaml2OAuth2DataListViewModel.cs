@@ -75,7 +75,7 @@ namespace MultiPurposeAuthSite.ViewModels
     ///
     /// | | |
     /// |---|---|
-    /// | **並び** | **`client_id` の昇順**（`DataProvider.GetByOwner`。方言 3 つと `mem` で同じ） |
+    /// | **並び** | **`client_id` の昇順**（`Saml2OAuth2DataProvider.GetByOwner`。方言 3 つと `mem` で同じ） |
     /// | **出るもの** | **所有者が自分の登録だけ** — **所有者の無い登録**（構成ファイル発の種データ）**は出ない** |
     /// | **上限** | **無い**（段階 5-a-1 の決め。**ページングもしない**） |
     /// </remarks>

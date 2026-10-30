@@ -151,6 +151,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   This client_id is already in use. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientIdAlreadyExists {
+            get {
+                return ResourceManager.GetString("ClientIdAlreadyExists", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Your security code is: に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string CodeForAddPhoneNumber {
@@ -245,6 +254,42 @@ namespace MultiPurposeAuthSite.Resources {
         public static string RevokeConsentSuccess {
             get {
                 return ResourceManager.GetString("RevokeConsentSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   The password is incorrect. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string PasswordIncorrect {
+            get {
+                return ResourceManager.GetString("PasswordIncorrect", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Set a password before making this change. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string PasswordNotSet {
+            get {
+                return ResourceManager.GetString("PasswordNotSet", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   The e-mail address is the same as the current one. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EmailNotChanged {
+            get {
+                return ResourceManager.GetString("EmailNotChanged", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Verification code is invalid. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string InvalidVerificationCode {
+            get {
+                return ResourceManager.GetString("InvalidVerificationCode", resourceCulture);
             }
         }
         

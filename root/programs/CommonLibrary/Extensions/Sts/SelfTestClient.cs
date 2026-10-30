@@ -30,10 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/28  玄人 幸道         新規（#246 : 両アプリに二重だった組み立てを寄せた）
 //*  2026/09/28  玄人 幸道         CIBA の通しを寄せ、判定とポーリングを直した（#246 の 3-a / 3-b）
-//*  2026/09/28  玄人 幸道         Device Authorization Grant のポーリングも寄せた（#246 の 3-a / 3-b）
-//*  2026/09/28  玄人 幸道         SAML2 の応答（Assertion）を読む処理を寄せた（#246 の項目 3）
 //*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
-//*  2026/10/10  玄人 幸道         SAML2 の応答の検証を CmnSaml2Response へ移した（#286 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -186,7 +183,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string clientNotificationToken, string bindingMessage)
         {
             string requestObject = RequestObject.CreateCiba(
-                clientId, Config.IssuerId,
+                clientId, CmnServerParams.IssuerId,
                 DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds().ToString(),
                 DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
                 scopes, clientNotificationToken, bindingMessage, "", "",
@@ -320,7 +317,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             CibaResult ret = new CibaResult()
             {
-                Verdict = "ABNORMAL_END",
+                Verdict = Const.VerdictAbnormalEnd,
                 Reason = "",
                 Endpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint,
                 RequestObject = "",
@@ -344,7 +341,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (string.IsNullOrEmpty(ret.RequestObject))
             {
-                ret.Reason = "認証要求（署名付き JWT）の自己検証に失敗した。送っていない。";
+                ret.Reason = Resources.Diagnostics.SelfTestCibaRequestObjectInvalid;
                 return ret;
             }
 
@@ -371,8 +368,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (string.IsNullOrEmpty(ret.AuthReqId))
             {
                 // **端末が登録されていなければ、ここで終わる。**
-                ret.Reason = "認証要求が受け付けられなかった（auth_req_id が返らない） : "
-                    + SelfTestClient.ErrorOf(authZ, "応答が JSON ではない");
+                ret.Reason = string.Format(Resources.Diagnostics.SelfTestCibaNotAccepted,
+                    SelfTestClient.ErrorOf(authZ, Resources.Diagnostics.SelfTestResponseNotJson));
                 return ret;
             }
 
@@ -475,7 +472,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             DeviceAuthZResult ret = new DeviceAuthZResult()
             {
-                Verdict = "ABNORMAL_END",
+                Verdict = Const.VerdictAbnormalEnd,
                 Reason = "",
                 TokenEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
                 Interval = interval ?? "",
@@ -488,7 +485,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(deviceCode))
             {
-                ret.Reason = "client_id か device_code が渡されていない。問い合わせていない。";
+                ret.Reason = Resources.Diagnostics.SelfTestDeviceCodeMissing;
                 return ret;
             }
 
@@ -562,7 +559,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             PollOutcome ret = new PollOutcome()
             {
-                Verdict = "ABNORMAL_END",
+                Verdict = Const.VerdictAbnormalEnd,
                 Reason = "",
                 IntervalSeconds = intervalSeconds,
                 Count = 0,
@@ -587,8 +584,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     ret.UserInfoResponse = await Helper.GetInstance().GetUserInfoAsync(
                         (string)token[OAuth2AndOIDCConst.AccessToken]);
 
-                    ret.Verdict = "NORMAL_END";
-                    ret.Reason = "トークンを取得し、/userinfo まで通った。";
+                    ret.Verdict = Const.VerdictNormalEnd;
+                    ret.Reason = Resources.Diagnostics.SelfTestReachedUserInfo;
                     return ret;
                 }
 
@@ -602,15 +599,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 else if (error != OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
                 {
                     // **authorization_pending 以外は、待っても変わらない**（拒否・期限切れなど）。
-                    ret.Reason = "ポーリングが終了した : "
-                        + SelfTestClient.ErrorOf(token, "応答が JSON ではない");
+                    ret.Reason = string.Format(Resources.Diagnostics.SelfTestPollingEnded,
+                        SelfTestClient.ErrorOf(token, Resources.Diagnostics.SelfTestResponseNotJson));
                     return ret;
                 }
 
                 if (deadline <= DateTime.Now)
                 {
-                    ret.Reason = "承認を待つ上限（" + waitLimitSeconds.ToString()
-                        + " 秒）に達した。承認されなかった（authorization_pending のまま）。";
+                    ret.Reason = string.Format(Resources.Diagnostics.SelfTestPollingTimedOut, waitLimitSeconds);
                     return ret;
                 }
 
@@ -624,8 +620,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>SAML2 の応答（SAMLResponse）を検証し、目視できる形にする</summary>
         /// <param name="samlResponse">SAMLResponse（受け取ったまま）</param>
-        /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象）</param>
-        /// <param name="sigAlg">SigAlg（同上）</param>
+        /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象。SigAlg も読む）</param>
         /// <param name="relayState">RelayState</param>
         /// <param name="expectedRelayState">送った state（照合する。無ければ空）</param>
         /// <param name="isGet">GET（Redirect Binding）で受け取ったか</param>
@@ -633,28 +628,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="expectedInResponseTo">送った AuthnRequest の ID（空なら照合しない）</param>
         /// <returns>結果（画面で見せる）</returns>
         /// <remarks>
-        /// **検証の本体は `SamlProviders.CmnSaml2Response.Verify`**（#286 の段階 1 で移した）。
+        /// **検証の本体は Open棟梁 の `SAML2Client.VerifyResponseWithReason`**（#286 の段階 1 / #294）。
         ///
         /// **ここは「自己テストの SP 役」としての引数を埋めるだけ**である。
         ///
         /// | 引数 | 自己テストが渡すもの |
         /// |---|---|
         /// | 証明書 | **自分の `SpRp_RsaCerFilePath`** — **IdP ＝ SP なので、相手の証明書が自分のもの**である |
-        /// | 期待 Issuer | **自分の `Config.IssuerId`** |
+        /// | 期待 Issuer | **自分の `CmnServerParams.IssuerId`** |
         ///
         /// **ID 連携（#286）は、同じ本体に上流の証明書と EntityID を渡す。**
         /// **引数が違うだけで、判定は 1 か所である。**
         /// </remarks>
-        public static CmnSaml2Response.Saml2Result VerifySaml2Response(
-            string samlResponse, string queryString, string sigAlg,
+        public static SAML2VerifyResult VerifySaml2Response(
+            string samlResponse, string queryString,
             string relayState, string expectedRelayState, bool isGet,
             string expectedAcsUrl = null, string expectedInResponseTo = null)
         {
-            return CmnSaml2Response.Verify(
-                samlResponse, queryString, sigAlg,
-                relayState, expectedRelayState, isGet,
-                expectedAcsUrl, expectedInResponseTo,
-                CmnClientParams.RsaCerFilePath, Config.IssuerId);
+            //  **読めない証明書は、鍵が無いものとして扱う**（`NoKey` で落ちる）。
+            //  **POST Binding のときは、クエリ文字列を渡さない**（空なら POST として検証する）。
+            return SAML2Client.VerifyResponseWithReason(
+                isGet ? queryString : null, isGet ? null : samlResponse,
+                new RSA[] { CmnSaml2Response.RsaFromCerFile(CmnClientParams.RsaCerFilePath) },
+                CmnServerParams.IssuerId, expectedAcsUrl, expectedInResponseTo,
+                relayState, expectedRelayState);
         }
 
         #endregion
@@ -689,7 +686,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return whenNull;
             }
 
-            string error = (string)json[OAuth2AndOIDCConst.error] ?? "（error なし）";
+            string error = (string)json[OAuth2AndOIDCConst.error] ?? Resources.Diagnostics.SelfTestNoError;
             string description = (string)json[OAuth2AndOIDCConst.error_description] ?? "";
 
             return string.IsNullOrEmpty(description) ? error : (error + " : " + description);
@@ -831,7 +828,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 if (json != null)
                 {
                     ret.RequestUri = (string)json[OAuth2AndOIDCConst.request_uri] ?? "";
-                    ret.ExpiresIn = (string)json["expires_in"] ?? "";
+                    ret.ExpiresIn = (string)json[OAuth2AndOIDCConst.expires_in] ?? "";
                 }
             }
             catch

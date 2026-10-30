@@ -158,7 +158,7 @@ namespace MultiPurposeAuthSite.Controllers
                     catch (Exception ex)
                     {
                         // このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。
-                        string err_str = "このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。";
+                        string err_str = Resources.Diagnostics.ErrorScreenPathWrong;
 #if DEBUG
                         Debug.WriteLine(err_str);
                         Debug.WriteLine(ex.Message);
@@ -171,7 +171,7 @@ namespace MultiPurposeAuthSite.Controllers
             catch (Exception ex)
             {
                 // 開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。
-                string err_str = "開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。";
+                string err_str = Resources.Diagnostics.ErrorScreenSuppressed;
 #if DEBUG
                 Debug.WriteLine(err_str);
                 Debug.WriteLine(ex.Message);

@@ -91,12 +91,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
-                            { "authReqId", authReqId },
-                            { "authReqExp", authReqExp.ToString() },
-                            { "authZCode", authZCode },
+                            { Const.PollingAuthReqId, authReqId },
+                            { Const.PollingAuthReqExp, authReqExp.ToString() },
+                            { Const.PollingAuthZCode, authZCode },
                             { "unstructuredData", unstructuredData },
-                            { "userId", userId },
-                            { "result", "" }
+                            { Const.PollingUserId, userId },
+                            { Const.PollingResult, "" }
                         };
                         
                         CibaProvider.CibaData.TryAdd(
@@ -226,7 +226,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     Dictionary<string, string> dic
                                         = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
 
-                                    if (authReqId != dic["authReqId"])
+                                    if (authReqId != dic[Const.PollingAuthReqId])
                                     {
                                         // 別の要求
                                         continue;
@@ -239,7 +239,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
 
                                     // 結果の登録
-                                    dic["result"] = result.ToString();
+                                    dic[Const.PollingResult] = result.ToString();
                                     CibaProvider.CibaData[clientNotificationToken] = JsonConvert.SerializeObject(dic);
                                     retVal = true;
 
@@ -314,7 +314,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             string temp;
 
-            if (!dic.TryGetValue("userId", out temp) || string.IsNullOrEmpty(temp))
+            if (!dic.TryGetValue(Const.PollingUserId, out temp) || string.IsNullOrEmpty(temp))
             {
                 return false;
             }
@@ -380,14 +380,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 Dictionary<string, string> dic
                                     = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
 
-                                if (authReqId == dic["authReqId"])
+                                if (authReqId == dic[Const.PollingAuthReqId])
                                 {
                                     clientNotificationToken = _clientNotificationToken;
 
                                     // Code
-                                    authZCode = dic["authZCode"];
+                                    authZCode = dic[Const.PollingAuthZCode];
                                     // CibaState
-                                    retVal = CibaProvider.GetState(dic["authReqExp"], dic["result"], out states);
+                                    retVal = CibaProvider.GetState(dic[Const.PollingAuthReqExp], dic[Const.PollingResult], out states);
 
                                     //  **速すぎるポーリングには slow_down を返す**（#305 の段階 1）。
                                     //    **記録は辞書の中**（`lastPolled`。**無ければ初回**）。
@@ -395,7 +395,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     {
                                         long? last = null;
                                         string lastPolled =
-                                            dic.ContainsKey("lastPolled") ? dic["lastPolled"] : "";
+                                            dic.ContainsKey(Const.PollingLastPolled) ? dic[Const.PollingLastPolled] : "";
 
                                         long parsed = 0;
                                         if (!string.IsNullOrEmpty(lastPolled)
@@ -406,7 +406,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                         bool tooFast = CibaProvider.ThrottlePolling(last);
 
-                                        dic["lastPolled"] = PollingThrottle.NowUnixSeconds().ToString();
+                                        dic[Const.PollingLastPolled] = PollingThrottle.NowUnixSeconds().ToString();
                                         CibaProvider.CibaData[_clientNotificationToken] =
                                             JsonConvert.SerializeObject(dic);
 

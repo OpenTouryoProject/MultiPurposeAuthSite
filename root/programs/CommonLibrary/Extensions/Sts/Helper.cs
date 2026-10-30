@@ -38,8 +38,6 @@
 //*  2021/06/02  西野 大介         テスト用 証明書 検証 無効化コード追加
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行しないよう、一覧と絞り込みを追加（#198）
-//*  2026/09/11  玄人 幸道         クライアントの登録（scope）で、発行するスコープを絞る（#198 の後半）
-//*  2026/09/11  玄人 幸道         GetScopesSupported を Claim関連ヘルパ から scopes_supported の region へ移す
 //*  2026/09/18  玄人 幸道         クライアント単位の PKCE 必須化（require_pkce）を追加（#221）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求をクライアント認証つきで送る口を追加（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を引く口を追加（#232）
@@ -52,15 +50,12 @@
 //*  2026/10/04  玄人 幸道         web_originsと画面登録ぶんを返す口を追加（#266）
 //*  2026/10/06  玄人 幸道         クライアント登録を専用列から読む（#270）
 //*  2026/10/18  玄人 幸道         scope をDBからも読み、grant_types / response_types を追加（#307 の段階 1）
-//*  2026/10/18  玄人 幸道         クライアント登録の有無を返す口を追加（#307 の段階 2）
 //*  2026/10/18  玄人 幸道         登録された redirect_uri の 1 本目を取る口を追加（#306）
-//*  2026/10/19  玄人 幸道         token_endpoint_auth_method を引く口を追加（#307 の段階 3）
-//*  2026/10/20  玄人 幸道         逆引きを OwnerUserId で引くようにした（#307 の段階 5-a）
-//*  2026/10/20  玄人 幸道         クライアントの所有者を引く口を追加（#307 の段階 5-b）
 //*  2026/10/21  玄人 幸道         jwks_uri を引く口を追加（#309 の段階 1）
-//*  2026/10/21  玄人 幸道         設定ファイルの jwks_uri を集める口を追加（#309 の段階 2）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を引く口と HttpClient を渡す口を追加（#310 の段階 2）
-//*  2026/10/21  玄人 幸道         frontchannel_logout_uri を引く口を追加（#310 の段階 3）
+//*  2026/10/24  玄人 幸道         openid を常に広告するようにした（EnableOpenIDConnect の廃止。#314）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/25  玄人 幸道         auth を、登録に明記したクライアントにだけ出すようにした（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -160,17 +155,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             get
             {
                 return this._oauth2ClientsInfo;
-            }
-        }
-
-        /// <summary>
-        /// OAuthHttpClient
-        /// </summary>
-        private HttpClient OAuth2HttpClient
-        {
-            get
-            {
-                return this._oAuth2HttpClient;
             }
         }
 
@@ -659,7 +643,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
-        #region Credential( → DataProvider)
+        #region Credential( → Saml2OAuth2DataProvider)
 
         #region Client authentication
 
@@ -685,14 +669,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("client_secret"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(OAuth2AndOIDCConst.client_secret))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["client_secret"];
+                    return this.Oauth2ClientsInfo[client_id][OAuth2AndOIDCConst.client_secret];
                 }
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -734,7 +718,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            return DataProvider.Get(client_id) != null;
+            return Saml2OAuth2DataProvider.Get(client_id) != null;
         }
 
         #endregion
@@ -762,7 +746,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>redirect_uri（登録が無ければ空）</returns>
         public string GetClientsRedirectUri(string client_id, string response_type, out bool isResourceOwner)
         {
-            string[] uris = Helper.SplitUriList(
+            string[] uris = OAuth2AndOIDCSpec.SplitSpaceDelimited(
                 this.GetClientsRedirectUriList(client_id, response_type, out isResourceOwner));
 
             return (0 < uris.Length) ? uris[0] : "";
@@ -781,7 +765,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string[] GetClientsRedirectUris(string client_id, string response_type)
         {
-            return Helper.SplitUriList(
+            return OAuth2AndOIDCSpec.SplitSpaceDelimited(
                 this.GetClientsRedirectUriList(client_id, response_type, out bool isResourceOwner));
         }
 
@@ -806,9 +790,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     // Code
-                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_code"))
+                    if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriCode))
                     {
-                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
+                        return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriCode];
                     }
                 }
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
@@ -819,15 +803,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     // Others
-                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_token"))
+                    if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriToken))
                     {
-                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
+                        return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriToken];
                     }
                 }
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -857,50 +841,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return "";
         }
 
-        /// <summary>空白区切りの列挙を分解する（#306）</summary>
-        /// <param name="value">空白区切りの列挙</param>
-        /// <returns>要素の並び（空なら 0 件）</returns>
-        /// <remarks>
-        /// **区切りは空白である。**
-        /// **URI に空白は入らない**（RFC 3986 §2。入れるなら `%20` に符号化される）ので、
-        /// **曖昧にならない。**
-        ///
-        /// **カンマは区切りにしない** — **URI に入り得る**
-        /// （RFC 3986 §2.2 の `sub-delims` に `,` が含まれる）。
-        /// **`scope` が空白区切り**（RFC 6749 §3.3）なのと同じ流儀である。
-        ///
-        /// **1 本だけの登録は、1 件の列挙として読める** — **既存の配備はそのまま動く。**
-        /// </remarks>
-        public static string[] SplitUriList(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return new string[0];
-            }
-
-            //  **空白（半角・全角・タブ・改行）で切り、空の要素は捨てる。**
-            return value.Split(
-                new char[] { ' ', '\t', '\r', '\n', '\u3000' },
-                StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        #endregion
-
-        #region GetOAuth2HttpClient
-
-        /// <summary>サーバ間の通信に使う HttpClient を渡す（#310 の段階 2）</summary>
-        /// <returns>HttpClient</returns>
-        /// <remarks>
-        /// **ID 連携や `/token` と同じもの**である（**TLS・プロキシ・クライアント証明書の扱いが揃う**）。
-        /// **`OAuth2AndOIDCClient.HttpClient` は設定専用**（get が無い）ので、ここから渡す。
-        ///
-        /// **`BackChannelLogout` が使う**（**RP へ `logout_token` を POST する**）。
-        /// </remarks>
-        public HttpClient GetOAuth2HttpClient()
-        {
-            return this.OAuth2HttpClient;
-        }
-
         #endregion
 
         #region GetClientsFrontChannelLogoutUri
@@ -921,14 +861,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("frontchannel_logout_uri"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientFrontChannelLogoutUri))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["frontchannel_logout_uri"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientFrontChannelLogoutUri];
                 }
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -958,14 +898,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("backchannel_logout_uri"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientBackChannelLogoutUri))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["backchannel_logout_uri"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientBackChannelLogoutUri];
                 }
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -994,14 +934,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("post_logout_redirect_uri"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientPostLogoutRedirectUri))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["post_logout_redirect_uri"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientPostLogoutRedirectUri];
                 }
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1035,14 +975,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_saml"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriSaml))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_saml"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriSaml];
                 }
             }
 
             // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1079,14 +1019,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("jwk_rsa_publickey"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientJwkRsaPublicKey))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["jwk_rsa_publickey"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientJwkRsaPublicKey];
                 }
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1121,14 +1061,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("jwk_ecdsa_publickey"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientJwkEcdsaPublicKey))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["jwk_ecdsa_publickey"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientJwkEcdsaPublicKey];
                 }
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1155,11 +1095,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// **ここでは取りに行かない** — **URL を返すだけ**である。
         /// **読む側（`CmnEndpoints.ClientAuthentication`）は同期**なので、
-        /// **取得はキャッシュ越しに行う**（`DiscoveryJwks.PickJwksFromCache`）。
+        /// **取得はキャッシュ越しに行う**（`RemoteJwkSetStore.PickJwksFromCache`）。
         /// </remarks>
         public string GetJwksUri(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "jwks_uri", model => model.JwksUri);
+            return this.GetRegisteredValue(client_id, OAuth2AndOIDCConst.jwks_uri, model => model.JwksUri);
         }
 
         #endregion
@@ -1180,10 +1120,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (Dictionary<string, string> client in this.Oauth2ClientsInfo.Values)
             {
-                if (client.ContainsKey("jwks_uri")
-                    && !string.IsNullOrEmpty(client["jwks_uri"]))
+                if (client.ContainsKey(OAuth2AndOIDCConst.jwks_uri)
+                    && !string.IsNullOrEmpty(client[OAuth2AndOIDCConst.jwks_uri]))
                 {
-                    urls.Add(client["jwks_uri"]);
+                    urls.Add(client[OAuth2AndOIDCConst.jwks_uri]);
                 }
             }
 
@@ -1214,14 +1154,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey("tls_client_auth_subject_dn"))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientTlsClientAuthSubjectDn))
                 {
-                    return this.Oauth2ClientsInfo[client_id]["tls_client_auth_subject_dn"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientTlsClientAuthSubjectDn];
                 }
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1272,10 +1212,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("subject_types"))
+                if (dic.ContainsKey(Const.ClientSubjectTypes))
                 {
                     // 設定値
-                    return this.Oauth2ClientsInfo[client_id]["subject_types"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientSubjectTypes];
                 }
                 else
                 {
@@ -1285,7 +1225,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1332,10 +1272,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("oauth2_oidc_mode"))
+                if (dic.ContainsKey(Const.ClientMode))
                 {
                     // 設定値
-                    return this.Oauth2ClientsInfo[client_id]["oauth2_oidc_mode"];
+                    return this.Oauth2ClientsInfo[client_id][Const.ClientMode];
                 }
                 else
                 {
@@ -1345,7 +1285,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1394,9 +1334,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("scope") && dic["scope"] != null)
+                if (dic.ContainsKey(OAuth2AndOIDCConst.scope) && dic[OAuth2AndOIDCConst.scope] != null)
                 {
-                    return Helper.ToDistinctList(dic["scope"]);
+                    return OAuth2AndOIDCSpec.ToDistinctList(dic[OAuth2AndOIDCConst.scope]);
                 }
 
                 // **構成ファイルに在るクライアントは、ここで打ち切る**（従来どおり）。
@@ -1404,11 +1344,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索（#307 の段階 1）
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null && !string.IsNullOrWhiteSpace(model.Scopes))
             {
-                return Helper.ToDistinctList(model.Scopes);
+                return OAuth2AndOIDCSpec.ToDistinctList(model.Scopes);
             }
 
             // 登録が無い
@@ -1433,7 +1373,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public List<string> GetClientGrantTypes(string client_id)
         {
-            return this.GetClientTypeList(client_id, "grant_types", false);
+            return this.GetClientTypeList(client_id, Const.ClientGrantTypes, false);
         }
 
         /// <summary>client_id から、使ってよい response_type（登録の response_types）を取得する。</summary>
@@ -1448,7 +1388,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public List<string> GetClientResponseTypes(string client_id)
         {
-            return this.GetClientTypeList(client_id, "response_types", true);
+            return this.GetClientTypeList(client_id, Const.ClientResponseTypes, true);
         }
 
         /// <summary>登録の列挙（grant_types / response_types）を読む</summary>
@@ -1479,11 +1419,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
-                string value = (key == "grant_types") ? model.GrantTypes : model.ResponseTypes;
+                string value = (key == Const.ClientGrantTypes) ? model.GrantTypes : model.ResponseTypes;
 
                 if (!string.IsNullOrWhiteSpace(value))
                 {
@@ -1497,25 +1437,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
         /// <param name="value">登録値</param>
-        /// <returns>一覧</returns>
-        public static List<string> ToDistinctList(string value)
-        {
-            return Helper.ToDistinctList(value, false);
-        }
-
-        /// <summary>空白区切りの登録値を、重複の無い一覧にする</summary>
-        /// <param name="value">登録値</param>
         /// <param name="unescapeSpace">要素の中の「+」を空白に戻すか</param>
         /// <returns>一覧</returns>
         /// <remarks>
-        /// **切り方は `SplitUriList` と同じ**（半角・全角の空白・タブ・改行。空の要素は捨てる）。
-        /// **`scope` が空白区切り**（RFC 6749 §3.3）**なのと同じ流儀**である。
+        /// **切り方は `OAuth2AndOIDCSpec.SplitSpaceDelimited` と同じ**（半角・全角の空白・タブ・改行。空の要素は捨てる）。
+        /// **`+` を戻さないなら、`OAuth2AndOIDCSpec.ToDistinctList` を使う。**
         /// </remarks>
         public static List<string> ToDistinctList(string value, bool unescapeSpace)
         {
             List<string> ret = new List<string>();
 
-            foreach (string s in Helper.SplitUriList(value))
+            foreach (string s in OAuth2AndOIDCSpec.SplitSpaceDelimited(value))
             {
                 string item = unescapeSpace ? s.Replace("+", " ") : s;
 
@@ -1552,10 +1484,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("require_pkce"))
+                if (dic.ContainsKey(Const.ClientRequirePkce))
                 {
                     // **空文字列で Convert.ToBoolean は例外になる**ので、TryParse で読む。
-                    bool.TryParse(dic["require_pkce"], out bool require);
+                    bool.TryParse(dic[Const.ClientRequirePkce], out bool require);
                     return require;
                 }
 
@@ -1563,7 +1495,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1606,17 +1538,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey("id_token_signed_response_alg")
-                    && !string.IsNullOrEmpty(dic["id_token_signed_response_alg"]))
+                if (dic.ContainsKey(Const.ClientIdTokenSignedResponseAlg)
+                    && !string.IsNullOrEmpty(dic[Const.ClientIdTokenSignedResponseAlg]))
                 {
-                    return dic["id_token_signed_response_alg"];
+                    return dic[Const.ClientIdTokenSignedResponseAlg];
                 }
 
                 return JwtConst.RS256;
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1654,7 +1586,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetTokenEndpointAuthSigningAlg(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "token_endpoint_auth_signing_alg",
+            return this.GetRegisteredValue(client_id, Const.ClientTokenEndpointAuthSigningAlg,
                 model => model.TokenEndpointAuthSigningAlg);
         }
 
@@ -1672,7 +1604,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetRequestObjectSigningAlg(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "request_object_signing_alg",
+            return this.GetRegisteredValue(client_id, Const.ClientRequestObjectSigningAlg,
                 model => model.RequestObjectSigningAlg);
         }
 
@@ -1695,7 +1627,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public string GetTokenEndpointAuthMethod(string client_id)
         {
-            return this.GetRegisteredValue(client_id, "token_endpoint_auth_method",
+            return this.GetRegisteredValue(client_id, Const.ClientTokenEndpointAuthMethod,
                 model => model.TokenEndpointAuthMethod);
         }
 
@@ -1730,7 +1662,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1762,7 +1694,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | | |
         /// |---|---|
         /// | **public クライアントに限る** | `client_secret` が空のもの。**confidential は `/token` をサーバ間で呼ぶ**ので、ブラウザから叩かせる必要が無い |
-        /// | **構成ファイルに限る** | **画面登録（`saml2OAuth2Data`）は含めない。** プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、`DataProvider` に全件を列挙する口が無く、分散キャッシュも無い（E-2） |
+        /// | **構成ファイルに限る** | **画面登録（`saml2OAuth2Data`）は含めない。** プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、`Saml2OAuth2DataProvider` に全件を列挙する口が無く、分散キャッシュも無い（E-2） |
         ///
         /// **画面登録の SPA は、`Config.CorsAllowedOrigins` に足して通す。**
         /// </remarks>
@@ -1775,22 +1707,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Dictionary<string, string> client = this.Oauth2ClientsInfo[clientId];
 
                 // **confidential は対象外**（client_secret を持つもの）。
-                if (client.ContainsKey("client_secret")
-                    && !string.IsNullOrEmpty(client["client_secret"]))
+                if (client.ContainsKey(OAuth2AndOIDCConst.client_secret)
+                    && !string.IsNullOrEmpty(client[OAuth2AndOIDCConst.client_secret]))
                 {
                     continue;
                 }
 
                 // **`web_origins` が書かれていれば、それを使う**（#266）。
                 //   **書いたときは、導出しない**（登録どおりに絞る）。
-                if (client.ContainsKey("web_origins")
-                    && !string.IsNullOrEmpty(client["web_origins"]))
+                if (client.ContainsKey(Const.ClientWebOrigins)
+                    && !string.IsNullOrEmpty(client[Const.ClientWebOrigins]))
                 {
-                    uris.Add(client["web_origins"]);
+                    uris.Add(client[Const.ClientWebOrigins]);
                     continue;
                 }
 
-                foreach (string key in new string[] { "redirect_uri_code", "redirect_uri_token" })
+                foreach (string key in new string[] { Const.ClientRedirectUriCode, Const.ClientRedirectUriToken })
                 {
                     if (client.ContainsKey(key)
                         && !string.IsNullOrEmpty(client[key]))
@@ -1820,7 +1752,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | **`web_origins` が在れば、それを使う** | **書いたときは導出しない** |
         /// | **無ければ `redirect_uri_*`** | #265 の挙動 |
         ///
-        /// **`DataProvider.GetAllUris` を呼ぶので、毎回呼ばないこと。**
+        /// **`Saml2OAuth2DataProvider.GetAllUris` を呼ぶので、毎回呼ばないこと。**
         /// **読むのは URI 関連の列だけ**（#270 で列にしたので、絞れる）。
         /// 呼ぶ側（`CmnEndpoints.GetCorsAllowedOrigins`）がキャッシュする。
         /// </remarks>
@@ -1828,7 +1760,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             List<string> uris = new List<string>();
 
-            foreach (ManageAddSaml2OAuth2DataViewModel model in DataProvider.GetAllUris())
+            foreach (ManageAddSaml2OAuth2DataViewModel model in Saml2OAuth2DataProvider.GetAllUris())
             {
                 if (model == null)
                 {
@@ -1887,11 +1819,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.Oauth2ClientsInfo[client_id]["client_name"];
+                return this.Oauth2ClientsInfo[client_id][Const.ClientName];
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             if (model != null)
             {
@@ -1945,15 +1877,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (!dic.ContainsKey("owner")
-                    || string.IsNullOrWhiteSpace(dic["owner"]))
+                if (!dic.ContainsKey(Const.ClientOwner)
+                    || string.IsNullOrWhiteSpace(dic[Const.ClientOwner]))
                 {
                     //  **構成ファイルに在るクライアントは、ここで打ち切る**
                     //    （`GetClientScopes` と同じ流儀）。
                     return "";
                 }
 
-                ApplicationUser owner = CmnUserStore.FindByName(dic["owner"].Trim());
+                ApplicationUser owner = CmnUserStore.FindByName(dic[Const.ClientOwner].Trim());
 
                 //  **居ないことがある**（設定の誤り）。**空を返す** —
                 //    **null 参照で 500 にしない**（#210 / #241 と同じ性質）。
@@ -1961,7 +1893,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
 
             return (model == null || string.IsNullOrEmpty(model.OwnerUserId))
                 ? "" : model.OwnerUserId;
@@ -1991,7 +1923,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | **どれを返すか決めていない** | **`DataProvider.GetFirstByOwner`**（並びは決めていない） |
+        /// | **どれを返すか決めていない** | **`Saml2OAuth2DataProvider.GetFirstByOwner`**（並びは決めていない） |
         /// | **0 件なら空** | **以前は「宙に浮いた GUID」が返っていた**（登録が無くても値が入っていた） |
         ///
         /// **呼ぶ側は「その人のクライアント 1 つ」で足りる所だけ**である —
@@ -2009,7 +1941,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Dictionary<string, string> client
                     = this.Oauth2ClientsInfo[clientId];
 
-                string temp = client["client_name"];
+                string temp = client[Const.ClientName];
                 if (temp.ToLower() == clientName.ToLower())
                 {
                     return clientId;
@@ -2039,7 +1971,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **その人の登録のうち 1 件**（#307 の段階 5-a）。
             //    **0 件なら空を返す** — **以前は「宙に浮いた GUID」が返っていた。**
-            ManageAddSaml2OAuth2DataViewModel model = DataProvider.GetFirstByOwner(user.Id);
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.GetFirstByOwner(user.Id);
 
             if (model == null)
             {
@@ -2076,15 +2008,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 OAuth2AndOIDCConst.Scope_Phone,
                 OAuth2AndOIDCConst.Scope_Address,
                 OAuth2AndOIDCConst.Scope_Auth,
-                OAuth2AndOIDCConst.Scope_UserID,
                 OAuth2AndOIDCConst.Scope_Roles
             };
 
-            // openid は OIDC が有効なときだけ
-            if (Config.EnableOpenIDConnect)
-            {
-                scopes.Add(OAuth2AndOIDCConst.Scope_Openid);
-            }
+            // openid（**OIDC は常に有効**。#314 で EnableOpenIDConnect を廃止した）
+            scopes.Add(OAuth2AndOIDCConst.Scope_Openid);
 
             //  **クライアント登録の管理 API 専用の scope は、動的登録を開けた配備だけ**
             //    （#307 の段階 1）。**閉じている配備では、広告も発行もしない。**
@@ -2140,18 +2068,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// クライアントの登録に scope があれば、その範囲にも収める（#198 の後半）。
         /// 登録が無いクライアントは、既存の登録を壊さないよう、ここでは制限しない。
         ///
-        /// **`Const.ScopeClientRegistration`（クライアント登録の管理 API）だけは、倒し方が逆**
-        /// （#307 の段階 1）。**登録に明記していなければ出さない。**
+        /// **`Const.ScopeClientRegistration`（クライアント登録の管理 API）と
+        /// `OAuth2AndOIDCConst.Scope_Auth`（同意画面を出さない）だけは、倒し方が逆**
+        /// （#307 の段階 1 / #294）。**登録に明記していなければ出さない。**
         ///
         /// | | 倒し方 |
         /// |---|---|
         /// | 普通の scope | **登録が無ければ制限しない**（従来どおり） |
         /// | **`client_registration`** | **登録に明記していなければ出さない** |
+        /// | **`auth`** | **登録に明記していなければ出さない** |
         ///
-        /// **理由** : **この scope は「クライアント登録を作れる」権限**である。
+        /// **理由** : どちらも、**要求する側が自分で付けてよい scope ではない。**
         /// **「登録が無ければ制限しない」を当てはめると、**
         /// **`scope` を登録していない既存のクライアントが全て、**
-        /// **ROPC で登録を作れることになる。**
+        ///
+        /// - `client_registration` : **ROPC で登録を作れることになる。**
+        /// - `auth` : **同意画面を飛ばせることになる**（同意を求めるかを、クライアントが決めてしまう）。
+        ///   **飛ばしてよいかは、登録を管理する人が決める**（Keycloak の「Consent Required」と同じ考え方）。
         /// </remarks>
         public static IEnumerable<string> FilterSupportedScopes(IEnumerable<string> scopes, string client_id)
         {
@@ -2160,9 +2093,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (string s in Helper.FilterSupportedScopes(scopes))
             {
-                if (s == Const.ScopeClientRegistration)
+                if (s == Const.ScopeClientRegistration
+                    || s == OAuth2AndOIDCConst.Scope_Auth)
                 {
-                    //  **明記されているときだけ通す**（#307 の段階 1）。
+                    //  **明記されているときだけ通す**（#307 の段階 1 / #294）。
                     if (permitted != null && permitted.Contains(s))
                     {
                         ret.Add(s);
@@ -2192,10 +2126,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     temp.Add(OAuth2AndOIDCConst.Scope_Openid);
                 }
-                else if (s == OAuth2AndOIDCConst.Scope_UserID)
-                {
-                    temp.Add(OAuth2AndOIDCConst.Scope_UserID);
-                }
             }
 
             return temp;
@@ -2219,7 +2149,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #region 標準
 
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuerClaim, Config.IssuerId));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuerClaim, CmnServerParams.IssuerId));
             identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnAudienceClaim, client_id));
 
             foreach (string scope in scopes)

@@ -86,6 +86,29 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- **Config は partial に分けてある**（#294）。IDE で Config.cs の下に畳んで見せる。 -->
+    <Compile Update="Co\Config.*.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+
+    <!-- **ClientRegistrationProvider も partial に分けてある**（#294）。IDE で ClientRegistrationProvider.cs の下に畳んで見せる。 -->
+    <Compile Update="Extensions\Sts\ClientRegistrationProvider.*.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
+
+    <!-- **CmnEndpoints も partial に分けてある**（#294）。IDE で CmnEndpoints.cs の下に畳んで見せる。
+         **SamlProviders にも同名の CmnEndpoints.cs が在る**ので、フォルダまで指定する。 -->
+    <Compile Update="TokenProviders\CmnEndpoints.*.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+
+    <!-- **CmnUserStore も partial に分けてある**（#294）。IDE で CmnUserStore.cs の下に畳んで見せる。 -->
+    <Compile Update="Data\CmnUserStore.*.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Update="Resources\AccountController.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -120,6 +143,11 @@
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>CommonViewModels.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Resources\Diagnostics.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Diagnostics.resx</DependentUpon>
     </Compile>
     <Compile Update="Resources\ManageController.Designer.cs">
       <DesignTime>True</DesignTime>
@@ -173,6 +201,11 @@
       <CustomToolNamespace></CustomToolNamespace>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>CommonViewModels.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\Diagnostics.resx">
+      <CustomToolNamespace></CustomToolNamespace>
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Diagnostics.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Update="Resources\ManageController.resx">
       <CustomToolNamespace></CustomToolNamespace>

@@ -41,7 +41,7 @@ labels: bug
 プロトコルの問題なら、次も書いてください。設定で挙動が変わります。
 
   ・フローと grant_type / response_type / response_mode
-  ・関係する設定（Enable*GrantType、EnableOpenIDConnect など）
+  ・関係する設定（Enable*GrantType など）
   ・クライアントの subject_types / oauth2_oidc_mode
   ・リクエストとレスポンスの実際の値（**トークンや client_secret は伏せてください**）
 

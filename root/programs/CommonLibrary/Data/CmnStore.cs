@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/04  西野 大介         新規
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
+//*  2026/10/30  玄人 幸道         値の無いクレーム（Oracle は空文字を NULL にする）で、残りの関連情報を読み落とさない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -210,17 +211,20 @@ namespace MultiPurposeAuthSite.Data
 
                 // PostgreSQLだとdynamicが全部小文字になる。
 
+                //  **NULL は空文字で受ける**（#294）。**Oracle は空文字を NULL として保存する**ので、
+                //    **値の無いクレームを `new Claim(type, null)` にして例外になり**、
+                //    **握られて、後に読む外部ログインと TOTP のトークン（回復コード）が読み込まれなかった。**
                 foreach (dynamic d in claims)
                 {
                     if (Config.UserStoreType == EnumUserStoreType.PostgreSQL)
                     {
                         user.Claims.Add(new Claim(
-                            d.claimtype, d.claimvalue, null, d.issuer));
+                            (string)d.claimtype ?? "", (string)d.claimvalue ?? "", null, (string)d.issuer));
                     }
                     else
                     {
                         user.Claims.Add(new Claim(
-                            d.ClaimType, d.ClaimValue, null, d.Issuer));
+                            (string)d.ClaimType ?? "", (string)d.ClaimValue ?? "", null, (string)d.Issuer));
                     }
                 }
 

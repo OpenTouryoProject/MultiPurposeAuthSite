@@ -489,4 +489,7 @@
   <data name="AddWebAuthnDataResidentCredentialsDescription" xml:space="preserve">
     <value>Store the credential on the authenticator itself (a discoverable credential). It allows signing in without typing a user name.</value>
   </data>
+  <data name="CurrentPasswordPlaceholder" xml:space="preserve">
+    <value>Current password</value>
+  </data>
 </root>

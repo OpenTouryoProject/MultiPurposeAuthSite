@@ -30,11 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-4.5 の Skip を解除し、EX-4.7 を追加（#199）
-//*  2026/09/11  玄人 幸道         /device_authz の要求を IdPClient.DeviceAuthorizationAsync へ移す
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ ボタン（RT-246.3）を追加（#246 の 3-a）
 //*  2026/10/01  玄人 幸道         承認した利用者の確認を /userinfo の email に替えた（#151 の段階 4）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/16  玄人 幸道         Start/Poll を internal に（RT-305 が使う。#305 の段階 1）
+//*  2026/10/29  玄人 幸道         EX-4.3 の refresh_token の観測を、直した実装に合わせた（#294）
+//*  2026/10/30  玄人 幸道         デバイス フローの要求に openid を含める（/userinfo が openid の無いトークンを断るようにしたため。#294）
 //**********************************************************************************
 
 using System;
@@ -82,7 +83,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
             return client.DeviceAuthorizationAsync(new Dictionary<string, string>()
             {
                 { "client_id", clientId },
-                { "scope", "profile email" }
+                //  **openid を含める**（#294）。承認した利用者を `/userinfo` で確かめるため
+                //    （`/userinfo` は、openid の無いトークンを 403 で断る）。
+                { "scope", "openid profile email" }
             });
         }
 
@@ -292,8 +295,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 r.Observe("refresh_token / id_token",
                     "refresh_token=" + (string.IsNullOrEmpty(token.RefreshToken) ? "なし" : "あり")
                     + " / id_token=" + (string.IsNullOrEmpty(token.IdToken) ? "なし" : "あり"),
-                    "この実装は refresh_token を生成・保存するが、応答には含めていない"
-                    + "（CmnEndpoints.GrantDeviceAuthZ）。渡さないなら、生成しない方がよい。");
+                    "**device の登録には refresh_token を発行しない**（ClientModePolicy の表。#224）。"
+                    + "**normal の登録には返す**（以前は生成・保存するだけで返していなかった。RT-294.41）。");
 
                 r.Done();
             }

@@ -70,16 +70,16 @@
     省略した場合は、上記の環境変数から読む。
 
 .PARAMETER NoStoreContainer
-    **store\ の DB コンテナを、起動も停止もしない。**
+    **Container\Store\ の DB コンテナを、起動も停止もしない。**
 
-    既定では、-UserStoreType が mem 以外のとき、**接続文字列が store\ の
+    既定では、-UserStoreType が mem 以外のとき、**接続文字列が Container\Store\ の
     ポート（1434 / 1522 / 5433）を指していれば、その DB コンテナを起動し、
     終わったら停止する**（3 つ同時に起動するとメモリを使い切るため。
-    store\docker-compose.yml の「メモリの節約」）。
+    Container\Store\docker-compose.yml の「メモリの節約」）。
 
     **自分が起動したものだけを止める。** 既に起動していれば、そのまま残す。
 
-    **接続文字列が store\ のポートを指していなければ、何もしない**
+    **接続文字列が Container\Store\ のポートを指していなければ、何もしない**
     （手動確認の LocalServicesOnDocker は既定ポートなので、自動で対象外になる）。
     このスイッチは、それでも触らせたくないときに使う。
 
@@ -123,12 +123,29 @@
 
     付けなければ、nonce のテストはケースを作らない（Skip にもならない）。
 
+.PARAMETER NoImplicit
+    **Implicit を閉じた配備のテスト（RT-314）専用。**
+    **`EnableImplicitGrantType` を false にしてサイトを起動する**（#314）。
+
+    **-Filter と併せて使うこと。** Implicit / Hybrid（`token` を含むもの）のテストは落ちる。
+      .\test.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"
+
+    付けなければ、このテストはケースを作らない（Skip にもならない）。
+
 .PARAMETER NoWebUI
     ブラウザで測るもの（`Tests/WebUI`。識別子 UI-n.n）を走らせない。
     既定では走らせる（ブラウザが無ければ Skip する）。
 
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
+
+.PARAMETER Coverage
+    サイト（net10.0 版・net48 版）のコード カバレッジを取る（#294。-Launch と一緒に使う）。
+    dotnet-coverage（root\dotnet-tools.json のローカル ツール）でサイトを包んで起動し、
+    止めるときに Cobertura 形式で書き出させ、ReportGenerator で HTML にする。
+    出力は LogDir\coverage（report\index.html と report\Summary.txt）。
+    **XPlat Code Coverage（coverlet.collector）では、サイトは測れない**
+    （dotnet test の中で読み込まれたコードしか数えない。サイトは別のプロセスである）。
 
 .PARAMETER LogDir
     サイトの起動ログ（MpasSite.*.log / IisExpress.*.log）の出力先。
@@ -170,7 +187,9 @@ param(
     [switch] $NetFxMtls,
     [switch] $ShortLifetimes,
     [switch] $DPoPNonce,
+    [switch] $NoImplicit,
     [switch] $NoWebUI,
+    [switch] $Coverage,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
@@ -198,19 +217,19 @@ if (-not $LogDir) {
 }
 
 # ------------------------------------------------------------------
-# store\ の DB コンテナ（#305 の後）
+# Container\Store\ の DB コンテナ（#305 の後）
 # ------------------------------------------------------------------
 # **DB を 3 つ同時に起動すると、Docker の VM がメモリを使い切って固まることがある。**
 #   **使うストアの DB だけを、テストの間だけ起動する**
-#   （store\docker-compose.yml の「メモリの節約」。方針は LocalServicesOnDocker の CHEATSHEET）。
+#   （Container\Store\docker-compose.yml の「メモリの節約」。方針は LocalServicesOnDocker の CHEATSHEET）。
 #
 # **自分が起動したものだけを止める。** **人が自分で上げていた DB は、そのまま残す。**
 #
-# **対象かどうかは、接続文字列のポートで決める**（store\ は +1 にしてある）。
+# **対象かどうかは、接続文字列のポートで決める**（Container\Store\ は +1 にしてある）。
 #   **既定ポート（＝ 手動確認の LocalServicesOnDocker）なら、触らない。**
 
 $script:StoreDir = Join-Path `
-    (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'store'
+    (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'Container\Store'
 
 function Get-StorePortFromConnStr
 {
@@ -255,7 +274,8 @@ function Invoke-StoreDocker
 {
     param([Parameter(ValueFromRemainingArguments = $true)] [string[]] $DockerArgs)
 
-    #  **store\ で実行する。** compose のプロジェクト名をフォルダ名（store）に合わせるため。
+    #  **Container\Store\ で実行する。** docker-compose.yml を見つけるため
+    #  （プロジェクト名は、その name: で mpas-store に決まる。#318）。
     #  **profiles が付いたサービスは、名前を明示すれば起動できる**（--profile は要らない）。
     Push-Location $script:StoreDir
     try {
@@ -378,7 +398,7 @@ function Stop-StoreContainer
 #
 # **接続文字列の既定値は持たない。** 引数か環境変数で受ける。
 #
-# **Service / Port は store\docker-compose.yml のもの**（#305 の後）。
+# **Service / Port は Container\Store\docker-compose.yml のもの**（#305 の後）。
 #   **接続文字列がこのポートを指していれば、その DB コンテナを都度 起動・停止する。**
 #   **指していなければ触らない**（手動確認の LocalServicesOnDocker は既定ポート）。
 $storeKeys = @{
@@ -415,8 +435,8 @@ if ($UserStoreType -ne 'mem') {
     Write-Host ("UserStore : {0}（{1}）" -f $UserStoreType, $info.Name) -ForegroundColor Cyan
     Write-Host ("  接続文字列は {0} として渡します（内容は表示しません）。" -f $storeConnKey)
 
-    # **store\ の DB コンテナを、都度 起動・停止するか**（#305 の後）。
-    #   **接続文字列から読めたポートが store\ のものなら、対象にする。**
+    # **Container\Store\ の DB コンテナを、都度 起動・停止するか**（#305 の後）。
+    #   **接続文字列から読めたポートが Container\Store\ のものなら、対象にする。**
     #   **読めない（＝ 既定ポート）/ 違う番号なら、別の DBMS を指している**ので触らない。
     if (-not $NoStoreContainer) {
 
@@ -429,10 +449,10 @@ if ($UserStoreType -ne 'mem') {
         }
         elseif ($null -eq $foundPort) {
             Write-Host '  接続文字列にポートがありません（既定ポート）。' -ForegroundColor Yellow
-            Write-Host '    store\ の DB ではないと判断し、コンテナは触りません。' -ForegroundColor Yellow
+            Write-Host '    Container\Store\ の DB ではないと判断し、コンテナは触りません。' -ForegroundColor Yellow
         }
         else {
-            Write-Host ('  接続文字列のポートは {0} で、store\ の {1} ではありません。' -f $foundPort, $info.Port) -ForegroundColor Yellow
+            Write-Host ('  接続文字列のポートは {0} で、Container\Store\ の {1} ではありません。' -f $foundPort, $info.Port) -ForegroundColor Yellow
             Write-Host '    コンテナは触りません。' -ForegroundColor Yellow
         }
     }
@@ -575,11 +595,11 @@ $script:DcrCcNoOwnerSecret     = 'e2e_307_5b_dcr_cc_noowner_secret_do_not_use'
 
 
 # **ID フェデレーションの下流として振る舞うための設定（#250 の段階 5）。**
-#   上流は store\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
+#   上流は Container\E2E\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
 #   （建っていなければ、連携のテストは Skip される）。
 #
 #   **redirect_uri はクライアント 1 件に 1 つ**なので、**下流ごとに別のクライアント**を使う。
-#   登録は store\docker-compose.yml にある（上流に環境変数で差し込んでいる）。
+#   登録は Container\E2E\docker-compose.yml にある（上流に環境変数で差し込んでいる）。
 #
 #   **上流のエンドポイント（IdFederation{Authorize,Token,UserInfo}Endpoint）は上書きしない。**
 #   構成ファイルが既に 44301 を指しており、**テストはその値を読んで上流を探す**ため、
@@ -713,6 +733,125 @@ function Set-IdFederationEnv
     #   **/samlmetadata が 2 本広告する状態を作る**（`SA-2.2` が、それを測る）。
     #   **値は「いま署名に使っていない証明書」**でよい（広告するだけなので）。
     $env:PreviousSigningCerFilePaths = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
+}
+
+# ------------------------------------------------------------------
+# カバレッジ（#294。-Coverage）
+# ------------------------------------------------------------------
+# **XPlat Code Coverage（coverlet.collector）では、サイトを測れない。**
+#   あれが数えるのは dotnet test の中で読み込まれたコードで、サイトは別のプロセスである。
+#   **dotnet-coverage でサイトを包んで起動し、止めるときに書き出させる。**
+#   ツールは root\dotnet-tools.json のローカル ツール（dotnet tool restore で揃う）。
+$script:CoverageSessions = @()
+
+function Get-ToolRoot
+{
+    # root（dotnet-tools.json の在り処）。dotnet tool run は、作業フォルダから上へ探す。
+    return (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent)
+}
+
+function ConvertTo-ArgumentString
+{
+    param([string[]] $Arguments)
+
+    # **Start-Process は、空白を含む引数を引用符で囲まない**（5.1）。自分で囲む。
+    return (($Arguments | ForEach-Object {
+        if ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
+    }) -join ' ')
+}
+
+function Start-CoveredProcess
+{
+    param(
+        [string]   $Session,
+        [string]   $Output,
+        [string]   $FilePath,
+        [string[]] $Arguments,
+        [string]   $WorkingDirectory,
+        [string]   $OutLog,
+        [string]   $ErrLog)
+
+    $collect = @('tool', 'run', 'dotnet-coverage', 'collect',
+        '--session-id', $Session,
+        '--output', $Output, '--output-format', 'cobertura',
+        '--settings', (Join-Path $PSScriptRoot 'coverage.settings.xml'),
+        $FilePath) + $Arguments
+
+    $script:CoverageSessions += $Session
+
+    return Start-Process -FilePath 'dotnet' -ArgumentList (ConvertTo-ArgumentString $collect) `
+        -WorkingDirectory $WorkingDirectory -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $OutLog -RedirectStandardError $ErrLog
+}
+
+function Get-DescendantProcessId
+{
+    param([int] $ParentId)
+
+    $ids = @()
+    foreach ($child in @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue))
+    {
+        $ids += [int]$child.ProcessId
+        $ids += Get-DescendantProcessId -ParentId ([int]$child.ProcessId)
+    }
+    return $ids
+}
+
+function Stop-CoverageSessions
+{
+    # **先に計測を閉じて、書き出させる**（サイトを先に止めると、数えた分を失う）。
+    Push-Location (Get-ToolRoot)
+    try {
+        foreach ($s in $script:CoverageSessions)
+        {
+            Write-Host "カバレッジを書き出します（$s）..." -ForegroundColor Cyan
+            & dotnet tool run dotnet-coverage shutdown $s --timeout 180000 2>&1 | ForEach-Object { "  $_" }
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function New-CoverageReport
+{
+    param([string] $CoverageDir)
+
+    $files = @(Get-ChildItem -Path $CoverageDir -Filter '*.cobertura.xml' -ErrorAction SilentlyContinue)
+
+    if ($files.Count -eq 0)
+    {
+        Write-Warning "カバレッジが書き出されていません（$CoverageDir）。"
+        return
+    }
+
+    $reportDir = Join-Path $CoverageDir 'report'
+
+    Push-Location (Get-ToolRoot)
+    try {
+        #  **両版を 1 つのレポートにまとめる**（共通ライブラリは同じファイルなので、行が合わさる）。
+        #  **Razor の生成クラスは除く**（画面のテンプレートで、手で書いたコードではない）。
+        & dotnet tool run reportgenerator `
+            ("-reports:" + (($files | ForEach-Object { $_.FullName }) -join ';')) `
+            ("-targetdir:" + $reportDir) `
+            '-reporttypes:Html;TextSummary;MarkdownSummaryGithub' `
+            '-title:MultiPurposeAuthSite (E2E)' `
+            '-classfilters:-AspNetCoreGeneratedDocument.*' 2>&1 | Out-Null
+    }
+    finally {
+        Pop-Location
+    }
+
+    $summary = Join-Path $reportDir 'Summary.txt'
+
+    if (Test-Path $summary)
+    {
+        Write-Host ''
+        Write-Host '================ カバレッジ ================' -ForegroundColor Cyan
+        Get-Content $summary -Encoding UTF8 | Select-Object -First 14 | ForEach-Object { "  $_" }
+        Write-Host ''
+        Write-Host ('  レポート : ' + (Join-Path $reportDir 'index.html'))
+    }
 }
 
 function Wait-Site
@@ -909,6 +1048,15 @@ try {
             $env:MPAS_DPOP_NONCE = 'true'
         }
 
+        # **Implicit を閉じた配備のテスト（#314）は、閉じた設定で起動して測る。**
+        #   **通しは Implicit を開けて起動する**（廃止したフローの回帰を測るため。#220）。
+        #   **Implicit / Hybrid（token を含むもの）のテストは落ちるので、-Filter と併せて使う。**
+        #   **値は下の 2 か所（net10.0 / net48 の起動）で入れる**（そこで true に上書きしているため）。
+        if ($NoImplicit) {
+            Write-Warning '-NoImplicit : Implicit を閉じて起動します。-Filter と併せて使ってください（#314）。'
+            $env:MPAS_NO_IMPLICIT = 'true'
+        }
+
         if ($PSVersionTable.PSVersion.Major -lt 6) {
             # **コールバックは、スクリプト ブロックではなくコンパイルしたデリゲートにする。**
             #   クライアント証明書のネゴシエーション（-NetFxMtls）が入ると、
@@ -961,7 +1109,7 @@ public static class MpasTestTls
         # **Obsolete のテスト（Implicit / ROPC）も必ず測る（#220）。**
         #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
         #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
-        $env:EnableImplicitGrantType = 'true'
+        $env:EnableImplicitGrantType = $(if ($NoImplicit) { 'false' } else { 'true' })
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
         # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1）。**
         #   雛形の既定は無効（口そのものを張らない）だが、**テストでは有効にして起動する。**
@@ -1031,6 +1179,13 @@ public static class MpasTestTls
         Remove-Item (Join-Path $coreOutbox '*') -Force -ErrorAction SilentlyContinue
         $env:FcmOutboxDirectory = $coreOutbox
 
+        # **メールの送信箱（テスト用。#294）**。サイトは SMTP に送らず、ここへファイルとして書く。
+        #   **確認・リセットのリンクや 2FA のコード**を、テストがここから読む。サイトごとに分け、前回の残りは消す。
+        $coreMailOutbox = Join-Path $LogDir 'mail\core'
+        New-Item -ItemType Directory -Force $coreMailOutbox | Out-Null
+        Remove-Item (Join-Path $coreMailOutbox '*') -Force -ErrorAction SilentlyContinue
+        $env:MailOutboxDirectory = $coreMailOutbox
+
         # サイトの出力をファイルへ残す。
         # 起動に失敗したとき、これが無いと「応答しません」しか分からない。
         $coreOut = Join-Path $LogDir 'MpasSite.out.log'
@@ -1066,10 +1221,45 @@ public static class MpasTestTls
             $env:DOTNET_STARTUP_HOOKS = $mtlsHook.FullName
         }
 
-        $core = Start-Process -FilePath $coreExe.FullName `
-            -ArgumentList @('--urls', $Url) `
-            -WorkingDirectory $coreDir -PassThru -WindowStyle Hidden `
-            -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr
+        if ($Coverage) {
+            # **カバレッジを取る**（#294）。前回の分は消し、ツールを揃えてから包んで起動する。
+            $coverageDir = Join-Path $LogDir 'coverage'
+            New-Item -ItemType Directory -Force $coverageDir | Out-Null
+            Remove-Item (Join-Path $coverageDir '*') -Recurse -Force -ErrorAction SilentlyContinue
+
+            Push-Location (Get-ToolRoot)
+            try { & dotnet tool restore 2>&1 | Out-Null } finally { Pop-Location }
+
+            Write-Host '  カバレッジを取ります（dotnet-coverage）。' -ForegroundColor Cyan
+
+            #  **mTLS のフック（DOTNET_STARTUP_HOOKS）は、サイトにだけ渡す。**
+            #    **dotnet-coverage 自身も .NET のプロセス**なので、環境変数を引き継ぐと
+            #    **別の版の .NET でフックを読もうとして落ちる**（System.Runtime 10.0 が無い）。
+            #    **フックを立ててからサイトを起動する .cmd を作り、それを包む。**
+            $coreFile = $coreExe.FullName
+            $coreArgs = @('--urls', $Url)
+            if ($null -ne $mtlsHook) {
+                Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
+                $launcher = Join-Path $coverageDir 'launch-core.cmd'
+                Set-Content -Path $launcher -Encoding ASCII -Value @(
+                    '@echo off',
+                    ('set DOTNET_STARTUP_HOOKS=' + $mtlsHook.FullName),
+                    ('"' + $coreExe.FullName + '" --urls ' + $Url))
+                $coreFile = $env:ComSpec
+                $coreArgs = @('/c', $launcher)
+            }
+
+            $core = Start-CoveredProcess -Session 'mpas-core' `
+                -Output (Join-Path $coverageDir 'core.cobertura.xml') `
+                -FilePath $coreFile -Arguments $coreArgs `
+                -WorkingDirectory $coreDir -OutLog $coreOut -ErrLog $coreErr
+        }
+        else {
+            $core = Start-Process -FilePath $coreExe.FullName `
+                -ArgumentList @('--urls', $Url) `
+                -WorkingDirectory $coreDir -PassThru -WindowStyle Hidden `
+                -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr
+        }
 
         Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
 
@@ -1079,6 +1269,7 @@ public static class MpasTestTls
         Write-Host '起動しました。' -ForegroundColor Green
         $env:MPAS_CORE_BASEURL = $Url
         $env:MPAS_CORE_FCM_OUTBOX = $coreOutbox
+        $env:MPAS_CORE_MAIL_OUTBOX = $coreMailOutbox
         $env:MPAS_CORE_TESTUSER_SUFFIX = $script:TestUserSuffixCore
         if ($null -ne $mtlsHook) { $env:MPAS_CORE_MTLS = 'true' }   # FA-6 を回してよい（#226）
 
@@ -1109,7 +1300,7 @@ public static class MpasTestTls
             # **Obsolete のテスト（Implicit / ROPC）も必ず測る（#220）。**
             #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
             #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
-            $env:EnableImplicitGrantType = 'true'
+            $env:EnableImplicitGrantType = $(if ($NoImplicit) { 'false' } else { 'true' })
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
             # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1。上の net10.0 側と同じ理由）**
             $env:EnableDynamicClientRegistration = 'true'
@@ -1147,10 +1338,24 @@ public static class MpasTestTls
             Remove-Item (Join-Path $netFxOutbox '*') -Force -ErrorAction SilentlyContinue
             $env:FcmOutboxDirectory = $netFxOutbox
 
-            $netFx = Start-Process -FilePath $iisExe `
-                -ArgumentList @("/config:$iisCfg", '/site:MPAS48') `
-                -PassThru -WindowStyle Hidden `
-                -RedirectStandardOutput $netFxOut -RedirectStandardError $netFxErr
+            $netFxMailOutbox = Join-Path $LogDir 'mail\netfx'
+            New-Item -ItemType Directory -Force $netFxMailOutbox | Out-Null
+            Remove-Item (Join-Path $netFxMailOutbox '*') -Force -ErrorAction SilentlyContinue
+            $env:MailOutboxDirectory = $netFxMailOutbox
+
+            if ($Coverage) {
+                # **IIS Express ごと包む**（#294）。**net48 版はプロファイラで測る**（dotnet-coverage が環境変数で渡す）。
+                $netFx = Start-CoveredProcess -Session 'mpas-netfx' `
+                    -Output (Join-Path $LogDir 'coverage\netfx.cobertura.xml') `
+                    -FilePath $iisExe -Arguments @("/config:$iisCfg", '/site:MPAS48') `
+                    -WorkingDirectory (Get-ToolRoot) -OutLog $netFxOut -ErrLog $netFxErr
+            }
+            else {
+                $netFx = Start-Process -FilePath $iisExe `
+                    -ArgumentList @("/config:$iisCfg", '/site:MPAS48') `
+                    -PassThru -WindowStyle Hidden `
+                    -RedirectStandardOutput $netFxOut -RedirectStandardError $netFxErr
+            }
 
             Wait-Site -Name 'net48 版' -SiteUrl $NetFxUrl -Process $netFx `
                 -OutLog $netFxOut -ErrLog $netFxErr
@@ -1158,6 +1363,7 @@ public static class MpasTestTls
             Write-Host '起動しました。' -ForegroundColor Green
             $env:MPAS_NETFX_BASEURL = $NetFxUrl
             $env:MPAS_NETFX_FCM_OUTBOX = $netFxOutbox
+            $env:MPAS_NETFX_MAIL_OUTBOX = $netFxMailOutbox
             $env:MPAS_NETFX_TESTUSER_SUFFIX = $script:TestUserSuffixNetFx
             if ($NetFxMtls) { $env:MPAS_NETFX_MTLS = 'true' }   # FA-6 を net48 版でも回す（#226）
         }
@@ -1201,6 +1407,7 @@ public static class MpasTestTls
         Remove-Item Env:\OAuth2AuthorizationServerEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\OAuth2ClientEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
+        Remove-Item Env:\MailOutboxDirectory -ErrorAction SilentlyContinue
 
         # **接続文字列を、テスト プロセスへ引き継がない。**
         # テストはサイトを HTTP で叩くだけで、DB へは触らない。
@@ -1229,6 +1436,13 @@ public static class MpasTestTls
     #   **チャレンジのスキーム（RT-311.12）は DPoPChallengeTests に在り、いつでも走る。**
     if (-not $DPoPNonce) {
         $exclude = 'FullyQualifiedName!~DPoPNonceTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    # **Implicit を閉じた配備のテスト（RT-314）も、既定では走らせない**（#314）。
+    #   **閉じた設定で起動したときにだけ意味がある**（上の DPoPNonceTests と同じ事情）。
+    if (-not $NoImplicit) {
+        $exclude = 'FullyQualifiedName!~ImplicitDisabledTests'
         if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
     }
 
@@ -1277,11 +1491,29 @@ public static class MpasTestTls
     }
 }
 finally {
+    # **カバレッジを取っているときは、サイトは dotnet-coverage の子プロセス**である（#294）。
+    #   **子の番号を先に控え、計測を閉じて書き出させてから、子まで止める**
+    #   （親だけ止めると、サイトが残って次回の起動がポートを奪われる）。
+    $children = @()
+    if ($Coverage) {
+        foreach ($p in @($core, $netFx)) {
+            if ($null -ne $p) { $children += Get-DescendantProcessId -ParentId $p.Id }
+        }
+        Stop-CoverageSessions
+    }
+
     foreach ($p in @($core, $netFx)) {
         if ($null -ne $p -and -not $p.HasExited) {
             Write-Host 'サイトを停止します...' -ForegroundColor Cyan
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
         }
+    }
+    foreach ($id in $children) {
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($Coverage -and $LogDir) {
+        New-CoverageReport -CoverageDir (Join-Path $LogDir 'coverage')
     }
 
     # **自分が起動した DB コンテナだけを止める**（#305 の後）。
@@ -1298,6 +1530,9 @@ finally {
         Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_FCM_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_FCM_OUTBOX -ErrorAction SilentlyContinue
+        Remove-Item Env:\MailOutboxDirectory -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_MAIL_OUTBOX -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_NETFX_MAIL_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\TestUserSuffix -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_TESTUSER_SUFFIX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_TESTUSER_SUFFIX -ErrorAction SilentlyContinue

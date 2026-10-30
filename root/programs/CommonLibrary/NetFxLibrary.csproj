@@ -67,6 +67,33 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Co\Config.cs" />
+    <Compile Include="Co\Config.Account.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Deployment.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.ExternalLogin.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.IdFederation.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Notification.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.Endpoints.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.Features.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.Protection.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Co\Config.Sts.cs">
+      <DependentUpon>Config.cs</DependentUpon>
+    </Compile>
     <Compile Include="Co\IdFederationUpstreams.cs" />
     <Compile Include="Co\SoftwareStatementIssuers.cs" />
     <Compile Include="Co\Const.cs" />
@@ -75,15 +102,46 @@
     <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
     <Compile Include="Data\CmnUserStore.cs" />
+    <Compile Include="Data\CmnUserStore.Find.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Roles.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.UserAttributes.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.LoginAttributes.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Logins.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Claims.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Data\CmnUserStore.Tokens.cs">
+      <DependentUpon>CmnUserStore.cs</DependentUpon>
+    </Compile>
     <Compile Include="Extensions\Sts\AuthFailureProvider.cs" />
+    <Compile Include="Extensions\Sts\AuthTimeCookie.cs" />
+    <Compile Include="Extensions\Sts\UserCreationLock.cs" />
     <Compile Include="Extensions\Sts\ClientRegistrationProvider.cs" />
+    <Compile Include="Extensions\Sts\ClientRegistrationProvider.Crud.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\Sts\ClientRegistrationProvider.Metadata.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\Sts\ClientRegistrationProvider.Response.cs">
+      <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
+    </Compile>
     <Compile Include="Extensions\Sts\AccountLink.cs" />
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
-    <Compile Include="Extensions\Sts\DiscoveryJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationJwks.cs" />
     <Compile Include="Extensions\Sts\IdFederationUpstreamProvider.cs" />
-    <Compile Include="Extensions\Sts\JwkSetDocument.cs" />
     <Compile Include="Extensions\Sts\JwksUriWarmUp.cs" />
+    <Compile Include="Extensions\Sts\MailThrottle.cs" />
     <Compile Include="Extensions\Sts\PollingThrottle.cs" />
     <Compile Include="Extensions\Sts\RateLimitProvider.cs" />
     <Compile Include="Extensions\Sts\IdTokenAudience.cs" />
@@ -106,12 +164,11 @@
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="SamlProviders\CmnSaml2Response.cs" />
-    <Compile Include="SamlProviders\CmnSamlAttributes.cs" />
     <Compile Include="SamlProviders\CmnSamlMetadata.cs" />
     <Compile Include="SamlProviders\IdFederationSaml2Metadata.cs" />
     <Compile Include="SamlProviders\IdFederationSaml2Request.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
-    <Compile Include="Extensions\Sts\DataProvider.cs" />
+    <Compile Include="Extensions\Sts\Saml2OAuth2DataProvider.cs" />
     <Compile Include="Extensions\Sts\Helper.cs" />
     <Compile Include="TokenProviders\CmnAccessToken.cs" />
     <Compile Include="TokenProviders\CmnResponseObject.cs" />
@@ -125,12 +182,43 @@
     <Compile Include="Notifications\SmsService.cs" />
     <Compile Include="TokenProviders\ClientModePolicy.cs" />
     <Compile Include="TokenProviders\CmnEndpoints.cs" />
+    <Compile Include="TokenProviders\CmnEndpoints.Authorize.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.AuthorizeResponse.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Ciba.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.ClientAuthentication.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Discovery.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Logout.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.RequestObject.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Revocation.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.Token.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnEndpoints.TokenIssuance.cs">
+      <DependentUpon>CmnEndpoints.cs</DependentUpon>
+    </Compile>
     <Compile Include="TokenProviders\CmnIdToken.cs" />
     <Compile Include="TokenProviders\CmnLogoutToken.cs" />
     <Compile Include="TokenProviders\CmnDPoP.cs" />
     <Compile Include="TokenProviders\SigningKeys.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
+    <Compile Include="Util\IdP\UserIdentifier.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
     <Compile Include="Util\PPIDExtension.cs" />
     <Compile Include="Util\UriExtension.cs" />
@@ -181,6 +269,11 @@
     </Compile>
     <Compile Include="Resources\CommonViewModels.Designer.cs">
       <DependentUpon>CommonViewModels.resx</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <Compile Include="Resources\Diagnostics.Designer.cs">
+      <DependentUpon>Diagnostics.resx</DependentUpon>
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
     </Compile>
@@ -273,6 +366,11 @@
     <EmbeddedResource Include="Resources\CommonViewModels.resx">
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>CommonViewModels.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Diagnostics.ja.resx" />
+    <EmbeddedResource Include="Resources\Diagnostics.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Diagnostics.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\ManageController.ja.resx" />
     <EmbeddedResource Include="Resources\ManageController.resx">

@@ -28,9 +28,9 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2026/10/08  玄人 幸道         IdFederationTests から移した（#284）
 //*  2026/10/10  玄人 幸道         上流の同意を 1 度だけ押して整える口を追加（#287）
 //*  2026/10/13  玄人 幸道         どの上流か（idpKey）を渡せるようにした（#292 の段階 1）
+//*  2026/10/29  玄人 幸道         FederateAsync に ReturnUrl を渡せるようにした（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -118,7 +118,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             Skip.IfNot(up,
                 "上流の IdP（" + origin + "）が起動していません。"
-                + "store\\1_DockerComposeUp.bat で建ててください（#250 の段階 5）。");
+                + "Container\\E2E\\1_DockerComposeUp.bat で建ててください（#250 の段階 5）。");
 
             return origin;
         }
@@ -172,7 +172,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **どこでも「許可」を押さない**ため、**記録が無い上流では同意画面で止まる。**
         ///
         /// **それはテストの前提が整っていないだけ**なので、ここで整える。
-        /// **`store/` の DBMS や IIS Express と同じ扱い**である。
+        /// **`Container/Store/` の DBMS や IIS Express と同じ扱い**である。
         ///
         /// **測りたいのは ID 連携の一巡であって、「許可」が押せることではない。**
         /// そのため、**ここでの成否は判定に出さない**（整えられなければ、
@@ -238,7 +238,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="downstreamUserName">下流の画面に入れる利用者名</param>
         /// <returns>FederationResult</returns>
         public static async Task<FederationResult> FederateAsync(
-            IdPClient client, string downstreamUserName, string idpKey = "")
+            IdPClient client, string downstreamUserName, string idpKey = "", string returnUrl = null)
         {
             FederationResult result = new FederationResult();
 
@@ -263,7 +263,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     { "submitButtonName", "id_federation_signin" },
                     //  **どの上流へ委譲するか**（#292 の段階 1）。
                     //    **空なら既定（先頭の 1 件）** — **従来の押し方と同じ結果になる。**
-                    { "IdpKey", idpKey }
+                    { "IdpKey", idpKey },
+                    //  **連携を始めた画面の ReturnUrl**（#294。戻ってきたら、ここへ返る）。
+                    { "ReturnUrl", returnUrl }
                 });
 
             if (start.Headers.Location == null)

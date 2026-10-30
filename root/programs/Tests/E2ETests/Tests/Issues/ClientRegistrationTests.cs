@@ -29,14 +29,13 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/18  玄人 幸道         新規（#307 の段階 1）
-//*  2026/10/18  玄人 幸道         管理 API（RFC 7592）のケースを追加（#307 の段階 2）
-//*  2026/10/19  玄人 幸道         クライアント認証の方法のケースを追加（#307 の段階 3）
-//*  2026/10/20  玄人 幸道         software_statement のケースを追加（#307 の段階 4）
-//*  2026/10/20  玄人 幸道         RT-307.3 を「n 件作れる」に書き換えた（#307 の段階 5-a）
-//*  2026/10/20  玄人 幸道         RT-307.22〜.24（client_credentials）を追加（#307 の段階 5-b）
-//*  2026/10/20  玄人 幸道         RT-307.25/.26（発行者の上限と鍵の入れ替え）を追加（#307 の段階 6）
-//*  2026/10/20  玄人 幸道         Noteの文面を段階5-a-1後の形に直した（#307）
 //*  2026/10/21  玄人 幸道         RT-307.4 の jwks_uri を「読めない URL は 400」にした（#309 の段階 1）
+//*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
+//*  2026/10/26  玄人 幸道         RT-307.27（動的登録の CRUD の後で、保存された行を確かめる）を追加（#294）
+//*  2026/10/26  玄人 幸道         RT-307.28（管理画面で保存しても、画面に出ない列が残る）を追加（#294）
+//*  2026/10/26  玄人 幸道         RT-307.29（登録を消すと、全利用者の同意が消える）を追加（#294）
+//*  2026/10/29  玄人 幸道         RT-307.5 で expires_in も絞った期限であることを見る（#294）
+//*  2026/10/30  玄人 幸道         RT-307.16 の (6)（device_code × private_key_jwt を断る）を外した（受けるようにした。#294）
 //**********************************************************************************
 
 using System;
@@ -76,7 +75,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-307.2`** | **トークンが無ければ 401／scope が足りなければ 403** |
     /// | **`RT-307.3`** | **2 件目以降も登録できる**（**1 利用者 n クライアント**。#307 の段階 5-a） |
     /// | **`RT-307.4`** | **メタデータの誤りは `400`**（`jwks_uri` / `redirect_uris` 無し / 対応しない組み合わせ） |
-    /// | **`RT-307.5`** | **専用トークンは scope も有効期限も絞られている** |
+    /// | **`RT-307.5`** | **専用トークンは scope も有効期限も絞られている**（**応答の `expires_in` も**。#294） |
     /// | **`RT-307.6`** | **登録した `response_types` が効く** |
     /// | **`RT-307.7`** | **登録した `grant_types` が効く** |
     /// | **`RT-307.8`** | **登録した `scope` が効く**（DB に登録したクライアントでも） |
@@ -592,7 +591,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         + "権限を際限なく増やせる。** "
                         + "**配るのは、管理画面か構成ファイルからだけ**にしてある。");
 
-                    r.Step("(8) どの誤りでも、登録は作られていない");
+                    r.Step("(8) auth（同意画面を出さない）も、動的登録では付けられない");
+
+                    JsonResponse skipConsent = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid auth\"}");
+
+                    r.VerifyEqual("HTTP の状態は 400", "400", ((int)skipConsent.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_client_metadata",
+                        "invalid_client_metadata", skipConsent.String("error") ?? "（無い）");
+
+                    r.Note("**同意画面を飛ばすかは、登録を管理する人が決める**（#294）。"
+                        + "**自分で `auth` を登録できると、クライアントが決めることになる。**");
+
+                    r.Step("(9) どの誤りでも、登録は作られていない");
 
                     JsonResponse ok = await DynamicClientRegistration.RegisterAsync(
                         client, endpoint, token, DynamicClientRegistration.Metadata(UriA));
@@ -662,6 +676,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.Note("**既定は 300 秒**（`DcrAccessTokenExpireTimeSpanFromSeconds`。"
                         + "**未設定・0 以下なら既定値に倒す**）。"
                         + "**ここで値そのものを突き合わせないのは、配備で変えられる設定だから**である。");
+
+                    r.Step("(3) 応答の expires_in も、絞った期限を言う（#294）");
+
+                    //  **以前は常に配備ぜんたいの期限（既定 360 分）を返していた。**
+                    //    **クライアントは expires_in を見て使い続けるので、切れたトークンを出すことになる。**
+                    string expiresIn = res.String("expires_in");
+                    bool parsed = long.TryParse(expiresIn, out long seconds);
+
+                    r.Verify("expires_in が exp - iat と一致する（差が 5 秒以内）",
+                        parsed && Math.Abs(seconds - lifetime) <= 5,
+                        lifetime.ToString() + " 秒",
+                        "expires_in = " + (expiresIn ?? "なし"));
                 });
 
                 r.Done();
@@ -1809,14 +1835,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         head + "\"jwks_uri\":\"https://rp.example/jwks.json\"}",
                         "クライアント認証の経路が同期なので、取得を差し込めない（別 Issue）");
 
-                    r.Step("(6) device_code グラント × private_key_jwt");
-
-                    await this.VerifyRegistrationErrorAsync(r, client, endpoint, token,
-                        head + "\"grant_types\":[\"urn:ietf:params:oauth:grant-type:device_code\"],"
-                        + "\"response_types\":[],"
-                        + "\"token_endpoint_auth_method\":\"private_key_jwt\","
-                        + "\"jwks\":{\"keys\":[" + rsaJwk + "]}}",
-                        "RFC 8628 の口は client_assertion を読まないので、永久に認証できない");
+                    //  **(6) device_code グラント × private_key_jwt は、断らなくなった**（#294）。
+                    //    **RFC 8628 の口（/device_authz と /token）が client_assertion を受けるようにした**ので、
+                    //    **その組み合わせでも認証できる**（`RT-294.77`）。
 
                     r.Note("**`jwks` と `jwks_uri` を同時に送ることも断る**"
                         + "（RFC 7591 §2 は、どちらか一方としている）。"
@@ -2915,6 +2936,467 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-307.27
+
+        /// <summary>RT-307.27 動的登録で作り・読み・直し・消した後も、登録の行が正しい</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **応答ではなく、保存された行を確かめる**（管理画面の一覧と編集の画面で読む）。
+        /// **応答が正しくても、行が壊れていれば後から効く** — **所有者が消えれば、
+        /// 一覧から外れ、所有者を消しても登録が残る。**
+        ///
+        /// | | 確かめること |
+        /// |---|---|
+        /// | **作る**（`POST`） | **所有者の一覧に出る**（`OwnerUserId` が書かれた） |
+        /// | **直す**（`PUT`） | **要求の列は置き換わり、それ以外は持ち越される** — **所有者**と、**画面から入れた列**（`PostLogoutRedirectUri` / `WebOrigins`） |
+        /// | **読む**（`GET`） | **直した値が返る** |
+        /// | **消す**（`DELETE`） | **一覧から消え、`GET` は `401`** |
+        /// | **所有者を消す** | **`PUT` した登録も一緒に消える**（**所有者が保たれているから**、cascade が効く） |
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30727_動的登録のCRUDの後も登録の行が正しい(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.27",
+                    "動的登録で作り・読み・直し・消した後も、**保存された登録の行が正しい**",
+                    "**`PUT` は全置換**だが、**置き換えるのは動的登録が持つ列だけ**である — "
+                    + "**所有者（`OwnerUserId`）や、管理画面から入れた列は持ち越す。** "
+                    + "**応答だけを見ても分からない**（所有者は応答に出ない）ので、"
+                    + "**所有者の一覧と編集の画面から、行そのものを読む。**",
+                    "RFC 7591 §3.1 / RFC 7592 §2.1〜§2.3 / #307 の段階 2・5-a / #294");
+
+                r.Target("POST /register → 画面で編集 → PUT / GET / DELETE registration_client_uri");
+
+                const string postLogout = "https://localhost:44300/e2e/rt307/signed-out";
+                const string webOrigin = "https://localhost:44300";
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 作る : redirect_uris = A、scope = openid email で登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid email\"}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    bool listedAfterCreate =
+                        (await ManageClientRegistration.ListAsync(client)).Contains(clientId);
+
+                    r.Verify("所有者の一覧に出る", listedAfterCreate,
+                        "出る", listedAfterCreate ? "出た" : "**出ない**");
+
+                    string edit = await ManageClientRegistration.OpenEditAsync(client, clientId);
+
+                    r.VerifyEqual("行の redirect_uri は A", UriA,
+                        Html.FieldValue(edit, "RedirectUriCode") ?? "（無い）");
+
+                    r.VerifyEqual("行の scope は openid email", "openid email",
+                        Html.FieldValue(edit, "Scopes") ?? "（無い）");
+
+                    r.Step("(2) 動的登録では設定できない列を、管理画面から入れる");
+
+                    Dictionary<string, string> form = ManageClientRegistration.Harvest(edit);
+                    form["PostLogoutRedirectUri"] = postLogout;
+                    form["WebOrigins"] = webOrigin;
+
+                    await ManageClientRegistration.PostAsync(client, form, "submit.Add");
+
+                    string edited = await ManageClientRegistration.OpenEditAsync(client, clientId);
+
+                    Assert.True(Html.FieldValue(edited, "PostLogoutRedirectUri") == postLogout,
+                        "前提: 管理画面から post_logout_redirect_uri を入れられること");
+
+                    r.Step("(3) 直す : redirect_uris = B、scope = openid に置き換える");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        DynamicClientRegistration.UpdateMetadata(clientId, "openid", UriB));
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)updated.StatusCode).ToString());
+
+                    bool listedAfterUpdate =
+                        (await ManageClientRegistration.ListAsync(client)).Contains(clientId);
+
+                    r.Verify("所有者の一覧に、まだ出る（所有者が保たれている）", listedAfterUpdate,
+                        "出る", listedAfterUpdate ? "出た" : "**出ない（所有者が消えた）**");
+
+                    string after = await ManageClientRegistration.OpenEditAsync(client, clientId);
+
+                    r.VerifyEqual("行の redirect_uri は B（置き換わる）", UriB,
+                        Html.FieldValue(after, "RedirectUriCode") ?? "（無い）");
+
+                    r.VerifyEqual("行の scope は openid（置き換わる）", "openid",
+                        Html.FieldValue(after, "Scopes") ?? "（無い）");
+
+                    r.VerifyEqual("行の post_logout_redirect_uri は残る（画面から入れた列）", postLogout,
+                        Html.FieldValue(after, "PostLogoutRedirectUri") ?? "（無い）");
+
+                    r.VerifyEqual("行の web_origins は残る（画面から入れた列）", webOrigin,
+                        Html.FieldValue(after, "WebOrigins") ?? "（無い）");
+
+                    r.Note("**`PUT` は、現行の行を土台にして、動的登録が持つ列だけを置き換える。** "
+                        + "**要求の値を土台にしていた頃は、持ち越しを書き忘れた列が消えていた** — "
+                        + "**所有者（`OwnerUserId`）がそれで、一覧から外れ、所有者を消しても登録が残った。**");
+
+                    r.Step("(4) 読む : 直した値が返る");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)read.StatusCode).ToString());
+
+                    r.VerifyEqual("redirect_uris は B", "True",
+                        read.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.VerifyEqual("scope は openid", "openid", read.String("scope") ?? "（無い）");
+
+                    r.Step("(5) 消す : 一覧から消え、もう読めない");
+
+                    JsonResponse deleted = await DynamicClientRegistration.DeleteAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 204", "204", ((int)deleted.StatusCode).ToString());
+
+                    bool listedAfterDelete =
+                        (await ManageClientRegistration.ListAsync(client)).Contains(clientId);
+
+                    r.Verify("所有者の一覧から消える", !listedAfterDelete,
+                        "消える", listedAfterDelete ? "**残っている**" : "消えた");
+
+                    JsonResponse gone = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("もう読めない（401）", "401", ((int)gone.StatusCode).ToString());
+
+                    r.Step("(6) 直した登録は、所有者を消すと一緒に消える");
+
+                    JsonResponse other = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, DynamicClientRegistration.Metadata(UriA));
+
+                    Assert.Equal(201, (int)other.StatusCode);
+
+                    string otherUri = other.String("registration_client_uri");
+                    string otherToken = other.String("registration_access_token");
+
+                    JsonResponse otherUpdated = await DynamicClientRegistration.UpdateAsync(
+                        client, otherUri, otherToken,
+                        DynamicClientRegistration.UpdateMetadata(
+                            other.String("client_id"), "openid", UriB));
+
+                    Assert.Equal(200, (int)otherUpdated.StatusCode);
+
+                    //  **`WithDcrAsync` の後始末でも同じ利用者を消す**（二重になるが、無害）。
+                    await UsersAdmin.DeleteByUserNameAsync(admin, ctx.OwnerName);
+
+                    JsonResponse otherGone = await DynamicClientRegistration.ReadAsync(
+                        client, otherUri, otherToken);
+
+                    r.VerifyEqual("所有者を消すと、もう読めない（401）", "401",
+                        ((int)otherGone.StatusCode).ToString());
+
+                    r.Note("**所有者が `PUT` で消えていると、ここで `200` が返る** — "
+                        + "**所有者で消す仕掛け**（DB は `OwnerUserId` → `Users.Id` の `ON DELETE CASCADE`、"
+                        + "`mem` は `CmnUserStore` の削除）が、**空の所有者には効かない**ためである。");
+                },
+
+                //  **所有者を Admin にする** — **一覧と編集の画面は Admin 以上**を要る。
+                "Admin");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-307.28
+
+        /// <summary>RT-307.28 管理画面で保存しても、画面に出ない列（EC の鍵）は残る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **管理画面の保存も、行を丸ごと書き換える**（`Saml2OAuth2DataProvider.Update`）。
+        /// **画面のフォームに欄が無い列は、呼ぶ側が現行の行から持ち越す必要がある** —
+        /// **`RT-307.27` の `PUT` と同じ形**である。
+        ///
+        /// **EC の公開鍵（`JwkECDsaPublickey`）は、画面に欄が無い**
+        /// （**入るのは動的登録の `jwks` か、構成ファイル**）。
+        /// **持ち越していなかったので、画面で保存するたびに消えていた。**
+        ///
+        /// **保存の後で、管理 API（`GET`）から読み直して確かめる。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30728_管理画面で保存しても画面に出ない列は残る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.28",
+                    "管理画面で保存しても、**画面に出ない列（EC の公開鍵）は残る**",
+                    "**画面の保存は行を丸ごと書き換える**ので、"
+                    + "**フォームに欄の無い列は、現行の行から持ち越さないと消える。** "
+                    + "**EC の鍵は画面に欄が無い**（動的登録の `jwks` か構成ファイルから入る）。"
+                    + "**保存の後で、管理 API から読み直して確かめる。**",
+                    "#307 の段階 3 / #294 / ManageController.AddSaml2OAuth2Data");
+
+                r.Target("POST /register（jwks に RSA と EC）→ 画面で保存 → GET registration_client_uri");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) jwks に RSA と EC の鍵を 1 本ずつ入れて登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"jwks\":{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + ","
+                        + JwsSigner.PublicEcJwk(client) + "]}}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    JsonResponse before = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    Assert.True(ClientRegistrationTests.HasJwkOf(before, "EC"),
+                        "前提: 登録した EC の鍵が読めること");
+
+                    r.Step("(2) 管理画面で redirect_uri を B に直して保存する");
+
+                    Dictionary<string, string> form = ManageClientRegistration.Harvest(
+                        await ManageClientRegistration.OpenEditAsync(client, clientId));
+
+                    r.Verify("画面には EC の鍵の欄が無い",
+                        !form.ContainsKey("JwkECDsaPublickey"),
+                        "無い", form.ContainsKey("JwkECDsaPublickey") ? "**在る**" : "無い");
+
+                    form["RedirectUriCode"] = UriB;
+
+                    await ManageClientRegistration.PostAsync(client, form, "submit.Add");
+
+                    r.Step("(3) 管理 API で読み直す");
+
+                    JsonResponse after = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 200（registration_access_token も残る）", "200",
+                        ((int)after.StatusCode).ToString());
+
+                    r.VerifyEqual("画面で直した redirect_uri（B）が返る", "True",
+                        after.ArrayContains("redirect_uris", UriB).ToString());
+
+                    r.VerifyEqual("RSA の鍵は残る（画面に欄が在る）", "True",
+                        ClientRegistrationTests.HasJwkOf(after, "RSA").ToString());
+
+                    r.VerifyEqual("EC の鍵も残る（画面に欄が無い）", "True",
+                        ClientRegistrationTests.HasJwkOf(after, "EC").ToString());
+
+                    r.Note("**画面に欄の無い列は、保存のときに現行の行から持ち越す**"
+                        + "（`registration_access_token` のハッシュと同じ扱い）。"
+                        + "**持ち越していなかった頃は、画面で保存するたびに EC の鍵が消えていた。**");
+                },
+
+                //  **所有者を Admin にする** — **一覧と編集の画面は Admin 以上**を要る。
+                "Admin");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>応答の `jwks` に、その `kty` の鍵が在るか</summary>
+        /// <param name="response">登録の応答（GET / PUT）</param>
+        /// <param name="kty">`RSA` / `EC`</param>
+        /// <returns>在れば true</returns>
+        private static bool HasJwkOf(JsonResponse response, string kty)
+        {
+            if (!response.IsJson
+                || !response.Json.TryGetProperty("jwks", out JsonElement jwks)
+                || !jwks.TryGetProperty("keys", out JsonElement keys)
+                || keys.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (JsonElement key in keys.EnumerateArray())
+            {
+                if (key.TryGetProperty("kty", out JsonElement value) && value.GetString() == kty)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region RT-307.29
+
+        /// <summary>RT-307.29 登録を消すと、全利用者の同意が消える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **同意の表の `ClientID` には外部キーが無い**（構成ファイルのクライアントの同意も記録するため）。
+        /// **登録の行を消しても、同意は自動では消えない。**
+        ///
+        /// | 消し方 | 以前 | 今 |
+        /// |---|---|---|
+        /// | **動的登録の `DELETE`** | **所有者の同意だけ**を消していた | **全利用者の分**を消す |
+        /// | **管理画面の削除** | **1 件も消していなかった** | **全利用者の分**を消す |
+        ///
+        /// **消した後で、利用者ごとの同意の一覧（`/Manage/ConsentGrants`）を読み直して確かめる。**
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT30729_登録を消すと全利用者の同意が消える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-307.29",
+                    "登録を消すと、**所有者以外の利用者の同意も消える**（動的登録の `DELETE`・管理画面の削除）",
+                    "**同意の表の `ClientID` には外部キーが無い**ので、**登録を消しても同意は残る。** "
+                    + "**`DELETE` は所有者の同意だけを、管理画面の削除は 1 件も消していなかった。** "
+                    + "**消した後で、利用者ごとの同意の一覧を読み直して確かめる。**",
+                    "RFC 7592 §2.3 / #272 の段階 2 / #294 / ConsentProvider.RevokeByClient");
+
+                r.Target("DELETE registration_client_uri / POST /Manage/RemoveSaml2OAuth2Data → GET /Manage/ConsentGrants");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    //  **所有者とは別の利用者**（C）を作り、同意させる。
+                    string consumer = "e2e_rt307_csm_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+                    Assert.True(ClientRegistrationTests.IsRedirect(await UsersAdmin.CreateAsync(
+                        admin, consumer, consumer + "@example.com", "User")),
+                        "前提: 同意する利用者を作れること");
+
+                    try
+                    {
+                        using (IdPClient other = this.Client(targetKey))
+                        {
+                            Assert.True(await other.TrySignInAsync(consumer, ctx.Password),
+                                "前提: 同意する利用者でサインインできること");
+
+                            r.Step("(1) 登録 X を作り、所有者（B）と別の利用者（C）が同意する");
+
+                            (ClientRegistration x, string xUri, string xToken) =
+                                await ClientRegistrationTests.RegisterForConsentAsync(client, endpoint, token);
+
+                            await Flows.EnsureConsentAsync(client, x, "openid");
+                            await Flows.EnsureConsentAsync(other, x, "openid");
+
+                            Assert.True(await ClientRegistrationTests.HasConsentAsync(other, x.ClientId),
+                                "前提: C の同意の一覧に X が出ること");
+
+                            Assert.True(await ClientRegistrationTests.HasConsentAsync(client, x.ClientId),
+                                "前提: B の同意の一覧に X が出ること");
+
+                            r.Step("(2) 動的登録の DELETE で X を消し、同意の一覧を読み直す");
+
+                            JsonResponse deleted = await DynamicClientRegistration.DeleteAsync(
+                                client, xUri, xToken);
+
+                            r.VerifyEqual("HTTP の状態は 204", "204", ((int)deleted.StatusCode).ToString());
+
+                            bool ownerHasX = await ClientRegistrationTests.HasConsentAsync(client, x.ClientId);
+                            bool otherHasX = await ClientRegistrationTests.HasConsentAsync(other, x.ClientId);
+
+                            r.Verify("所有者（B）の同意は消える", !ownerHasX,
+                                "消える", ownerHasX ? "**残っている**" : "消えた");
+
+                            r.Verify("別の利用者（C）の同意も消える", !otherHasX,
+                                "消える", otherHasX ? "**残っている**" : "消えた");
+
+                            r.Step("(3) 登録 Y を作って C が同意し、管理画面から Y を消して、同意の一覧を読み直す");
+
+                            (ClientRegistration y, string _, string __) =
+                                await ClientRegistrationTests.RegisterForConsentAsync(client, endpoint, token);
+
+                            await Flows.EnsureConsentAsync(other, y, "openid");
+
+                            Assert.True(await ClientRegistrationTests.HasConsentAsync(other, y.ClientId),
+                                "前提: C の同意の一覧に Y が出ること");
+
+                            bool removed = await ManageClientRegistration.RemoveOneAsync(client, y.ClientId);
+
+                            r.Verify("管理画面から消せる", removed,
+                                "消せる", removed ? "消せた" : "**消せない**");
+
+                            bool otherHasY = await ClientRegistrationTests.HasConsentAsync(other, y.ClientId);
+
+                            r.Verify("別の利用者（C）の同意も消える", !otherHasY,
+                                "消える", otherHasY ? "**残っている**" : "消えた");
+
+                            r.Note("**`DELETE` は、以前は所有者の同意だけを消していた**"
+                                + "（`ConsentProvider.Revoke(所有者, client_id)`）。"
+                                + "**管理画面の削除は、同意を 1 件も消していなかった。** "
+                                + "**どちらも `ConsentProvider.RevokeByClient` で、全利用者の分を消すようにした。**");
+                        }
+                    }
+                    finally
+                    {
+                        await UsersAdmin.DeleteByUserNameAsync(admin, consumer);
+                    }
+                },
+
+                //  **所有者を Admin にする** — **管理画面の削除は Admin 以上**を要る。
+                "Admin");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>同意させるための登録を 1 件作る（#294）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="endpoint">registration_endpoint</param>
+        /// <param name="token">専用 scope のアクセス トークン</param>
+        /// <returns>クライアントと、registration_client_uri / registration_access_token</returns>
+        private static async Task<(ClientRegistration, string, string)> RegisterForConsentAsync(
+            IdPClient client, string endpoint, string token)
+        {
+            JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                client, endpoint, token,
+                "{\"redirect_uris\":[\"" + UriA + "\"],\"scope\":\"openid\"}");
+
+            Assert.Equal(201, (int)created.StatusCode);
+
+            ClientRegistration registration = new ClientRegistration()
+            {
+                ClientId = created.String("client_id"),
+                ClientSecret = created.String("client_secret"),
+                RedirectUri = UriA
+            };
+
+            return (registration,
+                created.String("registration_client_uri"),
+                created.String("registration_access_token"));
+        }
+
+        /// <summary>その利用者の同意の一覧に、そのクライアントが出るか（#294）</summary>
+        /// <param name="client">サインイン済みの IdPClient</param>
+        /// <param name="clientId">client_id</param>
+        /// <returns>出れば true</returns>
+        /// <remarks>**一覧の取り消しのフォームに、`client_id` が hidden で入っている。**</remarks>
+        private static async Task<bool> HasConsentAsync(IdPClient client, string clientId)
+        {
+            string html = await client.GetStringAsync("/Manage/ConsentGrants");
+
+            return html != null
+                && html.Contains("name=\"clientId\" value=\"" + clientId + "\"");
+        }
+
+        #endregion
+
         #region 補助
 
         /// <summary>
@@ -2949,7 +3431,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistrationTests.AllowedScope().Split(
                     new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
 
-            foreach (string candidate in new string[] { "address", "phone", "roles", "userid" })
+            foreach (string candidate in new string[] { "address", "phone", "roles" })
             {
                 if (!allowed.Contains(candidate))
                 {
@@ -3105,6 +3587,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="admin">管理者のクライアント</param>
         /// <param name="targetKey">core / netfx</param>
         /// <param name="body">測る本体（client / endpoint / access_token / 前提）</param>
+        /// <param name="ownerRole">
+        /// 所有者（B）のロール。**管理画面で行を読むテストは `Admin`**（画面が Admin 以上を要る。`RT-307.27`）
+        /// </param>
         /// <returns>Task</returns>
         /// <remarks>
         /// **利用者を 2 人使う。**
@@ -3128,7 +3613,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// </remarks>
         private async Task WithDcrAsync(
             IdPClient admin, string targetKey,
-            Func<IdPClient, string, string, DcrContext, Task> body)
+            Func<IdPClient, string, string, DcrContext, Task> body, string ownerRole = "User")
         {
             await admin.SignInAsAdministratorAsync();
             await UsersAdmin.SkipIfLockedDownAsync(admin);
@@ -3149,7 +3634,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             try
             {
                 Assert.True(ClientRegistrationTests.IsRedirect(await UsersAdmin.CreateAsync(
-                    admin, owner, owner + "@example.com", "User")),
+                    admin, owner, owner + "@example.com", ownerRole)),
                     "前提: 登録の所有者になる利用者を作れること");
 
                 try

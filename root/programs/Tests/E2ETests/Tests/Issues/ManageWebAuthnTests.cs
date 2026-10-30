@@ -29,8 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
+//*  2026/10/29  玄人 幸道         RT-294.62（利用者名を変えると資格情報も移る）を足した（#294）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -64,12 +66,124 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **消した分は、次のサインインで作り直される**ので、繰り返し流せる。
     ///
     /// **net10.0 版だけ**である（net48 版には WebAuthn の口が無い。#137）。
+    ///
+    /// **`RT-294.62` は、この利用者の名前を変える**（#294）。
+    /// **同じ利用者を使うテストと並んで走らないよう、同じコレクションに入れる**（`RemoveWebAuthnRenderingTests` も）。
     /// </remarks>
+    [Collection(ManageWebAuthnTests.WebAuthnUserCollection)]
     public class ManageWebAuthnTests : TargetTestBase
     {
+        /// <summary>種データの WebAuthn の利用者（webauthn_tanaka）を使うテストのコレクション</summary>
+        internal const string WebAuthnUserCollection = "WebAuthn の種データの利用者";
+
         /// <summary>コンストラクタ</summary>
         /// <param name="output">ITestOutputHelper</param>
         public ManageWebAuthnTests(ITestOutputHelper output) : base(output) { }
+
+        #region RT-294.62
+
+        /// <summary>RT-294.62 利用者名を変えると、WebAuthn の資格情報も新しい名前へ移る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29462_利用者名を変えると資格情報も移る(string targetKey)
+        {
+            Skip.If(targetKey == "netfx",
+                "net48 版には WebAuthn の口が無い（#137）。");
+
+            string oldName = TestEnv.WebAuthnUserName(targetKey);
+            string newName = "e2e_webauthn_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            TestReport r = this.Report("RT-294.62",
+                "利用者名を変えると、WebAuthn の資格情報も新しい名前へ移り、元の名前には残らない",
+                "**資格情報は利用者名で持っている**（`FIDO2Data.UserName` と `StoredCredential.UserId`）。"
+                + "**以前は利用者名を変えても、資格情報を移していなかった。**"
+                + "**本人は自分の資格情報を使えなくなり、資格情報は元の名前に残っていた。**"
+                + "**名前を変えるときに、資格情報も移す**ようにした（`FIDO.DataProvider.RenameUser`）。",
+                "#294（ManageController.*.cs のレビュー S1） / ManageController.ChangeUserName");
+
+            r.Target(oldName + " を " + newName + " に変え、元の名前で利用者を作り直す（終わったら両方を消す。"
+                + oldName + " と資格情報は、次にサインイン画面を開いたときに種データが作り直す）");
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                bool rebornCreated = false;
+
+                try
+                {
+                    using (IdPClient client = await this.SignedInClientAsync(targetKey, oldName))
+                    {
+                        r.Step("(1) 一覧を開く（種データが入っている）");
+
+                        List<string> before = await ManageWebAuthnTests.ListAsync(client);
+
+                        r.Verify("1 件以上ある（前提）", 1 <= before.Count,
+                            "1 件以上", before.Count + " 件");
+
+                        Assert.True(1 <= before.Count, "前提: 種データの資格情報が在ること");
+
+                        r.Step("(2) 利用者名を変える");
+
+                        string form = await client.GetStringAsync("/Manage/ChangeUserName");
+
+                        HttpResponseMessage changed = await client.PostFormAsync("/Manage/ChangeUserName",
+                            new Dictionary<string, string>()
+                            {
+                                { "__RequestVerificationToken", Html.Antiforgery(form) },
+                                { "UserNameForEdit", newName },
+                                { "Password", client.Config.Get("TestUserPWD") }
+                            });
+
+                        Assert.True(changed.Headers.Location != null,
+                            "前提: 利用者名を変えられること（HTTP " + (int)changed.StatusCode + "）");
+
+                        r.Step("(3) 変えた後の一覧");
+
+                        List<string> after = await ManageWebAuthnTests.ListAsync(client);
+
+                        r.Verify("資格情報が、新しい名前に付いて来る",
+                            before.OrderBy(x => x).SequenceEqual(after.OrderBy(x => x)),
+                            before.Count + " 件（同じもの）", after.Count + " 件");
+                    }
+
+                    r.Step("(4) 元の名前で利用者を作り直しても、資格情報は付いていない");
+
+                    //  **メアドは別にする**（変えた利用者が、元のメアドを持ったままなので）。
+                    Assert.True(ManageWebAuthnTests.IsRedirect(await UsersAdmin.CreateAsync(
+                        admin, oldName, newName + "_reborn@example.com", "User")),
+                        "前提: 元の名前で利用者を作れること");
+
+                    rebornCreated = true;
+
+                    using (IdPClient reborn = await this.SignedInClientAsync(targetKey, oldName))
+                    {
+                        List<string> leftover = await ManageWebAuthnTests.ListAsync(reborn);
+
+                        r.VerifyEqual("元の名前に残った資格情報", "0", leftover.Count.ToString());
+                    }
+                }
+                finally
+                {
+                    //  **変えた利用者を消す**（資格情報も消える）。
+                    //    **作り直した元の名前の利用者も消す**（メアドが種データと違うため）。
+                    //    **元の名前の利用者と資格情報は、次にサインイン画面を開いたときに種データが作り直す。**
+                    await UsersAdmin.DeleteByUserNameAsync(admin, newName);
+
+                    if (rebornCreated)
+                    {
+                        await UsersAdmin.DeleteByUserNameAsync(admin, oldName);
+                    }
+                }
+            }
+
+            r.Done();
+        }
+
+        #endregion
 
         #region RT-277.3
 
@@ -151,6 +265,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         #endregion
 
         #region 道具
+
+        /// <summary>リダイレクトか</summary>
+        /// <param name="res">応答</param>
+        /// <returns>リダイレクトなら true</returns>
+        private static bool IsRedirect(HttpResponseMessage res)
+        {
+            return res.StatusCode == System.Net.HttpStatusCode.Found
+                || res.StatusCode == System.Net.HttpStatusCode.Redirect
+                || res.StatusCode == System.Net.HttpStatusCode.SeeOther;
+        }
 
         /// <summary>資格情報の一覧を返す（画面から読む）</summary>
         /// <param name="client">IdPClient</param>

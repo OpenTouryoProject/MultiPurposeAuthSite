@@ -140,5 +140,59 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("SendEmail_passwordreset_msg", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   private_key_jwt (client_assertion. FAPI1 uses asymmetric authentication) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthMethodFapi1 {
+            get {
+                return ResourceManager.GetString("AuthMethodFapi1", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   private_key_jwt (client_assertion. FAPI 2.0 uses MTLS or this) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthMethodFapi2 {
+            get {
+                return ResourceManager.GetString("AuthMethodFapi2", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   client_secret_basic (Authorization header) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthMethodClientSecretBasic {
+            get {
+                return ResourceManager.GetString("AuthMethodClientSecretBasic", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   client_secret_post (form) + PKCE code_verifier に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthMethodClientSecretPostPkce {
+            get {
+                return ResourceManager.GetString("AuthMethodClientSecretPostPkce", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   AccessToken verification error に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AccessTokenVerificationError {
+            get {
+                return ResourceManager.GetString("AccessTokenVerificationError", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   IdToken verification error に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdTokenVerificationError {
+            get {
+                return ResourceManager.GetString("IdTokenVerificationError", resourceCulture);
+            }
+        }
     }
 }

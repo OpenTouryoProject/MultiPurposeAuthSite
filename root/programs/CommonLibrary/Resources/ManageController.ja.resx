@@ -180,4 +180,19 @@
   <data name="RevokeConsentSuccess" xml:space="preserve">
     <value>同意を取り消しました。</value>
   </data>
+  <data name="PasswordIncorrect" xml:space="preserve">
+    <value>パスワードが正しくありません。</value>
+  </data>
+  <data name="PasswordNotSet" xml:space="preserve">
+    <value>この変更の前に、パスワードを設定して下さい。</value>
+  </data>
+  <data name="EmailNotChanged" xml:space="preserve">
+    <value>現在のメアドと同じです。</value>
+  </data>
+  <data name="InvalidVerificationCode" xml:space="preserve">
+    <value>確認コードが正しくありません。</value>
+  </data>
+  <data name="ClientIdAlreadyExists" xml:space="preserve">
+    <value>この client_id は、既に使われています。</value>
+  </data>
 </root>

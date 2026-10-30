@@ -112,7 +112,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Co/` | 設定と定数 | `Config`(1740 行) `Const` |
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
-| `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1553) `SelfTestClient`(800) `DeviceAuthZProvider`(646) `CibaProvider`(505) `DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
+| `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1553) `SelfTestClient`(800) `DeviceAuthZProvider`(646) `CibaProvider`(505) `Saml2OAuth2DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
 | `Extensions/FIDO/` | WebAuthn（**net10.0 版だけ**。#137） | `WebAuthnHelper` `DataProvider` `StoredCredential` `EnumFidoType` |
 | `Log/` | ロギングの façade | `Logging`（`ACCESS` / `SQLTRACE` ロガー） |
 | `Manager/` | ASP.NET Identity の Manager（**net48 のみ**） | `ApplicationUserManager` `ApplicationRoleManager` `ApplicationSignInManager` |
@@ -233,8 +233,8 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   `AuthenticationCodeDictionary` `RefreshTokenDictionary` `CustomizedConfirmation`
   `Saml2OAuth2Data` `FIDO2Data` `DeviceAuthZData` `CibaData` `OAuth2Revocation`
   `IssuedToken` `RequestObject`）。**3 方言すべてを直すこと。**
-- Docker で DBMS を立てる一式は `store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
-  `0_CopyInitSql.ps1` が上記 DDL を `store/*/init/` へコピーし、**CRLF を LF に変換**する
+- Docker で DBMS を立てる一式は `Container/Store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
+  `0_CopyInitSql.ps1` が上記 DDL を `Container/Store/*/init/` へコピーし、**CRLF を LF に変換**する
   （Linux コンテナの初期化スクリプトが読むため）。
 
 ### 4.3 STS 専用モード（機能ロックダウン）
@@ -304,7 +304,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 
 | ファイル | 役割 |
 |---|---|
-| `TokenProviders/CmnEndpoints.cs`（2787 行） | **本体。** `.well-known/openid-configuration` の生成、認可要求の検証（`ValidateAuthZReqParam` / `ValidateCibaAuthZReqParam` / `CheckRedirectUri`）、応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`）、Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` ほか） |
+| `TokenProviders/CmnEndpoints.cs` ＋ `CmnEndpoints.*.cs`（partial。#294 で 11 ファイルに分割） | **本体。** 下の表のとおり、口ごとにファイルを分けてある。本体の `CmnEndpoints.cs` には、どの口からも使う公開の部品（redirect_uri の定数・CORS・エラー応答）と、分割の索引を置く |
 | `TokenProviders/CmnAccessToken.cs` | アクセス トークンの生成（Claim 集合の組み立て → JWS 化）と検証 |
 | `TokenProviders/CmnIdToken.cs` | id_token |
 | `TokenProviders/CmnResponseObject.cs` | JARM（Response Object） |
@@ -319,6 +319,21 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `SamlProviders/CmnEndpoints.cs` | SAML2 の Request / Response |
 | `Util/PPIDExtension.cs` | `subject_types`（`public` / `pairwise`）に応じた sub の生成。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 
+`CmnEndpoints` の分割（IDE では `CmnEndpoints.cs` の下に畳んで見える。`NetCoreLibrary.csproj` / `NetFxLibrary.csproj` の `DependentUpon`）:
+
+| ファイル | 中身 |
+|---|---|
+| `CmnEndpoints.Discovery.cs` | `.well-known/openid-configuration` の生成（`OpenIDConfig`） |
+| `CmnEndpoints.Authorize.cs` | 認可要求の検証（`ValidateAuthZReqParam` / `CheckRedirectUri` / `ResolveErrorRedirectUri`）、`max_age`、受け付ける grant / response_type、登録の grant_types / response_types、PKCE |
+| `CmnEndpoints.AuthorizeResponse.cs` | 応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`） |
+| `CmnEndpoints.RequestObject.cs` | Request Object（`RegisterRequestObject`）、PAR、登録の JWK の読み書き |
+| `CmnEndpoints.Ciba.cs` | CIBA の受付（`ReceiveCibaRequest` / `ValidateCibaAuthZReqParam`、jti の使い切り） |
+| `CmnEndpoints.Logout.cs` | RP-Initiated Logout（`ReceiveEndSessionRequest`） |
+| `CmnEndpoints.Token.cs` | Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` / `GrantClientCredentials` / `GrantJwtBearerTokenCredentials` / `GrantDeviceAuthZ` / `GrantCiba`） |
+| `CmnEndpoints.Revocation.cs` | 取り消し・照会（`RevokeToken` / `IntrospectToken`） |
+| `CmnEndpoints.ClientAuthentication.cs` | クライアント認証（`ClientAuthentication`。secret・x509・device・assertion）、Basic の資格情報、登録された認証の方法、検証する側の alg |
+| `CmnEndpoints.TokenIssuance.cs` | 発行の共通部品（利用者のロックアウト・`CheckClientMode`・DPoP・`CreateAccessTokenResponse`） |
+
 ### 7.2 対応しているグラント / 拡張
 
 `Config` の `Enable*GrantType` で個別に有効・無効を切り替える。
@@ -328,7 +343,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 - JWT Bearer Token Flow ／ Refresh Token
 - Device Authorization Grant ／ CIBA
 - Revocation ／ Introspection ／ UserInfo ／ JWK Set ／ Request Object ／ JARM
-- FAPI1 / FAPI2（クライアント個別に `oauth2_oidc_mode` で指定）
+- FAPI1 / FAPI2（クライアント個別に `client_mode` で指定）
 - SAML2（IdP 側）
 - ID フェデレーション（`IdFederation*Endpoint` で別の汎用認証サイトへ委譲）
 
@@ -341,7 +356,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
   "client_secret": "...", "client_name": "TestClient",
   "redirect_uri_code": "test_self_code", "redirect_uri_token": "test_self_token",
   // "subject_types" を書かなければ public（既定。他は pairwise のみ）
-  "oauth2_oidc_mode": "fapi1",       // normal / fapi1 / fapi2 / device / fapi_ciba（省略時は normal。既知でない値は不正として拒否。#224）
+  "client_mode": "fapi1",       // normal / fapi1 / fapi2 / device / fapi_ciba（省略時は normal。既知でない値は不正として拒否。#224）
   "jwk_rsa_publickey": "...", "jwk_ecdsa_publickey": "...",
   "tls_client_auth_subject_dn": "..."
 }
@@ -353,7 +368,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 
 ### 7.4 署名鍵
 
-`root/files/resource/X509/` の `.pfx` / `.cer` を `Config.RsaPfxFilePath` などで参照する。
+`root/files/resource/X509/` の `.pfx` / `.cer` を `CmnServerParams.RsaPfxFilePath` などで参照する。
 JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 `../CommandLineTools/CreateJwkSetJson` が `.cer` から生成する。
 **証明書を差し替えたら JwkSet.json を作り直すこと。**

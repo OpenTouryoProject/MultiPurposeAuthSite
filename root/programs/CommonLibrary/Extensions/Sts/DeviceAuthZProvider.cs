@@ -99,10 +99,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
-                            { "userCode", userCode },
-                            { "authReqExp", authReqExp.ToString() },
-                            { "tempData", tempData },
-                            { "result", "" }
+                            { Const.PollingUserCode, userCode },
+                            { Const.PollingAuthReqExp, authReqExp.ToString() },
+                            { Const.PollingTempData, tempData },
+                            { Const.PollingResult, "" }
                         };
 
                         DeviceAuthZProvider.DeviceAuthZData.TryAdd(
@@ -212,11 +212,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             Dictionary<string, string> dic
                                 = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
 
-                            string _userCode = dic["userCode"];
+                            string _userCode = dic[Const.PollingUserCode];
 
                             if (userCode == _userCode)
                             {
-                                string tempData = dic["tempData"];
+                                string tempData = dic[Const.PollingTempData];
 
                                 Dictionary<string, string> tempdic
                                      = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
@@ -224,8 +224,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 string code = DeviceAuthZProvider.GetCode(userName, tempdic);
 
                                 // 更新
-                                dic["authZCode"] = code;
-                                dic["result"] = result.ToString();
+                                dic[Const.PollingAuthZCode] = code;
+                                dic[Const.PollingResult] = result.ToString();
 
                                 DeviceAuthZProvider.DeviceAuthZData[deviceCode] = JsonConvert.SerializeObject(dic);
                                 retVal = true;
@@ -419,10 +419,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
                             
                             // 結果の判別
-                            if (DeviceAuthZProvider.GetState(dic["authReqExp"], dic["result"], out states))
+                            if (DeviceAuthZProvider.GetState(dic[Const.PollingAuthReqExp], dic[Const.PollingResult], out states))
                             {
                                 // Code
-                                authZCode = dic["authZCode"];
+                                authZCode = dic[Const.PollingAuthZCode];
                                 // retVal
                                 retVal = true;
                             }
@@ -432,7 +432,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             if (states == OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                             {
                                 long? last = null;
-                                string lastPolled = dic.ContainsKey("lastPolled") ? dic["lastPolled"] : "";
+                                string lastPolled = dic.ContainsKey(Const.PollingLastPolled) ? dic[Const.PollingLastPolled] : "";
 
                                 long parsed = 0;
                                 if (!string.IsNullOrEmpty(lastPolled) && long.TryParse(lastPolled, out parsed))
@@ -443,7 +443,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 bool tooFast = PollingThrottle.TooFast(
                                     last, Config.DeviceAuthZPollingIntervalSeconds);
 
-                                dic["lastPolled"] = PollingThrottle.NowUnixSeconds().ToString();
+                                dic[Const.PollingLastPolled] = PollingThrottle.NowUnixSeconds().ToString();
                                 DeviceAuthZProvider.DeviceAuthZData[deviceCode] =
                                     JsonConvert.SerializeObject(dic);
 
@@ -722,8 +722,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>Code</returns>
         private static string GetCode(string userName, Dictionary<string, string> tempdic)
         {
-            string client_id = tempdic["client_id"];
-            string scope = tempdic["scope"];
+            string client_id = tempdic[OAuth2AndOIDCConst.client_id];
+            string scope = tempdic[OAuth2AndOIDCConst.scope];
 
             // **identity.Name に入れるのは利用者名**（#151 の段階 4）。
             //   **sub を入れてはいけない。** sub は利用者 ID（または PPID）であり、

@@ -914,5 +914,203 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("TokenEndpointAuthMethodDescription", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Not specified に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlNotSpecified {
+            get {
+                return ResourceManager.GetString("DdlNotSpecified", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   none (no UI) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlPromptNone {
+            get {
+                return ResourceManager.GetString("DdlPromptNone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   login (re-authenticate) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlPromptLogin {
+            get {
+                return ResourceManager.GetString("DdlPromptLogin", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   consent (re-consent) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlPromptConsent {
+            get {
+                return ResourceManager.GetString("DdlPromptConsent", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   select_account (show the consent screen) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlPromptSelectAccount {
+            get {
+                return ResourceManager.GetString("DdlPromptSelectAccount", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   0 (re-authenticate every time) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlMaxAge0 {
+            get {
+                return ResourceManager.GetString("DdlMaxAge0", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   60 (1 minute) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlMaxAge60 {
+            get {
+                return ResourceManager.GetString("DdlMaxAge60", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   600 (10 minutes. The default of the OIDC buttons) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlMaxAge600 {
+            get {
+                return ResourceManager.GetString("DdlMaxAge600", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Not specified (the IdP falls back to unspecified) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlNameIdFormatNone {
+            get {
+                return ResourceManager.GetString("DdlNameIdFormatNone", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   unspecified (user name) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlNameIdFormatUnspecified {
+            get {
+                return ResourceManager.GetString("DdlNameIdFormatUnspecified", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   emailAddress (email address) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlNameIdFormatEmailAddress {
+            get {
+                return ResourceManager.GetString("DdlNameIdFormatEmailAddress", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   persistent (PPID per RP) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlNameIdFormatPersistent {
+            get {
+                return ResourceManager.GetString("DdlNameIdFormatPersistent", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client for Saml2 / OAuth2.0 / OIDC に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlClientTypeNormal {
+            get {
+                return ResourceManager.GetString("DdlClientTypeNormal", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client that requires PKCE (require_pkce) (OAuth2.1) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlClientTypeRequirePkce {
+            get {
+                return ResourceManager.GetString("DdlClientTypeRequirePkce", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client for Device Authorization Grant に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlClientTypeDevice {
+            get {
+                return ResourceManager.GetString("DdlClientTypeDevice", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client for Financial-grade API - Part1 に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlClientTypeFapi1 {
+            get {
+                return ResourceManager.GetString("DdlClientTypeFapi1", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client for Financial-grade API - Part2 に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlClientTypeFapi2 {
+            get {
+                return ResourceManager.GetString("DdlClientTypeFapi2", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client for Financial-grade API - CIBA に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlClientTypeFapiCiba {
+            get {
+                return ResourceManager.GetString("DdlClientTypeFapiCiba", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client of the signed-in user に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlClientTypeLoginUser {
+            get {
+                return ResourceManager.GetString("DdlClientTypeLoginUser", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   {0} (default) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlDefaultAlg {
+            get {
+                return ResourceManager.GetString("DdlDefaultAlg", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   (not narrowed) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlNotNarrowed {
+            get {
+                return ResourceManager.GetString("DdlNotNarrowed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   (not specified = client_secret_basic / client_secret_post) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DdlTokenEndpointAuthMethodNone {
+            get {
+                return ResourceManager.GetString("DdlTokenEndpointAuthMethodNone", resourceCulture);
+            }
+        }
     }
 }

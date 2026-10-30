@@ -29,15 +29,16 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/12  玄人 幸道         新規（#289 の段階 2）
-//*  2026/10/13  玄人 幸道         汎用部分を DiscoveryJwks に分けた（#289 の段階 2）
-//*  2026/10/13  玄人 幸道         discoveryのURLを設定で与えられるようにした（#289 の段階 2）
 //*  2026/10/13  玄人 幸道         上流のJWK SetのURLを直に指せるようにした（#290）
 //*  2026/10/13  玄人 幸道         上流n件から読めるようにした（#292 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Log;
 
 using System.Threading.Tasks;
+
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security.Jwt;
@@ -49,7 +50,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// </summary>
     /// <remarks>
     /// **この型は「設定の読み方」だけを持つ。**
-    /// **protocol と HTTP とキャッシュは `DiscoveryJwks`（汎用）**に在る。
+    /// **protocol と HTTP とキャッシュは `RemoteJwkSetStore`（Open棟梁）**に在る。
     ///
     /// | | この配備での決め方 |
     /// |---|---|
@@ -104,19 +105,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return null;
             }
 
-            string kid = DiscoveryJwks.KidOf(idToken);
+            string kid = JwtReader.TryReadKid(idToken);
+            JObject jwk = null;
 
             if (!string.IsNullOrEmpty(upstream.JwkSetUri))
             {
                 // 専用設定から引く
-                return await DiscoveryJwks.GetRsaKeyFromJwkSetAsync(upstream.JwkSetUri, kid);
+                jwk = await RemoteJwkSetStore.GetJwkAsync(upstream.JwkSetUri, kid);
             }
             else
             {
                 // Discovery経由で引く
-                return await DiscoveryJwks.GetRsaKeyAsync(
+                jwk = await RemoteJwkSetStore.GetJwkByDiscoveryAsync(
                     IdFederationJwks.DiscoveryUrl(upstream), upstream.Issuer, kid);
             }
+
+            if (jwk == null)
+            {
+                //  **理由を残す**（#253。**鍵そのものは出さない**）。
+                Logging.MyOperationTrace("The key of the upstream id_token was not found.");
+                return null;
+            }
+
+            //  **上流の id_token は RS256 で検証する**（設定の証明書に倒す経路と同じ）。
+            //    **鍵の種類が合わなければ null**（`JwsFactory.CreateFromJwk` が見る）。
+            return JwsFactory.CreateFromJwk(JwtConst.RS256, jwk);
         }
 
         /// <summary>
@@ -149,7 +162,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             else
             {
                 // 口の基底から組み立てる
-                return DiscoveryJwks.DiscoveryUrlOf(upstream.AuthorizeEndpoint);
+                return RemoteJwkSetStore.DiscoveryUrlOf(upstream.AuthorizeEndpoint);
             }
         }
     }

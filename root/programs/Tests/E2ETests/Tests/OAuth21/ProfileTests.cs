@@ -50,7 +50,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.OAuth21
     /// **サーバ全体の設定は変えない。** `-Launch` は Implicit / ROPC を有効にして起動しており
     /// （#220）、`RequirePkce` / `RequirePkceS256` も false のままである。
     ///
-    /// **締めるのはクライアント単位の登録**（`oauth2_oidc_mode` / `require_pkce`）。
+    /// **締めるのはクライアント単位の登録**（`client_mode` / `require_pkce`）。
     /// そのため「**サーバは開いているのに、このクライアントでは塞がる**」という
     /// 対照の効いた形で測れる。
     ///

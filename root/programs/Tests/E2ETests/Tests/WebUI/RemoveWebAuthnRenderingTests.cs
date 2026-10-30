@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
+//*  2026/10/29  玄人 幸道         RT-294.62 と並んで走らないよう、同じコレクションに入れた（#294）
 //**********************************************************************************
 
 using System;
@@ -65,7 +66,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.WebUI
     ///
     /// **資格情報は種データが用意する**（`FIDO.TestCredentials`。`webauthn_tanaka` に 3 件）。
     /// **net10.0 版だけ**である（net48 版には WebAuthn の口が無い。#137）。
+    ///
+    /// **`RT-294.62` がこの利用者の名前を変える**ので、**同じコレクションに入れる**（#294）。
     /// </remarks>
+    [Collection(Issues.ManageWebAuthnTests.WebAuthnUserCollection)]
     public class RemoveWebAuthnRenderingTests : TargetTestBase
     {
         /// <summary>コンストラクタ</summary>
