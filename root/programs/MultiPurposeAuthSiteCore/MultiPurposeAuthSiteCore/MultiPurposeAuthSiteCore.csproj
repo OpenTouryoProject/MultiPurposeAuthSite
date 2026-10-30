@@ -68,6 +68,10 @@
     <Compile Update="Controllers\ManageController.*.cs">
       <DependentUpon>ManageController.cs</DependentUpon>
     </Compile>
+    <!-- **OAuth2EndpointController も partial に分けてある**（#294）。OAuth2EndpointController.cs の下に畳んで見せる。 -->
+    <Compile Update="Controllers\OAuth2EndpointController.*.cs">
+      <DependentUpon>OAuth2EndpointController.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
   
 </Project>
