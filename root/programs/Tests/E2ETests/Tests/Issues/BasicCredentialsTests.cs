@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/27  玄人 幸道         新規（#237）
+//*  2026/10/31  玄人 幸道         RT-237.3 を、Basic を最初の「:」で分ける振る舞いに合わせた（Open棟梁 #643。#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -58,12 +59,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// |---|---|---|
     /// | RT-237.1 | 符号化した Basic（仕様どおり） | 通る |
     /// | RT-237.2 | 符号化しない Basic（配備済みのクライアント） | **通る**（互換） |
-    /// | RT-237.3 | 秘密に `:` を含む | **符号化したときだけ通る** |
+    /// | RT-237.3 | 秘密に `:` を含む | **符号化してもしなくても通る**（最初の `:` で分ける） |
     ///
     /// RT-237.2 が通るのは、**復号後で認証できなければ復号前の値でも照合する**ため
     /// （`CmnEndpoints.GetBasicCredentials`）。
-    /// RT-237.3 で符号化しない側が通らないのは、`:` が**分割位置そのもの**で、
-    /// ヘッダが 3 つに割れて資格情報として読めなくなるためであり、これは仕様上やむを得ない。
+    /// RT-237.3 で符号化しない側も通るのは、**Basic を最初の `:` で `id` と秘密に分ける**ためである
+    /// （RFC 7617 §2。`:` を含められないのは user-id の側だけ）。
+    /// **Open棟梁 #643 より前は、ヘッダが 3 つに割れて資格情報として読めなかった**（そのときは「符号化したときだけ通る」を測っていた）。
     /// </remarks>
     public class BasicCredentialsTests : TargetTestBase
     {
@@ -179,15 +181,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT23703_コロンを含む秘密は符号化したときだけ通る(string targetKey)
+        public async Task RT23703_コロンを含む秘密は符号化してもしなくても通る(string targetKey)
         {
             using (IdPClient client = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-237.3",
-                    "client_secret に `:` を含む場合、符号化したときだけ認証できる",
-                    "**`:` は Basic の区切り文字そのもの**なので、符号化しないと "
-                    + "`id:secret` の分割位置が決まらない。**符号化が仕様で要求されている理由**がここに出る。"
-                    + "復号を入れたことで、こういう秘密も扱えるようになった（#237）。",
+                    "client_secret に `:` を含む場合も、符号化してもしなくても認証できる",
+                    "**Basic は最初の `:` で `id` と秘密に分ける**（`:` を含められないのは user-id の側だけ）ので、"
+                    + "**符号化しなくても、`:` を含む秘密を送れる。** 符号化した側は復号で通る（#237）。"
+                    + "**Open棟梁 #643 で分け方が直った**（以前は 3 つに割れて読めなかった）。",
                     "RFC 6749 §2.3.1 / RFC 7617 §2");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_3);
@@ -210,18 +212,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 JsonResponse raw = await client.TokenWithBasicAuthAsync(
                     Form(), reg.ClientId, reg.ClientSecret, false);
 
-                r.Verify("トークンは返らない", string.IsNullOrEmpty(raw.AccessToken),
-                    "access_token なし", raw.AccessToken == null ? "なし" : "**あり**");
+                r.VerifyEqual("HTTP 200", "200", ((int)raw.StatusCode).ToString());
 
-                r.Observe("符号化しない場合の応答",
-                    ((int)raw.StatusCode).ToString()
-                    + (string.IsNullOrEmpty(raw.Error) ? "" : " / error=" + raw.Error),
-                    "ヘッダが 3 つに割れ、資格情報として読めない。"
-                    + "**500 ではなく、認証の失敗として返る**ことを見ている。");
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(raw.AccessToken),
+                    "access_token あり", raw.AccessToken == null ? "なし" : "あり（値は伏せる）");
 
-                r.Note("**これは仕様上やむを得ない**（符号化しないクライアントは、"
-                    + "`:` を含む秘密を送る手段を持たない）。"
-                    + "秘密を発行する側が `:` を含めない、という運用もありうる。");
+                r.Note("**最初の `:` で分ける**ので、秘密は `e2e:ab+cd` のまま照合される（RFC 7617 §2）。"
+                    + "**Open棟梁 #643 より前は、ヘッダが 3 つに割れて断っていた**（このケースは「符号化したときだけ通る」を測っていた）。");
 
                 r.Done();
             }

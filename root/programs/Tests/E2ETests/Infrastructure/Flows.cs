@@ -53,6 +53,7 @@
 //*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
 //*  2026/10/29  玄人 幸道         TestClient_30 〜 _34 を追加（#294）
 //*  2026/10/30  玄人 幸道         認証デバイスのクライアントでトークンを取る RunAuthenticationDeviceFlowAsync を追加（#294）
+//*  2026/10/31  玄人 幸道         ColonSecret の説明を、Basic を最初の「:」で分ける振る舞いに合わせた（Open棟梁 #643。#294）
 //**********************************************************************************
 
 using System;
@@ -481,8 +482,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **test.ps1 の差し込みと同じ値にすること。**
         /// </summary>
         /// <remarks>
-        /// **「:」は Basic の分割位置そのもの**なので、符号化しないと資格情報として読めない
-        /// （"id:e2e:ab+cd" は 3 つに割れる）。符号化したときだけ通る。
+        /// **「:」は Basic の区切り文字**だが、**最初の「:」で分ける**（RFC 7617 §2）ので、
+        /// 符号化してもしなくても通る（Open棟梁 #643 より前は "id:e2e:ab+cd" が 3 つに割れて読めなかった）。
         /// </remarks>
         public const string ColonSecret = "e2e:ab+cd";
 

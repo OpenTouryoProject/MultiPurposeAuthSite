@@ -4173,13 +4173,13 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - この秘密は `+` を含むので、**復号すると空白に変わる**（`WebUtility.UrlDecode`）。つまり復号後の値では一致せず、**復号前で照合して初めて通る**。ここが通ることが、互換が保たれている証拠になる。
 
-## RT-237.3 client_secret に `:` を含む場合、符号化したときだけ認証できる
+## RT-237.3 client_secret に `:` を含む場合も、符号化してもしなくても認証できる
 
 | | |
 |---|---|
-| 観点 | **`:` は Basic の区切り文字そのもの**なので、符号化しないと `id:secret` の分割位置が決まらない。**符号化が仕様で要求されている理由**がここに出る。復号を入れたことで、こういう秘密も扱えるようになった（#237）。 |
+| 観点 | **Basic は最初の `:` で `id` と秘密に分ける**（`:` を含められないのは user-id の側だけ）ので、**符号化しなくても、`:` を含む秘密を送れる。** 符号化した側は復号で通る（#237）。**Open棟梁 #643 で分け方が直った**（以前は 3 つに割れて読めなかった）。 |
 | 根拠 | RFC 6749 §2.3.1 / RFC 7617 §2 |
-| テスト | `RT23703_コロンを含む秘密は符号化したときだけ通る` |
+| テスト | `RT23703_コロンを含む秘密は符号化してもしなくても通る` |
 
 **手順**
 
@@ -4190,16 +4190,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - HTTP 200
 - access_token が返る
-- トークンは返らない
-
-**観測（判定しない）**
-
-- 符号化しない場合の応答
-  - ヘッダが 3 つに割れ、資格情報として読めない。**500 ではなく、認証の失敗として返る**ことを見ている。
+- HTTP 200
+- access_token が返る
 
 **補足**
 
-- **これは仕様上やむを得ない**（符号化しないクライアントは、`:` を含む秘密を送る手段を持たない）。秘密を発行する側が `:` を含めない、という運用もありうる。
+- **最初の `:` で分ける**ので、秘密は `e2e:ab+cd` のまま照合される（RFC 7617 §2）。**Open棟梁 #643 より前は、ヘッダが 3 つに割れて断っていた**（このケースは「符号化したときだけ通る」を測っていた）。
 
 ## RT-238.1 RFC 7523 §2.2 の client_assertion で、private_key_jwt のクライアント認証が通る
 
@@ -6844,7 +6840,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus
+1. GET /Account/EmailConfirmation?userId=ff9dec6e-5c67-4869-a09c-d54f3dcc90fb&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6853,8 +6849,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=78543ce2-28b0-436f-b30f-dcaaaeb57486&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=ff9dec6e-5c67-4869-a09c-d54f3dcc90fb&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=ff9dec6e-5c67-4869-a09c-d54f3dcc90fb&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
