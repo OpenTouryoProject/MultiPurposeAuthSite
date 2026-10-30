@@ -40,6 +40,7 @@
 //*  2026/10/25  玄人 幸道         scope に auth を登録した TestClient_29 を追加（#294）
 //*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
 //*  2026/10/29  玄人 幸道         TestClient_30 〜 _34（C-40・N1・S3・grant_types の絞り）を追加（#294）
+//*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35 を追加（RT-237.3。OpenTouryo#645 への備え。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -284,12 +285,24 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 // **「:」を含む client_secret**（#237）。
                 //   **E2E の KnownClients.ColonSecret と同じ値にすること。**
-                //   「:」は Basic の分割位置そのものなので、**符号化しないと資格情報として読めない。**
+                //   **「+」も含む**ので、符号化しないと**復号前の値での照合**で通る（RT-237.4。4.0 でやめる。OpenTouryo#645）。
                 ClientName = "TestClient_3", ClientId = "e2e0tc03000000000000000000000000",
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
                     { OAuth2AndOIDCConst.client_secret, "e2e:ab+cd" }
+                }
+            },
+            new Entry()
+            {
+                // **「:」だけを含む client_secret**（RT-237.3。#294）。
+                //   **E2E の KnownClients.ColonOnlySecret と同じ値にすること。**
+                //   **英数字と「:」だけ**なので、復号前の値での照合に頼らず「最初の「:」で分ける」だけを測れる。
+                ClientName = "TestClient_35", ClientId = "e2e0tc35000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.client_secret, "e2e:abcd" }
                 }
             },
             new Entry()

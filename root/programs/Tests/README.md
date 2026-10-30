@@ -74,7 +74,8 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
 | `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | 同上 |
 | `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | 同上 |
-| `TestClient_3` | 同じく写しで、**`client_secret` に `:` を含む**（`KnownClients.ColonSecret`）。符号化しないと資格情報として読めない値（#237） | 同上 |
+| `TestClient_3` | 同じく写しで、**`client_secret` に `:` と `+` を含む**（`KnownClients.ColonSecret`）。符号化しないと**復号前の値での照合**で通る（#237。`RT-237.4`。Open棟梁 4.0 でやめる。OpenTouryo#645） | 同上 |
+| `TestClient_35` | 同じく写しで、**`client_secret` に `:` だけを含む**（`KnownClients.ColonOnlySecret`）。**最初の `:` で分ける**ことだけを測る（`RT-237.3`。#294） | 同上 |
 | `TestClient_4` | 同じく写しで、**`post_logout_redirect_uri` を登録**（`test_self_logout`）。ログアウト後に RP へ戻せるかを測る（#232） | 同上 |
 | `TestClient_5` | 同じく写しで、**`subject_types = pairwise`**（#140 の段階 2） | 同上 |
 | `TestClient_6` / `_7` | **写しただけ**（`subject_types` を書かない）。**既定が public になった**ことを 2 つの client_id で測る（#151 の段階 4） | 同上 |
@@ -93,7 +94,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 - **`client_id` は固定値。** E2E は構成ファイルを読む作りなので user store は読めない。
   **`Flows.KnownClients.SeededClientIds` と `Sts.TestClients.Entries` を同じ値にしておくこと**
 - **`client_secret` を差し替えたものは、写す元の秘密では認証できない。**
-  **`KnownClients.SymbolSecret` / `ColonSecret` も、表と同じ値にしておくこと**
+  **`KnownClients.SymbolSecret` / `ColonSecret` / `ColonOnlySecret` も、表と同じ値にしておくこと**
 - **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**（種データはサイト側が作る）
 - **サイトは `GET /Account/Login` でしか種データを作らない**（`CreateData`。#210 で踏んだ）。
   **`TargetTestBase.Client` が 1 度だけ呼んで揃えている**（`TargetInfo.EnsureSeedData`）。
@@ -330,7 +331,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/Saml2AssertionTests.cs` | `RT-246` | **自己テストが SAML2 のアサーションを画面に出す**（Redirect / POST / 要求 POST ＋ 応答 Redirect の 3 経路。判定・署名の検証・Issuer の一致・XML・属性。`RT-246.4` 〜 `RT-246.7`） |
 | `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` / `RT-243` / `RT-246` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`）。**自己テストの CIBA ボタン**（判定と理由が画面に出る。`RT-246.2`） |
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
-| `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化してもしなくても通ること（最初の `:` で分ける。Open棟梁 #643） |
+| `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` だけを含む秘密は符号化してもしなくても通ること（最初の `:` で分ける。OpenTouryo#643）、`:` と `+` を含む秘密は符号化しなくても復号前の値の照合で通ること（Open棟梁 4.0 でやめる。OpenTouryo#645） |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 | `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `Container/E2E/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
 | `Tests/Issues/ManageGdprTests.cs` | `RT-277` | **GDPR 対応**（`/Manage/ManageGdprData`）。**参照**は自分のデータを `user.json`（`application/json`）で返し、**パスワードの控えは入っていない**こと。**消去**は、**利用者の行ごと消える**こと（#299。子の行は外部キーの cascade が落とす）と、**その利用者ではサインインできなくなる**こと。**属性データ・クライアント登録・ロールを持たせてから消す**（**登録が在ると、以前の実装では消去が外部キーで弾かれた**）。**使い捨ての利用者を使う**（消去は元に戻せない）。**4 ストアで測る** |

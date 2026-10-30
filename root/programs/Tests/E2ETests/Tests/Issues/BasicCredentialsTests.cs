@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/27  玄人 幸道         新規（#237）
 //*  2026/10/31  玄人 幸道         RT-237.3 を、Basic を最初の「:」で分ける振る舞いに合わせた（Open棟梁 #643。#294）
+//*  2026/10/31  玄人 幸道         RT-237.3 を「:」だけの秘密に分け、「:」と「+」の秘密を RT-237.4 にした（OpenTouryo#645 への備え。#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -58,12 +59,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | | 送り方 | 期待 |
     /// |---|---|---|
     /// | RT-237.1 | 符号化した Basic（仕様どおり） | 通る |
-    /// | RT-237.2 | 符号化しない Basic（配備済みのクライアント） | **通る**（互換） |
-    /// | RT-237.3 | 秘密に `:` を含む | **符号化してもしなくても通る**（最初の `:` で分ける） |
+    /// | RT-237.2 | 符号化しない Basic（配備済みのクライアント） | **通る**（互換。**復号前の値での照合**による） |
+    /// | RT-237.3 | 秘密に `:` だけを含む | **符号化してもしなくても通る**（最初の `:` で分ける） |
+    /// | RT-237.4 | 秘密に `:` と `+` を含む | **符号化すれば通る。しなくても復号前の値の照合で通る** |
     ///
     /// RT-237.2 が通るのは、**復号後で認証できなければ復号前の値でも照合する**ため
-    /// （`CmnEndpoints.GetBasicCredentials`）。
+    /// （`CmnEndpoints.GetBasicCredentials`。OpenTouryo#634 の H-3）。
+    /// **この照合は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。
+    /// **4.0 に上げたら RT-237.2 と RT-237.4 の (2) は落ちる**（そのときに期待を変える）。
     /// RT-237.3 で符号化しない側も通るのは、**Basic を最初の `:` で `id` と秘密に分ける**ためである
+    /// （**復号前の値での照合には頼らない**ので、4.0 でも変わらない）
     /// （RFC 7617 §2。`:` を含められないのは user-id の側だけ）。
     /// **Open棟梁 #643 より前は、ヘッダが 3 つに割れて資格情報として読めなかった**（そのときは「符号化したときだけ通る」を測っていた）。
     /// </remarks>
@@ -146,7 +151,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "符号化しない Basic でも、記号を含む client_secret のクライアントが認証できる",
                     "**符号化しないクライアントは配備済みである**（Open棟梁 の従来のクライアントを含む）。"
                     + "復号だけを入れると、そちらが繋がらなくなる。"
-                    + "**復号後で認証できなければ復号前の値でも照合する**ことで、どちらも受ける（#237）。",
+                    + "**復号後で認証できなければ復号前の値でも照合する**ことで、どちらも受ける（#237）。"
+                    + "**この照合（OpenTouryo#634 の H-3）は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。"
+                    + "**4.0 に上げたら、このケースは落ちる**（期待を変えること）。",
                     "RFC 6749 §2.3.1");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_2);
@@ -155,7 +162,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("この秘密は `+` を含むので、**復号すると空白に変わる**（`WebUtility.UrlDecode`）。"
                     + "つまり復号後の値では一致せず、**復号前で照合して初めて通る**。"
-                    + "ここが通ることが、互換が保たれている証拠になる。");
+                    + "ここが通ることが、互換が保たれている証拠になる。"
+                    + "**Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。");
 
                 r.Step("POST /token に、符号化しない Basic で client_credentials を送る");
 
@@ -176,26 +184,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
-        /// <summary>RT-237.3 秘密に「:」を含む</summary>
+        /// <summary>RT-237.3 秘密に「:」だけを含む（最初の「:」で分ける）</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
+        /// <remarks>
+        /// **復号前の値での照合に頼らない**（英数字と `:` だけなので、符号化しない値は復号しても変わらない）。
+        /// **「最初の `:` で分ける」だけを測る**ので、**Open棟梁 4.0 でも変わらない**（OpenTouryo#645 の影響を受けない）。
+        /// </remarks>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT23703_コロンを含む秘密は符号化してもしなくても通る(string targetKey)
+        public async Task RT23703_コロンだけを含む秘密は符号化してもしなくても通る(string targetKey)
         {
             using (IdPClient client = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-237.3",
-                    "client_secret に `:` を含む場合も、符号化してもしなくても認証できる",
+                    "client_secret に `:` だけを含む場合、符号化してもしなくても認証できる",
                     "**Basic は最初の `:` で `id` と秘密に分ける**（`:` を含められないのは user-id の側だけ）ので、"
                     + "**符号化しなくても、`:` を含む秘密を送れる。** 符号化した側は復号で通る（#237）。"
+                    + "**この秘密は英数字と `:` だけ**なので、**復号前の値での照合には頼らない**（Open棟梁 4.0 でも変わらない）。"
                     + "**Open棟梁 #643 で分け方が直った**（以前は 3 つに割れて読めなかった）。",
                     "RFC 6749 §2.3.1 / RFC 7617 §2");
 
-                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_3);
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_35);
 
-                r.Target("client_name=" + KnownClients.TestClient_3
-                    + "（client_secret に `:` を含む。test.ps1 が差し込む）");
+                r.Target("client_name=" + KnownClients.TestClient_35
+                    + "（client_secret に `:` だけを含む。種データで作る）");
 
                 r.Step("(1) 符号化した Basic（`:` は `%3A` になる）");
 
@@ -217,8 +230,64 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("access_token が返る", !string.IsNullOrEmpty(raw.AccessToken),
                     "access_token あり", raw.AccessToken == null ? "なし" : "あり（値は伏せる）");
 
-                r.Note("**最初の `:` で分ける**ので、秘密は `e2e:ab+cd` のまま照合される（RFC 7617 §2）。"
-                    + "**Open棟梁 #643 より前は、ヘッダが 3 つに割れて断っていた**（このケースは「符号化したときだけ通る」を測っていた）。");
+                r.Note("**最初の `:` で分ける**ので、秘密は `e2e:abcd` のまま読める（RFC 7617 §2）。"
+                    + "**復号しても同じ値**なので、復号後の値で一致する。"
+                    + "**Open棟梁 #643 より前は、ヘッダが 3 つに割れて断っていた**。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-237.4 秘密に「:」と「+」を含む（復号前の値での照合）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **(2) が通るのは、復号前の値での照合（OpenTouryo#634 の H-3）による。**
+        /// **この照合は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。
+        /// **4.0 に上げたら (2) は落ちる**ので、そのときに期待を「通らない」へ変える。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23704_コロンと記号を含む秘密は符号化しなくても復号前の照合で通る(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-237.4",
+                    "client_secret に `:` と `+` を含む場合、符号化すれば通る。符号化しなくても、復号前の値の照合で通る",
+                    "**符号化すれば通る。符号化しなくても、復号前の値の照合（OpenTouryo#634 の H-3）で通る。**"
+                    + "**この照合は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。"
+                    + "**4.0 に上げたら (2) は落ちる**（期待を変えること）。"
+                    + "`:` の分け方は `RT-237.3` が測る。",
+                    "RFC 6749 §2.3.1 / RFC 7617 §2");
+
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_3);
+
+                r.Target("client_name=" + KnownClients.TestClient_3
+                    + "（client_secret に `:` と `+` を含む。種データで作る）");
+
+                r.Step("(1) 符号化した Basic（`:` は `%3A`、`+` は `%2B` になる）");
+
+                JsonResponse encoded = await client.TokenWithBasicAuthAsync(
+                    Form(), reg.ClientId, reg.ClientSecret, true);
+
+                r.VerifyEqual("HTTP 200", "200", ((int)encoded.StatusCode).ToString());
+
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(encoded.AccessToken),
+                    "access_token あり", encoded.AccessToken == null ? "なし" : "あり（値は伏せる）");
+
+                r.Step("(2) 符号化しない Basic（`:` と `+` がそのまま載る）");
+
+                JsonResponse raw = await client.TokenWithBasicAuthAsync(
+                    Form(), reg.ClientId, reg.ClientSecret, false);
+
+                r.VerifyEqual("HTTP 200", "200", ((int)raw.StatusCode).ToString());
+
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(raw.AccessToken),
+                    "access_token あり", raw.AccessToken == null ? "なし" : "あり（値は伏せる）");
+
+                r.Note("**`+` は復号で空白に変わる**ので、復号後の値（`e2e:ab cd`）では一致しない。"
+                    + "**復号前の値（`e2e:ab+cd`）で照合して通る**（H-3）。"
+                    + "**Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。");
 
                 r.Done();
             }
