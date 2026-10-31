@@ -171,6 +171,18 @@
     <Compile Include="Extensions\Sts\Saml2OAuth2DataProvider.cs" />
     <Compile Include="Extensions\Sts\Helper.cs" />
     <Compile Include="TokenProviders\CmnAccessToken.cs" />
+    <Compile Include="TokenProviders\CmnAccessToken.Create.cs">
+      <DependentUpon>CmnAccessToken.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnAccessToken.Verify.cs">
+      <DependentUpon>CmnAccessToken.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnAccessToken.Binding.cs">
+      <DependentUpon>CmnAccessToken.cs</DependentUpon>
+    </Compile>
+    <Compile Include="TokenProviders\CmnAccessToken.SecurityStamp.cs">
+      <DependentUpon>CmnAccessToken.cs</DependentUpon>
+    </Compile>
     <Compile Include="TokenProviders\CmnResponseObject.cs" />
     <Compile Include="Extensions\Sts\CibaProvider.cs" />
     <Compile Include="Extensions\Sts\TwoFactorPushProvider.cs" />
