@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         AddClaim の XML コメントを直した（#294）
+//*  2026/11/01  玄人 幸道         コメントの参照先を CmnDiscoveryEndpoint に直した（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -66,7 +67,7 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <summary>認可サーバが扱うスコープの一覧（Discovery の scopes_supported と同じもの）</summary>
         /// <returns>スコープの一覧</returns>
         /// <remarks>
-        /// Discovery の広告（CmnEndpoints.OpenIDConfig）と、発行時の絞り込み（FilterSupportedScopes）の
+        /// Discovery の広告（CmnDiscoveryEndpoint.OpenIDConfig）と、発行時の絞り込み（FilterSupportedScopes）の
         /// 両方で使う。別々に持つと一方だけ直してずれるので、ここ 1 か所で決める（#198）。
         /// </remarks>
         public static List<string> GetScopesSupported()

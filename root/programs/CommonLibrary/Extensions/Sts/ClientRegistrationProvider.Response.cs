@@ -29,10 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
+//*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Util.Sts;
 
@@ -166,7 +166,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             foreach (string registered in new string[]
                 { model.JwkRsaPublickey, model.JwkECDsaPublickey })
             {
-                string json = CmnEndpoints.DecodeRegisteredJwk(registered);
+                string json = JwtUtil.DecodeRegisteredJwk(registered);
 
                 if (string.IsNullOrEmpty(json))
                 {

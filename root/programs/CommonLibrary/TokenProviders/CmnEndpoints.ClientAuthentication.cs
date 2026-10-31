@@ -35,11 +35,12 @@
 //*  2026/10/30  玄人 幸道         使われなくなった DeviceAuthZClientAuthentication（引数 3 つの版）を消した（#294）
 //*  2026/10/31  玄人 幸道         登録の有無は HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
 //*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone の値は Const から取る（#294）
+//*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/01  玄人 幸道         AllowsVerifyingAlg を internal にした（Extensions/Sts の CmnRequestObjectEndpoint が使う。#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
@@ -396,9 +397,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     ? new string[0]
                     : new string[]
                     {
-                        CmnEndpoints.DecodeRegisteredJwk(
+                        JwtUtil.DecodeRegisteredJwk(
                             Helper.GetInstance().GetJwkRsaPublickey(assertionIss)),
-                        CmnEndpoints.DecodeRegisteredJwk(
+                        JwtUtil.DecodeRegisteredJwk(
                             Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
                     };
 
@@ -700,7 +701,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         private static bool IsAssertionAudience(JObject payload)
         {
-            string aud = CmnEndpoints.StringClaimOf(payload, OAuth2AndOIDCConst.aud);
+            string aud = JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.aud);
 
             return !string.IsNullOrEmpty(aud)
                 && (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint
@@ -831,7 +832,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// **実際の alg が読めないとき（JWT でない等）は拒否**する。
         /// </remarks>
-        private static bool AllowsVerifyingAlg(
+        internal static bool AllowsVerifyingAlg(
             string registeredAlg, string[] supported, string actualAlg)
         {
             if (string.IsNullOrEmpty(registeredAlg))

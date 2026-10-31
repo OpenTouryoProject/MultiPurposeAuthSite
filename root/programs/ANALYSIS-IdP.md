@@ -471,7 +471,7 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   **保持はそのストアの有効期限まで**（既定 300 秒）なので、要求の `exp` をそれより長くすると、
   記録が消えた後は同じ `jti` を受け付ける。厳密な排他はしていない（同時到着は防がない）。
   検証は `jti` を確かめた時点で行うので、**利用者が見つからずに終わった要求でも `jti` は消費される**（`RT-234.3`）
-- **要求の受け取り方は 2 つある**（#233。`CmnEndpoints.ReceiveCibaRequest`）。
+- **要求の受け取り方は 2 つある**（#233。`CmnCibaEndpoint.ReceiveCibaRequest`。#321 で `CmnEndpoints` から移した）。
 
   | | 送り方 | 位置付け |
   |---|---|---|
@@ -1156,7 +1156,7 @@ E2E テスト: `EX-4.5`（使用済み）/ `EX-4.7`（発行していない・�
 | | 内容 |
 |---|---|
 | `CmnEndpoints.TryReadJwtPayload` | JWT でなければ **null**（例外にしない）。**`JObject` で読む**（`Dictionary<string, string>` だと入れ子のクレームで失敗する） |
-| `CmnEndpoints.DecodeRegisteredJwk` | 登録値が空・壊れていれば **空文字**（復号は空でないと確かめた後） |
+| `JwtUtil.DecodeRegisteredJwk`（#321 で `CmnEndpoints` から移した） | 登録値が空・壊れていれば **空文字**（復号は空でないと確かめた後） |
 
 `/ros` は **400**、`client_assertion` は**アサーション無しとして扱い 401（`invalid_client`）**。
 後者は、`client_assertion_type` が誤りのときと同じ扱い（#238）。
@@ -2149,7 +2149,7 @@ if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
 > FAPI 2.0 Security Profile は PAR を必須としているので、**本命は `/par`** という関係は変わらない。
 >
 > 廃止しないのであれば、**両アプリに二重に書かれたままにする理由も無い。**
-> **✅ #235 で `CmnEndpoints.RegisterRequestObject` に集約した**（`/par` と CIBA の受け取りに続いて）。
+> **✅ #235 で `CmnEndpoints.RegisterRequestObject` に集約した**（`/par` と CIBA の受け取りに続いて）。**#321 で `CmnRequestObjectEndpoint.RegisterRequestObject` に移した。**
 > **振る舞いは変えていない**（署名だけを確かめ、クライアント認証はしない）。
 > Controller に残るのは、本文の読み方（net48 は同期、net10.0 は非同期）と応答の包み方だけ。
 >
@@ -3177,7 +3177,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 
 ### C-41. PAR に預けた Request Object の `client_id` を、認証したクライアントと照合していなかった **[Lib]** — **✅ 修正済み（#294）**
 
-**`CmnEndpoints.PushedAuthorizationRequest`** は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめていた**が、
+**`CmnEndpoints.PushedAuthorizationRequest`**（#321 で `CmnRequestObjectEndpoint` へ移した）は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめていた**が、
 **中の `client_id` は確かめていなかった。** その後の検証（`ValidateAuthZReqParam`）と保存は、**中の `client_id` で行っていた**ので、
 **別のクライアントの名義で、PAR に預けた要求を作れた**（RFC 9126 §2.1 / RFC 9101 §6.3）。
 

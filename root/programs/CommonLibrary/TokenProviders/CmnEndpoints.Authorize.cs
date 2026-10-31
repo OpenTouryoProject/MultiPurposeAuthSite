@@ -31,10 +31,10 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         CheckAuthTime の記述を実装に合わせ、using を整理した（#294）
 //*  2026/10/29  玄人 幸道         scope の省略で 500 にしない。id_token 単独と、登録の grant_types に無い Implicit / Hybrid を、同意の前に断る（#294）
+//*  2026/11/01  玄人 幸道         CheckClientGrantType を internal にした（Extensions/Sts の CmnCibaEndpoint が使う。#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
@@ -652,7 +652,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// | **この関数** | **そのクライアントが、その経路を登録したか**（RP の申告） |
         /// | `ClientModePolicy` | **その登録種別（normal / fapi1 / fapi2…）に、その経路と証明を許すか**（AS の方針） |
         /// </remarks>
-        private static bool CheckClientGrantType(string client_id, ClientModePolicy.Flow flow)
+        internal static bool CheckClientGrantType(string client_id, ClientModePolicy.Flow flow)
         {
             List<string> permitted = Helper.GetInstance().GetClientGrantTypes(client_id);
 

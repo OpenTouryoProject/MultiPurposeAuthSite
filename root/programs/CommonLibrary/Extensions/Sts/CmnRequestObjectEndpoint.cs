@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：CmnEndpoints
-//* クラス日本語名  ：CmnEndpoints（ライブラリ）の Request Object・PAR
+//* クラス名        ：CmnRequestObjectEndpoint
+//* クラス日本語名  ：CmnRequestObjectEndpoint（ライブラリ）の Request Object・PAR
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -34,10 +34,11 @@
 //*  2026/10/29  玄人 幸道         /ros の Request Object の client_id を、署名したクライアントと照合する（F5。#294）
 //*  2026/10/31  玄人 幸道         /par の claims を JSON のオブジェクトとして預ける。読めなければ invalid_request（#294）
 //*  2026/10/31  玄人 幸道         /ros と PAR の Request Object も、claims がオブジェクトでなければ断る（#294）
+//*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.RequestObject.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
@@ -52,77 +53,18 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
-namespace MultiPurposeAuthSite.TokenProviders
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
-    /// <summary>CmnEndpoints（Request Object・PAR）</summary>
-    public partial class CmnEndpoints
+    /// <summary>CmnRequestObjectEndpoint（Request Object・PAR）</summary>
+    /// <remarks>
+    /// **以前は `TokenProviders/CmnEndpoints` の partial（`CmnEndpoints.RequestObject.cs`）だった**（#321 で移した）。
+    /// **本体の部品は `CmnEndpoints.` を付けて呼ぶ**（クライアント認証・`CheckClientMode` など）。
+    /// </remarks>
+    public static class CmnRequestObjectEndpoint
     {
         #region AuthZ(N)Endpoint
 
-        #region JWT の読み取り（#241）
-
-        /// <summary>公開鍵（JWK）を、登録する形（Base64URL）にする（#307 の段階 3）</summary>
-        /// <param name="jwk">JWK（1 本。JWK Set ではない）</param>
-        /// <returns>登録する値（Base64URL の JWK）</returns>
-        /// <remarks>
-        /// **`DecodeRegisteredJwk` の逆である。** **形の知識を 1 か所に置くため、ここに並べた。**
-        /// **列が持つのは「JWK 1 本を Base64URL にしたもの」**で、**JWK Set ではない**
-        /// （`jwk_rsa_publickey` / `jwk_ecdsa_publickey` の 2 列に分かれている）。
-        /// **余白を入れない**（`Formatting.None`）。
-        /// </remarks>
-        public static string EncodeRegisteredJwk(JObject jwk)
-        {
-            if (jwk == null)
-            {
-                return "";
-            }
-
-            return CustomEncode.ToBase64UrlString(
-                CustomEncode.StringToByte(
-                    jwk.ToString(Formatting.None), CustomEncode.us_ascii));
-        }
-
-        /// <summary>登録された公開鍵（Base64URL の JWK）を復号する（無ければ空）</summary>
-        /// <param name="base64UrlJwk">登録された値</param>
-        /// <returns>JWK の JSON（無ければ空）</returns>
-        /// <remarks>
-        /// **未登録のクライアントでは空が返る**（#241）。
-        /// 以前は空かどうかを確かめる前に復号しており、
-        /// `FromBase64UrlString(null)` が NullReferenceException になって **HTTP 500** だった。
-        /// </remarks>
-        public static string DecodeRegisteredJwk(string base64UrlJwk)
-        {
-            if (string.IsNullOrEmpty(base64UrlJwk))
-            {
-                return "";
-            }
-
-            try
-            {
-                return CustomEncode.ByteToString(
-                    CustomEncode.FromBase64UrlString(base64UrlJwk), CustomEncode.us_ascii);
-            }
-            catch
-            {
-                // 登録の値が壊れている（運用の誤り）。**要求の側の誤りと区別せず、認証失敗にする。**
-                return "";
-            }
-        }
-
-        /// <summary>JWT の payload から、文字列のクレームを取り出す（無い・文字列でなければ空）</summary>
-        /// <param name="payload">payload（null 可）</param>
-        /// <param name="name">クレーム名</param>
-        /// <returns>値（無ければ空）</returns>
-        /// <remarks>
-        /// **`(string)payload[name]` は、値がオブジェクトや配列だと例外になる**（#294）。
-        /// **外から来た JWT の `iss` などを読むときは、こちらを使う**（#241 と同じ方針）。
-        /// </remarks>
-        private static string StringClaimOf(JObject payload, string name)
-        {
-            JToken value = (payload == null) ? null : payload[name];
-
-            return (value != null && value.Type == JTokenType.String) ? (string)value : "";
-        }
+        #region claims の形（#294）
 
         /// <summary>payload の claims が、無いか JSON のオブジェクトか（#294）</summary>
         /// <param name="payload">Request Object の payload</param>
@@ -181,7 +123,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             string requestObjectString = payload.ToString(Formatting.None);
             // **文字列でない iss で例外にしない**（#294）。
-            string iss = CmnEndpoints.StringClaimOf(payload, OAuth2AndOIDCConst.iss);
+            string iss = JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.iss);
             string pubKey = "";
             bool result = false;
 
@@ -196,7 +138,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // CIBA
 
                 // - 公開鍵取得を取り出す。
-                pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                pubKey = JwtUtil.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkECDsaPublickey(iss));
 
                 // 署名検証
@@ -208,7 +150,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // F-API2 CC
 
                 // - 公開鍵取得を取り出す。
-                pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                pubKey = JwtUtil.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkRsaPublickey(iss));
 
                 // **登録 request_object_signing_alg で絞る**（#262）。
@@ -250,7 +192,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             //  **claims は JSON のオブジェクトであること**（OIDC Core 5.5。#294）。
             //    **PAR のフォームと同じ扱い**（以前は `/authorize` で読めずに 500、いまは黙って無視していた）。
-            if (!CmnEndpoints.IsClaimsObjectOrAbsent(payload))
+            if (!CmnRequestObjectEndpoint.IsClaimsObjectOrAbsent(payload))
             {
                 return false;
             }
@@ -354,7 +296,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // **署名付き Request Object（JAR）。** /ros と同じ鍵で検証する。
                 //   **登録の値が壊れていても例外にしない**（#294。`DecodeRegisteredJwk` は空を返す）。
-                string pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                string pubKey = JwtUtil.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkRsaPublickey(client_id));
 
                 if (string.IsNullOrEmpty(pubKey))
@@ -413,7 +355,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 //  **claims は JSON のオブジェクトであること**（OIDC Core 5.5。#294。フォームの経路と同じ）
-                if (!CmnEndpoints.IsClaimsObjectOrAbsent(payload))
+                if (!CmnRequestObjectEndpoint.IsClaimsObjectOrAbsent(payload))
                 {
                     err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description, "The claims in the request object must be a JSON object.");

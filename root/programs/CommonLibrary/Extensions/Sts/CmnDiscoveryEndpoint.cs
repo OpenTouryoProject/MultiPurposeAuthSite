@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：CmnEndpoints
-//* クラス日本語名  ：CmnEndpoints（ライブラリ）の ディスカバリ（.well-known/openid-configuration）
+//* クラス名        ：CmnDiscoveryEndpoint
+//* クラス日本語名  ：CmnDiscoveryEndpoint（ライブラリ）の ディスカバリ（.well-known/openid-configuration）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -31,10 +31,11 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、region の入れ子と using を直した（#294）
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、none を認証の口から外し、CIBA を開けた配備だけ広告する（#294）
+//*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Discovery.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System.Collections.Generic;
@@ -43,10 +44,14 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
-namespace MultiPurposeAuthSite.TokenProviders
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
-    /// <summary>CmnEndpoints（ディスカバリ（.well-known/openid-configuration））</summary>
-    public partial class CmnEndpoints
+    /// <summary>CmnDiscoveryEndpoint（ディスカバリ（.well-known/openid-configuration））</summary>
+    /// <remarks>
+    /// **以前は `TokenProviders/CmnEndpoints` の partial（`CmnEndpoints.Discovery.cs`）だった**（#321 で移した）。
+    /// **本体の部品は `CmnEndpoints.` を付けて呼ぶ**（クライアント認証・`CheckClientMode` など）。
+    /// </remarks>
+    public static class CmnDiscoveryEndpoint
     {
         #region .well-known/openid-configuration
 

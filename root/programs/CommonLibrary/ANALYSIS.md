@@ -112,7 +112,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Co/` | 設定と定数 | `Config`(1740 行) `Const` |
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
-| `Extensions/Sts/` | **STS の拡張仕様**の実装と、その状態を持つもの | `DeviceAuthZProvider` `CibaProvider` `ClientRegistrationProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` `CmnDPoP` `CmnResponseObject`（JARM） `CmnLogoutToken`（Back-Channel Logout） `Saml2OAuth2DataProvider` |
+| `Extensions/Sts/` | **STS の拡張仕様**の実装と、その状態を持つもの | `DeviceAuthZProvider` `CibaProvider` `ClientRegistrationProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` `CmnDPoP` `CmnResponseObject`（JARM） `CmnLogoutToken`（Back-Channel Logout） `CmnDiscoveryEndpoint` `CmnRequestObjectEndpoint`（JAR・PAR） `CmnCibaEndpoint` `CmnLogoutEndpoint`（RP-Initiated Logout） `Saml2OAuth2DataProvider` |
 | `Extensions/FIDO/` | WebAuthn（**net10.0 版だけ**。#137） | `WebAuthnHelper` `DataProvider` `StoredCredential` `EnumFidoType` |
 | `Log/` | ロギングの façade | `Logging`（`ACCESS` / `SQLTRACE` ロガー） |
 | `Manager/` | ASP.NET Identity の Manager（**net48 のみ**） | `ApplicationUserManager` `ApplicationRoleManager` `ApplicationSignInManager` |
@@ -318,6 +318,11 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `Extensions/Sts/RevocationProvider.cs` / `IssuedTokenProvider.cs` | revoke / introspect の裏付けデータ |
 | `Extensions/Sts/SubjectIdProvider.cs` | **発行した `sub` の対応表**（#151 の段階 2）。`(Sector, UserId) → Sub` と、その逆引き。**`sub` を「導出」から「データ」に変える**ので、`subject_types` の既定や PPID の作り方を変えても**発行済みの `sub` が動かない** |
 | `Extensions/Sts/RequestObjectProvider.cs` | Request Object の登録（`/ros`） |
+| `Extensions/Sts/CmnDiscoveryEndpoint.cs` | `.well-known/openid-configuration` の生成（`OpenIDConfig`）。#321 で `CmnEndpoints` から移した |
+| `Extensions/Sts/CmnRequestObjectEndpoint.cs` | Request Object（`RegisterRequestObject`。`/ros`）と PAR（`PushedAuthorizationRequest`）。#321 で `CmnEndpoints` から移した |
+| `Extensions/Sts/CmnCibaEndpoint.cs` | CIBA の受付（`ReceiveCibaRequest` / `ValidateCibaAuthZReqParam`、jti の使い切り）。#321 で `CmnEndpoints` から移した |
+| `Extensions/Sts/CmnLogoutEndpoint.cs` | RP-Initiated Logout（`ReceiveEndSessionRequest`）。#321 で `CmnEndpoints` から移した |
+| `Util/Sts/JwtUtil.cs` | 登録された公開鍵（JWK）の読み書き（`EncodeRegisteredJwk` / `DecodeRegisteredJwk`）と、JWT の文字列クレームの読み出し（`StringClaimOf`）。#321 で `CmnEndpoints` から出した |
 | `SamlProviders/CmnEndpoints.cs` | SAML2 の Request / Response |
 | `Util/Sts/PPIDExtension.cs` | `subject_types`（`public` / `pairwise`）に応じた sub の生成。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 
@@ -325,16 +330,17 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 
 | ファイル | 中身 |
 |---|---|
-| `CmnEndpoints.Discovery.cs` | `.well-known/openid-configuration` の生成（`OpenIDConfig`） |
 | `CmnEndpoints.Authorize.cs` | 認可要求の検証（`ValidateAuthZReqParam` / `CheckRedirectUri` / `ResolveErrorRedirectUri`）、`max_age`、受け付ける grant / response_type、登録の grant_types / response_types、PKCE |
 | `CmnEndpoints.AuthorizeResponse.cs` | 応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`） |
-| `CmnEndpoints.RequestObject.cs` | Request Object（`RegisterRequestObject`）、PAR、登録の JWK の読み書き |
-| `CmnEndpoints.Ciba.cs` | CIBA の受付（`ReceiveCibaRequest` / `ValidateCibaAuthZReqParam`、jti の使い切り） |
-| `CmnEndpoints.Logout.cs` | RP-Initiated Logout（`ReceiveEndSessionRequest`） |
 | `CmnEndpoints.Token.cs` | Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` / `GrantClientCredentials` / `GrantJwtBearerTokenCredentials` / `GrantDeviceAuthZ` / `GrantCiba`） |
 | `CmnEndpoints.Revocation.cs` | 取り消し・照会（`RevokeToken` / `IntrospectToken`） |
 | `CmnEndpoints.ClientAuthentication.cs` | クライアント認証（`ClientAuthentication`。secret・x509・device・assertion）、Basic の資格情報、登録された認証の方法、検証する側の alg |
 | `CmnEndpoints.TokenIssuance.cs` | 発行の共通部品（利用者のロックアウト・`CheckClientMode`・DPoP・`CreateAccessTokenResponse`） |
+
+**拡張仕様の分（JAR・PAR、CIBA、RP-Initiated Logout）と Discovery は、`Extensions/Sts` の別のクラスに移した**（#321。上の表）。
+**partial のままフォルダだけを移さなかった**のは、partial は全ファイルが同じ名前空間でなければならず、フォルダ＝名前空間の決まりが崩れるため。
+**本体の部品は `CmnEndpoints.` を付けて呼ぶ**（`ClientAuthentication` など）。**移した側だけが使う本体の部品は `internal` にした**（`CheckClientGrantType` / `AllowsVerifyingAlg`）。
+**失効・照会（RFC 7009 / 7662）は OAuth 2.0 の仕様として本体に残した。**
 
 ### 7.2 対応しているグラント / 拡張
 

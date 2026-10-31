@@ -31,6 +31,7 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         expires_in を実際の期間で返し、登録の鍵を安全に読む。using を整理した（#294）
 //*  2026/10/30  玄人 幸道         refresh_token の利用者が居るか・SecurityStamp が変わっていないかを確かめる口を追加（#294）
+//*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -38,7 +39,6 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 #endif
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
@@ -245,7 +245,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // fapi2 の登録は、JWK（RSA 公開鍵）も読む
                 //   **登録が無い・壊れていれば空**（#294。以前は列が NULL だと 500 だった）。
                 //   **空なら JWE にせず JWS で返す**（`CreateAccessTokenResponse`）。
-                jwkString = CmnEndpoints.DecodeRegisteredJwk(
+                jwkString = JwtUtil.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkRsaPublickey(client_id));
             }
 

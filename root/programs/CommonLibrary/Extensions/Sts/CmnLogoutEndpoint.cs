@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：CmnEndpoints
-//* クラス日本語名  ：CmnEndpoints（ライブラリ）の RP-Initiated Logout
+//* クラス名        ：CmnLogoutEndpoint
+//* クラス日本語名  ：CmnLogoutEndpoint（ライブラリ）の RP-Initiated Logout
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -30,10 +30,10 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         using を整理した（#294）
+//*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Logout.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Util;
-using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
@@ -43,10 +43,14 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
-namespace MultiPurposeAuthSite.TokenProviders
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
-    /// <summary>CmnEndpoints（RP-Initiated Logout）</summary>
-    public partial class CmnEndpoints
+    /// <summary>CmnLogoutEndpoint（RP-Initiated Logout）</summary>
+    /// <remarks>
+    /// **以前は `TokenProviders/CmnEndpoints` の partial（`CmnEndpoints.Logout.cs`）だった**（#321 で移した）。
+    /// **本体の部品は `CmnEndpoints.` を付けて呼ぶ**（クライアント認証・`CheckClientMode` など）。
+    /// </remarks>
+    public static class CmnLogoutEndpoint
     {
         #region AuthZ(N)Endpoint
 
@@ -107,7 +111,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (!string.IsNullOrEmpty(idTokenHint))
             {
-                if (!CmnEndpoints.VerifyIdTokenHint(idTokenHint, out aud, out string userName))
+                if (!CmnLogoutEndpoint.VerifyIdTokenHint(idTokenHint, out aud, out string userName))
                 {
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "id_token_hint is invalid.";

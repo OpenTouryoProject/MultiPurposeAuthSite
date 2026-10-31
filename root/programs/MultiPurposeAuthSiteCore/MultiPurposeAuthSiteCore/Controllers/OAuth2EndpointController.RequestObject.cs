@@ -31,10 +31,12 @@
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         /ros の summary を POST に直し、失敗を JSON のエラーで返す（#294）
 //*  2026/10/30  玄人 幸道         /par で同じ名前のパラメタが 2 回来たら invalid_request で断る（#294）
+//*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnRequestObjectEndpoint）を呼ぶ（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
+using MultiPurposeAuthSite.Extensions.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
 
 using System.IO;
@@ -121,7 +123,7 @@ namespace MultiPurposeAuthSite.Controllers
                 parameters[key] = formData[key];
             }
 
-            if (Token.CmnEndpoints.PushedAuthorizationRequest(
+            if (CmnRequestObjectEndpoint.PushedAuthorizationRequest(
                 client_id, client_secret, assertion, x509, parameters,
                 out Dictionary<string, string> ret, out err))
             {
@@ -151,7 +153,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // **処理は CommonLibrary（#235）。** 両アプリに同じものを書いていた。
             //   ここは、本文を渡して応答を包むだけ。
-            if (Token.CmnEndpoints.RegisterRequestObject(body, out Dictionary<string, object> ret))
+            if (CmnRequestObjectEndpoint.RegisterRequestObject(body, out Dictionary<string, object> ret))
             {
                 // 成功
                 return this.Created("", // 第一引数...

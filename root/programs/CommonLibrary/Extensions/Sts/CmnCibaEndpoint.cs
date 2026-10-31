@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：CmnEndpoints
-//* クラス日本語名  ：CmnEndpoints（ライブラリ）の CIBA の受付
+//* クラス名        ：CmnCibaEndpoint
+//* クラス日本語名  ：CmnCibaEndpoint（ライブラリ）の CIBA の受付
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -32,10 +32,11 @@
 //*  2026/10/29  玄人 幸道         壊れた request で 500 にしない。文言・定数の置き場所・using を直した（#294）
 //*  2026/10/29  玄人 幸道         poll では client_notification_token を要らず、binding_message を任意にした（#294）
 //*  2026/10/30  玄人 幸道         CIBA の requested_expiry を検証し、上限で頭を打つ（CibaExpiresIn）（#294）
+//*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Ciba.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
@@ -50,10 +51,14 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
-namespace MultiPurposeAuthSite.TokenProviders
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
-    /// <summary>CmnEndpoints（CIBA の受付）</summary>
-    public partial class CmnEndpoints
+    /// <summary>CmnCibaEndpoint（CIBA の受付）</summary>
+    /// <remarks>
+    /// **以前は `TokenProviders/CmnEndpoints` の partial（`CmnEndpoints.Ciba.cs`）だった**（#321 で移した）。
+    /// **本体の部品は `CmnEndpoints.` を付けて呼ぶ**（クライアント認証・`CheckClientMode` など）。
+    /// </remarks>
+    public static class CmnCibaEndpoint
     {
         #region AuthZ(N)Endpoint
 
@@ -136,7 +141,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
-                string unverifiedIss = CmnEndpoints.StringClaimOf(unverified, OAuth2AndOIDCConst.iss);
+                string unverifiedIss = JwtUtil.StringClaimOf(unverified, OAuth2AndOIDCConst.iss);
 
                 if (string.IsNullOrEmpty(unverifiedIss))
                 {
@@ -146,7 +151,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // 署名の検証に使う公開鍵は、登録（iss ＝ client_id）から引く。
                 //   **登録の値が壊れていても例外にしない**（`DecodeRegisteredJwk` は空を返す。#294）。
-                string pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                string pubKey = JwtUtil.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkECDsaPublickey(unverifiedIss));
 
                 if (string.IsNullOrEmpty(pubKey))
@@ -164,7 +169,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 payload = unverified;
-                return CmnEndpoints.VerifyCibaRequestIssuer(
+                return CmnCibaEndpoint.VerifyCibaRequestIssuer(
                     client_id, payload, ref err, ref errDescription);
             }
 
@@ -184,7 +189,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
-                return CmnEndpoints.VerifyCibaRequestIssuer(
+                return CmnCibaEndpoint.VerifyCibaRequestIssuer(
                     client_id, payload, ref err, ref errDescription);
             }
 
@@ -261,7 +266,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         private static bool ConsumeCibaJti(string jti)
         {
-            string key = CmnEndpoints.CibaJtiKey(jti);
+            string key = CmnCibaEndpoint.CibaJtiKey(jti);
 
             if (!string.IsNullOrEmpty(RequestObjectProvider.Get(key)))
             {
@@ -300,7 +305,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 byte[] head = new byte[16];
                 Array.Copy(hash, head, head.Length);
 
-                return CmnEndpoints.CibaJtiKeyPrefix + CustomEncode.ToBase64UrlString(head);
+                return CmnCibaEndpoint.CibaJtiKeyPrefix + CustomEncode.ToBase64UrlString(head);
             }
         }
 
@@ -369,7 +374,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region 取得 → チェック
             // iss → client_id
-            if (!CmnEndpoints.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.iss,
                 out client_id, out err, out errDescription))
             {
@@ -414,7 +419,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   以前は取り出しも検証もしていなかった（この行はコメントだけだった）。
             //   見ないと、**別の認可サーバ宛てに作られた要求**を、
             //   同じクライアントの鍵が登録されているこの IdP でも受け付けてしまう。
-            if (!CmnEndpoints.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.aud,
                 out aud, out err, out errDescription))
             {
@@ -431,7 +436,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
             // exp
-            if (!CmnEndpoints.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                     json, OAuth2AndOIDCConst.exp,
                     out exp, out err, out errDescription))
             {
@@ -449,7 +454,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
             // iat
             // nbf
-            if (!CmnEndpoints.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.nbf,
                 out nbf, out err, out errDescription))
             {
@@ -469,7 +474,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // **同じ要求を二度受け付けない（#234 の段階 2）。**
             //   CIBA Core 7.1.1 は jti を「署名した認証要求の一意な識別子」としている。
             //   見ないと、**同じ要求 JWT を exp まで何度でも送り直せる**（利用者に通知が繰り返し届く）。
-            if (!CmnEndpoints.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.jti,
                 out jti, out err, out errDescription))
             {
@@ -477,7 +482,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
             else
             {
-                if (!CmnEndpoints.ConsumeCibaJti(jti))
+                if (!CmnCibaEndpoint.ConsumeCibaJti(jti))
                 {
                     // CIBA Core 13 : invalid_request
                     err = OAuth2AndOIDCConst.invalid_request;
@@ -486,7 +491,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
             // scope
-            if (!CmnEndpoints.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.scope,
                 out scope, out err, out errDescription))
             {
@@ -511,22 +516,22 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   **以前は必須にしていた**ので、**標準の poll のクライアントが invalid_request で断られた**（#294）。
             //   ※ `/ros` は、これの有無で CIBA かどうかを見分ける（`RegisterRequestObject`）ので、
             //     **`request_uri` の経路では、在ることになる。**
-            CmnEndpoints.GetCibaClaim(
+            CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.client_notification_token,
                 out client_notification_token, out err, out errDescription, nullable: true);
             client_notification_token = client_notification_token ?? "";
             // binding_message
             //   **OPTIONAL**（CIBA Core §7.1。#294。以前は必須にしていた）。
-            CmnEndpoints.GetCibaClaim(
+            CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.binding_message,
                 out binding_message, out err, out errDescription, nullable: true);
             binding_message = binding_message ?? "";
             // user_code
-            CmnEndpoints.GetCibaClaim(
+            CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.user_code,
                 out user_code, out err, out errDescription, nullable: true);
             // requested_expiry
-            CmnEndpoints.GetCibaClaim(
+            CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.requested_expiry,
                 out requested_expiry, out err, out errDescription, nullable: true);
 
@@ -541,7 +546,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
             // login_hint
-            if (!CmnEndpoints.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.login_hint,
                 out login_hint, out err, out errDescription))
             {

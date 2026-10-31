@@ -30,11 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         /jwkcerts の If-None-Match で、弱い ETag と * も一致とみなす（#294）
+//*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnDiscoveryEndpoint）を呼ぶ（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
-using Token = MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Xml;
@@ -143,7 +144,7 @@ namespace MultiPurposeAuthSite.Controllers
             return new HttpResponseMessage()
             {
                 Content = new JsonContent(
-                    Token.CmnEndpoints.OpenIDConfig(),
+                    CmnDiscoveryEndpoint.OpenIDConfig(),
                     new JsonSerializerSettings
                     {
                         Formatting = Newtonsoft.Json.Formatting.Indented,

@@ -21,6 +21,7 @@
 //*  2026/10/28  玄人 幸道         サインイン画面の初期表示で外部ログインの Cookie を消す（net10.0 版に揃えた。#294）
 //*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
 //*  2026/10/29  玄人 幸道         ID 連携に ReturnUrl を渡す（#294）
+//*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnLogoutEndpoint）を呼ぶ（#321）
 //**********************************************************************************
 
 /*
@@ -34,7 +35,7 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-using Token = MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
@@ -418,7 +419,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="confirmed">利用者が確認画面で「はい」を押したか</param>
         /// <returns>ActionResult</returns>
         /// <remarks>
-        /// **判定は CmnEndpoints.ReceiveEndSessionRequest（両アプリ共通）。**
+        /// **判定は CmnLogoutEndpoint.ReceiveEndSessionRequest（両アプリ共通）。**
         /// ここは「確認画面を出すか」「サインアウト」「リダイレクト」だけを行う。
         /// </remarks>
         private async Task<ActionResult> EndSessionCore(
@@ -427,7 +428,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             bool signedIn = User.Identity.IsAuthenticated;
 
-            Token.CmnEndpoints.ReceiveEndSessionRequest(
+            CmnLogoutEndpoint.ReceiveEndSessionRequest(
                 idTokenHint, clientId, postLogoutRedirectUri, state,
                 signedIn ? User.Identity.Name : "",
                 out bool verified, out string redirectUri,

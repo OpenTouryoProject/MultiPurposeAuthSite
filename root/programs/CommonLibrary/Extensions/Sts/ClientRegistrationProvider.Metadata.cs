@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         動的登録で device_code × private_key_jwt を断らない（両方の口が受けるようにした。#294）
+//*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -700,7 +701,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
 
                 string kty = (string)jwk[JwtConst.kty];
-                string encoded = CmnEndpoints.EncodeRegisteredJwk(jwk);
+                string encoded = JwtUtil.EncodeRegisteredJwk(jwk);
 
                 if (kty == JwtConst.RSA)
                 {
