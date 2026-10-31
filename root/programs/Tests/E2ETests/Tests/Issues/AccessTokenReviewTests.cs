@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：AccessTokenReviewTests
-//* クラス日本語名  ：RT-294.87 〜 .90 CmnAccessToken.*.cs のレビューで見つけた不具合
+//* クラス日本語名  ：RT-294.87 〜 .92 CmnAccessToken.*.cs のレビューで見つけた不具合
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（#294）
+//*  2026/10/31  玄人 幸道         RT-294.91 / .92（claims の id_token がオブジェクトでなくても 500 にしない・/ros の claims）を足した（#294）
 //**********************************************************************************
 
 using System;
@@ -46,7 +47,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-294.87 〜 .90 `CmnAccessToken.*.cs` のレビューで見つけた不具合（#294）。
+    /// RT-294.87 〜 .92 `CmnAccessToken.*.cs` のレビューで見つけた不具合（#294）。
     /// </summary>
     /// <remarks>
     /// | | 確かめること |
@@ -55,6 +56,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | `RT-294.88` | **`auth_time` は JSON の数値**（OIDC Core §2） |
     /// | `RT-294.89` | **Implicit でも `claims` パラメタが access_token に載る**（OIDC Core 5.5。PAR で渡す） |
     /// | `RT-294.90` | **`/par` は、JSON のオブジェクトでない `claims` を断る**（以前は `/authorize` で 500） |
+    /// | `RT-294.91` | **`claims` の `id_token` がオブジェクトでなくても、認可は 500 にならない**（`AddAuthTimeClaim`） |
+    /// | `RT-294.92` | **`/ros` は、`claims` がオブジェクトでない Request Object を預からない**（PAR と同じ扱い） |
     ///
     /// **`RT-294.87` は管理者でサインインする**（使い捨ての利用者を作って消す）ので、管理画面のテストと同じコレクションに入れる。
     /// </remarks>
@@ -311,6 +314,131 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.VerifyEqual("**HTTP 400**", "400", ((int)par.StatusCode).ToString());
                 r.VerifyEqual("invalid_request", "invalid_request", par.Error);
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.91
+
+        /// <summary>RT-294.91 claims の id_token がオブジェクトでなくても 500 にしない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29491_claimsのid_tokenがオブジェクトでなくても500にしない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.91",
+                    "PAR の claims が {\"id_token\":null} でも、認可は 500 にならず code を返す",
+                    "**auth_time を載せるかの判定（`AddAuthTimeClaim`）が、claims の id_token を `(JObject)` で読んでいた**ので、"
+                    + "**オブジェクトでないと 500 になった**（RT-294.89 で PAR の claims を受けるようにしたので、誰でも届く）。"
+                    + "**いまは、オブジェクトでなければ auth_time の要求は無いものとして扱う。**",
+                    "OIDC Core §5.5 / #294");
+
+                JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
+                string endpoint = discovery.String("pushed_authorization_request_endpoint");
+
+                Skip.If(string.IsNullOrEmpty(endpoint), "PAR の口が広告されていません。");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + " / claims={\"id_token\":null}");
+
+                r.Step("(1) claims={\"id_token\":null} の認可コードの要求を、PAR に預ける");
+
+                JsonResponse par = await client.PostJsonWithBasicAuthAsync(
+                    client.ToLocalUrl(endpoint),
+                    new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", reg.ClientId },
+                        { "scope", "openid" },
+                        { "redirect_uri", reg.RedirectUri },
+                        { "state", "state1" },
+                        { "nonce", "nonce1" },
+                        { "claims", "{\"id_token\":null}" }
+                    },
+                    reg.ClientId, reg.ClientSecret);
+
+                string requestUri = par.String("request_uri");
+
+                Assert.False(string.IsNullOrEmpty(requestUri), "前提: request_uri が返ること（" + par.ToString() + "）");
+
+                r.Step("(2) その request_uri で認可する");
+
+                AuthZResponse authz = await client.AuthorizeAndGrantAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", reg.ClientId },
+                    { "request_uri", requestUri }
+                });
+
+                r.Verify("**500 にならず、code を返す**", !string.IsNullOrEmpty(authz.Code),
+                    "code が返る", string.IsNullOrEmpty(authz.Code) ? "**" + authz.ToString() + "**" : "code が返った");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.92
+
+        /// <summary>RT-294.92 /ros は、claims が JSON のオブジェクトでない Request Object を預からない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29492_rosはclaimsがオブジェクトでないRequestObjectを預からない(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-294.92",
+                    "/ros : claims が JSON のオブジェクトでない Request Object を預からない（PAR と同じ扱い）",
+                    "**以前は預かり、/authorize で黙って無視していた**（その前は `(JObject)` の変換で 500）。"
+                    + "**PAR のフォーム（RT-294.90）と扱いを揃えた。**",
+                    "OIDC Core §5.5 / RFC 9101 §6.3 / #294");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+
+                r.Target("POST /ros（iss=" + KnownClients.TestClient2 + " / claims=\"not-an-object\"）");
+
+                r.Step("(1) claims を文字列にした Request Object を預ける");
+
+                string bad = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                {
+                    { "response_type", "code" },
+                    { "scope", "openid" },
+                    { "redirect_uri", reg.RedirectUri },
+                    { "state", "state-rt29492" },
+                    { "nonce", "nonce-rt29492" },
+                    { "claims", "not-an-object" }
+                });
+
+                string rejected = await RequestObjectBuilder.RegisterAsync(client, bad);
+
+                r.Verify("**request_uri を返さない**", string.IsNullOrEmpty(rejected),
+                    "返さない", string.IsNullOrEmpty(rejected) ? "返さない" : "**返した**");
+
+                r.Step("(2) claims をオブジェクトにすれば預かる（対照）");
+
+                string good = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                {
+                    { "response_type", "code" },
+                    { "scope", "openid" },
+                    { "redirect_uri", reg.RedirectUri },
+                    { "state", "state-rt29492" },
+                    { "nonce", "nonce-rt29492" },
+                    { "claims", new Dictionary<string, object>() { { "userinfo", new Dictionary<string, object>() { { "email", null } } } } }
+                });
+
+                string accepted = await RequestObjectBuilder.RegisterAsync(client, good);
+
+                r.Verify("request_uri を返す", !string.IsNullOrEmpty(accepted),
+                    "返す", string.IsNullOrEmpty(accepted) ? "**返さない**" : "返した");
 
                 r.Done();
             }

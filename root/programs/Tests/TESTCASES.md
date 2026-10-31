@@ -6864,7 +6864,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=9816fa84-186d-43d9-bc95-1ff5676f6136&code=bogus
+1. GET /Account/EmailConfirmation?userId=67ad8c53-1109-4cba-8eb2-6d8d67a9ff3b&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6873,8 +6873,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=9816fa84-186d-43d9-bc95-1ff5676f6136&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=9816fa84-186d-43d9-bc95-1ff5676f6136&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=67ad8c53-1109-4cba-8eb2-6d8d67a9ff3b&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=67ad8c53-1109-4cba-8eb2-6d8d67a9ff3b&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -8020,6 +8020,41 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **HTTP 400**
 - invalid_request
+
+## RT-294.91 PAR の claims が {"id_token":null} でも、認可は 500 にならず code を返す
+
+| | |
+|---|---|
+| 観点 | **auth_time を載せるかの判定（`AddAuthTimeClaim`）が、claims の id_token を `(JObject)` で読んでいた**ので、**オブジェクトでないと 500 になった**（RT-294.89 で PAR の claims を受けるようにしたので、誰でも届く）。**いまは、オブジェクトでなければ auth_time の要求は無いものとして扱う。** |
+| 根拠 | OIDC Core §5.5 / #294 |
+| テスト | `RT29491_claimsのid_tokenがオブジェクトでなくても500にしない` |
+
+**手順**
+
+1. claims={"id_token":null} の認可コードの要求を、PAR に預ける
+1. その request_uri で認可する
+
+**検証（合否を判定する）**
+
+- **500 にならず、code を返す**
+
+## RT-294.92 /ros : claims が JSON のオブジェクトでない Request Object を預からない（PAR と同じ扱い）
+
+| | |
+|---|---|
+| 観点 | **以前は預かり、/authorize で黙って無視していた**（その前は `(JObject)` の変換で 500）。**PAR のフォーム（RT-294.90）と扱いを揃えた。** |
+| 根拠 | OIDC Core §5.5 / RFC 9101 §6.3 / #294 |
+| テスト | `RT29492_rosはclaimsがオブジェクトでないRequestObjectを預からない` |
+
+**手順**
+
+1. claims を文字列にした Request Object を預ける
+1. claims をオブジェクトにすれば預かる（対照）
+
+**検証（合否を判定する）**
+
+- **request_uri を返さない**
+- request_uri を返す
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

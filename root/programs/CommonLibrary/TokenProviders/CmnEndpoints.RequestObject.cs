@@ -33,6 +33,7 @@
 //*  2026/10/29  玄人 幸道         PAR の Request Object の client_id を、認証したクライアントと照合する（C-41。#294）
 //*  2026/10/29  玄人 幸道         /ros の Request Object の client_id を、署名したクライアントと照合する（F5。#294）
 //*  2026/10/31  玄人 幸道         /par の claims を JSON のオブジェクトとして預ける。読めなければ invalid_request（#294）
+//*  2026/10/31  玄人 幸道         /ros と PAR の Request Object も、claims がオブジェクトでなければ断る（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -120,6 +121,17 @@ namespace MultiPurposeAuthSite.TokenProviders
             JToken value = (payload == null) ? null : payload[name];
 
             return (value != null && value.Type == JTokenType.String) ? (string)value : "";
+        }
+
+        /// <summary>payload の claims が、無いか JSON のオブジェクトか（#294）</summary>
+        /// <param name="payload">Request Object の payload</param>
+        /// <returns>無いか、オブジェクトなら true</returns>
+        /// <remarks>**OIDC Core 5.5 の claims は JSON のオブジェクト**である（文字列・配列・null は受けない）。</remarks>
+        private static bool IsClaimsObjectOrAbsent(JObject payload)
+        {
+            JToken claims = (payload == null) ? null : payload[OAuth2AndOIDCConst.claims];
+
+            return claims == null || claims.Type == JTokenType.Object;
         }
 
         #endregion
@@ -231,6 +243,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 requestObjectString = payload.ToString(Formatting.None);
             }
             else if (roClientId.Type != JTokenType.String || (string)roClientId != iss)
+            {
+                return false;
+            }
+
+            //  **claims は JSON のオブジェクトであること**（OIDC Core 5.5。#294）。
+            //    **PAR のフォームと同じ扱い**（以前は `/authorize` で読めずに 500、いまは黙って無視していた）。
+            if (!CmnEndpoints.IsClaimsObjectOrAbsent(payload))
             {
                 return false;
             }
@@ -389,6 +408,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description, "The client_id in the request object does not match the authenticated client.");
+                    return false;
+                }
+
+                //  **claims は JSON のオブジェクトであること**（OIDC Core 5.5。#294。フォームの経路と同じ）
+                if (!CmnEndpoints.IsClaimsObjectOrAbsent(payload))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error_description, "The claims in the request object must be a JSON object.");
                     return false;
                 }
             }

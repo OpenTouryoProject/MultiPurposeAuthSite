@@ -3493,6 +3493,8 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > | **`auth_time`** | **W3C 形式の文字列**（`AccountController.AddAuthTimeClaim` が渡す形のまま） | **JSON の数値（秒）**（OIDC Core §2。`RT-294.88`）。**預けた refresh_token の payload に残る文字列も、作り直すときに数値にする** |
 > | **Claims 経由の access_token（Implicit / Hybrid）** | **`claims`（OIDC Core 5.5）を拾っていなかった** | **拾う**（`RT-294.89`） |
 > | **`/par` の `claims`** | **文字列のまま預け、`/authorize` が `(JObject)` の変換に失敗して 500** | **JSON のオブジェクトとして預ける。読めなければ `invalid_request`**（`RT-294.90`）。`/authorize` 側も、オブジェクトでなければ受けない |
+> | **`claims` の `id_token`**（`AddAuthTimeClaim`） | **オブジェクトでないと `(JObject)` の変換で 500** | **オブジェクトでなければ、`auth_time` の要求は無いものとして扱う**（`RT-294.91`。2 回目のレビューで追加） |
+> | **Request Object（`/ros`・PAR の JAR）の `claims`** | オブジェクトでなくても預かり、`/authorize` で黙って無視した | **預からない**（`invalid_request_object`。`RT-294.92`。PAR のフォームと同じ扱い） |
 > | **access_token の `nbf`** | **確かめていなかった** | **確かめる**（RFC 7519 §4.1.5。時刻のずれを 60 秒まで許す） |
 > | **`scope` の照合**（クレームの選択） | `ToLower` で大文字小文字を無視 | **区別する**（RFC 6749 §3.3） |
 

@@ -23,6 +23,7 @@
 //*  2026/10/29  玄人 幸道         OpSession と /device_verify の初期表示も、補助を使って両版で同じ本文にした（#294）
 //*  2026/10/30  玄人 幸道         auth_time を書く所の注を直した（管理画面の再サインインでは書かない。#294）
 //*  2026/10/31  玄人 幸道         Request Object の claims がオブジェクトでなくても 500 にしない（#294）
+//*  2026/10/31  玄人 幸道         claims の id_token がオブジェクトでなくても 500 にしない（AddAuthTimeClaim。#294）
 //**********************************************************************************
 
 /*
@@ -88,7 +89,9 @@ namespace MultiPurposeAuthSite.Controllers
             // - claims パラメタで id_token の auth_time を求められた（OIDC Core 5.5）
             if (!string.IsNullOrEmpty(max_age) || (claims != null
                 && claims.ContainsKey(OAuth2AndOIDCConst.claims_id_token)
-                && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
+                //  **id_token がオブジェクトでなければ、auth_time の要求は無いものとして扱う**（#294。以前は変換の例外で 500）
+                && claims[OAuth2AndOIDCConst.claims_id_token] is JObject claimsIdToken
+                && claimsIdToken.ContainsKey(OAuth2AndOIDCConst.auth_time)))
             {
                 // **前回の認証時刻は Cookie から読む**（**改ざんできない形で包んである**。#294。`Sts.AuthTimeCookie`）。
                 // サインイン時（InitSessionAfterlogin）と、ManageController で資格情報を確かめた時（パスワードの再確認・変更、外部ログインの結び付け）に書く。
