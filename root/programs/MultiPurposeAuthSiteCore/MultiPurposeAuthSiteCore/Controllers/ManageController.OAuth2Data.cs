@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         ほかで使われている client_id では、登録を作らない（#294）
+//*  2026/10/31  玄人 幸道         client_id の重なりは HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
 //**********************************************************************************
 
 /*
@@ -273,12 +274,13 @@ namespace MultiPurposeAuthSite.Controllers
                                 return RedirectToAction("Saml2OAuth2DataList", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                             }
                             else if (!string.IsNullOrEmpty(model.ClientID)
-                                && (Sts.Saml2OAuth2DataProvider.Get(model.ClientID) != null
-                                    || !string.IsNullOrEmpty(Helper.GetInstance().GetClientName(model.ClientID))))
+                                && Helper.GetInstance().HasClient(model.ClientID))
                             {
                                 //  **ほかで使われている `client_id` では作らない**（#294）。
                                 //    **以前は、mem では何もせずに「成功」と出し、DB では主キーの違反で 500 になっていた。**
                                 //    **構成ファイルのクライアントとも重ねない**（引くときは構成ファイルが勝つので、作っても効かない）。
+                                //    **`HasClient` で見る**（構成ファイルと画面登録の両方）。**`GetClientName` では、
+                                //    client_name の無い構成ファイルのクライアントを見逃す**（名前が空で返る）。
                                 ModelState.AddModelError("ClientID", Resources.ManageController.ClientIdAlreadyExists);
                             }
                             else if (!string.IsNullOrEmpty(model.ClientID))

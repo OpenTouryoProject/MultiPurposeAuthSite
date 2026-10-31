@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         構成ファイルに在るクライアントは、項目が無くても画面登録を読みに行かない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -90,6 +91,10 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][OAuth2AndOIDCConst.client_secret];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294。`GetClientScopes` などと同じ流儀）。
+                //   以前は項目が無いと、同じ client_id の画面登録（saml2OAuth2Data）を読みに行っていた。
+                return "";
             }
 
             // saml2OAuth2Dataを検索
@@ -168,6 +173,10 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][Const.ClientJwkRsaPublicKey];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294。`GetClientScopes` などと同じ流儀）。
+                //   以前は項目が無いと、同じ client_id の画面登録（saml2OAuth2Data）を読みに行っていた。
+                return "";
             }
 
             // saml2OAuth2Dataを検索
@@ -210,6 +219,10 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][Const.ClientJwkEcdsaPublicKey];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294。`GetClientScopes` などと同じ流儀）。
+                //   以前は項目が無いと、同じ client_id の画面登録（saml2OAuth2Data）を読みに行っていた。
+                return "";
             }
 
             // saml2OAuth2Dataを検索
@@ -303,6 +316,10 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][Const.ClientTlsClientAuthSubjectDn];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294。`GetClientScopes` などと同じ流儀）。
+                //   以前は項目が無いと、同じ client_id の画面登録（saml2OAuth2Data）を読みに行っていた。
+                return "";
             }
 
             // saml2OAuth2Dataを検索

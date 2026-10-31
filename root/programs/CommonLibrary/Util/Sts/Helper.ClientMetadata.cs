@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         client_name の無い登録で落ちない。名前の照合で大文字小文字を区別する。コメント（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -76,10 +77,10 @@ namespace MultiPurposeAuthSite.Util.Sts
             return this.GetSubjectTypes(client_id, out bool isResourceOwner);
         }
 
-        /// <summary>client_idからClientModeを取得する。</summary>
+        /// <summary>client_idからSubjectTypesを取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="isResourceOwner">bool</param>
-        /// <returns>ClientMode</returns>
+        /// <returns>SubjectTypes</returns>
         /// <remarks>
         /// **登録に subject_types が無いときの既定値は `public`**。
         /// **扱う値は `public` と `pairwise` の 2 つ**（OIDC Core §8）。
@@ -593,9 +594,11 @@ namespace MultiPurposeAuthSite.Util.Sts
             client_id = client_id ?? "";
 
             // *.config内を検索
+            //   **client_name が無くても落ちない**（#294。以前は KeyNotFoundException で 500）。
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.Oauth2ClientsInfo[client_id][Const.ClientName];
+                return this.Oauth2ClientsInfo[client_id].TryGetValue(Const.ClientName, out string name)
+                    ? (name ?? "") : "";
             }
 
             // saml2OAuth2Dataを検索
@@ -711,14 +714,24 @@ namespace MultiPurposeAuthSite.Util.Sts
         {
             isResourceOwner = false;
 
+            if (string.IsNullOrEmpty(clientName))
+            {
+                // **null で落ちない**（#294。以前は NullReferenceException）。
+                return "";
+            }
+
             // *.config内を検索
+            //   **大文字小文字を区別する**（#294）。**以前は区別しなかった**ので、
+            //   **クライアント名と大文字小文字だけ違う利用者**（例 : `testclient`）を引くと、
+            //   **その人の登録ではなく、構成ファイルのクライアントが返った。**
+            //   **client_name の無い登録も落ちない**（以前は KeyNotFoundException で 500）。
             foreach (string clientId in this.Oauth2ClientsInfo.Keys)
             {
                 Dictionary<string, string> client
                     = this.Oauth2ClientsInfo[clientId];
 
-                string temp = client[Const.ClientName];
-                if (temp.ToLower() == clientName.ToLower())
+                if (client.TryGetValue(Const.ClientName, out string temp)
+                    && string.Equals(temp, clientName, StringComparison.Ordinal))
                 {
                     return clientId;
                 }

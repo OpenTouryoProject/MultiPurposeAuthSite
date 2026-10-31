@@ -536,6 +536,11 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
     **新規ファイルは BOM 付き UTF-8 で作ること**（**走査で確かめられる** — `TESTING.md`）。
 13. **`bin/` `obj/` が作業ツリーに残る。** `.gitignore` 済みだが、
     `bin\netfx\` と `bin\netcore\` の 2 系統が並ぶ点に注意。
+14. **`Util/Sts/Helper.HttpClientBuilder` はクライアント証明書を `X509KeyStorageFlags.MachineKeySet` で読む**（両版。#294 のレビューで記録だけした）。
+    **秘密鍵がマシンの鍵ストアに書かれ、プロセスが終わっても残ることがある**（読むたびに増える）。
+    **net10.0 版は `EphemeralKeySet`（メモリだけに置く）に替えられる**か、検討の余地がある。
+    **net48 版の `WebRequestHandler`（SChannel）は、ephemeral な鍵では TLS のクライアント認証ができない**ことがあるので、**同じには替えられない。**
+    **替えるなら mTLS の E2E（`MPAS_CORE_MTLS`）で、両版の通しを回して確かめる。**
 
 ---
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         CIBA の認証要求で、要求と応答を Dispose する（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -404,31 +405,35 @@ namespace MultiPurposeAuthSite.Util.Sts
             // コンテナ化サポート
             cibaAuthZUri = Helper.GetContainerizatedAuthZServerUri(cibaAuthZUri);
 
-            HttpRequestMessage httpRequestMessage = new HttpRequestMessage
+            // **要求と応答を Dispose する**（#294）。
+            using (HttpRequestMessage httpRequestMessage = new HttpRequestMessage
             {
                 Method = HttpMethod.Post,
                 RequestUri = cibaAuthZUri,
-            };
+            })
+            {
+                // client_secret_basic（RFC 6749 2.3.1）
+                httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
+                    OAuth2AndOIDCConst.Basic,
+                    CustomEncode.ToBase64String(CustomEncode.StringToByte(
+                        string.Format("{0}:{1}",
+                            CustomEncode.UrlEncode(client_id),
+                            CustomEncode.UrlEncode(client_secret)), CustomEncode.us_ascii)));
 
-            // client_secret_basic（RFC 6749 2.3.1）
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                OAuth2AndOIDCConst.Basic,
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(
-                    string.Format("{0}:{1}",
-                        CustomEncode.UrlEncode(client_id),
-                        CustomEncode.UrlEncode(client_secret)), CustomEncode.us_ascii)));
+                // CIBA Core 7.1.1 : 認証要求のパラメタは JWT の中だけに置く。
+                httpRequestMessage.Content = new FormUrlEncodedContent(
+                    new Dictionary<string, string>
+                    {
+                        { OAuth2AndOIDCConst.request, requestObject },
+                    });
+                httpRequestMessage.Content.Headers.ContentType =
+                    new MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
-            // CIBA Core 7.1.1 : 認証要求のパラメタは JWT の中だけに置く。
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
+                using (HttpResponseMessage httpResponseMessage = await _oAuth2HttpClient.SendAsync(httpRequestMessage))
                 {
-                    { OAuth2AndOIDCConst.request, requestObject },
-                });
-            httpRequestMessage.Content.Headers.ContentType =
-                new MediaTypeHeaderValue("application/x-www-form-urlencoded");
-
-            HttpResponseMessage httpResponseMessage = await _oAuth2HttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
+                    return await httpResponseMessage.Content.ReadAsStringAsync();
+                }
+            }
         }
 
         /// <summary>

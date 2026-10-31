@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         response_type を区別して比べる。構成ファイルに在るクライアントは画面登録を読みに行かない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -115,6 +116,9 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="response_type">response_type</param>
         /// <param name="isResourceOwner">bool</param>
         /// <returns>空白区切りの列挙（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **response_type は大文字小文字を区別して比べる**（RFC 6749 §3.1.1。#294。入口の検証と揃える）。
+        /// </remarks>
         private string GetClientsRedirectUriList(string client_id, string response_type, out bool isResourceOwner)
         {
             isResourceOwner = false;
@@ -128,7 +132,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     // ...
                 }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                else if (response_type == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     // Code
                     if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriCode))
@@ -136,12 +140,12 @@ namespace MultiPurposeAuthSite.Util.Sts
                         return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriCode];
                     }
                 }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
+                else if (response_type == OAuth2AndOIDCConst.ImplicitResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     // Others
                     if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientRedirectUriToken))
@@ -149,6 +153,10 @@ namespace MultiPurposeAuthSite.Util.Sts
                         return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriToken];
                     }
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294。`GetClientScopes` などと同じ流儀）。
+                //   以前は登録が無いと、同じ client_id の画面登録（saml2OAuth2Data）を読みに行っていた。
+                return "";
             }
 
             // Saml2OAuth2Dataを検索
@@ -162,17 +170,17 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     // ...
                 }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                else if (response_type == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     // Code
                     return model.RedirectUriCode;
                 }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
+                else if (response_type == OAuth2AndOIDCConst.ImplicitResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     // Others
                     return model.RedirectUriToken;
@@ -206,6 +214,9 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][Const.ClientFrontChannelLogoutUri];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294）。
+                return "";
             }
 
             // Saml2OAuth2Dataを検索
@@ -243,6 +254,9 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][Const.ClientBackChannelLogoutUri];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294）。
+                return "";
             }
 
             // Saml2OAuth2Dataを検索
@@ -279,6 +293,9 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][Const.ClientPostLogoutRedirectUri];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294）。
+                return "";
             }
 
             // Saml2OAuth2Dataを検索
@@ -320,6 +337,9 @@ namespace MultiPurposeAuthSite.Util.Sts
                 {
                     return this.Oauth2ClientsInfo[client_id][Const.ClientRedirectUriSaml];
                 }
+
+                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294）。
+                return "";
             }
 
             // Saml2OAuth2Dataを検索

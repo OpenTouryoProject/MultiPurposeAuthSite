@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         AddClaim の XML コメントを直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -203,12 +204,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <summary>
         /// ClaimsIdentityに所定のClaimを追加する。
         /// </summary>
-        /// <param name="claims">ClaimsIdentity</param>
+        /// <param name="identity">ClaimsIdentity</param>
         /// <param name="client_id">string</param>
-        /// <param name="scopes">string[]</param>
-        /// <param name="claims">JObject</param>
+        /// <param name="scopes">IEnumerable(string)</param>
+        /// <param name="claims">JObject（claims パラメタ。無ければ null）</param>
         /// <param name="nonce">string</param>
-        /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
         public static ClaimsIdentity AddClaim(ClaimsIdentity identity,
             string client_id, IEnumerable<string> scopes, JObject claims, string nonce)
