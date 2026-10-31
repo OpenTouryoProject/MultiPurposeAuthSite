@@ -50,6 +50,7 @@
 //*  2026/10/24  玄人 幸道         StandardScopes から userid を外した（独自 scope の userid を廃止。#294）
 //*  2026/10/24  玄人 幸道         OidcScopes / SelfTestScopes / IdFederationScopes を const にした（宣言の順で初期化が欠けないように。#294）
 //*  2026/10/30  玄人 幸道         EndpointSetDeviceToken を追加（#294）
+//*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone を追加（CmnEndpoints と Helper の二重定義をやめた。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -551,6 +552,13 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>token_endpoint_auth_method</summary>
         public const string ClientTokenEndpointAuthMethod = "token_endpoint_auth_method";
+
+        /// <summary>`token_endpoint_auth_method` の `none`（パブリック クライアント。RFC 7591 §2。#294）</summary>
+        /// <remarks>
+        /// **`CmnEndpoints`（TokenProviders）と `Helper`（Util/Sts）の両方が使う**ので、ここに置く
+        /// （**部品の側から TokenProviders を参照しない**ため）。
+        /// </remarks>
+        public const string TokenEndpointAuthMethodNone = "none";
 
         /// <summary>grant_types</summary>
         public const string ClientGrantTypes = "grant_types";

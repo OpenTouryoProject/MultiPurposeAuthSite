@@ -541,6 +541,12 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
     **net10.0 版は `EphemeralKeySet`（メモリだけに置く）に替えられる**か、検討の余地がある。
     **net48 版の `WebRequestHandler`（SChannel）は、ephemeral な鍵では TLS のクライアント認証ができない**ことがあるので、**同じには替えられない。**
     **替えるなら mTLS の E2E（`MPAS_CORE_MTLS`）で、両版の通しを回して確かめる。**
+15. **`Util/Sts/Helper` のシングルトンは、型の初期化（`static` のフィールド）で作られる**（両版。#294 のレビューで記録だけした）。
+    **コンストラクタがクライアント証明書（`ClientCertPfxFilePath` / `ClientCertPfxPassword`）を読む**ので、
+    **パスやパスワードが誤っていると `TypeInitializationException` になり、以後 `Helper` を使う所がすべて落ちる**
+    （**STS のほぼ全体が 500 になり、原因が内側の例外にしか出ない**）。
+    **直すなら**、証明書を読むところだけを遅らせる（`Lazy<HttpClient>`）か、**読めなければ証明書なしで続けてログに残す**か、を決めてから。
+    **黙って証明書なしにすると、mTLS の相手で失敗の理由が見えにくくなる**ので、どちらにするかは配備の都合で決める。
 
 ---
 

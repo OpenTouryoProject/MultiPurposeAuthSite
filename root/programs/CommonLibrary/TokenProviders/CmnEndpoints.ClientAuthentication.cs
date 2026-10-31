@@ -34,6 +34,7 @@
 //*  2026/10/30  玄人 幸道         デバイス認可のクライアント認証で client_assertion（private_key_jwt）も受ける（#294）
 //*  2026/10/30  玄人 幸道         使われなくなった DeviceAuthZClientAuthentication（引数 3 つの版）を消した（#294）
 //*  2026/10/31  玄人 幸道         登録の有無は HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
+//*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone の値は Const から取る（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -645,7 +646,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         };
 
         /// <summary>`token_endpoint_auth_method` の `none`（パブリック クライアント。RFC 7591 §2。#294）</summary>
-        public const string TokenEndpointAuthMethodNone = "none";
+        /// <remarks>**値の本体は `Const.TokenEndpointAuthMethodNone`**（`Helper` も使うため）。</remarks>
+        public const string TokenEndpointAuthMethodNone = Const.TokenEndpointAuthMethodNone;
 
         /// <summary>認証する方法だけ（`none` を除く。revoke / introspect の広告。#294）</summary>
         public static string[] AuthenticatingMethods

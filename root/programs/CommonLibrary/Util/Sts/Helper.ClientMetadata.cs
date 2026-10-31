@@ -31,6 +31,7 @@
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         client_name の無い登録で落ちない。名前の照合で大文字小文字を区別する。コメント（#294）
 //*  2026/10/31  玄人 幸道         空の登録値も既定値に倒す。画面登録の名前も空を返す。利用者名で引く口を分けた（#294）
+//*  2026/10/31  玄人 幸道         使われなくなった GetClientIdByName の out 版を消した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -690,15 +691,6 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <summary>clientNameからclientIdを取得</summary>
         /// <param name="clientName">string</param>
         /// <returns>指定したclientNameのclientId</returns>
-        public string GetClientIdByName(string clientName)
-        {
-            return this.GetClientIdByName(clientName, out bool isResourceOwner);
-        }
-
-        /// <summary>clientNameからclientIdを取得</summary>
-        /// <param name="clientName">string</param>
-        /// <param name="isResourceOwner">bool（**常に false**）</param>
-        /// <returns>指定したclientNameのclientId</returns>
         /// <remarks>
         /// **構成ファイルのクライアント名だけを引く**（#294）。
         /// **利用者名で引くのは `GetClientIdByUserName`** である。
@@ -706,11 +698,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// **以前は 1 つの口で、クライアント名 → 利用者名の順に引いていた**ので、
         /// **利用者名がクライアント名と同じだと、その人の登録ではなく構成ファイルのクライアントが返った**
         /// （**呼ぶ側は、どちらの名前かを知っている**ので、口を分けた）。
+        ///
+        /// **`out isResourceOwner` の版は消した**（常に false になり、呼ぶ所も無かった）。
         /// </remarks>
-        public string GetClientIdByName(string clientName, out bool isResourceOwner)
+        public string GetClientIdByName(string clientName)
         {
-            isResourceOwner = false;
-
             if (string.IsNullOrEmpty(clientName))
             {
                 // **null で落ちない**（#294。以前は NullReferenceException）。
