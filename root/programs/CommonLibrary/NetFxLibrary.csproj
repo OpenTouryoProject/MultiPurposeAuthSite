@@ -151,6 +151,7 @@
     <Compile Include="Extensions\Sts\SoftwareStatementProvider.cs" />
     <Compile Include="Extensions\Sts\SoftwareStatementIssuerProvider.cs" />
     <Compile Include="Util\Test\SelfTestClient.cs" />
+    <Compile Include="Util\Test\SelfTestWebApi.cs" />
     <Compile Include="Extensions\Sts\ConsentProvider.cs" />
     <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />
     <Compile Include="Extensions\Sts\SessionClientProvider.cs" />
@@ -170,9 +171,6 @@
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\Sts\Saml2OAuth2DataProvider.cs" />
     <Compile Include="Util\Sts\Helper.cs" />
-    <Compile Include="Util\Sts\Helper.WebApi.cs">
-      <DependentUpon>Helper.cs</DependentUpon>
-    </Compile>
     <Compile Include="Util\Sts\Helper.ClientCredential.cs">
       <DependentUpon>Helper.cs</DependentUpon>
     </Compile>

@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：Helper
-//* クラス日本語名  ：Helper（ライブラリ）の WebAPI の呼び出し（自己テスト用）
+//* クラス名        ：SelfTestWebApi
+//* クラス日本語名  ：自己テスト用の WebAPI の呼び出し（この認可サーバを RP として呼ぶ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -30,16 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         CIBA の認証要求で、要求と応答を Dispose する（#294）
+//*  2026/11/01  玄人 幸道         Util/Sts/Helper.WebApi.cs から移し、static クラスにした（配置の見直し。#321）
 //*  2026/10/31  玄人 幸道         IntrospectTokenAsync の要約を直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-#if NETFX
-using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Manager;
-#else
-using MultiPurposeAuthSite;
-#endif
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;
@@ -48,28 +44,42 @@ using System.Threading.Tasks;
 using System.Net.Http;
 using System.Net.Http.Headers;
 
-#if NETFX
-using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
-#else
-using Microsoft.AspNetCore.Identity;
-#endif
-
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
-namespace MultiPurposeAuthSite.Util.Sts
+namespace MultiPurposeAuthSite.Util.Test
 {
-    /// <summary>Helper（WebAPI の呼び出し（自己テスト用））</summary>
+    /// <summary>自己テスト用の WebAPI の呼び出し</summary>
     /// <remarks>
     /// **クライアント（RP）として、この認可サーバを呼ぶ**（各フローの WebAPI）。
     /// **呼ぶのは自己テスト（`SelfTestClient`・HomeController・AccountController.SelfTest）と、テスト用の口だけ**で、
     /// **本番の処理からは呼ばない**（ID 連携は Open棟梁 の `OAuth2AndOIDCClient` を直接使う。#140）。
-    /// **配置の決まりでは `Util/Test` が合う**が、移すには呼び出し側の付け替えが要るので、#321 と一緒に扱う。
+    ///
+    /// **以前は `Util/Sts/Helper` の partial（`Helper.WebApi.cs`）だった**（#321 で移した）。
+    /// **`HttpClient` とコンテナ化への対応は `Helper` に残してある**
+    /// （**本番の処理も使う** — `OAuth2AndOIDCClient.HttpClient` を Back-Channel Logout や ID 連携が使う）。
     /// </remarks>
-    public partial class Helper
+    public static class SelfTestWebApi
     {
-        #region instanceメソッド
+        #region staticメソッド
+
+        #region コンテナ化サポート
+
+        /// <summary>宛先をコンテナから届く形にする（`Helper.GetContainerizatedAuthZServerUri`）</summary>
+        /// <param name="uri">Uri</param>
+        /// <returns>Uri</returns>
+        /// <remarks>
+        /// **先に `Helper` を作る** — **コンストラクタが `OAuth2AndOIDCClient.HttpClient` を設定する**
+        /// （クライアント証明書を持つ `HttpClient`）。**static のメソッドを呼ぶだけでは作られないことがある**
+        /// （`Helper` の static フィールドに触れないため）。**以前は `Helper` のインスタンス メソッドだった**ので、要らなかった。
+        /// </remarks>
+        private static Uri ToContainerUri(Uri uri)
+        {
+            Helper.GetInstance();
+            return Helper.GetContainerizatedAuthZServerUri(uri);
+        }
+
+        #endregion
 
         #region HTTP
 
@@ -84,11 +94,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="redirect_uri">redirect_uri</param>
         /// <param name="code">code</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
+        public static async Task<string> GetAccessTokenByCodeAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
@@ -105,12 +115,12 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="password">string</param>
         /// <param name="scopes">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> ResourceOwnerPasswordCredentialsGrantAsync(
+        public static async Task<string> ResourceOwnerPasswordCredentialsGrantAsync(
             Uri tokenEndpointUri, string client_id, string client_secret,
             string username, string password, string scopes)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.ResourceOwnerPasswordCredentialsGrantAsync(
@@ -125,11 +135,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="client_secret">string</param>
         /// <param name="scopes">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> ClientCredentialsGrantAsync(
+        public static async Task<string> ClientCredentialsGrantAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string scopes)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.ClientCredentialsGrantAsync(
@@ -142,11 +152,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="client_secret">client_secret</param>
         /// <param name="refreshToken">refreshToken</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> UpdateAccessTokenByRefreshTokenAsync(
+        public static async Task<string> UpdateAccessTokenByRefreshTokenAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string refreshToken)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.UpdateAccessTokenByRefreshTokenAsync(
@@ -160,7 +170,7 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <summary>UserInfoエンドポイントで、認可ユーザのClaim情報を取得する。</summary>
         /// <param name="accessToken">accessToken</param>
         /// <returns>結果のJSON文字列（認可したユーザのClaim情報）</returns>
-        public async Task<string> GetUserInfoAsync(string accessToken)
+        public static async Task<string> GetUserInfoAsync(string accessToken)
         {
             // 通信用の変数
 
@@ -169,7 +179,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
 
             // コンテナ化サポート
-            userInfoUri = Helper.GetContainerizatedAuthZServerUri(userInfoUri);
+            userInfoUri = SelfTestWebApi.ToContainerUri(userInfoUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
@@ -191,11 +201,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="code">code</param>
         /// <param name="code_verifier">code_verifier</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
+        public static async Task<string> GetAccessTokenByCodeAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
@@ -213,11 +223,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="token">token</param>
         /// <param name="token_type_hint">token_type_hint</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> RevokeTokenAsync(
+        public static async Task<string> RevokeTokenAsync(
             Uri revokeTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
         {
             // コンテナ化サポート
-            revokeTokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(revokeTokenEndpointUri);
+            revokeTokenEndpointUri = SelfTestWebApi.ToContainerUri(revokeTokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.RevokeTokenAsync(
@@ -231,11 +241,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="token">token</param>
         /// <param name="token_type_hint">token_type_hint</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> IntrospectTokenAsync(
+        public static async Task<string> IntrospectTokenAsync(
             Uri introspectTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
         {
             // コンテナ化サポート
-            introspectTokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(introspectTokenEndpointUri);
+            introspectTokenEndpointUri = SelfTestWebApi.ToContainerUri(introspectTokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.IntrospectTokenAsync(
@@ -252,10 +262,10 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
         /// <param name="assertion">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> JwtBearerTokenFlowAsync(Uri tokenEndpointUri, string assertion)
+        public static async Task<string> JwtBearerTokenFlowAsync(Uri tokenEndpointUri, string assertion)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(tokenEndpointUri, assertion);
@@ -270,10 +280,10 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="deviceAuthZUri">Uri</param>
         /// <param name="clientId">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> DeviceAuthZRequestAsync(Uri deviceAuthZUri, string clientId)
+        public static async Task<string> DeviceAuthZRequestAsync(Uri deviceAuthZUri, string clientId)
         {
             // コンテナ化サポート
-            deviceAuthZUri = Helper.GetContainerizatedAuthZServerUri(deviceAuthZUri);
+            deviceAuthZUri = SelfTestWebApi.ToContainerUri(deviceAuthZUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.DeviceAuthZRequestAsync(deviceAuthZUri, clientId);
@@ -286,11 +296,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="client_id">client_id</param>
         /// <param name="device_code">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByDeviceAuthZAsync(
+        public static async Task<string> GetAccessTokenByDeviceAuthZAsync(
             Uri tokenEndpointUri, string client_id, string device_code)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByDeviceAuthZAsync(
@@ -308,11 +318,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="code">code</param>
         /// <param name="assertion">assertion</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
+        public static async Task<string> GetAccessTokenByCodeAsync(
             Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
@@ -325,10 +335,10 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="requestObjectRegUri">Uri</param>
         /// <param name="requestObject">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> RegisterRequestObjectAsync(Uri requestObjectRegUri, string requestObject)
+        public static async Task<string> RegisterRequestObjectAsync(Uri requestObjectRegUri, string requestObject)
         {
             // コンテナ化サポート
-            requestObjectRegUri = Helper.GetContainerizatedAuthZServerUri(requestObjectRegUri);
+            requestObjectRegUri = SelfTestWebApi.ToContainerUri(requestObjectRegUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.RegisterRequestObjectAsync(requestObjectRegUri, requestObject);
@@ -350,11 +360,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// 送るのは `request`（JAR）1 つ。**認可エンドポイントのパラメタを、
         /// フォームで直接預ける形も RFC 9126 は許している**（Open棟梁 の別のオーバーロード）。
         /// </remarks>
-        public async Task<string> PushAuthorizationRequestAsync(
+        public static async Task<string> PushAuthorizationRequestAsync(
             Uri authRequestPushUri, string requestObject, string client_id, string clientAssertion)
         {
             // コンテナ化サポート
-            authRequestPushUri = Helper.GetContainerizatedAuthZServerUri(authRequestPushUri);
+            authRequestPushUri = SelfTestWebApi.ToContainerUri(authRequestPushUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.PushAuthorizationRequestAsync(
@@ -373,12 +383,12 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <remarks>
         /// **request_uri を渡す独自拡張の形**（CIBA Core には無い）。
         /// **クライアント認証もしない**ので、#234 の段階 3 以降は認可サーバに断られる。
-        /// 新しい呼び出しは <see cref="CibaAuthZRequestAsync(Uri, string, string, string)"/> を使う。
+        /// 新しい呼び出しは <see cref="SelfTestWebApi.CibaAuthZRequestAsync(Uri, string, string, string)"/> を使う。
         /// </remarks>
-        public async Task<string> CibaAuthZRequestAsync(Uri cibaAuthZUri, string requestObjectUri)
+        public static async Task<string> CibaAuthZRequestAsync(Uri cibaAuthZUri, string requestObjectUri)
         {
             // コンテナ化サポート
-            cibaAuthZUri = Helper.GetContainerizatedAuthZServerUri(cibaAuthZUri);
+            cibaAuthZUri = SelfTestWebApi.ToContainerUri(cibaAuthZUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.CibaAuthZRequestAsync(cibaAuthZUri, requestObjectUri);
@@ -400,11 +410,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// 資格情報を渡す引数が無いため（OpenTouryoProject/OpenTouryo#592）。
         /// ここは `/chage_to_user` などと同じく、自前で組み立てる。
         /// </remarks>
-        public async Task<string> CibaAuthZRequestAsync(
+        public static async Task<string> CibaAuthZRequestAsync(
             Uri cibaAuthZUri, string requestObject, string client_id, string client_secret)
         {
             // コンテナ化サポート
-            cibaAuthZUri = Helper.GetContainerizatedAuthZServerUri(cibaAuthZUri);
+            cibaAuthZUri = SelfTestWebApi.ToContainerUri(cibaAuthZUri);
 
             // **要求と応答を Dispose する**（#294）。
             using (HttpRequestMessage httpRequestMessage = new HttpRequestMessage
@@ -430,7 +440,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 httpRequestMessage.Content.Headers.ContentType =
                     new MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
-                using (HttpResponseMessage httpResponseMessage = await _oAuth2HttpClient.SendAsync(httpRequestMessage))
+                using (HttpResponseMessage httpResponseMessage = await Helper.GetInstance().HttpClient.SendAsync(httpRequestMessage))
                 {
                     return await httpResponseMessage.Content.ReadAsStringAsync();
                 }
@@ -445,11 +455,11 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <param name="client_secret">client_secret</param>
         /// <param name="auth_req_id">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCibaAsync(
+        public static async Task<string> GetAccessTokenByCibaAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string auth_req_id)
         {
             // コンテナ化サポート
-            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCibaAsync(

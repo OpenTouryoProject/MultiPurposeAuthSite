@@ -34,6 +34,7 @@
 //*  2026/10/31  玄人 幸道         Device AuthZ の間隔を、設定値より短くしない（画面から来る値なので。#294）
 //*  2026/10/31  玄人 幸道         ポーリングで、待ち時間の上限を越えて待たない（#294）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
+//*  2026/11/01  玄人 幸道         WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -64,15 +65,15 @@ namespace MultiPurposeAuthSite.Util.Test
     /// 自己テスト（この実装が兼ねているクライアント）の**組み立て**を受け持つ（#246）。
     /// </summary>
     /// <remarks>
-    /// **なぜ Helper と分けるか。**
-    /// `Helper` は「**WebAPI 呼び出し ＋ コンテナ化の URL 変換**」を受け持つ
+    /// **なぜ SelfTestWebApi と分けるか。**
+    /// `SelfTestWebApi` は「**WebAPI 呼び出し ＋ コンテナ化の URL 変換**」を受け持つ
     /// （全メソッドが `GetContainerizatedAuthZServerUri` を通す）。
     /// こちらは「**鍵を読み、JWT（Request Object / client_assertion）を作る**」側で、関心が別。
     ///
     /// **両アプリ（net48 / net10.0）の `HomeController` に、ほぼ同文で二重に在ったもの**を寄せた。
     /// 自己テストのパターンを増やすたびに二重が増える状態だったため（#246）。
     ///
-    /// **HTTP はここでは行わず、`Helper` に委ねる。**
+    /// **HTTP はここでは行わず、`SelfTestWebApi` に委ねる**（#321 で `Helper` から移した）。
     /// 預ける系（`/ros` / `/par`）だけは「組み立て → 預ける → 応答を解く」までを 1 つにしている
     /// （呼び出し側が毎回同じ 3 手順を書いていたため）。
     ///
@@ -357,7 +358,7 @@ namespace MultiPurposeAuthSite.Util.Test
 
             #region 認証要求を送る（CIBA Core 7.1.1 : request で直接。7.1 : クライアント認証つき）
 
-            ret.AuthZResponse = await Helper.GetInstance().CibaAuthZRequestAsync(
+            ret.AuthZResponse = await SelfTestWebApi.CibaAuthZRequestAsync(
                 new Uri(ret.Endpoint), ret.RequestObject,
                 clientId, Helper.GetInstance().GetClientSecret(clientId));
 
@@ -405,7 +406,7 @@ namespace MultiPurposeAuthSite.Util.Test
             string authReqId = ret.AuthReqId;
 
             PollOutcome poll = await SelfTestClient.PollForTokenAsync(
-                () => Helper.GetInstance().GetAccessTokenByCibaAsync(
+                () => SelfTestWebApi.GetAccessTokenByCibaAsync(
                     tokenEndpointUri, clientId, clientSecret, authReqId),
                 interval, ret.WaitLimitSeconds);
 
@@ -510,7 +511,7 @@ namespace MultiPurposeAuthSite.Util.Test
             Uri tokenEndpointUri = new Uri(ret.TokenEndpoint);
 
             PollOutcome poll = await SelfTestClient.PollForTokenAsync(
-                () => Helper.GetInstance().GetAccessTokenByDeviceAuthZAsync(
+                () => SelfTestWebApi.GetAccessTokenByDeviceAuthZAsync(
                     tokenEndpointUri, clientId, deviceCode),
                 seconds, ret.WaitLimitSeconds);
 
@@ -590,7 +591,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 if (token != null && string.IsNullOrEmpty(error))
                 {
                     // 正常系（トークンを取れた）
-                    ret.UserInfoResponse = await Helper.GetInstance().GetUserInfoAsync(
+                    ret.UserInfoResponse = await SelfTestWebApi.GetUserInfoAsync(
                         (string)token[OAuth2AndOIDCConst.AccessToken]);
 
                     ret.Verdict = Const.VerdictNormalEnd;
@@ -766,7 +767,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 return ret;
             }
 
-            ret.Response = await Helper.GetInstance().RegisterRequestObjectAsync(
+            ret.Response = await SelfTestWebApi.RegisterRequestObjectAsync(
                 new Uri(endpoint), ret.RequestObject);
 
             SelfTestClient.ReadResponse(ret);
@@ -803,7 +804,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 return ret;
             }
 
-            ret.Response = await Helper.GetInstance().PushAuthorizationRequestAsync(
+            ret.Response = await SelfTestWebApi.PushAuthorizationRequestAsync(
                 new Uri(endpoint), ret.RequestObject, clientId,
                 SelfTestClient.CreateClientAssertion(clientId, new TimeSpan(0, 0, 30), Const.OidcScopes));
 

@@ -38,6 +38,7 @@
 //*  2026/10/21  玄人 幸道         jwks_uri を登録の前に取りに行く（#309 の段階 1）
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/25  玄人 幸道         登録の失敗の応答を OPERATION に記録する（障害対応のため。#294）
+//*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -46,6 +47,7 @@ using MultiPurposeAuthSite.Network;
 
 using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Util.Test;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 
@@ -466,13 +468,12 @@ namespace MultiPurposeAuthSite.Controllers
                 + Config.OAuth2ImplicitGrantClient_Account;
 
             // Tokenエンドポイントにアクセス
-            string response = await Helper.GetInstance()
-            .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
+            string response = await SelfTestWebApi.GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
             dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(response);
 
             // UserInfoエンドポイントにアクセス
             dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                await Helper.GetInstance().GetUserInfoAsync((string)dic[OAuth2AndOIDCConst.AccessToken]));
+                await SelfTestWebApi.GetUserInfoAsync((string)dic[OAuth2AndOIDCConst.AccessToken]));
 
             return dic;
         }

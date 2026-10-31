@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         ID 連携の後は ReturnUrl へ戻す、同じ利用者を同時に作らない、サインインの結果を見る、クレームの入れ替え（#294）
+//*  2026/11/01  玄人 幸道         コメントの参照先を SelfTestWebApi に直した（#321）
 //**********************************************************************************
 
 /*
@@ -254,8 +255,8 @@ namespace MultiPurposeAuthSite.Controllers
                     string codeVerifier = HttpContext.Session.GetString(Const.IdFederationSigninVerifier);
                     HttpContext.Session.SetString(Const.IdFederationSigninVerifier, ""); // 誤動作防止
 
-                    // Tokenエンドポイントにアクセス。Helper の WebAPI 呼び出しは使わない（#140）。
-                    //   Helper は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
+                    // Tokenエンドポイントにアクセス。自己テストの WebAPI 呼び出し（SelfTestWebApi）は使わない（#140）。
+                    //   SelfTestWebApi は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
                     //   宛先のホストを自分の認可サーバへ書き換える。相手は上流の IdP なので、その配備では宛先が変わって壊れる。
                     model.Response = await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                             new Uri(upstream.TokenEndpoint),
@@ -395,8 +396,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #region Userinfo処理
 
-                    // Userinfoエンドポイントにアクセス。Helper の WebAPI 呼び出しは使わない（#246）。
-                    //   Helper は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
+                    // Userinfoエンドポイントにアクセス。自己テストの WebAPI 呼び出し（SelfTestWebApi）は使わない（#246）。
+                    //   SelfTestWebApi は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
                     //   宛先のホストを自分の認可サーバへ書き換える。相手は上流の IdP なので、その配備では宛先が変わって壊れる。
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
                         new Uri(upstream.UserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);

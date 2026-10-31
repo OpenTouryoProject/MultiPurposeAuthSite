@@ -59,6 +59,7 @@
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
 //*  2026/10/31  玄人 幸道         partial に分割した（WebApi / ClientCredential / ClientUri / ClientMetadata / Scope。#294）
 //*  2026/10/31  玄人 幸道         コンテナ化の宛先の書き換えで、%xx を戻さず、先頭の scheme://authority だけを替える（#294）
+//*  2026/11/01  玄人 幸道         WebAPI の呼び出し（Helper.WebApi.cs）を Util/Test/SelfTestWebApi へ移し、HttpClient を渡す口を足した（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -114,6 +115,23 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// Singletonで使うので、ここではstaticではない。
         /// </remarks>
         private HttpClient _oAuth2HttpClient = null;
+
+        #endregion
+
+        #region property（HttpClient）
+
+        /// <summary>認可サーバへ送るための HttpClient（クライアント証明書を持つ）</summary>
+        /// <remarks>
+        /// **`Util/Test/SelfTestWebApi` が、自前で組み立てた要求（CIBA の認証要求）を送るのに使う**（#321）。
+        /// **`OAuth2AndOIDCClient.HttpClient` と同じインスタンス**である。
+        /// </remarks>
+        internal HttpClient HttpClient
+        {
+            get
+            {
+                return this._oAuth2HttpClient;
+            }
+        }
 
         #endregion
 

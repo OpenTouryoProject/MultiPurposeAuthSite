@@ -19,6 +19,7 @@
 //*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を Saml2.cs から移した（#294）
 //*  2026/10/29  玄人 幸道         id_token の nonce の照合、Cookie を消す条件、JARM の検証の失敗を直した（#294）
 //*  2026/10/29  玄人 幸道         自己テストを始めていない要求・壊れた JARM で、500 にしない（#294）
+//*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //**********************************************************************************
 
 /*
@@ -328,7 +329,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // **アサーションの組み立ては SelfTestClient**（#246）。
                             model.AuthMethod = Resources.AccountController.AuthMethodFapi1;
 
-                            model.Response = await Helper.GetInstance().GetAccessTokenByCodeAsync(
+                            model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
                                 SelfTestClient.CreateClientAssertion(
                                     clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.SelfTestScopes));
@@ -347,7 +348,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // **アサーションの組み立ては SelfTestClient**（#246）。
                             model.AuthMethod = Resources.AccountController.AuthMethodFapi2;
 
-                            model.Response = await Helper.GetInstance().GetAccessTokenByCodeAsync(
+                            model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
                                 SelfTestClient.CreateClientAssertion(
                                     clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.OidcScopes));
@@ -367,8 +368,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 //   （既定が client_secret_basic。#246 の項目 3）。
                                 model.AuthMethod = Resources.AccountController.AuthMethodClientSecretBasic;
 
-                                model.Response = await Helper.GetInstance()
-                                    .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                                model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(tokenEndpointUri,
                                     client_id, client_secret, redirect_uri, code);
                             }
                             else
@@ -378,8 +378,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 //   PKCE 自体はクライアント認証ではないので、code_verifier は別に送る。
                                 model.AuthMethod = Resources.AccountController.AuthMethodClientSecretPostPkce;
 
-                                model.Response = await Helper.GetInstance()
-                                   .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                                model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(tokenEndpointUri,
                                    client_id, client_secret, redirect_uri,
                                    code, code_verifier_InSessionOrCookie);
                             }
@@ -495,7 +494,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(Request.Form["submit.GetUserClaims"]))
                     {
                         // UserInfoエンドポイントにアクセス
-                        model.Response = await Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
+                        model.Response = await SelfTestWebApi.GetUserInfoAsync(model.AccessToken);
                     }
                     else if (!string.IsNullOrEmpty(Request.Form["submit.Refresh"]))
                     {
@@ -510,8 +509,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string client_id = model.ClientId;
                         string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Helper.GetInstance().
-                            UpdateAccessTokenByRefreshTokenAsync(
+                        model.Response = await SelfTestWebApi.UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
 
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
@@ -560,7 +558,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string client_id = model.ClientId;
                         string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Helper.GetInstance().RevokeTokenAsync(
+                        model.Response = await SelfTestWebApi.RevokeTokenAsync(
                             revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -595,7 +593,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string client_id = model.ClientId;
                         string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Helper.GetInstance().IntrospectTokenAsync(
+                        model.Response = await SelfTestWebApi.IntrospectTokenAsync(
                             introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion

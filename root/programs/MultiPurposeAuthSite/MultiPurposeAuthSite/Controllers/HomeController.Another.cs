@@ -20,6 +20,7 @@
 //*  2026/10/31  玄人 幸道         Device AuthZ の開始も、応答が壊れていても 500 にしない（#294）
 //*  2026/10/31  玄人 幸道         Device AuthZ の開始で、/device_authz が断った理由を画面に出す（#294）
 //*  2026/10/31  玄人 幸道         client_id は ResolveClientId で引く（利用者名とクライアント名を分けた。#294）
+//*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -51,7 +52,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             // リクエスト
             string deviceAuthZAuthorizeEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.DeviceAuthZAuthorizeEndpoint;
-            string responseString = await Helper.GetInstance().DeviceAuthZRequestAsync(new Uri(deviceAuthZAuthorizeEndpoint), this.ClientId);
+            string responseString = await SelfTestWebApi.DeviceAuthZRequestAsync(new Uri(deviceAuthZAuthorizeEndpoint), this.ClientId);
 
             // レスポンス
             //   **壊れていても 500 にしない**（#294。読めない項目は空で出す）。
@@ -215,8 +216,7 @@ namespace MultiPurposeAuthSite.Controllers
             string client_id = this.ResolveClientId();
             string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-            string response = await Helper.GetInstance()
-                .ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
+            string response = await SelfTestWebApi.ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
                     client_id, client_secret, "tanaka" + Config.TestUserSuffix, Config.TestUserPWD, Const.SelfTestScopes);
 
@@ -238,8 +238,7 @@ namespace MultiPurposeAuthSite.Controllers
             string client_id = this.ResolveClientId();
             string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-            string response = await Helper.GetInstance()
-                .ClientCredentialsGrantAsync(new Uri(
+            string response = await SelfTestWebApi.ClientCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
                     client_id, client_secret, Const.SelfTestScopes);
 
@@ -261,7 +260,7 @@ namespace MultiPurposeAuthSite.Controllers
             string iss = this.ResolveClientId();
 
             // **アサーションの組み立ては SelfTestClient**（#246。aud はトークン エンドポイント）。
-            string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
+            string response = await SelfTestWebApi.JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
                 SelfTestClient.CreateClientAssertion(
                     iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.SelfTestScopes));
