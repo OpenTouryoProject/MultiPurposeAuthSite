@@ -3451,6 +3451,29 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > | **`/jwkcerts` の `If-None-Match`** | 弱い ETag（`W/"…"`。net10.0）と `*` を一致とみなさなかった | **一致とみなす**（RFC 9110 §13.1.2） |
 > | **`/userinfo`** | **aud の無いトークンで NullReferenceException**。`claims` の何もしないループ | **利用者を引かずに `sub` だけ返す**。ループは消した |
 
+### C-56. 自己テストの口の 1 つを、本番で閉じられなかった。自己テストの ROPC が管理者のトークンを配っていた **[NetFx][Core]** — **✅ 修正済み（#294）**
+
+**自己テスト（`HomeController`）は `IsLockedDownTestEndpoints` で閉じる設計**だが、**閉じ方と中身に 2 つの抜けがあった。**
+
+| 場所 | 以前 | いま |
+|---|---|---|
+| **`/Home/DeviceAuthZResponse`**（ポーリング） | **`IsLockedDownTestEndpoints` を見ていなかった**（`Saml2OAuth2Starters` は見ていた）。**本番で閉じても、この口だけは匿名で使え**、**サーバに自分の `/token` を問い合わせさせられた**。**間隔は画面（hidden）の `interval` に従った**ので、**外から短くできた** | **閉じる**。**間隔は設定値（`DeviceAuthZPollingIntervalSeconds`）より短くしない**（`SelfTestClient.RunDeviceAuthZPollingAsync`。`RT-294.82`） |
+| **自己テストの ROPC** | **管理者（`AdministratorUID` / `AdministratorPWD`）でトークンを取り、画面に出した。** **この POST は匿名で受ける**ので、**自己テストの口が開いている間は、ログインしていない人にも管理者のトークンを見せていた** | **テスト利用者（`tanaka`）で取る**。**`TestUserPWD` が無ければ取らずに理由を出す**（`RT-294.83`） |
+
+**どちらも `IsLockedDownTestEndpoints` を `true` にした配備には当たらない**（ROPC の件）か、**当たっても問い合わせ先は自分の `/token` だけ**（ポーリングの件）である。
+**自己テストを開けたまま公開する配備**（雛形の既定は `false`。テストのスタブも既定で開けている）が対象になる。
+
+> **同じレビューで直した不具合**（セキュリティ以外）:
+>
+> | 場所 | 以前 | いま |
+> |---|---|---|
+> | **自己テストの POST 2 つ** | 画面は AntiForgery トークンを出していたが、**確かめていなかった** | **`[ValidateAntiForgeryToken]`**（`RT-294.81`） |
+> | **FAPI2（`/ros`）の開始** | **預けられないと `Redirect(null)` の例外で 500** | **理由を出して再表示** |
+> | **「ログイン・ユーザの Client」** | **消された利用者・登録の無い利用者で 500**（NRE / `Session.SetString(null)`） | **理由を出して再表示** |
+> | **SPA 向けの PKCE** | **`response_mode` を後から足した**ので、画面で選ぶと 2 つ載った（RFC 6749 §3.1） | **`fragment` で置き換える**（`RT-294.84`） |
+> | **開始の URL** | **画面から来る値（`prompt`・`max_age`・`response_mode`）と `scope` などを符号化せずに連結**（`&` で別のパラメタを差し込めた） | **URL 符号化する**（`RT-294.85`） |
+> | **ROPC・Client Credentials・JWT Bearer の結果** | **応答を JSON と決めて読み**、そうでなければ 500 | **読めなければ access_token を空にして、応答をそのまま出す** |
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能

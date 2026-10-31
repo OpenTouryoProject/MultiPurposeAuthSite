@@ -38,6 +38,7 @@
 //*  2026/10/07  玄人 幸道         SAML2のAuthnRequestのIDを保存するようにした（#276）
 //*  2026/10/08  玄人 幸道         自己テストで NameIDFormat / ResponseMode を選べるようにした（#277 の段階 4）
 //*  2026/10/31  玄人 幸道         partial に分割した（Params / Starters / Saml2 / OAuth2 / Fapi / Another。#294）
+//*  2026/10/31  玄人 幸道         コメントの誤りを直した（受けていない引数の説明など。#294）
 //**********************************************************************************
 
 using Microsoft.AspNetCore.Http;
@@ -57,10 +58,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>constructor</summary>
         /// <param name="userManager">UserManager</param>
-        /// <param name="roleManager">RoleManager</param>
-        /// <param name="signInManager">SignInManager</param>
-        /// <param name="emailSender">IEmailSender</param>
-        /// <param name="smsSender">ISmsSender</param>
         public HomeController(
             UserManager<ApplicationUser> userManager)
         {
@@ -82,7 +79,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>UserManager</summary>
         private readonly UserManager<ApplicationUser> _userManager = null;
 
-        //  <summary>CookieOptions</summary>
+        /// <summary>CookieOptions</summary>
         private readonly CookieOptions _cookieOptions = null;
 
         #endregion

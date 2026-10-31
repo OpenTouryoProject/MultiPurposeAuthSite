@@ -6864,7 +6864,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=c6a7b888-2149-4eae-b0ce-994acbe4db7d&code=bogus
+1. GET /Account/EmailConfirmation?userId=ea17f710-c165-41dd-a3ca-6b20ff2a3e98&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6873,8 +6873,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=c6a7b888-2149-4eae-b0ce-994acbe4db7d&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=c6a7b888-2149-4eae-b0ce-994acbe4db7d&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=ea17f710-c165-41dd-a3ca-6b20ff2a3e98&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=ea17f710-c165-41dd-a3ca-6b20ff2a3e98&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7835,6 +7835,98 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - POST : HTTP 200
 - POST : sub と email が返る
 - **403 / insufficient_scope**
+
+## RT-294.81 /Home/Saml2OAuth2Starters・/Home/DeviceAuthZResponse : AntiForgery トークンの無い POST では動かない
+
+| | |
+|---|---|
+| 観点 | **画面はトークンを出していたが、アクションが確かめていなかった**（`[ValidateAntiForgeryToken]` が無かった）。**#294 で `/device_verify` に付けたのと同じ種類の抜け**である。 |
+| 根拠 | OWASP CSRF Prevention / #294 |
+| テスト | `RT29481_自己テストのPOSTはAntiForgeryトークンが無ければ動かない` |
+
+**手順**
+
+1. トークンを付けずに、自己テストの開始（認可コード フロー）を送る
+1. トークンを付けずに、Device AuthZ のポーリングを送る
+
+**検証（合否を判定する）**
+
+- **認可エンドポイントへ送られない**
+- **ポーリングしない**（結果の画面が出ない）
+
+## RT-294.82 /Home/DeviceAuthZResponse : interval を 1 にして送っても、設定値より短い間隔では問い合わせない
+
+| | |
+|---|---|
+| 観点 | **interval は画面（hidden）から戻ってくる値**なので、**以前は 1 秒にすれば、60 秒で 60 回、サーバに自分の /token を問い合わせさせられた**（C-56）。 |
+| 根拠 | RFC 8628 §3.5 / #294 |
+| テスト | `RT29482_DeviceAuthZのポーリングの間隔を画面から短くできない` |
+
+**手順**
+
+1. 自己テストの Device AuthZ を始めて、画面（AntiForgery トークン）を得る
+1. interval=1・存在しない device_code で、ポーリングを送る（1 回目で終わる）
+
+**検証（合否を判定する）**
+
+- **間隔は 1 秒にならない**（設定値で頭を押さえる）
+
+**観測（判定しない）**
+
+- 問い合わせた回数
+  - 存在しない device_code なので、1 回目で終わる。
+
+## RT-294.83 /Home/Saml2OAuth2Starters の ROPC : 取ったトークンの sub はテスト利用者
+
+| | |
+|---|---|
+| 観点 | **以前は管理者（AdministratorUID / AdministratorPWD）でトークンを取り、画面に出していた。****この POST は匿名で受ける**ので、自己テストの口が開いている間は、**ログインしていない人にも管理者のトークンを見せていた**（C-56）。 |
+| 根拠 | RFC 6749 §4.3 / #294 |
+| テスト | `RT29483_自己テストのROPCはテスト利用者でトークンを取る` |
+
+**手順**
+
+1. ログインせずに、自己テストの ROPC を押す
+1. テスト利用者（2 人目）で、同じクライアントから ROPC を直接送り、sub を比べる
+
+**検証（合否を判定する）**
+
+- **sub はテスト利用者**（tanaka_core）
+
+## RT-294.84 自己テストの PKCE（SPA 向け）: 画面で response_mode を選んでいても、response_mode は fragment の 1 つだけ
+
+| | |
+|---|---|
+| 観点 | **以前は `&response_mode=fragment` を後から足していた**ので、**画面で選んでいると response_mode が 2 つ載った**（RFC 6749 §3.1 : 同じパラメタを 2 回含めてはならない）。 |
+| 根拠 | RFC 6749 §3.1 / #294 |
+| テスト | `RT29484_SPA向けのPKCEでresponse_modeが2つ載らない` |
+
+**手順**
+
+1. response_mode=query を選んで、PKCE（S256・SPA 向け）を始める
+
+**検証（合否を判定する）**
+
+- **response_mode は 1 つ**
+- その値は fragment
+
+## RT-294.85 自己テストの開始 : prompt に `&` を含めても、別のパラメタにならない（URL 符号化される）
+
+| | |
+|---|---|
+| 観点 | **以前は画面から来る値（prompt・max_age・response_mode）を符号化せずに連結していた**ので、**`&` を入れると別のパラメタを差し込めた**（自分への要求なので、影響は自己テストの中だけ）。scope・response_type の空白も、そのまま載っていた。 |
+| 根拠 | RFC 6749 Appendix B / RFC 3986 §2.1 / #294 |
+| テスト | `RT29485_画面から来る値はURL符号化される` |
+
+**手順**
+
+1. prompt に `none&rt29485=injected` を入れて、認可コード フローを始める
+
+**検証（合否を判定する）**
+
+- **別のパラメタにならない**
+- prompt の値として符号化されている
+- scope の空白も符号化されている
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

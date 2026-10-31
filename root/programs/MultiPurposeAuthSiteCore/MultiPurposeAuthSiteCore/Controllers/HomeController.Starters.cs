@@ -16,10 +16,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         AntiForgery トークンを確かめる。クライアントが無い・Request Object を預けられないときは再表示（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System.Threading.Tasks;
 
@@ -62,8 +64,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /Home/Saml2OAuth2Starters
         /// </summary>
         /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **AntiForgery トークンを確かめる**（#294。画面は出していたが、確かめていなかった）。
+        /// </remarks>
         [HttpPost]
         [AllowAnonymous]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> Saml2OAuth2Starters(HomeSaml2OAuth2StartersViewModel model)
         {
             if (Config.IsLockedDownTestEndpoints)
@@ -118,9 +124,19 @@ namespace MultiPurposeAuthSite.Controllers
                         if (User.Identity.IsAuthenticated)
                         {
                             // ユーザの取得
+                            //   **消された利用者の Cookie が残っていると null**（#294。以前は NRE で 500）。
                             ApplicationUser user = await UserManager.GetUserAsync(User);
-                            this.ClientName = user.UserName;
+                            this.ClientName = (user == null) ? "" : user.UserName;
                         }
+                    }
+
+                    // **クライアントの登録が無ければ、始めない**（#294）。
+                    //   以前は client_id が null のまま進み、Session への保存で 500 になっていた。
+                    if (!string.IsNullOrEmpty(this.ClientName)
+                        && string.IsNullOrEmpty(Helper.GetInstance().GetClientIdByName(this.ClientName)))
+                    {
+                        ModelState.AddModelError("", "No client is registered for the selected client type.");
+                        this.ClientName = "";
                     }
                     #endregion
 
@@ -266,7 +282,13 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2"]))
                         {
-                            return await this.AuthorizationCodeFAPI2Async();
+                            // **預けられなければ null**（理由は ModelState。下で再表示する。#294）
+                            ActionResult fapi2 = await this.AuthorizationCodeFAPI2Async();
+
+                            if (fapi2 != null)
+                            {
+                                return fapi2;
+                            }
                         }
                         else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2_PAR"]))
                         {

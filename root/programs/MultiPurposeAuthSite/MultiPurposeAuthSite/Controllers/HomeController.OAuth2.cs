@@ -16,16 +16,19 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         値を URL 符号化する。SPA の PKCE で response_mode を二重にしない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.TokenProviders;
 
+using System;
 using System.Web.Mvc;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security.Pwd;
+using Touryo.Infrastructure.Public.FastReflection;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -35,6 +38,19 @@ namespace MultiPurposeAuthSite.Controllers
         #region Assemble
 
         #region OAuth2/OIDC
+        /// <summary>クエリの値を符号化する（#294）</summary>
+        /// <param name="value">値（null は空）</param>
+        /// <returns>符号化した値</returns>
+        /// <remarks>
+        /// **以前は符号化せずに連結していた。** 画面から来る値（prompt・max_age・response_mode）に
+        /// `&` を入れると、別のパラメタを差し込めた（自分への要求なので、影響は自己テストの中だけ）。
+        /// scope・response_type の空白も、そのまま載っていた（RFC 6749 Appendix B / RFC 3986）。
+        /// </remarks>
+        private static string Enc(string value)
+        {
+            return Uri.EscapeDataString(value ?? "");
+        }
+
         /// <summary>OAuth2スターターに追加のパラメタを組み込む</summary>
         /// <param name="redirect">string</param>
         /// <param name="response_type">string</param>
@@ -46,13 +62,13 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
                 this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
-                redirect += "&" + OAuth2AndOIDCConst.redirect_uri + "=" + this.RedirectUri;
+                redirect += "&" + OAuth2AndOIDCConst.redirect_uri + "=" + Enc(this.RedirectUri);
             }
 
             // ResponseModeの指定
             if (!string.IsNullOrEmpty(this.ResponseMode))
             {
-                redirect += "&" + OAuth2AndOIDCConst.response_mode + "=" + this.ResponseMode;
+                redirect += "&" + OAuth2AndOIDCConst.response_mode + "=" + Enc(this.ResponseMode);
             }
 
             // **prompt と max_age の指定**（#246 の項目 3）。
@@ -60,12 +76,12 @@ namespace MultiPurposeAuthSite.Controllers
             //   **ここは認可エンドポイントへ行く全てのスターターが通る**ので、1 か所で足りる。
             if (!string.IsNullOrEmpty(this.Prompt))
             {
-                redirect += "&" + OAuth2AndOIDCConst.prompt + "=" + this.Prompt;
+                redirect += "&" + OAuth2AndOIDCConst.prompt + "=" + Enc(this.Prompt);
             }
 
             if (!string.IsNullOrEmpty(this.MaxAge))
             {
-                redirect += "&" + OAuth2AndOIDCConst.max_age + "=" + this.MaxAge;
+                redirect += "&" + OAuth2AndOIDCConst.max_age + "=" + Enc(this.MaxAge);
             }
 
             return redirect;
@@ -81,7 +97,7 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.SelfTestScopes, this.State);
+                    Enc(this.ClientId), Enc(response_type), Enc(Const.SelfTestScopes), Enc(this.State));
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
@@ -98,8 +114,8 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.OidcScopes, this.State)
-                    + "&nonce=" + this.Nonce
+                    Enc(this.ClientId), Enc(response_type), Enc(Const.OidcScopes), Enc(this.State))
+                    + "&nonce=" + Enc(this.Nonce)
                     // **画面で max_age を選んでいれば、そちらを使う**（#246 の項目 3）。
                     //   選んでいなければ、従来どおり 600 秒を付ける。
                     + (string.IsNullOrEmpty(this.MaxAge) ? "&max_age=600" : "");
@@ -174,14 +190,16 @@ namespace MultiPurposeAuthSite.Controllers
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = this.CodeVerifier;
 
+            // Authorization Code Grant Flow with PKCE
+            //   **SPA 向けは fragment で受ける。** 画面で選んだ response_mode より優先する
+            //   （以前は後から足していたので、選んでいると response_mode が 2 つ載った。RFC 6749 3.1。#294）。
+            if (toSpa) this.ResponseMode = OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit();
+
             // Assemble
             string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                + "&code_challenge=" + this.CodeChallenge
+                + "&code_challenge=" + Enc(this.CodeChallenge)
                 + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain;
-
-            // Authorization Code Grant Flow with PKCE
-            if (toSpa) redirect += "&response_mode=fragment";
 
             this.SaveOAuth2Params();
 
@@ -199,14 +217,15 @@ namespace MultiPurposeAuthSite.Controllers
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
 
+            // Authorization Code Grant Flow with PKCE
+            //   **SPA 向けは fragment で受ける**（PKCE_Plain と同じ。#294）。
+            if (toSpa) this.ResponseMode = OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit();
+
             // Assemble
             string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                + "&code_challenge=" + this.CodeChallenge
+                + "&code_challenge=" + Enc(this.CodeChallenge)
                 + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256;
-
-            // Authorization Code Grant Flow with PKCE
-            if (toSpa) redirect += "&response_mode=fragment";
 
             this.SaveOAuth2Params();
 

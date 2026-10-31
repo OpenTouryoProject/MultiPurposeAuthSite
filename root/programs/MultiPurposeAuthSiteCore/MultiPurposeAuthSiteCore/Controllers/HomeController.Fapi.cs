@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         FAPI2 で Request Object を預けられなければ再表示（500 にしない）。値を URL 符号化（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -48,8 +49,8 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.SelfTestScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State);
+                    Enc(this.ClientId), Enc(response_type), Enc(Const.SelfTestScopes),
+                    Enc(OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State));
             // テストコードで、clientを識別するために、Stateに細工する。
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
@@ -67,9 +68,9 @@ namespace MultiPurposeAuthSite.Controllers
             temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.OidcScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State)
-                    + "&nonce=" + this.Nonce;
+                    Enc(this.ClientId), Enc(response_type), Enc(Const.OidcScopes),
+                    Enc(OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State))
+                    + "&nonce=" + Enc(this.Nonce);
             // テストコードで、clientを識別するために、Stateに細工する。
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
@@ -110,7 +111,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // request_uriの認可リクエストを投げる。
-            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", ret.RequestUri);
+            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", Enc(ret.RequestUri));
         }
 
         /// <summary>FAPI2CC ＋ PAR のスターターを組み立てて返す（#246）</summary>
@@ -163,7 +164,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // request_uri の認可リクエスト
-            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", ret.RequestUri);
+            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", Enc(ret.RequestUri));
         }
 
         #endregion
@@ -265,7 +266,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   **このボタンは必ず失敗していた**（FAPI 1.0 Advanced も S256 を求める）。
             string redirect = this.AssembleFAPI1_OIDCStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                + "&code_challenge=" + this.CodeChallenge
+                + "&code_challenge=" + Enc(this.CodeChallenge)
                 + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256;
 
             this.SaveOAuth2Params();
@@ -278,7 +279,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region FAPI2
 
         /// <summary>Test Authorization Code Flow (FAPI2)</summary>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResult（Request Object を預けられなければ null。理由は ModelState）</returns>
         private async Task<ActionResult> AuthorizationCodeFAPI2Async()
         {
             this.InitOAuth2Params();
@@ -286,6 +287,13 @@ namespace MultiPurposeAuthSite.Controllers
             // Assemble
             string redirect = await this.AssembleFAPI2CCStarterAsync(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+
+            if (string.IsNullOrEmpty(redirect))
+            {
+                // **預けられなかった**（#294。以前は Redirect(null) の例外で 500）。
+                ModelState.AddModelError("", "The request object could not be registered (/ros).");
+                return null;
+            }
 
             this.SaveOAuth2Params();
 

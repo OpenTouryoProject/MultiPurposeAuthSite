@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         コメントの誤りを直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -41,7 +42,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Saml2
 
-        /// <summary>認可エンドポイント</summary>
+        /// <summary>SAML2 の要求の宛先</summary>
         private string Saml2RequestEndpoint = "";
 
         /// <summary>NameIDFormat（SAML2。画面で選ぶ。#277 の段階 4）</summary>
@@ -63,7 +64,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>ClientId</summary>
         private string ClientId = "";
 
-        /// <summary>state (nonce)</summary>
+        /// <summary>state（SAML2 では RelayState）</summary>
         private string State = "";
 
         /// <summary>nonce</summary>
@@ -75,7 +76,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>code_verifier</summary>
         private string CodeVerifier = "";
 
-        /// <summary>code_verifier</summary>
+        /// <summary>code_challenge</summary>
         private string CodeChallenge = "";
 
         /// <summary>prompt（画面で選ぶ。#246 の項目 3）</summary>

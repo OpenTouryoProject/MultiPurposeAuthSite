@@ -31,6 +31,7 @@
 //*  2026/09/28  玄人 幸道         新規（#246 : 両アプリに二重だった組み立てを寄せた）
 //*  2026/09/28  玄人 幸道         CIBA の通しを寄せ、判定とポーリングを直した（#246 の 3-a / 3-b）
 //*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
+//*  2026/10/31  玄人 幸道         Device AuthZ の間隔を、設定値より短くしない（画面から来る値なので。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -466,6 +467,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// **間隔は `/device_authz` が返した `interval` に従う**（RFC 8628 3.5。#246 の 3-b）。
         /// 以前は `ExponentialBackoff(10, 5)` で、**上限は回数だけ**だった。
+        ///
+        /// **`interval` は画面（hidden）から戻ってくる値**なので、**設定値より短くはしない**（#294）。
+        /// 短くできると、**問い合わせの回数を外から増やせた**（1 秒なら 60 秒で 60 回）。
         /// </remarks>
         public static async Task<DeviceAuthZResult> RunDeviceAuthZPollingAsync(
             string clientId, string deviceCode, string interval, int maxWaitSeconds)
@@ -493,8 +497,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             int seconds = Config.DeviceAuthZPollingIntervalSeconds;
 
             int fromServer = 0;
-            if (int.TryParse(ret.Interval, out fromServer) && 0 < fromServer)
+            if (int.TryParse(ret.Interval, out fromServer) && seconds < fromServer)
             {
+                // **長くするのだけ従う**（短い値は設定値で頭を押さえる。#294）
                 seconds = fromServer;
             }
 

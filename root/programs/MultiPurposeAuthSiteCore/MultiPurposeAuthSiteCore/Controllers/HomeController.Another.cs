@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         DeviceAuthZResponse を IsLockedDownTestEndpoints で閉じ、AntiForgery を確かめる。ROPC はテスト利用者で。応答が JSON でなくても 500 にしない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -88,11 +89,21 @@ namespace MultiPurposeAuthSite.Controllers
         /// **以前は結果を URL（`?ret=OK_…`）で返していた**（#246 の 3-a。CIBA と同じ）。
         /// `OK_` が接頭辞で、その後ろが判定という形だったため、
         /// **`?ret=OK_ABNORMAL_END` が成功なのか失敗なのか読めなかった。**
+        ///
+        /// **`IsLockedDownTestEndpoints` で閉じる**（#294）。**以前は閉じておらず**、
+        /// 本番で自己テストを閉じても、**この口だけは匿名で使えた**（サーバに自分の `/token` を問い合わせさせる）。
+        /// **AntiForgery トークンも確かめる**（画面は出していたが、確かめていなかった）。
         /// </remarks>
         [HttpPost]
         [AllowAnonymous]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> DeviceAuthZResponse(IFormCollection formData)
         {
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return View("Index");
+            }
+
             // **承認を待つ上限（秒）。**
             //   利用者が user_code を入れて許可するまで待つが、待ち続けはしない（#246 の 3-b）。
             //   net48 の ASP.NET は要求を 110 秒（executionTimeout の既定）で打ち切るので、それより短くする。
@@ -123,14 +134,44 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Another Flow
 
+        /// <summary>トークン応答から access_token を読む（#294）</summary>
+        /// <param name="response">トークン応答</param>
+        /// <returns>access_token（読めなければ空）</returns>
+        /// <remarks>
+        /// **JSON でない応答でも 500 にしない**（以前は決め打ちで読み、例外になった）。
+        /// **応答はそのまま画面に出す**ので、何が返ったかはそこで分かる。
+        /// </remarks>
+        private static string ReadAccessToken(string response)
+        {
+            try
+            {
+                JObject json = JsonConvert.DeserializeObject(response ?? "") as JObject;
+                return (json == null) ? "" : ((string)json[OAuth2AndOIDCConst.AccessToken] ?? "");
+            }
+            catch (JsonException)
+            {
+                return "";
+            }
+        }
+
         #region Resource Owner Password Credentials Flow
 
         /// <summary>Test Resource Owner Password Credentials Flow</summary>
         /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **資源の持ち主は、テスト利用者（`tanaka`）**（#294）。
+        /// **以前は管理者（`AdministratorUID` / `AdministratorPWD`）で取っていた**ので、
+        /// 自己テストの口が開いている間は、**ログインしていない人にも管理者のトークンを画面で見せていた。**
+        /// **`TestUserPWD` が無ければ、トークンを取らずに理由を出す**（テスト利用者が作られていないため）。
+        /// </remarks>
         private async Task<ActionResult> ResourceOwnerPasswordCredentialsFlow()
         {
-            // Tokenエンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+            if (string.IsNullOrEmpty(Config.TestUserPWD))
+            {
+                ViewBag.Response = "TestUserPWD is not configured. The self-test ROPC uses the test user.";
+                ViewBag.AccessToken = "";
+                return View("OAuth2ClientAuthenticationFlow");
+            }
 
             // ClientNameから、client_id, client_secretを取得。
             string client_id = Helper.GetInstance().GetClientIdByName(this.ClientName);
@@ -139,10 +180,10 @@ namespace MultiPurposeAuthSite.Controllers
             string response = await Helper.GetInstance()
                 .ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                    client_id, client_secret, Config.AdministratorUID, Config.AdministratorPWD, Const.SelfTestScopes);
+                    client_id, client_secret, "tanaka" + Config.TestUserSuffix, Config.TestUserPWD, Const.SelfTestScopes);
 
             ViewBag.Response = response;
-            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
+            ViewBag.AccessToken = HomeController.ReadAccessToken(response);
 
             return View("OAuth2ClientAuthenticationFlow");
         }
@@ -155,9 +196,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private async Task<ActionResult> ClientCredentialsFlow()
         {
-            // Tokenエンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
             // ClientNameから、client_id, client_secretを取得。
             string client_id = Helper.GetInstance().GetClientIdByName(this.ClientName);
             string client_secret = Helper.GetInstance().GetClientSecret(client_id);
@@ -168,7 +206,7 @@ namespace MultiPurposeAuthSite.Controllers
                     client_id, client_secret, Const.SelfTestScopes);
 
             ViewBag.Response = response;
-            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
+            ViewBag.AccessToken = HomeController.ReadAccessToken(response);
 
             return View("OAuth2ClientAuthenticationFlow");
         }
@@ -191,7 +229,7 @@ namespace MultiPurposeAuthSite.Controllers
                     iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.SelfTestScopes));
 
             ViewBag.Response = response;
-            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
+            ViewBag.AccessToken = HomeController.ReadAccessToken(response);
 
             return View("OAuth2ClientAuthenticationFlow");
         }
