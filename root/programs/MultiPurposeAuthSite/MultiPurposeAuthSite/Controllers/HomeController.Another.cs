@@ -227,7 +227,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Client Credentials Flow
 
-        /// <summary>ClientCredentialsFlow</summary>
+        /// <summary>Test Client Credentials Flow</summary>
         /// <returns>ActionResult</returns>
         private async Task<ActionResult> ClientCredentialsFlow()
         {
@@ -250,7 +250,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region JWT Bearer Token Flow
 
-        /// <summary>JWTBearerTokenFlow</summary>
+        /// <summary>Test JWT Bearer Token Flow</summary>
         /// <returns>ActionResult</returns>
         private async Task<ActionResult> JWTBearerTokenFlow()
         {
@@ -304,7 +304,6 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
-
 
         #endregion
 

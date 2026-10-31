@@ -166,6 +166,7 @@ namespace MultiPurposeAuthSite.Controllers
             // request_uri の認可リクエスト
             return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", Enc(ret.RequestUri));
         }
+
         #endregion
 
         #region FAPI CIBA
