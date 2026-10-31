@@ -47,6 +47,7 @@
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/30  玄人 幸道         預ける refresh_token の payload に、利用者の SecurityStamp のハッシュを書く口を追加（#294）
 //*  2026/10/31  玄人 幸道         partial に分割した（Create / Verify / Binding / SecurityStamp。#294）
+//*  2026/10/31  玄人 幸道         S256 / S512 を readonly に（#294）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -65,9 +66,9 @@ namespace MultiPurposeAuthSite.TokenProviders
     public partial class CmnAccessToken
     {
         /// <summary>S256</summary>
-        static string S256 = "#S256";
+        private static readonly string S256 = "#S256";
         /// <summary>S512</summary>
-        static string S512 = "#S512";
+        private static readonly string S512 = "#S512";
 
         #region SelectJws
 

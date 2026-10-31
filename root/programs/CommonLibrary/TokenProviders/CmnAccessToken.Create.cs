@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（CmnAccessToken.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         auth_time を数値（秒）に。Claims 経由でも claims を拾う。コメント（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -42,6 +43,7 @@ using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
@@ -64,8 +66,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>CreateFromClaims</summary>
         /// <param name="clientId">string</param>
         /// <param name="userName">string</param>
-        /// <param name="claims">IEnumerable(Claim)</param>
-        /// <param name="ExpiresUtc">DateTimeOffset</param>
+        /// <param name="identityClaims">IEnumerable(Claim)</param>
+        /// <param name="expiresUtc">DateTimeOffset</param>
         /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
         /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <returns>JWT文字列</returns>
@@ -113,17 +115,24 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     auth_time = c.Value;
                 }
+                else if (c.Type == OAuth2AndOIDCConst.UrnClaimsClaim)
+                {
+                    //  **claims パラメタ（OIDC Core 5.5）**（#294）。
+                    //    **以前は拾っておらず**、Implicit / Hybrid で要求された claims が載らなかった
+                    //    （`CreatePayloadForCode` は拾っていた）。
+                    claims = c.Value;
+                }
                 else if (c.Type == Const.UrnSidClaim)
                 {
                     //  **sid（OP のセッションの識別子。#310 の段階 1）**
                     sid = c.Value;
                 }
             }
-            
+
             // PPID対応
+            //   **aud が無ければ空として扱う**（#294。以前は KeyNotFoundException）。
             ApplicationUser user = null;
-            string sub = PPIDExtension.GetSubForOIDC(
-                (string)tokenClaimSet[OAuth2AndOIDCConst.aud], userName, out user);
+            string sub = PPIDExtension.GetSubForOIDC(audience, userName, out user);
 
             // sub
             tokenClaimSet.Add(OAuth2AndOIDCConst.sub, sub);
@@ -131,9 +140,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             // scopes
             tokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
 
-            // auth_time
-            if (!string.IsNullOrEmpty(auth_time))
-                tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, auth_time);
+            // auth_time（**JSON の数値**。OIDC Core §2。#294）
+            long? authTime = CmnAccessToken.ToNumericDate(auth_time);
+            if (authTime != null)
+                tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, authTime.Value);
 
             // sid（#310 の段階 1）
             //   **id_token に出すためには、ここ（access_token）を通る必要が在る**
@@ -143,14 +153,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (!string.IsNullOrEmpty(sid))
                 tokenClaimSet.Add(Const.Sid, sid);
 
-            // claims
+            // claims（`CreatePayloadForCode` と同じ形で載せる。#294）
             if (!string.IsNullOrEmpty(claims))
-            {
-                JObject _claims = JObject.Parse(claims);
-                // claimsからid_tokeの内容を削除する。
-                tokenClaimSet.Remove(OAuth2AndOIDCConst.claims_id_token);
-                tokenClaimSet.Add(OAuth2AndOIDCConst.claims, _claims);
-            }
+                tokenClaimSet.Add(OAuth2AndOIDCConst.claims, JObject.Parse(claims));
 
             tokenClaimSet.Add(OAuth2AndOIDCConst.jti, jti);
             // exp/nbf/iat は NumericDate（RFC 7519 2章）＝JSONの数値。文字列にしない。
@@ -163,7 +168,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (user != null)
                 {
-                    switch (scope.ToLower())
+                    //  **scope は大文字小文字を区別する**（RFC 6749 §3.3）。`ToLower` しない（#294）
+                    switch (scope)
                     {
                         #region OpenID Connect
 
@@ -288,9 +294,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             // scopes
             tokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
 
-            // auth_time
-            if(!string.IsNullOrEmpty(auth_time))
-                tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, auth_time);
+            // auth_time（**JSON の数値**。OIDC Core §2。#294）
+            long? authTime = CmnAccessToken.ToNumericDate(auth_time);
+            if (authTime != null)
+                tokenClaimSet.Add(OAuth2AndOIDCConst.auth_time, authTime.Value);
 
             // sid（#310 の段階 1）
             if (!string.IsNullOrEmpty(sid))
@@ -360,6 +367,22 @@ namespace MultiPurposeAuthSite.TokenProviders
             payload[OAuth2AndOIDCConst.nbf] = DateTimeOffset.Now.ToUnixTimeSeconds();
             payload[OAuth2AndOIDCConst.iat] = DateTimeOffset.Now.ToUnixTimeSeconds();
             
+            // **auth_time を数値にする**（#294）。**預けた refresh_token の payload には、以前の文字列が残っている。**
+            if (payload[OAuth2AndOIDCConst.auth_time] != null
+                && payload[OAuth2AndOIDCConst.auth_time].Type == JTokenType.String)
+            {
+                long? authTime = CmnAccessToken.ToNumericDate((string)payload[OAuth2AndOIDCConst.auth_time]);
+
+                if (authTime == null)
+                {
+                    payload.Remove(OAuth2AndOIDCConst.auth_time);
+                }
+                else
+                {
+                    payload[OAuth2AndOIDCConst.auth_time] = authTime.Value;
+                }
+            }
+
             // 書込２
             // - cnf
             CmnAccessToken.WriteCnf(payload, x509, jkt);
@@ -405,6 +428,41 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region private
+
+        #region ToNumericDate
+
+        /// <summary>時刻の文字列を NumericDate（Unix 秒）にする（#294）</summary>
+        /// <param name="value">W3C（ISO 8601）形式、または Unix 秒の文字列</param>
+        /// <returns>Unix 秒（空・読めなければ null）</returns>
+        /// <remarks>
+        /// **`auth_time` は JSON の数値**（OIDC Core §2。RFC 7519 の NumericDate）。
+        /// **以前は W3C 形式の文字列のまま載せていた**（`AccountController.AddAuthTimeClaim` が W3C で渡す）。
+        /// **既に数値なら、そのまま**（refresh_token の payload から作り直す経路）。
+        /// </remarks>
+        private static long? ToNumericDate(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            long seconds;
+            if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out seconds))
+            {
+                return seconds;
+            }
+
+            DateTimeOffset time;
+            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out time))
+            {
+                return time.ToUnixTimeSeconds();
+            }
+
+            return null;
+        }
+
+        #endregion
 
         #region AddClaims
 

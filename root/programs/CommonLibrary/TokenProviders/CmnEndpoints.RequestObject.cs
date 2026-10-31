@@ -32,6 +32,7 @@
 //*  2026/10/29  玄人 幸道         文字列でない iss・壊れた鍵の登録で 500 にしない。using を整理した（#294）
 //*  2026/10/29  玄人 幸道         PAR の Request Object の client_id を、認証したクライアントと照合する（C-41。#294）
 //*  2026/10/29  玄人 幸道         /ros の Request Object の client_id を、署名したクライアントと照合する（F5。#294）
+//*  2026/10/31  玄人 幸道         /par の claims を JSON のオブジェクトとして預ける。読めなければ invalid_request（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -407,6 +408,30 @@ namespace MultiPurposeAuthSite.TokenProviders
                         case OAuth2AndOIDCConst.client_assertion:
                         case OAuth2AndOIDCConst.client_assertion_type:
                         case OAuth2AndOIDCConst.assertion:
+                            break;
+
+                        case OAuth2AndOIDCConst.claims:
+                            //  **claims は JSON のオブジェクトとして預ける**（OIDC Core 5.5。#294）。
+                            //    **以前は文字列のまま預けていた**ので、**/authorize で `(JObject)` の変換に失敗して 500 になった。**
+                            //    **Request Object（JAR）では、もともとオブジェクトで入る。**
+                            JObject parClaims = null;
+                            try
+                            {
+                                parClaims = JsonConvert.DeserializeObject(parameters[key] ?? "") as JObject;
+                            }
+                            catch (JsonException)
+                            {
+                                parClaims = null;
+                            }
+
+                            if (parClaims == null)
+                            {
+                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                                err.Add(OAuth2AndOIDCConst.error_description, "The claims parameter must be a JSON object.");
+                                return false;
+                            }
+
+                            payload[key] = parClaims;
                             break;
 
                         default:

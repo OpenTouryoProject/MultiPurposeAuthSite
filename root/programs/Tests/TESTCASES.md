@@ -6864,7 +6864,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=c88d979b-8437-490f-b980-0489cdc5554c&code=bogus
+1. GET /Account/EmailConfirmation?userId=9816fa84-186d-43d9-bc95-1ff5676f6136&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6873,8 +6873,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=c88d979b-8437-490f-b980-0489cdc5554c&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=c88d979b-8437-490f-b980-0489cdc5554c&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=9816fa84-186d-43d9-bc95-1ff5676f6136&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=9816fa84-186d-43d9-bc95-1ff5676f6136&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7950,6 +7950,76 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - 問い合わせた回数
   - 1 回目は承認待ち。上限まで待ってから 2 回目を問い合わせ、期限で終わる。
+
+## RT-294.87 pairwise のクライアント : 利用者を消したら、その人の access_token は /userinfo で通らない
+
+| | |
+|---|---|
+| 観点 | **以前は pairwise なら、利用者が居るかを確かめずに access_token を受けていた**ので、**利用者を消しても、その人の access_token が期限まで通った**（public のクライアントでは落ちていた）。**C-54（refresh_token）と同じ種類の抜け**である（C-57）。 |
+| 根拠 | OIDC Core §8.1 / #294（CmnAccessToken.VerifyAccessToken。ANALYSIS-IdP.md の C-57） |
+| テスト | `RT29487_pairwiseでも消された利用者のaccess_tokenは通らない` |
+
+**手順**
+
+1. 使い捨ての利用者を作り、pairwise のクライアントで access_token を得る
+1. 管理者が、その利用者を消す
+1. 消された利用者の access_token で /userinfo を叩く
+
+**検証（合否を判定する）**
+
+- 消す前は /userinfo が通る
+- **401 で断る**
+
+## RT-294.88 max_age を付けた認可コード フロー : id_token と access_token の auth_time は JSON の数値
+
+| | |
+|---|---|
+| 観点 | **以前は W3C 形式の文字列（`2026-10-31T…Z`）で載せていた**（`AccountController.AddAuthTimeClaim` が W3C で渡すものを、そのまま入れていた）。**OIDC Core §2 は auth_time を、エポックからの秒数（JSON の数値）と定めている。****厳密な RP は max_age の照合で読めない。** |
+| 根拠 | OIDC Core §2 / RFC 7519 §2（NumericDate）/ #294 |
+| テスト | `RT29488_auth_timeはJSONの数値` |
+
+**手順**
+
+1. max_age=600 を付けて、認可コード フローを通す
+
+**検証（合否を判定する）**
+
+- **id_token の auth_time は数値**
+- access_token の auth_time も数値
+
+## RT-294.89 Implicit（id_token token）: claims パラメタが access_token に載る
+
+| | |
+|---|---|
+| 観点 | **以前は Claims 経由の作り方（`CreateFromClaims`）が claims を拾っていなかった**ので、**Implicit / Hybrid で要求された claims が access_token に載らず、/userinfo で効かなかった**（認可コード フローの `CreatePayloadForCode` は拾っていた）。 |
+| 根拠 | OIDC Core §5.5 / #294 |
+| テスト | `RT29489_Implicitでもclaimsパラメタがaccess_tokenに載る` |
+
+**手順**
+
+1. claims（userinfo の email）を付けた Implicit の要求を、PAR に預ける
+1. その request_uri で認可する
+
+**検証（合否を判定する）**
+
+- **access_token に claims が載る**
+
+## RT-294.90 /par : claims が JSON のオブジェクトでなければ、invalid_request で断る（500 にしない）
+
+| | |
+|---|---|
+| 観点 | **以前は claims を文字列のまま預けていた**ので、**/authorize で `(JObject)` の変換に失敗して 500 になった**（正しい JSON でも同じだった。RT-294.89）。**いまは JSON のオブジェクトとして預け、読めなければ PAR の時点で断る。** |
+| 根拠 | RFC 9126 §2.1 / §2.3 / OIDC Core §5.5 / #294 |
+| テスト | `RT29490_parはJSONのオブジェクトでないclaimsを断る` |
+
+**手順**
+
+1. JSON でない claims を付けて、PAR に預ける
+
+**検証（合否を判定する）**
+
+- **HTTP 400**
+- invalid_request
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

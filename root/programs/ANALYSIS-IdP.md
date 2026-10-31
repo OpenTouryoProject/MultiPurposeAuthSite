@@ -3474,6 +3474,28 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > | **開始の URL** | **画面から来る値（`prompt`・`max_age`・`response_mode`）と `scope` などを符号化せずに連結**（`&` で別のパラメタを差し込めた） | **URL 符号化する**（`RT-294.85`） |
 > | **ROPC・Client Credentials・JWT Bearer の結果** | **応答を JSON と決めて読み**、そうでなければ 500 | **読めなければ access_token を空にして、応答をそのまま出す** |
 
+### C-57. pairwise のクライアントでは、消された利用者の access_token が期限まで通っていた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**`CmnAccessToken.VerifyAccessToken` は、`sub` の持ち主を確かめる**（利用者が居るか、居なければクライアント アカウントか）。
+**ところが `subject_types` が `pairwise` のクライアントでは、この確認を飛ばして受けていた。**
+**public のクライアントでは落ちていた**ので、**利用者を消しても、pairwise のクライアントに発行した access_token だけは期限まで通った**
+（`/userinfo`・リソース サーバ・認証デバイスの口など）。**C-54（refresh_token）と同じ種類の抜け**で、access_token 側である。
+
+**pairwise でも public と同じ判定にした**（利用者が居れば受ける。居なければ、クライアント アカウントとして `sub` を照合する）。
+**pairwise のクライアントの client_credentials は、`sub` がクライアント名**なので、照合で通る。
+
+**E2E** : **`RT-294.87`**（使い捨ての利用者で pairwise のトークンを取り、消した後の `/userinfo` が 401）。
+
+> **同じレビューで直した不具合**（セキュリティ以外）:
+>
+> | 場所 | 以前 | いま |
+> |---|---|---|
+> | **`auth_time`** | **W3C 形式の文字列**（`AccountController.AddAuthTimeClaim` が渡す形のまま） | **JSON の数値（秒）**（OIDC Core §2。`RT-294.88`）。**預けた refresh_token の payload に残る文字列も、作り直すときに数値にする** |
+> | **Claims 経由の access_token（Implicit / Hybrid）** | **`claims`（OIDC Core 5.5）を拾っていなかった** | **拾う**（`RT-294.89`） |
+> | **`/par` の `claims`** | **文字列のまま預け、`/authorize` が `(JObject)` の変換に失敗して 500** | **JSON のオブジェクトとして預ける。読めなければ `invalid_request`**（`RT-294.90`）。`/authorize` 側も、オブジェクトでなければ受けない |
+> | **access_token の `nbf`** | **確かめていなかった** | **確かめる**（RFC 7519 §4.1.5。時刻のずれを 60 秒まで許す） |
+> | **`scope` の照合**（クレームの選択） | `ToLower` で大文字小文字を無視 | **区別する**（RFC 6749 §3.3） |
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能

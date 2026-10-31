@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（CmnAccessToken.cs から partial に分割。#294）
+//*  2026/10/31  玄人 幸道         pairwise でも利用者が居なければ受けない（C-57）。nbf を確かめる（#294）
 //**********************************************************************************
 
 #if NETFX
@@ -49,7 +50,6 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security.Jwt;
-using Touryo.Infrastructure.Public.FastReflection;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
@@ -81,7 +81,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             return jws != null && jws.Verify(jwt, JwtConst.JWT);
         }
 
-        /// <summary>Verify</summary>
+        /// <summary>access_token を検証する（claims を返さない版）</summary>
         /// <param name="jwt">string</param>
         /// <param name="identity">ClaimsIdentity</param>
         /// <returns>検証結果</returns>
@@ -91,11 +91,23 @@ namespace MultiPurposeAuthSite.TokenProviders
             return CmnAccessToken.VerifyAccessToken(jwt, out claims, out identity);
         }
 
-        /// <summary>Verify</summary>
+        /// <summary>access_token を検証する</summary>
         /// <param name="jwt">string</param>
         /// <param name="claims">out JObject</param>
         /// <param name="identity">out ClaimsIdentity</param>
         /// <returns>検証結果</returns>
+        /// <remarks>
+        /// | 確かめること | |
+        /// |---|---|
+        /// | 署名と `typ`（`at+jwt`） | `SelectJws` の鍵で |
+        /// | 失効 | `RevocationProvider`（`jti`） |
+        /// | `iss`・クライアントの登録・`exp`・`nbf` | `nbf` は時刻のずれを `NbfLeewaySeconds` まで許す（#294） |
+        /// | **`sub` の持ち主** | **利用者が居れば受ける。居なければ、クライアント アカウントとして `sub` を照合する** |
+        ///
+        /// **pairwise でも同じ判定にする**（C-57。#294）。
+        /// **以前は pairwise なら利用者を確かめずに受けていた**ので、
+        /// **利用者を消しても、その人の access_token が期限まで通った**（public は落ちていた）。
+        /// </remarks>
         public static bool VerifyAccessToken(string jwt, out JObject claims, out ClaimsIdentity identity)
         {
             claims = null; // = new JObject();
@@ -140,47 +152,41 @@ namespace MultiPurposeAuthSite.TokenProviders
                             && Helper.GetInstance().HasClient((string)tokenClaimSet[OAuth2AndOIDCConst.aud])
                             // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったのでToStringで渡す
                             // （文字列で発行された過去のTokenも、そのまま通る）。
-                            && CmnJwtToken.VerifyExp(tokenClaimSet[OAuth2AndOIDCConst.exp].ToString()))
+                            && CmnJwtToken.VerifyExp(tokenClaimSet[OAuth2AndOIDCConst.exp].ToString())
+                            //  **nbf も確かめる**（RFC 7519 §4.1.5。#294）
+                            && CmnAccessToken.VerifyNbf(tokenClaimSet))
                         {
                             // claims
                             if(tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.claims))
                                 claims = (JObject)tokenClaimSet[OAuth2AndOIDCConst.claims];
 
                             // subの検証
-                            // ApplicationUser を取得する。
-                            string subjectTypes = "";
+                            // ApplicationUser を取得する（pairwise なら PPID から引く）。
                             ApplicationUser user = PPIDExtension.GetUserFromSub(
                                 (string)tokenClaimSet[OAuth2AndOIDCConst.aud],
-                                (string)tokenClaimSet[OAuth2AndOIDCConst.sub],
-                                out subjectTypes);
-                            //CmnUserStore.FindByName((string)tokenClaimSet[OAuth2AndOIDCConst.sub]); // 同期版でOK。
+                                (string)tokenClaimSet[OAuth2AndOIDCConst.sub]);
 
-                            if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
+                            // **pairwise でも、利用者が居ることを確かめる**（C-57。#294）。
+                            //   以前は pairwise なら、ここで無条件に受けていた。
+                            //   **pairwise のクライアントの client_credentials は、sub がクライアント名**なので、
+                            //   **下のクライアント アカウントの照合で通る。**
+                            if (user != null)
                             {
-                                // PPIDの場合
+                                // User Accountの場合
                                 CmnAccessToken.AddClaims(tokenClaimSet, identity);
                                 return true;
                             }
                             else
                             {
-                                if (user != null)
+                                // Client Accountの場合
+
+                                // ClaimとStoreのAudience(aud)に対応するSubject(sub)が一致するかを確認し、一致する場合のみ、認証する。
+                                // ※ でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
+                                if ((string)tokenClaimSet[OAuth2AndOIDCConst.sub]
+                                    == Helper.GetInstance().GetClientName((string)tokenClaimSet[OAuth2AndOIDCConst.aud]))
                                 {
-                                    // User Accountの場合
                                     CmnAccessToken.AddClaims(tokenClaimSet, identity);
                                     return true;
-                                }
-                                else
-                                {
-                                    // Client Accountの場合
-
-                                    // ClaimとStoreのAudience(aud)に対応するSubject(sub)が一致するかを確認し、一致する場合のみ、認証する。
-                                    // ※ でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
-                                    if ((string)tokenClaimSet[OAuth2AndOIDCConst.sub]
-                                        == Helper.GetInstance().GetClientName((string)tokenClaimSet[OAuth2AndOIDCConst.aud]))
-                                    {
-                                        CmnAccessToken.AddClaims(tokenClaimSet, identity);
-                                        return true;
-                                    }
                                 }
                             }
                         }
@@ -205,6 +211,30 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return false;
+        }
+
+        /// <summary>nbf の時刻のずれを、どこまで許すか（秒。#294）</summary>
+        private const long NbfLeewaySeconds = 60;
+
+        /// <summary>nbf を確かめる（RFC 7519 §4.1.5。#294）</summary>
+        /// <param name="tokenClaimSet">payload</param>
+        /// <returns>使ってよい時刻なら true</returns>
+        /// <remarks>
+        /// **nbf より前のトークンは受けない。** 複数台の時刻のずれを `NbfLeewaySeconds` まで許す。
+        /// **無い・読めない nbf は確かめない**（この認可サーバは必ず書くが、過去の形を壊さない）。
+        /// </remarks>
+        private static bool VerifyNbf(Dictionary<string, object> tokenClaimSet)
+        {
+            object nbf;
+            long seconds;
+
+            if (!tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.nbf, out nbf) || nbf == null
+                || !long.TryParse(nbf.ToString(), out seconds))
+            {
+                return true;
+            }
+
+            return seconds <= DateTimeOffset.UtcNow.ToUnixTimeSeconds() + CmnAccessToken.NbfLeewaySeconds;
         }
 
         #endregion

@@ -22,6 +22,7 @@
 //*                                応答の組み立てを 1 か所にまとめ、本文を両版で同じにした（#294）
 //*  2026/10/29  玄人 幸道         OpSession と /device_verify の初期表示も、補助を使って両版で同じ本文にした（#294）
 //*  2026/10/30  玄人 幸道         auth_time を書く所の注を直した（管理画面の再サインインでは書かない。#294）
+//*  2026/10/31  玄人 幸道         Request Object の claims がオブジェクトでなくても 500 にしない（#294）
 //**********************************************************************************
 
 /*
@@ -711,7 +712,9 @@ namespace MultiPurposeAuthSite.Controllers
             nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
             max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
             prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
-            claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+            //  **オブジェクトでなければ受けない**（#294）。**以前は `(JObject)` の変換で 500 になった**
+            //    （PAR が文字列のまま預けていたため。いまは PAR で JSON のオブジェクトに直して預ける）。
+            claims = requestObjectPayload[OAuth2AndOIDCConst.claims] as JObject;
             code_challenge = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
 
             return true;
