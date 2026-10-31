@@ -296,6 +296,24 @@
     </Compile>
     <Compile Include="Controllers\ErrorController.cs" />
     <Compile Include="Controllers\HomeController.cs" />
+    <Compile Include="Controllers\HomeController.Params.cs">
+      <DependentUpon>HomeController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\HomeController.Starters.cs">
+      <DependentUpon>HomeController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\HomeController.Saml2.cs">
+      <DependentUpon>HomeController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\HomeController.OAuth2.cs">
+      <DependentUpon>HomeController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\HomeController.Fapi.cs">
+      <DependentUpon>HomeController.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controllers\HomeController.Another.cs">
+      <DependentUpon>HomeController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\ManageController.cs" />
     <Compile Include="Controllers\ManageController.Account.cs">
       <DependentUpon>ManageController.cs</DependentUpon>
