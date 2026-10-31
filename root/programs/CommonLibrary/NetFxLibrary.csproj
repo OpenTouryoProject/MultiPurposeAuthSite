@@ -123,9 +123,9 @@
     <Compile Include="Data\CmnUserStore.Tokens.cs">
       <DependentUpon>CmnUserStore.cs</DependentUpon>
     </Compile>
-    <Compile Include="Extensions\Sts\AuthFailureProvider.cs" />
-    <Compile Include="Extensions\Sts\AuthTimeCookie.cs" />
-    <Compile Include="Extensions\Sts\UserCreationLock.cs" />
+    <Compile Include="Util\Sts\AuthFailureProvider.cs" />
+    <Compile Include="Util\IdP\AuthTimeCookie.cs" />
+    <Compile Include="Util\IdP\UserCreationLock.cs" />
     <Compile Include="Extensions\Sts\ClientRegistrationProvider.cs" />
     <Compile Include="Extensions\Sts\ClientRegistrationProvider.Crud.cs">
       <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
@@ -136,31 +136,31 @@
     <Compile Include="Extensions\Sts\ClientRegistrationProvider.Response.cs">
       <DependentUpon>ClientRegistrationProvider.cs</DependentUpon>
     </Compile>
-    <Compile Include="Extensions\Sts\AccountLink.cs" />
+    <Compile Include="Util\IdP\AccountLink.cs" />
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
-    <Compile Include="Extensions\Sts\IdFederationJwks.cs" />
-    <Compile Include="Extensions\Sts\IdFederationUpstreamProvider.cs" />
+    <Compile Include="TokenProviders\IdFederationJwks.cs" />
+    <Compile Include="Util\IdP\IdFederationUpstreamProvider.cs" />
     <Compile Include="Extensions\Sts\JwksUriWarmUp.cs" />
-    <Compile Include="Extensions\Sts\MailThrottle.cs" />
+    <Compile Include="Util\IdP\MailThrottle.cs" />
     <Compile Include="Extensions\Sts\PollingThrottle.cs" />
-    <Compile Include="Extensions\Sts\RateLimitProvider.cs" />
-    <Compile Include="Extensions\Sts\IdTokenAudience.cs" />
+    <Compile Include="Util\Sts\RateLimitProvider.cs" />
+    <Compile Include="Util\Sts\IdTokenAudience.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
-    <Compile Include="Extensions\Sts\SecretProtector.cs" />
+    <Compile Include="Util\Sts\SecretProtector.cs" />
     <Compile Include="Extensions\Sts\SoftwareStatementProvider.cs" />
     <Compile Include="Extensions\Sts\SoftwareStatementIssuerProvider.cs" />
-    <Compile Include="Extensions\Sts\SelfTestClient.cs" />
+    <Compile Include="Util\Test\SelfTestClient.cs" />
     <Compile Include="Extensions\Sts\ConsentProvider.cs" />
     <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />
     <Compile Include="Extensions\Sts\SessionClientProvider.cs" />
     <Compile Include="Extensions\Sts\BackChannelLogout.cs" />
     <Compile Include="Extensions\Sts\FrontChannelLogout.cs" />
-    <Compile Include="Extensions\Sts\TestFrontChannelLogoutBox.cs" />
-    <Compile Include="Extensions\Sts\TestLogoutTokenBox.cs" />
+    <Compile Include="Util\Test\TestFrontChannelLogoutBox.cs" />
+    <Compile Include="Util\Test\TestLogoutTokenBox.cs" />
     <Compile Include="Extensions\Sts\DPoPProofProvider.cs" />
-    <Compile Include="Extensions\Sts\TestClients.cs" />
-    <Compile Include="Extensions\Sts\UserClaims.cs" />
+    <Compile Include="Util\Test\TestClients.cs" />
+    <Compile Include="Util\Sts\UserClaims.cs" />
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="SamlProviders\CmnSaml2Response.cs" />
@@ -169,7 +169,7 @@
     <Compile Include="SamlProviders\IdFederationSaml2Request.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\Sts\Saml2OAuth2DataProvider.cs" />
-    <Compile Include="Extensions\Sts\Helper.cs" />
+    <Compile Include="Util\Sts\Helper.cs" />
     <Compile Include="TokenProviders\CmnAccessToken.cs" />
     <Compile Include="TokenProviders\CmnAccessToken.Create.cs">
       <DependentUpon>CmnAccessToken.cs</DependentUpon>
@@ -183,9 +183,9 @@
     <Compile Include="TokenProviders\CmnAccessToken.SecurityStamp.cs">
       <DependentUpon>CmnAccessToken.cs</DependentUpon>
     </Compile>
-    <Compile Include="TokenProviders\CmnResponseObject.cs" />
+    <Compile Include="Extensions\Sts\CmnResponseObject.cs" />
     <Compile Include="Extensions\Sts\CibaProvider.cs" />
-    <Compile Include="Extensions\Sts\TwoFactorPushProvider.cs" />
+    <Compile Include="Util\IdP\TwoFactorPushProvider.cs" />
     <Compile Include="TokenProviders\RefreshTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RevocationProvider.cs" />
     <Compile Include="Notifications\CmnEmail.cs" />
@@ -225,15 +225,14 @@
       <DependentUpon>CmnEndpoints.cs</DependentUpon>
     </Compile>
     <Compile Include="TokenProviders\CmnIdToken.cs" />
-    <Compile Include="TokenProviders\CmnLogoutToken.cs" />
-    <Compile Include="TokenProviders\CmnDPoP.cs" />
+    <Compile Include="Extensions\Sts\CmnLogoutToken.cs" />
+    <Compile Include="Extensions\Sts\CmnDPoP.cs" />
     <Compile Include="TokenProviders\SigningKeys.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
     <Compile Include="Util\IdP\UserIdentifier.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
-    <Compile Include="Util\PPIDExtension.cs" />
-    <Compile Include="Util\UriExtension.cs" />
+    <Compile Include="Util\Sts\PPIDExtension.cs" />
     <Compile Include="Util\Sts\OnlySts.cs" />
     <Compile Include="Data\EnumSessionStoreType.cs" />
     <Compile Include="Data\EnumUserStoreType.cs" />

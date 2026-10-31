@@ -46,6 +46,7 @@ using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Network;
 
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 
@@ -146,7 +147,7 @@ namespace MultiPurposeAuthSite.Controllers
                 identity, accessToken,
                 isDPoP ? HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_DPoP] : null,
                 HttpContext.Current.Request.HttpMethod,
-                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
+                CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
                 out dpopError);
         }
 
@@ -378,7 +379,7 @@ namespace MultiPurposeAuthSite.Controllers
                     new System.Net.Http.Headers.AuthenticationHeaderValue(
                         scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, Const.EndpointRegister, err)));
 
-                string nonce = Token.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
+                string nonce = CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
 
                 if (nonce != null)
                 {

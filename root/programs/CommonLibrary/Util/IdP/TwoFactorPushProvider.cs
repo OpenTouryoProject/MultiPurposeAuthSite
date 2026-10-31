@@ -25,14 +25,16 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/16  玄人 幸道         新規（#213）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/IdP へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 
 using System;
 using System.Collections.Concurrent;
+using MultiPurposeAuthSite.Extensions.Sts;
 
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>
     /// 2FA のプッシュ承認（認証デバイスからの返答）を保持する。

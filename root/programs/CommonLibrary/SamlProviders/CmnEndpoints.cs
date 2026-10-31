@@ -44,6 +44,7 @@ using MultiPurposeAuthSite.Entity;
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -147,7 +148,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             //    **要求に書かれた ACS URL は、登録値との照合にしか使わない。**
             //    （要求の値をそのまま使うと、任意の URL へアサーションを飛ばせられる。）
             string temp1 = SAML2Bindings.GetAssertionConsumerServiceURLInRequest(samlRequest, samlNsMgr);
-            string temp2 = Sts.Helper.GetInstance().GetAssertionConsumerServiceURL(iss);
+            string temp2 = Helper.GetInstance().GetAssertionConsumerServiceURL(iss);
 
             if (string.IsNullOrEmpty(temp2))
             {
@@ -254,7 +255,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         private static RSA RsaOf(string clientId)
         {
             // rsa from iss
-            string pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(clientId);
+            string pubKey = Helper.GetInstance().GetJwkRsaPublickey(clientId);
 
             if (string.IsNullOrEmpty(pubKey))
             {

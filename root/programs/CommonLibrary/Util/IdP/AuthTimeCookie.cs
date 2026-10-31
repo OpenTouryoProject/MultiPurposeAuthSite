@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/IdP へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using System;
@@ -49,9 +50,10 @@ using Touryo.Infrastructure.Framework.StdMigration;
 // OpenTouryo
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>
     /// auth_time と再認証の印の Cookie を、改ざんできない形で読み書きする（#294）。

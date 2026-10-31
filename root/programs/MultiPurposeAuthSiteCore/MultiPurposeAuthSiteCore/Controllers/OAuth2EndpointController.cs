@@ -81,6 +81,7 @@ using MultiPurposeAuthSite.Co;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Linq;
@@ -227,7 +228,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             try
             {
-                string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+                string clientId = RateLimitProvider.ClientIdFromAuthorizationHeader(
                     this.Request.Headers[Const.HeaderAuthorization]);
 
                 //  **フォームは、口の処理で読み終えている**（ここで本文を読み直さない）。
@@ -279,7 +280,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && error == OAuth2AndOIDCConst.use_dpop_nonce)
             {
                 this.Response.Headers[OAuth2AndOIDCConst.HttpHeader_DPoPNonce] =
-                    Token.CmnDPoP.CurrentNonce(Token.CmnDPoP.PurposeAs);
+                    Sts.CmnDPoP.CurrentNonce(Sts.CmnDPoP.PurposeAs);
             }
 
             return new ObjectResult(err) { StatusCode = status };
@@ -317,7 +318,7 @@ namespace MultiPurposeAuthSite.Controllers
                 this.Response.Headers[Const.HeaderWwwAuthenticate] =
                     scheme + " " + Token.CmnEndpoints.GetChallengeParameter(scheme, realm, err);
 
-                string nonce = Token.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
+                string nonce = Sts.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
 
                 if (nonce != null)
                 {

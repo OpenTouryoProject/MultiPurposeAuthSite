@@ -33,6 +33,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util.Sts;
 
 #if NETFX
 using System.Web.Mvc;

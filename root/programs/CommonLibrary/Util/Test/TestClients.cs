@@ -41,6 +41,7 @@
 //*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
 //*  2026/10/29  玄人 幸道         TestClient_30 〜 _34（C-40・N1・S3・grant_types の絞り）を追加（#294）
 //*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35 を追加（RT-237.3。OpenTouryo#645 への備え。#294）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -52,8 +53,10 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security.Jwt;
+using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.Test
 {
     /// <summary>E2E 専用のクライアント登録（種データ）の表（#264）</summary>
     /// <remarks>

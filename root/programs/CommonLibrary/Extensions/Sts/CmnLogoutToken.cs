@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 2）
+//*  2026/10/31  玄人 幸道         TokenProviders から Extensions/Sts へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -41,8 +42,10 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security.Jwt;
+using MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Util.Sts;
 
-namespace MultiPurposeAuthSite.TokenProviders
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
     /// CmnLogoutToken

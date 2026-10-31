@@ -56,6 +56,7 @@
 //*  2026/10/24  玄人 幸道         openid を常に広告するようにした（EnableOpenIDConnect の廃止。#314）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/25  玄人 幸道         auth を、登録に明記したクライアントにだけ出すようにした（#294）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -97,8 +98,9 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Str;
+using MultiPurposeAuthSite.Extensions.Sts;
 
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.Sts
 {
     /// <summary>Helper（ライブラリ）</summary>
     public class Helper

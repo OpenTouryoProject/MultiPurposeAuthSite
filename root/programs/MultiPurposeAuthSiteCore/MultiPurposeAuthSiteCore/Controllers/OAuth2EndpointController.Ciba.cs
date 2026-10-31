@@ -40,6 +40,7 @@ using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Linq;
@@ -142,7 +143,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 検証成功
 
                         // AccountControllerからの移行なので...。
-                        string name = Sts.Helper.GetInstance().GetClientName(client_id);
+                        string name = Helper.GetInstance().GetClientName(client_id);
 
                         // scopeパラメタ
                         string[] scopes = (scope ?? "").Split(' ');

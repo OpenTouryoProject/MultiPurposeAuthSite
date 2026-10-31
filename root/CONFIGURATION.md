@@ -467,7 +467,7 @@ CreateJwkSetJson.exe
 
 > **E2E だけが使うクライアントは、ここには無い**（#264）。
 > **テスト利用者の登録（`saml2OAuth2Data`）として種データが作る**
-> （`CommonLibrary/Extensions/Sts/TestClients.cs`。`IsDebug` ＋ `TestUserPWD` のときだけ）。
+> （`CommonLibrary/Util/Test/TestClients.cs`。`IsDebug` ＋ `TestUserPWD` のときだけ）。
 > **一覧を環境変数で差し替えると、環境ブロックの 32,767 文字に当たる**ため
 > （`TESTING.md` 1 節）。
 
@@ -2379,7 +2379,7 @@ E2E テストは、**実行時にアプリ自身の構成ファイルから読�
 | 形 | **`enc:v1:` ＋ base64(salt 16 ＋ IV 16 ＋ 暗号文)** |
 | salt / IV | **1 件ごとに作る**（**同じ秘密でも、毎回違う暗号文になる**） |
 | 印 | **先頭の `enc:v1:`**（**暗号文か平文かを、見れば分かる**） |
-| 実装 | `Extensions/Sts/SecretProtector`。**保存と読み出しの境目は Provider の 2 か所だけ** |
+| 実装 | `Util/Sts/SecretProtector`。**保存と読み出しの境目は Provider の 2 か所だけ** |
 
 **実測（2026/10/14。SQL Server）** : `Saml2OAuth2Data.ClientSecret` は
 **`enc:v1:…`（115 文字）**で入っている（**平文に見える 4 行は空文字** ＝ public クライアント）。
@@ -2808,7 +2808,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | 1 | **連携キー `(iss, sub)`** | **上流ごとに別の行**（`UserLogins`） |
 | 2 | **メアド** | **引けたら、その利用者に `(iss, sub)` を足す** |
 
-**守りは「メアドが検証済みであること」**である（#140 の段階 1。`Sts.AccountLink`）。
+**守りは「メアドが検証済みであること」**である（#140 の段階 1。`AccountLink`）。
 **測定は `CN-5.6`**（#292 の段階 1）。
 
 #### (3) の検証鍵 — OIDC（#289 / #290）
@@ -3384,7 +3384,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 > **段階 1 の `slow_down` はプロトコルの層の話**（RFC 8628 §3.5）で、
 > **こちらは HTTP の層の話**である（`/token` のエラー符号は RFC 6749 §5.2 で閉じている）。
 
-**作りは、両アプリで同じ判断にしてある**（`Extensions/Sts/RateLimitProvider`）。
+**作りは、両アプリで同じ判断にしてある**（`Util/Sts/RateLimitProvider`）。
 
 | | |
 |---|---|
@@ -3424,7 +3424,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 | 対象のメール | **メアド検証**（サインアップ・確認待ちの登録し直し・確認待ちのサインイン）と、**パスワード リセット** |
 | 数える単位 | **用途 × 利用者**（**メアド検証とリセットは別に数える**） |
 | 断るとき | **送らないだけで、画面は変えない**（**送ったかどうかを画面から分からせない**）。**ログには最初の 1 回だけ残す** |
-| 覚える場所 | **プロセスの中**（`Extensions/Sts/MailThrottle`。**インスタンスを増やすと、その数だけ緩くなる**） |
+| 覚える場所 | **プロセスの中**（`Util/IdP/MailThrottle`。**インスタンスを増やすと、その数だけ緩くなる**） |
 
 #### 認証の失敗を数える — `AuthFailureMaxAttempts` / `AuthFailureLockoutSeconds` / `AuthFailureWindowSeconds`（#305 の段階 2・段階 4）
 
@@ -3442,7 +3442,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 | **`device_verify:<利用者>`** | **`user_code` の投入**（RFC 8628 §5.2） |
 | **`Users` 表の `AccessFailedCount`** | **利用者のパスワード**（**画面のサインイン**と、**`/token` の `grant_type=password`**。段階 4） |
 
-**置き場は `AuthFailure` 表**（`Extensions/Sts/AuthFailureProvider`。`mem` では辞書）。
+**置き場は `AuthFailure` 表**（`Util/Sts/AuthFailureProvider`。`mem` では辞書）。
 **表に持つので、インスタンスを増やしても効く。**
 **利用者のパスワードだけは `Users` 表**（ASP.NET Identity の数え）。
 
@@ -3636,7 +3636,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 **同梱の証明書は、テスト用の自己署名である。** 本番では使わないこと（パスワードも雛形に書いてある）。
 
 - `SpRp_ClientCertPfxFilePath`（`SHA256RSAClientCert.pfx`）は、**アプリが外向きに呼ぶときの
-  HttpClient に必ず載る**（`Extensions/Sts/Helper.cs`）。サーバが要求すれば、これを提示する
+  HttpClient に必ず載る**（`Util/Sts/Helper.cs`）。サーバが要求すれば、これを提示する
 - **Subject は、クライアント登録の `tls_client_auth_subject_dn` と一致させること。**
   雛形では `TestClient1` / `TestClient2` の値（`CN=MPAS Test Client`）
 - 作り直すバッチは `GenClientCertByOpenSSL.bat`（先頭に `_` の付いたファイルができる。
@@ -3865,7 +3865,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 
 **`profile` / `address` のクレームは、設定の対応付けで返す**（#230）。
 **この実装は氏名・住所の項目を持たない。** 入れ物は `ApplicationUser.UnstructuredData`（JSON）で、
-**中身は導入する側が決める**という方針である（`Extensions/Sts/UserClaims.cs`）。
+**中身は導入する側が決める**という方針である（`Util/Sts/UserClaims.cs`）。
 
 ### 入れ物（`UnstructuredData`）
 

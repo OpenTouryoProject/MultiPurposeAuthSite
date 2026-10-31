@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 3）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を対象に足した（#307 の段階 1）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -42,9 +43,10 @@ using System.Text;
 
 // OpenTouryo
 using Touryo.Infrastructure.Framework.Authentication;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.Sts
 {
     /// <summary>
     /// 口ごとのレート制限（#305 の段階 3）。

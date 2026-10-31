@@ -22,6 +22,7 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Util.IdP;
 
 using System.Collections.Generic;
 using System.Linq;

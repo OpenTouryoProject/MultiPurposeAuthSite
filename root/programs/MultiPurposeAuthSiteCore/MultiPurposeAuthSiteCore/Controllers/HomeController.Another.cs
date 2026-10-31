@@ -23,6 +23,8 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Util.Test;
 
 using System;
 using System.Globalization;

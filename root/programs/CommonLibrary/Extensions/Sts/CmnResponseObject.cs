@@ -32,6 +32,7 @@
 //*  2026/09/11  玄人 幸道         exp を NumericDate（JSON の数値）で出すよう修正（#201）
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //*  2026/10/31  玄人 幸道         clientId を必須にし、iss・aud・exp の無い応答を作らないようにした（JARM 2.1。#317）
+//*  2026/10/31  玄人 幸道         TokenProviders から Extensions/Sts へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -43,9 +44,10 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security.Jwt;
+using MultiPurposeAuthSite.TokenProviders;
 
 
-namespace MultiPurposeAuthSite.TokenProviders
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>CmnResponseObject(JARM)</summary>
     public class CmnResponseObject

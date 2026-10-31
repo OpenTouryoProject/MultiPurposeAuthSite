@@ -710,7 +710,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// **クライアント認証で照合し、画面で再表示する**ためである。
         ///
         /// **だから、保存して読み直したときに、同じ値が出なければならない。**
-        /// **暗号化して保管し、使うときに復号する**（`Sts.SecretProtector`）。
+        /// **暗号化して保管し、使うときに復号する**（`SecretProtector`）。
         ///
         /// | | |
         /// |---|---|
@@ -779,7 +779,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(2) 画面を開き直すと、同じ client_secret が出る");
 
                 //  **ここが往復である。**
-                //    **保存で暗号化し、読み出しで復号している**（`Sts.SecretProtector`）。
+                //    **保存で暗号化し、読み出しで復号している**（`SecretProtector`）。
                 //    **復号できていなければ、空か、別の値になる。**
                 //
                 //  **開き直すときは、どの登録かを指す**（#307 の段階 5-a-2）。

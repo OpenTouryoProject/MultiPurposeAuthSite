@@ -29,6 +29,8 @@ SAML2 の ACS、Front-Channel / Back-Channel Logout の受け口）を担うAcco
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Util.Test;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -326,9 +328,9 @@ namespace MultiPurposeAuthSite.Controllers
                             // **アサーションの組み立ては SelfTestClient**（#246）。
                             model.AuthMethod = Resources.AccountController.AuthMethodFapi1;
 
-                            model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                            model.Response = await Helper.GetInstance().GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
-                                Sts.SelfTestClient.CreateClientAssertion(
+                                SelfTestClient.CreateClientAssertion(
                                     clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.SelfTestScopes));
                         }
                         else if (state.StartsWith(fapi2Prefix))
@@ -345,9 +347,9 @@ namespace MultiPurposeAuthSite.Controllers
                             // **アサーションの組み立ては SelfTestClient**（#246）。
                             model.AuthMethod = Resources.AccountController.AuthMethodFapi2;
 
-                            model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                            model.Response = await Helper.GetInstance().GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
-                                Sts.SelfTestClient.CreateClientAssertion(
+                                SelfTestClient.CreateClientAssertion(
                                     clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.OidcScopes));
                         }
                         else
@@ -356,7 +358,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             //  client_Idから、client_secretを取得。
                             string client_id = clientId_InSessionOrCookie;
-                            string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
+                            string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
                             if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                             {
@@ -365,7 +367,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 //   （既定が client_secret_basic。#246 の項目 3）。
                                 model.AuthMethod = Resources.AccountController.AuthMethodClientSecretBasic;
 
-                                model.Response = await Sts.Helper.GetInstance()
+                                model.Response = await Helper.GetInstance()
                                     .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                     client_id, client_secret, redirect_uri, code);
                             }
@@ -376,7 +378,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 //   PKCE 自体はクライアント認証ではないので、code_verifier は別に送る。
                                 model.AuthMethod = Resources.AccountController.AuthMethodClientSecretPostPkce;
 
-                                model.Response = await Sts.Helper.GetInstance()
+                                model.Response = await Helper.GetInstance()
                                    .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                    client_id, client_secret, redirect_uri,
                                    code, code_verifier_InSessionOrCookie);
@@ -493,7 +495,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(Request.Form["submit.GetUserClaims"]))
                     {
                         // UserInfoエンドポイントにアクセス
-                        model.Response = await Sts.Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
+                        model.Response = await Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
                     }
                     else if (!string.IsNullOrEmpty(Request.Form["submit.Refresh"]))
                     {
@@ -506,9 +508,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Sts.Helper.GetInstance().
+                        model.Response = await Helper.GetInstance().
                             UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
 
@@ -556,9 +558,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Sts.Helper.GetInstance().RevokeTokenAsync(
+                        model.Response = await Helper.GetInstance().RevokeTokenAsync(
                             revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -591,9 +593,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Sts.Helper.GetInstance().IntrospectTokenAsync(
+                        model.Response = await Helper.GetInstance().IntrospectTokenAsync(
                             introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -766,7 +768,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             string requestId = this.LoadTestSamlRequestId();
 
-            SAML2VerifyResult result = Sts.SelfTestClient.VerifySaml2Response(
+            SAML2VerifyResult result = SelfTestClient.VerifySaml2Response(
                 samlResponse, queryString, relayState,
                 state_InSessionOrCookie, isGet, acsUrl, requestId);
 
@@ -835,7 +837,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return this.NotFound();
             }
 
-            Sts.TestFrontChannelLogoutBox.Add(iss, sid);
+            TestFrontChannelLogoutBox.Add(iss, sid);
 
             // オペレーション・トレース・ログ出力
             //   **値は出さない**（`sid` はセッションの識別子である）。
@@ -864,12 +866,12 @@ namespace MultiPurposeAuthSite.Controllers
                 return this.NotFound();
             }
 
-            List<string> hits = Sts.TestFrontChannelLogoutBox.GetAll();
+            List<string> hits = TestFrontChannelLogoutBox.GetAll();
 
             if (clear)
             {
                 // **測る前に空にする**ために在る。
-                Sts.TestFrontChannelLogoutBox.Clear();
+                TestFrontChannelLogoutBox.Clear();
             }
 
             return this.Json(new { frontchannel_hits = hits });
@@ -916,7 +918,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return this.BadRequest();
             }
 
-            Sts.TestLogoutTokenBox.Add(logoutToken);
+            TestLogoutTokenBox.Add(logoutToken);
 
             // オペレーション・トレース・ログ出力
             //   **値は出さない**（`logout_token` には `sub` と `sid` が入っている）。
@@ -948,12 +950,12 @@ namespace MultiPurposeAuthSite.Controllers
                 return this.NotFound();
             }
 
-            List<string> tokens = Sts.TestLogoutTokenBox.GetAll();
+            List<string> tokens = TestLogoutTokenBox.GetAll();
 
             if (clear)
             {
                 // **測る前に空にする**ために在る（前のケースの通知が混ざらないように）。
-                Sts.TestLogoutTokenBox.Clear();
+                TestLogoutTokenBox.Clear();
             }
 
             return this.Json(new { logout_tokens = tokens });

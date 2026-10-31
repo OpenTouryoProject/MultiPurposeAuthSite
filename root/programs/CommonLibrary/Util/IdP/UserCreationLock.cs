@@ -29,14 +29,16 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（#294）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/IdP へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>
     /// 外部ログイン・ID 連携で、同じ利用者を同時に作らない（#294）。

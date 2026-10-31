@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util.Test;
 
 using System;
 using System.Security.Cryptography;
@@ -52,7 +53,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
     /// **#277 の段階 6 で直した不具合**（**複数選んでも 1 件しか消えない**）には、
     /// **いま回帰テストが無い。** その前提をここで用意する。
     ///
-    /// **種データの流儀は `Sts.TestClients` と同じ**（#264）。
+    /// **種データの流儀は `TestClients` と同じ**（#264）。
     /// **`IsDebug` ＋ `TestUserPWD` のときだけ**作られ、**本番では一度も呼ばれない。**
     ///
     /// **専用の利用者（`webauthn_tanaka`）にだけ付ける。**

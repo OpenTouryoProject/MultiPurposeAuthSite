@@ -31,6 +31,8 @@
 //*  2026/10/21  玄人 幸道         新規（#308 の段階 1）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Util.Sts;
+
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>

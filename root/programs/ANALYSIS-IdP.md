@@ -84,7 +84,7 @@
 | | Refresh Token | ✓ | ローテーションあり |
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
 | | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
-| | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
+| | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/Sts/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
 | | `/end_session`（RP-Initiated Logout） | ✓ | #232。**`sid` は `id_token` に出る**（#310 の段階 1。**RP ごとに別の値**。伝える先は `SessionClient` の表）。**サインアウトすると、登録が在る RP へ `logout_token` を POST する**（#310 の段階 2）。**`frontchannel_logout_uri` の登録が在れば、`iframe` の画面も返す**（#310 の段階 3）。**どちらも Discovery で広告している** |
@@ -142,7 +142,7 @@ if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
 
 > **この指摘は誤りだった。** 条件だけを見て「`nonce` が無ければ `id_token` を打ち切る」と判断したが、
 > **呼び出し元を辿っていなかった。**
-> `Helper.AddClaim`（`Extensions/Sts/Helper.cs`）は **`nonce` 未指定時に `state` を代入して
+> `Helper.AddClaim`（`Util/Sts/Helper.cs`）は **`nonce` 未指定時に `state` を代入して
 > 無条件に nonce クレームを追加する**。トークンを発行する 6 経路
 > （code / implicit / hybrid / ROPC / client_credentials / JWT bearer）はすべてここを通るため、
 > payload には **常に** `nonce` キーが存在し、上の条件は**常に真**だった。
@@ -872,7 +872,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 - **決定的**でなければならない（RP は `sub` を利用者の主キーとして保存するため、
   同じ利用者・同じクライアントなら常に同じ値）。**鍵と IV を秘密と `client_id` から導出**して実現
 - **クライアントごとに変わる**（`client_id` を鍵材料に入れている）
-- 実装は `Util/PPIDExtension`（AES-CBC）。**対応表（新しいテーブル）を作らずに済む**ので、
+- 実装は `Util/Sts/PPIDExtension`（AES-CBC）。**対応表（新しいテーブル）を作らずに済む**ので、
   **DDL の 3 方言と、既存データベースへの移行が要らない**
 - E2E テスト : **`RT-140.2`**（`pairwise` でも `/userinfo` がクレームを返す）、
   **`RT-140.3`**（毎回同じ値になり、クライアントが違えば違う値になる）。
@@ -2952,7 +2952,7 @@ this.SendConfirmEmail(user);
 **サインアップ・パスワードの失念は、利用者名かメアドが分かれば、誰でも何度でも押せる。** **押すたびにメールが飛んだ。**
 **口ごとのレート制限（#305 の段階 3）は送信元ごとに数える**ので、**宛先が 1 つでも、送信元を変えれば止まらない。**
 
-**宛先（利用者）ごとに数える `Extensions/Sts/MailThrottle` を足した。**
+**宛先（利用者）ごとに数える `Util/IdP/MailThrottle` を足した。**
 **同じ利用者・同じ用途のメールは、`MailResendIntervalSeconds` 秒に 1 通まで**（雛形は 60。**0（未設定）なら絞らない**）。
 **断っても画面は変えない**（**送ったかどうかを画面から分からせない**）。CONFIGURATION.md の「メールの送り過ぎ」。
 
@@ -3132,7 +3132,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | **印がどの要求にも効いた** | **再認証の途中でやめると印が残り、後で別の RP が送ってきた `prompt=login` が、再認証なしで通った** |
 | **壊れた値** | **`DateTime.Parse` が例外を出し、500 になった** |
 
-**どちらの Cookie も、改ざんできない形で包む**ようにした（`Extensions/Sts/AuthTimeCookie`。
+**どちらの Cookie も、改ざんできない形で包む**ようにした（`Util/IdP/AuthTimeCookie`。
 **net10.0 : DataProtection**（#251 で鍵を永続化）／**net48 : `MachineKey.Protect`**）。**開けない値は、無いものとして扱う。**
 **再認証の印は、それを求めた認可要求に結び付けた**（クエリから作る指紋。**別の要求の `prompt=login` には効かない**）。
 
@@ -3536,7 +3536,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | E-6 | **✅ Deny ボタンは入れた（#272 の段階 2）**。認可画面で拒否でき、**`access_denied` を `redirect_uri` へ返す**（RFC 6749 §4.1.2.1。`RT-272.6`）。**拒否は記録しない**。残るのは **scope が生の識別子のまま**であること |
 | E-7 | **✅ 解けた（#303）。** **ファイルの更新だけを見て覚える**（`Extensions/Sts/JwkSetDocument`）。**`ETag` を常に付け、`If-None-Match` に `304`**。**`Cache-Control` は `JwkSetCacheMaxAgeSeconds`**（0 なら `no-store` ＝ 従来どおり）。**鍵の入れ替えに追随する**（`RT-303.2`） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる。**#294 で両方を責務ごとの partial に分けた**（`AccountController.*.cs` / `ManageController.*.cs`。**別 Controller への切り出しはしていない**） |
-| E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
+| E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
 | E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |
 | E-11 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションが **認可応答の `iss`（RFC 9207）を見ていなかった。** `id_token` の `iss` は照合していたが、**OAuth 2.1 が Mix-Up 対策として挙げているのは応答パラメタの方。** いまは `SpRp_Isser` と照合する（**来なければ通す** — 実装していない OP があるため） |
 | E-12 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの要求スコープに**独自の `userid` / `roles`** が入っていた。**厳格な OP では `invalid_scope` になりうる**（この IdP 自身も #198 でスコープを絞る）。**標準だけにした。** `userid` は連携キーでなくなったので不要（`(iss, sub)` へ移行済み）。`state` も 10 → 32 文字にした |

@@ -46,6 +46,7 @@ using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Linq;

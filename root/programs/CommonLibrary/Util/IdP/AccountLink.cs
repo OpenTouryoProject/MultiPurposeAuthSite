@@ -30,11 +30,13 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/29  玄人 幸道         新規（#140 の段階 1）
 //*  2026/10/01  玄人 幸道         鍵が常にメアドになったので、判定の引数を 1 つにした（#151 の段階 3）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/IdP へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Extensions.Sts;
 
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>外部 ID を既存アカウントに結び付けてよいか（#140 の段階 1）</summary>
     public enum AccountLinkCheck

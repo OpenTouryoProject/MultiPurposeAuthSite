@@ -53,7 +53,7 @@ namespace MultiPurposeAuthSite.SamlProviders
     ///
     /// | | 汎用 | 設定の読み方 |
     /// |---|---|---|
-    /// | OIDC | `RemoteJwkSetStore`（Open棟梁） | `Extensions.Sts.IdFederationJwks` |
+    /// | OIDC | `RemoteJwkSetStore`（Open棟梁） | `TokenProviders.IdFederationJwks` |
     /// | **SAML2** | **`SAML2Metadata`（Open棟梁）** | **`IdFederationSaml2Metadata`** |
     /// </remarks>
     public static class CmnSamlMetadata

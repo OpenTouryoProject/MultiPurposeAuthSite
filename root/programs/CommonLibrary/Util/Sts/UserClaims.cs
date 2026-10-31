@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/25  玄人 幸道         新規（profile / address のクレームを設定で対応付ける。#230）
 //*  2026/10/03  玄人 幸道         クレームの型をJSONのまま返す（updated_atは数値）（#261）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -49,9 +50,10 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.Sts
 {
     /// <summary>
     /// scope に応じて返す利用者のクレームを組み立てる（#230）

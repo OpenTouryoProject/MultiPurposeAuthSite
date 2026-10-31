@@ -50,6 +50,7 @@ using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Notifications;
+using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;   // RateLimitProvider（#305 の段階 3）
 
 using System;
@@ -234,8 +235,8 @@ namespace MultiPurposeAuthSite
 
                 // 1. 判定対象外のスキップ（アーリーリターン）
                 // 機能がオフ、対象外のパスのリクエストの場合
-                if (!Sts.RateLimitProvider.Enabled
-                    || !Sts.RateLimitProvider.IsLimitedPath(path))
+                if (!RateLimitProvider.Enabled
+                    || !RateLimitProvider.IsLimitedPath(path))
                 {
                     await next();
                     return;
@@ -244,7 +245,7 @@ namespace MultiPurposeAuthSite
                 // 2. client_idの抽出（RFC 6749 §2.3.1）に則った優先順位で
                 // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
                 // **`ReadFormAsync` の結果は要求に残る**ので、後のモデル バインドは読み直さない。
-                string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+                string clientId = RateLimitProvider.ClientIdFromAuthorizationHeader(
                     context.Request.Headers[Const.HeaderAuthorization]);
 
                 if (string.IsNullOrEmpty(clientId))
@@ -263,7 +264,7 @@ namespace MultiPurposeAuthSite
                 }
 
                 // 3. レート制限チェックの実行（パス、client_id、IPアドレス）
-                int? retryAfter = Sts.RateLimitProvider.Check(path, clientId,
+                int? retryAfter = RateLimitProvider.Check(path, clientId,
                     (context.Connection.RemoteIpAddress == null)
                         ? "" : context.Connection.RemoteIpAddress.ToString());
 

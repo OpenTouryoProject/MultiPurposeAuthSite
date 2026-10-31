@@ -32,6 +32,9 @@
 //*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールの間隔を足した（#294）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.Util.Sts;
+
 using Touryo.Infrastructure.Public.Util;
 
 /// <summary>MultiPurposeAuthSite.Co</summary>

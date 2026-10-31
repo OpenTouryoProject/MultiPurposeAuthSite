@@ -36,6 +36,7 @@ using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.Sts;
 
 #if NETCORE
 //using MultiPurposeAuthSite;

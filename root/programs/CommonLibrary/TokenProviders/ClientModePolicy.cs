@@ -33,6 +33,8 @@
 //*  2026/09/26  玄人 幸道         refresh_token を、非対称の証明なら fapi1 / fapi2 にも開いた（#239 の段階 3）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Util.Sts;
+
 using System.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;

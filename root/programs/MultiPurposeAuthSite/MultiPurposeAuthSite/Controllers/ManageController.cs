@@ -43,6 +43,7 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System.Threading.Tasks;

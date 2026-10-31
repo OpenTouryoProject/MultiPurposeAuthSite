@@ -6864,7 +6864,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=67ad8c53-1109-4cba-8eb2-6d8d67a9ff3b&code=bogus
+1. GET /Account/EmailConfirmation?userId=9a5566bc-64d6-4ee2-a302-9d69686a6ecd&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6873,8 +6873,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=67ad8c53-1109-4cba-8eb2-6d8d67a9ff3b&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=67ad8c53-1109-4cba-8eb2-6d8d67a9ff3b&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=9a5566bc-64d6-4ee2-a302-9d69686a6ecd&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=9a5566bc-64d6-4ee2-a302-9d69686a6ecd&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11637,7 +11637,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **結び付けの守りは「メアドが検証済みであること」**である（#140 の段階 1。`Sts.AccountLink.CheckLinkToExistingUser`）。**検証済みでなければ結ばず、理由を画面とログに出す。****上流が増えるほど、この守りが効いている必要がある。**
+- **結び付けの守りは「メアドが検証済みであること」**である（#140 の段階 1。`AccountLink.CheckLinkToExistingUser`）。**検証済みでなければ結ばず、理由を画面とログに出す。****上流が増えるほど、この守りが効いている必要がある。**
 
 ## CN-6.1 `/MultiPurposeAuthSite/...` では開かない（コンテナは root 配信である）
 

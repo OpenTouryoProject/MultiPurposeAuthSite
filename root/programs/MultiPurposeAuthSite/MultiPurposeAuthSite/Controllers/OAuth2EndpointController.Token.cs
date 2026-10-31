@@ -33,6 +33,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 
@@ -278,7 +279,7 @@ namespace MultiPurposeAuthSite.Controllers
                 identity, accessToken,
                 isDPoP ? HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_DPoP] : null,
                 HttpContext.Current.Request.HttpMethod,
-                Token.CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
+                CmnDPoP.EndpointUriOf(HttpContext.Current.Request.Path),
                 out dpopError);
         }
 

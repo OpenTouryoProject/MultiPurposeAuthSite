@@ -62,7 +62,7 @@ namespace MultiPurposeAuthSite.Controllers
             // SessionIDの切換にはこのコードが必要である模様。
             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
             Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
-            Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
+            Response.Cookies[Config.AuthTimeCookieName].Value = AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
 
             // **OP のセッションの識別子を作る**（#310）。
             //   **ここがセッションの始まり**である（`sid` はこの値から引く）。

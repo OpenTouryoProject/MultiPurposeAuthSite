@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 2）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -45,9 +46,11 @@ using Touryo.Infrastructure.Framework.StdMigration;
 #endif
 
 using Dapper;
+using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.IdP;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.Sts
 {
     /// <summary>
     /// 認証の失敗を数えて、**一定回数で一定時間断る**（#305 の段階 2）。

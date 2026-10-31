@@ -3195,7 +3195,7 @@ cd root
 **サーバ側の種データが、テスト利用者の登録（`saml2OAuth2Data`）として作る。**
 
 ```
-root/programs/CommonLibrary/Extensions/Sts/TestClients.cs   表（16 件）
+root/programs/CommonLibrary/Util/Test/TestClients.cs   表（16 件）
     ↓  AccountController.CreateTestUsers（IsDebug ＋ TestUserPWD）
 利用者 1 人 ＝ クライアント登録 1 件（client_name は利用者名そのもの）
 ```
@@ -3206,7 +3206,7 @@ root/programs/CommonLibrary/Extensions/Sts/TestClients.cs   表（16 件）
 | **種データで作るもの** | **E2E だけが使うもの**（16 件。`Tests/README.md`） |
 
 - **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**
-- **`client_id` は固定値。** **`Sts.TestClients.Entries` と `Flows.KnownClients.SeededClientIds`
+- **`client_id` は固定値。** **`TestClients.Entries` と `Flows.KnownClients.SeededClientIds`
   を同じ値にしておくこと**（E2E は構成ファイルを読む作りで、user store は読めない）
 - **件数の上限が無い。** user store は 1 件ずつ別の行になる
 
@@ -4026,7 +4026,7 @@ The ID federation did not complete. (the error view was returned)
 > **`IdFederation.FederateAsync` / `Saml2Federation.FederateAsync` に ReturnUrl を渡せるようにした**（渡さなければ、従来どおり）。
 >
 > **測れていないもの。** 外部ログイン（Google など）の戻りの経路（結果を見る・クレームの入れ替え・name が無い場合）は、E2E では動かせない。
-> **同じ利用者を同時に初めて連携したときの直列化**（`Sts.UserCreationLock`）は、上流の新しい利用者を作れないので測っていない
+> **同じ利用者を同時に初めて連携したときの直列化**（`UserCreationLock`）は、上流の新しい利用者を作れないので測っていない
 > （**以前の通しで SA-6.6 が落ちた形**は、これで起きなくなるはずである）。
 
 #### メールを使う流れ・失敗の口・自己テスト（`RT-294.26`〜`.40`。#294）

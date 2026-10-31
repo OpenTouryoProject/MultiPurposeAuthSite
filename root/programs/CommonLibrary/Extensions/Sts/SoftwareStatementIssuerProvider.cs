@@ -34,6 +34,7 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Util.IdP;
 
 using System;
 using System.Collections.Concurrent;

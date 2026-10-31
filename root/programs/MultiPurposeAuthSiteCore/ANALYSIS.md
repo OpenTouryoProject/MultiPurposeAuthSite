@@ -411,7 +411,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 **net48 側にしか無い話**（新しい View を csproj の `<Content Include>` に足す など）は
 [`../MultiPurposeAuthSite/ANALYSIS.md`](../MultiPurposeAuthSite/ANALYSIS.md) の 3 節にある。
 
-**クライアント側の組み立ては `CommonLibrary/Extensions/Sts/SelfTestClient.cs` に寄せてある**（#246）。
+**クライアント側の組み立ては `CommonLibrary/Util/Test/SelfTestClient.cs` に寄せてある**（#246）。
 
 | | 受け持ち |
 |---|---|

@@ -32,6 +32,7 @@
 //*  2026/10/28  玄人 幸道         送れなかった分を返す Release を足した（#294）
 //*  2026/10/29  玄人 幸道         管理画面のメアドの変更・電話番号の追加（SMS）の用途を足した（#294）
 //*  2026/10/30  玄人 幸道         宛先ごとに数える TryAcquireForDestination / ReleaseForDestination を足した（#294）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/IdP へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -40,9 +41,11 @@ using MultiPurposeAuthSite.Log;
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>
     /// メアド検証・パスワード リセットのメールを、送り過ぎない（#294）。

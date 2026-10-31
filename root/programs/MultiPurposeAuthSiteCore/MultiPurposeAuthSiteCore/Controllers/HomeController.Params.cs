@@ -21,6 +21,7 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 using Microsoft.AspNetCore.Http;
 

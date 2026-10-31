@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System.Collections.Generic;
 
@@ -337,7 +338,7 @@ namespace MultiPurposeAuthSite.Co
             List<IdFederationUpstream> ret = IdFederationUpstreams.FromConfig();
 
             foreach (IdFederationUpstreamViewModel row
-                in Extensions.Sts.IdFederationUpstreamProvider.GetAll())
+                in Util.IdP.IdFederationUpstreamProvider.GetAll())
             {
                 if (row == null || string.IsNullOrEmpty(row.UpstreamKey))
                 {

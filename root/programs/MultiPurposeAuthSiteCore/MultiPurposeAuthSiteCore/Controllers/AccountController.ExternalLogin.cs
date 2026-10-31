@@ -228,8 +228,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // サインアップ済み → 外部ログイン追加だけで済む
 
                             // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140）。
-                            if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
-                                    == Sts.AccountLinkCheck.NeedsVerifiedEmail)
+                            if (AccountLink.CheckLinkToExistingUser(emailVerified)
+                                    == AccountLinkCheck.NeedsVerifiedEmail)
                             {
                                 // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
                                 Logging.MyOperationTrace(string.Format(
@@ -297,7 +297,7 @@ namespace MultiPurposeAuthSite.Controllers
                             user = ApplicationUser.CreateUser(newUserName, email, true);
 
                             // **上流が検証していないメアドを「確認済み」として定着させない**（#140）。
-                            user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
+                            user.EmailConfirmed = AccountLink.EmailConfirmedForNewUser(emailVerified);
 
                             // ユーザの新規作成（パスワードは不要）
                             idResult = await UserManager.CreateAsync(user);

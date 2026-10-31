@@ -25,6 +25,7 @@ using MultiPurposeAuthSite.ViewModels;
 
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Util.IdP;
 
 using System.Collections.Generic;
 using System.Linq;

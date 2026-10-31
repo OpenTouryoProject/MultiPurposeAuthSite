@@ -52,6 +52,9 @@
 //*  2026/10/30  玄人 幸道         EndpointSetDeviceToken を追加（#294）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Util.Test;
+
 using Touryo.Infrastructure.Framework.Authentication;
 
 /// <summary>MultiPurposeAuthSite.Co</summary>

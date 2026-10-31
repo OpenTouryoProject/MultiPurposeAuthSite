@@ -33,6 +33,7 @@
 //*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
 //*  2026/10/31  玄人 幸道         Device AuthZ の間隔を、設定値より短くしない（画面から来る値なので。#294）
 //*  2026/10/31  玄人 幸道         ポーリングで、待ち時間の上限を越えて待たない（#294）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -53,9 +54,11 @@ using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.Str;
+using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.Util.Test
 {
     /// <summary>
     /// 自己テスト（この実装が兼ねているクライアント）の**組み立て**を受け持つ（#246）。

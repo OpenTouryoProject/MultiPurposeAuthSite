@@ -35,6 +35,7 @@ using System.Web.Helpers;   // AntiForgeryConfig（#282）
 using System.Web.SessionState;
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;   // RateLimitProvider（#305 の段階 3）
 
 // OpenTouryo
@@ -244,7 +245,7 @@ namespace MultiPurposeAuthSite
         {
             // 1. 判定対象外のスキップ（アーリーリターン）
             // 機能がオフ、対象外のパスのリクエストの場合
-            if (!Sts.RateLimitProvider.Enabled)
+            if (!RateLimitProvider.Enabled)
             {
                 return;
             }
@@ -259,14 +260,14 @@ namespace MultiPurposeAuthSite
                 path = path.Substring(appPath.Length);
             }
 
-            if (!Sts.RateLimitProvider.IsLimitedPath(path))
+            if (!RateLimitProvider.IsLimitedPath(path))
             {
                 return;
             }
 
             // 2. client_idの抽出（RFC 6749 §2.3.1）に則った優先順位で
             // 優先度 1: Authorization ヘッダー（Basic 認証）から取得
-            string clientId = Sts.RateLimitProvider.ClientIdFromAuthorizationHeader(
+            string clientId = RateLimitProvider.ClientIdFromAuthorizationHeader(
                 this.Request.Headers[Const.HeaderAuthorization]);
 
             if (string.IsNullOrEmpty(clientId))
@@ -293,7 +294,7 @@ namespace MultiPurposeAuthSite
             }
 
             // 3. レート制限チェックの実行（パス、client_id、IPアドレス）
-            int? retryAfter = Sts.RateLimitProvider.Check(
+            int? retryAfter = RateLimitProvider.Check(
                 path, clientId, this.Request.UserHostAddress);
 
             // 4. 制限超過時のレスポンス処理（429 応答）

@@ -34,6 +34,8 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.Util.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
@@ -93,7 +95,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && claims[OAuth2AndOIDCConst.claims_id_token] is JObject claimsIdToken
                 && claimsIdToken.ContainsKey(OAuth2AndOIDCConst.auth_time)))
             {
-                // **前回の認証時刻は Cookie から読む**（**改ざんできない形で包んである**。#294。`Sts.AuthTimeCookie`）。
+                // **前回の認証時刻は Cookie から読む**（**改ざんできない形で包んである**。#294。`AuthTimeCookie`）。
                 // サインイン時（InitSessionAfterlogin）と、ManageController で資格情報を確かめた時（パスワードの再確認・変更、外部ログインの結び付け）に書く。
                 // **サインインし直しただけでは書かない**（#294。資格情報を確かめていないので、認証したことにはならない）。
                 // **以前は平文の Cookie で、ブラウザ側で書き換えると、偽の auth_time を RP に保証していた。**
@@ -357,7 +359,7 @@ namespace MultiPurposeAuthSite.Controllers
                 out valid_redirect_uri, out err, out errDescription, code_challenge, prompt))
             {
                 // **max_age と auth_time の照合**（判定は CommonLibrary）。
-                //   **どちらの Cookie も、改ざんできない形で読む**（#294。`Sts.AuthTimeCookie`）。
+                //   **どちらの Cookie も、改ざんできない形で読む**（#294。`AuthTimeCookie`）。
                 OAuth2AndOIDCEnum.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
                     max_age, this.ReadAuthTime(), this.ReadReAuthenticatedAt());
 
@@ -453,7 +455,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //   Keycloak の Consent Required のオフや、Auth0 の first-party の同意を飛ばすと同じ考え方。
                     //   **要求に付けただけでは、同意画面を飛ばせない**（飛ばすかは、登録を管理する人が決める）。
                     //   **scope は case-sensitive**（RFC 6749 §3.3）なので、小文字化しない。
-                    bool isAuth = Sts.Helper.FilterSupportedScopes(scopes, client_id)
+                    bool isAuth = Helper.FilterSupportedScopes(scopes, client_id)
                         .Contains(OAuth2AndOIDCConst.Scope_Auth);
 
                     if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
@@ -484,7 +486,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // ★ 必要に応じてスコープのフィルタ
                         if (isAuth)
                         {
-                            scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
+                            scopes = Helper.FilterClaimAtAuth(scopes).ToArray();
                         }
 
                         // ★ code / token の生成と、Redirectエンドポイントへの応答
@@ -948,7 +950,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (isJwt)
             {
                 // JARM
-                string response = Token.CmnResponseObject.Create(parameters, client_id, this.CreateJarmExp());
+                string response = Sts.CmnResponseObject.Create(parameters, client_id, this.CreateJarmExp());
 
                 if (isFormPost)
                 {
@@ -1094,14 +1096,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>W3C 形式の時刻（無い・開けなければ null）</returns>
         private string ReadAuthTime()
         {
-            return Sts.AuthTimeCookie.UnprotectAuthTime(this.ReadCookie(Config.AuthTimeCookieName));
+            return AuthTimeCookie.UnprotectAuthTime(this.ReadCookie(Config.AuthTimeCookieName));
         }
 
         /// <summary>この要求の、再認証の印を読む</summary>
         /// <returns>W3C 形式の時刻（無い・開けない・別の要求の印なら null）</returns>
         private string ReadReAuthenticatedAt()
         {
-            return Sts.AuthTimeCookie.UnprotectReAuthenticatedAt(
+            return AuthTimeCookie.UnprotectReAuthenticatedAt(
                 this.ReadCookie(Config.ReAuthenticatedAtCookieName), this.ReAuthRequestKey());
         }
 
@@ -1122,7 +1124,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
-            return Sts.AuthTimeCookie.RequestKey(pairs, Const.OpSessionRetry);
+            return AuthTimeCookie.RequestKey(pairs, Const.OpSessionRetry);
         }
 
         /// <summary>再認証の印を残してサインアウトし、同じ URL に戻す（max_age 超過・prompt=login）</summary>
@@ -1131,7 +1133,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             //  **印は、この要求に結び付けて、改ざんできない形で残す**（#294）。
             this.SetCookie(Config.ReAuthenticatedAtCookieName,
-                Sts.AuthTimeCookie.ProtectReAuthenticatedAt(DateTime.UtcNow, this.ReAuthRequestKey()));
+                AuthTimeCookie.ProtectReAuthenticatedAt(DateTime.UtcNow, this.ReAuthRequestKey()));
 
             // **OpSessionを終わらせる**（入り直すと新しい sid になる）
             List<string> iframeUrls = this.ClearOpSession();
@@ -1184,13 +1186,13 @@ namespace MultiPurposeAuthSite.Controllers
             if (formData != null)
             {
                 string userCode = formData[OAuth2AndOIDCConst.user_code];
-                string failureKey = Sts.AuthFailureProvider.DeviceVerifyKey(User.Identity.Name);
+                string failureKey = AuthFailureProvider.DeviceVerifyKey(User.Identity.Name);
 
                 //  **続けて間違えている利用者は、断る**（#305。RFC 8628 §5.2）。
                 //    **間違えた `user_code` では、どの要求を狙ったか分からない**ので、
                 //    **投入した人で数える。**
                 //    **断っている間は、正しい `user_code` でも通さない。**
-                if (Sts.AuthFailureProvider.IsLockedOut(failureKey))
+                if (AuthFailureProvider.IsLockedOut(failureKey))
                 {
                     ViewBag.ReceiveResult = false;
                 }
@@ -1200,11 +1202,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                     if (ViewBag.ReceiveResult)
                     {
-                        Sts.AuthFailureProvider.Clear(failureKey);
+                        AuthFailureProvider.Clear(failureKey);
                     }
                     else
                     {
-                        Sts.AuthFailureProvider.Record(failureKey);
+                        AuthFailureProvider.Record(failureKey);
                     }
                 }
             }

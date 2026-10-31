@@ -36,6 +36,8 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.Util.Sts;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
@@ -212,7 +214,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 承認を記録する（待っているブラウザが拾う）
-            Sts.TwoFactorPushProvider.Create(user.Id, code);
+            TwoFactorPushProvider.Create(user.Id, code);
 
             return this.Ok("OK");
         }

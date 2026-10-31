@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;

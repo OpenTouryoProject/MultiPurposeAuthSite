@@ -123,7 +123,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **CIBA の `/ciba_authz` と `/token` を、`client_assertion` で通すことを測る**（`RT-294.43`）。
         /// **アサーションは ES256**（写し元の ECDSA の公開鍵で検証される）。
-        /// **構成ファイルには無い。** 種データ（`Sts.TestClients`）で登録される。
+        /// **構成ファイルには無い。** 種データ（`TestClients`）で登録される。
         /// </remarks>
         public const string TestClient4_4 = "TestClient4_4";
 
@@ -163,7 +163,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>
         /// TestClient（normal）を写し、**backchannel_logout_uri を登録**したクライアント（#310 の段階 2）。
-        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// **構成ファイルには無い。** サーバ側の種データ（TestClients）が作る。
         /// </summary>
         /// <remarks>
         /// 登録値は定数（test_self_bclogout）で、**サーバ側で URL に解決される**
@@ -175,7 +175,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>
         /// TestClient（normal）を写し、**backchannel_logout_uri を登録**したが、
         /// **同意されない**クライアント（#310 の段階 2）。
-        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// **構成ファイルには無い。** サーバ側の種データ（TestClients）が作る。
         /// </summary>
         /// <remarks>
         /// **このクライアントには「許可」を押さないこと。**
@@ -186,7 +186,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>
         /// TestClient（normal）を写し、**frontchannel_logout_uri を登録**したクライアント（#310 の段階 3）。
-        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// **構成ファイルには無い。** サーバ側の種データ（TestClients）が作る。
         /// </summary>
         /// <remarks>
         /// 登録値は定数（test_self_fclogout）で、**サーバ側で URL に解決される**
@@ -406,7 +406,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         #region 種データで登録される client_id（#264）
 
         /// <summary>
-        /// **種データ（`Sts.TestClients`）で登録されるクライアントの client_id**（#264）。
+        /// **種データ（`TestClients`）で登録されるクライアントの client_id**（#264）。
         /// </summary>
         /// <remarks>
         /// **以前は test.ps1 -Launch が環境変数で差し込み、client_id を `MPAS_<名前>` で渡していた。**
@@ -414,7 +414,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **利用者の登録（`saml2OAuth2Data`）に寄せた**（#264）。
         ///
         /// **user store は構成ファイルから読めない**ので、**client_id を固定値で持つ。**
-        /// **サーバ側の `Sts.TestClients.Entries` と同じ値にすること。**
+        /// **サーバ側の `TestClients.Entries` と同じ値にすること。**
         /// 揃っていなければ「登録されていない」で落ちる。
         /// </remarks>
         private static readonly Dictionary<string, string> SeededClientIds
@@ -495,7 +495,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>
         /// TestClient_35 の client_secret（RT-237.3。#294）。
-        /// **サーバ側の `Sts.TestClients.Entries` と同じ値にすること。**
+        /// **サーバ側の `TestClients.Entries` と同じ値にすること。**
         /// </summary>
         /// <remarks>
         /// **「:」だけを含む**（英数字と「:」）。符号化しない値は復号しても変わらないので、
@@ -1094,7 +1094,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             // **client_id は固定値**（#264）。
             //   **以前は test.ps1 -Launch が環境変数（`MPAS_<名前>`）で渡していた**が、
-            //   **サーバ側の種データ（`Sts.TestClients`）に寄せた**ので、環境変数を使わない。
+            //   **サーバ側の種データ（`TestClients`）に寄せた**ので、環境変数を使わない。
             //   **`-Launch` を付けずに、手で起動したサイトに対しても測れる**ようになった。
             string clientId = sourceName != null
                 ? KnownClients.SeededClientId(clientName) : null;

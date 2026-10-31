@@ -22,6 +22,7 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 

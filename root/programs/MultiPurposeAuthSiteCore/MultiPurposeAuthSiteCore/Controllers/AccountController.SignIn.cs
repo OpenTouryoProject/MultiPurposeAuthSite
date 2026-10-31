@@ -73,7 +73,7 @@ namespace MultiPurposeAuthSite.Controllers
             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
             Response.Cookies.Set(this.SessionCookieName, "", this._cookieOptions);
             Response.Cookies.Set(Config.AuthTimeCookieName,
-                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
+                AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
 
             // **OP のセッションの識別子を作る**（#310）。
             //   **ここがセッションの始まり**である（`sid` はこの値から引く）。

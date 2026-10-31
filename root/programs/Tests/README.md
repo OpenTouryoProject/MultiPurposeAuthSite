@@ -64,7 +64,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 雛形にも実設定にも足さずに済むので、**特定の組み合わせを試すためだけのクライアント**に使う。
 
 **種データが、テスト利用者の登録（`saml2OAuth2Data`）として作る**（#264）。
-表は **`CommonLibrary/Extensions/Sts/TestClients.cs`** にあり、
+表は **`CommonLibrary/Util/Test/TestClients.cs`** にあり、
 **`IsDebug` ＋ `TestUserPWD` のときだけ**作られる。
 
 | client_name | 何か | 引き方 |
@@ -92,7 +92,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
 - **`client_id` は固定値。** E2E は構成ファイルを読む作りなので user store は読めない。
-  **`Flows.KnownClients.SeededClientIds` と `Sts.TestClients.Entries` を同じ値にしておくこと**
+  **`Flows.KnownClients.SeededClientIds` と `TestClients.Entries` を同じ値にしておくこと**
 - **`client_secret` を差し替えたものは、写す元の秘密では認証できない。**
   **`KnownClients.SymbolSecret` / `ColonSecret` / `ColonOnlySecret` も、表と同じ値にしておくこと**
 - **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**（種データはサイト側が作る）

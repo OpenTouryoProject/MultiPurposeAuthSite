@@ -103,7 +103,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>auth_time を、いまの時刻にする（資格情報を確かめた所だけで呼ぶ。#294）</summary>
         private void WriteAuthTime()
         {
-            Response.Cookies[Config.AuthTimeCookieName].Value = Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
+            Response.Cookies[Config.AuthTimeCookieName].Value = AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow);
         }
 
         #endregion
@@ -234,7 +234,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // **送れなかった分は、間隔に数えない**（すぐに送り直せるように）。
                     if (purpose != null)
                     {
-                        Sts.MailThrottle.ReleaseForDestination(purpose, destination);
+                        MailThrottle.ReleaseForDestination(purpose, destination);
                     }
                 }
             });
@@ -253,7 +253,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private void SendConfirmEmail(ApplicationUser user, string newEmail)
         {
-            if (!Sts.MailThrottle.TryAcquireForDestination(Sts.MailThrottle.PurposeEmailChange, newEmail, user.Id))
+            if (!MailThrottle.TryAcquireForDestination(MailThrottle.PurposeEmailChange, newEmail, user.Id))
             {
                 return;
             }
@@ -273,7 +273,7 @@ namespace MultiPurposeAuthSite.Controllers
                     new { userId = user.Id, code = customizedConfirmationJson.Code }, protocol: Request.Url.Scheme
                 );
 
-            this.SendMailInBackground(Sts.MailThrottle.PurposeEmailChange, user.Id,
+            this.SendMailInBackground(MailThrottle.PurposeEmailChange, user.Id,
                 newEmail, Resources.AccountController.SendEmail_emailconfirm,
                 string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl));
         }

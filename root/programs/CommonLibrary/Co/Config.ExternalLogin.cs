@@ -56,7 +56,7 @@ namespace MultiPurposeAuthSite.Co
         /// それでもメアドで結び付けたいとき**の逃げ道である
         /// （その場合の代替は、ローカルでサインインしてから `/Manage/ManageLogins` で追加すること）。
         ///
-        /// 判定は `Extensions.Sts.AccountLink` にある。
+        /// 判定は `Util.IdP.AccountLink` にある。
         /// </remarks>
         public static bool RequireVerifiedEmailForAccountLinking
         {

@@ -27,6 +27,7 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -275,7 +276,7 @@ namespace MultiPurposeAuthSite.Controllers
                             }
                             else if (!string.IsNullOrEmpty(model.ClientID)
                                 && (Sts.Saml2OAuth2DataProvider.Get(model.ClientID) != null
-                                    || !string.IsNullOrEmpty(Sts.Helper.GetInstance().GetClientName(model.ClientID))))
+                                    || !string.IsNullOrEmpty(Helper.GetInstance().GetClientName(model.ClientID))))
                             {
                                 //  **ほかで使われている `client_id` では作らない**（#294）。
                                 //    **以前は、mem では何もせずに「成功」と出し、DB では主キーの違反で 500 になっていた。**

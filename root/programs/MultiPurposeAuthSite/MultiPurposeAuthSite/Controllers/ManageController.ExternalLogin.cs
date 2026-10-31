@@ -33,6 +33,7 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -81,7 +82,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // **client_name を引けなければ client_id を出す**
                 //   （登録を消した後でも、同意の記録は残る）。
-                string clientName = Sts.Helper.GetInstance().GetClientName(kv.Key);
+                string clientName = Helper.GetInstance().GetClientName(kv.Key);
 
                 grants.Add(new ConsentGrantViewModel()
                 {

@@ -28,6 +28,7 @@
 //*  2026/09/30  玄人 幸道         PPID を OP だけが戻せる形にした（#140 の段階 2）
 //*  2026/09/30  玄人 幸道         発行した sub を対応表から引き、無ければ記録するようにした（#151 の段階 2）
 //*  2026/10/12  玄人 幸道         SAML2 の属性で使う利用者を返すオーバーロードを足した（#286 の段階 4）
+//*  2026/10/31  玄人 幸道         Util から Util/Sts へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 #if NETFX
@@ -47,8 +48,9 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.FastReflection;
+using MultiPurposeAuthSite.Util;
 
-namespace MultiPurposeAuthSite.Util
+namespace MultiPurposeAuthSite.Util.Sts
 {
     /// <summary>PPIDExtension</summary>
     public static class PPIDExtension

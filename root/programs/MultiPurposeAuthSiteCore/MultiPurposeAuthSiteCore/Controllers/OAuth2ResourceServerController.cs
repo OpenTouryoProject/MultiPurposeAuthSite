@@ -45,6 +45,7 @@ using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Network;
 
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 
@@ -172,7 +173,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //    （`null` との三項演算子が、そのままでは通らない）。
                 isDPoP ? MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_DPoP].ToString() : null,
                 MyHttpContext.Current.Request.Method,
-                Token.CmnDPoP.EndpointUriOf(MyHttpContext.Current.Request.Path),
+                CmnDPoP.EndpointUriOf(MyHttpContext.Current.Request.Path),
                 out dpopError);
         }
 
@@ -405,7 +406,7 @@ namespace MultiPurposeAuthSite.Controllers
                 this.Response.Headers[Const.HeaderWwwAuthenticate] =
                     scheme + " " + Token.CmnEndpoints.GetChallengeParameter(scheme, Const.EndpointRegister, err);
 
-                string nonce = Token.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
+                string nonce = CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
 
                 if (nonce != null)
                 {

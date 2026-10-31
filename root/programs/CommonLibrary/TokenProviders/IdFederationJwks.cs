@@ -31,6 +31,7 @@
 //*  2026/10/12  玄人 幸道         新規（#289 の段階 2）
 //*  2026/10/13  玄人 幸道         上流のJWK SetのURLを直に指せるようにした（#290）
 //*  2026/10/13  玄人 幸道         上流n件から読めるようにした（#292 の段階 1）
+//*  2026/10/31  玄人 幸道         Extensions/Sts から TokenProviders へ移した（配置の見直し。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -42,8 +43,9 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security.Jwt;
+using MultiPurposeAuthSite.Extensions.Sts;
 
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>
     /// ID 連携（OIDC）の上流の署名鍵を、**設定から決めて**引く（#289 の段階 2）。
