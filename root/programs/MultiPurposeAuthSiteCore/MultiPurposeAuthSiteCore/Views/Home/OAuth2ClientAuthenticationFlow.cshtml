@@ -37,6 +37,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/12/26  西野 大介         新規
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
+    //*  2026/10/31  玄人 幸道         応答を JS の文字列に埋めず、要素に直接出す（改行を含む応答で表示が崩れた。#294）
     //**********************************************************************************
 *@
 
@@ -54,7 +55,8 @@
     <div class="col-md-8">
         <p><a class="btn btn-primary" href="#" id="OAuth2UserInfoEndpoint" url="@(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint)">Get user claims</a></p>
         <br />
-        <div id="debug"></div>
+        @* **応答はここに直接出す**（#294。以前は JS の '…' に埋めたので、改行を含む応答でスクリプトが壊れた） *@
+        <div id="debug">Objected fragment : @ViewBag.Response</div>
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
         <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
@@ -96,11 +98,6 @@
         }
 
         $(function () {
-            // Response
-            //alert(JSON.stringify('@ViewBag.Response'));
-            document.getElementById('debug').innerHTML
-                = 'Objected fragment : ' + '@ViewBag.Response';
-
             // access_token
             // access_token (Bearer Token) を使用して
             // ResourceServerのWebAPIにアクセスする。

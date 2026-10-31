@@ -18,6 +18,7 @@
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         AntiForgery トークンを確かめる。クライアントが無い・Request Object を預けられないときは再表示（#294）
 //*  2026/10/31  玄人 幸道         response_mode の比較を ToLowerInvariant に。コメントの誤り（#294）
+//*  2026/10/31  玄人 幸道         「ログイン・ユーザの Client」をログインせずに選んだら、理由を出す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -129,6 +130,11 @@ namespace MultiPurposeAuthSite.Controllers
                             //   **消された利用者の Cookie が残っていると null**（#294。以前は NRE で 500）。
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                             this.ClientName = (user == null) ? "" : user.UserName;
+                        }
+                        else
+                        {
+                            // **理由を出す**（#294。以前は何も起きずに再表示されるだけだった）。
+                            ModelState.AddModelError("", "Sign in to use your own client.");
                         }
                     }
 

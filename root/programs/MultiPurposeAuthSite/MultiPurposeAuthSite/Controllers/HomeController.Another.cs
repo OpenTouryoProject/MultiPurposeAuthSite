@@ -18,6 +18,7 @@
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         DeviceAuthZResponse を IsLockedDownTestEndpoints で閉じ、AntiForgery を確かめる。ROPC はテスト利用者で。応答が JSON でなくても 500 にしない（#294）
 //*  2026/10/31  玄人 幸道         Device AuthZ の開始も、応答が壊れていても 500 にしない（#294）
+//*  2026/10/31  玄人 幸道         Device AuthZ の開始で、/device_authz が断った理由を画面に出す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -51,7 +52,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // レスポンス
             //   **壊れていても 500 にしない**（#294。読めない項目は空で出す）。
-            JObject responseJObject = HomeController.ReadJson(responseString) ?? new JObject();
+            JObject parsed = HomeController.ReadJson(responseString);
+            JObject responseJObject = parsed ?? new JObject();
             ViewBag.ClientId = this.ClientId;
             ViewBag.DeviceCode = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.device_code);
             ViewBag.UserCode = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.user_code);
@@ -66,6 +68,16 @@ namespace MultiPurposeAuthSite.Controllers
             //   ポーリングは次の POST で行うので、画面（hidden）で持ち回す。
             ViewBag.Interval = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.PollingInterval);
             ViewBag.ExpiresIn = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.expires_in);
+
+            // **断られたら、理由を出す**（#294。以前は項目が空になるだけだった）。
+            //   例 : Device の許可を持たないクライアント、クライアント証明書を提示して公開クライアントが 401 になる配備（#226）。
+            if (string.IsNullOrEmpty((string)ViewBag.DeviceCode))
+            {
+                ViewBag.Error = (parsed == null)
+                    ? "The response is not a JSON object: " + (responseString ?? "")
+                    : HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.error)
+                        + " : " + HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.error_description);
+            }
 
             return View("DeviceAuthZResponse");
         }
