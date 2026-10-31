@@ -32,6 +32,7 @@
 //*  2026/09/28  玄人 幸道         CIBA の通しを寄せ、判定とポーリングを直した（#246 の 3-a / 3-b）
 //*  2026/10/07  玄人 幸道         SAML2 の応答に Audience / Recipient / InResponseTo / RelayState の照合を足した（#276）
 //*  2026/10/31  玄人 幸道         Device AuthZ の間隔を、設定値より短くしない（画面から来る値なので。#294）
+//*  2026/10/31  玄人 幸道         ポーリングで、待ち時間の上限を越えて待たない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -615,7 +616,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return ret;
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(ret.IntervalSeconds));
+                // **残り時間より長くは待たない**（#294）。
+                //   **間隔は画面（hidden）から来ることがある**ので、大きな値だと
+                //   **1 回の要求で上限を大きく越えて待ち続けた**（承認待ちの間）。
+                //   **net48 は executionTimeout（110 秒）で打ち切られる**ので、越えないことにも意味がある。
+                TimeSpan remaining = deadline - DateTime.Now;
+                TimeSpan wait = TimeSpan.FromSeconds(ret.IntervalSeconds);
+
+                if (remaining < wait)
+                {
+                    // 負の値は Task.Delay が例外にする（直前の判定との間に過ぎた場合）
+                    wait = (remaining < TimeSpan.Zero) ? TimeSpan.Zero : remaining;
+                }
+
+                await Task.Delay(wait);
             }
         }
 

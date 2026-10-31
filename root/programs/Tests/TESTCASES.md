@@ -6864,7 +6864,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=ea17f710-c165-41dd-a3ca-6b20ff2a3e98&code=bogus
+1. GET /Account/EmailConfirmation?userId=c88d979b-8437-490f-b980-0489cdc5554c&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6873,8 +6873,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=ea17f710-c165-41dd-a3ca-6b20ff2a3e98&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=ea17f710-c165-41dd-a3ca-6b20ff2a3e98&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=c88d979b-8437-490f-b980-0489cdc5554c&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=c88d979b-8437-490f-b980-0489cdc5554c&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7927,6 +7927,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **別のパラメタにならない**
 - prompt の値として符号化されている
 - scope の空白も符号化されている
+
+## RT-294.86 /Home/DeviceAuthZResponse : interval をとても大きくしても、待ち時間の上限（60 秒）で結果の画面を返す
+
+| | |
+|---|---|
+| 観点 | **以前は、待つ前に残り時間を見ていなかった**ので、**画面から interval を大きくすると、承認待ちの間は 1 回の要求で何日も待ち続けた**（C-56）。**net48 は executionTimeout（110 秒）で打ち切られる。** |
+| 根拠 | RFC 8628 §3.5 / #294 |
+| テスト | `RT29486_ポーリングは待ち時間の上限を越えて待たない` |
+
+**手順**
+
+1. 自己テストの Device AuthZ を始めて、承認していない device_code を得る
+1. interval=100000 で、ポーリングを送る（承認しないので、上限まで待つ）
+
+**検証（合否を判定する）**
+
+- **結果の画面が返る**
+- **上限（60 秒）から大きく越えない**
+
+**観測（判定しない）**
+
+- 問い合わせた回数
+  - 1 回目は承認待ち。上限まで待ってから 2 回目を問い合わせ、期限で終わる。
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

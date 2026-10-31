@@ -17,12 +17,14 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         DeviceAuthZResponse を IsLockedDownTestEndpoints で閉じ、AntiForgery を確かめる。ROPC はテスト利用者で。応答が JSON でなくても 500 にしない（#294）
+//*  2026/10/31  玄人 幸道         Device AuthZ の開始も、応答が壊れていても 500 にしない（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
+using System.Globalization;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
@@ -51,21 +53,22 @@ namespace MultiPurposeAuthSite.Controllers
             string responseString = await Helper.GetInstance().DeviceAuthZRequestAsync(new Uri(deviceAuthZAuthorizeEndpoint), this.ClientId);
 
             // レスポンス
-            JObject responseJObject = (JObject)JsonConvert.DeserializeObject(responseString);
+            //   **壊れていても 500 にしない**（#294。読めない項目は空で出す）。
+            JObject responseJObject = HomeController.ReadJson(responseString) ?? new JObject();
             ViewBag.ClientId = this.ClientId;
-            ViewBag.DeviceCode = (string)responseJObject[OAuth2AndOIDCConst.device_code];
-            ViewBag.UserCode = (string)responseJObject[OAuth2AndOIDCConst.user_code];
+            ViewBag.DeviceCode = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.device_code);
+            ViewBag.UserCode = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.user_code);
             // **応答の verification_uri は絶対 URI である**（RFC 8628 3.2 : ユーザが別の端末で開く URL）。
             //   ここで RootURI を足していたため、URL が二重になり、
             //   **画面のリンクが 404 になっていた**（承認の画面に行けない）（#246）。
-            ViewBag.VerificationUri = (string)responseJObject[OAuth2AndOIDCConst.verification_uri];
-            ViewBag.VerificationUriComplete = (string)responseJObject[OAuth2AndOIDCConst.verification_uri_complete];
+            ViewBag.VerificationUri = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.verification_uri);
+            ViewBag.VerificationUriComplete = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.verification_uri_complete);
 
             // **interval と expires_in を画面に渡す**（#246 の 3-b）。
             //   RFC 8628 3.5 は、機器がこの間隔を空けて問い合わせることを求めている。
             //   ポーリングは次の POST で行うので、画面（hidden）で持ち回す。
-            ViewBag.Interval = (string)responseJObject[OAuth2AndOIDCConst.PollingInterval];
-            ViewBag.ExpiresIn = (string)responseJObject[OAuth2AndOIDCConst.expires_in];
+            ViewBag.Interval = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.PollingInterval);
+            ViewBag.ExpiresIn = HomeController.ReadString(responseJObject, OAuth2AndOIDCConst.expires_in);
             
             return View("DeviceAuthZResponse");
         }
@@ -134,24 +137,47 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Another Flow
 
-        /// <summary>トークン応答から access_token を読む（#294）</summary>
-        /// <param name="response">トークン応答</param>
-        /// <returns>access_token（読めなければ空）</returns>
+        /// <summary>応答を JSON のオブジェクトとして読む（#294）</summary>
+        /// <param name="response">応答</param>
+        /// <returns>JObject（JSON のオブジェクトでなければ null）</returns>
         /// <remarks>
         /// **JSON でない応答でも 500 にしない**（以前は決め打ちで読み、例外になった）。
         /// **応答はそのまま画面に出す**ので、何が返ったかはそこで分かる。
         /// </remarks>
-        private static string ReadAccessToken(string response)
+        private static JObject ReadJson(string response)
         {
             try
             {
-                JObject json = JsonConvert.DeserializeObject(response ?? "") as JObject;
-                return (json == null) ? "" : ((string)json[OAuth2AndOIDCConst.AccessToken] ?? "");
+                return JsonConvert.DeserializeObject(response ?? "") as JObject;
             }
             catch (JsonException)
             {
-                return "";
+                return null;
             }
+        }
+
+        /// <summary>JSON の値を文字列で読む（#294）</summary>
+        /// <param name="json">JObject</param>
+        /// <param name="name">名前</param>
+        /// <returns>値（無い・値でなければ空）</returns>
+        /// <remarks>
+        /// **`(string)` の変換は、配列やオブジェクトだと `ArgumentException` を投げる**ので使わない。
+        /// **数値も読む**（`interval` / `expires_in` は JSON の数値。C-55 のレビュー）。
+        /// </remarks>
+        private static string ReadString(JObject json, string name)
+        {
+            JValue value = (json == null) ? null : json[name] as JValue;
+
+            return (value == null || value.Value == null)
+                ? "" : Convert.ToString(value.Value, CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>トークン応答から access_token を読む（#294）</summary>
+        /// <param name="response">トークン応答</param>
+        /// <returns>access_token（読めなければ空）</returns>
+        private static string ReadAccessToken(string response)
+        {
+            return HomeController.ReadString(HomeController.ReadJson(response), OAuth2AndOIDCConst.AccessToken);
         }
 
         #region Resource Owner Password Credentials Flow

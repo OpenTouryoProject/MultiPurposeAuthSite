@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         AntiForgery トークンを確かめる。クライアントが無い・Request Object を預けられないときは再表示（#294）
+//*  2026/10/31  玄人 幸道         response_mode の比較を ToLowerInvariant に。コメントの誤り（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -78,7 +79,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // AccountLoginViewModelの検証
+                // HomeSaml2OAuth2StartersViewModel の検証
                 if (ModelState.IsValid)
                 {
                     // RedirectUriの扱い
@@ -145,17 +146,17 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         this.ResponseMode = "";
                     }
-                    else if (model.ResponseMode.ToLower().Replace('.', '_')
+                    else if (model.ResponseMode.ToLowerInvariant().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit())
                     {
                         this.ResponseMode = Const.ResponseModeQueryJwt;
                     }
-                    else if (model.ResponseMode.ToLower().Replace('.', '_')
+                    else if (model.ResponseMode.ToLowerInvariant().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
                     {
                         this.ResponseMode = Const.ResponseModeFragmentJwt;
                     }
-                    else if (model.ResponseMode.ToLower().Replace('.', '_')
+                    else if (model.ResponseMode.ToLowerInvariant().Replace('.', '_')
                         == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
                     {
                         this.ResponseMode = Const.ResponseModeFormPostJwt;

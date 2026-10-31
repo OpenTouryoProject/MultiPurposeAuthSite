@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：HomeReviewTests
-//* クラス日本語名  ：RT-294.81 〜 .85 HomeController.*.cs のレビューで見つけた不具合
+//* クラス日本語名  ：RT-294.81 〜 .86 HomeController.*.cs のレビューで見つけた不具合
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,9 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（#294）
+//*  2026/10/31  玄人 幸道         RT-294.86（ポーリングは待ち時間の上限を越えて待たない）を足した（#294）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -44,7 +47,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-294.81 〜 .85 `HomeController.*.cs`（自己テスト）のレビューで見つけた不具合（#294）。
+    /// RT-294.81 〜 .86 `HomeController.*.cs`（自己テスト）のレビューで見つけた不具合（#294）。
     /// </summary>
     /// <remarks>
     /// | | 確かめること |
@@ -54,6 +57,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | `RT-294.83` | **自己テストの ROPC は、管理者ではなくテスト利用者でトークンを取る**（C-56） |
     /// | `RT-294.84` | **SPA 向けの PKCE で、response_mode が 2 つ載らない** |
     /// | `RT-294.85` | **画面から来る値は URL 符号化され、別のパラメタを差し込めない** |
+    /// | `RT-294.86` | **ポーリングは、待ち時間の上限を越えて待たない**（C-56。**約 60 秒かかる**） |
     ///
     /// **`IsLockedDownTestEndpoints` で閉じたこと**（C-56）は、**通しでは測れない**（通しは自己テストを開けて回す）。
     /// </remarks>
@@ -310,6 +314,79 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "prompt=none%26rt29485%3Dinjected", url);
                 r.Verify("scope の空白も符号化されている", !url.Contains(" "),
                     "空白が無い", url.Contains(" ") ? "**ある**" : "無い");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-294.86
+
+        /// <summary>RT-294.86 ポーリングは、待ち時間の上限を越えて待たない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29486_ポーリングは待ち時間の上限を越えて待たない(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-294.86",
+                    "/Home/DeviceAuthZResponse : interval をとても大きくしても、待ち時間の上限（60 秒）で結果の画面を返す",
+                    "**以前は、待つ前に残り時間を見ていなかった**ので、"
+                    + "**画面から interval を大きくすると、承認待ちの間は 1 回の要求で何日も待ち続けた**（C-56）。"
+                    + "**net48 は executionTimeout（110 秒）で打ち切られる。**",
+                    "RFC 8628 §3.5 / #294");
+
+                // **クライアント証明書を要求させている対象では測れない**（DeviceAuthorizationTests の自己テストと同じ。#226）。
+                //   アプリ自身の内部呼び出しも証明書を提示するので、公開クライアントの /device_authz が 401 になり、
+                //   **device_code が取れない。**
+                Skip.If(Environment.GetEnvironmentVariable(
+                    client.Target.Key == TestEnv.NetFxKey ? "MPAS_NETFX_MTLS" : "MPAS_CORE_MTLS") == "true",
+                    client.Target.DisplayName + " はクライアント証明書を要求している（#226）。"
+                    + "その状態ではアプリ自身の内部呼び出しも証明書を提示するため、"
+                    + "公開クライアントの /device_authz が 401（invalid_client）になる。");
+
+                r.Step("(1) 自己テストの Device AuthZ を始めて、承認していない device_code を得る");
+
+                HttpResponseMessage started = await client.StartSelfTestAsync("DeviceAuthZGrant", "device");
+                string html = await started.Content.ReadAsStringAsync();
+
+                Match token = TokenRegex.Match(html);
+                Match clientId = new Regex("name=\"client_id\"[^>]*value=\"(?<value>[^\"]*)\"").Match(html);
+                Match deviceCode = new Regex("name=\"device_code\"[^>]*value=\"(?<value>[^\"]*)\"").Match(html);
+
+                Assert.True(token.Success && clientId.Success && deviceCode.Success
+                    && !string.IsNullOrEmpty(deviceCode.Groups["value"].Value), "前提: Device AuthZ の画面に device_code が出ること");
+
+                r.Step("(2) interval=100000 で、ポーリングを送る（承認しないので、上限まで待つ）");
+
+                Stopwatch watch = Stopwatch.StartNew();
+
+                HttpResponseMessage poll = await client.PostFormAsync("/Home/DeviceAuthZResponse",
+                    new Dictionary<string, string>()
+                    {
+                        { "client_id", clientId.Groups["value"].Value },
+                        { "device_code", deviceCode.Groups["value"].Value },
+                        { "interval", "100000" },
+                        { "__RequestVerificationToken", token.Groups["value"].Value }
+                    },
+                    TimeSpan.FromSeconds(150));
+
+                watch.Stop();
+
+                string body = await poll.Content.ReadAsStringAsync();
+                Match m = PollRegex.Match(body);
+
+                r.Verify("**結果の画面が返る**", m.Success,
+                    "N 秒 × M 回", m.Success ? m.Value : "**返らない**（HTTP " + (int)poll.StatusCode + "）");
+
+                r.Verify("**上限（60 秒）から大きく越えない**", watch.Elapsed.TotalSeconds < 90,
+                    "90 秒未満", ((int)watch.Elapsed.TotalSeconds) + " 秒");
+
+                r.Observe("問い合わせた回数", m.Success ? m.Groups["count"].Value + " 回" : "（読めない）",
+                    "1 回目は承認待ち。上限まで待ってから 2 回目を問い合わせ、期限で終わる。");
 
                 r.Done();
             }

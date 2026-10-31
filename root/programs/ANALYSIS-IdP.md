@@ -3457,7 +3457,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 
 | 場所 | 以前 | いま |
 |---|---|---|
-| **`/Home/DeviceAuthZResponse`**（ポーリング） | **`IsLockedDownTestEndpoints` を見ていなかった**（`Saml2OAuth2Starters` は見ていた）。**本番で閉じても、この口だけは匿名で使え**、**サーバに自分の `/token` を問い合わせさせられた**。**間隔は画面（hidden）の `interval` に従った**ので、**外から短くできた** | **閉じる**。**間隔は設定値（`DeviceAuthZPollingIntervalSeconds`）より短くしない**（`SelfTestClient.RunDeviceAuthZPollingAsync`。`RT-294.82`） |
+| **`/Home/DeviceAuthZResponse`**（ポーリング） | **`IsLockedDownTestEndpoints` を見ていなかった**（`Saml2OAuth2Starters` は見ていた）。**本番で閉じても、この口だけは匿名で使え**、**サーバに自分の `/token` を問い合わせさせられた**。**間隔は画面（hidden）の `interval` に従った**ので、**外から短くできた** | **閉じる**。**間隔は設定値（`DeviceAuthZPollingIntervalSeconds`）より短くしない**（`SelfTestClient.RunDeviceAuthZPollingAsync`。`RT-294.82`）。**待つ前に残り時間を見て、待ち時間の上限（60 秒）を越えて待たない**（`PollForTokenAsync`。CIBA にも効く。2 回目のレビューで追加。`RT-294.86`） |
 | **自己テストの ROPC** | **管理者（`AdministratorUID` / `AdministratorPWD`）でトークンを取り、画面に出した。** **この POST は匿名で受ける**ので、**自己テストの口が開いている間は、ログインしていない人にも管理者のトークンを見せていた** | **テスト利用者（`tanaka`）で取る**。**`TestUserPWD` が無ければ取らずに理由を出す**（`RT-294.83`） |
 
 **どちらも `IsLockedDownTestEndpoints` を `true` にした配備には当たらない**（ROPC の件）か、**当たっても問い合わせ先は自分の `/token` だけ**（ポーリングの件）である。

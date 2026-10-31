@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         FAPI2 で Request Object を預けられなければ再表示（500 にしない）。値を URL 符号化（#294）
+//*  2026/10/31  玄人 幸道         CIBA の login_hint に TestUserSuffix を付ける（ROPC と揃える。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -189,7 +190,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             SelfTestClient.CibaResult result = await SelfTestClient.RunCibaProfileAsync(
                 this.ClientId,      // FAPI2用か自前のクライアント
-                "tanaka",           // プッシュ通知の対象となるアカウント（#151 の段階 3 で利用者名とメアドを分けた）
+                // プッシュ通知の対象となるアカウント（#151 の段階 3 で利用者名とメアドを分けた）。
+                //   **接尾辞を付ける**（#294。種データの名前に付く。#260）。ROPC の自己テストと同じ利用者。
+                "tanaka" + Config.TestUserSuffix,
                 MaxWaitSeconds);
 
             ViewBag.ClientId = this.ClientId;
