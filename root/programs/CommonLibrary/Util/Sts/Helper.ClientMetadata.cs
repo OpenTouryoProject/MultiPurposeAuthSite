@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         client_name の無い登録で落ちない。名前の照合で大文字小文字を区別する。コメント（#294）
+//*  2026/10/31  玄人 幸道         空の登録値も既定値に倒す。画面登録の名前も空を返す。利用者名で引く口を分けた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -103,7 +104,9 @@ namespace MultiPurposeAuthSite.Util.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey(Const.ClientSubjectTypes))
+                //  **空も既定値に倒す**（#294。画面登録の側と揃えた）。
+                if (dic.ContainsKey(Const.ClientSubjectTypes)
+                    && !string.IsNullOrEmpty(dic[Const.ClientSubjectTypes]))
                 {
                     // 設定値
                     return this.Oauth2ClientsInfo[client_id][Const.ClientSubjectTypes];
@@ -163,7 +166,9 @@ namespace MultiPurposeAuthSite.Util.Sts
             {
                 Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
 
-                if (dic.ContainsKey(Const.ClientMode))
+                //  **空も既定値に倒す**（#294。画面登録の側と揃えた）。
+                if (dic.ContainsKey(Const.ClientMode)
+                    && !string.IsNullOrEmpty(dic[Const.ClientMode]))
                 {
                     // 設定値
                     return this.Oauth2ClientsInfo[client_id][Const.ClientMode];
@@ -607,7 +612,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             if (model != null)
             {
                 isResourceOwner = true;
-                return model.ClientName;
+                return model.ClientName ?? ""; // **null を返さない**（#294）
             }
 
             return "";
@@ -692,23 +697,15 @@ namespace MultiPurposeAuthSite.Util.Sts
 
         /// <summary>clientNameからclientIdを取得</summary>
         /// <param name="clientName">string</param>
-        /// <param name="isResourceOwner">bool</param>
+        /// <param name="isResourceOwner">bool（**常に false**）</param>
         /// <returns>指定したclientNameのclientId</returns>
         /// <remarks>
-        /// **利用者名で引いたときは、その人の登録のうち 1 件を返す**（#307 の段階 5-a）。
+        /// **構成ファイルのクライアント名だけを引く**（#294）。
+        /// **利用者名で引くのは `GetClientIdByUserName`** である。
         ///
-        /// **以前は `Users.ClientID`（1 枠）を返していた。**
-        /// **1 利用者 n クライアント**になったので、**「1 件」の意味が変わった。**
-        ///
-        /// | | |
-        /// |---|---|
-        /// | **どれを返すか決めていない** | **`Saml2OAuth2DataProvider.GetFirstByOwner`**（並びは決めていない） |
-        /// | **0 件なら空** | **以前は「宙に浮いた GUID」が返っていた**（登録が無くても値が入っていた） |
-        ///
-        /// **呼ぶ側は「その人のクライアント 1 つ」で足りる所だけ**である —
-        /// **自己テストの導線**（`HomeController` の「ログイン・ユーザの Client」）と、
-        /// **認可ログの `User Account`**（1 行）。
-        /// **n 件から選ばせるのは、管理画面の話**（#307 の段階 5-a-2）。
+        /// **以前は 1 つの口で、クライアント名 → 利用者名の順に引いていた**ので、
+        /// **利用者名がクライアント名と同じだと、その人の登録ではなく構成ファイルのクライアントが返った**
+        /// （**呼ぶ側は、どちらの名前かを知っている**ので、口を分けた）。
         /// </remarks>
         public string GetClientIdByName(string clientName, out bool isResourceOwner)
         {
@@ -737,6 +734,52 @@ namespace MultiPurposeAuthSite.Util.Sts
                 }
             }
 
+            return "";
+        }
+
+        #endregion
+
+        #region GetClientIdByUserName
+
+        /// <summary>利用者名から、その人のクライアントの clientId を取得（#294）</summary>
+        /// <param name="userName">利用者名</param>
+        /// <returns>その人の登録の clientId（無ければ空）</returns>
+        public string GetClientIdByUserName(string userName)
+        {
+            return this.GetClientIdByUserName(userName, out bool isResourceOwner);
+        }
+
+        /// <summary>利用者名から、その人のクライアントの clientId を取得（#294）</summary>
+        /// <param name="userName">利用者名</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>その人の登録の clientId（無ければ空）</returns>
+        /// <remarks>
+        /// **構成ファイルのクライアント名は引かない**（それは `GetClientIdByName`）。
+        ///
+        /// **利用者名で引いたときは、その人の登録のうち 1 件を返す**（#307 の段階 5-a）。
+        ///
+        /// **以前は `Users.ClientID`（1 枠）を返していた。**
+        /// **1 利用者 n クライアント**になったので、**「1 件」の意味が変わった。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **どれを返すか決めていない** | **`Saml2OAuth2DataProvider.GetFirstByOwner`**（並びは決めていない） |
+        /// | **0 件なら空** | **以前は「宙に浮いた GUID」が返っていた**（登録が無くても値が入っていた） |
+        ///
+        /// **呼ぶ側は「その人のクライアント 1 つ」で足りる所だけ**である —
+        /// **自己テストの導線**（`HomeController` の「ログイン・ユーザの Client」）と、
+        /// **認可ログの `User Account`**（1 行）。
+        /// **n 件から選ばせるのは、管理画面の話**（#307 の段階 5-a-2）。
+        /// </remarks>
+        public string GetClientIdByUserName(string userName, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+
+            if (string.IsNullOrEmpty(userName))
+            {
+                return "";
+            }
+
             ApplicationUser user = null;
 
             // ★ CommonLibraryから、Manager系への依存を
@@ -747,10 +790,10 @@ namespace MultiPurposeAuthSite.Util.Sts
             //    = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
             //user = userManager.FindByName(); // 同期版でOK。
 
-            user = CmnUserStore.FindByName(clientName);
+            user = CmnUserStore.FindByName(userName);
 
             // **見つからないことがある。**
-            //   クライアント名でも利用者名でもない値を渡されると、
+            //   利用者名でない値を渡されると、
             //   **以前は null 参照で、処理されない例外（HTTP 500）になっていた**
             //   （#210 / #241 と同じ性質。#151 の段階 4 で踏んだ）。
             if (user == null)

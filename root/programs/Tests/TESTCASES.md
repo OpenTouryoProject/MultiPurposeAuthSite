@@ -6864,7 +6864,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=c4c60c09-17d1-45f2-8e55-d37993f5f34f&code=bogus
+1. GET /Account/EmailConfirmation?userId=b34d9e6c-d9e2-4b1e-a943-c710834b1e52&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6873,8 +6873,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=c4c60c09-17d1-45f2-8e55-d37993f5f34f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=c4c60c09-17d1-45f2-8e55-d37993f5f34f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=b34d9e6c-d9e2-4b1e-a943-c710834b1e52&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=b34d9e6c-d9e2-4b1e-a943-c710834b1e52&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -8073,6 +8073,24 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **client_id は、その人が登録したもの**
 - 構成ファイルの TestClient ではない
+
+## RT-294.94 自己テスト（ログイン・ユーザの Client）: 利用者 WebForms_Sample は、構成ファイルの WebForms_Sample ではなく、自分の登録で認可要求を送る
+
+| | |
+|---|---|
+| 観点 | **RT-294.93 で大文字小文字を区別した後も、名前が完全に同じなら、構成ファイルのクライアントが勝っていた**（**1 つの口で、クライアント名 → 利用者名の順に引いていた**）。**利用者名で引く口（`GetClientIdByUserName`）を分けた。** |
+| 根拠 | #294（Helper.GetClientIdByUserName） |
+| テスト | `RT29494_クライアント名と同じ名前の利用者も自分の登録を使う` |
+
+**手順**
+
+1. 使い捨ての利用者を作り、サインインして、クライアントを 1 件登録する
+1. 自己テストを「ログイン・ユーザの Client」で始める（認可コード フロー）
+
+**検証（合否を判定する）**
+
+- **client_id は、その人が登録したもの**
+- 構成ファイルの WebForms_Sample ではない
 
 ## RT-297.1 クライアント登録の `client_secret` が、暗号化しても往復する
 

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         ログの文言を経路に合わせ、using を整理した（#294）
+//*  2026/10/31  玄人 幸道         認可ログの User Account は、利用者名で引く（GetClientIdByUserName。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -120,7 +121,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             Logging.MyOperationTrace(string.Format(
                 "{0}({1}) passed the authorization endpoint of Authorization Code by {2}({3}).",
                 client_id, name,                                                        // Client Account
-                Helper.GetInstance().GetClientIdByName(identity.Name), identity.Name)); // User Account
+                Helper.GetInstance().GetClientIdByUserName(identity.Name), identity.Name)); // User Account
 
             // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
             CmnEndpoints.ConsumeRequestObject(queryString);
@@ -215,7 +216,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 Logging.MyOperationTrace(string.Format(
                     "{0}({1}) passed the authorization endpoint of Implicit by {2}({3}).",
                     client_id, name,                                                        // Client Account
-                    Helper.GetInstance().GetClientIdByName(identity.Name), identity.Name)); // User Account
+                    Helper.GetInstance().GetClientIdByUserName(identity.Name), identity.Name)); // User Account
 
                 // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
                 CmnEndpoints.ConsumeRequestObject(queryString);

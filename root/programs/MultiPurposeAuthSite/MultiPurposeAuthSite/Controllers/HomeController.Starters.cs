@@ -19,6 +19,7 @@
 //*  2026/10/31  玄人 幸道         AntiForgery トークンを確かめる。クライアントが無い・Request Object を預けられないときは再表示（#294）
 //*  2026/10/31  玄人 幸道         response_mode の比較を ToLowerInvariant に。コメントの誤り（#294）
 //*  2026/10/31  玄人 幸道         「ログイン・ユーザの Client」をログインせずに選んだら、理由を出す（#294）
+//*  2026/10/31  玄人 幸道         「ログイン・ユーザの Client」は利用者名として client_id を引く（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -131,6 +132,9 @@ namespace MultiPurposeAuthSite.Controllers
                             //   **消された利用者の Cookie が残っていると null**（#294。以前は NRE で 500）。
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                             this.ClientName = (user == null) ? "" : user.UserName;
+
+                            //  **利用者名として引く**（#294。クライアント名と同じ名前でも、その人の登録を使う）。
+                            this.IsOwnClient = true;
                         }
                         else
                         {
@@ -142,7 +146,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // **クライアントの登録が無ければ、始めない**（#294）。
                     //   以前は client_id が null のまま進み、Session への保存で 500 になっていた。
                     if (!string.IsNullOrEmpty(this.ClientName)
-                        && string.IsNullOrEmpty(Helper.GetInstance().GetClientIdByName(this.ClientName)))
+                        && string.IsNullOrEmpty(this.ResolveClientId()))
                     {
                         ModelState.AddModelError("", "No client is registered for the selected client type.");
                         this.ClientName = "";

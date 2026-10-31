@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         コメントの誤りを直した（#294）
+//*  2026/10/31  玄人 幸道         ClientName が利用者名かを持ち、client_id の引き方を分けた（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -65,6 +66,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>ClientName</summary>
         private string ClientName = "";
 
+        /// <summary>ClientName が利用者名か（「ログイン・ユーザの Client」。#294）</summary>
+        private bool IsOwnClient = false;
+
         /// <summary>ClientId</summary>
         private string ClientId = "";
 
@@ -92,6 +96,24 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region ResolveClientId
+
+        /// <summary>ClientName から client_id を引く（#294）</summary>
+        /// <returns>client_id（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **「ログイン・ユーザの Client」なら利用者名として、それ以外は構成ファイルのクライアント名として引く。**
+        /// **以前は 1 つの口で両方を引いていた**ので、**利用者名がクライアント名と同じだと、
+        /// その人の登録ではなく構成ファイルのクライアントで動いた。**
+        /// </remarks>
+        private string ResolveClientId()
+        {
+            return this.IsOwnClient
+                ? Helper.GetInstance().GetClientIdByUserName(this.ClientName)
+                : Helper.GetInstance().GetClientIdByName(this.ClientName);
+        }
+
+        #endregion
+
         #region InitParams
 
         #region InitSaml2Params
@@ -103,7 +125,7 @@ namespace MultiPurposeAuthSite.Controllers
             Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
 
             // Issuer (RootURI + ClientId) 
-            this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            this.ClientId = this.ResolveClientId();
             this.Issuer = "http://" + ClientId;
 
             if (this.ClarifyRedirectUri)
@@ -151,7 +173,7 @@ namespace MultiPurposeAuthSite.Controllers
             Config.OAuth2AuthorizationServerEndpointsRootURI
             + Config.OAuth2AuthorizeEndpoint;
 
-            this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            this.ClientId = this.ResolveClientId();
             // ココでは、まだ、response_typeが明確にならないので取得できない。
             //this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientName, response_type);
 

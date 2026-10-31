@@ -36,6 +36,7 @@
 //*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの列を追加（#307 の段階 1）
 //*  2026/10/21  玄人 幸道         BackChannelLogoutUri の列を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         登録されている jwks_uri を全部返す口を追加（#309 の段階 2）
+//*  2026/10/31  玄人 幸道         CORS の public の判定のため、GetAllUris で token_endpoint_auth_method も読む（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -147,11 +148,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>
         /// **`GetAllUris` が使う。** 全列を読む必要はない
         /// （**列にしたので、こう絞れる**。JSON 1 列では全部読むしかなかった）。
-        /// **`ClientSecret` が要る**のは、**public クライアントに限る**ため。
+        /// **`ClientSecret` と `TokenEndpointAuthMethod` が要る**のは、**public クライアントに限る**ため
+        /// （`Helper.IsPublicClientForCors`。#294）。
         /// </remarks>
         private static readonly string[] UriColumns = new string[]
         {
             "ClientSecret",
+            "TokenEndpointAuthMethod",
             "RedirectUriSaml",
             "RedirectUriCode",
             "RedirectUriToken",

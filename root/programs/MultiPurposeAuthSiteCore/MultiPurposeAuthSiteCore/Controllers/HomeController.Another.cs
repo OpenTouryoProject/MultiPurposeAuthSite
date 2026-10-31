@@ -19,6 +19,7 @@
 //*  2026/10/31  玄人 幸道         DeviceAuthZResponse を IsLockedDownTestEndpoints で閉じ、AntiForgery を確かめる。ROPC はテスト利用者で。応答が JSON でなくても 500 にしない（#294）
 //*  2026/10/31  玄人 幸道         Device AuthZ の開始も、応答が壊れていても 500 にしない（#294）
 //*  2026/10/31  玄人 幸道         Device AuthZ の開始で、/device_authz が断った理由を画面に出す（#294）
+//*  2026/10/31  玄人 幸道         client_id は ResolveClientId で引く（利用者名とクライアント名を分けた。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -214,7 +215,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // ClientNameから、client_id, client_secretを取得。
-            string client_id = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            string client_id = this.ResolveClientId();
             string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
             string response = await Helper.GetInstance()
@@ -237,7 +238,7 @@ namespace MultiPurposeAuthSite.Controllers
         private async Task<ActionResult> ClientCredentialsFlow()
         {
             // ClientNameから、client_id, client_secretを取得。
-            string client_id = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            string client_id = this.ResolveClientId();
             string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
             string response = await Helper.GetInstance()
@@ -260,7 +261,7 @@ namespace MultiPurposeAuthSite.Controllers
         private async Task<ActionResult> JWTBearerTokenFlow()
         {
             // ClientNameから、client_id(iss)を取得。
-            string iss = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            string iss = this.ResolveClientId();
 
             // **アサーションの組み立ては SelfTestClient**（#246。aud はトークン エンドポイント）。
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(

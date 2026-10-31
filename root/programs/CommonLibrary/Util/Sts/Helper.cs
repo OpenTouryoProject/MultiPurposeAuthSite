@@ -58,6 +58,7 @@
 //*  2026/10/25  玄人 幸道         auth を、登録に明記したクライアントにだけ出すようにした（#294）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
 //*  2026/10/31  玄人 幸道         partial に分割した（WebApi / ClientCredential / ClientUri / ClientMetadata / Scope。#294）
+//*  2026/10/31  玄人 幸道         コンテナ化の宛先の書き換えで、%xx を戻さず、先頭の scheme://authority だけを替える（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -256,6 +257,15 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <summary>GetContainerizatedAuthZServerUri</summary>
         /// <param name="orgUri">Uri</param>
         /// <returns>Uri</returns>
+        /// <remarks>
+        /// **替えるのは先頭の `scheme://authority` だけ**（#294）。
+        /// **以前は `Uri.ToString()` と文字列の `Replace` で組み直していた**ので、
+        ///
+        /// - **`%xx` が戻った**（`ToString` は escape を外す。`%26` が `&amp;` になり、別のパラメタに化ける）
+        /// - **クエリの中の同じ authority も書き換えた**（`redirect_uri` の値など）
+        ///
+        /// **残りは `AbsoluteUri`（escape したまま）から切り出す。**
+        /// </remarks>
         public static Uri GetContainerizatedAuthZServerUri(Uri orgUri)
         {
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
@@ -266,21 +276,23 @@ namespace MultiPurposeAuthSite.Util.Sts
             {
                 string temp = "";
 
+                // 先頭の scheme://authority と、その後ろ（escape したまま）
+                string prefix = orgUri.GetLeftPart(UriPartial.Authority);
+                string rest = orgUri.AbsoluteUri.Substring(prefix.Length);
+
                 // コンテナの可能性
                 temp = Config.OAuth2ContainerizatedAuthSvrFqdnAndPort;
                 if (!string.IsNullOrEmpty(temp))
                 {
-                    // 置換
-                    string orgStr = orgUri.ToString();
-                    return new Uri(orgStr.Replace(orgUri.Authority, temp));
+                    // 置換（ホスト名とポートだけ。スキームは元のまま）
+                    return new Uri(orgUri.Scheme + "://" + temp + rest);
                 }
 
                 temp = Config.OAuth2ContainerizatedAuthSvrEPRootURI;
                 if (!string.IsNullOrEmpty(temp))
                 {
-                    // 置換
-                    string orgStr = orgUri.ToString();
-                    return new Uri(orgStr.Replace(orgUri.Scheme + "://" + orgUri.Authority, temp));
+                    // 置換（スキームごと）
+                    return new Uri(temp + rest);
                 }
             }
 

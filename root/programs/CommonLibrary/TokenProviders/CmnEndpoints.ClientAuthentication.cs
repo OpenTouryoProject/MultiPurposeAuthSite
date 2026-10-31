@@ -33,6 +33,7 @@
 //*  2026/10/29  玄人 幸道         none（パブリック）を受け、PKCE だけで引き換えられる登録を絞る。assertion の aud に issuer を受け、秘密を定数時間で比べる（#294）
 //*  2026/10/30  玄人 幸道         デバイス認可のクライアント認証で client_assertion（private_key_jwt）も受ける（#294）
 //*  2026/10/30  玄人 幸道         使われなくなった DeviceAuthZClientAuthentication（引数 3 つの版）を消した（#294）
+//*  2026/10/31  玄人 幸道         登録の有無は HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -193,10 +194,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             //  **登録されていない `client_id` では数えない**（#305 の段階 4）。
             //    **要求の `client_id` をそのまま鍵にして行を作ると、
             //    誰でも `AuthFailure` 表を好きなだけ太らせられる。**
-            //    **登録の有無は `GetClientName` で見る**
-            //    （`DeviceAuthZClientAuthentication` と同じ見方）。
+            //    **登録の有無は `HasClient` で見る**（#294。`DeviceAuthZClientAuthentication` と同じ見方）。
+            //    **以前は `GetClientName` が空でないかで見ていた**ので、
+            //    **client_name の無い構成ファイルのクライアントは、数えられなかった。**
             if (!string.IsNullOrEmpty(client_id)
-                && !string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id)))
+                && Helper.GetInstance().HasClient(client_id))
             {
                 AuthFailureProvider.Record(failureKey);
             }
@@ -301,7 +303,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (string.IsNullOrEmpty(client_id)) return false;
 
             // 未登録のclient_idは拒否
-            if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
+            //   **`HasClient` で見る**（#294。以前は `GetClientName` が空でないかで、
+            //   **client_name の無い構成ファイルのクライアントが、未登録として断られた**）。
+            if (!Helper.GetInstance().HasClient(client_id)) return false;
 
             //  **`token_endpoint_auth_method` が `none` なら、パブリック クライアント**（RFC 7591 §2。#294）。
             //    **秘密を持っていても使えない**（`AllowsAuthMethod` が断る）ので、client_id の確認だけにする。

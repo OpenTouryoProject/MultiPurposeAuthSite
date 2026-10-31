@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         CIBA の認証要求で、要求と応答を Dispose する（#294）
+//*  2026/10/31  玄人 幸道         IntrospectTokenAsync の要約を直した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -223,7 +224,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
         }
 
-        /// <summary>Introspectエンドポイントで、Tokenを無効化する。</summary>
+        /// <summary>Introspectエンドポイントで、Tokenの状態を照会する。</summary>
         /// <param name="introspectTokenEndpointUri">IntrospectエンドポイントのUri</param>
         /// <param name="client_id">client_id</param>
         /// <param name="client_secret">client_secret</param>

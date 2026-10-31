@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         構成ファイルに在るクライアントは、項目が無くても画面登録を読みに行かない（#294）
+//*  2026/10/31  玄人 幸道         画面登録の値が無いときも、null ではなく空を返す（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -103,7 +104,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             if (model != null)
             {
                 isResourceOwner = true;
-                return model.ClientSecret;
+                return model.ClientSecret ?? ""; // **null を返さない**（#294）
             }
 
             return "";
@@ -185,7 +186,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             if (model != null)
             {
                 isResourceOwner = true;
-                return model.JwkRsaPublickey;
+                return model.JwkRsaPublickey ?? ""; // **null を返さない**（#294）
             }
 
             return "";
@@ -231,7 +232,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             if (model != null)
             {
                 isResourceOwner = true;
-                return model.JwkECDsaPublickey;
+                return model.JwkECDsaPublickey ?? ""; // **null を返さない**（#294）
             }
 
             return "";
@@ -328,7 +329,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             if (model != null)
             {
                 isResourceOwner = true;
-                return model.TlsClientAuthSubjectDn;
+                return model.TlsClientAuthSubjectDn ?? ""; // **null を返さない**（#294）
             }
 
             return "";

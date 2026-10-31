@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         response_type を区別して比べる。構成ファイルに在るクライアントは画面登録を読みに行かない（#294）
+//*  2026/10/31  玄人 幸道         画面登録の値が無いときも空を返す。CORS の public の判定に token_endpoint_auth_method を使う（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -173,7 +174,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 else if (response_type == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     // Code
-                    return model.RedirectUriCode;
+                    return model.RedirectUriCode ?? ""; // **null を返さない**（#294）
                 }
                 else if (response_type == OAuth2AndOIDCConst.ImplicitResponseType
                     || response_type == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
@@ -183,7 +184,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                     || response_type == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     // Others
-                    return model.RedirectUriToken;
+                    return model.RedirectUriToken ?? ""; // **null を返さない**（#294）
                 }
             }
 
@@ -348,7 +349,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             if (model != null)
             {
                 isResourceOwner = true;
-                return model.RedirectUriSaml;
+                return model.RedirectUriSaml ?? ""; // **null を返さない**（#294）
             }
 
             return "";
@@ -370,7 +371,7 @@ namespace MultiPurposeAuthSite.Util.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | **public クライアントに限る** | `client_secret` が空のもの。**confidential は `/token` をサーバ間で呼ぶ**ので、ブラウザから叩かせる必要が無い |
+        /// | **public クライアントに限る** | **`IsPublicClientForCors`**（#294）。**confidential は `/token` をサーバ間で呼ぶ**ので、ブラウザから叩かせる必要が無い |
         /// | **構成ファイルに限る** | **画面登録（`saml2OAuth2Data`）は含めない。** プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、`Saml2OAuth2DataProvider` に全件を列挙する口が無く、分散キャッシュも無い（E-2） |
         ///
         /// **画面登録の SPA は、`Config.CorsAllowedOrigins` に足して通す。**
@@ -383,9 +384,11 @@ namespace MultiPurposeAuthSite.Util.Sts
             {
                 Dictionary<string, string> client = this.Oauth2ClientsInfo[clientId];
 
-                // **confidential は対象外**（client_secret を持つもの）。
-                if (client.ContainsKey(OAuth2AndOIDCConst.client_secret)
-                    && !string.IsNullOrEmpty(client[OAuth2AndOIDCConst.client_secret]))
+                // **confidential は対象外**（#294 で判定を IsPublicClientForCors に寄せた）。
+                client.TryGetValue(Const.ClientTokenEndpointAuthMethod, out string method);
+                client.TryGetValue(OAuth2AndOIDCConst.client_secret, out string secret);
+
+                if (!Helper.IsPublicClientForCors(method, secret))
                 {
                     continue;
                 }
@@ -414,6 +417,36 @@ namespace MultiPurposeAuthSite.Util.Sts
 
         #endregion
 
+        #region IsPublicClientForCors
+
+        /// <summary>CORS で public クライアントとして扱うか（#294）</summary>
+        /// <param name="tokenEndpointAuthMethod">登録の token_endpoint_auth_method</param>
+        /// <param name="clientSecret">登録の client_secret</param>
+        /// <returns>public なら true</returns>
+        /// <remarks>
+        /// | 登録の `token_endpoint_auth_method` | 扱い |
+        /// |---|---|
+        /// | **`none`** | **public**（**秘密を持っていても**。`/token` は秘密を使わせない） |
+        /// | **それ以外**（`private_key_jwt` など） | **confidential**（**秘密が空でも**） |
+        /// | **空**（明示しない） | **従来どおり、`client_secret` が空なら public** |
+        ///
+        /// **以前は `client_secret` だけで決めていた**ので、
+        /// **秘密を持たない `private_key_jwt` / `tls_client_auth` のクライアントが public 扱いになり、**
+        /// **`none` で秘密を持つクライアントが外れていた。**
+        /// </remarks>
+        private static bool IsPublicClientForCors(string tokenEndpointAuthMethod, string clientSecret)
+        {
+            if (!string.IsNullOrEmpty(tokenEndpointAuthMethod))
+            {
+                //  **`CmnEndpoints.TokenEndpointAuthMethodNone` と同じ値**（部品の側から TokenProviders を参照しないので、ここに書く）。
+                return tokenEndpointAuthMethod == "none";
+            }
+
+            return string.IsNullOrEmpty(clientSecret);
+        }
+
+        #endregion
+
         #region GetStoredClientsPublicRedirectUris
 
         /// <summary>
@@ -425,7 +458,7 @@ namespace MultiPurposeAuthSite.Util.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | **public クライアントに限る** | `client_secret` が空のもの |
+        /// | **public クライアントに限る** | **`IsPublicClientForCors`**（#294） |
         /// | **`web_origins` が在れば、それを使う** | **書いたときは導出しない** |
         /// | **無ければ `redirect_uri_*`** | #265 の挙動 |
         ///
@@ -445,7 +478,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 }
 
                 // **confidential は対象外。**
-                if (!string.IsNullOrEmpty(model.ClientSecret))
+                if (!Helper.IsPublicClientForCors(model.TokenEndpointAuthMethod, model.ClientSecret))
                 {
                     continue;
                 }
