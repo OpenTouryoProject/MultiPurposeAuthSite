@@ -107,6 +107,11 @@
       <DependentUpon>CmnAccessToken.cs</DependentUpon>
     </Compile>
 
+    <!-- **Helper も partial に分けてある**（#294）。IDE で Helper.cs の下に畳んで見せる。 -->
+    <Compile Update="Util\Sts\Helper.*.cs">
+      <DependentUpon>Helper.cs</DependentUpon>
+    </Compile>
+
     <!-- **CmnUserStore も partial に分けてある**（#294）。IDE で CmnUserStore.cs の下に畳んで見せる。 -->
     <Compile Update="Data\CmnUserStore.*.cs">
       <DependentUpon>CmnUserStore.cs</DependentUpon>

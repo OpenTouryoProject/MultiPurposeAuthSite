@@ -170,6 +170,21 @@
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\Sts\Saml2OAuth2DataProvider.cs" />
     <Compile Include="Util\Sts\Helper.cs" />
+    <Compile Include="Util\Sts\Helper.WebApi.cs">
+      <DependentUpon>Helper.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Util\Sts\Helper.ClientCredential.cs">
+      <DependentUpon>Helper.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Util\Sts\Helper.ClientUri.cs">
+      <DependentUpon>Helper.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Util\Sts\Helper.ClientMetadata.cs">
+      <DependentUpon>Helper.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Util\Sts\Helper.Scope.cs">
+      <DependentUpon>Helper.cs</DependentUpon>
+    </Compile>
     <Compile Include="TokenProviders\CmnAccessToken.cs" />
     <Compile Include="TokenProviders\CmnAccessToken.Create.cs">
       <DependentUpon>CmnAccessToken.cs</DependentUpon>
