@@ -37,7 +37,9 @@ DB の通しには、ストアに固有の失敗が含まれる（#327・#328。
 | **DB で届いている** | `Extensions.Sts` の 40 個・230 行（`Saml2OAuth2DataProvider`・`SoftwareStatementIssuerProvider`・`DPoPProofProvider` の列の組み立て、`ConsentProvider.Value`、`SessionClientProvider.Value`、`DeviceAuthZProvider.ThrottlePolling`） | `mem` の測定に入らないだけ |
 | **単体テストを足した** | `StoredCredential.FromRegistered`、`CmnDPoP.CurrentNonce`・`NonceOfSlot`・`CurrentSlot`、`WebAuthnHelper.AuthenticatorAssertion`、`DataProvider.Update`・`GetUserByCredential`、`Entry.JwkFromCer`・`CreateJwsFromCer`・`get_CerFilePath` | 外部が要らない。アサーションは本物の ES256 の鍵で、証明書は使い捨てのものを作って確かめる |
 | **単体テストにできない** | `CmnSaml2Response.OrNone`（`SAML2VerifyResult` を外から作れない）、`CmnAccessToken.SelectJwsFromCertificate`（`private`。`JwkSet.json` が無い配備の経路） | E2E で足すかを決める |
-| **E2E で足す** | `RolesAdminController.Edit`、`ManageController.SetPassword`・`RemoveUnstructuredData`、`UsersAdminController.Details`・`List`、`HomeController` の各フロー | サイトの画面で動かせる |
+| **E2E を足した**（`RT-324.1`〜`.5`） | `RolesAdminController.Edit`、`ManageController.RemoveUnstructuredData`、`UsersAdminController.Details`・`List`、`HomeController` の `Implicit`・`Implicit_OIDC1`・`Implicit_OIDC2`・`Hybrid_OIDC1`〜`3`・`PKCE_Plain` | サイトの画面で動かせる |
+| **E2E で足す（残り）** | `HomeController` の `ClientCredentialsFlow`・`JWTBearerTokenFlow`・`AuthorizationCodeFAPI1`・`AuthorizationCodeFAPI1_OIDC`・`AssembleFAPI1Starter` | 自己テストの入口。プロトコルそのものは `TC`・`EX`・`FA` のテストが直接確かめている |
+| **テストしない** | `ManageController.SetPassword` | パスワードの無い利用者が要る。外部ログインで作るので、上流のプロバイダが要る |
 | **テストしない** | 外部ログインの戻り（`ExternalLogin*`・`RemoveLogin`・`ManageLogins`）、電話番号（`AddPhoneNumber`・`VerifyPhoneNumber`・`RemovePhoneNumber`）、`IdFederationJwks`・`IdFederationSaml2Metadata` の取得 | 上流のプロバイダや SMS が要る |
 | **テストしない** | `get_*` の委譲、`PingController`、`ErrorController`、`ValuesController` | 判断を持たない。外れても認証に関わらない |
 
