@@ -598,6 +598,14 @@ foreach ($row in $ordered)
 
 # UTF-8（BOM 無し）で書く。読み手が別のツールでも開けるように。
 [System.IO.File]::WriteAllText($reportPath, $md.ToString(), (New-Object Text.UTF8Encoding $false))
+
+# ------------------------------------------------------------------
+# 観測の変化（前回の実行との差。判定はしない。#315）
+# ------------------------------------------------------------------
+# 観測は落ちないので、比べなければ変わったことに気付けない。**失敗しても合否に影響させない。**
+$observationStore = $(if ($UserStoreType) { $UserStoreType } else { "mem" })
+& (Join-Path $PSScriptRoot "CompareObservations.ps1") -Trx $trx `
+    -Baseline (Join-Path $OutputDir ("E2ETests.observations.{0}.txt" -f $observationStore)) -ReportPath $reportPath
 # ------------------------------------------------------------------
 # テストケースの原本（programs\Tests\TESTCASES.md）
 # ------------------------------------------------------------------
