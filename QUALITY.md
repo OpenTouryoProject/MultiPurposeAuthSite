@@ -15,6 +15,7 @@
 | 検証の手順・回す範囲 | [`root/CHEATSHEET.md`](root/CHEATSHEET.md) 1 節、[`root/TESTING.md`](root/TESTING.md) |
 | コーディング規約 | [`root/CODING.md`](root/CODING.md) |
 | テストケース | [`Tests/TESTCASES.md`](root/programs/Tests/TESTCASES.md)（生成物。一次情報はテスト コード） |
+| カバレッジの値と、届いていない箇所 | [`Tests/COVERAGE.md`](root/programs/Tests/COVERAGE.md) |
 | セキュリティの指摘の扱い | [`AGENTS.md`](AGENTS.md)「セキュリティの指摘は、公開される前に確認を取る」、[`Security.ja.md`](Security.ja.md) |
 
 > **人は個々の変更を細かく見るより、羅針盤を決める役を担う。**
@@ -183,6 +184,7 @@ git config core.hooksPath .githooks
 
 - [ ] 期待値の変更（3 節）を含むか。含むなら、根拠があるか
 - [ ] **net48 と net10.0 で、同じ振る舞いになるか**（片方だけ直していないか）
+- [ ] テストが、変更した分岐を実際に通しているか（[`COVERAGE.md`](root/programs/Tests/COVERAGE.md) の手順で測り、HTML で行を見る）
 - [ ] **見つかった型の横展開**：同じ形が、別のエンドポイントに残っていないか
 
 ### 作る役と検証する役を分ける
@@ -217,6 +219,7 @@ git config core.hooksPath .githooks
 - 期待値の変更のうち、トレーラーが付いたものの割合（3 段で塞げば 100%。漏れがあれば仕組みの穴）
 - 品質マップの単位で、根拠の種類（**外部の仕様 / Issue / リポジトリの前提**）の割合（7 節）
 - 別モデルのレビューで見つかり、書いたモデルのレビューでは見つからなかった指摘の数
+- 品質マップの単位で、E2E のカバレッジ（[`COVERAGE.md`](root/programs/Tests/COVERAGE.md)。**判定には使わない**）
 
 ### 根拠の種類（初回の基準。[`CountBasis.ps1`](root/CountBasis.ps1)。2026/11/01）
 

@@ -28,6 +28,7 @@
 | ブラウザで測るもの（`UI-n.n`）を外す | `cd programs\Tests; .\test.ps1 -Launch -NoWebUI` | 1 |
 | **テストを足した・変えた**ので、テストケースの原本を作り直す | `.\2_RunAllTests.ps1 -Launch -UpdateTestCases` | [`TESTING.md`](TESTING.md) 10 節 |
 | サイトのコード カバレッジを測る | `.\2_RunAllTests.ps1 -Launch -Coverage` | [`TESTING.md`](TESTING.md) 1 節 |
+| カバレッジを品質マップの単位で集計する（`-Update` で `COVERAGE.md` を更新） | `.\CoverageReport.ps1` | [`COVERAGE.md`](programs/Tests/COVERAGE.md) |
 | 期待値の変更にトレーラーがあるかを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD` | [`QUALITY.md`](../QUALITY.md) 3 節 |
 | TESTCASES.md の作り直しの漏れを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD -CheckTestCases` | [`QUALITY.md`](../QUALITY.md) 3 節 |
 | 根拠を種類ごとに数える | `.\CountBasis.ps1` | [`QUALITY.md`](../QUALITY.md) 6 節 |

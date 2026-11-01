@@ -80,6 +80,8 @@ E2E はサイトを外から叩くので、テストのプロセスに付く収�
 - **net10.0 版の `DOTNET_STARTUP_HOOKS`（mTLS のテスト用フック）は、`coverage\launch-core.cmd` の中で設定する。**
   `dotnet-coverage` 自身に継がれると、`System.Runtime, Version=10.0.0.0` を読めずに落ちる
 
+**品質マップの単位の集計と、届いていない箇所の一覧は [`COVERAGE.md`](programs/Tests/COVERAGE.md)**（`.\CoverageReport.ps1`。#315）。
+
 > **数字は E2E が届く範囲の目安である。** 外部プロバイダ（Google など）の戻りの経路のように、
 > **E2E では動かせない所は、測っても上がらない。** 低い所を見て、テストを足す・足せない理由を書く、の材料にする。
 
