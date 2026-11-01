@@ -11,7 +11,7 @@
       リポジトリの前提 … どちらも指さないもの
 
     **外部の仕様と Issue の両方を挙げる根拠は、外部の仕様に数える。**
-    「節あり」は、外部の仕様のうち節番号（§）まで書いたもの。
+    「節あり」は、外部の仕様のうち節番号まで書いたもの。
 
     E2E はサイトを外から叩くので、テストと名前空間は 1 対 1 に対応しない。
     そのため、品質マップの名前空間ではなく、テストの群で数える。
@@ -65,7 +65,8 @@ foreach ($line in (Get-Content -LiteralPath $Path -Encoding UTF8))
     if ($basis -cmatch $externalPattern)
     {
         $g.外部++
-        if ($basis -match '§') { $g.節あり++ }
+        # SAML の根拠は § を付けずに「Bindings 3.4」と書く。版（1.0・2.0）は節に数えない。
+        if ($basis -match '§' -or ($basis -replace '\b\d+\.0\b', '') -match '\b\d+\.\d+') { $g.節あり++ }
     }
     elseif ($basis -match '#\d+') { $g.Issue++ }
     else { $g.前提++ }

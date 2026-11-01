@@ -337,7 +337,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     CustomEncode.ByteToString(
                         CustomEncode.FromBase64UrlString(request.Split('.')[1]), CustomEncode.us_ascii));
 
-                //  **中の client_id も、認証したクライアントであること**（RFC 9126 §2.1 / RFC 9101 §6.3。C-41。#294）。
+                //  **中の client_id も、認証したクライアントであること**（RFC 9126 §3 / RFC 9101 §6.3。C-41。#294）。
                 //    **以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、
                 //    **別のクライアントの名義で、預けた要求を作れた。**
                 //    **無ければ、認証したクライアントで埋める**（フォームの経路と同じ）。

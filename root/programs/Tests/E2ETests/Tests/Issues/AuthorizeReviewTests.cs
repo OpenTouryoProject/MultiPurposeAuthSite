@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
+//*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
 //**********************************************************************************
 
 using System;
@@ -89,7 +90,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "**画面はトークンを埋めていたが、アクションが検証していなかった。**"
                     + "**認証の Cookie は `SameSite=None`** なので、**別のサイトからの POST にも Cookie が付く。**"
                     + "**利用者が意図しない `user_code` の承認を送らせられた。**",
-                    "#294（AccountController.Authorize.cs のレビュー S1）/ RFC 8628 §5.4");
+                    "#294（AccountController.Authorize.cs のレビュー S1）/ OWASP CSRF Prevention");
 
                 r.Target("client_name=" + KnownClients.TestClient3);
 

@@ -3179,7 +3179,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 
 **`CmnEndpoints.PushedAuthorizationRequest`**（#321 で `CmnRequestObjectEndpoint` へ移した）は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめていた**が、
 **中の `client_id` は確かめていなかった。** その後の検証（`ValidateAuthZReqParam`）と保存は、**中の `client_id` で行っていた**ので、
-**別のクライアントの名義で、PAR に預けた要求を作れた**（RFC 9126 §2.1 / RFC 9101 §6.3）。
+**別のクライアントの名義で、PAR に預けた要求を作れた**（RFC 9126 §3 / RFC 9101 §6.3）。
 
 **中の `client_id` が認証したクライアントと違えば `invalid_request_object`、無ければ認証したクライアントで埋める**（フォームの経路と同じ）ようにした。
 

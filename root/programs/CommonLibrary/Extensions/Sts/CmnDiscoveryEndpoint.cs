@@ -227,7 +227,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             response_modes_supported.Add(Const.ResponseModeFragmentJwt);
             response_modes_supported.Add(Const.ResponseModeFormPostJwt);
 
-            // **応答の署名アルゴリズムを広告していなかった**（JARM §7。#189 の 8）。
+            // **応答の署名アルゴリズムを広告していなかった**（JARM §4。#189 の 8）。
             //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
             //   実装は CmnResponseObject の JWS(RS256)。
             OpenIDConfig.Add("authorization_signing_alg_values_supported", new List<string> {

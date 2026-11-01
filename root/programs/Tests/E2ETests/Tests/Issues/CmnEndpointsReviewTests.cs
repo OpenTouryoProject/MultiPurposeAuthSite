@@ -31,6 +31,7 @@
 //*  2026/10/29  玄人 幸道         新規（#294）
 //*  2026/10/29  玄人 幸道         RT-294.50 〜 .57 を追加し、.41（登録種別）と .49（none）を見直した（#294）
 //*  2026/10/29  玄人 幸道         RT-294.58 / .59 を追加し、.51 で invalid_grant を見る（#294）
+//*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
 //**********************************************************************************
 
 using System;
@@ -745,7 +746,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "**FAPI 2.0 は、PKCE と、private_key_jwt か mTLS の両方を求める。**"
                     + "**以前は code_verifier が在ると、client_assertion を見ずに PKCE だけで認証した**ので、"
                     + "**証明が PKCE になり、fapi2 の登録は通らなかった**（N1）。",
-                    "FAPI 2.0 Security Profile §5.3.2.1 / RFC 7636 / RFC 7523 §2.2 / #294");
+                    "FAPI 2.0 Security Profile §5.3.2.1 / §5.3.2.2 / RFC 7636 / RFC 7523 §2.2 / #294");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_32);
 
@@ -1071,10 +1072,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-294.57",
                     "**PAR に預ける Request Object の client_id が、認証したクライアントと違えば、invalid_request_object で断る**",
-                    "**RFC 9126 §2.1 は、Request Object の client_id が認証したクライアントであることを求める。**"
+                    "**RFC 9126 §3 は、Request Object の client_id が認証したクライアントであることを求める。**"
                     + "**以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、"
                     + "**別のクライアントの名義で、預けた要求を作れた**（C-41）。",
-                    "RFC 9126 §2.1 / RFC 9101 §6.3 / #294");
+                    "RFC 9126 §3 / RFC 9101 §6.3 / #294");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
                 ClientRegistration other = Flows.Registration(client, KnownClients.TestClient);

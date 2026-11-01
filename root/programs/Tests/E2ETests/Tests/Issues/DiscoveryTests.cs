@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/24  玄人 幸道         新規（#189 の 2〜8 : 誤りの修正と、実装済みの項目の広告）
 //*  2026/09/24  玄人 幸道         RT-189.5（広告と実装をそろえる。#228 の 9・12）を追加
+//*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -250,7 +251,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "**片方だけでは使えない。** 暗号化は alg（鍵）と enc（本文）の両方が要り、"
                     + "`*.jwt` の response_mode を出すなら、RP は**何で検証するか**を知る必要がある。"
                     + "実装は JWE が RSA-OAEP ＋ A256GCM、JARM の署名が RS256。",
-                    "OIDC Discovery 1.0 §3 / JARM §7 / #189 の 5・8");
+                    "OIDC Discovery 1.0 §3 / JARM §4 / #189 の 5・8");
 
                 r.Target(client.Target.DisplayName);
                 r.Step("GET /.well-known/openid-configuration");
