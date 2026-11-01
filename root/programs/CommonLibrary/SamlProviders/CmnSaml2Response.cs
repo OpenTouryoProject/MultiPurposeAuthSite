@@ -35,6 +35,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Security.Cryptography;

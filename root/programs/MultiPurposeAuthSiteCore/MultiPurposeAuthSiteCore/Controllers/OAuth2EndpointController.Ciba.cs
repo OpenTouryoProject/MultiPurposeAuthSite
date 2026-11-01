@@ -30,16 +30,19 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         /ciba_result を認証デバイスのトークンに限る・expires_in / interval を数値で返す・requested_expiry を上限で頭打ちにする（#294）
+//*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnCibaEndpoint）を呼ぶ（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
 
+using MultiPurposeAuthSite.Extensions.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Linq;
@@ -116,7 +119,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!string.IsNullOrEmpty(request) || !string.IsNullOrEmpty(request_uri))
                 {
                     // 受け取りと署名検証は、両アプリで同じ（CommonLibrary）。
-                    bool received = Token.CmnEndpoints.ReceiveCibaRequest(
+                    bool received = CmnCibaEndpoint.ReceiveCibaRequest(
                         client_id, client_secret, assertion, x509,
                         request, request_uri, out JObject jsonObj, out err, out errDescription);
 
@@ -133,7 +136,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     // **client_id は、要求の iss（＝認証したクライアント。ReceiveCibaRequest が照合済み）から取る**（#294）。
                     //   **private_key_jwt ではフォームに client_id が無い**ので、以前は空のまま code を作り、500 になっていた。
-                    else if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
+                    else if (CmnCibaEndpoint.ValidateCibaAuthZReqParam(
                         jsonObj, out client_id, out scope,
                         out client_notification_token, out binding_message,
                         out user_code, out requested_expiry, out login_hint,
@@ -142,7 +145,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 検証成功
 
                         // AccountControllerからの移行なので...。
-                        string name = Sts.Helper.GetInstance().GetClientName(client_id);
+                        string name = Helper.GetInstance().GetClientName(client_id);
 
                         // scopeパラメタ
                         string[] scopes = (scope ?? "").Split(' ');
@@ -167,7 +170,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // requested_expiry → UnixTime化
                             //   **`CibaExpireTimeSpanFromSeconds` を上限にする**（#294。値は `ValidateCibaAuthZReqParam` が検証済み）。
                             //   **以前は上限が無く**、読めない値は 0 になって、作った瞬間に期限が切れていた。
-                            int _requested_expiry = Token.CmnEndpoints.CibaExpiresIn(requested_expiry);
+                            int _requested_expiry = CmnCibaEndpoint.CibaExpiresIn(requested_expiry);
 
                             long authReqExp = DateTimeOffset.Now.AddSeconds(_requested_expiry).ToUnixTimeSeconds();
 

@@ -108,7 +108,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // **同じ電話番号に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）。
                     //   **電話番号ごとに数える** — 打ち間違いを直した番号へは、すぐに送れる。
-                    if (Sts.MailThrottle.TryAcquireForDestination(Sts.MailThrottle.PurposePhoneNumber, model.Number, user.Id))
+                    if (MailThrottle.TryAcquireForDestination(MailThrottle.PurposePhoneNumber, model.Number, user.Id))
                     {
                         // 検証コード生成
                         string code = await UserManager.GenerateChangePhoneNumberTokenAsync(user, model.Number);
@@ -125,10 +125,10 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             Logging.MyOperationTrace(string.Format(
                                 "The {0} SMS to {1} could not be sent. ({2})",
-                                Sts.MailThrottle.PurposePhoneNumber, user.Id, ex.GetType().Name));
+                                MailThrottle.PurposePhoneNumber, user.Id, ex.GetType().Name));
                             Logging.MyDebugLogForEx(ex);
 
-                            Sts.MailThrottle.ReleaseForDestination(Sts.MailThrottle.PurposePhoneNumber, model.Number);
+                            MailThrottle.ReleaseForDestination(MailThrottle.PurposePhoneNumber, model.Number);
                         }
                     }
 

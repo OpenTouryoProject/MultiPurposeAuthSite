@@ -33,6 +33,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 
@@ -273,7 +274,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //    （`null` との三項演算子が、そのままでは通らない）。
                 isDPoP ? MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_DPoP].ToString() : null,
                 MyHttpContext.Current.Request.Method,
-                Token.CmnDPoP.EndpointUriOf(MyHttpContext.Current.Request.Path),
+                CmnDPoP.EndpointUriOf(MyHttpContext.Current.Request.Path),
                 out dpopError);
         }
 

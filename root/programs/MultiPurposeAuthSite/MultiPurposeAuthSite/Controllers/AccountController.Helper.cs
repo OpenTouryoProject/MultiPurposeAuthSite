@@ -35,6 +35,7 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Util.Test;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -96,7 +97,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // **送れなかった分は、間隔に数えない**（すぐに送り直せるように）。
                     if (purpose != null)
                     {
-                        Sts.MailThrottle.Release(purpose, userId);
+                        MailThrottle.Release(purpose, userId);
                     }
                 }
             });
@@ -112,7 +113,7 @@ namespace MultiPurposeAuthSite.Controllers
         private async Task SendConfirmEmail(ApplicationUser user)
         {
             // **同じ利用者に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）
-            if (!Sts.MailThrottle.TryAcquire(Sts.MailThrottle.PurposeEmailConfirmation, user.Id))
+            if (!MailThrottle.TryAcquire(MailThrottle.PurposeEmailConfirmation, user.Id))
             {
                 return;
             }
@@ -131,7 +132,7 @@ namespace MultiPurposeAuthSite.Controllers
             // E-mailの送信
             string subject = GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm);
             string body = GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg);
-            this.SendMailInBackground(Sts.MailThrottle.PurposeEmailConfirmation, user.Id,
+            this.SendMailInBackground(MailThrottle.PurposeEmailConfirmation, user.Id,
                 user.Email, subject, string.Format(body, callbackUrl, user.UserName));
         }
 
@@ -143,7 +144,7 @@ namespace MultiPurposeAuthSite.Controllers
         private async Task SendConfirmEmailForPasswordReset(ApplicationUser user)
         {
             // **同じ利用者に、続けて送らない**（#294。`MailResendIntervalSeconds`。画面は変えない）
-            if (!Sts.MailThrottle.TryAcquire(Sts.MailThrottle.PurposePasswordReset, user.Id))
+            if (!MailThrottle.TryAcquire(MailThrottle.PurposePasswordReset, user.Id))
             {
                 return;
             }
@@ -161,7 +162,7 @@ namespace MultiPurposeAuthSite.Controllers
                 );
 
             // E-mailの送信
-            this.SendMailInBackground(Sts.MailThrottle.PurposePasswordReset, user.Id,
+            this.SendMailInBackground(MailThrottle.PurposePasswordReset, user.Id,
                     user.Email, GetContentOfLetter.Get("PasswordResetTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset),
                     string.Format(GetContentOfLetter.Get("PasswordResetMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset_msg), callbackUrl));
         }
@@ -429,11 +430,11 @@ namespace MultiPurposeAuthSite.Controllers
             //   **user store に寄せてある**ので、**件数に上限が無い**
             //   （環境変数で差し込むと、net48 版は一覧ごと 1 本になり、件数に上限が出る。#262 / #264）。
             //   **接尾辞は付けない。** E2E が client_name と固定の client_id で引くため
-            //   （Sts.TestClients の表と、E2E の KnownClients を同じ値で揃える）。
-            foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
+            //   （TestClients の表と、E2E の KnownClients を同じ値で揃える）。
+            foreach (TestClients.Entry entry in TestClients.Entries)
             {
                 // 写す元（構成ファイル）から、登録を作る。
-                ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data = Sts.TestClients.CreateSaml2OAuth2Data(entry);
+                ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data = TestClients.CreateSaml2OAuth2Data(entry);
 
                 if (saml2OAuth2Data == null)
                 {

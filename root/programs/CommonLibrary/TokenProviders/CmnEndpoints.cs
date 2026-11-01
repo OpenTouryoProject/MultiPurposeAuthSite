@@ -78,6 +78,7 @@
 //*  2026/09/25  玄人 幸道         client_assertion（RFC 7523 2.2）を読む（#238）
 //*  2026/09/25  玄人 幸道         claims_supported を、クレームの対応付けから作る（#230）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
+//*  2026/11/01  玄人 幸道         拡張仕様の分（Ciba / RequestObject / Logout）と Discovery を Extensions/Sts の別クラスへ移した（#321）
 //*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
@@ -109,7 +110,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;
@@ -123,17 +124,20 @@ namespace MultiPurposeAuthSite.TokenProviders
     public partial class CmnEndpoints
     {
         // 本体は、partial の次のファイルに在る（#294 で分割した）。
-        //   CmnEndpoints.Discovery.cs            : .well-known/openid-configuration
         //   CmnEndpoints.Authorize.cs            : 認可エンドポイント（要求の検証・redirect_uri・PKCE）
         //   CmnEndpoints.AuthorizeResponse.cs    : 認可エンドポイント（code / Implicit / Hybrid の応答）
-        //   CmnEndpoints.RequestObject.cs        : Request Object・PAR
-        //   CmnEndpoints.Ciba.cs                 : CIBA の受付
-        //   CmnEndpoints.Logout.cs               : RP-Initiated Logout
         //   CmnEndpoints.Token.cs                : トークン エンドポイント（各 grant）
         //   CmnEndpoints.Revocation.cs           : 取り消し・照会エンドポイント
         //   CmnEndpoints.ClientAuthentication.cs : クライアント認証
         //   CmnEndpoints.TokenIssuance.cs        : 発行の共通部品（ロックアウト・CheckClientMode・DPoP・応答）
         // このファイルには、どの口からも使う公開の部品（redirect_uri の定数・CORS・エラー応答）を置く。
+        //
+        // 拡張仕様の分と Discovery は、Extensions/Sts の別のクラスに在る（#321 で移した）。
+        //   CmnDiscoveryEndpoint     : .well-known/openid-configuration
+        //   CmnRequestObjectEndpoint : Request Object（/ros）・PAR
+        //   CmnCibaEndpoint          : CIBA の受付
+        //   CmnLogoutEndpoint        : RP-Initiated Logout
+        // 登録された鍵（JWK）と JWT のクレームの読み出しは Util/Sts/JwtUtil。
 
         #region Common
 

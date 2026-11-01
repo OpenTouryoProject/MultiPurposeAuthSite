@@ -84,7 +84,7 @@
 | | Refresh Token | ✓ | ローテーションあり |
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
 | | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
-| | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
+| | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/Sts/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
 | | `/end_session`（RP-Initiated Logout） | ✓ | #232。**`sid` は `id_token` に出る**（#310 の段階 1。**RP ごとに別の値**。伝える先は `SessionClient` の表）。**サインアウトすると、登録が在る RP へ `logout_token` を POST する**（#310 の段階 2）。**`frontchannel_logout_uri` の登録が在れば、`iframe` の画面も返す**（#310 の段階 3）。**どちらも Discovery で広告している** |
@@ -142,7 +142,7 @@ if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
 
 > **この指摘は誤りだった。** 条件だけを見て「`nonce` が無ければ `id_token` を打ち切る」と判断したが、
 > **呼び出し元を辿っていなかった。**
-> `Helper.AddClaim`（`Extensions/Sts/Helper.cs`）は **`nonce` 未指定時に `state` を代入して
+> `Helper.AddClaim`（`Util/Sts/Helper.cs`）は **`nonce` 未指定時に `state` を代入して
 > 無条件に nonce クレームを追加する**。トークンを発行する 6 経路
 > （code / implicit / hybrid / ROPC / client_credentials / JWT bearer）はすべてここを通るため、
 > payload には **常に** `nonce` キーが存在し、上の条件は**常に真**だった。
@@ -471,7 +471,7 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   **保持はそのストアの有効期限まで**（既定 300 秒）なので、要求の `exp` をそれより長くすると、
   記録が消えた後は同じ `jti` を受け付ける。厳密な排他はしていない（同時到着は防がない）。
   検証は `jti` を確かめた時点で行うので、**利用者が見つからずに終わった要求でも `jti` は消費される**（`RT-234.3`）
-- **要求の受け取り方は 2 つある**（#233。`CmnEndpoints.ReceiveCibaRequest`）。
+- **要求の受け取り方は 2 つある**（#233。`CmnCibaEndpoint.ReceiveCibaRequest`。#321 で `CmnEndpoints` から移した）。
 
   | | 送り方 | 位置付け |
   |---|---|---|
@@ -872,7 +872,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 - **決定的**でなければならない（RP は `sub` を利用者の主キーとして保存するため、
   同じ利用者・同じクライアントなら常に同じ値）。**鍵と IV を秘密と `client_id` から導出**して実現
 - **クライアントごとに変わる**（`client_id` を鍵材料に入れている）
-- 実装は `Util/PPIDExtension`（AES-CBC）。**対応表（新しいテーブル）を作らずに済む**ので、
+- 実装は `Util/Sts/PPIDExtension`（AES-CBC）。**対応表（新しいテーブル）を作らずに済む**ので、
   **DDL の 3 方言と、既存データベースへの移行が要らない**
 - E2E テスト : **`RT-140.2`**（`pairwise` でも `/userinfo` がクレームを返す）、
   **`RT-140.3`**（毎回同じ値になり、クライアントが違えば違う値になる）。
@@ -913,7 +913,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 |---|---|---|
 | **N1 : PKCE と private_key_jwt / mTLS の併用** | **`code_verifier` が在ると `client_assertion` と証明書を見ず、PKCE だけで認証した** → **証明が PKCE になり、fapi2（FAPI 2.0 は PKCE と鍵か証明書の両方を求める）が通らなかった**。`RequirePkce` を有効にすると、鍵・証明書のクライアントは全く通らなかった | **まず資格情報で認証し、PKCE は別に検証する**（証明は PrivateKeyJwt / Mtls） |
 | **N3 : `response_type=id_token`** | **Implicit を閉じても検査を通り、同意の後で `server_error`** | **`unsupported_response_type`**（Implicit の経路として扱う） |
-| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（FAPI 2.0 は issuer も受けることを求める）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
+| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（**fapi2 の扱いは C-58 で直した**）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
 | **N5 : poll の CIBA** | **`client_notification_token`（ping / push のときだけ REQUIRED）と `binding_message`（OPTIONAL）を必須にしていた** | **省略できる**（`/ros` は前者の有無で CIBA を見分けるので、`request_uri` の経路では在ることになる） |
 | **N6 : Device グラントの登録種別** | **`device` を固定で書いていた**（normal の登録のトークンも `device` を名乗った） | **登録された種別で書く**（#220 と同じ） |
 | **登録の `grant_types` と Implicit / Hybrid** | **認可エンドポイントで見ず、同意の後で `server_error`** | **認可エンドポイントで発行する経路（`implicit`）は、同意の前に `unauthorized_client`**。**code は従来どおり `/token` で見る**（#307 の段階 1 の決め。`RT-307.7`） |
@@ -1156,7 +1156,7 @@ E2E テスト: `EX-4.5`（使用済み）/ `EX-4.7`（発行していない・�
 | | 内容 |
 |---|---|
 | `CmnEndpoints.TryReadJwtPayload` | JWT でなければ **null**（例外にしない）。**`JObject` で読む**（`Dictionary<string, string>` だと入れ子のクレームで失敗する） |
-| `CmnEndpoints.DecodeRegisteredJwk` | 登録値が空・壊れていれば **空文字**（復号は空でないと確かめた後） |
+| `JwtUtil.DecodeRegisteredJwk`（#321 で `CmnEndpoints` から移した） | 登録値が空・壊れていれば **空文字**（復号は空でないと確かめた後） |
 
 `/ros` は **400**、`client_assertion` は**アサーション無しとして扱い 401（`invalid_client`）**。
 後者は、`client_assertion_type` が誤りのときと同じ扱い（#238）。
@@ -2149,7 +2149,7 @@ if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
 > FAPI 2.0 Security Profile は PAR を必須としているので、**本命は `/par`** という関係は変わらない。
 >
 > 廃止しないのであれば、**両アプリに二重に書かれたままにする理由も無い。**
-> **✅ #235 で `CmnEndpoints.RegisterRequestObject` に集約した**（`/par` と CIBA の受け取りに続いて）。
+> **✅ #235 で `CmnEndpoints.RegisterRequestObject` に集約した**（`/par` と CIBA の受け取りに続いて）。**#321 で `CmnRequestObjectEndpoint.RegisterRequestObject` に移した。**
 > **振る舞いは変えていない**（署名だけを確かめ、クライアント認証はしない）。
 > Controller に残るのは、本文の読み方（net48 は同期、net10.0 は非同期）と応答の包み方だけ。
 >
@@ -2545,7 +2545,7 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 |---|---|---|
 | `+` | `%2B` | 一致しない（素朴に復号すると**空白**になる文字でもある） |
 | `/` `=` `%` | `%2F` `%3D` `%25` | 一致しない |
-| `:` | `%3A` | **資格情報として読めない**（ヘッダが 3 つに割れる） |
+| `:` | `%3A` | 一致しない（**符号化しない `:` は、Open棟梁 が最初の `:` で分ける**。RFC 7617 §2。OpenTouryo#643。下の注） |
 
 **秘密は base64 で生成されるのが普通**なので、`+` `/` `=` は現実に現れる。
 つまり**仕様どおりに送る相手ほど繋がらない**状態だった。
@@ -2558,14 +2558,19 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 **英数字だけの秘密では、符号化しても同じ文字列になる**。
 このため**既存の E2E では現れず**（雛形の秘密は base64url の英数字）、
 **記号を含む秘密のクライアントを用意して測る**ようにした
-（`RT-237.1`〜`.3`。**種データで作る**。#264。もとの仕組みは #224）。
+（`RT-237.1`〜`.4`。**種データで作る**。#264。もとの仕組みは #224）。
 
 送り側（Open棟梁 の `CreateBasicAuthenticationHeaderValue`）は OpenTouryo #592 で符号化するようになった。
 **送り側だけを直すと、受け側が復号しない認可サーバに繋がらなくなる**ため、
 受け側の対応（この項）と対になっている。
 
-`:` を含む秘密が符号化しないと通らないのは、**仕様上やむを得ない**
-（区切り文字そのものなので、符号化しないクライアントには送る手段が無い）。
+`:` を含む秘密は、**符号化しなくても通る。** **Open棟梁 は最初の `:` で分ける**
+（RFC 7617 §2。`:` を含められないのは user-id の側だけ。OpenTouryo#643）。
+**以前は 3 つに割れて読めず「符号化したときだけ通る」だった**（`RT-237.3`）。
+
+**復号前の値での照合（OpenTouryo#634 の H-3）は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。
+**記号（`+` など）を含む秘密を符号化せずに送るクライアントは、4.0 で繋がらなくなる**
+（`RT-237.2` と `RT-237.4` の (2) が落ちる。`:` だけの `RT-237.3` は変わらない）。
 
 これも C-20 と同じく**相互接続性の話**で、弱点を塞いだものではない。
 Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz`・`/par`）が、
@@ -2947,7 +2952,7 @@ this.SendConfirmEmail(user);
 **サインアップ・パスワードの失念は、利用者名かメアドが分かれば、誰でも何度でも押せる。** **押すたびにメールが飛んだ。**
 **口ごとのレート制限（#305 の段階 3）は送信元ごとに数える**ので、**宛先が 1 つでも、送信元を変えれば止まらない。**
 
-**宛先（利用者）ごとに数える `Extensions/Sts/MailThrottle` を足した。**
+**宛先（利用者）ごとに数える `Util/IdP/MailThrottle` を足した。**
 **同じ利用者・同じ用途のメールは、`MailResendIntervalSeconds` 秒に 1 通まで**（雛形は 60。**0（未設定）なら絞らない**）。
 **断っても画面は変えない**（**送ったかどうかを画面から分からせない**）。CONFIGURATION.md の「メールの送り過ぎ」。
 
@@ -3127,7 +3132,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | **印がどの要求にも効いた** | **再認証の途中でやめると印が残り、後で別の RP が送ってきた `prompt=login` が、再認証なしで通った** |
 | **壊れた値** | **`DateTime.Parse` が例外を出し、500 になった** |
 
-**どちらの Cookie も、改ざんできない形で包む**ようにした（`Extensions/Sts/AuthTimeCookie`。
+**どちらの Cookie も、改ざんできない形で包む**ようにした（`Util/IdP/AuthTimeCookie`。
 **net10.0 : DataProtection**（#251 で鍵を永続化）／**net48 : `MachineKey.Protect`**）。**開けない値は、無いものとして扱う。**
 **再認証の印は、それを求めた認可要求に結び付けた**（クエリから作る指紋。**別の要求の `prompt=login` には効かない**）。
 
@@ -3172,9 +3177,9 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 
 ### C-41. PAR に預けた Request Object の `client_id` を、認証したクライアントと照合していなかった **[Lib]** — **✅ 修正済み（#294）**
 
-**`CmnEndpoints.PushedAuthorizationRequest`** は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめていた**が、
+**`CmnEndpoints.PushedAuthorizationRequest`**（#321 で `CmnRequestObjectEndpoint` へ移した）は、`request`（JAR）で預けるとき、**`iss` が認証したクライアントであることは確かめていた**が、
 **中の `client_id` は確かめていなかった。** その後の検証（`ValidateAuthZReqParam`）と保存は、**中の `client_id` で行っていた**ので、
-**別のクライアントの名義で、PAR に預けた要求を作れた**（RFC 9126 §2.1 / RFC 9101 §6.3）。
+**別のクライアントの名義で、PAR に預けた要求を作れた**（RFC 9126 §3 / RFC 9101 §6.3）。
 
 **中の `client_id` が認証したクライアントと違えば `invalid_request_object`、無ければ認証したクライアントで埋める**（フォームの経路と同じ）ようにした。
 
@@ -3446,7 +3451,63 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > | **`/jwkcerts` の `If-None-Match`** | 弱い ETag（`W/"…"`。net10.0）と `*` を一致とみなさなかった | **一致とみなす**（RFC 9110 §13.1.2） |
 > | **`/userinfo`** | **aud の無いトークンで NullReferenceException**。`claims` の何もしないループ | **利用者を引かずに `sub` だけ返す**。ループは消した |
 
+### C-56. 自己テストの口の 1 つを、本番で閉じられなかった。自己テストの ROPC が管理者のトークンを配っていた **[NetFx][Core]** — **✅ 修正済み（#294）**
+
+**自己テスト（`HomeController`）は `IsLockedDownTestEndpoints` で閉じる設計**だが、**閉じ方と中身に 2 つの抜けがあった。**
+
+| 場所 | 以前 | いま |
+|---|---|---|
+| **`/Home/DeviceAuthZResponse`**（ポーリング） | **`IsLockedDownTestEndpoints` を見ていなかった**（`Saml2OAuth2Starters` は見ていた）。**本番で閉じても、この口だけは匿名で使え**、**サーバに自分の `/token` を問い合わせさせられた**。**間隔は画面（hidden）の `interval` に従った**ので、**外から短くできた** | **閉じる**。**間隔は設定値（`DeviceAuthZPollingIntervalSeconds`）より短くしない**（`SelfTestClient.RunDeviceAuthZPollingAsync`。`RT-294.82`）。**待つ前に残り時間を見て、待ち時間の上限（60 秒）を越えて待たない**（`PollForTokenAsync`。CIBA にも効く。2 回目のレビューで追加。`RT-294.86`） |
+| **自己テストの ROPC** | **管理者（`AdministratorUID` / `AdministratorPWD`）でトークンを取り、画面に出した。** **この POST は匿名で受ける**ので、**自己テストの口が開いている間は、ログインしていない人にも管理者のトークンを見せていた** | **テスト利用者（`tanaka`）で取る**。**`TestUserPWD` が無ければ取らずに理由を出す**（`RT-294.83`） |
+
+**どちらも `IsLockedDownTestEndpoints` を `true` にした配備には当たらない**（ROPC の件）か、**当たっても問い合わせ先は自分の `/token` だけ**（ポーリングの件）である。
+**自己テストを開けたまま公開する配備**（雛形の既定は `false`。テストのスタブも既定で開けている）が対象になる。
+
+> **同じレビューで直した不具合**（セキュリティ以外）:
+>
+> | 場所 | 以前 | いま |
+> |---|---|---|
+> | **自己テストの POST 2 つ** | 画面は AntiForgery トークンを出していたが、**確かめていなかった** | **`[ValidateAntiForgeryToken]`**（`RT-294.81`） |
+> | **FAPI2（`/ros`）の開始** | **預けられないと `Redirect(null)` の例外で 500** | **理由を出して再表示** |
+> | **「ログイン・ユーザの Client」** | **消された利用者・登録の無い利用者で 500**（NRE / `Session.SetString(null)`） | **理由を出して再表示** |
+> | **SPA 向けの PKCE** | **`response_mode` を後から足した**ので、画面で選ぶと 2 つ載った（RFC 6749 §3.1） | **`fragment` で置き換える**（`RT-294.84`） |
+> | **開始の URL** | **画面から来る値（`prompt`・`max_age`・`response_mode`）と `scope` などを符号化せずに連結**（`&` で別のパラメタを差し込めた） | **URL 符号化する**（`RT-294.85`） |
+> | **ROPC・Client Credentials・JWT Bearer の結果** | **応答を JSON と決めて読み**、そうでなければ 500 | **読めなければ access_token を空にして、応答をそのまま出す** |
+
+### C-57. pairwise のクライアントでは、消された利用者の access_token が期限まで通っていた **[Lib][Core][NetFx]** — **✅ 修正済み（#294）**
+
+**`CmnAccessToken.VerifyAccessToken` は、`sub` の持ち主を確かめる**（利用者が居るか、居なければクライアント アカウントか）。
+**ところが `subject_types` が `pairwise` のクライアントでは、この確認を飛ばして受けていた。**
+**public のクライアントでは落ちていた**ので、**利用者を消しても、pairwise のクライアントに発行した access_token だけは期限まで通った**
+（`/userinfo`・リソース サーバ・認証デバイスの口など）。**C-54（refresh_token）と同じ種類の抜け**で、access_token 側である。
+
+**pairwise でも public と同じ判定にした**（利用者が居れば受ける。居なければ、クライアント アカウントとして `sub` を照合する）。
+**pairwise のクライアントの client_credentials は、`sub` がクライアント名**なので、照合で通る。
+
+**E2E** : **`RT-294.87`**（使い捨ての利用者で pairwise のトークンを取り、消した後の `/userinfo` が 401）。
+
+> **同じレビューで直した不具合**（セキュリティ以外）:
+>
+> | 場所 | 以前 | いま |
+> |---|---|---|
+> | **`auth_time`** | **W3C 形式の文字列**（`AccountController.AddAuthTimeClaim` が渡す形のまま） | **JSON の数値（秒）**（OIDC Core §2。`RT-294.88`）。**預けた refresh_token の payload に残る文字列も、作り直すときに数値にする** |
+> | **Claims 経由の access_token（Implicit / Hybrid）** | **`claims`（OIDC Core 5.5）を拾っていなかった** | **拾う**（`RT-294.89`） |
+> | **`/par` の `claims`** | **文字列のまま預け、`/authorize` が `(JObject)` の変換に失敗して 500** | **JSON のオブジェクトとして預ける。読めなければ `invalid_request`**（`RT-294.90`）。`/authorize` 側も、オブジェクトでなければ受けない |
+> | **`claims` の `id_token`**（`AddAuthTimeClaim`） | **オブジェクトでないと `(JObject)` の変換で 500** | **オブジェクトでなければ、`auth_time` の要求は無いものとして扱う**（`RT-294.91`。2 回目のレビューで追加） |
+> | **Request Object（`/ros`・PAR の JAR）の `claims`** | オブジェクトでなくても預かり、`/authorize` で黙って無視した | **預からない**（`invalid_request_object`。`RT-294.92`。PAR のフォームと同じ扱い） |
+> | **access_token の `nbf`** | **確かめていなかった** | **確かめる**（RFC 7519 §4.1.5。時刻のずれを 60 秒まで許す） |
+> | **`scope` の照合**（クレームの選択） | `ToLower` で大文字小文字を無視 | **区別する**（RFC 6749 §3.3） |
+
 ---
+
+### C-58. fapi2 のクライアント認証で、`aud` にトークン エンドポイントの URL も受けていた ✅ 修正済み（#323）
+
+**FAPI 2.0 Security Profile §5.3.2.1 は、認可サーバが受ける `aud` を issuer の文字列だけに限っている。**
+**#294 では「issuer も受ける」と読み**、`IsAssertionAudience` は登録の種別を見ず、どちらも受けていた。
+**#315 で根拠を原典と照らして見つけた。**
+
+**fapi2 の登録のクライアント認証では、issuer だけを受ける**（`IsClientAssertionAudience`。`RT-323.1`）。
+**それ以外の登録と JWT Bearer グラントは変えない**（RFC 7523 §3 はトークン エンドポイントの URL を認めている）。
 
 ## 5. D. 最新の IdP として不足している機能
 
@@ -3484,7 +3545,7 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | E-6 | **✅ Deny ボタンは入れた（#272 の段階 2）**。認可画面で拒否でき、**`access_denied` を `redirect_uri` へ返す**（RFC 6749 §4.1.2.1。`RT-272.6`）。**拒否は記録しない**。残るのは **scope が生の識別子のまま**であること |
 | E-7 | **✅ 解けた（#303）。** **ファイルの更新だけを見て覚える**（`Extensions/Sts/JwkSetDocument`）。**`ETag` を常に付け、`If-None-Match` に `304`**。**`Cache-Control` は `JwkSetCacheMaxAgeSeconds`**（0 なら `no-store` ＝ 従来どおり）。**鍵の入れ替えに追随する**（`RT-303.2`） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる。**#294 で両方を責務ごとの partial に分けた**（`AccountController.*.cs` / `ManageController.*.cs`。**別 Controller への切り出しはしていない**） |
-| E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
+| E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
 | E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |
 | E-11 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションが **認可応答の `iss`（RFC 9207）を見ていなかった。** `id_token` の `iss` は照合していたが、**OAuth 2.1 が Mix-Up 対策として挙げているのは応答パラメタの方。** いまは `SpRp_Isser` と照合する（**来なければ通す** — 実装していない OP があるため） |
 | E-12 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの要求スコープに**独自の `userid` / `roles`** が入っていた。**厳格な OP では `invalid_scope` になりうる**（この IdP 自身も #198 でスコープを絞る）。**標準だけにした。** `userid` は連携キーでなくなったので不要（`(iss, sub)` へ移行済み）。`state` も 10 → 32 文字にした |

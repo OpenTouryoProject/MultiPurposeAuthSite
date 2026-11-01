@@ -18,6 +18,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2020/12/21  西野 大介         新規
     //*  2026/09/28  玄人 幸道         interval を表示し、hidden で持ち回す（#246 の 3-b）
+    //*  2026/10/31  玄人 幸道         /device_authz が断った理由を出す（#294）
     //**********************************************************************************
 *@
 
@@ -31,6 +32,11 @@
 }
 
 <h2>@ViewBag.Title</h2>
+@* **/device_authz が断ったら、その理由**（#294） *@
+@if (!string.IsNullOrEmpty(ViewBag.Error as string))
+{
+    <p class="text-danger">@ViewBag.Error</p>
+}
 <ul>
     <li>ClientId : @ViewBag.ClientId</li>
     <li>DeviceCode : @ViewBag.DeviceCode</li>

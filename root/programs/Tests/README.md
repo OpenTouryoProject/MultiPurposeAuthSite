@@ -9,6 +9,7 @@ MultiPurposeAuthSite の**ビルド確認**と **E2E テスト**。
 | | |
 |---|---|
 | `TESTCASES.md` | **テストケースの原本。** 何を・何を根拠に確かめるのか（生成物） |
+| `COVERAGE.md` | **E2E のカバレッジ。** 品質マップの単位の値と、届いていない箇所（#315） |
 | `test.ps1` | サイトを起動して E2E テストを実行する |
 | `E2ETests/` | xUnit のテスト プロジェクト（net10.0） |
 
@@ -64,7 +65,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 雛形にも実設定にも足さずに済むので、**特定の組み合わせを試すためだけのクライアント**に使う。
 
 **種データが、テスト利用者の登録（`saml2OAuth2Data`）として作る**（#264）。
-表は **`CommonLibrary/Extensions/Sts/TestClients.cs`** にあり、
+表は **`CommonLibrary/Util/Test/TestClients.cs`** にあり、
 **`IsDebug` ＋ `TestUserPWD` のときだけ**作られる。
 
 | client_name | 何か | 引き方 |
@@ -74,7 +75,8 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
 | `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | 同上 |
 | `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | 同上 |
-| `TestClient_3` | 同じく写しで、**`client_secret` に `:` を含む**（`KnownClients.ColonSecret`）。符号化しないと資格情報として読めない値（#237） | 同上 |
+| `TestClient_3` | 同じく写しで、**`client_secret` に `:` と `+` を含む**（`KnownClients.ColonSecret`）。符号化しないと**復号前の値での照合**で通る（#237。`RT-237.4`。Open棟梁 4.0 でやめる。OpenTouryo#645） | 同上 |
+| `TestClient_35` | 同じく写しで、**`client_secret` に `:` だけを含む**（`KnownClients.ColonOnlySecret`）。**最初の `:` で分ける**ことだけを測る（`RT-237.3`。#294） | 同上 |
 | `TestClient_4` | 同じく写しで、**`post_logout_redirect_uri` を登録**（`test_self_logout`）。ログアウト後に RP へ戻せるかを測る（#232） | 同上 |
 | `TestClient_5` | 同じく写しで、**`subject_types = pairwise`**（#140 の段階 2） | 同上 |
 | `TestClient_6` / `_7` | **写しただけ**（`subject_types` を書かない）。**既定が public になった**ことを 2 つの client_id で測る（#151 の段階 4） | 同上 |
@@ -91,9 +93,9 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
 - **`client_id` は固定値。** E2E は構成ファイルを読む作りなので user store は読めない。
-  **`Flows.KnownClients.SeededClientIds` と `Sts.TestClients.Entries` を同じ値にしておくこと**
+  **`Flows.KnownClients.SeededClientIds` と `TestClients.Entries` を同じ値にしておくこと**
 - **`client_secret` を差し替えたものは、写す元の秘密では認証できない。**
-  **`KnownClients.SymbolSecret` / `ColonSecret` も、表と同じ値にしておくこと**
+  **`KnownClients.SymbolSecret` / `ColonSecret` / `ColonOnlySecret` も、表と同じ値にしておくこと**
 - **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**（種データはサイト側が作る）
 - **サイトは `GET /Account/Login` でしか種データを作らない**（`CreateData`。#210 で踏んだ）。
   **`TargetTestBase.Client` が 1 度だけ呼んで揃えている**（`TargetInfo.EnsureSeedData`）。
@@ -280,7 +282,7 @@ using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.Secon
 | ファイル | 識別子 | 対象 |
 |---|---|---|
 | `Tests/Extended/RefreshTokenTests.cs` | `EX-1` | refresh_token の更新・ローテーション・**再利用の検知と一族ごとの失効**（#188）・発行先との結び付け（RFC 6749 §6 / RFC 9700 / RFC 7009） |
-| `Tests/Extended/RevocationTests.cs` | `EX-2` | トークンの失効（RFC 7009） |
+| `Tests/Extended/RevocationTests.cs` | `EX-2` | トークンの失効（RFC 7009）。**失効の記録の掃除が走っても、期限内の access_token は使えないまま**（`EX-2.7`。#322。**100 回失効させる**） |
 | `Tests/Extended/IntrospectionTests.cs` | `EX-3` | トークンの問い合わせ（RFC 7662） |
 | `Tests/Extended/DeviceAuthorizationTests.cs` | `EX-4` / `RT-246` | Device Authorization Grant（RFC 8628）。**自己テストのボタンから、承認して判定が画面に出るまで**（`RT-246.3`） |
 | `Tests/Extended/HybridFlowTests.cs` | `EX-5` | OIDC Hybrid フロー（c_hash / at_hash） |
@@ -330,7 +332,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/Saml2AssertionTests.cs` | `RT-246` | **自己テストが SAML2 のアサーションを画面に出す**（Redirect / POST / 要求 POST ＋ 応答 Redirect の 3 経路。判定・署名の検証・Issuer の一致・XML・属性。`RT-246.4` 〜 `RT-246.7`） |
 | `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` / `RT-243` / `RT-246` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`）。**自己テストの CIBA ボタン**（判定と理由が画面に出る。`RT-246.2`） |
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
-| `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |
+| `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` だけを含む秘密は符号化してもしなくても通ること（最初の `:` で分ける。OpenTouryo#643）、`:` と `+` を含む秘密は符号化しなくても復号前の値の照合で通ること（Open棟梁 4.0 でやめる。OpenTouryo#645） |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 | `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `Container/E2E/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
 | `Tests/Issues/ManageGdprTests.cs` | `RT-277` | **GDPR 対応**（`/Manage/ManageGdprData`）。**参照**は自分のデータを `user.json`（`application/json`）で返し、**パスワードの控えは入っていない**こと。**消去**は、**利用者の行ごと消える**こと（#299。子の行は外部キーの cascade が落とす）と、**その利用者ではサインインできなくなる**こと。**属性データ・クライアント登録・ロールを持たせてから消す**（**登録が在ると、以前の実装では消去が外部キーで弾かれた**）。**使い捨ての利用者を使う**（消去は元に戻せない）。**4 ストアで測る** |
@@ -348,6 +350,9 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/DPoPChallengeTests.cs` | `RT-311` | **チャレンジのスキームが `DPoP` になる**（#311 の段階 4）。**`DPoP` スキームで来た要求には `WWW-Authenticate: DPoP` ＋ `algs`**、**`Bearer` で来た要求には従来どおり `Bearer`**（`RT-311.12`） |
 | `Tests/Issues/DPoPNonceTests.cs` | `RT-311` | **DPoP の `nonce` を要求する**（#311 の段階 4）。**`/token` は `use_dpop_nonce` ＋ 400**（`RT-311.13`。**`DPoP-Nonce` で値を渡す**。**`code` は消費されていない**）、**保護されたリソースは 401 ＋ チャレンジ**（`RT-311.14`）。**`/token` と保護されたリソースの nonce は別物**。**`test.ps1 -DPoPNonce` のときだけ走る**（既定では除外） |
 | `Tests/Issues/ImplicitDisabledTests.cs` | `RT-314` | **Implicit を閉じた配備では、Hybrid / OIDC の Implicit も閉じる**（#314）。**Discovery が `token` を含む response_type を広告しない**（`RT-314.1`）、**`token` を含む response_type を `unsupported_response_type` で断る**（`RT-314.2`）、**`code id_token` は通る**（`RT-314.3`）。**`id_token` 単独も断る**（`RT-314.4`。#294）。**`test.ps1 -NoImplicit` のときだけ走る**（既定では除外） |
+| `Tests/Issues/AccessTokenReviewTests.cs` | `RT-294` | **`CmnAccessToken.*.cs` のレビューで見つけた不具合**（#294。`RT-294.87`〜`.92`）。**pairwise でも消された利用者の access_token は通らない**（`.87`。C-57。**使い捨ての利用者を作って消す**ので、管理画面のテストと同じコレクション）、**`auth_time` は JSON の数値**（`.88`）、**Implicit でも `claims` が access_token に載る**（`.89`。PAR で渡す）、**`/par` は JSON のオブジェクトでない `claims` を断る**（`.90`）、**`claims` の `id_token` がオブジェクトでなくても 500 にしない**（`.91`）、**`/ros` も `claims` がオブジェクトでなければ預からない**（`.92`） |
+| `Tests/Issues/HomeReviewTests.cs` | `RT-294` | **`HomeController.*.cs`（自己テスト）のレビューで見つけた不具合**（#294。`RT-294.81`〜`.86`）。**自己テストの POST は AntiForgery トークンを確かめる**（`.81`）、**Device AuthZ のポーリングの間隔を画面から短くできない**（`.82`。C-56）、**自己テストの ROPC はテスト利用者で取る**（`.83`。C-56）、**SPA 向けの PKCE で `response_mode` が 2 つ載らない**（`.84`）、**画面から来る値を URL 符号化する**（`.85`）、**ポーリングは待ち時間の上限を越えて待たない**（`.86`。C-56。**約 60 秒かかる**。**クライアント証明書を要求させている対象（通しの net10.0）では Skip**）。**`IsLockedDownTestEndpoints` で閉じたこと（C-56）は通しでは測れない** |
+| `Tests/Issues/HelperReviewTests.cs` | `RT-294` | **`Util/Sts/Helper.*.cs` のレビューで見つけた不具合**（#294。`RT-294.93`〜`.94`）。**クライアント名と大文字小文字だけ違う利用者（`testclient`）は、自己テストの「ログイン・ユーザの Client」で自分の登録を使う**（`.93`。以前は構成ファイルの `TestClient` で動いた）、**名前が完全に同じ利用者（`WebForms_Sample`）も同じ**（`.94`。利用者名で引く口を分けた。**使い捨ての利用者を作って消す**ので、管理画面のテストと同じコレクション） |
 | `Tests/Issues/CmnEndpointsReviewTests.cs` | `RT-294` | **`CmnEndpoints.*.cs` のレビュー（3 回）で見つけた不具合**（#294。`RT-294.41`〜`.59`）。**Device の refresh_token**・**照会の `cnf.jkt`**・**CIBA を private_key_jwt で**・**壊れた入力で 500 にしない**（JWT Bearer・scope の省略・CIBA の `request`）・**他のクライアントの refresh_token を消費しない**・**Discovery の一覧**（`.41`〜`.49`）、**client_credentials の `sub`**・**PKCE と private_key_jwt の併用**・**PKCE だけの引き換えを登録で絞る**・**`client_assertion` の `aud` に issuer**・**Hybrid の grant_types**・**poll の CIBA**・**PAR の Request Object の `client_id`**（`.50`〜`.57`）、**合わない `code_verifier` は `invalid_grant`**・**`/ros` の Request Object の `client_id`**（`.58` / `.59`）。**種データの `TestClient4_4` / `TestClient_30`〜`_34` を使う** |
 | `Tests/Issues/DPoPReplayTests.cs` | `RT-311` | **DPoP の証明の使い回しを断る**（#311 の段階 3）。**一度使った証明は二度と通らない**こと（`RT-311.8`。**`/userinfo` と `/token` の両方**。**新しい `jti` なら通る**。**検証に通らなかった証明の `jti` は焼かれない**）、**台帳は鍵ごとである**こと（`RT-311.9`。**別の鍵が同じ `jti` を使っても、互いを塞がない**） |
 | `Tests/Issues/DPoPResourceTests.cs` | `RT-311` | **DPoP を保護されたリソースで照合する**（#311 の段階 2）。**縛ったトークンは `Authorization: DPoP …` ＋ 証明（`ath` 付き）なら `/userinfo` で使える**こと（`RT-311.5`）、**出し方を変えると断られる**こと（`RT-311.6`。**6 通り** — `Bearer` で出す／`Bearer` ＋ 正しい証明／証明なし／`ath` が違う／別の鍵／`htu` が別の口。**最後に正しい出し方で通ることまで見る**）、**縛っていないトークンは従来どおり `Bearer` で通る**こと（`RT-311.7`） |

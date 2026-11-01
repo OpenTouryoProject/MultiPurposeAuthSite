@@ -71,6 +71,7 @@
 */
 
 using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System.Collections.Generic;
 using System.Configuration;

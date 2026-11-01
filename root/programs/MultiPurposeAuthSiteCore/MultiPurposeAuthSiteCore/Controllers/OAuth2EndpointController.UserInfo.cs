@@ -36,6 +36,7 @@
 using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.Sts;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
@@ -159,7 +160,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 case OAuth2AndOIDCConst.Scope_Profile:
                                     // **返す項目は設定で決まる**（#230。UserClaims）。
-                                    Sts.UserClaims.AddClaims(
+                                    UserClaims.AddClaims(
                                         userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Profile);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Email:
@@ -172,7 +173,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Address:
                                     // **返す項目は設定で決まる**（#230。UserClaims）。
-                                    Sts.UserClaims.AddClaims(
+                                    UserClaims.AddClaims(
                                         userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Address);
                                     break;
 
@@ -232,7 +233,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             //  **nonce を要求する配備では、新しい値を渡す**（§9）。
             //    **これが無いと、クライアントは出し直せない。**
-            string nonce = Token.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
+            string nonce = Sts.CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
 
             if (nonce != null)
             {

@@ -32,6 +32,8 @@
 //*  2026/10/24  玄人 幸道         EnableOpenIDConnect を廃止した（#314）
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Util.Sts;
+
 using System;
 using System.Collections.Generic;
 
@@ -135,7 +137,7 @@ namespace MultiPurposeAuthSite.Co
         /// <remarks>
         /// **「どのキーを、どのクレームとして返すか」だけを持つ。**
         /// 値の在り処は `ApplicationUser.UnstructuredData`（JSON）の中のパス、
-        /// または `user:&lt;項目&gt;`（白名簿。<see cref="Extensions.Sts.UserClaims"/>）。
+        /// または `user:&lt;項目&gt;`（白名簿。<see cref="Util.Sts.UserClaims"/>）。
         ///
         /// **既定は空で、何も返らない**（従来どおり）。設定した分だけ返る。
         /// どのクレームがどの scope に属するかは**仕様が決めている**ので、ここには書かせない

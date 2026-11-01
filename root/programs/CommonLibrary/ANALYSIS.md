@@ -112,7 +112,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Co/` | 設定と定数 | `Config`(1740 行) `Const` |
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
-| `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1553) `SelfTestClient`(800) `DeviceAuthZProvider`(646) `CibaProvider`(505) `Saml2OAuth2DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
+| `Extensions/Sts/` | **STS の拡張仕様**の実装と、その状態を持つもの | `DeviceAuthZProvider` `CibaProvider` `ClientRegistrationProvider` `RequestObjectProvider` `CmnDPoP` `CmnResponseObject`（JARM） `CmnLogoutToken`（Back-Channel Logout） `CmnDiscoveryEndpoint` `CmnRequestObjectEndpoint`（JAR・PAR） `CmnCibaEndpoint` `CmnLogoutEndpoint`（RP-Initiated Logout） `Saml2OAuth2DataProvider` |
 | `Extensions/FIDO/` | WebAuthn（**net10.0 版だけ**。#137） | `WebAuthnHelper` `DataProvider` `StoredCredential` `EnumFidoType` |
 | `Log/` | ロギングの façade | `Logging`（`ACCESS` / `SQLTRACE` ロガー） |
 | `Manager/` | ASP.NET Identity の Manager（**net48 のみ**） | `ApplicationUserManager` `ApplicationRoleManager` `ApplicationSignInManager` |
@@ -120,9 +120,11 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Notifications/` | メール / SMS / プッシュ通知 | `CmnEmail` `CmnSms` `FcmService`、net48 は `*Service`、.NET は `*Sender` |
 | `Password/` | パスワード ハッシュ | `CustomPasswordHasher`（両系統の型を 1 ファイルに同居） |
 | `Resources/` | 多言語リソース | `*.resx` / `*.ja.resx` の 10 組 |
-| `SamlProviders/` | SAML2 のエンドポイント実装 | `CmnEndpoints` |
-| `TokenProviders/` | OAuth2/OIDC の中核 | `CmnEndpoints`(2162) `CmnAccessToken`(682) `CmnIdToken` `CmnResponseObject` `AuthorizationCodeProvider` `RefreshTokenProvider` |
-| `Util/` | 雑多なユーティリティ | `IdP/CheckRole` `IdP/CustomizedConfirmationProvider` `IdP/GetContentOfLetter` `PPIDExtension` `UriExtension` `Sts/OnlySts` |
+| `SamlProviders/` | **STS（SAML2 仕様）**。ID 連携（SAML2）の SP 側も | `CmnEndpoints` `CmnSaml2Response` `CmnSamlMetadata` `IdFederationSaml2*` |
+| `TokenProviders/` | **STS（OAuth2・OIDC 仕様）**。ID 連携（OIDC）の RP 側も | `CmnEndpoints` `CmnAccessToken` `CmnIdToken` `AuthorizationCodeProvider` `RefreshTokenProvider` `RevocationProvider` `IdFederationJwks` |
+| `Util/Sts/` | **STS 関連の部品** | `Helper` `PPIDExtension` `UserClaims` `RateLimitProvider` `AuthFailureProvider` `SecretProtector` `IdTokenAudience` `OnlySts` |
+| `Util/IdP/` | **IdP 関連の部品**（アカウント・サインイン・ID 連携の上流の登録） | `AccountLink` `UserCreationLock` `MailThrottle` `TwoFactorPushProvider` `AuthTimeCookie` `IdFederationUpstreamProvider` `CheckRole` `CustomizedConfirmationProvider` `GetContentOfLetter` `UserIdentifier` |
+| `Util/Test/` | **自己テスト・E2E のための部品**（本番の処理からは呼ばない） | `SelfTestClient` `TestClients` `TestFrontChannelLogoutBox` `TestLogoutTokenBox` |
 | `ViewModels/` | 画面のモデル 32 件 | `BaseViewModel` ほか |
 
 ---
@@ -232,7 +234,9 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   テーブルは 16 本（`Users` `Roles` `UserRoles` `UserLogins` `UserClaims` `TotpTokens`
   `AuthenticationCodeDictionary` `RefreshTokenDictionary` `CustomizedConfirmation`
   `Saml2OAuth2Data` `FIDO2Data` `DeviceAuthZData` `CibaData` `OAuth2Revocation`
-  `IssuedToken` `RequestObject`）。**3 方言すべてを直すこと。**
+  `RequestObject`）。**3 方言すべてを直すこと。**
+  **`IssuedToken` は #321 で落とした**（発行した access_token を保存するだけで、どこからも読まれていなかった）。
+  **既に配備された DB に残っている表は使われない**（消してよい）。
 - Docker で DBMS を立てる一式は `Container/Store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
   `0_CopyInitSql.ps1` が上記 DDL を `Container/Store/*/init/` へコピーし、**CRLF を LF に変換**する
   （Linux コンテナの初期化スクリプトが読むため）。
@@ -307,32 +311,38 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `TokenProviders/CmnEndpoints.cs` ＋ `CmnEndpoints.*.cs`（partial。#294 で 11 ファイルに分割） | **本体。** 下の表のとおり、口ごとにファイルを分けてある。本体の `CmnEndpoints.cs` には、どの口からも使う公開の部品（redirect_uri の定数・CORS・エラー応答）と、分割の索引を置く |
 | `TokenProviders/CmnAccessToken.cs` | アクセス トークンの生成（Claim 集合の組み立て → JWS 化）と検証 |
 | `TokenProviders/CmnIdToken.cs` | id_token |
-| `TokenProviders/CmnResponseObject.cs` | JARM（Response Object） |
+| `Extensions/Sts/CmnResponseObject.cs` | JARM（Response Object） |
 | `TokenProviders/AuthorizationCodeProvider.cs` / `RefreshTokenProvider.cs` | code / refresh_token の保管（Memory or DBMS） |
-| `Extensions/Sts/Helper.cs`（1380 行） | **クライアント情報のレジストリ**。`OAuth2ClientsInformation` から client_secret / redirect_uri / JWK 公開鍵 / `tls_client_auth_subject_dn` / subject_types / client mode を引く。加えて各フローの WebAPI 呼び出しヘルパ（シングルトン、`GetInstance`） |
-| `Extensions/Sts/SelfTestClient.cs`（800 行） | **自己テスト（この実装が兼ねているクライアント）側の組み立て**（#246）。鍵を読み、JWT（Request Object / CIBA の要求 / `client_assertion`）を作る。`/ros`・`/par` は「組み立て → 預ける → 応答を解く」まで、CIBA と Device Authorization Grant は**ポーリングの通し**まで受け持つ。**IdP の処理からは呼ばない**（役割は `../MultiPurposeAuthSiteCore/ANALYSIS.md` 7 節） |
+| `TokenProviders/RevocationProvider.cs` | 失効させた access_token の jti（RFC 7009 の状態。`CmnAccessToken.VerifyAccessToken` が引く）。#321 で `Extensions/Sts` から移した。**access_token の `exp`（列 `ExpiresAt`）に 5 分の余裕を足した時刻を過ぎた記録を、100 回の記録ごとに消す**（#322） |
+| `Util/Sts/Helper.cs`（1380 行） | **クライアント情報のレジストリ**。`OAuth2ClientsInformation` から client_secret / redirect_uri / JWK 公開鍵 / `tls_client_auth_subject_dn` / subject_types / client mode を引く。加えて各フローの WebAPI 呼び出しヘルパ（シングルトン、`GetInstance`） |
+| `Util/Test/SelfTestClient.cs`（800 行） | **自己テスト（この実装が兼ねているクライアント）側の組み立て**（#246）。鍵を読み、JWT（Request Object / CIBA の要求 / `client_assertion`）を作る。`/ros`・`/par` は「組み立て → 預ける → 応答を解く」まで、CIBA と Device Authorization Grant は**ポーリングの通し**まで受け持つ。**IdP の処理からは呼ばない**（役割は `../MultiPurposeAuthSiteCore/ANALYSIS.md` 7 節） |
 | `Extensions/Sts/DeviceAuthZProvider.cs` | Device Authorization Grant |
 | `Extensions/Sts/CibaProvider.cs` | CIBA（FAPI）。FCM プッシュと連携 |
-| `Extensions/Sts/RevocationProvider.cs` / `IssuedTokenProvider.cs` | revoke / introspect の裏付けデータ |
 | `Extensions/Sts/SubjectIdProvider.cs` | **発行した `sub` の対応表**（#151 の段階 2）。`(Sector, UserId) → Sub` と、その逆引き。**`sub` を「導出」から「データ」に変える**ので、`subject_types` の既定や PPID の作り方を変えても**発行済みの `sub` が動かない** |
 | `Extensions/Sts/RequestObjectProvider.cs` | Request Object の登録（`/ros`） |
+| `Extensions/Sts/CmnDiscoveryEndpoint.cs` | `.well-known/openid-configuration` の生成（`OpenIDConfig`）。#321 で `CmnEndpoints` から移した |
+| `Extensions/Sts/CmnRequestObjectEndpoint.cs` | Request Object（`RegisterRequestObject`。`/ros`）と PAR（`PushedAuthorizationRequest`）。#321 で `CmnEndpoints` から移した |
+| `Extensions/Sts/CmnCibaEndpoint.cs` | CIBA の受付（`ReceiveCibaRequest` / `ValidateCibaAuthZReqParam`、jti の使い切り）。#321 で `CmnEndpoints` から移した |
+| `Extensions/Sts/CmnLogoutEndpoint.cs` | RP-Initiated Logout（`ReceiveEndSessionRequest`）。#321 で `CmnEndpoints` から移した |
+| `Util/Sts/JwtUtil.cs` | 登録された公開鍵（JWK）の読み書き（`EncodeRegisteredJwk` / `DecodeRegisteredJwk`）と、JWT の文字列クレームの読み出し（`StringClaimOf`）。#321 で `CmnEndpoints` から出した |
 | `SamlProviders/CmnEndpoints.cs` | SAML2 の Request / Response |
-| `Util/PPIDExtension.cs` | `subject_types`（`public` / `pairwise`）に応じた sub の生成。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
+| `Util/Sts/PPIDExtension.cs` | `subject_types`（`public` / `pairwise`）に応じた sub の生成。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 
 `CmnEndpoints` の分割（IDE では `CmnEndpoints.cs` の下に畳んで見える。`NetCoreLibrary.csproj` / `NetFxLibrary.csproj` の `DependentUpon`）:
 
 | ファイル | 中身 |
 |---|---|
-| `CmnEndpoints.Discovery.cs` | `.well-known/openid-configuration` の生成（`OpenIDConfig`） |
 | `CmnEndpoints.Authorize.cs` | 認可要求の検証（`ValidateAuthZReqParam` / `CheckRedirectUri` / `ResolveErrorRedirectUri`）、`max_age`、受け付ける grant / response_type、登録の grant_types / response_types、PKCE |
 | `CmnEndpoints.AuthorizeResponse.cs` | 応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`） |
-| `CmnEndpoints.RequestObject.cs` | Request Object（`RegisterRequestObject`）、PAR、登録の JWK の読み書き |
-| `CmnEndpoints.Ciba.cs` | CIBA の受付（`ReceiveCibaRequest` / `ValidateCibaAuthZReqParam`、jti の使い切り） |
-| `CmnEndpoints.Logout.cs` | RP-Initiated Logout（`ReceiveEndSessionRequest`） |
 | `CmnEndpoints.Token.cs` | Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` / `GrantClientCredentials` / `GrantJwtBearerTokenCredentials` / `GrantDeviceAuthZ` / `GrantCiba`） |
 | `CmnEndpoints.Revocation.cs` | 取り消し・照会（`RevokeToken` / `IntrospectToken`） |
 | `CmnEndpoints.ClientAuthentication.cs` | クライアント認証（`ClientAuthentication`。secret・x509・device・assertion）、Basic の資格情報、登録された認証の方法、検証する側の alg |
 | `CmnEndpoints.TokenIssuance.cs` | 発行の共通部品（利用者のロックアウト・`CheckClientMode`・DPoP・`CreateAccessTokenResponse`） |
+
+**拡張仕様の分（JAR・PAR、CIBA、RP-Initiated Logout）と Discovery は、`Extensions/Sts` の別のクラスに移した**（#321。上の表）。
+**partial のままフォルダだけを移さなかった**のは、partial は全ファイルが同じ名前空間でなければならず、フォルダ＝名前空間の決まりが崩れるため。
+**本体の部品は `CmnEndpoints.` を付けて呼ぶ**（`ClientAuthentication` など）。**移した側だけが使う本体の部品は `internal` にした**（`CheckClientGrantType` / `AllowsVerifyingAlg`）。
+**失効・照会（RFC 7009 / 7662）は OAuth 2.0 の仕様として本体に残した。**
 
 ### 7.2 対応しているグラント / 拡張
 
@@ -510,7 +520,7 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
    ```
 
    **`EncryptString` / `DecryptString` も同じ経路を通るので、対称鍵の API は丸ごと使えない。**
-   **上流（OpenTouryo）の不具合。** こちらでは `Util/PPIDExtension` が
+   **上流（OpenTouryo）の不具合。** こちらでは `Util/Sts/PPIDExtension` が
    **.NET の `Aes` を直接使う**ことで回避している。
    **例外ではなくプロセスが落ちる**ので、**ログにも 500 にも残らない**（`MpasSite.err.log` にだけ出る）。
 
@@ -534,6 +544,17 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
     **新規ファイルは BOM 付き UTF-8 で作ること**（**走査で確かめられる** — `TESTING.md`）。
 13. **`bin/` `obj/` が作業ツリーに残る。** `.gitignore` 済みだが、
     `bin\netfx\` と `bin\netcore\` の 2 系統が並ぶ点に注意。
+14. **`Util/Sts/Helper.HttpClientBuilder` はクライアント証明書を `X509KeyStorageFlags.MachineKeySet` で読む**（両版。#294 のレビューで記録だけした）。
+    **秘密鍵がマシンの鍵ストアに書かれ、プロセスが終わっても残ることがある**（読むたびに増える）。
+    **net10.0 版は `EphemeralKeySet`（メモリだけに置く）に替えられる**か、検討の余地がある。
+    **net48 版の `WebRequestHandler`（SChannel）は、ephemeral な鍵では TLS のクライアント認証ができない**ことがあるので、**同じには替えられない。**
+    **替えるなら mTLS の E2E（`MPAS_CORE_MTLS`）で、両版の通しを回して確かめる。**
+15. **`Util/Sts/Helper` のシングルトンは、型の初期化（`static` のフィールド）で作られる**（両版。#294 のレビューで記録だけした）。
+    **コンストラクタがクライアント証明書（`ClientCertPfxFilePath` / `ClientCertPfxPassword`）を読む**ので、
+    **パスやパスワードが誤っていると `TypeInitializationException` になり、以後 `Helper` を使う所がすべて落ちる**
+    （**STS のほぼ全体が 500 になり、原因が内側の例外にしか出ない**）。
+    **直すなら**、証明書を読むところだけを遅らせる（`Lazy<HttpClient>`）か、**読めなければ証明書なしで続けてログに残す**か、を決めてから。
+    **黙って証明書なしにすると、mTLS の相手で失敗の理由が見えにくくなる**ので、どちらにするかは配備の都合で決める。
 
 ---
 
@@ -560,7 +581,7 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 |---|---|
 | 設定 | `EnableStripe` / `Stripe_PK` / `Stripe_SK` / `EnablePAYJP` / `PAYJP_PK` / `PAYJP_SK` / `CanEditPayment` / `ChageToUserWebAPI` / `OAuth2AuthorizationCodeGrantClient_Manage` |
 | 口 | `/ChageToUser`（経路登録ごと）／`Manage` の `AddPaymentInformation` `ChargeByPaymentInformation` `RemovePaymentInformation` `GetOAuth2Token` `GetSaml2Assertion` `OAuth2AuthorizationCodeGrantClient` |
-| 呼び出し | `WebAPIHelper` の決済 WebAPI、`Sts.Helper.CallOAuth2ChageToUserWebAPIAsync` |
+| 呼び出し | `WebAPIHelper` の決済 WebAPI、`Helper.CallOAuth2ChageToUserWebAPIAsync` |
 | 画面 | `AddPaymentInformationStripe` / `AddPaymentInformationPAYJP` / `Manage/OAuth2AuthorizationCodeGrantClient`、`Manage/Index` の該当ブロック |
 | 利用者属性 | **`Users.PaymentInformation`（列ごと）**。`ApplicationUser` / `CmnUserStore` の INSERT・UPDATE / DDL 3 本 |
 | 記号 | `test_self_code_manage`（`redirect_uri_code` の既定は `test_self_code` に戻した） |

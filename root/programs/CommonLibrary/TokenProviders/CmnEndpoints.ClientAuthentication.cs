@@ -33,11 +33,16 @@
 //*  2026/10/29  玄人 幸道         none（パブリック）を受け、PKCE だけで引き換えられる登録を絞る。assertion の aud に issuer を受け、秘密を定数時間で比べる（#294）
 //*  2026/10/30  玄人 幸道         デバイス認可のクライアント認証で client_assertion（private_key_jwt）も受ける（#294）
 //*  2026/10/30  玄人 幸道         使われなくなった DeviceAuthZClientAuthentication（引数 3 つの版）を消した（#294）
+//*  2026/10/31  玄人 幸道         登録の有無は HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
+//*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone の値は Const から取る（#294）
+//*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/01  玄人 幸道         AllowsVerifyingAlg を internal にした（Extensions/Sts の CmnRequestObjectEndpoint が使う。#321）
+//*  2026/11/01  玄人 幸道         fapi2 のクライアント認証では、assertion の aud を issuer に限った（#323）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Linq;
@@ -192,10 +197,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             //  **登録されていない `client_id` では数えない**（#305 の段階 4）。
             //    **要求の `client_id` をそのまま鍵にして行を作ると、
             //    誰でも `AuthFailure` 表を好きなだけ太らせられる。**
-            //    **登録の有無は `GetClientName` で見る**
-            //    （`DeviceAuthZClientAuthentication` と同じ見方）。
+            //    **登録の有無は `HasClient` で見る**（#294。`DeviceAuthZClientAuthentication` と同じ見方）。
+            //    **以前は `GetClientName` が空でないかで見ていた**ので、
+            //    **client_name の無い構成ファイルのクライアントは、数えられなかった。**
             if (!string.IsNullOrEmpty(client_id)
-                && !string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id)))
+                && Helper.GetInstance().HasClient(client_id))
             {
                 AuthFailureProvider.Record(failureKey);
             }
@@ -300,7 +306,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (string.IsNullOrEmpty(client_id)) return false;
 
             // 未登録のclient_idは拒否
-            if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
+            //   **`HasClient` で見る**（#294。以前は `GetClientName` が空でないかで、
+            //   **client_name の無い構成ファイルのクライアントが、未登録として断られた**）。
+            if (!Helper.GetInstance().HasClient(client_id)) return false;
 
             //  **`token_endpoint_auth_method` が `none` なら、パブリック クライアント**（RFC 7591 §2。#294）。
             //    **秘密を持っていても使えない**（`AllowsAuthMethod` が断る）ので、client_id の確認だけにする。
@@ -390,9 +398,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     ? new string[0]
                     : new string[]
                     {
-                        CmnEndpoints.DecodeRegisteredJwk(
+                        JwtUtil.DecodeRegisteredJwk(
                             Helper.GetInstance().GetJwkRsaPublickey(assertionIss)),
-                        CmnEndpoints.DecodeRegisteredJwk(
+                        JwtUtil.DecodeRegisteredJwk(
                             Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
                     };
 
@@ -460,8 +468,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //    **`private_key_jwt` の明示が要る** — **鍵を登録しただけでは通らない。**
                         //    **`client_id` はアサーションの `iss`**（RFC 7523 §3）なので、それで引く。
                         //  **aud は、トークン エンドポイントの URL か、この IdP の issuer**（#294）。
-                        //    RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1（issuer を受けること）。
-                        if (CmnEndpoints.IsAssertionAudience(payload)
+                        //    **fapi2 の登録は issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
+                        if (CmnEndpoints.IsClientAssertionAudience(payload, iss)
                             && CmnEndpoints.AllowsAuthMethod(
                                 iss, ClientModePolicy.Proof.PrivateKeyJwt))
                         {
@@ -499,12 +507,15 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **RFC 6749 §2.3.1 は、`client_id` と `client_secret` を
         /// `application/x-www-form-urlencoded` で符号化してから Base64 にする**ことを求めている。
         /// 以前は復号しておらず、**仕様に従うクライアントは、記号を含む秘密だと認証できなかった**
-        /// （`+` `/` `=` `%` `:` など。特に `:` は分割位置がずれる）。
+        /// （`+` `/` `=` `%` `:` など）。
+        /// **Open棟梁 は最初の `:` で分ける**（RFC 7617 §2。OpenTouryo#643）。
         ///
         /// **復号後と復号前の両方を受ける。**
         /// 復号後で認証できなければ、復号前の値を返す（**符号化しないクライアントを壊さない**）。
         /// Open棟梁 の既存のクライアントは符号化しない（OpenTouryo #592 で送り側も符号化するようになったが、
         /// 配備済みのものは残る）。
+        /// **この復号前の値での照合（OpenTouryo#634 の H-3）は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。
+        /// 4.0 に上げると `RT-237.2` と `RT-237.4` の (2) が落ちる。
         ///
         /// **英数字だけの値では、どちらも同じ文字列になる**ので、この分岐は効かない。
         ///
@@ -637,7 +648,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         };
 
         /// <summary>`token_endpoint_auth_method` の `none`（パブリック クライアント。RFC 7591 §2。#294）</summary>
-        public const string TokenEndpointAuthMethodNone = "none";
+        /// <remarks>**値の本体は `Const.TokenEndpointAuthMethodNone`**（`Helper` も使うため）。</remarks>
+        public const string TokenEndpointAuthMethodNone = Const.TokenEndpointAuthMethodNone;
 
         /// <summary>認証する方法だけ（`none` を除く。revoke / introspect の広告。#294）</summary>
         public static string[] AuthenticatingMethods
@@ -690,11 +702,30 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         private static bool IsAssertionAudience(JObject payload)
         {
-            string aud = CmnEndpoints.StringClaimOf(payload, OAuth2AndOIDCConst.aud);
+            string aud = JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.aud);
 
             return !string.IsNullOrEmpty(aud)
                 && (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint
                     || aud == CmnServerParams.IssuerId);
+        }
+
+        /// <summary>クライアント認証の assertion の aud が、そのクライアントに認められた値か（#323）</summary>
+        /// <param name="payload">assertion のペイロード</param>
+        /// <param name="client_id">署名を検証したクライアント（assertion の iss）</param>
+        /// <returns>認められた値か</returns>
+        /// <remarks>
+        /// **FAPI 2.0 Security Profile §5.3.2.1 は、issuer を文字列で受けることだけを認める**
+        /// （"shall only accept its issuer identifier value"）ので、**fapi2 の登録は issuer に限る。**
+        /// **それ以外の登録は変えない**（RFC 7523 §3 は、トークン エンドポイントの URL を認めている）。
+        /// </remarks>
+        private static bool IsClientAssertionAudience(JObject payload, string client_id)
+        {
+            if (Helper.GetInstance().GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+            {
+                return JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.aud) == CmnServerParams.IssuerId;
+            }
+
+            return CmnEndpoints.IsAssertionAudience(payload);
         }
 
         /// <summary>assertion の署名と期限を検証する（読めない形なら false。#294）</summary>
@@ -821,7 +852,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// **実際の alg が読めないとき（JWT でない等）は拒否**する。
         /// </remarks>
-        private static bool AllowsVerifyingAlg(
+        internal static bool AllowsVerifyingAlg(
             string registeredAlg, string[] supported, string actualAlg)
         {
             if (string.IsNullOrEmpty(registeredAlg))

@@ -53,6 +53,8 @@
 //*  2026/10/29  玄人 幸道         private_key_jwt の fapi_ciba の TestClient4_4 を追加（#294）
 //*  2026/10/29  玄人 幸道         TestClient_30 〜 _34 を追加（#294）
 //*  2026/10/30  玄人 幸道         認証デバイスのクライアントでトークンを取る RunAuthenticationDeviceFlowAsync を追加（#294）
+//*  2026/10/31  玄人 幸道         ColonSecret の説明を、Basic を最初の「:」で分ける振る舞いに合わせた（Open棟梁 #643。#294）
+//*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35（ColonOnlySecret）を追加（OpenTouryo#645 への備え。#294）
 //**********************************************************************************
 
 using System;
@@ -121,7 +123,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **CIBA の `/ciba_authz` と `/token` を、`client_assertion` で通すことを測る**（`RT-294.43`）。
         /// **アサーションは ES256**（写し元の ECDSA の公開鍵で検証される）。
-        /// **構成ファイルには無い。** 種データ（`Sts.TestClients`）で登録される。
+        /// **構成ファイルには無い。** 種データ（`TestClients`）で登録される。
         /// </remarks>
         public const string TestClient4_4 = "TestClient4_4";
 
@@ -161,7 +163,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>
         /// TestClient（normal）を写し、**backchannel_logout_uri を登録**したクライアント（#310 の段階 2）。
-        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// **構成ファイルには無い。** サーバ側の種データ（TestClients）が作る。
         /// </summary>
         /// <remarks>
         /// 登録値は定数（test_self_bclogout）で、**サーバ側で URL に解決される**
@@ -173,7 +175,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>
         /// TestClient（normal）を写し、**backchannel_logout_uri を登録**したが、
         /// **同意されない**クライアント（#310 の段階 2）。
-        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// **構成ファイルには無い。** サーバ側の種データ（TestClients）が作る。
         /// </summary>
         /// <remarks>
         /// **このクライアントには「許可」を押さないこと。**
@@ -184,7 +186,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>
         /// TestClient（normal）を写し、**frontchannel_logout_uri を登録**したクライアント（#310 の段階 3）。
-        /// **構成ファイルには無い。** サーバ側の種データ（Sts.TestClients）が作る。
+        /// **構成ファイルには無い。** サーバ側の種データ（TestClients）が作る。
         /// </summary>
         /// <remarks>
         /// 登録値は定数（test_self_fclogout）で、**サーバ側で URL に解決される**
@@ -383,6 +385,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>TestClient を写し、**grant_types を client_credentials だけ**にしたクライアント（implicit 無し。#294）</summary>
         public const string TestClient_34 = "TestClient_34";
 
+        /// <summary>TestClient を写し、client_secret を**「:」だけを含む値**（ColonOnlySecret）にしたクライアント（RT-237.3。#294）</summary>
+        public const string TestClient_35 = "TestClient_35";
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -401,7 +406,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         #region 種データで登録される client_id（#264）
 
         /// <summary>
-        /// **種データ（`Sts.TestClients`）で登録されるクライアントの client_id**（#264）。
+        /// **種データ（`TestClients`）で登録されるクライアントの client_id**（#264）。
         /// </summary>
         /// <remarks>
         /// **以前は test.ps1 -Launch が環境変数で差し込み、client_id を `MPAS_<名前>` で渡していた。**
@@ -409,7 +414,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **利用者の登録（`saml2OAuth2Data`）に寄せた**（#264）。
         ///
         /// **user store は構成ファイルから読めない**ので、**client_id を固定値で持つ。**
-        /// **サーバ側の `Sts.TestClients.Entries` と同じ値にすること。**
+        /// **サーバ側の `TestClients.Entries` と同じ値にすること。**
         /// 揃っていなければ「登録されていない」で落ちる。
         /// </remarks>
         private static readonly Dictionary<string, string> SeededClientIds
@@ -450,7 +455,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_31, "e2e0tc31000000000000000000000000" },
                 { KnownClients.TestClient_32, "e2e0tc32000000000000000000000000" },
                 { KnownClients.TestClient_33, "e2e0tc33000000000000000000000000" },
-                { KnownClients.TestClient_34, "e2e0tc34000000000000000000000000" }
+                { KnownClients.TestClient_34, "e2e0tc34000000000000000000000000" },
+                { KnownClients.TestClient_35, "e2e0tc35000000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -481,10 +487,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **test.ps1 の差し込みと同じ値にすること。**
         /// </summary>
         /// <remarks>
-        /// **「:」は Basic の分割位置そのもの**なので、符号化しないと資格情報として読めない
-        /// （"id:e2e:ab+cd" は 3 つに割れる）。符号化したときだけ通る。
+        /// **Open棟梁 は Basic を最初の「:」で分ける**（RFC 7617 §2。OpenTouryo#643）。
+        /// **「+」も含む**ので、符号化しないと復号後の値（"e2e:ab cd"）では一致せず、
+        /// **復号前の値での照合（OpenTouryo#634 の H-3）で通る。** この照合は 4.0 で既定ではやめる（OpenTouryo#645。RT-237.4）。
         /// </remarks>
         public const string ColonSecret = "e2e:ab+cd";
+
+        /// <summary>
+        /// TestClient_35 の client_secret（RT-237.3。#294）。
+        /// **サーバ側の `TestClients.Entries` と同じ値にすること。**
+        /// </summary>
+        /// <remarks>
+        /// **「:」だけを含む**（英数字と「:」）。符号化しない値は復号しても変わらないので、
+        /// **復号前の値での照合に頼らず、「最初の「:」で分ける」だけを測れる**（4.0 でも変わらない）。
+        /// </remarks>
+        public const string ColonOnlySecret = "e2e:abcd";
 
         /// <summary>
         /// TestClient2_2 / TestClient2_3 の tls_client_auth_subject_dn（#226）。
@@ -964,6 +981,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 sourceName = KnownClients.TestClient;
                 overriddenSecret = KnownClients.ColonSecret;
             }
+            else if (clientName == KnownClients.TestClient_35)
+            {
+                // **「:」だけを含む秘密**（RT-237.3。#294）。
+                sourceName = KnownClients.TestClient;
+                overriddenSecret = KnownClients.ColonOnlySecret;
+            }
             else if (clientName == KnownClients.TestClient_4)
             {
                 // client_secret は写す元のまま（登録に足したのは post_logout_redirect_uri だけ）。
@@ -1071,7 +1094,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             // **client_id は固定値**（#264）。
             //   **以前は test.ps1 -Launch が環境変数（`MPAS_<名前>`）で渡していた**が、
-            //   **サーバ側の種データ（`Sts.TestClients`）に寄せた**ので、環境変数を使わない。
+            //   **サーバ側の種データ（`TestClients`）に寄せた**ので、環境変数を使わない。
             //   **`-Launch` を付けずに、手で起動したサイトに対しても測れる**ようになった。
             string clientId = sourceName != null
                 ? KnownClients.SeededClientId(clientName) : null;

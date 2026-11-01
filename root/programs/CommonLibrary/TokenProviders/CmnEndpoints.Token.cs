@@ -34,6 +34,7 @@
 //*  2026/10/29  玄人 幸道         code_verifier の不一致を invalid_grant で返す（RFC 7636 §4.6。#294）
 //*  2026/10/30  玄人 幸道         消された利用者・SecurityStamp が変わった利用者の refresh_token を断る（#294）
 //*  2026/10/30  玄人 幸道         device_code の引き換えで client_assertion（private_key_jwt）も受ける（#294）
+//*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -41,11 +42,11 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 #endif
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
 
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Linq;
@@ -994,10 +995,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JObject assertionPayload =
                     string.IsNullOrEmpty(assertion) ? null : JwtReader.TryReadPayload(assertion);
 
-                string assertionIss = CmnEndpoints.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.iss);
+                string assertionIss = JwtUtil.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.iss);
 
                 string pubKey = string.IsNullOrEmpty(assertionIss)
-                    ? "" : CmnEndpoints.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
+                    ? "" : JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
 
                 if (!string.IsNullOrEmpty(pubKey))
                 {
@@ -1011,7 +1012,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
                     if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, out string iss))
                     {
-                        string scopes = CmnEndpoints.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.scope);
+                        string scopes = JwtUtil.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.scope);
 
                         // aud 検証
                         //   **トークン エンドポイントの URL か issuer**（RFC 7523 §3。#294）。配列は受けない（`IsAssertionAudience`）。

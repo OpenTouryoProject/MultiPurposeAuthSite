@@ -41,6 +41,7 @@ using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.ViewModels;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;

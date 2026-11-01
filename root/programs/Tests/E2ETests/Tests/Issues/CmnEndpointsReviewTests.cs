@@ -31,6 +31,8 @@
 //*  2026/10/29  玄人 幸道         新規（#294）
 //*  2026/10/29  玄人 幸道         RT-294.50 〜 .57 を追加し、.41（登録種別）と .49（none）を見直した（#294）
 //*  2026/10/29  玄人 幸道         RT-294.58 / .59 を追加し、.51 で invalid_grant を見る（#294）
+//*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
+//*  2026/11/01  玄人 幸道         RT-323.1 を追加し、RT-294.51 / RT-294.54 を fapi2 の aud に合わせた（#323）
 //**********************************************************************************
 
 using System;
@@ -745,11 +747,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "**FAPI 2.0 は、PKCE と、private_key_jwt か mTLS の両方を求める。**"
                     + "**以前は code_verifier が在ると、client_assertion を見ずに PKCE だけで認証した**ので、"
                     + "**証明が PKCE になり、fapi2 の登録は通らなかった**（N1）。",
-                    "FAPI 2.0 Security Profile §5.3.2.1 / RFC 7636 / RFC 7523 §2.2 / #294");
+                    "FAPI 2.0 Security Profile §5.3.2.1 / §5.3.2.2 / RFC 7636 / RFC 7523 §2.2 / #294");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_32);
 
                 r.Target("client_name=" + KnownClients.TestClient_32 + "（fapi2。token_endpoint_auth_method=private_key_jwt）");
+
+                //  **fapi2 の aud は issuer だけ**（#323）。
+                string issuer = await client.IssuerAsync();
 
                 r.Step("(1) PKCE（S256）で認可コードを取る");
 
@@ -768,7 +773,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "code_verifier", CmnEndpointsReviewTests.Verifier },
                     { "redirect_uri", reg.RedirectUri },
                     { "client_assertion_type", JwtBearerAssertionType },
-                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, null) }
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, issuer) }
                 });
 
                 r.Verify("access_token が返る", !string.IsNullOrEmpty(token.AccessToken),
@@ -788,7 +793,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "code_verifier", CmnEndpointsReviewTests.Verifier + "x" },
                     { "redirect_uri", reg.RedirectUri },
                     { "client_assertion_type", JwtBearerAssertionType },
-                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, null) }
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, issuer) }
                 });
 
                 r.Verify("access_token を返さない", string.IsNullOrEmpty(wrong.AccessToken),
@@ -906,14 +911,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-294.54",
-                    "**client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**"
+                    "**fapi2 以外の登録の client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**"
                     + "（配列は、500 にせず invalid_client で断る）",
-                    "**FAPI 2.0 は、issuer を aud として受けることを求める**（RFC 7523 §3 も issuer を認める）。"
+                    "**RFC 7523 §3 は、認可サーバを指す値を求め、トークン エンドポイントの URL も認める。**"
+                    + "**fapi2 の登録は、issuer だけを受ける**（RT-323.1）。"
                     + "**以前はトークン エンドポイントの URL との完全一致だけ**だったので、"
                     + "**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。"
                     + "**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**"
                     + "（**以前は HTTP 500** だった）。",
-                    "RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.3 / #294");
+                    "RFC 7523 §3 / RFC 7519 §4.1.3 / #294");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_24);
                 string issuer = await client.IssuerAsync();
@@ -944,6 +950,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     JsonResponse res = await CmnEndpointsReviewTests.RevokeWithAssertionAsync(client, reg, aud.Value);
 
                     r.VerifyEqual("invalid_client（500 にしない）", "invalid_client", res.Error ?? "（無い）");
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-323.1
+
+        /// <summary>RT-323.1 fapi2 の client_assertion の aud は issuer だけを受ける</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT3231_fapi2のclient_assertionのaudはissuerだけを受ける(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-323.1",
+                    "**fapi2 の登録の client_assertion の aud は、issuer の文字列だけを受ける**",
+                    "**FAPI 2.0 は、issuer だけを文字列で受けることを求める。**"
+                    + "**以前は登録の種別を見ず、トークン エンドポイントの URL も受けていた。**",
+                    "FAPI 2.0 Security Profile §5.3.2.1 / #323");
+
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_32);
+                string issuer = await client.IssuerAsync();
+
+                r.Target("POST /revoke（client_name=" + KnownClients.TestClient_32 + "。fapi2。private_key_jwt で認証する）");
+
+                r.Step("aud = issuer");
+
+                JsonResponse accepted = await CmnEndpointsReviewTests.RevokeWithAssertionAsync(client, reg, issuer);
+
+                r.VerifyEqual("認証が通る（HTTP 200）", "200", ((int)accepted.StatusCode).ToString());
+
+                foreach (KeyValuePair<string, object> aud in new Dictionary<string, object>()
+                {
+                    { "トークン エンドポイント", client.Target.BaseUrl + "/token" },
+                    { "[issuer]（配列）", new string[] { issuer } }
+                })
+                {
+                    r.Step("aud = " + aud.Key);
+
+                    JsonResponse res = await CmnEndpointsReviewTests.RevokeWithAssertionAsync(client, reg, aud.Value);
+
+                    r.VerifyEqual("invalid_client", "invalid_client", res.Error ?? "（無い）");
                 }
 
                 r.Done();
@@ -1071,10 +1124,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-294.57",
                     "**PAR に預ける Request Object の client_id が、認証したクライアントと違えば、invalid_request_object で断る**",
-                    "**RFC 9126 §2.1 は、Request Object の client_id が認証したクライアントであることを求める。**"
+                    "**RFC 9126 §3 は、Request Object の client_id が認証したクライアントであることを求める。**"
                     + "**以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、"
                     + "**別のクライアントの名義で、預けた要求を作れた**（C-41）。",
-                    "RFC 9126 §2.1 / RFC 9101 §6.3 / #294");
+                    "RFC 9126 §3 / RFC 9101 §6.3 / #294");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
                 ClientRegistration other = Flows.Registration(client, KnownClients.TestClient);
@@ -1095,7 +1148,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     { "request", request },
                     { "client_assertion_type", JwtBearerAssertionType },
-                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, null) }
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, await client.IssuerAsync()) }
                 });
 
                 r.VerifyEqual("invalid_request_object", "invalid_request_object", res.Error ?? "（無い）");

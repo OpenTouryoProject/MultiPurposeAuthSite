@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         ID 連携の後は ReturnUrl へ戻す、同じ利用者を同時に作らない、サインインの結果を見る、クレームの入れ替え（#294）
+//*  2026/11/01  玄人 幸道         コメントの参照先を SelfTestWebApi に直した（#321）
 //**********************************************************************************
 
 /*
@@ -40,6 +41,8 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -252,8 +255,8 @@ namespace MultiPurposeAuthSite.Controllers
                     string codeVerifier = HttpContext.Session.GetString(Const.IdFederationSigninVerifier);
                     HttpContext.Session.SetString(Const.IdFederationSigninVerifier, ""); // 誤動作防止
 
-                    // Tokenエンドポイントにアクセス。Sts.Helper の WebAPI 呼び出しは使わない（#140）。
-                    //   Sts.Helper は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
+                    // Tokenエンドポイントにアクセス。自己テストの WebAPI 呼び出し（SelfTestWebApi）は使わない（#140）。
+                    //   SelfTestWebApi は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
                     //   宛先のホストを自分の認可サーバへ書き換える。相手は上流の IdP なので、その配備では宛先が変わって壊れる。
                     model.Response = await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                             new Uri(upstream.TokenEndpoint),
@@ -297,7 +300,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (!string.IsNullOrEmpty(upstream.Issuer))
                         {
                             // 上流の JWK Set（上の表の 1）から kid で引き、RS256 の鍵にする（#289 / #290）。
-                            upstreamKey = await Sts.IdFederationJwks.GetKeyAsync(id_token, upstream);
+                            upstreamKey = await IdFederationJwks.GetKeyAsync(id_token, upstream);
 
                             // 引けなければ（届かない・kid が無い）、上流の証明書（上の表の 2）に倒す。
                             if (upstreamKey == null
@@ -358,7 +361,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //
                         //    **期待値は、開始処理が `client_id` に使った値**（自分のクライアント ID）。
                         bool audMatched =
-                            Sts.IdTokenAudience.Matches(jobj, upstream.ClientId);
+                            IdTokenAudience.Matches(jobj, upstream.ClientId);
 
                         if (idTokenVerified && nonceMatched && audMatched)
                         {
@@ -393,8 +396,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #region Userinfo処理
 
-                    // Userinfoエンドポイントにアクセス。Sts.Helper の WebAPI 呼び出しは使わない（#246）。
-                    //   Sts.Helper は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
+                    // Userinfoエンドポイントにアクセス。自己テストの WebAPI 呼び出し（SelfTestWebApi）は使わない（#246）。
+                    //   SelfTestWebApi は、自己ホストをコンテナ化した配備（Windows 以外で OAuth2Containerizated* を設定）では、
                     //   宛先のホストを自分の認可サーバへ書き換える。相手は上流の IdP なので、その配備では宛先が変わって壊れる。
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
                         new Uri(upstream.UserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
@@ -499,8 +502,8 @@ namespace MultiPurposeAuthSite.Controllers
             this._idFederationReturnUrl = HttpContext.Session.GetString(Const.IdFederationSigninReturnUrl);
             HttpContext.Session.SetString(Const.IdFederationSigninReturnUrl, ""); // 誤動作防止
 
-            //  **同じ利用者（メアド）を、同時に作らない**（#294。`Sts.UserCreationLock`。プロセスの中だけ）。
-            using (await Sts.UserCreationLock.AcquireAsync(email))
+            //  **同じ利用者（メアド）を、同時に作らない**（#294。`UserCreationLock`。プロセスの中だけ）。
+            using (await UserCreationLock.AcquireAsync(email))
             {
                 return await this.SignInByIdFederationOidcCore(idpIssuer, federationKey, email, name, preferredUserName, emailVerified);
             }
@@ -584,8 +587,8 @@ namespace MultiPurposeAuthSite.Controllers
                         UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
 
                         // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140）。
-                        if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
-                                == Sts.AccountLinkCheck.NeedsVerifiedEmail)
+                        if (AccountLink.CheckLinkToExistingUser(emailVerified)
+                                == AccountLinkCheck.NeedsVerifiedEmail)
                         {
                             // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
                             Logging.MyOperationTrace(string.Format(
@@ -651,7 +654,7 @@ namespace MultiPurposeAuthSite.Controllers
                         user = ApplicationUser.CreateUser(newUserName, email, true);
 
                         // **上流が検証していないメアドを「確認済み」として定着させない**（#140）。
-                        user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
+                        user.EmailConfirmed = AccountLink.EmailConfirmedForNewUser(emailVerified);
 
                         // ユーザの新規作成（パスワードは不要）
                         idResult = await UserManager.CreateAsync(user);
@@ -997,8 +1000,8 @@ namespace MultiPurposeAuthSite.Controllers
             this._idFederationReturnUrl = HttpContext.Session.GetString(Const.IdFederationSigninReturnUrl);
             HttpContext.Session.SetString(Const.IdFederationSigninReturnUrl, ""); // 誤動作防止
 
-            //  **同じ利用者（メアド）を、同時に作らない**（#294。`Sts.UserCreationLock`。プロセスの中だけ）。
-            using (await Sts.UserCreationLock.AcquireAsync(email))
+            //  **同じ利用者（メアド）を、同時に作らない**（#294。`UserCreationLock`。プロセスの中だけ）。
+            using (await UserCreationLock.AcquireAsync(email))
             {
                 return await this.SignInByIdFederationSaml2Core(idpIssuer, federationKey, email, preferredUserName, emailVerified);
             }
@@ -1063,8 +1066,8 @@ namespace MultiPurposeAuthSite.Controllers
                 UserLoginInfo externalLoginInfo = new UserLoginInfo(idpIssuer, federationKey, idpIssuer);
 
                 // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140）。
-                if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
-                        == Sts.AccountLinkCheck.NeedsVerifiedEmail)
+                if (AccountLink.CheckLinkToExistingUser(emailVerified)
+                        == AccountLinkCheck.NeedsVerifiedEmail)
                 {
                     // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
                     Logging.MyOperationTrace(string.Format(
@@ -1125,7 +1128,7 @@ namespace MultiPurposeAuthSite.Controllers
                 user = ApplicationUser.CreateUser(newUserName, email, true);
 
                 // **上流が検証していないメアドを「確認済み」として定着させない**（#140）。
-                user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
+                user.EmailConfirmed = AccountLink.EmailConfirmedForNewUser(emailVerified);
 
                 // ユーザの新規作成（パスワードは不要）
                 idResult = await UserManager.CreateAsync(user);

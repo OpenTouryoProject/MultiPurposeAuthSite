@@ -502,7 +502,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
         /// | 2 | **メアド** | **引けたら、その利用者に `(iss, sub)` を足す**（#151 の段階 3） |
         ///
         /// **守りは「メアドが検証済みであること」**である（#140 の段階 1。
-        /// `Sts.AccountLink.CheckLinkToExistingUser`）。
+        /// `AccountLink.CheckLinkToExistingUser`）。
         /// **検証済みでなければ結ばない** — **でなければ、メアドを名乗るだけで
         /// 他人のアカウントに入れてしまう。**
         ///
@@ -589,7 +589,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                     nameAgain ?? "(読めない)");
 
                 r.Note("**結び付けの守りは「メアドが検証済みであること」**である"
-                    + "（#140 の段階 1。`Sts.AccountLink.CheckLinkToExistingUser`）。"
+                    + "（#140 の段階 1。`AccountLink.CheckLinkToExistingUser`）。"
                     + "**検証済みでなければ結ばず、理由を画面とログに出す。**"
                     + "**上流が増えるほど、この守りが効いている必要がある。**");
 

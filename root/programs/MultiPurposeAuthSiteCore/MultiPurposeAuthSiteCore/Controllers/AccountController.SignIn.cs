@@ -21,6 +21,7 @@
 //*  2026/10/28  玄人 幸道         ReturnUrl と login_hint の取り出し方を net48 版に揃えた（#294）
 //*  2026/10/28  玄人 幸道         auth_time の Cookie を、改ざんできない形で書く（#294）
 //*  2026/10/29  玄人 幸道         ID 連携に ReturnUrl を渡す（#294）
+//*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnLogoutEndpoint）を呼ぶ（#321）
 //**********************************************************************************
 
 /*
@@ -33,7 +34,7 @@ using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
-using Token = MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Extensions.Sts;
 using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
@@ -73,7 +74,7 @@ namespace MultiPurposeAuthSite.Controllers
             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
             Response.Cookies.Set(this.SessionCookieName, "", this._cookieOptions);
             Response.Cookies.Set(Config.AuthTimeCookieName,
-                Sts.AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
+                AuthTimeCookie.ProtectAuthTime(DateTime.UtcNow), this._cookieOptions);
 
             // **OP のセッションの識別子を作る**（#310）。
             //   **ここがセッションの始まり**である（`sid` はこの値から引く）。
@@ -532,7 +533,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="confirmed">利用者が確認画面で「はい」を押したか</param>
         /// <returns>ActionResult</returns>
         /// <remarks>
-        /// **判定は CmnEndpoints.ReceiveEndSessionRequest（両アプリ共通）。**
+        /// **判定は CmnLogoutEndpoint.ReceiveEndSessionRequest（両アプリ共通）。**
         /// ここは「確認画面を出すか」「サインアウト」「リダイレクト」だけを行う。
         /// </remarks>
         private async Task<ActionResult> EndSessionCore(
@@ -541,7 +542,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             bool signedIn = User.Identity.IsAuthenticated;
 
-            Token.CmnEndpoints.ReceiveEndSessionRequest(
+            CmnLogoutEndpoint.ReceiveEndSessionRequest(
                 idTokenHint, clientId, postLogoutRedirectUri, state,
                 signedIn ? User.Identity.Name : "",
                 out bool verified, out string redirectUri,

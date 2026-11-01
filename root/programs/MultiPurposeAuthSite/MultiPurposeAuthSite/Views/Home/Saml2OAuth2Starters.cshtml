@@ -30,6 +30,7 @@
     //*  2026/10/06  玄人 幸道         prompt の解説を実態に合わせた（#272）
     //*  2026/10/09  玄人 幸道         各オプションの説明を出した（#277 の段階 2）
     //*  2026/10/09  玄人 幸道         NameIDFormat を選べるようにした（#277 の段階 4）
+    //*  2026/10/31  玄人 幸道         始められなかった理由を出す（ValidationSummary。#294）
     //**********************************************************************************
 *@
 
@@ -56,6 +57,8 @@
     @using (Html.BeginForm("Saml2OAuth2Starters", "Home", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
     {
         @Html.AntiForgeryToken()
+        @* **始められなかった理由を出す**（クライアントが無い・Request Object を預けられない。#294） *@
+        @Html.ValidationSummary("", new { @class = "text-danger" })
         <div class="form-group">
             @Html.LabelFor(m => m.ClarifyRedirectUri, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">

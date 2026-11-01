@@ -28,6 +28,7 @@ TOTP の認証アプリ・回復コード）を担うAccountControllerの一部
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.IdP;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -397,7 +398,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 認証デバイスからの承認（無ければ null）
-            string code = Sts.TwoFactorPushProvider.Receive(user.Id);
+            string code = TwoFactorPushProvider.Receive(user.Id);
 
             if (string.IsNullOrEmpty(code))
             {

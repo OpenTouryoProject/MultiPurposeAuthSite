@@ -52,6 +52,7 @@
 //*  2026/10/18  玄人 幸道         JSON の本文を POST する口を足した（#307 の段階 1）
 //*  2026/10/28  玄人 幸道         Cookie の値を書き換える口（OverwriteCookie）を足した（#294）
 //*  2026/10/30  玄人 幸道         WebAuthn の登録の段階 0 で、パスワードを送る（#294）
+//*  2026/10/31  玄人 幸道         待ち時間を指定して POST する口を追加（自己テストのポーリング。#294）
 //**********************************************************************************
 
 using System;
@@ -262,6 +263,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return this._http.PostAsync(this.Absolute(pathOrUrl), new FormUrlEncodedContent(items));
+        }
+
+        /// <summary>POST（application/x-www-form-urlencoded）。待ち時間を指定する（#294）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="form">フォーム</param>
+        /// <param name="timeout">待ち時間</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **既定の 60 秒より長く待つ要求のため**（自己テストのポーリングは、サーバが最大 60 秒待つ）。
+        /// **`HttpClient.Timeout` は最初の要求の後は変えられない**ので、**同じハンドラ（Cookie）で別の HttpClient を作る。**
+        /// </remarks>
+        public async Task<HttpResponseMessage> PostFormAsync(
+            string pathOrUrl, IDictionary<string, string> form, TimeSpan timeout)
+        {
+            using (HttpClient http = new HttpClient(this._handler, false))
+            {
+                http.Timeout = timeout;
+                return await http.PostAsync(this.Absolute(pathOrUrl), new FormUrlEncodedContent(form));
+            }
         }
 
         /// <summary>POST（同じ名前を複数送る）</summary>

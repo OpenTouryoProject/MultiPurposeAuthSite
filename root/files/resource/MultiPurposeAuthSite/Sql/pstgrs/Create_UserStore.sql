@@ -276,16 +276,8 @@ CREATE TABLE AuthFailure(
 CREATE TABLE OAuth2Revocation(
     Jti varchar(38) NOT NULL,                -- PK, guid
     CreatedDate timestamp NOT NULL,
+    ExpiresAt bigint NULL,                   -- access_token の exp（UNIX 秒）。過ぎたら消す（#322）
     CONSTRAINT PK_OAuth2Revocation PRIMARY KEY (Jti)
-);
-
-CREATE TABLE IssuedToken(
-    Jti varchar(38) NOT NULL,                -- PK, guid
-    Value varchar(2000) NOT NULL,
-    ClientID varchar(38) NOT NULL,
-    Audience varchar(38) NOT NULL,
-    CreatedDate timestamp NOT NULL,
-    CONSTRAINT PK_IssuedToken PRIMARY KEY (Jti)
 );
 
 CREATE TABLE RequestObject(

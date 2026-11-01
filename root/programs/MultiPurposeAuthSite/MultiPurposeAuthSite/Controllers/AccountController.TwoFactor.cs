@@ -29,6 +29,7 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.IdP;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -343,7 +344,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 認証デバイスからの承認（無ければ null）
-            string code = Sts.TwoFactorPushProvider.Receive(userId);
+            string code = TwoFactorPushProvider.Receive(userId);
 
             if (string.IsNullOrEmpty(code))
             {
