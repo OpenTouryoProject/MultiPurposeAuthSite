@@ -7307,12 +7307,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 500 にならない
 - code が返る
 
-## RT-294.54 **client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**（配列は、500 にせず invalid_client で断る）
+## RT-294.54 **fapi2 以外の登録の client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**（配列は、500 にせず invalid_client で断る）
 
 | | |
 |---|---|
-| 観点 | **FAPI 2.0 は、issuer を aud として受けることを求める**（RFC 7523 §3 も issuer を認める）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**（**以前は HTTP 500** だった）。 |
-| 根拠 | RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.3 / #294 |
+| 観点 | **RFC 7523 §3 は、認可サーバを指す値を求め、トークン エンドポイントの URL も認める。****fapi2 の登録は、issuer だけを受ける**（RT-323.1）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**（**以前は HTTP 500** だった）。 |
+| 根拠 | RFC 7523 §3 / RFC 7519 §4.1.3 / #294 |
 | テスト | `RT29454_client_assertionのaudにissuerを受ける` |
 
 **手順**
@@ -10274,6 +10274,26 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **両方のスキームを並べて広告はしない。** **できるが、`Bearer` だけを知るクライアントが 2 つ目を読めるとは限らず、得るものが無い。**
+
+## RT-323.1 **fapi2 の登録の client_assertion の aud は、issuer の文字列だけを受ける**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、issuer だけを文字列で受けることを求める。****以前は登録の種別を見ず、トークン エンドポイントの URL も受けていた。** |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / #323 |
+| テスト | `RT3231_fapi2のclient_assertionのaudはissuerだけを受ける` |
+
+**手順**
+
+1. aud = issuer
+1. aud = トークン エンドポイント
+1. aud = [issuer]（配列）
+
+**検証（合否を判定する）**
+
+- 認証が通る（HTTP 200）
+- invalid_client
+- invalid_client
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

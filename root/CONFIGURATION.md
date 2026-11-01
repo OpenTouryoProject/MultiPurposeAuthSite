@@ -1574,7 +1574,7 @@ Content-Type: application/json
 |---|---|
 | **空**（未登録） | **`client_secret_basic` と `client_secret_post`**（**暗黙に許す**） |
 | `client_secret_basic` / `client_secret_post` | 同じ（**明示しても変わらない**） |
-| **`private_key_jwt`** | **`client_assertion` だけ**（**秘密では通らない**） |
+| **`private_key_jwt`** | **`client_assertion` だけ**（**秘密では通らない**）。**`aud` はトークン エンドポイントの URL か issuer。`fapi2` の登録は issuer の文字列だけ**（#323） |
 | **`tls_client_auth`** | **クライアント証明書だけ**（同じ） |
 | **`none`**（#294） | **認証しない**（**パブリック クライアント**。**秘密を持っていても、それでは通らない**） |
 | **既知でない値** | **通さない**（登録の誤り。#224 の段階 2 と同じ方針） |

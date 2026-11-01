@@ -355,7 +355,7 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <remarks>
         /// **`/ros`（独自）との違いは、クライアント認証があること**（RFC 9126 §2）。
         /// **FAPI 2.0 はこの認証を private_key_jwt か MTLS に限っている**ので、
-        /// ここは private_key_jwt で呼ぶ（`client_assertion` の `aud` は**トークン エンドポイント**）。
+        /// ここは private_key_jwt で呼ぶ（`client_assertion` の `aud` は `SelfTestClient.CreateClientAssertion` が決める）。
         ///
         /// 送るのは `request`（JAR）1 つ。**認可エンドポイントのパラメタを、
         /// フォームで直接預ける形も RFC 9126 は許している**（Open棟梁 の別のオーバーロード）。

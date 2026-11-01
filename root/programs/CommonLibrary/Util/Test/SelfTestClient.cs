@@ -35,6 +35,7 @@
 //*  2026/10/31  玄人 幸道         ポーリングで、待ち時間の上限を越えて待たない（#294）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
 //*  2026/11/01  玄人 幸道         WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
+//*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -117,14 +118,16 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <param name="scopes">scope（サーバは見ないが、従来と同じ値を入れる）</param>
         /// <returns>署名付き JWT</returns>
         /// <remarks>
-        /// **`aud` はトークン エンドポイント**（RFC 7523 §3）。
+        /// **`aud` はトークン エンドポイント**（RFC 7523 §3）。**fapi2 の登録は issuer**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
         /// **サーバ側（`CmnEndpoints.ClientAuthentication`）がそこを見る**ので、外すと認証できない。
         /// </remarks>
         public static string CreateClientAssertion(string clientId, TimeSpan lifetime, string scopes)
         {
             return JwtAssertion.CreateByRsa(
                 clientId,
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
+                Helper.GetInstance().GetClientMode(clientId) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit()
+                    ? CmnServerParams.IssuerId
+                    : Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
                 lifetime, scopes, SelfTestClient.RsaPrivateKey());
         }
 

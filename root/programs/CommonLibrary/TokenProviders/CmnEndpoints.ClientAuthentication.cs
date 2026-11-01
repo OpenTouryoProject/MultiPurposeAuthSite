@@ -37,6 +37,7 @@
 //*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone の値は Const から取る（#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/01  玄人 幸道         AllowsVerifyingAlg を internal にした（Extensions/Sts の CmnRequestObjectEndpoint が使う。#321）
+//*  2026/11/01  玄人 幸道         fapi2 のクライアント認証では、assertion の aud を issuer に限った（#323）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -467,8 +468,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //    **`private_key_jwt` の明示が要る** — **鍵を登録しただけでは通らない。**
                         //    **`client_id` はアサーションの `iss`**（RFC 7523 §3）なので、それで引く。
                         //  **aud は、トークン エンドポイントの URL か、この IdP の issuer**（#294）。
-                        //    RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1（issuer を受けること）。
-                        if (CmnEndpoints.IsAssertionAudience(payload)
+                        //    **fapi2 の登録は issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
+                        if (CmnEndpoints.IsClientAssertionAudience(payload, iss)
                             && CmnEndpoints.AllowsAuthMethod(
                                 iss, ClientModePolicy.Proof.PrivateKeyJwt))
                         {
@@ -706,6 +707,25 @@ namespace MultiPurposeAuthSite.TokenProviders
             return !string.IsNullOrEmpty(aud)
                 && (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint
                     || aud == CmnServerParams.IssuerId);
+        }
+
+        /// <summary>クライアント認証の assertion の aud が、そのクライアントに認められた値か（#323）</summary>
+        /// <param name="payload">assertion のペイロード</param>
+        /// <param name="client_id">署名を検証したクライアント（assertion の iss）</param>
+        /// <returns>認められた値か</returns>
+        /// <remarks>
+        /// **FAPI 2.0 Security Profile §5.3.2.1 は、issuer を文字列で受けることだけを認める**
+        /// （"shall only accept its issuer identifier value"）ので、**fapi2 の登録は issuer に限る。**
+        /// **それ以外の登録は変えない**（RFC 7523 §3 は、トークン エンドポイントの URL を認めている）。
+        /// </remarks>
+        private static bool IsClientAssertionAudience(JObject payload, string client_id)
+        {
+            if (Helper.GetInstance().GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+            {
+                return JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.aud) == CmnServerParams.IssuerId;
+            }
+
+            return CmnEndpoints.IsAssertionAudience(payload);
         }
 
         /// <summary>assertion の署名と期限を検証する（読めない形なら false。#294）</summary>

@@ -33,6 +33,7 @@
 //*  2026/09/30  玄人 幸道         RT-129.1（ES256 の client_assertion）を追加（#129 の段階 2）
 //*  2026/10/03  玄人 幸道         RT-262.1（登録で絞ったalg以外は通らない）を追加（#262）
 //*  2026/10/19  玄人 幸道         方法を明示したTestClient_24に向けた（#307 の段階 3）
+//*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //**********************************************************************************
 
 using System;
@@ -79,7 +80,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <returns>JWS</returns>
-        /// <remarks>`aud` は、この実装が求めるトークン エンドポイントの URL。</remarks>
+        /// <remarks>`aud` はトークン エンドポイントの URL（**fapi2 の登録には使えない**。#323）。</remarks>
         private static string CreateClientAssertion(IdPClient client, string clientId)
         {
             return AsymmetricAuthTests.CreateClientAssertion(client, clientId, false);
@@ -89,13 +90,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="es256">true なら ES256、false なら RS256</param>
+        /// <param name="aud">aud（null ならトークン エンドポイントの URL）</param>
         /// <returns>JWS</returns>
         /// <remarks>
         /// **署名鍵は、クライアント登録の公開鍵と対になる構成ファイルの鍵。**
         /// RS256 は `jwk_rsa_publickey` ↔ `SpRp_RsaPfxFilePath`、
         /// ES256 は `jwk_ecdsa_publickey` ↔ `SpRp_EcdsaPfxFilePath`。
         /// </remarks>
-        private static string CreateClientAssertion(IdPClient client, string clientId, bool es256)
+        private static string CreateClientAssertion(IdPClient client, string clientId, bool es256, string aud = null)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -103,7 +105,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", clientId },
                 { "sub", clientId },
-                { "aud", client.Target.BaseUrl + "/token" },
+                { "aud", aud ?? (client.Target.BaseUrl + "/token") },
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }
@@ -149,13 +151,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="items">フォームの中身</param>
+        /// <param name="aud">aud（null ならトークン エンドポイントの URL。**fapi2 は issuer を渡す**。#323）</param>
         /// <returns>フォーム</returns>
         private static Dictionary<string, string> WithClientAssertion(
-            IdPClient client, string clientId, IDictionary<string, string> items)
+            IdPClient client, string clientId, IDictionary<string, string> items, string aud = null)
         {
             Dictionary<string, string> form = new Dictionary<string, string>(items)
             {
-                { "client_assertion", AsymmetricAuthTests.CreateClientAssertion(client, clientId) },
+                { "client_assertion", AsymmetricAuthTests.CreateClientAssertion(client, clientId, false, aud) },
                 { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" }
             };
 
@@ -364,7 +367,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             { "grant_type", "authorization_code" },
                             { "code", authz.Code },
                             { "redirect_uri", reg.RedirectUri }
-                        }));
+                        }, await client.IssuerAsync()));
 
                 string refreshToken = token.String("refresh_token");
 
@@ -382,7 +385,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         {
                             { "grant_type", "refresh_token" },
                             { "refresh_token", refreshToken }
-                        }));
+                        }, await client.IssuerAsync()));
 
                 r.VerifyEqual("HTTP 200", "200", ((int)refreshed.StatusCode).ToString());
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/25  玄人 幸道         新規（#238）
+//*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //**********************************************************************************
 
 using System;
@@ -57,8 +58,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **両方を受ける**（`client_assertion` を優先し、無ければ `assertion`）。
     /// Open棟梁 の既存のクライアントは `assertion` を送るため（OpenTouryo #592）。
     ///
-    /// アサーションの `aud` は、**トークン エンドポイントの URL**でなければならない
-    /// （`CmnEndpoints.ClientAuthentication` の実装。`/par` や `/ciba_authz` へ送るときも同じ）。
+    /// **ここで使う `TestClient2` は fapi2 なので、アサーションの `aud` は issuer**（#323。`RT-323.1`）。
+    /// `/par` や `/ciba_authz` へ送るときも同じ。
     /// </remarks>
     public class ClientAssertionTests : TargetTestBase
     {
@@ -71,12 +72,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <summary>client_assertion（RS256 で署名した JWT）を作る</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
+        /// <param name="issuer">issuer（aud に入れる）</param>
         /// <returns>JWS</returns>
         /// <remarks>
         /// RFC 7523 §3 : `iss` / `sub` はクライアントの識別子、`aud` は認可サーバ。
-        /// **この実装は `aud` にトークン エンドポイントの URL を求める。**
         /// </remarks>
-        private static string CreateClientAssertion(IdPClient client, string clientId)
+        private static string CreateClientAssertion(IdPClient client, string clientId, string issuer)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -84,7 +85,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", clientId },
                 { "sub", clientId },
-                { "aud", client.Target.BaseUrl + "/token" },
+                { "aud", issuer },
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }
@@ -117,7 +118,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 JsonResponse res = await client.PostJsonAsync("/par", new Dictionary<string, string>()
                 {
                     { "client_id", reg.ClientId },
-                    { "client_assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId) },
+                    { "client_assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId, await client.IssuerAsync()) },
                     { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" },
                     { "response_type", "code" },
                     { "scope", "openid" },
@@ -164,7 +165,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 JsonResponse res = await client.PostJsonAsync("/par", new Dictionary<string, string>()
                 {
                     { "client_id", reg.ClientId },
-                    { "assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId) },
+                    { "assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId, await client.IssuerAsync()) },
                     { "response_type", "code" },
                     { "scope", "openid" },
                     { "redirect_uri", reg.RedirectUri },
@@ -206,7 +207,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 JsonResponse res = await client.PostJsonAsync("/par", new Dictionary<string, string>()
                 {
                     { "client_id", reg.ClientId },
-                    { "client_assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId) },
+                    { "client_assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId, await client.IssuerAsync()) },
                     { "client_assertion_type", "urn:ietf:params:oauth:grant-type:jwt-bearer" },
                     { "response_type", "code" },
                     { "scope", "openid" },
@@ -269,7 +270,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     { "grant_type", "authorization_code" },
                     { "code", authz.Code },
-                    { "client_assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId) },
+                    { "client_assertion", ClientAssertionTests.CreateClientAssertion(client, reg.ClientId, await client.IssuerAsync()) },
                     { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" },
                     { "redirect_uri", reg.RedirectUri }
                 });

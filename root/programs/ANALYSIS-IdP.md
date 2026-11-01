@@ -913,7 +913,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 |---|---|---|
 | **N1 : PKCE と private_key_jwt / mTLS の併用** | **`code_verifier` が在ると `client_assertion` と証明書を見ず、PKCE だけで認証した** → **証明が PKCE になり、fapi2（FAPI 2.0 は PKCE と鍵か証明書の両方を求める）が通らなかった**。`RequirePkce` を有効にすると、鍵・証明書のクライアントは全く通らなかった | **まず資格情報で認証し、PKCE は別に検証する**（証明は PrivateKeyJwt / Mtls） |
 | **N3 : `response_type=id_token`** | **Implicit を閉じても検査を通り、同意の後で `server_error`** | **`unsupported_response_type`**（Implicit の経路として扱う） |
-| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（FAPI 2.0 は issuer も受けることを求める）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
+| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（**fapi2 の扱いは C-58 で直した**）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
 | **N5 : poll の CIBA** | **`client_notification_token`（ping / push のときだけ REQUIRED）と `binding_message`（OPTIONAL）を必須にしていた** | **省略できる**（`/ros` は前者の有無で CIBA を見分けるので、`request_uri` の経路では在ることになる） |
 | **N6 : Device グラントの登録種別** | **`device` を固定で書いていた**（normal の登録のトークンも `device` を名乗った） | **登録された種別で書く**（#220 と同じ） |
 | **登録の `grant_types` と Implicit / Hybrid** | **認可エンドポイントで見ず、同意の後で `server_error`** | **認可エンドポイントで発行する経路（`implicit`）は、同意の前に `unauthorized_client`**。**code は従来どおり `/token` で見る**（#307 の段階 1 の決め。`RT-307.7`） |
@@ -3499,6 +3499,15 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 > | **`scope` の照合**（クレームの選択） | `ToLower` で大文字小文字を無視 | **区別する**（RFC 6749 §3.3） |
 
 ---
+
+### C-58. fapi2 のクライアント認証で、`aud` にトークン エンドポイントの URL も受けていた ✅ 修正済み（#323）
+
+**FAPI 2.0 Security Profile §5.3.2.1 は、認可サーバが受ける `aud` を issuer の文字列だけに限っている。**
+**#294 では「issuer も受ける」と読み**、`IsAssertionAudience` は登録の種別を見ず、どちらも受けていた。
+**#315 で根拠を原典と照らして見つけた。**
+
+**fapi2 の登録のクライアント認証では、issuer だけを受ける**（`IsClientAssertionAudience`。`RT-323.1`）。
+**それ以外の登録と JWT Bearer グラントは変えない**（RFC 7523 §3 はトークン エンドポイントの URL を認めている）。
 
 ## 5. D. 最新の IdP として不足している機能
 
