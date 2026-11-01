@@ -35,12 +35,11 @@ DB の通しには、ストアに固有の失敗が含まれる（#327・#328。
 | 扱い | 対象 | 理由 |
 |---|---|---|
 | **DB で届いている** | `Extensions.Sts` の 40 個・230 行（`Saml2OAuth2DataProvider`・`SoftwareStatementIssuerProvider`・`DPoPProofProvider` の列の組み立て、`ConsentProvider.Value`、`SessionClientProvider.Value`、`DeviceAuthZProvider.ThrottlePolling`） | `mem` の測定に入らないだけ |
-| **単体テストを足した** | `StoredCredential.FromRegistered`、`CmnDPoP.CurrentNonce`・`NonceOfSlot`・`CurrentSlot` | 外部を要らない。nonce は `-DPoPNonce` の起動でしか通らない |
-| **単体テストで足す（次）** | `CmnSaml2Response.OrNone`、`Entry.JwkFromCer`・`CreateJwsFromCer`、`CmnAccessToken.SelectJwsFromCertificate` | 外部を要らない。`Entry` は証明書の用意が要る |
+| **単体テストを足した** | `StoredCredential.FromRegistered`、`CmnDPoP.CurrentNonce`・`NonceOfSlot`・`CurrentSlot`、`WebAuthnHelper.AuthenticatorAssertion`、`DataProvider.Update`・`GetUserByCredential`、`Entry.JwkFromCer`・`CreateJwsFromCer`・`get_CerFilePath` | 外部が要らない。アサーションは本物の ES256 の鍵で、証明書は使い捨てのものを作って確かめる |
+| **単体テストにできない** | `CmnSaml2Response.OrNone`（`SAML2VerifyResult` を外から作れない）、`CmnAccessToken.SelectJwsFromCertificate`（`private`。`JwkSet.json` が無い配備の経路） | E2E で足すかを決める |
 | **E2E で足す** | `RolesAdminController.Edit`、`ManageController.SetPassword`・`RemoveUnstructuredData`、`UsersAdminController.Details`・`List`、`HomeController` の各フロー | サイトの画面で動かせる |
 | **テストしない** | 外部ログインの戻り（`ExternalLogin*`・`RemoveLogin`・`ManageLogins`）、電話番号（`AddPhoneNumber`・`VerifyPhoneNumber`・`RemovePhoneNumber`）、`IdFederationJwks`・`IdFederationSaml2Metadata` の取得 | 上流のプロバイダや SMS が要る |
 | **テストしない** | `get_*` の委譲、`PingController`、`ErrorController`、`ValuesController` | 判断を持たない。外れても認証に関わらない |
-| **未判断** | `WebAuthnHelper.AuthenticatorAssertion`、`DataProvider.Update`・`GetUserByCredential` | 署名の検証を通す正しいアサーションを作る足場が要る。**リスク「高」なので、優先して決める** |
 
 <!-- COVERAGE:BEGIN -->
 
