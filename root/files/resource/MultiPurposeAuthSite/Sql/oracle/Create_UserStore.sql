@@ -279,15 +279,6 @@ CREATE TABLE "OAuth2Revocation"(
     CONSTRAINT "PK.OAuth2Revocation" PRIMARY KEY ("Jti")
 );
 
-CREATE TABLE "IssuedToken"(
-    "Jti" NVARCHAR2(38) NOT NULL,                -- PK, guid
-    "Value" NVARCHAR2(2000) NOT NULL,
-    "ClientID" NVARCHAR2(38) NOT NULL,
-    "Audience" NVARCHAR2(38) NOT NULL,
-    "CreatedDate" DATE NOT NULL,
-    CONSTRAINT "PK.IssuedToken" PRIMARY KEY ("Jti")
-);
-
 CREATE TABLE "RequestObject"(
     "Urn" NVARCHAR2(38) NOT NULL,                -- PK, guid（接頭辞付きのキーも入る。38文字に収まるものだけ。#243）
     "Value" NVARCHAR2(2000) NOT NULL,

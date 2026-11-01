@@ -320,16 +320,6 @@ CREATE TABLE [OAuth2Revocation](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [IssuedToken](
-    [Jti] [nvarchar](38) NOT NULL,            -- PK, guid
-    [Value] [nvarchar](max) NULL,             -- IssuedToken
-    [ClientID] [nvarchar](38) NOT NULL,
-    [Audience] [nvarchar](38) NOT NULL,
-    [CreatedDate] [smalldatetime] NOT NULL,
-    CONSTRAINT [PK.IssuedToken] PRIMARY KEY NONCLUSTERED ([Jti] ASC)
-        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-) ON [PRIMARY]
-
 CREATE TABLE [RequestObject](
     [Urn] [nvarchar](38) NOT NULL,            -- PK, guid（接頭辞付きのキーも入る。38文字に収まるものだけ。#243）
     [Value] [nvarchar](max) NULL,             -- RequestObject

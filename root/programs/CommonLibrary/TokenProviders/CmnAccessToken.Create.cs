@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（CmnAccessToken.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         auth_time を数値（秒）に。Claims 経由でも claims を拾う。コメント（#294）
+//*  2026/11/01  玄人 幸道         使われていない IssuedTokenProvider への書き込みを外した（発行した access_token を保存するだけで、どこからも読まれていなかった。#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -38,8 +39,6 @@ using MultiPurposeAuthSite.Entity;
 #else
 using MultiPurposeAuthSite;
 #endif
-using MultiPurposeAuthSite.Util;
-using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
@@ -215,9 +214,6 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // **登録された alg で署名する**（#129 の段階 2）。鍵の選択は SelectJwsForSigning が持つ。
             JWS jws = CmnAccessToken.SelectJwsForSigning(alg);
-
-            // ここでストアに登録
-            IssuedTokenProvider.Create(jti, json, clientId, audience);
 
             // 署名
             return jws.Create(json);
@@ -411,12 +407,6 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // **登録された alg で署名する**（#129 の段階 2）。鍵の選択は SelectJwsForSigning が持つ。
             JWS jws = CmnAccessToken.SelectJwsForSigning(alg);
-
-            // ここでストアに登録
-            if (!string.IsNullOrEmpty(clientId))
-                // ... clientIdがnullのケースは、
-                // IntrospectTokenから処理共通化のために利用されるケース。
-                IssuedTokenProvider.Create(jti, json, clientId, audience);
 
             // 署名
             return jws.Create(json);

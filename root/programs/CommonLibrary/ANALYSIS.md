@@ -112,7 +112,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Co/` | 設定と定数 | `Config`(1740 行) `Const` |
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
-| `Extensions/Sts/` | **STS の拡張仕様**の実装と、その状態を持つもの | `DeviceAuthZProvider` `CibaProvider` `ClientRegistrationProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` `CmnDPoP` `CmnResponseObject`（JARM） `CmnLogoutToken`（Back-Channel Logout） `CmnDiscoveryEndpoint` `CmnRequestObjectEndpoint`（JAR・PAR） `CmnCibaEndpoint` `CmnLogoutEndpoint`（RP-Initiated Logout） `Saml2OAuth2DataProvider` |
+| `Extensions/Sts/` | **STS の拡張仕様**の実装と、その状態を持つもの | `DeviceAuthZProvider` `CibaProvider` `ClientRegistrationProvider` `RequestObjectProvider` `CmnDPoP` `CmnResponseObject`（JARM） `CmnLogoutToken`（Back-Channel Logout） `CmnDiscoveryEndpoint` `CmnRequestObjectEndpoint`（JAR・PAR） `CmnCibaEndpoint` `CmnLogoutEndpoint`（RP-Initiated Logout） `Saml2OAuth2DataProvider` |
 | `Extensions/FIDO/` | WebAuthn（**net10.0 版だけ**。#137） | `WebAuthnHelper` `DataProvider` `StoredCredential` `EnumFidoType` |
 | `Log/` | ロギングの façade | `Logging`（`ACCESS` / `SQLTRACE` ロガー） |
 | `Manager/` | ASP.NET Identity の Manager（**net48 のみ**） | `ApplicationUserManager` `ApplicationRoleManager` `ApplicationSignInManager` |
@@ -121,7 +121,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Password/` | パスワード ハッシュ | `CustomPasswordHasher`（両系統の型を 1 ファイルに同居） |
 | `Resources/` | 多言語リソース | `*.resx` / `*.ja.resx` の 10 組 |
 | `SamlProviders/` | **STS（SAML2 仕様）**。ID 連携（SAML2）の SP 側も | `CmnEndpoints` `CmnSaml2Response` `CmnSamlMetadata` `IdFederationSaml2*` |
-| `TokenProviders/` | **STS（OAuth2・OIDC 仕様）**。ID 連携（OIDC）の RP 側も | `CmnEndpoints` `CmnAccessToken` `CmnIdToken` `AuthorizationCodeProvider` `RefreshTokenProvider` `IdFederationJwks` |
+| `TokenProviders/` | **STS（OAuth2・OIDC 仕様）**。ID 連携（OIDC）の RP 側も | `CmnEndpoints` `CmnAccessToken` `CmnIdToken` `AuthorizationCodeProvider` `RefreshTokenProvider` `RevocationProvider` `IdFederationJwks` |
 | `Util/Sts/` | **STS 関連の部品** | `Helper` `PPIDExtension` `UserClaims` `RateLimitProvider` `AuthFailureProvider` `SecretProtector` `IdTokenAudience` `OnlySts` |
 | `Util/IdP/` | **IdP 関連の部品**（アカウント・サインイン・ID 連携の上流の登録） | `AccountLink` `UserCreationLock` `MailThrottle` `TwoFactorPushProvider` `AuthTimeCookie` `IdFederationUpstreamProvider` `CheckRole` `CustomizedConfirmationProvider` `GetContentOfLetter` `UserIdentifier` |
 | `Util/Test/` | **自己テスト・E2E のための部品**（本番の処理からは呼ばない） | `SelfTestClient` `TestClients` `TestFrontChannelLogoutBox` `TestLogoutTokenBox` |
@@ -234,7 +234,9 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   テーブルは 16 本（`Users` `Roles` `UserRoles` `UserLogins` `UserClaims` `TotpTokens`
   `AuthenticationCodeDictionary` `RefreshTokenDictionary` `CustomizedConfirmation`
   `Saml2OAuth2Data` `FIDO2Data` `DeviceAuthZData` `CibaData` `OAuth2Revocation`
-  `IssuedToken` `RequestObject`）。**3 方言すべてを直すこと。**
+  `RequestObject`）。**3 方言すべてを直すこと。**
+  **`IssuedToken` は #321 で落とした**（発行した access_token を保存するだけで、どこからも読まれていなかった）。
+  **既に配備された DB に残っている表は使われない**（消してよい）。
 - Docker で DBMS を立てる一式は `Container/Store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
   `0_CopyInitSql.ps1` が上記 DDL を `Container/Store/*/init/` へコピーし、**CRLF を LF に変換**する
   （Linux コンテナの初期化スクリプトが読むため）。
@@ -311,11 +313,11 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `TokenProviders/CmnIdToken.cs` | id_token |
 | `Extensions/Sts/CmnResponseObject.cs` | JARM（Response Object） |
 | `TokenProviders/AuthorizationCodeProvider.cs` / `RefreshTokenProvider.cs` | code / refresh_token の保管（Memory or DBMS） |
+| `TokenProviders/RevocationProvider.cs` | 失効させた access_token の jti（RFC 7009 の状態。`CmnAccessToken.VerifyAccessToken` が引く）。#321 で `Extensions/Sts` から移した |
 | `Util/Sts/Helper.cs`（1380 行） | **クライアント情報のレジストリ**。`OAuth2ClientsInformation` から client_secret / redirect_uri / JWK 公開鍵 / `tls_client_auth_subject_dn` / subject_types / client mode を引く。加えて各フローの WebAPI 呼び出しヘルパ（シングルトン、`GetInstance`） |
 | `Util/Test/SelfTestClient.cs`（800 行） | **自己テスト（この実装が兼ねているクライアント）側の組み立て**（#246）。鍵を読み、JWT（Request Object / CIBA の要求 / `client_assertion`）を作る。`/ros`・`/par` は「組み立て → 預ける → 応答を解く」まで、CIBA と Device Authorization Grant は**ポーリングの通し**まで受け持つ。**IdP の処理からは呼ばない**（役割は `../MultiPurposeAuthSiteCore/ANALYSIS.md` 7 節） |
 | `Extensions/Sts/DeviceAuthZProvider.cs` | Device Authorization Grant |
 | `Extensions/Sts/CibaProvider.cs` | CIBA（FAPI）。FCM プッシュと連携 |
-| `Extensions/Sts/RevocationProvider.cs` / `IssuedTokenProvider.cs` | revoke / introspect の裏付けデータ |
 | `Extensions/Sts/SubjectIdProvider.cs` | **発行した `sub` の対応表**（#151 の段階 2）。`(Sector, UserId) → Sub` と、その逆引き。**`sub` を「導出」から「データ」に変える**ので、`subject_types` の既定や PPID の作り方を変えても**発行済みの `sub` が動かない** |
 | `Extensions/Sts/RequestObjectProvider.cs` | Request Object の登録（`/ros`） |
 | `Extensions/Sts/CmnDiscoveryEndpoint.cs` | `.well-known/openid-configuration` の生成（`OpenIDConfig`）。#321 で `CmnEndpoints` から移した |

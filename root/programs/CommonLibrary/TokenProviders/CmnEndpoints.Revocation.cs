@@ -31,10 +31,10 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         照会の cnf に jkt を入れる。using を整理した（#294）
 //*  2026/10/30  玄人 幸道         照会で、消された利用者・SecurityStamp が変わった利用者の refresh_token を active=false にする（#294）
+//*  2026/11/01  玄人 幸道         RevocationProvider を TokenProviders へ移したので、using を整理した（#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;

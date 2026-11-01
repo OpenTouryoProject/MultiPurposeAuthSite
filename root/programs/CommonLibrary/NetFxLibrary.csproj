@@ -145,7 +145,6 @@
     <Compile Include="Extensions\Sts\PollingThrottle.cs" />
     <Compile Include="Util\Sts\RateLimitProvider.cs" />
     <Compile Include="Util\Sts\IdTokenAudience.cs" />
-    <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
     <Compile Include="Util\Sts\SecretProtector.cs" />
     <Compile Include="Extensions\Sts\SoftwareStatementProvider.cs" />
@@ -200,7 +199,7 @@
     <Compile Include="Extensions\Sts\CibaProvider.cs" />
     <Compile Include="Util\IdP\TwoFactorPushProvider.cs" />
     <Compile Include="TokenProviders\RefreshTokenProvider.cs" />
-    <Compile Include="Extensions\Sts\RevocationProvider.cs" />
+    <Compile Include="TokenProviders\RevocationProvider.cs" />
     <Compile Include="Notifications\CmnEmail.cs" />
     <Compile Include="Notifications\EmailService.cs" />
     <Compile Include="Notifications\CmnSms.cs" />

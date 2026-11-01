@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（CmnAccessToken.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         pairwise でも利用者が居なければ受けない（C-57）。nbf を確かめる（#294）
+//*  2026/11/01  玄人 幸道         RevocationProvider を TokenProviders へ移したので、using を整理した（#321）
 //**********************************************************************************
 
 #if NETFX
@@ -37,8 +38,6 @@ using MultiPurposeAuthSite.Entity;
 #else
 using MultiPurposeAuthSite;
 #endif
-using MultiPurposeAuthSite.Util;
-using MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;

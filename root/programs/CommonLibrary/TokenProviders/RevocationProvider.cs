@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
+//*  2026/11/01  玄人 幸道         Extensions/Sts から TokenProviders へ移した（RFC 7009 の失効の状態。失効・照会は OAuth 2.0 として本体に置く。#321）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -40,7 +41,7 @@ using System.Collections.Concurrent;
 
 using Dapper;
 
-namespace MultiPurposeAuthSite.Extensions.Sts
+namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>
     /// RevocationしたOAuth2のaccess_tokenのjtiを保存する。
