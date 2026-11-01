@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（#257）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/11/01  玄人 幸道         302 のときのリダイレクト先を残す（#325）
 //**********************************************************************************
 
 using System;
@@ -216,6 +217,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 HttpResponseMessage details = await RolesAdmin.DetailsAsync(client, userRoleId);
                 string body = await details.Content.ReadAsStringAsync();
 
+                //  **断続的に 302 になる**（#325）。次に落ちたときに、どこへ送られたかが分かるように残す。
+                if (details.Headers.Location != null)
+                {
+                    r.Note("リダイレクト先 : " + details.Headers.Location);
+                }
+
                 r.VerifyEqual("HTTP 200", "200", ((int)details.StatusCode).ToString());
 
                 r.Verify("**属している利用者が出る**（テスト利用者）",
@@ -287,6 +294,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 HttpResponseMessage post = await RolesAdmin.CreateAsync(client, "");
                 string body = await post.Content.ReadAsStringAsync();
+
+                //  **断続的に 302 になる**（#325）。次に落ちたときに、どこへ送られたかが分かるように残す。
+                if (post.Headers.Location != null)
+                {
+                    r.Note("リダイレクト先 : " + post.Headers.Location);
+                }
 
                 r.VerifyEqual("**HTTP 200（500 にならない）**",
                     "200", ((int)post.StatusCode).ToString());

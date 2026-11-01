@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
+//*  2026/11/01  玄人 幸道         サインイン後の遷移で load を待たない（#325）
 //**********************************************************************************
 
 using System;
@@ -259,8 +260,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             await page.FillAsync("#Password", password);
             await page.ClickAsync("#normal_signin");
 
+            //  **`load` まで待たない**（`GotoAsync` と同じ。#325）。
+            //    **URL が変わっていても、遷移先の資源が遅いと、既定の `load` を待ってタイムアウトした。**
             await page.WaitForURLAsync(u => !u.Contains("/Account/Login"),
-                new PageWaitForURLOptions() { Timeout = 30000 });
+                new PageWaitForURLOptions() { Timeout = 30000, WaitUntil = WaitUntilState.DOMContentLoaded });
         }
 
         #endregion

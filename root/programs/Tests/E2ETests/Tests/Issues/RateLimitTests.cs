@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 3）
+//*  2026/11/01  玄人 幸道         連打の途中で窓が変わると 429 に届かないことがあったのを直した（#325）
 //**********************************************************************************
 
 using System;
@@ -146,10 +147,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.Step("(3) 上限を超えるまで叩く（10 本ずつ並べて、窓の中で叩き切る）");
 
                         JsonResponse limited = await RateLimitTests.BurstUntilLimitedAsync(
-                            client, clientId, secret, permits + 30);
+                            client, clientId, secret, permits * 2 + 30);
 
                         r.Verify("429 が返る", limited != null, "429", (limited == null)
-                            ? "上限 " + permits + " ＋ 30 回まで叩いても 429 にならなかった" : "429");
+                            ? "上限 " + permits + " の 2 倍 ＋ 30 回まで叩いても 429 にならなかった" : "429");
 
                         Assert.NotNull(limited);
 
@@ -336,6 +337,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <remarks>
         /// **窓の中で叩き切る必要がある**（**窓が変わると回数は 0 に戻る**）ので、
         /// **10 本ずつ並べて叩く。**
+        ///
+        /// **窓は時計に揃っている**ので、**叩いている途中で窓が変わることがある**（#325）。
+        /// **上限の 2 倍を叩けば、窓が 1 度変わっても、どちらかの窓で上限を超える。**
         /// </remarks>
         private static async Task<JsonResponse> BurstUntilLimitedAsync(
             IdPClient client, string clientId, string clientSecret, int maxRequests)
