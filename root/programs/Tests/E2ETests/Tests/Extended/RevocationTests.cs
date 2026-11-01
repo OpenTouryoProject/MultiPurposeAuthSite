@@ -30,8 +30,10 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-2.4 / 2.5 の Skip を解除、成功の HTTP 200 を検証に、EX-2.6 を追加（#200）
+//*  2026/11/01  玄人 幸道         EX-2.7（掃除が走っても、失効はまだ効いている）を追加（#322）
 //**********************************************************************************
 
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -341,6 +343,68 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     "sub を含む応答を返さない",
                     UserInfoAccepted(after) ? "**返してしまった**（失効していない）"
                                             : "拒否した（" + after.ToString() + "）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-2.7 失効の記録の掃除が走っても、期限内の access_token の失効は効いている</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0207_掃除が走っても失効は効いている(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("EX-2.7",
+                    "失効の記録の掃除（100 回の記録ごと）が走っても、期限内の access_token は使えないまま",
+                    "**期限を過ぎた記録は消す**（#322）。**消しすぎると、失効させた access_token が期限内に通ってしまう**ので、"
+                    + "**掃除の後も断られることを確かめる。**"
+                    + "**期限を過ぎた行が消えること自体は、期限を待てないので、通しでは測らない。**",
+                    "RFC 7009 §2.1 / #322");
+
+                r.Target("client_name=" + KnownClients.MvcSample + " / " + KnownClients.TestClient5);
+                r.Step("(1) access_token を得て、失効させる");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
+                    client, KnownClients.MvcSample, "openid email");
+
+                JsonResponse revoke = await Flows.RevokeAsync(client, reg, token.AccessToken, "access_token");
+
+                Assert.True(string.IsNullOrEmpty(revoke.Error), "前提: 失効できること");
+
+                r.Step("(2) 別のトークンを 100 回失効させて、掃除を必ず 1 回は走らせる");
+
+                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient5);
+
+                for (int i = 0; i < 100; i++)
+                {
+                    JsonResponse issued = await client.TokenAsync(new Dictionary<string, string>()
+                    {
+                        { "grant_type", "client_credentials" },
+                        { "scope", "profile" },
+                        { "client_id", other.ClientId },
+                        { "client_secret", other.ClientSecret }
+                    });
+
+                    Assert.False(string.IsNullOrEmpty(issued.AccessToken),
+                        "前提: トークンを取れること（" + i + " 回目。error=" + issued.Error + "）");
+
+                    JsonResponse revoked = await Flows.RevokeAsync(client, other, issued.AccessToken, "access_token");
+
+                    Assert.True(string.IsNullOrEmpty(revoked.Error),
+                        "前提: 失効できること（" + i + " 回目。error=" + revoked.Error + "）");
+                }
+
+                r.Step("(3) 最初の access_token で /userinfo を叩く");
+
+                JsonResponse after = await client.UserInfoAsync(token.AccessToken);
+
+                r.Verify("**断られたまま**", !UserInfoAccepted(after),
+                    "ユーザ情報を返さない", "HTTP " + (int)after.StatusCode);
 
                 r.Done();
             }

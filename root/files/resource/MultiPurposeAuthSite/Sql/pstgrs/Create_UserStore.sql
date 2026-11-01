@@ -276,6 +276,7 @@ CREATE TABLE AuthFailure(
 CREATE TABLE OAuth2Revocation(
     Jti varchar(38) NOT NULL,                -- PK, guid
     CreatedDate timestamp NOT NULL,
+    ExpiresAt bigint NULL,                   -- access_token の exp（UNIX 秒）。過ぎたら消す（#322）
     CONSTRAINT PK_OAuth2Revocation PRIMARY KEY (Jti)
 );
 

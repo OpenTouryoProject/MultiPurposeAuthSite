@@ -3255,6 +3255,24 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 
 ---
 
+### 失効の記録（`OAuth2Revocation`。#322）
+
+**失効させた access_token の `exp` を `ExpiresAt`（UNIX 秒）に記録し、過ぎた行を消す。**
+**期限を過ぎた access_token は検証で落ちる**ので、**記録はもう要らない。**
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。
+**足さないと、`/revoke` で access_token を失効させられなくなる**（記録の `INSERT` が失敗する）。
+**列を足す前の行は `ExpiresAt` が空で、消されない**（不要なら、access_token の期限を過ぎた後に手で消してよい）。
+
+```sql
+-- SQL Server
+ALTER TABLE [OAuth2Revocation] ADD [ExpiresAt] [bigint] NULL
+-- Oracle
+ALTER TABLE "OAuth2Revocation" ADD "ExpiresAt" NUMBER(19) NULL;
+-- PostgreSQL
+ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
+```
+
 ## 8. 証明書
 
 ```json

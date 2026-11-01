@@ -316,6 +316,7 @@ CREATE TABLE [AuthFailure](
 CREATE TABLE [OAuth2Revocation](
     [Jti] [nvarchar](38) NOT NULL,            -- PK, guid
     [CreatedDate] [smalldatetime] NOT NULL,
+    [ExpiresAt] [bigint] NULL,                -- access_token の exp（UNIX 秒）。過ぎたら消す（#322）
     CONSTRAINT [PK.OAuth2Revocation] PRIMARY KEY NONCLUSTERED ([Jti] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

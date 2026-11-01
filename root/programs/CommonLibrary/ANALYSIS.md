@@ -313,7 +313,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `TokenProviders/CmnIdToken.cs` | id_token |
 | `Extensions/Sts/CmnResponseObject.cs` | JARM（Response Object） |
 | `TokenProviders/AuthorizationCodeProvider.cs` / `RefreshTokenProvider.cs` | code / refresh_token の保管（Memory or DBMS） |
-| `TokenProviders/RevocationProvider.cs` | 失効させた access_token の jti（RFC 7009 の状態。`CmnAccessToken.VerifyAccessToken` が引く）。#321 で `Extensions/Sts` から移した |
+| `TokenProviders/RevocationProvider.cs` | 失効させた access_token の jti（RFC 7009 の状態。`CmnAccessToken.VerifyAccessToken` が引く）。#321 で `Extensions/Sts` から移した。**access_token の `exp`（列 `ExpiresAt`）に 5 分の余裕を足した時刻を過ぎた記録を、100 回の記録ごとに消す**（#322） |
 | `Util/Sts/Helper.cs`（1380 行） | **クライアント情報のレジストリ**。`OAuth2ClientsInformation` から client_secret / redirect_uri / JWK 公開鍵 / `tls_client_auth_subject_dn` / subject_types / client mode を引く。加えて各フローの WebAPI 呼び出しヘルパ（シングルトン、`GetInstance`） |
 | `Util/Test/SelfTestClient.cs`（800 行） | **自己テスト（この実装が兼ねているクライアント）側の組み立て**（#246）。鍵を読み、JWT（Request Object / CIBA の要求 / `client_assertion`）を作る。`/ros`・`/par` は「組み立て → 預ける → 応答を解く」まで、CIBA と Device Authorization Grant は**ポーリングの通し**まで受け持つ。**IdP の処理からは呼ばない**（役割は `../MultiPurposeAuthSiteCore/ANALYSIS.md` 7 節） |
 | `Extensions/Sts/DeviceAuthZProvider.cs` | Device Authorization Grant |

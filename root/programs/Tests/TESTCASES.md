@@ -768,6 +768,24 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 失効要求がエラーにならない
 - 失効後は /userinfo がユーザ情報を返さない
 
+## EX-2.7 失効の記録の掃除（100 回の記録ごと）が走っても、期限内の access_token は使えないまま
+
+| | |
+|---|---|
+| 観点 | **期限を過ぎた記録は消す**（#322）。**消しすぎると、失効させた access_token が期限内に通ってしまう**ので、**掃除の後も断られることを確かめる。****期限を過ぎた行が消えること自体は、期限を待てないので、通しでは測らない。** |
+| 根拠 | RFC 7009 §2.1 / #322 |
+| テスト | `EX0207_掃除が走っても失効は効いている` |
+
+**手順**
+
+1. access_token を得て、失効させる
+1. 別のトークンを 100 回失効させて、掃除を必ず 1 回は走らせる
+1. 最初の access_token で /userinfo を叩く
+
+**検証（合否を判定する）**
+
+- **断られたまま**
+
 ## EX-3.1 有効な access_token について、active=true と答える
 
 | | |
@@ -6864,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=b34d9e6c-d9e2-4b1e-a943-c710834b1e52&code=bogus
+1. GET /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6873,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=b34d9e6c-d9e2-4b1e-a943-c710834b1e52&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=b34d9e6c-d9e2-4b1e-a943-c710834b1e52&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**

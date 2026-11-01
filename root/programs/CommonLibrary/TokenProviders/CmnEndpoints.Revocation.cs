@@ -32,6 +32,7 @@
 //*  2026/10/29  玄人 幸道         照会の cnf に jkt を入れる。using を整理した（#294）
 //*  2026/10/30  玄人 幸道         照会で、消された利用者・SecurityStamp が変わった利用者の refresh_token を active=false にする（#294）
 //*  2026/11/01  玄人 幸道         RevocationProvider を TokenProviders へ移したので、using を整理した（#321）
+//*  2026/11/01  玄人 幸道         失効の記録に access_token の exp を渡す（#322）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -96,7 +97,12 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     if (jti != null)
                     {
-                        RevocationProvider.Create(jti.Value);
+                        // **exp も記録する**（#322。exp を過ぎた記録を消す基準）。読めなければ null ＝ 消さない。
+                        Claim exp = identity.Claims.Where(
+                            x => x.Type == OAuth2AndOIDCConst.UrnExpirationTimeClaim).FirstOrDefault<Claim>();
+
+                        RevocationProvider.Create(jti.Value,
+                            (exp != null && long.TryParse(exp.Value, out long expValue)) ? expValue : (long?)null);
                     }
 
                     return err; // 成功（空）

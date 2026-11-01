@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
 //*  2026/11/01  玄人 幸道         Extensions/Sts から TokenProviders へ移した（RFC 7009 の失効の状態。失効・照会は OAuth 2.0 として本体に置く。#321）
+//*  2026/11/01  玄人 幸道         access_token の exp を記録し、exp を過ぎた記録を消す（#322）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -52,19 +53,34 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// OAuth2RevocationProvider
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, DateTime>
-            OAuth2Revocation = new ConcurrentDictionary<string, DateTime>();
+        /// <remarks>値は（記録した時刻, access_token の exp（UNIX 秒。分からなければ null））。</remarks>
+        private static ConcurrentDictionary<string, Tuple<DateTime, long?>>
+            OAuth2Revocation = new ConcurrentDictionary<string, Tuple<DateTime, long?>>();
+
+        /// <summary>何回の記録ごとに掃除するか（要求ごとに DELETE を撃たない）</summary>
+        private const int PruneInterval = 100;
+
+        /// <summary>exp を過ぎてから消すまでの余裕（秒）</summary>
+        /// <remarks>
+        /// **消すのが早いと、失効させた access_token が期限内に通ってしまう**ので、**遅い側に倒す**
+        /// （**サーバ間の時計のずれ**を見込む）。**exp は UTC の UNIX 秒**なので、夏時間には左右されない。
+        /// </remarks>
+        private const long RetentionMarginSeconds = 300;
+
+        /// <summary>記録の回数（掃除の間隔を数える）</summary>
+        private static int CreateCount = 0;
 
         #region Create
 
         /// <summary>Create</summary>
         /// <param name="jti">string</param>
-        public static void Create(string jti)
+        /// <param name="exp">access_token の exp（UNIX 秒。分からなければ null ＝ 消さない）</param>
+        public static void Create(string jti, long? exp)
         {
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    RevocationProvider.OAuth2Revocation.TryAdd(jti, DateTime.Now);
+                    RevocationProvider.OAuth2Revocation.TryAdd(jti, Tuple.Create(DateTime.Now, exp));
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -80,30 +96,115 @@ namespace MultiPurposeAuthSite.TokenProviders
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "INSERT INTO [OAuth2Revocation] ([Jti], [CreatedDate]) VALUES (@Jti, @CreatedDate)",
-                                    new { Jti = jti, CreatedDate = DateTime.Now });
+                                    "INSERT INTO [OAuth2Revocation] ([Jti], [CreatedDate], [ExpiresAt]) VALUES (@Jti, @CreatedDate, @ExpiresAt)",
+                                    new { Jti = jti, CreatedDate = DateTime.Now, ExpiresAt = exp });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"OAuth2Revocation\" (\"Jti\", \"CreatedDate\") VALUES (:Jti, :CreatedDate)",
-                                    new { Jti = jti, CreatedDate = DateTime.Now });
+                                    "INSERT INTO \"OAuth2Revocation\" (\"Jti\", \"CreatedDate\", \"ExpiresAt\") VALUES (:Jti, :CreatedDate, :ExpiresAt)",
+                                    new { Jti = jti, CreatedDate = DateTime.Now, ExpiresAt = exp });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"oauth2revocation\" (\"jti\", \"createddate\") VALUES (@Jti, @CreatedDate)",
-                                    new { Jti = jti, CreatedDate = DateTime.Now });
+                                    "INSERT INTO \"oauth2revocation\" (\"jti\", \"createddate\", \"expiresat\") VALUES (@Jti, @CreatedDate, @ExpiresAt)",
+                                    new { Jti = jti, CreatedDate = DateTime.Now, ExpiresAt = exp });
 
                                 break;
                         }
                     }
 
                     break;
+            }
+
+            RevocationProvider.PruneExpired();
+        }
+
+        #endregion
+
+        #region PruneExpired
+
+        /// <summary>access_token の exp を過ぎた記録を消す（#322）</summary>
+        /// <remarks>
+        /// **exp を過ぎた access_token は、`exp` の確認で落ちる**ので、**失効の記録はもう要らない。**
+        /// **そのトークンの exp を基準にする**ので、**期限の設定を変えても、早く消えない。**
+        /// **exp の無い記録**（列を足す前の行）**は消さない**（いつ消してよいか分からない）。
+        /// **書き込み `PruneInterval` 回に 1 回だけ**行う。
+        /// **掃除に失敗しても、失効は済んでいる**（次の機会に消せばよい）。
+        /// </remarks>
+        private static void PruneExpired()
+        {
+            if (0 != (System.Threading.Interlocked.Increment(
+                ref RevocationProvider.CreateCount) % RevocationProvider.PruneInterval))
+            {
+                return;
+            }
+
+            long limit = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - RevocationProvider.RetentionMarginSeconds;
+
+            try
+            {
+                switch (Config.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+
+                        foreach (System.Collections.Generic.KeyValuePair<string, Tuple<DateTime, long?>> kv in RevocationProvider.OAuth2Revocation)
+                        {
+                            if (kv.Value.Item2.HasValue && kv.Value.Item2.Value <= limit)
+                            {
+                                RevocationProvider.OAuth2Revocation.TryRemove(kv.Key, out Tuple<DateTime, long?> _);
+                            }
+                        }
+
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            switch (Config.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "DELETE FROM [OAuth2Revocation] WHERE [ExpiresAt] <= @Limit",
+                                        new { Limit = limit });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"OAuth2Revocation\" WHERE \"ExpiresAt\" <= :Limit",
+                                        new { Limit = limit });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"oauth2revocation\" WHERE \"expiresat\" <= @Limit",
+                                        new { Limit = limit });
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            catch
+            {
+                //  **掃除は、落ちても構わない。**
             }
         }
 
@@ -122,10 +223,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 case EnumUserStoreType.Memory:
 
-                    DateTime temp = DateTime.MinValue;
+                    Tuple<DateTime, long?> temp = null;
                     if (RevocationProvider.OAuth2Revocation.TryGetValue(jti, out temp))
                     {
-                        datetime = temp;
+                        datetime = temp.Item1;
                     }
 
                     break;
