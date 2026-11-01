@@ -28,6 +28,9 @@
 | ブラウザで測るもの（`UI-n.n`）を外す | `cd programs\Tests; .\test.ps1 -Launch -NoWebUI` | 1 |
 | **テストを足した・変えた**ので、テストケースの原本を作り直す | `.\2_RunAllTests.ps1 -Launch -UpdateTestCases` | [`TESTING.md`](TESTING.md) 10 節 |
 | サイトのコード カバレッジを測る | `.\2_RunAllTests.ps1 -Launch -Coverage` | [`TESTING.md`](TESTING.md) 1 節 |
+| 期待値の変更にトレーラーがあるかを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD` | [`QUALITY.md`](../QUALITY.md) 3 節 |
+| TESTCASES.md の作り直しの漏れを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD -CheckTestCases` | [`QUALITY.md`](../QUALITY.md) 3 節 |
+| commit-msg フックを有効にする（各自の手元で 1 回） | `git config core.hooksPath .githooks` | [`QUALITY.md`](../QUALITY.md) 3 節 |
 
 ### 特別な構成で回す（`-Filter` と併せて使う。`-UpdateTestCases` は付けない）
 

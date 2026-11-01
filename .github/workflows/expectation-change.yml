@@ -1,0 +1,99 @@
+# PR のコミットに、トレーラーの無い期待値の変更が無いかを確かめる（#315 の段 3。QUALITY.md 3 節）。
+#
+# ＜位置づけ＞
+#   段 1（Claude Code の PreToolUse フック）と段 2（commit-msg フック）は、手元の設定に頼る。
+#   フックを有効にしていない、--no-verify で迂回した、別のエージェントを使った、を最終的に塞ぐのがここ。
+#   何を期待値の変更と数えるかの正は root/CheckExpectationChange.ps1 にある。ここには判定を書かない。
+#
+# ＜検出器は、ベース側の版を使う＞
+#   PR の側の CheckExpectationChange.ps1 を使うと、PR が検出器を緩めれば素通りになる。
+#   そこでベースのコミットを別のフォルダへ取り出し、その版で PR のコミットを調べる。
+#   **ベースに検出器が無いとき（導入する PR）だけ、PR の側の版を使う。** その PR は人が差分を確かめる。
+#   pull_request_target にはしない（書き込み権限の文脈で PR を扱うことになる）。
+#
+# ＜対象＞
+#   develop・master 宛の PR。ビルドも E2E も回さないので、すぐ終わる。
+#   必須のチェックにするかは人が決める。チェック名はジョブ名の expectation-change と testcases-regenerated。
+
+name: Expectation change
+
+on:
+  pull_request:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+
+jobs:
+  expectation-change:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      # PR のコミットを範囲で辿るので、履歴をすべて取る。
+      - name: Checkout (PR)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout (base, for the checker)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: _base
+          persist-credentials: false
+
+      # **run: の中は ASCII だけにする。** Windows PowerShell 5.1 は、Actions が書き出す BOM 無しの一時ファイルを
+      # ANSI（Shift_JIS）として読み、日本語の文字列で構文エラーになる（CODING.md 5 節）。
+      - name: Check expectation changes
+        shell: powershell
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $checker = Join-Path $env:GITHUB_WORKSPACE "_base\root\CheckExpectationChange.ps1"
+          if (-not (Test-Path $checker))
+          {
+            Write-Host "::warning::CheckExpectationChange.ps1 is not in the base; using the PR's version (introducing PR)."
+            $checker = Join-Path $env:GITHUB_WORKSPACE "root\CheckExpectationChange.ps1"
+          }
+          & $checker -Range "$env:BASE_SHA..$env:HEAD_SHA"
+          exit $LASTEXITCODE
+
+  # テストの内容を変えたのに、TESTCASES.md（生成物）が作り直されていないことを検出する。
+  # 作り直しには E2E の実行（DB・コンテナ）が要るので、CI では作り直さない。
+  testcases-regenerated:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout (PR)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout (base, for the checker)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: _base
+          persist-credentials: false
+
+      - name: Check TESTCASES.md
+        shell: powershell
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $checker = Join-Path $env:GITHUB_WORKSPACE "_base\root\CheckExpectationChange.ps1"
+          if (-not (Test-Path $checker))
+          {
+            Write-Host "::warning::CheckExpectationChange.ps1 is not in the base; using the PR's version (introducing PR)."
+            $checker = Join-Path $env:GITHUB_WORKSPACE "root\CheckExpectationChange.ps1"
+          }
+          & $checker -Range "$env:BASE_SHA..$env:HEAD_SHA" -CheckTestCases
+          exit $LASTEXITCODE

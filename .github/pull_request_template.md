@@ -27,7 +27,7 @@
 ## 検証
 
 <!--
-**本リポジトリに CI はありません。結果を貼ってください。**
+**CI は、期待値の変更と TESTCASES.md の作り直しの漏れを見ます（QUALITY.md 3 節）。ビルドと E2E は回さないので、結果を貼ってください。**
 
   dotnet build root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.sln
   dotnet build root/programs/CommandLineTools/CommandLineToolsCore.sln

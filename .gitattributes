@@ -1,6 +1,9 @@
 # Windows batch files want to use CRLF by default.
 *.bat text eol=crlf
 
+# sh で動くフックは LF（#315）
+.githooks/* text eol=lf
+
 # Visual Studio files want to use CRLF by default.
 
 # env_file は LF でなければならない（#281）。
