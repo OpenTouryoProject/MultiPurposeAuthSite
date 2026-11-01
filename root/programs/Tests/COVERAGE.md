@@ -27,6 +27,21 @@ cd root
   下の一覧には、そうしたメソッドも含まれる
 - **一覧は、単体テストを足す Issue の入力である。** 届いていないことを示すだけで、不具合を示すものではない
 
+## 一覧の仕分け（#324。2026/11/02）
+
+下の一覧を、どう扱うかで分けた。**DB のストア（`sql`・`ora`・`npg`）でも通しを測り、`mem` だけでは届かない分を分けた。**
+DB の通しには、ストアに固有の失敗が含まれる（#327・#328。ほかに断続的な失敗。#325）ので、**下の一覧の値は、全件成功の通しではない DB の分を含まない**。
+
+| 扱い | 対象 | 理由 |
+|---|---|---|
+| **DB で届いている** | `Extensions.Sts` の 40 個・230 行（`Saml2OAuth2DataProvider`・`SoftwareStatementIssuerProvider`・`DPoPProofProvider` の列の組み立て、`ConsentProvider.Value`、`SessionClientProvider.Value`、`DeviceAuthZProvider.ThrottlePolling`） | `mem` の測定に入らないだけ |
+| **単体テストを足した** | `StoredCredential.FromRegistered`、`CmnDPoP.CurrentNonce`・`NonceOfSlot`・`CurrentSlot` | 外部を要らない。nonce は `-DPoPNonce` の起動でしか通らない |
+| **単体テストで足す（次）** | `CmnSaml2Response.OrNone`、`Entry.JwkFromCer`・`CreateJwsFromCer`、`CmnAccessToken.SelectJwsFromCertificate` | 外部を要らない。`Entry` は証明書の用意が要る |
+| **E2E で足す** | `RolesAdminController.Edit`、`ManageController.SetPassword`・`RemoveUnstructuredData`、`UsersAdminController.Details`・`List`、`HomeController` の各フロー | サイトの画面で動かせる |
+| **テストしない** | 外部ログインの戻り（`ExternalLogin*`・`RemoveLogin`・`ManageLogins`）、電話番号（`AddPhoneNumber`・`VerifyPhoneNumber`・`RemovePhoneNumber`）、`IdFederationJwks`・`IdFederationSaml2Metadata` の取得 | 上流のプロバイダや SMS が要る |
+| **テストしない** | `get_*` の委譲、`PingController`、`ErrorController`、`ValuesController` | 判断を持たない。外れても認証に関わらない |
+| **未判断** | `WebAuthnHelper.AuthenticatorAssertion`、`DataProvider.Update`・`GetUserByCredential` | 署名の検証を通す正しいアサーションを作る足場が要る。**リスク「高」なので、優先して決める** |
+
 <!-- COVERAGE:BEGIN -->
 
 | 名前空間 | リスク | net10.0 版 | net48 版 | 両版の和 |

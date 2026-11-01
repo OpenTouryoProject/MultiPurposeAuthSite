@@ -65,6 +65,7 @@
   - 観測（`Observe`）：仕様に幅がある、または根拠を確かめていない値を、記録する。**判定しない**
   - **観測から検証へ上げるのは、人が根拠を確かめてから**
   - **Open棟梁 との違い：こちらの観測は落ちない。** サイトは外から叩く対象で、仕様が幅を持つ項目を合否に混ぜると「通った」の意味が薄まるため
+  - **単体テスト（`Tests/UnitTests`）に観測は無い。** 判定できる値だけを書き、`[Basis]` に根拠を書く（7 節。Open棟梁 の `[Observation]` は流用しない。#324）
   - **落ちない代わりに、前回の実行と比べて差分を報告する**（`2_RunAllTests.ps1` が [`CompareObservations.ps1`](root/CompareObservations.ps1) を呼ぶ。報告書の末尾と画面に出る）。
     **判定はせず、合否にも関わらない。** 変わってよいかは人が判断する
   - **前回の値はコミットしない**（`Result` に置く）。配備ごとの値や、サインイン中の利用者の名前を含む画面の文面が入るため
@@ -85,7 +86,7 @@
 |---|---|
 | テスト（`root/programs/Tests/**/*.cs`） | テストの削除（`[Fact]`・`[Theory]`・`[SkippableFact]`・`[SkippableTheory]`・`[InlineData]`・`[MemberData]` などの行の削除） |
 | | Skip の追加（`Skip.If(`・`Skip.IfNot(`・`Skip =`・`SkipException(`） |
-| | 検証の削除（`.Verify(`・`.VerifyEqual(` の行の削除。`Observe` への移動を含む） |
+| | 検証の削除（`.Verify(`・`.VerifyEqual(` の行の削除。`Observe` への移動を含む。`UnitTests` の下では `Assert.`・`[Basis(` の行の削除も） |
 | | 根拠の変更（`Report` の `basis` が、識別子ごとに変わった・消えた） |
 
 - **消えた行と足した行は差し引く。** 書き直しまで数えると、**承認が形だけになる**
@@ -245,6 +246,7 @@ git config core.hooksPath .githooks
 ## 7. 期待値の根拠の書き方
 
 **`TestReport` の `basis` に書く。** `basis` は必須の引数なので、有無ではなく**種類**を見る。
+単体テスト（`Tests/UnitTests`）は `[Basis("...")]` に書く。**無いテストは `BasisRequiredTests` が落とす。**
 
 ```csharp
 TestReport r = this.Report("EX-2.7",

@@ -126,7 +126,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.WebUI
                     r.Observe("通らなかった要求", string.Join(" / ", failures));
 
                     //  **断続的にタイムアウトする**（#325）。**次に落ちたときに、どの画面で止まったかが分かるように残す。**
-                    r.Note("止まった画面 : " + page.Url);
+                    r.Observe("止まった画面", page.Url);
                     r.Verify("サインインの画面が開く", false, "開く",
                         "**" + e.Message.Replace('\n', ' ').Replace('\r', ' ') + "**");
                     throw;

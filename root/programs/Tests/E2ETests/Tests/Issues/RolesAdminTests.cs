@@ -220,7 +220,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //  **断続的に 302 になる**（#325）。次に落ちたときに、どこへ送られたかが分かるように残す。
                 if (details.Headers.Location != null)
                 {
-                    r.Note("リダイレクト先 : " + details.Headers.Location);
+                    r.Observe("リダイレクト先", details.Headers.Location.ToString());
                 }
 
                 r.VerifyEqual("HTTP 200", "200", ((int)details.StatusCode).ToString());
@@ -298,7 +298,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //  **断続的に 302 になる**（#325）。次に落ちたときに、どこへ送られたかが分かるように残す。
                 if (post.Headers.Location != null)
                 {
-                    r.Note("リダイレクト先 : " + post.Headers.Location);
+                    r.Observe("リダイレクト先", post.Headers.Location.ToString());
                 }
 
                 r.VerifyEqual("**HTTP 200（500 にならない）**",

@@ -4,6 +4,9 @@
 # sh で動くフックは LF（#315）
 .githooks/* text eol=lf
 
+# コンテナの中の sh で動く。CRLF だと「not found」で動かず、DDL が流れない（#324）
+*.sh text eol=lf
+
 # Visual Studio files want to use CRLF by default.
 
 # env_file は LF でなければならない（#281）。

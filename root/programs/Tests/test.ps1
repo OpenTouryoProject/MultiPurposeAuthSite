@@ -277,11 +277,18 @@ function Invoke-StoreDocker
     #  **Container\Store\ で実行する。** docker-compose.yml を見つけるため
     #  （プロジェクト名は、その name: で mpas-store に決まる。#318）。
     #  **profiles が付いたサービスは、名前を明示すれば起動できる**（--profile は要らない）。
+    #
+    #  **ここだけ $ErrorActionPreference を Continue にする。**
+    #    **docker compose は進捗を標準エラーへ書く。** Windows PowerShell 5.1 では、それが
+    #    `Stop` の例外になり、コンテナを作るときに止まる（7 では止まらない。#324）。
     Push-Location $script:StoreDir
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         return (& docker @DockerArgs 2>&1 | Out-String)
     }
     finally {
+        $ErrorActionPreference = $eap
         Pop-Location
     }
 }
