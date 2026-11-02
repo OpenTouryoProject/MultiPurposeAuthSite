@@ -169,6 +169,7 @@ namespace MultiPurposeAuthSite.Co
         /// FcmOutboxDirectory（テスト用）。
         /// 設定すると、プッシュ通知を FCM に送らず、このディレクトリにファイルとして書く（#196）。
         /// E2E テスト（test.ps1 -Launch）が環境変数で設定する。本番では空のままにする。
+        /// **`IsDebug` のときだけ効く**（#294）。
         /// </summary>
         public static string FcmOutboxDirectory
         {
@@ -182,6 +183,7 @@ namespace MultiPurposeAuthSite.Co
         /// MailOutboxDirectory（テスト用。#294）。
         /// 設定すると、メールをこのディレクトリにファイルとして書く（`IsDebug` のときだけ。そのときは、もともと SMTP に送らない）。
         /// E2E テスト（test.ps1 -Launch）が環境変数で設定する。本番では空のままにする。
+        /// **`IsDebug` のときだけ効く**（#294）。
         /// **メールでしか届かない値**（メアドの確認・パスワードのリセットのリンク、2FA のコード）**を、E2E が読むために在る。**
         /// </summary>
         public static string MailOutboxDirectory

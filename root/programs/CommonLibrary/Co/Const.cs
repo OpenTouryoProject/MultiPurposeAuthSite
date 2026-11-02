@@ -54,7 +54,6 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
-using MultiPurposeAuthSite.Util.Test;
 
 using Touryo.Infrastructure.Framework.Authentication;
 

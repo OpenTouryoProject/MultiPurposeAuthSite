@@ -569,7 +569,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <returns>利用者名</returns>
         /// <remarks>
         /// **種データが、この利用者にだけ資格情報を 3 件付ける**
-        /// （`FIDO.TestCredentials`。**net10.0 版だけ**）。
+        /// （`TestCredentials`。**net10.0 版だけ**）。
         ///
         /// **テスト ユーザに付けないのは**、
         /// **`RT-137.1` / `RT-137.2` が「この利用者は認証器を登録していない」ことを

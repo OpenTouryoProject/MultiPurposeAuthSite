@@ -62,7 +62,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **後者（描画）は HttpClient では測れない。** **ブラウザが要る。**
     ///
     /// **資格情報を作れるのは認証器だけ**なので、**種データで用意している**
-    /// （`FIDO.TestCredentials`。`webauthn_tanaka` に 3 件。#277 の段階 7）。
+    /// （`TestCredentials`。`webauthn_tanaka` に 3 件。#277 の段階 7）。
     /// **消した分は、次のサインインで作り直される**ので、繰り返し流せる。
     ///
     /// **net10.0 版だけ**である（net48 版には WebAuthn の口が無い。#137）。
@@ -217,7 +217,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 List<string> before = await ManageWebAuthnTests.ListAsync(client);
 
                 r.Observe("登録されている資格情報", before.Count + " 件",
-                    "**種データが用意したもの**（`FIDO.TestCredentials`）。"
+                    "**種データが用意したもの**（`TestCredentials`）。"
                     + "**認証器が無いと作れない**ので、E2E では作れない。");
 
                 r.Verify("2 件以上ある（前提）", 2 <= before.Count,

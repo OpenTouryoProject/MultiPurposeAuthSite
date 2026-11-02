@@ -18,6 +18,7 @@
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         ほかで使われている client_id では、登録を作らない（#294）
 //*  2026/10/31  玄人 幸道         client_id の重なりは HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
+//*  2026/11/03  玄人 幸道         自己テストの受け口を閉じた配備では、折り返し先の既定値を入れない（#294）
 //**********************************************************************************
 
 /*
@@ -159,7 +160,9 @@ namespace MultiPurposeAuthSite.Controllers
                     //
                     //   **以前は `test_self_code_manage`（管理画面の「トークンを取る」）だった**が、
                     //   **その画面は廃止されたので、記号ごと落とした。**
-                    model.RedirectUriCode = Const.TestSelfCode;
+                    //   **自己テストの受け口を閉じた配備では、既定値を入れない**（#294）。
+                    //   **閉じた口を指す登録が、そのまま作られてしまう。**
+                    model.RedirectUriCode = Config.IsLockedDownTestEndpoints ? "" : Const.TestSelfCode;
                 }
 
                 return View(model);

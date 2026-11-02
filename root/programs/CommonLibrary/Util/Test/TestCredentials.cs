@@ -29,17 +29,18 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
+//*  2026/11/03  玄人 幸道         Extensions/FIDO から Util/Test へ移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Util.Test;
+using MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
 using System.Security.Cryptography;
 using System.Text;
 
-/// <summary>MultiPurposeAuthSite.Extensions.FIDO</summary>
-namespace MultiPurposeAuthSite.Extensions.FIDO
+/// <summary>MultiPurposeAuthSite.Util.Test</summary>
+namespace MultiPurposeAuthSite.Util.Test
 {
     /// <summary>
     /// E2E 専用の WebAuthn 資格情報を作る（#277 の段階 7）。

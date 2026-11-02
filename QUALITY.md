@@ -43,7 +43,7 @@
 | `Data` | **中〜高** | 各 DBMS の文法 | E2E（`mem`・`sql`・`ora`・`npg`）、`CompareDdl.ps1` | DDL の変更（配備済みの DB）、SQL の組み立て、3 方言の一致 |
 | `Manager`・`Co` | 中 | [`CommonLibrary/ANALYSIS.md`](root/programs/CommonLibrary/ANALYSIS.md) | E2E（両版） | 設定の既定値（`Co`）の変更 |
 | `Network`・`Notifications`・`Entity`・`ViewModels`・`Log` | 中〜低 | — | E2E（両版） | 外への送信先、例外の扱い |
-| `Util.Test` | 低（**製品の経路に無い**） | — | E2E が使う | **製品の経路から呼ばれるようにならないか** |
+| `Util.Test` | 低（**製品の経路に無い**） | — | E2E が使う | **製品の経路から呼ばれるようにならないか**（例外は、`IsDebug` か `SeedsTestData` で閉じた 1 行のフック。`TestOutbox`・`TestClients.RegisterInStore`） |
 | ツール（`CommandLineTools`）・`DesignNotes` | 低 | — | ビルド | 原則として見ない |
 
 - **表に無い名前空間は「中〜低」として扱う。** 迷ったら、高い方に倒して報告する
