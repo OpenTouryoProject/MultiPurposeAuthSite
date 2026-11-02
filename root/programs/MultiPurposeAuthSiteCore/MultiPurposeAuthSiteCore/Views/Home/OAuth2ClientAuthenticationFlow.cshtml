@@ -38,6 +38,7 @@
     //*  2017/12/26  西野 大介         新規
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
     //*  2026/10/31  玄人 幸道         応答を JS の文字列に埋めず、要素に直接出す（改行を含む応答で表示が崩れた。#294）
+    //*  2026/11/03  玄人 幸道         存在しないパスの oauthimplicit.js の読み込みを消した（_Layout が読み込む。#294）
     //**********************************************************************************
 *@
 
@@ -65,7 +66,6 @@
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
-    <script src="~/js/oauthimplicit.js"></script>
     <script type="text/javascript">
 
         var fragment = "";

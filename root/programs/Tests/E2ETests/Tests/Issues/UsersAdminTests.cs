@@ -578,6 +578,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-294.95 作成に失敗しても、入力した値が残る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29495_作成に失敗しても入力した値が残る(string targetKey)
+        {
+            using (IdPClient client = await this.AdminClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.95",
+                    "利用者の作成に失敗して再表示しても、入力した値が残る",
+                    "**net48 版と net10.0 版で、再表示の書き方が違っていた**（`View()` と `View(userViewModel)`）。",
+                    "#294");
+
+                await UsersAdmin.SkipIfLockedDownAsync(client);
+
+                string first = UsersAdminTests.UniqueName();
+                string second = UsersAdminTests.UniqueName();
+                string email = first + "@example.com";
+
+                r.Target("同じメアドで 2 人目を作る : " + second);
+
+                try
+                {
+                    r.Step("(1) 1 人目を作る");
+
+                    await UsersAdmin.CreateAsync(client, first, email, Const.RoleUser);
+
+                    r.Step("(2) 同じメアドで 2 人目を作り、失敗させる");
+
+                    HttpResponseMessage res =
+                        await UsersAdmin.CreateAsync(client, second, email, Const.RoleUser);
+                    string body = await res.Content.ReadAsStringAsync();
+
+                    r.VerifyEqual("再表示の利用者名", second, Html.FieldValue(body, "Name"));
+                    r.VerifyEqual("再表示のメアド", email, Html.FieldValue(body, "Email"));
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(client, first);
+                    await UsersAdmin.DeleteByUserNameAsync(client, second);
+                }
+
+                r.Done();
+            }
+        }
+
         #region 補助
 
         /// <summary>管理者でサインインした client を返す</summary>

@@ -18,6 +18,7 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         ID 連携の後は ReturnUrl へ戻す、同じ利用者を同時に作らない、サインインの結果を見る、クレームの入れ替え（#294）
 //*  2026/11/01  玄人 幸道         コメントの参照先を SelfTestWebApi に直した（#321）
+//*  2026/11/03  玄人 幸道         SAML2 の応答の署名の対象を、受け取ったままのクエリから取る（#294）
 //**********************************************************************************
 
 /*
@@ -856,8 +857,8 @@ namespace MultiPurposeAuthSite.Controllers
             if (isGet)
             {
                 // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。
-                string rawUrl = Request.GetEncodedUrl();
-                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                //   **受け取ったままの値を使う**（#294。`Saml2Request` と net48 版の `RawUrl` に揃えた）。
+                queryString = (Request.QueryString.Value ?? "").TrimStart('?');
             }
 
             string state = HttpContext.Session.GetString(Const.IdFederationSaml2State);

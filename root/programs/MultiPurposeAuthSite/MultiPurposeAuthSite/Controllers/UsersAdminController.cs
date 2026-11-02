@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2026/10/01  玄人 幸道         利用者名とメアドを別の項目として扱うようにした（#151 の段階 3）
+//*  2026/11/03  玄人 幸道         作成の再表示にモデルを渡す（net10.0 版に揃えた。#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -353,7 +354,7 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.RoleId = new SelectList(RoleManager.Roles, "Name", "Name");
 
             // 再表示
-            return View();
+            return View(userViewModel);
         }
 
         #endregion
