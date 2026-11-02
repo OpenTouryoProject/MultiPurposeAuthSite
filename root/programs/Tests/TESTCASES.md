@@ -10432,6 +10432,36 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - AuthorizationCodeFAPI1_OIDC : state は fapi1 で始まる
 - OIDC : nonce が付く
 
+## RT-328.1 poll の CIBA は、client_notification_token が無くても同じでも、要求を別々に保存する
+
+| | |
+|---|---|
+| 観点 | **この値は ping / push の通知にしか使わない**（CIBA Core §7.1）。**以前は保存のキーにしていた**ので、DB では 500 になり、`mem` では 2 件目が保存されなかった。**2 件目もポーリングで authorization_pending になる**ことで、保存されたことを確かめる。 |
+| 根拠 | CIBA Core §7.1 / #328 |
+| テスト | `RT32801_CIBAの要求はclient_notification_tokenに関わらず別々に保存する` |
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- 1 件目（token 無し） : auth_req_id が返る
+- 1 件目（token 無し） : authorization_pending
+- 2 件目（token 無し） : auth_req_id が返る
+- 2 件目（token 無し） : authorization_pending
+- 3 件目（token 同じ） : auth_req_id が返る
+- 3 件目（token 同じ） : authorization_pending
+- 4 件目（token 同じ） : auth_req_id が返る
+- 4 件目（token 同じ） : authorization_pending
+- auth_req_id はすべて別
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

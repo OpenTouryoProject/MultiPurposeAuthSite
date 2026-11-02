@@ -30,6 +30,7 @@
 //*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
 //*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
+//*  2026/11/02  玄人 幸道         client_notification_token を保存のキーに使わない（poll で 500。#328）
 //**********************************************************************************
 
 using System;
@@ -65,7 +66,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region Create
 
         /// <summary>Create</summary>
-        /// <param name="clientNotificationToken">string</param>
         /// <param name="authReqExp">long</param>
         /// <param name="authZCode">string</param>
         /// <param name="unstructuredData">string</param>
@@ -75,7 +75,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// PPID により sub はクライアントごとに変わるので、利用者に固定な Id を使う。
         /// </param>
         /// <param name="authReqId">string</param>
-        public static void Create(string clientNotificationToken,
+        //  **`client_notification_token` は保存しない**（#328）。
+        //    **この実装は poll だけを扱い**、この値は ping / push の通知にしか使わない（CIBA Core §7.1）ので、読む箇所が無い。
+        //    **poll では値が無い**ので、`NOT NULL` で一意の `ClientNotificationToken` 列に入れると 500 になっていた
+        //    （mem では辞書のキーが衝突し、2 件目が黙って保存されなかった）。
+        //    **その列には、一意な乱数である `auth_req_id` を入れる。** 列の名前と中身は合わないが、DDL を変えずに済む。
+        //    **ping / push を実装するときは、DDL を変えて、本来の値を持たせる。**
+        public static void Create(
             long authReqExp, string authZCode, string unstructuredData, string userId, out string authReqId)
         {
             authReqId = ""; // 初期化
@@ -100,7 +106,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         };
                         
                         CibaProvider.CibaData.TryAdd(
-                            clientNotificationToken, JsonConvert.SerializeObject(temp));
+                            authReqId, JsonConvert.SerializeObject(temp));
 
                         break;
 
@@ -121,7 +127,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         + " ([ClientNotificationToken], [AuthReqId], [AuthReqExp], [AuthZCode], [UnstructuredData], [UserId])"
                                         + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId)",
                                         new {
-                                            ClientNotificationToken = clientNotificationToken,
+                                            ClientNotificationToken = authReqId,
                                             AuthReqId = authReqId,
                                             AuthReqExp = authReqExp,
                                             AuthZCode = authZCode,
@@ -138,7 +144,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         + " VALUES (:ClientNotificationToken, :AuthReqId, :AuthReqExp, :AuthZCode, :UnstructuredData, :UserId)",
                                         new
                                         {
-                                            ClientNotificationToken = clientNotificationToken,
+                                            ClientNotificationToken = authReqId,
                                             AuthReqId = authReqId,
                                             AuthReqExp = authReqExp,
                                             AuthZCode = authZCode,
@@ -156,7 +162,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId)",
                                          new
                                          {
-                                             ClientNotificationToken = clientNotificationToken,
+                                             ClientNotificationToken = authReqId,
                                              AuthReqId = authReqId,
                                              AuthReqExp = authReqExp,
                                              AuthZCode = authZCode,
