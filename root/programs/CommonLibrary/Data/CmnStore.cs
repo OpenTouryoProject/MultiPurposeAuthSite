@@ -31,6 +31,7 @@
 //*  2018/12/04  西野 大介         新規
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //*  2026/10/30  玄人 幸道         値の無いクレーム（Oracle は空文字を NULL にする）で、残りの関連情報を読み落とさない（#294）
+//*  2026/11/02  玄人 幸道         mem ストアの入れ物を、並行に読み書きできるものに変えた（#325）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -66,13 +67,13 @@ namespace MultiPurposeAuthSite.Data
         #region Memory
 
         /// <summary>ユーザ保存先</summary>
-        protected static List<ApplicationUser> _users { get; } = new List<ApplicationUser>();
+        protected static MemoryStoreList<ApplicationUser> _users { get; } = new MemoryStoreList<ApplicationUser>();
 
         /// <summary>ロールの保存先</summary>
-        protected static List<ApplicationRole> _roles { get; } = new List<ApplicationRole>();
+        protected static MemoryStoreList<ApplicationRole> _roles { get; } = new MemoryStoreList<ApplicationRole>();
 
         /// <summary>ユーザとロールのリレーション</summary>
-        protected static List<Tuple<string, string>> _userRoleMap { get; } = new List<Tuple<string, string>>();
+        protected static MemoryStoreList<Tuple<string, string>> _userRoleMap { get; } = new MemoryStoreList<Tuple<string, string>>();
 
         #endregion
 

@@ -94,8 +94,8 @@ namespace MultiPurposeAuthSite.Data
     /// **Skip や「居ない」で成り立っている経路**（種データの作成など）が在るため、
     /// **1 件ずつ意味を決める必要がある。**
     ///
-    /// **mem ストアの入れ物（`CmnStore._users` など）は `List` で、排他していない。**
-    /// **開発・試験用**であり、同時に書き込む使い方は想定していない。
+    /// **mem ストアの入れ物（`CmnStore._users` など）は `MemoryStoreList` で、1 回の読み書きだけを排他する**（#325）。
+    /// **開発・試験用**であり、複数の操作をまとめた排他はしていない。
     /// </remarks>
     internal partial class CmnUserStore : CmnStore
     {

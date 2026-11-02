@@ -99,6 +99,7 @@
     <Compile Include="Co\Const.cs" />
     <Compile Include="Co\ProductionCheck.cs" />
     <Compile Include="Data\CmnStore.cs" />
+    <Compile Include="Data\MemoryStoreList.cs" />
     <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
     <Compile Include="Data\CmnUserStore.cs" />
