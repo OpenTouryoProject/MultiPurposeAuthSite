@@ -274,7 +274,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 await Task.Delay(100);
             }
 
-            await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
+            //  **`WaitForLoadStateAsync` も使わない**（#325）。
+            //    `load` と `NetworkIdle` は記録されたのに `DOMContentLoaded` が記録されず、30 秒待って落ちた。
+            //    **読み込みの状態の通知を待たず、文書そのものを見る。**
+            await page.Locator("body").WaitForAsync(
+                new LocatorWaitForOptions { State = WaitForSelectorState.Attached });
         }
 
         #endregion

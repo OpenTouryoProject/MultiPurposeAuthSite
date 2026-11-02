@@ -626,11 +626,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 try
                 {
-                    r.Step("(1) 間違ったパスワードで、同時に " + max + " 回失敗する");
+                    //  **同時に送るのは 上限 - 1 回。最後の 1 回を、確かめる直前に送る。**
+                    //    **同時に上限まで送ると、応答が揃うまでにロックアウトが解けて、正しいパスワードで入れてしまう**
+                    //    （`-Launch` では 5 秒。負荷の高い通しで踏んだ）。
+                    //    **1 回でも少なく数えられていれば、最後の 1 回で上限に届かず、入れる。**
+                    r.Step("(1) 間違ったパスワードで、同時に 上限 - 1 回（" + (max - 1) + " 回）失敗する");
 
                     List<Task<bool>> attempts = new List<Task<bool>>();
 
-                    for (int i = 0; i < max; i++)
+                    for (int i = 0; i < max - 1; i++)
                     {
                         IdPClient client = this.Client(targetKey);
                         clients.Add(client);
@@ -642,7 +646,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.VerifyEqual("どの回も入れない", "0",
                         results.Count(x => x).ToString());
 
-                    r.Step("(2) 正しいパスワードでも断られる");
+                    r.Step("(2) もう 1 回間違えて、上限に届かせる");
+
+                    using (IdPClient last = this.Client(targetKey))
+                    {
+                        bool lastResult = await last.TrySignInAsync(name, "WRONG-PASSWORD-LAST");
+
+                        r.Verify("最後の 1 回も入れない", !lastResult,
+                            "入れない", lastResult ? "**入れた**" : "入れなかった");
+                    }
+
+                    r.Step("(3) 正しいパスワードでも断られる");
 
                     using (IdPClient client = this.Client(targetKey))
                     {
@@ -704,11 +718,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     {
                         ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
 
-                        r.Step("(1) 間違ったパスワードで、同時に " + max + " 回失敗する");
+                        //  **同時に送るのは 上限 - 1 回**（理由は RT-316.1 と同じ）。
+                        r.Step("(1) 間違ったパスワードで、同時に 上限 - 1 回（" + (max - 1) + " 回）失敗する");
 
                         List<Task<JsonResponse>> attempts = new List<Task<JsonResponse>>();
 
-                        for (int i = 0; i < max; i++)
+                        for (int i = 0; i < max - 1; i++)
                         {
                             attempts.Add(AuthFailureLockoutTests.PasswordGrantAsync(
                                 client, reg, name, "WRONG-PASSWORD-" + i.ToString()));
@@ -719,7 +734,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.VerifyEqual("どの回もトークンを出さない", "0",
                             wrongs.Count(x => !string.IsNullOrEmpty(x.AccessToken)).ToString());
 
-                        r.Step("(2) 正しいパスワードでも断られる");
+                        r.Step("(2) もう 1 回間違えて、上限に届かせる");
+
+                        JsonResponse last = await AuthFailureLockoutTests.PasswordGrantAsync(
+                            client, reg, name, "WRONG-PASSWORD-LAST");
+
+                        r.Verify("最後の 1 回もトークンを出さない",
+                            string.IsNullOrEmpty(last.AccessToken),
+                            "出さない", string.IsNullOrEmpty(last.AccessToken)
+                                ? "出さなかった" : "**出してしまった**");
+
+                        r.Step("(3) 正しいパスワードでも断られる");
 
                         JsonResponse correct = await AuthFailureLockoutTests.PasswordGrantAsync(
                             client, reg, name, password);
