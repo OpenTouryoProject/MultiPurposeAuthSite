@@ -324,6 +324,10 @@ CREATE INDEX IX_TotpTokens_UserId ON TotpTokens (UserId);
 ---- **逆引き（sid → セッション）用。** sid は新しい guid なので一意（#310 の段階 1）
 CREATE UNIQUE INDEX IX_SessionClient_Sid ON SessionClient (Sid);
 CREATE INDEX IX_SessionClient_UserId ON SessionClient (UserId);
+---- 外部キーの子の列（#329）。**無いと、親の削除が子の表を全件走査し、同時の削除とデッドロックする**
+CREATE INDEX IX_Saml2OAuth2Data_OwnerUserId ON Saml2OAuth2Data (OwnerUserId);
+CREATE INDEX IX_FIDO2Data_UserName ON FIDO2Data (UserName);
+CREATE INDEX IX_SubjectIdentifier_UserId ON SubjectIdentifier (UserId);
 
 -- CONSTRAINT
 ---- UserRoles
