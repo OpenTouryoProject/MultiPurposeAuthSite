@@ -33,6 +33,7 @@
 //*  2026/10/29  玄人 幸道         RT-294.58 / .59 を追加し、.51 で invalid_grant を見る（#294）
 //*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
 //*  2026/11/01  玄人 幸道         RT-323.1 を追加し、RT-294.51 / RT-294.54 を fapi2 の aud に合わせた（#323）
+//*  2026/11/02  玄人 幸道         RT-328.1 を追加した（#328）
 //**********************************************************************************
 
 using System;
@@ -1101,6 +1102,93 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 if (!string.IsNullOrEmpty(authReqId))
                 {
                     // **後始末**（利用者は拒否する。端末の登録は、同じコレクションの次のテストが上書きする）。
+                    await CibaTests.ReceivePushAsync(r, client, authReqId, device.DeviceToken);
+                    await client.CibaPushResultAsync(device.AccessToken, authReqId, "false");
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-328.1
+
+        /// <summary>RT-328.1 poll の CIBA は、client_notification_token の有無と重複に関わらず、要求を別々に保存する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT32801_CIBAの要求はclient_notification_tokenに関わらず別々に保存する(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                FcmOutbox.SkipIfUnavailable(client.Target);
+
+                TestReport r = this.Report("RT-328.1",
+                    "poll の CIBA は、client_notification_token が無くても同じでも、要求を別々に保存する",
+                    "**この値は ping / push の通知にしか使わない**（CIBA Core §7.1）。"
+                    + "**以前は保存のキーにしていた**ので、DB では 500 になり、`mem` では 2 件目が保存されなかった。"
+                    + "**2 件目もポーリングで authorization_pending になる**ことで、保存されたことを確かめる。",
+                    "CIBA Core §7.1 / #328");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("POST /ciba_authz を 4 回（token 無し × 2、同じ token × 2）→ POST /token");
+
+                (string AccessToken, string DeviceToken) device = await CibaTests.RegisterDeviceAsync(r, client);
+
+                string sameToken = Guid.NewGuid().ToString("N");
+                string[] tokens = new string[] { null, null, sameToken, sameToken };
+                List<string> authReqIds = new List<string>();
+
+                foreach (string token in tokens)
+                {
+                    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+                    Dictionary<string, object> claims = new Dictionary<string, object>()
+                    {
+                        { "iss", reg.ClientId },
+                        { "aud", await client.IssuerAsync() },
+                        { "iat", now },
+                        { "nbf", now },
+                        { "exp", now + 600 },
+                        { "jti", Guid.NewGuid().ToString("N") },
+                        { "scope", "openid" },
+                        { "login_hint", TestEnv.TestUserName(targetKey) }
+                    };
+
+                    if (token != null)
+                    {
+                        claims["client_notification_token"] = token;
+                    }
+
+                    JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(
+                        new Dictionary<string, string>() { { "request", JwsSigner.SignES256(client, claims) } },
+                        reg.ClientId, reg.ClientSecret);
+
+                    string authReqId = start.String("auth_req_id");
+                    string label = (authReqIds.Count + 1) + " 件目（token " + (token == null ? "無し" : "同じ") + "）";
+
+                    r.Verify(label + " : auth_req_id が返る", !string.IsNullOrEmpty(authReqId),
+                        "あり", string.IsNullOrEmpty(authReqId) ? "**無い**（" + start.ToString() + "）" : "あり");
+
+                    if (!string.IsNullOrEmpty(authReqId))
+                    {
+                        authReqIds.Add(authReqId);
+
+                        JsonResponse poll = await CibaTests.PollAsync(client, reg, authReqId);
+
+                        r.VerifyEqual(label + " : authorization_pending", "authorization_pending", poll.Error);
+                    }
+                }
+
+                r.VerifyEqual("auth_req_id はすべて別", authReqIds.Count.ToString(),
+                    new HashSet<string>(authReqIds).Count.ToString());
+
+                // **後始末**（利用者は拒否する）。
+                foreach (string authReqId in authReqIds)
+                {
                     await CibaTests.ReceivePushAsync(r, client, authReqId, device.DeviceToken);
                     await client.CibaPushResultAsync(device.AccessToken, authReqId, "false");
                 }

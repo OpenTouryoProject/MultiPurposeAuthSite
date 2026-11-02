@@ -914,7 +914,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 | **N1 : PKCE と private_key_jwt / mTLS の併用** | **`code_verifier` が在ると `client_assertion` と証明書を見ず、PKCE だけで認証した** → **証明が PKCE になり、fapi2（FAPI 2.0 は PKCE と鍵か証明書の両方を求める）が通らなかった**。`RequirePkce` を有効にすると、鍵・証明書のクライアントは全く通らなかった | **まず資格情報で認証し、PKCE は別に検証する**（証明は PrivateKeyJwt / Mtls） |
 | **N3 : `response_type=id_token`** | **Implicit を閉じても検査を通り、同意の後で `server_error`** | **`unsupported_response_type`**（Implicit の経路として扱う） |
 | **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（**fapi2 の扱いは C-58 で直した**）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
-| **N5 : poll の CIBA** | **`client_notification_token`（ping / push のときだけ REQUIRED）と `binding_message`（OPTIONAL）を必須にしていた** | **省略できる**（`/ros` は前者の有無で CIBA を見分けるので、`request_uri` の経路では在ることになる） |
+| **N5 : poll の CIBA** | **`client_notification_token`（ping / push のときだけ REQUIRED）と `binding_message`（OPTIONAL）を必須にしていた** | **省略できる**（`/ros` は前者の有無で CIBA を見分けるので、`request_uri` の経路では在ることになる）。**値は保存しない**（#328。`CibaData.ClientNotificationToken` 列には `auth_req_id` を入れる。DB で 500 になっていた） |
 | **N6 : Device グラントの登録種別** | **`device` を固定で書いていた**（normal の登録のトークンも `device` を名乗った） | **登録された種別で書く**（#220 と同じ） |
 | **登録の `grant_types` と Implicit / Hybrid** | **認可エンドポイントで見ず、同意の後で `server_error`** | **認可エンドポイントで発行する経路（`implicit`）は、同意の前に `unauthorized_client`**。**code は従来どおり `/token` で見る**（#307 の段階 1 の決め。`RT-307.7`） |
 | **Discovery** | **CIBA を、`EnableCibaGrantType` を見ずに広告していた。** `token_endpoint_auth_signing_alg_values_supported` を値で直に書いていた | **開けた配備だけ広告する。** **一覧から作る。** **`token_endpoint_auth_methods_supported` に `none` を足し、revoke / introspect の一覧からは除いた**（認証を要する口のため） |
@@ -3256,6 +3256,10 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 **利用者名を変えるときに、資格情報も新しい名前へ移す**ようにした（`FIDO.DataProvider.RenameUser`。**`UserHandle` は変えない** —
 認証器が持っている値であり、サインインで照合する）。**管理画面で利用者を消すときも、資格情報を消す**ようにした（GDPR の削除は以前から消していた）。
 **表の形は変えていない**（利用者の id で持ち直すことはしない）。
+
+**この修正は、DB のストアでは動いていなかった**（#327）。`FIDO2Data.UserName` は `Users.UserName` への外部キーで `ON UPDATE` が無く、
+**資格情報を持つ利用者の名前を変えると HTTP 500 になっていた**（`mem` には外部キーが無い）。
+**`CmnUserStore.Update` が、1 つのトランザクションで子を消す → 親を変える → 子を入れ直す**ようにした（`RenameUser` は `mem` だけ）。DDL は変えていない。
 
 **E2E** : **`RT-294.62`**（種データの利用者の名前を変えると、資格情報が付いて来て、作り直された元の名前の利用者には 0 件）。
 

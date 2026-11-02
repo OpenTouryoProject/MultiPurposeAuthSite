@@ -10295,6 +10295,173 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - invalid_client
 - invalid_client
 
+## RT-324.1 ロールの編集で名前を変えると、一覧の名前が変わり、元の名前は無くなる
+
+| | |
+|---|---|
+| 観点 | **編集の画面は、一度も通っていなかった**（`COVERAGE.md`）。 |
+| 根拠 | #324 |
+| テスト | `RT32401_ロールの名前を変えられる` |
+
+**手順**
+
+1. ロールを作る
+1. 編集の画面を開く
+1. 名前を変える
+
+**検証（合否を判定する）**
+
+- 編集の画面 : HTTP 200
+- 更新 : 一覧へリダイレクトする
+- 一覧に新しい名前が出る
+- 一覧に元の名前が出ない
+
+## RT-324.2 利用者の一覧を名前で絞り込むと、当たる利用者だけが出る
+
+| | |
+|---|---|
+| 観点 | **絞り込みの口は、一度も通っていなかった**（`COVERAGE.md`）。 |
+| 根拠 | #324 |
+| テスト | `RT32402_利用者を名前で絞り込める` |
+
+**手順**
+
+1. 利用者を作る
+1. その名前で絞り込む
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- 当たる利用者が出る
+- 当たらない利用者は出ない
+
+## RT-324.3 利用者の詳細に、利用者名と、付けたロールが出る
+
+| | |
+|---|---|
+| 観点 | **詳細の画面は、一度も通っていなかった**（`COVERAGE.md`）。 |
+| 根拠 | #324 |
+| テスト | `RT32403_利用者の詳細に名前とロールが出る` |
+
+**手順**
+
+1. ロール付きで利用者を作る
+1. 詳細を開く
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- 利用者名が出る
+- ロールが出る
+
+## RT-324.4 利用者が自分の属性データを消すと、管理画面の削除の口が消える
+
+| | |
+|---|---|
+| 観点 | **削除の口は、一度も通っていなかった**（`COVERAGE.md`）。**使い捨ての利用者で測る**（テスト利用者の属性データを消さないため）。 |
+| 根拠 | #324 |
+| テスト | `RT32404_属性データを消せる` |
+
+**手順**
+
+1. 利用者を作り、属性データを入れる
+1. 属性データを消す
+
+**検証（合否を判定する）**
+
+- 削除の口が出る（前提）
+- 管理画面へリダイレクトする
+- 削除の口が消える
+
+## RT-324.5 自己テストの入口（Implicit・Hybrid・PKCE plain）が、決まった response_type で /authorize へ送る
+
+| | |
+|---|---|
+| 観点 | **これらの入口は、一度も通っていなかった**（`COVERAGE.md`）。**送るところまでを見る。** 認可の応答は `TC`・`EX` のテストが直接確かめている。 |
+| 根拠 | RFC 6749 §4.2.1 / OIDC Core 1.0 §3.2.2.1 / OIDC Core 1.0 §3.3.2.1 / RFC 7636 §4.3 |
+| テスト | `RT32405_自己テストの入口がresponse_typeを組み立てる` |
+
+**検証（合否を判定する）**
+
+- Implicit : /authorize へ送る
+- Implicit : response_type
+- Implicit_OIDC1 : /authorize へ送る
+- Implicit_OIDC1 : response_type
+- Implicit_OIDC2 : /authorize へ送る
+- Implicit_OIDC2 : response_type
+- Hybrid_OIDC1 : /authorize へ送る
+- Hybrid_OIDC1 : response_type
+- Hybrid_OIDC2 : /authorize へ送る
+- Hybrid_OIDC2 : response_type
+- Hybrid_OIDC3 : /authorize へ送る
+- Hybrid_OIDC3 : response_type
+- PKCE_Plain : /authorize へ送る
+- PKCE_Plain : response_type
+- PKCE_Plain : code_challenge_method
+
+## RT-324.6 自己テストの Client Credentials と JWT Bearer が、JWT の access_token を受け取って画面に出す
+
+| | |
+|---|---|
+| 観点 | **これらの入口は、一度も通っていなかった**（`COVERAGE.md`）。 |
+| 根拠 | RFC 6749 §4.4 / RFC 7523 §2.1 |
+| テスト | `RT32406_自己テストのクライアント認証の入口がトークンを受け取る` |
+
+**検証（合否を判定する）**
+
+- ClientCredentialsFlow : HTTP 200
+- ClientCredentialsFlow : JWT の access_token が出る
+- JWTBearerTokenFlow : HTTP 200
+- JWTBearerTokenFlow : JWT の access_token が出る
+
+## RT-324.7 自己テストの FAPI1 の入口が、code と、OIDC なら nonce を付けて /authorize へ送る
+
+| | |
+|---|---|
+| 観点 | **これらの入口は、一度も通っていなかった**（`COVERAGE.md`）。**`state` の接頭辞で、自己テストの戻り先がクライアントを見分ける。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.1 / #324 |
+| テスト | `RT32407_自己テストのFAPI1の入口がパラメタを組み立てる` |
+
+**検証（合否を判定する）**
+
+- AuthorizationCodeFAPI1 : /authorize へ送る
+- AuthorizationCodeFAPI1 : response_type
+- AuthorizationCodeFAPI1 : state は fapi1 で始まる
+- AuthorizationCodeFAPI1_OIDC : /authorize へ送る
+- AuthorizationCodeFAPI1_OIDC : response_type
+- AuthorizationCodeFAPI1_OIDC : state は fapi1 で始まる
+- OIDC : nonce が付く
+
+## RT-328.1 poll の CIBA は、client_notification_token が無くても同じでも、要求を別々に保存する
+
+| | |
+|---|---|
+| 観点 | **この値は ping / push の通知にしか使わない**（CIBA Core §7.1）。**以前は保存のキーにしていた**ので、DB では 500 になり、`mem` では 2 件目が保存されなかった。**2 件目もポーリングで authorization_pending になる**ことで、保存されたことを確かめる。 |
+| 根拠 | CIBA Core §7.1 / #328 |
+| テスト | `RT32801_CIBAの要求はclient_notification_tokenに関わらず別々に保存する` |
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- 1 件目（token 無し） : auth_req_id が返る
+- 1 件目（token 無し） : authorization_pending
+- 2 件目（token 無し） : auth_req_id が返る
+- 2 件目（token 無し） : authorization_pending
+- 3 件目（token 同じ） : auth_req_id が返る
+- 3 件目（token 同じ） : authorization_pending
+- 4 件目（token 同じ） : auth_req_id が返る
+- 4 件目（token 同じ） : authorization_pending
+- auth_req_id はすべて別
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

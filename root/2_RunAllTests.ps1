@@ -91,6 +91,7 @@
 
     原本は「テストが何を・何を根拠に確かめるのか」を書いたもので、
     実行のたびに変わらない。**テストを変えたときだけ**作り直す。
+    **失敗したテストがあれば、作り直さない**（途中で落ちたテストの内容が原本から欠けるため。#325）。
 
 .PARAMETER OutputDir
     TRX と実行ログの保存先。
@@ -612,7 +613,13 @@ $observationStore = $(if ($UserStoreType) { $UserStoreType } else { "mem" })
 # -UpdateTestCases のときだけ作り直す。
 # **実行のたびに書き換えない。** 中身は実行結果に依らないので、
 # 毎回書き換えると、コミットの差分が意味の無いものになる。
-if ($UpdateTestCases)
+# **失敗があれば書き換えない。** 落ちたテストは途中までしか記録を出さないので、原本から内容が欠ける（#325）。
+if ($UpdateTestCases -and $failed.Count -gt 0)
+{
+    Write-Host ""
+    Write-Host ("  失敗が {0} 件あるので、テストケースの原本は作り直しません。" -f $failed.Count) -ForegroundColor Yellow
+}
+elseif ($UpdateTestCases)
 {
     $casesPath = Join-Path $PSScriptRoot "programs\Tests\TESTCASES.md"
 

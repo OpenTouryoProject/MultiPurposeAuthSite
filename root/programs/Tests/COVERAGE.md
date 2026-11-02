@@ -27,6 +27,21 @@ cd root
   下の一覧には、そうしたメソッドも含まれる
 - **一覧は、単体テストを足す Issue の入力である。** 届いていないことを示すだけで、不具合を示すものではない
 
+## 一覧の仕分け（#324。2026/11/02）
+
+下の一覧を、どう扱うかで分けた。**DB のストア（`sql`・`ora`・`npg`）でも通しを測り、`mem` だけでは届かない分を分けた。**
+DB の通しには、ストアに固有の失敗が含まれる（#327・#328。ほかに断続的な失敗。#325）ので、**下の一覧の値は、全件成功の通しではない DB の分を含まない**。
+
+| 扱い | 対象 | 理由 |
+|---|---|---|
+| **DB で届いている** | `Extensions.Sts` の 40 個・230 行（`Saml2OAuth2DataProvider`・`SoftwareStatementIssuerProvider`・`DPoPProofProvider` の列の組み立て、`ConsentProvider.Value`、`SessionClientProvider.Value`、`DeviceAuthZProvider.ThrottlePolling`） | `mem` の測定に入らないだけ |
+| **単体テストを足した** | `StoredCredential.FromRegistered`、`CmnDPoP.CurrentNonce`・`NonceOfSlot`・`CurrentSlot`、`WebAuthnHelper.AuthenticatorAssertion`、`DataProvider.Update`・`GetUserByCredential`、`Entry.JwkFromCer`・`CreateJwsFromCer`・`get_CerFilePath`、`CmnAccessToken.SelectJwsFromCertificate`（`VerifySignature` から） | 外部が要らない。アサーションは本物の ES256 の鍵で、証明書は使い捨てのものを作って確かめる |
+| **E2E を足した**（`RT-324.1`〜`.7`） | `RolesAdminController.Edit`、`ManageController.RemoveUnstructuredData`、`UsersAdminController.Details`・`List`、`HomeController` の `Implicit`・`Implicit_OIDC1`・`Implicit_OIDC2`・`Hybrid_OIDC1`〜`3`・`PKCE_Plain`・`ClientCredentialsFlow`・`JWTBearerTokenFlow`・`AuthorizationCodeFAPI1`・`AuthorizationCodeFAPI1_OIDC`・`AssembleFAPI1Starter` | サイトの画面で動かせる |
+| **テストしない** | `ManageController.SetPassword` | パスワードの無い利用者が要る。外部ログインで作るので、上流のプロバイダが要る |
+| **テストしない** | `CmnSaml2Response.OrNone` | 表示の文面だけで、判定に関わらない（`IsValid` だけで判断する）。`SAML2VerifyResult` を外から作れない |
+| **テストしない** | 外部ログインの戻り（`ExternalLogin*`・`RemoveLogin`・`ManageLogins`）、電話番号（`AddPhoneNumber`・`VerifyPhoneNumber`・`RemovePhoneNumber`）、`IdFederationJwks`・`IdFederationSaml2Metadata` の取得 | 上流のプロバイダや SMS が要る |
+| **テストしない** | `get_*` の委譲、`PingController`、`ErrorController`、`ValuesController` | 判断を持たない。外れても認証に関わらない |
+
 <!-- COVERAGE:BEGIN -->
 
 | 名前空間 | リスク | net10.0 版 | net48 版 | 両版の和 |

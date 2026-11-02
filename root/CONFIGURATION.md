@@ -2552,6 +2552,34 @@ cd root
 **SQL が実行できるかは分からない。** それは、ストアを切り替えて E2E を回して確かめる
 （[`TESTING.md`](TESTING.md) 1 節「ストアを切り替える」、#207）。
 
+### 外部キーの子の列のインデックス（#329）
+
+`Saml2OAuth2Data.OwnerUserId`・`FIDO2Data.UserName`・`SubjectIdentifier.UserId` にインデックスが無かった。
+利用者を消すと連鎖削除が子の表を全件走査し、**同時の削除とデッドロックして HTTP 500 になることがあった**
+（SQL Server の `1205`）。**配備済みの DB には、次の文を流す。**
+インデックスの作成中は、その表への書き込みが待たされる。
+
+```sql
+-- SQL Server
+CREATE NONCLUSTERED INDEX [IX_Saml2OAuth2Data.OwnerUserId] ON [Saml2OAuth2Data] ([OwnerUserId] ASC);
+CREATE NONCLUSTERED INDEX [IX_FIDO2Data.UserName] ON [FIDO2Data] ([UserName] ASC);
+CREATE NONCLUSTERED INDEX [IX_SubjectIdentifier.UserId] ON [SubjectIdentifier] ([UserId] ASC);
+```
+
+```sql
+-- Oracle
+CREATE INDEX "IX_Saml2OAuth2Data.OwnerUserId" ON "Saml2OAuth2Data" ("OwnerUserId" ASC);
+CREATE INDEX "IX_FIDO2Data.UserName" ON "FIDO2Data" ("UserName" ASC);
+CREATE INDEX "IX_SubjectIdentifier.UserId" ON "SubjectIdentifier" ("UserId" ASC);
+```
+
+```sql
+-- PostgreSQL
+CREATE INDEX IX_Saml2OAuth2Data_OwnerUserId ON Saml2OAuth2Data (OwnerUserId);
+CREATE INDEX IX_FIDO2Data_UserName ON FIDO2Data (UserName);
+CREATE INDEX IX_SubjectIdentifier_UserId ON SubjectIdentifier (UserId);
+```
+
 ### セッションの置き場 — `SessionStoreType`（#256）
 
 **`UserStoreType` とは別のストアである。** 利用者やトークンではなく、

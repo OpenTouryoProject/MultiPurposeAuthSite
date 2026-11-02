@@ -12,6 +12,7 @@ MultiPurposeAuthSite の**ビルド確認**と **E2E テスト**。
 | `COVERAGE.md` | **E2E のカバレッジ。** 品質マップの単位の値と、届いていない箇所（#315） |
 | `test.ps1` | サイトを起動して E2E テストを実行する |
 | `E2ETests/` | xUnit のテスト プロジェクト（net10.0） |
+| `UnitTests/` | **単体テスト**（xUnit・net10.0）。`dotnet test root/programs/Tests/UnitTests`。E2E が届かない部品を、`NetCoreLibrary` に直接当てる。**`#if NETFX` の分岐は確かめられない**（#324） |
 
 **通しで回すときは `root` のスクリプトを使う。**
 OpenTouryo が `root/programs/*.ps1` から `CS/*.bat` を呼ぶのと同じ構造で、

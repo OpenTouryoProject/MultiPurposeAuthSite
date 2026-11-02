@@ -32,6 +32,7 @@
 //*  2026/10/30  玄人 幸道         /ciba_result を認証デバイスのトークンに限る・expires_in / interval を数値で返す・requested_expiry を上限で頭打ちにする（#294）
 //*  2026/10/30  玄人 幸道         CIBA のプッシュ送信で使われていない変数を外した（net10.0 版に揃えた。#294）
 //*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnCibaEndpoint）を呼ぶ（#321）
+//*  2026/11/02  玄人 幸道         client_notification_token を CibaProvider.Create に渡さない（#328）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -204,7 +205,6 @@ namespace MultiPurposeAuthSite.Controllers
                             // CIBA情報をストア
                             // **誰宛ての要求かを記録する**（user は login_hint で解決した利用者）。
                             Sts.CibaProvider.Create(
-                               client_notification_token,
                                authReqExp, code, binding_message, user.Id, out authReqId);
 
 #pragma warning disable 162

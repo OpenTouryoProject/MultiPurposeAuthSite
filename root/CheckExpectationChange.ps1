@@ -11,6 +11,7 @@
         テストの削除   … [Fact]・[Theory]・[InlineData] などの行が、足した数より多く消えた
         Skip の追加    … Skip.If(・Skip.IfNot(・Skip =・SkipException( の行が、消した数より多く足された
         検証の削除     … .Verify(・.VerifyEqual( の行が、足した数より多く消えた（観測への移動を含む）
+                         UnitTests の下では、Assert.・[Basis( の行も同じように数える（#324）
       消えた行と足した行を差し引くので、書き直し（引数を変えるなど）は数えない。
       // で始まる行は数えない（コメント アウトは「消えた」と数える）。
 
@@ -97,6 +98,9 @@ $guardPattern     = '^(\.githooks/|\.claude/settings\.json$|\.claude/hooks/|root
 $testAttrPattern = '[\[,]\s*(Fact|Theory|SkippableFact|SkippableTheory|InlineData|MemberData|ClassData|Test|TestCase|TestCaseSource)\s*[\],(]'
 $skipPattern     = '\bSkip\s*\.\s*(If|IfNot)\s*\(|[\[,(]\s*Skip\s*=|\bSkipException\s*\(|[\[,]\s*(Ignore|Explicit)\s*[\],(]'
 $verifyPattern   = '\.\s*(Verify|VerifyEqual)\s*\('
+# 単体テストの検証は Assert と [Basis]。**E2E の Assert は前提の確認なので、数えない**（#324）
+$unitTestPattern   = '^root/programs/Tests/UnitTests/'
+$unitVerifyPattern = '\bAssert\s*\.|\[\s*Basis\s*\('
 
 # 空の木（親の無いコミットの比較元）
 $emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -485,7 +489,10 @@ try
         $del = $l.StartsWith("-")
         if ($body -match $testAttrPattern) { if ($del) { $count[$file].TestDel++ } else { $count[$file].TestAdd++ } }
         if ($body -match $skipPattern)     { if ($del) { $count[$file].SkipDel++ } else { $count[$file].SkipAdd++ } }
-        if ($body -match $verifyPattern)   { if ($del) { $count[$file].VerifyDel++ } else { $count[$file].VerifyAdd++ } }
+        if (($body -match $verifyPattern) -or (($file -match $unitTestPattern) -and ($body -match $unitVerifyPattern)))
+        {
+            if ($del) { $count[$file].VerifyDel++ } else { $count[$file].VerifyAdd++ }
+        }
     }
     foreach ($k in ($count.Keys | Sort-Object))
     {
