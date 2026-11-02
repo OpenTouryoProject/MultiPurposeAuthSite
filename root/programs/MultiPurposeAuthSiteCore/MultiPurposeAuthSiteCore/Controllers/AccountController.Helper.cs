@@ -19,6 +19,7 @@
 //*  2026/10/27  玄人 幸道         テスト用の種まきを整理（利用者は接尾辞の super_tanaka で判定、クライアントは起動ごとに 1 回、WebAuthn は毎回。#294）
 //*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールを、同じ利用者に続けて送らない（#294）
 //*  2026/10/28  玄人 幸道         メールを要求から切り離して送る（async void をやめた）、完了メールの空送りをやめた、
+//*  2026/11/02  玄人 幸道         WebAuthn の種データを、その利用者のサインインの時だけ作るようにした（#325）
 //*                                初期化の確認を 1 回に、管理者の作成の失敗を記録、テスト利用者のメアドを example.com に（#294）
 //**********************************************************************************
 
@@ -464,7 +465,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>Task</returns>
         /// <remarks>
-        /// **毎回通す**（#277）。**E2E が途中で資格情報を消す**ので、次のテストの前に戻す。
+        /// **その利用者のサインインの度に通す**（#277）。**E2E が途中で資格情報を消す**ので、次のテストの前に戻す。
+        /// **サインイン画面を開いただけでは通さない**（#325）。別のテストが開くと、消している最中に作り直していた。
         /// **触るのは専用の利用者（webauthn_tanaka）だけ**なので、
         /// デバッグで他のテスト利用者を触っても戻されない（#294）。
         /// </remarks>
@@ -509,12 +511,38 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>
+        /// WebAuthn のテスト利用者でのサインインなら、資格情報をまき直す（#325）。
+        /// </summary>
+        /// <param name="uid">サインインの画面に入力された値</param>
+        /// <returns>Task</returns>
+        private async Task SeedWebAuthnTestUserOnSignIn(string uid)
+        {
+            // **本番（テスト データを撒かない配備）では、何もしない。**
+            if (!AccountController.SeedsTestData
+                || uid != "webauthn_tanaka" + Config.TestUserSuffix)
+            {
+                return;
+            }
+
+            await _semaphoreSlim.WaitAsync();
+
+            try
+            {
+                await this.SeedWebAuthnTestUser();
+            }
+            finally
+            {
+                _semaphoreSlim.Release();
+            }
+        }
+
+        /// <summary>
         /// テストデータの作成、Login か Register の画面を開くたびに走る。
         /// - ロールと管理者（初期データ）は、ストアが初期化済みでなければ作る（HasInitializedStore、IsDBMSInitialized）。
         /// - **本番（テスト データを撒かない配備）では、確かめ終えたら、ロックも問い合わせもしない**（#294）。
         /// - テストユーザは、この接尾辞で初期化済みでなければ作る（IsTestUsersInitialized）。
         /// - E2E 専用のクライアントは、起動ごとに 1 回だけ作る。
-        /// - E2E が途中で消すユーザのWebAuthn資格情報は、次のテストが始まる前に毎回戻す。
+        /// - E2E が途中で消すユーザのWebAuthn資格情報は、ここでは戻さない（SeedWebAuthnTestUserOnSignIn）。
         /// </summary>
         /// <returns>Task</returns>
         /// <remarks>
@@ -619,9 +647,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // #264：E2E 専用のクライアントを、起動ごとに 1 回「無ければ作る」。
                     this.CreateTestClients();
-
-                    // #277：E2E が消すもの（WebAuthn の資格情報）を、毎回まき直す。
-                    await this.SeedWebAuthnTestUser();
                 }
 
                 #endregion

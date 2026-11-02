@@ -260,10 +260,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             await page.FillAsync("#Password", password);
             await page.ClickAsync("#normal_signin");
 
-            //  **`load` まで待たない**（`GotoAsync` と同じ。#325）。
-            //    **URL が変わっていても、遷移先の資源が遅いと、既定の `load` を待ってタイムアウトした。**
-            await page.WaitForURLAsync(u => !u.Contains("/Account/Login"),
-                new PageWaitForURLOptions() { Timeout = 30000, WaitUntil = WaitUntilState.DOMContentLoaded });
+            //  **`WaitForURLAsync` を使わず、`page.Url` を見る**（#325）。
+            //    `load` も `NetworkIdle` も発火して `/` に移った後で、`WaitForURLAsync` がタイムアウトしたことがある。
+            DateTime deadline = DateTime.UtcNow.AddSeconds(30);
+
+            while (page.Url.Contains("/Account/Login"))
+            {
+                if (deadline < DateTime.UtcNow)
+                {
+                    throw new TimeoutException("サインインの画面から移らなかった : " + page.Url);
+                }
+
+                await Task.Delay(100);
+            }
+
+            await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
         }
 
         #endregion

@@ -104,7 +104,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 "#294（ManageController.*.cs のレビュー S1） / ManageController.ChangeUserName");
 
             r.Target(oldName + " を " + newName + " に変え、元の名前で利用者を作り直す（終わったら両方を消す。"
-                + oldName + " と資格情報は、次にサインイン画面を開いたときに種データが作り直す）");
+                + oldName + " と資格情報は、次にこの利用者でサインインするときに種データが作り直す）");
 
             using (IdPClient admin = this.Client(targetKey))
             {
@@ -170,7 +170,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     //  **変えた利用者を消す**（資格情報も消える）。
                     //    **作り直した元の名前の利用者も消す**（メアドが種データと違うため）。
-                    //    **元の名前の利用者と資格情報は、次にサインイン画面を開いたときに種データが作り直す。**
+                    //    **元の名前の利用者と資格情報は、次にこの利用者でサインインするときに種データが作り直す。**
                     await UsersAdmin.DeleteByUserNameAsync(admin, newName);
 
                     if (rebornCreated)

@@ -216,7 +216,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.Step("(2) `JwkSet.json` の末尾に空白を 1 つ足す（鍵は変えない）");
 
-                    File.WriteAllText(path, original + " ");
+                    JwkSetCacheTests.ReplaceFile(path, original + " ");
 
                     HttpResponseMessage after = await client.GetAsync("/jwkcerts");
                     string etagAfter = (after.Headers.ETag == null)
@@ -232,7 +232,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.Step("(3) 戻すと、`ETag` も元に戻る（中身から作っているため）");
 
-                    File.WriteAllText(path, original);
+                    JwkSetCacheTests.ReplaceFile(path, original);
 
                     HttpResponseMessage restored = await client.GetAsync("/jwkcerts");
                     string etagRestored = (restored.Headers.ETag == null)
@@ -244,7 +244,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 finally
                 {
                     //  **必ず戻す**（落ちた回でも、鍵の配布を壊さない）。
-                    File.WriteAllText(path, original);
+                    JwkSetCacheTests.ReplaceFile(path, original);
                 }
 
                 r.Done();
@@ -254,6 +254,32 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         #endregion
 
         #region 補助
+
+        /// <summary>別名で書いてから置き換える</summary>
+        /// <param name="path">JwkSet.json のパス</param>
+        /// <param name="content">中身</param>
+        /// <remarks>
+        /// **直接上書きすると、並行するテストのトークン検証が読めずに 500 になる**（#325 の `EX-8.4`）。
+        /// サイトが開いている間は置き換えられないので、少し待ってやり直す。
+        /// </remarks>
+        private static void ReplaceFile(string path, string content)
+        {
+            string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllText(temp, content);
+
+            for (int i = 0; ; i++)
+            {
+                try
+                {
+                    File.Move(temp, path, true);
+                    return;
+                }
+                catch (Exception e) when (i < 50 && (e is IOException || e is UnauthorizedAccessException))
+                {
+                    System.Threading.Thread.Sleep(100);
+                }
+            }
+        }
 
         /// <summary>この配備の `JwkSetCacheMaxAgeSeconds`（未設定なら 0）</summary>
         /// <param name="client">IdPClient</param>

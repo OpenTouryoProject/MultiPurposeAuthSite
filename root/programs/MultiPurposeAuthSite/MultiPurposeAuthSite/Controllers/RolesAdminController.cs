@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/11/02  玄人 幸道         ロール詳細が、一覧の途中で消えた利用者で例外にならないようにした（#325）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -23,6 +24,7 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Data;
 
 using System.Linq;
 using System.Collections.Generic;
@@ -201,7 +203,9 @@ namespace MultiPurposeAuthSite.Controllers
             foreach (ApplicationUser user in UserManager.Users.AsEnumerable())
             {
                 //　ユーザがロールに属するかどうか。
-                if (await UserManager.IsInRoleAsync(user.Id, role.Name))
+                //  UserManager.IsInRoleAsync(user.Id, ...) は id で引き直すので、
+                //  一覧を取った後で消えた利用者に当たると例外になる（#325。net10.0 版は user を渡すので起きない）。
+                if (await HttpContext.GetOwinContext().Get<UserStore>().IsInRoleAsync(user, role.Name))
                 {
                     // ロールに含まれるユーザ
                     userNames.Add(user.UserName);
