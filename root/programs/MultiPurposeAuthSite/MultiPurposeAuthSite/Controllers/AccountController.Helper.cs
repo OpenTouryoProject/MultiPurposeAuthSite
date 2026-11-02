@@ -19,6 +19,7 @@
 //*  2026/10/27  玄人 幸道         テスト用の種まきを net10.0 版に揃えた（利用者は接尾辞の super_tanaka で判定、クライアントは起動ごとに 1 回。#294）
 //*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールを、同じ利用者に続けて送らない（#294）
 //*  2026/10/28  玄人 幸道         メールを要求から切り離して送る（async void をやめた）、完了メールの空送りをやめた、
+//*  2026/11/02  玄人 幸道         E2E 専用のクライアントを 2 つのサイトが同時に作っても、サインイン画面を落とさない（#325）
 //*                                初期化の確認を 1 回に、管理者の作成の失敗を記録、テスト利用者のメアドを example.com に（#294）
 //**********************************************************************************
 
@@ -451,7 +452,15 @@ namespace MultiPurposeAuthSite.Controllers
                 //   **書き込みを 1 回に閉じる。**
                 if (Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) == null)
                 {
-                    Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
+                    try
+                    {
+                        Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
+                    }
+                    catch (Exception) when (Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) != null)
+                    {
+                        //  **もう一方のサイトが、確かめてから入れるまでの間に入れた**（#325）。
+                        //    **在れば目的は果たしているので、サインイン画面を落とさない。**
+                    }
                 }
             }
 
