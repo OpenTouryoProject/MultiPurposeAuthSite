@@ -44,6 +44,7 @@
 //*  2026/10/30  玄人 幸道         partial に分割（Find / Roles / UserAttributes / LoginAttributes / Logins / Claims / Tokens。#294）
 //*  2026/10/30  玄人 幸道         利用者の削除で、同意の取り消しを削除の後へ・メアド変更の確認待ちも消す・子の表を親より先に消す（#294）
 //*  2026/10/30  玄人 幸道         消した UpdateRoles などを指すコメントを直した（#294）
+//*  2026/11/02  玄人 幸道         利用者名の変更で、WebAuthn の資格情報を同じトランザクションで移す（外部キーで 500。#327）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -65,6 +66,9 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using Dapper;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 /// <summary>MultiPurposeAuthSite.Data</summary>
 namespace MultiPurposeAuthSite.Data
@@ -268,79 +272,90 @@ namespace MultiPurposeAuthSite.Data
                         {
                             cnn.Open();
 
-                            // ユーザー情報を更新
-                            switch (Config.UserStoreType)
+                            using (IDbTransaction tr = cnn.BeginTransaction())
                             {
-                                case EnumUserStoreType.SqlServer:
+                                // **利用者名が変わるなら、資格情報を一度外す**（#327）。
+                                List<Fido2DataRow> fido2Data = CmnUserStore.TakeFido2DataForRename(cnn, tr, user);
 
-                                    cnn.Execute(
-                                        "UPDATE [Users] " +
-                                        "SET [UserName] = @UserName, [NormalizedUserName] = @NormalizedUserName, [PasswordHash] = @PasswordHash, " +
-                                        "    [Email] = @Email, [NormalizedEmail] = @NormalizedEmail, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
-                                        "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
-                                        "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
-                                        "    [UnstructuredData] = @UnstructuredData, " + 
-                                        "    [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
-                                        "WHERE [Id] = @Id", user);
+                                // ユーザー情報を更新
+                                switch (Config.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
 
-                                    break;
+                                        cnn.Execute(
+                                            "UPDATE [Users] " +
+                                            "SET [UserName] = @UserName, [NormalizedUserName] = @NormalizedUserName, [PasswordHash] = @PasswordHash, " +
+                                            "    [Email] = @Email, [NormalizedEmail] = @NormalizedEmail, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
+                                            "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
+                                            "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
+                                            "    [UnstructuredData] = @UnstructuredData, " + 
+                                            "    [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
+                                            "WHERE [Id] = @Id", user, tr);
 
-                                case EnumUserStoreType.ODPManagedDriver:
+                                        break;
 
-                                    cnn.Execute(
-                                        "UPDATE \"Users\" " +
-                                        "SET \"UserName\" = :UserName, \"NormalizedUserName\" = :NormalizedUserName, \"PasswordHash\" = :PasswordHash, " +
-                                        "    \"Email\" = :Email, \"NormalizedEmail\" = :NormalizedEmail, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
-                                        "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
-                                        "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
-                                        "    \"UnstructuredData\" = :UnstructuredData, " +
-                                        "    \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
-                                        "WHERE \"Id\" = :Id",
-                                        new // 拡張メソッドで対策できる。
-                                        {
-                                            Id = user.Id,
-                                            UserName = user.UserName,
-                                            NormalizedUserName = user.NormalizedUserName,
-                                            PasswordHash = user.PasswordHash,
-                                            Email = user.Email,
-                                            NormalizedEmail = user.NormalizedEmail,
-                                            EmailConfirmed = user.EmailConfirmed ? -1 : 0,
-                                            PhoneNumber = user.PhoneNumber,
-                                            PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
-                                            LockoutEnabled = user.LockoutEnabled ? -1 : 0,
-                                            AccessFailedCount = user.AccessFailedCount,
-                                            LockoutEndDateUtc = user.LockoutEndDateUtc,
-                                            SecurityStamp = user.SecurityStamp,
-                                            TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
-                                            TotpAuthenticatorKey = user.TotpAuthenticatorKey,
-                                            UnstructuredData = user.UnstructuredData,
-                                            DeviceToken = user.DeviceToken,
-                                            //CreatedDate = user.CreatedDate,
-                                            PasswordChangeDate = user.PasswordChangeDate
-                                        });
+                                    case EnumUserStoreType.ODPManagedDriver:
 
-                                    break;
+                                        cnn.Execute(
+                                            "UPDATE \"Users\" " +
+                                            "SET \"UserName\" = :UserName, \"NormalizedUserName\" = :NormalizedUserName, \"PasswordHash\" = :PasswordHash, " +
+                                            "    \"Email\" = :Email, \"NormalizedEmail\" = :NormalizedEmail, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
+                                            "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
+                                            "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
+                                            "    \"UnstructuredData\" = :UnstructuredData, " +
+                                            "    \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
+                                            "WHERE \"Id\" = :Id",
+                                            new // 拡張メソッドで対策できる。
+                                            {
+                                                Id = user.Id,
+                                                UserName = user.UserName,
+                                                NormalizedUserName = user.NormalizedUserName,
+                                                PasswordHash = user.PasswordHash,
+                                                Email = user.Email,
+                                                NormalizedEmail = user.NormalizedEmail,
+                                                EmailConfirmed = user.EmailConfirmed ? -1 : 0,
+                                                PhoneNumber = user.PhoneNumber,
+                                                PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
+                                                LockoutEnabled = user.LockoutEnabled ? -1 : 0,
+                                                AccessFailedCount = user.AccessFailedCount,
+                                                LockoutEndDateUtc = user.LockoutEndDateUtc,
+                                                SecurityStamp = user.SecurityStamp,
+                                                TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
+                                                TotpAuthenticatorKey = user.TotpAuthenticatorKey,
+                                                UnstructuredData = user.UnstructuredData,
+                                                DeviceToken = user.DeviceToken,
+                                                //CreatedDate = user.CreatedDate,
+                                                PasswordChangeDate = user.PasswordChangeDate
+                                            }, tr);
 
-                                case EnumUserStoreType.PostgreSQL:
+                                        break;
 
-                                    cnn.Execute(
-                                       "UPDATE \"users\" " +
-                                       "SET \"username\" = @UserName, \"normalizedusername\" = @NormalizedUserName, \"passwordhash\" = @PasswordHash, " +
-                                       "    \"email\" = @Email, \"normalizedemail\" = @NormalizedEmail, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
-                                       "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
-                                       "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
-                                       "    \"unstructureddata\" = @UnstructuredData, " +
-                                       "    \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
-                                       "WHERE \"id\" = @Id", user);
+                                    case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                        cnn.Execute(
+                                           "UPDATE \"users\" " +
+                                           "SET \"username\" = @UserName, \"normalizedusername\" = @NormalizedUserName, \"passwordhash\" = @PasswordHash, " +
+                                           "    \"email\" = @Email, \"normalizedemail\" = @NormalizedEmail, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
+                                           "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
+                                           "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
+                                           "    \"unstructureddata\" = @UnstructuredData, " +
+                                           "    \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
+                                           "WHERE \"id\" = @Id", user, tr);
+
+                                        break;
+                                }
+
+                                // **外した資格情報を、新しい名前で戻す**（#327）。
+                                CmnUserStore.PutFido2DataForRename(cnn, tr, user, fido2Data);
+
+                                tr.Commit();
+
+                                // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
+                                //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
+                                //    その際、二重実行により二重登録（制約により例外になる）が起き得るので、以下は、ココに実装しないことにした。
+                                //    （Roles / Logins / Claims は、それぞれの口（AddToRole / AddLogin / AddClaim など）で更新する。
+                                //      以前ここに在った UpdateRoles などの呼び出しは、#294 で UpdateRoles ごと消した）
                             }
-
-                            // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
-                            //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
-                            //    その際、二重実行により二重登録（制約により例外になる）が起き得るので、以下は、ココに実装しないことにした。
-                            //    （Roles / Logins / Claims は、それぞれの口（AddToRole / AddLogin / AddClaim など）で更新する。
-                            //      以前ここに在った UpdateRoles などの呼び出しは、#294 で UpdateRoles ごと消した）
                         }
 
                         break;
@@ -357,6 +372,128 @@ namespace MultiPurposeAuthSite.Data
             }
 
             return;
+        }
+
+        /// <summary>利用者名の変更で動かす、FIDO2Data の行</summary>
+        internal sealed class Fido2DataRow
+        {
+            /// <summary>PublicKeyId</summary>
+            public string PublicKeyId { get; set; }
+
+            /// <summary>UnstructuredData</summary>
+            public string UnstructuredData { get; set; }
+        }
+
+        /// <summary>利用者名が変わるなら、その利用者の FIDO2Data の行を読んで消す</summary>
+        /// <param name="cnn">IDbConnection</param>
+        /// <param name="tr">IDbTransaction</param>
+        /// <param name="user">ApplicationUser（新しい利用者名を持つ）</param>
+        /// <returns>消した行（利用者名が変わらなければ null）</returns>
+        //  **`FIDO2Data.UserName` は `Users.UserName` への外部キーで、`ON UPDATE` が無い**（#327）。
+        //    **親を先に変えても、子を先に変えても、制約に当たる。**
+        //    **`ON UPDATE CASCADE` は Oracle に無い**ので、3 方言で同じ手順にする：
+        //    **子を消す → 親を変える → 子を入れ直す**（1 つのトランザクション）。
+        //    **途中で失敗すれば全部戻る**ので、資格情報は失われない。DDL は変えない。
+        //
+        //    **net48 版も通る。** `Extensions\FIDO` は net10.0 版だけがビルドするので、
+        //    **ここでは `StoredCredential` を使わない。**
+        private static List<Fido2DataRow> TakeFido2DataForRename(
+            IDbConnection cnn, IDbTransaction tr, ApplicationUser user)
+        {
+            string selectUserName = "";
+            string selectRows = "";
+            string delete = "";
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    selectUserName = "SELECT [UserName] FROM [Users] WHERE [Id] = @Id";
+                    selectRows = "SELECT [PublicKeyId], [UnstructuredData] FROM [FIDO2Data] WHERE [UserName] = @UserName";
+                    delete = "DELETE FROM [FIDO2Data] WHERE [UserName] = @UserName";
+                    break;
+
+                case EnumUserStoreType.ODPManagedDriver:
+                    selectUserName = "SELECT \"UserName\" FROM \"Users\" WHERE \"Id\" = :Id";
+                    selectRows = "SELECT \"PublicKeyId\", \"UnstructuredData\" FROM \"FIDO2Data\" WHERE \"UserName\" = :UserName";
+                    delete = "DELETE FROM \"FIDO2Data\" WHERE \"UserName\" = :UserName";
+                    break;
+
+                case EnumUserStoreType.PostgreSQL:
+                    selectUserName = "SELECT \"username\" FROM \"users\" WHERE \"id\" = @Id";
+                    selectRows = "SELECT \"publickeyid\", \"unstructureddata\" FROM \"fido2data\" WHERE \"username\" = @UserName";
+                    delete = "DELETE FROM \"fido2data\" WHERE \"username\" = @UserName";
+                    break;
+            }
+
+            string oldUserName = cnn.QueryFirstOrDefault<string>(selectUserName, new { Id = user.Id }, tr);
+
+            if (string.IsNullOrEmpty(oldUserName) || oldUserName == user.UserName)
+            {
+                return null;
+            }
+
+            List<Fido2DataRow> rows = cnn.Query<Fido2DataRow>(selectRows, new { UserName = oldUserName }, tr).ToList();
+
+            if (0 < rows.Count)
+            {
+                cnn.Execute(delete, new { UserName = oldUserName }, tr);
+            }
+
+            return rows;
+        }
+
+        /// <summary>消した FIDO2Data の行を、新しい利用者名で入れ直す</summary>
+        /// <param name="cnn">IDbConnection</param>
+        /// <param name="tr">IDbTransaction</param>
+        /// <param name="user">ApplicationUser（新しい利用者名を持つ）</param>
+        /// <param name="rows">TakeFido2DataForRename の戻り値</param>
+        //  **`UserName` 列と、JSON の `UserId`（利用者名の UTF-8 の base64）を変える。**
+        //    **`UserHandle` は変えない。** 認証器が持っている値で、サインインで照合する（#294）。
+        //    **`DateParseHandling.None` で読む。** 触らない項目（`RegDate`）の形を変えないため。
+        private static void PutFido2DataForRename(
+            IDbConnection cnn, IDbTransaction tr, ApplicationUser user, List<Fido2DataRow> rows)
+        {
+            if (rows == null)
+            {
+                return;
+            }
+
+            string insert = "";
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    insert = "INSERT INTO [FIDO2Data] ([PublicKeyId], [UserName], [UnstructuredData]) "
+                        + "VALUES (@PublicKeyId, @UserName, @UnstructuredData)";
+                    break;
+
+                case EnumUserStoreType.ODPManagedDriver:
+                    insert = "INSERT INTO \"FIDO2Data\" (\"PublicKeyId\", \"UserName\", \"UnstructuredData\") "
+                        + "VALUES (:PublicKeyId, :UserName, :UnstructuredData)";
+                    break;
+
+                case EnumUserStoreType.PostgreSQL:
+                    insert = "INSERT INTO \"fido2data\" (\"publickeyid\", \"username\", \"unstructureddata\") "
+                        + "VALUES (@PublicKeyId, @UserName, @UnstructuredData)";
+                    break;
+            }
+
+            string newUserId = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(user.UserName));
+
+            foreach (Fido2DataRow row in rows)
+            {
+                JObject credential = JsonConvert.DeserializeObject<JObject>(row.UnstructuredData,
+                    new JsonSerializerSettings() { DateParseHandling = DateParseHandling.None });
+
+                credential["UserId"] = newUserId;
+
+                cnn.Execute(insert, new
+                {
+                    PublicKeyId = row.PublicKeyId,
+                    UserName = user.UserName,
+                    UnstructuredData = credential.ToString(Formatting.None)
+                }, tr);
+            }
         }
 
         #endregion

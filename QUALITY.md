@@ -180,6 +180,7 @@ git config core.hooksPath .githooks
 
 - [ ] パラメタ化できる値を、パラメタにしているか
 - [ ] **3 方言（SQL Server・Oracle・PostgreSQL）と `mem` で、同じ意味になるか**
+- [ ] **`mem` に無い制約（外部キーなど）に当たらないか。`mem` だけの通しでは見つからない**（#327）
 - [ ] DDL を変えたなら、配備済みの DB への手順を書いたか
 
 ### 全般

@@ -572,7 +572,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // 削除の成功
 
                 // **WebAuthn の資格情報も消す**（#294。ManageController.DeleteGdprPersonalData と同じ）。
-                //   **FIDO2Data は利用者名で持っていて、Users への外部キーが無い**ので、残っていた。
+                //   **FIDO2Data は利用者名で持っていて、mem には外部キーが無い**ので、残っていた。
                 if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
                 {
                     FIDO.DataProvider.DeleteByUser(user.UserName);

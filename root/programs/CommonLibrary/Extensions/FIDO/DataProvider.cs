@@ -31,6 +31,7 @@
 //*  2019/03/13  西野 大介         新規
 //*  2026/10/07  玄人 幸道         fido2-net-lib 4.2.0 に合わせた（#137）
 //*  2026/10/29  玄人 幸道         利用者名の変更で、資格情報を新しい名前へ移す RenameUser を足した（#294）
+//*  2026/11/02  玄人 幸道         DB の資格情報は CmnUserStore.Update が移すので、RenameUser は mem だけにした（#327）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -411,6 +412,9 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         //
         //    **`UserHandle` は変えない。** 認証器が持っている値（登録したときの利用者名）であり、
         //    サインインで照合する（`WebAuthnHelper` の `IsUserHandleOwnerOfCredentialIdCallback`）。
+        //
+        //    **ここで移すのは mem だけである**（#327）。**DB は `CmnUserStore.Update` が、
+        //    `Users` の更新と同じトランザクションで移す**（外部キーがあるので、更新の後では移せない）。
         public static void RenameUser(string oldUserName, string newUserName)
         {
             if (string.IsNullOrEmpty(oldUserName)
@@ -442,64 +446,6 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                                 storedCredential.UserId = newUserId;
                                 DataProvider.FIDO2Data[key] = JsonConvert.SerializeObject(storedCredential);
                             }
-                        }
-                    }
-
-                    break;
-
-                case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.ODPManagedDriver:
-                case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
-
-                        using (IDbTransaction tr = cnn.BeginTransaction())
-                        {
-                            string select = "";
-                            string update = "";
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-                                    select = "SELECT [UnstructuredData] FROM [FIDO2Data] WHERE [UserName] = @UserName";
-                                    update = "UPDATE [FIDO2Data] SET [UserName] = @UserName, [UnstructuredData] = @UnstructuredData WHERE [PublicKeyId] = @PublicKeyId";
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-                                    select = "SELECT \"UnstructuredData\" FROM \"FIDO2Data\" WHERE \"UserName\" = :UserName";
-                                    update = "UPDATE \"FIDO2Data\" SET \"UserName\" = :UserName, \"UnstructuredData\" = :UnstructuredData WHERE \"PublicKeyId\" = :PublicKeyId";
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-                                    select = "SELECT \"unstructureddata\" FROM \"fido2data\" WHERE \"username\" = @UserName";
-                                    update = "UPDATE \"fido2data\" SET \"username\" = @UserName, \"unstructureddata\" = @UnstructuredData WHERE \"publickeyid\" = @PublicKeyId";
-                                    break;
-                            }
-
-                            foreach (string unstructuredData in
-                                cnn.Query<string>(select, new { UserName = oldUserName }, tr).ToList())
-                            {
-                                StoredCredential storedCredential =
-                                    JsonConvert.DeserializeObject<StoredCredential>(unstructuredData);
-
-                                if (storedCredential == null)
-                                {
-                                    continue;
-                                }
-
-                                storedCredential.UserId = newUserId;
-
-                                cnn.Execute(update, new
-                                {
-                                    PublicKeyId = CustomEncode.ToBase64UrlString(storedCredential.CredentialId),
-                                    UserName = newUserName,
-                                    UnstructuredData = JsonConvert.SerializeObject(storedCredential)
-                                }, tr);
-                            }
-
-                            tr.Commit();
                         }
                     }
 
@@ -567,8 +513,8 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// <summary>DeleteByUser</summary>
         /// <param name="userName">string</param>
         //  **利用者ごと消す**（#137）。
-        //    **FIDO2Data は UserName で持っており、Users への外部キーが無い。**
-        //    **利用者を消しても資格情報が残る**ので、GDPR の削除から呼ぶ。
+        //    **mem には外部キーが無く、利用者を消しても資格情報が残る**ので、削除から呼ぶ。
+        //    **DB では外部キー**（`ON DELETE CASCADE`）**も消す。**
         public static void DeleteByUser(string userName)
         {
             switch (Config.UserStoreType)
