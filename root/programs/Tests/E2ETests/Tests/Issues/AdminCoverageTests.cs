@@ -34,6 +34,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -347,6 +348,78 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             AdminCoverageTests.QueryValue(location, "code_challenge_method"));
                     }
                 }
+            }
+        }
+
+        /// <summary>RT-324.6 自己テストの Client Credentials と JWT Bearer が、access_token を受け取る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT32406_自己テストのクライアント認証の入口がトークンを受け取る(string targetKey)
+        {
+            using (IdPClient client = await this.AdminClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-324.6",
+                    "自己テストの Client Credentials と JWT Bearer が、JWT の access_token を受け取って画面に出す",
+                    "**これらの入口は、一度も通っていなかった**（`COVERAGE.md`）。",
+                    "RFC 6749 §4.4 / RFC 7523 §2.1");
+
+                r.Target("POST /Home/Saml2OAuth2Starters");
+
+                foreach (string starter in new string[] { "ClientCredentialsFlow", "JWTBearerTokenFlow" })
+                {
+                    HttpResponseMessage res = await AdminCoverageTests.StartAsync(client, starter);
+                    string body = await res.Content.ReadAsStringAsync();
+
+                    r.VerifyEqual(starter + " : HTTP 200", "200", ((int)res.StatusCode).ToString());
+
+                    Match token = Regex.Match(body, "token = '(?<jwt>[^']*)'");
+                    int segments = token.Groups["jwt"].Value.Split('.').Length;
+
+                    r.Verify(starter + " : JWT の access_token が出る", segments == 3,
+                        "3 つの部分", segments + " つの部分");
+                }
+            }
+        }
+
+        /// <summary>RT-324.7 自己テストの FAPI1 の入口が、認可エンドポイントへ送る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT32407_自己テストのFAPI1の入口がパラメタを組み立てる(string targetKey)
+        {
+            using (IdPClient client = await this.AdminClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-324.7",
+                    "自己テストの FAPI1 の入口が、code と、OIDC なら nonce を付けて /authorize へ送る",
+                    "**これらの入口は、一度も通っていなかった**（`COVERAGE.md`）。"
+                    + "**`state` の接頭辞で、自己テストの戻り先がクライアントを見分ける。**",
+                    "OIDC Core 1.0 §3.1.2.1 / #324");
+
+                r.Target("POST /Home/Saml2OAuth2Starters");
+
+                foreach (string starter in new string[] { "AuthorizationCodeFAPI1", "AuthorizationCodeFAPI1_OIDC" })
+                {
+                    HttpResponseMessage res = await AdminCoverageTests.StartAsync(client, starter);
+                    string location = (res.Headers.Location == null) ? "" : res.Headers.Location.ToString();
+
+                    r.Verify(starter + " : /authorize へ送る", location.Contains("/authorize"),
+                        "/authorize", string.IsNullOrEmpty(location) ? "HTTP " + (int)res.StatusCode : location.Split('?')[0]);
+
+                    r.VerifyEqual(starter + " : response_type", "code",
+                        AdminCoverageTests.QueryValue(location, "response_type"));
+
+                    r.Verify(starter + " : state は fapi1 で始まる",
+                        AdminCoverageTests.QueryValue(location, "state").StartsWith("fapi1:"),
+                        "fapi1:", "fapi1 で" + (AdminCoverageTests.QueryValue(location, "state").StartsWith("fapi1:") ? "始まる" : "**始まらない**"));
+                }
+
+                string oidc = (await AdminCoverageTests.StartAsync(client, "AuthorizationCodeFAPI1_OIDC")).Headers.Location.ToString();
+
+                r.Verify("OIDC : nonce が付く", !string.IsNullOrEmpty(AdminCoverageTests.QueryValue(oidc, "nonce")),
+                    "付く", string.IsNullOrEmpty(AdminCoverageTests.QueryValue(oidc, "nonce")) ? "**付かない**" : "付く");
             }
         }
 

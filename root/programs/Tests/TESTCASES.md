@@ -10399,6 +10399,39 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PKCE_Plain : response_type
 - PKCE_Plain : code_challenge_method
 
+## RT-324.6 自己テストの Client Credentials と JWT Bearer が、JWT の access_token を受け取って画面に出す
+
+| | |
+|---|---|
+| 観点 | **これらの入口は、一度も通っていなかった**（`COVERAGE.md`）。 |
+| 根拠 | RFC 6749 §4.4 / RFC 7523 §2.1 |
+| テスト | `RT32406_自己テストのクライアント認証の入口がトークンを受け取る` |
+
+**検証（合否を判定する）**
+
+- ClientCredentialsFlow : HTTP 200
+- ClientCredentialsFlow : JWT の access_token が出る
+- JWTBearerTokenFlow : HTTP 200
+- JWTBearerTokenFlow : JWT の access_token が出る
+
+## RT-324.7 自己テストの FAPI1 の入口が、code と、OIDC なら nonce を付けて /authorize へ送る
+
+| | |
+|---|---|
+| 観点 | **これらの入口は、一度も通っていなかった**（`COVERAGE.md`）。**`state` の接頭辞で、自己テストの戻り先がクライアントを見分ける。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.1 / #324 |
+| テスト | `RT32407_自己テストのFAPI1の入口がパラメタを組み立てる` |
+
+**検証（合否を判定する）**
+
+- AuthorizationCodeFAPI1 : /authorize へ送る
+- AuthorizationCodeFAPI1 : response_type
+- AuthorizationCodeFAPI1 : state は fapi1 で始まる
+- AuthorizationCodeFAPI1_OIDC : /authorize へ送る
+- AuthorizationCodeFAPI1_OIDC : response_type
+- AuthorizationCodeFAPI1_OIDC : state は fapi1 で始まる
+- OIDC : nonce が付く
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

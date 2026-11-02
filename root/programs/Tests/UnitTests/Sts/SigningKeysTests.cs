@@ -40,6 +40,8 @@ using MultiPurposeAuthSite.TokenProviders;
 
 using Newtonsoft.Json.Linq;
 
+using Touryo.Infrastructure.Public.Security.Jwt;
+
 
 using Xunit;
 
@@ -63,7 +65,9 @@ namespace MultiPurposeAuthSite.Tests.Unit.Sts
             Dictionary<string, string> config = new Dictionary<string, string>
             {
                 { "RsaPfxPassword", Password },
-                { "EcdsaPfxPassword", Password }
+                { "EcdsaPfxPassword", Password },
+                //  **`JwkSet.json` の無い配備**（検証は証明書に落ちる）。
+                { "JwkSetFilePath", Path.Combine(this._dir, "no-such-JwkSet.json") }
             };
 
             using (RSA rsa = RSA.Create(2048))
@@ -144,6 +148,103 @@ namespace MultiPurposeAuthSite.Tests.Unit.Sts
         public void 扱わないalgは引けない(string alg)
         {
             Assert.Null(SigningKeys.Of(alg));
+        }
+
+        /// <summary>kid が空でも、JWK Set に無くても、自分の証明書で検証する</summary>
+        [Theory]
+        [InlineData("RS256", "")]
+        [InlineData("RS256", "unknown-kid")]
+        [InlineData("ES256", "")]
+        [InlineData("ES256", "unknown-kid")]
+        [Basis("設計：CmnAccessToken.SelectJws のコメント（kid が空・JWK Set に無ければ、alg に対応する自分の証明書）")]
+        public void kidを引けなければ自分の証明書で検証する(string alg, string kid)
+        {
+            SigningKeys.Entry entry = SigningKeys.Of(alg);
+
+            Assert.True(CmnAccessToken.VerifySignature(SigningKeysTests.Sign(entry.CreateJwsFromPfx(), kid)));
+        }
+
+        /// <summary>別の鍵の署名は、kid を引けなくても通らない</summary>
+        [Theory]
+        [InlineData("RS256", "")]
+        [InlineData("RS256", "unknown-kid")]
+        [InlineData("ES256", "")]
+        [InlineData("ES256", "unknown-kid")]
+        [Basis("RFC 7515 §5.2（JWS の検証）")]
+        public void 別の鍵の署名は通らない(string alg, string kid)
+        {
+            string pfx = Path.Combine(this._dir, "other.pfx");
+
+            if (alg == "RS256")
+            {
+                using (RSA rsa = RSA.Create(2048))
+                {
+                    this.WriteOther(pfx, new CertificateRequest("CN=other", rsa,
+                        HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+                }
+            }
+            else
+            {
+                using (ECDsa ec = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+                {
+                    this.WriteOther(pfx, new CertificateRequest("CN=other", ec, HashAlgorithmName.SHA256));
+                }
+            }
+
+            Assert.False(CmnAccessToken.VerifySignature(
+                SigningKeysTests.Sign(JwsFactory.CreateFromPfx(alg, pfx, Password), kid)));
+        }
+
+        /// <summary>自分が発行しない alg は、ヘッダを書き換えても通らない</summary>
+        [Theory]
+        [InlineData("none")]
+        [InlineData("HS256")]
+        [Basis("RFC 8725 §3.1（使う alg を確かめる）")]
+        public void 自分が発行しないalgは通らない(string alg)
+        {
+            string[] parts = SigningKeysTests.Sign(SigningKeys.Of("RS256").CreateJwsFromPfx(), "").Split('.');
+            string header = SigningKeysTests.Base64Url("{\"alg\":\"" + alg + "\",\"kid\":\"\",\"typ\":\"JWT\"}");
+
+            Assert.False(CmnAccessToken.VerifySignature(header + "." + parts[1] + "." + parts[2]));
+        }
+
+        /// <summary>kid を入れて署名する</summary>
+        /// <param name="jws">JWS</param>
+        /// <param name="kid">kid</param>
+        /// <returns>JWT</returns>
+        private static string Sign(JWS jws, string kid)
+        {
+            if (jws is JWS_RSA)
+            {
+                ((JWS_RSA)jws).JWSHeader.kid = kid;
+            }
+            else
+            {
+                ((JWS_ECDSA)jws).JWSHeader.kid = kid;
+            }
+
+            return jws.Create("{\"sub\":\"ut\"}");
+        }
+
+        /// <summary>base64url</summary>
+        /// <param name="value">文字列</param>
+        /// <returns>base64url</returns>
+        private static string Base64Url(string value)
+        {
+            return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value))
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        /// <summary>別の鍵を *.pfx に書く</summary>
+        /// <param name="path">パス</param>
+        /// <param name="request">CertificateRequest</param>
+        private void WriteOther(string path, CertificateRequest request)
+        {
+            using (X509Certificate2 cert = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1)))
+            {
+                File.WriteAllBytes(path, cert.Export(X509ContentType.Pfx, Password));
+            }
         }
 
         /// <summary>証明書をファイルに書いて、設定に入れる</summary>
