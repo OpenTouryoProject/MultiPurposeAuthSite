@@ -18,6 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //*  2026/09/16  玄人 幸道         MobileApp（プッシュ通知）の2FAプロバイダを登録（#216）
 //*  2026/10/01  玄人 幸道         メアドの一意を常に必須にした（#151 の段階 3）
+//*  2026/11/02  玄人 幸道         更新の競合を失敗で返し、数えやスタンプの更新は読み直してやり直す（#316）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Entity;
@@ -30,6 +31,10 @@ using Microsoft.Owin;
 using Microsoft.Owin.Security.DataProtection;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
+
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 /// <summary>MultiPurposeAuthSite.Manager</summary>
 namespace MultiPurposeAuthSite.Manager
@@ -51,6 +56,86 @@ namespace MultiPurposeAuthSite.Manager
         /// <summary>constructor</summary>
         /// <param name="store">IUserStore</param>
         public ApplicationUserManager(IUserStore<ApplicationUser> store) : base(store) { }
+
+        #region 楽観排他（#316）
+
+        /// <summary>UpdateAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>IdentityResult（競合したら失敗）</returns>
+        public override async Task<IdentityResult> UpdateAsync(ApplicationUser user)
+        {
+            try
+            {
+                return await base.UpdateAsync(user);
+            }
+            catch (CmnUserStore.ConcurrencyException)
+            {
+                return IdentityResult.Failed(CmnUserStore.ConcurrencyFailureMessage);
+            }
+        }
+
+        /// <summary>AccessFailedAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**競合で数えが消えると、ロックアウトに届きにくくなる**（`ANALYSIS-IdP.md` の E-14）。</remarks>
+        public override Task<IdentityResult> AccessFailedAsync(string userId)
+        {
+            return this.RetryOnConflictAsync(() => base.AccessFailedAsync(userId));
+        }
+
+        /// <summary>ResetAccessFailedCountAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <returns>IdentityResult</returns>
+        public override Task<IdentityResult> ResetAccessFailedCountAsync(string userId)
+        {
+            return this.RetryOnConflictAsync(() => base.ResetAccessFailedCountAsync(userId));
+        }
+
+        /// <summary>UpdateSecurityStampAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**結果を見ない呼び出しがあり、競合で更新が消えると、古いセッションが生き残る。**</remarks>
+        public override Task<IdentityResult> UpdateSecurityStampAsync(string userId)
+        {
+            return this.RetryOnConflictAsync(() => base.UpdateSecurityStampAsync(userId));
+        }
+
+        /// <summary>SetTwoFactorEnabledAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="enabled">有効にするか</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**結果を見ない呼び出しがある。**</remarks>
+        public override Task<IdentityResult> SetTwoFactorEnabledAsync(string userId, bool enabled)
+        {
+            return this.RetryOnConflictAsync(() => base.SetTwoFactorEnabledAsync(userId, enabled));
+        }
+
+        /// <summary>競合したら、やり直す（基底の操作は、Id で読み直すところから始まる）</summary>
+        /// <param name="operation">操作</param>
+        /// <returns>IdentityResult</returns>
+        private async Task<IdentityResult> RetryOnConflictAsync(Func<Task<IdentityResult>> operation)
+        {
+            IdentityResult result = null;
+
+            for (int i = 0; i < CmnUserStore.ConcurrencyRetryCount; i++)
+            {
+                if (0 < i)
+                {
+                    await Task.Delay(CmnUserStore.ConcurrencyRetryDelayMilliseconds());
+                }
+
+                result = await operation();
+
+                if (!result.Errors.Contains(CmnUserStore.ConcurrencyFailureMessage))
+                {
+                    return result;
+                }
+            }
+
+            return result;
+        }
+
+        #endregion
 
         /// <summary>Create</summary>
         /// <param name="options">options</param>

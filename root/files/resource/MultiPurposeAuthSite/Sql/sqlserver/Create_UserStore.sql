@@ -38,6 +38,7 @@ CREATE TABLE [Users](              -- Users
     [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
     [PasswordChangeDate] [smalldatetime] NOT NULL,
+    [ConcurrencyStamp] [nvarchar](38) NULL,  -- 楽観排他（#316）
     CONSTRAINT [PK.Users] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]

@@ -808,6 +808,7 @@ namespace MultiPurposeAuthSite
             services.AddIdentity<ApplicationUser, ApplicationRole>()
                 //.AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddUserStore<UserStoreCore>()
+                .AddUserManager<UserManagerCore>() // 楽観排他の競合をやり直す（#316）
                 .AddRoleStore<RoleStoreCore>()
                 .AddDefaultTokenProviders();
             

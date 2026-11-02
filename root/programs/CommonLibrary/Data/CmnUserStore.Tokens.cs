@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         回復コードで空のコードを断る・トークンを渡された user の一覧で扱う（読み直さない・重ねない）・INSERT / UPDATE を Execute で（#294）
 //*  2026/10/30  玄人 幸道         トークンを、DB に入れた後で一覧に足す（#294）
+//*  2026/11/02  玄人 幸道         回復コードの書き戻しを、読んだ値が一致するときだけにした（同時に使うと 2 回使えた。#316）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -618,7 +619,6 @@ namespace MultiPurposeAuthSite.Data
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
-            string mergedCodes = CmnUserStore.GetToken(user, InternalLoginProvider, RecoveryCodeTokenName) ?? "";
             //  **空のコードは断る**（#294）。
             //    **コードが 0 件だと `"".Split(';')` が `[""]` になり、空のコードが一致していた**
             //    （画面は `[Required]` で止めているが、ストアの側でも断る）。
@@ -627,16 +627,106 @@ namespace MultiPurposeAuthSite.Data
                 return false;
             }
 
-            //  **読んで書き戻すので、同時に送ると、同じコードを 2 回使える。**
-            //    **楽観排他（#316）で解く**（`Update` の後勝ちと同じ根）。
-            string[] splitCodes = mergedCodes.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-            if (splitCodes.Contains(code))
+            //  **mem は同じ物を共有するので、物でロックして、読みと書きを 1 回にする**（#316）。
+            if (Config.UserStoreType == EnumUserStoreType.Memory)
             {
-                // ココで使用されたRecoveryCodeが削除される。
-                List<string> updatedCodes = new List<string>(splitCodes.Where(s => s != code));
-                CmnUserStore.ReplaceCodes(user, updatedCodes);
-                return true;
+                lock (user)
+                {
+                    string memoryCodes = CmnUserStore.GetToken(user, InternalLoginProvider, RecoveryCodeTokenName) ?? "";
+                    string[] memorySplit = memoryCodes.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    if (!memorySplit.Contains(code))
+                    {
+                        return false;
+                    }
+
+                    CmnUserStore.ReplaceCodes(user, memorySplit.Where(s => s != code));
+                    return true;
+                }
             }
+
+            //  **読んだ値が変わっていなければ書き戻す**（#316）。
+            //    **以前は無条件で書き戻したので、同時に送ると、同じコードを 2 回使えた。**
+            //    **負けたら読み直す。** 同じコードなら、もう無いので断る。別のコードなら、まだ使える。
+            for (int i = 0; i < CmnUserStore.ConcurrencyRetryCount; i++)
+            {
+                string mergedCodes = CmnUserStore.GetToken(user, InternalLoginProvider, RecoveryCodeTokenName) ?? "";
+                string[] splitCodes = mergedCodes.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (!splitCodes.Contains(code))
+                {
+                    return false;
+                }
+
+                // ココで使用されたRecoveryCodeが削除される。
+                string updatedCodes = string.Join(";", splitCodes.Where(s => s != code));
+
+                if (CmnUserStore.TryReplaceRecoveryCodes(user, mergedCodes, updatedCodes))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>回復コードを、読んだ値が変わっていないときだけ書き換える</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="oldCodes">読んだ値</param>
+        /// <param name="newCodes">書く値</param>
+        /// <returns>書き換えたら true</returns>
+        private static bool TryReplaceRecoveryCodes(ApplicationUser user, string oldCodes, string newCodes)
+        {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
+            try
+            {
+                using (IDbConnection cnn = DataAccess.CreateConnection())
+                {
+                    cnn.Open();
+
+                    object param = new
+                    {
+                        UserId = user.Id,
+                        LoginProvider = CmnUserStore.InternalLoginProvider,
+                        Name = CmnUserStore.RecoveryCodeTokenName,
+                        OldCodes = oldCodes,
+                        NewCodes = newCodes
+                    };
+
+                    switch (Config.UserStoreType)
+                    {
+                        case EnumUserStoreType.SqlServer:
+
+                            return 0 < cnn.Execute(
+                                "UPDATE [TotpTokens] SET [Value] = @NewCodes " +
+                                "  WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [Name] = @Name AND [Value] = @OldCodes",
+                                param);
+
+                        case EnumUserStoreType.ODPManagedDriver:
+
+                            return 0 < cnn.Execute(
+                                "UPDATE \"TotpTokens\" SET \"Value\" = :NewCodes " +
+                                "  WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"Name\" = :Name AND \"Value\" = :OldCodes",
+                                param);
+
+                        case EnumUserStoreType.PostgreSQL:
+
+                            return 0 < cnn.Execute(
+                                "UPDATE \"totptokens\" SET \"value\" = @NewCodes " +
+                                "  WHERE \"userid\" = @UserId AND \"loginprovider\" = @LoginProvider AND \"name\" = @Name AND \"value\" = @OldCodes",
+                                param);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
+                Logging.MySQLLogForEx(ex);
+                throw;
+            }
+
             return false;
         }
 

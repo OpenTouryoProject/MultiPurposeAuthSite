@@ -29,10 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 2）
+//*  2026/11/02  玄人 幸道         同時に間違えても、すべて数える（RT-316.1・RT-316.2）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -572,6 +574,160 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             + "**利用者名が見つからないときは数えられない**（鍵が無い）— "
                             + "**利用者名を変えながら試す経路は、"
                             + "口ごとのレート制限が頭を打つ**（段階 3）。");
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-316
+
+        /// <summary>RT-316.1 画面のサインインを同時に間違えても、すべて数える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT31601_画面のサインインを同時に間違えてもすべて数える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                int max = AuthFailureLockoutTests.SettingOf(
+                    admin, "MaxFailedAccessAttemptsBeforeLockout", 0);
+
+                Skip.If(max <= 0,
+                    "MaxFailedAccessAttemptsBeforeLockout が 0（数えない配備）です。");
+
+                TestReport r = this.Report("RT-316.1",
+                    "画面のサインインを同時に間違えても、すべて数える",
+                    "**`Users` の更新は後勝ちだったので、並行した失敗が少なく数えられ、ロックアウトに届きにくかった。** "
+                    + "**競合したら読み直して数え直す。**",
+                    "#316");
+
+                r.Target("POST /Account/Login（使い捨ての利用者。同時に " + max + " 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3161_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "User")),
+                    "前提: 利用者を作れること");
+
+                List<IdPClient> clients = new List<IdPClient>();
+
+                try
+                {
+                    r.Step("(1) 間違ったパスワードで、同時に " + max + " 回失敗する");
+
+                    List<Task<bool>> attempts = new List<Task<bool>>();
+
+                    for (int i = 0; i < max; i++)
+                    {
+                        IdPClient client = this.Client(targetKey);
+                        clients.Add(client);
+                        attempts.Add(client.TrySignInAsync(name, "WRONG-PASSWORD-" + i.ToString()));
+                    }
+
+                    bool[] results = await Task.WhenAll(attempts);
+
+                    r.VerifyEqual("どの回も入れない", "0",
+                        results.Count(x => x).ToString());
+
+                    r.Step("(2) 正しいパスワードでも断られる");
+
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        bool signedIn = await client.TrySignInAsync(name, password);
+
+                        r.Verify("**正しいパスワードでも入れない**", !signedIn,
+                            "入れない", signedIn ? "**入れた（少なく数えられた）**" : "入れなかった");
+                    }
+                }
+                finally
+                {
+                    clients.ForEach(x => x.Dispose());
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-316.2 /token のパスワードを同時に間違えても、すべて数える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT31602_tokenのパスワードを同時に間違えてもすべて数える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                //  **ROPC は雛形の既定で無効**（#220）。有効な環境でだけ測る。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(admin, "password");
+
+                int max = AuthFailureLockoutTests.SettingOf(
+                    admin, "MaxFailedAccessAttemptsBeforeLockout", 0);
+
+                Skip.If(max <= 0,
+                    "MaxFailedAccessAttemptsBeforeLockout が 0（数えない配備）です。");
+
+                TestReport r = this.Report("RT-316.2",
+                    "`/token` のパスワードを同時に間違えても、すべて数える",
+                    "**読み・足し・書きの 3 手が原子的でなく、並行した失敗が少なく数えられていた**"
+                    + "（`ANALYSIS-IdP.md` の E-14）。**競合したら読み直して数え直す。**",
+                    "RFC 6749 §4.3 / #316");
+
+                r.Target("POST /token（grant_type=password。使い捨ての利用者。同時に " + max + " 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3162_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "User")),
+                    "前提: 利用者を作れること");
+
+                try
+                {
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                        r.Step("(1) 間違ったパスワードで、同時に " + max + " 回失敗する");
+
+                        List<Task<JsonResponse>> attempts = new List<Task<JsonResponse>>();
+
+                        for (int i = 0; i < max; i++)
+                        {
+                            attempts.Add(AuthFailureLockoutTests.PasswordGrantAsync(
+                                client, reg, name, "WRONG-PASSWORD-" + i.ToString()));
+                        }
+
+                        JsonResponse[] wrongs = await Task.WhenAll(attempts);
+
+                        r.VerifyEqual("どの回もトークンを出さない", "0",
+                            wrongs.Count(x => !string.IsNullOrEmpty(x.AccessToken)).ToString());
+
+                        r.Step("(2) 正しいパスワードでも断られる");
+
+                        JsonResponse correct = await AuthFailureLockoutTests.PasswordGrantAsync(
+                            client, reg, name, password);
+
+                        r.Verify("**正しいパスワードでもトークンが出ない**",
+                            string.IsNullOrEmpty(correct.AccessToken),
+                            "出ない", string.IsNullOrEmpty(correct.AccessToken)
+                                ? "出なかった" : "**出てしまった（少なく数えられた）**");
                     }
                 }
                 finally

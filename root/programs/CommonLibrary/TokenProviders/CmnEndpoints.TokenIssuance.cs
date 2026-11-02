@@ -32,6 +32,7 @@
 //*  2026/10/29  玄人 幸道         expires_in を実際の期間で返し、登録の鍵を安全に読む。using を整理した（#294）
 //*  2026/10/30  玄人 幸道         refresh_token の利用者が居るか・SecurityStamp が変わっていないかを確かめる口を追加（#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/02  玄人 幸道         ROPC の失敗の数えを、競合したら読み直してやり直す（E-14。#316）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -109,22 +110,64 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return;
             }
 
-            int count = CmnUserStore.IncrementAccessFailedCount(user);
-
-            if (Config.MaxFailedAccessAttemptsBeforeLockout <= count)
+            CmnEndpoints.RetryOnUserConflict(user, (current) =>
             {
-                CmnUserStore.SetLockoutEndDate(user,
-                    DateTimeOffset.UtcNow.Add(Config.DefaultAccountLockoutTimeSpanFromSeconds));
+                int count = CmnUserStore.IncrementAccessFailedCount(current);
+                bool lockedOut = Config.MaxFailedAccessAttemptsBeforeLockout <= count;
 
-                CmnUserStore.ResetAccessFailedCount(user);
+                if (lockedOut)
+                {
+                    CmnUserStore.SetLockoutEndDate(current,
+                        DateTimeOffset.UtcNow.Add(Config.DefaultAccountLockoutTimeSpanFromSeconds));
 
-                //  **断り始めた 1 回だけ、ログに残す。**
-                Logging.MyOperationTrace(string.Format(
-                    "{0}({1}) was locked out. (too many password failures at the token endpoint)",
-                    user.Id, user.UserName));
+                    CmnUserStore.ResetAccessFailedCount(current);
+                }
+
+                CmnUserStore.Update(current);
+
+                //  **断り始めた 1 回だけ、ログに残す**（書けてから。競合したらやり直すため）。
+                if (lockedOut)
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "{0}({1}) was locked out. (too many password failures at the token endpoint)",
+                        current.Id, current.UserName));
+                }
+            });
+        }
+
+        /// <summary>利用者の更新を、競合したら読み直してやり直す（#316）</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="operation">読み直した物を受け取り、更新する操作</param>
+        /// <remarks>
+        /// **やり直しても書けなければ、ログに残して諦める。**
+        /// **この口の応答は、数えられたかどうかに関わらないので、500 にしない。**
+        /// </remarks>
+        private static void RetryOnUserConflict(ApplicationUser user, Action<ApplicationUser> operation)
+        {
+            ApplicationUser current = user;
+
+            for (int i = 0; i < CmnUserStore.ConcurrencyRetryCount; i++)
+            {
+                try
+                {
+                    operation(current);
+                    return;
+                }
+                catch (CmnUserStore.ConcurrencyException)
+                {
+                    System.Threading.Thread.Sleep(CmnUserStore.ConcurrencyRetryDelayMilliseconds());
+
+                    current = CmnUserStore.FindById(user.Id);
+
+                    if (current == null)
+                    {
+                        return;
+                    }
+                }
             }
 
-            CmnUserStore.Update(user);
+            Logging.MyOperationTrace(string.Format(
+                "{0}({1}) could not be updated. (conflicts at the token endpoint)", user.Id, user.UserName));
         }
 
         /// <summary>成功したので、数えた分を消す</summary>
@@ -143,10 +186,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return;
             }
 
-            CmnUserStore.ResetAccessFailedCount(user);
-            CmnUserStore.SetLockoutEndDate(user, null);
+            CmnEndpoints.RetryOnUserConflict(user, (current) =>
+            {
+                CmnUserStore.ResetAccessFailedCount(current);
+                CmnUserStore.SetLockoutEndDate(current, null);
 
-            CmnUserStore.Update(user);
+                CmnUserStore.Update(current);
+            });
         }
 
         #endregion
