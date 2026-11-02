@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 2）
 //*  2026/11/02  玄人 幸道         同時に間違えても、すべて数える（RT-316.1・RT-316.2）
+//*  2026/11/03  玄人 幸道         同時の失敗の数えと、同時の同意の記録（RT-331.1・RT-331.2）
 //**********************************************************************************
 
 using System;
@@ -757,6 +758,171 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 }
                 finally
                 {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-331.1
+
+        /// <summary>RT-331.1 クライアント認証を同時に間違えても、すべて数える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT33101_クライアント認証を同時に間違えてもすべて数える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                int max = AuthFailureLockoutTests.SettingOf(admin, "AuthFailureMaxAttempts", 0);
+
+                Skip.If(max <= 0, "AuthFailureMaxAttempts が 0（数えない配備）です。");
+
+                TestReport r = this.Report("RT-331.1",
+                    "クライアント認証を同時に間違えても、すべて数える",
+                    "**`AuthFailureProvider.Record` は、読んで足して書き戻していた**ので、"
+                    + "**並行した失敗が少なく数えられ、断りに届きにくかった。**"
+                    + "**同時の 1 件目が重なると、主キーの違反にもなり得た。**",
+                    "#331 / RFC 6749 §5.2（invalid_client）");
+
+                r.Target("POST /revoke（使い捨てのクライアント。同時に 上限 - 1 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3311_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "Admin")),
+                    "前提: 利用者を作れること");
+
+                try
+                {
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        Assert.True(await client.TrySignInAsync(name, password),
+                            "前提: 使い捨ての利用者でサインインできること");
+
+                        (string ClientId, string ClientSecret) registered =
+                            await ManageClientRegistration.RegisterWithSecretAsync(client);
+
+                        //  **同時に送るのは 上限 - 1 回。最後の 1 回を、確かめる直前に送る**（RT-316.1 と同じ）。
+                        r.Step("(1) 間違った秘密で、同時に 上限 - 1 回（" + (max - 1) + " 回）失敗する");
+
+                        List<Task<JsonResponse>> attempts = new List<Task<JsonResponse>>();
+
+                        for (int i = 0; i < max - 1; i++)
+                        {
+                            attempts.Add(AuthFailureLockoutTests.RevokeAsync(
+                                client, registered.ClientId, "wrong-secret-" + i.ToString()));
+                        }
+
+                        JsonResponse[] wrongs = await Task.WhenAll(attempts);
+
+                        r.VerifyEqual("どの回も invalid_client", "0",
+                            wrongs.Count(x => x.Error != "invalid_client").ToString());
+
+                        r.Step("(2) もう 1 回間違えて、上限に届かせる");
+
+                        JsonResponse last = await AuthFailureLockoutTests.RevokeAsync(
+                            client, registered.ClientId, "wrong-secret-last");
+
+                        r.VerifyEqual("最後の 1 回も invalid_client", "invalid_client", last.Error);
+
+                        r.Step("(3) 正しい秘密でも断られる");
+
+                        JsonResponse correct = await AuthFailureLockoutTests.RevokeAsync(
+                            client, registered.ClientId, registered.ClientSecret);
+
+                        r.VerifyEqual("**正しい秘密でも invalid_client**", "invalid_client", correct.Error);
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-331.2 同意を同時に記録しても、落ちず、どの scope も消えない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT33102_同意を同時に記録しても落ちずscopeも消えない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-331.2",
+                    "同意を同時に記録しても、落ちず、どの scope も消えない",
+                    "**`ConsentProvider.Grant` は、読んでから入れるか書き戻していた**ので、"
+                    + "**同時の 1 件目が主キーの違反になり、後の書き込みが前の scope を消し得た。**",
+                    "#331 / OIDC Core 1.0 §3.1.2.4");
+
+                r.Target("GET /Account/OAuth2Authorize（使い捨ての利用者。scope を変えて同時に 8 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3312_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "User")),
+                    "前提: 利用者を作れること");
+
+                List<IdPClient> clients = new List<IdPClient>();
+
+                try
+                {
+                    ClientRegistration reg = Flows.Registration(admin, KnownClients.MvcSample);
+
+                    r.Step("(1) 別々のセッションから、scope を変えて同時に要求する");
+
+                    for (int i = 0; i < 8; i++)
+                    {
+                        IdPClient client = this.Client(targetKey);
+                        clients.Add(client);
+
+                        Assert.True(await client.TrySignInAsync(name, password),
+                            "前提: 使い捨ての利用者でサインインできること");
+                    }
+
+                    List<Task<AuthZResponse>> requests = new List<Task<AuthZResponse>>();
+
+                    for (int i = 0; i < clients.Count; i++)
+                    {
+                        requests.Add(Flows.AuthorizeCodeAsync(
+                            clients[i], reg, (i % 2 == 0) ? "openid email" : "openid profile",
+                            "state-" + i.ToString(), "nonce-" + i.ToString(), reg.RedirectUri));
+                    }
+
+                    AuthZResponse[] results = await Task.WhenAll(requests);
+
+                    r.VerifyEqual("**どの要求も code を受け取る**", "8",
+                        results.Count(x => x.Parameters != null && x.Parameters.ContainsKey("code")).ToString());
+
+                    r.Step("(2) 両方の scope を、同意画面なしで要求する");
+
+                    AuthZResponse none = await Flows.AuthorizeCodeAsync(
+                        clients[0], reg, "openid email profile", "state-none", "nonce-none", reg.RedirectUri,
+                        new Dictionary<string, string>() { { "prompt", "none" } });
+
+                    r.Verify("**どの scope も消えていない**",
+                        none.Parameters != null && none.Parameters.ContainsKey("code"),
+                        "code", (none.Parameters != null && none.Parameters.ContainsKey("error"))
+                            ? "**" + none.Parameters["error"] + "**" : "code");
+                }
+                finally
+                {
+                    clients.ForEach(x => x.Dispose());
                     await UsersAdmin.DeleteByUserNameAsync(admin, name);
                 }
 
