@@ -18,6 +18,7 @@
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         ID 連携の後は ReturnUrl へ戻す、同じ利用者を同時に作らない、サインインの結果を見る、クレームの入れ替え（#294）
 //*  2026/11/01  玄人 幸道         コメントの参照先を SelfTestWebApi に直した（#321）
+//*  2026/11/03  玄人 幸道         /userinfo に email・sub が無いときも、理由を OPERATION に記録する（#331）
 //**********************************************************************************
 
 /*
@@ -721,7 +722,15 @@ namespace MultiPurposeAuthSite.Controllers
                         } // else処理済
                     } // else処理済
                 } // else処理済
-            } // クレーム情報（e-mail, name情報）を取得できなかった。
+            }
+            else
+            {
+                // クレーム情報（e-mail, name情報）を取得できなかった。
+                //  **理由を残す**（#331）。**以前は、ここだけ理由が出ず、利用者の作成の失敗と区別できなかった。**
+                Logging.MyOperationTrace(string.Format(
+                    "The /userinfo of the ID federation had no email or sub. (email: {0}, sub: {1})",
+                    LogSanitizer.Describe(email), LogSanitizer.Describe(name)));
+            }
 
             // **ここに来た理由を残す**（#253）。
             //   **上で個別のトレースを出していれば、その次の行として出る**（経路の終わりを示す）。

@@ -62,6 +62,7 @@
 //*  2026/10/21  玄人 幸道         OP のセッションの識別子と sid クレームを追加（#310 の段階 1）
 //*  2026/10/25  玄人 幸道         認可エンドポイントと SAML2 のエラーを OPERATION に記録する（障害対応のため。#294）
 //*  2026/10/29  玄人 幸道         使われていない ErrorMessage・AddErrors(IEnumerable)・空の Dispose を消した（#294）
+//*  2026/11/03  玄人 幸道         IdentityResult の失敗の理由を OPERATION に記録する（#331）
 //**********************************************************************************
 
 /*
@@ -77,10 +78,12 @@
 */
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System.Collections.Generic;
+using System.Linq;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization;
@@ -247,6 +250,11 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 ModelState.AddModelError("", error.Code + ": " + error.Description);
             }
+
+            //  **理由を残す**（#331）。**画面に出すだけでは、ID 連携のように Error の画面で終わる経路で、何も分からない。**
+            //    **コードだけを出す**（説明には利用者名やメアドが入る）。
+            Logging.MyOperationTrace(string.Format("The identity operation failed. (errors: {0})",
+                string.Join(", ", result.Errors.Select(x => x.Code))));
         }
 
         /// <summary>RedirectToActionする。</summary>

@@ -57,6 +57,7 @@
 //*  2026/10/20  玄人 幸道         クライアントごとの利用者を作らなくした（#307 の段階 5-a-1）
 //*  2026/10/21  玄人 幸道         OP のセッションの識別子と sid クレームを追加（#310 の段階 1）
 //*  2026/10/25  玄人 幸道         認可エンドポイントと SAML2 のエラーを OPERATION に記録する（障害対応のため。#294）
+//*  2026/11/03  玄人 幸道         IdentityResult の失敗の理由を OPERATION に記録する（#331）
 //**********************************************************************************
 
 /*
@@ -70,10 +71,12 @@
 - 段階ごとの決定と経緯（partial の全ファイル分）は、root/programs/DesignNotes/AccountController.md に在る。
 */
 
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Configuration;
 
 using System.Web;
@@ -86,6 +89,7 @@ using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
 using Touryo.Infrastructure.Business.Presentation;
+using Touryo.Infrastructure.Public.Log;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -185,6 +189,11 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 ModelState.AddModelError("", error);
             }
+
+            //  **理由を残す**（#331）。**画面に出すだけでは、ID 連携のように Error の画面で終わる経路で、何も分からない。**
+            //    **ASP.NET Identity 2 は文言しか持たない**ので、文言を出す（改行などは落とす）。
+            Logging.MyOperationTrace(string.Format("The identity operation failed. (errors: {0})",
+                string.Join(" / ", result.Errors.Select(x => LogSanitizer.Sanitize(x)))));
         }
 
         /// <summary>

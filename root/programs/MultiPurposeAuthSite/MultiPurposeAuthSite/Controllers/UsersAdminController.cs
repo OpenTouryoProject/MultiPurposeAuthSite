@@ -18,6 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //*  2026/10/01  玄人 幸道         利用者名とメアドを別の項目として扱うようにした（#151 の段階 3）
 //*  2026/11/03  玄人 幸道         作成の再表示にモデルを渡す（net10.0 版に揃えた。#294）
+//*  2026/11/03  玄人 幸道         画面からの更新も、競合したら読み直して、変えた項目だけを当て直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -450,7 +451,14 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // 入力値で更新する。
-                    result = await UserManager.UpdateAsync(user);
+                    //  **競合したら、読み直して、変えた項目だけを当て直す**（#331）。**ほかの項目は、読み直した値のまま。**
+                    string newUserName = user.UserName;
+                    string newEmail = user.Email;
+                    result = await UserManager.UpdateWithRetryAsync(user, x =>
+                    {
+                        x.UserName = newUserName;
+                        x.Email = newEmail;
+                    });
 
                     if (result.Succeeded)
                     {

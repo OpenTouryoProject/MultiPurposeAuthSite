@@ -22,6 +22,7 @@
 //*                                パスワードの変更で auth_time を書く・メアドの変更で SecurityStamp を更新し、
 //*                                変更前のメアドにも知らせる（#294）
 //*  2026/10/30  玄人 幸道         メアドの変更は、設定によらずパスワードを確かめる（#294）
+//*  2026/11/03  玄人 幸道         画面からの更新も、競合したら読み直して、変えた項目だけを当て直す（#331）
 //**********************************************************************************
 
 /*
@@ -121,7 +122,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // UserNameの更新
                     user.UserName = model.UserNameForEdit;
-                    IdentityResult result = await UserManager.UpdateAsync(user);
+                    //  **競合したら、読み直して、変えた項目だけを当て直す**（#331）。**ほかの項目は、読み直した値のまま。**
+                    IdentityResult result = await ((MultiPurposeAuthSite.Data.UserManagerCore)UserManager).UpdateWithRetryAsync(
+                        user, x => x.UserName = model.UserNameForEdit);
 
                     // 結果の確認
                     if (result.Succeeded)
@@ -501,7 +504,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // 場合によっては、Email & UserName を更新するため。
                             //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
-                            IdentityResult result = await UserManager.UpdateAsync(user);
+                            //  **競合したら、読み直して、変えた項目だけを当て直す**（#331）。**ほかの項目は、読み直した値のまま。**
+                            IdentityResult result = await ((MultiPurposeAuthSite.Data.UserManagerCore)UserManager).UpdateWithRetryAsync(
+                                user, x => x.Email = email);
 
                             // 結果の確認
                             if (result.Succeeded)

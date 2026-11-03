@@ -116,8 +116,9 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="change">変更（**読み直すたびに当て直す**ので、前の値から計算しない）</param>
         /// <returns>IdentityResult</returns>
         /// <remarks>
-        /// **送り直す人がいない要求**（端末からの `/SetDeviceToken` など）のためにある。
-        /// **画面からの更新には使わない**（見ていない値の上に書くことになる。競合なら、失敗を見せて送り直させる）。
+        /// **`change` には、この要求で変える項目だけを書く。** 読み直した行に当て直すので、**ほかの項目は新しい値のまま残る。**
+        /// 端末からの要求（`/SetDeviceToken`）と、画面からの更新（利用者名・メアド・非構造化データなど）が使う。
+        /// **同じ項目を同時に変えたときは、後から書いた方が残る。**
         /// </remarks>
         public Task<IdentityResult> UpdateWithRetryAsync(ApplicationUser user, Action<ApplicationUser> change)
         {
