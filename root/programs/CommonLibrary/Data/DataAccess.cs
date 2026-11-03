@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/11/03  玄人 幸道         デッドロックの犠牲になった読み取りを読み直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -37,6 +38,7 @@ using MultiPurposeAuthSite.Log;
 using System;
 using System.Data;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Oracle.ManagedDataAccess.Client;
 
@@ -92,6 +94,48 @@ namespace MultiPurposeAuthSite.Data
         }
 
 #endregion
+
+        #region 読み取りのやり直し
+
+        /// <summary>読み取りを試す回数（#331）</summary>
+        private const int ReadAttempts = 3;
+
+        /// <summary>読み取りを、デッドロックの犠牲になったら読み直す（#331）</summary>
+        /// <typeparam name="T">読んだ値の型</typeparam>
+        /// <param name="read">読み取り（**状態を変えないこと**）</param>
+        /// <returns>読んだ値</returns>
+        /// <remarks>
+        /// **SQL Server は、読み取りもデッドロックの犠牲に選ぶ**（エラー 1205）。
+        /// 以前は読み取りの失敗を握っていたので、**「居ない」「ロールが無い」として返っていた。**
+        /// 握らなくしたので、**読み直さないと 500 になる。**
+        /// Oracle・PostgreSQL の読み取りは、行のロックを取らないので当たらない。
+        /// </remarks>
+        public static T RetryOnDeadlock<T>(Func<T> read)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return read();
+                }
+                catch (Exception ex) when (attempt < DataAccess.ReadAttempts && DataAccess.IsDeadlockVictim(ex))
+                {
+                    //  **記録は読み取りの側で済んでいる。** 少し待って読み直す。
+                    Thread.Sleep(10 * attempt);
+                }
+            }
+        }
+
+        /// <summary>デッドロックの犠牲か（SQL Server のエラー 1205）</summary>
+        /// <param name="ex">例外</param>
+        /// <returns>犠牲なら true</returns>
+        private static bool IsDeadlockVictim(Exception ex)
+        {
+            SqlException sql = ex as SqlException;
+            return sql != null && sql.Number == 1205;
+        }
+
+        #endregion
 
         #region 初期化
 

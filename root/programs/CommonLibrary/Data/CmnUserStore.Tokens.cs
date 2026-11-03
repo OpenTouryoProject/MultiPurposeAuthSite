@@ -32,6 +32,7 @@
 //*  2026/10/30  玄人 幸道         回復コードで空のコードを断る・トークンを渡された user の一覧で扱う（読み直さない・重ねない）・INSERT / UPDATE を Execute で（#294）
 //*  2026/10/30  玄人 幸道         トークンを、DB に入れた後で一覧に足す（#294）
 //*  2026/11/02  玄人 幸道         回復コードの書き戻しを、読んだ値が一致するときだけにした（同時に使うと 2 回使えた。#316）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す。デッドロックの犠牲なら読み直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -175,12 +176,19 @@ namespace MultiPurposeAuthSite.Data
             return;
         }
 
+        /// <summary>FindTotpToken（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `FindTotpTokenOnce`。</remarks>
+        private static IdentityUserToken<string> FindTotpToken(ApplicationUser user, string loginProvider, string name)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnUserStore.FindTotpTokenOnce(user, loginProvider, name));
+        }
+
         /// <summary>FindTotpToken</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="loginProvider">string</param>
         /// <param name="name">string</param>
         /// <returns>IdentityUserToken(string)</returns>
-        private static IdentityUserToken<string> FindTotpToken(ApplicationUser user, string loginProvider, string name)
+        private static IdentityUserToken<string> FindTotpTokenOnce(ApplicationUser user, string loginProvider, string name)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -284,7 +292,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return null;

@@ -42,6 +42,7 @@
 //*  2026/10/21  玄人 幸道         起動のときに jwks_uri を温める（#309 の段階 2）
 //*  2026/10/26  玄人 幸道         外部ログインの戻りの失敗を OPERATION に記録する（#294）
 //*  2026/10/27  玄人 幸道         利用者名の文字の制限を AllowOnlyAlphanumericUserNames に合わせた（#294）
+//*  2026/11/03  玄人 幸道         読めないフォームを 400 で断る（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -225,6 +226,38 @@ namespace MultiPurposeAuthSite
             {
                 app.UseHttpsRedirection();
             }
+
+            //  **読めないフォームは、要求の誤りとして断る**（#331）。
+            //    **ASP.NET Core は、NUL 文字を含む値や、上限（`FormOptions`）を超えるフォームを、**
+            //    **`InvalidDataException` で断る。** 受けないと 500 になる（net48 版は読める）。
+            //    **フォームの読み取りは要求に残る**ので、後の読み取りは読み直さない。
+            app.Use(async (context, next) =>
+            {
+                if (context.Request.HasFormContentType)
+                {
+                    try
+                    {
+                        await context.Request.ReadFormAsync();
+                    }
+                    catch (InvalidDataException)
+                    {
+                        context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+
+                        if (RateLimitProvider.IsLimitedPath(context.Request.Path.Value))
+                        {
+                            //  **OAuth2 の口は、`invalid_request` で返す**（RFC 6749 §5.2）。
+                            context.Response.Headers["Cache-Control"] = "no-store";
+                            context.Response.ContentType = "application/json;charset=UTF-8";
+                            await context.Response.WriteAsync(
+                                "{\"error\":\"invalid_request\",\"error_description\":\"invalid form.\"}");
+                        }
+
+                        return;
+                    }
+                }
+
+                await next();
+            });
 
             // **口ごとのレート制限**（#305 の段階 3）。
             // （**net48 版は `Global.asax` の `BeginRequest` から同じものを呼ぶ**。

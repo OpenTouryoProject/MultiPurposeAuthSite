@@ -32,6 +32,7 @@
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //*  2026/10/30  玄人 幸道         値の無いクレーム（Oracle は空文字を NULL にする）で、残りの関連情報を読み落とさない（#294）
 //*  2026/11/02  玄人 幸道         mem ストアの入れ物を、並行に読み書きできるものに変えた（#325）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -78,6 +79,21 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 
         #region DBMS
+
+        /// <summary>DB で引ける値か（#331）</summary>
+        /// <param name="value">利用者名・メアドなど、外から来た値</param>
+        /// <returns>引けるなら true</returns>
+        /// <remarks>
+        /// **PostgreSQL は NUL 文字を、Oracle は列の幅を大きく超える値を、例外で断る。**
+        /// **読み取りの失敗を握らない**ので、確かめないと 500 になる。
+        /// **列の幅（256）を超える値は、どの行にも一致しない。** `mem` には幅が無いので確かめない。
+        /// </remarks>
+        public static bool IsSearchable(string value)
+        {
+            return Config.UserStoreType == EnumUserStoreType.Memory
+                || value == null
+                || (value.Length <= 256 && value.IndexOf('\0') < 0);
+        }
 
         /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）</summary>
         public static void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
@@ -286,7 +302,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
         }
         

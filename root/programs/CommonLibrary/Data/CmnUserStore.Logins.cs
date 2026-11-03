@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         外部ログインを大文字小文字まで比べる（SQL Server の照合順序で、違う sub が一致していた）・DB でも渡された user の一覧を揃える・mem の削除で隣り合う組を飛ばさない（#294）
 //*  2026/10/30  玄人 幸道         SQL Server で、外部ログインを外すときも大文字小文字まで比べる（#294）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す。デッドロックの犠牲なら読み直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -162,10 +163,17 @@ namespace MultiPurposeAuthSite.Data
             return;
         }
 
+        /// <summary>Find（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `FindOnce`。</remarks>
+        public static ApplicationUser Find(UserLoginInfo login)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnUserStore.FindOnce(login));
+        }
+
         /// <summary>外部ログインでユーザーを検索</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser Find(UserLoginInfo login)
+        private static ApplicationUser FindOnce(UserLoginInfo login)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -181,6 +189,12 @@ namespace MultiPurposeAuthSite.Data
             try
             {
                 // 外部ログインでユーザーを検索
+                //  **DB が受け付けない値は、引くまでもなく「無い」**（#331）。
+                if (!CmnStore.IsSearchable(login.ProviderKey))
+                {
+                    return user;
+                }
+
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -276,7 +290,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return user;

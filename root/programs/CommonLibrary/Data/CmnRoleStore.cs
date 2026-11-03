@@ -31,6 +31,7 @@
 //*  2018/12/04  西野 大介         新規
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //*  2026/10/15  玄人 幸道         書き込みの失敗を握らずに投げ直す（#300）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す。デッドロックの犠牲なら読み直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -142,10 +143,17 @@ namespace MultiPurposeAuthSite.Data
 
         #region R (Read)
 
+        /// <summary>FindById（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `FindByIdOnce`。</remarks>
+        public static ApplicationRole FindById(string roleId)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnRoleStore.FindByIdOnce(roleId));
+        }
+
         /// <summary>ロールを ID から検索</summary>
         /// <param name="roleId">string</param>
         /// <returns>ApplicationRole</returns>
-        public static ApplicationRole FindById(string roleId)
+        private static ApplicationRole FindByIdOnce(string roleId)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -160,6 +168,12 @@ namespace MultiPurposeAuthSite.Data
 
             try
             {
+                //  **DB が受け付けない値は、引くまでもなく「無い」**（#331）。
+                if (!CmnStore.IsSearchable(roleId))
+                {
+                    return role;
+                }
+
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -213,10 +227,19 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return role;
+        }
+
+        /// <summary>FindByName（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `FindByNameOnce`。</remarks>
+        public static ApplicationRole FindByName(string roleName)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnRoleStore.FindByNameOnce(roleName));
         }
 
         /// <summary>ロールを（ロール名指定で）検索</summary>
@@ -227,7 +250,7 @@ namespace MultiPurposeAuthSite.Data
         /// ・グローバル ロールを優先して返す。
         /// ・無ければ自テナントを検索して返す。
         /// </remarks>
-        public static ApplicationRole FindByName(string roleName)
+        private static ApplicationRole FindByNameOnce(string roleName)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -243,6 +266,12 @@ namespace MultiPurposeAuthSite.Data
             
             try
             {
+                //  **DB が受け付けない値は、引くまでもなく「無い」**（#331）。
+                if (!CmnStore.IsSearchable(roleName))
+                {
+                    return role;
+                }
+
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -308,10 +337,22 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return role;
+        }
+
+        /// <summary>Roles（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `RolesOnce`。</remarks>
+        public static IQueryable<ApplicationRole> Roles
+        {
+            get
+            {
+                return DataAccess.RetryOnDeadlock(() => CmnRoleStore.RolesOnce);
+            }
         }
 
         /// <summary>
@@ -321,7 +362,7 @@ namespace MultiPurposeAuthSite.Data
         /// ★ マルチテナント化対応を施した
         /// （場合によってはページングも必要になる）
         /// </remarks>
-        public static IQueryable<ApplicationRole> Roles
+        private static IQueryable<ApplicationRole> RolesOnce
         {
             get
             {
@@ -381,7 +422,9 @@ namespace MultiPurposeAuthSite.Data
                 }
                 catch (Exception ex)
                 {
+                    //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                     Logging.MySQLLogForEx(ex);
+                    throw;
                 }
 
                 // IQueryableとして戻す。
