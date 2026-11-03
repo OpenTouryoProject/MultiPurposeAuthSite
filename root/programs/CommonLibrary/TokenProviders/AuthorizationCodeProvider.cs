@@ -36,6 +36,7 @@
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
 //*  2026/10/22  玄人 幸道         認可要求の dpop_jkt を code に紐付ける（#311 の段階 4）
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
+//*  2026/11/04  玄人 幸道         消せた 1 つだけが引き換える（同時に引き換えると、複数にトークンが出ていた。#332）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -101,6 +102,18 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             CodeEntry entry = null;
 
+            if (remove)
+            {
+                //  **取り出せた 1 つだけが引き換える**（#332）。
+                //    **以前は読んでから消し、消せたかを見ていなかった**ので、同時に来た要求の両方が読めた。
+                if (!AuthorizationCodeProvider.AuthenticationCodes.TryRemove(code, out entry))
+                {
+                    return "";
+                }
+
+                return (entry.CreatedDate < AuthorizationCodeProvider.ExpireLimit) ? "" : entry.Value;
+            }
+
             if (!AuthorizationCodeProvider.AuthenticationCodes.TryGetValue(code, out entry))
             {
                 return "";
@@ -111,11 +124,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // 期限切れ。参照した時点で消す。
                 AuthorizationCodeProvider.AuthenticationCodes.TryRemove(code, out CodeEntry _);
                 return "";
-            }
-
-            if (remove)
-            {
-                AuthorizationCodeProvider.AuthenticationCodes.TryRemove(code, out CodeEntry _);
             }
 
             return entry.Value;
@@ -396,6 +404,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         cnn.Open();
 
+                        int deleted = 0;
+
                         switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
@@ -405,8 +415,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
                                     new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
 
-                                cnn.Execute(
-                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
+                                //  **同じ行の削除が重なると、SQL Server はデッドロックの犠牲を選ぶ**（#332）。やり直す。
+                                deleted = DataAccess.RetryWriteOnDeadlock(() => cnn.Execute(
+                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code }));
 
                                 break;
 
@@ -417,7 +428,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
                                     new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
 
-                                cnn.Execute(
+                                deleted = cnn.Execute(
                                     "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
 
                                 break;
@@ -429,10 +440,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
                                     new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
 
-                                cnn.Execute(
+                                deleted = cnn.Execute(
                                     "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
 
                                 break;
+                        }
+
+                        //  **消せた 1 つだけが引き換える**（#332）。
+                        //    **以前は消せたかを見ていなかった**ので、同時に来た要求の両方が読めて、両方にトークンが出た。
+                        //    **device_code・auth_req_id も、最後はここで内部の認可コードを引き換える**ので、同じく 1 回になる。
+                        if (deleted != 1)
+                        {
+                            value = "";
                         }
                     }
 
