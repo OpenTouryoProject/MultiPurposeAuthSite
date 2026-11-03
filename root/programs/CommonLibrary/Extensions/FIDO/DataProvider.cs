@@ -32,6 +32,7 @@
 //*  2026/10/07  玄人 幸道         fido2-net-lib 4.2.0 に合わせた（#137）
 //*  2026/10/29  玄人 幸道         利用者名の変更で、資格情報を新しい名前へ移す RenameUser を足した（#294）
 //*  2026/11/02  玄人 幸道         DB の資格情報は CmnUserStore.Update が移すので、RenameUser は mem だけにした（#327）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -462,6 +463,12 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// <param name="userName">string</param>
         public static void Delete(string publicKeyId, string userName)
         {
+            //  **列の幅（256）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(publicKeyId, 256))
+            {
+                return;
+            }
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:

@@ -32,6 +32,7 @@
 //*  2026/10/26  玄人 幸道         クライアント単位で同意を消す RevokeByClient を追加（登録の削除で、全利用者の同意を消す。#294）
 //*  2026/10/29  玄人 幸道         利用者単位で同意を消す DeleteByUser を追加（mem ストアで利用者の削除後に残っていた。#294）
 //*  2026/11/03  玄人 幸道         同意の記録を、読んだ値が変わっていないときだけ書く形にした（同時の 1 件目が主キーの違反で落ち、scope が消え得た。#331）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 /*
@@ -419,6 +420,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public static void Revoke(string userId, string clientId)
         {
+            //  **列の幅（256）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(clientId, 256))
+            {
+                return;
+            }
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:

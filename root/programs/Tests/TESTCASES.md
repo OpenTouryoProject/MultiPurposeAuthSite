@@ -10676,6 +10676,19 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **どの口も 500 にならない**（/token code=400, /token refresh_token=400, /token client_id=401, /token device_code=400, /token auth_req_id=400, /revoke token=200, /introspect token=200, /authorize request_uri=302）
 
+## RT-331.10 DB の列の幅を超える値で、画面から同意・資格情報・管理の行を引いても 500 にしない
+
+| | |
+|---|---|
+| 観点 | **`RT-331.9` と同じ型を、サインインした利用者と管理者の画面で見る。****外から来た値で引く口は、「無い」と同じ結果になる**こと。 |
+| 根拠 | #331 |
+| テスト | `RT33110_列の幅を超える値で画面から引いても500にしない` |
+
+**検証（合否を判定する）**
+
+- **どの口も 500 にならない**（RevokeConsent clientId=302, RemoveWebAuthnData publicKeys=200, SoftwareStatementAdmin/Edit key=302, IdFederationAdmin/Edit key=302）
+- **同意の取り消しは、一覧の画面へ戻る**（エラー画面へ送らない）
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

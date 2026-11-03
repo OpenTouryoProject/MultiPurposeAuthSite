@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/03  玄人 幸道         新規（#331）
 //*  2026/11/03  玄人 幸道         RT-331.9（列の幅を超える値でトークンを引いても 500 にしない）を足した（#331）
+//*  2026/11/03  玄人 幸道         RT-331.10（列の幅を超える値で画面から引いても 500 にしない）を足した（#331）
 //**********************************************************************************
 
 using System;
@@ -217,6 +218,89 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("**どの口も 500 にならない**（" + string.Join(", ", statuses) + "）",
                     errors.Count == 0,
                     "500 未満", (errors.Count == 0) ? "500 未満" : "**500**: " + string.Join(", ", errors));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-331.10 列の幅を超える値で、画面から同意・資格情報・管理の行を引いても 500 にしない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT33110_列の幅を超える値で画面から引いても500にしない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-331.10",
+                    "DB の列の幅を超える値で、画面から同意・資格情報・管理の行を引いても 500 にしない",
+                    "**`RT-331.9` と同じ型を、サインインした利用者と管理者の画面で見る。**"
+                    + "**外から来た値で引く口は、「無い」と同じ結果になる**こと。",
+                    "#331");
+
+                string longValue = new string('a', 5000);
+
+                r.Target("/Manage/RevokeConsent・/Manage/RemoveWebAuthnData・/SoftwareStatementAdmin/Edit・/IdFederationAdmin/Edit（値は 5000 文字）");
+
+                List<string> statuses = new List<string>();
+                List<string> errors = new List<string>();
+
+                string html = await (await client.GetAsync("/Manage/Index")).Content.ReadAsStringAsync();
+                Match m = Regex.Match(html,
+                    "name=\"__RequestVerificationToken\"[^>]*value=\"(?<value>[^\"]+)\"");
+
+                Assert.True(m.Success, "前提: 管理画面を開けること");
+
+                List<KeyValuePair<string, HttpResponseMessage>> calls = new List<KeyValuePair<string, HttpResponseMessage>>();
+
+                calls.Add(new KeyValuePair<string, HttpResponseMessage>("RevokeConsent clientId",
+                    await client.PostFormAsync("/Manage/RevokeConsent", new Dictionary<string, string>()
+                    {
+                        { "__RequestVerificationToken", m.Groups["value"].Value }, { "clientId", longValue }
+                    })));
+
+                //  **WebAuthn の削除の画面は net10.0 版だけに在る**（#137）。
+                if (targetKey == TestEnv.CoreKey)
+                {
+                    calls.Add(new KeyValuePair<string, HttpResponseMessage>("RemoveWebAuthnData publicKeys",
+                        await client.PostFormAsync("/Manage/RemoveWebAuthnData", new Dictionary<string, string>()
+                        {
+                            { "__RequestVerificationToken", m.Groups["value"].Value }, { "publicKeys", longValue }
+                        })));
+                }
+
+                await admin.SignInAsAdministratorAsync();
+
+                calls.Add(new KeyValuePair<string, HttpResponseMessage>("SoftwareStatementAdmin/Edit key",
+                    await admin.GetAsync("/SoftwareStatementAdmin/Edit?key=" + longValue)));
+
+                calls.Add(new KeyValuePair<string, HttpResponseMessage>("IdFederationAdmin/Edit key",
+                    await admin.GetAsync("/IdFederationAdmin/Edit?key=" + longValue)));
+
+                foreach (KeyValuePair<string, HttpResponseMessage> call in calls)
+                {
+                    statuses.Add(call.Key + "=" + (int)call.Value.StatusCode);
+
+                    if ((int)call.Value.StatusCode >= 500)
+                    {
+                        errors.Add(call.Key);
+                    }
+                }
+
+                r.Verify("**どの口も 500 にならない**（" + string.Join(", ", statuses) + "）",
+                    errors.Count == 0,
+                    "500 未満", (errors.Count == 0) ? "500 未満" : "**500**: " + string.Join(", ", errors));
+
+                //  **net48 版は、例外をエラー画面への 302 にする**ので、状態コードだけでは見分けられない
+                //    （修正前の `ora` で、取り消しは 302 のまま例外になっていた）。**取り消しは一覧へ戻ること**を見る。
+                HttpResponseMessage revoked = calls[0].Value;
+                string location = (revoked.Headers.Location == null) ? "" : revoked.Headers.Location.ToString();
+
+                r.Verify("**同意の取り消しは、一覧の画面へ戻る**（エラー画面へ送らない）",
+                    location.Contains("/Manage/ConsentGrants"),
+                    "/Manage/ConsentGrants へ", string.IsNullOrEmpty(location)
+                        ? "HTTP " + (int)revoked.StatusCode : location);
 
                 r.Done();
             }
