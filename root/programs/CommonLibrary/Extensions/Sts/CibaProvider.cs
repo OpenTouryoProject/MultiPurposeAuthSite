@@ -31,6 +31,7 @@
 //*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
 //*  2026/11/02  玄人 幸道         client_notification_token を保存のキーに使わない（poll で 500。#328）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using System;
@@ -361,6 +362,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // EnableCibaGrantType == true
 
                 string temp = "";
+                //  **列の幅（800）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+                if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(authReqId, 800))
+                {
+                    return retVal;
+                }
+
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:

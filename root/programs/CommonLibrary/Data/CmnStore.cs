@@ -90,9 +90,23 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public static bool IsSearchable(string value)
         {
+            return CmnStore.IsSearchable(value, 256);
+        }
+
+        /// <summary>DB で引ける値か（列の幅を指定する。#331）</summary>
+        /// <param name="value">コード・トークン・client_id など、外から来た値</param>
+        /// <param name="maxLength">引く列の幅（DDL の値）</param>
+        /// <returns>引けるなら true</returns>
+        /// <remarks>
+        /// **Oracle（ODP.NET）は、4000 文字を超える文字列のパラメタを例外で断る**（Dapper が長さを -1 にするため）。
+        /// **列の幅を超える値は、どの行にも一致しない**（入れるときに DB が断っている）ので、引かずに「無い」とする。
+        /// **「無い」が「通す」になる口**（使用済みの記録・失敗の数え）**には使わない。**
+        /// </remarks>
+        public static bool IsSearchable(string value, int maxLength)
+        {
             return Config.UserStoreType == EnumUserStoreType.Memory
                 || value == null
-                || (value.Length <= 256 && value.IndexOf('\0') < 0);
+                || (value.Length <= maxLength && value.IndexOf('\0') < 0);
         }
 
         /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）</summary>

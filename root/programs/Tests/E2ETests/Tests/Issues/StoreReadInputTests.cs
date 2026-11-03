@@ -29,8 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/03  玄人 幸道         新規（#331）
+//*  2026/11/03  玄人 幸道         RT-331.9（列の幅を超える値でトークンを引いても 500 にしない）を足した（#331）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -130,6 +132,106 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Done();
             }
+        }
+
+        /// <summary>RT-331.9 列の幅を超える値でトークンやコードを引いても、500 にしない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT33109_列の幅を超える値でトークンを引いても500にしない(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-331.9",
+                    "DB の列の幅を超える値で、コード・トークン・クライアントを引いても 500 にしない",
+                    "**`mem` には列の幅が無い。** DB では、幅を大きく超える値で引くと例外になることがある"
+                    + "（Oracle は、利用者名で実際に起きた。`RT-331.3`）。"
+                    + "**外から来た値で引く口は、「無い」と同じ結果になる**こと。",
+                    "#331 / RFC 6749 §5.2 / RFC 7009 §2.2.1 / RFC 7662 §2.3");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+                string longValue = new string('a', 5000);
+
+                r.Target("/token・/revoke・/introspect・/authorize（値は 5000 文字）");
+
+                List<KeyValuePair<string, Task<HttpResponseMessage>>> calls = new List<KeyValuePair<string, Task<HttpResponseMessage>>>()
+                {
+                    Post(client, "/token code", "/token", new Dictionary<string, string>()
+                    {
+                        { "grant_type", "authorization_code" }, { "code", longValue },
+                        { "redirect_uri", reg.RedirectUri },
+                        { "client_id", reg.ClientId }, { "client_secret", reg.ClientSecret }
+                    }),
+                    Post(client, "/token refresh_token", "/token", new Dictionary<string, string>()
+                    {
+                        { "grant_type", "refresh_token" }, { "refresh_token", longValue },
+                        { "client_id", reg.ClientId }, { "client_secret", reg.ClientSecret }
+                    }),
+                    Post(client, "/token client_id", "/token", new Dictionary<string, string>()
+                    {
+                        { "grant_type", "client_credentials" },
+                        { "client_id", longValue }, { "client_secret", "e2e-wrong-secret" }
+                    }),
+                    Post(client, "/token device_code", "/token", new Dictionary<string, string>()
+                    {
+                        { "grant_type", "urn:ietf:params:oauth:grant-type:device_code" }, { "device_code", longValue },
+                        { "client_id", reg.ClientId }, { "client_secret", reg.ClientSecret }
+                    }),
+                    Post(client, "/token auth_req_id", "/token", new Dictionary<string, string>()
+                    {
+                        { "grant_type", "urn:openid:params:grant-type:ciba" }, { "auth_req_id", longValue },
+                        { "client_id", reg.ClientId }, { "client_secret", reg.ClientSecret }
+                    }),
+                    Post(client, "/revoke token", "/revoke", new Dictionary<string, string>()
+                    {
+                        { "token", longValue },
+                        { "client_id", reg.ClientId }, { "client_secret", reg.ClientSecret }
+                    }),
+                    Post(client, "/introspect token", "/introspect", new Dictionary<string, string>()
+                    {
+                        { "token", longValue },
+                        { "client_id", reg.ClientId }, { "client_secret", reg.ClientSecret }
+                    }),
+                    new KeyValuePair<string, Task<HttpResponseMessage>>("/authorize request_uri",
+                        client.GetAsync("/authorize?response_type=code&client_id=" + Uri.EscapeDataString(reg.ClientId)
+                            + "&request_uri=" + Uri.EscapeDataString("urn:ietf:params:oauth:request_uri:" + longValue)))
+                };
+
+                //  **どの口が落ちたかを、まとめて出す**（1 つ目で止めると、残りが分からない）。
+                List<string> statuses = new List<string>();
+                List<string> errors = new List<string>();
+
+                foreach (KeyValuePair<string, Task<HttpResponseMessage>> call in calls)
+                {
+                    HttpResponseMessage res = await call.Value;
+
+                    statuses.Add(call.Key + "=" + (int)res.StatusCode);
+
+                    if ((int)res.StatusCode >= 500)
+                    {
+                        errors.Add(call.Key);
+                    }
+                }
+
+                r.Verify("**どの口も 500 にならない**（" + string.Join(", ", statuses) + "）",
+                    errors.Count == 0,
+                    "500 未満", (errors.Count == 0) ? "500 未満" : "**500**: " + string.Join(", ", errors));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>フォームを POST する（呼び出しを並べるため）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="label">名前</param>
+        /// <param name="path">口</param>
+        /// <param name="form">フォーム</param>
+        /// <returns>名前と応答</returns>
+        private static KeyValuePair<string, Task<HttpResponseMessage>> Post(
+            IdPClient client, string label, string path, Dictionary<string, string> form)
+        {
+            return new KeyValuePair<string, Task<HttpResponseMessage>>(label, client.PostFormAsync(path, form));
         }
     }
 }

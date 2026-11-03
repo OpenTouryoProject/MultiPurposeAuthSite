@@ -35,6 +35,7 @@
 //*  2026/09/11  玄人 幸道         request_uri 経路でも redirect_uri / PKCE を code に紐付ける（#197）
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
 //*  2026/10/22  玄人 幸道         認可要求の dpop_jkt を code に紐付ける（#311 の段階 4）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -375,6 +376,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             string value = "";
 
+            //  **列の幅（64）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(code, 64))
+            {
+                return value;
+            }
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -456,6 +463,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             string value = "";
             code_challenge_method = "";
             code_challenge = "";
+
+            //  **列の幅（64）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(code, 64))
+            {
+                return;
+            }
 
             switch (Config.UserStoreType)
             {
@@ -573,6 +586,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             string value = "";
 
+            //  **列の幅（64）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(code, 64))
+            {
+                return value;
+            }
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -643,6 +662,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static string GetDPoPJkt(string code)
         {
             string value = "";
+
+            //  **列の幅（64）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(code, 64))
+            {
+                return value;
+            }
 
             switch (Config.UserStoreType)
             {
