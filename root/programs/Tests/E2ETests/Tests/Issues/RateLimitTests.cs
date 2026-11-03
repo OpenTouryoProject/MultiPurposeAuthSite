@@ -30,10 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 3）
 //*  2026/11/01  玄人 幸道         連打の途中で窓が変わると 429 に届かないことがあったのを直した（#325）
+//*  2026/11/03  玄人 幸道         連打の打ち切りを回数から時間に変え、並べる本数を増やした（応答が遅いと 429 に届かなかった。#331）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -67,6 +69,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// </remarks>
     public class RateLimitTests : TargetTestBase
     {
+        /// <summary>連打で並べる本数（#331）</summary>
+        /// <remarks>
+        /// **窓の中で上限に届くかは、1 往復の時間で決まる**（並べる本数 ÷ 1 往復 × 窓）。
+        /// **上限 300 回 / 20 秒（`test.ps1`）なら、40 本で 1 往復 2.6 秒まで届く**（10 本では 0.6 秒）。
+        /// </remarks>
+        private const int BurstParallel = 40;
+
         /// <summary>コンストラクタ</summary>
         /// <param name="output">ITestOutputHelper</param>
         public RateLimitTests(ITestOutputHelper output) : base(output)
@@ -144,13 +153,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                         r.VerifyEqual("HTTP 200", "200", ((int)before.StatusCode).ToString());
 
-                        r.Step("(3) 上限を超えるまで叩く（10 本ずつ並べて、窓の中で叩き切る）");
+                        r.Step("(3) 上限を超えるまで叩く（" + RateLimitTests.BurstParallel
+                            + " 本ずつ並べて、窓の中で叩き切る。最大 " + (window * 3) + " 秒）");
+
+                        Stopwatch burstWatch = Stopwatch.StartNew();
+                        int sent = 0;
 
                         JsonResponse limited = await RateLimitTests.BurstUntilLimitedAsync(
-                            client, clientId, secret, permits * 2 + 30);
+                            client, clientId, secret, TimeSpan.FromSeconds(window * 3), n => sent = n);
+
+                        burstWatch.Stop();
+
+                        //  **送った回数と時間を実測に残す**（遅い通しで、どれだけ余裕があったかを後から見るため）。
+                        string burst = sent + " 回 / " + burstWatch.Elapsed.TotalSeconds.ToString("0.0") + " 秒";
 
                         r.Verify("429 が返る", limited != null, "429", (limited == null)
-                            ? "上限 " + permits + " の 2 倍 ＋ 30 回まで叩いても 429 にならなかった" : "429");
+                            ? "**429 にならなかった**（" + burst + "）" : "429（" + burst + "）");
 
                         Assert.NotNull(limited);
 
@@ -332,30 +350,37 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="clientSecret">client_secret</param>
-        /// <param name="maxRequests">叩く上限（これを超えたら諦める）</param>
+        /// <param name="budget">叩く時間の上限（これを超えたら諦める）</param>
+        /// <param name="progress">送った回数を受け取る</param>
         /// <returns>429 の応答（返らなければ null）</returns>
         /// <remarks>
         /// **窓の中で叩き切る必要がある**（**窓が変わると回数は 0 に戻る**）ので、
-        /// **10 本ずつ並べて叩く。**
+        /// **並べて叩く。**
         ///
         /// **窓は時計に揃っている**ので、**叩いている途中で窓が変わることがある**（#325）。
-        /// **上限の 2 倍を叩けば、窓が 1 度変わっても、どちらかの窓で上限を超える。**
+        /// **打ち切りは回数ではなく時間で決める**（#331）。**以前は上限の 2 倍 ＋ 30 回で打ち切っていた**ので、
+        /// **応答が遅いと（10 本ずつで 1 往復が 0.6 秒を超えると）、どの窓でも上限に届かずに落ちた**
+        /// （応答ごとに 1 秒の遅れを入れて再現した）。**窓の 3 つ分を叩けば、少なくとも 2 つの窓を丸ごと叩く。**
         /// </remarks>
         private static async Task<JsonResponse> BurstUntilLimitedAsync(
-            IdPClient client, string clientId, string clientSecret, int maxRequests)
+            IdPClient client, string clientId, string clientSecret,
+            TimeSpan budget, Action<int> progress)
         {
-            const int Parallel = 10;
+            Stopwatch watch = Stopwatch.StartNew();
 
-            for (int sent = 0; sent < maxRequests; sent += Parallel)
+            for (int sent = 0; watch.Elapsed < budget; )
             {
                 List<Task<JsonResponse>> wave = new List<Task<JsonResponse>>();
 
-                for (int i = 0; i < Parallel; i++)
+                for (int i = 0; i < RateLimitTests.BurstParallel; i++)
                 {
                     wave.Add(RateLimitTests.RevokeAsync(client, clientId, clientSecret));
                 }
 
                 JsonResponse[] responses = await Task.WhenAll(wave);
+
+                sent += responses.Length;
+                progress(sent);
 
                 foreach (JsonResponse res in responses)
                 {
