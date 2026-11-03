@@ -10,6 +10,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/02  玄人 幸道         新規（#316）
 //*  2026/11/03  玄人 幸道         変更を当て直してやり直す UpdateWithRetryAsync を足した（#331）
+//*  2026/11/03  玄人 幸道         回復コードの作成も、競合したら読み直して作り直す（#331）
 //**********************************************************************************
 
 using System;
@@ -81,6 +82,33 @@ namespace MultiPurposeAuthSite.Data
         public override Task<IdentityResult> SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
         {
             return this.RetryOnConflictAsync(user, () => base.SetTwoFactorEnabledAsync(user, enabled));
+        }
+
+        /// <summary>GenerateNewTwoFactorRecoveryCodesAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="number">作る数</param>
+        /// <returns>回復コード（作れなければ null）</returns>
+        /// <remarks>
+        /// **基底は、コードを保存した後で利用者の行を書き、書けなければ null を返す。**
+        /// **同じ利用者の別の更新と重なるだけで null になり、呼ぶ側が 500 になっていた**（認証アプリの登録を同時に送ったとき。#331）。
+        /// **競合したら、読み直して作り直す**（作り直したコードで上書きするので、前のコードは残らない）。
+        /// </remarks>
+        public override async Task<IEnumerable<string>> GenerateNewTwoFactorRecoveryCodesAsync(
+            ApplicationUser user, int number)
+        {
+            IEnumerable<string> codes = null;
+
+            //  **null の理由は、基底からは分からない**（行の更新の失敗だけが null になる）。競合として扱い、回数で止める。
+            await this.RetryOnConflictAsync(user, async () =>
+            {
+                codes = await base.GenerateNewTwoFactorRecoveryCodesAsync(user, number);
+
+                return (codes != null)
+                    ? IdentityResult.Success
+                    : IdentityResult.Failed(new IdentityErrorDescriber().ConcurrencyFailure());
+            });
+
+            return codes;
         }
 
         /// <summary>変更を当てて書き、競合したら読み直して当て直す（#331）</summary>
