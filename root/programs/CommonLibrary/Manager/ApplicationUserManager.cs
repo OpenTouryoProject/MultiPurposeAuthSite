@@ -19,6 +19,7 @@
 //*  2026/09/16  玄人 幸道         MobileApp（プッシュ通知）の2FAプロバイダを登録（#216）
 //*  2026/10/01  玄人 幸道         メアドの一意を常に必須にした（#151 の段階 3）
 //*  2026/11/02  玄人 幸道         更新の競合を失敗で返し、数えやスタンプの更新は読み直してやり直す（#316）
+//*  2026/11/03  玄人 幸道         変更を当て直してやり直す UpdateWithRetryAsync を足した（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Entity;
@@ -108,6 +109,34 @@ namespace MultiPurposeAuthSite.Manager
         public override Task<IdentityResult> SetTwoFactorEnabledAsync(string userId, bool enabled)
         {
             return this.RetryOnConflictAsync(() => base.SetTwoFactorEnabledAsync(userId, enabled));
+        }
+
+        /// <summary>変更を当てて書き、競合したら読み直して当て直す（#331）</summary>
+        /// <param name="user">ApplicationUser（1 回目は、この物に当てる）</param>
+        /// <param name="change">変更（**読み直すたびに当て直す**ので、前の値から計算しない）</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **送り直す人がいない要求**（端末からの `/SetDeviceToken` など）のためにある。
+        /// **画面からの更新には使わない**（見ていない値の上に書くことになる。競合なら、失敗を見せて送り直させる）。
+        /// </remarks>
+        public Task<IdentityResult> UpdateWithRetryAsync(ApplicationUser user, Action<ApplicationUser> change)
+        {
+            bool first = true;
+
+            return this.RetryOnConflictAsync(async () =>
+            {
+                ApplicationUser target = user;
+
+                if (!first)
+                {
+                    //  **2 回目からは、読み直した物に当てる。** 消えていたら、そのまま失敗させる。
+                    target = await this.FindByIdAsync(user.Id) ?? user;
+                }
+
+                first = false;
+                change(target);
+                return await this.UpdateAsync(target);
+            });
         }
 
         /// <summary>競合したら、やり直す（基底の操作は、Id で読み直すところから始まる）</summary>

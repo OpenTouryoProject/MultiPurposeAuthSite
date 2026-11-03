@@ -9,6 +9,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/02  玄人 幸道         新規（#316）
+//*  2026/11/03  玄人 幸道         変更を当て直してやり直す UpdateWithRetryAsync を足した（#331）
 //**********************************************************************************
 
 using System;
@@ -80,6 +81,23 @@ namespace MultiPurposeAuthSite.Data
         public override Task<IdentityResult> SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
         {
             return this.RetryOnConflictAsync(user, () => base.SetTwoFactorEnabledAsync(user, enabled));
+        }
+
+        /// <summary>変更を当てて書き、競合したら読み直して当て直す（#331）</summary>
+        /// <param name="user">ApplicationUser（変更は、この物に当てる）</param>
+        /// <param name="change">変更（**読み直すたびに当て直す**ので、前の値から計算しない）</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **送り直す人がいない要求**（端末からの `/SetDeviceToken` など）のためにある。
+        /// **画面からの更新には使わない**（見ていない値の上に書くことになる。競合なら、失敗を見せて送り直させる）。
+        /// </remarks>
+        public Task<IdentityResult> UpdateWithRetryAsync(ApplicationUser user, Action<ApplicationUser> change)
+        {
+            return this.RetryOnConflictAsync(user, () =>
+            {
+                change(user);
+                return this.UpdateAsync(user);
+            });
         }
 
         /// <summary>競合したら、物を読み直して、やり直す</summary>
