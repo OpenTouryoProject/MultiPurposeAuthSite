@@ -11,10 +11,12 @@
 //*  2026/11/02  玄人 幸道         新規（#316）
 //*  2026/11/03  玄人 幸道         変更を当て直してやり直す UpdateWithRetryAsync を足した（#331）
 //*  2026/11/03  玄人 幸道         回復コードの作成も、競合したら読み直して作り直す（#331）
+//*  2026/11/04  玄人 幸道         外部ログイン・クレームの追加と外部ログインの解除も、後の更新が競合したらやり直す（#331。RT-294.23 の原因）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Identity;
@@ -111,6 +113,58 @@ namespace MultiPurposeAuthSite.Data
             return codes;
         }
 
+        /// <summary>AddLoginAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="login">外部ログイン</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **基底は、外部ログインの行をその場で書いてから、利用者の行を更新する。**
+        /// **後の更新だけが競合に負けると、行は書けているのに失敗が返り、ID 連携がエラー画面で終わっていた**（#331。`RT-294.23`）。
+        /// **後の更新は中身を変えない**ので、**競合したら読み直して書き直す。**
+        /// </remarks>
+        public override async Task<IdentityResult> AddLoginAsync(ApplicationUser user, UserLoginInfo login)
+        {
+            IdentityResult result = await base.AddLoginAsync(user, login);
+
+            return UserManagerCore.IsConflict(result)
+                ? await this.UpdateWithRetryAsync(user, x => { })
+                : result;
+        }
+
+        /// <summary>AddClaimsAsync（AddClaimAsync も、ここを通る）</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="claims">クレーム</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**`AddLoginAsync` と同じ**（クレームの行をその場で書いてから、利用者の行を更新する。#331）。</remarks>
+        public override async Task<IdentityResult> AddClaimsAsync(ApplicationUser user, IEnumerable<Claim> claims)
+        {
+            IdentityResult result = await base.AddClaimsAsync(user, claims);
+
+            return UserManagerCore.IsConflict(result)
+                ? await this.UpdateWithRetryAsync(user, x => { })
+                : result;
+        }
+
+        /// <summary>RemoveLoginAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">LoginProvider</param>
+        /// <param name="providerKey">ProviderKey</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **基底は、外部ログインの行を消してから、`SecurityStamp` を新しくして利用者の行を更新する。**
+        /// **後の更新が競合に負けると、解除できているのに失敗が返り、スタンプも古いまま残る**（#331）。
+        /// **競合したら、スタンプの更新をやり直す**（`UpdateSecurityStampAsync` は、読み直してやり直す）。
+        /// </remarks>
+        public override async Task<IdentityResult> RemoveLoginAsync(
+            ApplicationUser user, string loginProvider, string providerKey)
+        {
+            IdentityResult result = await base.RemoveLoginAsync(user, loginProvider, providerKey);
+
+            return UserManagerCore.IsConflict(result)
+                ? await this.UpdateSecurityStampAsync(user)
+                : result;
+        }
+
         /// <summary>変更を当てて書き、競合したら読み直して当て直す（#331）</summary>
         /// <param name="user">ApplicationUser（変更は、この物に当てる）</param>
         /// <param name="change">変更（**読み直すたびに当て直す**ので、前の値から計算しない）</param>
@@ -136,20 +190,13 @@ namespace MultiPurposeAuthSite.Data
         private async Task<IdentityResult> RetryOnConflictAsync(
             ApplicationUser user, Func<Task<IdentityResult>> operation)
         {
-            string concurrencyFailure = new IdentityErrorDescriber().ConcurrencyFailure().Code;
             IdentityResult result = null;
 
             for (int i = 0; i < CmnUserStore.ConcurrencyRetryCount; i++)
             {
                 result = await operation();
 
-                bool conflicted = false;
-                foreach (IdentityError error in result.Errors)
-                {
-                    conflicted |= error.Code == concurrencyFailure;
-                }
-
-                if (!conflicted)
+                if (!UserManagerCore.IsConflict(result))
                 {
                     return result;
                 }
@@ -167,6 +214,24 @@ namespace MultiPurposeAuthSite.Data
             }
 
             return result;
+        }
+
+        /// <summary>競合で失敗したか</summary>
+        /// <param name="result">IdentityResult</param>
+        /// <returns>競合なら true</returns>
+        private static bool IsConflict(IdentityResult result)
+        {
+            string concurrencyFailure = new IdentityErrorDescriber().ConcurrencyFailure().Code;
+
+            foreach (IdentityError error in result.Errors)
+            {
+                if (error.Code == concurrencyFailure)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>読み直した行の値を、呼び出し元が持っている物へ写す</summary>

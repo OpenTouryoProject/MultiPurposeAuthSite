@@ -20,6 +20,7 @@
 //*  2026/10/01  玄人 幸道         メアドの一意を常に必須にした（#151 の段階 3）
 //*  2026/11/02  玄人 幸道         更新の競合を失敗で返し、数えやスタンプの更新は読み直してやり直す（#316）
 //*  2026/11/03  玄人 幸道         変更を当て直してやり直す UpdateWithRetryAsync を足した（#331）
+//*  2026/11/04  玄人 幸道         外部ログイン・クレームの追加と外部ログインの解除も、後の更新が競合したらやり直す（#331。RT-294.23 の原因）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Entity;
@@ -35,6 +36,7 @@ using Microsoft.AspNet.Identity.Owin;
 
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 /// <summary>MultiPurposeAuthSite.Manager</summary>
@@ -109,6 +111,77 @@ namespace MultiPurposeAuthSite.Manager
         public override Task<IdentityResult> SetTwoFactorEnabledAsync(string userId, bool enabled)
         {
             return this.RetryOnConflictAsync(() => base.SetTwoFactorEnabledAsync(userId, enabled));
+        }
+
+        /// <summary>AddLoginAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="login">外部ログイン</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **基底は、外部ログインの行をその場で書いてから、利用者の行を更新する。**
+        /// **後の更新だけが競合に負けると、行は書けているのに失敗が返り、ID 連携がエラー画面で終わっていた**（#331。`RT-294.23`）。
+        /// **後の更新は中身を変えない**ので、**競合したら読み直して書き直す。**
+        /// </remarks>
+        public override async Task<IdentityResult> AddLoginAsync(string userId, UserLoginInfo login)
+        {
+            IdentityResult result = await base.AddLoginAsync(userId, login);
+
+            return ApplicationUserManager.IsConflict(result)
+                ? await this.RewriteRowAsync(userId, result)
+                : result;
+        }
+
+        /// <summary>AddClaimAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="claim">クレーム</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**`AddLoginAsync` と同じ**（クレームの行をその場で書いてから、利用者の行を更新する。#331）。</remarks>
+        public override async Task<IdentityResult> AddClaimAsync(string userId, Claim claim)
+        {
+            IdentityResult result = await base.AddClaimAsync(userId, claim);
+
+            return ApplicationUserManager.IsConflict(result)
+                ? await this.RewriteRowAsync(userId, result)
+                : result;
+        }
+
+        /// <summary>RemoveLoginAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="login">外部ログイン</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **基底は、外部ログインの行を消してから、`SecurityStamp` を新しくして利用者の行を更新する。**
+        /// **後の更新が競合に負けると、解除できているのに失敗が返り、スタンプも古いまま残る**（#331）。
+        /// **競合したら、スタンプの更新をやり直す**（`UpdateSecurityStampAsync` は、読み直してやり直す）。
+        /// </remarks>
+        public override async Task<IdentityResult> RemoveLoginAsync(string userId, UserLoginInfo login)
+        {
+            IdentityResult result = await base.RemoveLoginAsync(userId, login);
+
+            return ApplicationUserManager.IsConflict(result)
+                ? await this.UpdateSecurityStampAsync(userId)
+                : result;
+        }
+
+        /// <summary>利用者の行を読み直して、そのまま書き直す（子の行を書いた後の更新が競合したとき）</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="failed">競合で失敗した結果（利用者が消えていたら、これを返す）</param>
+        /// <returns>IdentityResult</returns>
+        private async Task<IdentityResult> RewriteRowAsync(string userId, IdentityResult failed)
+        {
+            ApplicationUser user = await this.FindByIdAsync(userId);
+
+            return (user == null)
+                ? failed
+                : await this.UpdateWithRetryAsync(user, x => { });
+        }
+
+        /// <summary>競合で失敗したか</summary>
+        /// <param name="result">IdentityResult</param>
+        /// <returns>競合なら true</returns>
+        private static bool IsConflict(IdentityResult result)
+        {
+            return result.Errors.Contains(CmnUserStore.ConcurrencyFailureMessage);
         }
 
         /// <summary>変更を当てて書き、競合したら読み直して当て直す（#331）</summary>

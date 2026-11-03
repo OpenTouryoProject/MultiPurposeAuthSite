@@ -194,7 +194,8 @@ git config core.hooksPath .githooks
   **ただし「無い」が「通す」になる口（使用済みの記録・失敗の数え）では、引かずに「無い」としない**（#331）
 - [ ] **更新の結果を見ているか。競合で負けたとき、失敗のまま返していないか**（#331）。
   同じ利用者の行は、無関係な更新（サインインの数え、別の端末）でも書き換わる。**読み直して、変えた項目だけを当て直す**（`UpdateWithRetryAsync`）。
-  **失敗を null で返す API**（`GenerateNewTwoFactorRecoveryCodesAsync`）**も、結果である**（#331）
+  **失敗を null で返す API**（`GenerateNewTwoFactorRecoveryCodesAsync`）**も、結果である**（#331）。
+  **子の行を書いてから利用者の行を更新する API**（`AddLoginAsync`・`AddClaimAsync`・`RemoveLoginAsync`）は、**行は書けているのに競合で失敗を返す**（ID 連携がエラー画面で終わった。#331 の `RT-294.23`）
 
 ### 全般
 
