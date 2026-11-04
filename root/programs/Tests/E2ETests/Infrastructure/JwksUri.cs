@@ -43,22 +43,22 @@ using Xunit;
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 {
     /// <summary>
-    /// 相手（RP）の `jwks_uri` を、静的配信のコンテナ（`Container/E2E/jwks`）で用意する。
+    /// 相手（RP）の `jwks_uri` を、静的配信のコンテナ（`container/E2E/jwks`）で用意する。
     /// </summary>
     /// <remarks>
     /// **`jwks_uri` が指す先は、本来クライアントが公開する**（#309）。
     /// **E2E のクライアントは `HttpClient` のコードで、HTTP サーバを持たない**ので、
-    /// **配るだけのものを 1 つ置いてある**（`Container/E2E/docker-compose.yml` の `jwks`。44305）。
+    /// **配るだけのものを 1 つ置いてある**（`container/E2E/docker-compose.yml` の `jwks`。44305）。
     ///
     /// | | |
     /// |---|---|
-    /// | **中身を書くのはテスト** | **ホストの `Container/E2E/jwks` に `.json` を置く**（**同じテストの中で消す**） |
+    /// | **中身を書くのはテスト** | **ホストの `container/E2E/jwks` に `.json` を置く**（**同じテストの中で消す**） |
     /// | **鍵の入れ替えを測れる** | **同じ URL の中身を書き替えられる**（`RT-309.3`） |
     /// | **既存の `/jwkcerts` は使わない** | **あれは `RT-140.*` / `CN-5.*` も見ている共有のファイル**である |
     ///
     /// **コンテナが上がっていなければ Skip する**（`SkipIfNotAvailableAsync`）。
     /// **既定の通し（`-Launch` だけ）では Skip になる** —
-    /// **`Container\E2E\1_DockerComposeUp.bat` を回してあれば測れる。**
+    /// **`container\E2E\1_DockerComposeUp.bat` を回してあれば測れる。**
     ///
     /// **平文の http で配っている。** **実装は `https` を要求するが、
     /// ループバックだけは `http` を許している**
@@ -66,10 +66,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// </remarks>
     public static class JwksUri
     {
-        /// <summary>配信の URL（`Container/E2E/docker-compose.yml` の `jwks`）</summary>
+        /// <summary>配信の URL（`container/E2E/docker-compose.yml` の `jwks`）</summary>
         public const string BaseUrl = "http://localhost:44305/";
 
-        /// <summary>中身を置く場所（`Container/E2E/jwks`）</summary>
+        /// <summary>中身を置く場所（`container/E2E/jwks`）</summary>
         /// <remarks>
         /// **`TestEnv.ProgramsDir`（`root/programs`）から 2 つ上が repo の根**である。
         /// </remarks>
@@ -78,7 +78,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             get
             {
                 return Path.GetFullPath(Path.Combine(
-                    TestEnv.ProgramsDir, "..", "..", "Container", "E2E", "jwks"));
+                    TestEnv.ProgramsDir, "..", "..", "container", "E2E", "jwks"));
             }
         }
 
@@ -147,7 +147,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             Skip.IfNot(up,
                 "jwks のコンテナ（" + JwksUri.BaseUrl + "）が上がっていません"
-                + "（Container\\E2E\\1_DockerComposeUp.bat で起動します）。");
+                + "（container\\E2E\\1_DockerComposeUp.bat で起動します）。");
         }
     }
 }

@@ -112,4 +112,4 @@ New-Item -ItemType Directory -Force (Join-Path $here 'keys'), (Join-Path $here '
 Write-Output "  publish しました : app\publish（appsettings.json は雛形）"
 Write-Output ""
 Write-Output "  起動 : docker compose --env-file <パラメタのファイル> up -d --build"
-Write-Output "         （Container\Stub\ で実行する。パラメタのファイルは .env.sample を写して作る）"
+Write-Output "         （container\Stub\ で実行する。パラメタのファイルは .env.sample を写して作る）"

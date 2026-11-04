@@ -12,7 +12,7 @@ OAuth2 / OIDC / SAML2 の IdP として動く（**中身は net10.0 版の MPAS 
 OpenTouryo のアセンブリ（`root\1_BuildAll.ps1` が取得する）。
 
 ```powershell
-cd Container\Stub
+cd container\Stub
 .\1_PublishStub.ps1                                    # publish と証明書（最初と、MPAS を更新したとき）
 copy .env.sample my-stub.env                           # パラメタを写して直す（下の 2 節・3 節）
 docker compose --env-file my-stub.env up -d --build    # 起動
@@ -27,7 +27,7 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 ## 2. パラメタ（`.env`）
 
 **`docker compose --env-file <ファイル>` で渡す。** 書いていないキーは `docker-compose.yml` の既定値になる。
-**相対パスは `Container\Stub\`（`docker-compose.yml` の在る所）から見たもの。**
+**相対パスは `container\Stub\`（`docker-compose.yml` の在る所）から見たもの。**
 
 | キー | 既定 | 意味 |
 |---|---|---|
@@ -89,10 +89,10 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 **`-f` で `docker-compose.yml` を指せば、どこからでも起動できる。** パラメタのファイルは、使う側のリポジトリに置いてよい。
 
 ```powershell
-docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file .\mpas-stub.env up -d --build
+docker compose -f C:\MultiPurposeAuthSite\container\Stub\docker-compose.yml --env-file .\mpas-stub.env up -d --build
 ```
 
-**`--env-file` の中の相対パスは `Container\Stub\` から見たもの**なので、使う側のファイル（`STUB_SETTINGS` など）は**絶対パス**で書く。
+**`--env-file` の中の相対パスは `container\Stub\` から見たもの**なので、使う側のファイル（`STUB_SETTINGS` など）は**絶対パス**で書く。
 **同じホストで 2 つ以上動かす**なら、`-p <プロジェクト名>` と `STUB_PORT` を分ける（鍵の置き場 `keys\` は共有になる）。
 
 ## 6. 知っておくこと

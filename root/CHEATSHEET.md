@@ -43,37 +43,37 @@
 | Implicit を閉じた配備（`RT-314`）を回す | `.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"` | [`TESTING.md`](TESTING.md) 5 節 |
 | net48 版でも mTLS（`FA-6`）を回す（証明書の準備・後片付けが要る） | `.\SetupNetFxMtls.ps1 -Action Prepare` → （管理者）`-Action Trust` → `.\2_RunAllTests.ps1 -Launch -NetFxMtls` → （管理者）`-Action Cleanup` | 1 |
 | 証明書の準備ができているかを見る | `.\SetupNetFxMtls.ps1 -Action Check` | 1 |
-| DB のストアで回す（`sql` / `ora` / `npg`。`Container\Store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`TESTING.md`](TESTING.md) 1 節 |
-| 別ホストの DB を指す（`Container\Store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`TESTING.md`](TESTING.md) 1 節 |
+| DB のストアで回す（`sql` / `ora` / `npg`。`container\Store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`TESTING.md`](TESTING.md) 1 節 |
+| 別ホストの DB を指す（`container\Store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`TESTING.md`](TESTING.md) 1 節 |
 
-### テストのスタブ（MPAS を IdP として起動する。`Container\Stub\` で実行する）
+### テストのスタブ（MPAS を IdP として起動する。`container\Stub\` で実行する）
 
 **Open棟梁 などのクライアント（RP / SP）のテストから使う。** 流れと設定値は 10 節。
 
 | やりたいこと | コマンド | 節 |
 |---|---|---|
-| **最初に 1 回**（と、MPAS を更新したとき）: publish と証明書の書き出し | `cd ..\Container\Stub; .\1_PublishStub.ps1` | 10.1 |
+| **最初に 1 回**（と、MPAS を更新したとき）: publish と証明書の書き出し | `cd ..\container\Stub; .\1_PublishStub.ps1` | 10.1 |
 | パラメタのファイルを作る（写して直す） | `copy .env.sample my-stub.env` | 10.2 |
 | **起動する** | `docker compose --env-file my-stub.env up -d --build` | 10.1 |
 | 起動を確かめる（200 と JSON が返ればよい） | `curl.exe -s https://localhost:44310/.well-known/openid-configuration` | 10.1 |
 | **まっさらに戻す**（利用者・同意・セッションが消える） | `docker compose --env-file my-stub.env restart` | 10.1 |
 | **止めて消す** | `docker compose --env-file my-stub.env down` | 10.1 |
-| ログを見る | `docker compose --env-file my-stub.env logs -f`（アプリのログは `Container\Stub\logs\`） | 10.6 |
+| ログを見る | `docker compose --env-file my-stub.env logs -f`（アプリのログは `container\Stub\logs\`） | 10.6 |
 | 証明書を作り直す（期限切れなど） | `.\1_PublishStub.ps1 -NewCertificate` | 10.1 |
-| **他のリポジトリから起動する**（パラメタのファイルは使う側に置く） | `docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file <絶対パス> up -d --build` | 10.5 |
+| **他のリポジトリから起動する**（パラメタのファイルは使う側に置く） | `docker compose -f C:\MultiPurposeAuthSite\container\Stub\docker-compose.yml --env-file <絶対パス> up -d --build` | 10.5 |
 | 2 つ目を同時に起動する（`.env` のポート・URL・`iss` を変える） | `docker compose -p mpas-stub2 --env-file stub2.env up -d --build` | 10.5 |
 | 動いているスタブを見る | `docker ps --filter "label=com.docker.compose.project=mpas-stub"` | — |
 
-### E2E 用のコンテナ（`Container\E2E\` / `Container\Store\`。このリポジトリのテストが使う）
+### E2E 用のコンテナ（`container\E2E\` / `container\Store\`。このリポジトリのテストが使う）
 
 | やりたいこと | コマンド | 節 |
 |---|---|---|
-| ID 連携の IdP 群（上流・上流 2・下流）と jwks を作り直して起動する（publish → `up -d --build`） | `..\Container\E2E\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
-| IdP 群を**一旦止める**（`start` で戻せる） | `cd ..\Container\E2E; docker compose stop` | — |
-| IdP 群を**消す** | `..\Container\E2E\2_DockerComposeDown.bat` | — |
-| E2E 用の DB に DDL を流し込む（DB は起動しない。通しでは `test.ps1` が起動・停止する） | `..\Container\Store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
-| DB を**一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\Container\Store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
-| DB を**消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\Container\Store\2_DockerComposeDown.bat` | — |
+| ID 連携の IdP 群（上流・上流 2・下流）と jwks を作り直して起動する（publish → `up -d --build`） | `..\container\E2E\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| IdP 群を**一旦止める**（`start` で戻せる） | `cd ..\container\E2E; docker compose stop` | — |
+| IdP 群を**消す** | `..\container\E2E\2_DockerComposeDown.bat` | — |
+| E2E 用の DB に DDL を流し込む（DB は起動しない。通しでは `test.ps1` が起動・停止する） | `..\container\Store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| DB を**一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\container\Store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
+| DB を**消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\container\Store\2_DockerComposeDown.bat` | — |
 | 動いているコンテナを見る | `docker ps --filter "label=com.docker.compose.project=mpas-e2e"`（DB は `mpas-store`） | — |
 
 ### その他
@@ -347,11 +347,11 @@ Data Protection の鍵も作り直される**ので、古いクッキーはも�
 - **回さなかった検証は、「回していない」と報告する。** どこまで回すかの目安は [`../AGENTS.md`](../AGENTS.md)
 - ヘッダの更新者は **「玄人 幸道」**
 
-## 10. テストのスタブとして MPAS を使う（`Container\Stub\`）
+## 10. テストのスタブとして MPAS を使う（`container\Stub\`）
 
 **Open棟梁 などのクライアント（RP / SP）のテストで、相手の IdP として MPAS を起動する。**
 **中身は net10.0 版の MPAS そのもの**（応答を偽装するスタブではない）。OAuth2 / OIDC / SAML2 の IdP として動く。
-一次情報 → [`../Container/Stub/README.md`](../Container/Stub/README.md)
+一次情報 → [`../container/Stub/README.md`](../container/Stub/README.md)
 
 **前提** : Docker（compose v2）、.NET 10 SDK、`C:\root\files\resource`（[`Readme.ja.md`](Readme.ja.md) の手順）、
 OpenTouryo のアセンブリ（`.\1_BuildAll.ps1` が取得する）。
@@ -359,7 +359,7 @@ OpenTouryo のアセンブリ（`.\1_BuildAll.ps1` が取得する）。
 ### 10.1 流れ
 
 ```powershell
-cd Container\Stub                                     # リポジトリのルートから
+cd container\Stub                                     # リポジトリのルートから
 .\1_PublishStub.ps1                                   # 最初に 1 回（MPAS を更新したら、もう一度）
 copy .env.sample my-stub.env                          # パラメタ（10.2）
 copy appsettings.Stub.sample.json my-stub.json        # クライアントの登録（10.3）。my-stub.env の STUB_SETTINGS で指す
@@ -380,7 +380,7 @@ docker compose --env-file my-stub.env down            # 止めて消す
 
 ### 10.2 パラメタ（`.env`）
 
-**書いていないキーは既定値になる。** **相対パスは `Container\Stub\` から見たもの。**
+**書いていないキーは既定値になる。** **相対パスは `container\Stub\` から見たもの。**
 
 | キー | 既定 | 変えるとき |
 |---|---|---|
@@ -446,8 +446,8 @@ STUB_SETTINGS=C:/MultiPurposeAuthSite/root/programs/MultiPurposeAuthSiteCore/Mul
 
 ```powershell
 # **パラメタのファイルは、使う側のリポジトリに置いてよい。** その中のパスは絶対パスで書く
-docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file C:\work\my-repo\mpas-stub.env up -d --build
-docker compose -f C:\MultiPurposeAuthSite\Container\Stub\docker-compose.yml --env-file C:\work\my-repo\mpas-stub.env down
+docker compose -f C:\MultiPurposeAuthSite\container\Stub\docker-compose.yml --env-file C:\work\my-repo\mpas-stub.env up -d --build
+docker compose -f C:\MultiPurposeAuthSite\container\Stub\docker-compose.yml --env-file C:\work\my-repo\mpas-stub.env down
 
 # **同じホストで 2 つ目**: -p でプロジェクト名を、.env で STUB_PORT / STUB_PUBLIC_URL / STUB_ISSUER を分ける
 docker compose -p mpas-stub2 --env-file stub2.env up -d --build
@@ -468,6 +468,6 @@ docker compose -p mpas-stub2 --env-file stub2.env down
 | 別のコンテナで動く RP から届かない | **`localhost:44310` はそのコンテナ自身を指す**（証明書の名前も合わない）。README 6 節 |
 | MPAS を直したのに振る舞いが変わらない | **`1_PublishStub.ps1` を回していない**（`--build` だけでは古い成果物が入る） |
 | 起動直後に応答しない | **起動中。** `docker compose --env-file my-stub.env logs -f` で `Now listening on` を待つ |
-| 原因が分からない | `docker compose --env-file my-stub.env logs`、アプリのログは `Container\Stub\logs\` |
+| 原因が分からない | `docker compose --env-file my-stub.env logs`、アプリのログは `container\Stub\logs\` |
 
 **net48 版の振る舞いは再現しない**（中身は net10.0 版）。**任意のエラー応答は返せない**（本物の IdP なので、同意の拒否・`prompt=none`・期限切れなど、自然に出るものだけ）。
