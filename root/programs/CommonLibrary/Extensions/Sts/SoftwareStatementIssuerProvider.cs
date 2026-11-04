@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#308 の段階 1）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -320,6 +321,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (string.IsNullOrEmpty(issuerKey))
             {
                 return null;
+            }
+
+            //  **列の幅（128）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(issuerKey, 128))
+            {
+                return model;
             }
 
             switch (Config.UserStoreType)

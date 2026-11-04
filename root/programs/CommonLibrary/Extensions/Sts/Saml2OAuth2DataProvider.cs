@@ -37,6 +37,7 @@
 //*  2026/10/21  玄人 幸道         BackChannelLogoutUri の列を追加（#310 の段階 2）
 //*  2026/10/21  玄人 幸道         登録されている jwks_uri を全部返す口を追加（#309 の段階 2）
 //*  2026/10/31  玄人 幸道         CORS の public の判定のため、GetAllUris で token_endpoint_auth_method も読む（#294）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -503,6 +504,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public static ManageAddSaml2OAuth2DataViewModel Get(string clientID)
         {
             ManageAddSaml2OAuth2DataViewModel model = null;
+
+            //  **列の幅（256）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(clientID, 256))
+            {
+                return model;
+            }
 
             switch (Config.UserStoreType)
             {

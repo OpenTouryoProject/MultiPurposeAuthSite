@@ -31,6 +31,7 @@
 //*  2019/06/20  西野 大介         新規
 //*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -253,6 +254,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public static string Get(string urn)
         {
             string requestObjectValue = "";
+
+            //  **列の幅（38）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(urn, 38))
+            {
+                return requestObjectValue;
+            }
 
             switch (Config.UserStoreType)
             {

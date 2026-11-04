@@ -317,6 +317,35 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-294.96 作成に失敗しても、入力した値が残る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT29496_作成に失敗しても入力した値が残る(string targetKey)
+        {
+            using (IdPClient client = await this.AdminClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-294.96",
+                    "ロールの作成に失敗して再表示しても、入力した値が残る",
+                    "**net48 版と net10.0 版で、再表示の書き方が違っていた**（`View()` と `View(roleViewModel)`）。",
+                    "#294");
+
+                await RolesAdmin.SkipIfLockedDownAsync(client);
+
+                r.Target("既に在るロール名 : User");
+
+                r.Step("既に在るロール名で作り、失敗させる");
+
+                HttpResponseMessage res = await RolesAdmin.CreateAsync(client, "User");
+                string body = await res.Content.ReadAsStringAsync();
+
+                r.VerifyEqual("再表示のロール名", "User", Html.FieldValue(body, "Name"));
+
+                r.Done();
+            }
+        }
+
         #region 補助
 
         /// <summary>管理者でサインインした client を返す</summary>

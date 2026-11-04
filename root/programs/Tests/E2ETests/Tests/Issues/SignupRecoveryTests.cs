@@ -372,7 +372,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string userName = SignupRecoveryTests.UniqueName();
 
                 //  **このドメイン宛ては、認証サイトが IsDebug のときに送信を失敗させる**
-                //    （`CmnEmail.FailureDomainForTest`。RFC 2606 の `.invalid`）。
+                //    （`TestOutbox.MailFailureDomain`。RFC 2606 の `.invalid`）。
                 string email = userName + "@" + MailFailureDomain;
 
                 TestReport r = this.Report("RT-294.14",
@@ -435,7 +435,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region 補助
 
-        /// <summary>認証サイトが、IsDebug のときに送信を失敗させるドメイン（CmnEmail.FailureDomainForTest）</summary>
+        /// <summary>認証サイトが、IsDebug のときに送信を失敗させるドメイン（TestOutbox.MailFailureDomain）</summary>
         private const string MailFailureDomain = "e2e-mail-failure.invalid";
 
         /// <summary>この回だけの利用者名を作る（DB ストアでも衝突しない）</summary>

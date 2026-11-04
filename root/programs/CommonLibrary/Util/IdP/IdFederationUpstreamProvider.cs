@@ -31,6 +31,7 @@
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
 //*  2026/10/14  玄人 幸道         ClientSecretを暗号化して保管（#297）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/IdP へ移した（配置の見直し。#294）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -380,6 +381,12 @@ namespace MultiPurposeAuthSite.Util.IdP
             if (string.IsNullOrEmpty(upstreamKey))
             {
                 return null;
+            }
+
+            //  **列の幅（128）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(upstreamKey, 128))
+            {
+                return model;
             }
 
             switch (Config.UserStoreType)

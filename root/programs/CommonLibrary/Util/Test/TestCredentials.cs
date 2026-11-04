@@ -29,17 +29,18 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
+//*  2026/11/03  玄人 幸道         Extensions/FIDO から Util/Test へ移した（#294）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Util.Test;
+using MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
 using System.Security.Cryptography;
 using System.Text;
 
-/// <summary>MultiPurposeAuthSite.Extensions.FIDO</summary>
-namespace MultiPurposeAuthSite.Extensions.FIDO
+/// <summary>MultiPurposeAuthSite.Util.Test</summary>
+namespace MultiPurposeAuthSite.Util.Test
 {
     /// <summary>
     /// E2E 専用の WebAuthn 資格情報を作る（#277 の段階 7）。
@@ -61,7 +62,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
     /// **`RT-137.1` / `RT-137.2` が「この利用者は認証器を登録していない」ことを前提に書かれている**ため。
     ///
     /// **何度呼んでも増えない**（`CredentialId` が利用者名から決まる）。
-    /// **E2E が消した分を、次のサインインで作り直す**ために、そうしてある。
+    /// **E2E が消した分を、この利用者の次のサインインで作り直す**ために、そうしてある（#325）。
     ///
     /// **net10.0 版だけ**である（net48 版には WebAuthn の口が無い。#137）。
     /// </remarks>

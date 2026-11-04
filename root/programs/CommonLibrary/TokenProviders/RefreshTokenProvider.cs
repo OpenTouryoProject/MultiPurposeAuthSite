@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/26  西野 大介         新規（分割
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
+//*  2026/11/04  玄人 幸道         使用済みにできた 1 つだけが使う（同時に使うと、複数にトークンが出ていた。#332）
 //**********************************************************************************
 
 using System;
@@ -326,7 +328,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return "";
             }
 
-            RefreshTokenProvider.MarkAsUsed(tokenId);
+            //  **使用済みにできた 1 つだけが使う**（#332）。
+            //    **できなければ、同時に来た別の要求が先に使った** — **再利用と同じく、一族ごと失効させる。**
+            if (!RefreshTokenProvider.MarkAsUsed(tokenId))
+            {
+                RefreshTokenProvider.RevokeFamily(row.FamilyId);
+                return "";
+            }
 
             familyId = row.FamilyId;
             return row.Value;
@@ -391,6 +399,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>行（無い・期限切れなら null）</returns>
         private static TokenRow Find(string tokenId)
         {
+            //  **列の幅（256）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(tokenId, 256))
+            {
+                return null;
+            }
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -458,8 +472,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>使用済みにする（消さない）</summary>
         /// <param name="tokenId">refresh_token</param>
-        private static void MarkAsUsed(string tokenId)
+        /// <returns>**この呼び出しが使用済みにしたら true**（他が先に使用済みにしていたら false）</returns>
+        /// <remarks>
+        /// **未使用のときだけ書く**（#332）。**以前は条件なしに書き、書けたかを見ていなかった**ので、
+        /// **同時に来た要求の両方が「未使用」と読めて、両方にトークンが出た。**
+        /// </remarks>
+        private static bool MarkAsUsed(string tokenId)
         {
+            int updated = 0;
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -468,7 +489,14 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     if (RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out entry))
                     {
-                        entry.UsedDate = DateTime.Now;
+                        lock (entry)
+                        {
+                            if (entry.UsedDate == null)
+                            {
+                                entry.UsedDate = DateTime.Now;
+                                updated = 1;
+                            }
+                        }
                     }
 
                     break;
@@ -485,24 +513,28 @@ namespace MultiPurposeAuthSite.TokenProviders
                         {
                             case EnumUserStoreType.SqlServer:
 
-                                cnn.Execute(
-                                    "UPDATE [RefreshTokenDictionary] SET [UsedDate] = @UsedDate WHERE [Key] = @Key",
-                                    new { Key = tokenId, UsedDate = DateTime.Now });
+                                //  **同じ行の更新が重なると、SQL Server はデッドロックの犠牲を選ぶ**（#332）。やり直す。
+                                updated = DataAccess.RetryWriteOnDeadlock(() => cnn.Execute(
+                                    "UPDATE [RefreshTokenDictionary] SET [UsedDate] = @UsedDate"
+                                    + " WHERE [Key] = @Key AND [UsedDate] IS NULL",
+                                    new { Key = tokenId, UsedDate = DateTime.Now }));
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
-                                cnn.Execute(
-                                    "UPDATE \"RefreshTokenDictionary\" SET \"UsedDate\" = :UsedDate WHERE \"Key\" = :Key",
+                                updated = cnn.Execute(
+                                    "UPDATE \"RefreshTokenDictionary\" SET \"UsedDate\" = :UsedDate"
+                                    + " WHERE \"Key\" = :Key AND \"UsedDate\" IS NULL",
                                     new { Key = tokenId, UsedDate = DateTime.Now });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                cnn.Execute(
-                                    "UPDATE \"refreshtokendictionary\" SET \"useddate\" = @UsedDate WHERE \"key\" = @Key",
+                                updated = cnn.Execute(
+                                    "UPDATE \"refreshtokendictionary\" SET \"useddate\" = @UsedDate"
+                                    + " WHERE \"key\" = @Key AND \"useddate\" IS NULL",
                                     new { Key = tokenId, UsedDate = DateTime.Now });
 
                                 break;
@@ -511,6 +543,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     break;
             }
+
+            return updated == 1;
         }
 
         /// <summary>一族ごと失効させる（消す）</summary>

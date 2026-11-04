@@ -29,10 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/30  玄人 幸道         新規（#151 の段階 2）
+//*  2026/11/03  玄人 幸道         記録の失敗のうち、競合だけを無視する（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Log;
 
 using System;
 using System.Collections.Concurrent;
@@ -362,9 +364,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         break;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // **競合（主キーの重複）は無視する。** 呼び出し元が引き直す。
+                // **競合（主キーの重複）だけを無視する。** 行が在れば、呼び出し元が引き直せる。
+                //   **行が無いなら競合ではない**ので、記録しないまま `sub` を発行しない（#331）。
+                if (string.IsNullOrEmpty(SubjectIdProvider.Get(sector, userId)))
+                {
+                    Logging.MySQLLogForEx(ex);
+                    throw;
+                }
             }
         }
 

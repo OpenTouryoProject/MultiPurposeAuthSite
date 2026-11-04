@@ -23,6 +23,7 @@ CREATE TABLE Users(                -- Users
     DeviceToken varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,
     PasswordChangeDate timestamp NOT NULL,
+    ConcurrencyStamp varchar(38) NULL,       -- 楽観排他（#316）
     CONSTRAINT PK_Users PRIMARY KEY (Id)
 );
 

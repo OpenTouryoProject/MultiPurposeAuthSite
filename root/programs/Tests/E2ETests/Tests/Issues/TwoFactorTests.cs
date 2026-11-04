@@ -33,7 +33,9 @@
 //*  2026/10/30  玄人 幸道         RT-294.63（再サインインで auth_time を新しくしない）・.64（2FA の無効化でパスワードを確かめる）・
 //*                                .65（未確定の TOTP の鍵をほかの利用者に使わない）を足した（#294）
 //*  2026/10/30  玄人 幸道         RT-294.66（登録済みの TOTP の鍵を出さない）・.67（回復コードの再発行とリセットで
+//*  2026/11/02  玄人 幸道         同じ回復コードを同時に送っても、1 回しか使えない（RT-316.3）
 //*                                パスワードを確かめる）を足した（#294）
+//*  2026/11/03  玄人 幸道         RT-331.5（認証アプリの登録を同時に送っても 500 にならない）を足した（#331）
 //**********************************************************************************
 
 using System;
@@ -238,6 +240,73 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             returnUrl, TwoFactorTests.Describe(ok));
 
                         TwoFactorTests.VerifySessionInitialized(r, client);
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userName);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-316.3 同じ回復コードを同時に送っても、1 回しか使えない</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT31603_同じ回復コードを同時に送っても1回しか使えない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userName = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-316.3",
+                    "同じ回復コードを同時に送っても、1 回しか使えない",
+                    "**コードの一覧を読んで書き戻していたので、同時に送ると、どれも「まだ在る」と読んで通っていた。** "
+                    + "**読んだ値が変わっていないときだけ書き戻す。**",
+                    "#316");
+
+                r.Target("利用者名 = " + userName);
+
+                try
+                {
+                    r.Step("(1) 利用者を作り、認証アプリを登録して 2FA を有効にする（回復コードも受け取る）");
+
+                    TotpUser totp = await TwoFactorTests.PrepareTotpUserAsync(admin, targetKey, userName, this);
+
+                    Assert.True(0 < totp.RecoveryCodes.Count, "前提: 回復コードを受け取れること");
+
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        string returnUrl = TwoFactorTests.LocalPath(client, "/Manage/Index");
+
+                        r.Step("(2) パスワードでサインインし、認証アプリを選んだ後、回復コードの画面へ");
+
+                        await TwoFactorTests.StartTwoFactorAsync(client, userName, returnUrl, AuthenticatorProvider);
+
+                        string recoveryUrl = "/Account/LoginWithTwoFactorAuthenticatorRecoveryCode?returnUrl="
+                            + WebUtility.UrlEncode(returnUrl);
+
+                        HttpResponseMessage page = await client.GetAsync(recoveryUrl);
+                        string pageBody = await page.Content.ReadAsStringAsync();
+
+                        r.Step("(3) 同じ回復コードを、同時に 5 回送る");
+
+                        List<Task<HttpResponseMessage>> posts = new List<Task<HttpResponseMessage>>();
+
+                        for (int i = 0; i < 5; i++)
+                        {
+                            posts.Add(TwoFactorTests.PostFormFromAsync(client, pageBody,
+                                new Dictionary<string, string>() { { "RecoveryCode", totp.RecoveryCodes[0] } },
+                                recoveryUrl));
+                        }
+
+                        HttpResponseMessage[] results = await Task.WhenAll(posts);
+
+                        r.VerifyEqual("**戻り先へ進むのは 1 回だけ**", "1",
+                            results.Count(x => TwoFactorTests.IsRedirectTo(x, returnUrl)).ToString());
                     }
                 }
                 finally
@@ -981,6 +1050,90 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.Verify("正しいパスワードなら、認証アプリが外れる",
                             !(index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator"),
                             "外れる", !(index ?? "").Contains("/Manage/ManageTwoFactorAuthenticator") ? "外れた" : "**登録済みのまま**");
+                    }
+                }
+                finally
+                {
+                    await TwoFactorTests.CleanUpAsync(admin, userName);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-331.5 認証アプリの登録を同時に送っても、500 にならない</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT33105_認証アプリの登録を同時に送っても500にならない(string targetKey)
+        {
+            const int Parallel = 5;
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                string userName = TwoFactorTests.UniqueName();
+
+                TestReport r = this.Report("RT-331.5",
+                    "認証アプリの登録（コードの確認）を同時に送っても、500 にならない",
+                    "**登録が済むと、回復コードを作る**（`GenerateNewTwoFactorRecoveryCodesAsync`）。"
+                    + "**作った後の利用者の行の更新が、同時の要求と競合すると null が返り、"
+                    + "以前はそのまま 500 になった**（楽観排他。#316）。"
+                    + "**競合したら、読み直して作り直す。**",
+                    "#331");
+
+                r.Target("利用者名 = " + userName + "（2FA を有効にした使い捨ての利用者）");
+
+                try
+                {
+                    r.Step("(1) 利用者を作り、2FA を有効にして、認証アプリの登録画面を開く");
+
+                    await admin.SignInAsAdministratorAsync();
+                    await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                    HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                        admin, userName, userName + "@example.com", "User");
+
+                    Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                        "前提: 利用者を作れること");
+
+                    using (IdPClient user = this.Client(targetKey))
+                    {
+                        Assert.True(await user.TrySignInAsync(userName, user.Config.Get("TestUserPWD")),
+                            "前提: 作った利用者でサインインできること");
+
+                        await TwoFactorTests.EnableTwoFactorAsync(user);
+
+                        HttpResponseMessage get = await user.GetAsync("/Manage/EnableTwoFactorAuthenticator");
+                        string body = await get.Content.ReadAsStringAsync();
+                        string secret = TwoFactorTests.SecretOf(body);
+
+                        Assert.True(get.StatusCode == HttpStatusCode.OK && secret != null,
+                            "前提: 認証アプリの登録画面が開くこと（" + Html.Describe(body) + "）");
+
+                        r.Step("(2) 正しいコードで、登録を同時に " + Parallel + " 回送る");
+
+                        string code = Totp.Compute(secret, DateTimeOffset.UtcNow);
+                        List<Task<HttpResponseMessage>> posts = new List<Task<HttpResponseMessage>>();
+
+                        for (int i = 0; i < Parallel; i++)
+                        {
+                            posts.Add(TwoFactorTests.PostFormFromAsync(user, body,
+                                new Dictionary<string, string>() { { "Code", code } },
+                                "/Manage/EnableTwoFactorAuthenticator"));
+                        }
+
+                        HttpResponseMessage[] results = await Task.WhenAll(posts);
+
+                        string statuses = string.Join(", ", results.Select(x => ((int)x.StatusCode).ToString()));
+                        int errors = results.Count(x => (int)x.StatusCode >= 500);
+
+                        r.VerifyEqual("**500 にならない**（" + statuses + "）", "0 件", errors.ToString() + " 件");
+
+                        r.Verify("どれかは、回復コードの画面へ進む",
+                            results.Any(x => x.Headers.Location != null
+                                && x.Headers.Location.ToString().Contains("ShowTwoFactorAuthenticatorRecoveryCodes")),
+                            "進む", statuses);
                     }
                 }
                 finally

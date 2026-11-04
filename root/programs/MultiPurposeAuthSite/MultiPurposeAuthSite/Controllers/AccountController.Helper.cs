@@ -19,6 +19,8 @@
 //*  2026/10/27  玄人 幸道         テスト用の種まきを net10.0 版に揃えた（利用者は接尾辞の super_tanaka で判定、クライアントは起動ごとに 1 回。#294）
 //*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールを、同じ利用者に続けて送らない（#294）
 //*  2026/10/28  玄人 幸道         メールを要求から切り離して送る（async void をやめた）、完了メールの空送りをやめた、
+//*  2026/11/02  玄人 幸道         E2E 専用のクライアントを 2 つのサイトが同時に作っても、サインイン画面を落とさない（#325）
+//*  2026/11/03  玄人 幸道         テスト データの作成を AccountController.TestData.cs と Util/Test へ移した（#294）
 //*                                初期化の確認を 1 回に、管理者の作成の失敗を記録、テスト利用者のメアドを example.com に（#294）
 //**********************************************************************************
 
@@ -236,231 +238,10 @@ namespace MultiPurposeAuthSite.Controllers
         /// </remarks>
         private static volatile bool HasInitializedStore = false;
 
-        /// <summary>テスト データを撒く配備か（IsDebug ＋ TestUserPWD）</summary>
-        private static bool SeedsTestData
-        {
-            get
-            {
-                return Config.IsDebug
-                    && !string.IsNullOrWhiteSpace(Config.TestUserPWD);
-            }
-        }
-
-        /// <summary>このプロセスが E2E 専用のクライアント登録を済ませたか（起動ごとに 1 回。#294）</summary>
-        /// <remarks>
-        /// **メモリと DB の両方で使う。** 登録は「無ければ作る」なので、
-        /// このフラグは**ストアに聞きに行くのを、プロセスごとに 1 回にする**ためのもの。
-        /// </remarks>
-        private static volatile bool HasCreatedTestClients = false;
-
-        /// <summary>
-        /// 2 人目のテスト利用者に仕込む、標準クレームのサンプル（#261）。
-        /// </summary>
-        /// <remarks>
-        /// **OIDC Core 5.1 の標準クレームを、`UnstructuredData`（JSON）に入れた例**である。
-        /// **`UserClaimsMapping` で対応付けると、`/userinfo` と id_token に出る**（#230）。
-        /// 雛形の対応付けは `_appsettings.json` / `_app.config` にコメントで置いてある。
-        ///
-        /// **`name` と `address.locality` は、わざと入れていない。**
-        /// 雛形の対応付けは、その 2 つを **`usd1` / `usd2`（管理画面で入れられる 2 欄）**に
-        /// 向けてある（**画面から入れた値が返ることを E2E で測り続けるため**。`RT-230.*`）。
-        ///
-        /// **`preferred_username` / `email` / `phone_number` も入れていない。**
-        /// **`user:` で `ApplicationUser` から直に取れる**ので、二重に持たない（#151）。
-        ///
-        /// > **この JSON は、管理画面で保存すると消える。**
-        /// > 画面（`ManageAddUnstructuredDataViewModel`）は `usd1` / `usd2` しか持たないので、
-        /// > **読み込みで他のキーが捨てられ、保存で JSON ごと置き換わる。**
-        /// > **仕込み先を 2 人目にしてあるのは、そのため**である
-        /// > （`RT-230.*` は 1 人目の画面を叩く）。
-        /// </remarks>
-        private const string SampleUnstructuredData =
-            "{"
-            + "\"given_name\":\"Taro\","
-            + "\"family_name\":\"Tanaka\","
-            + "\"nickname\":\"taro\","
-            + "\"profile\":\"https://example.com/taro\","
-            + "\"picture\":\"https://example.com/taro.png\","
-            + "\"website\":\"https://example.com/\","
-            + "\"gender\":\"male\","
-            + "\"birthdate\":\"1990-01-23\","
-            + "\"zoneinfo\":\"Asia/Tokyo\","
-            + "\"locale\":\"ja-JP\","
-            + "\"updated_at\":1759449600,"
-            + "\"address\":{"
-            + "\"formatted\":\"100-0001 1-1 Chiyoda, Chiyoda-ku, Tokyo, JP\","
-            + "\"street_address\":\"1-1 Chiyoda, Chiyoda-ku\","
-            + "\"region\":\"Tokyo\","
-            + "\"postal_code\":\"100-0001\","
-            + "\"country\":\"JP\""
-            + "}"
-            + "}";
-
-        /// <summary>テスト利用者のメアドのドメイン（#294）</summary>
-        /// <remarks>
-        /// **RFC 2606 の `example.com` にする**（以前は `@gmail.com` で、実在するドメインだった）。
-        /// **テスト利用者は IsDebug のときだけ作られ、そのときはメールを送らない**が、
-        /// **DB ストアで作った後に本番の設定へ切り替えると、第三者に届きうる。**
-        /// **E2E の `TestEnv.TestUserEmail` も同じ値で揃える。**
-        /// </remarks>
-        private const string TestUserEmailDomain = "@example.com";
-
         #endregion
 
         #region メソッド
         
-        /// <summary>
-        /// この接尾辞のテスト利用者を、初期化済みか（#294）
-        /// </summary>
-        /// <returns>初期化済みなら true</returns>
-        /// <remarks>
-        /// **最初に作る利用者（super_tanaka ＋ 接尾辞）が居れば、初期化済みとみなす。**
-        /// IsDBMSInitialized が、最初に入れる [Roles] の件数で判定するのと同じ考え方。
-        ///
-        /// - **ストアに聞く**ので、メモリと DB の両方で使え、起動し直しても答えが変わらない。
-        /// - **接尾辞を変えた・DB を共有する後発のサイト**では居ないので、作る（#260）。
-        /// - **super_tanaka 自身を消すと、その接尾辞の利用者は全部作り直す**
-        ///   （ロールを全部消すと、IsDBMSInitialized が初期化し直すのと同じ）。
-        /// </remarks>
-        private async Task<bool> IsTestUsersInitialized()
-        {
-            return await this.UserManager.FindByNameAsync(
-                "super_tanaka" + Config.TestUserSuffix) != null;
-        }
-
-        /// <summary>
-        /// テスト利用者を作る（呼ぶ側が SeedsTestData を確かめる）。
-        /// </summary>
-        /// <returns>Task</returns>
-        /// <remarks>
-        /// **名前に接尾辞を付けられる**（`TestUserSuffix`。#260）。**空なら付けない。**
-        ///
-        /// **E2E は net48 版と net10.0 版を同時に立てて、同じケースを両方に流す。**
-        /// **DB ストアでは 1 つの DB を共有する**ため、分けないと
-        /// **同じ利用者の属性（`DeviceToken` / `UnstructuredData`）を書き換え合う。**
-        ///
-        /// **この接尾辞の利用者が初期化済みなら、何もしない**（IsTestUsersInitialized。#294）。
-        /// **接尾辞を変えても、DB を作り直さなくてよい**（#260）。
-        /// **デバッグで消したテスト利用者を、起動し直しても戻さない**（#294）。
-        /// </remarks>
-        private async Task CreateTestUsers()
-        {
-            if (await this.IsTestUsersInitialized())
-            {
-                // 接尾辞のテスト利用者を、初期化済み
-                return;
-            }
-
-            // 接尾辞のテスト利用者を、初期化する。
-            string password = Config.TestUserPWD;
-            string suffix = Config.TestUserSuffix;
-            string superName = "super_tanaka" + suffix;
-            string normalName = "tanaka" + suffix;
-
-            #region ユーザを作成
-
-            // 管理者ユーザを作成
-            if (await this.UserManager.FindByNameAsync(superName) == null)
-            {
-                ApplicationUser user = ApplicationUser.CreateUser(
-                    superName, superName + TestUserEmailDomain, true);
-
-                if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
-                {
-                    await this.UserManager.AddToRoleAsync(
-                        (await this.UserManager.FindByNameAsync(superName)).Id, Const.Role_User);
-                    await this.UserManager.AddToRoleAsync(
-                        (await this.UserManager.FindByNameAsync(superName)).Id, Const.Role_Admin);
-                }
-            }
-
-            // 一般ユーザを作成
-            if (await this.UserManager.FindByNameAsync(normalName) == null)
-            {
-                ApplicationUser user = ApplicationUser.CreateUser(
-                    normalName, normalName + TestUserEmailDomain, true);
-
-                // **標準クレームのサンプルを持たせる**（#261）。
-                user.UnstructuredData = SampleUnstructuredData;
-
-                if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
-                {
-                    await this.UserManager.AddToRoleAsync(
-                        (await this.UserManager.FindByNameAsync(normalName)).Id, Const.Role_User);
-                }
-            }
-            else
-            {
-                // **既に居る利用者にも、空なら入れる**（#261）。
-                //   **ここに来るのは、super_tanaka を消して tanaka だけが残っている場合だけ**
-                //   （両方居れば、IsTestUsersInitialized で先に戻る）。
-                //   **空のときだけ**なので、利用者が自分で入れた値は上書きしない。
-                ApplicationUser user = await this.UserManager.FindByNameAsync(normalName);
-
-                if (user != null
-                    && string.IsNullOrEmpty(user.UnstructuredData))
-                {
-                    user.UnstructuredData = SampleUnstructuredData;
-                    await this.UserManager.UpdateAsync(user);
-                }
-            }
-            
-            #endregion
-        }
-
-        /// <summary>
-        /// E2E 専用のクライアントを登録する（呼ぶ側が SeedsTestData を確かめる）。
-        /// </summary>
-        /// <remarks>
-        /// **起動ごとに 1 回だけ通す**（HasCreatedTestClients。#294）。
-        /// **IsTestUsersInitialized の判定には入れない。** 接尾辞が無く 2 つのサイトで共有し、
-        /// **TestClients に後から足したクライアントを、既存の DB に入れる役目もある**ため。
-        /// </remarks>
-        private void CreateTestClients()
-        {
-            if (AccountController.HasCreatedTestClients)
-            {
-                // 起動ごとの 1 回が済んでいる。
-                return;
-            }
-
-            #region E2E 専用のクライアント登録
-
-            // E2E だけが使うクライアント登録を、構成ファイルの既存のクライアントを写して作り、user store に無ければ入れる。
-            //   **user store に寄せてある**ので、**件数に上限が無い**
-            //   （環境変数で差し込むと、net48 版は一覧ごと 1 本になり、件数に上限が出る。#262 / #264）。
-            //   **接尾辞は付けない。** E2E が client_name と固定の client_id で引くため
-            //   （TestClients の表と、E2E の KnownClients を同じ値で揃える）。
-            foreach (TestClients.Entry entry in TestClients.Entries)
-            {
-                // 写す元（構成ファイル）から、登録を作る。
-                ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data = TestClients.CreateSaml2OAuth2Data(entry);
-
-                if (saml2OAuth2Data == null)
-                {
-                    // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
-                    continue;
-                }
-
-                // **所有者（OwnerUserId）は持たせない**（#307）。
-                //   構成ファイルの owner 無しのクライアントと同じく、**配備全体のもの**である。
-                //   **所有者の無い登録を作るのは、ここだけ**（管理画面と DCR は、必ず所有者を書く）。
-
-                // **この client_id の登録が無ければ入れる**（在れば触らない）。
-                //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
-                //   **書き込みを 1 回に閉じる。**
-                if (Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) == null)
-                {
-                    Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
-                }
-            }
-
-            #endregion
-
-            // **最後まで通ってから立てる**（途中で例外なら、次の呼び出しでやり直す）。
-            AccountController.HasCreatedTestClients = true;
-        }
-
         /// <summary>
         /// テストデータの作成、Login か Register の画面を開くたびに走る。
         /// - ロールと管理者（初期データ）は、ストアが初期化済みでなければ作る（HasInitializedStore、IsDBMSInitialized）。
@@ -571,7 +352,7 @@ namespace MultiPurposeAuthSite.Controllers
                     await this.CreateTestUsers();
 
                     // #264：E2E 専用のクライアントを、起動ごとに 1 回「無ければ作る」。
-                    this.CreateTestClients();
+                    TestClients.RegisterInStore();
                 }
 
                 #endregion

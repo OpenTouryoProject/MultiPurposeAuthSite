@@ -45,6 +45,7 @@
 //*  2026/10/30  玄人 幸道         利用者の削除で、同意の取り消しを削除の後へ・メアド変更の確認待ちも消す・子の表を親より先に消す（#294）
 //*  2026/10/30  玄人 幸道         消した UpdateRoles などを指すコメントを直した（#294）
 //*  2026/11/02  玄人 幸道         利用者名の変更で、WebAuthn の資格情報を同じトランザクションで移す（外部キーで 500。#327）
+//*  2026/11/02  玄人 幸道         Users の更新を楽観排他にした（読んだ時点から行が変わっていたら断る。#316）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -94,8 +95,8 @@ namespace MultiPurposeAuthSite.Data
     /// **Skip や「居ない」で成り立っている経路**（種データの作成など）が在るため、
     /// **1 件ずつ意味を決める必要がある。**
     ///
-    /// **mem ストアの入れ物（`CmnStore._users` など）は `List` で、排他していない。**
-    /// **開発・試験用**であり、同時に書き込む使い方は想定していない。
+    /// **mem ストアの入れ物（`CmnStore._users` など）は `MemoryStoreList` で、1 回の読み書きだけを排他する**（#325）。
+    /// **開発・試験用**であり、複数の操作をまとめた排他はしていない。
     /// </remarks>
     internal partial class CmnUserStore : CmnStore
     {
@@ -115,6 +116,9 @@ namespace MultiPurposeAuthSite.Data
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            //  **読み直した行と区別するための、最初の値**（#316）。
+            user.ConcurrencyStamp = Guid.NewGuid().ToString();
 
             try
             {
@@ -144,12 +148,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Id], [UserName], [NormalizedUserName], [PasswordHash], " +
                                         "    [Email], [NormalizedEmail], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], [TotpAuthenticatorKey], " +
-                                        "    [UnstructuredData], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
+                                        "    [UnstructuredData], [DeviceToken], [CreatedDate], [PasswordChangeDate], [ConcurrencyStamp])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate, @ConcurrencyStamp)", user);
 
                                     break;
 
@@ -160,12 +164,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Id\", \"UserName\", \"NormalizedUserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"NormalizedEmail\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", \"TotpAuthenticatorKey\", " +
-                                        "    \"UnstructuredData\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
+                                        "    \"UnstructuredData\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\", \"ConcurrencyStamp\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :NormalizedUserName, :PasswordHash, " +
                                         "        :Email, :NormalizedEmail, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, :TotpAuthenticatorKey, " +
-                                        "        :UnstructuredData, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
+                                        "        :UnstructuredData, :DeviceToken, :CreatedDate, :PasswordChangeDate, :ConcurrencyStamp)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -186,7 +190,8 @@ namespace MultiPurposeAuthSite.Data
                                             UnstructuredData = user.UnstructuredData,
                                             DeviceToken = user.DeviceToken,
                                             CreatedDate = user.CreatedDate,
-                                            PasswordChangeDate = user.PasswordChangeDate
+                                            PasswordChangeDate = user.PasswordChangeDate,
+                                            ConcurrencyStamp = user.ConcurrencyStamp
                                         });
 
                                     break;
@@ -198,12 +203,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"id\", \"username\", \"normalizedusername\", \"passwordhash\", " +
                                         "    \"email\", \"normalizedemail\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
                                         "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", \"totpauthenticatorkey\", " +
-                                        "    \"unstructureddata\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
+                                        "    \"unstructureddata\", \"devicetoken\", \"createddate\", \"passwordchangedate\", \"concurrencystamp\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @UnstructuredData, @DeviceToken, @CreatedDate, @PasswordChangeDate, @ConcurrencyStamp)", user);
 
                                     break;
                             }
@@ -232,8 +237,42 @@ namespace MultiPurposeAuthSite.Data
 
         #region U (Update)
 
+        /// <summary>読んだ時点から行が変わっていて、更新しなかった（#316）</summary>
+        /// <remarks>
+        /// **利用者が消えていた場合も、これになる**（更新した行が 0 件であることしか分からない）。
+        /// </remarks>
+        internal sealed class ConcurrencyException : Exception
+        {
+            /// <summary>constructor</summary>
+            /// <param name="userId">利用者の Id</param>
+            public ConcurrencyException(string userId)
+                : base(CmnUserStore.ConcurrencyFailureMessage + " (" + userId + ")") { }
+        }
+
+        /// <summary>競合の失敗の文面（net48 の IdentityResult 用。net10.0 の既定の文面に揃える）</summary>
+        internal const string ConcurrencyFailureMessage = "Optimistic concurrency failure, object has been modified.";
+
+        /// <summary>競合したときに、読み直してやり直す回数</summary>
+        /// <remarks>
+        /// **1 周で書けるのは 1 要求だけ**なので、**同時に N 要求なら N 周要る。**
+        /// **足りないと数えが消える**（10 回では、同時に 20 回の失敗を数えきれなかった。`RT-316.1`）。
+        /// </remarks>
+        internal const int ConcurrencyRetryCount = 50;
+
+        /// <summary>やり直す前に待つ時間（同時に走る要求が、また揃わないように散らす）</summary>
+        /// <returns>ミリ秒</returns>
+        internal static int ConcurrencyRetryDelayMilliseconds()
+        {
+            return new Random(Guid.NewGuid().GetHashCode()).Next(1, 30);
+        }
+
         /// <summary>ユーザー情報を更新</summary>
         /// <param name="user">ApplicationUser</param>
+        /// <remarks>
+        /// **読んだ時点から行が変わっていたら、`ConcurrencyException` を投げる**（#316）。
+        /// **以前は後勝ちで、並行した要求の書き込みが消えていた。**
+        /// **mem ストアは同じ実体を共有するので、確かめない。**
+        /// </remarks>
         public static void Update(ApplicationUser user)
         {
             // 更新系の機能のため、
@@ -277,34 +316,43 @@ namespace MultiPurposeAuthSite.Data
                                 // **利用者名が変わるなら、資格情報を一度外す**（#327）。
                                 List<Fido2DataRow> fido2Data = CmnUserStore.TakeFido2DataForRename(cnn, tr, user);
 
+                                //  **読んだ値が一致するときだけ更新する**（#316）。
+                                //    **列を足す前からの行は NULL** なので、`=` では一致しない。
+                                string newStamp = Guid.NewGuid().ToString();
+                                bool stampIsNull = user.ConcurrencyStamp == null;
+                                int rows = 0;
+
                                 // ユーザー情報を更新
                                 switch (Config.UserStoreType)
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        cnn.Execute(
+                                        rows = cnn.Execute(
                                             "UPDATE [Users] " +
                                             "SET [UserName] = @UserName, [NormalizedUserName] = @NormalizedUserName, [PasswordHash] = @PasswordHash, " +
                                             "    [Email] = @Email, [NormalizedEmail] = @NormalizedEmail, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
                                             "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
                                             "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
                                             "    [UnstructuredData] = @UnstructuredData, " + 
-                                            "    [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
-                                            "WHERE [Id] = @Id", user, tr);
+                                            "    [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate, [ConcurrencyStamp] = @NewStamp " +
+                                            "WHERE [Id] = @Id AND " +
+                                            (stampIsNull ? "[ConcurrencyStamp] IS NULL" : "[ConcurrencyStamp] = @OldStamp"),
+                                            CmnUserStore.UpdateParameters(user, newStamp), tr);
 
                                         break;
 
                                     case EnumUserStoreType.ODPManagedDriver:
 
-                                        cnn.Execute(
+                                        rows = cnn.Execute(
                                             "UPDATE \"Users\" " +
                                             "SET \"UserName\" = :UserName, \"NormalizedUserName\" = :NormalizedUserName, \"PasswordHash\" = :PasswordHash, " +
                                             "    \"Email\" = :Email, \"NormalizedEmail\" = :NormalizedEmail, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
                                             "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
                                             "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
                                             "    \"UnstructuredData\" = :UnstructuredData, " +
-                                            "    \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
-                                            "WHERE \"Id\" = :Id",
+                                            "    \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate, \"ConcurrencyStamp\" = :NewStamp " +
+                                            "WHERE \"Id\" = :Id AND " +
+                                            (stampIsNull ? "\"ConcurrencyStamp\" IS NULL" : "\"ConcurrencyStamp\" = :OldStamp"),
                                             new // 拡張メソッドで対策できる。
                                             {
                                                 Id = user.Id,
@@ -325,30 +373,44 @@ namespace MultiPurposeAuthSite.Data
                                                 UnstructuredData = user.UnstructuredData,
                                                 DeviceToken = user.DeviceToken,
                                                 //CreatedDate = user.CreatedDate,
-                                                PasswordChangeDate = user.PasswordChangeDate
+                                                PasswordChangeDate = user.PasswordChangeDate,
+                                                NewStamp = newStamp,
+                                                OldStamp = user.ConcurrencyStamp
                                             }, tr);
 
                                         break;
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        cnn.Execute(
+                                        rows = cnn.Execute(
                                            "UPDATE \"users\" " +
                                            "SET \"username\" = @UserName, \"normalizedusername\" = @NormalizedUserName, \"passwordhash\" = @PasswordHash, " +
                                            "    \"email\" = @Email, \"normalizedemail\" = @NormalizedEmail, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
                                            "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
                                            "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
                                            "    \"unstructureddata\" = @UnstructuredData, " +
-                                           "    \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
-                                           "WHERE \"id\" = @Id", user, tr);
+                                           "    \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate, \"concurrencystamp\" = @NewStamp " +
+                                           "WHERE \"id\" = @Id AND " +
+                                           (stampIsNull ? "\"concurrencystamp\" IS NULL" : "\"concurrencystamp\" = @OldStamp"),
+                                           CmnUserStore.UpdateParameters(user, newStamp), tr);
 
                                         break;
+                                }
+
+                                //  **更新できなければ、ここで投げる**（#316）。
+                                //    **コミットしないので、外した資格情報も戻る。**
+                                if (rows == 0)
+                                {
+                                    throw new CmnUserStore.ConcurrencyException(user.Id);
                                 }
 
                                 // **外した資格情報を、新しい名前で戻す**（#327）。
                                 CmnUserStore.PutFido2DataForRename(cnn, tr, user, fido2Data);
 
                                 tr.Commit();
+
+                                //  **同じ物で続けて更新しても、自分の更新と競合しない**ように、持ち替える。
+                                user.ConcurrencyStamp = newStamp;
 
                                 // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
                                 //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
@@ -364,6 +426,11 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MyOperationTrace(string.Format("{0}({1}) was updated.", user.Id, user.UserName));
                 //}
             }
+            catch (CmnUserStore.ConcurrencyException)
+            {
+                //  **障害ではない**ので、SQL のエラーとしてログに書かない。呼ぶ側が決める。
+                throw;
+            }
             catch (Exception ex)
             {
                 //  **書き込みの失敗は、握らない**（#300）。**ログに書いてから投げ直す。**
@@ -372,6 +439,37 @@ namespace MultiPurposeAuthSite.Data
             }
 
             return;
+        }
+
+        /// <summary>Update のパラメタ（SQL Server・PostgreSQL。真偽をそのまま渡せる方言）</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="newStamp">新しい ConcurrencyStamp</param>
+        /// <returns>パラメタ</returns>
+        private static object UpdateParameters(ApplicationUser user, string newStamp)
+        {
+            return new
+            {
+                user.Id,
+                user.UserName,
+                user.NormalizedUserName,
+                user.PasswordHash,
+                user.Email,
+                user.NormalizedEmail,
+                user.EmailConfirmed,
+                user.PhoneNumber,
+                user.PhoneNumberConfirmed,
+                user.LockoutEnabled,
+                user.AccessFailedCount,
+                user.LockoutEndDateUtc,
+                user.SecurityStamp,
+                user.TwoFactorEnabled,
+                user.TotpAuthenticatorKey,
+                user.UnstructuredData,
+                user.DeviceToken,
+                user.PasswordChangeDate,
+                NewStamp = newStamp,
+                OldStamp = user.ConcurrencyStamp
+            };
         }
 
         /// <summary>利用者名の変更で動かす、FIDO2Data の行</summary>

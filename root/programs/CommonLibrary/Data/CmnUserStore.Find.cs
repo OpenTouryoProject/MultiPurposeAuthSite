@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         利用者の一覧で、失敗しても 500 にせず、mem でも検索条件と件数を効かせる・ToUpperInvariant に揃える（#294）
 //*  2026/10/30  玄人 幸道         net48 の mem で、利用者名を大文字小文字を区別せずに引く（#294）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す。デッドロックの犠牲なら読み直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -69,10 +70,17 @@ namespace MultiPurposeAuthSite.Data
 
         #region R (Read)
 
+        /// <summary>FindById（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `FindByIdOnce`。</remarks>
+        public static ApplicationUser FindById(string userId)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnUserStore.FindByIdOnce(userId));
+        }
+
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser FindById(string userId)
+        private static ApplicationUser FindByIdOnce(string userId)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -116,6 +124,12 @@ namespace MultiPurposeAuthSite.Data
                 }
 
                 // 通常のモードでの実装を行う。
+                //  **DB が受け付けない値は、引くまでもなく「無い」**（#331）。
+                if (!CmnStore.IsSearchable(userId))
+                {
+                    return user;
+                }
+
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -173,16 +187,25 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return user;
         }
 
+        /// <summary>FindByName（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `FindByNameOnce`。</remarks>
+        public static ApplicationUser FindByName(string userName)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnUserStore.FindByNameOnce(userName));
+        }
+
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser FindByName(string userName)
+        private static ApplicationUser FindByNameOnce(string userName)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -229,6 +252,12 @@ namespace MultiPurposeAuthSite.Data
                 else
                 {
                     // 通常のモードでの実装を行う。
+                    //  **DB が受け付けない値は、引くまでもなく「無い」**（#331）。
+                    if (!CmnStore.IsSearchable(userName))
+                    {
+                        return user;
+                    }
+
                     switch (Config.UserStoreType)
                     {
                         case EnumUserStoreType.Memory:
@@ -301,10 +330,22 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return user;
+        }
+
+        /// <summary>Users（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `UsersOnce`。</remarks>
+        public static IQueryable<ApplicationUser> Users
+        {
+            get
+            {
+                return DataAccess.RetryOnDeadlock(() => CmnUserStore.UsersOnce);
+            }
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
@@ -312,7 +353,7 @@ namespace MultiPurposeAuthSite.Data
         /// ★ マルチテナント化対応を施した
         /// （場合によってはページングも必要になる）
         /// </remarks>
-        public static IQueryable<ApplicationUser> Users
+        private static IQueryable<ApplicationUser> UsersOnce
         {
             get
             {
@@ -430,12 +471,13 @@ namespace MultiPurposeAuthSite.Data
                 }
                 catch (Exception ex)
                 {
+                    //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                     Logging.MySQLLogForEx(ex);
+                    throw;
                 }
 
                 // IQueryableとして戻す。
-                //   **読み取りの失敗は、空の一覧にする**（#294。以前は null のまま `AsQueryable` を呼び、500 になっていた）。
-                return (users ?? new List<ApplicationUser>()).AsQueryable();
+                return users.AsQueryable();
             }
         }
 

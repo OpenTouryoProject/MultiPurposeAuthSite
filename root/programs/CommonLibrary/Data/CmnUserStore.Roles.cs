@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         net10.0 の mem でロールを外せなかった（正規化名で突き合わせる）・GetRoles の失敗で null を返さない・使われていない UpdateRoles を削除（#294）
 //*  2026/10/30  玄人 幸道         DB でも、渡された user のロールの一覧を揃える（#294）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す。デッドロックの犠牲なら読み直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -259,10 +260,17 @@ namespace MultiPurposeAuthSite.Data
             return roles.FirstOrDefault(x => x.ToUpperInvariant() == roleName.ToUpperInvariant()) != null;
         }
 
+        /// <summary>GetRoles（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `GetRolesOnce`。</remarks>
+        public static IList<string> GetRoles(ApplicationUser user)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnUserStore.GetRolesOnce(user));
+        }
+
         /// <summary>ユーザのロール一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ユーザのロール一覧</returns>
-        public static IList<string> GetRoles(ApplicationUser user)
+        private static IList<string> GetRolesOnce(ApplicationUser user)
         {
             // 他テーブルのため、
             //OnlySts.STSOnly_M();
@@ -363,10 +371,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
-
-                //  **読み取りの失敗は、空の一覧にする**（#294。以前は null を返し、`IsInRole` が落ちていた）。
-                roleNames = new List<string>();
+                throw;
             }
 
             // ユーザのロール一覧を返す。

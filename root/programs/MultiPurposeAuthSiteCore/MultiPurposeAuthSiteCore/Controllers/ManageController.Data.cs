@@ -18,6 +18,7 @@
 //*  2026/10/29  玄人 幸道         新規（ManageController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         GDPR 削除で、WebAuthn の資格情報を利用者を消せてから消す（#294）
 //*  2026/10/30  玄人 幸道         WebAuthn の資格情報の登録で、パスワードを確かめる（#294）
+//*  2026/11/03  玄人 幸道         画面からの更新も、競合したら読み直して、変えた項目だけを当て直す（#331）
 //**********************************************************************************
 
 /*
@@ -122,7 +123,10 @@ namespace MultiPurposeAuthSite.Controllers
                         user.UnstructuredData = JsonConvert.SerializeObject(model);
 
                         // ユーザーの保存
-                        IdentityResult result = await UserManager.UpdateAsync(user);
+                        //  **競合したら、読み直して、変えた項目だけを当て直す**（#331）。**ほかの項目は、読み直した値のまま。**
+                        string unstructuredData = user.UnstructuredData;
+                        IdentityResult result = await ((MultiPurposeAuthSite.Data.UserManagerCore)UserManager).UpdateWithRetryAsync(
+                            user, x => x.UnstructuredData = unstructuredData);
 
                         // 結果の確認
                         if (result.Succeeded)
@@ -181,7 +185,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // 非構造化データのクリア
                 user.UnstructuredData = "";
                 // ユーザーの保存
-                IdentityResult result = await UserManager.UpdateAsync(user);
+                //  **競合したら、読み直して、変えた項目だけを当て直す**（#331）。**ほかの項目は、読み直した値のまま。**
+                IdentityResult result = await ((MultiPurposeAuthSite.Data.UserManagerCore)UserManager).UpdateWithRetryAsync(
+                    user, x => x.UnstructuredData = "");
 
                 // 結果の確認
                 if (result.Succeeded)

@@ -291,6 +291,9 @@
     <Compile Include="Controllers\AccountController.SelfTest.cs">
       <DependentUpon>AccountController.cs</DependentUpon>
     </Compile>
+    <Compile Include="Controllers\AccountController.TestData.cs">
+      <DependentUpon>AccountController.cs</DependentUpon>
+    </Compile>
     <Compile Include="Controllers\AccountController.Helper.cs">
       <DependentUpon>AccountController.cs</DependentUpon>
     </Compile>

@@ -24,6 +24,7 @@
 //*  2026/10/09  玄人 幸道         Users.PaymentInformation を削除（オンライン決済の取り下げ）
 //*  2026/10/10  玄人 幸道         直列化をOptInにした（GDPRの持ち出しに資格情報を入れない）
 //*  2026/10/20  玄人 幸道         ClientID のプロパティを落とした（#307 の段階 5-a-1）
+//*  2026/11/02  玄人 幸道         楽観排他の列 ConcurrencyStamp を足した（#316）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -329,6 +330,15 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <remarks>
         /// </remarks>
         public string SecurityStamp { get; set; }
+
+        /// <summary>楽観排他の値（#316）。行を更新するたびに変わる。</summary>
+        /// <remarks>
+        /// **初期値を持たせない。** Dapper は NULL の列を代入しないので、
+        /// 初期値があると、**列を足す前からの行（NULL）を、読んだ値と違う行として断り続ける。**
+        /// 新しい行の値は `CmnUserStore.Create` が入れる。
+        /// **個人データの持ち出しには含めない**（`[JsonProperty]` を付けない）。
+        /// </remarks>
+        public string ConcurrencyStamp { get; set; }
 
         /// <summary>
         /// Gets or sets a value that indicates whether two-factor authentication is enabled for the user.

@@ -18,6 +18,9 @@
 //*  2017/04/24  西野 大介         新規
 //*  2026/09/16  玄人 幸道         MobileApp（プッシュ通知）の2FAプロバイダを登録（#216）
 //*  2026/10/01  玄人 幸道         メアドの一意を常に必須にした（#151 の段階 3）
+//*  2026/11/02  玄人 幸道         更新の競合を失敗で返し、数えやスタンプの更新は読み直してやり直す（#316）
+//*  2026/11/03  玄人 幸道         変更を当て直してやり直す UpdateWithRetryAsync を足した（#331）
+//*  2026/11/04  玄人 幸道         外部ログイン・クレームの追加と外部ログインの解除も、後の更新が競合したらやり直す（#331。RT-294.23 の原因）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Entity;
@@ -30,6 +33,11 @@ using Microsoft.Owin;
 using Microsoft.Owin.Security.DataProtection;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
+
+using System;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 /// <summary>MultiPurposeAuthSite.Manager</summary>
 namespace MultiPurposeAuthSite.Manager
@@ -51,6 +59,186 @@ namespace MultiPurposeAuthSite.Manager
         /// <summary>constructor</summary>
         /// <param name="store">IUserStore</param>
         public ApplicationUserManager(IUserStore<ApplicationUser> store) : base(store) { }
+
+        #region 楽観排他（#316）
+
+        /// <summary>UpdateAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>IdentityResult（競合したら失敗）</returns>
+        public override async Task<IdentityResult> UpdateAsync(ApplicationUser user)
+        {
+            try
+            {
+                return await base.UpdateAsync(user);
+            }
+            catch (CmnUserStore.ConcurrencyException)
+            {
+                return IdentityResult.Failed(CmnUserStore.ConcurrencyFailureMessage);
+            }
+        }
+
+        /// <summary>AccessFailedAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**競合で数えが消えると、ロックアウトに届きにくくなる**（`ANALYSIS-IdP.md` の E-14）。</remarks>
+        public override Task<IdentityResult> AccessFailedAsync(string userId)
+        {
+            return this.RetryOnConflictAsync(() => base.AccessFailedAsync(userId));
+        }
+
+        /// <summary>ResetAccessFailedCountAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <returns>IdentityResult</returns>
+        public override Task<IdentityResult> ResetAccessFailedCountAsync(string userId)
+        {
+            return this.RetryOnConflictAsync(() => base.ResetAccessFailedCountAsync(userId));
+        }
+
+        /// <summary>UpdateSecurityStampAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**結果を見ない呼び出しがあり、競合で更新が消えると、古いセッションが生き残る。**</remarks>
+        public override Task<IdentityResult> UpdateSecurityStampAsync(string userId)
+        {
+            return this.RetryOnConflictAsync(() => base.UpdateSecurityStampAsync(userId));
+        }
+
+        /// <summary>SetTwoFactorEnabledAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="enabled">有効にするか</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**結果を見ない呼び出しがある。**</remarks>
+        public override Task<IdentityResult> SetTwoFactorEnabledAsync(string userId, bool enabled)
+        {
+            return this.RetryOnConflictAsync(() => base.SetTwoFactorEnabledAsync(userId, enabled));
+        }
+
+        /// <summary>AddLoginAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="login">外部ログイン</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **基底は、外部ログインの行をその場で書いてから、利用者の行を更新する。**
+        /// **後の更新だけが競合に負けると、行は書けているのに失敗が返り、ID 連携がエラー画面で終わっていた**（#331。`RT-294.23`）。
+        /// **後の更新は中身を変えない**ので、**競合したら読み直して書き直す。**
+        /// </remarks>
+        public override async Task<IdentityResult> AddLoginAsync(string userId, UserLoginInfo login)
+        {
+            IdentityResult result = await base.AddLoginAsync(userId, login);
+
+            return ApplicationUserManager.IsConflict(result)
+                ? await this.RewriteRowAsync(userId, result)
+                : result;
+        }
+
+        /// <summary>AddClaimAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="claim">クレーム</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>**`AddLoginAsync` と同じ**（クレームの行をその場で書いてから、利用者の行を更新する。#331）。</remarks>
+        public override async Task<IdentityResult> AddClaimAsync(string userId, Claim claim)
+        {
+            IdentityResult result = await base.AddClaimAsync(userId, claim);
+
+            return ApplicationUserManager.IsConflict(result)
+                ? await this.RewriteRowAsync(userId, result)
+                : result;
+        }
+
+        /// <summary>RemoveLoginAsync</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="login">外部ログイン</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **基底は、外部ログインの行を消してから、`SecurityStamp` を新しくして利用者の行を更新する。**
+        /// **後の更新が競合に負けると、解除できているのに失敗が返り、スタンプも古いまま残る**（#331）。
+        /// **競合したら、スタンプの更新をやり直す**（`UpdateSecurityStampAsync` は、読み直してやり直す）。
+        /// </remarks>
+        public override async Task<IdentityResult> RemoveLoginAsync(string userId, UserLoginInfo login)
+        {
+            IdentityResult result = await base.RemoveLoginAsync(userId, login);
+
+            return ApplicationUserManager.IsConflict(result)
+                ? await this.UpdateSecurityStampAsync(userId)
+                : result;
+        }
+
+        /// <summary>利用者の行を読み直して、そのまま書き直す（子の行を書いた後の更新が競合したとき）</summary>
+        /// <param name="userId">利用者の Id</param>
+        /// <param name="failed">競合で失敗した結果（利用者が消えていたら、これを返す）</param>
+        /// <returns>IdentityResult</returns>
+        private async Task<IdentityResult> RewriteRowAsync(string userId, IdentityResult failed)
+        {
+            ApplicationUser user = await this.FindByIdAsync(userId);
+
+            return (user == null)
+                ? failed
+                : await this.UpdateWithRetryAsync(user, x => { });
+        }
+
+        /// <summary>競合で失敗したか</summary>
+        /// <param name="result">IdentityResult</param>
+        /// <returns>競合なら true</returns>
+        private static bool IsConflict(IdentityResult result)
+        {
+            return result.Errors.Contains(CmnUserStore.ConcurrencyFailureMessage);
+        }
+
+        /// <summary>変更を当てて書き、競合したら読み直して当て直す（#331）</summary>
+        /// <param name="user">ApplicationUser（1 回目は、この物に当てる）</param>
+        /// <param name="change">変更（**読み直すたびに当て直す**ので、前の値から計算しない）</param>
+        /// <returns>IdentityResult</returns>
+        /// <remarks>
+        /// **`change` には、この要求で変える項目だけを書く。** 読み直した行に当て直すので、**ほかの項目は新しい値のまま残る。**
+        /// 端末からの要求（`/SetDeviceToken`）と、画面からの更新（利用者名・メアド・非構造化データなど）が使う。
+        /// **同じ項目を同時に変えたときは、後から書いた方が残る。**
+        /// </remarks>
+        public Task<IdentityResult> UpdateWithRetryAsync(ApplicationUser user, Action<ApplicationUser> change)
+        {
+            bool first = true;
+
+            return this.RetryOnConflictAsync(async () =>
+            {
+                ApplicationUser target = user;
+
+                if (!first)
+                {
+                    //  **2 回目からは、読み直した物に当てる。** 消えていたら、そのまま失敗させる。
+                    target = await this.FindByIdAsync(user.Id) ?? user;
+                }
+
+                first = false;
+                change(target);
+                return await this.UpdateAsync(target);
+            });
+        }
+
+        /// <summary>競合したら、やり直す（基底の操作は、Id で読み直すところから始まる）</summary>
+        /// <param name="operation">操作</param>
+        /// <returns>IdentityResult</returns>
+        private async Task<IdentityResult> RetryOnConflictAsync(Func<Task<IdentityResult>> operation)
+        {
+            IdentityResult result = null;
+
+            for (int i = 0; i < CmnUserStore.ConcurrencyRetryCount; i++)
+            {
+                if (0 < i)
+                {
+                    await Task.Delay(CmnUserStore.ConcurrencyRetryDelayMilliseconds());
+                }
+
+                result = await operation();
+
+                if (!result.Errors.Contains(CmnUserStore.ConcurrencyFailureMessage))
+                {
+                    return result;
+                }
+            }
+
+            return result;
+        }
+
+        #endregion
 
         /// <summary>Create</summary>
         /// <param name="options">options</param>

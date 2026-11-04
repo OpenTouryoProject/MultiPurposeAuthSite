@@ -29,10 +29,15 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 2）
+//*  2026/11/02  玄人 幸道         同時に間違えても、すべて数える（RT-316.1・RT-316.2）
+//*  2026/11/03  玄人 幸道         同時の失敗の数えと、同時の同意の記録（RT-331.1・RT-331.2）
+//*  2026/11/04  玄人 幸道         ロックアウトの窓を過ぎてから確かめたときは、数え直す（#331）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -140,23 +145,56 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         Assert.True(await user.TrySignInAsync(name, password),
                             "前提: 使い捨ての利用者でサインインできること");
 
-                        r.Step("(3) 間違った user_code を " + max + " 回送る");
+                        //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                        //    **通ってしまうと user_code は使われる**ので、数え直すときは新しく取る。
+                        bool duringLockout = false;
+                        Stopwatch watch = null;
+                        int attempt = 0;
 
-                        for (int i = 0; i < max; i++)
+                        do
                         {
-                            bool wrong = await user.SubmitDeviceUserCodeAsync(
-                                "wrong" + i.ToString(), true);
+                            attempt++;
 
-                            r.Verify("間違いは受け付けない（" + (i + 1) + " 回目）", !wrong,
-                                "受け付けない", wrong ? "**受け付けた**" : "受け付けなかった");
+                            if (1 < attempt)
+                            {
+                                start = await DeviceAuthorizationTests.StartAsync(admin, reg.ClientId);
+                                userCode = start.String("user_code");
+                            }
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(3) 間違った user_code を " + max + " 回送る");
+                            }
+
+                            for (int i = 0; i < max; i++)
+                            {
+                                //  **最後の 1 回（上限に届かせる要求）を送る直前から測る。**
+                                if (i == max - 1)
+                                {
+                                    watch = Stopwatch.StartNew();
+                                }
+
+                                bool wrong = await user.SubmitDeviceUserCodeAsync(
+                                    "wrong" + i.ToString(), true);
+
+                                r.Verify("間違いは受け付けない（" + (i + 1) + " 回目）", !wrong,
+                                    "受け付けない", wrong ? "**受け付けた**" : "受け付けなかった");
+                            }
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(4) 正しい user_code を送っても、断られる");
+                            }
+
+                            duringLockout = await user.SubmitDeviceUserCodeAsync(userCode, true);
+
+                            watch.Stop();
                         }
-
-                        r.Step("(4) 正しい user_code を送っても、断られる");
-
-                        bool duringLockout = await user.SubmitDeviceUserCodeAsync(userCode, true);
+                        while (LockoutWindow.Retry(!duringLockout, watch.Elapsed, lockoutSeconds, attempt));
 
                         r.Verify("正しい user_code でも通らない", !duringLockout,
-                            "通らない", duringLockout ? "**通ってしまった**" : "通らなかった");
+                            "通らない", LockoutWindow.Describe(!duringLockout, "通らなかった", "通ってしまった",
+                                watch.Elapsed, lockoutSeconds, attempt));
 
                         r.Step("(5) " + lockoutSeconds + " ＋ 1 秒待つと、また通る");
 
@@ -253,23 +291,54 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                         r.VerifyEqual("HTTP 200", "200", ((int)before.StatusCode).ToString());
 
-                        r.Step("(3) 間違った秘密で " + max + " 回失敗する");
+                        //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                        JsonResponse duringLockout = null;
+                        Stopwatch watch = null;
+                        int attempt = 0;
 
-                        for (int i = 0; i < max; i++)
+                        do
                         {
-                            JsonResponse wrong = await AuthFailureLockoutTests.RevokeAsync(
-                                client, clientId, "wrong-secret-" + i.ToString());
+                            attempt++;
 
-                            r.VerifyEqual("invalid_client（" + (i + 1) + " 回目）",
-                                "invalid_client", wrong.Error);
+                            if (attempt == 1)
+                            {
+                                r.Step("(3) 間違った秘密で " + max + " 回失敗する");
+                            }
+
+                            for (int i = 0; i < max; i++)
+                            {
+                                //  **最後の 1 回（上限に届かせる要求）を送る直前から測る。**
+                                if (i == max - 1)
+                                {
+                                    watch = Stopwatch.StartNew();
+                                }
+
+                                JsonResponse wrong = await AuthFailureLockoutTests.RevokeAsync(
+                                    client, clientId, "wrong-secret-" + i.ToString());
+
+                                r.VerifyEqual("invalid_client（" + (i + 1) + " 回目）",
+                                    "invalid_client", wrong.Error);
+                            }
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(4) 正しい秘密でも断られる");
+                            }
+
+                            duringLockout = await AuthFailureLockoutTests.RevokeAsync(
+                                client, clientId, secret);
+
+                            watch.Stop();
                         }
+                        while (LockoutWindow.Retry(duringLockout.Error == "invalid_client",
+                            watch.Elapsed, lockoutSeconds, attempt));
 
-                        r.Step("(4) 正しい秘密でも断られる");
-
-                        JsonResponse duringLockout = await AuthFailureLockoutTests.RevokeAsync(
-                            client, clientId, secret);
-
-                        r.VerifyEqual("正しい秘密でも invalid_client", "invalid_client", duringLockout.Error);
+                        //  **断られなかったときだけ、窓に対していつ確かめたかを添える**（合否は error の一致で決まる）。
+                        r.VerifyEqual("正しい秘密でも invalid_client", "invalid_client",
+                            (duringLockout.Error == "invalid_client") ? duringLockout.Error
+                                : LockoutWindow.Describe(false, "",
+                                    "HTTP " + (int)duringLockout.StatusCode + "（error=" + (duringLockout.Error ?? "なし") + "）",
+                                    watch.Elapsed, lockoutSeconds, attempt));
 
                         r.Step("(5) " + lockoutSeconds + " ＋ 1 秒待つと、また通る");
 
@@ -390,23 +459,54 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         Assert.False(string.IsNullOrEmpty(clientId), "前提: クライアントを登録できること");
                         Assert.False(string.IsNullOrEmpty(secret), "前提: client_secret が発行されること");
 
-                        r.Step("(2) 送信元 " + ipA + " から、間違った秘密で " + max + " 回失敗する");
+                        //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                        JsonResponse fromA = null;
+                        Stopwatch watch = null;
+                        int attempt = 0;
 
-                        for (int i = 0; i < max; i++)
+                        do
                         {
-                            JsonResponse wrong = await AuthFailureLockoutTests.RevokeFromAsync(
-                                client, clientId, "wrong-secret-" + i.ToString(), ipA);
+                            attempt++;
 
-                            r.VerifyEqual("invalid_client（" + (i + 1) + " 回目）",
-                                "invalid_client", wrong.Error);
+                            if (attempt == 1)
+                            {
+                                r.Step("(2) 送信元 " + ipA + " から、間違った秘密で " + max + " 回失敗する");
+                            }
+
+                            for (int i = 0; i < max; i++)
+                            {
+                                //  **最後の 1 回（上限に届かせる要求）を送る直前から測る。**
+                                if (i == max - 1)
+                                {
+                                    watch = Stopwatch.StartNew();
+                                }
+
+                                JsonResponse wrong = await AuthFailureLockoutTests.RevokeFromAsync(
+                                    client, clientId, "wrong-secret-" + i.ToString(), ipA);
+
+                                r.VerifyEqual("invalid_client（" + (i + 1) + " 回目）",
+                                    "invalid_client", wrong.Error);
+                            }
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(3) 送信元 " + ipA + " は、正しい秘密でも断られる");
+                            }
+
+                            fromA = await AuthFailureLockoutTests.RevokeFromAsync(
+                                client, clientId, secret, ipA);
+
+                            watch.Stop();
                         }
+                        while (LockoutWindow.Retry(fromA.Error == "invalid_client",
+                            watch.Elapsed, lockoutSeconds, attempt));
 
-                        r.Step("(3) 送信元 " + ipA + " は、正しい秘密でも断られる");
-
-                        JsonResponse fromA = await AuthFailureLockoutTests.RevokeFromAsync(
-                            client, clientId, secret, ipA);
-
-                        r.VerifyEqual("正しい秘密でも invalid_client", "invalid_client", fromA.Error);
+                        //  **断られなかったときだけ、窓に対していつ確かめたかを添える**（合否は error の一致で決まる）。
+                        r.VerifyEqual("正しい秘密でも invalid_client", "invalid_client",
+                            (fromA.Error == "invalid_client") ? fromA.Error
+                                : LockoutWindow.Describe(false, "",
+                                    "HTTP " + (int)fromA.StatusCode + "（error=" + (fromA.Error ?? "なし") + "）",
+                                    watch.Elapsed, lockoutSeconds, attempt));
 
                         r.Step("(4) 送信元 " + ipB + " は、同じ `client_id` でも通る（段階 4 の要点）");
 
@@ -526,28 +626,55 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             "出る", string.IsNullOrEmpty(before.AccessToken)
                                 ? "**出ない（error=" + (before.Error ?? "なし") + "）**" : "出た");
 
-                        r.Step("(3) 間違ったパスワードで " + max + " 回失敗する");
+                        //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                        JsonResponse duringLockout = null;
+                        Stopwatch watch = null;
+                        int attempt = 0;
 
-                        for (int i = 0; i < max; i++)
+                        do
                         {
-                            JsonResponse wrong = await AuthFailureLockoutTests.PasswordGrantAsync(
-                                client, reg, name, "WRONG-PASSWORD-" + i.ToString());
+                            attempt++;
 
-                            r.Verify("トークンを出さない（" + (i + 1) + " 回目）",
-                                string.IsNullOrEmpty(wrong.AccessToken),
-                                "出さない", string.IsNullOrEmpty(wrong.AccessToken)
-                                    ? "出さなかった" : "**出してしまった**");
+                            if (attempt == 1)
+                            {
+                                r.Step("(3) 間違ったパスワードで " + max + " 回失敗する");
+                            }
+
+                            for (int i = 0; i < max; i++)
+                            {
+                                //  **最後の 1 回（上限に届かせる要求）を送る直前から測る。**
+                                if (i == max - 1)
+                                {
+                                    watch = Stopwatch.StartNew();
+                                }
+
+                                JsonResponse wrong = await AuthFailureLockoutTests.PasswordGrantAsync(
+                                    client, reg, name, "WRONG-PASSWORD-" + i.ToString());
+
+                                r.Verify("トークンを出さない（" + (i + 1) + " 回目）",
+                                    string.IsNullOrEmpty(wrong.AccessToken),
+                                    "出さない", string.IsNullOrEmpty(wrong.AccessToken)
+                                        ? "出さなかった" : "**出してしまった**");
+                            }
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(4) 正しいパスワードでも断られる");
+                            }
+
+                            duringLockout = await AuthFailureLockoutTests.PasswordGrantAsync(
+                                client, reg, name, password);
+
+                            watch.Stop();
                         }
-
-                        r.Step("(4) 正しいパスワードでも断られる");
-
-                        JsonResponse duringLockout = await AuthFailureLockoutTests.PasswordGrantAsync(
-                            client, reg, name, password);
+                        while (LockoutWindow.Retry(string.IsNullOrEmpty(duringLockout.AccessToken),
+                            watch.Elapsed, lockoutSeconds, attempt));
 
                         r.Verify("正しいパスワードでもトークンが出ない",
                             string.IsNullOrEmpty(duringLockout.AccessToken),
-                            "出ない", string.IsNullOrEmpty(duringLockout.AccessToken)
-                                ? "出なかった" : "**出てしまった（断りが効いていない）**");
+                            "出ない", LockoutWindow.Describe(string.IsNullOrEmpty(duringLockout.AccessToken),
+                                "出なかった", "出てしまった（断りが効いていない）",
+                                watch.Elapsed, lockoutSeconds, attempt));
 
                         r.VerifyEqual("応答は誤パスワードと同じ access_denied",
                             "access_denied", duringLockout.Error);
@@ -576,6 +703,438 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 }
                 finally
                 {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-316
+
+        /// <summary>RT-316.1 画面のサインインを同時に間違えても、すべて数える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT31601_画面のサインインを同時に間違えてもすべて数える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                int max = AuthFailureLockoutTests.SettingOf(
+                    admin, "MaxFailedAccessAttemptsBeforeLockout", 0);
+
+                Skip.If(max <= 0,
+                    "MaxFailedAccessAttemptsBeforeLockout が 0（数えない配備）です。");
+
+                TestReport r = this.Report("RT-316.1",
+                    "画面のサインインを同時に間違えても、すべて数える",
+                    "**`Users` の更新は後勝ちだったので、並行した失敗が少なく数えられ、ロックアウトに届きにくかった。** "
+                    + "**競合したら読み直して数え直す。**",
+                    "#316");
+
+                r.Target("POST /Account/Login（使い捨ての利用者。同時に " + max + " 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3161_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+                int lockoutSeconds = AuthFailureLockoutTests.SettingOf(
+                    admin, "DefaultAccountLockoutTimeSpanFromSeconds", 300);
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "User")),
+                    "前提: 利用者を作れること");
+
+                List<IdPClient> clients = new List<IdPClient>();
+
+                try
+                {
+                    //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                    bool signedIn = false;
+                    Stopwatch watch = null;
+                    int attempt = 0;
+
+                    do
+                    {
+                        attempt++;
+
+                        //  **同時に送るのは 上限 - 1 回。最後の 1 回を、確かめる直前に送る。**
+                        //    **同時に上限まで送ると、応答が揃うまでにロックアウトが解けて、正しいパスワードで入れてしまう**
+                        //    （`-Launch` では 5 秒。負荷の高い通しで踏んだ）。
+                        //    **1 回でも少なく数えられていれば、最後の 1 回で上限に届かず、入れる。**
+                        if (attempt == 1)
+                        {
+                            r.Step("(1) 間違ったパスワードで、同時に 上限 - 1 回（" + (max - 1) + " 回）失敗する");
+                        }
+
+                        List<Task<bool>> attempts = new List<Task<bool>>();
+
+                        for (int i = 0; i < max - 1; i++)
+                        {
+                            IdPClient client = this.Client(targetKey);
+                            clients.Add(client);
+                            attempts.Add(client.TrySignInAsync(name, "WRONG-PASSWORD-" + i.ToString()));
+                        }
+
+                        bool[] results = await Task.WhenAll(attempts);
+
+                        r.VerifyEqual("どの回も入れない", "0",
+                            results.Count(x => x).ToString());
+
+                        if (attempt == 1)
+                        {
+                            r.Step("(2) もう 1 回間違えて、上限に届かせる");
+                        }
+
+                        //  **ここから測る**（上限に届かせる要求を送る直前）。
+                        watch = Stopwatch.StartNew();
+
+                        using (IdPClient last = this.Client(targetKey))
+                        {
+                            bool lastResult = await last.TrySignInAsync(name, "WRONG-PASSWORD-LAST");
+
+                            r.Verify("最後の 1 回も入れない", !lastResult,
+                                "入れない", lastResult ? "**入れた**" : "入れなかった");
+                        }
+
+                        if (attempt == 1)
+                        {
+                            r.Step("(3) 正しいパスワードでも断られる");
+                        }
+
+                        using (IdPClient client = this.Client(targetKey))
+                        {
+                            signedIn = await client.TrySignInAsync(name, password);
+                        }
+
+                        watch.Stop();
+                    }
+                    while (LockoutWindow.Retry(!signedIn, watch.Elapsed, lockoutSeconds, attempt));
+
+                    r.Verify("**正しいパスワードでも入れない**", !signedIn,
+                        "入れない", LockoutWindow.Describe(!signedIn, "入れなかった", "入れた",
+                            watch.Elapsed, lockoutSeconds, attempt));
+                }
+                finally
+                {
+                    clients.ForEach(x => x.Dispose());
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-316.2 /token のパスワードを同時に間違えても、すべて数える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT31602_tokenのパスワードを同時に間違えてもすべて数える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                //  **ROPC は雛形の既定で無効**（#220）。有効な環境でだけ測る。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(admin, "password");
+
+                int max = AuthFailureLockoutTests.SettingOf(
+                    admin, "MaxFailedAccessAttemptsBeforeLockout", 0);
+
+                Skip.If(max <= 0,
+                    "MaxFailedAccessAttemptsBeforeLockout が 0（数えない配備）です。");
+
+                TestReport r = this.Report("RT-316.2",
+                    "`/token` のパスワードを同時に間違えても、すべて数える",
+                    "**読み・足し・書きの 3 手が原子的でなく、並行した失敗が少なく数えられていた**"
+                    + "（`ANALYSIS-IdP.md` の E-14）。**競合したら読み直して数え直す。**",
+                    "RFC 6749 §4.3 / #316");
+
+                r.Target("POST /token（grant_type=password。使い捨ての利用者。同時に " + max + " 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3162_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+                int lockoutSeconds = AuthFailureLockoutTests.SettingOf(
+                    admin, "DefaultAccountLockoutTimeSpanFromSeconds", 300);
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "User")),
+                    "前提: 利用者を作れること");
+
+                try
+                {
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                        //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                        bool blocked = false;
+                        Stopwatch watch = null;
+                        int attempt = 0;
+
+                        do
+                        {
+                            attempt++;
+
+                            //  **同時に送るのは 上限 - 1 回**（理由は RT-316.1 と同じ）。
+                            if (attempt == 1)
+                            {
+                                r.Step("(1) 間違ったパスワードで、同時に 上限 - 1 回（" + (max - 1) + " 回）失敗する");
+                            }
+
+                            List<Task<JsonResponse>> attempts = new List<Task<JsonResponse>>();
+
+                            for (int i = 0; i < max - 1; i++)
+                            {
+                                attempts.Add(AuthFailureLockoutTests.PasswordGrantAsync(
+                                    client, reg, name, "WRONG-PASSWORD-" + i.ToString()));
+                            }
+
+                            JsonResponse[] wrongs = await Task.WhenAll(attempts);
+
+                            r.VerifyEqual("どの回もトークンを出さない", "0",
+                                wrongs.Count(x => !string.IsNullOrEmpty(x.AccessToken)).ToString());
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(2) もう 1 回間違えて、上限に届かせる");
+                            }
+
+                            //  **ここから測る**（上限に届かせる要求を送る直前）。
+                            watch = Stopwatch.StartNew();
+
+                            JsonResponse last = await AuthFailureLockoutTests.PasswordGrantAsync(
+                                client, reg, name, "WRONG-PASSWORD-LAST");
+
+                            r.Verify("最後の 1 回もトークンを出さない",
+                                string.IsNullOrEmpty(last.AccessToken),
+                                "出さない", string.IsNullOrEmpty(last.AccessToken)
+                                    ? "出さなかった" : "**出してしまった**");
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(3) 正しいパスワードでも断られる");
+                            }
+
+                            JsonResponse correct = await AuthFailureLockoutTests.PasswordGrantAsync(
+                                client, reg, name, password);
+
+                            watch.Stop();
+                            blocked = string.IsNullOrEmpty(correct.AccessToken);
+                        }
+                        while (LockoutWindow.Retry(blocked, watch.Elapsed, lockoutSeconds, attempt));
+
+                        r.Verify("**正しいパスワードでもトークンが出ない**", blocked,
+                            "出ない", LockoutWindow.Describe(blocked, "出なかった", "出てしまった",
+                                watch.Elapsed, lockoutSeconds, attempt));
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-331.1
+
+        /// <summary>RT-331.1 クライアント認証を同時に間違えても、すべて数える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT33101_クライアント認証を同時に間違えてもすべて数える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                int max = AuthFailureLockoutTests.SettingOf(admin, "AuthFailureMaxAttempts", 0);
+
+                Skip.If(max <= 0, "AuthFailureMaxAttempts が 0（数えない配備）です。");
+
+                TestReport r = this.Report("RT-331.1",
+                    "クライアント認証を同時に間違えても、すべて数える",
+                    "**`AuthFailureProvider.Record` は、読んで足して書き戻していた**ので、"
+                    + "**並行した失敗が少なく数えられ、断りに届きにくかった。**"
+                    + "**同時の 1 件目が重なると、主キーの違反にもなり得た。**",
+                    "#331 / RFC 6749 §5.2（invalid_client）");
+
+                r.Target("POST /revoke（使い捨てのクライアント。同時に 上限 - 1 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3311_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "Admin")),
+                    "前提: 利用者を作れること");
+
+                try
+                {
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        Assert.True(await client.TrySignInAsync(name, password),
+                            "前提: 使い捨ての利用者でサインインできること");
+
+                        (string ClientId, string ClientSecret) registered =
+                            await ManageClientRegistration.RegisterWithSecretAsync(client);
+
+                        //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                        int lockoutSeconds = AuthFailureLockoutTests.SettingOf(
+                            admin, "AuthFailureLockoutSeconds", 300);
+                        JsonResponse correct = null;
+                        Stopwatch watch = null;
+                        int attempt = 0;
+
+                        do
+                        {
+                            attempt++;
+
+                            //  **同時に送るのは 上限 - 1 回。最後の 1 回を、確かめる直前に送る**（RT-316.1 と同じ）。
+                            if (attempt == 1)
+                            {
+                                r.Step("(1) 間違った秘密で、同時に 上限 - 1 回（" + (max - 1) + " 回）失敗する");
+                            }
+
+                            List<Task<JsonResponse>> attempts = new List<Task<JsonResponse>>();
+
+                            for (int i = 0; i < max - 1; i++)
+                            {
+                                attempts.Add(AuthFailureLockoutTests.RevokeAsync(
+                                    client, registered.ClientId, "wrong-secret-" + i.ToString()));
+                            }
+
+                            JsonResponse[] wrongs = await Task.WhenAll(attempts);
+
+                            r.VerifyEqual("どの回も invalid_client", "0",
+                                wrongs.Count(x => x.Error != "invalid_client").ToString());
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(2) もう 1 回間違えて、上限に届かせる");
+                            }
+
+                            //  **ここから測る**（上限に届かせる要求を送る直前）。
+                            watch = Stopwatch.StartNew();
+
+                            JsonResponse last = await AuthFailureLockoutTests.RevokeAsync(
+                                client, registered.ClientId, "wrong-secret-last");
+
+                            r.VerifyEqual("最後の 1 回も invalid_client", "invalid_client", last.Error);
+
+                            if (attempt == 1)
+                            {
+                                r.Step("(3) 正しい秘密でも断られる");
+                            }
+
+                            correct = await AuthFailureLockoutTests.RevokeAsync(
+                                client, registered.ClientId, registered.ClientSecret);
+
+                            watch.Stop();
+                        }
+                        while (LockoutWindow.Retry(correct.Error == "invalid_client",
+                            watch.Elapsed, lockoutSeconds, attempt));
+
+                        //  **断られなかったときだけ、窓に対していつ確かめたかを添える**（合否は error の一致で決まる）。
+                        r.VerifyEqual("**正しい秘密でも invalid_client**", "invalid_client",
+                            (correct.Error == "invalid_client") ? correct.Error
+                                : LockoutWindow.Describe(false, "",
+                                    "HTTP " + (int)correct.StatusCode + "（error=" + (correct.Error ?? "なし") + "）",
+                                    watch.Elapsed, lockoutSeconds, attempt));
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-331.2 同意を同時に記録しても、落ちず、どの scope も消えない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT33102_同意を同時に記録しても落ちずscopeも消えない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-331.2",
+                    "同意を同時に記録しても、落ちず、どの scope も消えない",
+                    "**`ConsentProvider.Grant` は、読んでから入れるか書き戻していた**ので、"
+                    + "**同時の 1 件目が主キーの違反になり、後の書き込みが前の scope を消し得た。**",
+                    "#331 / OIDC Core 1.0 §3.1.2.4");
+
+                r.Target("GET /Account/OAuth2Authorize（使い捨ての利用者。scope を変えて同時に 8 回）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt3312_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+
+                Assert.True(AuthFailureLockoutTests.IsRedirect(
+                    await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "User")),
+                    "前提: 利用者を作れること");
+
+                List<IdPClient> clients = new List<IdPClient>();
+
+                try
+                {
+                    ClientRegistration reg = Flows.Registration(admin, KnownClients.MvcSample);
+
+                    r.Step("(1) 別々のセッションから、scope を変えて同時に要求する");
+
+                    for (int i = 0; i < 8; i++)
+                    {
+                        IdPClient client = this.Client(targetKey);
+                        clients.Add(client);
+
+                        Assert.True(await client.TrySignInAsync(name, password),
+                            "前提: 使い捨ての利用者でサインインできること");
+                    }
+
+                    List<Task<AuthZResponse>> requests = new List<Task<AuthZResponse>>();
+
+                    for (int i = 0; i < clients.Count; i++)
+                    {
+                        requests.Add(Flows.AuthorizeCodeAsync(
+                            clients[i], reg, (i % 2 == 0) ? "openid email" : "openid profile",
+                            "state-" + i.ToString(), "nonce-" + i.ToString(), reg.RedirectUri));
+                    }
+
+                    AuthZResponse[] results = await Task.WhenAll(requests);
+
+                    r.VerifyEqual("**どの要求も code を受け取る**", "8",
+                        results.Count(x => x.Parameters != null && x.Parameters.ContainsKey("code")).ToString());
+
+                    r.Step("(2) 両方の scope を、同意画面なしで要求する");
+
+                    AuthZResponse none = await Flows.AuthorizeCodeAsync(
+                        clients[0], reg, "openid email profile", "state-none", "nonce-none", reg.RedirectUri,
+                        new Dictionary<string, string>() { { "prompt", "none" } });
+
+                    r.Verify("**どの scope も消えていない**",
+                        none.Parameters != null && none.Parameters.ContainsKey("code"),
+                        "code", (none.Parameters != null && none.Parameters.ContainsKey("error"))
+                            ? "**" + none.Parameters["error"] + "**" : "code");
+                }
+                finally
+                {
+                    clients.ForEach(x => x.Dispose());
                     await UsersAdmin.DeleteByUserNameAsync(admin, name);
                 }
 

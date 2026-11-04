@@ -31,6 +31,7 @@
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
 //*  2026/10/29  玄人 幸道         RT-294.62 と並んで走らないよう、同じコレクションに入れた（#294）
 //*  2026/11/01  玄人 幸道         サインインで止まったときの画面を残す（#325）
+//*  2026/11/03  玄人 幸道         ボタンを押した後、チェックボックスが現れるまで待ってから数える（#331）
 //**********************************************************************************
 
 using System;
@@ -138,6 +139,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.WebUI
                 await page.ClickAsync("form[action$='/Manage/RemoveWebAuthnData'] input[type=submit]");
 
                 ILocator boxes = page.Locator("input[name='publicKeys']");
+
+                //  **現れるまで待ってから数える**（#331）。**`CountAsync` は待たない。**
+                //    **押した後の画面が届く前に数えると 0 個になる**（応答を 2 秒遅らせて再現した）。
+                //    **現れなければ、そのまま数えて落とす**（0 個として結果に出る）。
+                try
+                {
+                    await boxes.First.WaitForAsync(
+                        new LocatorWaitForOptions { State = WaitForSelectorState.Attached });
+                }
+                catch (TimeoutException)
+                {
+                }
+
                 int count = await boxes.CountAsync();
 
                 r.Verify("チェックボックスが出ている", 0 < count,

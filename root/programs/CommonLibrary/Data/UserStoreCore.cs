@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/04  西野 大介         新規
+//*  2026/11/02  玄人 幸道         更新の競合を IdentityResult の失敗で返す（#316）
 //**********************************************************************************
 
 #if NETFX
@@ -175,8 +176,16 @@ namespace MultiPurposeAuthSite.Data
             cancellationToken.ThrowIfCancellationRequested();
             this.ThrowIfDisposed();
 
-            CmnUserStore.Update(user);
-            return Task.FromResult(IdentityResult.Success);
+            try
+            {
+                CmnUserStore.Update(user);
+                return Task.FromResult(IdentityResult.Success);
+            }
+            catch (CmnUserStore.ConcurrencyException)
+            {
+                //  **読んだ時点から行が変わっていた**（#316）。
+                return Task.FromResult(IdentityResult.Failed(new IdentityErrorDescriber().ConcurrencyFailure()));
+            }
         }
 
         // Roles, Logins, Claims, TotpTokensは、Del-Insで対応するため、

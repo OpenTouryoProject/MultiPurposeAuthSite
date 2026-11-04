@@ -31,10 +31,12 @@
 //*  2026/10/29  玄人 幸道         新規（#294）
 //*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
 //*  2026/10/30  玄人 幸道         RT-294.38 は自己テストの OIDC の経路で通す（UserInfo が openid の無いトークンを断るようにしたため。#294）
+//*  2026/11/04  玄人 幸道         RT-294.37 は、ロックアウトの窓を過ぎてから確かめたときは数え直す（#331）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -886,6 +888,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string confirmed = AccountFlowTests.UniqueName();
                 string pending = AccountFlowTests.UniqueName();
                 string password = admin.Config.Get("TestUserPWD");
+                int lockoutSeconds = AccountFlowTests.SettingOf(admin, "DefaultAccountLockoutTimeSpanFromSeconds", 300);
 
                 TestReport r = this.Report("RT-294.37",
                     "パスワードを続けて間違えると、ロックアウトの画面になり、正しいパスワードでも入れない（確認済み・確認待ちとも）",
@@ -912,42 +915,73 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         { "確認待ち", pending }
                     })
                     {
-                        using (IdPClient client = this.Client(targetKey))
+                        //  **窓を過ぎてから確かめたときは、数え直す**（#331。`LockoutWindow`）。
+                        //    **通ってしまうとサインインしているので、数え直すときはクライアントを替える。**
+                        bool rightLocked = false;
+                        string rightDescription = null;
+                        Stopwatch watch = null;
+                        int attempt = 0;
+
+                        do
                         {
-                            r.Step(c.Key + " : ロックアウトするまで、違うパスワードを送る（上限 " + max + " 回 ＋ 1）");
+                            attempt++;
 
-                            int tries = 0;
-                            bool lockedOut = false;
-                            string last = null;
-
-                            while (tries <= max && !lockedOut)
+                            using (IdPClient client = this.Client(targetKey))
                             {
-                                tries++;
+                                if (attempt == 1)
+                                {
+                                    r.Step(c.Key + " : ロックアウトするまで、違うパスワードを送る（上限 " + max + " 回 ＋ 1）");
+                                }
 
-                                HttpResponseMessage post = await AccountFlowTests.PostLoginAsync(client, c.Value, password + "x");
-                                string body = await post.Content.ReadAsStringAsync();
+                                int tries = 0;
+                                bool lockedOut = false;
+                                string last = null;
+                                Stopwatch previous = null;
 
-                                Assert.True(post.StatusCode == HttpStatusCode.OK,
-                                    "前提: 違うパスワードでは画面が返ること（HTTP " + (int)post.StatusCode + "）");
+                                //  **確認待ちは、上限に達した次の要求でロックアウトの画面になる**ので、
+                                //    **その要求が窓を過ぎて届くと、断りが解けていて画面が出ない**（数えは 0 から始め直す。#331）。
+                                //    **数え直す分を見込んで、上限 ＋ 1 回を `LockoutWindow.MaxAttempts` 周まで送る。**
+                                while (tries < (max + 1) * LockoutWindow.MaxAttempts && !lockedOut)
+                                {
+                                    tries++;
 
-                                lockedOut = body.Contains(LockoutMarker);
-                                last = body;
+                                    Stopwatch current = Stopwatch.StartNew();
+
+                                    HttpResponseMessage post = await AccountFlowTests.PostLoginAsync(client, c.Value, password + "x");
+                                    string body = await post.Content.ReadAsStringAsync();
+
+                                    Assert.True(post.StatusCode == HttpStatusCode.OK,
+                                        "前提: 違うパスワードでは画面が返ること（HTTP " + (int)post.StatusCode + "）");
+
+                                    lockedOut = body.Contains(LockoutMarker);
+                                    last = body;
+
+                                    //  **上限に届かせた要求から測る。** 確認済みは、ロックアウトの画面が出た要求で届く。
+                                    //    **確認待ちは、上限に達した次の要求で画面になる**ので、その 1 つ前から測る。
+                                    watch = (lockedOut && previous != null && c.Value == pending) ? previous : current;
+                                    previous = current;
+                                }
+
+                                Skip.IfNot(lockedOut,
+                                    c.Key + " : " + tries + " 回間違えてもロックアウトしません（UserLockoutEnabledByDefault を確認）: "
+                                    + Html.ErrorSummary(last) + " / " + Html.Describe(last));
+
+                                r.Verify(c.Key + " : **ロックアウトの画面になる**", lockedOut,
+                                    "ロックアウトの画面", "ロックアウトの画面（" + tries + " 回目）");
+
+                                HttpResponseMessage right = await AccountFlowTests.PostLoginAsync(client, c.Value, password);
+                                string rightBody = await right.Content.ReadAsStringAsync();
+
+                                watch.Stop();
+                                rightLocked = right.StatusCode == HttpStatusCode.OK && rightBody.Contains(LockoutMarker);
+                                rightDescription = "HTTP " + (int)right.StatusCode + " " + right.Headers.Location + " / " + Html.Describe(rightBody);
                             }
-
-                            Skip.IfNot(lockedOut,
-                                c.Key + " : " + (max + 1) + " 回間違えてもロックアウトしません（UserLockoutEnabledByDefault を確認）: "
-                                + Html.ErrorSummary(last) + " / " + Html.Describe(last));
-
-                            r.Verify(c.Key + " : **ロックアウトの画面になる**", lockedOut,
-                                "ロックアウトの画面", "ロックアウトの画面（" + tries + " 回目）");
-
-                            HttpResponseMessage right = await AccountFlowTests.PostLoginAsync(client, c.Value, password);
-                            string rightBody = await right.Content.ReadAsStringAsync();
-
-                            r.Verify(c.Key + " : **正しいパスワードでも、ロックアウトの画面になる**",
-                                right.StatusCode == HttpStatusCode.OK && rightBody.Contains(LockoutMarker),
-                                "ロックアウトの画面", "HTTP " + (int)right.StatusCode + " " + right.Headers.Location + " / " + Html.Describe(rightBody));
                         }
+                        while (LockoutWindow.Retry(rightLocked, watch.Elapsed, lockoutSeconds, attempt));
+
+                        r.Verify(c.Key + " : **正しいパスワードでも、ロックアウトの画面になる**", rightLocked,
+                            "ロックアウトの画面", LockoutWindow.Describe(rightLocked, "ロックアウトの画面", rightDescription,
+                                watch.Elapsed, lockoutSeconds, attempt));
                     }
                 }
                 finally

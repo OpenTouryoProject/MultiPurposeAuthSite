@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         STS 専用モードでの FindByEmail の扱いを記した（#294）
 //*  2026/10/30  玄人 幸道         net48 の mem で、メアドを大文字小文字を区別せずに引く（#294）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す。デッドロックの犠牲なら読み直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -128,10 +129,17 @@ namespace MultiPurposeAuthSite.Data
 
         #region IUserEmailStore
 
+        /// <summary>FindByEmail（**デッドロックの犠牲になったら、読み直す**。#331）</summary>
+        /// <remarks>本体は `FindByEmailOnce`。</remarks>
+        public static ApplicationUser FindByEmail(string email)
+        {
+            return DataAccess.RetryOnDeadlock(() => CmnUserStore.FindByEmailOnce(email));
+        }
+
         /// <summary>ユーザを（email指定で）検索して取得</summary>
         /// <param name="email">string</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser FindByEmail(string email)
+        private static ApplicationUser FindByEmailOnce(string email)
         {
             // 参照系の機能のため、
             //   **STS 専用モードでは例外を投げる**（`FindById` / `FindByName` と違い、テスト用の分岐を持たない）。
@@ -148,6 +156,12 @@ namespace MultiPurposeAuthSite.Data
             try
             {
                 // ユーザを（email指定で）検索して取得
+                //  **DB が受け付けない値は、引くまでもなく「無い」**（#331）。
+                if (!CmnStore.IsSearchable(email))
+                {
+                    return user;
+                }
+
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -220,7 +234,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
 
             return user;

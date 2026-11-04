@@ -31,6 +31,8 @@
 //*  2026/10/06  玄人 幸道         新規（#272 の段階 2 / D-6）
 //*  2026/10/26  玄人 幸道         クライアント単位で同意を消す RevokeByClient を追加（登録の削除で、全利用者の同意を消す。#294）
 //*  2026/10/29  玄人 幸道         利用者単位で同意を消す DeleteByUser を追加（mem ストアで利用者の削除後に残っていた。#294）
+//*  2026/11/03  玄人 幸道         同意の記録を、読んだ値が変わっていないときだけ書く形にした（同時の 1 件目が主キーの違反で落ち、scope が消え得た。#331）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 /*
@@ -219,31 +221,39 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return;
             }
 
-            string granted = ConsentProvider.Get(userId, clientId);
-
-            List<string> merged = ConsentProvider.SplitScopes(granted);
-
-            foreach (string scope in scopes ?? new string[0])
+            //  **読んだ値が変わっていないときだけ書く。負けたら読み直して足し込む**（#331）。
+            //    **以前は、同時の 1 件目が主キーの違反で落ち、後の書き込みが前の scope を消し得た。**
+            for (int i = 0; i < Data.CmnUserStore.ConcurrencyRetryCount; i++)
             {
-                string s = (scope ?? "").Trim();
+                string granted = ConsentProvider.Get(userId, clientId);
 
-                if (!string.IsNullOrEmpty(s) && !merged.Contains(s))
+                List<string> merged = ConsentProvider.SplitScopes(granted);
+
+                foreach (string scope in scopes ?? new string[0])
                 {
-                    merged.Add(s);
+                    string s = (scope ?? "").Trim();
+
+                    if (!string.IsNullOrEmpty(s) && !merged.Contains(s))
+                    {
+                        merged.Add(s);
+                    }
                 }
+
+                string value = ConsentProvider.NormalizeScopes(merged);
+
+                //  **変わっていなければ書かない。** 同意画面を通るたびに更新しない。
+                if (granted == value
+                    || (granted == null && ConsentProvider.TryInsert(userId, clientId, value))
+                    || (granted != null && ConsentProvider.TryUpdate(userId, clientId, granted, value)))
+                {
+                    return;
+                }
+
+                System.Threading.Thread.Sleep(Data.CmnUserStore.ConcurrencyRetryDelayMilliseconds());
             }
 
-            string value = ConsentProvider.NormalizeScopes(merged);
-
-            if (granted == null)
-            {
-                ConsentProvider.Insert(userId, clientId, value);
-            }
-            else if (granted != value)
-            {
-                // **変わっていなければ書かない。** 同意画面を通るたびに更新しても意味が無い。
-                ConsentProvider.Update(userId, clientId, value);
-            }
+            //  **書けないまま進むと、同意が記録されない。** 呼ぶ側に知らせる。
+            throw new InvalidOperationException("The consent could not be recorded. (conflicts)");
         }
 
         #endregion
@@ -410,6 +420,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         public static void Revoke(string userId, string clientId)
         {
+            //  **列の幅（256）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+            if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(clientId, 256))
+            {
+                return;
+            }
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -571,21 +587,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="userId">UserId</param>
         /// <param name="clientId">ClientID</param>
         /// <param name="scopes">scope（正規化済み）</param>
-        private static void Insert(string userId, string clientId, string scopes)
+        /// <returns>作ったら true（ほかの要求が先に作っていたら false）</returns>
+        private static bool TryInsert(string userId, string clientId, string scopes)
         {
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
 
-                    ConsentProvider.ConsentGrants.TryAdd(
+                    return ConsentProvider.ConsentGrants.TryAdd(
                         ConsentProvider.MemoryKey(userId, clientId), scopes);
-
-                    break;
 
                 case EnumUserStoreType.SqlServer:
                 case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
+                    try
+                    {
                     using (IDbConnection cnn = DataAccess.CreateConnection())
                     {
                         cnn.Open();
@@ -637,25 +654,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 break;
                         }
                     }
+                    }
+                    catch (Exception) when (ConsentProvider.Get(userId, clientId) != null)
+                    {
+                        //  **ほかの要求が先に作った**（主キーの違反）。
+                        return false;
+                    }
 
-                    break;
+                    return true;
             }
+
+            return false;
         }
 
         /// <summary>記録を更新する</summary>
         /// <param name="userId">UserId</param>
         /// <param name="clientId">ClientID</param>
+        /// <param name="oldScopes">読んだ scope</param>
         /// <param name="scopes">scope（正規化済み）</param>
-        private static void Update(string userId, string clientId, string scopes)
+        /// <returns>書いたら true（読んだ値が変わっていたら false）</returns>
+        private static bool TryUpdate(string userId, string clientId, string oldScopes, string scopes)
         {
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
 
-                    ConsentProvider.ConsentGrants[
-                        ConsentProvider.MemoryKey(userId, clientId)] = scopes;
-
-                    break;
+                    return ConsentProvider.ConsentGrants.TryUpdate(
+                        ConsentProvider.MemoryKey(userId, clientId), scopes, oldScopes);
 
                 case EnumUserStoreType.SqlServer:
                 case EnumUserStoreType.ODPManagedDriver:
@@ -669,47 +694,44 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         {
                             case EnumUserStoreType.SqlServer:
 
-                                cnn.Execute(
+                                return 0 < cnn.Execute(
                                     "UPDATE [ConsentGrant] SET [Scopes] = @Scopes, [UpdatedDate] = @UpdatedDate"
-                                    + " WHERE [UserId] = @UserId AND [ClientID] = @ClientID",
+                                    + " WHERE [UserId] = @UserId AND [ClientID] = @ClientID AND [Scopes] = @OldScopes",
                                     new
                                     {
                                         UserId = userId, ClientID = clientId,
-                                        Scopes = scopes, UpdatedDate = DateTime.Now
+                                        Scopes = scopes, OldScopes = oldScopes, UpdatedDate = DateTime.Now
                                     });
-
-                                break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
-                                cnn.Execute(
+                                return 0 < cnn.Execute(
                                     "UPDATE \"ConsentGrant\" SET \"Scopes\" = :Scopes, \"UpdatedDate\" = :UpdatedDate"
-                                    + " WHERE \"UserId\" = :UserId AND \"ClientID\" = :ClientID",
+                                    + " WHERE \"UserId\" = :UserId AND \"ClientID\" = :ClientID AND \"Scopes\" = :OldScopes",
                                     new
                                     {
                                         UserId = userId, ClientID = clientId,
-                                        Scopes = scopes, UpdatedDate = DateTime.Now
+                                        Scopes = scopes, OldScopes = oldScopes, UpdatedDate = DateTime.Now
                                     });
-
-                                break;
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                cnn.Execute(
+                                return 0 < cnn.Execute(
                                     "UPDATE \"consentgrant\" SET \"scopes\" = @Scopes, \"updateddate\" = @UpdatedDate"
-                                    + " WHERE \"userid\" = @UserId AND \"clientid\" = @ClientID",
+                                    + " WHERE \"userid\" = @UserId AND \"clientid\" = @ClientID AND \"scopes\" = @OldScopes",
                                     new
                                     {
                                         UserId = userId, ClientID = clientId,
-                                        Scopes = scopes, UpdatedDate = DateTime.Now
+                                        Scopes = scopes, OldScopes = oldScopes, UpdatedDate = DateTime.Now
                                     });
 
-                                break;
                         }
                     }
 
                     break;
             }
+
+            return false;
         }
 
         #endregion

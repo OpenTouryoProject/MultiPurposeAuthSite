@@ -42,8 +42,10 @@
 //*  2026/10/29  玄人 幸道         TestClient_30 〜 _34（C-40・N1・S3・grant_types の絞り）を追加（#294）
 //*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35 を追加（RT-237.3。OpenTouryo#645 への備え。#294）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
+//*  2026/11/03  玄人 幸道         E2E 専用のクライアントの登録（RegisterInStore）を AccountController から移した（#294）
 //**********************************************************************************
 
+using System;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 
@@ -577,6 +579,74 @@ namespace MultiPurposeAuthSite.Util.Test
         #endregion
 
         #region CreateSaml2OAuth2Data
+
+        /// <summary>このプロセスが E2E 専用のクライアントの登録を済ませたか（#294）</summary>
+        /// <remarks>
+        /// **メモリと DB の両方で使う。** 登録は「無ければ作る」なので、
+        /// このフラグは**ストアに聞きに行くのを、プロセスごとに 1 回にする**ためにある。
+        /// </remarks>
+        private static volatile bool HasRegisteredInStore = false;
+
+        /// <summary>
+        /// E2E 専用のクライアントを登録する（呼ぶ側が SeedsTestData を確かめる）。
+        /// </summary>
+        /// <remarks>
+        /// **起動ごとに 1 回だけ通す**（HasRegisteredInStore。#294）。
+        /// **IsTestUsersInitialized の判定には入れない。** 接尾辞が無く 2 つのサイトで共有し、
+        /// **TestClients に後から足したクライアントを、既存の DB に入れる役目もある**ため。
+        /// </remarks>
+        public static void RegisterInStore()
+        {
+            if (TestClients.HasRegisteredInStore)
+            {
+                // 起動ごとの 1 回が済んでいる。
+                return;
+            }
+
+            #region E2E 専用のクライアント登録
+
+            // E2E だけが使うクライアント登録を、構成ファイルの既存のクライアントを写して作り、user store に無ければ入れる。
+            //   **user store に寄せてある**ので、**件数に上限が無い**
+            //   （環境変数で差し込むと、net48 版は一覧ごと 1 本になり、件数に上限が出る。#262 / #264）。
+            //   **接尾辞は付けない。** E2E が client_name と固定の client_id で引くため
+            //   （TestClients の表と、E2E の KnownClients を同じ値で揃える）。
+            foreach (TestClients.Entry entry in TestClients.Entries)
+            {
+                // 写す元（構成ファイル）から、登録を作る。
+                ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data = TestClients.CreateSaml2OAuth2Data(entry);
+
+                if (saml2OAuth2Data == null)
+                {
+                    // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
+                    continue;
+                }
+
+                // **所有者（OwnerUserId）は持たせない**（#307）。
+                //   構成ファイルの owner 無しのクライアントと同じく、**配備全体のもの**である。
+                //   **所有者の無い登録を作るのは、ここだけ**（管理画面と DCR は、必ず所有者を書く）。
+
+                // **この client_id の登録が無ければ入れる**（在れば触らない）。
+                //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
+                //   **書き込みを 1 回に閉じる。**
+                if (MultiPurposeAuthSite.Extensions.Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) == null)
+                {
+                    try
+                    {
+                        MultiPurposeAuthSite.Extensions.Sts.Saml2OAuth2DataProvider.Create(entry.ClientId, saml2OAuth2Data);
+                    }
+                    catch (Exception) when (MultiPurposeAuthSite.Extensions.Sts.Saml2OAuth2DataProvider.Get(entry.ClientId) != null)
+                    {
+                        //  **もう一方のサイトが、確かめてから入れるまでの間に入れた**（#325）。
+                        //    **在れば目的は果たしているので、サインイン画面を落とさない。**
+                    }
+                }
+            }
+
+            #endregion
+
+            // **最後まで通ってから立てる**（途中で例外なら、次の呼び出しでやり直す）。
+            TestClients.HasRegisteredInStore = true;
+        }
 
         /// <summary>登録（saml2OAuth2Data）を作る（#264）</summary>
         /// <param name="entry">表の 1 件</param>

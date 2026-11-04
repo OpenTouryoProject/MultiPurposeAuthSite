@@ -28,6 +28,7 @@ CREATE TABLE "Users"(              -- Users
     "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
     "PasswordChangeDate" TIMESTAMP NOT NULL,
+    "ConcurrencyStamp" NVARCHAR2(38) NULL,   -- 楽観排他（#316）
     CONSTRAINT "PK.Users" PRIMARY KEY ("Id")
 );
 

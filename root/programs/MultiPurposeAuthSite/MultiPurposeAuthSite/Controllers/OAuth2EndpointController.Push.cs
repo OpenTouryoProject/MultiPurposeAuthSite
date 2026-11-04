@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         認証デバイスのクライアントに発行したトークンだけを受ける（#294）
+//*  2026/11/02  玄人 幸道         デバイス トークンの更新が競合で失敗したら、成功と答えない（#316）
+//*  2026/11/03  玄人 幸道         デバイス トークンの更新が競合したら、読み直して書き直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -120,10 +122,13 @@ namespace MultiPurposeAuthSite.Controllers
                 if (user != null)
                 {
                     // デバイストークンの保存
-                    user.DeviceToken = device_token;
-                    await UserManager.UpdateAsync(user);
-
-                    return this.Ok("OK");
+                    //  **競合で書けなかったのに `OK` と答えると、通知が届かないまま気づけない**（#316）。
+                    //  **競合したら、読み直して書き直す**（#331）。端末は送り直さないので、
+                    //    **同じ利用者の別の更新（サインインの数えなど）と重なるだけで、500 になっていた。**
+                    return (await UserManager.UpdateWithRetryAsync(
+                            user, x => x.DeviceToken = device_token)).Succeeded
+                        ? this.Ok("OK")
+                        : this.NGResult(500, Const.EndpointSetDeviceToken, null);
                 }
             }
 

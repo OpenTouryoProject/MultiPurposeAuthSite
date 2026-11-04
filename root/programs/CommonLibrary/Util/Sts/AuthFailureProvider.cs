@@ -30,10 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 2）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
+//*  2026/11/03  玄人 幸道         失敗の数えを、読んだ値が変わっていないときだけ書く形にした（同時の失敗が少なく数えられ、主キーの違反にもなった。#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Log;
 
 using System;
 using System.Collections.Concurrent;
@@ -132,46 +134,60 @@ namespace MultiPurposeAuthSite.Util.Sts
                 return false;
             }
 
-            long now = AuthFailureProvider.NowUnixSeconds();
-            Tuple<int, long?> current = AuthFailureProvider.Get(key);
-
-            //  **断っている間は、数え直さない**（#305 の段階 4）。
-            //    **呼ぶ側は先に `IsLockedOut` を見ている**が、**見ない呼び出しが増えたときに、
-            //    ここで期限を上書きして断りを解いてしまわないようにする。**
-            if (current.Item1 == 0 && current.Item2.HasValue && now < current.Item2.Value)
+            //  **読んだ値が変わっていないときだけ書く。負けたら読み直す**（#331）。
+            //    **以前は読んで足して書き戻していた**ので、並行した失敗が少なく数えられ、
+            //    **同時の 1 件目は、主キーの違反で 500 になっていた。**
+            for (int i = 0; i < Data.CmnUserStore.ConcurrencyRetryCount; i++)
             {
-                return true;
+                long now = AuthFailureProvider.NowUnixSeconds();
+                Tuple<int, long?> current = AuthFailureProvider.Get(key);
+
+                //  **断っている間は、数え直さない**（#305 の段階 4）。
+                //    **呼ぶ側は先に `IsLockedOut` を見ている**が、**見ない呼び出しが在っても**、
+                //    ここで期限を上書きして断りを解いてしまわないようにする。
+                if (current.Item1 == 0 && current.Item2.HasValue && now < current.Item2.Value)
+                {
+                    return true;
+                }
+
+                //  **期限が切れていたら、数えた分は忘れる**（#305 の段階 4）。
+                //    **断っていた期限でも、数えの寿命でも、同じ扱いでよい** —
+                //    **どちらも「やり直し」である。**
+                int count = (current.Item2.HasValue && current.Item2.Value <= now)
+                    ? 0 : current.Item1;
+
+                count++;
+
+                long lockoutEndAt = 0;
+
+                if (Config.AuthFailureMaxAttempts <= count)
+                {
+                    //  **上限に達した。** **断る期限を入れ、回数を 0 に戻す**
+                    //    （**期限が切れたら、また同じ回数だけ試せる**）。
+                    lockoutEndAt = now + Config.AuthFailureLockoutSeconds;
+                    count = 0;
+                }
+                else
+                {
+                    //  **まだ断らない。** **期限は「数えた分の寿命」として入れる。**
+                    //    **これで、どの行も期限を持つ**ので、**期限の切れた行を掃除できる。**
+                    //    **間隔を空けた失敗は数に積まれない** — `AuthFailureWindowSeconds`。
+                    lockoutEndAt = now + Config.AuthFailureWindowSeconds;
+                }
+
+                if (AuthFailureProvider.TrySave(key, current, count, lockoutEndAt))
+                {
+                    //  **回数が 0 に戻っていれば、いま断り始めた。**
+                    return count == 0;
+                }
+
+                System.Threading.Thread.Sleep(Data.CmnUserStore.ConcurrencyRetryDelayMilliseconds());
             }
 
-            //  **期限が切れていたら、数えた分は忘れる**（#305 の段階 4）。
-            //    **断っていた期限でも、数えの寿命でも、同じ扱いでよい** —
-            //    **どちらも「やり直し」である。**
-            int count = (current.Item2.HasValue && current.Item2.Value <= now)
-                ? 0 : current.Item1;
+            //  **やり直しても書けなかった。** 数えられないだけで、認証の失敗の応答は変わらない。
+            Logging.MyOperationTrace("An authentication failure could not be counted. (conflicts)");
 
-            count++;
-
-            long lockoutEndAt = 0;
-
-            if (Config.AuthFailureMaxAttempts <= count)
-            {
-                //  **上限に達した。** **断る期限を入れ、回数を 0 に戻す**
-                //    （**期限が切れたら、また同じ回数だけ試せる**）。
-                lockoutEndAt = now + Config.AuthFailureLockoutSeconds;
-                count = 0;
-            }
-            else
-            {
-                //  **まだ断らない。** **期限は「数えた分の寿命」として入れる**（#305 の段階 4）。
-                //    **これで、どの行も期限を持つ**ので、**期限の切れた行をまとめて消せる。**
-                //    **間隔を空けた失敗は数に積まれない** — `AuthFailureWindowSeconds` がその猶予。
-                lockoutEndAt = now + Config.AuthFailureWindowSeconds;
-            }
-
-            AuthFailureProvider.Save(key, count, lockoutEndAt);
-
-            //  **回数が 0 に戻っていれば、いま断り始めた。**
-            return count == 0;
+            return false;
         }
 
         /// <summary>成功したので消す</summary>
@@ -273,17 +289,26 @@ namespace MultiPurposeAuthSite.Util.Sts
             return new Tuple<int, long?>(0, null);
         }
 
-        /// <summary>回数と期限を書く（無ければ足す）</summary>
+        /// <summary>読んだ値が変わっていなければ、回数と期限を書く（無ければ足す）</summary>
         /// <param name="key">鍵</param>
+        /// <param name="old">読んだ値</param>
         /// <param name="count">回数</param>
         /// <param name="lockoutEndAt">期限</param>
-        private static void Save(string key, int count, long? lockoutEndAt)
+        /// <returns>書いたら true</returns>
+        private static bool TrySave(string key, Tuple<int, long?> old, int count, long? lockoutEndAt)
         {
+            bool saved = false;
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
 
-                    AuthFailureProvider.Failures[key] = new Tuple<int, long?>(count, lockoutEndAt);
+                    Tuple<int, long?> value = new Tuple<int, long?>(count, lockoutEndAt);
+
+                    //  **行が無いときの `Get` は (0, null) を返す。どの行も期限を持つ**ので、見分けられる。
+                    saved = old.Item2.HasValue
+                        ? AuthFailureProvider.Failures.TryUpdate(key, value, old)
+                        : AuthFailureProvider.Failures.TryAdd(key, value);
 
                     break;
 
@@ -296,27 +321,70 @@ namespace MultiPurposeAuthSite.Util.Sts
                         cnn.Open();
 
                         //  **更新 → 0 件なら挿入**（方言ごとの UPSERT を書かない）。
-                        int updated = cnn.Execute(
+                        saved = 0 < cnn.Execute(
                             "UPDATE " + AuthFailureProvider.TableName()
                             + " SET " + AuthFailureProvider.SetList()
-                            + AuthFailureProvider.WhereKey(),
-                            new { FailureKey = key, FailedCount = count, LockoutEndAt = lockoutEndAt });
+                            + AuthFailureProvider.WhereKey()
+                            + AuthFailureProvider.AndUnchanged(old),
+                            new
+                            {
+                                FailureKey = key, FailedCount = count, LockoutEndAt = lockoutEndAt,
+                                OldFailedCount = old.Item1, OldLockoutEndAt = old.Item2
+                            });
 
-                        if (updated == 0)
+                        if (!saved && !old.Item2.HasValue)
                         {
-                            cnn.Execute(
-                                "INSERT INTO " + AuthFailureProvider.TableName()
-                                + " (" + AuthFailureProvider.InsertColumnList() + ")"
-                                + " VALUES (" + AuthFailureProvider.ParameterList() + ")",
-                                new { FailureKey = key, FailedCount = count, LockoutEndAt = lockoutEndAt });
+                            try
+                            {
+                                saved = 0 < cnn.Execute(
+                                    "INSERT INTO " + AuthFailureProvider.TableName()
+                                    + " (" + AuthFailureProvider.InsertColumnList() + ")"
+                                    + " VALUES (" + AuthFailureProvider.ParameterList() + ")",
+                                    new { FailureKey = key, FailedCount = count, LockoutEndAt = lockoutEndAt });
+                            }
+                            catch (Exception) when (AuthFailureProvider.Get(key).Item2.HasValue)
+                            {
+                                //  **同時の 1 件目に負けた**（主キーの違反）。読み直す。
+                            }
                         }
                     }
 
                     break;
             }
 
-            //  **ついでに、期限の切れた行を掃除する**（#305 の段階 4）。
-            AuthFailureProvider.PruneExpired();
+            if (saved)
+            {
+                //  **ついでに、期限の切れた行を掃除する**（#305 の段階 4）。
+                AuthFailureProvider.PruneExpired();
+            }
+
+            return saved;
+        }
+
+        /// <summary>読んだ値から変わっていないことを確かめる条件</summary>
+        /// <param name="old">読んだ値</param>
+        /// <returns>WHERE 句に続ける条件</returns>
+        private static string AndUnchanged(Tuple<int, long?> old)
+        {
+            string p = (Config.UserStoreType == EnumUserStoreType.ODPManagedDriver) ? ":" : "@";
+            string count;
+            string end;
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.SqlServer:
+                    count = "[FailedCount]"; end = "[LockoutEndAt]";
+                    break;
+                case EnumUserStoreType.ODPManagedDriver:
+                    count = "\"FailedCount\""; end = "\"LockoutEndAt\"";
+                    break;
+                default:
+                    count = "\"failedcount\""; end = "\"lockoutendat\"";
+                    break;
+            }
+
+            return " AND " + count + " = " + p + "OldFailedCount AND " + end
+                + (old.Item2.HasValue ? " = " + p + "OldLockoutEndAt" : " IS NULL");
         }
 
         #endregion

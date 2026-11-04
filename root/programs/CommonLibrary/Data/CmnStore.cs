@@ -31,6 +31,8 @@
 //*  2018/12/04  西野 大介         新規
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //*  2026/10/30  玄人 幸道         値の無いクレーム（Oracle は空文字を NULL にする）で、残りの関連情報を読み落とさない（#294）
+//*  2026/11/02  玄人 幸道         mem ストアの入れ物を、並行に読み書きできるものに変えた（#325）
+//*  2026/11/03  玄人 幸道         読み取りの失敗を握らず投げ直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -66,17 +68,46 @@ namespace MultiPurposeAuthSite.Data
         #region Memory
 
         /// <summary>ユーザ保存先</summary>
-        protected static List<ApplicationUser> _users { get; } = new List<ApplicationUser>();
+        protected static MemoryStoreList<ApplicationUser> _users { get; } = new MemoryStoreList<ApplicationUser>();
 
         /// <summary>ロールの保存先</summary>
-        protected static List<ApplicationRole> _roles { get; } = new List<ApplicationRole>();
+        protected static MemoryStoreList<ApplicationRole> _roles { get; } = new MemoryStoreList<ApplicationRole>();
 
         /// <summary>ユーザとロールのリレーション</summary>
-        protected static List<Tuple<string, string>> _userRoleMap { get; } = new List<Tuple<string, string>>();
+        protected static MemoryStoreList<Tuple<string, string>> _userRoleMap { get; } = new MemoryStoreList<Tuple<string, string>>();
 
         #endregion
 
         #region DBMS
+
+        /// <summary>DB で引ける値か（#331）</summary>
+        /// <param name="value">利用者名・メアドなど、外から来た値</param>
+        /// <returns>引けるなら true</returns>
+        /// <remarks>
+        /// **PostgreSQL は NUL 文字を、Oracle は列の幅を大きく超える値を、例外で断る。**
+        /// **読み取りの失敗を握らない**ので、確かめないと 500 になる。
+        /// **列の幅（256）を超える値は、どの行にも一致しない。** `mem` には幅が無いので確かめない。
+        /// </remarks>
+        public static bool IsSearchable(string value)
+        {
+            return CmnStore.IsSearchable(value, 256);
+        }
+
+        /// <summary>DB で引ける値か（列の幅を指定する。#331）</summary>
+        /// <param name="value">コード・トークン・client_id など、外から来た値</param>
+        /// <param name="maxLength">引く列の幅（DDL の値）</param>
+        /// <returns>引けるなら true</returns>
+        /// <remarks>
+        /// **Oracle（ODP.NET）は、4000 文字を超える文字列のパラメタを例外で断る**（Dapper が長さを -1 にするため）。
+        /// **列の幅を超える値は、どの行にも一致しない**（入れるときに DB が断っている）ので、引かずに「無い」とする。
+        /// **「無い」が「通す」になる口**（使用済みの記録・失敗の数え）**には使わない。**
+        /// </remarks>
+        public static bool IsSearchable(string value, int maxLength)
+        {
+            return Config.UserStoreType == EnumUserStoreType.Memory
+                || value == null
+                || (value.Length <= maxLength && value.IndexOf('\0') < 0);
+        }
 
         /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）</summary>
         public static void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
@@ -285,7 +316,9 @@ namespace MultiPurposeAuthSite.Data
             }
             catch (Exception ex)
             {
+                //  **読み取りの失敗は「無い」にしない**（#331）。**ログに書いてから投げ直す。**
                 Logging.MySQLLogForEx(ex);
+                throw;
             }
         }
         

@@ -31,6 +31,7 @@
 //*  2026/09/13  玄人 幸道         Oracle: AuthReqExp(decimal)のlongへの明示キャスト（#207で判明）
 //*  2026/10/01  玄人 幸道         codeのidentityに利用者名を入れる（subではない）（#151 の段階 4）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
+//*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //**********************************************************************************
 
 using System;
@@ -194,6 +195,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (Config.EnableDeviceAuthZGrantType)
             {
                 // EnableDeviceAuthZGrantType == true
+
+                //  **列の幅（10）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+                if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(userCode, 10))
+                {
+                    return retVal;
+                }
 
                 switch (Config.UserStoreType)
                 {
@@ -393,6 +400,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // EnableDeviceAuthZGrantType == true
 
                 string temp = "";
+                //  **列の幅（38）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
+                if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(deviceCode, 38))
+                {
+                    return retVal;
+                }
+
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:

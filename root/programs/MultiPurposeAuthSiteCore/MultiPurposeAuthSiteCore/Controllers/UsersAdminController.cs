@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（net48 版から移植。#258）
 //*  2026/10/29  玄人 幸道         利用者名の変更で WebAuthn の資格情報を移し、削除で消す（#294）
+//*  2026/11/03  玄人 幸道         画面からの更新も、競合したら読み直して、変えた項目だけを当て直す（#331）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -433,7 +434,14 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // 入力値で更新する。
-                    result = await UserManager.UpdateAsync(user);
+                    //  **競合したら、読み直して、変えた項目だけを当て直す**（#331）。**ほかの項目は、読み直した値のまま。**
+                    string newUserName = user.UserName;
+                    string newEmail = user.Email;
+                    result = await ((MultiPurposeAuthSite.Data.UserManagerCore)UserManager).UpdateWithRetryAsync(user, x =>
+                    {
+                        x.UserName = newUserName;
+                        x.Email = newEmail;
+                    });
 
                     if (result.Succeeded)
                     {

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（CmnUserStore.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         ロックアウトの終了日時を UTC で保存する（#294）
+//*  2026/11/02  玄人 幸道         mem で、失敗の数えを物のロックで 1 回ずつ数える（#316）
 //**********************************************************************************
 
 #if NETFX
@@ -147,9 +148,14 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // サインインに失敗した試行回数を記録
-            user.AccessFailedCount++;
+            //   **mem では同じ物を共有するので、物でロックする**（#316）。
+            //   **DB では要求ごとに別の物なので、競合は `Update` が断る。**
+            lock (user)
+            {
+                user.AccessFailedCount++;
 
-            return user.AccessFailedCount;
+                return user.AccessFailedCount;
+            }
         }
 
         /// <summary>失敗したサインインの試行回数を取得</summary>

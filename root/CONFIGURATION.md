@@ -395,6 +395,8 @@ CreateJwkSetJson.exe
 **追記しかしない**ので、**1 を繰り返しても旧い鍵は消えない。**
 **4（旧い鍵を外す）は `JwkSet.json` を手で編集する**（＝ 消すのは人が決める）。
 
+**`JwkSet.json` は、配備中に直接上書きしない。** 書いている間にサイトが読むと、`IOException` で HTTP 500 になることがある（#325）。別名で書いてから置き換える。
+
 > **広告（Discovery）と公開鍵（`jwkcerts`）が揃っていることは E2E で測っている**（`RT-129.6`）。
 > **表に alg を足したのに `CreateJwkSetJson` を回していない**という食い違いは、そこで落ちる。
 
@@ -2578,6 +2580,29 @@ CREATE INDEX "IX_SubjectIdentifier.UserId" ON "SubjectIdentifier" ("UserId" ASC)
 CREATE INDEX IX_Saml2OAuth2Data_OwnerUserId ON Saml2OAuth2Data (OwnerUserId);
 CREATE INDEX IX_FIDO2Data_UserName ON FIDO2Data (UserName);
 CREATE INDEX IX_SubjectIdentifier_UserId ON SubjectIdentifier (UserId);
+```
+
+### 利用者の更新の楽観排他 — `Users.ConcurrencyStamp`（#316）
+
+`Users` の更新は、**読んだ時点から行が変わっていたら失敗する**。以前は後勝ちで、並行した要求の書き込みが消えていた。
+失敗の数えとセキュリティ スタンプは読み直してやり直すが、**画面の編集は、競合するとエラーを出して再表示する。**
+
+**配備済みの DB には、新しい版を動かす前に、次の文を流す**（**列が無いと、利用者の作成と更新が失敗する**）。
+**既存の行は NULL のままでよい**（最初の更新で値が入る）。
+
+```sql
+-- SQL Server
+ALTER TABLE [Users] ADD [ConcurrencyStamp] [nvarchar](38) NULL;
+```
+
+```sql
+-- Oracle
+ALTER TABLE "Users" ADD ("ConcurrencyStamp" NVARCHAR2(38) NULL);
+```
+
+```sql
+-- PostgreSQL
+ALTER TABLE Users ADD COLUMN ConcurrencyStamp varchar(38) NULL;
 ```
 
 ### セッションの置き場 — `SessionStoreType`（#256）
