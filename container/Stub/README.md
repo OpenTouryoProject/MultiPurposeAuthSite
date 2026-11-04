@@ -8,8 +8,8 @@ OAuth2 / OIDC / SAML2 の IdP として動く（**中身は net10.0 版の MPAS 
 
 ## 1. 使い方
 
-**前提** : Docker（compose v2）、.NET 10 SDK、`root\Readme.ja.md` の手順で用意したリソース（`C:\root\files\resource`）、
-OpenTouryo のアセンブリ（`root\1_BuildAll.ps1` が取得する）。
+**前提** : Docker（compose v2）、.NET 10 SDK、`root\Readme.ja.md` の手順で用意したリソース（`C:\root\files\resource`）と
+`appsettings.json`（net10.0 版。雛形から作ったもの）、OpenTouryo のアセンブリ（`root\1_BuildAll.ps1` が取得する）。
 
 ```powershell
 cd container\Stub
@@ -34,19 +34,26 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 | `STUB_PORT` | `44310` | ホストに公開するポート |
 | `STUB_PUBLIC_URL` | `https://localhost:44310` | **公開 URL**（Discovery の各口がこれで書かれる）。**ポートを変えたら、ここも変える** |
 | `STUB_ISSUER` | `https://localhost:44310` | **名乗る `iss`**。**RP の期待する issuer と揃える** |
-| `STUB_SETTINGS` | `./appsettings.Stub.sample.json` | **アプリの設定の JSON**（3 節） |
-| `STUB_ADMIN_UID` / `STUB_ADMIN_PWD` | テスト用の値 | 管理者 |
-| `STUB_TEST_USER_PWD` | テスト用の値 | **テスト利用者**（`super_tanaka@example.com` / `tanaka@example.com`）のパスワード |
-| `STUB_LOCKDOWN_TEST_ENDPOINTS` | `false` | テスト用の口（自己テストの画面など）を閉じるなら `true` |
+| `STUB_APPSETTINGS` | `../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json` | **アプリの設定の土台**（3 節）。**無ければ起動しない** |
+| `STUB_SETTINGS` | `./appsettings.Stub.sample.json` | **アプリの追加の設定**（3 節）。土台に重ねて効く |
 | `STUB_CERT_DIR` / `STUB_CERT_ENV_FILE` | `./cert` / `./cert/cert.env` | HTTPS の証明書（4 節） |
 | `STUB_RESOURCE_DIR` | `C:/root/files/resource` | 署名鍵などのリソース |
 
-**値はテスト専用にすること。** 管理者・テスト利用者・`client_secret` は、テストのためだけに使う値を書く。
+**管理者・テスト利用者・テスト用の口の開け閉めは、`.env` ではなく JSON の値を使う**（3 節）。
 
 ## 3. アプリの設定（JSON）
 
-**`appsettings.json` と同じ書き方**の JSON を、`STUB_SETTINGS` で指す（コンテナに `appsettings.Stub.json` として渡る）。
-**雛形（`_appsettings.json`）の値に重ねて効き、書いたキーだけが変わる。** 例は `appsettings.Stub.sample.json`。
+**2 つの JSON を重ねる**（後ろほど強い）。どちらも `appsettings.json` と同じ書き方で、**起動時にマウントするだけで、イメージには入らない。**
+
+| 順 | ファイル | 既定 | コンテナでの名前 |
+|---|---|---|---|
+| 1 | `STUB_APPSETTINGS` | **開発者の手元の `appsettings.json`**（net10.0 版） | `appsettings.json`（イメージの中の雛形を覆う） |
+| 2 | `STUB_SETTINGS` | `appsettings.Stub.sample.json` | `appsettings.Stub.json`（**書いたキーだけが変わる**） |
+
+- **管理者（`AdministratorUID` / `AdministratorPWD`）・テスト利用者（`super_tanaka@example.com` / `tanaka@example.com` のパスワード `TestUserPWD`）・
+  テスト用の口の開け閉め（`IsLockedDownTestEndpoints`）は、この JSON の値になる**
+- **値はテスト専用にすること**（管理者・テスト利用者・`client_secret`）。**スタブには、手元の `appsettings.json` の値がそのまま効く**
+- **`STUB_APPSETTINGS` のファイルが無いと、起動しない**（無いパスにディレクトリを作らせない）
 
 **テストする RP / SP のクライアントは、ここで登録する**（`OAuth2ClientsInformation`。キーは 32 桁の 16 進の client_id）。
 
@@ -60,20 +67,19 @@ docker compose --env-file my-stub.env down             # 止めて消す（状�
 
 ほかの項目と、機能の切り替え（`EnableDynamicClientRegistration` など）は `root\CONFIGURATION.md` を参照。
 
-**既存の `appsettings.json` を丸ごと渡してもよい**（`STUB_SETTINGS` にそのパスを書く）。
-**雛形のキーはすべて上書きされる**（雛形に配列は無いので、要素が残ることもない）。**イメージには入らない**（起動時にマウントするだけ）。
-ただし、**次の値は環境変数が勝つので、そこに書いても変わらない。**
+**別の `appsettings.json` を土台にする**なら、`STUB_APPSETTINGS` にそのパスを書く。
+ただし、**次の値は環境変数が勝つので、JSON に書いても変わらない。**
 
 | 値 | 決めているもの |
 |---|---|
-| 公開 URL・`IssuerId`・管理者・`TestUserPWD`・テスト用の口 | `.env` の `STUB_*` |
+| 公開 URL・`IssuerId` | `.env` の `STUB_*` |
 | `UserStoreType` | **常に `mem`** |
 | リソースのパス（19 件）と log4net の構成 | `..\Common\mpas-common.env`（`C:/root/files/...` をコンテナの `/resource` へ振り替える） |
 | `DataProtectionKeyPath` | `/keys` |
 
 **この 19 件のほかに Windows のパスを書いた設定があると、その機能はコンテナの中では動かない。**
 
-> **`docker-compose.yml` の `environment` に在るキー（公開 URL・`iss`・管理者など）は、JSON では変えられない**
+> **`docker-compose.yml` の `environment` に在るキー（公開 URL・`iss` など）は、JSON では変えられない**
 > （環境変数の方が強い）。**それらは `.env` で変える。**
 
 ## 4. 証明書
@@ -103,4 +109,4 @@ docker compose -f C:\MultiPurposeAuthSite\container\Stub\docker-compose.yml --en
 | **net10.0 版だけ** | net48 版に固有の振る舞いは再現しない |
 | **コンテナ間** | **別のコンテナで動く RP からは `localhost:44310` に届かない**（証明書の名前も合わない）。`..\E2E\docker-compose.yml` の上流・下流のように、宛先と公開 URL を分ける工夫が要る |
 | **異常系** | 本物の IdP なので、任意のエラー応答は返せない（同意の拒否・`prompt=none`・期限切れなど、自然に出るものは出せる） |
-| **イメージの中身** | **`appsettings.json` は雛形**（開発者の手元の設定は入らない）。署名鍵などはマウントで渡し、イメージに焼かない |
+| **イメージの中身** | **`appsettings.json` は雛形**（開発者の手元の設定は入らない。起動時にマウントして覆う）。署名鍵などもマウントで渡し、イメージに焼かない |
