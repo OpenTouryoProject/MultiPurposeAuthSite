@@ -37,6 +37,7 @@
 //*  2026/10/10  玄人 幸道         WebAuthn の資格情報を持つ利用者を追加（#277 の段階 7）
 //*  2026/10/14  玄人 幸道         到達性の記憶を読み直さない（並行したときに落ちていた）
 //*  2026/10/29  玄人 幸道         メールの送信箱（MPAS_CORE_MAIL_OUTBOX / MPAS_NETFX_MAIL_OUTBOX）を受け取る（#294）
+//*  2026/11/04  玄人 幸道         ID 連携の単数キーは、test.ps1 が渡す環境変数を構成に重ねる（雛形ではコメントにした）
 //**********************************************************************************
 
 using System;
@@ -146,6 +147,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 if (this._config == null)
                 {
                     this._config = AppConfig.Load(this.ConfigPath);
+
+                    //  **ID 連携の単数キーは、test.ps1 が環境変数でサイトへ渡す**（Set-IdFederationEnv）。
+                    //  **雛形の構成ファイルでは、ID 連携の設定をすべてコメントにした**ので、
+                    //  **サイトと同じ値を見るには、同じ環境変数を重ねる。** ホストの 2 サイトだけ（コンテナは compose が渡す）。
+                    if (this.Key == TestEnv.CoreKey || this.Key == TestEnv.NetFxKey)
+                    {
+                        this._config.Overlay(TestEnv.IdFederationEnv());
+                    }
                 }
 
                 return this._config;
@@ -604,6 +613,38 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             TargetInfo target;
             return (targetKey != null && _targets.TryGetValue(targetKey, out target))
                 ? (target.TestUserSuffix ?? "") : "";
+        }
+
+        /// <summary>
+        /// test.ps1 が ID 連携の下流として渡す単数キー（Set-IdFederationEnv）のうち、テストが読むもの。
+        /// **core / netfx で同じ値**である（サイトごとに違うのは、折り返し口と client_id だけ）。
+        /// </summary>
+        private static readonly string[] IdFederationEnvKeys = new string[]
+        {
+            "IdFederationAuthorizeEndpoint",
+            "IdFederationSaml2MetadataUrl",
+            "IdFederationSaml2RequestEndpoint",
+            "IdFederationSaml2IssuerId",
+            "IdFederationSaml2CerFilePath",
+        };
+
+        /// <summary>ID 連携の単数キーを、環境変数から `appSettings__&lt;キー&gt;=&lt;値&gt;` の形で返す</summary>
+        /// <returns>重ねる値（設定されていないキーは返さない）</returns>
+        internal static List<string> IdFederationEnv()
+        {
+            List<string> entries = new List<string>();
+
+            foreach (string key in TestEnv.IdFederationEnvKeys)
+            {
+                string value = Environment.GetEnvironmentVariable(key);
+
+                if (!string.IsNullOrEmpty(value))
+                {
+                    entries.Add("appSettings__" + key + "=" + value);
+                }
+            }
+
+            return entries;
         }
 
         /// <summary>静的コンストラクタ</summary>

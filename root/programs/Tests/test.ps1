@@ -608,9 +608,10 @@ $script:DcrCcNoOwnerSecret     = 'e2e_307_5b_dcr_cc_noowner_secret_do_not_use'
 #   **redirect_uri はクライアント 1 件に 1 つ**なので、**下流ごとに別のクライアント**を使う。
 #   登録は container\E2E\docker-compose.yml にある（上流に環境変数で差し込んでいる）。
 #
-#   **上流のエンドポイント（IdFederation{Authorize,Token,UserInfo}Endpoint）は上書きしない。**
-#   構成ファイルが既に 44301 を指しており、**テストはその値を読んで上流を探す**ため、
-#   ここで上書きすると、両者がずれたときに気付けなくなる。
+#   **上流の登録は、単数キー（1:1。互換）で渡す。** **雛形の構成ファイルでは、ID 連携の設定は
+#   すべてコメントにしてある**（既定では ID 連携を使わない）ので、**ここで全部を与える。**
+#   **テストも、この環境変数を読んで上流を探す**（TestEnv.IdFederationEnvKeys。サイトと同じ値を見る）。
+#   **複数キー（IdFederationUpstreams）の経路は、下流コンテナで測る**（CN-5.*）。
 $script:IdFederationClients = @{
     'core'  = @{
         ClientId = 'e2e1c0de0000000000000000000000c1'
@@ -644,6 +645,11 @@ function Set-IdFederationEnv
 
     # **E2E の下流は root で配信する**（VS の /MultiPurposeAuthSite とは形が違う）
     $env:IdFederationRedirectEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationRedirectEndPoint'
+
+    # **上流の口**（ブラウザが行く先も、サーバが呼ぶ先も 44301）。
+    $env:IdFederationAuthorizeEndpoint = 'https://localhost:44301/authorize'
+    $env:IdFederationTokenEndpoint = 'https://localhost:44301/token'
+    $env:IdFederationUserInfoEndpoint = 'https://localhost:44301/userinfo'
 
     # **上流の id_token の検証鍵**（#289 の段階 1）。
     #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す。**

@@ -666,12 +666,16 @@
     "IsLockedDownTestEndpoints": "false",
 
     // ==== ID 連携 : Config.IdFederation.cs ====
+    // **既定では ID 連携を使わない。この節のキーは、値を残したままコメントにしてある**（設定を整理した）。
+    //   **使うなら、折り返し口と、上流の登録（複数キー `IdFederationUpstreams` か、単数キーの一方）を外す。**
+    //   単数キーは、Client側設定の OAuth2AndOidcClientID / OAuth2AndOidcSecret / SpRp_Isser も使う。
+    //   **E2E では test.ps1 が単数キーを環境変数で渡す**（Set-IdFederationEnv）。
     // [折り返し口]
     // 既定値はコンテナ、E2Eは、環境変数で上書き。
     // Redirectエンドポイント
-    "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
+    // "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
     // Responseエンドポイント
-    "IdFederationSaml2ResponseEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationAssertionConsumerService",
+    // "IdFederationSaml2ResponseEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationAssertionConsumerService",
 
     // [複数キー（上流 IdP の登録 n 件）]
     // 上流 IdP の登録（n 件。#292 の段階 1）
@@ -690,6 +694,7 @@
     //   **折り返し口（IdFederationRedirectEndpoint / …Saml2ResponseEndpoint）は共通設定のまま**
     //   （**自分の URL なので相手ごとに変わらない**。全ての上流に同じ 1 本を登録する）。
     //
+    //   **値はサンプル**（上流は container\E2E\ の 44301。client_secret は伏せてある）。
     //   "IdFederationUpstreams": {
     //     "upstream1": {
     //       "display_name": "Upstream IdP (OIDC)", "protocol": "oidc", "enabled": "true",
@@ -714,36 +719,35 @@
     //       "signing_pfx_file_path": "", "signing_pfx_password": ""
     //     }
     //   },
-    "IdFederationUpstreams": {},
 
     // [単数キー（上流 IdP の登録 1 件。互換） / OIDC]
     // **IdFederationUpstreams を書くと、この節は読まれない**（下位互換）。
     // 期待する上流の iss は SpRp_Isser、client_id / client_secret は OAuth2AndOidcClientID / OAuth2AndOidcSecret を使う。
     // 値は、上流の /openid-configuration から引ける。
     // discovery（空なら IdFederationAuthorizeEndpoint の基底から組み立てる。#289）
-    "IdFederationOidcDiscoveryUrl": "https://localhost:44301/.well-known/openid-configuration",
+    // "IdFederationOidcDiscoveryUrl": "https://localhost:44301/.well-known/openid-configuration",
     // 認可エンドポイント
-    "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
+    // "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
     // Tokenエンドポイント
-    "IdFederationTokenEndpoint": "https://localhost:44301/token",
+    // "IdFederationTokenEndpoint": "https://localhost:44301/token",
     // UserInfoエンドポイント
-    "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
+    // "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
     // 上流の JWK Set（書けば discovery を読まない。#290）。**自分の JwkSetUri（/jwkcerts）とは別**
-    "IdFederationJwkSetUri": "",
+    // "IdFederationJwkSetUri": "",
     // 上流の署名を検証する証明書
-    "IdFederationOidcCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+    // "IdFederationOidcCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
     // [単数キー（上流 IdP の登録 1 件。互換） / SAML2]
     // **IdFederationUpstreams を書くと、この節は読まれない**（下位互換）。client_id は OAuth2AndOidcClientID を使う。
     // 値は、上流の /samlmetadata から引ける。
     // メタデータ（EntityDescriptor）。書けば SSO の口と署名証明書をここから引く（#291）
-    "IdFederationSaml2MetadataUrl": "https://localhost:44301/samlmetadata",
+    // "IdFederationSaml2MetadataUrl": "https://localhost:44301/samlmetadata",
     // Requestエンドポイント（メタデータから引けなければ、こちらを読む）
-    "IdFederationSaml2RequestEndpoint": "https://localhost:44301/saml2request",
+    // "IdFederationSaml2RequestEndpoint": "https://localhost:44301/saml2request",
     // 期待する上流の Issuer（上流の entityID）
-    "IdFederationSaml2IssuerId": "https://ssoauth.opentouryo.com",
+    // "IdFederationSaml2IssuerId": "https://ssoauth.opentouryo.com",
     // 上流の署名を検証する証明書
-    "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
+    // "IdFederationSaml2CerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 
     // Client-Server共通設定 ----------------------------------------------------------
     // 自分の JWK Set の口のパス。discovery の jwks_uri は OAuth2AuthorizationServerEndpointsRootURI ＋ このパス。

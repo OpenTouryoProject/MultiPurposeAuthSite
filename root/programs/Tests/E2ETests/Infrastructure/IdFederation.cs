@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -31,6 +31,7 @@
 //*  2026/10/10  玄人 幸道         上流の同意を 1 度だけ押して整える口を追加（#287）
 //*  2026/10/13  玄人 幸道         どの上流か（idpKey）を渡せるようにした（#292 の段階 1）
 //*  2026/10/29  玄人 幸道         FederateAsync に ReturnUrl を渡せるようにした（#294）
+//*  2026/11/04  玄人 幸道         上流の口は、test.ps1 が渡す環境変数を重ねた構成から引く（雛形ではコメントにした）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -70,9 +71,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="client">IdPClient（下流）</param>
         /// <returns>上流の URL。分からなければ null</returns>
         /// <remarks>
-        /// **構成ファイルの `IdFederationAuthorizeEndpoint` から引く。**
-        /// **テストに URL を書かない**（`test.ps1` はここを上書きしないので、
-        /// 構成ファイルの値が、そのままサイトの向き先である）。
+        /// **構成の `IdFederationAuthorizeEndpoint` から引く。**
+        /// **テストに URL を書かない。** **雛形の構成ファイルではコメントにしてある**ので、
+        /// **ホストのサイトは `test.ps1` が環境変数で渡し、テストも同じ値を重ねて読む**（`TestEnv.IdFederationEnv`）。
         ///
         /// **コンテナの下流では、compose の環境変数が重ねられている**（#284。`AppConfig.Overlay`）。
         /// </remarks>
@@ -96,7 +97,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string origin = IdFederation.UpstreamOrigin(client);
 
             Skip.If(string.IsNullOrEmpty(origin),
-                "IdFederationAuthorizeEndpoint が構成ファイルにありません。");
+                "IdFederationAuthorizeEndpoint が構成にありません（test.ps1 -Launch が環境変数で渡します）。");
 
             bool up = false;
 

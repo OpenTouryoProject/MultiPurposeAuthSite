@@ -2700,6 +2700,11 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 
 #### ID 連携の 4 つの脚（#286 / #289 / #290 / #291）
 
+> **雛形（`_appsettings.json` / `_app.config`）では、ID 連携のキーはすべてコメントにしてある**（既定では ID 連携を使わない）。
+> **値はコメントの中に残してある**（上流は `container\E2E\` の 44301）。以下の表の「値」は、そのコメントの値である。
+> **使うなら、折り返し口と、上流の登録（複数キー `IdFederationUpstreams` か、単数キーの一方）のコメントを外す。**
+> **E2E では `test.ps1` が単数キーを環境変数で渡す**（`Set-IdFederationEnv`）。**複数キーの経路は、下流コンテナで測る**（`CN-5.*`）。
+
 **ID 連携では、この IdP が真ん中に立つ。** **下流 IdP（＝この配備）と呼ぶ。**
 
 ```
