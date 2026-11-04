@@ -12,7 +12,10 @@ class AppAuth {
   //     'https://demo.identityserver.io/.well-known/openid-configuration';
 
   // Android / iOS（flutter_appauth）
-  static const String clientId = '40319c0100f94ff3aab3004c8bdb5e52';
+  //   認証サイトの OAuth2ClientsInformation に AuthenticationDevice として登録してある
+  //   （パブリック クライアント。client_secret は無い。PKCE で交換する）。
+  //   以前は Native_Application を使っていたが、FrontendTemplates の Flutter と共用だったので分けた。
+  static const String clientId = '3e8a76afc7ff4924bb4e83582f8304a1';
   static const String redirectUrl = 'com.opentouryo:/oauthredirect';
 
   // web（認可コード + PKCE を自前で実装する。components/web_sign_in.dart。#205）

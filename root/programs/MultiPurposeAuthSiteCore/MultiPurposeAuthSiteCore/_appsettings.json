@@ -107,8 +107,8 @@
     // テスト用 : 設定すると、プッシュ通知を FCM に送らず、このディレクトリにファイルとして書く。本番では空のまま
     "FcmOutboxDirectory": "",
     // 認証デバイスのクライアント（client_id。カンマ区切り）。/SetDeviceToken・/ciba_result・/2fa_result は、
-    // ここに挙げたクライアントに発行したトークンだけを受ける（#294）。空なら同梱の AuthenticationDevice_Web
-    "AuthenticationDeviceClientIds": "aad529f7f9b6428a84c59ac15aef0cdb",
+    // ここに挙げたクライアントに発行したトークンだけを受ける（#294）。空なら同梱の AuthenticationDevice（Android / iOS）と AuthenticationDevice_Web
+    "AuthenticationDeviceClientIds": "3e8a76afc7ff4924bb4e83582f8304a1,aad529f7f9b6428a84c59ac15aef0cdb",
 
     // ==== アカウント : Config.Account.cs ====
     // [事前登録ユーザ（Admin, Test）]
@@ -474,6 +474,13 @@
       "aad529f7f9b6428a84c59ac15aef0cdb": {
         "redirect_uri_code": "http://localhost:5610/",
         "client_name": "AuthenticationDevice_Web"
+      },
+      // 認証デバイスの Android / iOS 版（flutter_appauth）。パブリック クライアント（client_secret なし。PKCE でトークンを交換する）。
+      // redirect_uri_code は、アプリの app_auth.dart と appAuthRedirectScheme（Private-Use URI Scheme）に合わせる。
+      // **Native_Application（FrontendTemplates の Flutter）とは共用しない**（認証デバイス用の口を開けるのは、認証デバイスだけ）。
+      "3e8a76afc7ff4924bb4e83582f8304a1": {
+        "redirect_uri_code": "com.opentouryo:/oauthredirect",
+        "client_name": "AuthenticationDevice"
       },
       // 登録の scope で、要求してよいスコープを制限したクライアント（#198、E2E テスト用）。
       // scope は RFC 7591 の client metadata と同じく、スペース区切り。無ければ制限しない。

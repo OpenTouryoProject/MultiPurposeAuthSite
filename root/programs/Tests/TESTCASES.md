@@ -7716,6 +7716,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. 同じ利用者で、RP のトークンと、認証デバイスのトークンを取る
 1. RP のトークンで、3 つの口を叩く
 1. 認証デバイスのトークンなら、通る（対照）
+1. Android / iOS 版の認証デバイス（AuthenticationDevice）のトークンも、通る
 
 **検証（合否を判定する）**
 
@@ -7725,6 +7726,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - /SetDeviceToken : HTTP 200（端末を登録できる）
 - /ciba_result : トークンは受ける（合わない auth_req_id なので 400）
 - /2fa_result : トークンは受ける（合わないコードなので 400）
+- /SetDeviceToken : Android / iOS 版でも HTTP 200（端末を登録できる）
 
 ## RT-294.74 /token : grant_type が無ければ invalid_request、未知・大文字小文字の違う値なら unsupported_grant_type
 

@@ -55,6 +55,7 @@
 //*  2026/10/30  玄人 幸道         認証デバイスのクライアントでトークンを取る RunAuthenticationDeviceFlowAsync を追加（#294）
 //*  2026/10/31  玄人 幸道         ColonSecret の説明を、Basic を最初の「:」で分ける振る舞いに合わせた（Open棟梁 #643。#294）
 //*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35（ColonOnlySecret）を追加（OpenTouryo#645 への備え。#294）
+//*  2026/11/04  玄人 幸道         認証デバイスの Android / iOS 版（AuthenticationDevice）を足し、RunAuthenticationDeviceFlowAsync でクライアントを選べるようにした
 //**********************************************************************************
 
 using System;
@@ -97,6 +98,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// （`AuthenticationDeviceClientIds`）。
         /// </summary>
         public const string AuthenticationDeviceWeb = "AuthenticationDevice_Web";
+
+        /// <summary>
+        /// 同梱の認証デバイス（Android / iOS 版。パブリック クライアント ＋ PKCE）。
+        /// **`redirect_uri` は Private-Use URI Scheme**（`com.opentouryo:/oauthredirect`）。
+        /// **以前は `Native_Application`（FrontendTemplates の Flutter）と共用していた。**
+        /// </summary>
+        public const string AuthenticationDevice = "AuthenticationDevice";
 
         /// <summary>登録の scope で、要求してよいスコープを制限したクライアント（#198）</summary>
         public const string TestClient5 = "TestClient5";
@@ -782,10 +790,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         private const string PkceChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
         /// <summary>
-        /// 認証デバイスのクライアント（`AuthenticationDevice_Web`）で、認可コード フローを最後まで通す（#294）。
+        /// 認証デバイスのクライアント（既定は `AuthenticationDevice_Web`）で、認可コード フローを最後まで通す（#294）。
         /// </summary>
         /// <param name="client">IdPClient（サインイン済み）</param>
         /// <param name="scope">スコープ（認証デバイスと同じ `openid email`）</param>
+        /// <param name="clientName">認証デバイスのクライアント（`AuthenticationDevice_Web` / `AuthenticationDevice`）</param>
         /// <returns>JsonResponse</returns>
         /// <remarks>
         /// **認証デバイスの役をするテストは、これでトークンを取る。**
@@ -794,9 +803,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **パブリック クライアントなので、client_secret ではなく PKCE（S256）で引き換える。**
         /// </remarks>
         public static async Task<JsonResponse> RunAuthenticationDeviceFlowAsync(
-            IdPClient client, string scope = "openid email")
+            IdPClient client, string scope = "openid email",
+            string clientName = KnownClients.AuthenticationDeviceWeb)
         {
-            ClientRegistration registration = Registration(client, KnownClients.AuthenticationDeviceWeb);
+            ClientRegistration registration = Registration(client, clientName);
 
             AuthZResponse authz = await AuthorizeCodeAsync(
                 client, registration, scope, "state1", "nonce1", registration.RedirectUri,

@@ -117,7 +117,7 @@ flutter run -d web-server --web-port 5610 --dart-define-from-file=firebase_web.j
 | 設定 | 値 | 場所 | 設定要否 |
 |---|---|---|---|
 | web 版のクライアント | `client_name` = `AuthenticationDevice_Web`、`client_id` = `aad529f7f9b6428a84c59ac15aef0cdb`、`redirect_uri_code` = `http://localhost:5610/`、`client_secret` なし | `OAuth2ClientsInformation`（`_appsettings.json` / `_app.config` と、実際に読まれる `appsettings.json` / `app.config`） | 不要（埋込・設定済） |
-| Android 版のクライアント | `client_name` = `Native_Application`、`redirect_uri` = `com.opentouryo:/oauthredirect`（アプリ側） | 同上 | 不要（埋込・設定済） |
+| Android / iOS 版のクライアント | `client_name` = `AuthenticationDevice`、`client_id` = `3e8a76afc7ff4924bb4e83582f8304a1`、`redirect_uri_code` = `com.opentouryo:/oauthredirect`、`client_secret` なし | 同上 | 不要（埋込・設定済） |
 | 通知を送る鍵 | `FirebaseServiceAccountKey` | 同上。既定のパスはリポジトリ外 `C:\root\files\resource\MultiPurposeAuthSite\` | 要設定 |
 
 E2E テストは送信箱（`FcmOutboxDirectory`）を使うので、本物の FCM には送らない。

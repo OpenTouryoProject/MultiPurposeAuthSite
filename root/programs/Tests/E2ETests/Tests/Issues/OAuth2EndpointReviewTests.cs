@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（#294）
 //*  2026/10/30  玄人 幸道         RT-294.79（/par は同じ名前のパラメタを断る）を足した・既定の利用者の行を書くので CIBA と同じコレクションに入れた（#294）
 //*  2026/10/30  玄人 幸道         RT-294.80（/userinfo の POST と openid の無いトークン）を足した（#294）
+//*  2026/11/04  玄人 幸道         RT-294.73：Android / iOS 版（AuthenticationDevice）のトークンも受けることを確かめる
 //**********************************************************************************
 
 using System;
@@ -91,7 +92,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**`AuthenticationDeviceClientIds`（既定は同梱の AuthenticationDevice_Web）に挙げたクライアントだけ**を受ける。",
                     "#294（ANALYSIS-IdP.md の C-55）");
 
-                r.Target("RP = " + KnownClients.MvcSample + " / 認証デバイス = " + KnownClients.AuthenticationDeviceWeb);
+                r.Target("RP = " + KnownClients.MvcSample + " / 認証デバイス = " + KnownClients.AuthenticationDeviceWeb
+                    + "・" + KnownClients.AuthenticationDevice);
 
                 r.Step("(1) 同じ利用者で、RP のトークンと、認証デバイスのトークンを取る");
 
@@ -126,6 +128,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "400", ((int)cibaByDevice.StatusCode).ToString());
                 r.VerifyEqual("/2fa_result : トークンは受ける（合わないコードなので 400）",
                     "400", ((int)twoFaByDevice.StatusCode).ToString());
+
+                r.Step("(4) Android / iOS 版の認証デバイス（" + KnownClients.AuthenticationDevice + "）のトークンも、通る");
+
+                //  **以前は Native_Application（FrontendTemplates の Flutter）と共用で、既定の一覧に無かった**ので、
+                //  **Android / iOS 版の端末の登録は 401 になっていた。**
+                JsonResponse native = await Flows.RunAuthenticationDeviceFlowAsync(
+                    client, clientName: KnownClients.AuthenticationDevice);
+
+                Assert.False(string.IsNullOrEmpty(native.AccessToken),
+                    "前提: Android / iOS 版の認証デバイスの access_token が返ること（" + native.ToString() + "）");
+
+                JsonResponse setByNative = await client.SetDeviceTokenAsync(
+                    native.AccessToken, "e2e-native-" + Guid.NewGuid().ToString("N"));
+
+                r.VerifyEqual("/SetDeviceToken : Android / iOS 版でも HTTP 200（端末を登録できる）",
+                    "200", ((int)setByNative.StatusCode).ToString());
 
                 r.Done();
             }

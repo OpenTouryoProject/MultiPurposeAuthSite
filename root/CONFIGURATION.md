@@ -1187,6 +1187,7 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 ```
 
 → **`http://localhost:5610` が許される。**
+**`http` / `https` 以外の `redirect_uri`**（Android / iOS 版の `AuthenticationDevice` の `com.opentouryo:/oauthredirect` など）**は、オリジンにならない。**
 
 **SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ので、
 **クライアントを登録すれば、CORS のための作業は要らない。**
@@ -1235,11 +1236,12 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 アクセス トークンだけを受ける。** client_id をカンマ（または空白）で区切って書く。
 
 ```
-"AuthenticationDeviceClientIds": "aad529f7f9b6428a84c59ac15aef0cdb",          appsettings.json
-<add key="AuthenticationDeviceClientIds" value="aad529f7f9b6428a84c59ac15aef0cdb" />   app.config
+"AuthenticationDeviceClientIds": "3e8a76afc7ff4924bb4e83582f8304a1,aad529f7f9b6428a84c59ac15aef0cdb",          appsettings.json
+<add key="AuthenticationDeviceClientIds" value="3e8a76afc7ff4924bb4e83582f8304a1,aad529f7f9b6428a84c59ac15aef0cdb" />   app.config
 ```
 
-- **未設定・空なら、同梱の認証デバイス（`AuthenticationDevice_Web`）の client_id に倒す**（既存の配備にはこのキーが無い）
+- **未設定・空なら、同梱の認証デバイス（Android / iOS 版の `AuthenticationDevice` と、web 版の `AuthenticationDevice_Web`）の client_id に倒す**（既存の配備にはこのキーが無い）
+- **`Native_Application` は認証デバイスではない**（FrontendTemplates の Flutter の登録）ので、ここには挙げない
 - **認証デバイスを別の client_id で登録したなら、その client_id を書く**（書かないと、端末の登録も承認も 401 になる）
 - **以前は発行先を見ておらず、利用者が同意したどの RP のトークンでも通った**（`ANALYSIS-IdP.md` の C-55）
 
@@ -3828,9 +3830,9 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
 > 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
-| `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
+| `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
 | `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
-| `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
+| `OAuth2ClientsInformation` | **テスト用が 14 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`6` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
 
