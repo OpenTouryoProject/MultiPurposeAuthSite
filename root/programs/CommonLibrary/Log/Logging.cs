@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/14  西野 大介         新規
 //*  2026/10/25  玄人 幸道         エラー応答を記録する MyOperationTraceForErrorResponse を追加（障害対応のため。#294）
+//*  2026/11/05  玄人 幸道         Basic の復号前の値で通ったクライアントを記録する MyOperationTraceForRawBasicCredentials を追加（#320）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -177,6 +178,29 @@ namespace MultiPurposeAuthSite.Log
             Logging.MyOperationTrace(string.Format(Resources.Diagnostics.LogErrorResponse,
                 LogSanitizer.Sanitize(path), status, LogSanitizer.Sanitize(clientId),
                 LogSanitizer.Sanitize(error), LogSanitizer.Sanitize(description, Const.LogDetailMaxLength)));
+        }
+
+        /// <summary>
+        /// Basic 認証が**復号前の値**で通ったクライアントを、OPERATION に警告として記録する（#320）
+        /// </summary>
+        /// <param name="clientId">client_id（照合に通った値）</param>
+        /// <remarks>
+        /// **RFC 6749 §2.3.1 に従わず、符号化せずに送っているクライアントを見つけるため**である。
+        /// **Open棟梁 4.0 で、復号前の値での照合を既定ではやめる**（OpenTouryo#645）ので、
+        /// 上げる前に、そのクライアントに符号化を求める。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **秘密は出さない** | `client_id` だけ |
+        /// | **要求ごとに出す** | 1 回だけにするには、クライアントごとの状態を全サーバで共有する必要がある。**数で、直していないことが分かる** |
+        /// | **振る舞いは変えない** | 記録するだけ（通る・通らないは同じ） |
+        ///
+        /// **値は要求から来る**ので、`LogSanitizer` を通す。
+        /// </remarks>
+        public static void MyOperationTraceForRawBasicCredentials(string clientId)
+        {
+            Logging.MyOperationTrace(string.Format(Resources.Diagnostics.LogRawBasicCredentials,
+                LogSanitizer.Sanitize(clientId)));
         }
         #endregion
         

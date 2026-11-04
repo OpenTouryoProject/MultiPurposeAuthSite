@@ -38,6 +38,7 @@
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/01  玄人 幸道         AllowsVerifyingAlg を internal にした（Extensions/Sts の CmnRequestObjectEndpoint が使う。#321）
 //*  2026/11/01  玄人 幸道         fapi2 のクライアント認証では、assertion の aud を issuer に限った（#323）
+//*  2026/11/05  玄人 幸道         Basic が復号前の値で通ったら、client_id を OPERATION に記録する（Open棟梁 4.0 への備え。#320）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -516,6 +517,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 配備済みのものは残る）。
         /// **この復号前の値での照合（OpenTouryo#634 の H-3）は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。
         /// 4.0 に上げると `RT-237.2` と `RT-237.4` の (2) が落ちる。
+        /// **それまでに直してもらうため、復号前の値で通ったら `client_id` を OPERATION に記録する**（#320）。
+        /// **振る舞い（通る・通らない）は変えない。** 秘密は出さない。
         ///
         /// **英数字だけの値では、どちらも同じ文字列になる**ので、この分岐は効かない。
         ///
@@ -531,9 +534,17 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool GetBasicCredentials(
             string authHeader, out string client_id, out string client_secret)
         {
-            return AuthenticationHeader.GetCredentials(authHeader,
+            bool ret = AuthenticationHeader.GetCredentials(authHeader,
                 CmnEndpoints.MatchesClientSecret,
-                out client_id, out client_secret);
+                out client_id, out client_secret, out bool usedRawValue);
+
+            if (usedRawValue)
+            {
+                // 符号化せずに送るクライアント（Open棟梁 4.0 では通らなくなる。#320）
+                Logging.MyOperationTraceForRawBasicCredentials(client_id);
+            }
+
+            return ret;
         }
 
         /// <summary>登録された client_secret と一致するか（数えない・記録しない）</summary>
