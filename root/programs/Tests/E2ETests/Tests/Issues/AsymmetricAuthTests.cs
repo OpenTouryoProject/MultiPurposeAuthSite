@@ -34,6 +34,7 @@
 //*  2026/10/03  玄人 幸道         RT-262.1（登録で絞ったalg以外は通らない）を追加（#262）
 //*  2026/10/19  玄人 幸道         方法を明示したTestClient_24に向けた（#307 の段階 3）
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -332,7 +333,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
                 TestReport r = this.Report("RT-239.5",
                     "fapi2 の登録でも、非対称の証明なら refresh_token を使える",
@@ -343,7 +344,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**client_secret では開かない**（FAPI は秘密ベースの認証を認めない）。",
                     "FAPI 2.0 / RFC 6749 §6 / #239 の段階 3");
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（fapi2。JAR で認可し、private_key_jwt で交換）");
+                r.Target("client_name=" + KnownClients.Fapi2Client + "（fapi2。JAR で認可し、private_key_jwt で交換）");
 
                 r.Step("(1) FAPI2 の自己テストで code を得て、client_assertion で交換する");
 

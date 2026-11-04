@@ -33,6 +33,7 @@
 //*  2026/09/27  玄人 幸道         長い jti でも使い切りが効くことを追加（#243）
 //*  2026/09/28  玄人 幸道         自己テストの CIBA ボタン（RT-246.2）を追加（#246 の 3-a）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -107,10 +108,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**標準の CIBA クライアントが繋がるかどうか**を、ここで見る。",
                     "CIBA Core §7.1.1 / #233");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 string bindingMessage = "E2E-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
+                r.Target("client_name=" + KnownClients.FapiCibaClient + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（/ros を経由しない。認証デバイスとプッシュ通知は、テストで置き換える）");
 
                 r.Step("(1) 利用者 : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -179,11 +180,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "決めていないと、実装によって結果が変わる。",
                     "CIBA Core §7.1.1 / #233");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 string viaRequest = "E2E-req-" + Guid.NewGuid().ToString("N").Substring(0, 6);
                 string viaRequestUri = "E2E-uri-" + Guid.NewGuid().ToString("N").Substring(0, 6);
 
-                r.Target("client_name=" + KnownClients.TestClient4
+                r.Target("client_name=" + KnownClients.FapiCibaClient
                     + " / request と request_uri で binding_message を変え、どちらが届くかを見る");
 
                 r.Step("(1) 利用者 : 認証デバイスを登録する");
@@ -240,9 +241,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**利用者に通知を送る前に断る**こと。",
                     "CIBA Core §7.1.1 / §13 / #233");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + "（署名の最後の 1 文字を書き換えた request）");
+                r.Target("client_name=" + KnownClients.FapiCibaClient + "（署名の最後の 1 文字を書き換えた request）");
 
                 r.Step("(1) 正しい request を作り、署名の部分だけを書き換える");
 
@@ -294,7 +295,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "CIBA Core §13 / #233");
 
                 // ここで見たいのは「どちらも無い」ことなので、クライアント認証は通しておく。
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Target("空のフォームで POST /ciba_authz");
 
@@ -330,7 +331,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "以前は exp / nbf だけを見ており、aud は取り出してもいなかった。",
                     "CIBA Core §7.1.1 / §13 / #234 の段階 1");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Step("(1) Discovery から issuer を読む（テストに値を書かない）");
 
@@ -391,9 +392,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "欠落は、Open棟梁 が返す server_error ではなく invalid_request に読み替える（#196 と同じ扱い）。",
                     "CIBA Core §7.1.1 / §13 / #234 の段階 1");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + "（aud を外した request）");
+                r.Target("client_name=" + KnownClients.FapiCibaClient + "（aud を外した request）");
 
                 r.Step("(1) aud を入れずに request を作って送る");
 
@@ -436,9 +437,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "`request_uri` の経路も同じで、`/ros` に預け直せば新しい参照を取れた。",
                     "CIBA Core §7.1.1 / §13 / #234 の段階 2");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
-                r.Target("client_name=" + KnownClients.TestClient4
+                r.Target("client_name=" + KnownClients.FapiCibaClient
                     + "（既定の login_hint ＝ 存在しない利用者。**通知を出さずに jti の消費だけを見る**）");
 
                 r.Step("(1) 認証要求を 1 回送る");
@@ -498,12 +499,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**キーを固定長の要約にして**、長さに依らず記録できるようにした。",
                     "CIBA Core §7.1.1 / #234 の段階 2 / #243");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 // **200 文字の jti。** 桁あふれを起こすのに十分な長さ（38 文字を大きく超える）。
                 string longJti = "e2e-" + new string('j', 180) + Guid.NewGuid().ToString("N");
 
-                r.Target("client_name=" + KnownClients.TestClient4
+                r.Target("client_name=" + KnownClients.FapiCibaClient
                     + "（jti は " + longJti.Length.ToString() + " 文字）");
 
                 r.Step("(1) 長い jti の認証要求を 1 回送る");
@@ -563,9 +564,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**署名が正しくても、資格情報が無ければ受け付けない。**",
                     "CIBA Core §7.1 / §13 / #234 の段階 3");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + "（正しく署名した request。資格情報だけを付けない）");
+                r.Target("client_name=" + KnownClients.FapiCibaClient + "（正しく署名した request。資格情報だけを付けない）");
 
                 r.Step("(1) 資格情報を付けずに POST /ciba_authz");
 
@@ -629,11 +630,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "（要求の署名は、その他人の鍵で正しく検証できてしまう）。",
                     "CIBA Core §7.1 / §7.1.1 / #234 の段階 3");
 
-                ClientRegistration ciba = Flows.Registration(client, KnownClients.TestClient4);
-                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient1);
+                ClientRegistration ciba = Flows.Registration(client, KnownClients.FapiCibaClient);
+                ClientRegistration other = Flows.Registration(client, KnownClients.Fapi1Client);
 
-                r.Target("iss=" + KnownClients.TestClient4 + " の要求を、"
-                    + KnownClients.TestClient1 + " の資格情報で送る");
+                r.Target("iss=" + KnownClients.FapiCibaClient + " の要求を、"
+                    + KnownClients.Fapi1Client + " の資格情報で送る");
 
                 r.Step("(1) CIBA クライアントの鍵で、正しく署名した要求を作る");
 

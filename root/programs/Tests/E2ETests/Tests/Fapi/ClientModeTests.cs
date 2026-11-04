@@ -35,6 +35,7 @@
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/19  玄人 幸道         FA-4.1 の fapi2 を、認証の段で断られる形に改めた（#307 の段階 3）
 //*  2026/10/29  玄人 幸道         FA-2.1 の PKCE だけの拒否を invalid_client にした（C-40。#294）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -171,10 +172,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     + "**PKCE の S256 で取る行は fapi1 も通すので、そこだけが通る。**",
                     "FAPI 1.0 Advanced / #222");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi1Client);
                 ClientRegistration normal = Flows.Registration(client, KnownClients.MvcSample);
 
-                r.Target("client_name=" + KnownClients.TestClient1 + "（fapi1 登録）");
+                r.Target("client_name=" + KnownClients.Fapi1Client + "（fapi1 登録）");
 
                 r.Step("(1) 対照 : normal 登録のクライアントは、client_secret で通る");
 
@@ -259,10 +260,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     + "以前のように「fapi1 には発行しない」では、期限が切れるたびに認可からやり直しになる。",
                     "RFC 6749 §5.1 / §6 / FAPI 1.0 Advanced / #224 / #239");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi1Client);
                 ClientRegistration normal = Flows.Registration(client, KnownClients.MvcSample);
 
-                r.Target("client_name=" + KnownClients.TestClient1 + "（fapi1 登録）");
+                r.Target("client_name=" + KnownClients.Fapi1Client + "（fapi1 登録）");
 
                 r.Step("(1) 対照 : normal 登録では、refresh_token で更新できる");
 
@@ -338,9 +339,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     + "FAPI 1.0 Advanced は client_secret を認めていないので、拒否は設計どおり（#224）。",
                     "FAPI 1.0 Advanced §5.2.2 / RFC 7636 / #224");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi1Client);
 
-                r.Target("client_name=" + KnownClients.TestClient1 + "（fapi1 登録。client_secret 登録あり）");
+                r.Target("client_name=" + KnownClients.Fapi1Client + "（fapi1 登録。client_secret 登録あり）");
                 r.Step("PKCE(S256) で認可コードを取り、client_secret と code_verifier の両方を送って交換する");
 
                 AuthZResponse authz = await Flows.AuthorizeCodeAsync(
@@ -392,10 +393,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     + "unauthorized_client を RP へリダイレクトで返すようにした。",
                     "RFC 6749 §4.2.2.1 / OIDC Core §3.3 / FAPI 1.0 Advanced / #224");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi1Client);
                 ClientRegistration normal = Flows.Registration(client, KnownClients.TestClient);
 
-                r.Target("client_name=" + KnownClients.TestClient1 + "（fapi1 登録）/ 対照="
+                r.Target("client_name=" + KnownClients.Fapi1Client + "（fapi1 登録）/ 対照="
                     + KnownClients.TestClient + "（normal 登録）");
 
                 r.Step("(1) 対照 : normal 登録のクライアントは、Hybrid で code と id_token を受け取る");
@@ -472,9 +473,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     + "（`RT-197` が request_uri 経路を測っている）。",
                     "FAPI 2.0 / #222");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（fapi2 登録）");
+                r.Target("client_name=" + KnownClients.Fapi2Client + "（fapi2 登録）");
 
                 r.Step("(1) client_secret（PKCE 無し）");
 
@@ -492,7 +493,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     withPkce != null && string.IsNullOrEmpty(withPkce.AccessToken),
                     "拒否される", ClientModeTests.Outcome(withPkce));
 
-                //  **TestClient2 は、登録で認証の方法を明示している**ので、
+                //  **FAPI2_Client は、登録で認証の方法を明示している**ので、
                 //    **PKCE だけの引き換えは、認証の段で断られる**（invalid_client。C-40。#294）。
                 //    **以前は PKCE で認証が通り、登録種別の段で断られていた**（unauthorized_client）。
                 r.Verify("エラーは invalid_client（認証の方法を明示した登録は、PKCE だけでは認証しない）",
@@ -528,9 +529,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     + "ハードコードされていた（#224 の段階 1 で表に置き換えた）。**その行が効いていることを測る。**",
                     "RFC 8628（Device Authorization Grant）/ #222");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3
+                r.Target("client_name=" + KnownClients.DeviceClient
                     + "（device 登録。client_secret を持たないパブリック クライアント）");
 
                 r.Step("PKCE(S256) で認可コードを取り、交換する");
@@ -578,13 +579,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     + "**以前は登録種別を判定しておらず、client_secret だけでトークンが出ていた**（#224）。",
                     "RFC 8628 / RFC 6749 §5.2（unauthorized_client）/ #224");
 
-                r.Target("device=" + KnownClients.TestClient3 + " / normal=" + KnownClients.MvcSample
-                    + " / fapi1=" + KnownClients.TestClient1 + " / fapi2=" + KnownClients.TestClient2
-                    + " / fapi_ciba=" + KnownClients.TestClient4);
+                r.Target("device=" + KnownClients.DeviceClient + " / normal=" + KnownClients.MvcSample
+                    + " / fapi1=" + KnownClients.Fapi1Client + " / fapi2=" + KnownClients.Fapi2Client
+                    + " / fapi_ciba=" + KnownClients.FapiCibaClient);
 
                 r.Step("(1) 対照 : device / normal の登録は、開始できる");
 
-                foreach (string name in new string[] { KnownClients.TestClient3, KnownClients.MvcSample })
+                foreach (string name in new string[] { KnownClients.DeviceClient, KnownClients.MvcSample })
                 {
                     JsonResponse start = await ClientModeTests.StartDeviceAuthZAsync(
                         client, Flows.Registration(client, name));
@@ -600,7 +601,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 r.Step("(2) fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される");
 
                 foreach (string name in new string[]
-                    { KnownClients.TestClient1, KnownClients.TestClient4 })
+                    { KnownClients.Fapi1Client, KnownClients.FapiCibaClient })
                 {
                     JsonResponse start = await ClientModeTests.StartDeviceAuthZAsync(
                         client, Flows.Registration(client, name));
@@ -615,10 +616,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 r.Note("**client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、"
                     + "**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。");
 
-                r.Step("(3) fapi2（TestClient2）は、クライアント認証の段で断られる");
+                r.Step("(3) fapi2（FAPI2_Client）は、クライアント認証の段で断られる");
 
                 //  **#307 の段階 3 で、断る段が早くなった。**
-                //    **`TestClient2` は `token_endpoint_auth_method=private_key_jwt` を登録している**
+                //    **`FAPI2_Client` は `token_endpoint_auth_method=private_key_jwt` を登録している**
                 //    （fapi2 は秘密ベースの認証を認めないので、それが正しい登録である）。
                 //    **この口は `client_assertion` を読まない**（RFC 8628）ので、
                 //    **`client_secret` では認証そのものが通らない。**
@@ -627,16 +628,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 //    **仕様としては、こちらの方が正しい**（認証の失敗は `invalid_client`）。
                 {
                     JsonResponse start = await ClientModeTests.StartDeviceAuthZAsync(
-                        client, Flows.Registration(client, KnownClients.TestClient2));
+                        client, Flows.Registration(client, KnownClients.Fapi2Client));
 
-                    r.Verify(KnownClients.TestClient2 + " は invalid_client（401）",
+                    r.Verify(KnownClients.Fapi2Client + " は invalid_client（401）",
                         start.StatusCode == System.Net.HttpStatusCode.Unauthorized
                             && start.Error == "invalid_client",
                         "401 / invalid_client",
                         (int)start.StatusCode + " / " + (start.Error ?? "（無し）"));
                 }
 
-                r.Note("**`TestClient1` / `TestClient4` は方法を明示していない**ので、"
+                r.Note("**`FAPI1_Client` / `FAPI_CIBA_Client` は方法を明示していない**ので、"
                     + "**`client_secret` で認証が通り、登録種別の判定まで進む**（`unauthorized_client`）。"
                     + "**どちらの道でも、このグラントは使えない。**");
 

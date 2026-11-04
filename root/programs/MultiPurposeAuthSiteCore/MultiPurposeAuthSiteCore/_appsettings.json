@@ -408,7 +408,7 @@
         "redirect_uri_code": "test_self_code",
         "redirect_uri_token": "test_self_token",
         "client_mode": "fapi1",
-        "client_name": "TestClient1",
+        "client_name": "FAPI1_Client",
         "tls_client_auth_subject_dn": "CN=MPAS Test Client",
         "jwk_rsa_publickey": "eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ"
       },
@@ -417,7 +417,7 @@
         "redirect_uri_code": "test_self_code",
         "redirect_uri_token": "test_self_token",
         "client_mode": "fapi2",
-        "client_name": "TestClient2",
+        "client_name": "FAPI2_Client",
         "token_endpoint_auth_method": "private_key_jwt",
         "tls_client_auth_subject_dn": "CN=MPAS Test Client",
         "jwk_rsa_publickey": "eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ",
@@ -426,12 +426,12 @@
       "ae5a179813234ca290c8de93ef2e31dc": {
         "redirect_uri_code": "http://localhost:12345/",
         "client_mode": "device",
-        "client_name": "TestClient3"
+        "client_name": "Device_Client"
       },
       "7cecbd9282054f4a855ac77b5887582f": {
         "client_secret": "0AXrXnrvUj_rbgxTpBziy2SgDDIr9tKADjgg6j66M8E",
         "client_mode": "fapi_ciba",
-        "client_name": "TestClient4",
+        "client_name": "FAPI_CIBA_Client",
         "jwk_ecdsa_publickey": "eyJrdHkiOiJFQyIsImFsZyI6IkVTMjU2IiwiY3J2IjoiUC0yNTYiLCJ4IjoiUUhxUmdNZHdBN0RlbUFMM09yVE1NVU9QczZkdkxMaWd1UVlSVHY4SWFybyIsInkiOiJsNlAyVEVxeng1Z19TMkEzQ1BUYXNTY00zZFM4RHQtS1lCWTNXQ0FSeENFIiwia2lkIjoiMWhPa2thNVJHVGZDbHUyS3JFSEVTcmRHcmlseC1OUzVFT3pWZ1M1Sk12TSJ9"
       },
       "06d20f595b694114b710c1d85e21bb8e": {
@@ -484,21 +484,15 @@
         "redirect_uri_code": "com.opentouryo:/oauthredirect",
         "client_name": "AuthenticationDevice"
       },
-      // 登録の scope で、要求してよいスコープを制限したクライアント（#198、E2E テスト用）。
-      // scope は RFC 7591 の client metadata と同じく、スペース区切り。無ければ制限しない。
-      "e9d6919296934542a33230fec2ebef31": {
-        "client_secret": "8tjASfcfp4jYqoaauZuILw7D90MzxSEBz9xfO5JZhXc",
-        "redirect_uri_code": "http://localhost:12346/",
-        "client_name": "TestClient5",
-        "scope": "openid profile email"
-      },
+      // 登録の scope で、要求してよいスコープを制限したクライアント（旧 TestClient5。#198）は、
+      // E2E だけが使うので、E2E の種データ（Util/Test/TestClients.cs の TestClient_36）に移した。
       // このクライアントにだけ PKCE を必須にする（#221、E2E テスト用）。
       // サーバ全体の RequirePkce との OR で効く。クライアント側から緩めることはできない。
       // client_mode = fapi1 と違い、**PKCE 以外の経路は塞がない。**
       "c4309326f39b1e0975fddb4bc93b56a0": {
         "client_secret": "RW9WsvNoDe9Hu5CpqcWyvRBmZQnY8qHKWQgqaRhNXJQ",
         "redirect_uri_code": "test_self_code",
-        "client_name": "TestClient6",
+        "client_name": "RequirePKCE_Client",
         "require_pkce": "true"
       }
     },

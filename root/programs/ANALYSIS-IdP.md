@@ -1268,7 +1268,7 @@ RFC 8628 §3.1 は「クライアントの識別」を要求し、コンフィ�
 | パブリック（`client_secret` 未登録） | `client_id` の確認のみ（RFC 8628 は公開クライアントを許す） |
 
 **パブリックを一律で弾かないのが要点。** 実測では、登録済み 10 クライアントのうち
-`client_mode: device` の `ae5a1798…`（TestClient3）**だけが `client_secret` を持たない**。
+`client_mode: device` の `ae5a1798…`（Device_Client。旧 TestClient3）**だけが `client_secret` を持たない**。
 一律に認証必須にすると、同梱の自己テストが動かなくなる。
 
 `device_code` と `client_id` の紐付けは、`AuthorizationCodeProvider.Receive(code, client_id, "")` が

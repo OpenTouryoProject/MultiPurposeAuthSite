@@ -20,6 +20,7 @@
 //*  2026/10/31  玄人 幸道         response_mode の比較を ToLowerInvariant に。コメントの誤り（#294）
 //*  2026/10/31  玄人 幸道         「ログイン・ユーザの Client」をログインせずに選んだら、理由を出す（#294）
 //*  2026/10/31  玄人 幸道         「ログイン・ユーザの Client」は利用者名として client_id を引く（#294）
+//*  2026/11/04  玄人 幸道         自己テストのクライアント（normal 以外）を、名前ではなく client_mode で選ぶ
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -95,25 +96,17 @@ namespace MultiPurposeAuthSite.Controllers
                         // OAuth2.0 / OIDC用 Client
                         this.ClientName = "TestClient";
                     }
-                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
+                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
+                        || model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit()
+                        || model.ClientType == OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit()
+                        || model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit())
                     {
-                        // Financial-grade API - Part1用 Client
-                        this.ClientName = "TestClient1";
-                    }
-                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
-                    {
-                        // Financial-grade API - Part2用 Client
-                        this.ClientName = "TestClient2";
-                    }
-                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit())
-                    {
-                        // Device Authorization Grant用 Client
-                        this.ClientName = "TestClient3";
-                    }
-                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit())
-                    {
-                        // Financial-grade API - CIBA用 Client
-                        this.ClientName = "TestClient4";
+                        // Financial-grade API - Part1 / Part2・Device Authorization Grant・CIBA 用 Client
+                        //   **名前ではなく、登録の client_mode で選ぶ**（構成ファイルの最初の 1 件）。
+                        //   **名前を変えても、配備済みの構成ファイルで選べなくならない**ため
+                        //   （以前は TestClient1〜4 を直に書いていた。雛形の名前は FAPI1_Client・FAPI2_Client・
+                        //   Device_Client・FAPI_CIBA_Client）。
+                        this.ClientName = Helper.GetInstance().GetClientNameByClientMode(model.ClientType, false);
                     }
                     else if (model.ClientType == HomeSaml2OAuth2StartersViewModel.RequirePkceClientType)
                     {
@@ -121,7 +114,9 @@ namespace MultiPurposeAuthSite.Controllers
                         //   登録（OAuth2ClientsInformation）で require_pkce = true。
                         //   これを選ぶと、**下のボタンはどれもこのクライアントで動く。**
                         //   PKCE を付けないフローは、認可エンドポイントで invalid_request になる。
-                        this.ClientName = "TestClient6";
+                        //   **名前ではなく、normal で require_pkce = true の登録を選ぶ**（雛形の名前は RequirePKCE_Client）。
+                        this.ClientName = Helper.GetInstance().GetClientNameByClientMode(
+                            OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit(), true);
                     }
                     else
                     {

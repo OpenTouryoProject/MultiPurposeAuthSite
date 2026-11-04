@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/29  玄人 幸道         新規（#245 の段階 2）
 //*  2026/10/03  玄人 幸道         RT-245.4のSkipを外した（#263）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -89,7 +90,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 ClientRegistration normal = Flows.Registration(client, KnownClients.TestClient);
-                ClientRegistration ciba = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration ciba = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 TestReport r = this.Report("RT-245.1",
                     "`/par` に預けた request_uri は `/ciba_authz` では使えず、CIBA の request は `/par` に預けられない",
@@ -101,7 +102,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "RFC 9126 / CIBA Core §7.1.1 / #245 の段階 2");
 
                 r.Target("client_name=" + KnownClients.TestClient + "（/par）と "
-                    + KnownClients.TestClient4 + "（/ciba_authz）");
+                    + KnownClients.FapiCibaClient + "（/ciba_authz）");
 
                 r.Step("(1) /par に認可要求を預けて request_uri を得る");
 
@@ -329,7 +330,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(4) パブリック クライアント（client_secret 無し）では、そもそも認証が通らない");
 
-                ClientRegistration pub = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration pub = Flows.Registration(client, KnownClients.DeviceClient);
 
                 AuthZResponse publicAuthZ = await Flows.AuthorizeCodeAsync(
                     client, pub, redirectUri: pub.RedirectUri, state: "state-rt2453c",

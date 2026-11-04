@@ -56,6 +56,7 @@
 //*  2026/10/31  玄人 幸道         ColonSecret の説明を、Basic を最初の「:」で分ける振る舞いに合わせた（Open棟梁 #643。#294）
 //*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35（ColonOnlySecret）を追加（OpenTouryo#645 への備え。#294）
 //*  2026/11/04  玄人 幸道         認証デバイスの Android / iOS 版（AuthenticationDevice）を足し、RunAuthenticationDeviceFlowAsync でクライアントを選べるようにした
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -81,16 +82,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public const string TestClient = "TestClient";
 
         /// <summary>FAPI1 用</summary>
-        public const string TestClient1 = "TestClient1";
+        public const string Fapi1Client = "FAPI1_Client";
 
         /// <summary>FAPI2 用（Request Object を使う）</summary>
-        public const string TestClient2 = "TestClient2";
+        public const string Fapi2Client = "FAPI2_Client";
 
         /// <summary>Device Authorization Grant 用（client_secret 無し ＝ パブリック）</summary>
-        public const string TestClient3 = "TestClient3";
+        public const string DeviceClient = "Device_Client";
 
         /// <summary>CIBA 用</summary>
-        public const string TestClient4 = "TestClient4";
+        public const string FapiCibaClient = "FAPI_CIBA_Client";
 
         /// <summary>
         /// 同梱の認証デバイス（web ビルド。パブリック クライアント ＋ PKCE）（#294）。
@@ -107,26 +108,27 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public const string AuthenticationDevice = "AuthenticationDevice";
 
         /// <summary>登録の scope で、要求してよいスコープを制限したクライアント（#198）</summary>
-        public const string TestClient5 = "TestClient5";
+        /// <remarks>**構成ファイルには無い**（以前は雛形の TestClient5。種データに移した）。`Flows.InjectedRegistration` で引く。</remarks>
+        public const string TestClient_36 = "TestClient_36";
 
         /// <summary>クライアント単位で PKCE を必須にしたクライアント（#221）</summary>
-        public const string TestClient6 = "TestClient6";
+        public const string RequirePkceClient = "RequirePKCE_Client";
 
         /// <summary>
-        /// TestClient4（fapi_ciba）を写し、登録種別だけ normal にしたクライアント（#224）。
+        /// FAPI_CIBA_Client（fapi_ciba）を写し、登録種別だけ normal にしたクライアント（#224）。
         /// **構成ファイルには無い。** test.ps1 -Launch が環境変数でサイトへ差し込む
         /// （Flows.InjectedRegistration で引く）。
         /// </summary>
         public const string TestClient4_2 = "TestClient4_2";
 
         /// <summary>
-        /// TestClient4（fapi_ciba）を写し、登録種別を既知でない値（fapi_1）にしたクライアント（#224 の段階 2）。
+        /// FAPI_CIBA_Client（fapi_ciba）を写し、登録種別を既知でない値（fapi_1）にしたクライアント（#224 の段階 2）。
         /// **構成ファイルには無い。** TestClient4_2 と同じく test.ps1 -Launch が差し込む。
         /// </summary>
         public const string TestClient4_3 = "TestClient4_3";
 
         /// <summary>
-        /// TestClient4（fapi_ciba）を写し、**`token_endpoint_auth_method` を `private_key_jwt`** にしたクライアント（#294）。
+        /// FAPI_CIBA_Client（fapi_ciba）を写し、**`token_endpoint_auth_method` を `private_key_jwt`** にしたクライアント（#294）。
         /// </summary>
         /// <remarks>
         /// **CIBA の `/ciba_authz` と `/token` を、`client_assertion` で通すことを測る**（`RT-294.43`）。
@@ -136,7 +138,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public const string TestClient4_4 = "TestClient4_4";
 
         /// <summary>
-        /// TestClient2（fapi2）を写し、tls_client_auth_subject_dn をテスト専用の値（MtlsSubjectDn）にしたクライアント（#226）。
+        /// FAPI2_Client（fapi2）を写し、tls_client_auth_subject_dn をテスト専用の値（MtlsSubjectDn）にしたクライアント（#226）。
         /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
         /// </summary>
         public const string TestClient2_2 = "TestClient2_2";
@@ -346,7 +348,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>SAML2 を測るクライアント（#275）</summary>
         /// <remarks>
-        /// **`jwk_rsa_publickey` を持たない**（写す元が TestClient3）ので、
+        /// **`jwk_rsa_publickey` を持たない**（写す元が Device_Client）ので、
         /// **署名の無い AuthnRequest が通る**。**要求を自前で組み立てられる。**
         /// </remarks>
         public const string TestClient_21 = "TestClient_21";
@@ -384,7 +386,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>TestClient を写し、**`token_endpoint_auth_method` を `none`（パブリック）**にしたクライアント（C-40。#294）</summary>
         public const string TestClient_31 = "TestClient_31";
 
-        /// <summary>TestClient2（fapi2）を写し、**`private_key_jwt` で認証する**クライアント（N1。#294）</summary>
+        /// <summary>FAPI2_Client（fapi2）を写し、**`private_key_jwt` で認証する**クライアント（N1。#294）</summary>
         public const string TestClient_32 = "TestClient_32";
 
         /// <summary>TestClient を写しただけのクライアント（S3。**同じ名前の利用者をテストが作る**。#294）</summary>
@@ -464,7 +466,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_32, "e2e0tc32000000000000000000000000" },
                 { KnownClients.TestClient_33, "e2e0tc33000000000000000000000000" },
                 { KnownClients.TestClient_34, "e2e0tc34000000000000000000000000" },
-                { KnownClients.TestClient_35, "e2e0tc35000000000000000000000000" }
+                { KnownClients.TestClient_35, "e2e0tc35000000000000000000000000" },
+                { KnownClients.TestClient_36, "e2e0tc36000000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -513,7 +516,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>
         /// TestClient2_2 / TestClient2_3 の tls_client_auth_subject_dn（#226）。
-        /// **test.ps1 の差し込みと同じ値にすること。** 雛形の TestClient1 / TestClient2 は同じ Subject を共有しているので使わない。
+        /// **test.ps1 の差し込みと同じ値にすること。** 雛形の FAPI1_Client / FAPI2_Client は同じ Subject を共有しているので使わない。
         /// </summary>
         public const string MtlsSubjectDn = "CN=mpas-e2e-mtls-client";
 
@@ -962,7 +965,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static ClientRegistration InjectedRegistration(IdPClient client, string clientName)
         {
             // test.ps1 -Launch が、起動したサイトに差し込んだ client_id を渡してくる（MPAS_<client_name の大文字>）。
-            //   写す元 : TestClient4_x は TestClient4、TestClient2_x は TestClient2、TestClient_x は TestClient
+            //   写す元 : TestClient4_x は FAPI_CIBA_Client、TestClient2_x は FAPI2_Client、TestClient_x は TestClient
             string sourceName = null;
 
             // **client_secret を差し替えたものは、写す元の秘密では認証できない**（#237）。
@@ -975,11 +978,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 || clientName == KnownClients.TestClient4_4)
             {
                 // TestClient4_4 は **`private_key_jwt` で認証する**（#294）。client_secret は写す元のまま（使わない）。
-                sourceName = KnownClients.TestClient4;
+                sourceName = KnownClients.FapiCibaClient;
             }
             else if (clientName == KnownClients.TestClient2_2 || clientName == KnownClients.TestClient2_3)
             {
-                sourceName = KnownClients.TestClient2;
+                sourceName = KnownClients.Fapi2Client;
             }
             else if (clientName == KnownClients.TestClient_2)
             {
@@ -1072,8 +1075,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
             else if (clientName == KnownClients.TestClient_32)
             {
-                // **fapi2 ＋ private_key_jwt**（#294）。鍵は写し元（TestClient2）のもの。
-                sourceName = KnownClients.TestClient2;
+                // **fapi2 ＋ private_key_jwt**（#294）。鍵は写し元（FAPI2_Client）のもの。
+                sourceName = KnownClients.Fapi2Client;
             }
             else if (clientName == KnownClients.TestClient_29)
             {
@@ -1092,6 +1095,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 //   写す元の秘密では認証できない。**このテストは CORS だけを測る。**
                 sourceName = KnownClients.TestClient;
                 overriddenSecret = "";
+            }
+            else if (clientName == KnownClients.TestClient_36)
+            {
+                // **登録の scope で制限した**（#198。以前は雛形の TestClient5）。
+                //   client_secret は写す元のまま。**折り返し先は差し替えてある。**
+                sourceName = KnownClients.TestClient;
+                overriddenRedirectUri = "http://localhost:12346/";
             }
             else if (clientName == KnownClients.TestClient_15)
             {

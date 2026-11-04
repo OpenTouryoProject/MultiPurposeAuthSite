@@ -790,7 +790,7 @@ docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U
 |---|---|
 | **`TestClient`** | **秘密で認証する**（ほぼ全てのケースがそう使う）。**方法は明示しない** |
 | **`TestClient_24`（新規）** | **`TestClient` を写し、`token_endpoint_auth_method` を `private_key_jwt` にした種データ。** **`RT-239.1` 〜 `.4` / `RT-129.1` を、こちらへ向けた** |
-| **`TestClient2`** | **構成ファイルに `token_endpoint_auth_method": "private_key_jwt"` を明記した**（fapi2。`RT-238.*` / `RT-239.5`） |
+| **`FAPI2_Client`** | **構成ファイルに `token_endpoint_auth_method": "private_key_jwt"` を明記した**（fapi2。`RT-238.*` / `RT-239.5`） |
 | **`TestClient2_2` / `TestClient2_3`** | **`tls_client_auth` を明記**（`FA-6.*`。**DN を登録しただけでは通らない**） |
 | **`TestClient_8`** | **`private_key_jwt` を明記**（`RT-262.1`） |
 
@@ -2994,7 +2994,7 @@ curl.exe --config preflight.cfg
 |---|---|
 | **`RequirePkce` は、登録項目で唯一の `bool`** | **方言ごとに形が違う** — SQL Server `bit` / PostgreSQL `boolean` / **Oracle は `NUMBER(3)` の `-1`**（`Users` の bool 列と同じ流儀） |
 | **そこが落ちても、画面とビルドは黙っている** | **「登録で PKCE を必須にしたつもりのクライアントが、PKCE 無しを受け入れる」**になる |
-| **既存の `RT-221.1` では測れない** | `TestClient6` は**構成ファイル側**なので、`Helper` は user store を見に来ない |
+| **既存の `RT-221.1` では測れない** | `RequirePKCE_Client`（旧 `TestClient6`）は**構成ファイル側**なので、`Helper` は user store を見に来ない |
 
 - **E2E** : **`RT-270.1`**（**画面登録側**の `require_pkce`。種データ `TestClient_18`）
 - **歯が立つことを確かめてある** : `mem` の複製と Oracle の書き込みを
@@ -3204,7 +3204,7 @@ root/programs/CommonLibrary/Util/Test/TestClients.cs   表（16 件）
 
 | | |
 |---|---|
-| **構成ファイルに残すもの** | 自己テスト画面が名前で選ぶもの（`TestClient`〜`TestClient6`。`HomeController` に直書き）、`IdFederation`、サンプル RP |
+| **構成ファイルに残すもの** | 自己テスト画面が選ぶもの（`TestClient` は名前で、`FAPI1_Client`〜`RequirePKCE_Client` は登録の種別で。`HomeController`）、`IdFederation`、サンプル RP |
 | **種データで作るもの** | **E2E だけが使うもの**（16 件。`Tests/README.md`） |
 
 - **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**
@@ -4538,7 +4538,7 @@ Get-Service aspnet_state | Select-Object Name, Status, StartType
 **その状態では、アプリ自身の内部呼び出し（自己テスト）も証明書を提示する**
 （`Helper` の `HttpClient` が `SpRp_ClientCertPfxFilePath` を添える）。
 サーバは**証明書を提示したクライアントをコンフィデンシャル扱いにする**ので、
-**公開クライアントで始める自己テストが `invalid_client` になる**（`/device_authz` の `TestClient3`）。
+**公開クライアントで始める自己テストが `invalid_client` になる**（`/device_authz` の `Device_Client`。旧 `TestClient3`）。
 **製品の欠陥ではなく、測り方の都合である。** そのため `RT-246.3` は、要求している側を Skip する。
 
 **構成ファイルの既定では、net10.0 版と net48 版は同じ URL を指している。**

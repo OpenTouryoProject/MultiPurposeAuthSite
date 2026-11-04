@@ -43,6 +43,7 @@
 //*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35 を追加（RT-237.3。OpenTouryo#645 への備え。#294）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
 //*  2026/11/03  玄人 幸道         E2E 専用のクライアントの登録（RegisterInStore）を AccountController から移した（#294）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -73,7 +74,7 @@ namespace MultiPurposeAuthSite.Util.Test
     ///
     /// | | |
     /// |---|---|
-    /// | **構成ファイルに残すもの** | 自己テスト画面が名前で選ぶもの（`TestClient`〜`TestClient6`。`HomeController`）、`IdFederation`、サンプル RP |
+    /// | **構成ファイルに残すもの** | 自己テスト画面が選ぶもの（`TestClient` は名前で、`FAPI1_Client`〜`RequirePKCE_Client` は `client_mode` で。`HomeController`）、`IdFederation`、サンプル RP |
     /// | **ここで作るもの** | **E2E だけが使うもの**（FAPI 系と、署名 alg を測るもの） |
     ///
     /// **`client_name` は利用者名そのもの**である（`GetClientIdByName` が
@@ -126,26 +127,26 @@ namespace MultiPurposeAuthSite.Util.Test
         public static readonly Entry[] Entries = new Entry[]
         {
             // ---------------------------------------------------------------- FAPI 系
-            //   **写す元は TestClient4 / TestClient2。** 自己テスト画面が使う登録には触らない。
+            //   **写す元は FAPI_CIBA_Client / FAPI2_Client。** 自己テスト画面が使う登録には触らない。
             new Entry()
             {
                 ClientName = "TestClient4_2", ClientId = "e2e0tc42000000000000000000000000",
-                ClientMode = "normal", SourceName = "TestClient4"
+                ClientMode = "normal", SourceName = "FAPI_CIBA_Client"
             },
             new Entry()
             {
                 ClientName = "TestClient4_3", ClientId = "e2e0tc43000000000000000000000000",
-                ClientMode = "fapi_1", SourceName = "TestClient4"
+                ClientMode = "fapi_1", SourceName = "FAPI_CIBA_Client"
             },
             new Entry()
             {
                 // **`private_key_jwt` で認証する fapi_ciba のクライアント**（#294）。
                 //   **CIBA の `/token` で `client_assertion` を受けることを測る**（`RT-294.43`）。
-                //   **`TestClient4` は秘密で認証する**ので、**鍵で認証する分はこちらで測る**
+                //   **`FAPI_CIBA_Client` は秘密で認証する**ので、**鍵で認証する分はこちらで測る**
                 //   （**登録された方法でなければ通さない**。#307 の段階 3）。
-                //   **写し元は `TestClient4`** なので、**ECDSA の公開鍵を持つ**（アサーションは ES256 で作る）。
+                //   **写し元は `FAPI_CIBA_Client`** なので、**ECDSA の公開鍵を持つ**（アサーションは ES256 で作る）。
                 ClientName = "TestClient4_4", ClientId = "e2e0tc44000000000000000000000000",
-                ClientMode = "fapi_ciba", SourceName = "TestClient4",
+                ClientMode = "fapi_ciba", SourceName = "FAPI_CIBA_Client",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
@@ -175,7 +176,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 // **mTLS（FA-6）で使う。** Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
                 //   **方法も明示する**（#307 の段階 3）。**DN を登録しただけでは通らない。**
                 ClientName = "TestClient2_2", ClientId = "e2e0tc22000000000000000000000000",
-                ClientMode = "fapi2", SourceName = "TestClient2",
+                ClientMode = "fapi2", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
@@ -185,7 +186,7 @@ namespace MultiPurposeAuthSite.Util.Test
             new Entry()
             {
                 ClientName = "TestClient2_3", ClientId = "e2e0tc23000000000000000000000000",
-                ClientMode = "fapi_1", SourceName = "TestClient2",
+                ClientMode = "fapi_1", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
@@ -308,6 +309,20 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { OAuth2AndOIDCConst.client_secret, "e2e:abcd" }
+                }
+            },
+            new Entry()
+            {
+                // **登録の scope で、要求してよいスコープを制限したクライアント**（#198。`RT-198.3` / `.4`、`EX-2.7`）。
+                //   **以前は雛形の TestClient5** だった（E2E だけが使うので、種データに移した）。
+                //   **scope は E2E の `ScopeTests.RestrictedScope` と同じ値にすること。**
+                //   **折り返し先は、どこの口でもない URI**（`RT-198.4` は応答の Location から code を取るだけ）。
+                ClientName = "TestClient_36", ClientId = "e2e0tc36000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientRedirectUriCode, "http://localhost:12346/" },
+                    { OAuth2AndOIDCConst.scope, "openid profile email" }
                 }
             },
             new Entry()
@@ -465,9 +480,9 @@ namespace MultiPurposeAuthSite.Util.Test
             {
                 // **`private_key_jwt` で認証する fapi2 のクライアント**（N1。#294）。
                 //   **PKCE と client_assertion を併用して、認可コードを引き換える**（`RT-294.51`。FAPI 2.0）。
-                //   **写し元は `TestClient2`**（RSA の公開鍵を持つ）。
+                //   **写し元は `FAPI2_Client`**（RSA の公開鍵を持つ）。
                 ClientName = "TestClient_32", ClientId = "e2e0tc32000000000000000000000000",
-                ClientMode = "fapi2", SourceName = "TestClient2",
+                ClientMode = "fapi2", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
@@ -494,7 +509,7 @@ namespace MultiPurposeAuthSite.Util.Test
             new Entry()
             {
                 // **登録で require_pkce を立てたクライアント**（#270）。
-                //   **構成ファイル側の TestClient6 と対をなす。**
+                //   **構成ファイル側の RequirePKCE_Client と対をなす。**
                 //   `require_pkce` は**唯一の bool の登録項目**で、
                 //   **列に切り出した後は方言で形が違う**
                 //   （SQL Server : bit / PostgreSQL : boolean / Oracle : NUMBER(3) の -1）。
@@ -540,7 +555,7 @@ namespace MultiPurposeAuthSite.Util.Test
             new Entry()
             {
                 // **SAML2 を測るためのクライアント**（#275）。
-                //   **写す元を TestClient3 にしているのは、
+                //   **写す元を Device_Client にしているのは、
                 //   そこに `jwk_rsa_publickey` が無いからである。**
                 //   **鍵が無いクライアントの AuthnRequest は、署名が無くても通る**
                 //   （`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
@@ -556,7 +571,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 //     **`e2e0tc22` を取ろうとして衝突した**（先に在る方が登録され、
                 //     こちらは「登録されていない」ことになり、応答が返らなかった）。
                 ClientName = "TestClient_21", ClientId = "e2e0sa21000000000000000000000000",
-                ClientMode = "normal", SourceName = "TestClient3",
+                ClientMode = "normal", SourceName = "Device_Client",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientRedirectUriSaml, "https://saml.e2e.example/acs" }
@@ -568,7 +583,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 //   `NameIDFormat=persistent` は `GeneratePPIDByUserID(iss, user.Id)` なので、
                 //   **iss が違えば値が違う**ことを確かめる。
                 ClientName = "TestClient_22", ClientId = "e2e0sa22000000000000000000000000",
-                ClientMode = "normal", SourceName = "TestClient3",
+                ClientMode = "normal", SourceName = "Device_Client",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientRedirectUriSaml, "https://saml.e2e.example/acs2" }

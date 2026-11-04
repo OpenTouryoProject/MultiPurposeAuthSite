@@ -5530,7 +5530,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **`RT-221.1` の TestClient6 は構成ファイル側のクライアントである。**そのため、**画面登録側の `require_pkce` は測られていなかった**。**#270 で登録を JSON 1 列から専用列に切り出した**とき、**`require_pkce` だけが bool** で、**方言ごとに形が違う**（SQL Server : `bit` / PostgreSQL : `boolean` / Oracle : `NUMBER(3)` の -1）。**この往復が落ちると、登録で締めたつもりのクライアントが、黙って PKCE 無しを受け入れる。** |
+| 観点 | **`RT-221.1` の RequirePKCE_Client は構成ファイル側のクライアントである。**そのため、**画面登録側の `require_pkce` は測られていなかった**。**#270 で登録を JSON 1 列から専用列に切り出した**とき、**`require_pkce` だけが bool** で、**方言ごとに形が違う**（SQL Server : `bit` / PostgreSQL : `boolean` / Oracle : `NUMBER(3)` の -1）。**この往復が落ちると、登録で締めたつもりのクライアントが、黙って PKCE 無しを受け入れる。** |
 | 根拠 | OAuth 2.1 draft §4.1.1 / #221 / #270 |
 | テスト | `RT27001_登録経由のrequire_pkceも効く` |
 
@@ -10918,20 +10918,20 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 1. 対照 : device / normal の登録は、開始できる
 1. fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される
-1. fapi2（TestClient2）は、クライアント認証の段で断られる
+1. fapi2（FAPI2_Client）は、クライアント認証の段で断られる
 
 **検証（合否を判定する）**
 
-- TestClient3 は device_code を得る
+- Device_Client は device_code を得る
 - MVC_Sample は device_code を得る
-- TestClient1 は unauthorized_client（400）
-- TestClient4 は unauthorized_client（400）
-- TestClient2 は invalid_client（401）
+- FAPI1_Client は unauthorized_client（400）
+- FAPI_CIBA_Client は unauthorized_client（400）
+- FAPI2_Client は invalid_client（401）
 
 **補足**
 
 - **client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。
-- **`TestClient1` / `TestClient4` は方法を明示していない**ので、**`client_secret` で認証が通り、登録種別の判定まで進む**（`unauthorized_client`）。**どちらの道でも、このグラントは使えない。**
+- **`FAPI1_Client` / `FAPI_CIBA_Client` は方法を明示していない**ので、**`client_secret` で認証が通り、登録種別の判定まで進む**（`unauthorized_client`）。**どちらの道でも、このグラントは使えない。**
 - **トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、この E2E では単独で測っていない。
 
 ## FA-5.1 CIBA を normal 登録のクライアントで使うと、開始（/ciba_authz）で unauthorized_client になる

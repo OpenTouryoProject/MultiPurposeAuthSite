@@ -59,8 +59,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 
 | client_name | 何のために登録してあるか |
 |---|---|
-| `TestClient5` | 登録の `scope` で、要求してよいスコープを制限（#198） |
-| `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221） |
+| `RequirePKCE_Client` | **クライアント単位で PKCE を必須**（`require_pkce`。#221。旧 `TestClient6`） |
 
 **構成ファイルに無いクライアントもある**（#224 / #264）。
 雛形にも実設定にも足さずに済むので、**特定の組み合わせを試すためだけのクライアント**に使う。
@@ -71,9 +70,9 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 
 | client_name | 何か | 引き方 |
 |---|---|---|
-| `TestClient4_2` | `TestClient4`（fapi_ciba）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
+| `TestClient4_2` | `FAPI_CIBA_Client`（fapi_ciba。旧 `TestClient4`）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
 | `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | 同上 |
-| `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
+| `TestClient2_2` | `FAPI2_Client`（fapi2。旧 `TestClient2`）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
 | `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | 同上 |
 | `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | 同上 |
 | `TestClient_3` | 同じく写しで、**`client_secret` に `:` と `+` を含む**（`KnownClients.ColonSecret`）。符号化しないと**復号前の値での照合**で通る（#237。`RT-237.4`。Open棟梁 4.0 でやめる。OpenTouryo#645） | 同上 |
@@ -85,11 +84,12 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_15` | 同じく写しで、**`redirect_uri_code` を `test_self_code_manage`** に（C-10）。**管理画面の自己テストの折り返し先が、登録値として通る**ことを測る | 同上 |
 | `TestClient_16` | 同じく写しで、**`client_secret` を空（public）**にし、**`web_origins`** と**別オリジンの `redirect_uri_code`** を登録（#266）。**`web_origins` が勝つ**ことを測る | 同上 |
 | `TestClient_17` | 同じく public で、**`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つ**を登録（#269）。**登録全体が 2000 文字を超えても保存できる**ことを測る（#270 で列に切り出した後も、列ごとの幅に入ることの確かめになっている） | 同上 |
-| `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `TestClient6` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
+| `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `RequirePKCE_Client` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
 | `TestClient_19` | 同じく写し。**どのテストも「許可」を押さない**（#272 の段階 2）。**「同意の記録が無い」状態を測るためだけに在る**（`RT-272.3` / `RT-272.4`）。**押すと記録が残り、DB ストアでは 2 回目から測れなくなる** | 同上 |
 | `TestClient_20` | 同じく写し。**同意の取り消しを測るためだけに在る**（#272 の段階 2。`RT-272.7`）。**「許可 → 取り消し → prompt=none」**を回すので、**終わった時点で記録を残さない** | 同上 |
-| `TestClient_21` | **写す元が `TestClient3`**（#275）。**`jwk_rsa_publickey` を持たない**ので、**署名の無い `AuthnRequest` が通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録してある — **応答は辿らず、返ってきた場所と `SAMLResponse` を読むだけ**。`SA-1` 以外の SAML のテストが使う | 同上 |
+| `TestClient_21` | **写す元が `Device_Client`**（旧 `TestClient3`。#275）。**`jwk_rsa_publickey` を持たない**ので、**署名の無い `AuthnRequest` が通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録してある — **応答は辿らず、返ってきた場所と `SAMLResponse` を読むだけ**。`SA-1` 以外の SAML のテストが使う | 同上 |
 | `TestClient_22` | 同じく（`https://saml.e2e.example/acs2`）。**`NameIDPolicy=persistent` の PPID が RP ごとに違うこと**を測るための 2 つ目（`SA-3.3`） | 同上 |
+| `TestClient_36` | `TestClient` の写しで、**登録の `scope` を `openid profile email` に制限**し、`redirect_uri_code` を `http://localhost:12346/` にしたもの（#198。`RT-198.3` / `.4`、`EX-2.7`）。**旧 `TestClient5`**（雛形に在ったが、E2E だけが使うので移した）。**scope は `ScopeTests.RestrictedScope` と同じ値にしておくこと** | 同上 |
 
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
@@ -449,7 +449,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 >
 > **署名は作らない。**
 > **`TestClient_21` / `TestClient_22` は `jwk_rsa_publickey` を持たない**ので
-> （写す元を `TestClient3` にしてある）、**署名の無い要求が通る。**
+> （写す元を `Device_Client` にしてある）、**署名の無い要求が通る。**
 > **`TestClient` は持っている**ので、同じ要求が `SA-5.4` で落ちる。**差は登録だけである。**
 >
 > **`client_id` の接頭辞は `sa`**（`e2e0sa21…`）。
@@ -671,5 +671,5 @@ cd root
   `-Launch` は環境変数で別のポートへ寄せるので**同時に測れる**が、
   手で立てるときは片方を別の URL にすること。
 - CIBA のテスト（`RT-196.16` 〜 `196.18`、`EX-8`）は、構成ファイルの `SpRp_EcdsaPfxFilePath`（ES256 の秘密鍵）で要求に署名する。
-  CIBA のクライアント（`TestClient4`）が登録している `jwk_ecdsa_publickey` と対になっていること。
+  CIBA のクライアント（`FAPI_CIBA_Client`）が登録している `jwk_ecdsa_publickey` と対になっていること。
   取り違えは検出して Skip する（[`../../TESTING.md`](../../TESTING.md) 5 節）。

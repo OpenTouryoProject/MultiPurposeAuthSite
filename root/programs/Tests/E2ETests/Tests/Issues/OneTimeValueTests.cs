@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/04  玄人 幸道         新規（#332）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -160,7 +161,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**同時に来た要求の両方にトークンが出る**可能性があった。",
                     "#332");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
                 r.Target("POST /token（grant_type=device_code。同じ device_code で同時に " + Concurrency + " 回）");
 
@@ -208,7 +209,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**同時に来た要求の両方にトークンが出る**可能性があった。",
                     "#332");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Target("POST /token（grant_type=ciba。同じ auth_req_id で同時に " + Concurrency + " 回）");
 

@@ -31,6 +31,7 @@
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-2.4 / 2.5 の Skip を解除、成功の HTTP 200 を検証に、EX-2.6 を追加（#200）
 //*  2026/11/01  玄人 幸道         EX-2.7（掃除が走っても、失効はまだ効いている）を追加（#322）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -364,7 +365,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "**期限を過ぎた行が消えること自体は、期限を待てないので、通しでは測らない。**",
                     "RFC 7009 §2.1 / #322");
 
-                r.Target("client_name=" + KnownClients.MvcSample + " / " + KnownClients.TestClient5);
+                r.Target("client_name=" + KnownClients.MvcSample + " / " + KnownClients.TestClient_36);
                 r.Step("(1) access_token を得て、失効させる");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
@@ -378,7 +379,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) 別のトークンを 100 回失効させて、掃除を必ず 1 回は走らせる");
 
-                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient5);
+                ClientRegistration other = Flows.InjectedRegistration(client, KnownClients.TestClient_36);
 
                 for (int i = 0; i < 100; i++)
                 {

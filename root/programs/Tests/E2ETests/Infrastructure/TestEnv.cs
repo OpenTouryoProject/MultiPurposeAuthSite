@@ -38,6 +38,7 @@
 //*  2026/10/14  玄人 幸道         到達性の記憶を読み直さない（並行したときに落ちていた）
 //*  2026/10/29  玄人 幸道         メールの送信箱（MPAS_CORE_MAIL_OUTBOX / MPAS_NETFX_MAIL_OUTBOX）を受け取る（#294）
 //*  2026/11/04  玄人 幸道         ID 連携の単数キーは、test.ps1 が渡す環境変数を構成に重ねる（雛形ではコメントにした）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -450,12 +451,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string[] clientNames = new string[]
             {
                 KnownClients.TestClient,
-                KnownClients.TestClient1,
-                KnownClients.TestClient2,
-                KnownClients.TestClient3,
-                KnownClients.TestClient4,
-                KnownClients.TestClient5,
-                KnownClients.TestClient6,
+                KnownClients.Fapi1Client,
+                KnownClients.Fapi2Client,
+                KnownClients.DeviceClient,
+                KnownClients.FapiCibaClient,
+                KnownClients.RequirePkceClient,
                 KnownClients.MvcSample
             };
 

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（#294）
 //*  2026/10/31  玄人 幸道         RT-294.91 / .92（claims の id_token がオブジェクトでなくても 500 にしない・/ros の claims）を足した（#294）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -402,9 +403,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**PAR のフォーム（RT-294.90）と扱いを揃えた。**",
                     "OIDC Core §5.5 / RFC 9101 §6.3 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
-                r.Target("POST /ros（iss=" + KnownClients.TestClient2 + " / claims=\"not-an-object\"）");
+                r.Target("POST /ros（iss=" + KnownClients.Fapi2Client + " / claims=\"not-an-object\"）");
 
                 r.Step("(1) claims を文字列にした Request Object を預ける");
 

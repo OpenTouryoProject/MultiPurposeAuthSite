@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#224 の段階 0 : CIBA × 登録種別）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System.Threading.Tasks;
@@ -47,7 +48,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
     /// <remarks>
     /// **CIBA の要求は、クライアントの鍵で署名して /ros に登録する。** サーバは登録済みの
     /// jwk_ecdsa_publickey で検証するので、鍵を持たないクライアントでは署名検証で先に落ち、
-    /// 登録種別の判定まで届かない。**そこで test.ps1 -Launch が、TestClient4（fapi_ciba）を写して
+    /// 登録種別の判定まで届かない。**そこで test.ps1 -Launch が、FAPI_CIBA_Client（fapi_ciba）を写して
     /// 登録種別だけ変えたクライアントを、環境変数でサイトへ差し込む**（設定ファイルは変えない）。
     ///   TestClient4_2 : normal / TestClient4_3 : fapi_1（既知でない値）
     ///
@@ -84,7 +85,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     "OpenID Connect CIBA Core §13 / #224");
 
                 r.Target("client_name=" + KnownClients.TestClient4_2
-                    + "（TestClient4 の写し。登録種別だけ normal。test.ps1 が差し込む）");
+                    + "（FAPI_CIBA_Client の写し。登録種別だけ normal。test.ps1 が差し込む）");
 
                 r.Step("(1) 利用者 : 認証デバイスを登録する（通知を受けられる状態にしておく）");
 
@@ -124,7 +125,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     "#224");
 
                 r.Target("client_name=" + KnownClients.TestClient4_3
-                    + "（TestClient4 の写し。登録種別だけ fapi_1＝書き間違い。test.ps1 が差し込む）");
+                    + "（FAPI_CIBA_Client の写し。登録種別だけ fapi_1＝書き間違い。test.ps1 が差し込む）");
 
                 r.Step("(1) 利用者 : 認証デバイスを登録する");
 

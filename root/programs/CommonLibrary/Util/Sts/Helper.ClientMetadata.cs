@@ -32,6 +32,7 @@
 //*  2026/10/31  玄人 幸道         client_name の無い登録で落ちない。名前の照合で大文字小文字を区別する。コメント（#294）
 //*  2026/10/31  玄人 幸道         空の登録値も既定値に倒す。画面登録の名前も空を返す。利用者名で引く口を分けた（#294）
 //*  2026/10/31  玄人 幸道         使われなくなった GetClientIdByName の out 版を消した（#294）
+//*  2026/11/04  玄人 幸道         client_mode で構成ファイルのクライアント名を引く口を足した（自己テストの画面が使う）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -723,6 +724,51 @@ namespace MultiPurposeAuthSite.Util.Sts
                     && string.Equals(temp, clientName, StringComparison.Ordinal))
                 {
                     return clientId;
+                }
+            }
+
+            return "";
+        }
+
+        #endregion
+
+        #region GetClientNameByClientMode
+
+        /// <summary>client_mode から、構成ファイルのクライアント名を取得（自己テストの画面が使う）</summary>
+        /// <param name="clientMode">client_mode（normal / fapi1 / fapi2 / device / fapi_ciba）</param>
+        /// <param name="requirePkce">true なら、PKCE を必須にした登録（require_pkce = true）だけを引く</param>
+        /// <returns>最初に見つかったクライアントの client_name（無ければ空）</returns>
+        /// <remarks>
+        /// **自己テストの画面は、以前はクライアント名を直に書いて選んでいた**（TestClient1 など）。
+        /// **名前を変えると、配備済みの構成ファイルでは選べなくなる**ので、**登録の種別で選ぶ。**
+        ///
+        /// **構成ファイルのクライアントだけを見る**（画面や DCR で登録したものは見ない）。
+        /// **書いてある順の、最初の 1 件**を返す。
+        /// **requirePkce が false のときは、require_pkce の有無を問わない。**
+        /// </remarks>
+        public string GetClientNameByClientMode(string clientMode, bool requirePkce)
+        {
+            if (string.IsNullOrEmpty(clientMode))
+            {
+                return "";
+            }
+
+            foreach (string clientId in this.Oauth2ClientsInfo.Keys)
+            {
+                if (!string.Equals(this.GetClientMode(clientId), clientMode, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (requirePkce && !this.GetClientRequirePkce(clientId))
+                {
+                    continue;
+                }
+
+                if (this.Oauth2ClientsInfo[clientId].TryGetValue(Const.ClientName, out string clientName)
+                    && !string.IsNullOrEmpty(clientName))
+                {
+                    return clientName;
                 }
             }
 

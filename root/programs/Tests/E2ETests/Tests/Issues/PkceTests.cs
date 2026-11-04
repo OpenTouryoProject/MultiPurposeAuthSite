@@ -31,6 +31,7 @@
 //*  2026/09/17  玄人 幸道         新規（#220 : client_secret と PKCE の併用）
 //*  2026/09/18  玄人 幸道         RT-221.1 / RT-221.2（クライアント単位の PKCE）を追加（#221）
 //*  2026/10/06  玄人 幸道         RT-270.1（登録経由の require_pkce）を追加（#270）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -322,7 +323,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                Flows.SkipIfClientNotRegistered(client, KnownClients.TestClient6);
+                Flows.SkipIfClientNotRegistered(client, KnownClients.RequirePkceClient);
 
                 TestReport r = this.Report("RT-221.1",
                     "登録で require_pkce を true にしたクライアントは、PKCE 無しの認可を拒否する",
@@ -332,9 +333,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**そちらは ROPC / client_credentials / refresh_token も巻き添えで塞ぐ**（#222）。",
                     "OAuth 2.1 draft §4.1.1 / #221");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient6);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.RequirePkceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient6 + "（登録で require_pkce=true）");
+                r.Target("client_name=" + KnownClients.RequirePkceClient + "（登録で require_pkce=true）");
                 r.Step("(1) code_challenge を送らずに認可リクエストを出す");
 
                 AuthZResponse without = await Flows.AuthorizeCodeAsync(
@@ -421,7 +422,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-270.1",
                     "画面登録（user store）に書いた require_pkce も、構成ファイルと同じように効く",
-                    "**`RT-221.1` の TestClient6 は構成ファイル側のクライアントである。**"
+                    "**`RT-221.1` の RequirePKCE_Client は構成ファイル側のクライアントである。**"
                     + "そのため、**画面登録側の `require_pkce` は測られていなかった**。"
                     + "**#270 で登録を JSON 1 列から専用列に切り出した**とき、"
                     + "**`require_pkce` だけが bool** で、**方言ごとに形が違う**"

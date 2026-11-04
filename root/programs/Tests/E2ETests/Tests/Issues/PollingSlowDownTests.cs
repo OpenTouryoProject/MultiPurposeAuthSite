@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 1）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -95,10 +96,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**`slow_down` は、仕様が用意した断り方**である。",
                     "RFC 8628 §3.5（slow_down）/ #305 の段階 1");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
                 int interval = PollingSlowDownTests.IntervalOf(client, "DeviceAuthZPollingIntervalSeconds");
 
-                r.Target("client_name=" + KnownClients.TestClient3
+                r.Target("client_name=" + KnownClients.DeviceClient
                     + " / interval=" + interval + " 秒");
 
                 r.Step("(1) 機器 : POST /device_authz で device_code を得る");
@@ -172,10 +173,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**Device と同じ判定**（`LastPolledAt`）で、**同じ断り方**をする。",
                     "CIBA Core §11（slow_down）/ #305 の段階 1");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 int interval = PollingSlowDownTests.IntervalOf(client, "CibaPollingIntervalSeconds");
 
-                r.Target("client_name=" + KnownClients.TestClient4
+                r.Target("client_name=" + KnownClients.FapiCibaClient
                     + " / interval=" + interval + " 秒");
 
                 r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");

@@ -457,15 +457,17 @@ CreateJwkSetJson.exe
 | `client_name` | 用途 |
 |---|---|
 | `TestClient` | 自己テスト用（`redirect_uri` は `test_self_code` / `test_self_token`） |
-| `TestClient1` | FAPI1 |
-| `TestClient2` | FAPI2（Request Object を使う） |
-| `TestClient3` | Device Authorization Grant。**`client_secret` を持たない**（パブリック クライアント） |
-| `TestClient4` | CIBA |
-| `TestClient5` | 登録の `scope` で、要求してよいスコープを制限した例（#198、E2E テスト用） |
-| `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221、E2E テスト用） |
+| `FAPI1_Client` | FAPI1（`client_mode` = `fapi1`。旧 `TestClient1`） |
+| `FAPI2_Client` | FAPI2（`client_mode` = `fapi2`。Request Object を使う。旧 `TestClient2`） |
+| `Device_Client` | Device Authorization Grant（`client_mode` = `device`）。**`client_secret` を持たない**（パブリック クライアント。旧 `TestClient3`） |
+| `FAPI_CIBA_Client` | CIBA（`client_mode` = `fapi_ciba`。旧 `TestClient4`） |
+| `RequirePKCE_Client` | **クライアント単位で PKCE を必須**（`require_pkce`。#221。旧 `TestClient6`） |
 | `MVC_Sample` ほか | 絶対 URL の `redirect_uri` を持つサンプル |
 
-> **自己テスト画面は、この名前で選んでいる**（`HomeController`）。**消すと画面が動かない。**
+> **自己テスト画面は、`TestClient` を名前で、ほかを登録の種別で選んでいる**（`HomeController`）。
+> **`FAPI1_Client`〜`FAPI_CIBA_Client` は `client_mode` の合う最初の 1 件、`RequirePKCE_Client` は normal で `require_pkce` = `true` の最初の 1 件**である。
+> **名前を変えても選べるが、その種別の登録を消すと、画面のその選択肢が動かない。**
+> 旧 `TestClient5`（登録の `scope` で制限した例。#198）は E2E だけが使うので、E2E の種データ（`TestClient_36`）に移した。
 
 > **E2E だけが使うクライアントは、ここには無い**（#264）。
 > **テスト利用者の登録（`saml2OAuth2Data`）として種データが作る**
@@ -1627,7 +1629,7 @@ PKCE だけでは引き換えられない**（`invalid_client`）。**PKCE と�
 
 ```jsonc
 "6336f8ff137044c4a30bbbdcd6c2cf5b": {
-  "client_name": "TestClient2",
+  "client_name": "FAPI2_Client",
   "client_mode": "fapi2",
   "token_endpoint_auth_method": "private_key_jwt",   // ← 足す（段階 3）
   "jwk_rsa_publickey": "..."
@@ -3716,7 +3718,7 @@ ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
 - `SpRp_ClientCertPfxFilePath`（`SHA256RSAClientCert.pfx`）は、**アプリが外向きに呼ぶときの
   HttpClient に必ず載る**（`Util/Sts/Helper.cs`）。サーバが要求すれば、これを提示する
 - **Subject は、クライアント登録の `tls_client_auth_subject_dn` と一致させること。**
-  雛形では `TestClient1` / `TestClient2` の値（`CN=MPAS Test Client`）
+  雛形では `FAPI1_Client` / `FAPI2_Client` の値（`CN=MPAS Test Client`）
 - 作り直すバッチは `GenClientCertByOpenSSL.bat`（先頭に `_` の付いたファイルができる。
   確かめてから名前を変えて置き換える）
 - **期限切れにしないこと。** 期限切れの証明書を提示すると、要求した相手との TLS がそこで失敗する
@@ -3837,7 +3839,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
 | `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
-| `OAuth2ClientsInformation` | **テスト用が 14 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`6` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
+| `OAuth2ClientsInformation` | **テスト用が 13 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI2_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
 
@@ -3919,7 +3921,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    "c4309326f39b1e0975fddb4bc93b56a0": {
      "client_secret": "...",
      "redirect_uri_code": "http://localhost:12347/",
-     "client_name": "TestClient6",
+     "client_name": "RequirePKCE_Client",
      "require_pkce": "true"
    }
    ```

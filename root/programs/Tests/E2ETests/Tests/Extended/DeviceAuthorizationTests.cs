@@ -36,6 +36,7 @@
 //*  2026/10/16  玄人 幸道         Start/Poll を internal に（RT-305 が使う。#305 の段階 1）
 //*  2026/10/29  玄人 幸道         EX-4.3 の refresh_token の観測を、直した実装に合わせた（#294）
 //*  2026/10/30  玄人 幸道         デバイス フローの要求に openid を含める（/userinfo が openid の無いトークンを断るようにしたため。#294）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -61,7 +62,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
     ///   ユーザ : 別の端末で /device_verify を開き、user_code を入力して許可する
     ///   機器   : POST /token（grant_type=device_code）をポーリングする
     ///
-    /// device モードのクライアント（TestClient3、client_secret なし）を使う。
+    /// device モードのクライアント（Device_Client、client_secret なし）を使う。
     /// </summary>
     public class DeviceAuthorizationTests : TargetTestBase
     {
@@ -119,9 +120,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "機器はこの応答だけを頼りに、ユーザへの案内とポーリングを行う。",
                     "RFC 8628 §3.1 / §3.2（device_code / user_code / verification_uri / expires_in は REQUIRED）");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3 + "（device モード、client_secret なし）");
+                r.Target("client_name=" + KnownClients.DeviceClient + "（device モード、client_secret なし）");
                 r.Step("POST /device_authz に client_id と scope を送る");
 
                 JsonResponse res = await StartAsync(client, reg.ClientId);
@@ -201,9 +202,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "**まだ承認されていないこと**を、失敗とは区別できる形で伝える必要がある。",
                     "RFC 8628 §3.4 / §3.5（authorization_pending）");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3);
+                r.Target("client_name=" + KnownClients.DeviceClient);
                 r.Step("(1) 機器 : POST /device_authz で device_code を得る");
 
                 JsonResponse start = await StartAsync(client, reg.ClientId);
@@ -241,9 +242,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "承認したユーザの権限で、機器にトークンが出ること。",
                     "RFC 8628 §3.3（ユーザの操作）/ §3.4 / §3.5");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3
+                r.Target("client_name=" + KnownClients.DeviceClient
                     + " / 承認するユーザ = " + TestEnv.TestUserName(targetKey));
                 r.Step("(1) 機器 : POST /device_authz で device_code と user_code を得る");
                 r.Step("(2) ユーザ : サインインした端末で /device_verify を開き、user_code を入力して許可する");
@@ -317,9 +318,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "**pending のままだと、期限が切れるまで叩き続ける。**",
                     "RFC 8628 §3.5（access_denied）");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3
+                r.Target("client_name=" + KnownClients.DeviceClient
                     + " / 拒否するユーザ = " + TestEnv.TestUserName(targetKey));
                 r.Step("(1) 機器 : device_code と user_code を得る");
                 r.Step("(2) ユーザ : /device_verify で user_code を入力して拒否する");
@@ -363,9 +364,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "**再び使えるなら、device_code を盗み見た者もトークンを得られる。**",
                     "RFC 8628 §3.5 / RFC 6749 §4.1.2（認可コードは 1 回限り。device_code も同じ役割を担う）");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3);
+                r.Target("client_name=" + KnownClients.DeviceClient);
                 r.Step("(1) 承認まで済ませ、トークンを 1 回受け取る");
 
                 JsonResponse start = await StartAsync(client, reg.ClientId);
@@ -450,9 +451,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "（EX-4.5 は使用済みの値。こちらは最初から存在しない値と、値が無い場合）",
                     "RFC 8628 §3.4（device_code は REQUIRED）/ RFC 6749 §5.2（invalid_grant / invalid_request）/ #199");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3);
+                r.Target("client_name=" + KnownClients.DeviceClient);
                 r.Step("(1) 発行していない device_code でトークンを要求する");
 
                 JsonResponse unknown = await PollAsync(client, reg.ClientId, "00000000000000000000000000000000");
@@ -504,7 +505,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 // **サイトがクライアント証明書を要求している間は、この通しを始められない。**
                 //   その状態では、**アプリ自身の内部呼び出し（Helper の HttpClient）も証明書を提示する**
                 //   （SpRp_ClientCertPfxFilePath）。/device_authz は証明書を提示されたクライアントを
-                //   コンフィデンシャル扱いにするので、**公開クライアント（TestClient3）が 401 になる。**
+                //   コンフィデンシャル扱いにするので、**公開クライアント（Device_Client）が 401 になる。**
                 //   **E2E が mTLS（FA-6）のために要求させているだけで、製品の欠陥ではない**（#226）。
                 Skip.If(Environment.GetEnvironmentVariable(
                     client.Target.Key == TestEnv.NetFxKey ? "MPAS_NETFX_MTLS" : "MPAS_CORE_MTLS") == "true",

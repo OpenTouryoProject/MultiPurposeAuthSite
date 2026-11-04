@@ -32,6 +32,7 @@
 //*  2026/09/23  玄人 幸道         FA-6.4（cnf の形式と、/userinfo での照合）を追加
 //*  2026/09/26  玄人 幸道         fapi2 でも refresh_token が発行される期待に改めた（#239 の段階 3）
 //*  2026/09/29  玄人 幸道         FA-6.5（mTLS で refresh_token を使える）を追加（#245 の段階 1）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -61,8 +62,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
     /// コンピューターの信頼されたルートに入れ（管理者権限）、その CA が発行した証明書を CurrentUser\My に置く。
     /// -NetFxMtls を付けなければ、net48 版のケースは作らない（Skip にもしない）。
     ///
-    /// クライアントは、TestClient2（fapi2）を写して Subject をテスト専用の値にした TestClient2_2 / TestClient2_3
-    /// （雛形の TestClient1 / TestClient2 は同じ Subject を共有しているので使わない）。
+    /// クライアントは、FAPI2_Client（fapi2）を写して Subject をテスト専用の値にした TestClient2_2 / TestClient2_3
+    /// （雛形の FAPI1_Client / FAPI2_Client は同じ Subject を共有しているので使わない）。
     /// </remarks>
     public class MtlsTests : TargetTestBase
     {
@@ -176,7 +177,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     "RFC 8705 §2.1（tls_client_auth）/ FAPI 2.0 / #226");
 
                 r.Target("client_name=" + KnownClients.TestClient2_2
-                    + "（TestClient2 の写し。Subject をテスト専用の値にしたもの。test.ps1 が差し込む）");
+                    + "（FAPI2_Client の写し。Subject をテスト専用の値にしたもの。test.ps1 が差し込む）");
 
                 r.Step("認可コードを取り、Subject が一致する自己署名の証明書を添えて交換する（client_secret は送らない）");
 
