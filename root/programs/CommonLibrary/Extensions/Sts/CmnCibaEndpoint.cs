@@ -33,6 +33,7 @@
 //*  2026/10/29  玄人 幸道         poll では client_notification_token を要らず、binding_message を任意にした（#294）
 //*  2026/10/30  玄人 幸道         CIBA の requested_expiry を検証し、上限で頭を打つ（CibaExpiresIn）（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Ciba.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
+//*  2026/11/06  玄人 幸道         request の検証を、aud を渡す版の RequestObject.VerifyCiba にした（OpenTouryo#653。#336）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -162,7 +163,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
 
-                if (!RequestObject.VerifyCiba(request, out string _, pubKey))
+                //  **aud は issuer**（CIBA Core §7.1.1。#336）。`ValidateCibaAuthZReqParam` も同じ値を確かめている。
+                if (!RequestObject.VerifyCiba(request, CmnServerParams.IssuerId, out string _, pubKey))
                 {
                     errDescription = "The request is not verified.";
                     return false;

@@ -2883,8 +2883,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. scope に openid が無い要求
-1. nbf が未来の要求（まだ有効になっていない）
-1. exp が過去の要求（期限切れ）
+1. nbf が未来の要求（まだ有効になっていない。request で送る）
+1. exp が過去の要求（期限切れ。request で送る）
 
 **検証（合否を判定する）**
 
@@ -10763,6 +10763,164 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - プッシュ通知が送られる（auth_req_id を載せて）
 - 宛先は、登録した端末
 - **トークンを受け取ったのは 1 つだけ**
+
+## RT-336.1 /ros は、Request Object の aud が issuer でなければ預からない
+
+| | |
+|---|---|
+| 観点 | **aud は認可サーバの issuer にすべき**（RFC 9101 §4）。**FAPI は issuer を求める。****以前は署名しか確かめず、別の認可サーバ宛ての Request Object も預かっていた。****待ち受けている URL（issuer と違う）も、もう受けない。** |
+| 根拠 | RFC 9101 §4 / FAPI 1.0 Advanced §5.2.2-15 / FAPI 2.0 Message Signing §5.3.1-2 / #336 |
+| テスト | `RT33601_rosはRequestObjectのaudをissuerと照合する` |
+
+**手順**
+
+1. aud = issuer
+1. aud = 待ち受けている URL
+1. aud = 別の認可サーバ
+
+**検証（合否を判定する）**
+
+- aud = issuer : 預かる（request_uri が返る）
+- aud = 待ち受けている URL : HTTP 400 で断る
+- aud = 待ち受けている URL : request_uri を返さない
+- aud = 別の認可サーバ : HTTP 400 で断る
+- aud = 別の認可サーバ : request_uri を返さない
+
+## RT-336.2 /ros は、exp の過ぎた・nbf がまだ来ていない Request Object を預からない
+
+| | |
+|---|---|
+| 観点 | **exp を過ぎた JWT は受けてはならない**（RFC 7519 §4.1.4）。nbf より前も同じ（§4.1.5）。**以前は確かめず、期限の過ぎた Request Object を預け直して、新しい request_uri を得られた**（預かったものの期限 300 秒は、JWT の exp とは別のもの）。 |
+| 根拠 | RFC 7519 §4.1.4 / RFC 7519 §4.1.5 / #336 |
+| テスト | `RT33602_rosは時刻の外れたRequestObjectを預からない` |
+
+**手順**
+
+1. exp が過去
+1. nbf が未来
+
+**検証（合否を判定する）**
+
+- exp が過去 : HTTP 400 で断る
+- exp が過去 : request_uri を返さない
+- nbf が未来 : HTTP 400 で断る
+- nbf が未来 : request_uri を返さない
+
+## RT-336.3 /par の request（JAR）も、aud が issuer でないもの・exp の過ぎたものを invalid_request_object で断る
+
+| | |
+|---|---|
+| 観点 | **/ros と同じ確認をする。** PAR はクライアント認証をするが、**以前は Request Object の aud と exp を確かめていなかった。** |
+| 根拠 | RFC 9101 §4 / RFC 9101 §6.3 / RFC 7519 §4.1.4 / RFC 9126 §3 / #336 |
+| テスト | `RT33603_PARのrequestもaudとexpを確かめる` |
+
+**手順**
+
+1. aud = 待ち受けている URL
+1. exp が過去
+
+**検証（合否を判定する）**
+
+- aud = 待ち受けている URL : HTTP 400
+- aud = 待ち受けている URL : invalid_request_object
+- exp が過去 : HTTP 400
+- exp が過去 : invalid_request_object
+
+**補足**
+
+- aud = issuer で預けられることは RT-229.3 が確かめる。
+
+## RT-336.4 FAPI の登録の Request Object は、exp・nbf が無いもの、寿命が 60 分を超えるもの、nbf が 60 分より前のものを預からない
+
+| | |
+|---|---|
+| 観点 | **FAPI は exp・nbf を必須とし、exp は nbf から 60 分以内、nbf は 60 分より前でないことを求める。****RFC 9101 は求めないので、FAPI でない登録には求めない**（対照）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2-13 / FAPI 1.0 Advanced §5.2.2-17 / FAPI 2.0 Message Signing §5.3.1-3 / FAPI 2.0 Message Signing §5.3.1-4 / #336 |
+| テスト | `RT33604_FAPIのRequestObjectはexpとnbfが必須で寿命は60分以内` |
+
+**手順**
+
+1. exp・nbf があり、寿命が 60 分ちょうど（受ける）
+1. exp が無い
+1. nbf が無い
+1. 寿命が 60 分を超える
+1. nbf が 60 分より前
+1. (対照) FAPI でない登録は、exp が無くても預かる
+
+**検証（合否を判定する）**
+
+- 寿命 60 分 : 預かる（request_uri が返る）
+- exp が無い : HTTP 400 で断る
+- exp が無い : request_uri を返さない
+- nbf が無い : HTTP 400 で断る
+- nbf が無い : request_uri を返さない
+- 寿命が 60 分を超える : HTTP 400 で断る
+- 寿命が 60 分を超える : request_uri を返さない
+- nbf が 60 分より前 : HTTP 400 で断る
+- nbf が 60 分より前 : request_uri を返さない
+- FAPI でない登録で exp が無い : 預かる（request_uri が返る）
+
+## RT-336.5 /ros は、CIBA の要求（ES256）も、aud が issuer でないもの・exp の過ぎたもの・nbf の来ていないものを預からない
+
+| | |
+|---|---|
+| 観点 | **CIBA Core は aud を OP の Issuer Identifier、exp・nbf を必須とする。****以前は /ros では署名だけを確かめ、/ciba_authz で初めて断っていた**（RT-196.17 は /ciba_authz の側を確かめる）。 |
+| 根拠 | CIBA Core §7.1.1 / RFC 7519 §4.1.4 / RFC 7519 §4.1.5 / #336 |
+| テスト | `RT33605_rosはCIBAの要求もaudとexpとnbfを確かめる` |
+
+**手順**
+
+1. 正しい要求（受ける）
+1. aud が別の認可サーバ
+1. exp が過去
+1. nbf が未来
+
+**検証（合否を判定する）**
+
+- 正しい要求 : 預かる（request_uri が返る）
+- aud が別の認可サーバ : HTTP 400 で断る
+- aud が別の認可サーバ : request_uri を返さない
+- exp が過去 : HTTP 400 で断る
+- exp が過去 : request_uri を返さない
+- nbf が未来 : HTTP 400 で断る
+- nbf が未来 : request_uri を返さない
+
+## RT-336.6 FAPI の登録は、/par の request（JAR）でも、exp・nbf の無いものを invalid_request_object で断る
+
+| | |
+|---|---|
+| 観点 | **/ros と同じ確認をする**（RT-336.4）。PAR のクライアント認証は private_key_jwt で行う。 |
+| 根拠 | FAPI 2.0 Message Signing §5.3.1-3 / FAPI 2.0 Message Signing §5.3.1-4 / RFC 9101 §6.3 / #336 |
+| テスト | `RT33606_FAPIの登録はPARのrequestでもexpとnbfが必須` |
+
+**手順**
+
+1. exp・nbf がある（受ける）
+1. exp が無い
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- exp が無い : HTTP 400
+- exp が無い : invalid_request_object
+
+## RT-336.7 client_assertion の sub が client_id でなければ、invalid_client で断る
+
+| | |
+|---|---|
+| 観点 | **クライアント認証の JWT では、sub は client_id でなければならない。****以前は sub を見ず**、iss の鍵で署名されていれば通した。 |
+| 根拠 | RFC 7523 §3 / OIDC Core 1.0 §9 / #336 |
+| テスト | `RT33607_client_assertionのsubはclient_idでなければならない` |
+
+**手順**
+
+1. sub = client_id（通る）
+1. sub = 別の値
+
+**検証（合否を判定する）**
+
+- 認証が通る（HTTP 200）
+- invalid_client
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

@@ -913,7 +913,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 |---|---|---|
 | **N1 : PKCE と private_key_jwt / mTLS の併用** | **`code_verifier` が在ると `client_assertion` と証明書を見ず、PKCE だけで認証した** → **証明が PKCE になり、fapi2（FAPI 2.0 は PKCE と鍵か証明書の両方を求める）が通らなかった**。`RequirePkce` を有効にすると、鍵・証明書のクライアントは全く通らなかった | **まず資格情報で認証し、PKCE は別に検証する**（証明は PrivateKeyJwt / Mtls） |
 | **N3 : `response_type=id_token`** | **Implicit を閉じても検査を通り、同意の後で `server_error`** | **`unsupported_response_type`**（Implicit の経路として扱う） |
-| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（**fapi2 の扱いは C-58 で直した**）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
+| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（**fapi2 の扱いは C-58 で直した**）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読んでいたため。**上流は要素 1 つの配列を受けるようになった**（OpenTouryo#654）が、**こちらは変えていない**。C-59） |
 | **N5 : poll の CIBA** | **`client_notification_token`（ping / push のときだけ REQUIRED）と `binding_message`（OPTIONAL）を必須にしていた** | **省略できる**（`/ros` は前者の有無で CIBA を見分けるので、`request_uri` の経路では在ることになる）。**値は保存しない**（#328。`CibaData.ClientNotificationToken` 列には `auth_req_id` を入れる。DB で 500 になっていた） |
 | **N6 : Device グラントの登録種別** | **`device` を固定で書いていた**（normal の登録のトークンも `device` を名乗った） | **登録された種別で書く**（#220 と同じ） |
 | **登録の `grant_types` と Implicit / Hybrid** | **認可エンドポイントで見ず、同意の後で `server_error`** | **認可エンドポイントで発行する経路（`implicit`）は、同意の前に `unauthorized_client`**。**code は従来どおり `/token` で見る**（#307 の段階 1 の決め。`RT-307.7`） |
@@ -3516,6 +3516,29 @@ CORS の許可オリジンに、`redirect_uri_code` のオリジンを入れる�
 
 **fapi2 の登録のクライアント認証では、issuer だけを受ける**（`IsClientAssertionAudience`。`RT-323.1`）。
 **それ以外の登録と JWT Bearer グラントは変えない**（RFC 7523 §3 はトークン エンドポイントの URL を認めている）。
+
+### C-59. `/ros` と PAR が、Request Object の `aud`・`exp`・`nbf` を確かめていなかった。client_assertion の `sub` を見ていなかった **[Lib]** — **✅ 修正済み（#336）**
+
+**`/ros`（`RegisterRequestObject`）と PAR の `request`（`PushedAuthorizationRequest`）は、署名と `iss`・`client_id` しか確かめていなかった。**
+Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかった（OpenTouryo#653）ことと重なっていた。
+`/authorize` は預けた JSON を読むだけなので、どこでも確かめていなかった。
+**効いていたのは、預かったものの期限（300 秒。C-11）と使い切りだけ**で、どちらも JWT の `exp` とは別のものである。
+
+**Open棟梁 の取り込み（OpenTouryo#653・#654・#655）に合わせて、次のように直した。**
+
+| 確かめること | 以前 | いま |
+|---|---|---|
+| **`aud`**（`/ros`・PAR・CIBA の `request`） | 確かめない（CIBA は `/ciba_authz` だけ） | **issuer だけ**（RFC 9101 §4、FAPI 1.0 Advanced §5.2.2-15、FAPI 2.0 Message Signing §5.3.1-2、CIBA Core §7.1.1。`RT-336.1`・`.3`・`.5`） |
+| **`exp`・`nbf`** | 確かめない | **在れば確かめる**（Open棟梁。`RT-336.2`・`.3`・`.5`） |
+| **同（FAPI の登録）** | 同上 | **必須にし、`exp` は `nbf` から 60 分以内**（FAPI 1.0 Advanced §5.2.2-13・17、FAPI 2.0 Message Signing §5.3.1-3・4。`VerifyFapiTimeClaims`。`RT-336.4`・`.6`） |
+| **必須のクレーム**（`iss`・`aud`・`response_type`・`client_id`・`scope`） | 確かめない | **無ければ断る**（Open棟梁）。**中の `client_id` を `iss` で埋める分岐は、CIBA の要求だけになった** |
+| **client_assertion の `sub`** | 見ない | **クライアント認証では `client_id` と一致すること**（RFC 7523 §3 の 2 の B。`RT-336.7`）。JWT Bearer グラントは在ることだけ（2 の A） |
+
+- **E2E の Request Object の `aud`**（`RequestObjectBuilder`）と、**自己テストの `aud`**（`SelfTestClient`）は、**issuer に直した。**
+  どちらも、以前は待ち受けている URL・預け先の URL を入れていた（照合していなかったので通っていた）
+- **自己テストは fapi2 の登録なので、`exp`・`nbf` を足して署名し直す。** Open棟梁 の `RequestObject.Create` は、どちらも入れない
+- **client_assertion の `aud` の照合**（文字列だけ、fapi2 は issuer だけ。C-58）**は MPAS 側に残した。** Open棟梁 は要素 1 つの配列も受ける（`RT-294.54` は断ることを確かめている）
+- **受け入れる範囲が狭まる。** issuer 以外の `aud` を入れている RP、FAPI の登録で `exp`・`nbf` を入れない RP は、断られる
 
 ## 5. D. 最新の IdP として不足している機能
 

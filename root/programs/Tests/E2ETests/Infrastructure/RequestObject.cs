@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（ES256 で署名）を作る CreateCiba を追加（#196）
 //*  2026/09/25  玄人 幸道         aud に Discovery の issuer を使うため CreateCibaAsync に改めた（#234 の段階 1）
+//*  2026/11/06  玄人 幸道         Create も aud に Discovery の issuer を使うため CreateAsync に改めた。RemoveClaim も受ける（/ros・PAR が aud を照合する。#336）
 //**********************************************************************************
 
 using System;
@@ -57,7 +58,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>
         /// クレームを取り除く指定。
-        /// <c>CreateCibaAsync</c> の parameters に
+        /// <c>CreateAsync</c>・<c>CreateCibaAsync</c> の parameters に
         /// <c>{ RequestObjectBuilder.RemoveClaim, "aud" }</c> のように入れる。
         /// </summary>
         public const string RemoveClaim = "__remove_claim__";
@@ -69,14 +70,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="clientId">client_id（iss にも入れる）</param>
         /// <param name="parameters">認可リクエストのパラメタ</param>
         /// <returns>JWS</returns>
-        public static string Create(
+        /// <remarks>
+        /// **aud は Discovery の issuer を使う**（RFC 9101 §4、FAPI 2.0 Message Signing §5.3.1-2。#336）。
+        /// **以前は待ち受けている URL（BaseUrl）を入れていた。** /ros と PAR が aud を照合していなかったので通っていた。
+        /// </remarks>
+        public static async Task<string> CreateAsync(
             IdPClient client, string clientId, IDictionary<string, object> parameters)
         {
             Dictionary<string, object> payload = new Dictionary<string, object>();
 
-            // RFC 9101 4: iss は client_id、aud は認可サーバ。
+            // RFC 9101 4: iss は client_id、aud は認可サーバ（の issuer）。
             payload["iss"] = clientId;
-            payload["aud"] = client.Target.BaseUrl;
+            payload["aud"] = await client.IssuerAsync();
             payload["client_id"] = clientId;
 
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -87,6 +92,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             foreach (KeyValuePair<string, object> p in parameters)
             {
+                if (p.Key == RequestObjectBuilder.RemoveClaim)
+                {
+                    // 必須クレームの欠落を試すため、取り除く（#336。CreateCibaAsync と同じ）。
+                    payload.Remove((string)p.Value);
+                    continue;
+                }
+
                 if (p.Value != null)
                 {
                     payload[p.Key] = p.Value;
@@ -176,7 +188,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             IdPClient client, string clientId, IDictionary<string, object> parameters)
         {
             string requestUri = await RegisterAsync(
-                client, Create(client, clientId, parameters));
+                client, await CreateAsync(client, clientId, parameters));
 
             if (string.IsNullOrEmpty(requestUri))
             {

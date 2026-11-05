@@ -20,6 +20,7 @@
 //*  2026/10/29  玄人 幸道         id_token の nonce の照合、JARM の検証の失敗を直した（#294）
 //*  2026/10/29  玄人 幸道         自己テストを始めていない要求・壊れた JARM で、500 にしない（#294）
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
+//*  2026/11/06  玄人 幸道         access_token を、期待する iss・aud を渡す版の AccessToken.Verify で検証する（OpenTouryo#655。#336）
 //**********************************************************************************
 
 /*
@@ -400,7 +401,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                             if (!string.IsNullOrEmpty(model.AccessToken))
                             {
+                                // **期待する iss・aud を渡す**（OpenTouryo#655。#336）。
+                                //   設定を読む版は、設定の client_id（IdFederation の上流向けの OAuth2AndOidcClientID）と aud を照合するので、
+                                //   **自己テストのクライアントのトークンは通らない。** aud は自己テストのクライアントの client_id である。
                                 if (!AccessToken.Verify(model.AccessToken,
+                                null, CmnServerParams.IssuerId, new string[] { clientId_InSessionOrCookie },
                                 out out_sub, out List<string> out_roles, out List<string> out_scopes, out out_jobj))
                                 {
                                     throw new Exception(Resources.AccountController.AccessTokenVerificationError);

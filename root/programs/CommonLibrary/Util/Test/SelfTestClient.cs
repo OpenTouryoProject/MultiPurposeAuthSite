@@ -36,6 +36,7 @@
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
 //*  2026/11/01  玄人 幸道         WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
+//*  2026/11/06  玄人 幸道         Request Object の aud を issuer にし、exp・nbf を入れる。aud を渡す版の Verify・VerifyCiba で自己検証する（#336）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -54,6 +55,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.Str;
 using MultiPurposeAuthSite.Extensions.Sts;
@@ -135,9 +137,11 @@ namespace MultiPurposeAuthSite.Util.Test
 
         #region Request Object
 
+        /// <summary>Request Object の有効期間（秒）。FAPI の上限（60 分）より短くする（#336）</summary>
+        private const long RequestObjectLifetimeSeconds = 10 * 60;
+
         /// <summary>認可リクエストの Request Object（RS256）を作る</summary>
         /// <param name="clientId">client_id（iss に入る）</param>
-        /// <param name="aud">aud（預け先のエンドポイント）</param>
         /// <param name="responseType">response_type</param>
         /// <param name="responseMode">response_mode</param>
         /// <param name="redirectUri">redirect_uri（明示しないときは空）</param>
@@ -153,22 +157,44 @@ namespace MultiPurposeAuthSite.Util.Test
         /// **`claims` に null を渡してはならない。** `RequestObject.Create` は
         /// null チェックをせずに参照する（`ClaimsInRO` 側は各引数の null を受ける）。
         /// このため、null のときは空の `ClaimsInRO` を渡す。
+        ///
+        /// **`aud` は issuer**（RFC 9101 §4、FAPI 2.0 Message Signing §5.3.1-2。#336）。
+        /// **以前は預け先のエンドポイントの URL だった**（`RequestObject.Create` のコメントのとおり）。
+        /// `/ros` と PAR が aud を issuer と照合するようになったので、それでは通らない。
+        ///
+        /// **`exp`・`nbf` を足して、署名し直す**（#336）。自己テストのクライアントは fapi2 の登録で、
+        /// FAPI は両方を必須にしている（FAPI 2.0 Message Signing §5.3.1-3・4）が、
+        /// **`RequestObject.Create` はどちらも入れない。** 中身の組み立ては `Create` のままにする
+        /// （Open棟梁 の部品を通す確認を残すため）。
         /// </remarks>
         public static string CreateRequestObject(
-            string clientId, string aud, string responseType, string responseMode,
+            string clientId, string responseType, string responseMode,
             string redirectUri, string scopes, string state, string nonce, ClaimsInRO claims)
         {
             RSAParameters rsa = SelfTestClient.RsaPrivateKey();
 
-            string requestObject = RequestObject.Create(
-                clientId, aud, responseType, responseMode,
+            string created = RequestObject.Create(
+                clientId, CmnServerParams.IssuerId, responseType, responseMode,
                 redirectUri, scopes, state, nonce,
                 "600", "", "",
                 claims ?? new ClaimsInRO(null, null, null),
                 rsa);
 
-            // 検証テスト（作ったものを、自分の公開鍵で検証できるか）
-            if (!RequestObject.Verify(requestObject, out string _, rsa))
+            JObject payload = JwtReader.TryReadPayload(created);
+
+            if (payload == null)
+            {
+                return "";
+            }
+
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            payload[OAuth2AndOIDCConst.nbf] = now;
+            payload[OAuth2AndOIDCConst.exp] = now + SelfTestClient.RequestObjectLifetimeSeconds;
+
+            string requestObject = new JWS_RS256_Param(rsa).Create(payload.ToString(Newtonsoft.Json.Formatting.None));
+
+            // 検証テスト（作ったものを、自分の公開鍵で、期待する aud で検証できるか）
+            if (!RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out string _, rsa))
             {
                 return "";
             }
@@ -201,7 +227,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 CmnClientParams.EcdsaPfxFilePath, CmnClientParams.EcdsaPfxPassword);
 
             // 検証テスト
-            if (!RequestObject.VerifyCiba(requestObject, out string _, SelfTestClient.EcdsaPublicKey()))
+            if (!RequestObject.VerifyCiba(requestObject, CmnServerParams.IssuerId, out string _, SelfTestClient.EcdsaPublicKey()))
             {
                 return "";
             }
@@ -762,7 +788,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 + OAuth2AndOIDCParams.RequestObjectRegUri;
 
             PushResult ret = SelfTestClient.NewResult(endpoint, SelfTestClient.CreateRequestObject(
-                clientId, endpoint, responseType, responseMode,
+                clientId, responseType, responseMode,
                 redirectUri, Const.OidcScopes, state, nonce, claims));
 
             if (string.IsNullOrEmpty(ret.RequestObject))
@@ -799,7 +825,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 + OAuth2AndOIDCParams.AuthRequestPushUri;
 
             PushResult ret = SelfTestClient.NewResult(endpoint, SelfTestClient.CreateRequestObject(
-                clientId, endpoint, responseType, responseMode,
+                clientId, responseType, responseMode,
                 redirectUri, Const.OidcScopes, state, nonce, claims));
 
             if (string.IsNullOrEmpty(ret.RequestObject))

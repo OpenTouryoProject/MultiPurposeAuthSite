@@ -39,6 +39,7 @@
 //*  2026/11/01  玄人 幸道         AllowsVerifyingAlg を internal にした（Extensions/Sts の CmnRequestObjectEndpoint が使う。#321）
 //*  2026/11/01  玄人 幸道         fapi2 のクライアント認証では、assertion の aud を issuer に限った（#323）
 //*  2026/11/05  玄人 幸道         Basic が復号前の値で通ったら、client_id を OPERATION に記録する（Open棟梁 4.0 への備え。#320）
+//*  2026/11/06  玄人 幸道         assertion の検証を、期待する iss・aud を渡す版の JwtAssertion.Verify にした。クライアント認証では sub が iss と一致することを確かめる（OpenTouryo#654。#336）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -461,8 +462,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
 
                     // 署名検証 ≒ クライアント認証
-                    if (CmnEndpoints.TryVerifyAssertion(assertion, pubKey, out string iss))
+                    //  **sub は iss（client_id）と一致すること**（RFC 7523 §3 の 2 の B、OIDC Core §9。#336）。
+                    //    Open棟梁 の `JwtAssertion.Verify` は sub が在ることだけを見る（OpenTouryo#654）ので、ここで照合する。
+                    if (CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, out string sub)
+                        && sub == assertionIss)
                     {
+                        string iss = assertionIss;
+
                         // aud 検証
                         //
                         //  **登録された方法でなければ通さない**（#307 の段階 3）。
@@ -688,7 +694,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// | 登録の `token_endpoint_auth_method` | PKCE だけ |
         /// |---|---|
         /// | **`none`**（パブリックの明示） | **通す** |
-        /// | **空**（明示しない） | **通す**（**従来どおり**。雛形の SPA / ネイティブは秘密を持ったまま PKCE だけで引き換えている） |
+        /// | **空**（明示しない） | **通す**（**従来どおり**。雛形のネイティブは秘密を持ったまま PKCE だけで引き換えている。SPA は秘密を外した） |
         /// | **それ以外**（認証の方法を明示した） | **通さない**（RFC 6749 §4.1.3 : コンフィデンシャル クライアントは認証する） |
         ///
         /// **空を通すのは、既定の挙動を変えないため**である。**閉じたいクライアントは、方法を明示する。**
@@ -708,8 +714,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **トークン エンドポイントの URL か、issuer**（RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1）。
         ///
         /// **配列の aud は受けない。** RFC 7519 §4.1.3 は配列を認めるが、
-        /// **Open棟梁 の `JwtAssertion.Verify` が aud を文字列として読む**ので、配列だと検証そのものができない
-        /// （`TryVerifyAssertion` が断る）。**受けるには上流の対応が要る。**
+        /// 以前は **Open棟梁 の `JwtAssertion.Verify` が aud を文字列として読み**、配列だと検証そのものができなかった。
+        /// **Open棟梁 は要素 1 つの配列を受けるようになった**（OpenTouryo#654）が、**こちらは変えていない**（`RT-294.54`。#336）。
         /// </remarks>
         private static bool IsAssertionAudience(JObject payload)
         {
@@ -739,28 +745,42 @@ namespace MultiPurposeAuthSite.TokenProviders
             return CmnEndpoints.IsAssertionAudience(payload);
         }
 
-        /// <summary>assertion の署名と期限を検証する（読めない形なら false。#294）</summary>
+        /// <summary>assertion の署名・iss・aud・期限を検証する（読めない形なら false。#294・#336）</summary>
         /// <param name="assertion">assertion（JWT）</param>
         /// <param name="pubKey">公開鍵（JWK）</param>
-        /// <param name="iss">iss</param>
+        /// <param name="iss">期待する iss（assertion の iss から鍵を引いたクライアント）</param>
+        /// <param name="sub">sub</param>
         /// <returns>検証できれば true</returns>
         /// <remarks>
-        /// **`JwtAssertion.Verify`（Open棟梁）は、`aud` などを文字列として読み、配列だと例外を投げる。**
-        /// **外から来た値なので、例外にしない**（#241 と同じ方針）。**以前は HTTP 500 だった。**
+        /// **期待する iss・aud を渡す版の `JwtAssertion.Verify`（OpenTouryo#654）を使う**（#336）。
+        /// 以前の版は iss・aud を照合せず（`[Obsolete]`）、sub・nbf も見なかった。
+        ///
+        /// - **aud は、トークン エンドポイントの URL か issuer**（`IsAssertionAudience` と同じ集合）。
+        ///   **登録の種別ごとの絞り込み**（fapi2 は issuer だけ。#323）と、**文字列に限ること**（RT-294.54）は、
+        ///   **呼び出し側が `IsClientAssertionAudience`・`IsAssertionAudience` で続けて行う**
+        ///   （Open棟梁 は要素 1 つの配列も受けるが、こちらは受けない）
+        /// - **sub は在ることだけ**を Open棟梁 が確かめる。**クライアント認証なら、呼び出し側が iss と照合する**
+        /// - **外から来た値なので、例外にしない**（#241 と同じ方針）。**以前は HTTP 500 だった**（`aud` の配列など）
         /// </remarks>
-        private static bool TryVerifyAssertion(string assertion, string pubKey, out string iss)
+        private static bool TryVerifyAssertion(string assertion, string pubKey, string iss, out string sub)
         {
             try
             {
                 return JwtAssertion.Verify(
-                    assertion, out iss, out string _, out string _, out JObject _, pubKey);
+                    assertion, iss,
+                    new string[]
+                    {
+                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
+                        CmnServerParams.IssuerId
+                    },
+                    out sub, out string _, out JObject _, pubKey);
             }
             catch (Exception ex)
             {
                 Logging.MyOperationTrace(string.Format(
                     "The assertion could not be verified. ({0})", ex.GetType().Name));
 
-                iss = "";
+                sub = "";
                 return false;
             }
         }

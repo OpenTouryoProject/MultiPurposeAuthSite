@@ -31,6 +31,7 @@
 //*  2026/10/31  玄人 幸道         新規（CmnAccessToken.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         pairwise でも利用者が居なければ受けない（C-57）。nbf を確かめる（#294）
 //*  2026/11/01  玄人 幸道         RevocationProvider を TokenProviders へ移したので、using を整理した（#321）
+//*  2026/11/06  玄人 幸道         exp を、カルチャに依らない文字列で渡す。無ければ例外にせず検証の失敗にする（#336）
 //**********************************************************************************
 
 #if NETFX
@@ -42,6 +43,7 @@ using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Security.Claims;
 
 using Newtonsoft.Json;
@@ -150,9 +152,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //    **`IsNullOrEmpty` にもしない** — **秘密を持たない public クライアントが止まる。**
                         if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == CmnServerParams.IssuerId
                             && Helper.GetInstance().HasClient((string)tokenClaimSet[OAuth2AndOIDCConst.aud])
-                            // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったのでToStringで渡す
+                            // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったので文字列にして渡す
                             // （文字列で発行された過去のTokenも、そのまま通る）。
-                            && CmnJwtToken.VerifyExp(tokenClaimSet[OAuth2AndOIDCConst.exp].ToString())
+                            //  **カルチャに依らない形にする**（#336。小数の exp を、小数点が「,」の文字列にしない）。
+                            //  **無ければ、例外にせず検証の失敗にする**（#336。以前はインデクサが KeyNotFoundException を投げた）。
+                            && tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.exp, out object exp) && exp != null
+                            && CmnJwtToken.VerifyExp(Convert.ToString(exp, CultureInfo.InvariantCulture))
                             //  **nbf も確かめる**（RFC 7519 §4.1.5。#294）
                             && CmnAccessToken.VerifyNbf(tokenClaimSet))
                         {

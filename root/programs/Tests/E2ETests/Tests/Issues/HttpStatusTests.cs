@@ -37,6 +37,7 @@
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/06  玄人 幸道         RT-196.17 の nbf・exp の誤りを、/ros を通さず request で送る（/ros が預かる前に断るようになった。#336）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -946,7 +947,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 long now = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-                r.Target("client_name=" + KnownClients.FapiCibaClient + "（fapi_ciba。要求は ES256 で署名して /ros に登録する）");
+                r.Target("client_name=" + KnownClients.FapiCibaClient + "（fapi_ciba。要求は ES256 で署名する。(1) は /ros に登録し、(2)・(3) は request で送る）");
 
                 r.Step("(1) scope に openid が無い要求");
 
@@ -957,22 +958,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     new Dictionary<string, string>() { { "request_uri", noOpenid } },
                     reg.ClientId, reg.ClientSecret), 400, "invalid_scope");
 
-                r.Step("(2) nbf が未来の要求（まだ有効になっていない）");
+                //  **(2)・(3) は /ros に預けず、request で送る**（#336）。
+                //    **/ros が、時刻の誤った要求を預かる前に断るようになった**（Open棟梁 の `VerifyCiba`。OpenTouryo#653）ので、
+                //    request_uri では /ciba_authz まで届かない。**/ros で断ることは RT-336.5 が確かめる。**
+                r.Step("(2) nbf が未来の要求（まだ有効になっていない。request で送る）");
 
-                string notYet = await RegisterCibaRequestAsync(client, reg,
+                string notYet = await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
                     new Dictionary<string, object>() { { "nbf", now + 600 } });
 
                 VerifyError(r, "nbf が未来", await client.CibaAuthorizeWithBasicAuthAsync(
-                    new Dictionary<string, string>() { { "request_uri", notYet } },
+                    new Dictionary<string, string>() { { "request", notYet } },
                     reg.ClientId, reg.ClientSecret), 400, "invalid_request");
 
-                r.Step("(3) exp が過去の要求（期限切れ）");
+                r.Step("(3) exp が過去の要求（期限切れ。request で送る）");
 
-                string expired = await RegisterCibaRequestAsync(client, reg,
+                string expired = await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
                     new Dictionary<string, object>() { { "exp", now - 600 } });
 
                 VerifyError(r, "exp が過去", await client.CibaAuthorizeWithBasicAuthAsync(
-                    new Dictionary<string, string>() { { "request_uri", expired } },
+                    new Dictionary<string, string>() { { "request", expired } },
                     reg.ClientId, reg.ClientSecret), 400, "invalid_request");
 
                 r.Done();
