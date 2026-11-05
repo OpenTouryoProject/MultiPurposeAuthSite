@@ -450,14 +450,16 @@
         "redirect_uri_code": "https://localhost:44334/Home/OAuth2AuthorizationCodeGrantClient",
         "redirect_uri_token": "hogehoge0",
         "redirect_uri_saml": "https://localhost:44334/Home/Saml2AssertionConsumerService",
-        "client_name": "MVC_Sample"
+        "client_name": "MVC_Sample",
+        "jwk_rsa_publickey": "eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ"
       },
       "b6b393fe861b430eb4ee061006826b03": {
         "client_secret": "p2RgAFKF-JaF0A9F1tyDXp4wMq-uQZYyvTBM8wr_v8g",
         "redirect_uri_code": "https://localhost:44333/Aspx/OAuth2/OAuth2AuthorizationCodeGrantClient.aspx",
         "redirect_uri_token": "hogehoge1",
         "redirect_uri_saml": "https://localhost:44333/Aspx/Saml2/Saml2AssertionConsumerService.aspx",
-        "client_name": "WebForms_Sample"
+        "client_name": "WebForms_Sample",
+        "jwk_rsa_publickey": "eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ"
       },
       "f374a155909d486a9234693c34e94479": {
         "redirect_uri_code": "http://localhost:5173/RedirectEndpoint",
