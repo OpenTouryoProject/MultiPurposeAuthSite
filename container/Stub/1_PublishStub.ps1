@@ -11,7 +11,7 @@
       3. **log4net の構成**（..\Common\LogConf.xml を写す。二重に持たない）
 
     ＜証明書は、ホストの開発用証明書を書き出す＞
-      **..\E2E\0_PublishIdP.ps1 と同じ。** ホストで既に信頼されているので、ブラウザが警告を出さない。
+      **..\E2E\1_PublishIdP.ps1 と同じ。** ホストで既に信頼されているので、ブラウザが警告を出さない。
       **パスワードは自動生成し、cert.env に書く**（compose が env_file として読む）。
       **自分の証明書を使うなら、.env の STUB_CERT_DIR / STUB_CERT_ENV_FILE で差し替える**（README.md）。
 
@@ -34,6 +34,7 @@
      ----------  ----------------  -------------------------------------------------
      2026/10/30  玄人 幸道         新規（#294）
      2026/10/31  玄人 幸道         stub\ から Container\Stub\ へ移した（#318）
+     2026/11/07  玄人 幸道         起動の案内を 2_DockerComposeUp.bat にした。..\E2E\ の改名に合わせた（#340）
 #>
 [CmdletBinding()]
 param(
@@ -90,7 +91,7 @@ Write-Output "  publish しています ..."
 
 Remove-Item -Recurse -Force $pub -ErrorAction SilentlyContinue
 
-# **中間出力を Visual Studio と共用しない**（--artifacts-path。..\E2E\0_PublishIdP.ps1 と同じ理由）。
+# **中間出力を Visual Studio と共用しない**（--artifacts-path。..\E2E\1_PublishIdP.ps1 と同じ理由）。
 dotnet publish $proj -c Debug -o $pub --artifacts-path $art --nologo -v quiet
 
 if ($LASTEXITCODE -ne 0)
@@ -111,5 +112,5 @@ New-Item -ItemType Directory -Force (Join-Path $here 'keys'), (Join-Path $here '
 
 Write-Output "  publish しました : app\publish（appsettings.json は雛形）"
 Write-Output ""
-Write-Output "  起動 : docker compose --env-file <パラメタのファイル> up -d --build"
-Write-Output "         （container\Stub\ で実行する。パラメタのファイルは .env.sample を写して作る）"
+Write-Output "  起動 : .\2_DockerComposeUp.bat <パラメタのファイル>"
+Write-Output "         （docker compose --env-file <パラメタのファイル> up -d --build。パラメタのファイルは .env.sample を写して作る）"

@@ -305,7 +305,7 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 
 ```powershell
 cd container\E2E
-.\0_PublishIdP.ps1           # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
+.\1_PublishIdP.ps1           # publish と証明書（MPAS を直したら、先にこれ。#340）
 docker compose up -d upstream
 ```
 
@@ -405,13 +405,22 @@ probe_auth_time                                 max_age の判定
 
 ```powershell
 cd container\E2E
-.\1_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流 ＋ jwks を、作り直して起動する（DB は container\Store\）
+.\1_PublishIdP.ps1         # 用意（publish と証明書。MPAS を直したら、先にこれ）
+.\2_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流 ＋ jwks を、作り直して起動する（DB は container\Store\）
+.\3_DockerComposeDown.bat  # 止めて消す
 ```
+
+> **用意と起動を分けてある**（#340。`container\Stub\` と同じ作法）。
+> **`2_DockerComposeUp.bat` は publish しない。** **成果物がソースより古ければ警告する**（起動は止めない。`container\Common\CheckPublishFreshness.ps1`）。
+>
+> **イメージの中の `appsettings.json` は雛形**（`1_PublishIdP.ps1` が差し替える。手元の秘密をイメージに入れない）。
+> **手元の `appsettings.json`（net10.0 版）は、起動時にマウントする。** **無ければ起動しない。**
+> **E2E のテストも同じファイルを、コンテナの構成として読む**（`Tests/Container/ContainerTargets.cs`）。
 
 **上流だけ・下流だけを建て直すなら、サービスを名指す。**
 
 ```powershell
-.\0_PublishIdP.ps1              # 成果物は 1 つ。上流も下流も同じイメージ
+.\1_PublishIdP.ps1              # 成果物は 1 つ。上流も下流も同じイメージ
 docker compose up -d --build upstream downstream
 ```
 
@@ -1065,7 +1074,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 | **平文の http** | **実装は `https` を要求するが、ループバックだけは許している**ので、**証明書を用意していない** |
 
 > **コンテナが上がっていなければ Skip する**（`Infrastructure/JwksUri.SkipIfNotAvailableAsync`）。
-> **`container\E2E\1_DockerComposeUp.bat` は、これも一緒に起動する。**
+> **`container\E2E\2_DockerComposeUp.bat` は、これも一緒に起動する。**
 
 ###### 測るのは `/revoke`（`RT-309.2` / `.3`）
 
@@ -3425,7 +3434,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 > | **メタデータの URL**を届かない口に | **8/8 通る**（ログに `The SAML2 metadata could not be read.`） |
 > | **メタデータと鍵の両方**を壊す | **`SA-6.1` / `SA-6.2` / `SA-6.4` が落ちる**（`SA-6.3` は署名に依存しないので通る） |
 
-> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `0_PublishIdP.ps1` → `docker compose up -d --build`）。
+> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `1_PublishIdP.ps1` → `docker compose up -d --build`）。
 > **実測（Open棟梁 #603 / #604 の取り込み。2026/10/12）** : **複製だけを更新して回すと 20 件が落ちた** — **`SigAlg` の扱い**（`SA-1.1` / `SA-1.3` / `RT-246.4` / `RT-246.7` / `SA-6.*`）と、**自己テストの `aud` の確認**（`RT-246.1` / `RT-246.6` / `RT-232.9`）である。
 > **どちらも「確認するようになった」ことによる失敗**であり、緩む方向ではない。
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
@@ -3487,7 +3496,7 @@ TC が倒れている状態の EX は、拡張の問題なのか土台の問題�
 ```
 
 > **原本を作り直すときは、IdP の 3 コンテナも起こしておくこと**
-> （`container\E2E\1_DockerComposeUp.bat`。**アプリを直したなら `docker compose up -d --build`**）。
+> （`container\E2E\2_DockerComposeUp.bat`。**アプリを直したなら、先に `1_PublishIdP.ps1`**）。
 > **止めたまま作り直すと、`CN-*` と `RT-140.4` 以降が原本から消える** —
 > **通しで Skip されたケースは記録が出ないので、載らない**（上の `Skip` の話と同じ）。
 >
@@ -3694,7 +3703,7 @@ cd root
 
 ```powershell
 cd container\E2E
-.\0_PublishIdP.ps1
+.\1_PublishIdP.ps1
 docker compose up -d upstream
 ```
 
@@ -3702,7 +3711,7 @@ docker compose up -d upstream
 > **Skip の件数**（サマリに出る）と、**Skip の理由**で気付くこと。
 
 > **上流は「作り直さないと古いまま」である。** ここが一番踏みやすい。
-> **アプリを直したら、必ず `0_PublishIdP.ps1` と `docker compose up -d --build upstream` を回す。**
+> **アプリを直したら、必ず `1_PublishIdP.ps1` と `docker compose up -d --build upstream` を回す。**
 >
 > **実測（#250 の段階 5）** : `FormPost.cshtml` を直した（#252）あと、**上流を作り直さずに**
 > `RT-140.7` を回して落ちた。**下流は新しく、上流だけが古い**という状態で、
@@ -3790,7 +3799,7 @@ docker compose up -d upstream
 
    ```powershell
    cd container\E2E
-   .\0_PublishIdP.ps1
+   .\1_PublishIdP.ps1
    docker compose up -d upstream
    ```
 

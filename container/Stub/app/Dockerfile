@@ -2,7 +2,7 @@
 # MPAS のスタブを動かすコンテナ（#294）
 #
 #   **作りは ..\E2E\app\Dockerfile と同じ**（ホストビルド型。publish 済みの成果物を写すだけ）。
-#   **違うのは中身の appsettings.json** — **雛形（_appsettings.json）である**（1_PublishStub.ps1 が入れる）。
+#   **中身の appsettings.json も同じく雛形（_appsettings.json）である**（1_PublishStub.ps1 が入れる。..\E2E\ も #340 で揃えた）。
 #   **開発者の手元の appsettings.json（秘密を含む）は、イメージに入れない。**
 #
 #   **リソース（署名鍵など）はイメージに入れず、compose がマウントする**（..\E2E\ と同じ理由）。

@@ -54,10 +54,10 @@
 |---|---|---|
 | **最初に 1 回**（と、MPAS を更新したとき）: publish と証明書の書き出し | `cd ..\container\Stub; .\1_PublishStub.ps1` | 10.1 |
 | パラメタのファイルを作る（写して直す） | `copy .env.sample my-stub.env` | 10.2 |
-| **起動する** | `docker compose --env-file my-stub.env up -d --build` | 10.1 |
+| **起動する**（成果物が古ければ警告する。#340） | `.\2_DockerComposeUp.bat my-stub.env` | 10.1 |
 | 起動を確かめる（200 と JSON が返ればよい） | `curl.exe -s https://localhost:44310/.well-known/openid-configuration` | 10.1 |
 | **まっさらに戻す**（利用者・同意・セッションが消える） | `docker compose --env-file my-stub.env restart` | 10.1 |
-| **止めて消す** | `docker compose --env-file my-stub.env down` | 10.1 |
+| **止めて消す** | `.\3_DockerComposeDown.bat my-stub.env` | 10.1 |
 | ログを見る | `docker compose --env-file my-stub.env logs -f`（アプリのログは `container\Stub\logs\`） | 10.6 |
 | 証明書を作り直す（期限切れなど） | `.\1_PublishStub.ps1 -NewCertificate` | 10.1 |
 | **他のリポジトリから起動する**（パラメタのファイルは使う側に置く） | `docker compose -f C:\MultiPurposeAuthSite\container\Stub\docker-compose.yml --env-file <絶対パス> up -d --build` | 10.5 |
@@ -68,9 +68,10 @@
 
 | やりたいこと | コマンド | 節 |
 |---|---|---|
-| ID 連携の IdP 群（上流・上流 2・下流）と jwks を作り直して起動する（publish → `up -d --build`） | `..\container\E2E\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| ID 連携の IdP 群の**用意**（publish と証明書。**MPAS を直したら、先にこれ**。#340） | `..\container\E2E\1_PublishIdP.ps1` | [`TESTING.md`](TESTING.md) 1 節 |
+| ID 連携の IdP 群（上流・上流 2・下流）と jwks を作り直して起動する（`up -d --build`。成果物が古ければ警告する） | `..\container\E2E\2_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
 | IdP 群を**一旦止める**（`start` で戻せる） | `cd ..\container\E2E; docker compose stop` | — |
-| IdP 群を**消す** | `..\container\E2E\2_DockerComposeDown.bat` | — |
+| IdP 群を**消す** | `..\container\E2E\3_DockerComposeDown.bat` | — |
 | E2E 用の DB に DDL を流し込む（DB は起動しない。通しでは `test.ps1` が起動・停止する） | `..\container\Store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
 | DB を**一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\container\Store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
 | DB を**消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\container\Store\2_DockerComposeDown.bat` | — |
@@ -363,13 +364,13 @@ cd container\Stub                                     # リポジトリのルー
 .\1_PublishStub.ps1                                   # 最初に 1 回（MPAS を更新したら、もう一度）
 copy .env.sample my-stub.env                          # パラメタ（10.2）
 copy appsettings.Stub.sample.json my-stub.json        # クライアントの登録（10.3）。my-stub.env の STUB_SETTINGS で指す
-docker compose --env-file my-stub.env up -d --build   # 起動
+.\2_DockerComposeUp.bat my-stub.env                   # 起動（docker compose --env-file my-stub.env up -d --build）
 curl.exe -s https://localhost:44310/.well-known/openid-configuration   # 200 と JSON が返ればよい
 
 # ……ここでクライアントのテストを回す（10.4 の値を RP / SP に設定する）……
 
 docker compose --env-file my-stub.env restart         # まっさらに戻す（テストの間で状態を消したいとき）
-docker compose --env-file my-stub.env down            # 止めて消す
+.\3_DockerComposeDown.bat my-stub.env                 # 止めて消す（docker compose --env-file my-stub.env down）
 ```
 
 - **自分のファイルは `my-` で始める**（`.gitignore` 済み。テスト用の秘密を書いてもコミットされない）

@@ -31,6 +31,7 @@
 //*  2026/10/08  玄人 幸道         新規（#284）
 //*  2026/10/13  玄人 幸道         CN-5.3（SAML2 の ID 連携）を足した（#293 の段階 3）
 //*  2026/10/13  玄人 幸道         CN-5.4〜5.6（上流2件）を足した（#292 の段階 1）
+//*  2026/11/07  玄人 幸道         コメントと Skip の文言のスクリプト名を、#340 の後のものにした（#340）
 //**********************************************************************************
 
 using System.Net.Http;
@@ -117,7 +118,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
                 //  **`prompt` は、もう付けない**（#287）。
                 //    **ここはコンテナの中のアプリを測る**ので、
-                //    **イメージが古いと「付いている」になる**（`container\E2E\1_DockerComposeUp.bat` で作り直す）。
+                //    **イメージが古いと「付いている」になる**（`container\E2E\1_PublishIdP.ps1` → `2_DockerComposeUp.bat` で作り直す）。
                 bool prompt = (fed.AuthorizeUrl ?? "").Contains("prompt=");
 
                 r.Verify("prompt は付けない（上流が画面を出してよい）", !prompt,
@@ -641,7 +642,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
             Skip.IfNot(up,
                 "2 つ目の上流（" + origin + "）が起動していません。"
-                + "container\\E2E\\1_DockerComposeUp.bat で建ててください（#292 の段階 1）。");
+                + "container\\E2E\\1_PublishIdP.ps1 → 2_DockerComposeUp.bat で建ててください（#292 の段階 1 / #340）。");
 
             return origin;
         }

@@ -31,6 +31,7 @@
 //*  2026/10/08  玄人 幸道         新規（#284）
 //*  2026/10/13  玄人 幸道         2つ目の上流コンテナを足した（#292 の段階 1）
 //*  2026/10/31  玄人 幸道         store\ から Container\E2E\ へ移したのに合わせた（#318）
+//*  2026/11/07  玄人 幸道         コンテナの構成を、マウントする手元の appsettings.json から読む。スクリプト名を #340 の後のものにした（#340）
 //**********************************************************************************
 
 using System;
@@ -178,14 +179,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
         {
             reason = null;
 
-            // **publish の成果物を構成として読む**（`0_PublishIdP.ps1` が作る）。
+            // **コンテナがマウントする、手元の appsettings.json を構成として読む**（#340）。
+            //   **publish の成果物の appsettings.json は雛形**（`1_PublishIdP.ps1` が差し替える）なので、読まない。
+            //   **パスは container\E2E\docker-compose.yml の volumes と同じ**（net10.0 版の手元の設定）。
             string configPath = Path.GetFullPath(Path.Combine(
-                TestEnv.ProgramsDir, "..", "..", "container", "E2E", "app", "publish", "appsettings.json"));
+                TestEnv.ProgramsDir, "MultiPurposeAuthSiteCore", "MultiPurposeAuthSiteCore", "appsettings.json"));
 
             if (!File.Exists(configPath))
             {
                 reason = "コンテナの構成が見つかりません（" + configPath + "）。"
-                    + "container\\E2E\\0_PublishIdP.ps1 を実行してください（#284）。";
+                    + "net10.0 版の appsettings.json を雛形から作ってください（コンテナも、これをマウントして起動する。#340）。";
                 return null;
             }
 
@@ -194,7 +197,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
             if (string.IsNullOrEmpty(containerName))
             {
                 reason = key + " のコンテナが起動していません。"
-                    + "container\\E2E\\1_DockerComposeUp.bat で建ててください（#284）。";
+                    + "container\\E2E\\1_PublishIdP.ps1 → 2_DockerComposeUp.bat で建ててください（#284 / #340）。";
                 return null;
             }
 
