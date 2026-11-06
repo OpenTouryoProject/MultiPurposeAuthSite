@@ -32,6 +32,7 @@
 //*  2026/10/31  玄人 幸道         response_type を区別して比べる。構成ファイルに在るクライアントは画面登録を読みに行かない（#294）
 //*  2026/10/31  玄人 幸道         画面登録の値が無いときも空を返す。CORS の public の判定に token_endpoint_auth_method を使う（#294）
 //*  2026/10/31  玄人 幸道         IsPublicClientForCors を static の region へ移し、none は Const から取る（#294）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -291,9 +292,9 @@ namespace MultiPurposeAuthSite.Util.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientPostLogoutRedirectUri))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(OAuth2AndOIDCConst.post_logout_redirect_uri))
                 {
-                    return this.Oauth2ClientsInfo[client_id][Const.ClientPostLogoutRedirectUri];
+                    return this.Oauth2ClientsInfo[client_id][OAuth2AndOIDCConst.post_logout_redirect_uri];
                 }
 
                 // **構成ファイルに在るクライアントは、ここで打ち切る**（#294）。
@@ -386,7 +387,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 Dictionary<string, string> client = this.Oauth2ClientsInfo[clientId];
 
                 // **confidential は対象外**（#294 で判定を IsPublicClientForCors に寄せた）。
-                client.TryGetValue(Const.ClientTokenEndpointAuthMethod, out string method);
+                client.TryGetValue(OAuth2AndOIDCConst.token_endpoint_auth_method, out string method);
                 client.TryGetValue(OAuth2AndOIDCConst.client_secret, out string secret);
 
                 if (!Helper.IsPublicClientForCors(method, secret))

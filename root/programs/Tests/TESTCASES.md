@@ -10922,6 +10922,66 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 認証が通る（HTTP 200）
 - invalid_client
 
+## RT-337.1 /ciba_authz : login_hint は、日付の形でも文字列のまま読む。null・オブジェクトは invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **login_hint は文字列のクレーム**で、日付の形をしていても、利用者を指す値として読む（日付として読めずに断らない）。**必須のクレームが null・オブジェクトなら、要求の誤り**として invalid_request（HTTP 400）で返す（500・server_error にしない）。 |
+| 根拠 | CIBA Core §7.1 / §13 / #337 |
+| テスト | `RT33701_ciba_authzはlogin_hintを文字列のまま読みnullとオブジェクトを断る` |
+
+**手順**
+
+1. login_hint が日付の形の文字列（その利用者は居ない）
+1. login_hint が null
+1. login_hint がオブジェクト
+
+**検証（合否を判定する）**
+
+- 日付の形の login_hint : HTTP 400 で返る
+- 日付の形の login_hint : error
+- null の login_hint : HTTP 400 で返る
+- null の login_hint : error
+- オブジェクトの login_hint : HTTP 400 で返る
+- オブジェクトの login_hint : error
+
+## RT-337.2 /ciba_authz : 任意のクレーム（binding_message・user_code・requested_expiry・client_notification_token）でも、オブジェクト・配列なら invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **任意のクレームは、無いのはよいが、在るなら文字列（requested_expiry は正の整数）でなければならない。**読めない値を無いものとして受けると、requested_expiry の {} が既定の期限で通るなど、要求の誤りを握りつぶす。 |
+| 根拠 | CIBA Core §7.1 / §13 / #337 |
+| テスト | `RT33702_ciba_authzは任意のクレームでもオブジェクトと配列を断る` |
+
+**手順**
+
+1. 対照：任意のクレームが正しい要求
+1. binding_message がオブジェクト・配列
+1. user_code がオブジェクト・配列
+1. requested_expiry がオブジェクト・配列
+1. client_notification_token がオブジェクト・配列
+
+**検証（合否を判定する）**
+
+- 正しい要求 : HTTP 400 で返る
+- 正しい要求 : error
+- binding_message がオブジェクト : HTTP 400 で返る
+- binding_message がオブジェクト : error
+- binding_message が配列 : HTTP 400 で返る
+- binding_message が配列 : error
+- user_code がオブジェクト : HTTP 400 で返る
+- user_code がオブジェクト : error
+- user_code が配列 : HTTP 400 で返る
+- user_code が配列 : error
+- requested_expiry がオブジェクト : HTTP 400 で返る
+- requested_expiry がオブジェクト : error
+- requested_expiry が配列 : HTTP 400 で返る
+- requested_expiry が配列 : error
+- client_notification_token がオブジェクト : HTTP 400 で返る
+- client_notification_token がオブジェクト : error
+- client_notification_token が配列 : HTTP 400 で返る
+- client_notification_token が配列 : error
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

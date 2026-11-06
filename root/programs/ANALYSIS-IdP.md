@@ -437,9 +437,10 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   （要求の署名は、その他人の鍵で正しく検証できてしまう）。`RT-234.4` / `RT-234.5`
 
   **同梱の自己テストも、これに合わせて移した。** `/ros` に預けて `request_uri` を渡す形をやめ、
-  **`request` を直接送り、資格情報を添える**（`Helper.CibaAuthZRequestAsync` のオーバーロード）。
-  Open棟梁 の `OAuth2AndOIDCClient.CibaAuthZRequestAsync(Uri, string)` は
-  資格情報を渡す引数が無いため使わず、`/chage_to_user` などと同じく自前で組み立てている（OpenTouryo #592）
+  **`request` を直接送り、資格情報を添える**（`SelfTestWebApi.CibaAuthZRequestAsync` のオーバーロード）。
+  当時は Open棟梁 の `OAuth2AndOIDCClient.CibaAuthZRequestAsync(Uri, string)` に
+  資格情報を渡す引数が無かったので、自前で組み立てていた。
+  **いまは Open棟梁 の、資格情報を受ける版で送る**（OpenTouryo#592。#337）
 - **`aud` を検証するようにした**（**#234 の段階 1**）。CIBA Core §7.1.1 は
   **`aud` に OP の Issuer Identifier を入れること**を MUST としている（`Config.IssuerId` ＝
   Discovery の `issuer`、トークンの `iss`、認可応答の `iss` と同じ値）。
@@ -485,7 +486,8 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   登録の時点で先に断られるので、`/ciba_authz` では起きにくかった。
   **`request` の経路では `/ciba_authz` が最初の関門になる**ので、ここの判定が実際に効く
 - `unknown_user_id` は Open棟梁 の定数に無いので `CmnEndpoints` で定義した。
-  クレームの欠落は、Open棟梁 の `CmnJwtToken.CheckClaims` が返す `server_error` を、`invalid_request` に読み替える（`GetCibaClaim`）
+  クレームの欠落は、当時は Open棟梁 の `CmnJwtToken.CheckClaims` が返す `server_error` を、`invalid_request` に読み替えていた（`GetCibaClaim`）。
+  **いまは Open棟梁 の `TryGetStringClaim` が `invalid_request` を返す**（OpenTouryo#662。#337）
 - E2E テスト : `RT-196.16`（`request_uri` なし・存在しない → 400）/
   `RT-196.17`（`openid` なし・`nbf` が未来・`exp` が過去 → 400 と CIBA のコード）/
   `RT-196.18`（ユーザ不明 → 400 と `unknown_user_id`）。要求は、テスト基盤に足した ES256 の署名で組み立てる
@@ -2158,7 +2160,7 @@ if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
 > **初期のドラフトには `request_uri` があったが、最終版にも FAPI-CIBA にも無い**）、
 > **#233 で `request` を直接受け取れるようにした**（`RT-233`）。
 > `request_uri` の受け口は後方互換で残しているが、**こちらは将来外す。**
-> （同梱の自己テストを `request` に移すには、Open棟梁 #592 の対応が要る）
+> （同梱の自己テストは `request` で送る。#337 から、Open棟梁 の `CibaAuthZRequestAsync` の資格情報を受ける版を使う。OpenTouryo#592）
 
 修正前は、署名検証は行っていた（`RequestObject.Verify` / `VerifyCiba`）ものの、
 

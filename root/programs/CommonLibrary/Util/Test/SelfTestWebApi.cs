@@ -32,20 +32,16 @@
 //*  2026/10/31  玄人 幸道         CIBA の認証要求で、要求と応答を Dispose する（#294）
 //*  2026/11/01  玄人 幸道         Util/Sts/Helper.WebApi.cs から移し、static クラスにした（配置の見直し。#321）
 //*  2026/10/31  玄人 幸道         IntrospectTokenAsync の要約を直した（#294）
+//*  2026/11/06  玄人 幸道         CIBA の要求を Open棟梁 の CibaAuthZRequestAsync（資格情報を受ける版。OpenTouryo#592）で送る（#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using System.Net.Http;
-using System.Net.Http.Headers;
-
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Util.Test
 {
@@ -405,10 +401,9 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <remarks>
         /// **CIBA Core が定めている形**（§7.1 : クライアント認証は MUST、§7.1.1 : 要求は request パラメタ）。
         ///
-        /// **Open棟梁 の OAuth2AndOIDCClient を使わない。**
-        /// `CibaAuthZRequestAsync(Uri, string)` は request_uri を渡す前提で、
-        /// 資格情報を渡す引数が無いため（OpenTouryoProject/OpenTouryo#592）。
-        /// ここは `/chage_to_user` などと同じく、自前で組み立てる。
+        /// **Open棟梁 の `OAuth2AndOIDCClient.CibaAuthZRequestAsync`（資格情報を受ける版）で送る**（#337）。
+        /// 以前は、資格情報を渡す引数が無かった（OpenTouryoProject/OpenTouryo#592）ので、自前で組み立てていた。
+        /// **送るものは同じ**（client_secret_basic。id と秘密を符号化してから Base64 にする。本文は `request` だけ）。
         /// </remarks>
         public static async Task<string> CibaAuthZRequestAsync(
             Uri cibaAuthZUri, string requestObject, string client_id, string client_secret)
@@ -416,35 +411,10 @@ namespace MultiPurposeAuthSite.Util.Test
             // コンテナ化サポート
             cibaAuthZUri = SelfTestWebApi.ToContainerUri(cibaAuthZUri);
 
-            // **要求と応答を Dispose する**（#294）。
-            using (HttpRequestMessage httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = cibaAuthZUri,
-            })
-            {
-                // client_secret_basic（RFC 6749 2.3.1）
-                httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                    OAuth2AndOIDCConst.Basic,
-                    CustomEncode.ToBase64String(CustomEncode.StringToByte(
-                        string.Format("{0}:{1}",
-                            CustomEncode.UrlEncode(client_id),
-                            CustomEncode.UrlEncode(client_secret)), CustomEncode.us_ascii)));
-
-                // CIBA Core 7.1.1 : 認証要求のパラメタは JWT の中だけに置く。
-                httpRequestMessage.Content = new FormUrlEncodedContent(
-                    new Dictionary<string, string>
-                    {
-                        { OAuth2AndOIDCConst.request, requestObject },
-                    });
-                httpRequestMessage.Content.Headers.ContentType =
-                    new MediaTypeHeaderValue("application/x-www-form-urlencoded");
-
-                using (HttpResponseMessage httpResponseMessage = await Helper.GetInstance().HttpClient.SendAsync(httpRequestMessage))
-                {
-                    return await httpResponseMessage.Content.ReadAsStringAsync();
-                }
-            }
+            // WebAPI呼び出し。
+            return await OAuth2AndOIDCClient.CibaAuthZRequestAsync(
+                cibaAuthZUri, requestObject, client_id, client_secret,
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic);
         }
 
         /// <summary>

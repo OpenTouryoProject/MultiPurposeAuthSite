@@ -31,6 +31,7 @@
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         動的登録で device_code × private_key_jwt を断らない（両方の口が受けるようにした。#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -75,7 +76,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JObject metadata, ManageAddSaml2OAuth2DataViewModel model,
             out string code, out string description)
         {
-            code = Const.InvalidClientMetadata;
+            code = OAuth2AndOIDCConst.invalid_client_metadata;
             description = "";
 
             // 以下、全て登録するClientに関する内容の検査
@@ -92,13 +93,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (statement == SoftwareStatementProvider.Result.Invalid)
             {
-                code = Const.InvalidSoftwareStatement;
+                code = OAuth2AndOIDCConst.invalid_software_statement;
                 return false;
             }
 
             if (statement == SoftwareStatementProvider.Result.Unapproved)
             {
-                code = Const.UnapprovedSoftwareStatement;
+                code = OAuth2AndOIDCConst.unapproved_software_statement;
                 return false;
             }
 
@@ -182,7 +183,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **空（省略）は `client_secret_basic` / `client_secret_post`**（RFC 7591 §2 の既定）。
             //    **列も空のまま**にして、**`AllowsAuthMethod` が暗黙に許す。**
             string authMethod = ClientRegistrationProvider.GetString(
-                metadata, Const.ClientTokenEndpointAuthMethod);
+                metadata, OAuth2AndOIDCConst.token_endpoint_auth_method);
 
             if (!string.IsNullOrEmpty(authMethod)
                 && Array.IndexOf(CmnEndpoints.TokenEndpointAuthMethods, authMethod) < 0)
@@ -209,7 +210,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **mTLS の Subject DN**（RFC 8705 §2.1.2）。
             //    **照合は `x509.Subject` との完全一致**である（`CmnEndpoints.ClientAuthentication`）。
             string subjectDn = ClientRegistrationProvider.GetString(
-                metadata, Const.ClientTlsClientAuthSubjectDn);
+                metadata, OAuth2AndOIDCConst.tls_client_auth_subject_dn);
 
             if (!string.IsNullOrEmpty(subjectDn))
             {
@@ -370,7 +371,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **折り返し先を使う経路なら、必須**（OIDC DCR 1.0 §2）。
                 if (redirectUris.Count == 0)
                 {
-                    code = Const.InvalidRedirectUri;
+                    code = OAuth2AndOIDCConst.invalid_redirect_uri;
                     description = "redirect_uris is required.";
                     return false;
                 }
@@ -380,7 +381,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 if (!ClientRegistrationProvider.IsValidRedirectUri(redirectUri))
                 {
-                    code = Const.InvalidRedirectUri;
+                    code = OAuth2AndOIDCConst.invalid_redirect_uri;
                     description = string.Format(
                         "The redirect_uri ({0}) must be an absolute URI without a fragment.",
                         redirectUri);
@@ -392,7 +393,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (Const.MaxLengthOfUriList < uriList.Length)
             {
-                code = Const.InvalidRedirectUri;
+                code = OAuth2AndOIDCConst.invalid_redirect_uri;
                 description = "The redirect_uris are too long.";
                 return false;
             }

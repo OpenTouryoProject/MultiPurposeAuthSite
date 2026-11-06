@@ -44,6 +44,7 @@
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
 //*  2026/11/03  玄人 幸道         E2E 専用のクライアントの登録（RegisterInStore）を AccountController から移した（#294）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using System;
@@ -149,7 +150,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi_ciba", SourceName = "FAPI_CIBA_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -168,7 +169,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -179,8 +180,8 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi2", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
-                    { Const.ClientTokenEndpointAuthMethod, "tls_client_auth" }
+                    { OAuth2AndOIDCConst.tls_client_auth_subject_dn, "CN=mpas-e2e-mtls-client" },
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "tls_client_auth" }
                 }
             },
             new Entry()
@@ -189,8 +190,8 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi_1", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
-                    { Const.ClientTokenEndpointAuthMethod, "tls_client_auth" }
+                    { OAuth2AndOIDCConst.tls_client_auth_subject_dn, "CN=mpas-e2e-mtls-client" },
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "tls_client_auth" }
                 }
             },
 
@@ -225,7 +226,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientTokenEndpointAuthSigningAlg, JwtConst.RS256 },
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -333,7 +334,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -349,7 +350,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientBackChannelLogoutUri, Const.TestSelfBackChannelLogout },
-                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -364,7 +365,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientFrontChannelLogoutUri, Const.TestSelfFrontChannelLogout },
-                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -421,7 +422,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     { OAuth2AndOIDCConst.client_secret, "" },
                     { Const.ClientWebOrigins, "https://o001.example https://o002.example https://o003.example https://o004.example https://o005.example https://o006.example https://o007.example https://o008.example https://o009.example https://o010.example https://o011.example https://o012.example https://o013.example https://o014.example https://o015.example https://o016.example https://o017.example https://o018.example https://o019.example https://o020.example https://o021.example https://o022.example https://o023.example https://o024.example" },
                     { Const.ClientRedirectUriSaml, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
-                    { Const.ClientPostLogoutRedirectUri, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
                 }
             },
             new Entry()
@@ -462,7 +463,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "client_secret_basic" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "client_secret_basic" }
                 }
             },
             new Entry()
@@ -473,7 +474,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "none" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "none" }
                 }
             },
             new Entry()
@@ -485,7 +486,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi2", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -759,7 +760,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     model.RedirectUriToken = value;
                     break;
 
-                case Const.ClientPostLogoutRedirectUri:
+                case OAuth2AndOIDCConst.post_logout_redirect_uri:
                     model.PostLogoutRedirectUri = value;
                     break;
 
@@ -775,7 +776,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     model.SubjectTypes = value;
                     break;
 
-                case Const.ClientTlsClientAuthSubjectDn:
+                case OAuth2AndOIDCConst.tls_client_auth_subject_dn:
                     model.TlsClientAuthSubjectDn = value;
                     break;
 
@@ -787,7 +788,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     model.TokenEndpointAuthSigningAlg = value;
                     break;
 
-                case Const.ClientTokenEndpointAuthMethod:
+                case OAuth2AndOIDCConst.token_endpoint_auth_method:
                     model.TokenEndpointAuthMethod = value;
                     break;
 

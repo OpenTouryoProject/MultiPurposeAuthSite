@@ -19,6 +19,7 @@
 //*  2026/10/29  玄人 幸道         ID 連携の後は ReturnUrl へ戻す、同じ利用者を同時に作らない、サインインの結果を見る、クレームの入れ替え（#294）
 //*  2026/11/01  玄人 幸道         コメントの参照先を SelfTestWebApi に直した（#321）
 //*  2026/11/03  玄人 幸道         /userinfo に email・sub が無いときも、理由を OPERATION に記録する（#331）
+//*  2026/11/06  玄人 幸道         aud の照合のコメントを、Open棟梁 が aud を照合するようになった後（OpenTouryo#601・#603）の状態に直した（#337）
 //**********************************************************************************
 
 /*
@@ -310,7 +311,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // **証明書だけ在って期待する `iss` が空**なら、渡せない。
                             //   iss に対応する証明書である確証がなく、
-                            //   鍵を指定する版の IdToken.Verify は iss が空なら例外にする（Open棟梁 #601）。
+                            //   鍵を指定する版の IdToken.Verify は iss が空なら例外にする（OpenTouryo#601）。
                             //   この後は、鍵を指定しない版に進む。**理由を残す**（#253）。
                             Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer.");
                         }
@@ -350,11 +351,11 @@ namespace MultiPurposeAuthSite.Controllers
                         bool nonceMatched =
                             (nonce == (string)Session[Const.IdFederationSigninNonce]);
 
-                        //  **`aud` は、呼び出し側で確認する**（#286）。
-                        //    **`IdToken.Verify` は、この配備では `aud` を見ない** —
-                        //    **「自分は認可サーバか」で分岐しており**（`JwkSetFilePath` の有無）、
-                        //    **設定済みの側では `iss` と `exp` だけで通す**（Open棟梁 #601）。
-                        //    **`out jobj` でペイロードが返る**ので、ここで確認できる。
+                        //  **`aud` は、呼び出し側でも確認する**（#286・#337）。
+                        //    **以前は `IdToken.Verify` がこの配備では `aud` を見なかった**（OpenTouryo#601）。
+                        //    いまは、鍵を指定する版は `upstream.ClientId` を、鍵を指定しない版は設定の client_id のどれかを照合する（OpenTouryo#601・#603）。
+                        //    **鍵を指定しない版が見るのは設定の client_id**（1:1 の構成の値）で、この上流のクライアント ID とは限らないので、
+                        //    ここで `upstream.ClientId` と照合する（`IdTokenAudience`）。
                         //
                         //    **期待値は、開始処理が `client_id` に使った値**（自分のクライアント ID）。
                         bool audMatched =

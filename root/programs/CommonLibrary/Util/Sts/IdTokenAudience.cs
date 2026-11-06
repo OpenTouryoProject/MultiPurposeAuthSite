@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/12  玄人 幸道         新規（#286 の段階 5）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
+//*  2026/11/06  玄人 幸道         Open棟梁 が aud を照合するようになった（OpenTouryo#601・#603）後も残す理由を書いた（#337）
 //**********************************************************************************
 
 using Newtonsoft.Json.Linq;
@@ -43,16 +44,24 @@ namespace MultiPurposeAuthSite.Util.Sts
     /// `id_token` の `aud` が、自分（クライアント役）宛かを確認する（#286 の段階 5）。
     /// </summary>
     /// <remarks>
-    /// **なぜ呼び出し側で確認するのか。**
+    /// **なぜ呼び出し側でも確認するのか。**
     ///
-    /// **`IdToken.Verify` は、この配備では `aud` を見ない。**
-    /// **「自分は認可サーバか」（`JwkSetFilePath` の有無）で分岐**しており、
-    /// **設定済みの側（＝認可サーバ役の枝）では `iss` と `exp` だけで通す**
-    /// （Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601)）。
-    /// **この配備は認可サーバなので、クライアント役の経路でもその枝に入る。**
+    /// **以前は、`IdToken.Verify` がこの配備では `aud` を見なかった**ので、ここで補っていた
+    /// （「自分は認可サーバか」で分岐し、認可サーバ役の枝では `iss` と `exp` だけで通した。
+    /// Open棟梁 [#601](https://github.com/OpenTouryoProject/OpenTouryo/issues/601)）。
     ///
-    /// **検証不可ではない。** **`IdToken.Verify` は `out JObject` でペイロードを返す**ので、
-    /// **呼び出し側が自分で確認できる。** **Open棟梁 側の変更を待たずに済む。**
+    /// **いまは Open棟梁 も `aud` を照合する**（OpenTouryo#601・#603）。
+    ///
+    /// | `IdToken.Verify` | 照合する `aud` |
+    /// |---|---|
+    /// | 鍵を指定する版 | 渡した値（ID 連携では `upstream.ClientId`） |
+    /// | 鍵を指定しない版（1:1 の構成の名残） | **設定の client_id（`ClientID`・`ClientIDs`）のどれか** |
+    ///
+    /// **それでも残す**（#337）。**鍵を指定しない版が見るのは、設定の client_id**（1:1 の構成の値。`OAuth2AndOidcClientID`）で、
+    /// **n 件の構成で上流の鍵が決まらずにそちらへ進んだとき、その上流のクライアント ID（`upstream.ClientId`）とは限らない。**
+    /// ここで期待値を、その上流のクライアント ID に決めて照合する。**鍵を指定する版では、Open棟梁 と同じ照合を重ねるだけ**で、受ける範囲は変わらない。
+    ///
+    /// **software_statement の `aud` の確認にも使う**（`SoftwareStatementProvider`。こちらは回避策ではない）。
     ///
     /// **SAML2 の ID 連携では `Audience` を照合している**
     /// （`SamlProviders.CmnSaml2Response` の `expectedAcsUrl`。#276）。

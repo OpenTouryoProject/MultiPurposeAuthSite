@@ -21,6 +21,7 @@
 //*  2026/10/29  玄人 幸道         自己テストを始めていない要求・壊れた JARM で、500 にしない（#294）
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //*  2026/11/06  玄人 幸道         access_token を、期待する iss・aud を渡す版の AccessToken.Verify で検証する（OpenTouryo#655。#336）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 /*
@@ -902,7 +903,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return HttpNotFound();
             }
 
-            string logoutToken = Request.Form[Const.LogoutToken] ?? "";
+            string logoutToken = Request.Form[OAuth2AndOIDCConst.logout_token] ?? "";
 
             if (string.IsNullOrEmpty(logoutToken))
             {

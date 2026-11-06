@@ -32,6 +32,7 @@
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、region の入れ子と using を直した（#294）
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、none を認証の口から外し、CIBA を開けた配備だけ広告する（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Discovery.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
+//*  2026/11/06  玄人 幸道         CIBA の request の署名の alg のコメントを、Open棟梁 の現状（OpenTouryo#595・#596・#664）に合わせた（#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -368,9 +369,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //   この実装は ES256 だけを受け付ける**（#129 の段階 0 で、記述を実装に合わせた）。
                 //
                 //   **以前は「ES256 と PS256のみ許可」と書いてあったが、PS256 は通らない。**
-                //   `RequestObject.VerifyCiba` は ES256 に固定されており、
-                //   **Open棟梁 に `JWS_PS*` が無い**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
-                //   PS256 を通すには上流の対応が要る（#129）。
+                //   使っている版の `RequestObject.VerifyCiba`（JWK を受ける版）は ES256 に固定されている。
+                //   **Open棟梁 には `JWS_PS256/384/512` と `JwsFactory` が在り**（OpenTouryo#595・#596）、
+                //   **検証鍵 `JWS` を受ける `VerifyCiba` も在る**（OpenTouryo#664）ので、PS256 を通すのは MPAS 側の対応である（まだ起票していない。#129 は発行する側の alg で、閉じている）。
                 //
                 //   ちなみに、Tokenの署名は、FAPI2に準拠する。
                 //

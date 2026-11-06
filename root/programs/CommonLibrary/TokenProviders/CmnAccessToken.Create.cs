@@ -31,6 +31,7 @@
 //*  2026/10/31  玄人 幸道         新規（CmnAccessToken.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         auth_time を数値（秒）に。Claims 経由でも claims を拾う。コメント（#294）
 //*  2026/11/01  玄人 幸道         使われていない IssuedTokenProvider への書き込みを外した（発行した access_token を保存するだけで、どこからも読まれていなかった。#321）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -151,7 +152,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   クレーム集合から id_token を作るため）。
             //   **クライアントごとに別の値**なので、**RP 同士の突き合わせには使えない。**
             if (!string.IsNullOrEmpty(sid))
-                tokenClaimSet.Add(Const.Sid, sid);
+                tokenClaimSet.Add(OAuth2AndOIDCConst.sid, sid);
 
             // claims（`CreatePayloadForCode` と同じ形で載せる。#294）
             if (!string.IsNullOrEmpty(claims))
@@ -298,7 +299,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // sid（#310 の段階 1）
             if (!string.IsNullOrEmpty(sid))
-                tokenClaimSet.Add(Const.Sid, sid);
+                tokenClaimSet.Add(OAuth2AndOIDCConst.sid, sid);
 
             // claims
             if (!string.IsNullOrEmpty(claims)) tokenClaimSet.Add(
@@ -487,7 +488,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   **refresh_token で作り直すときに、同じ sid を引き継ぐ**ため。
             //   **ここで戻さないと、作り直した id_token から sid が消える**
             //   （**RP から見ると、同じセッションが別物に見える**）。
-            if (tokenClaimSet.TryGetValue(Const.Sid, out object sid))
+            if (tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.sid, out object sid))
             {
                 if (!string.IsNullOrEmpty((string)sid))
                 {

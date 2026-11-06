@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -241,7 +242,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **登録された `token_endpoint_auth_method` を返す。**
             //    **空（明示なし）は `client_secret_basic`** — **RFC 7591 §2 の既定**であり、
             //    **実際に通る方法**でもある（`CmnEndpoints.AllowsAuthMethod`）。
-            ret.Add(Const.ClientTokenEndpointAuthMethod,
+            ret.Add(OAuth2AndOIDCConst.token_endpoint_auth_method,
                 string.IsNullOrEmpty(model.TokenEndpointAuthMethod)
                     ? OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
                     : model.TokenEndpointAuthMethod);
@@ -258,7 +259,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareVersion, model.SoftwareVersion);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSubjectType, model.SubjectTypes);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientIdTokenSignedResponseAlg, model.IdTokenSignedResponseAlg);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTlsClientAuthSubjectDn, model.TlsClientAuthSubjectDn);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.tls_client_auth_subject_dn, model.TlsClientAuthSubjectDn);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
 
             //  **登録された鍵を `jwks` に戻して返す。**

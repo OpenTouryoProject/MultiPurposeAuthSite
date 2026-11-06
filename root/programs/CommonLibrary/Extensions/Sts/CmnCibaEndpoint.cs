@@ -34,6 +34,7 @@
 //*  2026/10/30  玄人 幸道         CIBA の requested_expiry を検証し、上限で頭を打つ（CibaExpiresIn）（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Ciba.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //*  2026/11/06  玄人 幸道         request の検証を、aud を渡す版の RequestObject.VerifyCiba にした（OpenTouryo#653。#336）
+//*  2026/11/06  玄人 幸道         クレームを Open棟梁 の TryGetStringClaim で取り出し、要求を日付に変えずに読む。任意のクレームも、読めなければ断る（OpenTouryo#662。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -45,12 +46,10 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
@@ -134,7 +133,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // **CIBA Core §7.1.1 : 署名した認証要求を request で受け取る。**
                 //   **JWT でない・payload がオブジェクトでない値を渡されても、例外にしない**（#185 / #241 と同じ方針）。
                 //   **以前は base64 の復号だけを守っていて、JSON の配列や文字列でない `iss` で 500 になった**（#294）。
-                JObject unverified = JwtReader.TryReadPayload(request);
+                //   **日付の形の文字列を、日付に変えずに読む**（#337）。クレームは `TryGetStringClaim` で文字列として取り出すため
+                //   （`binding_message` などが、たまたま日付の形のときに読めなくなる。OpenTouryo#662）。
+                JObject unverified = JwtUtil.TryReadPayloadAsIs(request);
 
                 if (unverified == null)
                 {
@@ -183,7 +184,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 // 存在しない・期限切れの request_uri では空になる（#185 / #188）。
                 //   **預けたものは /ros が検証した JSON**なので、オブジェクトである。
-                payload = (JObject)JsonConvert.DeserializeObject(json ?? "");
+                //   **日付の形の文字列を、日付に変えずに読む**（#337。`request` の経路と同じ）。
+                payload = JwtUtil.TryParseObjectAsIs(json);
 
                 if (payload == null)
                 {
@@ -518,24 +520,40 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //   **以前は必須にしていた**ので、**標準の poll のクライアントが invalid_request で断られた**（#294）。
             //   ※ `/ros` は、これの有無で CIBA かどうかを見分ける（`RegisterRequestObject`）ので、
             //     **`request_uri` の経路では、在ることになる。**
-            CmnCibaEndpoint.GetCibaClaim(
+            //
+            //  **任意のクレームも、在って読めなければ断る**（CIBA Core §7.1 / §13 : invalid_request。#337）。
+            //    値がオブジェクト・配列だと `TryGetStringClaim` は false を返す。**戻り値を見ないと、無いものとして受けてしまう**
+            //    （`requested_expiry` は "abc" を断るのに、{} は既定の期限で受けていた）。
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.client_notification_token,
-                out client_notification_token, out err, out errDescription, nullable: true);
+                out client_notification_token, out err, out errDescription, nullable: true))
+            {
+                return false;
+            }
             client_notification_token = client_notification_token ?? "";
             // binding_message
             //   **OPTIONAL**（CIBA Core §7.1。#294。以前は必須にしていた）。
-            CmnCibaEndpoint.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.binding_message,
-                out binding_message, out err, out errDescription, nullable: true);
+                out binding_message, out err, out errDescription, nullable: true))
+            {
+                return false;
+            }
             binding_message = binding_message ?? "";
             // user_code
-            CmnCibaEndpoint.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.user_code,
-                out user_code, out err, out errDescription, nullable: true);
+                out user_code, out err, out errDescription, nullable: true))
+            {
+                return false;
+            }
             // requested_expiry
-            CmnCibaEndpoint.GetCibaClaim(
+            if (!CmnCibaEndpoint.GetCibaClaim(
                 json, OAuth2AndOIDCConst.requested_expiry,
-                out requested_expiry, out err, out errDescription, nullable: true);
+                out requested_expiry, out err, out errDescription, nullable: true))
+            {
+                return false;
+            }
 
             //  **正の整数でなければ断る**（CIBA Core §7.1 : 秒数の正の整数。#294）。
             //    **以前は検証せず**、読めない値は `int.TryParse` が 0 にして、**作った瞬間に期限が切れていた。**
@@ -558,7 +576,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return true;
         }
 
-        /// <summary>CIBA の認証リクエストのクレームを取り出す（CmnJwtToken.CheckClaims の包み）</summary>
+        /// <summary>CIBA の認証リクエストのクレームを取り出す（CmnJwtToken.TryGetStringClaim の包み）</summary>
         /// <param name="json">JObject</param>
         /// <param name="key">クレーム名</param>
         /// <param name="value">値</param>
@@ -567,19 +585,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="nullable">省略できるクレームか</param>
         /// <returns>取り出せたか（省略できるクレームが無い場合も true）</returns>
         /// <remarks>
-        /// Open棟梁 の CheckClaims は、クレームが無いと server_error を返す。
-        /// 要求の不備なので、CIBA Core 13 のとおり invalid_request にする（#196）。
+        /// **Open棟梁 の `TryGetStringClaim` は、無い・読めないクレームを invalid_request で返す**（CIBA Core 13。OpenTouryo#662）。
+        /// 以前の `CheckClaims` は server_error を返したので、ここで invalid_request に付け替えていた（#196）。
+        ///
+        /// **`CheckClaims` からの違い**（#337）：
+        /// - 必須のクレームが明示的な null なら、無いのと同じに断る（以前は値を null として通した）
+        /// - 値がオブジェクト・配列なら、例外にせず読めないものとして断る（**任意のクレームでも、在って読めなければ断る**）
+        /// - 数値は、カルチャに依らない字面になる（`requested_expiry` など）
+        /// - **日付の形の文字列は読めない**ので、payload は日付に変えずに読む（`JwtUtil.TryReadPayloadAsIs`）
         /// </remarks>
         private static bool GetCibaClaim(JObject json, string key,
             out string value, out string err, out string errDescription, bool nullable = false)
         {
-            if (CmnJwtToken.CheckClaims(json, key, out value, out err, out errDescription, nullable))
-            {
-                return true;
-            }
-
-            err = OAuth2AndOIDCConst.invalid_request;
-            return false;
+            return CmnJwtToken.TryGetStringClaim(
+                json, key, !nullable, out value, out err, out errDescription);
         }
         #endregion
 

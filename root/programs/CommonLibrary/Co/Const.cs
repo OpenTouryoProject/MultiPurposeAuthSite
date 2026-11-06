@@ -51,6 +51,7 @@
 //*  2026/10/24  玄人 幸道         OidcScopes / SelfTestScopes / IdFederationScopes を const にした（宣言の順で初期化が欠けないように。#294）
 //*  2026/10/30  玄人 幸道         EndpointSetDeviceToken を追加（#294）
 //*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone を追加（CmnEndpoints と Helper の二重定義をやめた。#294）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前（OpenTouryo#634・#663）を外し、そちらを使うようにした（#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -353,19 +354,14 @@ namespace MultiPurposeAuthSite.Co
         #region 要求パラメタ名
 
         // **Open棟梁 の OAuth2AndOIDCConst に無いもの。**
-
-        /// <summary>username（ROPC。RFC 6749 §4.3.2）</summary>
-        public const string ParamUsername = "username";
+        //   `username`・`post_logout_redirect_uri` は、Open棟梁 の `OAuth2AndOIDCConst` を使う（OpenTouryo#663。#337）。
+        //   **`password` は、Open棟梁 には grant_type の値（`ResourceOwnerPasswordCredentialsGrantType`）しか無い**ので、ここに残す。
 
         /// <summary>password（ROPC。RFC 6749 §4.3.2）</summary>
         public const string ParamPassword = "password";
 
         /// <summary>認証デバイスの FCM トークン（/SetDeviceToken。この IdP の独自）</summary>
         public const string ParamDeviceToken = "device_token";
-
-        /// <summary>post_logout_redirect_uri（RP-Initiated Logout 1.0 §2。/end_session の要求）</summary>
-        /// <remarks>登録の項目（<see cref="ClientPostLogoutRedirectUri"/>）と同じ名前だが、こちらは要求のパラメタである。</remarks>
-        public const string ParamPostLogoutRedirectUri = "post_logout_redirect_uri";
 
         #endregion
 
@@ -437,9 +433,6 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string UrnCnfJktClaim = "urn:oauth:cnf:jkt";
 
-        /// <summary>tls_client_auth_subject_dn（RFC 8705 §2.1.2）</summary>
-        public const string ClientTlsClientAuthSubjectDn = "tls_client_auth_subject_dn";
-
         #endregion
 
         #region response_mode（JARM）
@@ -478,24 +471,18 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string OpSessionRetry = "op_session_retry";
 
-        /// <summary>sid クレームの名前</summary>
-        /// <remarks>
-        /// **OP のセッションの識別子**（OIDC Core §2）。
-        /// **Front-Channel / Back-Channel Logout が「どのセッションか」を言う手段**である。
-        /// </remarks>
-        public const string Sid = "sid";
+        // **sid・events クレームと、logout_token の項目名は、Open棟梁 の `OAuth2AndOIDCConst` を使う**
+        //   （`sid`・`events`・`logout_token`。OpenTouryo#663。#337）。
+        //   `sid` は **OP のセッションの識別子**（OIDC Core §2）で、
+        //   **Front-Channel / Back-Channel Logout が「どのセッションか」を言う手段**である。
 
         /// <summary>sid を運ぶ ClaimsIdentity のクレーム型</summary>
         /// <remarks>
         /// **`urn:oauth:` は Open棟梁 が使っている名前空間**に合わせてある
         /// （`UrnAuthTimeClaim` などと同じ流儀）。
-        /// **プロセスの外には出ない**（トークンに入るのは <see cref="Sid"/> の名前）。
+        /// **プロセスの外には出ない**（トークンに入るのは <see cref="OAuth2AndOIDCConst.sid"/> の名前）。
         /// </remarks>
         public const string UrnSidClaim = "urn:oauth:sid";
-
-        /// <summary>logout_token を運ぶ要求の項目名</summary>
-        /// <remarks>**POST の本文に 1 項目だけ**（Back-Channel Logout 1.0 §2.5）。</remarks>
-        public const string LogoutToken = "logout_token";
 
         /// <summary>logout_token の typ ヘッダ</summary>
         /// <remarks>
@@ -504,53 +491,20 @@ namespace MultiPurposeAuthSite.Co
         /// </remarks>
         public const string LogoutJwtTyp = "logout+jwt";
 
-        /// <summary>events クレームの名前（Back-Channel Logout 1.0 §2.4）</summary>
-        public const string EventsClaim = "events";
-
-        #endregion
-
-        #region Error Code
-
-        // **Open棟梁 の OAuth2AndOIDCConst に無いもの。**
-
-        /// <summary>invalid_request_object（RFC 9101 §6.3）</summary>
-        public const string InvalidRequestObject = "invalid_request_object";
-
-        /// <summary>invalid_redirect_uri（RFC 7591 §3.2.2 : redirect_uri が不正）</summary>
-        public const string InvalidRedirectUri = "invalid_redirect_uri";
-
-        /// <summary>invalid_client_metadata（RFC 7591 §3.2.2 : メタデータが不正）</summary>
-        public const string InvalidClientMetadata = "invalid_client_metadata";
-
-        /// <summary>invalid_software_statement（RFC 7591 §3.2.2 : software_statement が壊れている）</summary>
-        /// <remarks>
-        /// **JWT として読めない・署名が合わない・`iss` が無い・`exp` が切れている**とき。
-        /// **「中身は読めたが、信頼していない」のは <see cref="UnapprovedSoftwareStatement"/>** である。
-        /// </remarks>
-        public const string InvalidSoftwareStatement = "invalid_software_statement";
-
-        /// <summary>unapproved_software_statement（RFC 7591 §3.2.2 : software_statement を受け付けない）</summary>
-        /// <remarks>
-        /// **その発行者を信頼していない**とき（§3.2.2 の
-        /// "not approved for use by this authorization server"）。
-        /// **信頼する発行者を 1 件も設定していない配備では、常にこれ**である。
-        /// </remarks>
-        public const string UnapprovedSoftwareStatement = "unapproved_software_statement";
-
-        /// <summary>insufficient_scope（RFC 6750 §3.1 : トークンの scope が足りない）</summary>
-        public const string InsufficientScope = "insufficient_scope";
-
         #endregion
 
         #region Client登録項目
 
         // **登録（DB の JSON・TestClients・画面・動的クライアント登録）で同じ名前を使う。**
-        //   **Open棟梁 の OAuth2AndOIDCConst に在るもの**（scope / jwks_uri / redirect_uris / client_secret）は、そちらを使う。
+        //   **Open棟梁 の OAuth2AndOIDCConst に在るもの**（scope / jwks_uri / redirect_uris / client_secret /
+        //   token_endpoint_auth_method / software_statement / tls_client_auth_subject_dn / post_logout_redirect_uri）は、
+        //   そちらを使う（後の 4 つは OpenTouryo#634・#663。#337）。
+        //
+        //   **エラー コード**（`invalid_request_object`・`invalid_redirect_uri`・`invalid_client_metadata`・
+        //   `invalid_software_statement`・`unapproved_software_statement`・`insufficient_scope`）も、
+        //   以前はここに持っていたが、**どれも Open棟梁 に在る**ので外した（#337）。
 
         #region RFC 7591 DCR
-
-        /// <summary>token_endpoint_auth_method</summary>
-        public const string ClientTokenEndpointAuthMethod = "token_endpoint_auth_method";
 
         /// <summary>`token_endpoint_auth_method` の `none`（パブリック クライアント。RFC 7591 §2。#294）</summary>
         /// <remarks>
@@ -592,9 +546,6 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>software_version</summary>
         public const string ClientSoftwareVersion = "software_version";
 
-        /// <summary>software_statement（RFC 7591 §2.3）</summary>
-        public const string ClientSoftwareStatement = "software_statement";
-
         #endregion
 
         #region OIDC DCR
@@ -616,9 +567,7 @@ namespace MultiPurposeAuthSite.Co
         #region Logout
 
         //（RP-Initiated / Front-Channel / Back-Channel Logout 1.0）
-
-        /// <summary>post_logout_redirect_uri（RP-Initiated Logout 1.0）</summary>
-        public const string ClientPostLogoutRedirectUri = "post_logout_redirect_uri";
+        //  post_logout_redirect_uri は、Open棟梁 の `OAuth2AndOIDCConst` を使う（要求のパラメタと同じ名前。OpenTouryo#663）。
 
         /// <summary>frontchannel_logout_uri（Front-Channel Logout 1.0）</summary>
         public const string ClientFrontChannelLogoutUri = "frontchannel_logout_uri";

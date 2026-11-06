@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 2）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -269,7 +270,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 FormUrlEncodedContent content = new FormUrlEncodedContent(
                     new Dictionary<string, string>()
                     {
-                        { Const.LogoutToken, logoutToken }
+                        { OAuth2AndOIDCConst.logout_token, logoutToken }
                     });
 
                 using (CancellationTokenSource cts

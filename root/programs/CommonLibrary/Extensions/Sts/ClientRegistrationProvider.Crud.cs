@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -113,7 +114,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
                 //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
                 JObject claims = JwtReader.TryReadPayload(
-                    ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareStatement));
+                    ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.software_statement));
 
                 if (claims != null)
                 {
@@ -192,7 +193,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 x.Type == OAuth2AndOIDCConst.UrnScopesClaim
                 && x.Value == Const.ScopeClientRegistration))
             {
-                err.Add(OAuth2AndOIDCConst.error, Const.InsufficientScope);
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.insufficient_scope);
                 err.Add(OAuth2AndOIDCConst.error_description, string.Format(
                     "The access token requires the {0} scope.", Const.ScopeClientRegistration));
                 return 403;
@@ -470,7 +471,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (requestedClientId != client_id)
             {
-                err.Add(OAuth2AndOIDCConst.error, Const.InvalidClientMetadata);
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client_metadata);
                 err.Add(OAuth2AndOIDCConst.error_description,
                     "The client_id must be present and match the client_id of this registration.");
                 return 400;
@@ -486,7 +487,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 if (!ClientRegistrationProvider.FixedTimeEquals(requestedSecret, current.ClientSecret))
                 {
-                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidClientMetadata);
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client_metadata);
                     err.Add(OAuth2AndOIDCConst.error_description,
                         "The client_secret does not match the current client_secret.");
                     return 400;

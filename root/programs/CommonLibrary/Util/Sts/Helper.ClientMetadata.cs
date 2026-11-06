@@ -33,6 +33,7 @@
 //*  2026/10/31  玄人 幸道         空の登録値も既定値に倒す。画面登録の名前も空を返す。利用者名で引く口を分けた（#294）
 //*  2026/10/31  玄人 幸道         使われなくなった GetClientIdByName の out 版を消した（#294）
 //*  2026/11/04  玄人 幸道         client_mode で構成ファイルのクライアント名を引く口を足した（自己テストの画面が使う）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -525,7 +526,7 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// </remarks>
         public string GetTokenEndpointAuthMethod(string client_id)
         {
-            return this.GetRegisteredValue(client_id, Const.ClientTokenEndpointAuthMethod,
+            return this.GetRegisteredValue(client_id, OAuth2AndOIDCConst.token_endpoint_auth_method,
                 model => model.TokenEndpointAuthMethod);
         }
 

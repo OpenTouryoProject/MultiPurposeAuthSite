@@ -30,6 +30,8 @@
 //*  2026/10/18  玄人 幸道         RFC 7591 §2 のクライアント メタデータを追加（#307 の段階 1）
 //*  2026/10/18  玄人 幸道         redirect_uri を n 件入れられるようにした（#306）
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を追加（#310 の段階 2）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/06  玄人 幸道         RequestObjectSigningAlg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#664）に合わせた（#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -118,7 +120,7 @@ namespace MultiPurposeAuthSite.ViewModels
             Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = Const.ClientPostLogoutRedirectUri)]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.post_logout_redirect_uri)]
         public string PostLogoutRedirectUri { get; set; }
 
         /// <summary>FrontChannelLogoutUri（#310 の段階 3）</summary>
@@ -184,7 +186,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>TlsClientAuthSubjectDn</summary>
         [Display(Name = "TlsClientAuthSubjectDn", Description = "TlsClientAuthSubjectDnDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = Const.ClientTlsClientAuthSubjectDn)]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.tls_client_auth_subject_dn)]
         public string TlsClientAuthSubjectDn { get; set; }
 
 
@@ -422,7 +424,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>RequestObjectSigningAlg アイテムリスト</summary>
         /// <remarks>
         /// **一覧は `CmnEndpoints.RequestObjectSigningAlgs` が持つ。**
-        /// **いまは `RS256` だけ**である（上流の `RequestObject.Verify` が RS256 固定のため）。
+        /// **いまは `RS256` だけ**である（使っている版の `RequestObject.Verify` が RS256 固定のため。
+        /// 検証鍵 `JWS` を受ける版は在る（OpenTouryo#664）。広げるのは、まだ起票していない別の作業）。
         /// **増やすのは「広げる側」の話**で、#262 では扱っていない。
         /// </remarks>
         // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
@@ -778,7 +781,7 @@ namespace MultiPurposeAuthSite.ViewModels
         [Display(Name = "TokenEndpointAuthMethod", Description = "TokenEndpointAuthMethodDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(Const.MaxLengthOfAuthMethod)]
-        [JsonProperty(PropertyName = Const.ClientTokenEndpointAuthMethod)]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.token_endpoint_auth_method)]
         public string TokenEndpointAuthMethod { get; set; }
 
         /// <summary>TokenEndpointAuthMethod アイテムリスト</summary>
