@@ -33,6 +33,7 @@
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、none を認証の口から外し、CIBA を開けた配備だけ広告する（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Discovery.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //*  2026/11/06  玄人 幸道         CIBA の request の署名の alg のコメントを、Open棟梁 の現状（OpenTouryo#595・#596・#664）に合わせた（#337）
+//*  2026/11/06  玄人 幸道         jwks_uri・request_object_endpoint・PAR の口を、Config で読む（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -210,13 +211,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OpenIDConfig.Add("request_parameter_supported", false);
             OpenIDConfig.Add("request_uri_parameter_supported", true);
             OpenIDConfig.Add("request_object_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.RequestObjectRegUri);
 
             // **PAR（RFC 9126）の口**（#229）。
             //   request_object_endpoint（独自の /ros）は、後方互換のため残している。
             //   こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
             OpenIDConfig.Add("pushed_authorization_request_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.AuthRequestPushUri);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri);
 
             // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
             OpenIDConfig.Add("require_pushed_authorization_requests", false);
@@ -273,7 +274,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OpenIDConfig.Add("authorization_response_iss_parameter_supported", true);
 
             OpenIDConfig.Add("jwks_uri",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.JwkSetUri);
 
             #endregion
 

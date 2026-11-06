@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
 //*  2026/10/14  玄人 幸道         SA-2.2（退役前の証明書）を足した（#292 の段階 3）
+//*  2026/11/06  玄人 幸道         コメントの設定キーを、#339 の後の名前に合わせた（#339）
 //**********************************************************************************
 
 using System.Net.Http;
@@ -319,7 +320,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 r.Step("(3) 1 本目は、いま署名に使っている証明書である");
 
-                //  **1 本目は `SpRp_RsaCerFilePath`**（`CreateMetadata` が入れる）。
+                //  **1 本目は `RsaCerFilePath`**（空なら `SpRp_RsaCerFilePath`。`CreateMetadata` が入れる。#339）。
                 //    **順が入れ替わると、キャッシュを持つ SP の挙動が変わる**ので、見ておく。
                 string first = (0 < count) ? keys[0].InnerText.Trim() : "";
                 string second = (1 < count) ? keys[1].InnerText.Trim() : "";

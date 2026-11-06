@@ -61,7 +61,10 @@ services:
       #   **ここを替えるだけでよい**（下流は倒れ先だけ上流の .cer に向けてある）。
       #
       #   **JwkSet も別に持つ**（`kid` が変わるため）。**EC の 3 本は共有のまま**（RSA だけを分けた）。
+      #   **対になる証明書は、サーバ側のキー（RsaCerFilePath）で上書きする**（#339）。
+      #   **SpRp_RsaCerFilePath（クライアント役の、相手の証明書）も上書きする。** 自己テストの相手は自分自身なので、同じ .cer を指す。
       - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Upstream.pfx
+      - appSettings__RsaCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
       - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
       - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet_Upstream.json
 
@@ -220,6 +223,7 @@ services:
       # ---------------------------------------------------------------- 署名鍵（#292 の段階 1）
       #   **1 つ目の上流とも、下流とも違う鍵**である（`CN-1.5` が 3 つとも違うことを見る）。
       - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Upstream2.pfx
+      - appSettings__RsaCerFilePath=/resource/X509/SHA256RSA_Upstream2.cer
       - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Upstream2.cer
       - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet_Upstream2.json
 
@@ -315,13 +319,13 @@ services:
       #     IssuerId     自分が IdP として名乗る iss
       #                  （Discovery の issuer / id_token の iss / 認可応答の iss /
       #                    client_assertion の aud の期待値 / SAML2 応答の Issuer）
-      #     SpRp_Isser   **上流に期待する iss**（RP / SP として検証する側。
+      #     SpRp_Issuer  **上流に期待する iss**（RP / SP として検証する側。改名前は SpRp_Isser。OpenTouryo#666。
       #                    CmnClientParams.Isser として読まれる）
       #
       #   **2 つの IdP が同じ iss を名乗らないように、下流に別の値を与える。**
       #   **PPID は変わらない**（sub の対応づけは SaltParameter と client_id から導く）。
       - appSettings__IssuerId=https://downstream.ssoauth.opentouryo.com
-      - appSettings__SpRp_Isser=https://ssoauth.opentouryo.com
+      - appSettings__SpRp_Issuer=https://ssoauth.opentouryo.com
 
       # ---------------------------------------------------------------- ID 連携（上流への委譲）
       #   **上流に登録した、このコンテナ専用のクライアント**。
@@ -389,7 +393,7 @@ services:
       - appSettings__UserStoreSecretPassword=E2E_SecretBox_8rJ2vQ5mZ1xK
 
       # ---------------------------------------------------------------- 上流の登録（n 件。#292 の段階 1）
-      #   **これが在れば、上の IdFederation* / SpRp_Isser / OAuth2AndOidc* より優先する。**
+      #   **これが在れば、上の IdFederation* / SpRp_Issuer / OAuth2AndOidc* より優先する。**
       #   **上の単数キーは、互換のために残してある**（この設定を外せば、1 件の配備に戻る）。
       #
       #   **相手ごとの値だけを並べる**（#290 のルール）。

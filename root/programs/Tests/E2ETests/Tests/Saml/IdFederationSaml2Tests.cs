@@ -31,6 +31,7 @@
 //*  2026/10/11  玄人 幸道         新規（#286 の段階 3）
 //*  2026/10/13  玄人 幸道         SA-6.5（署名を壊した要求）を足した（#293 の段階 4）
 //*  2026/10/14  玄人 幸道         SA-6.6（上流の証明書が2本）を足した（#292 の段階 3）
+//*  2026/11/06  玄人 幸道         コメントと観点の設定キーを、#339 の後の役割に合わせた（#339）
 //**********************************************************************************
 
 using System.Threading.Tasks;
@@ -55,7 +56,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     /// | 連携キー | `(id_token の iss, sub)` | **`(上流の EntityID, NameID)`** |
     /// | 利用者の鍵 | メアド | **メアド**（**属性の `mail`** → `NameID`。段階 4） |
     /// | 検証鍵 | `kid` → 上流の JWK Set（#290） | **上流のメタデータ**（#291。倒れ先が設定の `IdFederationSaml2CerFilePath`） |
-    /// | 期待する発行者 | `SpRp_Isser` | **`IdFederationSaml2IssuerId`** |
+    /// | 期待する発行者 | `SpRp_Issuer`（改名前は `SpRp_Isser`） | **`IdFederationSaml2IssuerId`** |
     ///
     /// **上流に、下流の ACS を `redirect_uri_saml` として登録してある**
     /// （`container/E2E/docker-compose.yml`。`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
@@ -92,7 +93,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                     + "**`NameIDFormat=emailAddress` の `NameID` をメアドとして扱い**、"
                     + "**`(上流の EntityID, NameID)` を連携キーに**、下流のアカウントへ結び付ける。"
                     + "**検証鍵は設定で与える**（`IdFederationSaml2CerFilePath`）— "
-                    + "**`SpRp_RsaCerFilePath` は、この配備では自分の証明書として読まれている**ため。",
+                    + "**`SpRp_RsaCerFilePath` は、自己テスト（相手が自分）の証明書を指している**ため。",
                     "SAML 2.0 Web Browser SSO Profile / #286 の段階 2");
 
                 r.Target(client.Target.DisplayName + " ← 上流 " + upstream);

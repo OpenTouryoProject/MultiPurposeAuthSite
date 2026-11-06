@@ -37,10 +37,12 @@
 //*  2026/11/01  玄人 幸道         WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //*  2026/11/06  玄人 幸道         Request Object の aud を issuer にし、exp・nbf を入れる。aud を渡す版の Verify・VerifyCiba で自己検証する（#336）
+//*  2026/11/06  玄人 幸道         /ros・/par の URL と、SAML2 の応答を検証する証明書を、サーバの値で読む（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.SamlProviders;
+using MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.Collections.Generic;
@@ -686,7 +688,7 @@ namespace MultiPurposeAuthSite.Util.Test
         ///
         /// | 引数 | 自己テストが渡すもの |
         /// |---|---|
-        /// | 証明書 | **自分の `SpRp_RsaCerFilePath`** — **IdP ＝ SP なので、相手の証明書が自分のもの**である |
+        /// | 証明書 | **自分の証明書**（`SigningKeys.RsaCerFilePath`。サーバ側のキー `RsaCerFilePath`、空なら `SpRp_RsaCerFilePath`。#339） — **IdP ＝ SP なので、相手の証明書が自分のもの**である |
         /// | 期待 Issuer | **自分の `CmnServerParams.IssuerId`** |
         ///
         /// **ID 連携（#286）は、同じ本体に上流の証明書と EntityID を渡す。**
@@ -701,7 +703,7 @@ namespace MultiPurposeAuthSite.Util.Test
             //  **POST Binding のときは、クエリ文字列を渡さない**（空なら POST として検証する）。
             return SAML2Client.VerifyResponseWithReason(
                 isGet ? queryString : null, isGet ? null : samlResponse,
-                new RSA[] { CmnSaml2Response.RsaFromCerFile(CmnClientParams.RsaCerFilePath) },
+                new RSA[] { CmnSaml2Response.RsaFromCerFile(SigningKeys.RsaCerFilePath) },
                 CmnServerParams.IssuerId, expectedAcsUrl, expectedInResponseTo,
                 relayState, expectedRelayState);
         }
@@ -784,8 +786,9 @@ namespace MultiPurposeAuthSite.Util.Test
             string clientId, string responseType, string responseMode,
             string redirectUri, string state, string nonce, ClaimsInRO claims)
         {
+            //  **送り先は自分自身なので、サーバの値（`Config`）で組み立てる**（OpenTouryo#666。#339）。
             string endpoint = Config.OAuth2AuthorizationServerEndpointsRootURI
-                + OAuth2AndOIDCParams.RequestObjectRegUri;
+                + Config.RequestObjectRegUri;
 
             PushResult ret = SelfTestClient.NewResult(endpoint, SelfTestClient.CreateRequestObject(
                 clientId, responseType, responseMode,
@@ -821,8 +824,9 @@ namespace MultiPurposeAuthSite.Util.Test
             string clientId, string responseType, string responseMode,
             string redirectUri, string state, string nonce, ClaimsInRO claims)
         {
+            //  **送り先は自分自身なので、サーバの値（`Config`）で組み立てる**（OpenTouryo#666。#339）。
             string endpoint = Config.OAuth2AuthorizationServerEndpointsRootURI
-                + OAuth2AndOIDCParams.AuthRequestPushUri;
+                + Config.AuthRequestPushUri;
 
             PushResult ret = SelfTestClient.NewResult(endpoint, SelfTestClient.CreateRequestObject(
                 clientId, responseType, responseMode,

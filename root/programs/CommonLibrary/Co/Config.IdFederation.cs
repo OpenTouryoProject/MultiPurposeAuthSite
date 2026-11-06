@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
+//*  2026/11/06  玄人 幸道         コメントの設定キーを、#339 の後の名前と役割に合わせた（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -299,7 +300,7 @@ namespace MultiPurposeAuthSite.Co
         /// </summary>
         /// <remarks>
         /// **上流の `/samlmetadata` の `entityID` の値**である。
-        /// **OIDC の `SpRp_Isser` に当たるもの**だが、**あちらは Open棟梁 の設定**なので分けてある。
+        /// **OIDC の `SpRp_Issuer` に当たるもの**だが、**あちらは Open棟梁 の設定**なので分けてある。
         /// </remarks>
         public static string IdFederationSaml2IssuerId
         {
@@ -315,10 +316,10 @@ namespace MultiPurposeAuthSite.Co
         /// <remarks>
         /// **上流の `/samlmetadata` の `KeyDescriptor use="signing"` の証明書**である。
         ///
-        /// **`SpRp_RsaCerFilePath` は使えない。**
-        /// **あのキーは、この配備では「自分の証明書」として読まれている**
-        /// （`/samlmetadata` の広告・`JwkSet.json` の素・検証の控え）ので、
-        /// **上流のものに差し替えると、そちらが壊れる**（`CmnSaml2Response` の説明）。
+        /// **`SpRp_RsaCerFilePath` は使わない。**
+        /// **以前は、この配備の「自分の証明書」として読まれていた**（`/samlmetadata` の広告・`JwkSet.json` の素・検証の控え）。
+        /// **いまは `RsaCerFilePath` で読む**が、**空なら今も `SpRp_RsaCerFilePath` を読む**（#339）。
+        /// **自己テスト（相手が自分）の証明書でもある**ので、**上流のものに差し替えると、そちらが壊れる**（`CmnSaml2Response` の説明）。
         /// </remarks>
         public static string IdFederationSaml2CerFilePath
         {

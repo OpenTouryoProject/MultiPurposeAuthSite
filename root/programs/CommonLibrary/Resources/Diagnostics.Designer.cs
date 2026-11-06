@@ -358,6 +358,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
+        ///   Both the old key name ({0}) and the new key name ({1}) are set, with different values. The value of {1} is used. Remove {0}. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string CheckRenamedKeyConflict {
+            get {
+                return ResourceManager.GetString("CheckRenamedKeyConflict", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   The certificate of this authorization server is read from the client-side key ({0}). Set {1} (the key paired with the signing .pfx). に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string CheckLegacyCerFilePathKey {
+            get {
+                return ResourceManager.GetString("CheckLegacyCerFilePathKey", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   EnableDebugTraceLog is true. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string CheckDebugTraceLog {

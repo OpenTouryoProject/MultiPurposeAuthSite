@@ -11839,7 +11839,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **下流は自分で認証せず、上流のアサーションを受け取る。****`NameIDFormat=emailAddress` の `NameID` をメアドとして扱い**、**`(上流の EntityID, NameID)` を連携キーに**、下流のアカウントへ結び付ける。**検証鍵は設定で与える**（`IdFederationSaml2CerFilePath`）— **`SpRp_RsaCerFilePath` は、この配備では自分の証明書として読まれている**ため。 |
+| 観点 | **下流は自分で認証せず、上流のアサーションを受け取る。****`NameIDFormat=emailAddress` の `NameID` をメアドとして扱い**、**`(上流の EntityID, NameID)` を連携キーに**、下流のアカウントへ結び付ける。**検証鍵は設定で与える**（`IdFederationSaml2CerFilePath`）— **`SpRp_RsaCerFilePath` は、自己テスト（相手が自分）の証明書を指している**ため。 |
 | 根拠 | SAML 2.0 Web Browser SSO Profile / #286 の段階 2 |
 | テスト | `SA0601_SAML2のID連携でサインインできる` |
 

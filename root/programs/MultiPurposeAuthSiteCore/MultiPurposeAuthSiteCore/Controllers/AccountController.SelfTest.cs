@@ -22,6 +22,7 @@
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //*  2026/11/06  玄人 幸道         access_token を、期待する iss・aud を渡す版の AccessToken.Verify で検証する（OpenTouryo#655。#336）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
 //**********************************************************************************
 
 /*
@@ -264,7 +265,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //    | 渡すもの | 値 |
                     //    |---|---|
                     //    | 鍵（`jws`） | **null**（自分が出したトークンなので、設定の選び方で引ける） |
-                    //    | `iss` | **`CmnServerParams.IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**である |
+                    //    | `iss` | **`CmnServerParams.IssuerId`（自分）** — **`SpRp_Issuer` は「相手の Issuer」**である |
                     //    | `aud` | **その回の `client_id`** |
                     if (!string.IsNullOrEmpty(response))
                     {

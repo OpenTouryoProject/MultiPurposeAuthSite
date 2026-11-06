@@ -27,5 +27,5 @@ del %NAME%.csr
 endlocal
 
 rem **作り直したら、その上流の JwkSet も作り直すこと。**
-rem   CommandLineTools/CreateJwkSetJson を、上流の設定（SpRp_RsaCerFilePath と JwkSetFilePath）で 1 回回す。
+rem   CommandLineTools/CreateJwkSetJson を、上流の設定（RsaCerFilePath と JwkSetFilePath。#339 までは SpRp_RsaCerFilePath）で 1 回回す。
 rem   出力 : resource/MultiPurposeAuthSite/JwkSet_<接尾辞>.json

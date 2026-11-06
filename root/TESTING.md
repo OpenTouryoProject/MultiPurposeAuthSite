@@ -423,7 +423,7 @@ docker compose up -d --build upstream downstream
 |---|---|---|
 | URL | **`https://localhost:44303`** | **口はポートで分ける**（上のポートの表） |
 | `IssuerId` | **`https://downstream.ssoauth.opentouryo.com`** | **2 つの IdP が同じ `iss` を名乗らない**ようにする |
-| `SpRp_Isser` | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
+| `SpRp_Issuer`（改名前は `SpRp_Isser`） | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
 | `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
 | `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
 | `IdFederationJwkSetUri` / `IdFederationSaml2MetadataUrl` | **`http://upstream:8080/...`**（#293 の段階 3） | **鍵を引くのもサーバである。** **`https://localhost:44301` には届かない** |
@@ -489,7 +489,7 @@ docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U
 
 | 壊すもの | 期待する結果 |
 |---|---|
-| **上流の広告の 1 本目を「署名に使っていない証明書」にする**（`SpRp_RsaCerFilePath` と `PreviousSigningCerFilePaths` を入れ替える） | **`SA-6.*` は 12 / 12 通る**。**下流のログに `The SAML2 response was verified with key #2.`** が出る（**1 本目で失敗し、2 本目で検証した**ことの証拠） |
+| **上流の広告の 1 本目を「署名に使っていない証明書」にする**（`RsaCerFilePath` と `PreviousSigningCerFilePaths` を入れ替える。#339 までは `SpRp_RsaCerFilePath`） | **`SA-6.*` は 12 / 12 通る**。**下流のログに `The SAML2 response was verified with key #2.`** が出る（**1 本目で失敗し、2 本目で検証した**ことの証拠） |
 | 上流の JWK Set を 1 本に戻す | **`RT-140.*` は通る**（`kid` で選ぶので、本数には依らない） |
 
 > **「通った」だけでは、どの鍵で通ったか分からない。**
@@ -1635,7 +1635,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 **DB ストアでは 2 つのサイトが 1 つの DB を共有する**ので、**同じ鍵だと奪い合う**（#260 と同じ事情）。
 
 **署名する鍵と、貼る証明書は、構成ファイルに在る対を使う**
-（**`RsaPfxFilePath` ↔ `SpRp_RsaCerFilePath`**。どちらも `SHA256RSA_Server`）。
+（**`RsaPfxFilePath` ↔ `RsaCerFilePath`**（空なら `SpRp_RsaCerFilePath`。#339）。どちらも `SHA256RSA_Server`）。
 **`SpRp_RsaPfxFilePath`（Client.pfx）とは対になっていない**ので、取り違えないこと。
 
 ###### 歯抜け（実測 2026/10/21）
@@ -2459,7 +2459,7 @@ GenRsaCertForUpstreamByOpenSSL.bat Upstream2
 ```
 
 **その後、上流 2 用の JwkSet を作り直す**（`CommandLineTools/CreateJwkSetJson` を、
-`SpRp_RsaCerFilePath` ＝ `SHA256RSA_Upstream2.cer` / `JwkSetFilePath` ＝ `JwkSet_Upstream2.json`
+`RsaCerFilePath` ＝ `SHA256RSA_Upstream2.cer` / `JwkSetFilePath` ＝ `JwkSet_Upstream2.json`
 の設定で 1 回）。**`C:\root\files\resource` にも配置する**（コンテナはそこをマウントする）。
 
 > **`.bat` は CRLF でなければならない**（`.gitattributes` の `*.bat text eol=crlf`）。
@@ -3408,7 +3408,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | **`SA-6.n`**（SAML2 の ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**。`RT-140.n` と同じ） |
 | `SA-7.n`（アサーションの属性） | ホストの core / netfx | `-UserStoreType`（**上流コンテナは要らない**。自己テストの口で測る） |
 
-> **「この配備の値」は共通設定のまま**である（#290。`JwkSetUri` / `SpRp_*CerFilePath`）。
+> **「この配備の値」はサーバ側のキー**である（#290・#339。`JwkSetUri` / `RsaCerFilePath` ほか）。
 > **上流（相手）の値だけが `IdFederation*` のキー**に在る
 > （`IdFederationJwkSetUri` / `IdFederationOidcDiscoveryUrl` / `IdFederationOidcCerFilePath` ほか）。
 > **`test.ps1` が渡しているのも、その `IdFederation*` だけ**である。

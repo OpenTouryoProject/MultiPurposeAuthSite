@@ -21,6 +21,7 @@
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）のルートを追加（#216）
 //*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
+//*  2026/11/06  玄人 幸道         /jwkcerts・/par・/ros のルートを、Config のパスで張る（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -106,19 +107,19 @@ namespace MultiPurposeAuthSite
 
             config.Routes.MapHttpRoute(
                 name: "JwksUri",
-                routeTemplate: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除
+                routeTemplate: Config.JwkSetUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" }
             );
 
             config.Routes.MapHttpRoute(
                 name: "PushedAuthorizationRequest",
-                routeTemplate: OAuth2AndOIDCParams.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除
+                routeTemplate: Config.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" }
             );
 
             config.Routes.MapHttpRoute(
                 name: "RequestObjectUri",
-                routeTemplate: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除
+                routeTemplate: Config.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" }
             );
             #endregion

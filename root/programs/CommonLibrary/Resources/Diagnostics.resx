@@ -216,6 +216,12 @@
   <data name="CheckRenamedKey" xml:space="preserve">
     <value>The old key name ({0}) is used. Change it to {1}.</value>
   </data>
+  <data name="CheckRenamedKeyConflict" xml:space="preserve">
+    <value>Both the old key name ({0}) and the new key name ({1}) are set, with different values. The value of {1} is used. Remove {0}.</value>
+  </data>
+  <data name="CheckLegacyCerFilePathKey" xml:space="preserve">
+    <value>The certificate of this authorization server is read from the client-side key ({0}). Set {1} (the key paired with the signing .pfx).</value>
+  </data>
   <data name="CheckDebugTraceLog" xml:space="preserve">
     <value>EnableDebugTraceLog is true.</value>
   </data>

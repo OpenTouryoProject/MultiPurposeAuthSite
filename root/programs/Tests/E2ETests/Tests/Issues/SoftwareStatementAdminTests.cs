@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#308 の段階 3）
+//*  2026/11/06  玄人 幸道         自分の証明書を、サーバ側のキー（RsaCerFilePath。空なら SpRp_RsaCerFilePath）で読む（#339）
 //**********************************************************************************
 
 using System;
@@ -198,11 +199,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string endpoint = await DynamicClientRegistration.SkipIfNotSupportedAsync(admin);
 
                 //  **署名する鍵と、その証明書**（**構成ファイルに在る対**を使う）。
-                //    `RsaPfxFilePath` ↔ `SpRp_RsaCerFilePath`（どちらも SHA256RSA_Server）。
-                string cerPath = admin.Config.Get("SpRp_RsaCerFilePath");
+                //    `RsaPfxFilePath` ↔ `RsaCerFilePath`（どちらも SHA256RSA_Server）。
+                //    **サイトと同じく、`RsaCerFilePath` が空なら `SpRp_RsaCerFilePath` を読む**（#339）。
+                string cerPath = admin.Config.Get("RsaCerFilePath");
+
+                if (string.IsNullOrEmpty(cerPath))
+                {
+                    cerPath = admin.Config.Get("SpRp_RsaCerFilePath");
+                }
 
                 Skip.If(string.IsNullOrEmpty(cerPath) || !File.Exists(cerPath),
-                    "証明書（SpRp_RsaCerFilePath）が読めません。");
+                    "証明書（RsaCerFilePath / SpRp_RsaCerFilePath）が読めません。");
 
                 TestReport r = this.Report("RT-308.2",
                     "**DB に入れた発行者**（**証明書を本文で持つ**）**の `software_statement` で、"
