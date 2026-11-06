@@ -36,6 +36,8 @@
 //*  2026/10/01  玄人 幸道         sub の期待値を利用者名にした（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/06  玄人 幸道         RT-196.17 の nbf・exp の誤りを、/ros を通さず request で送る（/ros が預かる前に断るようになった。#336）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -864,9 +866,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "成功の応答（device_code / user_code の JSON）まで変わっていないことを確かめる。",
                     "RFC 8628 §3.2（成功は 200 と JSON）/ #196");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3 + "（device モード、client_secret なし）");
+                r.Target("client_name=" + KnownClients.DeviceClient + "（device モード、client_secret なし）");
                 r.Step("POST /device_authz に client_id と scope を送る");
 
                 JsonResponse res = await client.DeviceAuthorizationAsync(new Dictionary<string, string>()
@@ -904,7 +906,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 // /ciba_authz はクライアント認証が要る（CIBA Core 7.1。#234 の段階 3）。
                 // ここで見たいのは request_uri の不備なので、認証は通しておく。
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Target(client.Target.DisplayName);
                 r.Step("(1) request_uri を付けずに POST /ciba_authz を送る");
@@ -942,10 +944,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "CIBA Core §13 のコードを返し、HTTP ステータスはコードから決める（invalid_client 以外は 400）。",
                     "CIBA Core §7.1 / §13 / #196");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 long now = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-                r.Target("client_name=" + KnownClients.TestClient4 + "（fapi_ciba。要求は ES256 で署名して /ros に登録する）");
+                r.Target("client_name=" + KnownClients.FapiCibaClient + "（fapi_ciba。要求は ES256 で署名する。(1) は /ros に登録し、(2)・(3) は request で送る）");
 
                 r.Step("(1) scope に openid が無い要求");
 
@@ -956,22 +958,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     new Dictionary<string, string>() { { "request_uri", noOpenid } },
                     reg.ClientId, reg.ClientSecret), 400, "invalid_scope");
 
-                r.Step("(2) nbf が未来の要求（まだ有効になっていない）");
+                //  **(2)・(3) は /ros に預けず、request で送る**（#336）。
+                //    **/ros が、時刻の誤った要求を預かる前に断るようになった**（Open棟梁 の `VerifyCiba`。OpenTouryo#653）ので、
+                //    request_uri では /ciba_authz まで届かない。**/ros で断ることは RT-336.5 が確かめる。**
+                r.Step("(2) nbf が未来の要求（まだ有効になっていない。request で送る）");
 
-                string notYet = await RegisterCibaRequestAsync(client, reg,
+                string notYet = await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
                     new Dictionary<string, object>() { { "nbf", now + 600 } });
 
                 VerifyError(r, "nbf が未来", await client.CibaAuthorizeWithBasicAuthAsync(
-                    new Dictionary<string, string>() { { "request_uri", notYet } },
+                    new Dictionary<string, string>() { { "request", notYet } },
                     reg.ClientId, reg.ClientSecret), 400, "invalid_request");
 
-                r.Step("(3) exp が過去の要求（期限切れ）");
+                r.Step("(3) exp が過去の要求（期限切れ。request で送る）");
 
-                string expired = await RegisterCibaRequestAsync(client, reg,
+                string expired = await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
                     new Dictionary<string, object>() { { "exp", now - 600 } });
 
                 VerifyError(r, "exp が過去", await client.CibaAuthorizeWithBasicAuthAsync(
-                    new Dictionary<string, string>() { { "request_uri", expired } },
+                    new Dictionary<string, string>() { { "request", expired } },
                     reg.ClientId, reg.ClientSecret), 400, "invalid_request");
 
                 r.Done();
@@ -993,9 +998,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**見つからないなら、それを unknown_user_id で伝える。**以前は error が空のまま返っていた。",
                     "CIBA Core §13（unknown_user_id は 400）/ #196");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = 存在しないユーザ");
+                r.Target("client_name=" + KnownClients.FapiCibaClient + " / login_hint = 存在しないユーザ");
                 r.Step("login_hint に存在しないユーザを入れた要求を /ros に登録し、その request_uri を送る");
 
                 string requestUri = await RegisterCibaRequestAsync(client, reg,
@@ -1108,7 +1113,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "ユーザ自体は見つかっているので、unknown_user_id（RT-196.18）ではなく access_denied で返す。",
                     "CIBA Core §13（access_denied は 400）/ #210");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 // **テスト ユーザは使えない。** CIBA のテスト（EX-8）が端末を登録するため、
                 // 実行順によっては「端末あり」になる。E2E からサインインしない別の利用者を指す。
@@ -1123,7 +1128,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //   実行順に依存しないよう、ここで 1 回踏んでおく。
                 await client.GetAsync("/Account/Login");
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = " + NoDeviceUser
+                r.Target("client_name=" + KnownClients.FapiCibaClient + " / login_hint = " + NoDeviceUser
                     + "（認証サイトが IsDebug のときに作る利用者。E2E は端末を登録しない）");
                 r.Step("端末を登録していない利用者を login_hint に入れた要求を /ros に登録し、その request_uri を送る");
 

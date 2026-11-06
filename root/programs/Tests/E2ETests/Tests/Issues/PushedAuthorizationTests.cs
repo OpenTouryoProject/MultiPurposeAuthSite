@@ -31,6 +31,7 @@
 //*  2026/09/24  玄人 幸道         新規（#229 : PAR のエンドポイントを追加）
 //*  2026/09/28  玄人 幸道         自己テストの PAR ボタンを駆動する RT-246.1 を追加（#246）
 //*  2026/10/06  玄人 幸道         先に同意を記録するようにした（#272 の段階 2）
+//*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -254,7 +255,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) Request Object を作り、request に入れて預ける");
 
-                string requestObject = RequestObjectBuilder.Create(
+                string requestObject = await RequestObjectBuilder.CreateAsync(
                     client, reg.ClientId, new Dictionary<string, object>()
                     {
                         { "response_type", "code" },

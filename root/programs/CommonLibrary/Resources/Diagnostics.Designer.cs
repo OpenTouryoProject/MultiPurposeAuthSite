@@ -545,5 +545,14 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("LogExternalLoginUserFailed", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   The client was authenticated by Basic credentials that were not form-urlencoded (RFC 6749 §2.3.1). Ask the client to encode them; this fallback will be disabled by default in Open Touryo 4.0. (client_id: {0}) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogRawBasicCredentials {
+            get {
+                return ResourceManager.GetString("LogRawBasicCredentials", resourceCulture);
+            }
+        }
     }
 }

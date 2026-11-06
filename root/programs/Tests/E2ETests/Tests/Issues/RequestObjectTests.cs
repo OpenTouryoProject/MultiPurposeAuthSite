@@ -33,6 +33,7 @@
 //*  2026/09/22  玄人 幸道         RT-197.2 の期待するエラー コードを unauthorized_client に改めた（#224 の段階 2）
 //*  2026/09/24  玄人 幸道         RT-188.4（request_uri は使い切り）を追加（#188 の段階 2）
 //*  2026/10/19  玄人 幸道         RT-197.2 の誤りを invalid_client に改めた（#307 の段階 3）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -87,7 +88,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**起動 URL の食い違い**であることが多い。",
                     "RFC 9101（JAR）/ RFC 9126（PAR。ただしこの実装の `/ros` は独自仕様）");
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（client_mode=fapi2）");
+                r.Target("client_name=" + KnownClients.Fapi2Client + "（client_mode=fapi2）");
                 r.Step("POST /Home/Saml2OAuth2Starters に submit.AuthorizationCodeFAPI2 を送る");
 
                 HttpResponseMessage starter = await client.StartSelfTestAsync(
@@ -130,9 +131,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "FAPI 2.0 Security Profile（クライアント認証は mTLS または"
                     + " private_key_jwt）/ RFC 6749 §5.2");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
-                r.Target("client_name=" + KnownClients.TestClient2);
+                r.Target("client_name=" + KnownClients.Fapi2Client);
                 r.Step("(1) FAPI2 の自己テストで request_uri 経路の code を得る");
                 r.Step("(2) client_secret を添えてトークンに交換する");
 
@@ -155,7 +156,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //  **#307 の段階 3 で、断る段が早くなった。**
                 //    **以前は `client_secret` で認証が通り**、**その先の登録種別の判定で
                 //    `unauthorized_client`** になっていた。
-                //    **いまは `TestClient2` が `token_endpoint_auth_method=private_key_jwt` を
+                //    **いまは `FAPI2_Client` が `token_endpoint_auth_method=private_key_jwt` を
                 //    登録している**ので、**`client_secret` では認証そのものが通らない。**
                 //
                 //  **断ることは変わっていない**（検証 2 のとおりトークンは出ない）。

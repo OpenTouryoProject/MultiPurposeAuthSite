@@ -40,8 +40,8 @@
     省略した場合は、test.ps1 が環境変数から読む。
 
 .PARAMETER NoStoreContainer
-    Container\Store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
-    既定では、接続文字列が Container\Store\ のポートを指していれば、
+    container\Store\ の DB コンテナを、起動も停止もしない（test.ps1 に渡す）。
+    既定では、接続文字列が container\Store\ のポートを指していれば、
     その DB だけをテストの間だけ起動する。詳細は test.ps1 の説明を参照。
 
 .PARAMETER Url

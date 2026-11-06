@@ -96,7 +96,7 @@
 | 拡張 | PKCE (RFC 7636) | ✓ | `plain` / `S256` |
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
-| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合、**`aud` も照合**（C-24 / #286 の段階 5）。**SAML2 でも委譲できる**（#286。`SA-6.*`）。**上流の SSO の口と署名証明書は、上流のメタデータから引く**（#291。**引けなければ設定**）。**上流の `id_token` の検証鍵は、上流の discovery（`jwks_uri`）から `kid` で引く**（#289 の段階 2）。**引けなければ設定の `.cer`**（段階 1。`IdFederationOidcCerFilePath`）。**メアド・利用者名・`email_verified` は、アサーションの属性で運ぶ**（#286 の段階 4。`SA-7.*`）。**上流は n 件**（#292 の段階 1・2。**設定 ＋ user store**。**管理画面は `/IdFederationAdmin`**。D-15）。**(2) の署名鍵は上流ごとに替えられる**（#292 の段階 4-a・4-b）。**目視・E2E とも実施済み**（上流は `Container/E2E/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
+| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合、**`aud` も照合**（C-24 / #286 の段階 5）。**SAML2 でも委譲できる**（#286。`SA-6.*`）。**上流の SSO の口と署名証明書は、上流のメタデータから引く**（#291。**引けなければ設定**）。**上流の `id_token` の検証鍵は、上流の discovery（`jwks_uri`）から `kid` で引く**（#289 の段階 2）。**引けなければ設定の `.cer`**（段階 1。`IdFederationOidcCerFilePath`）。**メアド・利用者名・`email_verified` は、アサーションの属性で運ぶ**（#286 の段階 4。`SA-7.*`）。**上流は n 件**（#292 の段階 1・2。**設定 ＋ user store**。**管理画面は `/IdFederationAdmin`**。D-15）。**(2) の署名鍵は上流ごとに替えられる**（#292 の段階 4-a・4-b）。**目視・E2E とも実施済み**（上流は `container/E2E/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
 | | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は #213（net10.0）/ #216（net48） |
 
 **未実装**は 5 節にまとめた。
@@ -913,7 +913,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 |---|---|---|
 | **N1 : PKCE と private_key_jwt / mTLS の併用** | **`code_verifier` が在ると `client_assertion` と証明書を見ず、PKCE だけで認証した** → **証明が PKCE になり、fapi2（FAPI 2.0 は PKCE と鍵か証明書の両方を求める）が通らなかった**。`RequirePkce` を有効にすると、鍵・証明書のクライアントは全く通らなかった | **まず資格情報で認証し、PKCE は別に検証する**（証明は PrivateKeyJwt / Mtls） |
 | **N3 : `response_type=id_token`** | **Implicit を閉じても検査を通り、同意の後で `server_error`** | **`unsupported_response_type`**（Implicit の経路として扱う） |
-| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（**fapi2 の扱いは C-58 で直した**）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読むため、受けるには上流の対応が要る） |
+| **N4 : `client_assertion` の `aud`** | **トークン エンドポイントの URL だけ**（**fapi2 の扱いは C-58 で直した**）。**配列は上流が例外を投げて 500** | **issuer も受ける。** **配列は 500 にせず `invalid_client`**（上流の `JwtAssertion.Verify` が文字列として読んでいたため。**上流は要素 1 つの配列を受けるようになった**（OpenTouryo#654）が、**こちらは変えていない**。C-59） |
 | **N5 : poll の CIBA** | **`client_notification_token`（ping / push のときだけ REQUIRED）と `binding_message`（OPTIONAL）を必須にしていた** | **省略できる**（`/ros` は前者の有無で CIBA を見分けるので、`request_uri` の経路では在ることになる）。**値は保存しない**（#328。`CibaData.ClientNotificationToken` 列には `auth_req_id` を入れる。DB で 500 になっていた） |
 | **N6 : Device グラントの登録種別** | **`device` を固定で書いていた**（normal の登録のトークンも `device` を名乗った） | **登録された種別で書く**（#220 と同じ） |
 | **登録の `grant_types` と Implicit / Hybrid** | **認可エンドポイントで見ず、同意の後で `server_error`** | **認可エンドポイントで発行する経路（`implicit`）は、同意の前に `unauthorized_client`**。**code は従来どおり `/token` で見る**（#307 の段階 1 の決め。`RT-307.7`） |
@@ -1268,7 +1268,7 @@ RFC 8628 §3.1 は「クライアントの識別」を要求し、コンフィ�
 | パブリック（`client_secret` 未登録） | `client_id` の確認のみ（RFC 8628 は公開クライアントを許す） |
 
 **パブリックを一律で弾かないのが要点。** 実測では、登録済み 10 クライアントのうち
-`client_mode: device` の `ae5a1798…`（TestClient3）**だけが `client_secret` を持たない**。
+`client_mode: device` の `ae5a1798…`（Device_Client。旧 TestClient3）**だけが `client_secret` を持たない**。
 一律に認証必須にすると、同梱の自己テストが動かなくなる。
 
 `device_code` と `client_id` の紐付けは、`AuthorizationCodeProvider.Receive(code, client_id, "")` が
@@ -2571,6 +2571,8 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 **復号前の値での照合（OpenTouryo#634 の H-3）は、Open棟梁 4.0 で既定ではやめる**（OpenTouryo#645）。
 **記号（`+` など）を含む秘密を符号化せずに送るクライアントは、4.0 で繋がらなくなる**
 （`RT-237.2` と `RT-237.4` の (2) が落ちる。`:` だけの `RT-237.3` は変わらない）。
+**上げる前に見つけて直してもらうため、復号前の値で通ったら `client_id` を OPERATION のログに出す**
+（**要求ごとに 1 行**。秘密は出さない。振る舞いは変えない。#320）。
 
 これも C-20 と同じく**相互接続性の話**で、弱点を塞いだものではない。
 Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz`・`/par`）が、
@@ -3164,11 +3166,13 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 | **空**（明示しない） | **通す**（**従来どおり**） |
 | **それ以外**（認証の方法を明示した） | **通さない**（`invalid_client`） |
 
-**空を通すのは、既定の挙動を変えないため**である。**雛形の SPA / ネイティブ アプリのクライアントは、秘密を持ったまま PKCE だけで引き換えている**
+**空を通すのは、既定の挙動を変えないため**である。**雛形のネイティブ アプリのクライアントは、秘密を持ったまま PKCE だけで引き換えている**
 （E2E の `FA-1.1` や `PkceTests` も同じ）。**閉じたいクライアントは、方法を明示する**（`CONFIGURATION.md`）。
+**雛形の SPA のクライアント（`SPA_Application`）は、秘密を外した**（方法は空のまま。秘密が無いのでパブリックである）。
+CORS の許可オリジンに、`redirect_uri_code` のオリジンを入れるためである。
 
 > **残り : 方法が空の登録は、秘密を持っていても PKCE だけで通る。**
-> **雛形の SPA / ネイティブから秘密を外し `none` を登録すれば、既定でも閉じられる**（雛形と E2E の書き換えを伴う）。
+> **雛形のネイティブからも秘密を外し `none` を登録すれば、既定でも閉じられる**（雛形と E2E の書き換えを伴う）。
 
 **同じ分岐に、逆向きの不具合も在った**（`code_verifier` が在ると `client_assertion` と証明書を見なかった）。A-16 の N1。
 
@@ -3512,6 +3516,29 @@ Response.Cookies.Set(Config.AuthTimeCookieName,
 
 **fapi2 の登録のクライアント認証では、issuer だけを受ける**（`IsClientAssertionAudience`。`RT-323.1`）。
 **それ以外の登録と JWT Bearer グラントは変えない**（RFC 7523 §3 はトークン エンドポイントの URL を認めている）。
+
+### C-59. `/ros` と PAR が、Request Object の `aud`・`exp`・`nbf` を確かめていなかった。client_assertion の `sub` を見ていなかった **[Lib]** — **✅ 修正済み（#336）**
+
+**`/ros`（`RegisterRequestObject`）と PAR の `request`（`PushedAuthorizationRequest`）は、署名と `iss`・`client_id` しか確かめていなかった。**
+Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかった（OpenTouryo#653）ことと重なっていた。
+`/authorize` は預けた JSON を読むだけなので、どこでも確かめていなかった。
+**効いていたのは、預かったものの期限（300 秒。C-11）と使い切りだけ**で、どちらも JWT の `exp` とは別のものである。
+
+**Open棟梁 の取り込み（OpenTouryo#653・#654・#655）に合わせて、次のように直した。**
+
+| 確かめること | 以前 | いま |
+|---|---|---|
+| **`aud`**（`/ros`・PAR・CIBA の `request`） | 確かめない（CIBA は `/ciba_authz` だけ） | **issuer だけ**（RFC 9101 §4、FAPI 1.0 Advanced §5.2.2-15、FAPI 2.0 Message Signing §5.3.1-2、CIBA Core §7.1.1。`RT-336.1`・`.3`・`.5`） |
+| **`exp`・`nbf`** | 確かめない | **在れば確かめる**（Open棟梁。`RT-336.2`・`.3`・`.5`） |
+| **同（FAPI の登録）** | 同上 | **必須にし、`exp` は `nbf` から 60 分以内**（FAPI 1.0 Advanced §5.2.2-13・17、FAPI 2.0 Message Signing §5.3.1-3・4。`VerifyFapiTimeClaims`。`RT-336.4`・`.6`） |
+| **必須のクレーム**（`iss`・`aud`・`response_type`・`client_id`・`scope`） | 確かめない | **無ければ断る**（Open棟梁）。**中の `client_id` を `iss` で埋める分岐は、CIBA の要求だけになった** |
+| **client_assertion の `sub`** | 見ない | **クライアント認証では `client_id` と一致すること**（RFC 7523 §3 の 2 の B。`RT-336.7`）。JWT Bearer グラントは在ることだけ（2 の A） |
+
+- **E2E の Request Object の `aud`**（`RequestObjectBuilder`）と、**自己テストの `aud`**（`SelfTestClient`）は、**issuer に直した。**
+  どちらも、以前は待ち受けている URL・預け先の URL を入れていた（照合していなかったので通っていた）
+- **自己テストは fapi2 の登録なので、`exp`・`nbf` を足して署名し直す。** Open棟梁 の `RequestObject.Create` は、どちらも入れない
+- **client_assertion の `aud` の照合**（文字列だけ、fapi2 は issuer だけ。C-58）**は MPAS 側に残した。** Open棟梁 は要素 1 つの配列も受ける（`RT-294.54` は断ることを確かめている）
+- **受け入れる範囲が狭まる。** issuer 以外の `aud` を入れている RP、FAPI の登録で `exp`・`nbf` を入れない RP は、断られる
 
 ## 5. D. 最新の IdP として不足している機能
 

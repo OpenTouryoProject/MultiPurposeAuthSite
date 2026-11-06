@@ -33,6 +33,7 @@
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/25  玄人 幸道         auth は登録に明記したクライアントにしか出さない（RT-198.1 の期待値。#294）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -54,7 +55,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// client_credentials と password を見る（サーバ側の経路が別）。
     ///
     /// 期待値は決め打ちにせず、**サーバ自身が Discovery で宣言した scopes_supported** を基準にする。
-    /// クライアントごとの制限（#198 の後半）は、scope を登録した TestClient5 で確かめる（RT-198.3 / 198.4）。
+    /// クライアントごとの制限（#198 の後半）は、scope を登録した TestClient_36 で確かめる（RT-198.3 / 198.4）。
     /// 登録の無いクライアント（MVC_Sample）が制限されないことは、RT-198.1 / 198.2 が示している。
     /// </summary>
     public class ScopeTests : TargetTestBase
@@ -124,28 +125,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         }
 
         /// <summary>
-        /// scope を登録したクライアント（TestClient5）を返す。登録が無ければ Skip する。
+        /// scope を登録したクライアント（TestClient_36）を返す。登録が無ければ Skip する。
         /// </summary>
         /// <param name="client">IdPClient</param>
         /// <param name="permitted">登録の scope</param>
         /// <returns>ClientRegistration</returns>
+        /// <remarks>
+        /// **種データのクライアント**（`TestClients`）なので、**構成ファイルからは引けない。**
+        /// **登録の scope は、種データの表と同じ値（`RestrictedScope`）** を使う
+        /// （以前は雛形の TestClient5 で、構成ファイルから読んでいた）。
+        /// </remarks>
         private static ClientRegistration RestrictedClient(IdPClient client, out List<string> permitted)
         {
-            string clientId = client.Config.FindClientIdByName(KnownClients.TestClient5);
+            permitted = RestrictedScope.Split(' ').Where(x => x.Length > 0).ToList();
 
-            Skip.If(string.IsNullOrEmpty(clientId),
-                KnownClients.TestClient5 + " が構成ファイルに登録されていません。"
-                + "雛形（_appsettings.json / _app.config）を参照して追加してください。");
-
-            string scope = client.Config.GetClientAttribute(clientId, "scope");
-
-            Skip.If(string.IsNullOrEmpty(scope),
-                KnownClients.TestClient5 + " に scope が登録されていません。");
-
-            permitted = scope.Split(' ').Where(x => x.Length > 0).ToList();
-
-            return Flows.Registration(client, KnownClients.TestClient5);
+            return Flows.InjectedRegistration(client, KnownClients.TestClient_36);
         }
+
+        /// <summary>TestClient_36 に登録した scope（**サーバ側の `TestClients` の表と同じ値にすること**）</summary>
+        private const string RestrictedScope = "openid profile email";
 
         /// <summary>登録の scope に無いスコープを発行していないことを確かめる</summary>
         /// <param name="r">TestReport</param>
@@ -287,7 +285,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string[] expected = Requested.Split(' ')
                     .Where(x => permitted.Contains(x) && supported.Contains(x)).ToArray();
 
-                r.Target("client_name=" + KnownClients.TestClient5
+                r.Target("client_name=" + KnownClients.TestClient_36
                     + " / 登録の scope = " + string.Join(" ", permitted));
                 r.Note("Discovery の scopes_supported = [" + string.Join(", ", supported) + "]");
                 r.Step("POST /token に grant_type=client_credentials、scope=\"" + Requested + "\" を送る");
@@ -335,7 +333,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string[] expected = Requested.Split(' ')
                     .Where(x => permitted.Contains(x) && supported.Contains(x)).ToArray();
 
-                r.Target("client_name=" + KnownClients.TestClient5
+                r.Target("client_name=" + KnownClients.TestClient_36
                     + " / 登録の scope = " + string.Join(" ", permitted));
                 r.Step("(1) GET /authorize に scope=\"" + Requested + "\" を付けて code を得る");
                 r.Step("(2) code をトークンに交換する");

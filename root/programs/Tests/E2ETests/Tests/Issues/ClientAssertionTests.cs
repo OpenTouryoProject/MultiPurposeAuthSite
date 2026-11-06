@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/25  玄人 幸道         新規（#238）
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -58,7 +59,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **両方を受ける**（`client_assertion` を優先し、無ければ `assertion`）。
     /// Open棟梁 の既存のクライアントは `assertion` を送るため（OpenTouryo #592）。
     ///
-    /// **ここで使う `TestClient2` は fapi2 なので、アサーションの `aud` は issuer**（#323。`RT-323.1`）。
+    /// **ここで使う `FAPI2_Client` は fapi2 なので、アサーションの `aud` は issuer**（#323。`RT-323.1`）。
     /// `/par` や `/ciba_authz` へ送るときも同じ。
     /// </remarks>
     public class ClientAssertionTests : TargetTestBase
@@ -101,7 +102,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = this.Client(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
                 TestReport r = this.Report("RT-238.1",
                     "RFC 7523 §2.2 の client_assertion で、private_key_jwt のクライアント認証が通る",
@@ -111,7 +112,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "Open棟梁 の PAR / CIBA のクライアント（OpenTouryo#592）は `client_assertion` を送る。",
                     "RFC 7523 §2.2 / RFC 9126 §2 / #238");
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（fapi2。jwk_rsa_publickey を登録済み）");
+                r.Target("client_name=" + KnownClients.Fapi2Client + "（fapi2。jwk_rsa_publickey を登録済み）");
 
                 r.Step("(1) client_assertion（RS256）を作り、client_assertion_type を添えて POST /par");
 
@@ -148,7 +149,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = this.Client(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
                 TestReport r = this.Report("RT-238.2",
                     "従来の名前（assertion）でも、private_key_jwt のクライアント認証が通る",
@@ -158,7 +159,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "`client_assertion` を優先し、**無ければ `assertion` も読む。**",
                     "RFC 7523 §2.2 / #238");
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（assertion という名前で送る）");
+                r.Target("client_name=" + KnownClients.Fapi2Client + "（assertion という名前で送る）");
 
                 r.Step("(1) assertion（従来の名前）で POST /par");
 
@@ -190,7 +191,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = this.Client(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
                 TestReport r = this.Report("RT-238.3",
                     "client_assertion_type が仕様の値でなければ、クライアント認証を通さない",
@@ -200,7 +201,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**省略されていれば受ける**（この実装は従来、型を見ていなかったため）。",
                     "RFC 7523 §2.2 / #238");
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（client_assertion_type だけ誤り）");
+                r.Target("client_name=" + KnownClients.Fapi2Client + "（client_assertion_type だけ誤り）");
 
                 r.Step("(1) client_assertion_type に別の URN を入れて POST /par");
 
@@ -238,7 +239,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
 
                 TestReport r = this.Report("RT-238.4",
                     "トークン エンドポイントでも、client_assertion で認証してトークンを得られる",
@@ -247,7 +248,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**この経路が通らないと、fapi2 のクライアントはトークンを得られない。**",
                     "RFC 7523 §2.2 / FAPI 2.0 / #238");
 
-                r.Target("client_name=" + KnownClients.TestClient2 + "（fapi2。JAR で認可し、private_key_jwt で交換）");
+                r.Target("client_name=" + KnownClients.Fapi2Client + "（fapi2。JAR で認可し、private_key_jwt で交換）");
 
                 r.Step("(1) FAPI2 の自己テストで、request_uri 経路の code を得る");
 

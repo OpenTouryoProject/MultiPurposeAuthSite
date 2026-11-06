@@ -35,6 +35,7 @@
 //*  2026/10/31  玄人 幸道         /par の claims を JSON のオブジェクトとして預ける。読めなければ invalid_request（#294）
 //*  2026/10/31  玄人 幸道         /ros と PAR の Request Object も、claims がオブジェクトでなければ断る（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.RequestObject.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
+//*  2026/11/06  玄人 幸道         /ros と PAR の Request Object の aud を issuer と照合する。FAPI の登録は exp・nbf を必須にし、寿命を 60 分以内に限る（#336）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -50,6 +51,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
@@ -75,6 +77,78 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JToken claims = (payload == null) ? null : payload[OAuth2AndOIDCConst.claims];
 
             return claims == null || claims.Type == JTokenType.Object;
+        }
+
+        #endregion
+
+        #region FAPI の時刻のクレーム（#336）
+
+        /// <summary>FAPI の Request Object の寿命の上限（秒）</summary>
+        private const long FapiRequestObjectMaxLifetimeSeconds = 60 * 60;
+
+        /// <summary>FAPI の登録なら、exp・nbf が在り、寿命が 60 分以内か（#336）</summary>
+        /// <param name="client_id">Request Object を署名したクライアント</param>
+        /// <param name="payload">Request Object の payload（署名は確かめた後であること）</param>
+        /// <returns>FAPI の登録でないか、満たしていれば true</returns>
+        /// <remarks>
+        /// **FAPI 1.0 Advanced §5.2.2-13・17、FAPI 2.0 Message Signing §5.3.1-3・4。**
+        ///
+        /// | クレーム | 確かめること |
+        /// |---|---|
+        /// | `nbf` | 在り、60 分より前でない |
+        /// | `exp` | 在り、`nbf` から 60 分以内 |
+        ///
+        /// **過ぎていないか**（`exp` が先、`nbf` が後でない）は、Open棟梁 の `RequestObject.Verify` が確かめている（OpenTouryo#653）。
+        /// **ここで足すのは、在ることと、寿命の上限**である（Open棟梁 は、在れば確かめるだけ）。
+        /// **FAPI でない登録には求めない**（RFC 9101 は `exp`・`nbf` を必須にしていない）。
+        /// </remarks>
+        private static bool VerifyFapiTimeClaims(string client_id, JObject payload)
+        {
+            string mode = Helper.GetInstance().GetClientMode(client_id);
+
+            if (mode != OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
+                && mode != OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+            {
+                return true;
+            }
+
+            if (!CmnRequestObjectEndpoint.TryReadNumericDate(payload[OAuth2AndOIDCConst.exp], out double exp)
+                || !CmnRequestObjectEndpoint.TryReadNumericDate(payload[OAuth2AndOIDCConst.nbf], out double nbf))
+            {
+                return false;
+            }
+
+            double now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            return nbf >= now - CmnRequestObjectEndpoint.FapiRequestObjectMaxLifetimeSeconds
+                && exp - nbf <= CmnRequestObjectEndpoint.FapiRequestObjectMaxLifetimeSeconds;
+        }
+
+        /// <summary>NumericDate（JSON の数値）を読む（#336）</summary>
+        /// <param name="token">クレームの値</param>
+        /// <param name="value">秒</param>
+        /// <returns>読めれば true</returns>
+        /// <remarks>**数値だけを受ける**（RFC 7519 §2。文字列は受けない）。**外から来た値なので、例外にしない。**</remarks>
+        private static bool TryReadNumericDate(JToken token, out double value)
+        {
+            value = 0;
+
+            if (token == null || (token.Type != JTokenType.Integer && token.Type != JTokenType.Float))
+            {
+                return false;
+            }
+
+            try
+            {
+                value = token.Value<double>();
+            }
+            catch (Exception)
+            {
+                // 桁の大きすぎる整数など
+                return false;
+            }
+
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
 
         #endregion
@@ -141,9 +215,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 pubKey = JwtUtil.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkECDsaPublickey(iss));
 
-                // 署名検証
+                // 署名とクレームの検証
+                //   **aud は issuer**（CIBA Core §7.1.1。#336）。必須のクレームと時刻は Open棟梁 が確かめる（OpenTouryo#653）。
                 result = !string.IsNullOrEmpty(pubKey)
-                    && RequestObject.VerifyCiba(requestObject, out iss, pubKey);
+                    && RequestObject.VerifyCiba(requestObject, CmnServerParams.IssuerId, out iss, pubKey);
             }
             else
             {
@@ -163,9 +238,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
 
-                // 署名検証
+                // 署名とクレームの検証（#336）
+                //   **aud は issuer だけ**（RFC 9101 §4、FAPI 1.0 Advanced §5.2.2-15、FAPI 2.0 Message Signing §5.3.1-2）。
+                //   **以前は署名しか確かめず、期限の過ぎたもの・別の認可サーバ宛てのものも預かっていた。**
+                //   必須のクレームと、在る時刻のクレームは Open棟梁 が確かめる（OpenTouryo#653）。
+                //   **FAPI の登録は、exp・nbf を必須にし、寿命を 60 分以内に限る**（`VerifyFapiTimeClaims`）。
                 result = !string.IsNullOrEmpty(pubKey)
-                    && RequestObject.Verify(requestObject, out iss, pubKey);
+                    && RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out iss, pubKey)
+                    && CmnRequestObjectEndpoint.VerifyFapiTimeClaims(iss, payload);
             }
 
             if (!result)
@@ -178,6 +258,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **自分の鍵で署名した Request Object を、別のクライアントの名義で預けられた**
             //    （`/authorize` は、要求の client_id と Request Object の client_id だけを突き合わせる）。
             //    **PAR（C-41）と同じ扱い** — **無ければ iss で埋める。**
+            //    **埋めるのは CIBA の要求だけになった**（#336）。RS256 の Request Object は、
+            //    Open棟梁 の `RequestObject.Verify` が client_id を必須にした（OpenTouryo#653）ので、無ければ上で断られる。
             JToken roClientId = payload[OAuth2AndOIDCConst.client_id];
 
             if (roClientId == null)
@@ -318,7 +400,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
 
-                if (!RequestObject.Verify(request, out string iss, pubKey))
+                //  **aud は issuer だけ**（RFC 9101 §4 / FAPI。#336。`RegisterRequestObject` と同じ）。
+                if (!RequestObject.Verify(request, CmnServerParams.IssuerId, out string iss, pubKey))
                 {
                     err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object is not verified.");
@@ -341,6 +424,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    **以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、
                 //    **別のクライアントの名義で、預けた要求を作れた。**
                 //    **無ければ、認証したクライアントで埋める**（フォームの経路と同じ）。
+                //    **ただし今は、無いものは上の `RequestObject.Verify` で断られる**（client_id を必須にした。OpenTouryo#653。#336）。
                 JToken roClientId = payload[OAuth2AndOIDCConst.client_id];
 
                 if (roClientId == null)
@@ -359,6 +443,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
                     err.Add(OAuth2AndOIDCConst.error_description, "The claims in the request object must be a JSON object.");
+                    return false;
+                }
+
+                //  **FAPI の登録は、exp・nbf を必須にし、寿命を 60 分以内に限る**（#336。`RegisterRequestObject` と同じ）。
+                //    **フォームのパラメタ（下）には求めない**（FAPI 2.0 Security Profile は JAR を求めない。求めるのは Message Signing）。
+                if (!CmnRequestObjectEndpoint.VerifyFapiTimeClaims(client_id, payload))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "The request object of a FAPI client must have exp and nbf, and live no longer than 60 minutes.");
                     return false;
                 }
             }

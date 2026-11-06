@@ -5,7 +5,7 @@ rem   ・出来上がるのは _SHA256RSAClientCert.cer / _SHA256RSAClientCert.p
 rem     （既存を壊さないよう、先頭に _ が付く。確認してから名前を変えて置き換える）
 rem   ・パスワードは test（構成ファイルの SpRp_ClientCertPfxPassword と同じ）
 rem   ・Subject は、クライアント登録の tls_client_auth_subject_dn と一致させること
-rem     （雛形では TestClient1 / TestClient2 の値）
+rem     （雛形では FAPI1_Client / FAPI2_Client の値）
 rem   ・PKCS#12 の暗号化は古い方式に揃える。net48（.NET Framework）で読めるようにするため
 rem
 rem 詳細は CONFIGURATION.md 8 節。

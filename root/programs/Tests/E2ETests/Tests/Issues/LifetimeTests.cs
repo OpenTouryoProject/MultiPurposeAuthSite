@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/24  玄人 幸道         新規（#188 の段階 1 : 有効期限を実際に検証する）
+//*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
 //**********************************************************************************
 
 using System;
@@ -197,7 +198,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(1) Request Object を /ros に預け、request_uri と exp を得る");
 
                 string requestUri = await RequestObjectBuilder.RegisterAsync(client,
-                    RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                    await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
                     {
                         { "response_type", "code" },
                         { "redirect_uri", reg.RedirectUri },

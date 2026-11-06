@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/19  玄人 幸道         新規（#222 : 許されない経路が抑止されること）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -80,7 +81,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.OAuth21
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                Flows.SkipIfClientNotRegistered(client, KnownClients.TestClient6);
+                Flows.SkipIfClientNotRegistered(client, KnownClients.RequirePkceClient);
 
                 TestReport r = this.Report("21-1.1",
                     "OAuth 2.1 が許さない経路（Implicit / ROPC / PKCE 無し）が、締めた登録では塞がる",
@@ -89,12 +90,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.OAuth21
                     + "対照（normal 登録は通る）と並べて確かめる（#222）。",
                     "OAuth 2.1 draft §2.1.2 / §4.1.1 / #222");
 
-                ClientRegistration fapi1 = Flows.Registration(client, KnownClients.TestClient1);
-                ClientRegistration pkceOnly = Flows.Registration(client, KnownClients.TestClient6);
+                ClientRegistration fapi1 = Flows.Registration(client, KnownClients.Fapi1Client);
+                ClientRegistration pkceOnly = Flows.Registration(client, KnownClients.RequirePkceClient);
                 ClientRegistration normal = Flows.Registration(client, KnownClients.MvcSample);
 
-                r.Target("fapi1=" + KnownClients.TestClient1
-                    + " / require_pkce=" + KnownClients.TestClient6
+                r.Target("fapi1=" + KnownClients.Fapi1Client
+                    + " / require_pkce=" + KnownClients.RequirePkceClient
                     + " / 対照=" + KnownClients.MvcSample);
 
                 r.Step("(1) 対照 : normal 登録は、PKCE 無しでも ROPC でも通る");

@@ -237,8 +237,8 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   `RequestObject`）。**3 方言すべてを直すこと。**
   **`IssuedToken` は #321 で落とした**（発行した access_token を保存するだけで、どこからも読まれていなかった）。
   **既に配備された DB に残っている表は使われない**（消してよい）。
-- Docker で DBMS を立てる一式は `Container/Store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
-  `0_CopyInitSql.ps1` が上記 DDL を `Container/Store/*/init/` へコピーし、**CRLF を LF に変換**する
+- Docker で DBMS を立てる一式は `container/Store/`（`docker-compose.yml` ＋ `0_CopyInitSql.ps1`）。
+  `0_CopyInitSql.ps1` が上記 DDL を `container/Store/*/init/` へコピーし、**CRLF を LF に変換**する
   （Linux コンテナの初期化スクリプトが読むため）。
 
 ### 4.3 STS 専用モード（機能ロックダウン）

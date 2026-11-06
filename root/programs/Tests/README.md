@@ -59,8 +59,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 
 | client_name | 何のために登録してあるか |
 |---|---|
-| `TestClient5` | 登録の `scope` で、要求してよいスコープを制限（#198） |
-| `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221） |
+| `RequirePKCE_Client` | **クライアント単位で PKCE を必須**（`require_pkce`。#221。旧 `TestClient6`） |
 
 **構成ファイルに無いクライアントもある**（#224 / #264）。
 雛形にも実設定にも足さずに済むので、**特定の組み合わせを試すためだけのクライアント**に使う。
@@ -71,9 +70,9 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 
 | client_name | 何か | 引き方 |
 |---|---|---|
-| `TestClient4_2` | `TestClient4`（fapi_ciba）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
+| `TestClient4_2` | `FAPI_CIBA_Client`（fapi_ciba。旧 `TestClient4`）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
 | `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | 同上 |
-| `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
+| `TestClient2_2` | `FAPI2_Client`（fapi2。旧 `TestClient2`）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
 | `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | 同上 |
 | `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | 同上 |
 | `TestClient_3` | 同じく写しで、**`client_secret` に `:` と `+` を含む**（`KnownClients.ColonSecret`）。符号化しないと**復号前の値での照合**で通る（#237。`RT-237.4`。Open棟梁 4.0 でやめる。OpenTouryo#645） | 同上 |
@@ -85,11 +84,12 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_15` | 同じく写しで、**`redirect_uri_code` を `test_self_code_manage`** に（C-10）。**管理画面の自己テストの折り返し先が、登録値として通る**ことを測る | 同上 |
 | `TestClient_16` | 同じく写しで、**`client_secret` を空（public）**にし、**`web_origins`** と**別オリジンの `redirect_uri_code`** を登録（#266）。**`web_origins` が勝つ**ことを測る | 同上 |
 | `TestClient_17` | 同じく public で、**`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つ**を登録（#269）。**登録全体が 2000 文字を超えても保存できる**ことを測る（#270 で列に切り出した後も、列ごとの幅に入ることの確かめになっている） | 同上 |
-| `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `TestClient6` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
+| `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `RequirePKCE_Client` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
 | `TestClient_19` | 同じく写し。**どのテストも「許可」を押さない**（#272 の段階 2）。**「同意の記録が無い」状態を測るためだけに在る**（`RT-272.3` / `RT-272.4`）。**押すと記録が残り、DB ストアでは 2 回目から測れなくなる** | 同上 |
 | `TestClient_20` | 同じく写し。**同意の取り消しを測るためだけに在る**（#272 の段階 2。`RT-272.7`）。**「許可 → 取り消し → prompt=none」**を回すので、**終わった時点で記録を残さない** | 同上 |
-| `TestClient_21` | **写す元が `TestClient3`**（#275）。**`jwk_rsa_publickey` を持たない**ので、**署名の無い `AuthnRequest` が通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録してある — **応答は辿らず、返ってきた場所と `SAMLResponse` を読むだけ**。`SA-1` 以外の SAML のテストが使う | 同上 |
+| `TestClient_21` | **写す元が `Device_Client`**（旧 `TestClient3`。#275）。**`jwk_rsa_publickey` を持たない**ので、**署名の無い `AuthnRequest` が通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録してある — **応答は辿らず、返ってきた場所と `SAMLResponse` を読むだけ**。`SA-1` 以外の SAML のテストが使う | 同上 |
 | `TestClient_22` | 同じく（`https://saml.e2e.example/acs2`）。**`NameIDPolicy=persistent` の PPID が RP ごとに違うこと**を測るための 2 つ目（`SA-3.3`） | 同上 |
+| `TestClient_36` | `TestClient` の写しで、**登録の `scope` を `openid profile email` に制限**し、`redirect_uri_code` を `http://localhost:12346/` にしたもの（#198。`RT-198.3` / `.4`、`EX-2.7`）。**旧 `TestClient5`**（雛形に在ったが、E2E だけが使うので移した）。**scope は `ScopeTests.RestrictedScope` と同じ値にしておくこと** | 同上 |
 
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
@@ -335,7 +335,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` だけを含む秘密は符号化してもしなくても通ること（最初の `:` で分ける。OpenTouryo#643）、`:` と `+` を含む秘密は符号化しなくても復号前の値の照合で通ること（Open棟梁 4.0 でやめる。OpenTouryo#645） |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
-| `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `Container/E2E/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
+| `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `container/E2E/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
 | `Tests/Issues/ManageGdprTests.cs` | `RT-277` | **GDPR 対応**（`/Manage/ManageGdprData`）。**参照**は自分のデータを `user.json`（`application/json`）で返し、**パスワードの控えは入っていない**こと。**消去**は、**利用者の行ごと消える**こと（#299。子の行は外部キーの cascade が落とす）と、**その利用者ではサインインできなくなる**こと。**属性データ・クライアント登録・ロールを持たせてから消す**（**登録が在ると、以前の実装では消去が外部キーで弾かれた**）。**使い捨ての利用者を使う**（消去は元に戻せない）。**4 ストアで測る** |
 | `Tests/Issues/TokenHeaderTests.cs` | `RT-302` | **発行するトークンの JWS ヘッダ**（#302 の段階 1。D-10 / RFC 9068）。**`jku` を入れず、`kid` で引けること**を access_token / id_token / JARM の 3 つで見る。**`typ` は種類どおりであること**（access_token は `at+jwt`、id_token と JARM は `JWT`。#302 の段階 2）。**`jku` は、検証が `kid` で引くので他のケースでは代わりにならない。****`typ` は逆で、噛み合っていないと通し全体が落ちる**（歯抜けで 75 件） |
 | `Tests/Issues/JwkSetCacheTests.cs` | `RT-303` | **`/jwkcerts` のキャッシュ**（#303。E-7）。**`ETag` / `Cache-Control` / `If-None-Match` の `304`**（`RT-303.1`）と、**鍵の入れ替えに追随すること**（`RT-303.2`。`JwkSet.json` の末尾に空白を足して戻す。**鍵は変えない**ので他のテストを壊さない） |
@@ -361,7 +361,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/FrontChannelLogoutTests.cs` | `RT-310` | **ブラウザ経由でログアウトを伝える**（#310 の段階 3）。**Discovery が `frontchannel_logout_supported` を広告する**こと（`RT-310.7`。**`check_session_iframe` は出さない**）、**`/end_session` が `iframe` の画面を返し、URL に `iss` と `sid` が付く**こと（`RT-310.8`。**その URL を叩くと RP に届く**。**登録が無い RP の `iframe` は無い**。**画面の後は登録された戻り先へ進む**）、**`/Account/Logout` でも画面が出る**こと（`RT-310.9`。**登録が在る RP が 1 つも無ければ、画面は出ない**）。**E2E は `iframe` を開けない**ので、**画面から URL を取り出して自分で叩く**（受信箱は `/Account/FrontChannelLogoutBox`。**`IsLockedDownTestEndpoints` で閉じる**） |
 | `Tests/Issues/BackChannelLogoutTests.cs` | `RT-310` | **ログアウトを RP へ伝える**（#310 の段階 2）。**Discovery が `backchannel_logout_supported` を広告する**こと（`RT-310.4`。**`frontchannel_logout_supported` はまだ出さない**）、**`/end_session` で `backchannel_logout_uri` を登録した RP に `logout_token` が届く**こと（`RT-310.5`。**`aud` / `sid` / `events` / `nonce` 無し / `typ` まで見る**。**登録が無い RP には届かない**）、**同意画面を出しただけ・拒否された RP には伝えない**こと（`RT-310.6`）。**受け口はサイト自身**（`/Account/BackChannelLogoutClient`。**`IsLockedDownTestEndpoints` で閉じる**ので、閉じていれば Skip）。**通知は背景で送られる**ので**届くまで待つ** |
 | `Tests/Issues/SessionIdTests.cs` | `RT-310` | **`sid`（OP のセッションの識別子）を `id_token` に出す**（#310 の段階 1）。**同じセッション・同じ RP なら 2 回目も同じ値で、`refresh_token` で取り直しても同じ**こと（`RT-310.1`。**台帳から引けている**）、**RP ごとに別の値**であること（`RT-310.2`。**`pairwise` の `sub` を分けた意味を消さない**）、**サインアウトして入り直すと変わる**こと（`RT-310.3`）。**値そのものは見ない**（guid。**同じか違うかだけ**） |
-| `Tests/Issues/JwksUriTests.cs` | `RT-309` | **クライアントの鍵を `jwks_uri` から引く**（#309 の段階 1）。**動的登録で `jwks_uri` を登録でき、その URL の鍵で `private_key_jwt` が通る**こと（`RT-309.1`。**`jwks` との併記と、読めない URL は `400`**）、**画面から登録した `jwks_uri` は 1 回目に断られ、背景で補充された後は通る**こと（`RT-309.2`。**要求の経路では取りに行かない**）、**同じ URL の中身を入れ替えると `PUT` で読み直す**こと（`RT-309.3`）、**`software_statement` の中だけで主張された `jwks_uri`** でも登録でき**1 回目から通る**こと（`RT-309.4`。**段階 2**）。**相手の `jwks_uri` は静的配信のコンテナ**（`Container/E2E/` の `jwks`。**44305**）**で用意する** — **上がっていなければ Skip** |
+| `Tests/Issues/JwksUriTests.cs` | `RT-309` | **クライアントの鍵を `jwks_uri` から引く**（#309 の段階 1）。**動的登録で `jwks_uri` を登録でき、その URL の鍵で `private_key_jwt` が通る**こと（`RT-309.1`。**`jwks` との併記と、読めない URL は `400`**）、**画面から登録した `jwks_uri` は 1 回目に断られ、背景で補充された後は通る**こと（`RT-309.2`。**要求の経路では取りに行かない**）、**同じ URL の中身を入れ替えると `PUT` で読み直す**こと（`RT-309.3`）、**`software_statement` の中だけで主張された `jwks_uri`** でも登録でき**1 回目から通る**こと（`RT-309.4`。**段階 2**）。**相手の `jwks_uri` は静的配信のコンテナ**（`container/E2E/` の `jwks`。**44305**）**で用意する** — **上がっていなければ Skip** |
 | `Tests/Issues/SoftwareStatementAdminTests.cs` | `RT-308` | **発行者（ベンダ）の台帳を DB ＋ 画面で持つ**（#308）。**画面から足して・直して・消せる**こと（`RT-308.1`）、**DB に PEM を貼った発行者の `software_statement` で登録が通り、消すとその場で通らなくなる**こと（`RT-308.2`。**`CerFilePath` は空 ＝ 本文だけで検証**）、**設定ファイルに在る鍵は画面から足せない**こと（`RT-308.3`。**同じ鍵なら設定が勝つ**）。**鍵は対象ごとに分ける**（DB ストアでは 1 つの DB を共有するため）。**署名は `RsaPfxFilePath`、貼る証明書は `SpRp_RsaCerFilePath`**（**対になっている方**） |
 | `Tests/Issues/ManageSaml2OAuth2DataTests.cs` | `RT-277` | **管理画面のクライアント登録**（`/Manage/AddSaml2OAuth2Data`。#277 の段階 1・3）。**3 回押さないと登録できない**こと（`client_id` → `client_secret` → 登録。**1 回目で「登録」を押しても黙って何も起きない**）、**折り返し先の候補が `datalist` に出る**こと、**新規登録の `redirect_uri_code` の既定が `test_self_code`** であること。**サインイン中の利用者自身の登録を使い、測り終えたら消す**。**`RT-297.1` は、クライアント登録の `client_secret` が暗号化しても往復すること**（#297。**発行 → 登録 → 読み直し**）。**`RT-277.9` 〜 `.11` は、管理画面の一覧**（#307 の段階 5-a-2）— **2 件登録して一覧に並ぶこと・`client_id` の昇順であること・2 件目だけを編集できること**（`RT-277.9`）、**自分の物でない `client_id` では編集も削除もできないこと**（`RT-277.10`。**種データのクライアント ＝ 所有者の無い行で測る**）、**一覧から 1 件だけ消せること**（`RT-277.11`） |
 | `Tests/Issues/IdFederationAdminTests.cs` | `RT-292` | **上流 IdP の登録を、user store と管理画面で扱う**（`/IdFederationAdmin`。#292 の段階 2）。**足して・直して・消せること**／**足した上流がサインイン画面の導線に出ること**（**設定 → user store の順に読む**）／**`SystemAdmin` でなければ開かないこと**。**4 つのストアで測った**（`mem` / `sql` / `ora` / `npg`）。**`RT-297.2` は、上流の登録の `client_secret` が暗号化しても往復すること**（#297）。**`RT-292.4` は、上流ごとの署名鍵（`.pfx` のパスとパスワード）が往復すること**（#292 の段階 4-b。**パスワードは暗号化して保管する**） |
@@ -436,7 +436,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/NameIdFormatTests.cs` | `SA-3` | `NameIDPolicy` の値ごとの `NameID`（`unspecified` / `emailAddress` / **`persistent` は RP ごとに違う PPID**） |
 | `Tests/Saml/SignInFlowTests.cs` | `SA-4` | **未サインイン → サインイン画面 → アサーション**（SP-initiated SSO の本来の形） |
 | `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
-| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `Container/E2E/` のコンテナ**。**建っていなければ Skip**。**`SA-6.5` は、署名を壊した `AuthnRequest` を上流が弾くこと**（#293 の段階 4。(2) の検証が効いていること）。**`SA-6.6` は、上流が証明書を 2 本広告していても連携できること**（#292 の段階 3。**受け取る側は全部試す**） |
+| `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `container/E2E/` のコンテナ**。**建っていなければ Skip**。**`SA-6.5` は、署名を壊した `AuthnRequest` を上流が弾くこと**（#293 の段階 4。(2) の検証が効いていること）。**`SA-6.6` は、上流が証明書を 2 本広告していても連携できること**（#292 の段階 3。**受け取る側は全部試す**） |
 | `Tests/Saml/AttributeStatementTests.cs` | `SA-7` | **アサーションの `AttributeStatement`**（#286 の段階 4）。**メアド・利用者名・`email_verified` を属性で返すこと**（`urn:oid:…` ＋ `FriendlyName` ＋ `NameFormat`）／**`persistent` の `NameID` でも属性でメアドが分かること**（段階 4 の目的）。**自己テストの口で測る**ので、上流コンテナは要らない |
 
 > **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**
@@ -449,7 +449,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 >
 > **署名は作らない。**
 > **`TestClient_21` / `TestClient_22` は `jwk_rsa_publickey` を持たない**ので
-> （写す元を `TestClient3` にしてある）、**署名の無い要求が通る。**
+> （写す元を `Device_Client` にしてある）、**署名の無い要求が通る。**
 > **`TestClient` は持っている**ので、同じ要求が `SA-5.4` で落ちる。**差は登録だけである。**
 >
 > **`client_id` の接頭辞は `sa`**（`e2e0sa21…`）。
@@ -671,5 +671,5 @@ cd root
   `-Launch` は環境変数で別のポートへ寄せるので**同時に測れる**が、
   手で立てるときは片方を別の URL にすること。
 - CIBA のテスト（`RT-196.16` 〜 `196.18`、`EX-8`）は、構成ファイルの `SpRp_EcdsaPfxFilePath`（ES256 の秘密鍵）で要求に署名する。
-  CIBA のクライアント（`TestClient4`）が登録している `jwk_ecdsa_publickey` と対になっていること。
+  CIBA のクライアント（`FAPI_CIBA_Client`）が登録している `jwk_ecdsa_publickey` と対になっていること。
   取り違えは検出して Skip する（[`../../TESTING.md`](../../TESTING.md) 5 節）。

@@ -32,6 +32,7 @@
 //*  2026/11/02  玄人 幸道         同時に間違えても、すべて数える（RT-316.1・RT-316.2）
 //*  2026/11/03  玄人 幸道         同時の失敗の数えと、同時の同意の記録（RT-331.1・RT-331.2）
 //*  2026/11/04  玄人 幸道         ロックアウトの窓を過ぎてから確かめたときは、数え直す（#331）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -134,7 +135,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                     r.Step("(2) 機器 : POST /device_authz で user_code を得る");
 
-                    ClientRegistration reg = Flows.Registration(admin, KnownClients.TestClient3);
+                    ClientRegistration reg = Flows.Registration(admin, KnownClients.DeviceClient);
                     JsonResponse start = await DeviceAuthorizationTests.StartAsync(admin, reg.ClientId);
                     string userCode = start.String("user_code");
 

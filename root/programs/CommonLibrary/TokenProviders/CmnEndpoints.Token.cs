@@ -35,6 +35,7 @@
 //*  2026/10/30  玄人 幸道         消された利用者・SecurityStamp が変わった利用者の refresh_token を断る（#294）
 //*  2026/10/30  玄人 幸道         device_code の引き換えで client_assertion（private_key_jwt）も受ける（#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/06  玄人 幸道         JWT Bearer の assertion を、期待する iss・aud を渡す版の JwtAssertion.Verify で検証する（OpenTouryo#654。#336）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1010,8 +1011,12 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     //  **読めない形（配列の aud など）でも例外にしない**（#294。`TryVerifyAssertion`）。
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
-                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, out string iss))
+                    //    **iss・aud も Open棟梁 が照合する**（OpenTouryo#654。#336）。
+                    //    **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。
+                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, out string _))
                     {
+                        string iss = assertionIss;
+
                         string scopes = JwtUtil.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.scope);
 
                         // aud 検証

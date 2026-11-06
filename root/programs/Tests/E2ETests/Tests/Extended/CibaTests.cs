@@ -34,6 +34,7 @@
 //*  2026/09/25  玄人 幸道         認証要求を request で送り、クライアント認証を添えるようにした（#234）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //*  2026/10/30  玄人 幸道         認証デバイスの口を叩くトークンを、認証デバイスのクライアントで取る（#294）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -203,10 +204,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "プッシュ通知は、登録した端末に、要求の binding_message を載せて届くこと。",
                     "CIBA Core §7（認証リクエスト）/ §10（ポーリング）/ §11（authorization_pending）/ #196");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 string bindingMessage = "E2E-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
+                r.Target("client_name=" + KnownClients.FapiCibaClient + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（認証デバイスとプッシュ通知は、テストで置き換える）");
 
                 r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -281,9 +282,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "拒否した要求で、トークンが出てはならない。",
                     "CIBA Core §11（access_denied）/ #196");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
+                r.Target("client_name=" + KnownClients.FapiCibaClient + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（認証デバイスとプッシュ通知は、テストで置き換える）");
 
                 r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -339,9 +340,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "この状態では、承認していない要求にもトークンが出てしまう。",
                     "CIBA Core §10（ポーリング）/ §11（authorization_pending）");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
+                r.Target("client_name=" + KnownClients.FapiCibaClient + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（同じ利用者の要求を 2 件、同時に保留にする）");
 
                 r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -413,7 +414,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     + "（区別すると auth_req_id の存在を推測できる）。",
                     "CIBA Core §7（認証リクエストは特定の利用者に宛てられる）");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Target("宛先の利用者 = " + TestEnv.TestUserName(targetKey)
                     + " / 返答するのは " + TestEnv.SecondUserName(targetKey));

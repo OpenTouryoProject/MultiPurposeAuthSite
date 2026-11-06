@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/28  玄人 幸道         新規（#294）
 //*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -83,7 +84,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
                 TestReport r = this.Report("RT-294.15",
                     "/device_verify は、AntiForgery トークンが無ければ承認しない",
@@ -92,7 +93,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**利用者が意図しない `user_code` の承認を送らせられた。**",
                     "#294（AccountController.Authorize.cs のレビュー S1）/ OWASP CSRF Prevention");
 
-                r.Target("client_name=" + KnownClients.TestClient3);
+                r.Target("client_name=" + KnownClients.DeviceClient);
 
                 r.Step("(1) 機器 : デバイス認可を始める");
 
@@ -373,7 +374,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
-                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient1);
+                ClientRegistration other = Flows.Registration(client, KnownClients.Fapi1Client);
 
                 TestReport r = this.Report("RT-294.21",
                     "request_uri（PAR）の Request Object と違う client_id を付けると、断る",
@@ -381,7 +382,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "（RFC 9126 §4 / RFC 9101 §5 は一致を求める）。",
                     "#294（AccountController.Authorize.cs のレビュー 8）");
 
-                r.Target("PAR は " + KnownClients.TestClient + " / 認可要求の client_id は " + KnownClients.TestClient1);
+                r.Target("PAR は " + KnownClients.TestClient + " / 認可要求の client_id は " + KnownClients.Fapi1Client);
 
                 JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
                 string endpoint = discovery.String("pushed_authorization_request_endpoint");

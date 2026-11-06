@@ -46,14 +46,14 @@ using Xunit;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 {
     /// <summary>
-    /// `Container/E2E/` のコンテナ（上流 / 下流）を、テスト対象として扱う（#284）。
+    /// `container/E2E/` のコンテナ（上流 / 下流）を、テスト対象として扱う（#284）。
     /// </summary>
     /// <remarks>
     /// **ホストの core / netfx（`TestEnv`）とは別に持つ。**
     /// **`AllTargets` に混ぜない** — 混ぜると既存の全テストが増え、
     /// **その大半は同じコードの再計測**になる。**ここで測るのは配備の差だけである。**
     ///
-    /// **実効設定は「`Container/E2E/app/publish/appsettings.json` ＋ compose の環境変数」**である。
+    /// **実効設定は「`container/E2E/app/publish/appsettings.json` ＋ compose の環境変数」**である。
     /// **ファイルだけ読むと、compose が上書きした分が分からない**ので、
     /// **`docker inspect` で稼働中コンテナの環境変数を読み、重ねる**（`AppConfig.Overlay`）。
     ///
@@ -85,7 +85,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
         /// </remarks>
         public const string Upstream2Key = "upstream2";
 
-        /// <summary>compose のプロジェクト名（`Container/E2E/docker-compose.yml` の `name:`。#318）</summary>
+        /// <summary>compose のプロジェクト名（`container/E2E/docker-compose.yml` の `name:`。#318）</summary>
         private const string ComposeProject = "mpas-e2e";
 
         private static readonly object _lock = new object();
@@ -180,12 +180,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
             // **publish の成果物を構成として読む**（`0_PublishIdP.ps1` が作る）。
             string configPath = Path.GetFullPath(Path.Combine(
-                TestEnv.ProgramsDir, "..", "..", "Container", "E2E", "app", "publish", "appsettings.json"));
+                TestEnv.ProgramsDir, "..", "..", "container", "E2E", "app", "publish", "appsettings.json"));
 
             if (!File.Exists(configPath))
             {
                 reason = "コンテナの構成が見つかりません（" + configPath + "）。"
-                    + "Container\\E2E\\0_PublishIdP.ps1 を実行してください（#284）。";
+                    + "container\\E2E\\0_PublishIdP.ps1 を実行してください（#284）。";
                 return null;
             }
 
@@ -194,7 +194,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
             if (string.IsNullOrEmpty(containerName))
             {
                 reason = key + " のコンテナが起動していません。"
-                    + "Container\\E2E\\1_DockerComposeUp.bat で建ててください（#284）。";
+                    + "container\\E2E\\1_DockerComposeUp.bat で建ててください（#284）。";
                 return null;
             }
 

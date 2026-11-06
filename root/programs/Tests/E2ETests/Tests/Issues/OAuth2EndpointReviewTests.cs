@@ -31,6 +31,8 @@
 //*  2026/10/30  玄人 幸道         新規（#294）
 //*  2026/10/30  玄人 幸道         RT-294.79（/par は同じ名前のパラメタを断る）を足した・既定の利用者の行を書くので CIBA と同じコレクションに入れた（#294）
 //*  2026/10/30  玄人 幸道         RT-294.80（/userinfo の POST と openid の無いトークン）を足した（#294）
+//*  2026/11/04  玄人 幸道         RT-294.73：Android / iOS 版（AuthenticationDevice）のトークンも受けることを確かめる
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //**********************************************************************************
 
 using System;
@@ -91,7 +93,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**`AuthenticationDeviceClientIds`（既定は同梱の AuthenticationDevice_Web）に挙げたクライアントだけ**を受ける。",
                     "#294（ANALYSIS-IdP.md の C-55）");
 
-                r.Target("RP = " + KnownClients.MvcSample + " / 認証デバイス = " + KnownClients.AuthenticationDeviceWeb);
+                r.Target("RP = " + KnownClients.MvcSample + " / 認証デバイス = " + KnownClients.AuthenticationDeviceWeb
+                    + "・" + KnownClients.AuthenticationDevice);
 
                 r.Step("(1) 同じ利用者で、RP のトークンと、認証デバイスのトークンを取る");
 
@@ -126,6 +129,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "400", ((int)cibaByDevice.StatusCode).ToString());
                 r.VerifyEqual("/2fa_result : トークンは受ける（合わないコードなので 400）",
                     "400", ((int)twoFaByDevice.StatusCode).ToString());
+
+                r.Step("(4) Android / iOS 版の認証デバイス（" + KnownClients.AuthenticationDevice + "）のトークンも、通る");
+
+                //  **以前は Native_Application（FrontendTemplates の Flutter）と共用で、既定の一覧に無かった**ので、
+                //  **Android / iOS 版の端末の登録は 401 になっていた。**
+                JsonResponse native = await Flows.RunAuthenticationDeviceFlowAsync(
+                    client, clientName: KnownClients.AuthenticationDevice);
+
+                Assert.False(string.IsNullOrEmpty(native.AccessToken),
+                    "前提: Android / iOS 版の認証デバイスの access_token が返ること（" + native.ToString() + "）");
+
+                JsonResponse setByNative = await client.SetDeviceTokenAsync(
+                    native.AccessToken, "e2e-native-" + Guid.NewGuid().ToString("N"));
+
+                r.VerifyEqual("/SetDeviceToken : Android / iOS 版でも HTTP 200（端末を登録できる）",
+                    "200", ((int)setByNative.StatusCode).ToString());
 
                 r.Done();
             }
@@ -225,9 +244,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**型に厳しいクライアントは、文字列を読めない。** `EX-4.1` は型を記録するだけだった。",
                     "RFC 8628 §3.2 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.DeviceClient);
 
-                r.Target("client_name=" + KnownClients.TestClient3);
+                r.Target("client_name=" + KnownClients.DeviceClient);
 
                 JsonResponse res = await client.DeviceAuthorizationAsync(new Dictionary<string, string>()
                 {
@@ -265,10 +284,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**応答の expires_in / interval も、JSON の数値で返す**（以前は文字列）。",
                     "CIBA Core §7.1 / §7.3 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 int max = int.Parse(client.Config.Get("CibaExpireTimeSpanFromSeconds"));
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / 上限（CibaExpireTimeSpanFromSeconds）= " + max);
+                r.Target("client_name=" + KnownClients.FapiCibaClient + " / 上限（CibaExpireTimeSpanFromSeconds）= " + max);
 
                 r.Step("(1) 認証デバイスを登録する（宛先が無いと access_denied になるため）");
 

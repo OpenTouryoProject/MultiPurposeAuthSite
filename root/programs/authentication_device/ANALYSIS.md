@@ -51,14 +51,16 @@
 
 | 版 | `client_id` | `client_name` | `redirect_uri` |
 |---|---|---|---|
-| Android / iOS | `40319c0100f94ff3aab3004c8bdb5e52` | `Native_Application` | `com.opentouryo:/oauthredirect` |
+| Android / iOS | `3e8a76afc7ff4924bb4e83582f8304a1` | `AuthenticationDevice`（パブリック クライアント。`client_secret` なし、PKCE で交換） | `com.opentouryo:/oauthredirect` |
 | web（#205） | `aad529f7f9b6428a84c59ac15aef0cdb` | `AuthenticationDevice_Web`（パブリック クライアント。`client_secret` なし、PKCE で交換） | `http://localhost:5610/` |
 
 - **`redirect_uri` は両側で一致させる必要がある**（認証サイトは完全一致で照合する）。
   アプリ側は `com.opentouryo:/oauthredirect`（`app_auth.dart` ＋ `AndroidManifest.xml` ＋
   `build.gradle.kts` の `appAuthRedirectScheme`）。
-  認証サイト側のテンプレート `_appsettings.json` は `http://opentouryo.com/` になっている
-  （＝ App Links 用）ので、**Private-Use URI Scheme で試すならサイト側の設定を直す。**
+  認証サイト側のテンプレート（`_appsettings.json` / `_app.config`）の `AuthenticationDevice` も、この値で登録してある。
+- **以前は Android / iOS 版が `Native_Application` を使っていた。** FrontendTemplates の Flutter と共用で、
+  `redirect_uri` も合っておらず、**`AuthenticationDeviceClientIds` に無いので、認証デバイス用の口にも断られていた。**
+  **認証デバイス専用の登録（`AuthenticationDevice`）に分けた。** `Native_Application` は FrontendTemplates のために残してある。
   web は `flutter run` を `--web-port 5610` で起動する（サイト側のテンプレートと実際の設定に登録済み。#205）。
 
 ---

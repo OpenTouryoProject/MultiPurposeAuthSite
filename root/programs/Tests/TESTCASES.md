@@ -2883,8 +2883,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. scope に openid が無い要求
-1. nbf が未来の要求（まだ有効になっていない）
-1. exp が過去の要求（期限切れ）
+1. nbf が未来の要求（まだ有効になっていない。request で送る）
+1. exp が過去の要求（期限切れ。request で送る）
 
 **検証（合否を判定する）**
 
@@ -5530,7 +5530,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **`RT-221.1` の TestClient6 は構成ファイル側のクライアントである。**そのため、**画面登録側の `require_pkce` は測られていなかった**。**#270 で登録を JSON 1 列から専用列に切り出した**とき、**`require_pkce` だけが bool** で、**方言ごとに形が違う**（SQL Server : `bit` / PostgreSQL : `boolean` / Oracle : `NUMBER(3)` の -1）。**この往復が落ちると、登録で締めたつもりのクライアントが、黙って PKCE 無しを受け入れる。** |
+| 観点 | **`RT-221.1` の RequirePKCE_Client は構成ファイル側のクライアントである。**そのため、**画面登録側の `require_pkce` は測られていなかった**。**#270 で登録を JSON 1 列から専用列に切り出した**とき、**`require_pkce` だけが bool** で、**方言ごとに形が違う**（SQL Server : `bit` / PostgreSQL : `boolean` / Oracle : `NUMBER(3)` の -1）。**この往復が落ちると、登録で締めたつもりのクライアントが、黙って PKCE 無しを受け入れる。** |
 | 根拠 | OAuth 2.1 draft §4.1.1 / #221 / #270 |
 | テスト | `RT27001_登録経由のrequire_pkceも効く` |
 
@@ -7716,6 +7716,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. 同じ利用者で、RP のトークンと、認証デバイスのトークンを取る
 1. RP のトークンで、3 つの口を叩く
 1. 認証デバイスのトークンなら、通る（対照）
+1. Android / iOS 版の認証デバイス（AuthenticationDevice）のトークンも、通る
 
 **検証（合否を判定する）**
 
@@ -7725,6 +7726,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - /SetDeviceToken : HTTP 200（端末を登録できる）
 - /ciba_result : トークンは受ける（合わない auth_req_id なので 400）
 - /2fa_result : トークンは受ける（合わないコードなので 400）
+- /SetDeviceToken : Android / iOS 版でも HTTP 200（端末を登録できる）
 
 ## RT-294.74 /token : grant_type が無ければ invalid_request、未知・大文字小文字の違う値なら unsupported_grant_type
 
@@ -10762,6 +10764,164 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 宛先は、登録した端末
 - **トークンを受け取ったのは 1 つだけ**
 
+## RT-336.1 /ros は、Request Object の aud が issuer でなければ預からない
+
+| | |
+|---|---|
+| 観点 | **aud は認可サーバの issuer にすべき**（RFC 9101 §4）。**FAPI は issuer を求める。****以前は署名しか確かめず、別の認可サーバ宛ての Request Object も預かっていた。****待ち受けている URL（issuer と違う）も、もう受けない。** |
+| 根拠 | RFC 9101 §4 / FAPI 1.0 Advanced §5.2.2-15 / FAPI 2.0 Message Signing §5.3.1-2 / #336 |
+| テスト | `RT33601_rosはRequestObjectのaudをissuerと照合する` |
+
+**手順**
+
+1. aud = issuer
+1. aud = 待ち受けている URL
+1. aud = 別の認可サーバ
+
+**検証（合否を判定する）**
+
+- aud = issuer : 預かる（request_uri が返る）
+- aud = 待ち受けている URL : HTTP 400 で断る
+- aud = 待ち受けている URL : request_uri を返さない
+- aud = 別の認可サーバ : HTTP 400 で断る
+- aud = 別の認可サーバ : request_uri を返さない
+
+## RT-336.2 /ros は、exp の過ぎた・nbf がまだ来ていない Request Object を預からない
+
+| | |
+|---|---|
+| 観点 | **exp を過ぎた JWT は受けてはならない**（RFC 7519 §4.1.4）。nbf より前も同じ（§4.1.5）。**以前は確かめず、期限の過ぎた Request Object を預け直して、新しい request_uri を得られた**（預かったものの期限 300 秒は、JWT の exp とは別のもの）。 |
+| 根拠 | RFC 7519 §4.1.4 / RFC 7519 §4.1.5 / #336 |
+| テスト | `RT33602_rosは時刻の外れたRequestObjectを預からない` |
+
+**手順**
+
+1. exp が過去
+1. nbf が未来
+
+**検証（合否を判定する）**
+
+- exp が過去 : HTTP 400 で断る
+- exp が過去 : request_uri を返さない
+- nbf が未来 : HTTP 400 で断る
+- nbf が未来 : request_uri を返さない
+
+## RT-336.3 /par の request（JAR）も、aud が issuer でないもの・exp の過ぎたものを invalid_request_object で断る
+
+| | |
+|---|---|
+| 観点 | **/ros と同じ確認をする。** PAR はクライアント認証をするが、**以前は Request Object の aud と exp を確かめていなかった。** |
+| 根拠 | RFC 9101 §4 / RFC 9101 §6.3 / RFC 7519 §4.1.4 / RFC 9126 §3 / #336 |
+| テスト | `RT33603_PARのrequestもaudとexpを確かめる` |
+
+**手順**
+
+1. aud = 待ち受けている URL
+1. exp が過去
+
+**検証（合否を判定する）**
+
+- aud = 待ち受けている URL : HTTP 400
+- aud = 待ち受けている URL : invalid_request_object
+- exp が過去 : HTTP 400
+- exp が過去 : invalid_request_object
+
+**補足**
+
+- aud = issuer で預けられることは RT-229.3 が確かめる。
+
+## RT-336.4 FAPI の登録の Request Object は、exp・nbf が無いもの、寿命が 60 分を超えるもの、nbf が 60 分より前のものを預からない
+
+| | |
+|---|---|
+| 観点 | **FAPI は exp・nbf を必須とし、exp は nbf から 60 分以内、nbf は 60 分より前でないことを求める。****RFC 9101 は求めないので、FAPI でない登録には求めない**（対照）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2-13 / FAPI 1.0 Advanced §5.2.2-17 / FAPI 2.0 Message Signing §5.3.1-3 / FAPI 2.0 Message Signing §5.3.1-4 / #336 |
+| テスト | `RT33604_FAPIのRequestObjectはexpとnbfが必須で寿命は60分以内` |
+
+**手順**
+
+1. exp・nbf があり、寿命が 60 分ちょうど（受ける）
+1. exp が無い
+1. nbf が無い
+1. 寿命が 60 分を超える
+1. nbf が 60 分より前
+1. (対照) FAPI でない登録は、exp が無くても預かる
+
+**検証（合否を判定する）**
+
+- 寿命 60 分 : 預かる（request_uri が返る）
+- exp が無い : HTTP 400 で断る
+- exp が無い : request_uri を返さない
+- nbf が無い : HTTP 400 で断る
+- nbf が無い : request_uri を返さない
+- 寿命が 60 分を超える : HTTP 400 で断る
+- 寿命が 60 分を超える : request_uri を返さない
+- nbf が 60 分より前 : HTTP 400 で断る
+- nbf が 60 分より前 : request_uri を返さない
+- FAPI でない登録で exp が無い : 預かる（request_uri が返る）
+
+## RT-336.5 /ros は、CIBA の要求（ES256）も、aud が issuer でないもの・exp の過ぎたもの・nbf の来ていないものを預からない
+
+| | |
+|---|---|
+| 観点 | **CIBA Core は aud を OP の Issuer Identifier、exp・nbf を必須とする。****以前は /ros では署名だけを確かめ、/ciba_authz で初めて断っていた**（RT-196.17 は /ciba_authz の側を確かめる）。 |
+| 根拠 | CIBA Core §7.1.1 / RFC 7519 §4.1.4 / RFC 7519 §4.1.5 / #336 |
+| テスト | `RT33605_rosはCIBAの要求もaudとexpとnbfを確かめる` |
+
+**手順**
+
+1. 正しい要求（受ける）
+1. aud が別の認可サーバ
+1. exp が過去
+1. nbf が未来
+
+**検証（合否を判定する）**
+
+- 正しい要求 : 預かる（request_uri が返る）
+- aud が別の認可サーバ : HTTP 400 で断る
+- aud が別の認可サーバ : request_uri を返さない
+- exp が過去 : HTTP 400 で断る
+- exp が過去 : request_uri を返さない
+- nbf が未来 : HTTP 400 で断る
+- nbf が未来 : request_uri を返さない
+
+## RT-336.6 FAPI の登録は、/par の request（JAR）でも、exp・nbf の無いものを invalid_request_object で断る
+
+| | |
+|---|---|
+| 観点 | **/ros と同じ確認をする**（RT-336.4）。PAR のクライアント認証は private_key_jwt で行う。 |
+| 根拠 | FAPI 2.0 Message Signing §5.3.1-3 / FAPI 2.0 Message Signing §5.3.1-4 / RFC 9101 §6.3 / #336 |
+| テスト | `RT33606_FAPIの登録はPARのrequestでもexpとnbfが必須` |
+
+**手順**
+
+1. exp・nbf がある（受ける）
+1. exp が無い
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- exp が無い : HTTP 400
+- exp が無い : invalid_request_object
+
+## RT-336.7 client_assertion の sub が client_id でなければ、invalid_client で断る
+
+| | |
+|---|---|
+| 観点 | **クライアント認証の JWT では、sub は client_id でなければならない。****以前は sub を見ず**、iss の鍵で署名されていれば通した。 |
+| 根拠 | RFC 7523 §3 / OIDC Core 1.0 §9 / #336 |
+| テスト | `RT33607_client_assertionのsubはclient_idでなければならない` |
+
+**手順**
+
+1. sub = client_id（通る）
+1. sub = 別の値
+
+**検証（合否を判定する）**
+
+- 認証が通る（HTTP 200）
+- invalid_client
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -10916,20 +11076,20 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 1. 対照 : device / normal の登録は、開始できる
 1. fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される
-1. fapi2（TestClient2）は、クライアント認証の段で断られる
+1. fapi2（FAPI2_Client）は、クライアント認証の段で断られる
 
 **検証（合否を判定する）**
 
-- TestClient3 は device_code を得る
+- Device_Client は device_code を得る
 - MVC_Sample は device_code を得る
-- TestClient1 は unauthorized_client（400）
-- TestClient4 は unauthorized_client（400）
-- TestClient2 は invalid_client（401）
+- FAPI1_Client は unauthorized_client（400）
+- FAPI_CIBA_Client は unauthorized_client（400）
+- FAPI2_Client は invalid_client（401）
 
 **補足**
 
 - **client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。
-- **`TestClient1` / `TestClient4` は方法を明示していない**ので、**`client_secret` で認証が通り、登録種別の判定まで進む**（`unauthorized_client`）。**どちらの道でも、このグラントは使えない。**
+- **`FAPI1_Client` / `FAPI_CIBA_Client` は方法を明示していない**ので、**`client_secret` で認証が通り、登録種別の判定まで進む**（`unauthorized_client`）。**どちらの道でも、このグラントは使えない。**
 - **トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、この E2E では単独で測っていない。
 
 ## FA-5.1 CIBA を normal 登録のクライアントで使うと、開始（/ciba_authz）で unauthorized_client になる
@@ -11766,7 +11926,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **このケースが通らなくなったら、まず登録を見ること**（`Container/E2E/docker-compose.yml` の `jwk_rsa_publickey`）。**鍵が無いと「通す」ので、`Success` が返って落ちる。**
+- **このケースが通らなくなったら、まず登録を見ること**（`container/E2E/docker-compose.yml` の `jwk_rsa_publickey`）。**鍵が無いと「通す」ので、`Success` が返って落ちる。**
 
 ## SA-6.6 上流が署名証明書を 2 本広告していても、SAML2 の ID 連携ができる
 

@@ -32,6 +32,7 @@
 //*  2018/11/27  西野 大介         XML(Base64) ---> Jwk(Base64Url)に変更。
 //*  2019/02/13  西野 大介         自動生成から、証明書利用に変更。
 //*  2020/03/04  西野 大介         CIBA対応（ECDsaのJwt Assertion生成）
+//*  2026/11/06  玄人 幸道         作った assertion を、期待する iss・aud を渡す版の JwtAssertion.Verify で確かめる（OpenTouryo#654。#336）
 //**********************************************************************************
 
 using System;
@@ -62,9 +63,8 @@ namespace CreateJwtBearerTokenFlowAssertion
             string jwkPublicKey = "";
             string jwtAssertion = "";
 
-            string iss = CmnClientParams.Isser;
-            string aud = OAuth2AndOIDCParams.Audience;
             string scopes = "hoge1 hoge2 hoge3";
+            string sub = "";
             JObject jobj = null;
 
             #region RS256
@@ -99,17 +99,15 @@ namespace CreateJwtBearerTokenFlowAssertion
                 CmnClientParams.Isser, OAuth2AndOIDCParams.Audience, new TimeSpan(0, 30, 0), scopes,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPrivateKey), CustomEncode.us_ascii));
 
+            // iss・aud の照合は、期待する値を渡す版の Verify が行う（OpenTouryo#654。#336）
             if (JwtAssertion.Verify(
-                jwtAssertion, out iss, out aud, out scopes, out jobj,
+                jwtAssertion, CmnClientParams.Isser, new string[] { OAuth2AndOIDCParams.Audience },
+                out sub, out scopes, out jobj,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPublicKey), CustomEncode.us_ascii)))
             {
-                if (iss == CmnClientParams.Isser
-                    && aud == OAuth2AndOIDCParams.Audience)
-                {
-                    Console.WriteLine("JwtAssertion(RS256):");
-                    Console.WriteLine(jwtAssertion);
-                    Console.WriteLine("");
-                }
+                Console.WriteLine("JwtAssertion(RS256):");
+                Console.WriteLine(jwtAssertion);
+                Console.WriteLine("");
             }
 
             #endregion
@@ -151,17 +149,15 @@ namespace CreateJwtBearerTokenFlowAssertion
                 CmnClientParams.EcdsaPfxFilePath, CmnClientParams.EcdsaPfxPassword);
                 //CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPrivateKey), CustomEncode.us_ascii));
 
+            // iss・aud の照合は、期待する値を渡す版の Verify が行う（OpenTouryo#654。#336）
             if (JwtAssertion.Verify(
-                jwtAssertion, out iss, out aud, out scopes, out jobj,
+                jwtAssertion, CmnClientParams.Isser, new string[] { OAuth2AndOIDCParams.Audience },
+                out sub, out scopes, out jobj,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPublicKey), CustomEncode.us_ascii)))
             {
-                if (iss == CmnClientParams.Isser
-                    && aud == OAuth2AndOIDCParams.Audience)
-                {
-                    Console.WriteLine("JwtAssertion(ES256):");
-                    Console.WriteLine(jwtAssertion);
-                    Console.WriteLine("");
-                }
+                Console.WriteLine("JwtAssertion(ES256):");
+                Console.WriteLine(jwtAssertion);
+                Console.WriteLine("");
             }
 
             #endregion

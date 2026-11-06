@@ -6,15 +6,18 @@
 #   **E2E 用の ..\E2E\ とは別のもの。** プロジェクト名・ポート・鍵の置き場を分けてある
 #   （同じホストで、E2E のコンテナと同時に動かせる）。
 #
-#   **パラメタは 2 つのファイルで渡す。**
-#     .env（--env-file）           ポート・公開 URL・iss・管理者とテスト利用者・証明書・設定ファイルの場所
-#     appsettings.Stub.json         アプリの設定（クライアントの登録など）。appsettings.json と同じ書き方
+#   **パラメタは 3 つのファイルで渡す。**
+#     .env（--env-file）           ポート・公開 URL・iss・証明書・設定ファイルの場所
+#     appsettings.json              アプリの設定の土台（既定は開発者の手元の appsettings.json。STUB_APPSETTINGS）
+#     appsettings.Stub.json         起動側の追加の設定（クライアントの登録など。STUB_SETTINGS）
 #
 #   **設定の重なり方**（ASP.NET Core の既定。後ろほど強い）:
-#     1. appsettings.json       … 雛形（_appsettings.json）。1_PublishStub.ps1 が入れる
+#     1. appsettings.json       … **起動時にマウントする**（STUB_APPSETTINGS）。イメージの中の雛形（_appsettings.json）を覆う
 #     2. appsettings.Stub.json  … 起動側の JSON（STUB_SETTINGS をマウントする）
 #     3. 環境変数                … 下の environment（.env の値）。**JSON より強い**
-#   **下の environment に在るキーは、JSON では変えられない。** .env で変える。
+#   **手元の appsettings.json はイメージに入れない**（秘密を含むため。1_PublishStub.ps1 は雛形を入れる）。
+#   **管理者・テスト利用者・テスト用の口の開け閉めは、JSON（appsettings.json）の値を使う。**
+#   **下の environment に在るキー（コンテナとして動かすのに要るもの）は、JSON では変えられない。** .env で変える。
 # ##################################################################################################
 
 name: mpas-stub
@@ -51,18 +54,22 @@ services:
       # **自分自身を呼ぶときの宛先**（コンテナの中から。..\E2E\ と同じ理由。#250）。
       - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
 
-      # **管理者とテスト利用者**（最初のアクセスで作られる）。**テスト専用の値を使うこと。**
-      - appSettings__AdministratorUID=${STUB_ADMIN_UID:-admin@stub.example.com}
-      - appSettings__AdministratorPWD=${STUB_ADMIN_PWD:-Stub_Admin_Pa55word!}
-      - appSettings__TestUserPWD=${STUB_TEST_USER_PWD:-Stub_User_Pa55word!}
-
-      # **テスト用の口（自己テストの画面など）を開けておくか。**
-      - appSettings__IsLockedDownTestEndpoints=${STUB_LOCKDOWN_TEST_ENDPOINTS:-false}
+      # **管理者・テスト利用者（AdministratorUID・AdministratorPWD・TestUserPWD）と、
+      #   テスト用の口の開け閉め（IsLockedDownTestEndpoints）は、ここに書かない**（appsettings.json の値を使う）。
 
       # **DataProtection の鍵の置き場**（下の keys をマウントする）。
       - appSettings__DataProtectionKeyPath=/keys
     volumes:
-      # **起動側の設定**（無ければサンプル）。**appsettings.json と同じ書き方。**
+      # **アプリの設定の土台**（既定は開発者の手元の appsettings.json）。**イメージの中の雛形を覆う。**
+      #   **起動時にマウントするだけで、イメージには入らない。**
+      #   **ファイルが無ければ起動しない**（create_host_path: false。無いパスにディレクトリを作らせない）。
+      - type: bind
+        source: ${STUB_APPSETTINGS:-../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json}
+        target: /app/appsettings.json
+        read_only: true
+        bind:
+          create_host_path: false
+      # **起動側の追加の設定**（無ければサンプル）。**appsettings.json と同じ書き方。**
       - ${STUB_SETTINGS:-./appsettings.Stub.sample.json}:/app/appsettings.Stub.json:ro
       # **HTTPS の証明書**（aspnetapp.pfx を置いたディレクトリ）。
       - ${STUB_CERT_DIR:-./cert}:/https:ro

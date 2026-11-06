@@ -34,6 +34,8 @@
 //*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
 //*  2026/11/01  玄人 幸道         RT-323.1 を追加し、RT-294.51 / RT-294.54 を fapi2 の aud に合わせた（#323）
 //*  2026/11/02  玄人 幸道         RT-328.1 を追加した（#328）
+//*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
 //**********************************************************************************
 
 using System;
@@ -362,7 +364,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**Device グラントは #199 で直してあった**ので、それに揃えた。",
                     "CIBA Core §11 / RFC 6749 §5.2 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Target("POST /token（grant_type=ciba、発行していない auth_req_id）");
 
@@ -530,7 +532,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "**以前は Base64URL の復号だけを守っていて、その後の JSON の読み取りで 500 になっていた。**",
                     "CIBA Core §13 / RFC 6749 §5.2 / #241 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Target("POST /ciba_authz（client_secret_basic で認証し、壊れた request を送る）");
 
@@ -1071,10 +1073,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**標準の poll のクライアントは invalid_request で断られた**（N5）。",
                     "CIBA Core §7.1 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
                 long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-                r.Target("POST /ciba_authz（client_name=" + KnownClients.TestClient4 + "。request に 2 つを入れない）");
+                r.Target("POST /ciba_authz（client_name=" + KnownClients.FapiCibaClient + "。request に 2 つを入れない）");
 
                 (string AccessToken, string DeviceToken) device = await CibaTests.RegisterDeviceAsync(r, client);
 
@@ -1132,7 +1134,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**2 件目もポーリングで authorization_pending になる**ことで、保存されたことを確かめる。",
                     "CIBA Core §7.1 / #328");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.FapiCibaClient);
 
                 r.Target("POST /ciba_authz を 4 回（token 無し × 2、同じ token × 2）→ POST /token");
 
@@ -1217,12 +1219,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**別のクライアントの名義で、預けた要求を作れた**（C-41）。",
                     "RFC 9126 §3 / RFC 9101 §6.3 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
                 ClientRegistration other = Flows.Registration(client, KnownClients.TestClient);
 
-                r.Target("POST /par（client_name=" + KnownClients.TestClient2 + "。request の client_id だけを他のクライアントにする）");
+                r.Target("POST /par（client_name=" + KnownClients.Fapi2Client + "。request の client_id だけを他のクライアントにする）");
 
-                string request = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                string request = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "client_id", other.ClientId },
                     { "response_type", "code" },
@@ -1324,14 +1326,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "別のクライアントの名義で預けられた**（PAR は C-41 で直した。F5）。",
                     "RFC 9101 §6.3 / #294");
 
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+                ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
                 ClientRegistration other = Flows.Registration(client, KnownClients.TestClient);
 
-                r.Target("POST /ros（iss=" + KnownClients.TestClient2 + "。client_id だけを他のクライアントにする）");
+                r.Target("POST /ros（iss=" + KnownClients.Fapi2Client + "。client_id だけを他のクライアントにする）");
 
                 r.Step("(1) client_id が他のクライアント");
 
-                string mismatched = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                string mismatched = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "client_id", other.ClientId },
                     { "response_type", "code" },
@@ -1348,7 +1350,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) client_id が署名したクライアント（従来どおり預かる）");
 
-                string matched = RequestObjectBuilder.Create(client, reg.ClientId, new Dictionary<string, object>()
+                string matched = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "response_type", "code" },
                     { "scope", "openid" },

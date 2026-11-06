@@ -31,6 +31,7 @@
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         MailOutboxDirectory（メールの送信箱。テスト用）を追加（#294）
 //*  2026/10/30  玄人 幸道         AuthenticationDeviceClientIds（認証デバイスのクライアント）を追加（#294）
+//*  2026/11/04  玄人 幸道         AuthenticationDeviceClientIds の既定に、Android / iOS 版（AuthenticationDevice）を足した
 //**********************************************************************************
 
 using System;
@@ -134,8 +135,13 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        /// <summary>同梱の認証デバイス（`AuthenticationDevice_Web`）の client_id</summary>
-        private const string BundledAuthenticationDeviceClientId = "aad529f7f9b6428a84c59ac15aef0cdb";
+        /// <summary>同梱の認証デバイス（Android / iOS 版の `AuthenticationDevice` と、web 版の `AuthenticationDevice_Web`）の client_id</summary>
+        /// <remarks>
+        /// **Android / iOS 版は、以前は `Native_Application` を使っていた**（FrontendTemplates の Flutter と共用で、
+        /// **ここに無いので、認証デバイス用の口に断られていた**）。**認証デバイス専用の登録に分けた。**
+        /// </remarks>
+        private const string BundledAuthenticationDeviceClientId =
+            "3e8a76afc7ff4924bb4e83582f8304a1,aad529f7f9b6428a84c59ac15aef0cdb";
 
         /// <summary>
         /// 認証デバイスのクライアント（client_id。カンマ・空白区切り）（#294）
@@ -146,7 +152,7 @@ namespace MultiPurposeAuthSite.Co
         /// **以前はトークンの発行先を見ておらず**、利用者が同意した**どの RP のトークンでも**、
         /// 端末の登録を差し替えたり、CIBA の要求を「許可」したりできた。
         ///
-        /// **未設定・空なら、同梱の認証デバイス（`AuthenticationDevice_Web`）の client_id に倒す**
+        /// **未設定・空なら、同梱の認証デバイス（`AuthenticationDevice` / `AuthenticationDevice_Web`）の client_id に倒す**
         /// （**既存の配備にはこのキーが無い**）。**認証デバイスを別の client_id で登録したなら、ここに書く。**
         /// </remarks>
         public static string[] AuthenticationDeviceClientIds
