@@ -31,6 +31,7 @@
 //*  2026/09/22  玄人 幸道         新規（#224 の段階 1 : permittedLevel の大小比較を、表に置き換える）
 //*  2026/09/25  玄人 幸道         認可コード × private_key_jwt に fapi2 を足した（#238）
 //*  2026/09/26  玄人 幸道         refresh_token を、非対称の証明なら fapi1 / fapi2 にも開いた（#239 の段階 3）
+//*  2026/11/08  玄人 幸道         mTLS の行のコメント「net10.0 のみ」を、E2E の測り方の話だと分かる書き方にした（行は両版で効く。#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -171,7 +172,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   ここを塞ぐと mTLS を使えない fapi2 のクライアントがトークンを取れない。
             //   この行に E2E が無かったため、元の実装から引き継いだ穴が残っていた。
             new Rule(Flow.AuthorizationCode,     Proof.PrivateKeyJwt,       Normal, Fapi1, Fapi2, Device),   // RT-238.4
-            new Rule(Flow.AuthorizationCode,     Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.1（net10.0 のみ）
+            new Rule(Flow.AuthorizationCode,     Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.1（E2E の既定は net10.0 だけ。net48 は -NetFxMtls のとき。行は両版で効く）
 
             // **refresh_token : 証明によって、通す登録種別が変わる（#239 の段階 3）。**
             //   FAPI 1.0 Advanced / FAPI 2.0 は refresh token を禁じていない。
