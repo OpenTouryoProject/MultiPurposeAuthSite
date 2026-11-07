@@ -1,14 +1,16 @@
 @echo off
-rem **MPAS のスタブを起動する**（#294 / #340）。
+rem NOTE: keep this file pure ASCII. cmd.exe reads a batch file by byte offset, so non-ASCII text
+rem       can break lines depending on the console code page (root/CODING.md section 4. #342).
 rem
-rem   使い方 : 2_DockerComposeUp.bat [パラメタのファイル]
-rem     パラメタのファイル : .env.sample を写して作ったもの（my-stub.env など。README.md 2 節）。
-rem                          **省略すると docker-compose.yml の既定値で起動する。**
+rem Start the MPAS stub (#294 / #340).
 rem
-rem   **用意（publish と証明書）は 1_PublishStub.ps1**（最初と、MPAS を更新したとき）。
-rem   **成果物がソースより古ければ、警告する**（起動は止めない。..\Common\CheckPublishFreshness.ps1）。
+rem   Usage: 2_DockerComposeUp.bat [parameter file]
+rem     parameter file : a copy of .env.sample (e.g. my-stub.env. README.md section 2).
+rem                      If omitted, the defaults in docker-compose.yml are used.
 rem
-rem   **--build を付ける**（..\E2E\ と同じ。付けないと、publish した成果物がイメージに入らない）。
+rem   Preparation (publish and certificate) is 1_PublishStub.ps1 (first time, and after updating MPAS).
+rem   If the published output is older than the sources, a warning is shown (..\Common\CheckPublishFreshness.ps1).
+rem   "--build" is required (same as ..\E2E\): without it, the published output does not get into the image.
 setlocal
 
 set "ENVARG="
@@ -25,21 +27,22 @@ docker compose %ENVARG% up -d --build
 if errorlevel 1 goto :error
 
 echo.
-echo  MPAS のスタブを起動しました（起動の確認 : /.well-known/openid-configuration が 200 を返せばよい）。
-echo  まっさらに戻すなら  docker compose %ENVARG% restart 、止めて消すなら  3_DockerComposeDown.bat [パラメタのファイル] 。
+echo  The MPAS stub has been started (check: /.well-known/openid-configuration returns 200).
+echo  To reset its state:  docker compose %ENVARG% restart
+echo  To stop and remove:  3_DockerComposeDown.bat [parameter file]
 popd
 endlocal
 goto :eof
 
 :error
 echo.
-echo  失敗しました。
+echo  Failed.
 popd
 endlocal
 exit /b 1
 
 :noenvfile
-rem **括弧の中で exit /b しない**（cmd /c から呼ぶと、終了コードが 0 になることがある）。
-echo  パラメタのファイルがありません : %~f1
+rem Do not "exit /b" inside parentheses: called via "cmd /c", the exit code can become 0.
+echo  Parameter file not found: %~f1
 endlocal
 exit /b 1
