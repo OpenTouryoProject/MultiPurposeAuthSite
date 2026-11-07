@@ -50,7 +50,7 @@
 | **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15〜A-17 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 / B-12 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。**C-40〜C-46 は `CmnEndpoints.*.cs` のレビューで見つかり #294**。**C-47 / C-48 は `ManageController.*.cs` のレビューで、C-49 は 2 回目、C-50 / C-51 は 3 回目のレビューで見つかり #294**。**C-52 / C-53 は `CmnUserStore.*.cs` のレビューで、C-54 は 2 回目のレビューで見つかり #294**。**C-55 は `OAuth2EndpointController.*.cs` のレビューで見つかり #294**。**C-40 は「方法を明示した登録」で閉じ、空の登録は従来どおり**） |
-| **D. 機能不足** | **1 件 残り** : **D-14**（適合性テスト）。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
+| **D. 機能不足** | **2 件 残り** : **D-14**（適合性テスト）・**D-16**（プロファイルの要件を、登録ごとに強制するオプション）。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
 | **E. 品質** | **6 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）／**E-13**（refresh_token の失効で access_token も）／**E-15**（クライアント認証の方法を 1 要求に 1 つへ）／**E-16**（CIBA の送れなかった要求の後始末）／**E-17**（`user_code` の大文字小文字）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
 **7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
@@ -3563,6 +3563,91 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
 | D-13 | **レート制限 / ブルートフォース対策**（#305） | **✅ 解けた（#305）。** **段階 1** : ポーリングが `interval` より速ければ **`slow_down`**（`LastPolledAt`。`RT-305.1` / `.2`）。**段階 2** : **クライアント認証と `user_code` の投入の失敗を数え、一定回数で一定時間断る**（`AuthFailure` 表。`RT-305.3` / `.4`）。**段階 3** : **口ごとのレート制限** — **`client_id` ごと・送信元ごとに窓の中の要求を数え、超えた分に `429`**（`RateLimitProvider`。`RT-305.5` / `.6`）。**段階 4** : **失敗の数えを「クライアント ＋ 送信元」ごとにし**（`client_id` だけで数えると、**ロックアウトがそのまま妨害の手段になる**。`RT-305.7`）、**`/token` の `grant_type=password` を画面と同じ利用者ロックアウトに合流させた**（`RT-305.8`）。**行には寿命を入れた**（期限の切れた行を掃除する）。**判定は両アプリで 1 か所**（net48 に組み込みが無いため） | **既定は「制限しない」**（`RateLimitPerClientPermits` / `RateLimitPerIpPermits` が 0。**雛形は 120 回 / 600 回 / 60 秒**）。**失敗の数えは雛形で有効**（5 回 / 300 秒）。**プロセスの中に覚えるので、インスタンスを増やすとその数だけ緩くなる**（レート制限の方。失敗の数えは表に持つ）。**鍵の粒度は利用者の数に追随しない** — **同じ `client_id` に利用者が多数いる配備では、閾値をその全員分に合わせることになる**（`CONFIGURATION.md`） |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
+| D-16 | **プロファイル（FAPI 1.0 Advanced・FAPI 2.0・FAPI-CIBA）の要件を、登録ごとに強制するオプション** | **一部だけ在る**（認証の方法・PKCE）。**PAR・署名付きの Request Object・送信者の拘束（DPoP / MTLS）を必須にする手段が無い**（#346）。詳細は下の「クライアント モードとプロファイル（D-16）」 | **組み合わせは実現できる**が、**FAPI として登録したクライアントでも、それらを使わない要求が通る** |
+
+
+### クライアント モードとプロファイル（D-16。2026/11/08 時点）
+
+**考え方** : **プロファイルを 1 つの設定で表さない。** 以前は「水準」の概念で表そうとして破綻した（#224）。
+いまは、**クライアント モード（`client_mode`）が「どの経路 × どの証明を使えるか」を決め**（`ClientModePolicy` の表）、
+**強制は、登録のメタデータとサーバの設定のオプションを組み合わせて行う**（PKCE の `require_pkce` ＋ `RequirePkce` と同じ形）。
+**要るのは、指定のクライアント モードで、プロファイルが求めるフローとオプションの組み合わせを実現できること**である
+（Request Object を使えるが、使わないと断る設定は無い、のと同じ扱い）。
+
+**列の意味** : **ClientModePolicy** = 表の行（経路 × 証明 → 通す `client_mode`）／**metadata** = クライアントの登録の項目／**option** = サーバ全体の設定。**✕ = その強制の手段が無い。**
+
+#### OAuth 2.1 / OIDC（`normal`）
+
+| やりたいこと | ClientModePolicy | metadata | option |
+|---|---|---|---|
+| 認可コード ＋ 秘密 | 認可コード × ClientSecret → normal | `token_endpoint_auth_method`（空か `client_secret_*`） | `EnableAuthorizationCodeGrantType` |
+| 認可コード ＋ 秘密 ＋ PKCE | 認可コード × ClientSecretAndPkce → normal | `require_pkce` | `RequirePkce`・`RequirePkceS256` |
+| 認可コード ＋ PKCE だけ（パブリック） | 認可コード × PkceS256 → normal（fapi1・device も） | `token_endpoint_auth_method` = `none`（空でも通る） | `RequirePkceS256` |
+| Implicit・Hybrid | Implicit・Hybrid × 問わない → normal | `response_types`・`grant_types` | `EnableImplicitGrantType` |
+| Request Object を使う | （経路は上と同じ） | 検証鍵（`jwk_*_publickey`・`jwks_uri`）。**必須にする項目は ✕** | **✕** |
+| refresh_token | refresh_token × 問わない → normal | `grant_types` | `EnableRefreshToken` |
+
+#### FAPI 1.0 Advanced（`fapi1`）
+
+| やりたいこと | ClientModePolicy | metadata | option |
+|---|---|---|---|
+| `code` ＋ JARM ＋ 署名付きの Request Object ＋ `private_key_jwt` | 認可コード × PrivateKeyJwt → fapi1 | `token_endpoint_auth_method` = `private_key_jwt`、検証鍵。**Request Object の必須は ✕** | **✕** |
+| 同上 ＋ `tls_client_auth` ＋ MTLS で縛ったトークン | 認可コード × Mtls → fapi1 | `token_endpoint_auth_method` = `tls_client_auth`、`tls_client_auth_subject_dn`。**拘束の必須は ✕** | **✕**（net48 版は IIS Express の証明書の準備が要る） |
+| 上に PAR ＋ PKCE（S256）を足す | （同上） | `require_pkce`。**PAR の必須は ✕** | `RequirePkceS256`。**PAR の必須は ✕**（Discovery は false 固定） |
+| `code id_token`（Hybrid）＋ 分離署名 | **Hybrid は normal だけ → fapi1 は通らない**（`FA-1.4`） | — | — |
+| refresh_token | refresh_token × PrivateKeyJwt・Mtls → fapi1 | — | `EnableRefreshToken` |
+
+**FAPI 1.0 Advanced（Final）5.2.2 の 2** は、「`code id_token`、**または** `code` ＋ `response_mode=jwt` を求める」である。
+**どちらを採るかはサーバの選択**なので、**JARM の形だけでも準拠はしている。** Hybrid の形を前提にしたクライアントは、fapi1 の登録では使えない。
+
+#### FAPI 2.0（`fapi2`）
+
+| やりたいこと | ClientModePolicy | metadata | option |
+|---|---|---|---|
+| PAR ＋ PKCE（S256）＋ `private_key_jwt` ＋ DPoP（＋ `dpop_jkt`） | 認可コード × PrivateKeyJwt → fapi2 | `token_endpoint_auth_method` = `private_key_jwt`、`require_pkce`。**PAR・DPoP の必須は ✕** | `RequirePkceS256`、`EnableDPoPNonce`。**PAR・拘束の必須は ✕** |
+| PAR ＋ PKCE ＋ MTLS（認証と拘束） | 認可コード × Mtls → fapi2 | `token_endpoint_auth_method` = `tls_client_auth`、`tls_client_auth_subject_dn`、`require_pkce`。**拘束の必須は ✕** | 同上 |
+| refresh_token | refresh_token × PrivateKeyJwt・Mtls → fapi2 | — | `EnableRefreshToken` |
+
+**FAPI 2.0 Security Profile（Final）**は、認可サーバに **PKCE（S256）**（5.3.2.2 の 5）、**PAR 以外の認可要求を断ること**（5.3.2.2 の 3）、**送信者に縛ったトークンだけを出すこと**（5.3.2.1 の 4・5。MTLS か DPoP）、**クライアント認証を MTLS か `private_key_jwt` に限ること**（5.3.2.1 の 6）を求める。
+**サーバは全部の部品を持つ**（`dpop_jkt` も #311）。**クライアント側（Open棟梁）は、Request Object に `code_challenge` を入れる口だけが無い**（OpenTouryoProject/OpenTouryo#675）。
+
+#### FAPI-CIBA（`fapi_ciba`）と Device（`device`）
+
+| やりたいこと | ClientModePolicy | metadata | option |
+|---|---|---|---|
+| poll ＋ 署名付きの要求 ＋ `private_key_jwt` | CIBA × 問わない → fapi_ciba | `token_endpoint_auth_method` = `private_key_jwt`（**明示すれば秘密は通らない**。空なら `client_secret` も通る）、検証鍵 | `EnableCibaGrantType`（poll だけを広告。FAPI-CIBA（Draft-02）5.2.2 の 3〜5 は push を禁じ、poll を必須、ping を任意とする） |
+| Device AuthZ（パブリック） | Device AuthZ × 問わない → normal・device | `grant_types` | `EnableDeviceAuthZGrantType` |
+| （参考）認可コード | 認可コード × PkceS256・PrivateKeyJwt → **device にも開いている**（理由が表に書かれていない） | — | — |
+
+#### metadata と option の重なり
+
+**重なっているものは、どれも「厳しい方が勝つ」。**
+
+| 種類 | option（サーバ全体） | metadata（登録ごと） | 組み合わせ |
+|---|---|---|---|
+| **使ってよいか**（開く） | `Enable*GrantType`・`EnableRefreshToken` | `grant_types`・`response_types` | **AND**（両方が許すときだけ通る。登録が空なら絞らない。`CheckClientGrantType`） |
+| **必須か**（締める） | `RequirePkce` | `require_pkce` | **OR**（どちらかが求めれば必須。登録側から緩められない。#221） |
+| option だけ | `RequirePkceS256`・`EnableDPoPNonce` | — | 登録ごとの指定は無い |
+| metadata だけ | — | `token_endpoint_auth_method`・`client_mode` | 扱う方法の一覧はコードで固定（`TokenEndpointAuthMethods`） |
+
+#### 強制の手段が無いもの（✕）と、標準のメタデータ
+
+| 強制したいこと | 標準のメタデータ | サーバ | クライアント |
+|---|---|---|---|
+| PAR を必須にする | `require_pushed_authorization_requests`（RFC 9126 §5・§6。断るときは `invalid_request`。§4） | ○ | ○ |
+| 署名付きの Request Object を必須にする | `require_signed_request_object`（RFC 9101 §10.5。`alg` が `none` も断る） | ○ | ○ |
+| DPoP で縛る | `dpop_bound_access_tokens`（RFC 9449 §5.2。DPoP ヘッダの無いトークン要求を断る） | **無い** | ○ |
+| MTLS で縛る | `tls_client_certificate_bound_access_tokens`（RFC 8705 §3.3・§3.4。証明書の無い要求をエラーにするか、縛らないトークンを出すかはサーバが決める） | ○ | ○ |
+
+#### プロファイルより多く許しているもの
+
+**登録の設定で塞げる。** 雛形の登録が方法を明示していないので、雛形のままだと通る。
+
+| `ClientModePolicy` の行 | プロファイルとの差 | 塞ぐ設定 |
+|---|---|---|
+| 認可コード × PKCE だけ（認証なし）× **fapi1** | FAPI 1.0 Advanced はパブリック クライアントを扱わない（5.2.2 の 16） | `token_endpoint_auth_method` を明示する（`private_key_jwt` など。明示すれば PKCE だけでは通らない） |
+| CIBA × 問わない × **fapi_ciba** | FAPI-CIBA（Draft-02）は機密クライアントだけを扱い（5.2.2 の 1）、FAPI 1.0・2.0 の規定を引き継ぐ（6.1）。**認証の方法の一覧は、参照先の節番号が古く、原文からははっきりしない**（FAPI 1.0 Advanced・FAPI 2.0 の方法に、秘密は無い） | 同上 |
+| fapi1・fapi2 × PAR なし／署名の無い要求／縛らないトークン | 上の ✕ | **無い**（D-16 で足す） |
 
 ---
 
