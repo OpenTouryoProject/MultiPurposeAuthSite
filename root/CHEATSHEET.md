@@ -255,7 +255,8 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
    4. のビルドで自動取得される（無ければ取得する）
    取り直す  : cd root && .\1_BuildAll.ps1 -Libs Force
    手で入れる: root\programs\3_BuildLibsAtOtherRepos.bat
-               （または OpenTouryo を clone してビルドし、mpas_dev.bat で複写）
+               （または OpenTouryo を clone してビルドし、mpas_dev.bat で複写。
+                 場所は環境変数 OTR_PATH・MPAS_PATH。無ければカレント フォルダからの相対。#344）
 
 2. 設定ファイルを作る（どちらも .gitignore 済み）
    programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\_appsettings.json → appsettings.json

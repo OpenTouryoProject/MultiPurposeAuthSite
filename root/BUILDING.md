@@ -285,6 +285,17 @@ OpenTouryo 側を更新したときは `-Libs Force` で取り直す。
 手で用意することもできる。`3_BuildLibsAtOtherRepos.bat`（タグ `03-20`）を実行するか、
 OpenTouryo を別途 clone してビルドし、`mpas_dev.bat` で複写する。
 
+**`mpas_dev.bat` は、2 つのリポジトリの場所を、環境変数 `OTR_PATH`（OpenTouryo）・`MPAS_PATH`（MultiPurposeAuthSite）から読む**（#344）。
+
+| | 使う場所 |
+|---|---|
+| **両方が在る** | 環境変数の場所。**どこから実行してもよい** |
+| **どちらかが無い** | **カレント フォルダからの相対パス**（`OpenTouryo\…`・`MultiPurposeAuthSite\…`）。**2 つを同じフォルダに clone し、そこへ `mpas_dev.bat` を写して実行する**（従来どおり）。片方だけ在るときは、取り違えないよう、その値も使わない |
+
+**どちらを使ったかは、実行したときに表示する。**
+環境変数は、リポジトリの場所を引く約束（OpenTouryoProject/OpenTouryo#652）で、
+**登録は OpenTouryo の `root/files/tools/PowerShell/Register-RepoPaths.ps1`**（一覧と既定の場所は、同じフォルダの `_RepoPaths.csv`）。
+
 > **取得ステップの合否は、出力ではなくフォルダの実在で判定している。**
 > `xcopy` の失敗は `: error` の形で出ないため、出力解析では拾えない。
 
