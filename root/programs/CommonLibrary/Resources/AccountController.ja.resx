@@ -147,6 +147,9 @@
   <data name="AuthMethodFapi1" xml:space="preserve">
     <value>private_key_jwt（client_assertion。FAPI1 は非対称の認証）</value>
   </data>
+  <data name="AuthMethodFapi1Pkce" xml:space="preserve">
+    <value>private_key_jwt（client_assertion）＋ PKCE の code_verifier</value>
+  </data>
   <data name="AuthMethodFapi2" xml:space="preserve">
     <value>private_key_jwt（client_assertion。FAPI 2.0 は MTLS か これ）</value>
   </data>

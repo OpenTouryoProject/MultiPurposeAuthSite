@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/07  玄人 幸道         新規（#341）
+//*  2026/11/07  玄人 幸道         RT-341.2（「FAPI1 PC, PKCE」のボタン）を足した（OpenTouryo#670 の取り込みの後。#341）
 //**********************************************************************************
 
 using System.Net;
@@ -50,8 +51,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// 戻り（`/Account/OAuth2AuthorizationCodeGrantClient`）のトークン要求は、
     /// **方法を明示していない `FAPI1_Client` では `invalid_client` になっていた**（#307 の段階 3 から。#341）。
     ///
-    /// **「FAPI1 PC, PKCE」は、ここでは測らない。** アサーションと `code_verifier` を一緒に送る口が、
-    /// Open棟梁 のクライアントに無いため（#341 の案 2。Open棟梁 に足してから測る）。
+    /// **「FAPI1 PC, PKCE」は `RT-341.2`。** アサーションと `code_verifier` を一緒に送る口が
+    /// Open棟梁 のクライアントに無かったので、足してから測った（OpenTouryo#670）。
     /// </remarks>
     public class SelfTestFapi1Tests : TargetTestBase
     {
@@ -129,6 +130,81 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             "出る", string.IsNullOrEmpty(idToken) ? "**出ない**" : "出る");
                     }
                 }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-341.2
+
+        /// <summary>RT-341.2 自己テストの「FAPI1 PC, PKCE」のボタンが、private_key_jwt と code_verifier で引き換えて、結果の画面まで進む</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT34102_自己テストのFAPI1のPKCEのボタンが結果の画面まで進む(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-341.2",
+                    "自己テストの「FAPI1 PC, PKCE」のボタンが、private_key_jwt で認証し code_verifier も送って引き換え、結果の画面まで進む",
+                    "**`code_challenge` を付けて認可を求めたコードは、トークン要求で `code_verifier` が要る。**"
+                    + "**クライアント認証（`private_key_jwt`）とは別に送る**（PKCE はクライアント認証ではない）。"
+                    + "**アサーションだけを送っていた間は、このボタンは通らなかった。**",
+                    "RFC 7636 §4.5 / RFC 7523 §2.2 / #341");
+
+                string configured = client.Config.FindClientIdByName(KnownClients.Fapi1PrivateKeyJwtClient);
+
+                Skip.If(string.IsNullOrEmpty(configured),
+                    "client_name=" + KnownClients.Fapi1PrivateKeyJwtClient + " が構成ファイルに在りません（雛形から写してください。#341）: "
+                    + client.Config.Path);
+
+                await client.SignInAsync();
+
+                r.Target("自己テスト（ClientType=fapi1）: AuthorizationCodeFAPI1_PKCE / " + KnownClients.Fapi1PrivateKeyJwtClient);
+
+                r.Step("(1) 「AuthorizationCodeFAPI1_PKCE」を押す");
+
+                HttpResponseMessage start = await client.StartSelfTestAsync("AuthorizationCodeFAPI1_PKCE", "fapi1");
+                string authorizeUrl = (start.Headers.Location == null) ? null : start.Headers.Location.OriginalString;
+
+                Skip.If(string.IsNullOrEmpty(authorizeUrl),
+                    "自己テストが認可リクエストへ飛びません（HTTP " + (int)start.StatusCode + "。IsLockedDownTestEndpoints を確認）。");
+
+                r.VerifyEqual("client_id は " + KnownClients.Fapi1PrivateKeyJwtClient, configured,
+                    Saml2.QueryValue(authorizeUrl, "client_id"));
+
+                r.VerifyEqual("code_challenge_method は S256", "S256",
+                    Saml2.QueryValue(authorizeUrl, "code_challenge_method"));
+
+                string challenge = Saml2.QueryValue(authorizeUrl, "code_challenge");
+
+                r.Verify("code_challenge が付く", !string.IsNullOrEmpty(challenge),
+                    "付く", string.IsNullOrEmpty(challenge) ? "**付かない**" : "付く");
+
+                r.Step("(2) 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）");
+
+                AuthZResponse authz = await client.AuthorizeAndGrantAsync(client.ToLocalUrl(authorizeUrl));
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが返ること（" + authz.ToString() + "）");
+
+                HttpResponseMessage screen = await client.GetAsync(authz.Location);
+                string html = await screen.Content.ReadAsStringAsync();
+
+                r.Verify("結果の画面が返る（エラー画面にならない）",
+                    screen.StatusCode == HttpStatusCode.OK && !html.Contains(ErrorHeading),
+                    "HTTP 200 / エラー画面ではない", "HTTP " + (int)screen.StatusCode + " / " + Html.Describe(html));
+
+                string accessToken = Html.FieldValue(html, "AccessToken");
+
+                r.Verify("access_token が出る（トークン要求が通った）", !string.IsNullOrEmpty(accessToken),
+                    "出る", string.IsNullOrEmpty(accessToken) ? "**出ない**（" + Html.FieldValue(html, "Response") + "）" : "出る");
+
+                string idToken = Html.FieldValue(html, "IdToken");
+
+                r.Verify("id_token が出る", !string.IsNullOrEmpty(idToken),
+                    "出る", string.IsNullOrEmpty(idToken) ? "**出ない**" : "出る");
 
                 r.Done();
             }

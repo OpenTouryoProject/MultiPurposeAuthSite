@@ -23,6 +23,7 @@
 //*  2026/11/06  玄人 幸道         access_token を、期待する iss・aud を渡す版の AccessToken.Verify で検証する（OpenTouryo#655。#336）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
+//*  2026/11/07  玄人 幸道         「FAPI1 PC, PKCE」のボタンで、code_verifier も送る（OpenTouryo#670。#341）
 //**********************************************************************************
 
 /*
@@ -330,12 +331,26 @@ namespace MultiPurposeAuthSite.Controllers
                             // FAPI1
 
                             // **アサーションの組み立ては SelfTestClient**（#246）。
-                            model.AuthMethod = Resources.AccountController.AuthMethodFapi1;
+                            string assertion = SelfTestClient.CreateClientAssertion(
+                                clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.SelfTestScopes);
 
-                            model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, redirect_uri, code,
-                                SelfTestClient.CreateClientAssertion(
-                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.SelfTestScopes));
+                            if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
+                            {
+                                model.AuthMethod = Resources.AccountController.AuthMethodFapi1;
+
+                                model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(
+                                    tokenEndpointUri, redirect_uri, code, assertion);
+                            }
+                            else
+                            {
+                                // **「FAPI1 PC, PKCE」のボタン**（code_challenge を付けて認可を求めた）。
+                                //   **code_verifier も送らないと、引き換えられない**（RFC 7636 §4.5。#245）。
+                                //   以前はアサーションだけを送っていて、このボタンは通らなかった（#341。OpenTouryo#670）。
+                                model.AuthMethod = Resources.AccountController.AuthMethodFapi1Pkce;
+
+                                model.Response = await SelfTestWebApi.GetAccessTokenByCodeWithPkceAsync(
+                                    tokenEndpointUri, redirect_uri, code, code_verifier_InSessionOrCookie, assertion);
+                            }
                         }
                         else if (state.StartsWith(fapi2Prefix))
                         {

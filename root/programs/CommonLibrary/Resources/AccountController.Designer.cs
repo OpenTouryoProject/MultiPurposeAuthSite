@@ -151,6 +151,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
+        ///   private_key_jwt (client_assertion) + PKCE code_verifier に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthMethodFapi1Pkce {
+            get {
+                return ResourceManager.GetString("AuthMethodFapi1Pkce", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   private_key_jwt (client_assertion. FAPI 2.0 uses MTLS or this) に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AuthMethodFapi2 {

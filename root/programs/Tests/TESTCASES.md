@@ -11005,6 +11005,28 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - AuthorizationCodeFAPI1_OIDC : access_token が出る（トークン要求が通った）
 - AuthorizationCodeFAPI1_OIDC : id_token が出る
 
+## RT-341.2 自己テストの「FAPI1 PC, PKCE」のボタンが、private_key_jwt で認証し code_verifier も送って引き換え、結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **`code_challenge` を付けて認可を求めたコードは、トークン要求で `code_verifier` が要る。****クライアント認証（`private_key_jwt`）とは別に送る**（PKCE はクライアント認証ではない）。**アサーションだけを送っていた間は、このボタンは通らなかった。** |
+| 根拠 | RFC 7636 §4.5 / RFC 7523 §2.2 / #341 |
+| テスト | `RT34102_自己テストのFAPI1のPKCEのボタンが結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI1_PKCE」を押す
+1. 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）
+
+**検証（合否を判定する）**
+
+- client_id は FAPI1_PrivateKeyJwt_Client
+- code_challenge_method は S256
+- code_challenge が付く
+- 結果の画面が返る（エラー画面にならない）
+- access_token が出る（トークン要求が通った）
+- id_token が出る
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

@@ -33,6 +33,7 @@
 //*  2026/11/01  玄人 幸道         Util/Sts/Helper.WebApi.cs から移し、static クラスにした（配置の見直し。#321）
 //*  2026/10/31  玄人 幸道         IntrospectTokenAsync の要約を直した（#294）
 //*  2026/11/06  玄人 幸道         CIBA の要求を Open棟梁 の CibaAuthZRequestAsync（資格情報を受ける版。OpenTouryo#592）で送る（#337）
+//*  2026/11/07  玄人 幸道         FAPI1 で PKCE も送る GetAccessTokenByCodeWithPkceAsync を足した（OpenTouryo#670。#341）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -323,6 +324,32 @@ namespace MultiPurposeAuthSite.Util.Test
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, redirect_uri, code, assertion);
+        }
+
+        /// <summary>
+        /// FAPI1 + PKCE : code, code_verifier, assertionからAccess Tokenを取得する（#341）。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="code_verifier">code_verifier</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>結果のJSON文字列</returns>
+        /// <remarks>
+        /// **`private_key_jwt`（RFC 7523 §2.2）で認証し、PKCE の `code_verifier`（RFC 7636 §4.5）も送る。**
+        /// **`code_challenge` を付けて認可を求めたコードは、`code_verifier` が無いと引き換えられない**（#245）。
+        /// Open棟梁 の `GetAccessTokenByCodeWithPkceAsync`（OpenTouryo#670）を呼ぶ
+        /// （アサーションの版は `code_verifier` を送らない。名前が違うのは、既存の版と型の並びが同じになるため）。
+        /// </remarks>
+        public static async Task<string> GetAccessTokenByCodeWithPkceAsync(
+            Uri tokenEndpointUri, string redirect_uri, string code, string code_verifier, string assertion)
+        {
+            // コンテナ化サポート
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeWithPkceAsync(
+                tokenEndpointUri, redirect_uri, code, code_verifier, assertion);
         }
 
         /// <summary>

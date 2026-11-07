@@ -147,6 +147,9 @@
   <data name="AuthMethodFapi1" xml:space="preserve">
     <value>private_key_jwt (client_assertion. FAPI1 uses asymmetric authentication)</value>
   </data>
+  <data name="AuthMethodFapi1Pkce" xml:space="preserve">
+    <value>private_key_jwt (client_assertion) + PKCE code_verifier</value>
+  </data>
   <data name="AuthMethodFapi2" xml:space="preserve">
     <value>private_key_jwt (client_assertion. FAPI 2.0 uses MTLS or this)</value>
   </data>
