@@ -3617,7 +3617,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 |---|---|---|---|
 | poll ＋ 署名付きの要求 ＋ `private_key_jwt` | CIBA × 問わない → fapi_ciba | `token_endpoint_auth_method` = `private_key_jwt`（**明示すれば秘密は通らない**。空なら `client_secret` も通る）、検証鍵 | `EnableCibaGrantType`（poll だけを広告。FAPI-CIBA（Draft-02）5.2.2 の 3〜5 は push を禁じ、poll を必須、ping を任意とする） |
 | Device AuthZ（パブリック） | Device AuthZ × 問わない → normal・device | `grant_types` | `EnableDeviceAuthZGrantType` |
-| （参考）認可コード | 認可コード × PkceS256・PrivateKeyJwt → **device にも開いている**（理由が表に書かれていない） | — | — |
+| （参考）認可コード | 認可コード × PkceS256・PrivateKeyJwt → **device にも開いている**（理由が表に書かれていない。**D-16 の主題（プロファイルの強制）の外の発見**で、#346 の「決めること」で扱う） | — | — |
 
 #### metadata と option の重なり
 
@@ -3632,12 +3632,14 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 
 #### 強制の手段が無いもの（✕）と、標準のメタデータ
 
-| 強制したいこと | 標準のメタデータ | サーバ | クライアント |
-|---|---|---|---|
-| PAR を必須にする | `require_pushed_authorization_requests`（RFC 9126 §5・§6。断るときは `invalid_request`。§4） | ○ | ○ |
-| 署名付きの Request Object を必須にする | `require_signed_request_object`（RFC 9101 §10.5。`alg` が `none` も断る） | ○ | ○ |
-| DPoP で縛る | `dpop_bound_access_tokens`（RFC 9449 §5.2。DPoP ヘッダの無いトークン要求を断る） | **無い** | ○ |
-| MTLS で縛る | `tls_client_certificate_bound_access_tokens`（RFC 8705 §3.3・§3.4。証明書の無い要求をエラーにするか、縛らないトークンを出すかはサーバが決める） | ○ | ○ |
+**「標準」の 2 列は、RFC がその側の項目として定めているか**（○・無い）である。**この実装が対応しているかは、右端の列**を見ること。Open棟梁 のクライアントの部品にも、4 つとも無い。
+
+| 強制したいこと | 標準のメタデータ | 標準：AS のメタデータ（RFC 8414） | 標準：クライアントのメタデータ（RFC 7591） | この実装（2026/11/08） |
+|---|---|---|---|---|
+| PAR を必須にする | `require_pushed_authorization_requests`（RFC 9126 §5・§6。断るときは `invalid_request`。§4） | ○ | ○ | **無い。** Discovery は `false` を固定で広告している（`CmnDiscoveryEndpoint`）。登録の項目としては読んでいない |
+| 署名付きの Request Object を必須にする | `require_signed_request_object`（RFC 9101 §10.5。`alg` が `none` も断る） | ○ | ○ | **無い**（コードに出てこない） |
+| DPoP で縛る | `dpop_bound_access_tokens`（RFC 9449 §5.2。DPoP ヘッダの無いトークン要求を断る） | **無い** | ○ | **無い。** Discovery が広告するのは、証明に使える alg（`dpop_signing_alg_values_supported`。RFC 9449 §5.1）だけ |
+| MTLS で縛る | `tls_client_certificate_bound_access_tokens`（RFC 8705 §3.3・§3.4。証明書の無い要求をエラーにするか、縛らないトークンを出すかはサーバが決める） | ○ | ○ | **無い。** Discovery は `true` を広告している（RFC 8705 §3.3 の意味は「縛ったトークンを扱える」で、これは正しい）。登録ごとに必須にする手段は無い |
 
 #### プロファイルより多く許しているもの
 
@@ -3646,8 +3648,19 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 | `ClientModePolicy` の行 | プロファイルとの差 | 塞ぐ設定 |
 |---|---|---|
 | 認可コード × PKCE だけ（認証なし）× **fapi1** | FAPI 1.0 Advanced はパブリック クライアントを扱わない（5.2.2 の 16） | `token_endpoint_auth_method` を明示する（`private_key_jwt` など。明示すれば PKCE だけでは通らない） |
-| CIBA × 問わない × **fapi_ciba** | FAPI-CIBA（Draft-02）は機密クライアントだけを扱い（5.2.2 の 1）、FAPI 1.0・2.0 の規定を引き継ぐ（6.1）。**認証の方法の一覧は、参照先の節番号が古く、原文からははっきりしない**（FAPI 1.0 Advanced・FAPI 2.0 の方法に、秘密は無い） | 同上 |
-| fapi1・fapi2 × PAR なし／署名の無い要求／縛らないトークン | 上の ✕ | **無い**（D-16 で足す） |
+| CIBA × 問わない × **fapi_ciba** | FAPI-CIBA（Draft-02）は機密クライアントだけを扱い（5.2.2 の 1）、FAPI 1.0・2.0 の規定を引き継ぐ（6.1）。**認証の方法は、FAPI-CIBA の本文には書かれていない**（5.2.3.1 は FAPI の Part 1・Part 2 の「5.2.4」を参照するが、FAPI 1.0 Advanced（Final）の 5.2.4 は「(withdrawn)」で、方法の一覧は 5.2.2 の 14 にある。そこに秘密は無い） | 同上 |
+| fapi1・fapi2 × PAR なし／署名の無い要求／縛らないトークン | 上の ✕ | **無い**（#346 で足す） |
+
+#### #346 で足すもの
+
+| 段階 | 中身 |
+|---|---|
+| 1 | **登録のメタデータを 4 つ**（上の表。構成ファイル・管理画面・動的登録で読み書きする。既定は false） |
+| 2 | **サーバ全体の設定**（PAR・署名付きの Request Object。`RequirePkce` ＋ `require_pkce` と同じ OR）。DPoP・MTLS の拘束を全体で必須にするかは、作業のときに決める |
+| 3 | **判定**：PAR・署名付きの Request Object は認可エンドポイントで、送信者の拘束はトークン エンドポイント（refresh_token を含む）で断る |
+| 4 | **Discovery**：`require_pushed_authorization_requests`（今は false 固定）・`require_signed_request_object` を、サーバ全体の設定から出す |
+| 5 | **雛形と E2E**：プロファイルどおりのクライアント（#341 で足した `FAPI1_PrivateKeyJwt_Client`、#345 で足す予定のもの）に書くか。E2E が PKCE・PAR なしで使う `FAPI1_Client`・`FAPI2_Client` には書かない |
+| 決めること | **fapi1 × Hybrid** を開けるか。**device × 認可コード**の行を残すか |
 
 ---
 
