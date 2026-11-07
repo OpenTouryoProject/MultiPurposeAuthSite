@@ -457,7 +457,8 @@ CreateJwkSetJson.exe
 | `client_name` | 用途 |
 |---|---|
 | `TestClient` | 自己テスト用（`redirect_uri` は `test_self_code` / `test_self_token`） |
-| `FAPI1_Client` | FAPI1（`client_mode` = `fapi1`。旧 `TestClient1`） |
+| `FAPI1_Client` | FAPI1（`client_mode` = `fapi1`。旧 `TestClient1`）。**`token_endpoint_auth_method` を明示していない**（E2E が `client_secret` で使う。#341） |
+| `FAPI1_PrivateKeyJwt_Client` | **FAPI1 の自己テストが使う**（`client_mode` = `fapi1`、**`token_endpoint_auth_method` = `private_key_jwt`**。#341） |
 | `FAPI2_Client` | FAPI2（`client_mode` = `fapi2`。Request Object を使う。旧 `TestClient2`） |
 | `Device_Client` | Device Authorization Grant（`client_mode` = `device`）。**`client_secret` を持たない**（パブリック クライアント。旧 `TestClient3`） |
 | `FAPI_CIBA_Client` | CIBA（`client_mode` = `fapi_ciba`。旧 `TestClient4`） |
@@ -466,6 +467,11 @@ CreateJwkSetJson.exe
 
 > **自己テスト画面は、`TestClient` を名前で、ほかを登録の種別で選んでいる**（`HomeController`）。
 > **`FAPI1_Client`〜`FAPI_CIBA_Client` は `client_mode` の合う最初の 1 件、`RequirePKCE_Client` は normal で `require_pkce` = `true` の最初の 1 件**である。
+> **FAPI1・FAPI2 だけは、`token_endpoint_auth_method` = `private_key_jwt` の登録を優先する**（#341）。
+> **自己テストは `private_key_jwt` で認可コードを引き換える**が、**方法を明示していない登録では通らない**（#307 の段階 3。登録が空なら `client_secret` だけ）。
+> 一方、**fapi1 の登録は `client_secret` では認可コードを引き換えられない**（`ClientModePolicy`）。
+> **つまり方法を明示していない fapi1 の登録は、自己テストの送り方では、どの方法でも引き換えられない**ので、**写して使うなら `private_key_jwt` を明示すること。**
+> **明示した登録が無ければ、従来どおり最初の 1 件**を選ぶ（配備済みの構成ファイルでも、画面は動く）。
 > **名前を変えても選べるが、その種別の登録を消すと、画面のその選択肢が動かない。**
 > 旧 `TestClient5`（登録の `scope` で制限した例。#198）は E2E だけが使うので、E2E の種データ（`TestClient_36`）に移した。
 
@@ -3856,7 +3862,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
 | `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
-| `OAuth2ClientsInformation` | **テスト用が 13 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI2_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
+| `OAuth2ClientsInformation` | **テスト用が 14 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI1_PrivateKeyJwt_Client` `FAPI2_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
 

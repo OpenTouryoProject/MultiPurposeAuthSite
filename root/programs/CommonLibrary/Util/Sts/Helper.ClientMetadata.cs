@@ -34,6 +34,7 @@
 //*  2026/10/31  玄人 幸道         使われなくなった GetClientIdByName の out 版を消した（#294）
 //*  2026/11/04  玄人 幸道         client_mode で構成ファイルのクライアント名を引く口を足した（自己テストの画面が使う）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/07  玄人 幸道         client_mode でクライアント名を引くとき、認証の方法を明示した登録を優先できるようにした（#341）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -749,11 +750,47 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// </remarks>
         public string GetClientNameByClientMode(string clientMode, bool requirePkce)
         {
+            return this.GetClientNameByClientMode(clientMode, requirePkce, null);
+        }
+
+        /// <summary>client_mode から、構成ファイルのクライアント名を取得（認証の方法を明示した登録を優先する。#341）</summary>
+        /// <param name="clientMode">client_mode（normal / fapi1 / fapi2 / device / fapi_ciba）</param>
+        /// <param name="requirePkce">true なら、PKCE を必須にした登録（require_pkce = true）だけを引く</param>
+        /// <param name="preferredAuthMethod">優先する token_endpoint_auth_method（null・空なら問わない）</param>
+        /// <returns>クライアントの client_name（無ければ空）</returns>
+        /// <remarks>
+        /// **自己テストの FAPI1・FAPI2 のボタンは、`private_key_jwt` でトークンを引き換える**（#246）。
+        /// **登録が方法を明示していないと、`private_key_jwt` は通らない**（#307 の段階 3。`CmnEndpoints.AllowsAuthMethod`）。
+        /// 雛形の `FAPI1_Client` は、E2E が `client_secret` で使うので明示していない（#341）。
+        /// **そこで、明示した登録が在ればそれを、無ければ従来どおり最初の 1 件を返す**（配備済みの構成ファイルでも選べる）。
+        /// </remarks>
+        public string GetClientNameByClientMode(string clientMode, bool requirePkce, string preferredAuthMethod)
+        {
             if (string.IsNullOrEmpty(clientMode))
             {
                 return "";
             }
 
+            if (!string.IsNullOrEmpty(preferredAuthMethod))
+            {
+                string preferred = this.FindClientNameByClientMode(clientMode, requirePkce, preferredAuthMethod);
+
+                if (!string.IsNullOrEmpty(preferred))
+                {
+                    return preferred;
+                }
+            }
+
+            return this.FindClientNameByClientMode(clientMode, requirePkce, null);
+        }
+
+        /// <summary>条件に合う、構成ファイルの最初のクライアント名</summary>
+        /// <param name="clientMode">client_mode</param>
+        /// <param name="requirePkce">true なら、require_pkce = true の登録だけ</param>
+        /// <param name="authMethod">token_endpoint_auth_method（null なら問わない）</param>
+        /// <returns>client_name（無ければ空）</returns>
+        private string FindClientNameByClientMode(string clientMode, bool requirePkce, string authMethod)
+        {
             foreach (string clientId in this.Oauth2ClientsInfo.Keys)
             {
                 if (!string.Equals(this.GetClientMode(clientId), clientMode, StringComparison.Ordinal))
@@ -762,6 +799,12 @@ namespace MultiPurposeAuthSite.Util.Sts
                 }
 
                 if (requirePkce && !this.GetClientRequirePkce(clientId))
+                {
+                    continue;
+                }
+
+                if (authMethod != null
+                    && !string.Equals(this.GetTokenEndpointAuthMethod(clientId), authMethod, StringComparison.Ordinal))
                 {
                     continue;
                 }

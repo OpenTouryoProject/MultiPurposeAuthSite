@@ -800,6 +800,7 @@ docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U
 | **`TestClient`** | **秘密で認証する**（ほぼ全てのケースがそう使う）。**方法は明示しない** |
 | **`TestClient_24`（新規）** | **`TestClient` を写し、`token_endpoint_auth_method` を `private_key_jwt` にした種データ。** **`RT-239.1` 〜 `.4` / `RT-129.1` を、こちらへ向けた** |
 | **`FAPI2_Client`** | **構成ファイルに `token_endpoint_auth_method": "private_key_jwt"` を明記した**（fapi2。`RT-238.*` / `RT-239.5`） |
+| **`FAPI1_PrivateKeyJwt_Client`** | **fapi1 で `private_key_jwt` を明記した**（#341。自己テストの FAPI1 のボタンが選ぶ。`RT-341.1`）。**`FAPI1_Client` は明示しないまま**（`client_secret` で種別の判定まで進むことを測る E2E が使う） |
 | **`TestClient2_2` / `TestClient2_3`** | **`tls_client_auth` を明記**（`FA-6.*`。**DN を登録しただけでは通らない**） |
 | **`TestClient_8`** | **`private_key_jwt` を明記**（`RT-262.1`） |
 

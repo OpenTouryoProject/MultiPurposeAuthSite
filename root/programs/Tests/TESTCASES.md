@@ -10982,6 +10982,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - client_notification_token が配列 : HTTP 400 で返る
 - client_notification_token が配列 : error
 
+## RT-341.1 自己テストの FAPI1 のボタン（FAPI1・FAPI1, OIDC）が、private_key_jwt を明示した fapi1 の登録を選び、トークンを得て結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **自己テストは、FAPI1 の認可コードを `private_key_jwt`（`client_assertion`）で引き換える。****登録が方法を明示していないと、`private_key_jwt` は通らない**（登録が空なら `client_secret` だけ）。**fapi1 の登録は `client_secret` では引き換えられない**ので、**明示した登録を選ぶ必要がある。** |
+| 根拠 | RFC 7523 §2.2 / RFC 7591 §2 / #341 |
+| テスト | `RT34101_自己テストのFAPI1のボタンが結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI1」を押し、認可して、戻りの画面を開く
+1. 「AuthorizationCodeFAPI1_OIDC」を押し、認可して、戻りの画面を開く
+
+**検証（合否を判定する）**
+
+- AuthorizationCodeFAPI1 : client_id は FAPI1_PrivateKeyJwt_Client
+- AuthorizationCodeFAPI1 : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI1 : access_token が出る（トークン要求が通った）
+- AuthorizationCodeFAPI1_OIDC : client_id は FAPI1_PrivateKeyJwt_Client
+- AuthorizationCodeFAPI1_OIDC : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI1_OIDC : access_token が出る（トークン要求が通った）
+- AuthorizationCodeFAPI1_OIDC : id_token が出る
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

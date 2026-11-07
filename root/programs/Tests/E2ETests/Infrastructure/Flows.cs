@@ -57,6 +57,7 @@
 //*  2026/10/31  玄人 幸道         「:」だけを含む秘密の TestClient_35（ColonOnlySecret）を追加（OpenTouryo#645 への備え。#294）
 //*  2026/11/04  玄人 幸道         認証デバイスの Android / iOS 版（AuthenticationDevice）を足し、RunAuthenticationDeviceFlowAsync でクライアントを選べるようにした
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/07  玄人 幸道         FAPI1_PrivateKeyJwt_Client を足した（#341）
 //**********************************************************************************
 
 using System;
@@ -81,8 +82,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>自己テスト用（redirect_uri は test_self_code / test_self_token）</summary>
         public const string TestClient = "TestClient";
 
-        /// <summary>FAPI1 用</summary>
+        /// <summary>FAPI1 用（`token_endpoint_auth_method` を明示していない。`client_secret` で種別の判定まで進む）</summary>
         public const string Fapi1Client = "FAPI1_Client";
+
+        /// <summary>FAPI1 用（`token_endpoint_auth_method` = `private_key_jwt`。自己テストの FAPI1 のボタンが選ぶ。#341）</summary>
+        public const string Fapi1PrivateKeyJwtClient = "FAPI1_PrivateKeyJwt_Client";
 
         /// <summary>FAPI2 用（Request Object を使う）</summary>
         public const string Fapi2Client = "FAPI2_Client";
