@@ -35,6 +35,7 @@
 //*  2026/11/04  玄人 幸道         client_mode で構成ファイルのクライアント名を引く口を足した（自己テストの画面が使う）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/07  玄人 幸道         client_mode でクライアント名を引くとき、認証の方法を明示した登録を優先できるようにした（#341）
+//*  2026/11/08  玄人 幸道         client_mode と認証の方法の両方が合う登録だけを引く口を足した（自己テストの MTLS のボタン。#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -782,6 +783,25 @@ namespace MultiPurposeAuthSite.Util.Sts
             }
 
             return this.FindClientNameByClientMode(clientMode, requirePkce, null);
+        }
+
+        /// <summary>client_mode と token_endpoint_auth_method の両方が合う、構成ファイルのクライアント名を取得（#345）</summary>
+        /// <param name="clientMode">client_mode（normal / fapi1 / fapi2 / device / fapi_ciba）</param>
+        /// <param name="authMethod">token_endpoint_auth_method（tls_client_auth など）</param>
+        /// <returns>クライアントの client_name（無ければ空）</returns>
+        /// <remarks>
+        /// **優先する版と違い、合う登録が無ければ空を返す**（最初の 1 件に戻さない）。
+        /// **自己テストの MTLS のボタンが使う**（#345）。`tls_client_auth` を明示していない登録を選ぶと、
+        /// 証明書を添えても通らない（#307 の段階 3）ので、別の登録で始めずに、無いことを画面に出す。
+        /// </remarks>
+        public string GetClientNameByClientModeAndAuthMethod(string clientMode, string authMethod)
+        {
+            if (string.IsNullOrEmpty(clientMode) || string.IsNullOrEmpty(authMethod))
+            {
+                return "";
+            }
+
+            return this.FindClientNameByClientMode(clientMode, false, authMethod);
         }
 
         /// <summary>条件に合う、構成ファイルの最初のクライアント名</summary>

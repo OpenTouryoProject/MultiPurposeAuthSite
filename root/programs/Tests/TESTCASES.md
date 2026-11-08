@@ -4310,7 +4310,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. FAPI2 の自己テストで、request_uri 経路の code を得る
-1. client_assertion を添えて、code をトークンに交換する
+1. client_assertion を添えて、code をトークンに交換する（code_verifier も送る。#345）
 
 **検証（合否を判定する）**
 
@@ -6882,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus
+1. GET /Account/EmailConfirmation?userId=456c0d2c-8f8f-4ffd-929e-ad7fdd43c8fb&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=456c0d2c-8f8f-4ffd-929e-ad7fdd43c8fb&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=456c0d2c-8f8f-4ffd-929e-ad7fdd43c8fb&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11026,6 +11026,81 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 結果の画面が返る（エラー画面にならない）
 - access_token が出る（トークン要求が通った）
 - id_token が出る
+
+## RT-345.1 自己テストの FAPI2 のボタン（FAPI2 CC・FAPI2 CC, PAR）が、Request Object に code_challenge（S256）を入れ、code_verifier を送って引き換え、結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 はクライアントに S256 の PKCE を求める。** PAR と Request Object を使うとき、**PKCE のパラメタは Request Object の中に入る。** **`code_challenge` を付けて認可を求めたコードは、トークン要求で `code_verifier` が要る**（無ければ引き換えられない）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.3.2 / RFC 9101 §4 / RFC 7636 §4.3・§4.5 / #345 |
+| テスト | `RT34501_自己テストのFAPI2のボタンがPKCEで結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI2」を押す
+1. 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）
+1. 「AuthorizationCodeFAPI2_PAR」を押す
+1. 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）
+
+**検証（合否を判定する）**
+
+- AuthorizationCodeFAPI2 : 自己テストが code_verifier を用意する（43 文字以上）
+- AuthorizationCodeFAPI2 : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI2 : access_token が出る（code_verifier を送って引き換えられた）
+- AuthorizationCodeFAPI2 : id_token が出る
+- AuthorizationCodeFAPI2 : 画面のクライアント認証の欄が、private_key_jwt と code_verifier を示す
+- AuthorizationCodeFAPI2_PAR : Request Object に code_challenge_method = S256 が入る
+- AuthorizationCodeFAPI2_PAR : Request Object に code_challenge が入る
+- AuthorizationCodeFAPI2_PAR : 自己テストが code_verifier を用意する（43 文字以上）
+- AuthorizationCodeFAPI2_PAR : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI2_PAR : access_token が出る（code_verifier を送って引き換えられた）
+- AuthorizationCodeFAPI2_PAR : id_token が出る
+- AuthorizationCodeFAPI2_PAR : 画面のクライアント認証の欄が、private_key_jwt と code_verifier を示す
+
+## RT-345.2 FAPI2 の自己テストの結果の画面で、照会・更新・取り消しのボタンが、登録の方法（private_key_jwt）で送って通る
+
+| | |
+|---|---|
+| 観点 | **サーバは、登録が明示した方法でしか通さない**（`token_endpoint_auth_method`）。**以前の結果の画面のボタンは、クライアントによらず秘密を Basic で送っていた**ので、**private_key_jwt を明示した fapi2 の登録では断られていた。** fapi2 は refresh_token を、非対称の証明でだけ使える。 |
+| 根拠 | RFC 7523 §2.2 / RFC 6749 §6 / RFC 7009 §2.1 / RFC 7662 §2.1 / #345 |
+| テスト | `RT34502_FAPI2の結果の画面のボタンがprivate_key_jwtで通る` |
+
+**手順**
+
+1. 自己テストを通し、結果の画面まで進む
+1. 「IntrospectAccess」を押す
+1. 「Refresh」を押す
+1. 「RevokeAccess」を押す
+1. 「IntrospectAccess」を押す
+
+**検証（合否を判定する）**
+
+- 照会（access_token）: **有効**（private_key_jwt で認証できた）
+- 更新 : **新しい access_token が画面に出る**（private_key_jwt で認証できた）
+- **取り消した access_token は、照会で無効**（取り消しも通った）
+
+## RT-345.3 自己テストの MTLS のボタンが、tls_client_auth を明示した fapi2 の登録を選び、PAR とトークン要求をクライアント証明書で認証して、結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 が認めるクライアント認証は MTLS か private_key_jwt。** **自己テストは private_key_jwt しか試せなかった**（MTLS で引き換える口が Open棟梁 に無かった。OpenTouryo#676）。**MTLS は明示した登録でしか通らない**ので、ボタンはその登録だけを選ぶ。 |
+| 根拠 | RFC 8705 §2 / RFC 9126 §2 / FAPI 2.0 Security Profile §5.3.2.1 / #345 |
+| テスト | `RT34503_自己テストのMTLSのボタンが結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI2_PAR_MTLS」を押す（tls_client_auth で /par に預ける）
+1. 認可して、戻りの画面を開く（トークン要求は tls_client_auth ＋ code_verifier）
+
+**検証（合否を判定する）**
+
+- HTTP 200（預けた結果の画面）
+- 選んだ登録が FAPI2_MTLS_Client である
+- PAR のクライアント認証が tls_client_auth である
+- request_uri で認可へ進むリンクが出る（PAR が証明書で認証できた）
+- 結果の画面が返る（エラー画面にならない）
+- access_token が出る（証明書で認証して引き換えられた）
+- 画面のクライアント認証の欄が、tls_client_auth と code_verifier を示す
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

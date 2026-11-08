@@ -160,11 +160,20 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
-        ///   private_key_jwt (client_assertion. FAPI 2.0 uses MTLS or this) に類似しているローカライズされた文字列を検索します。
+        ///   {0} (the registered token_endpoint_auth_method. FAPI 2.0 uses MTLS or private_key_jwt) に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AuthMethodFapi2 {
             get {
                 return ResourceManager.GetString("AuthMethodFapi2", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   {0} + PKCE code_verifier に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthMethodWithPkce {
+            get {
+                return ResourceManager.GetString("AuthMethodWithPkce", resourceCulture);
             }
         }
 

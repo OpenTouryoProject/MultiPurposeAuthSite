@@ -3660,7 +3660,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 | 3 | **判定**：PAR・署名付きの Request Object は認可エンドポイントで、送信者の拘束はトークン エンドポイント（refresh_token を含む）で断る |
 | 4 | **Discovery**：`require_pushed_authorization_requests`（今は false 固定）・`require_signed_request_object` を、サーバ全体の設定から出す |
 | 5 | **雛形と E2E**：E2E は、4 つそれぞれ、登録で必須にしたクライアントが「使えば通り、使わなければ断られる」ことを測る。**E2E が PKCE・PAR なしで使う `FAPI1_Client`・`FAPI2_Client` には書かない**（書くと既存の期待値が変わる） |
-| 決めること | **fapi1 × Hybrid** を開けるか。**device × 認可コード**の行を残すか。**送信者の拘束の 2 つに、サーバ全体の設定を足すか**（DPoP には標準の AS のメタデータが無い）。**雛形のプロファイルどおりのクライアント**（#341 の `FAPI1_PrivateKeyJwt_Client`、#345 で足す予定のもの）に、4 つを書くか |
+| 決めること | **fapi1 × Hybrid** を開けるか。**device × 認可コード**の行を残すか。**送信者の拘束の 2 つに、サーバ全体の設定を足すか**（DPoP には標準の AS のメタデータが無い）。**雛形のプロファイルどおりのクライアント**（#341 の `FAPI1_PrivateKeyJwt_Client`、#345 の `FAPI2_MTLS_Client`）に、4 つを書くか |
 
 ---
 

@@ -53,6 +53,7 @@
 //*  2026/10/28  玄人 幸道         Cookie の値を書き換える口（OverwriteCookie）を足した（#294）
 //*  2026/10/30  玄人 幸道         WebAuthn の登録の段階 0 で、パスワードを送る（#294）
 //*  2026/10/31  玄人 幸道         待ち時間を指定して POST する口を追加（自己テストのポーリング。#294）
+//*  2026/11/08  玄人 幸道         自己テストが Cookie に置いた code_verifier を読む口を追加（#345）
 //**********************************************************************************
 
 using System;
@@ -151,6 +152,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             this._handler.CookieContainer.Add(uri, new Cookie(name, value, path));
+        }
+
+        /// <summary>
+        /// 自己テストのスターターが Cookie に置いた code_verifier を読む（#345）。
+        /// </summary>
+        /// <returns>code_verifier（無ければ空）</returns>
+        /// <remarks>
+        /// **自己テストの FAPI2 のボタンは、PKCE（S256）を使う**（#345）。
+        /// そのボタンで認可コードだけを取り、**引き換えはテストが自分で行う**ケース（`RT-238.4`・`RT-239.5`）は、
+        /// **`code_verifier` も送らないと引き換えられない**（RFC 7636 §4.6）。
+        /// **自己テストは `code_verifier` を Cookie `test_code_verifier`（平文）にも置く**（`SaveOAuth2Params`）ので、それを読む。
+        ///
+        /// **ほかの Cookie の値は読ませない**（`CookieNames` が値を返さないのと同じ考え）。
+        /// </remarks>
+        public string SelfTestCodeVerifier()
+        {
+            foreach (Cookie cookie in this._handler.CookieContainer.GetCookies(new Uri(this.Target.BaseUrl)))
+            {
+                if (cookie.Name.EndsWith("test_code_verifier", StringComparison.Ordinal))
+                {
+                    return cookie.Value ?? "";
+                }
+            }
+
+            return "";
         }
 
         /// <summary>コンストラクタ</summary>

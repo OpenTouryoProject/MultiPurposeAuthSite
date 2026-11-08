@@ -31,6 +31,7 @@
     //*  2026/10/09  玄人 幸道         各オプションの説明を出した（#277 の段階 2）
     //*  2026/10/09  玄人 幸道         NameIDFormat を選べるようにした（#277 の段階 4）
     //*  2026/10/31  玄人 幸道         始められなかった理由を出す（ValidationSummary。#294）
+    //*  2026/11/08  玄人 幸道         FAPI2 の MTLS のボタンを追加。FAPI2 のボタンが PKCE（S256）を使うことを明記（#345）
     //**********************************************************************************
 *@
 
@@ -192,8 +193,15 @@
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI2" value="Test Authorization Code Flow (FAPI2 CC)" class="btn btn-link" /></li>
                     @* PAR（RFC 9126）に預けてから認可する。FAPI 2.0 の正規の形（#246） *@
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI2_PAR" value="Test Authorization Code Flow (FAPI2 CC, PAR)" class="btn btn-link" /></li>
+                    @*
+                        **MTLS（tls_client_auth）で認証する**（#345）。fapi2 で tls_client_auth を明示した登録（雛形の FAPI2_MTLS_Client）を選ぶ。
+                        **クライアント証明書は SpRp_ClientCertPfxFilePath。** 設定が無い・サイトが証明書を受けない配備では invalid_client になる。
+                    *@
+                    <li><input type="submit" name="submit.AuthorizationCodeFAPI2_PAR_MTLS" value="Test Authorization Code Flow (FAPI2 CC, PAR, MTLS)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.FAPI_CIBA_Profile" value="Test FAPI CIBA Profile (FAPI2)" class="btn btn-link" /></li>
                 </ul>
+                ※ The FAPI2 buttons use PKCE (S256). The MTLS button needs the client certificate (SpRp_ClientCertPfxFilePath),
+                a fapi2 client registered with token_endpoint_auth_method = tls_client_auth, and a site that accepts client certificates.<br />
             </li>
             <li>
                 ResourceOwner Password Credentials Flow<br />

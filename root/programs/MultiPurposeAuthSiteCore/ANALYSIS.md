@@ -508,15 +508,16 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 | PKCE（`plain` / `S256`） | PKCE plain / S256（＋ SPA 用の 2 つ） | |
 | `password`（ROPC） | Test ResourceOwner Password Credentials Flow | **雛形の既定で無効**（#220） |
 | `client_credentials` | Test Client Credentials Flow | |
-| `refresh_token` | 結果画面の [Refresh] | |
+| `refresh_token` | 結果画面の [Refresh] | **登録の `token_endpoint_auth_method` で送る**（#345。以前は秘密を Basic で送り、FAPI の登録では断られていた） |
 | `urn:ietf:params:oauth:grant-type:jwt-bearer` | Test JWT Bearer Token Flow | |
 | CIBA（`…:openid:params:grant-type:ciba`） | Test FAPI CIBA Profile (FAPI2) | **認証デバイスの登録と承認が要る**（判定と理由は画面に出る。#246 の 3-a） |
 | Device（`…:oauth:grant-type:device_code`） | Test Device Authorization Grant → [Start polling.] | 承認は `/device_verify`（画面のリンク） |
-| `/revoke` / `/introspect` | 結果画面の [RevokeAccess] [IntrospectAccess] [RevokeRefresh] [IntrospectRefresh] | |
+| `/revoke` / `/introspect` | 結果画面の [RevokeAccess] [IntrospectAccess] [RevokeRefresh] [IntrospectRefresh] | **登録の `token_endpoint_auth_method` で送る**（#345） |
 | `/userinfo` | 結果画面の [Get user claims]／`OAuth2ClientAuthenticationFlow.cshtml` | |
 | FAPI1（CC / CC+OIDC / PC+PKCE） | Test Authorization Code Flow (FAPI1 …) ×3 | **PC+PKCE は、S256 の値を `plain` と宣言していたため必ず失敗していた**（#245 の段階 2 で修正。`RT-245.6`） |
-| FAPI2（`/ros` 経由） | Test Authorization Code Flow (FAPI2 CC) | `/ros` は独自（RFC 9101 §5.2.1 の任意機能） |
-| **PAR（RFC 9126）** | Test Authorization Code Flow (FAPI2 CC, PAR) | **#246 で追加。** Open棟梁 のクライアントで `/par` に預ける |
+| FAPI2（`/ros` 経由） | Test Authorization Code Flow (FAPI2 CC) | `/ros` は独自（RFC 9101 §5.2.1 の任意機能）。**PKCE（S256）を使う**（`code_challenge` は Request Object に入る。#345） |
+| **PAR（RFC 9126）** | Test Authorization Code Flow (FAPI2 CC, PAR) | **#246 で追加。** Open棟梁 のクライアントで `/par` に預ける。**PKCE（S256）を使う**（#345） |
+| **PAR ＋ MTLS（RFC 8705）** | Test Authorization Code Flow (FAPI2 CC, PAR, MTLS) | **#345 で追加。** `tls_client_auth` を明示した fapi2 の登録（`FAPI2_MTLS_Client`）を選び、PAR とトークン要求をクライアント証明書（`SpRp_ClientCertPfxFilePath`）で認証する。**証明書が無い・サイトが受けない配備では `invalid_client`** |
 | **SAML2 の 4 バインディング** | Saml2 Redirect Redirect / Redirect Post / Post Post / **Post Redirect** | **4 つ目は #246 で追加**（要求は POST、応答は Redirect） |
 | SAML2 のメタデータ | 画面下の `samlmetadata` リンク | |
 | RP-Initiated Logout | Test RP-Initiated Logout（**確認画面の経路**）／結果画面の [Sign out]（**`id_token_hint` の経路**） | #232 |

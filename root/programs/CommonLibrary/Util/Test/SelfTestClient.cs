@@ -38,6 +38,8 @@
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //*  2026/11/06  玄人 幸道         Request Object の aud を issuer にし、exp・nbf を入れる。aud を渡す版の Verify・VerifyCiba で自己検証する（#336）
 //*  2026/11/06  玄人 幸道         /ros・/par の URL と、SAML2 の応答を検証する証明書を、サーバの値で読む（OpenTouryo#666。#339）
+//*  2026/11/08  玄人 幸道         Request Object を Open棟梁 の版（有効期間と code_challenge を受ける。OpenTouryo#675）で作り、自前の署名し直しをやめた（#345）
+//*  2026/11/08  玄人 幸道         トークン エンドポイント系の認証を、登録の token_endpoint_auth_method で決める（PAR も。OpenTouryo#676。#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -137,6 +139,89 @@ namespace MultiPurposeAuthSite.Util.Test
 
         #endregion
 
+        #region クライアント認証（トークン エンドポイント系・PAR）
+
+        /// <summary>送るクライアント認証（方法と、その方法で送る値）</summary>
+        public class ClientCredential
+        {
+            /// <summary>方法</summary>
+            public OAuth2AndOIDCEnum.AuthMethods AuthMethod { get; set; }
+
+            /// <summary>client_id</summary>
+            public string ClientId { get; set; }
+
+            /// <summary>client_secret（client_secret_basic・client_secret_post のときだけ）</summary>
+            public string ClientSecret { get; set; }
+
+            /// <summary>client_assertion（private_key_jwt のときだけ）</summary>
+            public string ClientAssertion { get; set; }
+        }
+
+        /// <summary>登録の token_endpoint_auth_method から、送るクライアント認証を決める（#345）</summary>
+        /// <param name="clientId">client_id</param>
+        /// <param name="whenNotExplicit">登録が方法を明示していない（または送れない値の）ときに使う方法</param>
+        /// <param name="scopes">client_assertion の scope（private_key_jwt のときだけ使う）</param>
+        /// <returns>送るクライアント認証</returns>
+        /// <remarks>
+        /// **サーバは、登録が明示した方法でしか通さない**（#307 の段階 3。`CmnEndpoints.AllowsAuthMethod`）。
+        /// **クライアントも、それに合わせて送る。** 以前は経路ごとに方法を決め打ちしていたので、
+        /// **FAPI の登録で、結果の画面の更新・取り消し・照会（秘密を Basic で送っていた）が断られていた。**
+        ///
+        /// | 登録 | 送るもの |
+        /// |---|---|
+        /// | `client_secret_basic`・`client_secret_post` | 登録の秘密（Basic ヘッダ・フォーム） |
+        /// | `private_key_jwt` | `client_assertion`（`CreateClientAssertion`） |
+        /// | `tls_client_auth` | `client_id` だけ（**証明書は `OAuth2AndOIDCClient.HttpClient` が載せる**。`SpRp_ClientCertPfxFilePath`） |
+        /// | 空・上記以外 | `whenNotExplicit` の方法 |
+        ///
+        /// **送るのは Open棟梁 の `SetClientAuthentication` を通る口**（OpenTouryo#676）。
+        /// </remarks>
+        public static ClientCredential CredentialOf(
+            string clientId, OAuth2AndOIDCEnum.AuthMethods whenNotExplicit, string scopes)
+        {
+            OAuth2AndOIDCEnum.AuthMethods authMethod = whenNotExplicit;
+
+            string registered = Helper.GetInstance().GetTokenEndpointAuthMethod(clientId);
+
+            foreach (OAuth2AndOIDCEnum.AuthMethods candidate in new OAuth2AndOIDCEnum.AuthMethods[]
+            {
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic,
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_post,
+                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt,
+                OAuth2AndOIDCEnum.AuthMethods.tls_client_auth
+            })
+            {
+                if (registered == candidate.ToStringByEmit())
+                {
+                    authMethod = candidate;
+                    break;
+                }
+            }
+
+            ClientCredential ret = new ClientCredential()
+            {
+                AuthMethod = authMethod,
+                ClientId = clientId,
+                ClientSecret = null,
+                ClientAssertion = null
+            };
+
+            if (authMethod == OAuth2AndOIDCEnum.AuthMethods.private_key_jwt)
+            {
+                ret.ClientAssertion = SelfTestClient.CreateClientAssertion(
+                    clientId, new TimeSpan(0, 0, 30), scopes);
+            }
+            else if (authMethod == OAuth2AndOIDCEnum.AuthMethods.client_secret_basic
+                || authMethod == OAuth2AndOIDCEnum.AuthMethods.client_secret_post)
+            {
+                ret.ClientSecret = Helper.GetInstance().GetClientSecret(clientId);
+            }
+
+            return ret;
+        }
+
+        #endregion
+
         #region Request Object
 
         /// <summary>Request Object の有効期間（秒）。FAPI の上限（60 分）より短くする（#336）</summary>
@@ -151,6 +236,7 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <param name="state">state</param>
         /// <param name="nonce">nonce</param>
         /// <param name="claims">claims（null なら空で作る）</param>
+        /// <param name="codeChallenge">code_challenge（S256。空なら PKCE のクレームを入れない。#345）</param>
         /// <returns>署名付き JWT（自己検証に失敗したら空）</returns>
         /// <remarks>
         /// **作った後に自分で検証する**（従来の「検証テスト」をここに入れた）。
@@ -164,36 +250,30 @@ namespace MultiPurposeAuthSite.Util.Test
         /// **以前は預け先のエンドポイントの URL だった**（`RequestObject.Create` のコメントのとおり）。
         /// `/ros` と PAR が aud を issuer と照合するようになったので、それでは通らない。
         ///
-        /// **`exp`・`nbf` を足して、署名し直す**（#336）。自己テストのクライアントは fapi2 の登録で、
-        /// FAPI は両方を必須にしている（FAPI 2.0 Message Signing §5.3.1-3・4）が、
-        /// **`RequestObject.Create` はどちらも入れない。** 中身の組み立ては `Create` のままにする
-        /// （Open棟梁 の部品を通す確認を残すため）。
+        /// **`exp`・`nbf`（と `iat`）は、Open棟梁 の `RequestObject.Create`（有効期間を受ける版）が入れる**
+        /// （OpenTouryo#660・#675。#345）。FAPI は両方を必須にしている（FAPI 2.0 Message Signing §5.3.1-3・4）。
+        /// **以前は `exp`・`nbf` を入れない版で作り、足して自前で署名し直していた**（#336）。
+        ///
+        /// **`code_challenge` を渡すと、`code_challenge_method` = `S256` と一緒に Request Object に入る**
+        /// （RFC 9101 §4、RFC 7636 §4.3。#345）。**FAPI 2.0 は PAR と S256 の PKCE を求める**
+        /// （FAPI 2.0 Security Profile §5.3.3.2）。FAPI1 のボタンは空で呼ぶ（PKCE のクレームは入らない）。
         /// </remarks>
         public static string CreateRequestObject(
             string clientId, string responseType, string responseMode,
-            string redirectUri, string scopes, string state, string nonce, ClaimsInRO claims)
+            string redirectUri, string scopes, string state, string nonce, ClaimsInRO claims,
+            string codeChallenge)
         {
             RSAParameters rsa = SelfTestClient.RsaPrivateKey();
 
-            string created = RequestObject.Create(
+            //  **code_challenge_method は空で渡す**（Open棟梁 が S256 を入れる。code_challenge が空なら、どちらも入らない）。
+            string requestObject = RequestObject.Create(
                 clientId, CmnServerParams.IssuerId, responseType, responseMode,
                 redirectUri, scopes, state, nonce,
                 "600", "", "",
                 claims ?? new ClaimsInRO(null, null, null),
+                codeChallenge ?? "", "",
+                TimeSpan.FromSeconds(SelfTestClient.RequestObjectLifetimeSeconds),
                 rsa);
-
-            JObject payload = JwtReader.TryReadPayload(created);
-
-            if (payload == null)
-            {
-                return "";
-            }
-
-            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            payload[OAuth2AndOIDCConst.nbf] = now;
-            payload[OAuth2AndOIDCConst.exp] = now + SelfTestClient.RequestObjectLifetimeSeconds;
-
-            string requestObject = new JWS_RS256_Param(rsa).Create(payload.ToString(Newtonsoft.Json.Formatting.None));
 
             // 検証テスト（作ったものを、自分の公開鍵で、期待する aud で検証できるか）
             if (!RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out string _, rsa))
@@ -770,6 +850,9 @@ namespace MultiPurposeAuthSite.Util.Test
 
             /// <summary>expires_in（`/par` だけが返す。無ければ空）</summary>
             public string ExpiresIn { get; set; }
+
+            /// <summary>送ったクライアント認証の方法（`/par` だけ。`/ros` は認証しないので空。#345）</summary>
+            public string AuthMethod { get; set; }
         }
 
         /// <summary>Request Object を `/ros` に預ける（独自。RFC 9101 §5.2.1 の任意機能）</summary>
@@ -780,11 +863,13 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <param name="state">state</param>
         /// <param name="nonce">nonce</param>
         /// <param name="claims">claims</param>
+        /// <param name="codeChallenge">code_challenge（S256。空なら入れない。#345）</param>
         /// <returns>預けた結果</returns>
         /// <remarks>**クライアント認証は無い**（Request Object の署名だけを見る口）。</remarks>
         public static async Task<PushResult> RegisterRequestObjectAsync(
             string clientId, string responseType, string responseMode,
-            string redirectUri, string state, string nonce, ClaimsInRO claims)
+            string redirectUri, string state, string nonce, ClaimsInRO claims,
+            string codeChallenge)
         {
             //  **送り先は自分自身なので、サーバの値（`Config`）で組み立てる**（OpenTouryo#666。#339）。
             string endpoint = Config.OAuth2AuthorizationServerEndpointsRootURI
@@ -792,7 +877,7 @@ namespace MultiPurposeAuthSite.Util.Test
 
             PushResult ret = SelfTestClient.NewResult(endpoint, SelfTestClient.CreateRequestObject(
                 clientId, responseType, responseMode,
-                redirectUri, Const.OidcScopes, state, nonce, claims));
+                redirectUri, Const.OidcScopes, state, nonce, claims, codeChallenge));
 
             if (string.IsNullOrEmpty(ret.RequestObject))
             {
@@ -815,14 +900,18 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <param name="state">state</param>
         /// <param name="nonce">nonce</param>
         /// <param name="claims">claims</param>
-        /// <returns>預けた結果</returns>
+        /// <param name="codeChallenge">code_challenge（S256。空なら入れない。#345）</param>
+        /// <returns>預けた結果（`AuthMethod` に、送ったクライアント認証の方法）</returns>
         /// <remarks>
         /// **`/ros` との違いはクライアント認証**（RFC 9126 §2）。
-        /// **FAPI 2.0 はこれを MTLS か private_key_jwt に限っている**ので、private_key_jwt で送る。
+        /// **FAPI 2.0 はこれを MTLS か private_key_jwt に限っている。**
+        /// **方法は登録の `token_endpoint_auth_method` で決める**（`CredentialOf`。#345）。
+        /// 明示していない登録は、従来どおり private_key_jwt で送る。
         /// </remarks>
         public static async Task<PushResult> PushAuthorizationRequestAsync(
             string clientId, string responseType, string responseMode,
-            string redirectUri, string state, string nonce, ClaimsInRO claims)
+            string redirectUri, string state, string nonce, ClaimsInRO claims,
+            string codeChallenge)
         {
             //  **送り先は自分自身なので、サーバの値（`Config`）で組み立てる**（OpenTouryo#666。#339）。
             string endpoint = Config.OAuth2AuthorizationServerEndpointsRootURI
@@ -830,7 +919,12 @@ namespace MultiPurposeAuthSite.Util.Test
 
             PushResult ret = SelfTestClient.NewResult(endpoint, SelfTestClient.CreateRequestObject(
                 clientId, responseType, responseMode,
-                redirectUri, Const.OidcScopes, state, nonce, claims));
+                redirectUri, Const.OidcScopes, state, nonce, claims, codeChallenge));
+
+            ClientCredential credential = SelfTestClient.CredentialOf(
+                clientId, OAuth2AndOIDCEnum.AuthMethods.private_key_jwt, Const.OidcScopes);
+
+            ret.AuthMethod = credential.AuthMethod.ToStringByEmit();
 
             if (string.IsNullOrEmpty(ret.RequestObject))
             {
@@ -838,8 +932,7 @@ namespace MultiPurposeAuthSite.Util.Test
             }
 
             ret.Response = await SelfTestWebApi.PushAuthorizationRequestAsync(
-                new Uri(endpoint), ret.RequestObject, clientId,
-                SelfTestClient.CreateClientAssertion(clientId, new TimeSpan(0, 0, 30), Const.OidcScopes));
+                new Uri(endpoint), ret.RequestObject, credential);
 
             SelfTestClient.ReadResponse(ret);
 
@@ -859,7 +952,8 @@ namespace MultiPurposeAuthSite.Util.Test
                 RequestObjectJson = "",
                 Response = "",
                 RequestUri = "",
-                ExpiresIn = ""
+                ExpiresIn = "",
+                AuthMethod = ""
             };
 
             if (!string.IsNullOrEmpty(requestObject))

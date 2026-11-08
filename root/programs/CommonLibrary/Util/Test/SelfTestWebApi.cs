@@ -34,6 +34,7 @@
 //*  2026/10/31  玄人 幸道         IntrospectTokenAsync の要約を直した（#294）
 //*  2026/11/06  玄人 幸道         CIBA の要求を Open棟梁 の CibaAuthZRequestAsync（資格情報を受ける版。OpenTouryo#592）で送る（#337）
 //*  2026/11/07  玄人 幸道         FAPI1 で PKCE も送る GetAccessTokenByCodeWithPkceAsync を足した（OpenTouryo#670。#341）
+//*  2026/11/08  玄人 幸道         FAPI2 の引き換え・PAR・更新・取り消し・照会を、登録の方法で送る版にした（OpenTouryo#676。#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -145,19 +146,27 @@ namespace MultiPurposeAuthSite.Util.Test
 
         /// <summary>Refresh Tokenを使用してAccess Tokenを更新する。</summary>
         /// <param name="tokenEndpointUri">tokenEndpointUri</param>
-        /// <param name="client_id">client_id</param>
-        /// <param name="client_secret">client_secret</param>
+        /// <param name="credential">送るクライアント認証（`SelfTestClient.CredentialOf`）</param>
         /// <param name="refreshToken">refreshToken</param>
         /// <returns>結果のJSON文字列</returns>
+        /// <remarks>
+        /// **登録の方法で送る**（OpenTouryo#676 の版。#345）。
+        /// 以前は Basic だけの版で、**FAPI の登録では断られていた**（refresh_token は、秘密では normal だけ。`ClientModePolicy`）。
+        /// </remarks>
         public static async Task<string> UpdateAccessTokenByRefreshTokenAsync(
-            Uri tokenEndpointUri, string client_id, string client_secret, string refreshToken)
+            Uri tokenEndpointUri, SelfTestClient.ClientCredential credential, string refreshToken)
         {
             // コンテナ化サポート
             tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.UpdateAccessTokenByRefreshTokenAsync(
-                tokenEndpointUri, client_id, client_secret, refreshToken);
+                tokenEndpointUri,
+                client_id: credential.ClientId,
+                client_secret: credential.ClientSecret,
+                client_assertion: credential.ClientAssertion,
+                refreshToken: refreshToken,
+                authMethod: credential.AuthMethod);
         }
 
         #endregion
@@ -215,38 +224,50 @@ namespace MultiPurposeAuthSite.Util.Test
 
         /// <summary>Revokeエンドポイントで、Tokenを無効化する。</summary>
         /// <param name="revokeTokenEndpointUri">RevokeエンドポイントのUri</param>
-        /// <param name="client_id">client_id</param>
-        /// <param name="client_secret">client_secret</param>
+        /// <param name="credential">送るクライアント認証（`SelfTestClient.CredentialOf`）</param>
         /// <param name="token">token</param>
         /// <param name="token_type_hint">token_type_hint</param>
         /// <returns>結果のJSON文字列</returns>
+        /// <remarks>**登録の方法で送る**（OpenTouryo#676 の版。#345）。以前は Basic・Post だけだった。</remarks>
         public static async Task<string> RevokeTokenAsync(
-            Uri revokeTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
+            Uri revokeTokenEndpointUri, SelfTestClient.ClientCredential credential, string token, string token_type_hint)
         {
             // コンテナ化サポート
             revokeTokenEndpointUri = SelfTestWebApi.ToContainerUri(revokeTokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.RevokeTokenAsync(
-                revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
+                revokeTokenEndpointUri,
+                client_id: credential.ClientId,
+                client_secret: credential.ClientSecret,
+                client_assertion: credential.ClientAssertion,
+                token: token,
+                token_type_hint: token_type_hint,
+                authMethod: credential.AuthMethod);
         }
 
         /// <summary>Introspectエンドポイントで、Tokenの状態を照会する。</summary>
         /// <param name="introspectTokenEndpointUri">IntrospectエンドポイントのUri</param>
-        /// <param name="client_id">client_id</param>
-        /// <param name="client_secret">client_secret</param>
+        /// <param name="credential">送るクライアント認証（`SelfTestClient.CredentialOf`）</param>
         /// <param name="token">token</param>
         /// <param name="token_type_hint">token_type_hint</param>
         /// <returns>結果のJSON文字列</returns>
+        /// <remarks>**登録の方法で送る**（OpenTouryo#676 の版。#345）。以前は Basic・Post だけだった。</remarks>
         public static async Task<string> IntrospectTokenAsync(
-            Uri introspectTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
+            Uri introspectTokenEndpointUri, SelfTestClient.ClientCredential credential, string token, string token_type_hint)
         {
             // コンテナ化サポート
             introspectTokenEndpointUri = SelfTestWebApi.ToContainerUri(introspectTokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.IntrospectTokenAsync(
-                introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
+                introspectTokenEndpointUri,
+                client_id: credential.ClientId,
+                client_secret: credential.ClientSecret,
+                client_assertion: credential.ClientAssertion,
+                token: token,
+                token_type_hint: token_type_hint,
+                authMethod: credential.AuthMethod);
         }
 
         #endregion
@@ -353,6 +374,40 @@ namespace MultiPurposeAuthSite.Util.Test
         }
 
         /// <summary>
+        /// FAPI2 : code（と code_verifier）からAccess Tokenを取得する。認証は登録の方法で送る（#345）。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="credential">送るクライアント認証（`SelfTestClient.CredentialOf`）</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="code_verifier">code_verifier（空なら送らない）</param>
+        /// <returns>結果のJSON文字列</returns>
+        /// <remarks>
+        /// **Open棟梁 の方式を問わない版（OpenTouryo#676）を呼ぶ。** `private_key_jwt` も `tls_client_auth` も、この 1 つで送れる。
+        /// **`tls_client_auth` のときは、本文に `client_id` だけが載り、証明書は `OAuth2AndOIDCClient.HttpClient` が載せる**
+        /// （`Helper` が `SpRp_ClientCertPfxFilePath` で設定する）。
+        /// **引数はすべて名前付きで渡す**（どれも `string` で、既存の版と順が違うため）。
+        /// </remarks>
+        public static async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, SelfTestClient.ClientCredential credential,
+            string redirect_uri, string code, string code_verifier)
+        {
+            // コンテナ化サポート
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri,
+                client_id: credential.ClientId,
+                client_secret: credential.ClientSecret,
+                client_assertion: credential.ClientAssertion,
+                redirect_uri: redirect_uri,
+                code: code,
+                code_verifier: code_verifier,
+                authMethod: credential.AuthMethod);
+        }
+
+        /// <summary>
         /// FAPI2 : RequestObjectを登録する。
         /// </summary>
         /// <param name="requestObjectRegUri">Uri</param>
@@ -372,19 +427,20 @@ namespace MultiPurposeAuthSite.Util.Test
         /// </summary>
         /// <param name="authRequestPushUri">PAR エンドポイント</param>
         /// <param name="requestObject">Request Object（署名付き JWT）</param>
-        /// <param name="client_id">client_id</param>
-        /// <param name="clientAssertion">client_assertion（private_key_jwt）</param>
+        /// <param name="credential">送るクライアント認証（`SelfTestClient.CredentialOf`）</param>
         /// <returns>結果の JSON 文字列（request_uri と expires_in）</returns>
         /// <remarks>
         /// **`/ros`（独自）との違いは、クライアント認証があること**（RFC 9126 §2）。
-        /// **FAPI 2.0 はこの認証を private_key_jwt か MTLS に限っている**ので、
-        /// ここは private_key_jwt で呼ぶ（`client_assertion` の `aud` は `SelfTestClient.CreateClientAssertion` が決める）。
+        /// **FAPI 2.0 はこの認証を private_key_jwt か MTLS に限っている。**
+        /// **方法は登録で決まる**（`SelfTestClient.CredentialOf`。#345）。
+        /// `client_assertion` の `aud` は `SelfTestClient.CreateClientAssertion` が決める。
+        /// **PAR は、方法によらず `client_id` を送る**（RFC 9126 §2.1。Open棟梁 も空なら送る前に断る。OpenTouryo#678）。
         ///
         /// 送るのは `request`（JAR）1 つ。**認可エンドポイントのパラメタを、
         /// フォームで直接預ける形も RFC 9126 は許している**（Open棟梁 の別のオーバーロード）。
         /// </remarks>
         public static async Task<string> PushAuthorizationRequestAsync(
-            Uri authRequestPushUri, string requestObject, string client_id, string clientAssertion)
+            Uri authRequestPushUri, string requestObject, SelfTestClient.ClientCredential credential)
         {
             // コンテナ化サポート
             authRequestPushUri = SelfTestWebApi.ToContainerUri(authRequestPushUri);
@@ -392,8 +448,8 @@ namespace MultiPurposeAuthSite.Util.Test
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.PushAuthorizationRequestAsync(
                 authRequestPushUri, requestObject,
-                client_id, null, clientAssertion,
-                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt);
+                credential.ClientId, credential.ClientSecret, credential.ClientAssertion,
+                credential.AuthMethod);
         }
 
         #region CIBA
