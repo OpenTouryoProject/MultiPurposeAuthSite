@@ -178,6 +178,12 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     -- ブラウザ経由で伝える先（#310 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
     --   **iframe で開く URL**（Front-Channel Logout 1.0 §2）。**空なら伝えない。**
     "FrontChannelLogoutUri" NVARCHAR2(512) NULL,     -- Const.MaxLengthOfUri
+    -- プロファイルの強制（#346 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    --   **既定は 0**（強制しない）。**真は -1**（RequirePkce と同じ）。**ALTER で足すときのために既定値を付けた。**
+    "RequirePar" NUMBER(3) DEFAULT 0 NOT NULL,                 -- require_pushed_authorization_requests（RFC 9126 §6）
+    "RequireSignedRequestObject" NUMBER(3) DEFAULT 0 NOT NULL, -- require_signed_request_object（RFC 9101 §10.5）
+    "DPoPBoundAccessTokens" NUMBER(3) DEFAULT 0 NOT NULL,      -- dpop_bound_access_tokens（RFC 9449 §5.2）
+    "TlsCertBoundAccessTokens" NUMBER(3) DEFAULT 0 NOT NULL,   -- tls_client_certificate_bound_access_tokens（RFC 8705 §3.4）
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 

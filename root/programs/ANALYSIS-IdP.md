@@ -3655,7 +3655,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 
 | 段階 | 中身 |
 |---|---|
-| 1 | **登録のメタデータを 4 つ**（上の表。構成ファイル・管理画面・動的登録で読み書きする。既定は false） |
+| 1 | **✅ 入れた（2026/11/08）。** **登録のメタデータを 4 つ**（上の表。構成ファイル・管理画面・動的登録で読み書きする。既定は false）。列は `RequirePar`・`RequireSignedRequestObject`・`DPoPBoundAccessTokens`・`TlsCertBoundAccessTokens`（3 方言 ＋ `mem`。`ALTER` の手順は `CONFIGURATION.md`）。**動的登録の `PUT` では立てられるが下げられない。** **判定はまだ無い**（段階 3）。`RT-346.1` |
 | 2 | **サーバ全体の設定**：**PAR・署名付きの Request Object の 2 つ**（`RequirePkce` ＋ `require_pkce` と同じ OR。どちらも標準に AS のメタデータが在る）。**送信者の拘束の 2 つは、段階 1 の登録だけで強制する**（全体の設定を足すかは「決めること」） |
 | 3 | **判定**：PAR・署名付きの Request Object は認可エンドポイントで、送信者の拘束はトークン エンドポイント（refresh_token を含む）で断る |
 | 4 | **Discovery**：`require_pushed_authorization_requests`（今は false 固定）・`require_signed_request_object` を、サーバ全体の設定から出す |

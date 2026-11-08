@@ -36,6 +36,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/07  玄人 幸道         client_mode でクライアント名を引くとき、認証の方法を明示した登録を優先できるようにした（#341）
 //*  2026/11/08  玄人 幸道         client_mode と認証の方法の両方が合う登録だけを引く口を足した（自己テストの MTLS のボタン。#345）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を引く口を足した（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -359,6 +360,82 @@ namespace MultiPurposeAuthSite.Util.Sts
             }
 
             return ret;
+        }
+
+        #endregion
+
+        #region プロファイルの強制（#346）
+
+        /// <summary>PAR を必須にするか（登録の require_pushed_authorization_requests。RFC 9126 §6）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>必須なら true（登録が無ければ false）</returns>
+        /// <remarks>**サーバ全体の設定とは OR で組み合わせる**（判定する側で。`require_pkce` と同じ形）。</remarks>
+        public bool GetClientRequirePar(string client_id)
+        {
+            return this.GetRegisteredFlag(client_id,
+                Const.ClientRequirePushedAuthorizationRequests, model => model.RequirePar);
+        }
+
+        /// <summary>署名付きの Request Object を必須にするか（登録の require_signed_request_object。RFC 9101 §10.5）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>必須なら true（登録が無ければ false）</returns>
+        /// <remarks>**サーバ全体の設定とは OR で組み合わせる**（判定する側で）。</remarks>
+        public bool GetClientRequireSignedRequestObject(string client_id)
+        {
+            return this.GetRegisteredFlag(client_id,
+                Const.ClientRequireSignedRequestObject, model => model.RequireSignedRequestObject);
+        }
+
+        /// <summary>トークン要求に DPoP を必須にするか（登録の dpop_bound_access_tokens。RFC 9449 §5.2）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>必須なら true（登録が無ければ false）</returns>
+        public bool GetClientDPoPBoundAccessTokens(string client_id)
+        {
+            return this.GetRegisteredFlag(client_id,
+                Const.ClientDPoPBoundAccessTokens, model => model.DPoPBoundAccessTokens);
+        }
+
+        /// <summary>トークン要求にクライアント証明書を必須にするか（登録の tls_client_certificate_bound_access_tokens。RFC 8705 §3.4）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>必須なら true（登録が無ければ false）</returns>
+        public bool GetClientTlsCertBoundAccessTokens(string client_id)
+        {
+            return this.GetRegisteredFlag(client_id,
+                Const.ClientTlsClientCertificateBoundAccessTokens, model => model.TlsCertBoundAccessTokens);
+        }
+
+        /// <summary>登録された真偽値を引く（構成ファイル → saml2OAuth2Data。#346）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="key">*.config の項目名</param>
+        /// <param name="fromModel">画面登録（saml2OAuth2Data）から取り出す式</param>
+        /// <returns>値（**登録・項目が無ければ false**）</returns>
+        /// <remarks>
+        /// **読み方は `GetClientRequirePkce` と同じ。** **空文字列で Convert.ToBoolean は例外になる**ので、TryParse で読む。
+        /// **読めない値は false**（＝ 強制しない。従来どおり）。
+        /// </remarks>
+        private bool GetRegisteredFlag(string client_id, string key,
+            Func<ManageAddSaml2OAuth2DataViewModel, bool> fromModel)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey(key))
+                {
+                    bool.TryParse(dic[key], out bool flag);
+                    return flag;
+                }
+
+                return false;
+            }
+
+            // saml2OAuth2Dataを検索
+            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
+
+            return model != null && fromModel(model);
         }
 
         #endregion

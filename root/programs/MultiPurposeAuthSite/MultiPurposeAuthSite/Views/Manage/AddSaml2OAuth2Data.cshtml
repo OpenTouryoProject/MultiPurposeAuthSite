@@ -28,6 +28,7 @@
     //*  2026/10/18  玄人 幸道         RFC 7591 §2 のメタデータの入力欄を追加（#307 の段階 1）
     //*  2026/10/20  玄人 幸道         編集では client_id を作り直せないようにした（#307 の段階 5-a-2）
     //*  2026/10/21  玄人 幸道         backchannel / frontchannel_logout_uri の欄を追加（#310 の段階 2・3）
+    //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）の欄を追加（#346 の段階 1）
     //**********************************************************************************
 *@
 
@@ -115,6 +116,34 @@
         <div class="col-md-3">
             @Html.CheckBoxFor(model => model.RequirePkce)
             <p class="help-block">@Html.DescriptionFor(m => m.RequirePkce)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.RequirePar, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.CheckBoxFor(model => model.RequirePar)
+            <p class="help-block">@Html.DescriptionFor(m => m.RequirePar)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.RequireSignedRequestObject, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.CheckBoxFor(model => model.RequireSignedRequestObject)
+            <p class="help-block">@Html.DescriptionFor(m => m.RequireSignedRequestObject)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.DPoPBoundAccessTokens, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.CheckBoxFor(model => model.DPoPBoundAccessTokens)
+            <p class="help-block">@Html.DescriptionFor(m => m.DPoPBoundAccessTokens)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.TlsCertBoundAccessTokens, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.CheckBoxFor(model => model.TlsCertBoundAccessTokens)
+            <p class="help-block">@Html.DescriptionFor(m => m.TlsCertBoundAccessTokens)</p>
         </div>
     </div>
     <div class="form-group">

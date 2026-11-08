@@ -36,6 +36,7 @@
 //*  2026/10/26  玄人 幸道         RT-307.29（登録を消すと、全利用者の同意が消える）を追加（#294）
 //*  2026/10/29  玄人 幸道         RT-307.5 で expires_in も絞った期限であることを見る（#294）
 //*  2026/10/30  玄人 幸道         RT-307.16 の (6)（device_code × private_key_jwt を断る）を外した（受けるようにした。#294）
+//*  2026/11/08  玄人 幸道         RT-346.1（プロファイルを強制する 4 つのメタデータを、動的登録で立てて読み戻す）を追加（#346 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -92,6 +93,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-307.19`** | **壊れた statement は `400` ＋ `invalid_software_statement`** |
     /// | **`RT-307.20`** | **知らない発行者は `400` ＋ `unapproved_software_statement`** |
     /// | **`RT-307.21`** | **`PUT` でも statement が効き、省くと本文が通る** |
+    /// | **`RT-346.1`** | **プロファイルを強制する 4 つのメタデータを立てられ、読み戻せる**（**DB の列を通る**。#346 の段階 1。動的登録の部品を使うので、ここに置く） |
     ///
     /// **段階 2 は RFC 7592**（`registration_client_uri` ＝ `…/register/{client_id}`）。
     /// **管理のトークンは、登録の応答で 1 回だけ返る**（**こちらはハッシュしか持たない**）。
@@ -3564,6 +3566,150 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             return ClientRegistrationTests.DcrCcEnv(targetKey, "DCR_CC_NOOWNER_CLIENT_SECRET");
         }
+
+        #region RT-346.1
+
+        /// <summary>プロファイルを強制する 4 つのメタデータ（#346）</summary>
+        private static readonly string[] ProfileFlags = new string[]
+        {
+            "require_pushed_authorization_requests",
+            "require_signed_request_object",
+            "dpop_bound_access_tokens",
+            "tls_client_certificate_bound_access_tokens"
+        };
+
+        /// <summary>RT-346.1 プロファイルを強制する 4 つのメタデータを、動的登録で立てて読み戻せる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT34601_強制のメタデータを立てて読み戻せる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-346.1",
+                    "プロファイルを強制する 4 つのメタデータを、動的登録で立てられ、`GET` で読み戻せる。"
+                    + "真偽値でなければ `400`。`PUT` で省いても下がらない",
+                    "**4 つは、それぞれの RFC がクライアントのメタデータとして定める真偽値**である。"
+                    + "**保存の経路（DB の列。方言で真偽値の形が違う）を通って、立てた値が残ること**を測る。"
+                    + "**`\"true\"` の文字列を黙って false にすると、締めたつもりで締まっていない登録ができる**ので断る。"
+                    + "**締める向きの項目なので、`PUT` では下げられない**（下げるのは管理画面から。#346 の決定）",
+                    "RFC 9126 §6 / RFC 9101 §10.5 / RFC 9449 §5.2 / RFC 8705 §3.4 / RFC 7591 §3.2.2 / #346");
+
+                r.Target("POST registration_endpoint / GET・PUT registration_client_uri");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    r.Step("(1) 4 つを true にして登録する");
+
+                    string flags = string.Join(",", Array.ConvertAll(
+                        ClientRegistrationTests.ProfileFlags, f => "\"" + f + "\":true"));
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"]," + flags + "}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString());
+
+                    foreach (string flag in ClientRegistrationTests.ProfileFlags)
+                    {
+                        r.VerifyEqual("登録の応答の " + flag + " は true", "true",
+                            ClientRegistrationTests.FlagOf(created, flag));
+                    }
+
+                    string clientId = created.String("client_id");
+                    string registrationAccessToken = created.String("registration_access_token");
+                    string registrationClientUri = created.String("registration_client_uri");
+
+                    r.Step("(2) GET で読み戻す（保存した行から作り直した応答）");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)read.StatusCode).ToString());
+
+                    foreach (string flag in ClientRegistrationTests.ProfileFlags)
+                    {
+                        r.VerifyEqual("GET の " + flag + " は true", "true",
+                            ClientRegistrationTests.FlagOf(read, flag));
+                    }
+
+                    r.Step("(3) 4 つを省いた PUT（全置換）をして、もう一度読む");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(
+                        client, registrationClientUri, registrationAccessToken,
+                        DynamicClientRegistration.UpdateMetadata(clientId, "", UriA));
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)updated.StatusCode).ToString());
+
+                    JsonResponse reread = await DynamicClientRegistration.ReadAsync(
+                        client, registrationClientUri, registrationAccessToken);
+
+                    foreach (string flag in ClientRegistrationTests.ProfileFlags)
+                    {
+                        r.VerifyEqual("PUT の後の " + flag + " は true のまま", "true",
+                            ClientRegistrationTests.FlagOf(reread, flag));
+                    }
+
+                    r.Step("(4) 何も立てずに登録する");
+
+                    JsonResponse plain = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, DynamicClientRegistration.Metadata(UriB));
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)plain.StatusCode).ToString());
+
+                    foreach (string flag in ClientRegistrationTests.ProfileFlags)
+                    {
+                        r.VerifyEqual("登録の応答に " + flag + " は無い（省略は false）", "（無い）",
+                            ClientRegistrationTests.FlagOf(plain, flag));
+                    }
+
+                    r.Step("(5) 真偽値でない値（文字列の \"true\"）で登録する");
+
+                    foreach (string flag in ClientRegistrationTests.ProfileFlags)
+                    {
+                        JsonResponse wrong = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],\"" + flag + "\":\"true\"}");
+
+                        r.VerifyEqual(flag + " が文字列なら 400 ＋ invalid_client_metadata",
+                            "400 invalid_client_metadata",
+                            ((int)wrong.StatusCode).ToString() + " " + (wrong.String("error") ?? "（無い）"));
+                    }
+
+                    r.Note("**判定（使わない要求を断ること）は、段階 2 で足す。** ここでは保存と読み戻しだけを測る。"
+                        + "**`-UserStoreType` を切り替えて回すと、3 方言の列（Oracle は -1 / 0）を通る。**");
+                });
+
+                r.Done();
+            }
+        }
+
+        /// <summary>応答の真偽値のメタデータを、文字列にして読む</summary>
+        /// <param name="response">JsonResponse</param>
+        /// <param name="name">名前</param>
+        /// <returns>`true` / `false` / それ以外の型ならその JSON / 無ければ `（無い）`</returns>
+        private static string FlagOf(JsonResponse response, string name)
+        {
+            if (response == null || !response.IsJson
+                || response.Json.ValueKind != JsonValueKind.Object
+                || !response.Json.TryGetProperty(name, out JsonElement value))
+            {
+                return "（無い）";
+            }
+
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.True:
+                    return "true";
+                case JsonValueKind.False:
+                    return "false";
+                default:
+                    return value.GetRawText();
+            }
+        }
+
+        #endregion
 
         /// <summary>管理 API を叩くための前提（使い捨ての利用者 2 人ぶん）</summary>
         private sealed class DcrContext

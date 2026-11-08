@@ -32,6 +32,7 @@
 //*  2026/10/21  玄人 幸道         backchannel_logout_uri を追加（#310 の段階 2）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/06  玄人 幸道         RequestObjectSigningAlg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#664）に合わせた（#337）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -538,6 +539,48 @@ namespace MultiPurposeAuthSite.ViewModels
             ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = Const.ClientRequirePkce)]
         public bool RequirePkce { get; set; }
+        #endregion
+
+        #region プロファイルの強制（#346）
+
+        //  **FAPI の要件のうち、使わない要求を断る手段が無かった 4 つ**（#346。ANALYSIS-IdP.md の D-16）。
+        //    **名前は標準のメタデータ**（RFC 9126 §6 / RFC 9101 §10.5 / RFC 9449 §5.2 / RFC 8705 §3.4）。
+        //    **どれも既定は false**（強制しない ＝ 従来どおり）。**登録が無い行・項目も false。**
+        //
+        //  **列名（＝ 属性名）は短くしてある**（標準の名前は 30 文字を超えるものが在り、
+        //    **古い Oracle の識別子の上限**に当たる）。**直列化の名前は標準のまま**（`JsonProperty`）。
+        //
+        //  **締める向きだけ**である。**PAR と署名付きの Request Object は、サーバ全体の設定とも OR で効く**
+        //    （`require_pkce` ＋ `RequirePkce` と同じ形。#221）。**送信者の拘束の 2 つは、登録だけで決める。**
+
+        /// <summary>PAR を必須にするか（require_pushed_authorization_requests。RFC 9126 §6）</summary>
+        [Display(Name = "RequirePar", Description = "RequireParDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientRequirePushedAuthorizationRequests)]
+        public bool RequirePar { get; set; }
+
+        /// <summary>署名付きの Request Object を必須にするか（require_signed_request_object。RFC 9101 §10.5）</summary>
+        [Display(Name = "RequireSignedRequestObject", Description = "RequireSignedRequestObjectDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientRequireSignedRequestObject)]
+        public bool RequireSignedRequestObject { get; set; }
+
+        /// <summary>トークン要求に DPoP を必須にするか（dpop_bound_access_tokens。RFC 9449 §5.2）</summary>
+        [Display(Name = "DPoPBoundAccessTokens", Description = "DPoPBoundAccessTokensDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientDPoPBoundAccessTokens)]
+        public bool DPoPBoundAccessTokens { get; set; }
+
+        /// <summary>トークン要求にクライアント証明書を必須にするか（tls_client_certificate_bound_access_tokens。RFC 8705 §3.4）</summary>
+        /// <remarks>
+        /// **RFC 8705 §3.4 では「使うつもり」の表明**で、証明書の無い要求をエラーにするか、
+        /// 縛らないトークンを出すかはサーバが決める。**この実装は断る**（#346）。
+        /// </remarks>
+        [Display(Name = "TlsCertBoundAccessTokens", Description = "TlsCertBoundAccessTokensDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientTlsClientCertificateBoundAccessTokens)]
+        public bool TlsCertBoundAccessTokens { get; set; }
+
         #endregion
 
         /// <summary>ClientName</summary>

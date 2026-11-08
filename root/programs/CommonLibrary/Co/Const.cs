@@ -52,6 +52,7 @@
 //*  2026/10/30  玄人 幸道         EndpointSetDeviceToken を追加（#294）
 //*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone を追加（CmnEndpoints と Helper の二重定義をやめた。#294）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前（OpenTouryo#634・#663）を外し、そちらを使うようにした（#337）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -599,6 +600,21 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>PKCE を必須にするか</summary>
         public const string ClientRequirePkce = "require_pkce";
+
+        //  **プロファイル（FAPI）の要件を、登録ごとに強制する項目**（#346）。**名前は標準のメタデータ。**
+        //    **Open棟梁 の OAuth2AndOIDCConst には無い**（2026/11/08）。
+
+        /// <summary>PAR を必須にするか（RFC 9126 §6）</summary>
+        public const string ClientRequirePushedAuthorizationRequests = "require_pushed_authorization_requests";
+
+        /// <summary>署名付きの Request Object を必須にするか（RFC 9101 §10.5）</summary>
+        public const string ClientRequireSignedRequestObject = "require_signed_request_object";
+
+        /// <summary>トークン要求に DPoP を必須にするか（RFC 9449 §5.2）</summary>
+        public const string ClientDPoPBoundAccessTokens = "dpop_bound_access_tokens";
+
+        /// <summary>トークン要求にクライアント証明書を必須にするか（RFC 8705 §3.4）</summary>
+        public const string ClientTlsClientCertificateBoundAccessTokens = "tls_client_certificate_bound_access_tokens";
 
         /// <summary>クライアントの所有者の利用者名</summary>
         public const string ClientOwner = "owner";

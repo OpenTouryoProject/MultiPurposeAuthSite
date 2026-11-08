@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/08  玄人 幸道         更新（PUT）で、プロファイルを強制する 4 つのメタデータは、立てられるが下げられないようにした（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -407,6 +408,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | 2 | `Jwk*` ↔ `JwksUri` | **要求が片方を入れたら、もう片方は消える**（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
         /// | 3 | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` | **要求に在れば置き換え、無ければ持ち越す** |
         /// | 4 | `ClientMode` | **持ち越す**（**空のときだけ `normal`**。管理画面で FAPI の登録にしたものを、`PUT` で下げない） |
+        /// | 5 | `RequirePar` / `RequireSignedRequestObject` / `DPoPBoundAccessTokens` / `TlsCertBoundAccessTokens` | **現行と要求の OR**（**立てられるが、下げられない**。#346） |
         /// | — | **上の外の全て** : `ClientID` / `ClientSecret` / `ClientName` / `RequirePkce` / `OwnerUserId` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `BackChannelLogoutUri` / `FrontChannelLogoutUri` / `WebOrigins` / `RequestObjectSigningAlg`） | **持ち越す**（**要求では変えられない**。**土台が現行なので、コードには出てこない**） |
         ///
         /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
@@ -582,6 +584,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 model.ClientMode = requested.ClientMode;
             }
+
+            //  5. **プロファイルの強制は、立てられるが下げられない**（#346 の段階 1）。
+            //    **締める向きの項目**なので、**`registration_access_token` を持つ者が、
+            //    管理画面で締めた登録を `PUT` で緩められてはならない**（`ClientMode` と同じ考え）。
+            //    **下げるのは管理画面から。**
+            model.RequirePar = model.RequirePar || requested.RequirePar;
+            model.RequireSignedRequestObject = model.RequireSignedRequestObject || requested.RequireSignedRequestObject;
+            model.DPoPBoundAccessTokens = model.DPoPBoundAccessTokens || requested.DPoPBoundAccessTokens;
+            model.TlsCertBoundAccessTokens = model.TlsCertBoundAccessTokens || requested.TlsCertBoundAccessTokens;
 
             // UserのClientデータを更新
             Saml2OAuth2DataProvider.Update(client_id, model);

@@ -6882,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=456c0d2c-8f8f-4ffd-929e-ad7fdd43c8fb&code=bogus
+1. GET /Account/EmailConfirmation?userId=475b6b2e-844a-4d77-830f-e0966c47d5da&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=456c0d2c-8f8f-4ffd-929e-ad7fdd43c8fb&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=456c0d2c-8f8f-4ffd-929e-ad7fdd43c8fb&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=475b6b2e-844a-4d77-830f-e0966c47d5da&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=475b6b2e-844a-4d77-830f-e0966c47d5da&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11101,6 +11101,53 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 結果の画面が返る（エラー画面にならない）
 - access_token が出る（証明書で認証して引き換えられた）
 - 画面のクライアント認証の欄が、tls_client_auth と code_verifier を示す
+
+## RT-346.1 プロファイルを強制する 4 つのメタデータを、動的登録で立てられ、`GET` で読み戻せる。真偽値でなければ `400`。`PUT` で省いても下がらない
+
+| | |
+|---|---|
+| 観点 | **4 つは、それぞれの RFC がクライアントのメタデータとして定める真偽値**である。**保存の経路（DB の列。方言で真偽値の形が違う）を通って、立てた値が残ること**を測る。**`"true"` の文字列を黙って false にすると、締めたつもりで締まっていない登録ができる**ので断る。**締める向きの項目なので、`PUT` では下げられない**（下げるのは管理画面から。#346 の決定） |
+| 根拠 | RFC 9126 §6 / RFC 9101 §10.5 / RFC 9449 §5.2 / RFC 8705 §3.4 / RFC 7591 §3.2.2 / #346 |
+| テスト | `RT34601_強制のメタデータを立てて読み戻せる` |
+
+**手順**
+
+1. 4 つを true にして登録する
+1. GET で読み戻す（保存した行から作り直した応答）
+1. 4 つを省いた PUT（全置換）をして、もう一度読む
+1. 何も立てずに登録する
+1. 真偽値でない値（文字列の "true"）で登録する
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 登録の応答の require_pushed_authorization_requests は true
+- 登録の応答の require_signed_request_object は true
+- 登録の応答の dpop_bound_access_tokens は true
+- 登録の応答の tls_client_certificate_bound_access_tokens は true
+- HTTP の状態は 200
+- GET の require_pushed_authorization_requests は true
+- GET の require_signed_request_object は true
+- GET の dpop_bound_access_tokens は true
+- GET の tls_client_certificate_bound_access_tokens は true
+- HTTP の状態は 200
+- PUT の後の require_pushed_authorization_requests は true のまま
+- PUT の後の require_signed_request_object は true のまま
+- PUT の後の dpop_bound_access_tokens は true のまま
+- PUT の後の tls_client_certificate_bound_access_tokens は true のまま
+- HTTP の状態は 201
+- 登録の応答に require_pushed_authorization_requests は無い（省略は false）
+- 登録の応答に require_signed_request_object は無い（省略は false）
+- 登録の応答に dpop_bound_access_tokens は無い（省略は false）
+- 登録の応答に tls_client_certificate_bound_access_tokens は無い（省略は false）
+- require_pushed_authorization_requests が文字列なら 400 ＋ invalid_client_metadata
+- require_signed_request_object が文字列なら 400 ＋ invalid_client_metadata
+- dpop_bound_access_tokens が文字列なら 400 ＋ invalid_client_metadata
+- tls_client_certificate_bound_access_tokens が文字列なら 400 ＋ invalid_client_metadata
+
+**補足**
+
+- **判定（使わない要求を断ること）は、段階 2 で足す。** ここでは保存と読み戻しだけを測る。**`-UserStoreType` を切り替えて回すと、3 方言の列（Oracle は -1 / 0）を通る。**
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

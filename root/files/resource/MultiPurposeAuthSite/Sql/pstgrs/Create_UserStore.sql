@@ -180,6 +180,13 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     --   **iframe で開く URL**（Front-Channel Logout 1.0 §2）。**空なら伝えない。**
     --   **引用符なしなので、識別子は小文字に畳まれる**（frontchannellogouturi）。
     FrontChannelLogoutUri varchar(512) NULL,
+    -- プロファイルの強制（#346 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    --   **既定は false**（強制しない）。**ALTER で足すとき、既存の行を false で埋めるために既定値を付けた。**
+    --   **引用符なしなので、識別子は小文字に畳まれる**（requirepar など）。
+    RequirePar boolean NOT NULL DEFAULT false,                 -- require_pushed_authorization_requests（RFC 9126 §6）
+    RequireSignedRequestObject boolean NOT NULL DEFAULT false, -- require_signed_request_object（RFC 9101 §10.5）
+    DPoPBoundAccessTokens boolean NOT NULL DEFAULT false,      -- dpop_bound_access_tokens（RFC 9449 §5.2）
+    TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false,   -- tls_client_certificate_bound_access_tokens（RFC 8705 §3.4）
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

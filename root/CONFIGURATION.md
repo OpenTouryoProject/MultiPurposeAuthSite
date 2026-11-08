@@ -1111,6 +1111,64 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN FrontChannelLogoutUri varchar(512) NULL;
 **同意画面を見せただけの相手・拒否された相手も、伝える先に残っていた**
 （**その RP に「この利用者が来た」ことを教えてしまう**）。
 
+### FAPI の要件を、登録ごとに強制する（#346）
+
+**FAPI 1.0 Advanced・FAPI 2.0 の要件のうち、使わない要求を断る手段が無かった 4 つを、登録の項目にした。**
+**名前は標準のメタデータ**で、**値は真偽値**。**どれも既定は `false`**（強制しない ＝ 従来どおり）。
+経緯は [`ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) の D-16。
+
+| 登録の項目（標準の名前） | 定義 | 立てると | 列（`Saml2OAuth2Data`） |
+|---|---|---|---|
+| `require_pushed_authorization_requests` | RFC 9126 §6 | **PAR で預けた `request_uri` の無い認可要求を断る** | `RequirePar` |
+| `require_signed_request_object` | RFC 9101 §10.5 | **署名付きの Request Object で送られていない認可要求を断る** | `RequireSignedRequestObject` |
+| `dpop_bound_access_tokens` | RFC 9449 §5.2 | **DPoP の証明の無いトークン要求を断る**（`refresh_token` も） | `DPoPBoundAccessTokens` |
+| `tls_client_certificate_bound_access_tokens` | RFC 8705 §3.4 | **クライアント証明書の無いトークン要求を断る**（`refresh_token` も。RFC は「エラーにするか、縛らないトークンを出すかはサーバが決める」としていて、**ここでは断る**） | `TlsCertBoundAccessTokens` |
+
+> **段階 1（登録の項目と列）だけが入っている。** **断る判定は段階 2 で足す**（それまでは、立てても振る舞いは変わらない）。
+
+| どこで登録するか | |
+|---|---|
+| **設定ファイル**（`OAuth2ClientsInformation`） | **文字列で `"true"`**（`require_pkce` と同じ。**読めない値は `false`**） |
+| **クライアント登録の画面** | チェック ボックス |
+| **動的登録（RFC 7591）** | **JSON の真偽値。** **文字列（`"true"`）は `400` ＋ `invalid_client_metadata`**（黙って `false` にすると、締めたつもりで締まっていない登録ができる）。**立っているものだけを応答に返す**（省略は `false`） |
+| **動的登録の更新（`PUT`）** | **立てられるが、下げられない**（**現行と要求の OR**）。**締める向きの項目**なので、`registration_access_token` を持つ者が、管理画面で締めた登録を緩められないようにした。**下げるのは管理画面から** |
+
+```json
+"<client_id>": {
+  "client_secret": "...",
+  "client_name": "...",
+  "client_mode": "fapi2",
+  "require_pushed_authorization_requests": "true",
+  "require_signed_request_object": "true"
+}
+```
+
+**列名は標準の名前より短い**（標準の名前は 30 文字を超えるものが在り、古い Oracle の識別子の上限に当たる）。
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。
+**既定値を付けてあるので、既存の行は `false`（0）になる。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD
+    [RequirePar] [bit] NOT NULL DEFAULT 0,
+    [RequireSignedRequestObject] [bit] NOT NULL DEFAULT 0,
+    [DPoPBoundAccessTokens] [bit] NOT NULL DEFAULT 0,
+    [TlsCertBoundAccessTokens] [bit] NOT NULL DEFAULT 0
+-- Oracle（真は -1。RequirePkce と同じ）
+ALTER TABLE "Saml2OAuth2Data" ADD (
+    "RequirePar" NUMBER(3) DEFAULT 0 NOT NULL,
+    "RequireSignedRequestObject" NUMBER(3) DEFAULT 0 NOT NULL,
+    "DPoPBoundAccessTokens" NUMBER(3) DEFAULT 0 NOT NULL,
+    "TlsCertBoundAccessTokens" NUMBER(3) DEFAULT 0 NOT NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data
+    ADD COLUMN RequirePar boolean NOT NULL DEFAULT false,
+    ADD COLUMN RequireSignedRequestObject boolean NOT NULL DEFAULT false,
+    ADD COLUMN DPoPBoundAccessTokens boolean NOT NULL DEFAULT false,
+    ADD COLUMN TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false;
+```
+
 ### `redirect_uri` の記号
 
 `test_self_code` / `test_self_token` は URL ではなく**記号**である。

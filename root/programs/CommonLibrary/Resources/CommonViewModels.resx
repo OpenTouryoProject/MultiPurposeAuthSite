@@ -129,6 +129,18 @@
   <data name="RequirePkce" xml:space="preserve">
     <value>Require PKCE for this client.</value>
   </data>
+  <data name="RequirePar" xml:space="preserve">
+    <value>Require PAR (require_pushed_authorization_requests)</value>
+  </data>
+  <data name="RequireSignedRequestObject" xml:space="preserve">
+    <value>Require signed request objects (require_signed_request_object)</value>
+  </data>
+  <data name="DPoPBoundAccessTokens" xml:space="preserve">
+    <value>Require DPoP (dpop_bound_access_tokens)</value>
+  </data>
+  <data name="TlsCertBoundAccessTokens" xml:space="preserve">
+    <value>Require certificate-bound tokens (tls_client_certificate_bound_access_tokens)</value>
+  </data>
   <data name="ClientName" xml:space="preserve">
     <value>Client name</value>
   </data>
@@ -263,6 +275,18 @@
   </data>
   <data name="RequirePkceDescription" xml:space="preserve">
     <value>Require PKCE for this client. It is OR-ed with the server-wide setting, so clearing it here does not disable PKCE when the server requires it.</value>
+  </data>
+  <data name="RequireParDescription" xml:space="preserve">
+    <value>Accept authorization requests from this client only via PAR (RFC 9126). It is OR-ed with the server-wide setting.</value>
+  </data>
+  <data name="RequireSignedRequestObjectDescription" xml:space="preserve">
+    <value>Accept authorization requests from this client only as a signed request object (RFC 9101). It is OR-ed with the server-wide setting.</value>
+  </data>
+  <data name="DPoPBoundAccessTokensDescription" xml:space="preserve">
+    <value>Reject token requests from this client without a DPoP proof (RFC 9449), including refresh_token.</value>
+  </data>
+  <data name="TlsCertBoundAccessTokensDescription" xml:space="preserve">
+    <value>Reject token requests from this client without a client certificate (RFC 8705), including refresh_token. If the site does not request client certificates, every token request is rejected.</value>
   </data>
   <data name="RedirectUriSamlDescription" xml:space="preserve">
     <value>Where SAML2 assertions are posted (the ACS URL). The self-test uses redirect_uri_saml.</value>

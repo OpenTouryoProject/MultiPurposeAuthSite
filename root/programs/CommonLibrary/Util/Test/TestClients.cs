@@ -45,6 +45,7 @@
 //*  2026/11/03  玄人 幸道         E2E 専用のクライアントの登録（RegisterInStore）を AccountController から移した（#294）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を差し替えられるようにした（#346 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -511,7 +512,7 @@ namespace MultiPurposeAuthSite.Util.Test
             {
                 // **登録で require_pkce を立てたクライアント**（#270）。
                 //   **構成ファイル側の RequirePKCE_Client と対をなす。**
-                //   `require_pkce` は**唯一の bool の登録項目**で、
+                //   `require_pkce` は**bool の登録項目**で（#346 で 4 つ増えた）、
                 //   **列に切り出した後は方言で形が違う**
                 //   （SQL Server : bit / PostgreSQL : boolean / Oracle : NUMBER(3) の -1）。
                 //   **これが落ちると「締めたつもりが締まっていない」になる**ので、
@@ -809,9 +810,25 @@ namespace MultiPurposeAuthSite.Util.Test
                     break;
 
                 case Const.ClientRequirePkce:
-                    // **ここだけ bool**（#270）。
+                    // **bool**（#270。#346 の 4 つも同じ）。
                     //   **綾り違いを黙って false にしない**ため、`Parse` で落とす。
                     model.RequirePkce = bool.Parse(value);
+                    break;
+
+                case Const.ClientRequirePushedAuthorizationRequests:
+                    model.RequirePar = bool.Parse(value);
+                    break;
+
+                case Const.ClientRequireSignedRequestObject:
+                    model.RequireSignedRequestObject = bool.Parse(value);
+                    break;
+
+                case Const.ClientDPoPBoundAccessTokens:
+                    model.DPoPBoundAccessTokens = bool.Parse(value);
+                    break;
+
+                case Const.ClientTlsClientCertificateBoundAccessTokens:
+                    model.TlsCertBoundAccessTokens = bool.Parse(value);
                     break;
 
                 default:

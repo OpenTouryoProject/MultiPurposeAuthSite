@@ -32,6 +32,7 @@
 //*  2026/10/30  玄人 幸道         動的登録で device_code × private_key_jwt を断らない（両方の口が受けるようにした。#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを受けるようにした（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -529,6 +530,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
+            #region プロファイルの強制（#346 の段階 1）
+
+            //  **RFC 9126 §6 / RFC 9101 §10.5 / RFC 9449 §5.2 / RFC 8705 §3.4 のクライアント メタデータ。**
+            //    **値は JSON の真偽値**（どれも Boolean と定義されている）。
+            //    **真偽値でなければ断る** — **`"true"` の文字列を黙って false にすると、
+            //    締めたつもりで締まっていない登録ができる**（無視すると黙って弱くなるもの）。
+            bool requirePar, requireSignedRequestObject, dpopBound, tlsCertBound;
+
+            if (!ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientRequirePushedAuthorizationRequests, out requirePar, ref description)
+                || !ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientRequireSignedRequestObject, out requireSignedRequestObject, ref description)
+                || !ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientDPoPBoundAccessTokens, out dpopBound, ref description)
+                || !ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientTlsClientCertificateBoundAccessTokens, out tlsCertBound, ref description))
+            {
+                return false;
+            }
+
+            model.RequirePar = requirePar;
+            model.RequireSignedRequestObject = requireSignedRequestObject;
+            model.DPoPBoundAccessTokens = dpopBound;
+            model.TlsCertBoundAccessTokens = tlsCertBound;
+
+            #endregion
+
             //  **登録種別は normal。** **FAPI の登録は、鍵や証明書の登録を要する。**
             model.ClientMode = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit();
 
@@ -551,6 +579,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JToken token = metadata[name];
 
             return token != null && token.Type != JTokenType.Null;
+        }
+
+        /// <summary>真偽値のメタデータを読む（#346）</summary>
+        /// <param name="metadata">要求の JSON</param>
+        /// <param name="name">名前</param>
+        /// <param name="value">値（無ければ false）</param>
+        /// <param name="description">誤りの説明</param>
+        /// <returns>**無いか、真偽値なら true**（真偽値でなければ false）</returns>
+        private static bool GetFlag(JObject metadata, string name, out bool value, ref string description)
+        {
+            value = false;
+
+            if (!ClientRegistrationProvider.Has(metadata, name))
+            {
+                return true;
+            }
+
+            if (metadata[name].Type != JTokenType.Boolean)
+            {
+                description = string.Format("The {0} must be a boolean.", name);
+                return false;
+            }
+
+            value = (bool)metadata[name];
+            return true;
         }
 
         /// <summary>文字列のメタデータを読む</summary>
