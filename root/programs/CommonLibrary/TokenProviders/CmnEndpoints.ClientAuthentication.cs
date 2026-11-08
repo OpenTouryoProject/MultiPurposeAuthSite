@@ -41,6 +41,7 @@
 //*  2026/11/05  玄人 幸道         Basic が復号前の値で通ったら、client_id を OPERATION に記録する（Open棟梁 4.0 への備え。#320）
 //*  2026/11/06  玄人 幸道         assertion の検証を、期待する iss・aud を渡す版の JwtAssertion.Verify にした。クライアント認証では sub が iss と一致することを確かめる（OpenTouryo#654。#336）
 //*  2026/11/06  玄人 幸道         TryVerifyAssertion の catch と、alg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#654・#664）に合わせた（#337）
+//*  2026/11/08  玄人 幸道         tls_client_auth の登録で、証明書が届かない・Subject が合わないときの理由を OPERATION に残す（#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -191,6 +192,30 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                         return true;
                     }
+
+                    //  **Subject が合わない理由を、運用のログに残す**（#345）。
+                    //    **証明書は届いているのに通らない**ので、残さないと配備側で原因が分からない
+                    //    （構成ファイルが古い証明書を指したままで、これに当たった）。
+                    //    **Subject の値は書かない**（どちらが正しいかは、配備側が証明書と登録を見て決める）。
+                    if (!string.IsNullOrEmpty(registeredDn) && x509.Subject != registeredDn)
+                    {
+                        Logging.MyOperationTrace(string.Format(
+                            "The client authentication of {0} was refused. "
+                            + "(the subject of the client certificate does not match the registered tls_client_auth_subject_dn)",
+                            client_id));
+                    }
+                }
+                else if (Helper.GetInstance().GetTokenEndpointAuthMethod(client_id)
+                    == OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit())
+                {
+                    //  **tls_client_auth の登録なのに、クライアント証明書が届いていない**（#345）。
+                    //    **サイトが証明書を求めていない**（IIS Express の既定の sslFlags="None" など）と、
+                    //    クライアントが添えても届かない。**応答は従来どおり invalid_client**（理由は返さない）。
+                    Logging.MyOperationTrace(string.Format(
+                        "The client authentication of {0} was refused. "
+                        + "(the registered token_endpoint_auth_method is \"tls_client_auth\", but no client certificate was presented. "
+                        + "Check that the site requests client certificates.)",
+                        client_id));
                 }
             }
 

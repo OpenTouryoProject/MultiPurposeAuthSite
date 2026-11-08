@@ -460,7 +460,7 @@ CreateJwkSetJson.exe
 | `FAPI1_Client` | FAPI1（`client_mode` = `fapi1`。旧 `TestClient1`）。**`token_endpoint_auth_method` を明示していない**（E2E が `client_secret` で使う。#341） |
 | `FAPI1_PrivateKeyJwt_Client` | **FAPI1 の自己テストが使う**（`client_mode` = `fapi1`、**`token_endpoint_auth_method` = `private_key_jwt`**。#341） |
 | `FAPI2_Client` | FAPI2（`client_mode` = `fapi2`。Request Object を使う。旧 `TestClient2`）。**`token_endpoint_auth_method` = `private_key_jwt`**（自己テストの FAPI2 のボタンが使う） |
-| `FAPI2_MTLS_Client` | **自己テストの MTLS のボタンが使う**（`client_mode` = `fapi2`、**`token_endpoint_auth_method` = `tls_client_auth`**。秘密を持たない。#345）。**Subject は `SpRp_ClientCertPfxFilePath` の証明書に合わせる**（`CN=MPAS Test Client`） |
+| `FAPI2_MTLS_Client` | **自己テストの MTLS のボタンが使う**（`client_mode` = `fapi2`、**`token_endpoint_auth_method` = `tls_client_auth`**。秘密を持たない。#345）。**Subject は `SpRp_ClientCertPfxFilePath` の証明書に合わせる**（`CN=MPAS Test Client`）。**サイトがクライアント証明書を求めていないと使えない**（VS から起動した IIS Express は既定で求めない。E2E の `-Launch` の net10.0 版で測る） |
 | `Device_Client` | Device Authorization Grant（`client_mode` = `device`）。**`client_secret` を持たない**（パブリック クライアント。旧 `TestClient3`） |
 | `FAPI_CIBA_Client` | CIBA（`client_mode` = `fapi_ciba`。旧 `TestClient4`） |
 | `RequirePKCE_Client` | **クライアント単位で PKCE を必須**（`require_pkce`。#221。旧 `TestClient6`） |
