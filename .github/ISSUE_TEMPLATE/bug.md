@@ -53,3 +53,13 @@ labels: bug
 ## 調べたこと
 
 <!-- 原因の見当や、切り分けの結果があれば。無くても構いません。 -->
+
+## 見つけた手段（任意）
+
+<!--
+どこで・何で見つけたか。分かれば、直すコミットのトレーラー Found-By: にそのまま使います（QUALITY.md 5 節）。
+語彙（一次情報は root/rules.common.psd1 の Found-By の規則）:
+  spec-check / type-review / test-added / test-failure / review-other-model / review-same-model /
+  static-analysis / downstream / upstream / user-report
+例: user-report（利用者からの報告）、downstream（サンプル・アプリの作業で見つけた）
+-->

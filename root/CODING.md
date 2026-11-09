@@ -467,6 +467,21 @@ try     { & dotnet @args }
 finally { if ($null -ne $prev) { try { [Console]::OutputEncoding = $prev } catch { } } }
 ```
 
+### 子プロセスの標準入力に、BOM が入る（5.1。#343）
+
+**子プロセスの標準入力に渡した値（パスワードなど）が合わない。5.1 からだけ起き、7 からは通る。**
+5.1（.NET Framework）は子プロセスの標準入力を `[Console]::InputEncoding` で開き、**それが BOM 付きの UTF-8 だと、起動した時点で BOM を書く。**
+net10.0 の子プロセスは、それを値の先頭の 1 文字（U+FEFF）として読む（net48 の子プロセスは読み飛ばす）。
+Open棟梁 で見つかった（OpenTouryoProject/OpenTouryo#668）。
+
+```powershell
+# 子プロセスの標準入力に BOM を書かせない（5.1。起動の前に）
+[Console]::InputEncoding = New-Object Text.UTF8Encoding $false
+```
+
+- 受け取る側も、先頭の BOM を読み飛ばすとよい
+- **7 から動かすと起きない。** 5.1 から動かして確かめること
+
 ### ネイティブ コマンドの標準エラーで止まる（5.1）
 
 **Windows PowerShell 5.1 は、出力をリダイレクトしているとき、ネイティブ コマンドの
