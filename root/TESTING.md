@@ -4439,6 +4439,19 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 
 `2_RunAllTests.ps1` は、テスト名の `targetKey: "..."` で切り分けて内訳を出す。
 
+### 適合性テスト（OpenID Foundation の Conformance Suite。#350）
+
+**E2E とは別に、外部の基準で測る**（`QUALITY.md` 2 節「外部の基準を、最終的な正とする」。`ANALYSIS-IdP.md` の D-14）。
+**E2E は、このリポジトリが書いたテスト**なので、書いた側と同じ仕様の読み違いを共有しうる。
+
+| | |
+|---|---|
+| 置き場所 | **`container/CTS/`**（Conformance Suite（版を固定）と、相手の OP（net10.0 版・`mem`）。手順と仕組みは `container/CTS/README.md`） |
+| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan oidcc-basic`**（`oidcc-config` も）→ `3_DockerComposeDown.bat` |
+| 相手 | **net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る） |
+| 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値を含む） |
+| 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。**落ちたものは、プランごとに Issue にして直す** |
+
 ## 6. 未修正の項目の扱い
 
 **未修正だと分かっている項目は、期待する動作を書いたうえで `Skip` にする。**

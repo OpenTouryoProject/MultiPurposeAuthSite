@@ -8,6 +8,7 @@
 | `Store\` | **E2E 用の UserStore の DB**（SQL Server・Oracle・PostgreSQL） | `mpas-store` | **通しでは `test.ps1` が、使う 1 つだけを起動・停止する**（`-UserStoreType` が `mem` 以外のとき） |
 | `E2E\` | **ID 連携の E2E で使う IdP 群**（上流・上流 2・下流）と、**`jwks_uri` を配る nginx** | `mpas-e2e` | **`1_PublishIdP.ps1`（用意）→ `2_DockerComposeUp.bat`（起動）→ `3_DockerComposeDown.bat`（停止）**（#340） |
 | `Stub\` | **他のリポジトリ（Open棟梁 など）のテストから使う IdP のスタブ** | `mpas-stub` | **`1_PublishStub.ps1`（用意）→ `2_DockerComposeUp.bat`（起動）→ `3_DockerComposeDown.bat`（停止）**。`Stub\README.md` |
+| `CTS\` | **適合性テスト（OpenID Foundation の Conformance Suite）と、その相手の OP**（#350。`ANALYSIS-IdP.md` の D-14） | `mpas-cts` | **`..\E2E\1_PublishIdP.ps1`（OP の用意。E2E と共用）→ `2_DockerComposeUp.bat`（起動）→ `RunTestPlan.ps1`（プランを回す）→ `3_DockerComposeDown.bat`（停止）**。`CTS\README.md` |
 | `Common\` | **E2E と Stub が共用する設定**（`mpas-common.env`、`LogConf.xml`）と、**成果物の新しさの確認**（`CheckPublishFreshness.ps1`。#340） | — | — |
 
 **E2E と Stub は、同じ作法である**（#340）。

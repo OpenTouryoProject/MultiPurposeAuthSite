@@ -1,0 +1,73 @@
+{
+  "alias": "mpas-cts",
+  "description": "MultiPurposeAuthSite (net10.0, mem) - OpenID Connect Basic OP",
+  "server": {
+    "discoveryUrl": "https://mpas-cts.localhost:44310/.well-known/openid-configuration"
+  },
+  "client": {
+    "client_id": "c75c11e0000000000000000000000001",
+    "client_secret": "cts-client1-secret-for-conformance-test-only"
+  },
+  "client2": {
+    "client_id": "c75c11e0000000000000000000000002",
+    "client_secret": "cts-client2-secret-for-conformance-test-only"
+  },
+  "consent": {},
+  "browser": [
+    {
+      "match": "https://mpas-cts.localhost:44310/*",
+      "tasks": [
+        {
+          "task": "Login",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44310/Account/Login*",
+          "commands": [
+            [
+              "text",
+              "id",
+              "Email",
+              "@TEST_USER@",
+              "optional"
+            ],
+            [
+              "text",
+              "id",
+              "Password",
+              "@TEST_PASSWORD@",
+              "optional"
+            ],
+            [
+              "click",
+              "id",
+              "normal_signin"
+            ]
+          ]
+        },
+        {
+          "task": "Consent",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44310/authorize*",
+          "commands": [
+            [
+              "click",
+              "name",
+              "submit.Grant"
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*/test/*/callback*",
+          "commands": [
+            [
+              "wait",
+              "id",
+              "submission_complete",
+              10
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

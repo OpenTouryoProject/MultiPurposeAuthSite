@@ -339,6 +339,14 @@ __pycache__/
 #   E2E が書いて、同じテストの中で消す（Infrastructure/JwksUri）
 /container/E2E/jwks/*.json
 
+# 適合性テスト（Conformance Suite）と、その相手の OP の生成物（#350）
+#   mongo/ は Conformance Suite の結果（MongoDB のデータ）、keys/・logs/ は OP の DataProtection の鍵とログ
+/container/CTS/mongo/
+/container/CTS/keys/
+/container/CTS/logs/
+#   out/ は RunTestPlan.ps1 が作る実行用の設定（テスト利用者のパスワードを埋めたもの）と、結果・報告書
+/container/CTS/out/
+
 # テストのスタブ（1_PublishStub.ps1 が作る。#294）
 #   cert/ はホストの開発用証明書の秘密鍵とパスワード。.env は起動側のパラメタ（.env.sample を写したもの）
 /container/Stub/cert/
