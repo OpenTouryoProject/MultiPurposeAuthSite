@@ -114,16 +114,34 @@ Expectation-Change: <何が・なぜ変わったか（仕様の該当箇所・Is
 | 2. 人のコミット | commit-msg フック（[`.githooks/commit-msg`](.githooks/commit-msg) → [`CheckExpectationChange.ps1`](root/CheckExpectationChange.ps1)）：トレーラーの無い期待値の変更を拒否する | 理由の無いコミット | **各自の手元で有効にする**（下記） |
 | 3. PR | GitHub Actions（[`expectation-change.yml`](.github/workflows/expectation-change.yml)）：develop・master 宛の PR のコミットを検査する（検出は段 2 と同じスクリプトの、**ベース側の版**） | フックの未設定や `--no-verify` での迂回。**最終的に塞ぐのはここ** | **必須のチェックにするのは人** |
 
-- **何を期待値の変更と数えるかの実装は `CheckExpectationChange.ps1` にある**（段 1 は、編集の前に推測する簡易版）
+- **何を期待値の変更と数えるかの実装は、本体 `CheckExpectationChange.ps1` と、このリポジトリの規則 `rules.psd1` にある**（下の「共通の本体と、このリポジトリの規則」。段 1 は、編集の前に推測する簡易版）
 - **段 1 は止めない。** 人に見せるだけで、許可すれば編集は進む。承認の記録は段 2・段 3 のトレーラーである
 - 段 1 は Claude Code の機能である。**ほかのエージェントでは効かない**が、段 2・段 3 で塞がる
 - **マージ コミットは見ない。** 取り込むコミットのほうで確かめているため
-- **仕組み自体のファイル**（`.githooks/`・`.claude/settings.json`・`.claude/hooks/`・`CheckExpectationChange.ps1`・
-  `expectation-change.yml`・`TestReport.cs`）**の変更・削除も、トレーラーが要る。**
+- **仕組み自体のファイル**（`.githooks/`・`.claude/settings.json`・`.claude/hooks/`・`.claude/agents/`・`CheckExpectationChange.ps1`・
+  `rules.common.psd1`・`rules.psd1`・`expectation-change.yml`・`TestReport.cs`）**の変更・削除も、トレーラーが要る。**
   仕組みを緩めれば、期待値をいくら変えても通るため（追加は数えない）。
   `TestReport.cs` を含むのは、`Verify` が落ちなくなれば、すべてのテストが通るからである
 - **導入の PR は、検査されない。** ベース側に検出器が無いので、PR の側の版で動く。**人が差分を確かめ、必須のチェックにするのはマージの後**
 - **`-Range`（段 3）は、導入より前のコミットを見ない。** `-Commit` で個別に見れば、導入前でも見る（6 節の計測に使える）
+
+#### 共通の本体と、このリポジトリの規則（#335）
+
+**検出器の本体は、OpenTouryoCodingAgentAssets の共通の本体の写しである**（原本は同リポジトリの `src/quality/ExpectationGuard/`。
+OpenTouryoCodingAgentAssets#3）。Open棟梁 も同じ本体を写して使う（OpenTouryo#657）。
+
+| ファイル（`root/`） | 持ち主 | 中身 |
+|---|---|---|
+| `CheckExpectationChange.ps1` | 写し | 本体（段 1〜3 の判定。規則は持たない） |
+| `rules.common.psd1` | 写し | 共通の規則（仕組みのファイル・トレーラーの検査（`Found-By:`。5 節）・段 1 の判定） |
+| `ExpectationGuard.Tests/` | 写し | 判定の用例（「この差分なら検出する／しない」）。CI のジョブ `expectation-guard-tests` が回す |
+| `rules.psd1` | このリポジトリ | このリポジトリの規則（テストの属性・Skip・`Verify` と単体テストの `Assert.`・`[Basis(` の削除・`Report` の `basis`・`TESTCASES.md`） |
+
+- `.claude/hooks/ExpectationGuard.ps1`・`.githooks/commit-msg` も写しである。`expectation-change.yml` は雛形から作り、このリポジトリが持つ
+- **写しは直さない。** 原本を直して、`install.ps1 -TargetRoot <このリポジトリ> -IncludeQualityGuard -QualityGuardPath root -Force` で写し直す。
+  **写し直しのコミットにも `Expectation-Change:` が要る**（印の行の版が変わるだけで「仕組みの変更」になる）。理由には、版の変化と中身が変わったかを書く
+- CI の `Verify copies` が、写しが写したときのままかを確かめる（ずれは警告。手元では `.\CheckExpectationChange.ps1 -VerifyCopy`）
+- **置き換えの前後で、導入の後の全コミット（62 件）の判定が同じ**であることを確かめた（PowerShell 7・5.1。#335）
 
 #### 段 2 を有効にする（各自の手元で 1 回）
 
@@ -139,7 +157,8 @@ git config core.hooksPath .githooks
 
 **CI では作り直さず、検出だけ行う**（作り直しには DB・コンテナが要る）。
 同じワークフローのジョブ `testcases-regenerated` が、**テストの文面**（`TestReport` に渡す文面とメソッド名）**が変わったのに `TESTCASES.md` が変わっていない** PR を落とす。
-手元では、`root` で `.\CheckExpectationChange.ps1 -Range develop..HEAD -CheckTestCases`。
+手元では、`root` で `.\CheckExpectationChange.ps1 -Range develop..HEAD -CheckGenerated`
+（**`-CheckTestCases` から改名した**。#335。共通の本体では、生成物の確認は規則の `GeneratedRules` で決まる）。
 
 - **通しの既定から外れるテスト**（`-ShortLifetimes` などの特別な構成）は原本に載らない。
   そのときは、コミットのトレーラーに `TestCases-Unchanged: <理由>` と書く
@@ -237,6 +256,24 @@ git config core.hooksPath .githooks
 
 **本書を直すのは、問題を直したのと同じコミットにする。** 先に書くと、未修正の弱点を公開することになる。
 
+### 見つけた手段を残す：`Found-By:`（OpenTouryoCodingAgentAssets#5）
+
+**バグを直すコミット（`fixed #NNN`）には、どこで・何で見つけたかを、トレーラーで残す。** 6 節の計測（バグの Issue）に使う。
+
+```text
+fixed #NNN
+
+Found-By: <手段> [<補足>]
+```
+
+- **`<手段>` は、決まった語彙から選ぶ**（`spec-check`・`review-other-model`・`downstream` など）。
+  **語彙と意味の一次情報は [`rules.common.psd1`](root/rules.common.psd1) の `Found-By` の規則**（本書には写さない）
+- `<補足>` には、派生元の Issue や見つけた作業を書く（例：`Found-By: type-review (#331 の派生)`）。手段が複数なら、行を分ける
+- **トレーラーがあることが、バグの修正の印になる。** 機能の追加・エンハンスには付けない
+- **見つけた経緯は、推測で埋めない。** そのセッションのエージェントが文案に入れ、分からなければ人に聞く。人はコミットのときに、経緯と合っているかを見る
+- 検出器が確かめる：**語彙に無い値は止める**（段 2・段 3）。`fixed #NNN` に無ければ**警告に留める**（バグかどうかは機械に分からない）
+- 導入の前のコミットには遡って付けない（遡るなら Wiki の集計で行い、コミットは書き換えない）
+
 ---
 
 ## 6. 計測
@@ -247,6 +284,11 @@ git config core.hooksPath .githooks
 - 品質マップの単位で、根拠の種類（**外部の仕様 / Issue / リポジトリの前提**）の割合（7 節）
 - 別モデルのレビューで見つかり、書いたモデルのレビューでは見つからなかった指摘の数
 - 品質マップの単位で、E2E のカバレッジ（[`COVERAGE.md`](root/programs/Tests/COVERAGE.md)。**判定には使わない**）
+- バグの Issue の、見つけた手段の内訳（5 節の `Found-By:`）。Git だけで集計できる：
+
+  ```text
+  git log --format='%h %(trailers:key=Found-By,valueonly,separator=|)' <範囲>
+  ```
 
 ### 根拠の種類（初回の基準。[`CountBasis.ps1`](root/CountBasis.ps1)。2026/11/01）
 
@@ -304,3 +346,4 @@ TestReport r = this.Report("EX-2.7",
 - [ ] テストの文面を変えたなら、`TESTCASES.md` を作り直したか
 - [ ] リスクが「高」なら、4 節の観点で見直したか。別のセッション・別のモデルのレビューを人に勧めたか
 - [ ] 見つけた問題を、5 節の 3 か所に戻したか（セキュリティの弱点なら、まず人に報告したか）
+- [ ] バグの修正（`fixed #NNN`）なら、コミット メッセージの案に `Found-By:` を入れたか（5 節。経緯を推測で埋めていないか）

@@ -3,7 +3,10 @@
 # ＜位置づけ＞
 #   段 1（Claude Code の PreToolUse フック）と段 2（commit-msg フック）は、手元の設定に頼る。
 #   フックを有効にしていない、--no-verify で迂回した、別のエージェントを使った、を最終的に塞ぐのがここ。
-#   何を期待値の変更と数えるかの正は root/CheckExpectationChange.ps1 にある。ここには判定を書かない。
+#   何を期待値の変更と数えるかの正は、root/CheckExpectationChange.ps1（共通の本体の写し）と
+#   root/rules.psd1（このリポジトリの規則）にある（#335。原本は OpenTouryoCodingAgentAssets の
+#   src/quality/ExpectationGuard/。写しは直さず、原本を直して写し直す）。ここには判定を書かない。
+#   **この yml は導入先が持つ**（install.ps1 は上書きしない）。原本の雛形の変更は、手で合わせる。
 #
 # ＜検出器は、ベース側の版を使う＞
 #   PR の側の CheckExpectationChange.ps1 を使うと、PR が検出器を緩めれば素通りになる。
@@ -13,7 +16,9 @@
 #
 # ＜対象＞
 #   develop・master 宛の PR。ビルドも E2E も回さないので、すぐ終わる。
-#   必須のチェックにするかは人が決める。チェック名はジョブ名の expectation-change と testcases-regenerated。
+#   必須のチェックにするかは人が決める。チェック名はジョブ名の expectation-change と testcases-regenerated
+#   （雛形の generated-regenerated に改名しない。必須のチェックの名前が変わるため。#335）。
+#   expectation-guard-tests（判定の用例）は #335 で足した。
 
 name: Expectation change
 
@@ -62,6 +67,15 @@ jobs:
           & $checker -Range "$env:BASE_SHA..$env:HEAD_SHA"
           exit $LASTEXITCODE
 
+      # The copies written by install.ps1 must match the original (warning only).
+      # always(): 上の検査が落ちても回す（落ちた PR でこそ、写しを手で直していないかを見たい）。
+      - name: Verify copies
+        if: always()
+        shell: powershell
+        run: |
+          & (Join-Path $env:GITHUB_WORKSPACE "root\CheckExpectationChange.ps1") -VerifyCopy
+          exit 0
+
   # テストの内容を変えたのに、TESTCASES.md（生成物）が作り直されていないことを検出する。
   # 作り直しには E2E の実行（DB・コンテナ）が要るので、CI では作り直さない。
   testcases-regenerated:
@@ -83,6 +97,8 @@ jobs:
           path: _base
           persist-credentials: false
 
+      # The switch was renamed from -CheckTestCases (the old detector) to -CheckGenerated (the common body. #335).
+      # The base may still be the old detector (the PR that replaces it), so pick the one the base knows.
       - name: Check TESTCASES.md
         shell: powershell
         env:
@@ -95,5 +111,30 @@ jobs:
             Write-Host "::warning::CheckExpectationChange.ps1 is not in the base; using the PR's version (introducing PR)."
             $checker = Join-Path $env:GITHUB_WORKSPACE "root\CheckExpectationChange.ps1"
           }
-          & $checker -Range "$env:BASE_SHA..$env:HEAD_SHA" -CheckTestCases
+          if (Select-String -LiteralPath $checker -Pattern '\$CheckGenerated\b' -Quiet)
+          {
+            & $checker -Range "$env:BASE_SHA..$env:HEAD_SHA" -CheckGenerated
+          }
+          else
+          {
+            & $checker -Range "$env:BASE_SHA..$env:HEAD_SHA" -CheckTestCases
+          }
+          exit $LASTEXITCODE
+
+  # 判定の用例（「この差分なら検出する／しない」）。PR の側の本体を試す（本体を直す PR を確かめるため）。
+  expectation-guard-tests:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout (PR)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Run the cases
+        shell: powershell
+        run: |
+          & (Join-Path $env:GITHUB_WORKSPACE "root\ExpectationGuard.Tests\Run-Tests.ps1")
           exit $LASTEXITCODE
