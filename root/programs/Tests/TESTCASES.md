@@ -544,7 +544,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - sub が id_token の sub と一致する
 - email スコープの属性が返る
 - 要求していない phone_number は返らない
-- phone を要求すれば phone_number が返る
+- phone を要求したとき、phone_number は値の在る文字列か、項目ごと無い（空文字列・null にしない）
 - email_verified が真偽値である
 - Bearer トークン無しではユーザ情報を返さない
 
@@ -2120,7 +2120,6 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - UserInfo が JSON を返す
 - email_verified が真偽値である
-- phone_number_verified が真偽値である
 
 ## RT-185.1 トークン エンドポイントに不正な入力を送っても、JSON のエラー応答になる
 
@@ -6882,7 +6881,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=12a3cf4c-3a03-4436-864e-4bb7ba689718&code=bogus
+1. GET /Account/EmailConfirmation?userId=7ea70bcc-d7bf-49dc-a910-733735c299b8&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6890,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=12a3cf4c-3a03-4436-864e-4bb7ba689718&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=12a3cf4c-3a03-4436-864e-4bb7ba689718&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=7ea70bcc-d7bf-49dc-a910-733735c299b8&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=7ea70bcc-d7bf-49dc-a910-733735c299b8&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11458,6 +11457,35 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - PAR：expires_in は JSON の数値
 - PAR：expires_in は正の整数
+
+## RT-354.1 値の無い phone_number は、userinfo にも access_token にも出ない（空文字列で返さない）
+
+| | |
+|---|---|
+| 観点 | **値の無いクレームは、名前ごと省く**（空文字列・null で返さない）。**`phone_number_verified` も、`phone_number` が無ければ出さない**（確かめた対象が無いため）。対照として、値の在る `email` と `email_verified` は返ることを見る。**JWT の access_token のクレームも、userinfo と同じ部品で作る。** |
+| 根拠 | OIDC Core 1.0 §5.3.2 / #354 |
+| テスト | `RT35401_値の無いphone_numberはuserinfoにもaccess_tokenにも出ない` |
+
+**手順**
+
+1. scope="openid email phone" で認可コードを引き換え、/userinfo を叩く
+1. grant_type=password で取った access_token（JWT）のペイロードを見る
+
+**検証（合否を判定する）**
+
+- userinfo：phone_number は、項目なしか値の在る文字列（空文字列・null にしない）
+- userinfo：phone_number_verified は、phone_number が在るときだけ在る
+- userinfo：（対照）値の在る email は返る
+- userinfo：（対照）email_verified は真偽値で返る
+- access_token：phone_number は、項目なしか値の在る文字列（空文字列・null にしない）
+- access_token：phone_number_verified は、phone_number が在るときだけ在る
+- access_token：（対照）値の在る email は返る
+- access_token：（対照）email_verified は真偽値で返る
+
+**観測（判定しない）**
+
+- userinfo の phone_number（種データの利用者は電話番号を持たない）
+  - 電話番号を持つ利用者なら、値の在る文字列で返る（E2E では登録できないので測っていない）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

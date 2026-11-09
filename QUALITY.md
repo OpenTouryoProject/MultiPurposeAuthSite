@@ -191,6 +191,8 @@ git config core.hooksPath .githooks
 - [ ] **応答の数値（`expires_in`・`interval` など）を、JSON の文字列にしていないか**（RFC 6749 §5.1「Numerical values are included as JSON numbers」）。
   **`Dictionary<string, string>` で応答を作ると、数値が文字列になる**（#294・#353。`RT-294.75`・`RT-353`）。
   **E2E の `JsonResponse.String` は数値も文字列にして返す**ので、型は `KindOf` で見る
+- [ ] **値の無いクレームを、空文字列・null で返していないか**（OIDC Core 1.0 §5.3.2。名前ごと省く）。
+  **利用者の値をそのまま足すと、持っていない項目が `""` で出る**（#354。`RT-354.1`）。**`*_verified` も、値が無ければ出さない**
 - [ ] **仕様の「だけ」を「も」と読んでいないか**（FAPI 2.0 の `aud` は issuer だけ。#323）。登録の種別で規定が変わらないか
 - [ ] **値が無いときに、検証を飛ばしていないか**（`nonce`・`aud`・署名など）
 - [ ] 検証を省く分岐（設定やパラメタで検証を飛ばせる経路）が増えていないか

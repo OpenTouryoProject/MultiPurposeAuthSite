@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         aud の無いトークンで落ちない・何もしていなかった claims のループを削除（#294）
 //*  2026/10/30  玄人 幸道         POST も受ける（OIDC Core 5.3.1）・openid スコープの無いトークンを 403（insufficient_scope）で断る（#294）
+//*  2026/11/10  玄人 幸道         値の無い email / phone のクレームを返さないようにした（OIDC Core 1.0 §5.3.2。#354）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -163,12 +164,9 @@ namespace MultiPurposeAuthSite.Controllers
                                         userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Profile);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Email:
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed);
-                                    break;
                                 case OAuth2AndOIDCConst.Scope_Phone:
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed);
+                                    // **値が無ければ、名前ごと出さない**（OIDC Core 1.0 §5.3.2。#354。以前は空文字列で返していた）。
+                                    UserClaims.AddContactClaims(userinfoClaimSet, user, scope.ToLower());
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Address:
                                     // **返す項目は設定で決まる**（#230。UserClaims）。

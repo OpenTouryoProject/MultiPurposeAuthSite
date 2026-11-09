@@ -217,6 +217,12 @@ OIDC Core §5.1 は **boolean** と定めている。JSON 的にも `"True"` は
 
 **修正:** `.ToString()` を外した。access_token / id_token と `/userinfo` の計 4 箇所。
 
+> **✅ 修正済み（#354）: 同じ箇所は、値の無い利用者に、空文字列の `email`・`phone_number` を返していた**
+> （電話番号の無い利用者に `"phone_number": ""` と `"phone_number_verified": false`）。
+> OIDC Core 1.0 §5.3.2 は「値の無いクレームは名前ごと省き、null や空文字列で返さない」。適合性テスト（#350。`ValidateUserInfoStandardClaims`）で見つかった。
+> **値が空なら、値の項目も `*_verified` も出さない**（`UserClaims.AddContactClaims`。`/userinfo` と access_token で共用。`RT-354.1`）。
+> profile / address（`UserClaims.AddClaims`。#230）は、以前から空の値を足していない。
+
 ### A-5. OIDC のとき `redirect_uri` が code に紐付かない（条件が反転している） **[Lib][Core]** — **✅ 修正済み（#186）**
 
 ```csharp
