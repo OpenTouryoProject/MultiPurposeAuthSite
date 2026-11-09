@@ -119,6 +119,13 @@ cd root\programs\Tests
 
 合否の読み方 → [`BUILDING.md`](BUILDING.md) 3 節 / [`TESTING.md`](TESTING.md) 5 節
 
+**リスク「高」なら、`fixed` の前に別モデルのレビューを回す**（[`QUALITY.md`](../QUALITY.md) 4 節）。
+
+```text
+# エージェント : サブエージェント quality-reviewer に、Issue 番号・範囲・名前空間だけを渡す（主の解釈は渡さない）
+#   指摘のすべてに判定（採用・却下・保留）を付け、判定後の重大度「高」が無くなるまで回す
+```
+
 ### 有効期限（`RT-188`）は、寿命を短くして回す
 
 ```powershell
