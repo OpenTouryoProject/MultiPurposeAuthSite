@@ -21,8 +21,8 @@ if errorlevel 1 goto :error
 echo.
 echo  The conformance suite and its OP have been started.
 echo    conformance suite : https://localhost.emobix.co.uk:8443/
-echo    OP (issuer)       : https://mpas-cts.localhost:44310
-echo    discovery         : https://mpas-cts.localhost:44310/.well-known/openid-configuration
+echo    OP (issuer)       : https://mpas-cts.localhost:44311
+echo    discovery         : https://mpas-cts.localhost:44311/.well-known/openid-configuration
 echo.
 echo  The suite takes a minute or two to start. Test plans and configs: config\ and README.md.
 echo  When done:  3_DockerComposeDown.bat

@@ -14,7 +14,8 @@
 #   | localhost.emobix.co.uk（Conformance Suite） | 公開の DNS が 127.0.0.1 を返す | nginx のネットワークの別名 |
 #   | mpas-cts.localhost（OP） | Edge・Chrome は *.localhost を 127.0.0.1 に向ける（RFC 6761。hosts は要らない） | op のネットワークの別名 |
 #
-#   **ポートは、中と外で同じにする**（44310）。違うと、issuer の URL がどちらかで届かない。
+#   **ポートは、中と外で同じにする**（44311）。違うと、issuer の URL がどちらかで届かない。
+#   **44310 にしない**（スタブ（..\Stub\）の既定のポート。同時に起動できなくなる。#351 で見つけた）。
 #
 #   **OP の発行物と証明書は、E2E のものを使う**（..\E2E\1_PublishIdP.ps1 が用意する。#340）。
 #   証明書は localhost 向けの開発用のものなので、**ブラウザは mpas-cts.localhost で名前の不一致を警告する**（進んでよい）。
@@ -82,7 +83,7 @@ services:
     build: ../E2E/app
     restart: "no"
     ports:
-      - "44310:44310"
+      - "44311:44311"
     networks:
       default:
         aliases:
@@ -91,13 +92,13 @@ services:
       - ../Common/mpas-common.env
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_HTTPS_PORTS=44310
+      - ASPNETCORE_HTTPS_PORTS=44311
       - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
       - Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
       - appSettings__UserStoreType=mem
       # **iss は、Discovery を取った URL と同じにする**（OIDC Discovery 1.0 §4.3。雛形の IssuerId は論理名で、URL と違う）
-      - appSettings__IssuerId=https://mpas-cts.localhost:44310
-      - appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://mpas-cts.localhost:44310
+      - appSettings__IssuerId=https://mpas-cts.localhost:44311
+      - appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://mpas-cts.localhost:44311
       - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
       - appSettings__DataProtectionKeyPath=/keys
       - sessionState__SessionCookieName=MultiPurposeAuthSiteCtsSession

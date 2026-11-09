@@ -2,7 +2,7 @@
   "alias": "mpas-cts",
   "description": "MultiPurposeAuthSite (net10.0, mem) - OpenID Connect Basic OP",
   "server": {
-    "discoveryUrl": "https://mpas-cts.localhost:44310/.well-known/openid-configuration"
+    "discoveryUrl": "https://mpas-cts.localhost:44311/.well-known/openid-configuration"
   },
   "client": {
     "client_id": "c75c11e0000000000000000000000001",
@@ -15,12 +15,12 @@
   "consent": {},
   "browser": [
     {
-      "match": "https://mpas-cts.localhost:44310/*",
+      "match": "https://mpas-cts.localhost:44311/*",
       "tasks": [
         {
           "task": "Login",
           "optional": true,
-          "match": "https://mpas-cts.localhost:44310/Account/Login*",
+          "match": "https://mpas-cts.localhost:44311/Account/Login*",
           "commands": [
             [
               "text",
@@ -46,7 +46,7 @@
         {
           "task": "Consent",
           "optional": true,
-          "match": "https://mpas-cts.localhost:44310/authorize*",
+          "match": "https://mpas-cts.localhost:44311/authorize*",
           "commands": [
             [
               "click",

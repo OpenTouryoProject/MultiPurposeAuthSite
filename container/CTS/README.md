@@ -22,8 +22,8 @@ cd ..\CTS
 | | URL |
 |---|---|
 | Conformance Suite（画面） | https://localhost.emobix.co.uk:8443/ （結果の一覧・各モジュールのログ） |
-| OP（issuer） | https://mpas-cts.localhost:44310 |
-| Discovery | https://mpas-cts.localhost:44310/.well-known/openid-configuration |
+| OP（issuer） | https://mpas-cts.localhost:44311 |
+| Discovery | https://mpas-cts.localhost:44311/.well-known/openid-configuration |
 
 - **メモリを使う**（Java の server・MongoDB・nginx・OP）。**要らないコンテナ（`..\E2E\`・`..\Store\`）は止めておく**
 - **hosts の編集は要らない。** `localhost.emobix.co.uk` は公開の DNS が 127.0.0.1 を返し、`mpas-cts.localhost` は Edge・Chrome が 127.0.0.1 に向ける（RFC 6761）
@@ -41,7 +41,7 @@ cd ..\CTS
 | `mpas-cts.localhost`（OP） | Edge・Chrome が `*.localhost` を 127.0.0.1 に向ける | op のネットワークの別名（Java の名前解決で、OP のコンテナに届くことを確かめた） |
 
 - **E2E の upstream（`https://localhost:44301`）は使えない** — Conformance Suite のコンテナから見ると、`localhost` は自分自身を指す
-- **ポートは、中と外で同じにする**（44310）。違うと、issuer の URL がどちらかで届かない
+- **ポートは、中と外で同じにする**（44311）。違うと、issuer の URL がどちらかで届かない
 - **`IssuerId` を、Discovery の URL と同じ値にしてある**（雛形の `IssuerId` は論理名で、URL と違う。そのままだと Discovery の検査で落ちる）
 - `curl` は `*.localhost` を自分で 127.0.0.1 に向ける（DNS に問わない）ので、**コンテナの中から `curl` で確かめるときは `--resolve` を付ける**
 
