@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#226 : mTLS の経路を E2E で確かめる）
+//*  2026/11/10  玄人 幸道         スタブ（ASPNETCORE_ENVIRONMENT=Stub）でも効くようにした（外の RP から MTLS を通すため。#351）
 //**********************************************************************************
 
 using System;
@@ -49,18 +50,24 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 ///   2. ここで、自分を名前で解決できるようにし、ASPNETCORE_HOSTINGSTARTUPASSEMBLIES に自分を足す
 ///   3. AcceptAnyClientCertificate（IHostingStartup）が、Kestrel の設定を足す
 ///
-/// **Development 以外では何もしない。** 発行元を問わずに証明書を受け付けるので、
+/// **Development とスタブ（Stub）以外では何もしない。** 発行元を問わずに証明書を受け付けるので、
 /// 本番の構成で読まれることがあってはならない（アプリは Subject だけで照合するため）。
+///
+/// **スタブ（`container\Stub\`）は、パラメタで選んだときだけ、これを読む**（#351。既定は読まない）。
+/// 外の RP（OpenTouryo の Sample4SpRp など）から、`tls_client_auth` と証明書に紐付くトークンを通すため。
 /// </remarks>
 internal class StartupHook
 {
     /// <summary>Main の前に呼ばれる</summary>
     public static void Initialize()
     {
-        if (!string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
-            "Development", StringComparison.OrdinalIgnoreCase))
+        // **テストの環境の名前だけで効く**（Development は E2E、Stub はスタブ。#351）
+        string environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+        if (!string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(environment, "Stub", StringComparison.OrdinalIgnoreCase))
         {
-            Console.Error.WriteLine("[MtlsTestHook] ASPNETCORE_ENVIRONMENT が Development ではないので、何もしない。");
+            Console.Error.WriteLine("[MtlsTestHook] ASPNETCORE_ENVIRONMENT が Development・Stub ではないので、何もしない。");
             return;
         }
 
@@ -76,7 +83,7 @@ internal class StartupHook
         Environment.SetEnvironmentVariable(key,
             string.IsNullOrEmpty(current) ? name : current + ";" + name);
 
-        Console.WriteLine("[MtlsTestHook] クライアント証明書を受け付ける（E2E 専用。#226）");
+        Console.WriteLine("[MtlsTestHook] クライアント証明書を受け付ける（テスト専用。E2E #226・スタブ #351）");
     }
 }
 

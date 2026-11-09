@@ -3863,8 +3863,10 @@ ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
   （`X-ARR-ClientCert` など）を読まない
 - `tls_client_auth_subject_dn` は **JSON の文字列**なので、`\\` は 1 文字の `\` になる。
   照合するのは、.NET が返す `X509Certificate2.Subject` の文字列
-- **E2E のテスト専用のフック（`Tests/MtlsTestHook`）は、発行元を問わずに受け付ける。本番の構成で読ませないこと**
-  （`test.ps1 -Launch` が、起動したサイトにだけ `DOTNET_STARTUP_HOOKS` で渡す。Development 以外では何もしない）
+- **テスト専用のフック（`Tests/MtlsTestHook`）は、発行元を問わずに受け付ける。本番の構成で読ませないこと**
+  （`test.ps1 -Launch` が、起動したサイトにだけ `DOTNET_STARTUP_HOOKS` で渡す。
+  **スタブ（`container/Stub/`）は、`.env` の `STUB_MTLS_HOOK` を書いたときだけ読む**（#351）。
+  `ASPNETCORE_ENVIRONMENT` が `Development`・`Stub` 以外では何もしない）
 
 ## 9. 機械で読むときの落とし穴
 

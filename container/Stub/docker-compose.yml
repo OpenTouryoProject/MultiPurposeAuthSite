@@ -59,6 +59,12 @@ services:
 
       # **DataProtection の鍵の置き場**（下の keys をマウントする）。
       - appSettings__DataProtectionKeyPath=/keys
+
+      # **MTLS（クライアント証明書）を受け付けるテスト専用のフック**（#351。README.md）。
+      #   **既定は空で、読まない。** .env の STUB_MTLS_HOOK=/hooks/MtlsTestHook.dll で読む。
+      #   **発行元を問わずに証明書を受け付ける**ので、テストのスタブ以外で使わないこと
+      #   （フック自身も、ASPNETCORE_ENVIRONMENT が Development・Stub でなければ何もしない）。
+      - DOTNET_STARTUP_HOOKS=${STUB_MTLS_HOOK:-}
     volumes:
       # **アプリの設定の土台**（既定は開発者の手元の appsettings.json）。**イメージの中の雛形を覆う。**
       #   **起動時にマウントするだけで、イメージには入らない。**
@@ -77,6 +83,8 @@ services:
       - ${STUB_RESOURCE_DIR:-C:/root/files/resource}:/resource:ro
       - ./keys:/keys
       - ./logs:/app/logs
+      # **MTLS のテスト専用のフック**（1_PublishStub.ps1 が作る。イメージには入れない）。
+      - ./hooks:/hooks:ro
     healthcheck:
       test: ["CMD", "dotnet", "--info"]
       interval: 10s

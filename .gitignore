@@ -356,5 +356,8 @@ __pycache__/
 /container/Stub/app/LogConf.xml
 /container/Stub/keys/
 /container/Stub/logs/
+#   hooks/ は MTLS のテスト専用のフック（1_PublishStub.ps1 が作る。#351）。app/artifacts-hook/ はその中間出力
+/container/Stub/hooks/
+/container/Stub/app/artifacts-hook/
 #   起動側のパラメタと設定（.env.sample / appsettings.Stub.sample.json を写したもの）。my- で始めれば追跡しない
 /container/Stub/my-*
