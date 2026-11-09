@@ -1131,6 +1131,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN FrontChannelLogoutUri varchar(512) NULL;
 | PAR・署名付きの Request Object | **認可エンドポイント**（`redirect_uri` を確かめた後なので、**エラーは RP へ返る**） | `invalid_request`（RFC 9126 §4。RFC 9101 §10.5 はコードを決めていないので揃えた） |
 | 署名付きの Request Object（フォームだけの PAR） | **PAR の口**（預ける時点で） | **400** ＋ `invalid_request`（RFC 9126 §2.3） |
 | DPoP・クライアント証明書 | **トークン エンドポイントの全グラント**（`refresh_token` を含む。**code などを消費する前**） | `invalid_request`（**`invalid_dpop_proof` は「証明が在って通らない」ときのコード**なので使わない） |
+| DPoP・クライアント証明書（`token` を含む `response_type`。Implicit・Hybrid） | **認可エンドポイント**（エラーは RP へ返る。PAR の口でも同じ） | `unauthorized_client`（RFC 6749 §4.2.2.1。**そこで出す access_token は縛れない**ので、この経路を許さない） |
 
 - **PAR を必須にすると、`/ros`（独自の口）で預けた `request_uri` も断られる**（PAR ではないため）。
   経路は、預けた中身にサーバが付ける印で見分ける（クライアントが同じ名前を入れても上書きする）

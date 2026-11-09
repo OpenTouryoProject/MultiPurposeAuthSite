@@ -6882,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=6abd43c6-a5de-4e72-b105-94969ccbff44&code=bogus
+1. GET /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=6abd43c6-a5de-4e72-b105-94969ccbff44&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=6abd43c6-a5de-4e72-b105-94969ccbff44&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11296,6 +11296,102 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 400 ＋ invalid_request
 - HTTP 200（断られた device_code は消費されていない）
 - access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-346.9 送信者の拘束を必須にした登録は、`token` を含む response_type（Implicit・Hybrid）を `unauthorized_client` で断られる
+
+| | |
+|---|---|
+| 観点 | **認可エンドポイントで出す access_token には、DPoP の証明もクライアント証明書も届かないので、縛れない。****縛ったトークンだけを出す**には、この経路を断るしかない。**以前はトークン エンドポイントだけで判定していた**ので、ここから縛らないトークンが出た（別モデルのレビューの指摘）。 |
+| 根拠 | FAPI 2.0 Security Profile 5.3.2.1 の 4・5 / RFC 6749 §4.2.2.1 / #346 |
+| テスト | `RT34609_拘束を必須にした登録はImplicitとHybridのtokenを断る` |
+
+**手順**
+
+1. client_name=TestClient_39 で response_type=token を送る
+1. client_name=TestClient_39 で response_type=code token を送る
+1. client_name=TestClient_40 で response_type=token を送る
+1. client_name=TestClient_40 で response_type=code token を送る
+1. 対照 : 拘束を必須にしていない登録（TestClient）で、response_type=token を送る
+
+**検証（合否を判定する）**
+
+- TestClient_39 / token は unauthorized_client（RP へ返る）
+- TestClient_39 / token で access_token は返らない
+- TestClient_39 / token の error_description は、送信者の拘束による断り
+- TestClient_39 / code token は unauthorized_client（RP へ返る）
+- TestClient_39 / code token で access_token は返らない
+- TestClient_39 / code token の error_description は、送信者の拘束による断り
+- TestClient_40 / token は unauthorized_client（RP へ返る）
+- TestClient_40 / token で access_token は返らない
+- TestClient_40 / token の error_description は、送信者の拘束による断り
+- TestClient_40 / code token は unauthorized_client（RP へ返る）
+- TestClient_40 / code token で access_token は返らない
+- TestClient_40 / code token の error_description は、送信者の拘束による断り
+- TestClient / token は access_token が返る（対照）
+
+**補足**
+
+- **`code` だけの要求は通る**（トークン エンドポイントで縛る。`RT-346.4`・`.5`）。**`id_token` だけの要求（access_token を出さない）は、ここでは断らない。**
+
+## RT-346.10 `dpop_bound_access_tokens` の登録は、refresh_token の要求でも、DPoP の証明が無ければ `invalid_request` で断る
+
+| | |
+|---|---|
+| 観点 | **RFC 9449 §5.2 の「トークン要求」は、refresh_token の要求を含む。****断られた refresh_token は、証明を添えればまだ使える**（消費する前に断る。ローテーションで一族ごと失効させない）。 |
+| 根拠 | RFC 9449 §5.2 / §5 / #346 |
+| テスト | `RT34610_DPoPを必須にした登録はrefresh_tokenでも証明を求める` |
+
+**手順**
+
+1. 証明を添えて、認可コードを refresh_token 付きのトークンに引き換える
+1. 証明なしで、refresh_token を使う
+1. 同じ refresh_token を、証明を添えて使う
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200（断られた refresh_token は消費されていない）
+- token_type は DPoP
+
+## RT-346.11 JWT Bearer（RFC 7523）のトークンは、`tls_client_auth` だけの登録では縛られず、`tls_client_certificate_bound_access_tokens` の登録では証明書が無ければ断られ、在れば縛られる
+
+| | |
+|---|---|
+| 観点 | **JWT Bearer はクライアント認証を通らない**（assertion が資格）。**提示された証明書の Subject は確かめていない**ので、`tls_client_auth` の登録でも、ここでは縛らない。**縛るのは、証明書を必須にした登録だけ**（縛る相手は提示した本人）。 |
+| 根拠 | RFC 7523 §2.1 / RFC 8705 §3・§3.4 / #346 |
+| テスト | `RT34611_JWT_Bearerは証明書を必須にした登録だけ縛る` |
+
+**手順**
+
+1. tls_client_auth だけの登録で、証明書を添えて JWT Bearer を使う
+1. 必須にした登録で、証明書なしで JWT Bearer を使う
+1. 必須にした登録で、証明書を添えて JWT Bearer を使う
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- cnf の x5t#S256 は付かない
+- HTTP 400 ＋ invalid_request
+- HTTP 200
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-346.12 `tls_client_auth` の device 登録（必須にはしていない）は、device_code のトークンも、認証した証明書に縛られる
+
+| | |
+|---|---|
+| 観点 | **以前は、device_code のグラントだけ、トークンを作るときに証明書を渡していなかった**（`tls_client_auth` で認証しても bearer）。**認可コード・client_credentials と揃えた**（別モデルのレビューの指摘で、振る舞いの変化を測る）。 |
+| 根拠 | RFC 8705 §3・§3.1 / RFC 8628 §3.4 / #346 |
+| テスト | `RT34612_tls_client_authのdevice登録はdevice_codeでも縛られる` |
+
+**手順**
+
+1. 機器 : 証明書で認証して device_code と user_code を得て、ユーザが許可する
+1. 機器 : 証明書で認証して、トークンを要求する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token の cnf の x5t#S256 は、認証した証明書の SHA-256（BASE64URL）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

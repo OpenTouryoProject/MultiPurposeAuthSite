@@ -33,6 +33,7 @@
 //*  2026/10/29  玄人 幸道         scope の省略で 500 にしない。id_token 単独と、登録の grant_types に無い Implicit / Hybrid を、同意の前に断る（#294）
 //*  2026/11/01  玄人 幸道         CheckClientGrantType を internal にした（Extensions/Sts の CmnCibaEndpoint が使う。#321）
 //*  2026/11/09  玄人 幸道         PAR・署名付きの Request Object を必須にした登録・配備では、それを使わない認可要求を断る（#346 の段階 2）
+//*  2026/11/09  玄人 幸道         送信者の拘束を必須にした登録には、認可エンドポイントで access_token を出さない（Implicit・Hybrid の token を断る。#346 の別モデルのレビュー）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -411,6 +412,27 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "This client must send the authorization request as a signed request object.";
+                    return false;
+                }
+
+                #endregion
+
+                #region 送信者の拘束を必須にした登録の、フロント チャネルの access_token（#346）
+
+                // **`token` を含む response_type（Implicit・Hybrid）は、認可エンドポイントで access_token を出す。**
+                //   **そこには DPoP の証明もクライアント証明書も届かない**ので、トークンを縛れない。
+                //   **送信者の拘束を必須にした登録**（dpop_bound_access_tokens・tls_client_certificate_bound_access_tokens）には、
+                //   **この経路を許さない**（FAPI 2.0 Security Profile 5.3.2.1 の 4・5 は「縛ったトークンだけを出す」）。
+                //   **以前はトークン エンドポイントだけで判定していた**ので、この経路から縛らないトークンが出た（別モデルのレビューで見つかった）。
+                //   RFC 6749 4.2.2.1 : この方法で access_token を要求することを許されていないクライアントは unauthorized_client。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                if (response_type.ToLower().Split(' ').Any(x => x == OAuth2AndOIDCConst.ImplicitResponseType)
+                    && (Helper.GetInstance().GetClientDPoPBoundAccessTokens(client_id)
+                        || Helper.GetInstance().GetClientTlsCertBoundAccessTokens(client_id)))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This client requires sender-constrained access tokens, "
+                        + "which cannot be issued from the authorization endpoint.";
                     return false;
                 }
 

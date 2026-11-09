@@ -58,7 +58,7 @@
 //*  2026/11/04  玄人 幸道         認証デバイスの Android / iOS 版（AuthenticationDevice）を足し、RunAuthenticationDeviceFlowAsync でクライアントを選べるようにした
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/07  玄人 幸道         FAPI1_PrivateKeyJwt_Client を足した（#341）
-//*  2026/11/09  玄人 幸道         TestClient_37〜43 を追加（#346 の段階 2）
+//*  2026/11/09  玄人 幸道         TestClient_37〜44 を追加（#346 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -424,6 +424,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>TestClient を写し、**device ＋ 証明書を必須**にしたクライアント（RT-346.8。#346）</summary>
         public const string TestClient_43 = "TestClient_43";
 
+        /// <summary>TestClient を写し、**device ＋ tls_client_auth** にしたクライアント（RT-346.12。#346）</summary>
+        public const string TestClient_44 = "TestClient_44";
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -500,7 +503,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_40, "e2e0tc40000000000000000000000000" },
                 { KnownClients.TestClient_41, "e2e0tc41000000000000000000000000" },
                 { KnownClients.TestClient_42, "e2e0tc42200000000000000000000000" },
-                { KnownClients.TestClient_43, "e2e0tc43300000000000000000000000" }
+                { KnownClients.TestClient_43, "e2e0tc43300000000000000000000000" },
+                { KnownClients.TestClient_44, "e2e0tc44400000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -1122,7 +1126,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 || clientName == KnownClients.TestClient_40
                 || clientName == KnownClients.TestClient_41
                 || clientName == KnownClients.TestClient_42
-                || clientName == KnownClients.TestClient_43)
+                || clientName == KnownClients.TestClient_43
+                || clientName == KnownClients.TestClient_44)
             {
                 // **プロファイルを強制する登録**（#346）。client_secret・折り返し先・鍵は写す元のまま。
                 //   **TestClient_41 は private_key_jwt、TestClient_42 は tls_client_auth なので、秘密では認証できない。**

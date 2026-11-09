@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/09  玄人 幸道         新規（#346 の段階 2）
+//*  2026/11/09  玄人 幸道         RT-346.9〜.12 を追加（別モデルのレビューの指摘：Implicit・refresh_token・JWT Bearer・tls_client_auth の device。#346）
 //**********************************************************************************
 
 using System;
@@ -64,6 +65,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-346.6`** | （Discovery） | **サーバ全体の 2 つの設定を広告する**（既定は false） |
     /// | **`RT-346.7`** | `tls_client_auth`（normal） | **client_credentials のトークンも、認証した証明書に縛られる**（以前は縛られなかった。net10.0 版だけ） |
     /// | **`RT-346.8`** | `tls_client_certificate_bound_access_tokens`（device） | **device_code の要求も、証明書が無ければ断り、在れば縛る**（net10.0 版だけ） |
+    /// | **`RT-346.9`** | 送信者の拘束（DPoP・MTLS） | **認可エンドポイントで access_token を出す要求（Implicit・Hybrid）を断る**（縛れないため） |
+    /// | **`RT-346.10`** | `dpop_bound_access_tokens` | **refresh_token の要求も、証明が無ければ断る** |
+    /// | **`RT-346.11`** | `tls_client_auth`・`tls_client_certificate_bound_access_tokens` | **JWT Bearer は、必須にした登録だけ縛る**（`tls_client_auth` だけの登録は縛らない。net10.0 版だけ） |
+    /// | **`RT-346.12`** | `tls_client_auth`（device） | **必須にしていない device 登録の device_code も、認証した証明書に縛られる**（net10.0 版だけ） |
+    ///
+    /// **`RT-346.9`〜`.12` は、別モデルのレビュー（`quality-reviewer`。#347 の試し）の指摘で足した。**
     ///
     /// **サーバ全体の設定**（`RequirePushedAuthorizationRequests`・`RequireSignedRequestObject`）を
     /// **true にしたときに断ることは、E2E では測っていない**（`RequirePkce` と同じ。既定の通しでは、他のテストが落ちる）。
@@ -654,6 +661,308 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     string expected = Base64Url.Encode(SHA256.HashData(cert.RawData));
 
                     r.Verify("access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）",
+                        thumbprint == expected,
+                        "一致",
+                        string.IsNullOrEmpty(thumbprint) ? "**無し**" : (thumbprint == expected ? "一致" : "**別の値**"));
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-346.9 Implicit・Hybrid
+
+        /// <summary>RT-346.9 送信者の拘束を必須にした登録は、認可エンドポイントで access_token を受け取れない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT34609_拘束を必須にした登録はImplicitとHybridのtokenを断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-346.9",
+                    "送信者の拘束を必須にした登録は、`token` を含む response_type（Implicit・Hybrid）を `unauthorized_client` で断られる",
+                    "**認可エンドポイントで出す access_token には、DPoP の証明もクライアント証明書も届かないので、縛れない。**"
+                    + "**縛ったトークンだけを出す**には、この経路を断るしかない。"
+                    + "**以前はトークン エンドポイントだけで判定していた**ので、ここから縛らないトークンが出た（別モデルのレビューの指摘）。",
+                    "FAPI 2.0 Security Profile 5.3.2.1 の 4・5 / RFC 6749 §4.2.2.1 / #346");
+
+                //  **Implicit が閉じた配備では、この経路がそもそも無い**（#220 で雛形の既定を閉じた）。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "implicit");
+
+                foreach (string name in new string[] { KnownClients.TestClient_39, KnownClients.TestClient_40 })
+                {
+                    ClientRegistration reg = Flows.InjectedRegistration(client, name);
+
+                    foreach (string responseType in new string[] { "token", "code token" })
+                    {
+                        r.Step("client_name=" + name + " で response_type=" + responseType + " を送る");
+
+                        Dictionary<string, string> q = ProfileEnforcementTests.Parameters(reg, "state-rt3469");
+                        q["client_id"] = reg.ClientId;
+                        q["response_type"] = responseType;
+                        q["redirect_uri"] = reg.RedirectUriToken ?? reg.RedirectUri;
+
+                        AuthZResponse authz = await client.AuthorizeAsync(q);
+
+                        r.VerifyEqual(name + " / " + responseType + " は unauthorized_client（RP へ返る）",
+                            "unauthorized_client", authz.Error ?? "（無し）");
+
+                        r.Verify(name + " / " + responseType + " で access_token は返らない",
+                            string.IsNullOrEmpty(authz.Get("access_token")),
+                            "返らない", string.IsNullOrEmpty(authz.Get("access_token")) ? "返らない" : "**返った**");
+
+                        //  **断った理由が、この判定であること**（別モデルのレビューの指摘）。
+                        //    **unauthorized_client は、手前の判定（登録の response_types・grant_types、ClientModePolicy）でも返る。**
+                        //    **error_description で、送信者の拘束による断りだと見分ける。**
+                        string description = authz.ErrorDescription ?? "";
+
+                        r.Verify(name + " / " + responseType + " の error_description は、送信者の拘束による断り",
+                            description.Contains("sender-constrained"),
+                            "sender-constrained を含む", string.IsNullOrEmpty(description) ? "（無し）" : description);
+                    }
+                }
+
+                r.Step("対照 : 拘束を必須にしていない登録（" + KnownClients.TestClient + "）で、response_type=token を送る");
+
+                //  **同じ要求が、必須にしていない登録では通る**ことを確かめる（断ったのが、登録の拘束のためだと分かる）。
+                ClientRegistration plain = Flows.Registration(client, KnownClients.TestClient);
+
+                Dictionary<string, string> pq = ProfileEnforcementTests.Parameters(plain, "state-rt3469p");
+                pq["client_id"] = plain.ClientId;
+                pq["response_type"] = "token";
+                pq["redirect_uri"] = plain.RedirectUriToken ?? plain.RedirectUri;
+
+                AuthZResponse plainAuthz = await client.AuthorizeAndGrantAsync(pq);
+
+                r.Verify(KnownClients.TestClient + " / token は access_token が返る（対照）",
+                    !string.IsNullOrEmpty(plainAuthz.Get("access_token")),
+                    "返る", string.IsNullOrEmpty(plainAuthz.Get("access_token"))
+                        ? "**返らない**（error=" + (plainAuthz.Error ?? "なし") + "）" : "返る（値は伏せる）");
+
+                r.Note("**`code` だけの要求は通る**（トークン エンドポイントで縛る。`RT-346.4`・`.5`）。"
+                    + "**`id_token` だけの要求（access_token を出さない）は、ここでは断らない。**");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-346.10 refresh_token × DPoP
+
+        /// <summary>RT-346.10 DPoP を必須にした登録は、refresh_token の要求でも証明を求める</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT34610_DPoPを必須にした登録はrefresh_tokenでも証明を求める(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_39);
+
+                TestReport r = this.Report("RT-346.10",
+                    "`dpop_bound_access_tokens` の登録は、refresh_token の要求でも、DPoP の証明が無ければ `invalid_request` で断る",
+                    "**RFC 9449 §5.2 の「トークン要求」は、refresh_token の要求を含む。**"
+                    + "**断られた refresh_token は、証明を添えればまだ使える**（消費する前に断る。ローテーションで一族ごと失効させない）。",
+                    "RFC 9449 §5.2 / §5 / #346");
+
+                r.Target("client_name=" + KnownClients.TestClient_39 + "（dpop_bound_access_tokens=true）");
+
+                string tokenEndpoint = await ProfileEnforcementTests.EndpointAsync(client, "token_endpoint");
+
+                r.Step("(1) 証明を添えて、認可コードを refresh_token 付きのトークンに引き換える");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri);
+
+                Assert.False(string.IsNullOrEmpty(authz.Code),
+                    "前提: 認可コードが取得できること（error=" + (authz.Error ?? "なし") + "）");
+
+                JsonResponse token = await client.PostJsonAsync(client.ToLocalUrl(tokenEndpoint),
+                    new Dictionary<string, string>()
+                    {
+                        { "grant_type", "authorization_code" },
+                        { "code", authz.Code },
+                        { "client_id", reg.ClientId },
+                        { "client_secret", reg.ClientSecret },
+                        { "redirect_uri", reg.RedirectUri }
+                    },
+                    new Dictionary<string, string>() { { "DPoP", ProfileEnforcementTests.DPoPProof(client, tokenEndpoint) } });
+
+                //  **refresh_token を出さない配備では、この経路が無い。**
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "refresh_token");
+
+                Assert.False(string.IsNullOrEmpty(token.RefreshToken),
+                    "前提: refresh_token が返ること（HTTP " + ((int)token.StatusCode).ToString() + "、error=" + (token.Error ?? "なし") + "）");
+
+                Dictionary<string, string> refresh = new Dictionary<string, string>()
+                {
+                    { "grant_type", "refresh_token" },
+                    { "refresh_token", token.RefreshToken },
+                    { "client_id", reg.ClientId },
+                    { "client_secret", reg.ClientSecret }
+                };
+
+                r.Step("(2) 証明なしで、refresh_token を使う");
+
+                JsonResponse noProof = await client.PostJsonAsync(client.ToLocalUrl(tokenEndpoint), refresh);
+
+                r.VerifyEqual("HTTP 400 ＋ invalid_request", "400 invalid_request",
+                    ((int)noProof.StatusCode).ToString() + " " + (noProof.Error ?? "（無し）"));
+
+                r.Step("(3) 同じ refresh_token を、証明を添えて使う");
+
+                JsonResponse withProof = await client.PostJsonAsync(client.ToLocalUrl(tokenEndpoint), refresh,
+                    new Dictionary<string, string>() { { "DPoP", ProfileEnforcementTests.DPoPProof(client, tokenEndpoint) } });
+
+                r.VerifyEqual("HTTP 200（断られた refresh_token は消費されていない）", "200",
+                    ((int)withProof.StatusCode).ToString());
+                r.VerifyEqual("token_type は DPoP", "DPoP", withProof.String("token_type") ?? "（無し）");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-346.11 JWT Bearer
+
+        /// <summary>RT-346.11 JWT Bearer は、証明書を必須にした登録だけ縛る</summary>
+        /// <param name="targetKey">core（-NetFxMtls のときは netfx も）</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(MtlsTests.MtlsTargets), MemberType = typeof(MtlsTests))]
+        public async Task RT34611_JWT_Bearerは証明書を必須にした登録だけ縛る(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                MtlsTests.SkipIfNoMtls(client.Target);
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, JwtBearerAssertion.GrantType);
+
+                ClientRegistration plain = Flows.InjectedRegistration(client, KnownClients.TestClient_42);
+                ClientRegistration bound = Flows.InjectedRegistration(client, KnownClients.TestClient_40);
+
+                TestReport r = this.Report("RT-346.11",
+                    "JWT Bearer（RFC 7523）のトークンは、`tls_client_auth` だけの登録では縛られず、"
+                    + "`tls_client_certificate_bound_access_tokens` の登録では証明書が無ければ断られ、在れば縛られる",
+                    "**JWT Bearer はクライアント認証を通らない**（assertion が資格）。**提示された証明書の Subject は確かめていない**ので、"
+                    + "`tls_client_auth` の登録でも、ここでは縛らない。**縛るのは、証明書を必須にした登録だけ**（縛る相手は提示した本人）。",
+                    "RFC 7523 §2.1 / RFC 8705 §3・§3.4 / #346");
+
+                r.Target("client_name=" + KnownClients.TestClient_42 + "（tls_client_auth）/ "
+                    + KnownClients.TestClient_40 + "（tls_client_certificate_bound_access_tokens=true）");
+
+                using (X509Certificate2 cert = TestCertificate.ForTarget(client.Target, KnownClients.MtlsSubjectDn))
+                {
+                    r.Step("(1) tls_client_auth だけの登録で、証明書を添えて JWT Bearer を使う");
+
+                    JsonResponse notBound = await client.TokenWithCertificateAsync(new Dictionary<string, string>()
+                    {
+                        { "grant_type", JwtBearerAssertion.GrantType },
+                        { "assertion", JwtBearerAssertion.Create(client, plain.ClientId) }
+                    }, cert);
+
+                    r.VerifyEqual("HTTP 200", "200", ((int)notBound.StatusCode).ToString());
+                    r.VerifyEqual("cnf の x5t#S256 は付かない", "（無し）",
+                        string.IsNullOrEmpty(ProfileEnforcementTests.CnfOf(notBound.AccessToken, "x5t#S256"))
+                            ? "（無し）" : "**付いた**");
+
+                    r.Step("(2) 必須にした登録で、証明書なしで JWT Bearer を使う");
+
+                    JsonResponse noCert = await client.TokenWithCertificateAsync(new Dictionary<string, string>()
+                    {
+                        { "grant_type", JwtBearerAssertion.GrantType },
+                        { "assertion", JwtBearerAssertion.Create(client, bound.ClientId) }
+                    }, null);
+
+                    r.VerifyEqual("HTTP 400 ＋ invalid_request", "400 invalid_request",
+                        ((int)noCert.StatusCode).ToString() + " " + (noCert.Error ?? "（無し）"));
+
+                    r.Step("(3) 必須にした登録で、証明書を添えて JWT Bearer を使う");
+
+                    JsonResponse withCert = await client.TokenWithCertificateAsync(new Dictionary<string, string>()
+                    {
+                        { "grant_type", JwtBearerAssertion.GrantType },
+                        { "assertion", JwtBearerAssertion.Create(client, bound.ClientId) }
+                    }, cert);
+
+                    r.VerifyEqual("HTTP 200", "200", ((int)withCert.StatusCode).ToString());
+
+                    string thumbprint = ProfileEnforcementTests.CnfOf(withCert.AccessToken, "x5t#S256");
+                    string expected = Base64Url.Encode(SHA256.HashData(cert.RawData));
+
+                    r.Verify("access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）",
+                        thumbprint == expected,
+                        "一致",
+                        string.IsNullOrEmpty(thumbprint) ? "**無し**" : (thumbprint == expected ? "一致" : "**別の値**"));
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-346.12 tls_client_auth の device
+
+        /// <summary>RT-346.12 tls_client_auth の device 登録は、device_code のトークンも証明書に縛られる</summary>
+        /// <param name="targetKey">core（-NetFxMtls のときは netfx も）</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(MtlsTests.MtlsTargets), MemberType = typeof(MtlsTests))]
+        public async Task RT34612_tls_client_authのdevice登録はdevice_codeでも縛られる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                MtlsTests.SkipIfNoMtls(client.Target);
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_44);
+
+                TestReport r = this.Report("RT-346.12",
+                    "`tls_client_auth` の device 登録（必須にはしていない）は、device_code のトークンも、認証した証明書に縛られる",
+                    "**以前は、device_code のグラントだけ、トークンを作るときに証明書を渡していなかった**（`tls_client_auth` で認証しても bearer）。"
+                    + "**認可コード・client_credentials と揃えた**（別モデルのレビューの指摘で、振る舞いの変化を測る）。",
+                    "RFC 8705 §3・§3.1 / RFC 8628 §3.4 / #346");
+
+                r.Target("client_name=" + KnownClients.TestClient_44 + "（device。token_endpoint_auth_method=tls_client_auth）");
+
+                using (X509Certificate2 cert = TestCertificate.ForTarget(client.Target, KnownClients.MtlsSubjectDn))
+                {
+                    r.Step("(1) 機器 : 証明書で認証して device_code と user_code を得て、ユーザが許可する");
+
+                    JsonResponse start = await client.PostWithCertificateAsync("/device_authz",
+                        new Dictionary<string, string>()
+                        {
+                            { "client_id", reg.ClientId },
+                            { "scope", "openid email" }
+                        }, cert);
+
+                    string deviceCode = start.String("device_code");
+                    string userCode = start.String("user_code");
+
+                    Assert.False(string.IsNullOrEmpty(deviceCode) || string.IsNullOrEmpty(userCode),
+                        "前提: device_code と user_code が発行されること（error=" + (start.Error ?? "なし") + "）");
+
+                    Assert.True(await client.SubmitDeviceUserCodeAsync(userCode, true), "前提: 検証画面が承認を受け付けること");
+
+                    r.Step("(2) 機器 : 証明書で認証して、トークンを要求する");
+
+                    JsonResponse token = await client.TokenWithCertificateAsync(new Dictionary<string, string>()
+                    {
+                        { "grant_type", "urn:ietf:params:oauth:grant-type:device_code" },
+                        { "device_code", deviceCode },
+                        { "client_id", reg.ClientId }
+                    }, cert);
+
+                    r.VerifyEqual("HTTP 200", "200", ((int)token.StatusCode).ToString());
+
+                    string thumbprint = ProfileEnforcementTests.CnfOf(token.AccessToken, "x5t#S256");
+                    string expected = Base64Url.Encode(SHA256.HashData(cert.RawData));
+
+                    r.Verify("access_token の cnf の x5t#S256 は、認証した証明書の SHA-256（BASE64URL）",
                         thumbprint == expected,
                         "一致",
                         string.IsNullOrEmpty(thumbprint) ? "**無し**" : (thumbprint == expected ? "一致" : "**別の値**"));

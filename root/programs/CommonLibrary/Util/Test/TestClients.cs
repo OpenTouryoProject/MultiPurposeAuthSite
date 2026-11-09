@@ -48,6 +48,7 @@
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を差し替えられるようにした（#346 の段階 1）
 //*  2026/11/09  玄人 幸道         プロファイルを強制する登録の TestClient_37〜40 と、device × private_key_jwt の TestClient_41 を追加（#346 の段階 2）
 //*  2026/11/09  玄人 幸道         normal で tls_client_auth の TestClient_42、証明書を必須にした device の TestClient_43 を追加（#346）
+//*  2026/11/09  玄人 幸道         device で tls_client_auth の TestClient_44 を追加（必須にしていない登録の device_code も縛られる。#346）
 //**********************************************************************************
 
 using System;
@@ -406,6 +407,19 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientTlsClientCertificateBoundAccessTokens, "true" }
+                }
+            },
+            new Entry()
+            {
+                // **device の登録で、tls_client_auth を明示したもの**（必須にはしていない。#346。`RT-346.12`）。
+                //   **device_code のトークンが、認証に使った証明書に縛られる**ことを測る（**以前は縛られなかった**）。
+                //   **`/device_authz` も証明書で認証する。** Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
+                ClientName = "TestClient_44", ClientId = "e2e0tc44400000000000000000000000",
+                ClientMode = "device", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.tls_client_auth_subject_dn, "CN=mpas-e2e-mtls-client" },
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "tls_client_auth" }
                 }
             },
             new Entry()

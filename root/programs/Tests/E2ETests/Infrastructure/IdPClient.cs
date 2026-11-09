@@ -54,6 +54,7 @@
 //*  2026/10/30  玄人 幸道         WebAuthn の登録の段階 0 で、パスワードを送る（#294）
 //*  2026/10/31  玄人 幸道         待ち時間を指定して POST する口を追加（自己テストのポーリング。#294）
 //*  2026/11/08  玄人 幸道         自己テストが Cookie に置いた code_verifier を読む口を追加（#345）
+//*  2026/11/09  玄人 幸道         クライアント証明書を添えて任意の口を POST する PostWithCertificateAsync を追加（device の /device_authz。#346）
 //**********************************************************************************
 
 using System;
@@ -1054,8 +1055,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// サーバがクライアント証明書を受け付けるのは、test.ps1 -Launch が net10.0 版に
         /// テスト専用のフック（Tests/MtlsTestHook）を読ませたときだけ。
         /// </remarks>
-        public async Task<JsonResponse> TokenWithCertificateAsync(
+        public Task<JsonResponse> TokenWithCertificateAsync(
             IDictionary<string, string> form, X509Certificate2 certificate)
+        {
+            return this.PostWithCertificateAsync("/token", form, certificate);
+        }
+
+        /// <summary>
+        /// 任意の口へ、クライアント証明書（mTLS）を添えてフォームを POST する（#346）。
+        /// </summary>
+        /// <param name="path">パス（`/token`・`/device_authz` など）</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="certificate">クライアント証明書（null なら添えない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>**`tls_client_auth` の device 登録は、`/device_authz` でも証明書で認証する**ので、トークンの口以外にも要る。</remarks>
+        public async Task<JsonResponse> PostWithCertificateAsync(
+            string path, IDictionary<string, string> form, X509Certificate2 certificate)
         {
             using (HttpClientHandler handler = new HttpClientHandler())
             {
@@ -1083,7 +1098,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     }
 
                     HttpResponseMessage res = await http.PostAsync(
-                        this.Absolute("/token"), new FormUrlEncodedContent(body));
+                        this.Absolute(path), new FormUrlEncodedContent(body));
 
                     return await ToJsonResponseAsync(res);
                 }
