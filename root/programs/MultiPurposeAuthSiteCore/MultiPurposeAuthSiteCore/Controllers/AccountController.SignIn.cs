@@ -23,6 +23,7 @@
 //*  2026/10/29  玄人 幸道         ID 連携に ReturnUrl を渡す（#294）
 //*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnLogoutEndpoint）を呼ぶ（#321）
 //*  2026/11/02  玄人 幸道         WebAuthn の種データを、その利用者のサインインの時だけ作るようにした（#325）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 /*
@@ -475,7 +476,7 @@ namespace MultiPurposeAuthSite.Controllers
             return await this.EndSessionCore(
                 Request.Query[OAuth2AndOIDCConst.id_token_hint],
                 Request.Query[OAuth2AndOIDCConst.client_id],
-                Request.Query[Const.ParamPostLogoutRedirectUri],
+                Request.Query[OAuth2AndOIDCConst.post_logout_redirect_uri],
                 Request.Query[OAuth2AndOIDCConst.state],
                 false);
         }
@@ -493,7 +494,7 @@ namespace MultiPurposeAuthSite.Controllers
             return await this.EndSessionCore(
                 formData[OAuth2AndOIDCConst.id_token_hint],
                 formData[OAuth2AndOIDCConst.client_id],
-                formData[Const.ParamPostLogoutRedirectUri],
+                formData[OAuth2AndOIDCConst.post_logout_redirect_uri],
                 formData[OAuth2AndOIDCConst.state],
                 false);
         }
@@ -523,7 +524,7 @@ namespace MultiPurposeAuthSite.Controllers
             return await this.EndSessionCore(
                 formData[OAuth2AndOIDCConst.id_token_hint],
                 formData[OAuth2AndOIDCConst.client_id],
-                formData[Const.ParamPostLogoutRedirectUri],
+                formData[OAuth2AndOIDCConst.post_logout_redirect_uri],
                 formData[OAuth2AndOIDCConst.state],
                 true);
         }

@@ -28,6 +28,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/02  玄人 幸道         新規作成（#324）
+//*  2026/11/06  玄人 幸道         自分の証明書を、サーバ側のキー（RsaCerFilePath ほか）で読むことを足した（#339）
 //**********************************************************************************
 
 using System;
@@ -57,12 +58,15 @@ namespace MultiPurposeAuthSite.Tests.Unit.Sts
 
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "mpas-ut-" + Guid.NewGuid().ToString("N"));
 
+        /// <summary>設定（テストの中で書き足して、入れ直す）</summary>
+        private readonly Dictionary<string, string> _config;
+
         /// <summary>RSA と ES256 の証明書を作り、設定に入れる</summary>
         public SigningKeysTests()
         {
             Directory.CreateDirectory(this._dir);
 
-            Dictionary<string, string> config = new Dictionary<string, string>
+            Dictionary<string, string> config = this._config = new Dictionary<string, string>
             {
                 { "RsaPfxPassword", Password },
                 { "EcdsaPfxPassword", Password },
@@ -206,6 +210,93 @@ namespace MultiPurposeAuthSite.Tests.Unit.Sts
             string header = SigningKeysTests.Base64Url("{\"alg\":\"" + alg + "\",\"kid\":\"\",\"typ\":\"JWT\"}");
 
             Assert.False(CmnAccessToken.VerifySignature(header + "." + parts[1] + "." + parts[2]));
+        }
+
+        /// <summary>サーバ側のキー（RsaCerFilePath ほか）が在れば、以前のキー（SpRp_*CerFilePath）より先に読む</summary>
+        [Theory]
+        [InlineData("RS256", "Rsa")]
+        [InlineData("PS256", "Rsa")]
+        [InlineData("ES256", "Ecdsa")]
+        [Basis("#339（自分の証明書は、*PfxFilePath と対になるサーバ側のキーで読む。SpRp_*CerFilePath はクライアント役の値）")]
+        public void サーバ側のキーが在ればそちらを読む(string alg, string name)
+        {
+            string cer = this._config["SpRp_" + name + "CerFilePath"];
+
+            //  **以前のキーは、別の鍵の証明書を指す**（読まれたら、下の検証が落ちる）。
+            this._config[name + "CerFilePath"] = cer;
+            this._config["SpRp_" + name + "CerFilePath"] = this.WriteOtherCer(name);
+            TestConfig.Set(this._config);
+
+            SigningKeys.Entry entry = SigningKeys.Of(alg);
+
+            Assert.Equal(cer, entry.CerFilePath);
+            Assert.True(entry.CreateJwsFromCer().Verify(entry.CreateJwsFromPfx().Create("{\"sub\":\"ut\"}")));
+            Assert.False(entry.UsesLegacyCerFilePathKey);
+
+            if (name == "Rsa")
+            {
+                Assert.Equal(cer, SigningKeys.RsaCerFilePath);
+            }
+        }
+
+        /// <summary>サーバ側のキーが空なら、以前のキー（SpRp_*CerFilePath）を読み、起動時の警告の一覧に 1 回だけ載る</summary>
+        [Fact]
+        [Basis("#339（配備済みの設定にはサーバ側のキーが無い。直さなくても動き、警告で知らせる）")]
+        public void サーバ側のキーが空なら以前のキーを読み警告の一覧に載る()
+        {
+            Assert.Equal(this._config["SpRp_RsaCerFilePath"], SigningKeys.Of("RS256").CerFilePath);
+            Assert.Equal(this._config["SpRp_RsaCerFilePath"], SigningKeys.RsaCerFilePath);
+            Assert.True(SigningKeys.Of("PS512").UsesLegacyCerFilePathKey);
+
+            //  **RSA の 6 つの alg は同じキーなので、1 回だけ載る。** 設定に無い ES384・ES512 は載らない。
+            Assert.Equal(new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("SpRp_RsaCerFilePath", "RsaCerFilePath"),
+                new KeyValuePair<string, string>("SpRp_EcdsaCerFilePath", "EcdsaCerFilePath")
+            }, SigningKeys.LegacyCerFilePathKeysStillUsed());
+        }
+
+        /// <summary>サーバ側のキーを書けば、以前のキーが残っていても、起動時の警告の一覧に載らない</summary>
+        [Fact]
+        [Basis("#339（SpRp_*CerFilePath は、クライアント役の値として残してよい）")]
+        public void サーバ側のキーを書けば警告の一覧に載らない()
+        {
+            this._config["RsaCerFilePath"] = this._config["SpRp_RsaCerFilePath"];
+            this._config["EcdsaCerFilePath"] = this._config["SpRp_EcdsaCerFilePath"];
+            TestConfig.Set(this._config);
+
+            Assert.Empty(SigningKeys.LegacyCerFilePathKeysStillUsed());
+        }
+
+        /// <summary>別の鍵の証明書（*.cer）を書く</summary>
+        /// <param name="name">Rsa / Ecdsa</param>
+        /// <returns>パス</returns>
+        private string WriteOtherCer(string name)
+        {
+            string path = Path.Combine(this._dir, name + "-other.cer");
+
+            if (name == "Rsa")
+            {
+                using (RSA rsa = RSA.Create(2048))
+                using (X509Certificate2 cert = new CertificateRequest("CN=ut-rsa-other", rsa,
+                    HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1).CreateSelfSigned(
+                    DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1)))
+                {
+                    File.WriteAllBytes(path, cert.Export(X509ContentType.Cert));
+                }
+            }
+            else
+            {
+                using (ECDsa ec = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+                using (X509Certificate2 cert = new CertificateRequest("CN=ut-ec-other", ec,
+                    HashAlgorithmName.SHA256).CreateSelfSigned(
+                    DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1)))
+                {
+                    File.WriteAllBytes(path, cert.Export(X509ContentType.Cert));
+                }
+            }
+
+            return path;
         }
 
         /// <summary>kid を入れて署名する</summary>

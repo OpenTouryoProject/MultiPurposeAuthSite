@@ -36,6 +36,9 @@
 //*  2026/10/30  玄人 幸道         device_code の引き換えで client_assertion（private_key_jwt）も受ける（#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/06  玄人 幸道         JWT Bearer の assertion を、期待する iss・aud を渡す版の JwtAssertion.Verify で検証する（OpenTouryo#654。#336）
+//*  2026/11/06  玄人 幸道         JWT Bearer の assertion の検証のコメントを、Open棟梁 の現状（OpenTouryo#654）に合わせた（#337）
+//*  2026/11/09  玄人 幸道         DPoP・クライアント証明書を必須にした登録では、それの無いトークン要求を断る（全グラント。#346 の段階 2）
+//*  2026/11/09  玄人 幸道         client_credentials・ROPC・device_code でも、証明書でトークンを縛る（以前は縛っていなかった。JWT Bearer は必須にした登録だけ。#346）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -109,6 +112,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 return false;
             }
+
+            //  **提示された証明書を取っておく**（#346）。**クライアント認証は、証明書で認証しなかったとき x509 を null にする**ので、
+            //    **送信者の拘束を必須にした登録では、こちらで縛る**（`CheckSenderConstraint`）。
+            X509Certificate2 presentedX509 = x509;
 
             if (Config.EnableAuthorizationCodeGrantType)
             {
@@ -231,6 +238,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
                     err.Add(OAuth2AndOIDCConst.error_description, "code_verifier is required.");
+                    return false;
+                }
+
+                //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
+                //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                {
                     return false;
                 }
 
@@ -384,6 +398,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
+            //  **提示された証明書を取っておく**（#346）。**クライアント認証は、証明書で認証しなかったとき x509 を null にする**ので、
+            //    **送信者の拘束を必須にした登録では、こちらで縛る**（`CheckSenderConstraint`）。
+            X509Certificate2 presentedX509 = x509;
+
             if (Config.EnableRefreshToken)
             {
                 #region 認証
@@ -399,6 +417,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 #endregion
+
+                //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
+                //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                {
+                    return false;
+                }
 
                 //  **縛られた refresh_token は、その鍵の証明と一緒でしか使えない**
                 //    （RFC 9449 §5。#311 の段階 4）。
@@ -597,6 +622,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
+            //  **提示された証明書を取っておく**（#346）。**クライアント認証は、証明書で認証しなかったとき x509 を null にする**ので、
+            //    **送信者の拘束を必須にした登録では、こちらで縛る**（`CheckSenderConstraint`）。
+            X509Certificate2 presentedX509 = x509;
+
             if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
             {
                 #region 認証
@@ -612,6 +641,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 #endregion
+
+                //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
+                //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                {
+                    return false;
+                }
 
                 if (authned)
                 {
@@ -702,7 +738,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 // **登録された署名 alg で署名する**（#129 の段階 2）
                                 Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                                 // **DPoP の鍵に縛る**（#311 の段階 1）
-                                jkt);
+                                jkt,
+                                // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る）
+                                x509);
 
                             // オペレーション・トレース・ログ出力
                             string name = Helper.GetInstance().GetClientName(client_id);
@@ -816,6 +854,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
+            //  **提示された証明書を取っておく**（#346）。**クライアント認証は、証明書で認証しなかったとき x509 を null にする**ので、
+            //    **送信者の拘束を必須にした登録では、こちらで縛る**（`CheckSenderConstraint`）。
+            X509Certificate2 presentedX509 = x509;
+
             //  **動的登録のための細い道**（#307 の段階 5-b）。
             //    **`EnableClientCredentialsGrantType` が false でも、
             //    専用 scope（`client_registration`）を要求したときだけ通す。**
@@ -846,6 +888,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 #endregion
+
+                //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
+                //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                {
+                    return false;
+                }
 
                 if (authned)
                 {
@@ -924,7 +973,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // **登録された署名 alg で署名する**（#129 の段階 2）
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                         // **DPoP の鍵に縛る**（#311 の段階 1）
-                        jkt);
+                        jkt,
+                        // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る）
+                        x509);
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format(
@@ -988,6 +1039,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
+            //  **提示された証明書を取っておく**（#346）。**クライアント認証は、証明書で認証しなかったとき x509 を null にする**ので、
+            //    **送信者の拘束を必須にした登録では、こちらで縛る**（`CheckSenderConstraint`）。
+            X509Certificate2 presentedX509 = x509;
+
             if (Config.EnableJwtBearerTokenFlowGrantType &&
                 grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
             {
@@ -1009,7 +1064,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     bool algOk = Array.IndexOf(
                         CmnEndpoints.JwtBearerSigningAlgs, JwtReader.TryReadAlg(assertion)) >= 0;
 
-                    //  **読めない形（配列の aud など）でも例外にしない**（#294。`TryVerifyAssertion`）。
+                    //  **読めない形（配列の aud など）でも例外にしない**（#294。OpenTouryo#654 の版は false を返す。登録の鍵が壊れていても `TryVerifyAssertion` が拾う）。
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
                     //    **iss・aud も Open棟梁 が照合する**（OpenTouryo#654。#336）。
                     //    **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。
@@ -1023,6 +1078,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **トークン エンドポイントの URL か issuer**（RFC 7523 §3。#294）。配列は受けない（`IsAssertionAudience`）。
                         if (CmnEndpoints.IsAssertionAudience(assertionPayload))
                         {
+                            //  **このグラントはクライアント認証を通らない**（assertion が資格）ので、
+                            //    **提示された証明書の Subject は確かめていない。** **`tls_client_auth` の登録でも、ここでは縛らない**（#346）。
+                            //    **縛るのは、証明書を必須にした登録だけ**（下の `CheckSenderConstraint` が、提示された証明書に戻す。
+                            //    **縛る相手は提示した本人**なので、Subject を確かめなくても、持ち主の証明にはなる）。
+                            x509 = null;
+
+                            //  **送信者の拘束を必須にした登録なら、証明の無い要求を断る**（#346）。
+                            if (!CmnEndpoints.CheckSenderConstraint(iss, presentedX509, ref x509, jkt, err))
+                            {
+                                return false;
+                            }
+
                             // このフローが認められるか？
                             if (CmnEndpoints.CheckClientMode(iss,
                                 ClientModePolicy.Flow.JwtBearer, ClientModePolicy.Proof.None,
@@ -1056,7 +1123,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     // **登録された署名 alg で署名する**（#129 の段階 2。client_id は iss）
                                     Helper.GetInstance().GetIdTokenSignedResponseAlg(iss),
                                     // **DPoP の鍵に縛る**（#311 の段階 1）
-                                    jkt);
+                                    jkt,
+                                    // **証明書に縛る**（#346。証明書を必須にした登録のときだけ x509 が在る）
+                                    x509);
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format(
@@ -1130,6 +1199,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
+            //  **提示された証明書を取っておく**（#346）。**クライアント認証は、証明書で認証しなかったとき x509 を null にする**ので、
+            //    **送信者の拘束を必須にした登録では、こちらで縛る**（`CheckSenderConstraint`）。
+            X509Certificate2 presentedX509 = x509;
+
             if (Config.EnableDeviceAuthZGrantType)
             {
                 #region 認証
@@ -1155,6 +1228,22 @@ namespace MultiPurposeAuthSite.TokenProviders
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
                     err.Add(OAuth2AndOIDCConst.error_description,
                         "This client is not allowed to use the device authorization grant.");
+                    return false;
+                }
+
+                //  **証明書で縛るのは、`tls_client_auth` の登録のときだけ**（#346。認証で Subject を確かめたもの）。
+                //    **パブリック クライアントの経路は、提示された証明書をそのまま残している**（認証を通らない）ので、ここで絞る。
+                //    **以前は、どの登録でも縛っていなかった**（下の `ProtectFromPayload` に null を渡していた）。
+                if (Helper.GetInstance().GetTokenEndpointAuthMethod(client_id)
+                    != OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit())
+                {
+                    x509 = null;
+                }
+
+                //  **送信者の拘束を必須にした登録なら、証明の無い要求を断る**（#346）。
+                //    **device_code を消費する前に断る。**
+                if (!CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                {
                     return false;
                 }
 
@@ -1201,7 +1290,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        null, deviceClientMode, out string aud, out string sub,
+                        // **証明書に縛る**（#346。`tls_client_auth` の登録か、証明書を必須にした登録のときだけ x509 が在る）
+                        x509, deviceClientMode, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                         // **DPoP の鍵に縛る**（#311 の段階 1）
@@ -1335,6 +1425,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
+            //  **提示された証明書を取っておく**（#346）。**クライアント認証は、証明書で認証しなかったとき x509 を null にする**ので、
+            //    **送信者の拘束を必須にした登録では、こちらで縛る**（`CheckSenderConstraint`）。
+            X509Certificate2 presentedX509 = x509;
+
             if (Config.EnableCibaGrantType)
             {
                 #region 認証
@@ -1352,6 +1446,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 #endregion
+
+                //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
+                //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                {
+                    return false;
+                }
 
                 if (authned)
                 {

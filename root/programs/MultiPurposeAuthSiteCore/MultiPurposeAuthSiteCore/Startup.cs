@@ -43,6 +43,7 @@
 //*  2026/10/26  玄人 幸道         外部ログインの戻りの失敗を OPERATION に記録する（#294）
 //*  2026/10/27  玄人 幸道         利用者名の文字の制限を AllowOnlyAlphanumericUserNames に合わせた（#294）
 //*  2026/11/03  玄人 幸道         読めないフォームを 400 で断る（#331）
+//*  2026/11/06  玄人 幸道         /jwkcerts・/par・/ros のルートを、Config のパスで張る（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -413,17 +414,17 @@ namespace MultiPurposeAuthSite
 
                 endpoints.MapControllerRoute(
                     name: "JwksUri",
-                    pattern: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.JwkSetUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" });
 
                 endpoints.MapControllerRoute(
                     name: "PushedAuthorizationRequest",
-                    pattern: OAuth2AndOIDCParams.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" });
 
                 endpoints.MapControllerRoute(
                     name: "RequestObjectUri",
-                    pattern: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" });
 
                 #endregion

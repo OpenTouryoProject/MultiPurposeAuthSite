@@ -194,7 +194,11 @@ bad = [hex(ord(c)) for c in s if ord(c) < 32 and c not in "\r\n\t"]
 
 ## 4. bat ファイル
 
-**重要な bat は、非 ASCII を一切書かない。** コメントも英語にする。
+**bat は、非 ASCII を一切書かない。** コメントも `echo` も英語にする。
+**`root/programs` に限らず、リポジトリのすべての bat が対象**である（#342 で広げた。`container\` など）。
+日本語の説明は、そのフォルダの `README.md` などに書く。
+
+**新しく書く bat も同じ。** 先頭に `NOTE: keep this file pure ASCII.` と理由を書いておく（`z_Common.bat` と同じ）。
 
 cmd.exe はバッチを**バイト オフセットで読み進める**ため、非 ASCII があると
 コンソールのコード ページ次第で文字境界がずれ、
@@ -209,18 +213,22 @@ cmd.exe はバッチを**バイト オフセットで読み進める**ため、�
 
 | 非 ASCII の役割 | 対処 |
 |---|---|
-| コメント・`echo` | **ASCII 化する**（重要な bat では必須） |
+| コメント・`echo` | **ASCII 化する** |
 | 外部プログラムへ渡す**引数** | 消せない。コンソールのコード ページに合わせて符号化する |
 
 純 ASCII なら BOM は不要（差分ノイズになるだけ）。
 **日本語を書き足すときは、BOM の有無を確認すること。**
 
-現状、`root/programs` の bat は次のとおり。
+**英語にするときは、`if ( … )` などの括弧の中に半角の `)` を書かない**（`echo` でも `rem` でも、そこでブロックが閉じる）。
+日本語の全角の括弧は問題にならなかったので、**訳すときに踏みやすい。**
+
+現状、リポジトリの bat は次のとおり（#342。2026/11/07）。
 
 | ファイル | 非 ASCII |
 |---|---|
-| `z_Common.bat` / `0_ExecAllBat.bat` / `10_*.bat` / `2_DeleteFile.bat` | **無し** |
-| `1_DeleteDir.bat` / `z_Common2.bat` / `3_BuildLibsAtOtherRepos*.bat` | 有り（コメントのみ） |
+| `root/programs` の `z_Common.bat` / `0_ExecAllBat.bat` / `10_*.bat` / `2_DeleteFile.bat` | **無し** |
+| `container\` の 6 本（Stub・E2E・Store の起動・停止）、`root/files/resource/X509/*.bat`、`mpas_dev.bat` | **無し**（#342 で英語にした） |
+| `root/programs` の `1_DeleteDir.bat` / `z_Common2.bat` / `3_BuildLibsAtOtherRepos*.bat` | 有り（コメントのみ。**直していない**） |
 
 ## 4.1 ソースの符号化は UTF-8（#304）
 
@@ -458,6 +466,21 @@ if ($PSVersionTable.PSVersion.Major -lt 6) {
 try     { & dotnet @args }
 finally { if ($null -ne $prev) { try { [Console]::OutputEncoding = $prev } catch { } } }
 ```
+
+### 子プロセスの標準入力に、BOM が入る（5.1。#343）
+
+**子プロセスの標準入力に渡した値（パスワードなど）が合わない。5.1 からだけ起き、7 からは通る。**
+5.1（.NET Framework）は子プロセスの標準入力を `[Console]::InputEncoding` で開き、**それが BOM 付きの UTF-8 だと、起動した時点で BOM を書く。**
+net10.0 の子プロセスは、それを値の先頭の 1 文字（U+FEFF）として読む（net48 の子プロセスは読み飛ばす）。
+Open棟梁 で見つかった（OpenTouryoProject/OpenTouryo#668）。
+
+```powershell
+# 子プロセスの標準入力に BOM を書かせない（5.1。起動の前に）
+[Console]::InputEncoding = New-Object Text.UTF8Encoding $false
+```
+
+- 受け取る側も、先頭の BOM を読み飛ばすとよい
+- **7 から動かすと起きない。** 5.1 から動かして確かめること
 
 ### ネイティブ コマンドの標準エラーで止まる（5.1）
 

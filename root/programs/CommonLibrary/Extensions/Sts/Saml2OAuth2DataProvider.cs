@@ -38,6 +38,7 @@
 //*  2026/10/21  玄人 幸道         登録されている jwks_uri を全部返す口を追加（#309 の段階 2）
 //*  2026/10/31  玄人 幸道         CORS の public の判定のため、GetAllUris で token_endpoint_auth_method も読む（#294）
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する登録の列（4 つ）を追加（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -142,7 +143,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **ログアウトを伝える先**（#310 の段階 2）。**末尾に足す**（`ALTER … ADD` で揃う）。
             "BackChannelLogoutUri",
             //  **ブラウザ経由で伝える先**（#310 の段階 3）。**末尾に足す**（同上）。
-            "FrontChannelLogoutUri"
+            "FrontChannelLogoutUri",
+            //  **プロファイルの強制**（#346 の段階 1）。**末尾に足す**（同上）。**真偽値の列**（`RequirePkce` と同じ形）。
+            "RequirePar",
+            "RequireSignedRequestObject",
+            "DPoPBoundAccessTokens",
+            "TlsCertBoundAccessTokens"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -299,7 +305,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="storeType">EnumUserStoreType</param>
         /// <returns>DynamicParameters</returns>
         /// <remarks>
-        /// **`RequirePkce` だけ方言で形が違う。**
+        /// **真偽値の列（`RequirePkce` と、#346 の 4 列）だけ、方言で形が違う。**
         /// **Oracle は `NUMBER(3)` で、真を -1 で持つ**（`Users` の bool 列と同じ流儀）。
         /// </remarks>
         private static DynamicParameters ToParameters(
@@ -346,16 +352,34 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             prm.Add("BackChannelLogoutUri", model.BackChannelLogoutUri);
             prm.Add("FrontChannelLogoutUri", model.FrontChannelLogoutUri);
 
+            Saml2OAuth2DataProvider.AddFlag(prm, "RequirePkce", model.RequirePkce, storeType);
+
+            //  **プロファイルの強制**（#346 の段階 1）。
+            Saml2OAuth2DataProvider.AddFlag(prm, "RequirePar", model.RequirePar, storeType);
+            Saml2OAuth2DataProvider.AddFlag(prm, "RequireSignedRequestObject", model.RequireSignedRequestObject, storeType);
+            Saml2OAuth2DataProvider.AddFlag(prm, "DPoPBoundAccessTokens", model.DPoPBoundAccessTokens, storeType);
+            Saml2OAuth2DataProvider.AddFlag(prm, "TlsCertBoundAccessTokens", model.TlsCertBoundAccessTokens, storeType);
+
+            return prm;
+        }
+
+        /// <summary>真偽値の列をパラメタにする（方言で形が違う）</summary>
+        /// <param name="prm">DynamicParameters</param>
+        /// <param name="name">列名</param>
+        /// <param name="value">値</param>
+        /// <param name="storeType">EnumUserStoreType</param>
+        /// <remarks>**Oracle は `NUMBER(3)` で、真を -1 で持つ。** 他は真偽値のまま。</remarks>
+        private static void AddFlag(
+            DynamicParameters prm, string name, bool value, EnumUserStoreType storeType)
+        {
             if (storeType == EnumUserStoreType.ODPManagedDriver)
             {
-                prm.Add("RequirePkce", model.RequirePkce ? -1 : 0);
+                prm.Add(name, value ? -1 : 0);
             }
             else
             {
-                prm.Add("RequirePkce", model.RequirePkce);
+                prm.Add(name, value);
             }
-
-            return prm;
         }
 
         /// <summary>保管する形にする（秘密を暗号化する。#297）</summary>
@@ -448,7 +472,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 OwnerUserId = model.OwnerUserId,
                 //  **ログアウトを伝える先**（#310 の段階 2・3）。
                 BackChannelLogoutUri = model.BackChannelLogoutUri,
-                FrontChannelLogoutUri = model.FrontChannelLogoutUri
+                FrontChannelLogoutUri = model.FrontChannelLogoutUri,
+                //  **プロファイルの強制**（#346 の段階 1）。
+                RequirePar = model.RequirePar,
+                RequireSignedRequestObject = model.RequireSignedRequestObject,
+                DPoPBoundAccessTokens = model.DPoPBoundAccessTokens,
+                TlsCertBoundAccessTokens = model.TlsCertBoundAccessTokens
             };
         }
 

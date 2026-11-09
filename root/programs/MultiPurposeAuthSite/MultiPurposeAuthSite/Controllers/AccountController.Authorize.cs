@@ -24,6 +24,7 @@
 //*  2026/10/30  玄人 幸道         auth_time を書く所の注を直した（管理画面の再サインインでは書かない。#294）
 //*  2026/10/31  玄人 幸道         Request Object の claims がオブジェクトでなくても 500 にしない（#294）
 //*  2026/10/31  玄人 幸道         claims の id_token がオブジェクトでなくても 500 にしない（AddAuthTimeClaim。#294）
+//*  2026/11/09  玄人 幸道         Request Object の経路（PAR か・署名付きか）を読み、認可要求の検証に渡す（#346 の段階 2）
 //**********************************************************************************
 
 /*
@@ -345,7 +346,8 @@ namespace MultiPurposeAuthSite.Controllers
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
-                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge))
+                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
+                out bool pushed, out bool signedRequestObject))
             {
                 err = OAuth2AndOIDCConst.invalid_request;
                 errDescription = "The client_id does not match the request object.";
@@ -353,7 +355,7 @@ namespace MultiPurposeAuthSite.Controllers
             // **要求の検証を先に行う**（#247）。`redirect_uri` を照合できていないと、エラーを RP へ返せない。
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt))
+                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt, pushed, signedRequestObject))
             {
                 // **max_age と auth_time の照合**（判定は CommonLibrary）。
                 //   **どちらの Cookie も、改ざんできない形で読む**（#294。`AuthTimeCookie`）。
@@ -567,7 +569,8 @@ namespace MultiPurposeAuthSite.Controllers
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
-                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge))
+                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
+                out bool pushed, out bool signedRequestObject))
             {
                 err = OAuth2AndOIDCConst.invalid_request;
                 errDescription = "The client_id does not match the request object.";
@@ -575,7 +578,7 @@ namespace MultiPurposeAuthSite.Controllers
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription,
-                code_challenge, prompt))
+                code_challenge, prompt, pushed, signedRequestObject))
             {
                 if (!this.IsSupportedResponseMode(response_type, response_mode))
                 {
@@ -668,6 +671,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="prompt">prompt</param>
         /// <param name="claims">claims</param>
         /// <param name="code_challenge">code_challenge</param>
+        /// <param name="pushed">PAR で預けたものか（#346。引けなければ false）</param>
+        /// <param name="signedRequestObject">署名付きの Request Object か（#346。引けなければ false）</param>
         /// <returns>**クエリの client_id と、Request Object の client_id が食い違えば false**</returns>
         /// <remarks>
         /// **GET と POST に同じ 20 行があったので、1 つにした**（#294）。
@@ -681,8 +686,13 @@ namespace MultiPurposeAuthSite.Controllers
         private bool OverwriteByRequestObject(string request_uri,
             ref string client_id, ref string redirect_uri, ref string response_type, ref string response_mode,
             ref string scope, ref string state, ref string nonce, ref string max_age, ref string prompt,
-            ref JObject claims, ref string code_challenge)
+            ref JObject claims, ref string code_challenge,
+            out bool pushed, out bool signedRequestObject)
         {
+            //  **経路**（#346）。**Request Object が引けなければ、クエリの要求**（どちらも false）。
+            pushed = false;
+            signedRequestObject = false;
+
             if (string.IsNullOrEmpty(request_uri))
             {
                 return true;
@@ -697,6 +707,9 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 return true;
             }
+
+            //  **預けたときにサーバが付けた印で、経路を見分ける**（#346）。
+            Sts.CmnRequestObjectEndpoint.ReadOrigin(requestObjectPayload, out pushed, out signedRequestObject);
 
             string requestObjectClientId = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
 

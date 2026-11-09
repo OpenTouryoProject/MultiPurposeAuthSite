@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         未知の grant_type を unsupported_grant_type、無いときを invalid_request で返す・grant_type を大文字小文字まで比べる・device_code で client_assertion も渡す（#294）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -166,7 +167,7 @@ namespace MultiPurposeAuthSite.Controllers
                             break;
 
                         case OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType:
-                            string username = formData[Const.ParamUsername];
+                            string username = formData[OAuth2AndOIDCConst.username];
                             string password = formData[Const.ParamPassword];
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantResourceOwnerCredentials(

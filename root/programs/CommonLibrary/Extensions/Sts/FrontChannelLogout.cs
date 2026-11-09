@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 3）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -122,7 +123,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 urls.Add(uri
                     + (uri.Contains("?") ? "&" : "?")
                     + OAuth2AndOIDCConst.iss + "=" + Uri.EscapeDataString(CmnServerParams.IssuerId ?? "")
-                    + "&" + Const.Sid + "=" + Uri.EscapeDataString(target.Sid ?? ""));
+                    + "&" + OAuth2AndOIDCConst.sid + "=" + Uri.EscapeDataString(target.Sid ?? ""));
             }
 
             if (0 < urls.Count)

@@ -457,8 +457,10 @@ CreateJwkSetJson.exe
 | `client_name` | 用途 |
 |---|---|
 | `TestClient` | 自己テスト用（`redirect_uri` は `test_self_code` / `test_self_token`） |
-| `FAPI1_Client` | FAPI1（`client_mode` = `fapi1`。旧 `TestClient1`） |
-| `FAPI2_Client` | FAPI2（`client_mode` = `fapi2`。Request Object を使う。旧 `TestClient2`） |
+| `FAPI1_Client` | FAPI1（`client_mode` = `fapi1`。旧 `TestClient1`）。**`token_endpoint_auth_method` を明示していない**（E2E が `client_secret` で使う。#341） |
+| `FAPI1_PrivateKeyJwt_Client` | **FAPI1 の自己テストが使う**（`client_mode` = `fapi1`、**`token_endpoint_auth_method` = `private_key_jwt`**。#341） |
+| `FAPI2_Client` | FAPI2（`client_mode` = `fapi2`。Request Object を使う。旧 `TestClient2`）。**`token_endpoint_auth_method` = `private_key_jwt`**（自己テストの FAPI2 のボタンが使う） |
+| `FAPI2_MTLS_Client` | **自己テストの MTLS のボタンが使う**（`client_mode` = `fapi2`、**`token_endpoint_auth_method` = `tls_client_auth`**。秘密を持たない。#345）。**Subject は `SpRp_ClientCertPfxFilePath` の証明書に合わせる**（`CN=MPAS Test Client`）。**サイトがクライアント証明書を求めていないと使えない**（VS から起動した IIS Express は既定で求めない。E2E の `-Launch` の net10.0 版で測る） |
 | `Device_Client` | Device Authorization Grant（`client_mode` = `device`）。**`client_secret` を持たない**（パブリック クライアント。旧 `TestClient3`） |
 | `FAPI_CIBA_Client` | CIBA（`client_mode` = `fapi_ciba`。旧 `TestClient4`） |
 | `RequirePKCE_Client` | **クライアント単位で PKCE を必須**（`require_pkce`。#221。旧 `TestClient6`） |
@@ -466,6 +468,13 @@ CreateJwkSetJson.exe
 
 > **自己テスト画面は、`TestClient` を名前で、ほかを登録の種別で選んでいる**（`HomeController`）。
 > **`FAPI1_Client`〜`FAPI_CIBA_Client` は `client_mode` の合う最初の 1 件、`RequirePKCE_Client` は normal で `require_pkce` = `true` の最初の 1 件**である。
+> **FAPI1・FAPI2 だけは、`token_endpoint_auth_method` = `private_key_jwt` の登録を優先する**（#341）。
+> **MTLS のボタンは、fapi2 で `tls_client_auth` を明示した登録だけを選ぶ**（無ければ始めずに理由を出す。#345）。
+> **FAPI2 のボタンのトークン要求・PAR と、結果の画面の更新・取り消し・照会は、登録の `token_endpoint_auth_method` で送る**（明示していない登録は、FAPI2 の引き換え・PAR は `private_key_jwt`、結果の画面のボタンは `client_secret_basic`。#345）。
+> **自己テストは `private_key_jwt` で認可コードを引き換える**が、**方法を明示していない登録では通らない**（#307 の段階 3。登録が空なら `client_secret` だけ）。
+> 一方、**fapi1 の登録は `client_secret` では認可コードを引き換えられない**（`ClientModePolicy`）。
+> **つまり方法を明示していない fapi1 の登録は、自己テストの送り方では、どの方法でも引き換えられない**ので、**写して使うなら `private_key_jwt` を明示すること。**
+> **明示した登録が無ければ、従来どおり最初の 1 件**を選ぶ（配備済みの構成ファイルでも、画面は動く）。
 > **名前を変えても選べるが、その種別の登録を消すと、画面のその選択肢が動かない。**
 > 旧 `TestClient5`（登録の `scope` で制限した例。#198）は E2E だけが使うので、E2E の種データ（`TestClient_36`）に移した。
 
@@ -1101,6 +1110,96 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN FrontChannelLogoutUri varchar(512) NULL;
 **段階 1 では認可の口に入った時点で書いていた**ので、
 **同意画面を見せただけの相手・拒否された相手も、伝える先に残っていた**
 （**その RP に「この利用者が来た」ことを教えてしまう**）。
+
+### FAPI の要件を、登録ごとに強制する（#346）
+
+**FAPI 1.0 Advanced・FAPI 2.0 の要件のうち、使わない要求を断る手段が無かった 4 つを、登録の項目にした。**
+**名前は標準のメタデータ**で、**値は真偽値**。**どれも既定は `false`**（強制しない ＝ 従来どおり）。
+経緯は [`ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) の D-16。
+
+| 登録の項目（標準の名前） | 定義 | 立てると | 列（`Saml2OAuth2Data`） |
+|---|---|---|---|
+| `require_pushed_authorization_requests` | RFC 9126 §6 | **PAR で預けた `request_uri` の無い認可要求を断る** | `RequirePar` |
+| `require_signed_request_object` | RFC 9101 §10.5 | **署名付きの Request Object で送られていない認可要求を断る** | `RequireSignedRequestObject` |
+| `dpop_bound_access_tokens` | RFC 9449 §5.2 | **DPoP の証明の無いトークン要求を断る**（`refresh_token` も） | `DPoPBoundAccessTokens` |
+| `tls_client_certificate_bound_access_tokens` | RFC 8705 §3.4 | **クライアント証明書の無いトークン要求を断る**（`refresh_token` も。RFC は「エラーにするか、縛らないトークンを出すかはサーバが決める」としていて、**ここでは断る**） | `TlsCertBoundAccessTokens` |
+
+**断る所とエラー**（段階 2）:
+
+| 項目 | 断る所 | エラー |
+|---|---|---|
+| PAR・署名付きの Request Object | **認可エンドポイント**（`redirect_uri` を確かめた後なので、**エラーは RP へ返る**） | `invalid_request`（RFC 9126 §4。RFC 9101 §10.5 はコードを決めていないので揃えた） |
+| 署名付きの Request Object（フォームだけの PAR） | **PAR の口**（預ける時点で） | **400** ＋ `invalid_request`（RFC 9126 §2.3） |
+| DPoP・クライアント証明書 | **トークン エンドポイントの全グラント**（`refresh_token` を含む。**code などを消費する前**） | `invalid_request`（**`invalid_dpop_proof` は「証明が在って通らない」ときのコード**なので使わない） |
+| DPoP・クライアント証明書（`token` を含む `response_type`。Implicit・Hybrid） | **認可エンドポイント**（エラーは RP へ返る。PAR の口でも同じ） | `unauthorized_client`（RFC 6749 §4.2.2.1。**そこで出す access_token は縛れない**ので、この経路を許さない） |
+
+- **PAR を必須にすると、`/ros`（独自の口）で預けた `request_uri` も断られる**（PAR ではないため）。
+  経路は、預けた中身にサーバが付ける印で見分ける（クライアントが同じ名前を入れても上書きする）
+- **この実装は `request` パラメタを受けない**（`request_parameter_supported` は false）。
+  **署名付きの Request Object は、`/ros` か PAR の `request` に入れて預け、`request_uri` で送る**
+- **クライアント証明書を必須にした登録は、秘密・`private_key_jwt` で認証していても、提示された証明書でトークンを縛る**
+  （RFC 8705 §3 は、縛ることを認証の方法と切り離している）。**サイトがクライアント証明書を求めていないと、全て断られる**
+- **client_credentials・ROPC・device_code のトークンも、`tls_client_auth` で認証した証明書に縛るようにした**（#346）。
+  **以前は縛られず（bearer）**、認可コード・refresh_token・CIBA だけが縛られていた。
+  **mTLS で認証している client_credentials などのトークンを、証明書なしで保護されたリソースへ出している RP は、
+  証明書を添える必要がある**
+- **JWT Bearer（RFC 7523）は、クライアント認証を通らない**（assertion が資格）ので、
+  **`tls_client_auth` の登録でも縛らない。** **縛るのは、証明書を必須にした登録だけ**（提示された証明書で縛る）
+- **device の登録は、`private_key_jwt` で認可コードを引き換えられなくなった**（#346。`ClientModePolicy` の表）。
+  **該当する登録が在れば、`client_mode` を `normal` にする**（device の登録の認可コードは、PKCE だけの経路が残っている）
+
+**サーバ全体の設定**（PAR・署名付きの Request Object の 2 つ。**登録とは OR で効く**。`RequirePkce` と同じ形）:
+
+| キー | 既定 | Discovery |
+|---|---|---|
+| `RequirePushedAuthorizationRequests` | `false` | `require_pushed_authorization_requests`（RFC 9126 §5） |
+| `RequireSignedRequestObject` | `false` | `require_signed_request_object`（RFC 9101 §10.5） |
+
+**送信者の拘束の 2 つには、サーバ全体の設定を置いていない**（DPoP には標準の AS のメタデータが無く、
+MTLS を全体で求めると、配備の TLS の設定次第で全クライアントが止まるため）。**登録ごとに立てる。**
+
+| どこで登録するか | |
+|---|---|
+| **設定ファイル**（`OAuth2ClientsInformation`） | **文字列で `"true"`**（`require_pkce` と同じ。**読めない値は `false`**） |
+| **クライアント登録の画面** | チェック ボックス |
+| **動的登録（RFC 7591）** | **JSON の真偽値。** **文字列（`"true"`）は `400` ＋ `invalid_client_metadata`**（黙って `false` にすると、締めたつもりで締まっていない登録ができる）。**立っているものだけを応答に返す**（省略は `false`） |
+| **動的登録の更新（`PUT`）** | **立てられるが、下げられない**（**現行と要求の OR**）。**締める向きの項目**なので、`registration_access_token` を持つ者が、管理画面で締めた登録を緩められないようにした。**下げるのは管理画面から** |
+
+```json
+"<client_id>": {
+  "client_secret": "...",
+  "client_name": "...",
+  "client_mode": "fapi2",
+  "require_pushed_authorization_requests": "true",
+  "require_signed_request_object": "true"
+}
+```
+
+**列名は標準の名前より短い**（標準の名前は 30 文字を超えるものが在り、古い Oracle の識別子の上限に当たる）。
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。
+**既定値を付けてあるので、既存の行は `false`（0）になる。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD
+    [RequirePar] [bit] NOT NULL DEFAULT 0,
+    [RequireSignedRequestObject] [bit] NOT NULL DEFAULT 0,
+    [DPoPBoundAccessTokens] [bit] NOT NULL DEFAULT 0,
+    [TlsCertBoundAccessTokens] [bit] NOT NULL DEFAULT 0
+-- Oracle（真は -1。RequirePkce と同じ）
+ALTER TABLE "Saml2OAuth2Data" ADD (
+    "RequirePar" NUMBER(3) DEFAULT 0 NOT NULL,
+    "RequireSignedRequestObject" NUMBER(3) DEFAULT 0 NOT NULL,
+    "DPoPBoundAccessTokens" NUMBER(3) DEFAULT 0 NOT NULL,
+    "TlsCertBoundAccessTokens" NUMBER(3) DEFAULT 0 NOT NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data
+    ADD COLUMN RequirePar boolean NOT NULL DEFAULT false,
+    ADD COLUMN RequireSignedRequestObject boolean NOT NULL DEFAULT false,
+    ADD COLUMN DPoPBoundAccessTokens boolean NOT NULL DEFAULT false,
+    ADD COLUMN TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false;
+```
 
 ### `redirect_uri` の記号
 
@@ -2688,7 +2787,7 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `Saml2RequestEndpoint` | `/saml2request` | **IdP の口**（SSO）。メタデータの `SingleSignOnService` にこの値が出る |
 | `Saml2ResponseEndpoint` | `/Account/AssertionConsumerService` | **自己テストの SP の口**（`redirect_uri_saml` を `test_self_saml` で登録したときの展開先） |
 | `Saml2AssertionExpireTimeSpanFromMinutes` | `30`（**分**） | **アサーションの有効期限**（#276）。**書かなければ `OidcIdTokenExpireTimeSpanFromMinutes` を使う**（従来の振る舞い） |
-| `RsaPfxFilePath` | — | **応答の署名鍵**。メタデータの `KeyDescriptor` に、対応する証明書（`SpRp_RsaCerFilePath`）が出る |
+| `RsaPfxFilePath` | — | **応答の署名鍵**。メタデータの `KeyDescriptor` に、対応する証明書（`RsaCerFilePath`。空なら `SpRp_RsaCerFilePath`。#339）が出る |
 
 クライアントの登録（`OAuth2ClientsInformation` または管理画面）側は次の 2 つ。
 
@@ -2731,8 +2830,8 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > **SAML2 は要求にも応答にも署名が在り、OIDC は応答だけ**である。
 
 > **E2E では、上流だけ別の RSA 鍵を使う**（#293 の段階 1）。
-> **`container/E2E/docker-compose.yml` の upstream が `RsaPfxFilePath` / `SpRp_RsaCerFilePath` /
-> `JwkSetFilePath` を `*_Upstream` に向けている。**
+> **`container/E2E/docker-compose.yml` の upstream が `RsaPfxFilePath` / `RsaCerFilePath` / `SpRp_RsaCerFilePath` /
+> `JwkSetFilePath` を `*_Upstream` に向けている。**（`SpRp_RsaCerFilePath` は、自己テストの相手（自分）の証明書。#339）
 >
 > | | 公開している RSA の `kid`（実測 2026/10/13） |
 > |---|---|
@@ -2830,7 +2929,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | | |
 |---|---|
 | **`IdFederationUpstreams` が空** | **従来のキーから 1〜2 件を組み立てる**（鍵は `default` / `default_saml2`） |
-| 組み立てに使う値 | OIDC : `SpRp_Isser` / `OAuth2AndOidcClientID` / `OAuth2AndOidcSecret` / `IdFederationOidcDiscoveryUrl` / `IdFederationJwkSetUri` / `IdFederationOidcCerFilePath` / `IdFederation{Authorize,Token,UserInfo}Endpoint`<br>SAML2 : `IdFederationSaml2IssuerId` / `OAuth2AndOidcClientID` / `IdFederationSaml2MetadataUrl` / `IdFederationSaml2RequestEndpoint` / `IdFederationSaml2CerFilePath` |
+| 組み立てに使う値 | OIDC : `SpRp_Issuer` / `OAuth2AndOidcClientID` / `OAuth2AndOidcSecret` / `IdFederationOidcDiscoveryUrl` / `IdFederationJwkSetUri` / `IdFederationOidcCerFilePath` / `IdFederation{Authorize,Token,UserInfo}Endpoint`<br>SAML2 : `IdFederationSaml2IssuerId` / `OAuth2AndOidcClientID` / `IdFederationSaml2MetadataUrl` / `IdFederationSaml2RequestEndpoint` / `IdFederationSaml2CerFilePath` |
 | **書いたときの優先** | **`IdFederationUpstreams` が勝つ**（従来のキーは読まれない） |
 
 > **1 件の配備は、見た目も POST も変わらない。**
@@ -2891,7 +2990,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | 渡すもの | 値 |
 |---|---|
 | 鍵 | **上の 3 本から決める**（下の「鍵の出どころは 4 段」） |
-| `iss` | **`SpRp_Isser`**（Open棟梁 のクライアント役の設定。**相手の Issuer** である） |
+| `iss` | **`SpRp_Issuer`**（Open棟梁 のクライアント役の設定。**相手の Issuer** である。改名前は `SpRp_Isser`） |
 | `aud` | **`OAuth2AndOidcClientID`**（上流に登録した自分の `client_id`） |
 
 **空なら、Open棟梁 が設定から鍵を選ぶ**（従来どおり）。
@@ -2932,7 +3031,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > （雛形は `https://ssoauth.opentouryo.com`）、**待ち受けている URL とは別**である
 > （実測 : 開発・E2E の上流は `https://localhost:44301`）。
 
-**discovery の `issuer` が `SpRp_Isser` と一致しなければ、その鍵は使わない**
+**discovery の `issuer` が `SpRp_Issuer` と一致しなければ、その鍵は使わない**
 （**設定の URL を差し替えられた配備で、別の発行者の鍵を信じないため**）。
 **引けなければ 2 段目に倒れる**ので、**discovery が落ちていても ID 連携は止まらない。**
 
@@ -3095,7 +3194,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 | 渡すもの | 値 |
 |---|---|
 | 鍵（`jws`） | **null**（自分が出したトークンなので、設定の選び方で引ける） |
-| `iss` | **`IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**であり、下流コンテナでは別の値である |
+| `iss` | **`IssuerId`（自分）** — **`SpRp_Issuer` は「相手の Issuer」**であり、下流コンテナでは別の値である |
 | `aud` | **その回の `client_id`**（セッション／Cookie に預けてある値） |
 
 > **設定に `OAuth2AndOidcClientIDs` を列挙する案は採らなかった。**
@@ -3190,7 +3289,7 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 |---|---|---|
 | 1 | **新しい証明書を広告に足す**（署名はまだ古い鍵） | **相手のキャッシュに、新しい鍵を先に配る** |
 | 2 | 相手のキャッシュが切れるのを待つ | **SAML2 のメタデータも OIDC の JWK Set も、相手がキャッシュする** |
-| 3 | **署名鍵を入れ替える**（`RsaPfxFilePath` / `SpRp_RsaCerFilePath`） | ここで初めて、新しい鍵の署名が出る |
+| 3 | **署名鍵を入れ替える**（`RsaPfxFilePath` / `RsaCerFilePath`） | ここで初めて、新しい鍵の署名が出る |
 | 4 | **古い証明書を広告から外す** | 退役。**`JwkSet.json` は手で消す。** SAML2 は設定から外す |
 
 > **OIDC は `kid` で選べる**（`id_token` のヘッダに入る）。
@@ -3236,17 +3335,21 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 #### なぜ (3) の鍵を `SpRp_RsaCerFilePath` にできないか
 
 **(3)（上流 → 下流の応答）の検証鍵として、`SpRp_RsaCerFilePath` は使えない。**
-**このキーは、この配備では「自分の証明書」として読まれている**（**(4) の側**）。
+**#339 までは、このキーが、この配備では「自分の証明書」として読まれていた**（**(4) の側**）。
 
-| | `SpRp_RsaCerFilePath` の役 | どの脚か |
+| | `SpRp_RsaCerFilePath` の役（#339 まで） | どの脚か |
 |---|---|---|
 | SAML2 | **`/samlmetadata` の `KeyDescriptor`**（**自分の証明書を広告する**） | **(4)** |
 | OIDC | **`JwkSet.json`（`/jwkcerts`）の素**（`CreateJwkSetJson` が読む） | **(4)** |
 | 共通 | **署名検証の控え**（`kid` が引けないとき。8 節） | (3) / (4) |
 | クライアント役 | **相手の公開鍵**（Open棟梁 の `SAML2Client.VerifyResponse` が読む先） | **(3)** |
 
-**1 つのキーが、(3) の検証鍵と (4) の広告鍵を兼ねている。**
+**1 つのキーが、(3) の検証鍵と (4) の広告鍵を兼ねていた。**
 **上流のものに差し替えると、(4) が壊れる**（**他人の証明書を広告することになる**）。
+
+> **#339 で、(4) の側はサーバ側のキー（`RsaCerFilePath`）に分けた**（8 節）。
+> **それでも差し替えない。** **`RsaCerFilePath` が空の配備では、今もこのキーが (4) に読まれる**うえ、
+> **自己テスト（相手が自分）の証明書でもある**ため。**上流の鍵は、上流ごとのキーで持つ**（下記）。
 
 **だから (3) の鍵は、別のキーで持つ** — `IdFederationSaml2CerFilePath`（SAML2）／
 `IdFederationJwkSetUri` ・ `IdFederationOidcDiscoveryUrl` ・ `IdFederationOidcCerFilePath`（OIDC）。
@@ -3340,6 +3443,7 @@ ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
 ```json
 "RsaPfxFilePath":      "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
 "EcdsaPfxFilePath":    "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
+"RsaCerFilePath":      "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 "SpRp_RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
 "SpRp_RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Client.pfx",
 "SpRp_ClientCertPfxFilePath": "C:/root/files/resource/X509/SHA256RSAClientCert.pfx"
@@ -3348,34 +3452,45 @@ ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
 | キー | 誰の鍵か | 誰が読むか |
 |---|---|---|
 | `RsaPfx*` / `EcdsaPfx*` / `Ecdsa384Pfx*` / `Ecdsa512Pfx*` | **サーバの秘密鍵**（`*_Server.pfx`） | **サーバだけ。** SAML2 と JWT の署名 |
-| `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` / `SpRp_Ecdsa384CerFilePath` / `SpRp_Ecdsa512CerFilePath` | **サーバの公開鍵**（`*_Server.cer`） | **サーバとクライアントの両方**（下記） |
+| `RsaCerFilePath` / `EcdsaCerFilePath` / `Ecdsa384CerFilePath` / `Ecdsa512CerFilePath` | **サーバの公開鍵**（`*_Server.cer`。上の `.pfx` と対） | **サーバだけ**（`SigningKeys`）。JWK Set の素・SAML2 のメタデータ・検証の控え・自己テストの検証（#339） |
+| `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` | **相手（OP / IdP）の公開鍵** | **クライアントだけ**（Open棟梁 の `CmnClientParams`）。**自己テストでは相手が自分なので、`*_Server.cer` を指す** |
 | `SpRp_RsaPfx*` / `SpRp_EcdsaPfx*` | **クライアントの秘密鍵**（`*_Client.pfx`） | クライアントだけ。`client_assertion` と Request Object の署名 |
 | `SpRp_ClientCertPfx*` | **クライアント証明書** | クライアントだけ。mTLS |
 
 > **`SpRp_` は「クライアント側」という意味ではない。**
-> Open棟梁 のクライアント用パラメタの接頭辞（`CmnClientParams.Isser` は `SpRp_Isser` を読む）であり、
+> Open棟梁 のクライアント用パラメタの接頭辞（`CmnClientParams.Isser` は `SpRp_Issuer` を読む。改名前は `SpRp_Isser`。OpenTouryo#666）であり、
 > **意味は「相手（OP / IdP）の値」**である
 > （[OpenTouryo#602](https://github.com/OpenTouryoProject/OpenTouryo/issues/602) で読み手を確かめた）。
 
-#### 「この配備の値」と「相手の値」の分け方（#290）
+> **`RsaCerFilePath` などが空なら、以前のキー（`SpRp_*CerFilePath`）を読む**（#339）。
+> **配備済みの設定ファイルには、サーバ側のキーが無い**ためで、**直さなくても動く。**
+> 読んでいるときは、起動時に `ProductionCheck` が警告する（`UserStoreType` が `mem` 以外のとき）。
+
+#### 「この配備の値」と「相手の値」の分け方（#290・#339）
 
 **1 つの規則で揃えてある。**
 
 | | 置き場 | 例 |
 |---|---|---|
-| **この配備の値**（**自分の役でも、相手が自分のときでも読む**） | **共通設定のまま**（`Client-Server共通設定` の節） | `JwkSetUri`（**自分の `/jwkcerts` のパス**）／`SpRp_*CerFilePath`（**この配備の証明書**） |
-| **相手（上流 IdP）の値** | **`IdFederation*` のキー**（**相手ごとの値**） | `IdFederationJwkSetUri` / `IdFederationOidcDiscoveryUrl` / `IdFederationOidcCerFilePath` / `IdFederationSaml2*` |
+| **この配備の値**（**サーバ役の自分の値**） | **サーバ側のキー**（`Config`・`SigningKeys`） | `JwkSetUri`（**自分の `/jwkcerts` のパス**。「STS（口）」の節）／`RsaCerFilePath` ほか（**この配備の証明書**。「STS（鍵）」の節） |
+| **相手の値**（**クライアント役**。Open棟梁 の `CmnClientParams`・`OAuth2AndOIDCParams`） | **`Client側設定` の節**（`SpRp_*` / `OAuth2AndOidc*`） | `SpRp_Issuer`／`SpRp_RsaCerFilePath`（**自己テストでは自分を指す**） |
+| **相手（上流 IdP）の値**（**ID 連携**） | **`IdFederation*` のキー**（**相手ごとの値**） | `IdFederationJwkSetUri` / `IdFederationOidcDiscoveryUrl` / `IdFederationOidcCerFilePath` / `IdFederationSaml2*` |
 
-> **以前は「サーバ役の自分の値」を別のキーに分ける案を採っていた**
-> （`JwkSetEndpoint` / `RsaCerFilePath` など）。
-> **やめた。** **同じ意味のキーが 2 本になるだけ**だったためである。
+> **#290 では、サーバ役の自分の値を別のキーに分ける案（`JwkSetEndpoint` / `RsaCerFilePath` など）を、いったんやめていた。**
+> `JwkSetUri` も `SpRp_*CerFilePath` も雛形の `Client-Server共通設定` の節に在り、
+> 「この配備の JWK Set の口」「この配備の証明書」として、サーバ役が読んでよいとしていた。
 >
-> **`JwkSetUri` も `SpRp_*CerFilePath` も、雛形では `Client-Server共通設定` の節に在る。**
-> **「この配備の JWK Set の口」「この配備の証明書」**であり、
-> **サーバ役が自分の値として読んでよい。**
+> **#339 で分けた。** **Open棟梁 では、どちらもクライアント役の値（相手の OP の口・証明書）**であり、
+> 自分の値として使い回すと、**認可サーバ兼クライアントの配備で、相手の値を置けなくなる**（Open棟梁 の Framework/ANALYSIS.md 8.1）。
 >
-> **本当に足りなかったのは「上流（相手）の値」**であり、
-> **それは `IdFederation*` のキーが持つ**（#286 / #289 / #291 で揃えた）。
+> | キー | #339 の後 |
+> |---|---|
+> | `JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` | **キー名と値は変えていない。** 読む場所が `Config` になった。**Open棟梁 は相手の口を `SpRp_JwkSetUri` などで読み、このキーを読まなくなった**（OpenTouryo#666） |
+> | `RsaCerFilePath` / `EcdsaCerFilePath` / `Ecdsa384CerFilePath` / `Ecdsa512CerFilePath` | **足した**（空なら `SpRp_*CerFilePath`） |
+> | `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` | **クライアント役の値として残る**（Open棟梁 の `IdToken.Verify` の鍵を指定しない版・SAML2 の応答の検証） |
+> | `SpRp_Ecdsa384CerFilePath` / `SpRp_Ecdsa512CerFilePath` | **雛形から外した**（読むのは、サーバ側のキーが空のときだけ） |
+>
+> **本当に足りなかった「上流（相手）の値」は、`IdFederation*` のキーが持つ**（#286 / #289 / #291 で揃えた）。
 
 **この規則で、相乗りは解けている。**
 
@@ -3383,7 +3498,7 @@ ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
 |---|---|
 | **上流の証明書に差し替えられない**（`SpRp_RsaCerFilePath` は自分の証明書として読まれる） | **差し替えない。** 上流の証明書は `IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath` |
 | **上流の JWK Set を取りに行けない**（`JwkSetUri` は相対パスで、`new Uri(...)` に渡せない） | **`IdFederationJwkSetUri`**（または discovery の `jwks_uri`）から引く。**`JwkSetStore` の経路は通らない** |
-| **期待する上流の Issuer が 1 つしか無い**（`SpRp_Isser`） | **上流ごとに持てる**（#292 の段階 1。`IdFederationUpstreams` の `issuer`）。**登録が無ければ、従来どおり SAML2 は `IdFederationSaml2IssuerId`、OIDC は `SpRp_Isser`** |
+| **期待する上流の Issuer が 1 つしか無い**（`SpRp_Issuer`） | **上流ごとに持てる**（#292 の段階 1。`IdFederationUpstreams` の `issuer`）。**登録が無ければ、従来どおり SAML2 は `IdFederationSaml2IssuerId`、OIDC は `SpRp_Issuer`** |
 
 **サーバ側での読み方は 2 つある。**
 
@@ -3824,11 +3939,13 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる。**`EnableImplicitGrantType` が `false` なら、access_token をフロント チャネルで返す Hybrid / OIDC の Implicit（`code token` / `code id_token token` / `id_token token`）も断り、広告しない**（#314。`code id_token` は通る） |
+| `RequirePushedAuthorizationRequests` / `RequireSignedRequestObject` | `false` | **任意**（FAPI の配備なら `true`） | **FAPI の要件を、全クライアントに強制する**（#346）。登録の同名の項目とは OR。**`true` にすると、PAR・署名付きの Request Object を使わない既存のクライアントが止まる** |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
 | `RequireVerifiedEmailForAccountLinking` | **`true`**（#140 の段階 1 で追加） | `true` のまま | **外部 ID を既存アカウントに結び付けるとき、上流が `email_verified: true` と言ったメアドだけを鍵にする。** **未設定でも `true`**（他の `Require*` と既定の向きが違う）。`false` にすると従来どおり（上流の言い値で結び付ける）。**Google は `email_verified` を写すようにしたので自動リンクできる。Microsoft Account は示せないので、`/Manage/ManageLogins` での明示的な追加になる** |
 | `FacebookAuthentication` / `TwitterAuthentication` | `false` | **触らない** | **サポートを取り下げた**（#249）。**`true` にしても有効にならない**（アプリ側の登録をコメント アウトしてある）。**動かないからではなく、維持コストが便益に見合わないため。** キーを残してあるのは戻せるようにするため（`CommonLibrary/ANALYSIS.md` 12 節） |
 | `ServiceDocumentation` | `""`（空） | **任意** | Discovery の `service_documentation`。**空なら出さない**（#228）。文書を公開しているなら、その URL |
 | `AuthRequestPushUri` | `/par` | 既定のまま | PAR（RFC 9126）の口（#229）。独自の `/ros`（`RequestObjectRegUri`）とは別。**改名した**（旧 `PushedAuthorizationRequestEndpoint`。下の 12 節） |
+| `RsaCerFilePath` / `EcdsaCerFilePath` / `Ecdsa384CerFilePath` / `Ecdsa512CerFilePath` | `*_Server.cer`（#339 で追加） | **署名鍵（`*PfxFilePath`）と対の証明書** | **この認可サーバの証明書**（JWK Set の素・SAML2 のメタデータ・検証の控え）。**空なら `SpRp_*CerFilePath` を読む**（配備済みの設定は直さなくても動く。起動時に警告する。8 節） |
 | `OAuth2AuthorizationCodeExpireTimeSpanFromSeconds` | `600` | 既定のまま（または短く） | 認可コードの寿命（#188）。RFC 6749 §4.1.2 は 10 分以内を推奨 |
 | `RequestObjectExpireTimeSpanFromSeconds` | `300` | 既定のまま（または短く） | `/ros` に預けた Request Object の寿命（#188）。応答の `exp` にも出る |
 | `OAuth2RefreshTokenExpireTimeSpanFromDays` | `14` | 運用に合わせる | **#188 で、実際に検証するようになった**（以前は事実上の無期限）。短くすると、既存のトークンが失効する |
@@ -3839,7 +3956,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
 | `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
-| `OAuth2ClientsInformation` | **テスト用が 13 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI2_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
+| `OAuth2ClientsInformation` | **テスト用が 15 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI1_PrivateKeyJwt_Client` `FAPI2_Client` `FAPI2_MTLS_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
 
@@ -4046,6 +4163,16 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `IdFederationUserInfoEndPoint` | `IdFederationUserInfoEndpoint` | 同上 | **読む** |
 | `PushedAuthorizationRequestEndpoint` | `AuthRequestPushUri` | **クライアント側も読む設定**なので、`RequestObjectRegUri` / `JwkSetUri` と同じ形に寄せた。**Open棟梁 側へ移す予定** | **読まない**（#229 で入れたばかりで、配備実績が無い） |
 
+**Open棟梁 で改名したキー**（OpenTouryo#666）は、一覧が Open棟梁 の **`CmnClientParams.RenamedKeys`** に在る。
+**起動時に `ProductionCheck` が、改名前の名前だけが使われているもの・新旧で値が違うものを警告する**（#339）。
+
+| 旧いキー名 | 新しいキー名 | なぜ | 旧キーも読む |
+|---|---|---|---|
+| `SpRp_Isser` | `SpRp_Issuer` | **綴りの誤り**（`Isser`） | **読む**（Open棟梁） |
+
+> **`JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` は、この実装では改名していない**（この認可サーバの口のパス。`Config` が読む）。
+> **Open棟梁 のクライアント役の値（相手の OP の口）が、`SpRp_JwkSetUri` などに改名された**（OpenTouryo#666。改名前の名前は読まない）。
+
 **`IdFederationRedirectEndpoint` の値に含まれる `Account/IDFederationRedirectEndPoint` は、
 画面の口（アクション名）なので変えていない。** 変えると、委譲先に登録した `redirect_uri` と
 食い違う。
@@ -4055,5 +4182,5 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | 接尾辞 | 例 | 理由 |
 |---|---|---|
 | `...RootURI` | `OAuth2AuthorizationServerEndpointsRootURI` | **エンドポイントではなく、その根っこ**（種別が違う） |
-| `...Uri` | `JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` | **クライアント側も読む設定**で、**実装が Open棟梁 側**にある（`OAuth2AndOIDCParams`）。この実装だけでは改名できない |
+| `...Uri` | `JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` | **配備済みの設定ファイルに在る名前**で、値も変えていない。**以前はクライアント側（Open棟梁 の `OAuth2AndOIDCParams`）も読む設定**だったが、#339 で `Config` だけが読むようになった（OpenTouryo#666） |
 | `...Endpoint` | それ以外 | こちらに揃えた |

@@ -31,6 +31,8 @@
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         動的登録で device_code × private_key_jwt を断らない（両方の口が受けるようにした。#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを受けるようにした（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -75,7 +77,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JObject metadata, ManageAddSaml2OAuth2DataViewModel model,
             out string code, out string description)
         {
-            code = Const.InvalidClientMetadata;
+            code = OAuth2AndOIDCConst.invalid_client_metadata;
             description = "";
 
             // 以下、全て登録するClientに関する内容の検査
@@ -92,13 +94,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (statement == SoftwareStatementProvider.Result.Invalid)
             {
-                code = Const.InvalidSoftwareStatement;
+                code = OAuth2AndOIDCConst.invalid_software_statement;
                 return false;
             }
 
             if (statement == SoftwareStatementProvider.Result.Unapproved)
             {
-                code = Const.UnapprovedSoftwareStatement;
+                code = OAuth2AndOIDCConst.unapproved_software_statement;
                 return false;
             }
 
@@ -182,7 +184,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **空（省略）は `client_secret_basic` / `client_secret_post`**（RFC 7591 §2 の既定）。
             //    **列も空のまま**にして、**`AllowsAuthMethod` が暗黙に許す。**
             string authMethod = ClientRegistrationProvider.GetString(
-                metadata, Const.ClientTokenEndpointAuthMethod);
+                metadata, OAuth2AndOIDCConst.token_endpoint_auth_method);
 
             if (!string.IsNullOrEmpty(authMethod)
                 && Array.IndexOf(CmnEndpoints.TokenEndpointAuthMethods, authMethod) < 0)
@@ -209,7 +211,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **mTLS の Subject DN**（RFC 8705 §2.1.2）。
             //    **照合は `x509.Subject` との完全一致**である（`CmnEndpoints.ClientAuthentication`）。
             string subjectDn = ClientRegistrationProvider.GetString(
-                metadata, Const.ClientTlsClientAuthSubjectDn);
+                metadata, OAuth2AndOIDCConst.tls_client_auth_subject_dn);
 
             if (!string.IsNullOrEmpty(subjectDn))
             {
@@ -370,7 +372,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **折り返し先を使う経路なら、必須**（OIDC DCR 1.0 §2）。
                 if (redirectUris.Count == 0)
                 {
-                    code = Const.InvalidRedirectUri;
+                    code = OAuth2AndOIDCConst.invalid_redirect_uri;
                     description = "redirect_uris is required.";
                     return false;
                 }
@@ -380,7 +382,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 if (!ClientRegistrationProvider.IsValidRedirectUri(redirectUri))
                 {
-                    code = Const.InvalidRedirectUri;
+                    code = OAuth2AndOIDCConst.invalid_redirect_uri;
                     description = string.Format(
                         "The redirect_uri ({0}) must be an absolute URI without a fragment.",
                         redirectUri);
@@ -392,7 +394,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (Const.MaxLengthOfUriList < uriList.Length)
             {
-                code = Const.InvalidRedirectUri;
+                code = OAuth2AndOIDCConst.invalid_redirect_uri;
                 description = "The redirect_uris are too long.";
                 return false;
             }
@@ -528,6 +530,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
+            #region プロファイルの強制（#346 の段階 1）
+
+            //  **RFC 9126 §6 / RFC 9101 §10.5 / RFC 9449 §5.2 / RFC 8705 §3.4 のクライアント メタデータ。**
+            //    **値は JSON の真偽値**（どれも Boolean と定義されている）。
+            //    **真偽値でなければ断る** — **`"true"` の文字列を黙って false にすると、
+            //    締めたつもりで締まっていない登録ができる**（無視すると黙って弱くなるもの）。
+            bool requirePar, requireSignedRequestObject, dpopBound, tlsCertBound;
+
+            if (!ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientRequirePushedAuthorizationRequests, out requirePar, ref description)
+                || !ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientRequireSignedRequestObject, out requireSignedRequestObject, ref description)
+                || !ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientDPoPBoundAccessTokens, out dpopBound, ref description)
+                || !ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientTlsClientCertificateBoundAccessTokens, out tlsCertBound, ref description))
+            {
+                return false;
+            }
+
+            model.RequirePar = requirePar;
+            model.RequireSignedRequestObject = requireSignedRequestObject;
+            model.DPoPBoundAccessTokens = dpopBound;
+            model.TlsCertBoundAccessTokens = tlsCertBound;
+
+            #endregion
+
             //  **登録種別は normal。** **FAPI の登録は、鍵や証明書の登録を要する。**
             model.ClientMode = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit();
 
@@ -550,6 +579,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JToken token = metadata[name];
 
             return token != null && token.Type != JTokenType.Null;
+        }
+
+        /// <summary>真偽値のメタデータを読む（#346）</summary>
+        /// <param name="metadata">要求の JSON</param>
+        /// <param name="name">名前</param>
+        /// <param name="value">値（無ければ false）</param>
+        /// <param name="description">誤りの説明</param>
+        /// <returns>**無いか、真偽値なら true**（真偽値でなければ false）</returns>
+        private static bool GetFlag(JObject metadata, string name, out bool value, ref string description)
+        {
+            value = false;
+
+            if (!ClientRegistrationProvider.Has(metadata, name))
+            {
+                return true;
+            }
+
+            if (metadata[name].Type != JTokenType.Boolean)
+            {
+                description = string.Format("The {0} must be a boolean.", name);
+                return false;
+            }
+
+            value = (bool)metadata[name];
+            return true;
         }
 
         /// <summary>文字列のメタデータを読む</summary>

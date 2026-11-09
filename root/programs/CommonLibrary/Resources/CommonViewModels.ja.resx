@@ -219,6 +219,18 @@
   <data name="RequirePkce" xml:space="preserve">
     <value>この Client に PKCE を必須とする</value>
   </data>
+  <data name="RequirePar" xml:space="preserve">
+    <value>PAR を必須とする（require_pushed_authorization_requests）</value>
+  </data>
+  <data name="RequireSignedRequestObject" xml:space="preserve">
+    <value>署名付きの Request Object を必須とする（require_signed_request_object）</value>
+  </data>
+  <data name="DPoPBoundAccessTokens" xml:space="preserve">
+    <value>DPoP を必須とする（dpop_bound_access_tokens）</value>
+  </data>
+  <data name="TlsCertBoundAccessTokens" xml:space="preserve">
+    <value>クライアント証明書で縛ったトークンを必須とする（tls_client_certificate_bound_access_tokens）</value>
+  </data>
   <data name="ClientType" xml:space="preserve">
     <value>フローを制限するためのClientのタイプ。</value>
   </data>
@@ -263,6 +275,18 @@
   </data>
   <data name="RequirePkceDescription" xml:space="preserve">
     <value>このクライアントに PKCE を必須にする。**サーバ全体の設定とは OR で効く**ので、**ここを外しても、全体が必須なら必須のまま。**</value>
+  </data>
+  <data name="RequireParDescription" xml:space="preserve">
+    <value>このクライアントの認可要求は、PAR（RFC 9126）で預けたものだけを受ける。**サーバ全体の設定とは OR で効く。**</value>
+  </data>
+  <data name="RequireSignedRequestObjectDescription" xml:space="preserve">
+    <value>このクライアントの認可要求は、署名付きの Request Object（RFC 9101）で送られたものだけを受ける。**サーバ全体の設定とは OR で効く。**</value>
+  </data>
+  <data name="DPoPBoundAccessTokensDescription" xml:space="preserve">
+    <value>このクライアントのトークン要求は、DPoP の証明（RFC 9449）を付けたものだけを受ける（refresh_token も同じ）。</value>
+  </data>
+  <data name="TlsCertBoundAccessTokensDescription" xml:space="preserve">
+    <value>このクライアントのトークン要求は、クライアント証明書（RFC 8705）を提示したものだけを受ける（refresh_token も同じ）。**サイトがクライアント証明書を求めていないと、全て断られる。**</value>
   </data>
   <data name="RedirectUriSamlDescription" xml:space="preserve">
     <value>SAML2 のアサーションを返す先（ACS URL）。自己テストは redirect_uri_saml を使う。</value>

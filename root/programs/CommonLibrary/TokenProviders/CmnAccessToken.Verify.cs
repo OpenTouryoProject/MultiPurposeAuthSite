@@ -32,6 +32,7 @@
 //*  2026/10/31  玄人 幸道         pairwise でも利用者が居なければ受けない（C-57）。nbf を確かめる（#294）
 //*  2026/11/01  玄人 幸道         RevocationProvider を TokenProviders へ移したので、using を整理した（#321）
 //*  2026/11/06  玄人 幸道         exp を、カルチャに依らない文字列で渡す。無ければ例外にせず検証の失敗にする（#336）
+//*  2026/11/06  玄人 幸道         exp・nbf を Open棟梁 の VerifyExpClaim・VerifyNbfClaim で確かめる。読めない nbf は断る（#337）
 //**********************************************************************************
 
 #if NETFX
@@ -43,7 +44,6 @@ using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Security.Claims;
 
 using Newtonsoft.Json;
@@ -152,12 +152,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //    **`IsNullOrEmpty` にもしない** — **秘密を持たない public クライアントが止まる。**
                         if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == CmnServerParams.IssuerId
                             && Helper.GetInstance().HasClient((string)tokenClaimSet[OAuth2AndOIDCConst.aud])
-                            // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったので文字列にして渡す
-                            // （文字列で発行された過去のTokenも、そのまま通る）。
-                            //  **カルチャに依らない形にする**（#336。小数の exp を、小数点が「,」の文字列にしない）。
+                            //  **exp は、Open棟梁 の `VerifyExpClaim` で確かめる**（OpenTouryo#661。#337）。
+                            //    以前は文字列に直して `VerifyExp` に渡していた（#336 でカルチャに依らない形にした）。
+                            //    **数値の文字列も読む**ので、文字列で発行された過去のトークンも、そのまま通る。
                             //  **無ければ、例外にせず検証の失敗にする**（#336。以前はインデクサが KeyNotFoundException を投げた）。
-                            && tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.exp, out object exp) && exp != null
-                            && CmnJwtToken.VerifyExp(Convert.ToString(exp, CultureInfo.InvariantCulture))
+                            && tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.exp, out object exp)
+                            && CmnJwtToken.VerifyExpClaim(
+                                CmnAccessToken.ToClaimToken(exp), DateTimeOffset.UtcNow.ToUnixTimeSeconds())
                             //  **nbf も確かめる**（RFC 7519 §4.1.5。#294）
                             && CmnAccessToken.VerifyNbf(tokenClaimSet))
                         {
@@ -226,20 +227,40 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>使ってよい時刻なら true</returns>
         /// <remarks>
         /// **nbf より前のトークンは受けない。** 複数台の時刻のずれを `NbfLeewaySeconds` まで許す。
-        /// **無い・読めない nbf は確かめない**（この認可サーバは必ず書くが、過去の形を壊さない）。
+        /// **無い nbf は確かめない**（この認可サーバは必ず書くが、過去の形を壊さない）。
+        ///
+        /// **読み方は Open棟梁 の `VerifyNbfClaim`**（OpenTouryo#647・#661。#337）。
+        /// **あちらは時計のずれを取らず、無い nbf も false にする**ので、
+        /// 無いことを先に見て、**いまの時刻に `NbfLeewaySeconds` を足して渡す。**
+        ///
+        /// **読めない nbf は断る**（#337）。以前は `long.TryParse` で読み、
+        /// **小数の nbf を読めず「確かめない」に倒れていた**（OpenTouryo#661 に書いた食い違い）。
+        /// 署名を確かめた後なので、読めない nbf が来るのは、この認可サーバが書いたものではないときだけである。
         /// </remarks>
         private static bool VerifyNbf(Dictionary<string, object> tokenClaimSet)
         {
-            object nbf;
-            long seconds;
-
-            if (!tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.nbf, out nbf) || nbf == null
-                || !long.TryParse(nbf.ToString(), out seconds))
+            if (!tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.nbf, out object nbf) || nbf == null)
             {
                 return true;
             }
 
-            return seconds <= DateTimeOffset.UtcNow.ToUnixTimeSeconds() + CmnAccessToken.NbfLeewaySeconds;
+            return CmnJwtToken.VerifyNbfClaim(
+                CmnAccessToken.ToClaimToken(nbf),
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds() + CmnAccessToken.NbfLeewaySeconds);
+        }
+
+        /// <summary>`Dictionary` で読んだクレームの値を、JToken にする（#337）</summary>
+        /// <param name="value">値（null 可）</param>
+        /// <returns>JToken（null なら null）</returns>
+        /// <remarks>
+        /// **`JsonConvert.DeserializeObject&lt;Dictionary&lt;string, object&gt;&gt;` は、
+        /// 数値を `long`・`double`、文字列を `string` で返す。** それを、Open棟梁 の
+        /// `VerifyExpClaim`・`VerifyNbfClaim` が受ける形（Integer・Float・String）に戻す。
+        /// 日付の形の文字列は `DateTime` で来て、Date の JToken になる（NumericDate として読めず、false になる）。
+        /// </remarks>
+        private static JToken ToClaimToken(object value)
+        {
+            return (value == null) ? null : JToken.FromObject(value);
         }
 
         #endregion

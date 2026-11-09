@@ -32,6 +32,7 @@
 //*  2026/10/13  玄人 幸道         上流のJWK SetのURLを直に指せるようにした（#290）
 //*  2026/10/13  玄人 幸道         上流n件から読めるようにした（#292 の段階 1）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から TokenProviders へ移した（配置の見直し。#294）
+//*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -58,7 +59,7 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// |---|---|
     /// | **上流の JWK Set** | **設定の `IdFederationJwkSetUri`**（書いてあれば、discovery を読まない。#290） |
     /// | **discovery の在り処** | **設定の `IdFederationOidcDiscoveryUrl`** → **`IdFederationAuthorizeEndpoint` の基底**（`https://host/authorize` → `https://host/.well-known/openid-configuration`） |
-    /// | **期待する Issuer** | **上流の登録の `issuer`**（#292 の段階 1。**登録が無ければ `SpRp_Isser`**） |
+    /// | **期待する Issuer** | **上流の登録の `issuer`**（#292 の段階 1。**登録が無ければ `SpRp_Issuer`**） |
     ///
     /// **設定を先に見る**（SAML2 側の `IdFederationSaml2MetadataUrl` と対称）。
     /// **組み立てでは足りない配備がある** — **パスの下に discovery を置く OP**

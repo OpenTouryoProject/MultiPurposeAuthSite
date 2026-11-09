@@ -44,6 +44,11 @@
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Test へ移した（配置の見直し。#294）
 //*  2026/11/03  玄人 幸道         E2E 専用のクライアントの登録（RegisterInStore）を AccountController から移した（#294）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を差し替えられるようにした（#346 の段階 1）
+//*  2026/11/09  玄人 幸道         プロファイルを強制する登録の TestClient_37〜40 と、device × private_key_jwt の TestClient_41 を追加（#346 の段階 2）
+//*  2026/11/09  玄人 幸道         normal で tls_client_auth の TestClient_42、証明書を必須にした device の TestClient_43 を追加（#346）
+//*  2026/11/09  玄人 幸道         device で tls_client_auth の TestClient_44 を追加（必須にしていない登録の device_code も縛られる。#346）
 //**********************************************************************************
 
 using System;
@@ -149,7 +154,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi_ciba", SourceName = "FAPI_CIBA_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -168,7 +173,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -179,8 +184,8 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi2", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
-                    { Const.ClientTokenEndpointAuthMethod, "tls_client_auth" }
+                    { OAuth2AndOIDCConst.tls_client_auth_subject_dn, "CN=mpas-e2e-mtls-client" },
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "tls_client_auth" }
                 }
             },
             new Entry()
@@ -189,8 +194,8 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi_1", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTlsClientAuthSubjectDn, "CN=mpas-e2e-mtls-client" },
-                    { Const.ClientTokenEndpointAuthMethod, "tls_client_auth" }
+                    { OAuth2AndOIDCConst.tls_client_auth_subject_dn, "CN=mpas-e2e-mtls-client" },
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "tls_client_auth" }
                 }
             },
 
@@ -225,7 +230,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientTokenEndpointAuthSigningAlg, JwtConst.RS256 },
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -327,13 +332,105 @@ namespace MultiPurposeAuthSite.Util.Test
             },
             new Entry()
             {
+                // **PAR を必須にした登録**（require_pushed_authorization_requests。#346。`RT-346.2`）。
+                ClientName = "TestClient_37", ClientId = "e2e0tc37000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientRequirePushedAuthorizationRequests, "true" }
+                }
+            },
+            new Entry()
+            {
+                // **署名付きの Request Object を必須にした登録**（require_signed_request_object。#346。`RT-346.3`）。
+                //   **鍵は写す元（TestClient）と同じ**なので、E2E が署名できる。
+                ClientName = "TestClient_38", ClientId = "e2e0tc38000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientRequireSignedRequestObject, "true" }
+                }
+            },
+            new Entry()
+            {
+                // **トークン要求に DPoP を必須にした登録**（dpop_bound_access_tokens。#346。`RT-346.4`）。
+                ClientName = "TestClient_39", ClientId = "e2e0tc39000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientDPoPBoundAccessTokens, "true" }
+                }
+            },
+            new Entry()
+            {
+                // **トークン要求にクライアント証明書を必須にした登録**（tls_client_certificate_bound_access_tokens。#346。`RT-346.5`）。
+                //   **認証は秘密のまま**（証明書で認証しない登録でも、提示された証明書で縛ることを測る）。
+                ClientName = "TestClient_40", ClientId = "e2e0tc40000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientTlsClientCertificateBoundAccessTokens, "true" }
+                }
+            },
+            new Entry()
+            {
+                // **device の登録で、private_key_jwt を明示したもの**（#346。`FA-3.2`）。
+                //   **認可コード × private_key_jwt の行から device を外した**ことを測る。**鍵は写す元と同じ。**
+                ClientName = "TestClient_41", ClientId = "e2e0tc41000000000000000000000000",
+                ClientMode = "device", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
+                }
+            },
+            new Entry()
+            {
+                // **normal の登録で、tls_client_auth を明示したもの**（#346。`RT-346.7`）。
+                //   **client_credentials のトークンが、認証に使った証明書に縛られる**ことを測る
+                //   （**以前は縛られなかった**。CreateFromClaims が証明書を受けていなかった）。
+                //   Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
+                ClientName = "TestClient_42", ClientId = "e2e0tc42200000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.tls_client_auth_subject_dn, "CN=mpas-e2e-mtls-client" },
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "tls_client_auth" }
+                }
+            },
+            new Entry()
+            {
+                // **証明書を必須にした device の登録**（tls_client_certificate_bound_access_tokens。#346。`RT-346.8`）。
+                //   **device_code のトークンも、提示された証明書に縛られる**ことを測る（**以前は、device だけ縛っていなかった**）。
+                //   **認証は秘密**（写す元の TestClient のまま）。
+                ClientName = "TestClient_43", ClientId = "e2e0tc43300000000000000000000000",
+                ClientMode = "device", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientTlsClientCertificateBoundAccessTokens, "true" }
+                }
+            },
+            new Entry()
+            {
+                // **device の登録で、tls_client_auth を明示したもの**（必須にはしていない。#346。`RT-346.12`）。
+                //   **device_code のトークンが、認証に使った証明書に縛られる**ことを測る（**以前は縛られなかった**）。
+                //   **`/device_authz` も証明書で認証する。** Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
+                ClientName = "TestClient_44", ClientId = "e2e0tc44400000000000000000000000",
+                ClientMode = "device", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.tls_client_auth_subject_dn, "CN=mpas-e2e-mtls-client" },
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "tls_client_auth" }
+                }
+            },
+            new Entry()
+            {
                 // **ログアウト後の戻り先**（#232）。サイトごとに URL が違うので、
                 //   定数で登録して `CmnEndpoints.GetRedirectUriFromConstr` に解決させる。
                 ClientName = "TestClient_4", ClientId = "e2e0tc04000000000000000000000000",
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -349,7 +446,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientBackChannelLogoutUri, Const.TestSelfBackChannelLogout },
-                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -364,7 +461,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientFrontChannelLogoutUri, Const.TestSelfFrontChannelLogout },
-                    { Const.ClientPostLogoutRedirectUri, Const.TestSelfLogout }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, Const.TestSelfLogout }
                 }
             },
             new Entry()
@@ -421,7 +518,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     { OAuth2AndOIDCConst.client_secret, "" },
                     { Const.ClientWebOrigins, "https://o001.example https://o002.example https://o003.example https://o004.example https://o005.example https://o006.example https://o007.example https://o008.example https://o009.example https://o010.example https://o011.example https://o012.example https://o013.example https://o014.example https://o015.example https://o016.example https://o017.example https://o018.example https://o019.example https://o020.example https://o021.example https://o022.example https://o023.example https://o024.example" },
                     { Const.ClientRedirectUriSaml, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
-                    { Const.ClientPostLogoutRedirectUri, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri, "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
                 }
             },
             new Entry()
@@ -462,7 +559,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "client_secret_basic" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "client_secret_basic" }
                 }
             },
             new Entry()
@@ -473,7 +570,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "none" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "none" }
                 }
             },
             new Entry()
@@ -485,7 +582,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 ClientMode = "fapi2", SourceName = "FAPI2_Client",
                 Overrides = new Dictionary<string, string>()
                 {
-                    { Const.ClientTokenEndpointAuthMethod, "private_key_jwt" }
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
             },
             new Entry()
@@ -510,7 +607,7 @@ namespace MultiPurposeAuthSite.Util.Test
             {
                 // **登録で require_pkce を立てたクライアント**（#270）。
                 //   **構成ファイル側の RequirePKCE_Client と対をなす。**
-                //   `require_pkce` は**唯一の bool の登録項目**で、
+                //   `require_pkce` は**bool の登録項目**で（#346 で 4 つ増えた）、
                 //   **列に切り出した後は方言で形が違う**
                 //   （SQL Server : bit / PostgreSQL : boolean / Oracle : NUMBER(3) の -1）。
                 //   **これが落ちると「締めたつもりが締まっていない」になる**ので、
@@ -759,7 +856,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     model.RedirectUriToken = value;
                     break;
 
-                case Const.ClientPostLogoutRedirectUri:
+                case OAuth2AndOIDCConst.post_logout_redirect_uri:
                     model.PostLogoutRedirectUri = value;
                     break;
 
@@ -775,7 +872,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     model.SubjectTypes = value;
                     break;
 
-                case Const.ClientTlsClientAuthSubjectDn:
+                case OAuth2AndOIDCConst.tls_client_auth_subject_dn:
                     model.TlsClientAuthSubjectDn = value;
                     break;
 
@@ -787,7 +884,7 @@ namespace MultiPurposeAuthSite.Util.Test
                     model.TokenEndpointAuthSigningAlg = value;
                     break;
 
-                case Const.ClientTokenEndpointAuthMethod:
+                case OAuth2AndOIDCConst.token_endpoint_auth_method:
                     model.TokenEndpointAuthMethod = value;
                     break;
 
@@ -808,9 +905,25 @@ namespace MultiPurposeAuthSite.Util.Test
                     break;
 
                 case Const.ClientRequirePkce:
-                    // **ここだけ bool**（#270）。
+                    // **bool**（#270。#346 の 4 つも同じ）。
                     //   **綾り違いを黙って false にしない**ため、`Parse` で落とす。
                     model.RequirePkce = bool.Parse(value);
+                    break;
+
+                case Const.ClientRequirePushedAuthorizationRequests:
+                    model.RequirePar = bool.Parse(value);
+                    break;
+
+                case Const.ClientRequireSignedRequestObject:
+                    model.RequireSignedRequestObject = bool.Parse(value);
+                    break;
+
+                case Const.ClientDPoPBoundAccessTokens:
+                    model.DPoPBoundAccessTokens = bool.Parse(value);
+                    break;
+
+                case Const.ClientTlsClientCertificateBoundAccessTokens:
+                    model.TlsCertBoundAccessTokens = bool.Parse(value);
                     break;
 
                 default:

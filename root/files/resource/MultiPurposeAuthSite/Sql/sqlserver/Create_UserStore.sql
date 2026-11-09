@@ -209,6 +209,12 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     -- ブラウザ経由で伝える先（#310 の段階 3）。末尾に足してある（ALTER … ADD で揃う）
     --   **iframe で開く URL**（Front-Channel Logout 1.0 §2）。**空なら伝えない。**
     [FrontChannelLogoutUri] [nvarchar](512) NULL,     -- Const.MaxLengthOfUri
+    -- プロファイルの強制（#346 の段階 1）。末尾に足してある（ALTER … ADD で揃う）
+    --   **既定は 0**（強制しない）。**ALTER で足すとき、既存の行を 0 で埋めるために既定値を付けた。**
+    [RequirePar] [bit] NOT NULL DEFAULT 0,                 -- require_pushed_authorization_requests（RFC 9126 §6）
+    [RequireSignedRequestObject] [bit] NOT NULL DEFAULT 0, -- require_signed_request_object（RFC 9101 §10.5）
+    [DPoPBoundAccessTokens] [bit] NOT NULL DEFAULT 0,      -- dpop_bound_access_tokens（RFC 9449 §5.2）
+    [TlsCertBoundAccessTokens] [bit] NOT NULL DEFAULT 0,   -- tls_client_certificate_bound_access_tokens（RFC 8705 §3.4）
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

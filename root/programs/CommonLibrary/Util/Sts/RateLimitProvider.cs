@@ -31,6 +31,7 @@
 //*  2026/10/16  玄人 幸道         新規（#305 の段階 3）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の口を対象に足した（#307 の段階 1）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
+//*  2026/11/06  玄人 幸道         PAR と JWK Set の口を、Config で読む（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -41,8 +42,6 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Text;
 
-// OpenTouryo
-using Touryo.Infrastructure.Framework.Authentication;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 /// <summary>MultiPurposeAuthSite.Extensions.Sts</summary>
@@ -116,7 +115,8 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// </summary>
         /// <remarks>
         /// **口の名前が、数える単位**になる（**`/token` の洪水で `/revoke` を止めない**ため）。
-        /// **パスは設定から引く**（配備で変えられる。`Config` / `OAuth2AndOIDCParams`）。
+        /// **パスは設定から引く**（配備で変えられる。`Config`）。
+        /// **PAR と JWK Set も `Config` で読む**（以前は Open棟梁 の `OAuth2AndOIDCParams`。あれはクライアント役の値である。#339）。
         /// **起動後は変わらないので、1 度だけ作る。**
         ///
         /// **ここに無い口は、制限しない**（画面・`/userinfo` ほか）。
@@ -151,8 +151,8 @@ namespace MultiPurposeAuthSite.Util.Sts
                         RateLimitProvider.Add(map, Config.DeviceAuthZAuthorizeEndpoint, Const.EndpointDeviceAuthZ);
                         RateLimitProvider.Add(map, Config.DeviceAuthZVerifyEndpoint, Const.EndpointDeviceVerify);
                         RateLimitProvider.Add(map, Config.CibaAuthorizeEndpoint, Const.EndpointCibaAuthZ);
-                        RateLimitProvider.Add(map, OAuth2AndOIDCParams.AuthRequestPushUri, Const.EndpointPar);
-                        RateLimitProvider.Add(map, OAuth2AndOIDCParams.JwkSetUri, Const.EndpointJwkCerts);
+                        RateLimitProvider.Add(map, Config.AuthRequestPushUri, Const.EndpointPar);
+                        RateLimitProvider.Add(map, Config.JwkSetUri, Const.EndpointJwkCerts);
 
                         //  **動的クライアント登録**（#307 の段階 1）。
                         //    **開けていない配備でも表には入る**（口が無ければ、そもそも来ない）。

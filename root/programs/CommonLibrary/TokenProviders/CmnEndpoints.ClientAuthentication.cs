@@ -40,6 +40,8 @@
 //*  2026/11/01  玄人 幸道         fapi2 のクライアント認証では、assertion の aud を issuer に限った（#323）
 //*  2026/11/05  玄人 幸道         Basic が復号前の値で通ったら、client_id を OPERATION に記録する（Open棟梁 4.0 への備え。#320）
 //*  2026/11/06  玄人 幸道         assertion の検証を、期待する iss・aud を渡す版の JwtAssertion.Verify にした。クライアント認証では sub が iss と一致することを確かめる（OpenTouryo#654。#336）
+//*  2026/11/06  玄人 幸道         TryVerifyAssertion の catch と、alg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#654・#664）に合わせた（#337）
+//*  2026/11/08  玄人 幸道         tls_client_auth の登録で、証明書が届かない・Subject が合わないときの理由を OPERATION に残す（#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -190,6 +192,30 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                         return true;
                     }
+
+                    //  **Subject が合わない理由を、運用のログに残す**（#345）。
+                    //    **証明書は届いているのに通らない**ので、残さないと配備側で原因が分からない
+                    //    （構成ファイルが古い証明書を指したままで、これに当たった）。
+                    //    **Subject の値は書かない**（どちらが正しいかは、配備側が証明書と登録を見て決める）。
+                    if (!string.IsNullOrEmpty(registeredDn) && x509.Subject != registeredDn)
+                    {
+                        Logging.MyOperationTrace(string.Format(
+                            "The client authentication of {0} was refused. "
+                            + "(the subject of the client certificate does not match the registered tls_client_auth_subject_dn)",
+                            client_id));
+                    }
+                }
+                else if (Helper.GetInstance().GetTokenEndpointAuthMethod(client_id)
+                    == OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit())
+                {
+                    //  **tls_client_auth の登録なのに、クライアント証明書が届いていない**（#345）。
+                    //    **サイトが証明書を求めていない**（IIS Express の既定の sslFlags="None" など）と、
+                    //    クライアントが添えても届かない。**応答は従来どおり invalid_client**（理由は返さない）。
+                    Logging.MyOperationTrace(string.Format(
+                        "The client authentication of {0} was refused. "
+                        + "(the registered token_endpoint_auth_method is \"tls_client_auth\", but no client certificate was presented. "
+                        + "Check that the site requests client certificates.)",
+                        client_id));
                 }
             }
 
@@ -609,9 +635,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **この一覧が、広告（`token_endpoint_auth_signing_alg_values_supported`）と、
         /// 登録値の検証（`token_endpoint_auth_signing_alg`）の両方を決める。**
         ///
-        /// **中身は上流の都合である。** `JwtAssertion.Verify` が
+        /// **中身は、いま使っている版の都合である。** JWK を受ける `JwtAssertion.Verify` は
         /// **JWK の `kty` を見て `JWS_RS256_Param` / `JWS_ES256_Param` を選ぶ**ので、この 2 つになる。
-        /// **広げるには上流の対応が要る**（alg を受け取るオーバーロードが無い）。
+        /// **広げるのは、まだ起票していない別の作業**である（#129 は発行する側の alg で、閉じている）。検証鍵 `JWS` を受ける版が在る（`JwsFactory.CreateFromJwk(alg, jwk)` で鍵を作り、
+        /// ヘッダの alg が鍵と違えば断る。OpenTouryo#664）。**広げると振る舞いが変わるので、#337 では変えていない。**
         /// </remarks>
         public static readonly string[] TokenEndpointAuthSigningAlgs = new string[]
         {
@@ -630,8 +657,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262）</summary>
         /// <remarks>
-        /// **`RequestObject.Verify` が `JWS_RS256_Param` 固定**なので、いまは `RS256` だけ。
-        /// **CIBA の `request` は別**（`VerifyCiba` が `ES256` 固定。仕様でも別の登録項目）。
+        /// **使っている版の `RequestObject.Verify`（JWK を受ける版）が `JWS_RS256_Param` 固定**なので、いまは `RS256` だけ。
+        /// **広げるのは、まだ起票していない別の作業**である（検証鍵 `JWS` を受ける版が在る。OpenTouryo#664）。
+        /// **CIBA の `request` は別**（使っている版の `VerifyCiba` が `ES256` 固定。仕様でも別の登録項目）。
         /// </remarks>
         public static readonly string[] RequestObjectSigningAlgs = new string[]
         {
@@ -760,7 +788,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///   **呼び出し側が `IsClientAssertionAudience`・`IsAssertionAudience` で続けて行う**
         ///   （Open棟梁 は要素 1 つの配列も受けるが、こちらは受けない）
         /// - **sub は在ることだけ**を Open棟梁 が確かめる。**クライアント認証なら、呼び出し側が iss と照合する**
-        /// - **外から来た値なので、例外にしない**（#241 と同じ方針）。**以前は HTTP 500 だった**（`aud` の配列など）
+        /// - **外から来た値では、例外にならない**（OpenTouryo#654 の版は、読めない形を false にする。#337）。
+        ///   **以前の版は `aud` の配列などで例外を投げ、HTTP 500 だった**（#294 でこの catch を入れた）
+        /// - **catch に落ちるのは、登録の鍵が壊れているとき**（JWK の JSON として読めない、`n`・`e` などが無い）。
+        ///   **運用の誤りなので、認証の失敗にして理由を残す。**
+        ///   iss・aud が空のとき（`ArgumentNullException`）も落ちるが、呼び出し側は空の iss・鍵では呼ばない
         /// </remarks>
         private static bool TryVerifyAssertion(string assertion, string pubKey, string iss, out string sub)
         {
@@ -777,6 +809,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
             catch (Exception ex)
             {
+                // 登録の鍵が壊れている（上の remarks）。
                 Logging.MyOperationTrace(string.Format(
                     "The assertion could not be verified. ({0})", ex.GetType().Name));
 

@@ -216,6 +216,12 @@
   <data name="CheckRenamedKey" xml:space="preserve">
     <value>改名前のキー名（{0}）が使われています。{1} に直してください。</value>
   </data>
+  <data name="CheckRenamedKeyConflict" xml:space="preserve">
+    <value>改名前のキー名（{0}）と新しいキー名（{1}）の両方に、違う値が設定されています。{1} の値が使われます。{0} を消してください。</value>
+  </data>
+  <data name="CheckLegacyCerFilePathKey" xml:space="preserve">
+    <value>この認可サーバの証明書を、クライアント役のキー（{0}）から読んでいます。{1}（署名の .pfx と対になるキー）を設定してください。</value>
+  </data>
   <data name="CheckDebugTraceLog" xml:space="preserve">
     <value>EnableDebugTraceLog が true です。</value>
   </data>

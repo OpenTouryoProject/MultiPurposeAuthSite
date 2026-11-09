@@ -20,6 +20,7 @@
 //*  2026/09/25  玄人 幸道         CibaProvider.DebugModeWithOutAD の確認を追加
 //*  2026/09/25  玄人 幸道         改名した設定キーの警告を、一覧（Config.RenamedKeys）から出す（#236）
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins の * を警告（#265）
+//*  2026/11/06  玄人 幸道         Open棟梁 で改名したキー（SpRp_Isser）と、自分の証明書を SpRp_*CerFilePath で読んでいることを警告（#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -125,6 +126,26 @@ namespace MultiPurposeAuthSite.Co
                     foreach (KeyValuePair<string, string> old in Config.OldKeysStillUsed())
                     {
                         warnings.Add(string.Format(Resources.Diagnostics.CheckRenamedKey, old.Key, old.Value));
+                    }
+
+                    // **Open棟梁 で改名したキーも、同じように確かめる**（`SpRp_Isser` → `SpRp_Issuer`。OpenTouryo#666。#339）。
+                    //   **JwkSetUri・RequestObjectRegUri・AuthRequestPushUri は、ここに出てこない**
+                    //   （Open棟梁 は改名前の名前を読まない。この認可サーバのパスとして `Config` が読む）。
+                    foreach (KeyValuePair<string, string> old in CmnClientParams.OldKeysStillUsed())
+                    {
+                        warnings.Add(string.Format(Resources.Diagnostics.CheckRenamedKey, old.Key, old.Value));
+                    }
+
+                    foreach (KeyValuePair<string, string> old in CmnClientParams.RenamedKeysInConflict())
+                    {
+                        warnings.Add(string.Format(Resources.Diagnostics.CheckRenamedKeyConflict, old.Key, old.Value));
+                    }
+
+                    // **自分の証明書を、まだクライアント役のキー（`SpRp_*CerFilePath`）で読んでいないか**（#339）。
+                    //   動きはするが、**認可サーバ兼クライアントの配備で、相手の証明書を置けなくなる。**
+                    foreach (KeyValuePair<string, string> old in TokenProviders.SigningKeys.LegacyCerFilePathKeysStillUsed())
+                    {
+                        warnings.Add(string.Format(Resources.Diagnostics.CheckLegacyCerFilePathKey, old.Key, old.Value));
                     }
 
                     if (Config.EnableDebugTraceLog)

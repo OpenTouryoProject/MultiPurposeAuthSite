@@ -32,8 +32,10 @@
 //*  2026/10/13  玄人 幸道         設定キーを自前のものに分け、旧キーも読む（#290）
 //*  2026/10/20  玄人 幸道         任意のパスの .cer から検証鍵を作る口を追加（#307 の段階 4）
 //*  2026/10/21  玄人 幸道         RSA の公開鍵のパラメタから検証する JWS を作る口を追加（#308 の段階 1）
+//*  2026/11/06  玄人 幸道         自分の証明書を、サーバ側のキー（RsaCerFilePath ほか）で読む。空なら SpRp_*CerFilePath（#339）
 //**********************************************************************************
 
+using System.Collections.Generic;
 using System.Security.Cryptography;
 
 using Newtonsoft.Json;
@@ -94,14 +96,23 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             /// <summary>設定キー名（検証に使う *.cer のパス）</summary>
             /// <remarks>
-            /// **`SpRp_*CerFilePath` を読む。**
-            /// **あれは「この配備の証明書」**であり、**クライアント・サーバの共通設定**である
-            /// （雛形の節も `Client-Server共通設定`）。**自分の証明書として読んでよい**（#290）。
+            /// **サーバ側のキー（`RsaCerFilePath` など。`*PfxFilePath` と対になる）を読む**（#339）。
+            /// **空なら `_legacyCerFilePathKey`（`SpRp_*CerFilePath`）を読む。**
             ///
             /// **相手（上流）の証明書は、別のキーで持つ**
             /// （`IdFederationOidcCerFilePath` / `IdFederationSaml2CerFilePath`。#286 / #289）。
             /// </remarks>
             private readonly string _cerFilePathKey;
+
+            /// <summary>設定キー名（*.cer のパス。以前のキー）</summary>
+            /// <remarks>
+            /// **以前は `SpRp_*CerFilePath` を、この配備の証明書として読んでいた**（#290）。
+            /// **あれは Open棟梁 のクライアント役のキー**（`CmnClientParams`。相手の証明書）で、
+            /// 自分の値として使い回すと、認可サーバ兼クライアントの配備で相手の値を置けなくなる
+            /// （Open棟梁 の Framework/ANALYSIS.md 8.1。#339）。
+            /// **配備済みの設定ファイルには、サーバ側のキーが無い**ので、空ならこちらを読む（**設定を直さなくても動く**）。
+            /// </remarks>
+            private readonly string _legacyCerFilePathKey;
 
             /// <summary>EC の曲線とダイジェスト（RSA のときは未使用）</summary>
             private readonly JWS_ECDSA.ES _es;
@@ -120,13 +131,16 @@ namespace MultiPurposeAuthSite.TokenProviders
             /// <param name="pfxFilePathKey">設定キー名（*.pfx のパス）</param>
             /// <param name="pfxPasswordKey">設定キー名（*.pfx のパスワード）</param>
             /// <param name="cerFilePathKey">設定キー名（*.cer のパス）</param>
+            /// <param name="legacyCerFilePathKey">設定キー名（*.cer のパス。以前のキー）</param>
             internal Entry(string alg,
-                string pfxFilePathKey, string pfxPasswordKey, string cerFilePathKey)
+                string pfxFilePathKey, string pfxPasswordKey,
+                string cerFilePathKey, string legacyCerFilePathKey)
             {
                 this.Alg = alg;
                 this._pfxFilePathKey = pfxFilePathKey;
                 this._pfxPasswordKey = pfxPasswordKey;
                 this._cerFilePathKey = cerFilePathKey;
+                this._legacyCerFilePathKey = legacyCerFilePathKey;
             }
 
             /// <summary>Constructor（EC）</summary>
@@ -135,14 +149,17 @@ namespace MultiPurposeAuthSite.TokenProviders
             /// <param name="pfxFilePathKey">設定キー名（*.pfx のパス）</param>
             /// <param name="pfxPasswordKey">設定キー名（*.pfx のパスワード）</param>
             /// <param name="cerFilePathKey">設定キー名（*.cer のパス）</param>
+            /// <param name="legacyCerFilePathKey">設定キー名（*.cer のパス。以前のキー）</param>
             internal Entry(string alg, JWS_ECDSA.ES es,
-                string pfxFilePathKey, string pfxPasswordKey, string cerFilePathKey)
+                string pfxFilePathKey, string pfxPasswordKey,
+                string cerFilePathKey, string legacyCerFilePathKey)
             {
                 this.Alg = alg;
                 this._es = es;
                 this._pfxFilePathKey = pfxFilePathKey;
                 this._pfxPasswordKey = pfxPasswordKey;
                 this._cerFilePathKey = cerFilePathKey;
+                this._legacyCerFilePathKey = legacyCerFilePathKey;
             }
 
             #endregion
@@ -162,9 +179,39 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             /// <summary>検証に使う *.cer のパス</summary>
+            /// <remarks>**サーバ側のキーが空なら、以前のキー（`SpRp_*CerFilePath`）を読む**（#339）。</remarks>
             public string CerFilePath
             {
-                get { return GetConfigParameter.GetConfigValue(this._cerFilePathKey); }
+                get
+                {
+                    string value = GetConfigParameter.GetConfigValue(this._cerFilePathKey);
+
+                    return string.IsNullOrEmpty(value)
+                        ? GetConfigParameter.GetConfigValue(this._legacyCerFilePathKey) : value;
+                }
+            }
+
+            /// <summary>設定キー名（*.cer のパス）</summary>
+            public string CerFilePathKey
+            {
+                get { return this._cerFilePathKey; }
+            }
+
+            /// <summary>設定キー名（*.cer のパス。以前のキー）</summary>
+            public string LegacyCerFilePathKey
+            {
+                get { return this._legacyCerFilePathKey; }
+            }
+
+            /// <summary>以前のキー（`SpRp_*CerFilePath`）だけで、証明書を読んでいるか</summary>
+            /// <remarks>起動時の警告に使う（`ProductionCheck`。#339）。</remarks>
+            public bool UsesLegacyCerFilePathKey
+            {
+                get
+                {
+                    return string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(this._cerFilePathKey))
+                        && !string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(this._legacyCerFilePathKey));
+                }
             }
 
             #endregion
@@ -264,27 +311,27 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             // RSA（**1 本の鍵で 3 つの alg**。ダイジェストだけが違い、kid も同じ）
             new Entry(JwtConst.RS256,
-                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+                "RsaPfxFilePath", "RsaPfxPassword", "RsaCerFilePath", "SpRp_RsaCerFilePath"),
             new Entry(JwtConst.RS384,
-                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+                "RsaPfxFilePath", "RsaPfxPassword", "RsaCerFilePath", "SpRp_RsaCerFilePath"),
             new Entry(JwtConst.RS512,
-                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+                "RsaPfxFilePath", "RsaPfxPassword", "RsaCerFilePath", "SpRp_RsaCerFilePath"),
 
             // RSA / RSASSA-PSS（**鍵は RS* と同じ 1 本**。パディングだけが違う。#129 の段階 4）
             new Entry(JwtConst.PS256,
-                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+                "RsaPfxFilePath", "RsaPfxPassword", "RsaCerFilePath", "SpRp_RsaCerFilePath"),
             new Entry(JwtConst.PS384,
-                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+                "RsaPfxFilePath", "RsaPfxPassword", "RsaCerFilePath", "SpRp_RsaCerFilePath"),
             new Entry(JwtConst.PS512,
-                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+                "RsaPfxFilePath", "RsaPfxPassword", "RsaCerFilePath", "SpRp_RsaCerFilePath"),
 
             // EC（**曲線が alg に紐づく**ので、鍵が 3 本に分かれる）
             new Entry(JwtConst.ES256, JWS_ECDSA.ES._256,
-                "EcdsaPfxFilePath", "EcdsaPfxPassword", "SpRp_EcdsaCerFilePath"),
+                "EcdsaPfxFilePath", "EcdsaPfxPassword", "EcdsaCerFilePath", "SpRp_EcdsaCerFilePath"),
             new Entry(JwtConst.ES384, JWS_ECDSA.ES._384,
-                "Ecdsa384PfxFilePath", "Ecdsa384PfxPassword", "SpRp_Ecdsa384CerFilePath"),
+                "Ecdsa384PfxFilePath", "Ecdsa384PfxPassword", "Ecdsa384CerFilePath", "SpRp_Ecdsa384CerFilePath"),
             new Entry(JwtConst.ES512, JWS_ECDSA.ES._512,
-                "Ecdsa512PfxFilePath", "Ecdsa512PfxPassword", "SpRp_Ecdsa512CerFilePath")
+                "Ecdsa512PfxFilePath", "Ecdsa512PfxPassword", "Ecdsa512CerFilePath", "SpRp_Ecdsa512CerFilePath")
         };
 
         /// <summary>alg に対応する鍵を引く</summary>
@@ -306,6 +353,36 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return null;
+        }
+
+        /// <summary>この認可サーバの RSA の証明書（*.cer）のパス</summary>
+        /// <remarks>
+        /// **SAML2 のメタデータに載せる証明書**と、**自己テスト（SP 役）が応答を検証する証明書**（#339）。
+        /// **RSA の 6 つの alg は同じ 1 本の鍵**なので、`RS256` の行を読む。
+        /// </remarks>
+        public static string RsaCerFilePath
+        {
+            get { return SigningKeys.Of(JwtConst.RS256).CerFilePath; }
+        }
+
+        /// <summary>以前のキー（`SpRp_*CerFilePath`）だけで読んでいる証明書（起動時の警告に使う。#339）</summary>
+        /// <returns>「以前のキー → サーバ側のキー」の一覧（重複なし。無ければ空）</returns>
+        public static List<KeyValuePair<string, string>> LegacyCerFilePathKeysStillUsed()
+        {
+            List<KeyValuePair<string, string>> used = new List<KeyValuePair<string, string>>();
+
+            foreach (Entry entry in SigningKeys._entries)
+            {
+                KeyValuePair<string, string> pair =
+                    new KeyValuePair<string, string>(entry.LegacyCerFilePathKey, entry.CerFilePathKey);
+
+                if (entry.UsesLegacyCerFilePathKey && !used.Contains(pair))
+                {
+                    used.Add(pair);
+                }
+            }
+
+            return used;
         }
 
         #endregion

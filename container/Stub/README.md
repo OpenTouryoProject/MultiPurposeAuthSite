@@ -15,8 +15,8 @@ OAuth2 / OIDC / SAML2 の IdP として動く（**中身は net10.0 版の MPAS 
 cd container\Stub
 .\1_PublishStub.ps1                                    # publish と証明書（最初と、MPAS を更新したとき）
 copy .env.sample my-stub.env                           # パラメタを写して直す（下の 2 節・3 節）
-docker compose --env-file my-stub.env up -d --build    # 起動
-docker compose --env-file my-stub.env down             # 止めて消す（状態は残らない）
+.\2_DockerComposeUp.bat my-stub.env                    # 起動（成果物がソースより古ければ警告する。#340）
+.\3_DockerComposeDown.bat my-stub.env                  # 止めて消す（状態は残らない）
 ```
 
 **起動の確認** : `https://localhost:44310/.well-known/openid-configuration` が 200 を返せばよい。

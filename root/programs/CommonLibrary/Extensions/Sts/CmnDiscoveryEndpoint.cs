@@ -32,6 +32,9 @@
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、region の入れ子と using を直した（#294）
 //*  2026/10/29  玄人 幸道         広告の一覧を 1 か所から作り、none を認証の口から外し、CIBA を開けた配備だけ広告する（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Discovery.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
+//*  2026/11/06  玄人 幸道         CIBA の request の署名の alg のコメントを、Open棟梁 の現状（OpenTouryo#595・#596・#664）に合わせた（#337）
+//*  2026/11/06  玄人 幸道         jwks_uri・request_object_endpoint・PAR の口を、Config で読む（OpenTouryo#666。#339）
+//*  2026/11/09  玄人 幸道         require_pushed_authorization_requests・require_signed_request_object を、サーバ全体の設定から出す（#346 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -209,16 +212,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OpenIDConfig.Add("request_parameter_supported", false);
             OpenIDConfig.Add("request_uri_parameter_supported", true);
             OpenIDConfig.Add("request_object_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.RequestObjectRegUri);
 
             // **PAR（RFC 9126）の口**（#229）。
             //   request_object_endpoint（独自の /ros）は、後方互換のため残している。
             //   こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
             OpenIDConfig.Add("pushed_authorization_request_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.AuthRequestPushUri);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri);
 
-            // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
-            OpenIDConfig.Add("require_pushed_authorization_requests", false);
+            // **PAR・署名付きの Request Object を必須にするかは、サーバ全体の設定**（#346）。
+            //   RFC 9126 §5 / RFC 9101 §10.5 の AS のメタデータ。**既定はどちらも false。**
+            //   **登録ごとの必須（同名のクライアントのメタデータ）は、ここには出ない**（Discovery にクライアント別の項目は無い）。
+            OpenIDConfig.Add("require_pushed_authorization_requests", Config.RequirePushedAuthorizationRequests);
+            OpenIDConfig.Add("require_signed_request_object", Config.RequireSignedRequestObject);
             #endregion
 
             #region ResponseObject(JARM)
@@ -272,7 +278,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OpenIDConfig.Add("authorization_response_iss_parameter_supported", true);
 
             OpenIDConfig.Add("jwks_uri",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.JwkSetUri);
 
             #endregion
 
@@ -368,9 +374,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //   この実装は ES256 だけを受け付ける**（#129 の段階 0 で、記述を実装に合わせた）。
                 //
                 //   **以前は「ES256 と PS256のみ許可」と書いてあったが、PS256 は通らない。**
-                //   `RequestObject.VerifyCiba` は ES256 に固定されており、
-                //   **Open棟梁 に `JWS_PS*` が無い**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
-                //   PS256 を通すには上流の対応が要る（#129）。
+                //   使っている版の `RequestObject.VerifyCiba`（JWK を受ける版）は ES256 に固定されている。
+                //   **Open棟梁 には `JWS_PS256/384/512` と `JwsFactory` が在り**（OpenTouryo#595・#596）、
+                //   **検証鍵 `JWS` を受ける `VerifyCiba` も在る**（OpenTouryo#664）ので、PS256 を通すのは MPAS 側の対応である（まだ起票していない。#129 は発行する側の alg で、閉じている）。
                 //
                 //   ちなみに、Tokenの署名は、FAPI2に準拠する。
                 //

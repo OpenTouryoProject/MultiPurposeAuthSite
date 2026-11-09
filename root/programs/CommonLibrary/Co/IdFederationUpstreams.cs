@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#292 の段階 1）
+//*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -422,7 +423,7 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>従来の単数キーから、OIDC の行を作る（互換）</summary>
         /// <returns>上流</returns>
         /// <remarks>
-        /// **期待する `iss` は `SpRp_Isser`**（Open棟梁 のクライアント役の設定）。
+        /// **期待する `iss` は `SpRp_Issuer`**（Open棟梁 のクライアント役の設定）。
         /// **`client_id` / `client_secret` も Open棟梁 の設定**（`OAuth2AndOidcClientID` / `…Secret`）である。
         /// **相手ごとに持つなら、設定の行へ移す**（#290 と同じ「自分の値 / 相手の値」の整理）。
         /// </remarks>

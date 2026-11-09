@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/20  玄人 幸道         新規（#307 の段階 4）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -121,7 +122,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OAuth2AndOIDCConst.nbf,
             OAuth2AndOIDCConst.iat,
             OAuth2AndOIDCConst.jti,
-            Const.ClientSoftwareStatement
+            OAuth2AndOIDCConst.software_statement
         };
 
         #endregion
@@ -174,7 +175,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return Result.None;
             }
 
-            JToken token = metadata[Const.ClientSoftwareStatement];
+            JToken token = metadata[OAuth2AndOIDCConst.software_statement];
 
             if (token == null || token.Type == JTokenType.Null)
             {
@@ -182,7 +183,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             //  **本文からは外す**（§3.1.1）。**この後どの道を通っても、保存する形には入らない。**
-            metadata.Remove(Const.ClientSoftwareStatement);
+            metadata.Remove(OAuth2AndOIDCConst.software_statement);
 
             //  1. **信頼する発行者が 1 件も無い配備**（＝ 段階 4 の設定を書いていない配備）。
             //     **従来どおり断る。** **既定の配備の振る舞いを変えない**ためである。

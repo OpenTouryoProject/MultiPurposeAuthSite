@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
 //*  2026/10/31  玄人 幸道         store\ から Container\E2E\ へ移したのに合わせた（#318）
+//*  2026/11/07  玄人 幸道         コメントと Skip の文言のスクリプト名を、#340 の後のものにした（#340）
 //**********************************************************************************
 
 using System;
@@ -58,7 +59,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     ///
     /// **コンテナが上がっていなければ Skip する**（`SkipIfNotAvailableAsync`）。
     /// **既定の通し（`-Launch` だけ）では Skip になる** —
-    /// **`container\E2E\1_DockerComposeUp.bat` を回してあれば測れる。**
+    /// **`container\E2E\2_DockerComposeUp.bat` を回してあれば測れる**（用意は `1_PublishIdP.ps1`。#340）。
     ///
     /// **平文の http で配っている。** **実装は `https` を要求するが、
     /// ループバックだけは `http` を許している**
@@ -147,7 +148,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             Skip.IfNot(up,
                 "jwks のコンテナ（" + JwksUri.BaseUrl + "）が上がっていません"
-                + "（container\\E2E\\1_DockerComposeUp.bat で起動します）。");
+                + "（container\\E2E\\2_DockerComposeUp.bat で起動します）。");
         }
     }
 }

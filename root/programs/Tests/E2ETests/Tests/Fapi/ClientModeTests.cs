@@ -36,8 +36,10 @@
 //*  2026/10/19  玄人 幸道         FA-4.1 の fapi2 を、認証の段で断られる形に改めた（#307 の段階 3）
 //*  2026/10/29  玄人 幸道         FA-2.1 の PKCE だけの拒否を invalid_client にした（C-40。#294）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/09  玄人 幸道         FA-3.2（device は private_key_jwt の認可コードでは通らない）を追加（#346）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -553,6 +555,71 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Note("**refresh_token の経路は normal の登録だけ**なので、device の登録には発行しない"
                     + "（#224 の段階 2。以前は発行していたが、使えなかった）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>FA-3.2 device は private_key_jwt の認可コードでは通らない（#346）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task FA0302_deviceはprivate_key_jwtの認可コードでは通らない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_41);
+
+                TestReport r = this.Report("FA-3.2",
+                    "client_mode=device のクライアントは、private_key_jwt の認可コードではトークンを得られない",
+                    "**表の「認可コード × private_key_jwt」の行から device を外した**（#346）。"
+                    + "#224 で「水準の大小」の比較を表に移したときに入った行で、意図の記録が無かった。"
+                    + "**device は入力の乏しい機器のための登録**（RFC 8628）であり、秘密鍵を持たせて認可コードを使う理由が無い。"
+                    + "**認証は通り、登録種別の判定で断られる**こと（`unauthorized_client`）を測る。",
+                    "RFC 8628 / RFC 6749 §5.2 / #224 / #346");
+
+                r.Target("client_name=" + KnownClients.TestClient_41
+                    + "（device。token_endpoint_auth_method=private_key_jwt。鍵は TestClient と同じ）");
+
+                r.Step("(1) 認可コードを取る（認可エンドポイントは、PKCE の行があるので device にも開いている）");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri);
+
+                Assert.False(string.IsNullOrEmpty(authz.Code),
+                    "前提: 認可コードが取得できること（error=" + (authz.Error ?? "なし") + "）");
+
+                r.Step("(2) client_assertion（private_key_jwt）で交換する");
+
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                string issuer = await client.IssuerAsync();
+
+                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "authorization_code" },
+                    { "code", authz.Code },
+                    { "client_assertion", JwsSigner.SignRS256(client, new Dictionary<string, object>()
+                        {
+                            { "iss", reg.ClientId },
+                            { "sub", reg.ClientId },
+                            { "aud", issuer },
+                            { "jti", Guid.NewGuid().ToString("N") },
+                            { "iat", now },
+                            { "exp", now + 300 }
+                        }) },
+                    { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" },
+                    { "redirect_uri", reg.RedirectUri }
+                });
+
+                r.VerifyEqual("HTTP 400", "400", ((int)token.StatusCode).ToString());
+
+                r.VerifyEqual("エラーは unauthorized_client（認証は通り、登録種別で断られた）",
+                    "unauthorized_client", token.Error ?? "（無し）");
+
+                r.Verify("access_token は返らない", string.IsNullOrEmpty(token.AccessToken),
+                    "返らない", string.IsNullOrEmpty(token.AccessToken) ? "返らない" : "**返った**");
+
+                r.Note("**PKCE だけの経路（FA-3.1）は残してある**（元の実装の例外措置）。");
 
                 r.Done();
             }

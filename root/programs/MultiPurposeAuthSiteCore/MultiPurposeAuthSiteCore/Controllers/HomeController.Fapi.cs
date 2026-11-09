@@ -18,6 +18,7 @@
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         FAPI2 で Request Object を預けられなければ再表示（500 にしない）。値を URL 符号化（#294）
 //*  2026/10/31  玄人 幸道         CIBA の login_hint に TestUserSuffix を付ける（ROPC と揃える。#294）
+//*  2026/11/08  玄人 幸道         FAPI2 のボタンで PKCE（S256）を使う。PAR の認証は登録の方法で送り、MTLS のボタンを足した（#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -102,10 +103,11 @@ namespace MultiPurposeAuthSite.Controllers
 
             // テストコードで、clientを識別するために、Stateに細工する。
             // TestCase（max_age, auth_time）: 無し, 不要、有り, 不要、無し, 必要
+            //   **code_challenge は Request Object に入る**（RFC 9101 §4。#345）。
             SelfTestClient.PushResult ret = await SelfTestClient.RegisterRequestObjectAsync(
                 this.ClientId, response_type, this.ResponseMode, this.RedirectUri,
                 OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
-                SelfTestClient.SampleClaims());
+                SelfTestClient.SampleClaims(), this.CodeChallenge);
 
             if (string.IsNullOrEmpty(ret.RequestUri))
             {
@@ -126,7 +128,7 @@ namespace MultiPurposeAuthSite.Controllers
         ///
         /// | | /ros（独自。RFC 9101 5.2.1 の任意機能として維持） | /par（RFC 9126） |
         /// |---|---|---|
-        /// | 認証 | **無し**（Request Object の署名だけ） | **クライアント認証**（ここでは private_key_jwt） |
+        /// | 認証 | **無し**（Request Object の署名だけ） | **クライアント認証**（登録の方法。明示が無ければ private_key_jwt。#345） |
         /// | 本文 | 署名付き JWT を生で | フォーム（request に JAR を入れる） |
         /// | 応答 | iss / aud / request_uri / exp | **request_uri / expires_in** |
         ///
@@ -145,15 +147,16 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // テストコードで、clientを識別するために、Stateに細工する。
+            //   **code_challenge は Request Object に入る**（RFC 9101 §4。#345）。
             SelfTestClient.PushResult ret = await SelfTestClient.PushAuthorizationRequestAsync(
                 this.ClientId, response_type, this.ResponseMode, this.RedirectUri,
                 OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
-                SelfTestClient.SampleClaims());
+                SelfTestClient.SampleClaims(), this.CodeChallenge);
 
             // 画面に出す（目視で確かめるもの）
             ViewBag.AuthRequestPushUri = ret.Endpoint;
             ViewBag.ClientId = this.ClientId;
-            ViewBag.AuthMethod = OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit();
+            ViewBag.AuthMethod = ret.AuthMethod; // 登録の方法（#345。以前は private_key_jwt の固定）
             ViewBag.RequestObject = ret.RequestObject;
             ViewBag.RequestObjectJson = ret.RequestObjectJson;
             ViewBag.Response = ret.Response;
@@ -289,6 +292,9 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.InitOAuth2Params();
 
+            // 追加のパラメタ（PKCE。#345）
+            this.SetFapi2Pkce();
+
             // Assemble
             string redirect = await this.AssembleFAPI2CCStarterAsync(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
@@ -305,16 +311,22 @@ namespace MultiPurposeAuthSite.Controllers
             return Redirect(redirect);
         }
 
-        /// <summary>Test Authorization Code Flow (FAPI2 CC, PAR)（#246）</summary>
+        /// <summary>Test Authorization Code Flow (FAPI2 CC, PAR)（#246）・(FAPI2 CC, PAR, MTLS)（#345）</summary>
         /// <returns>ActionResult</returns>
         /// <remarks>
         /// **預けた結果を画面で見せてから、続けて認可へ進む。**
         /// 他のスターターのように直接リダイレクトしないのは、
         /// **request_uri と expires_in を目視で確かめる**ため（#246）。
+        ///
+        /// **MTLS のボタンも、これを通る**（#345）。違いは選んだ登録（`tls_client_auth` を明示したもの）だけで、
+        /// **PAR とトークン要求の認証は、登録の方法で決まる**（`SelfTestClient.CredentialOf`）。
         /// </remarks>
         private async Task<ActionResult> AuthorizationCodeFAPI2ParAsync()
         {
             this.InitOAuth2Params();
+
+            // 追加のパラメタ（PKCE。#345）
+            this.SetFapi2Pkce();
 
             // Assemble
             string redirect = await this.AssembleFAPI2ParStarterAsync(
@@ -325,6 +337,18 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.AuthorizeUrl = redirect;
 
             return View("PushedAuthorizationResponse");
+        }
+
+        /// <summary>FAPI2 のボタンの PKCE（S256）を用意する（#345）</summary>
+        /// <remarks>
+        /// **FAPI 2.0 は、PAR と S256 の PKCE を求める**（FAPI 2.0 Security Profile §5.3.3.2）。
+        /// `code_challenge` は Request Object に入れ（`SelfTestClient.CreateRequestObject`）、
+        /// `code_verifier` は Session・Cookie に置いて（`SaveOAuth2Params`）、戻りのトークン要求で送る。
+        /// </remarks>
+        private void SetFapi2Pkce()
+        {
+            this.CodeVerifier = GetPassword.Base64UrlSecret(50);
+            this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
         }
 
 

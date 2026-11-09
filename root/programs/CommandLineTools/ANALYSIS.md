@@ -29,8 +29,8 @@
 | ツール | 何を作るか | 出力先 | 参照する設定キー |
 |---|---|---|---|
 | **`CreateClientsIdentity`** | OAuth2 クライアント定義（`client_id` / `client_secret` / `redirect_uri_*` / `client_name`）の雛形を **5 件**生成 | 標準出力（JSON、Indented） | なし（`appsettings.json` は `"xxx": "xxx"` のダミー） |
-| **`CreateJwkSetJson`** | X.509 証明書（`.cer`）から **JWK Set（`/jwkcerts` が返す `JwkSet.json`）** を生成・追記 | `JwkSetFilePath` のファイル | `SpRp_RsaCerFilePath` `SpRp_EcdsaCerFilePath` `JwkSetFilePath` |
-| **`CreateJwtBearerTokenFlowAssertion`** | **JWT Bearer Token Flow 用の JWK 鍵と Jwt Assertion** を生成し、その場で検証して表示 | 標準出力 | `SpRp_RsaPfxFilePath` / `SpRp_RsaPfxPassword` / `SpRp_EcdsaPfxFilePath` / `SpRp_EcdsaPfxPassword` / `SpRp_Isser` / `OAuth2AndOidcAudience` |
+| **`CreateJwkSetJson`** | X.509 証明書（`.cer`）から **JWK Set（`/jwkcerts` が返す `JwkSet.json`）** を生成・追記 | `JwkSetFilePath` のファイル | `RsaCerFilePath` `EcdsaCerFilePath` `Ecdsa384CerFilePath` `Ecdsa512CerFilePath`（空なら `SpRp_*CerFilePath`。#339） `JwkSetFilePath` |
+| **`CreateJwtBearerTokenFlowAssertion`** | **JWT Bearer Token Flow 用の JWK 鍵と Jwt Assertion** を生成し、その場で検証して表示 | 標準出力 | `SpRp_RsaPfxFilePath` / `SpRp_RsaPfxPassword` / `SpRp_EcdsaPfxFilePath` / `SpRp_EcdsaPfxPassword` / `SpRp_Issuer`（改名前は `SpRp_Isser`） / `OAuth2AndOidcAudience` |
 
 ### 2.1 `CreateClientsIdentity`
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/01  玄人 幸道         新規（TokenProviders/CmnEndpoints.RequestObject.cs から移した。#321）
+//*  2026/11/06  玄人 幸道         日付の形の文字列を日付に変えずに読む TryReadPayloadAsIs・TryParseObjectAsIs を足した（#337）
 //**********************************************************************************
 
 using Newtonsoft.Json;
@@ -111,6 +112,67 @@ namespace MultiPurposeAuthSite.Util.Sts
             JToken value = (payload == null) ? null : payload[name];
 
             return (value != null && value.Type == JTokenType.String) ? (string)value : "";
+        }
+
+        /// <summary>JWT の payload を、日付の形の文字列を日付に変えずに読む（読めなければ null。#337）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>payload（JWT でない・オブジェクトでなければ null）</returns>
+        /// <remarks>
+        /// **Open棟梁 の `JwtReader.TryReadPayload` は、既定の読み方**（`DateParseHandling.DateTime`）**で読む。**
+        /// 日付の形の文字列（`binding_message` などが、たまたまそうなったとき）は Date になり、
+        /// **`CmnJwtToken.TryGetStringClaim` で読めない**（OpenTouryo#662）。
+        /// **クレームを文字列で取り出す呼び出し側は、こちらで読む。**
+        /// **外から来た値なので、例外にしない**（#241 と同じ方針）。
+        /// </remarks>
+        public static JObject TryReadPayloadAsIs(string jwt)
+        {
+            if (string.IsNullOrEmpty(jwt))
+            {
+                return null;
+            }
+
+            string[] segments = jwt.Split('.');
+
+            if (segments.Length != 3 || string.IsNullOrEmpty(segments[1]))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JwtUtil.TryParseObjectAsIs(CustomEncode.ByteToString(
+                    CustomEncode.FromBase64UrlString(segments[1]), CustomEncode.UTF_8));
+            }
+            catch
+            {
+                // BASE64URL でない（外から来た値なので、例外にしない）。
+                return null;
+            }
+        }
+
+        /// <summary>JSON のオブジェクトを、日付の形の文字列を日付に変えずに読む（読めなければ null。#337）</summary>
+        /// <param name="json">JSON（null 可）</param>
+        /// <returns>JObject（JSON でない・オブジェクトでなければ null）</returns>
+        /// <remarks>`TryReadPayloadAsIs` と同じ理由（`UserClaims` の #261 と同じ読み方）。</remarks>
+        public static JObject TryParseObjectAsIs(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonConvert.DeserializeObject(json, new JsonSerializerSettings()
+                {
+                    DateParseHandling = DateParseHandling.None
+                }) as JObject;
+            }
+            catch
+            {
+                // JSON でない
+                return null;
+            }
         }
 
         #endregion

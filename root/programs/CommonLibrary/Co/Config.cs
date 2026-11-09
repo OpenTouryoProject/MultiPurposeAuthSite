@@ -69,6 +69,7 @@
 //*  2026/10/18  玄人 幸道         動的クライアント登録の設定を追加（#307 の段階 1）
 //*  2026/10/21  玄人 幸道         OP のセッションの Cookie 名を追加（#310 の段階 1）
 //*  2026/10/22  玄人 幸道         DPoP の nonce の設定を追加（#311 の段階 4）
+//*  2026/11/06  玄人 幸道         自分の口のパスと証明書を、Open棟梁 のクライアント役の設定で読まないことを書いた（#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -147,9 +148,11 @@ namespace MultiPurposeAuthSite.Co
         // - RequirePkceS256
         // - PreviousSigningCerFilePaths
 
-        // OAuth2AndOIDCParams
-        // - AuthRequestPushUri（PAR（RFC 9126）のエンドポイント
-        // - その他、移行前からSPRPで使用するパラメタを定義している。
+        // OAuth2AndOIDCParams・CmnClientParams
+        // - **クライアント役の値**（相手の OP の口・Issuer・鍵）。移行前から SP / RP で使用するパラメタを定義している。
+        // - **この認可サーバ自身の値を、ここで読まない**（Open棟梁 の Framework/ANALYSIS.md 8.1）。
+        //   JwkSetUri・RequestObjectRegUri・AuthRequestPushUri は `Config`（Config.Sts.Endpoints.cs）、
+        //   自分の証明書（RsaCerFilePath ほか）は `SigningKeys` で読む（OpenTouryo#666。#339）。
 
         #endregion
 

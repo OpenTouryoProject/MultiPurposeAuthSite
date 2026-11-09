@@ -340,6 +340,42 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
+        ///   Require PAR (require_pushed_authorization_requests) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequirePar {
+            get {
+                return ResourceManager.GetString("RequirePar", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Require signed request objects (require_signed_request_object) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequireSignedRequestObject {
+            get {
+                return ResourceManager.GetString("RequireSignedRequestObject", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Require DPoP (dpop_bound_access_tokens) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DPoPBoundAccessTokens {
+            get {
+                return ResourceManager.GetString("DPoPBoundAccessTokens", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Require certificate-bound tokens (tls_client_certificate_bound_access_tokens) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TlsCertBoundAccessTokens {
+            get {
+                return ResourceManager.GetString("TlsCertBoundAccessTokens", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   OAuth2/OIDC ResponseMode. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ResponseMode {
@@ -498,6 +534,42 @@ namespace MultiPurposeAuthSite.Resources {
         public static string RequirePkceDescription {
             get {
                 return ResourceManager.GetString("RequirePkceDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Accept authorization requests from this client only via PAR (RFC 9126). It is OR-ed with the server-wide setting. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequireParDescription {
+            get {
+                return ResourceManager.GetString("RequireParDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Accept authorization requests from this client only as a signed request object (RFC 9101). It is OR-ed with the server-wide setting. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequireSignedRequestObjectDescription {
+            get {
+                return ResourceManager.GetString("RequireSignedRequestObjectDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Reject token requests from this client without a DPoP proof (RFC 9449), including refresh_token. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DPoPBoundAccessTokensDescription {
+            get {
+                return ResourceManager.GetString("DPoPBoundAccessTokensDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Reject token requests from this client without a client certificate (RFC 8705), including refresh_token. If the site does not request client certificates, every token request is rejected. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TlsCertBoundAccessTokensDescription {
+            get {
+                return ResourceManager.GetString("TlsCertBoundAccessTokensDescription", resourceCulture);
             }
         }
         

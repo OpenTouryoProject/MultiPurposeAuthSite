@@ -20,6 +20,8 @@
 //*  2026/11/01  玄人 幸道         コメントの参照先を SelfTestWebApi に直した（#321）
 //*  2026/11/03  玄人 幸道         SAML2 の応答の署名の対象を、受け取ったままのクエリから取る（#294）
 //*  2026/11/03  玄人 幸道         /userinfo に email・sub が無いときも、理由を OPERATION に記録する（#331）
+//*  2026/11/06  玄人 幸道         aud の照合のコメントを、Open棟梁 が aud を照合するようになった後（OpenTouryo#601・#603）の状態に直した（#337）
+//*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
 //**********************************************************************************
 
 /*
@@ -214,7 +216,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // **認可応答の `iss` を検証する**（RFC 9207。#140）。
                 //   **Mix-Up 攻撃への対策**で、OAuth 2.1 が挙げているのはこの応答パラメタである。
-                //   `id_token` の `iss` も照合しているが（IdToken.Verify → SpRp_Isser）、
+                //   `id_token` の `iss` も照合しているが（IdToken.Verify → SpRp_Issuer）、
                 //   **応答そのものを見ていなかった。**
                 //
                 //   **来なければ通す。** RFC 9207 を実装していない OP があるため
@@ -295,7 +297,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //   | 2 | 上流の証明書（1 が引けなかったときの受け皿） | cer_file_path | IdFederationOidcCerFilePath |
                         //   | 3 | 渡さない（この配備の設定の鍵で検証する。下の if） | － | － |
                         //
-                        //   **期待する iss** は、n 件設定は issuer、1 件設定は SpRp_Isser。**空なら 1・2 は使えない**（3 に進む）。
+                        //   **期待する iss** は、n 件設定は issuer、1 件設定は SpRp_Issuer。**空なら 1・2 は使えない**（3 に進む）。
                         //   **自分の /jwkcerts（JwkSetUri）は、自分が発行するトークンの鍵を広告する口**で、ここでは使わない。
                         JWS upstreamKey = null;
 
@@ -315,7 +317,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // **証明書だけ在って期待する `iss` が空**なら、渡せない。
                             //   iss に対応する証明書である確証がなく、
-                            //   鍵を指定する版の IdToken.Verify は iss が空なら例外にする（Open棟梁 #601）。
+                            //   鍵を指定する版の IdToken.Verify は iss が空なら例外にする（OpenTouryo#601）。
                             //   この後は、鍵を指定しない版に進む。**理由を残す**（#253）。
                             Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer.");
                         }
@@ -323,7 +325,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // iss も .cer も無い。鍵を指定しない版の IdToken.Verify に進む（1:1 の構成）。
                             //   **理由を残す**（#253）。一般の OP ならこの後の検証で必ず落ちるので、
-                            //   **設定漏れ（issuer / cer_file_path、1 件設定では SpRp_Isser / IdFederationOidcCerFilePath）と区別できるようにする。**
+                            //   **設定漏れ（issuer / cer_file_path、1 件設定では SpRp_Issuer / IdFederationOidcCerFilePath）と区別できるようにする。**
                             Logging.MyOperationTrace(
                                 "The ID federation has neither an expected issuer nor a certificate. (verified with the client settings)");
                         }
@@ -337,7 +339,7 @@ namespace MultiPurposeAuthSite.Controllers
                             //   上流の鍵ではなく、この配備の設定の鍵で検証するので、通るのは上流・下流が同じ鍵を持つ構成のときだけ。
                             //   - 鍵：kid があれば、自分の JWK Set ファイル（JwkSetFilePath）から kid で引く。
                             //         kid が無い・引けなければ CmnClientParams.RsaCerFilePath (SpRp_RsaCerFilePath) を使う。
-                            //   - iss：SpRp_Isser
+                            //   - iss：SpRp_Issuer
                             //   **n 件設定でも、上流の鍵が決まらなければここに来る**（上の表の 3）。
                             idTokenVerified = IdToken.Verify(
                                 id_token, access_token, code, state,
@@ -355,11 +357,11 @@ namespace MultiPurposeAuthSite.Controllers
                         bool nonceMatched =
                             (nonce == (string)HttpContext.Session.GetString(Const.IdFederationSigninNonce));
 
-                        //  **`aud` は、呼び出し側で確認する**（#286）。
-                        //    **`IdToken.Verify` は、この配備では `aud` を見ない** —
-                        //    **「自分は認可サーバか」で分岐しており**（`JwkSetFilePath` の有無）、
-                        //    **設定済みの側では `iss` と `exp` だけで通す**（Open棟梁 #601）。
-                        //    **`out jobj` でペイロードが返る**ので、ここで確認できる。
+                        //  **`aud` は、呼び出し側でも確認する**（#286・#337）。
+                        //    **以前は `IdToken.Verify` がこの配備では `aud` を見なかった**（OpenTouryo#601）。
+                        //    いまは、鍵を指定する版は `upstream.ClientId` を、鍵を指定しない版は設定の client_id のどれかを照合する（OpenTouryo#601・#603）。
+                        //    **鍵を指定しない版が見るのは設定の client_id**（1:1 の構成の値）で、この上流のクライアント ID とは限らないので、
+                        //    ここで `upstream.ClientId` と照合する（`IdTokenAudience`）。
                         //
                         //    **期待値は、開始処理が `client_id` に使った値**（自分のクライアント ID）。
                         bool audMatched =

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/24  玄人 幸道         EnableOpenIDConnect を廃止した（#314）
+//*  2026/11/09  玄人 幸道         PAR・署名付きの Request Object を、サーバ全体で必須にする設定を追加（#346 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -194,6 +195,39 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePkce"));
+            }
+        }
+
+        #endregion
+
+        #region PAR・署名付きの Request Object（#346）
+
+        /// <summary>認可要求を、PAR で預けたものだけ受けるか（#346）</summary>
+        /// <remarks>
+        /// **RFC 9126 §5 の `require_pushed_authorization_requests`（AS のメタデータ）。**
+        /// **既定は false**（従来どおり）。**登録の同名の項目とは OR で効く**（`RequirePkce` と同じ形。#221）。
+        /// **Discovery にも、この値を出す。**
+        /// </remarks>
+        public static bool RequirePushedAuthorizationRequests
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePushedAuthorizationRequests"));
+            }
+        }
+
+        /// <summary>認可要求を、署名付きの Request Object で送られたものだけ受けるか（#346）</summary>
+        /// <remarks>
+        /// **RFC 9101 §10.5 の `require_signed_request_object`（AS のメタデータ）。**
+        /// **既定は false**（従来どおり）。**登録の同名の項目とは OR で効く。** **Discovery にも、この値を出す。**
+        /// **この実装は `request` パラメタを受けない**（`request_parameter_supported` は false）ので、
+        /// **署名付きの Request Object は `/ros` か PAR の `request` で預けて、`request_uri` で送る。**
+        /// </remarks>
+        public static bool RequireSignedRequestObject
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireSignedRequestObject"));
             }
         }
 

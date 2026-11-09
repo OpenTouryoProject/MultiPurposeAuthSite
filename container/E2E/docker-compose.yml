@@ -9,14 +9,19 @@
 #   **E2E 用の UserStore（DB）は ..\Store\ に在る**（#318 で分けた。もとは同じ store\docker-compose.yml）。
 #   **どの IdP も UserStoreType は mem** なので、DB は要らない。
 #
-#   **起動は 1_DockerComposeUp.bat。** publish（0_PublishIdP.ps1）をしてから `up -d --build` する。
+#   **用意は 1_PublishIdP.ps1、起動は 2_DockerComposeUp.bat**（#340 で分けた。..\Stub\ と同じ作法）。
+#   **MPAS を直したら、先に 1_PublishIdP.ps1 を実行すること**（起動は `up -d --build`）。
+#
+#   **イメージの中の appsettings.json は雛形**（1_PublishIdP.ps1 が差し替える。手元の秘密を入れない）。
+#   **手元の appsettings.json は、起動時にマウントする**（各サービスの volumes。#340）。
+#   **E2E のテストも同じファイルを、コンテナの構成として読む**（Tests/Container/ContainerTargets.cs）。
 #
 # --------------------------------------------------------------------------------------------------
 # メモリの節約
 #
 #   **restart は、すべてのサービスで "no"。** **エンジンを起動した拍子に
 #   コンテナが一斉に復帰するのを防ぐ。** **起動は、いつでも明示的に行う**（up -d / start）。
-#   **使い終わったら止める**（docker compose stop、または 2_DockerComposeDown.bat）。
+#   **使い終わったら止める**（docker compose stop、または 3_DockerComposeDown.bat）。
 # ##################################################################################################
 
 name: mpas-e2e
@@ -61,7 +66,10 @@ services:
       #   **ここを替えるだけでよい**（下流は倒れ先だけ上流の .cer に向けてある）。
       #
       #   **JwkSet も別に持つ**（`kid` が変わるため）。**EC の 3 本は共有のまま**（RSA だけを分けた）。
+      #   **対になる証明書は、サーバ側のキー（RsaCerFilePath）で上書きする**（#339）。
+      #   **SpRp_RsaCerFilePath（クライアント役の、相手の証明書）も上書きする。** 自己テストの相手は自分自身なので、同じ .cer を指す。
       - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Upstream.pfx
+      - appSettings__RsaCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
       - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Upstream.cer
       - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet_Upstream.json
 
@@ -70,7 +78,7 @@ services:
       #   **SP はメタデータをキャッシュする**ので、**1 本だけでは替えた瞬間に検証できなくなる。**
       #   **ここは「以前この配備が使っていた鍵」**（*_Server.cer）を指している。
       - appSettings__PreviousSigningCerFilePaths=/resource/X509/SHA256RSA_Server.cer
-      # **ホストの開発用証明書を書き出したもの**（0_PublishIdP.ps1 が用意する）。
+      # **ホストの開発用証明書を書き出したもの**（1_PublishIdP.ps1 が用意する）。
       #   既に信頼されているので、**自己テストでブラウザが警告を出さない。**
       - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
       - Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
@@ -184,6 +192,14 @@ services:
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d4__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d4__client_name=IdFederationNoConsent
     volumes:
+      # **アプリの設定の土台**（手元の appsettings.json。**イメージの中の雛形を覆う**。#340）。
+      #   **起動時にマウントするだけで、イメージには入らない。** **無ければ起動しない**（create_host_path: false）。
+      - type: bind
+        source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
+        target: /app/appsettings.json
+        read_only: true
+        bind:
+          create_host_path: false
       - ./cert:/https:ro
       - ./keys:/keys
       # **ホストのリソースを、そのまま読ませる**（署名鍵を含むのでイメージには入れない）。
@@ -220,6 +236,7 @@ services:
       # ---------------------------------------------------------------- 署名鍵（#292 の段階 1）
       #   **1 つ目の上流とも、下流とも違う鍵**である（`CN-1.5` が 3 つとも違うことを見る）。
       - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Upstream2.pfx
+      - appSettings__RsaCerFilePath=/resource/X509/SHA256RSA_Upstream2.cer
       - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Upstream2.cer
       - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet_Upstream2.json
 
@@ -253,6 +270,14 @@ services:
       # **AuthnRequest の署名を検証する鍵**（#293 の段階 2。値は *_Client.cer の JWK）。
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000d9__jwk_rsa_publickey=eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ
     volumes:
+      # **アプリの設定の土台**（手元の appsettings.json。**イメージの中の雛形を覆う**。#340）。
+      #   **起動時にマウントするだけで、イメージには入らない。** **無ければ起動しない**（create_host_path: false）。
+      - type: bind
+        source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
+        target: /app/appsettings.json
+        read_only: true
+        bind:
+          create_host_path: false
       - ./cert:/https:ro
       # **鍵の置き場とログは、上流 1・下流と分ける**（#279 / #281 と同じ理由）
       - ./keys-upstream2:/keys
@@ -315,13 +340,13 @@ services:
       #     IssuerId     自分が IdP として名乗る iss
       #                  （Discovery の issuer / id_token の iss / 認可応答の iss /
       #                    client_assertion の aud の期待値 / SAML2 応答の Issuer）
-      #     SpRp_Isser   **上流に期待する iss**（RP / SP として検証する側。
+      #     SpRp_Issuer  **上流に期待する iss**（RP / SP として検証する側。改名前は SpRp_Isser。OpenTouryo#666。
       #                    CmnClientParams.Isser として読まれる）
       #
       #   **2 つの IdP が同じ iss を名乗らないように、下流に別の値を与える。**
       #   **PPID は変わらない**（sub の対応づけは SaltParameter と client_id から導く）。
       - appSettings__IssuerId=https://downstream.ssoauth.opentouryo.com
-      - appSettings__SpRp_Isser=https://ssoauth.opentouryo.com
+      - appSettings__SpRp_Issuer=https://ssoauth.opentouryo.com
 
       # ---------------------------------------------------------------- ID 連携（上流への委譲）
       #   **上流に登録した、このコンテナ専用のクライアント**。
@@ -389,7 +414,7 @@ services:
       - appSettings__UserStoreSecretPassword=E2E_SecretBox_8rJ2vQ5mZ1xK
 
       # ---------------------------------------------------------------- 上流の登録（n 件。#292 の段階 1）
-      #   **これが在れば、上の IdFederation* / SpRp_Isser / OAuth2AndOidc* より優先する。**
+      #   **これが在れば、上の IdFederation* / SpRp_Issuer / OAuth2AndOidc* より優先する。**
       #   **上の単数キーは、互換のために残してある**（この設定を外せば、1 件の配備に戻る）。
       #
       #   **相手ごとの値だけを並べる**（#290 のルール）。
@@ -452,6 +477,14 @@ services:
 
       # **利用者名を下流へ渡すのは上流の役だけ**なので、ここには無い。
     volumes:
+      # **アプリの設定の土台**（手元の appsettings.json。**イメージの中の雛形を覆う**。#340）。
+      #   **起動時にマウントするだけで、イメージには入らない。** **無ければ起動しない**（create_host_path: false）。
+      - type: bind
+        source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
+        target: /app/appsettings.json
+        read_only: true
+        bind:
+          create_host_path: false
       - ./cert:/https:ro
       # **上流とは別の置き場**（上の DataProtectionKeyPath のコメント）
       - ./keys-downstream:/keys

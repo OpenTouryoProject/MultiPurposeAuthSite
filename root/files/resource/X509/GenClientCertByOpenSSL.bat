@@ -1,19 +1,23 @@
 @echo off
-rem クライアント証明書（mTLS 用）を作り直す。
+rem NOTE: keep this file pure ASCII. cmd.exe reads a batch file by byte offset, so non-ASCII text
+rem       can break lines depending on the console code page (root/CODING.md section 4. #342).
 rem
-rem   ・出来上がるのは _SHA256RSAClientCert.cer / _SHA256RSAClientCert.pfx
-rem     （既存を壊さないよう、先頭に _ が付く。確認してから名前を変えて置き換える）
-rem   ・パスワードは test（構成ファイルの SpRp_ClientCertPfxPassword と同じ）
-rem   ・Subject は、クライアント登録の tls_client_auth_subject_dn と一致させること
-rem     （雛形では FAPI1_Client / FAPI2_Client の値）
-rem   ・PKCS#12 の暗号化は古い方式に揃える。net48（.NET Framework）で読めるようにするため
+rem Recreate the client certificate (for mTLS).
 rem
-rem 詳細は CONFIGURATION.md 8 節。
+rem   - Output: _SHA256RSAClientCert.cer / _SHA256RSAClientCert.pfx
+rem     (prefixed with "_" so that the existing files are not overwritten; check, then rename to replace)
+rem   - Password: test (same as SpRp_ClientCertPfxPassword in the configuration file)
+rem   - The subject must match tls_client_auth_subject_dn of the client registration
+rem     (in the template, the value of FAPI1_Client / FAPI2_Client)
+rem   - PKCS#12 uses the legacy encryption, so that net48 (.NET Framework) can read it
+rem
+rem Details: root/CONFIGURATION.md section 8.
 
 where openssl >nul 2>&1
 if errorlevel 1 (
-    echo openssl が PATH にありません。
-    echo OpenSSL を入れるか、Git 同梱のもの（mingw64 の bin）に PATH を通してから実行してください。
+    echo openssl is not on PATH.
+    rem Do not write parentheses in this block: a closing one would end the "if" block.
+    echo Install OpenSSL, or add mingw64\bin of Git for Windows to PATH, then run again.
     exit /b 1
 )
 

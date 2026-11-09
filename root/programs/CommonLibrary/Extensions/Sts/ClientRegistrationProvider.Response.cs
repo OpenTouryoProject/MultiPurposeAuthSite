@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを、立っていれば返すようにした（#346 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -241,7 +243,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **登録された `token_endpoint_auth_method` を返す。**
             //    **空（明示なし）は `client_secret_basic`** — **RFC 7591 §2 の既定**であり、
             //    **実際に通る方法**でもある（`CmnEndpoints.AllowsAuthMethod`）。
-            ret.Add(Const.ClientTokenEndpointAuthMethod,
+            ret.Add(OAuth2AndOIDCConst.token_endpoint_auth_method,
                 string.IsNullOrEmpty(model.TokenEndpointAuthMethod)
                     ? OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
                     : model.TokenEndpointAuthMethod);
@@ -258,7 +260,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareVersion, model.SoftwareVersion);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSubjectType, model.SubjectTypes);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientIdTokenSignedResponseAlg, model.IdTokenSignedResponseAlg);
-            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTlsClientAuthSubjectDn, model.TlsClientAuthSubjectDn);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.tls_client_auth_subject_dn, model.TlsClientAuthSubjectDn);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
 
             //  **登録された鍵を `jwks` に戻して返す。**
@@ -276,6 +278,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(model.Contacts))
             {
                 ret.Add(Const.ClientContacts, OAuth2AndOIDCSpec.ToDistinctList(model.Contacts));
+            }
+
+            //  **プロファイルの強制**（#346 の段階 1）。**立っているものだけ返す**
+            //    （**省略は false** と各 RFC が定めている。RFC 9126 §6 / RFC 9101 §10.5 / RFC 9449 §5.2 / RFC 8705 §3.4）。
+            //    **管理画面で立てたものも返る**（**`PUT` は返された全てを入れ直す**ので、黙って落とさないため）。
+            foreach (KeyValuePair<string, bool> flag in new Dictionary<string, bool>()
+                {
+                    { Const.ClientRequirePushedAuthorizationRequests, model.RequirePar },
+                    { Const.ClientRequireSignedRequestObject, model.RequireSignedRequestObject },
+                    { Const.ClientDPoPBoundAccessTokens, model.DPoPBoundAccessTokens },
+                    { Const.ClientTlsClientCertificateBoundAccessTokens, model.TlsCertBoundAccessTokens }
+                })
+            {
+                if (flag.Value)
+                {
+                    ret.Add(flag.Key, true);
+                }
             }
 
             //  **RFC 7592 §3 : どちらも REQUIRED**（**管理の口と、その鍵**）。

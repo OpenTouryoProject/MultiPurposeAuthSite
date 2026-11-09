@@ -305,7 +305,7 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 
 ```powershell
 cd container\E2E
-.\0_PublishIdP.ps1           # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
+.\1_PublishIdP.ps1           # publish と証明書（MPAS を直したら、先にこれ。#340）
 docker compose up -d upstream
 ```
 
@@ -405,13 +405,22 @@ probe_auth_time                                 max_age の判定
 
 ```powershell
 cd container\E2E
-.\1_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流 ＋ jwks を、作り直して起動する（DB は container\Store\）
+.\1_PublishIdP.ps1         # 用意（publish と証明書。MPAS を直したら、先にこれ）
+.\2_DockerComposeUp.bat    # 上流 ＋ 上流 2 ＋ 下流 ＋ jwks を、作り直して起動する（DB は container\Store\）
+.\3_DockerComposeDown.bat  # 止めて消す
 ```
+
+> **用意と起動を分けてある**（#340。`container\Stub\` と同じ作法）。
+> **`2_DockerComposeUp.bat` は publish しない。** **成果物がソースより古ければ警告する**（起動は止めない。`container\Common\CheckPublishFreshness.ps1`）。
+>
+> **イメージの中の `appsettings.json` は雛形**（`1_PublishIdP.ps1` が差し替える。手元の秘密をイメージに入れない）。
+> **手元の `appsettings.json`（net10.0 版）は、起動時にマウントする。** **無ければ起動しない。**
+> **E2E のテストも同じファイルを、コンテナの構成として読む**（`Tests/Container/ContainerTargets.cs`）。
 
 **上流だけ・下流だけを建て直すなら、サービスを名指す。**
 
 ```powershell
-.\0_PublishIdP.ps1              # 成果物は 1 つ。上流も下流も同じイメージ
+.\1_PublishIdP.ps1              # 成果物は 1 つ。上流も下流も同じイメージ
 docker compose up -d --build upstream downstream
 ```
 
@@ -423,7 +432,7 @@ docker compose up -d --build upstream downstream
 |---|---|---|
 | URL | **`https://localhost:44303`** | **口はポートで分ける**（上のポートの表） |
 | `IssuerId` | **`https://downstream.ssoauth.opentouryo.com`** | **2 つの IdP が同じ `iss` を名乗らない**ようにする |
-| `SpRp_Isser` | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
+| `SpRp_Issuer`（改名前は `SpRp_Isser`） | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
 | `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
 | `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
 | `IdFederationJwkSetUri` / `IdFederationSaml2MetadataUrl` | **`http://upstream:8080/...`**（#293 の段階 3） | **鍵を引くのもサーバである。** **`https://localhost:44301` には届かない** |
@@ -489,7 +498,7 @@ docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U
 
 | 壊すもの | 期待する結果 |
 |---|---|
-| **上流の広告の 1 本目を「署名に使っていない証明書」にする**（`SpRp_RsaCerFilePath` と `PreviousSigningCerFilePaths` を入れ替える） | **`SA-6.*` は 12 / 12 通る**。**下流のログに `The SAML2 response was verified with key #2.`** が出る（**1 本目で失敗し、2 本目で検証した**ことの証拠） |
+| **上流の広告の 1 本目を「署名に使っていない証明書」にする**（`RsaCerFilePath` と `PreviousSigningCerFilePaths` を入れ替える。#339 までは `SpRp_RsaCerFilePath`） | **`SA-6.*` は 12 / 12 通る**。**下流のログに `The SAML2 response was verified with key #2.`** が出る（**1 本目で失敗し、2 本目で検証した**ことの証拠） |
 | 上流の JWK Set を 1 本に戻す | **`RT-140.*` は通る**（`kid` で選ぶので、本数には依らない） |
 
 > **「通った」だけでは、どの鍵で通ったか分からない。**
@@ -790,7 +799,9 @@ docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U
 |---|---|
 | **`TestClient`** | **秘密で認証する**（ほぼ全てのケースがそう使う）。**方法は明示しない** |
 | **`TestClient_24`（新規）** | **`TestClient` を写し、`token_endpoint_auth_method` を `private_key_jwt` にした種データ。** **`RT-239.1` 〜 `.4` / `RT-129.1` を、こちらへ向けた** |
-| **`FAPI2_Client`** | **構成ファイルに `token_endpoint_auth_method": "private_key_jwt"` を明記した**（fapi2。`RT-238.*` / `RT-239.5`） |
+| **`FAPI2_Client`** | **構成ファイルに `token_endpoint_auth_method": "private_key_jwt"` を明記した**（fapi2。`RT-238.*` / `RT-239.5`。自己テストの FAPI2 のボタンが選ぶ。`RT-345.1`・`RT-345.2`） |
+| **`FAPI2_MTLS_Client`** | **fapi2 で `tls_client_auth` を明記した**（#345。自己テストの MTLS のボタンが選ぶ。`RT-345.3`。**net10.0 版だけ**：自己テストが添える `SpRp_ClientCertPfxFilePath` の証明書は自己署名で、net48 版（IIS Express）は通さない）。**構成ファイルに無ければ `RT-345.3` は Skip** |
+| **`FAPI1_PrivateKeyJwt_Client`** | **fapi1 で `private_key_jwt` を明記した**（#341。自己テストの FAPI1 のボタンが選ぶ。`RT-341.1`・`RT-341.2`（PKCE も送る。OpenTouryo#670））。**`FAPI1_Client` は明示しないまま**（`client_secret` で種別の判定まで進むことを測る E2E が使う） |
 | **`TestClient2_2` / `TestClient2_3`** | **`tls_client_auth` を明記**（`FA-6.*`。**DN を登録しただけでは通らない**） |
 | **`TestClient_8`** | **`private_key_jwt` を明記**（`RT-262.1`） |
 
@@ -1065,7 +1076,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 | **平文の http** | **実装は `https` を要求するが、ループバックだけは許している**ので、**証明書を用意していない** |
 
 > **コンテナが上がっていなければ Skip する**（`Infrastructure/JwksUri.SkipIfNotAvailableAsync`）。
-> **`container\E2E\1_DockerComposeUp.bat` は、これも一緒に起動する。**
+> **`container\E2E\2_DockerComposeUp.bat` は、これも一緒に起動する。**
 
 ###### 測るのは `/revoke`（`RT-309.2` / `.3`）
 
@@ -1635,7 +1646,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 **DB ストアでは 2 つのサイトが 1 つの DB を共有する**ので、**同じ鍵だと奪い合う**（#260 と同じ事情）。
 
 **署名する鍵と、貼る証明書は、構成ファイルに在る対を使う**
-（**`RsaPfxFilePath` ↔ `SpRp_RsaCerFilePath`**。どちらも `SHA256RSA_Server`）。
+（**`RsaPfxFilePath` ↔ `RsaCerFilePath`**（空なら `SpRp_RsaCerFilePath`。#339）。どちらも `SHA256RSA_Server`）。
 **`SpRp_RsaPfxFilePath`（Client.pfx）とは対になっていない**ので、取り違えないこと。
 
 ###### 歯抜け（実測 2026/10/21）
@@ -2459,7 +2470,7 @@ GenRsaCertForUpstreamByOpenSSL.bat Upstream2
 ```
 
 **その後、上流 2 用の JwkSet を作り直す**（`CommandLineTools/CreateJwkSetJson` を、
-`SpRp_RsaCerFilePath` ＝ `SHA256RSA_Upstream2.cer` / `JwkSetFilePath` ＝ `JwkSet_Upstream2.json`
+`RsaCerFilePath` ＝ `SHA256RSA_Upstream2.cer` / `JwkSetFilePath` ＝ `JwkSet_Upstream2.json`
 の設定で 1 回）。**`C:\root\files\resource` にも配置する**（コンテナはそこをマウントする）。
 
 > **`.bat` は CRLF でなければならない**（`.gitattributes` の `*.bat text eol=crlf`）。
@@ -3408,7 +3419,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | **`SA-6.n`**（SAML2 の ID 連携） | **ホストの core / netfx ＋ 上流コンテナ** | **下流 = `-UserStoreType` / 上流 = `mem` 固定**（**クロス ストア**。`RT-140.n` と同じ） |
 | `SA-7.n`（アサーションの属性） | ホストの core / netfx | `-UserStoreType`（**上流コンテナは要らない**。自己テストの口で測る） |
 
-> **「この配備の値」は共通設定のまま**である（#290。`JwkSetUri` / `SpRp_*CerFilePath`）。
+> **「この配備の値」はサーバ側のキー**である（#290・#339。`JwkSetUri` / `RsaCerFilePath` ほか）。
 > **上流（相手）の値だけが `IdFederation*` のキー**に在る
 > （`IdFederationJwkSetUri` / `IdFederationOidcDiscoveryUrl` / `IdFederationOidcCerFilePath` ほか）。
 > **`test.ps1` が渡しているのも、その `IdFederation*` だけ**である。
@@ -3425,7 +3436,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 > | **メタデータの URL**を届かない口に | **8/8 通る**（ログに `The SAML2 metadata could not be read.`） |
 > | **メタデータと鍵の両方**を壊す | **`SA-6.1` / `SA-6.2` / `SA-6.4` が落ちる**（`SA-6.3` は署名に依存しないので通る） |
 
-> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `0_PublishIdP.ps1` → `docker compose up -d --build`）。
+> **Open棟梁 の複製を更新したら、コンテナも作り直すこと**（`1_BuildAll.ps1 -Libs Force` → `1_PublishIdP.ps1` → `docker compose up -d --build`）。
 > **実測（Open棟梁 #603 / #604 の取り込み。2026/10/12）** : **複製だけを更新して回すと 20 件が落ちた** — **`SigAlg` の扱い**（`SA-1.1` / `SA-1.3` / `RT-246.4` / `RT-246.7` / `SA-6.*`）と、**自己テストの `aud` の確認**（`RT-246.1` / `RT-246.6` / `RT-232.9`）である。
 > **どちらも「確認するようになった」ことによる失敗**であり、緩む方向ではない。
 | **`CN-n.n`** | **下流コンテナ ＋ 上流コンテナ** | **両方 `mem` 固定**（切り替えない） |
@@ -3487,7 +3498,7 @@ TC が倒れている状態の EX は、拡張の問題なのか土台の問題�
 ```
 
 > **原本を作り直すときは、IdP の 3 コンテナも起こしておくこと**
-> （`container\E2E\1_DockerComposeUp.bat`。**アプリを直したなら `docker compose up -d --build`**）。
+> （`container\E2E\2_DockerComposeUp.bat`。**アプリを直したなら、先に `1_PublishIdP.ps1`**）。
 > **止めたまま作り直すと、`CN-*` と `RT-140.4` 以降が原本から消える** —
 > **通しで Skip されたケースは記録が出ないので、載らない**（上の `Skip` の話と同じ）。
 >
@@ -3694,7 +3705,7 @@ cd root
 
 ```powershell
 cd container\E2E
-.\0_PublishIdP.ps1
+.\1_PublishIdP.ps1
 docker compose up -d upstream
 ```
 
@@ -3702,7 +3713,7 @@ docker compose up -d upstream
 > **Skip の件数**（サマリに出る）と、**Skip の理由**で気付くこと。
 
 > **上流は「作り直さないと古いまま」である。** ここが一番踏みやすい。
-> **アプリを直したら、必ず `0_PublishIdP.ps1` と `docker compose up -d --build upstream` を回す。**
+> **アプリを直したら、必ず `1_PublishIdP.ps1` と `docker compose up -d --build upstream` を回す。**
 >
 > **実測（#250 の段階 5）** : `FormPost.cshtml` を直した（#252）あと、**上流を作り直さずに**
 > `RT-140.7` を回して落ちた。**下流は新しく、上流だけが古い**という状態で、
@@ -3790,7 +3801,7 @@ docker compose up -d upstream
 
    ```powershell
    cd container\E2E
-   .\0_PublishIdP.ps1
+   .\1_PublishIdP.ps1
    docker compose up -d upstream
    ```
 

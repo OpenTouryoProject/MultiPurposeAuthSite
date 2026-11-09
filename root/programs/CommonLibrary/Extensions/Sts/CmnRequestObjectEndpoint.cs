@@ -36,6 +36,8 @@
 //*  2026/10/31  玄人 幸道         /ros と PAR の Request Object も、claims がオブジェクトでなければ断る（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.RequestObject.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //*  2026/11/06  玄人 幸道         /ros と PAR の Request Object の aud を issuer と照合する。FAPI の登録は exp・nbf を必須にし、寿命を 60 分以内に限る（#336）
+//*  2026/11/06  玄人 幸道         exp・nbf を Open棟梁 の TryReadNumericDate で読む。invalid_request_object を Open棟梁 の定数にし、根拠を RFC 9101 §7 に直した（#337）
+//*  2026/11/09  玄人 幸道         預ける Request Object に、PAR か・署名付きかの印を付ける（#346 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -81,6 +83,53 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region 預けた経路の印（#346）
+
+        /// <summary>預けた中身に付ける印：PAR で預けたか（サーバが付ける。#346）</summary>
+        /// <remarks>**URN の形にして、認可要求のパラメタと重ならないようにしてある。**</remarks>
+        public const string OriginPushedKey = "urn:mpas:origin:pushed";
+
+        /// <summary>預けた中身に付ける印：署名付きの Request Object だったか（サーバが付ける。#346）</summary>
+        public const string OriginSignedKey = "urn:mpas:origin:signed";
+
+        /// <summary>預ける中身に、経路の印を付ける（#346）</summary>
+        /// <param name="payload">預ける中身</param>
+        /// <param name="pushed">PAR で預けたか</param>
+        /// <param name="signed">署名付きの Request Object だったか</param>
+        /// <remarks>
+        /// **必ず上書きする。** **クライアントが同じ名前のクレーム・フォームの値を入れてきても、サーバの値が勝つ**
+        /// （**入れてきた値を信じると、`/ros` の Request Object が「PAR で預けた」と名乗れる**）。
+        /// </remarks>
+        private static void MarkOrigin(JObject payload, bool pushed, bool signed)
+        {
+            payload[CmnRequestObjectEndpoint.OriginPushedKey] = pushed;
+            payload[CmnRequestObjectEndpoint.OriginSignedKey] = signed;
+        }
+
+        /// <summary>預けた中身から、経路の印を読む（#346）</summary>
+        /// <param name="payload">預けた中身（null なら、どちらも false）</param>
+        /// <param name="pushed">PAR で預けたか</param>
+        /// <param name="signed">署名付きの Request Object だったか</param>
+        /// <remarks>**印が無い（この版より前に預けたもの）・真偽値でないものは false**（＝ 必須にした登録では断られる）。</remarks>
+        public static void ReadOrigin(JObject payload, out bool pushed, out bool signed)
+        {
+            pushed = CmnRequestObjectEndpoint.IsTrue(payload, CmnRequestObjectEndpoint.OriginPushedKey);
+            signed = CmnRequestObjectEndpoint.IsTrue(payload, CmnRequestObjectEndpoint.OriginSignedKey);
+        }
+
+        /// <summary>真偽値の true か</summary>
+        /// <param name="payload">JObject</param>
+        /// <param name="name">名前</param>
+        /// <returns>true なら true</returns>
+        private static bool IsTrue(JObject payload, string name)
+        {
+            JToken token = (payload == null) ? null : payload[name];
+
+            return token != null && token.Type == JTokenType.Boolean && (bool)token;
+        }
+
+        #endregion
+
         #region FAPI の時刻のクレーム（#336）
 
         /// <summary>FAPI の Request Object の寿命の上限（秒）</summary>
@@ -112,43 +161,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return true;
             }
 
-            if (!CmnRequestObjectEndpoint.TryReadNumericDate(payload[OAuth2AndOIDCConst.exp], out double exp)
-                || !CmnRequestObjectEndpoint.TryReadNumericDate(payload[OAuth2AndOIDCConst.nbf], out double nbf))
+            //  **読み方は Open棟梁 の `RequestObject.Verify` と同じ**（OpenTouryo#647・#661。#337）。
+            //    **数値だけを受ける**（`acceptString: false`。RFC 7519 §2 の NumericDate は JSON の数値）。
+            //    **外から来た値でも例外にならない**（読めなければ false）。
+            if (!CmnJwtToken.TryReadNumericDate(payload[OAuth2AndOIDCConst.exp], false, out decimal exp)
+                || !CmnJwtToken.TryReadNumericDate(payload[OAuth2AndOIDCConst.nbf], false, out decimal nbf))
             {
                 return false;
             }
 
-            double now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
             return nbf >= now - CmnRequestObjectEndpoint.FapiRequestObjectMaxLifetimeSeconds
                 && exp - nbf <= CmnRequestObjectEndpoint.FapiRequestObjectMaxLifetimeSeconds;
-        }
-
-        /// <summary>NumericDate（JSON の数値）を読む（#336）</summary>
-        /// <param name="token">クレームの値</param>
-        /// <param name="value">秒</param>
-        /// <returns>読めれば true</returns>
-        /// <remarks>**数値だけを受ける**（RFC 7519 §2。文字列は受けない）。**外から来た値なので、例外にしない。**</remarks>
-        private static bool TryReadNumericDate(JToken token, out double value)
-        {
-            value = 0;
-
-            if (token == null || (token.Type != JTokenType.Integer && token.Type != JTokenType.Float))
-            {
-                return false;
-            }
-
-            try
-            {
-                value = token.Value<double>();
-            }
-            catch (Exception)
-            {
-                // 桁の大きすぎる整数など
-                return false;
-            }
-
-            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
 
         #endregion
@@ -229,7 +254,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     Helper.GetInstance().GetJwkRsaPublickey(iss));
 
                 // **登録 request_object_signing_alg で絞る**（#262）。
-                //   **CIBA（上の分岐）は対象外**。あちらは ES256 固定で、仕様でも別の登録項目。
+                //   **CIBA（上の分岐）は対象外**。あちらは ES256 だけを受け（Discovery の広告と同じ）、仕様でも別の登録項目。
                 if (!CmnEndpoints.AllowsVerifyingAlg(
                     Helper.GetInstance().GetRequestObjectSigningAlg(iss),
                     CmnEndpoints.RequestObjectSigningAlgs,
@@ -278,6 +303,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 return false;
             }
+
+            //  **経路の印**（#346）。**/ros は、署名を確かめた Request Object だけを預かる**（PAR ではない）。
+            CmnRequestObjectEndpoint.MarkOrigin(payload, false, true);
+            requestObjectString = payload.ToString(Formatting.None);
 
             string urn = Guid.NewGuid().ToString("N");
 
@@ -394,7 +423,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     CmnEndpoints.RequestObjectSigningAlgs,
                     JwtReader.TryReadAlg(request)))
                 {
-                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description,
                         "The request object is not signed with the registered request_object_signing_alg.");
                     return false;
@@ -403,7 +432,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **aud は issuer だけ**（RFC 9101 §4 / FAPI。#336。`RegisterRequestObject` と同じ）。
                 if (!RequestObject.Verify(request, CmnServerParams.IssuerId, out string iss, pubKey))
                 {
-                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object is not verified.");
                     return false;
                 }
@@ -411,7 +440,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 if (iss != client_id)
                 {
                     // **認証したクライアントと、要求の中の iss が食い違う。**
-                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object was not issued by this client.");
                     return false;
                 }
@@ -433,7 +462,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
                 else if (roClientId.Type != JTokenType.String || (string)roClientId != client_id)
                 {
-                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The client_id in the request object does not match the authenticated client.");
                     return false;
                 }
@@ -441,7 +470,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **claims は JSON のオブジェクトであること**（OIDC Core 5.5。#294。フォームの経路と同じ）
                 if (!CmnRequestObjectEndpoint.IsClaimsObjectOrAbsent(payload))
                 {
-                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The claims in the request object must be a JSON object.");
                     return false;
                 }
@@ -450,7 +479,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    **フォームのパラメタ（下）には求めない**（FAPI 2.0 Security Profile は JAR を求めない。求めるのは Message Signing）。
                 if (!CmnRequestObjectEndpoint.VerifyFapiTimeClaims(client_id, payload))
                 {
-                    err.Add(OAuth2AndOIDCConst.error, Const.InvalidRequestObject); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description,
                         "The request object of a FAPI client must have exp and nbf, and live no longer than 60 minutes.");
                     return false;
@@ -517,6 +546,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //   **ここで正規化した値を payload に書き戻しておく**（並びを揃える）。
             string parResponseType = (string)payload[OAuth2AndOIDCConst.response_type];
 
+            //  **PAR そのもので預けるので `pushed` は true。** **`request`（JAR）なら署名付き。**
+            //    **署名付きを必須にした登録・配備では、フォームのパラメタだけの PAR を `invalid_request` で断る**
+            //    （RFC 9126 §2.3。#346）。
+            bool signedRequestObject = !string.IsNullOrEmpty(request);
+
             if (!CmnEndpoints.ValidateAuthZReqParam(
                 (string)payload[OAuth2AndOIDCConst.client_id],
                 (string)payload[OAuth2AndOIDCConst.redirect_uri],
@@ -525,7 +559,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 (string)payload[OAuth2AndOIDCConst.nonce],
                 out string _, out string error, out string errorDescription,
                 (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
-                (string)payload[OAuth2AndOIDCConst.prompt] ?? ""))
+                (string)payload[OAuth2AndOIDCConst.prompt] ?? "",
+                true, signedRequestObject))
             {
                 err.Add(OAuth2AndOIDCConst.error, error);
                 err.Add(OAuth2AndOIDCConst.error_description, errorDescription);
@@ -537,6 +572,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #endregion
 
             #region 預かる
+
+            //  **経路の印**（#346）。**フォームの値で同じ名前を入れてきても、ここで上書きする。**
+            CmnRequestObjectEndpoint.MarkOrigin(payload, true, signedRequestObject);
 
             string urn = Guid.NewGuid().ToString("N");
 

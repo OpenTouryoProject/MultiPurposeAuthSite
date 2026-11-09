@@ -21,6 +21,10 @@
 //*  2026/10/29  玄人 幸道         自己テストを始めていない要求・壊れた JARM で、500 にしない（#294）
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //*  2026/11/06  玄人 幸道         access_token を、期待する iss・aud を渡す版の AccessToken.Verify で検証する（OpenTouryo#655。#336）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
+//*  2026/11/07  玄人 幸道         「FAPI1 PC, PKCE」のボタンで、code_verifier も送る（OpenTouryo#670。#341）
+//*  2026/11/08  玄人 幸道         FAPI2 の引き換えと、結果の画面の更新・取り消し・照会を、登録の方法で送る。FAPI2 は code_verifier も送る（OpenTouryo#676。#345）
 //**********************************************************************************
 
 /*
@@ -221,6 +225,24 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region 結果の画面のボタンのクライアント認証
+
+        /// <summary>結果の画面のボタン（更新・取り消し・照会）が送るクライアント認証</summary>
+        /// <param name="clientId">その回の client_id</param>
+        /// <returns>送るクライアント認証</returns>
+        /// <remarks>
+        /// **登録の `token_endpoint_auth_method` で送る**（#345。OpenTouryo#676）。
+        /// **明示していない登録は、従来どおり `client_secret_basic`**（サーバも、空なら秘密だけを通す。#307 の段階 3）。
+        /// 以前はクライアントによらず秘密を Basic で送っていたので、**FAPI の登録では断られていた。**
+        /// </remarks>
+        private static SelfTestClient.ClientCredential SelfTestCredentialOf(string clientId)
+        {
+            return SelfTestClient.CredentialOf(
+                clientId, OAuth2AndOIDCEnum.AuthMethods.client_secret_basic, Const.OidcScopes);
+        }
+
+        #endregion
+
         #region OAuth2 / OIDC の Redirect Endpoint
 
         #region Authorization Codeグラント種別
@@ -263,7 +285,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //    | 渡すもの | 値 |
                     //    |---|---|
                     //    | 鍵（`jws`） | **null**（自分が出したトークンなので、設定の選び方で引ける） |
-                    //    | `iss` | **`CmnServerParams.IssuerId`（自分）** — **`SpRp_Isser` は「相手の Issuer」**である |
+                    //    | `iss` | **`CmnServerParams.IssuerId`（自分）** — **`SpRp_Issuer` は「相手の Issuer」**である |
                     //    | `aud` | **その回の `client_id`** |
                     if (!string.IsNullOrEmpty(response))
                     {
@@ -328,31 +350,51 @@ namespace MultiPurposeAuthSite.Controllers
                             // FAPI1
 
                             // **アサーションの組み立ては SelfTestClient**（#246）。
-                            model.AuthMethod = Resources.AccountController.AuthMethodFapi1;
+                            string assertion = SelfTestClient.CreateClientAssertion(
+                                clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.SelfTestScopes);
 
-                            model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, redirect_uri, code,
-                                SelfTestClient.CreateClientAssertion(
-                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.SelfTestScopes));
+                            if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
+                            {
+                                model.AuthMethod = Resources.AccountController.AuthMethodFapi1;
+
+                                model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(
+                                    tokenEndpointUri, redirect_uri, code, assertion);
+                            }
+                            else
+                            {
+                                // **「FAPI1 PC, PKCE」のボタン**（code_challenge を付けて認可を求めた）。
+                                //   **code_verifier も送らないと、引き換えられない**（RFC 7636 §4.5。#245）。
+                                //   以前はアサーションだけを送っていて、このボタンは通らなかった（#341。OpenTouryo#670）。
+                                model.AuthMethod = Resources.AccountController.AuthMethodFapi1Pkce;
+
+                                model.Response = await SelfTestWebApi.GetAccessTokenByCodeWithPkceAsync(
+                                    tokenEndpointUri, redirect_uri, code, code_verifier_InSessionOrCookie, assertion);
+                            }
                         }
                         else if (state.StartsWith(fapi2Prefix))
                         {
                             // FAPI2
 
-                            // **private_key_jwt で交換する**（#246）。
+                            // **登録の token_endpoint_auth_method で交換する**（#345。OpenTouryo#676）。
                             //   FAPI 2.0 が認めるのは MTLS と private_key_jwt の 2 つ。
-                            //   **自己テストのクライアントは、ClientCertPfxFilePath が設定されていなければ証明書を添えない**ので、
-                            //   **証明書の配置を前提にすると、設定が無い配置では /token が 401（invalid_client）になる。**
-                            //   **証明書の配置を前提にしない private_key_jwt に寄せる。**
-                            //   mTLS の経路は E2E（FA-6）が測る。
+                            //   **tls_client_auth を明示した登録（MTLS のボタン）は、証明書で認証する**
+                            //   （証明書は SpRp_ClientCertPfxFilePath。設定が無い配置では invalid_client になる）。
+                            //   **明示していない登録は、従来どおり private_key_jwt**（#246）。
+                            //   **PKCE の code_verifier も送る**（FAPI 2.0 Security Profile §5.3.3.2。空なら送らない）。
+                            SelfTestClient.ClientCredential credential = SelfTestClient.CredentialOf(
+                                clientId_InSessionOrCookie, OAuth2AndOIDCEnum.AuthMethods.private_key_jwt, Const.OidcScopes);
 
-                            // **アサーションの組み立ては SelfTestClient**（#246）。
-                            model.AuthMethod = Resources.AccountController.AuthMethodFapi2;
+                            model.AuthMethod = string.Format(
+                                Resources.AccountController.AuthMethodFapi2, credential.AuthMethod.ToStringByEmit());
+
+                            if (!string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
+                            {
+                                model.AuthMethod = string.Format(
+                                    Resources.AccountController.AuthMethodWithPkce, model.AuthMethod);
+                            }
 
                             model.Response = await SelfTestWebApi.GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, redirect_uri, code,
-                                SelfTestClient.CreateClientAssertion(
-                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.OidcScopes));
+                                tokenEndpointUri, credential, redirect_uri, code, code_verifier_InSessionOrCookie);
                         }
                         else
                         {
@@ -510,12 +552,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // Tokenエンドポイントにアクセス
 
-                        //  client_Idから、client_secretを取得。
-                        string client_id = model.ClientId;
-                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
-
+                        //  **登録の token_endpoint_auth_method で送る**（#345。以前は秘密を Basic で送り、FAPI の登録では断られていた）。
                         model.Response = await SelfTestWebApi.UpdateAccessTokenByRefreshTokenAsync(
-                            tokenEndpointUri, client_id, client_secret, model.RefreshToken);
+                            tokenEndpointUri, AccountController.SelfTestCredentialOf(model.ClientId), model.RefreshToken);
 
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -559,12 +598,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // Revokeエンドポイントにアクセス
 
-                        //  client_Idから、client_secretを取得。
-                        string client_id = model.ClientId;
-                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
-
+                        //  **登録の token_endpoint_auth_method で送る**（#345）。
                         model.Response = await SelfTestWebApi.RevokeTokenAsync(
-                            revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
+                            revokeTokenEndpointUri, AccountController.SelfTestCredentialOf(model.ClientId), token, token_type_hint);
 
                         #endregion
                     }
@@ -594,12 +630,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // Introspectエンドポイントにアクセス
 
-                        //  client_Idから、client_secretを取得。
-                        string client_id = model.ClientId;
-                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
-
+                        //  **登録の token_endpoint_auth_method で送る**（#345）。
                         model.Response = await SelfTestWebApi.IntrospectTokenAsync(
-                            introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
+                            introspectTokenEndpointUri, AccountController.SelfTestCredentialOf(model.ClientId), token, token_type_hint);
 
                         #endregion
                     }
@@ -914,7 +947,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             string logoutToken = MyHttpContext.Current.Request.HasFormContentType
-                ? MyHttpContext.Current.Request.Form[Const.LogoutToken].ToString() : "";
+                ? MyHttpContext.Current.Request.Form[OAuth2AndOIDCConst.logout_token].ToString() : "";
 
             if (string.IsNullOrEmpty(logoutToken))
             {

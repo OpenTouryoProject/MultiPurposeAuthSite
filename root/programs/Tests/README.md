@@ -323,6 +323,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
 | `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` / `RT-246` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない。**自己テストの PAR ボタン**（Open棟梁 のクライアントで預けて認可する。`RT-246.1`） |
+| `Tests/Issues/ProfileEnforcementTests.cs` | `RT-346` | **FAPI の要件を、登録ごとに強制する**（#346）。**PAR を必須にした登録はクエリ・`/ros` の要求を断り、PAR だけ通す**（`RT-346.2`）、**署名付きの Request Object を必須にした登録は、クエリ・フォームだけの PAR を断る**（`RT-346.3`）、**DPoP を必須にした登録は、証明の無いトークン要求を断り、断られた code はまだ使える**（`RT-346.4`）、**証明書を必須にした登録は、証明書の無いトークン要求を断り、在れば秘密の認証でも縛る**（`RT-346.5`。core だけ）、**Discovery の 2 つの設定**（`RT-346.6`）、**`tls_client_auth` の client_credentials も縛られる**（`RT-346.7`。core だけ）、**証明書を必須にした device の登録は、device_code でも縛られる**（`RT-346.8`。core だけ）、**拘束を必須にした登録は Implicit・Hybrid の `token` を断られる**（`RT-346.9`）、**refresh_token でも DPoP の証明を求める**（`RT-346.10`）、**JWT Bearer は必須にした登録だけ縛る**（`RT-346.11`。core だけ）、**`tls_client_auth` の device 登録の device_code も縛られる**（`RT-346.12`。core だけ）。`RT-346.9`〜`.12` は別モデルのレビュー（#347）の指摘で足した。`RT-346.1`（動的登録）は `ClientRegistrationTests` に在る |
 | `Tests/Issues/IssuerParameterTests.cs` | `RT-231` | 認可応答の `iss`（RFC 9207）。成功・失敗・JARM・Discovery の広告 |
 | `Tests/Issues/MalformedJwtTests.cs` | `RT-241` | JWT でない値・`iss` の無い JWT・未登録のクライアントで **500 にしない**（`/ros` と `client_assertion`） |
 | `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
@@ -362,7 +363,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/BackChannelLogoutTests.cs` | `RT-310` | **ログアウトを RP へ伝える**（#310 の段階 2）。**Discovery が `backchannel_logout_supported` を広告する**こと（`RT-310.4`。**`frontchannel_logout_supported` はまだ出さない**）、**`/end_session` で `backchannel_logout_uri` を登録した RP に `logout_token` が届く**こと（`RT-310.5`。**`aud` / `sid` / `events` / `nonce` 無し / `typ` まで見る**。**登録が無い RP には届かない**）、**同意画面を出しただけ・拒否された RP には伝えない**こと（`RT-310.6`）。**受け口はサイト自身**（`/Account/BackChannelLogoutClient`。**`IsLockedDownTestEndpoints` で閉じる**ので、閉じていれば Skip）。**通知は背景で送られる**ので**届くまで待つ** |
 | `Tests/Issues/SessionIdTests.cs` | `RT-310` | **`sid`（OP のセッションの識別子）を `id_token` に出す**（#310 の段階 1）。**同じセッション・同じ RP なら 2 回目も同じ値で、`refresh_token` で取り直しても同じ**こと（`RT-310.1`。**台帳から引けている**）、**RP ごとに別の値**であること（`RT-310.2`。**`pairwise` の `sub` を分けた意味を消さない**）、**サインアウトして入り直すと変わる**こと（`RT-310.3`）。**値そのものは見ない**（guid。**同じか違うかだけ**） |
 | `Tests/Issues/JwksUriTests.cs` | `RT-309` | **クライアントの鍵を `jwks_uri` から引く**（#309 の段階 1）。**動的登録で `jwks_uri` を登録でき、その URL の鍵で `private_key_jwt` が通る**こと（`RT-309.1`。**`jwks` との併記と、読めない URL は `400`**）、**画面から登録した `jwks_uri` は 1 回目に断られ、背景で補充された後は通る**こと（`RT-309.2`。**要求の経路では取りに行かない**）、**同じ URL の中身を入れ替えると `PUT` で読み直す**こと（`RT-309.3`）、**`software_statement` の中だけで主張された `jwks_uri`** でも登録でき**1 回目から通る**こと（`RT-309.4`。**段階 2**）。**相手の `jwks_uri` は静的配信のコンテナ**（`container/E2E/` の `jwks`。**44305**）**で用意する** — **上がっていなければ Skip** |
-| `Tests/Issues/SoftwareStatementAdminTests.cs` | `RT-308` | **発行者（ベンダ）の台帳を DB ＋ 画面で持つ**（#308）。**画面から足して・直して・消せる**こと（`RT-308.1`）、**DB に PEM を貼った発行者の `software_statement` で登録が通り、消すとその場で通らなくなる**こと（`RT-308.2`。**`CerFilePath` は空 ＝ 本文だけで検証**）、**設定ファイルに在る鍵は画面から足せない**こと（`RT-308.3`。**同じ鍵なら設定が勝つ**）。**鍵は対象ごとに分ける**（DB ストアでは 1 つの DB を共有するため）。**署名は `RsaPfxFilePath`、貼る証明書は `SpRp_RsaCerFilePath`**（**対になっている方**） |
+| `Tests/Issues/SoftwareStatementAdminTests.cs` | `RT-308` | **発行者（ベンダ）の台帳を DB ＋ 画面で持つ**（#308）。**画面から足して・直して・消せる**こと（`RT-308.1`）、**DB に PEM を貼った発行者の `software_statement` で登録が通り、消すとその場で通らなくなる**こと（`RT-308.2`。**`CerFilePath` は空 ＝ 本文だけで検証**）、**設定ファイルに在る鍵は画面から足せない**こと（`RT-308.3`。**同じ鍵なら設定が勝つ**）。**鍵は対象ごとに分ける**（DB ストアでは 1 つの DB を共有するため）。**署名は `RsaPfxFilePath`、貼る証明書は `RsaCerFilePath`**（空なら `SpRp_RsaCerFilePath`。#339）（**対になっている方**） |
 | `Tests/Issues/ManageSaml2OAuth2DataTests.cs` | `RT-277` | **管理画面のクライアント登録**（`/Manage/AddSaml2OAuth2Data`。#277 の段階 1・3）。**3 回押さないと登録できない**こと（`client_id` → `client_secret` → 登録。**1 回目で「登録」を押しても黙って何も起きない**）、**折り返し先の候補が `datalist` に出る**こと、**新規登録の `redirect_uri_code` の既定が `test_self_code`** であること。**サインイン中の利用者自身の登録を使い、測り終えたら消す**。**`RT-297.1` は、クライアント登録の `client_secret` が暗号化しても往復すること**（#297。**発行 → 登録 → 読み直し**）。**`RT-277.9` 〜 `.11` は、管理画面の一覧**（#307 の段階 5-a-2）— **2 件登録して一覧に並ぶこと・`client_id` の昇順であること・2 件目だけを編集できること**（`RT-277.9`）、**自分の物でない `client_id` では編集も削除もできないこと**（`RT-277.10`。**種データのクライアント ＝ 所有者の無い行で測る**）、**一覧から 1 件だけ消せること**（`RT-277.11`） |
 | `Tests/Issues/IdFederationAdminTests.cs` | `RT-292` | **上流 IdP の登録を、user store と管理画面で扱う**（`/IdFederationAdmin`。#292 の段階 2）。**足して・直して・消せること**／**足した上流がサインイン画面の導線に出ること**（**設定 → user store の順に読む**）／**`SystemAdmin` でなければ開かないこと**。**4 つのストアで測った**（`mem` / `sql` / `ora` / `npg`）。**`RT-297.2` は、上流の登録の `client_secret` が暗号化しても往復すること**（#297）。**`RT-292.4` は、上流ごとの署名鍵（`.pfx` のパスとパスワード）が往復すること**（#292 の段階 4-b。**パスワードは暗号化して保管する**） |
 | `Tests/Issues/WebAuthnTests.cs` | `RT-137` | **WebAuthn**（`Fido2` 4.2.0）。登録・認証の**要求を組み立てる段**（`CredentialCreateOptions` / `AssertionOptions`）、**壊れた入力を封筒に入れて 200 で返すこと**、**challenge を使い回していないこと**。**net48 版には口が無いこと**も測る |
@@ -414,7 +415,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 |---|---|---|
 | `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／`refresh_token` を発行しない／`client_secret` と PKCE の併用も、Hybrid も通らない） |
 | 〃 | `FA-2` | `fapi2`（`client_secret` も PKCE も通らない。x509 が要る） |
-| 〃 | `FA-3` | `device`（PKCE で通る。表の「PKCE の S256」の行） |
+| 〃 | `FA-3` | `device`（PKCE で通る。表の「PKCE の S256」の行。**`private_key_jwt` では通らない**。#346） |
 | 〃 | `FA-4` | Device AuthZ グラントは `normal` / `device` の登録にだけ許す（#224） |
 | `Tests/Fapi/CibaClientModeTests.cs` | `FA-5` | CIBA を `fapi_ciba` 以外の登録（`TestClient4_2`）や、既知でない登録値（`TestClient4_3`）で使うと、**開始（`/ciba_authz`）で**断る |
 | `Tests/Fapi/MtlsTests.cs` | `FA-6` | **mTLS**（#226）: `fapi2` は Subject が一致する証明書の認可コードで通る／証明書なし・不一致は `invalid_client`／既知でない登録値は証明書が一致しても通さない／**トークンの `cnf` は RFC 8705 の形式で、その証明書の要求でしか使えない**。**net48 版は `-NetFxMtls` のときだけ**（下記） |
@@ -590,7 +591,7 @@ cd root
 | 認可コード | `client_secret` ＋ PKCE | normal | `FA-1.3` |
 | 認可コード | PKCE plain | normal | `RT-220.2` |
 | 認可コード | PKCE S256 | normal / fapi1 / device | `FA-1.1` / `FA-3.1` |
-| 認可コード | `private_key_jwt` | normal / fapi1 / fapi2 / device | `RT-238.4` |
+| 認可コード | `private_key_jwt` | normal / fapi1 / fapi2（**device は外した**。#346） | `RT-238.4` / `FA-3.2`（device は断られる） |
 | 認可コード | mTLS | normal / fapi1 / fapi2 | `FA-6.1`（net10.0。net48 は `-NetFxMtls`） |
 | `refresh_token` | `private_key_jwt` | normal / fapi1 / fapi2 | `RT-239.5` |
 | `refresh_token` | mTLS | normal / fapi1 / fapi2 | **`FA-6.5`**（#245 で追加） |

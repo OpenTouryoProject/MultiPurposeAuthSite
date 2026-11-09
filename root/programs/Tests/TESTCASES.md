@@ -4310,7 +4310,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. FAPI2 の自己テストで、request_uri 経路の code を得る
-1. client_assertion を添えて、code をトークンに交換する
+1. client_assertion を添えて、code をトークンに交換する（code_verifier も送る。#345）
 
 **検証（合否を判定する）**
 
@@ -6882,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus
+1. GET /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=1676e987-6e7c-45b8-8598-855ca82a8e4f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -10922,6 +10922,477 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 認証が通る（HTTP 200）
 - invalid_client
 
+## RT-337.1 /ciba_authz : login_hint は、日付の形でも文字列のまま読む。null・オブジェクトは invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **login_hint は文字列のクレーム**で、日付の形をしていても、利用者を指す値として読む（日付として読めずに断らない）。**必須のクレームが null・オブジェクトなら、要求の誤り**として invalid_request（HTTP 400）で返す（500・server_error にしない）。 |
+| 根拠 | CIBA Core §7.1 / §13 / #337 |
+| テスト | `RT33701_ciba_authzはlogin_hintを文字列のまま読みnullとオブジェクトを断る` |
+
+**手順**
+
+1. login_hint が日付の形の文字列（その利用者は居ない）
+1. login_hint が null
+1. login_hint がオブジェクト
+
+**検証（合否を判定する）**
+
+- 日付の形の login_hint : HTTP 400 で返る
+- 日付の形の login_hint : error
+- null の login_hint : HTTP 400 で返る
+- null の login_hint : error
+- オブジェクトの login_hint : HTTP 400 で返る
+- オブジェクトの login_hint : error
+
+## RT-337.2 /ciba_authz : 任意のクレーム（binding_message・user_code・requested_expiry・client_notification_token）でも、オブジェクト・配列なら invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **任意のクレームは、無いのはよいが、在るなら文字列（requested_expiry は正の整数）でなければならない。**読めない値を無いものとして受けると、requested_expiry の {} が既定の期限で通るなど、要求の誤りを握りつぶす。 |
+| 根拠 | CIBA Core §7.1 / §13 / #337 |
+| テスト | `RT33702_ciba_authzは任意のクレームでもオブジェクトと配列を断る` |
+
+**手順**
+
+1. 対照：任意のクレームが正しい要求
+1. binding_message がオブジェクト・配列
+1. user_code がオブジェクト・配列
+1. requested_expiry がオブジェクト・配列
+1. client_notification_token がオブジェクト・配列
+
+**検証（合否を判定する）**
+
+- 正しい要求 : HTTP 400 で返る
+- 正しい要求 : error
+- binding_message がオブジェクト : HTTP 400 で返る
+- binding_message がオブジェクト : error
+- binding_message が配列 : HTTP 400 で返る
+- binding_message が配列 : error
+- user_code がオブジェクト : HTTP 400 で返る
+- user_code がオブジェクト : error
+- user_code が配列 : HTTP 400 で返る
+- user_code が配列 : error
+- requested_expiry がオブジェクト : HTTP 400 で返る
+- requested_expiry がオブジェクト : error
+- requested_expiry が配列 : HTTP 400 で返る
+- requested_expiry が配列 : error
+- client_notification_token がオブジェクト : HTTP 400 で返る
+- client_notification_token がオブジェクト : error
+- client_notification_token が配列 : HTTP 400 で返る
+- client_notification_token が配列 : error
+
+## RT-341.1 自己テストの FAPI1 のボタン（FAPI1・FAPI1, OIDC）が、private_key_jwt を明示した fapi1 の登録を選び、トークンを得て結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **自己テストは、FAPI1 の認可コードを `private_key_jwt`（`client_assertion`）で引き換える。****登録が方法を明示していないと、`private_key_jwt` は通らない**（登録が空なら `client_secret` だけ）。**fapi1 の登録は `client_secret` では引き換えられない**ので、**明示した登録を選ぶ必要がある。** |
+| 根拠 | RFC 7523 §2.2 / RFC 7591 §2 / #341 |
+| テスト | `RT34101_自己テストのFAPI1のボタンが結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI1」を押し、認可して、戻りの画面を開く
+1. 「AuthorizationCodeFAPI1_OIDC」を押し、認可して、戻りの画面を開く
+
+**検証（合否を判定する）**
+
+- AuthorizationCodeFAPI1 : client_id は FAPI1_PrivateKeyJwt_Client
+- AuthorizationCodeFAPI1 : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI1 : access_token が出る（トークン要求が通った）
+- AuthorizationCodeFAPI1_OIDC : client_id は FAPI1_PrivateKeyJwt_Client
+- AuthorizationCodeFAPI1_OIDC : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI1_OIDC : access_token が出る（トークン要求が通った）
+- AuthorizationCodeFAPI1_OIDC : id_token が出る
+
+## RT-341.2 自己テストの「FAPI1 PC, PKCE」のボタンが、private_key_jwt で認証し code_verifier も送って引き換え、結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **`code_challenge` を付けて認可を求めたコードは、トークン要求で `code_verifier` が要る。****クライアント認証（`private_key_jwt`）とは別に送る**（PKCE はクライアント認証ではない）。**アサーションだけを送っていた間は、このボタンは通らなかった。** |
+| 根拠 | RFC 7636 §4.5 / RFC 7523 §2.2 / #341 |
+| テスト | `RT34102_自己テストのFAPI1のPKCEのボタンが結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI1_PKCE」を押す
+1. 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）
+
+**検証（合否を判定する）**
+
+- client_id は FAPI1_PrivateKeyJwt_Client
+- code_challenge_method は S256
+- code_challenge が付く
+- 結果の画面が返る（エラー画面にならない）
+- access_token が出る（トークン要求が通った）
+- id_token が出る
+
+## RT-345.1 自己テストの FAPI2 のボタン（FAPI2 CC・FAPI2 CC, PAR）が、Request Object に code_challenge（S256）を入れ、code_verifier を送って引き換え、結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 はクライアントに S256 の PKCE を求める。** PAR と Request Object を使うとき、**PKCE のパラメタは Request Object の中に入る。** **`code_challenge` を付けて認可を求めたコードは、トークン要求で `code_verifier` が要る**（無ければ引き換えられない）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.3.2 / RFC 9101 §4 / RFC 7636 §4.3・§4.5 / #345 |
+| テスト | `RT34501_自己テストのFAPI2のボタンがPKCEで結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI2」を押す
+1. 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）
+1. 「AuthorizationCodeFAPI2_PAR」を押す
+1. 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）
+
+**検証（合否を判定する）**
+
+- AuthorizationCodeFAPI2 : 自己テストが code_verifier を用意する（43 文字以上）
+- AuthorizationCodeFAPI2 : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI2 : access_token が出る（code_verifier を送って引き換えられた）
+- AuthorizationCodeFAPI2 : id_token が出る
+- AuthorizationCodeFAPI2 : 画面のクライアント認証の欄が、private_key_jwt と code_verifier を示す
+- AuthorizationCodeFAPI2_PAR : Request Object に code_challenge_method = S256 が入る
+- AuthorizationCodeFAPI2_PAR : Request Object に code_challenge が入る
+- AuthorizationCodeFAPI2_PAR : 自己テストが code_verifier を用意する（43 文字以上）
+- AuthorizationCodeFAPI2_PAR : 結果の画面が返る（エラー画面にならない）
+- AuthorizationCodeFAPI2_PAR : access_token が出る（code_verifier を送って引き換えられた）
+- AuthorizationCodeFAPI2_PAR : id_token が出る
+- AuthorizationCodeFAPI2_PAR : 画面のクライアント認証の欄が、private_key_jwt と code_verifier を示す
+
+## RT-345.2 FAPI2 の自己テストの結果の画面で、照会・更新・取り消しのボタンが、登録の方法（private_key_jwt）で送って通る
+
+| | |
+|---|---|
+| 観点 | **サーバは、登録が明示した方法でしか通さない**（`token_endpoint_auth_method`）。**以前の結果の画面のボタンは、クライアントによらず秘密を Basic で送っていた**ので、**private_key_jwt を明示した fapi2 の登録では断られていた。** fapi2 は refresh_token を、非対称の証明でだけ使える。 |
+| 根拠 | RFC 7523 §2.2 / RFC 6749 §6 / RFC 7009 §2.1 / RFC 7662 §2.1 / #345 |
+| テスト | `RT34502_FAPI2の結果の画面のボタンがprivate_key_jwtで通る` |
+
+**手順**
+
+1. 自己テストを通し、結果の画面まで進む
+1. 「IntrospectAccess」を押す
+1. 「Refresh」を押す
+1. 「RevokeAccess」を押す
+1. 「IntrospectAccess」を押す
+
+**検証（合否を判定する）**
+
+- 照会（access_token）: **有効**（private_key_jwt で認証できた）
+- 更新 : **新しい access_token が画面に出る**（private_key_jwt で認証できた）
+- **取り消した access_token は、照会で無効**（取り消しも通った）
+
+## RT-345.3 自己テストの MTLS のボタンが、tls_client_auth を明示した fapi2 の登録を選び、PAR とトークン要求をクライアント証明書で認証して、結果の画面まで進む
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 が認めるクライアント認証は MTLS か private_key_jwt。** **自己テストは private_key_jwt しか試せなかった**（MTLS で引き換える口が Open棟梁 に無かった。OpenTouryo#676）。**MTLS は明示した登録でしか通らない**ので、ボタンはその登録だけを選ぶ。 |
+| 根拠 | RFC 8705 §2 / RFC 9126 §2 / FAPI 2.0 Security Profile §5.3.2.1 / #345 |
+| テスト | `RT34503_自己テストのMTLSのボタンが結果の画面まで進む` |
+
+**手順**
+
+1. 「AuthorizationCodeFAPI2_PAR_MTLS」を押す（tls_client_auth で /par に預ける）
+1. 認可して、戻りの画面を開く（トークン要求は tls_client_auth ＋ code_verifier）
+
+**検証（合否を判定する）**
+
+- HTTP 200（預けた結果の画面）
+- 選んだ登録が FAPI2_MTLS_Client である
+- PAR のクライアント認証が tls_client_auth である
+- request_uri で認可へ進むリンクが出る（PAR が証明書で認証できた）
+- 結果の画面が返る（エラー画面にならない）
+- access_token が出る（証明書で認証して引き換えられた）
+- 画面のクライアント認証の欄が、tls_client_auth と code_verifier を示す
+
+## RT-346.1 プロファイルを強制する 4 つのメタデータを、動的登録で立てられ、`GET` で読み戻せる。真偽値でなければ `400`。`PUT` で省いても下がらない
+
+| | |
+|---|---|
+| 観点 | **4 つは、それぞれの RFC がクライアントのメタデータとして定める真偽値**である。**保存の経路（DB の列。方言で真偽値の形が違う）を通って、立てた値が残ること**を測る。**`"true"` の文字列を黙って false にすると、締めたつもりで締まっていない登録ができる**ので断る。**締める向きの項目なので、`PUT` では下げられない**（下げるのは管理画面から。#346 の決定） |
+| 根拠 | RFC 9126 §6 / RFC 9101 §10.5 / RFC 9449 §5.2 / RFC 8705 §3.4 / RFC 7591 §3.2.2 / #346 |
+| テスト | `RT34601_強制のメタデータを立てて読み戻せる` |
+
+**手順**
+
+1. 4 つを true にして登録する
+1. GET で読み戻す（保存した行から作り直した応答）
+1. 4 つを省いた PUT（全置換）をして、もう一度読む
+1. 何も立てずに登録する
+1. 真偽値でない値（文字列の "true"）で登録する
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 登録の応答の require_pushed_authorization_requests は true
+- 登録の応答の require_signed_request_object は true
+- 登録の応答の dpop_bound_access_tokens は true
+- 登録の応答の tls_client_certificate_bound_access_tokens は true
+- HTTP の状態は 200
+- GET の require_pushed_authorization_requests は true
+- GET の require_signed_request_object は true
+- GET の dpop_bound_access_tokens は true
+- GET の tls_client_certificate_bound_access_tokens は true
+- HTTP の状態は 200
+- PUT の後の require_pushed_authorization_requests は true のまま
+- PUT の後の require_signed_request_object は true のまま
+- PUT の後の dpop_bound_access_tokens は true のまま
+- PUT の後の tls_client_certificate_bound_access_tokens は true のまま
+- HTTP の状態は 201
+- 登録の応答に require_pushed_authorization_requests は無い（省略は false）
+- 登録の応答に require_signed_request_object は無い（省略は false）
+- 登録の応答に dpop_bound_access_tokens は無い（省略は false）
+- 登録の応答に tls_client_certificate_bound_access_tokens は無い（省略は false）
+- require_pushed_authorization_requests が文字列なら 400 ＋ invalid_client_metadata
+- require_signed_request_object が文字列なら 400 ＋ invalid_client_metadata
+- dpop_bound_access_tokens が文字列なら 400 ＋ invalid_client_metadata
+- tls_client_certificate_bound_access_tokens が文字列なら 400 ＋ invalid_client_metadata
+
+**補足**
+
+- **判定（使わない要求を断ること）は、段階 2 で足す。** ここでは保存と読み戻しだけを測る。**`-UserStoreType` を切り替えて回すと、3 方言の列（Oracle は -1 / 0）を通る。**
+
+## RT-346.2 `require_pushed_authorization_requests` の登録は、PAR で預けた `request_uri` の無い認可要求を `invalid_request` で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、PAR 以外の認可要求を断ることを求める。****`/ros`（独自の口）で預けた `request_uri` も、PAR ではないので断る**（経路は、預けた中身にサーバが付けた印で見分ける）。**`redirect_uri` を確かめた後に断るので、エラーは RP へ返る。** |
+| 根拠 | RFC 9126 §4・§6 / FAPI 2.0 Security Profile 5.3.2.2 の 3 / #346 |
+| テスト | `RT34602_PARを必須にした登録はPARで預けた要求だけが通る` |
+
+**手順**
+
+1. クエリで認可要求を送る
+1. /ros で署名付きの Request Object を預け、その request_uri で送る
+1. PAR に預け、その request_uri で送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断られる（RP へ返る）
+- code は返らない
+- /ros の request_uri も invalid_request で断られる（PAR ではない）
+- PAR は HTTP 201
+- 認可コードが返る
+- state がそのまま返る
+
+## RT-346.3 `require_signed_request_object` の登録は、署名付きの Request Object で送られていない認可要求を断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は、署名付きの Request Object を求める。****この実装は `request` パラメタを受けない**ので、**署名付きの Request Object は `/ros` か PAR の `request` で預ける。****フォームのパラメタだけの PAR は、PAR の口で `invalid_request`（400）で断る**（RFC 9126 §2.3）。 |
+| 根拠 | RFC 9101 §10.5 / RFC 9126 §2.3 / FAPI 1.0 Advanced 5.2.2 の 1 / #346 |
+| テスト | `RT34603_署名付きのRequestObjectを必須にした登録はそれだけが通る` |
+
+**手順**
+
+1. クエリで認可要求を送る
+1. フォームのパラメタだけで PAR に預ける
+1. PAR の request に署名付きの Request Object を入れて預け、その request_uri で送る
+1. /ros に署名付きの Request Object を預け、その request_uri で送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断られる（RP へ返る）
+- HTTP 400 ＋ invalid_request
+- request_uri を返さない
+- PAR は HTTP 201
+- 認可コードが返る
+- 認可コードが返る
+
+## RT-346.4 `dpop_bound_access_tokens` の登録は、DPoP の証明の無いトークン要求を `invalid_request` で断る
+
+| | |
+|---|---|
+| 観点 | **RFC 9449 §5.2 は、証明の無いトークン要求を断ることを求める（MUST）が、エラー コードを決めていない。****`invalid_dpop_proof` は「証明が在って通らない」ときのコード**なので使わず、`invalid_request` にした。**code を消費する前に断る**ので、**断られた code は、証明を添えればまだ使える。** |
+| 根拠 | RFC 9449 §5.2 / FAPI 2.0 Security Profile 5.3.2.1 の 4・5 / #346 |
+| テスト | `RT34604_DPoPを必須にした登録は証明の無いトークン要求を断る` |
+
+**手順**
+
+1. client_credentials を、証明なしで要求する
+1. 同じ要求に、証明を添える
+1. 認可コードを取り、証明なしで交換する
+1. 同じ code を、証明を添えて交換する
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200
+- token_type は DPoP
+- HTTP 400 ＋ invalid_request
+- HTTP 200（断られた code は消費されていない）
+- access_token に cnf.jkt が入る
+
+## RT-346.5 `tls_client_certificate_bound_access_tokens` の登録は、クライアント証明書の無いトークン要求を `invalid_request` で断り、在れば、秘密で認証していても、その証明書でトークンを縛る
+
+| | |
+|---|---|
+| 観点 | **RFC 8705 §3.4 は「エラーにするか、縛らないトークンを出すかはサーバが決める」としている。この実装は断る。****縛るのは、認証の方法によらない**（RFC 8705 §3）。**以前は、証明書で認証した登録（`tls_client_auth`）のときだけ縛っていた**（秘密で認証すると、証明書を捨てていた）。 |
+| 根拠 | RFC 8705 §3・§3.1・§3.4 / FAPI 2.0 Security Profile 5.3.2.1 の 4・5 / #346 |
+| テスト | `RT34605_証明書を必須にした登録は証明書の無いトークン要求を断る` |
+
+**手順**
+
+1. client_credentials を、証明書なしで要求する
+1. 同じ要求に、クライアント証明書を添える
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-346.6 Discovery の `require_pushed_authorization_requests`・`require_signed_request_object` は、サーバ全体の設定の値（既定は false）
+
+| | |
+|---|---|
+| 観点 | **どちらも AS のメタデータとして標準に在る**（RFC 9126 §5・RFC 9101 §10.5）。**以前は `require_pushed_authorization_requests` を false に固定し、`require_signed_request_object` は出していなかった。****登録ごとの必須は、ここには出ない**（Discovery にクライアント別の項目は無い）。 |
+| 根拠 | RFC 9126 §5 / RFC 9101 §10.5 / RFC 8414 §2 / #346 |
+| テスト | `RT34606_サーバ全体の設定をDiscoveryに出す` |
+
+**検証（合否を判定する）**
+
+- require_pushed_authorization_requests は false（真偽値。既定の配備）
+- require_signed_request_object は false（真偽値。既定の配備）
+
+**補足**
+
+- **true にした配備は、E2E では測っていない**（既定の通しの他のテストが落ちる）。**値は `Config.RequirePushedAuthorizationRequests`・`Config.RequireSignedRequestObject` をそのまま出している。**
+
+## RT-346.7 `tls_client_auth` で認証した client_credentials のトークンは、その証明書に縛られる（`cnf.x5t#S256`）
+
+| | |
+|---|---|
+| 観点 | **以前は、client_credentials・ROPC・JWT Bearer のトークンを証明書に縛っていなかった**（トークンを作る `CreateFromClaims` が、証明書を受けていなかった）。**認可コード・refresh_token は縛っていた**ので、グラントによって振る舞いが違った。**#346 で、必須にした登録の縛りを足すときに見つけて、揃えた。** |
+| 根拠 | RFC 8705 §3・§3.1 / #346 |
+| テスト | `RT34607_tls_client_authのclient_credentialsは証明書に縛られる` |
+
+**手順**
+
+1. 証明書で認証して、client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token の cnf の x5t#S256 は、認証した証明書の SHA-256（BASE64URL）
+
+**補足**
+
+- **ROPC も同じ関数で作る**ので、同じ直し方で縛られる（E2E は client_credentials だけで測る）。**JWT Bearer はクライアント認証を通らない**ので、`tls_client_auth` の登録でも縛らない（証明書を必須にした登録だけ）。
+
+## RT-346.8 `tls_client_certificate_bound_access_tokens` の device の登録は、device_code の要求でも、証明書が無ければ断り、在ればトークンを縛る
+
+| | |
+|---|---|
+| 観点 | **device_code のグラントだけ、トークンを作るときに証明書を渡していなかった**（`ProtectFromPayload` に null）。**証明書を求めるのに、縛らない**ことになっていた（#346 のレビューで見つかった）。**断られた device_code は、まだ使える**（消費する前に断る）。 |
+| 根拠 | RFC 8705 §3・§3.1・§3.4 / RFC 8628 §3.4 / #346 |
+| テスト | `RT34608_証明書を必須にしたdeviceの登録はdevice_codeでも縛る` |
+
+**手順**
+
+1. 機器 : device_code と user_code を得て、ユーザが許可する
+1. 機器 : 証明書なしでトークンを要求する
+1. 機器 : 同じ device_code で、証明書を添えて要求する
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200（断られた device_code は消費されていない）
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-346.9 送信者の拘束を必須にした登録は、`token` を含む response_type（Implicit・Hybrid）を `unauthorized_client` で断られる
+
+| | |
+|---|---|
+| 観点 | **認可エンドポイントで出す access_token には、DPoP の証明もクライアント証明書も届かないので、縛れない。****縛ったトークンだけを出す**には、この経路を断るしかない。**以前はトークン エンドポイントだけで判定していた**ので、ここから縛らないトークンが出た（別モデルのレビューの指摘）。 |
+| 根拠 | FAPI 2.0 Security Profile 5.3.2.1 の 4・5 / RFC 6749 §4.2.2.1 / #346 |
+| テスト | `RT34609_拘束を必須にした登録はImplicitとHybridのtokenを断る` |
+
+**手順**
+
+1. client_name=TestClient_39 で response_type=token を送る
+1. client_name=TestClient_39 で response_type=code token を送る
+1. client_name=TestClient_40 で response_type=token を送る
+1. client_name=TestClient_40 で response_type=code token を送る
+1. 対照 : 拘束を必須にしていない登録（TestClient）で、response_type=token を送る
+
+**検証（合否を判定する）**
+
+- TestClient_39 / token は unauthorized_client（RP へ返る）
+- TestClient_39 / token で access_token は返らない
+- TestClient_39 / token の error_description は、送信者の拘束による断り
+- TestClient_39 / code token は unauthorized_client（RP へ返る）
+- TestClient_39 / code token で access_token は返らない
+- TestClient_39 / code token の error_description は、送信者の拘束による断り
+- TestClient_40 / token は unauthorized_client（RP へ返る）
+- TestClient_40 / token で access_token は返らない
+- TestClient_40 / token の error_description は、送信者の拘束による断り
+- TestClient_40 / code token は unauthorized_client（RP へ返る）
+- TestClient_40 / code token で access_token は返らない
+- TestClient_40 / code token の error_description は、送信者の拘束による断り
+- TestClient / token は access_token が返る（対照）
+
+**補足**
+
+- **`code` だけの要求は通る**（トークン エンドポイントで縛る。`RT-346.4`・`.5`）。**`id_token` だけの要求（access_token を出さない）は、ここでは断らない。**
+
+## RT-346.10 `dpop_bound_access_tokens` の登録は、refresh_token の要求でも、DPoP の証明が無ければ `invalid_request` で断る
+
+| | |
+|---|---|
+| 観点 | **RFC 9449 §5.2 の「トークン要求」は、refresh_token の要求を含む。****断られた refresh_token は、証明を添えればまだ使える**（消費する前に断る。ローテーションで一族ごと失効させない）。 |
+| 根拠 | RFC 9449 §5.2 / §5 / #346 |
+| テスト | `RT34610_DPoPを必須にした登録はrefresh_tokenでも証明を求める` |
+
+**手順**
+
+1. 証明を添えて、認可コードを refresh_token 付きのトークンに引き換える
+1. 証明なしで、refresh_token を使う
+1. 同じ refresh_token を、証明を添えて使う
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200（断られた refresh_token は消費されていない）
+- token_type は DPoP
+
+## RT-346.11 JWT Bearer（RFC 7523）のトークンは、`tls_client_auth` だけの登録では縛られず、`tls_client_certificate_bound_access_tokens` の登録では証明書が無ければ断られ、在れば縛られる
+
+| | |
+|---|---|
+| 観点 | **JWT Bearer はクライアント認証を通らない**（assertion が資格）。**提示された証明書の Subject は確かめていない**ので、`tls_client_auth` の登録でも、ここでは縛らない。**縛るのは、証明書を必須にした登録だけ**（縛る相手は提示した本人）。 |
+| 根拠 | RFC 7523 §2.1 / RFC 8705 §3・§3.4 / #346 |
+| テスト | `RT34611_JWT_Bearerは証明書を必須にした登録だけ縛る` |
+
+**手順**
+
+1. tls_client_auth だけの登録で、証明書を添えて JWT Bearer を使う
+1. 必須にした登録で、証明書なしで JWT Bearer を使う
+1. 必須にした登録で、証明書を添えて JWT Bearer を使う
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- cnf の x5t#S256 は付かない
+- HTTP 400 ＋ invalid_request
+- HTTP 200
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-346.12 `tls_client_auth` の device 登録（必須にはしていない）は、device_code のトークンも、認証した証明書に縛られる
+
+| | |
+|---|---|
+| 観点 | **以前は、device_code のグラントだけ、トークンを作るときに証明書を渡していなかった**（`tls_client_auth` で認証しても bearer）。**認可コード・client_credentials と揃えた**（別モデルのレビューの指摘で、振る舞いの変化を測る）。 |
+| 根拠 | RFC 8705 §3・§3.1 / RFC 8628 §3.4 / #346 |
+| テスト | `RT34612_tls_client_authのdevice登録はdevice_codeでも縛られる` |
+
+**手順**
+
+1. 機器 : 証明書で認証して device_code と user_code を得て、ユーザが許可する
+1. 機器 : 証明書で認証して、トークンを要求する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token の cnf の x5t#S256 は、認証した証明書の SHA-256（BASE64URL）
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -11063,6 +11534,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **表のこの行から device を外すと、ここは通らない。**表を書き換えるときは、この経路を壊さないこと（#224）。
 - **refresh_token の経路は normal の登録だけ**なので、device の登録には発行しない（#224 の段階 2。以前は発行していたが、使えなかった）。
+
+## FA-3.2 client_mode=device のクライアントは、private_key_jwt の認可コードではトークンを得られない
+
+| | |
+|---|---|
+| 観点 | **表の「認可コード × private_key_jwt」の行から device を外した**（#346）。#224 で「水準の大小」の比較を表に移したときに入った行で、意図の記録が無かった。**device は入力の乏しい機器のための登録**（RFC 8628）であり、秘密鍵を持たせて認可コードを使う理由が無い。**認証は通り、登録種別の判定で断られる**こと（`unauthorized_client`）を測る。 |
+| 根拠 | RFC 8628 / RFC 6749 §5.2 / #224 / #346 |
+| テスト | `FA0302_deviceはprivate_key_jwtの認可コードでは通らない` |
+
+**手順**
+
+1. 認可コードを取る（認可エンドポイントは、PKCE の行があるので device にも開いている）
+1. client_assertion（private_key_jwt）で交換する
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- エラーは unauthorized_client（認証は通り、登録種別で断られた）
+- access_token は返らない
+
+**補足**
+
+- **PKCE だけの経路（FA-3.1）は残してある**（元の実装の例外措置）。
 
 ## FA-4.1 Device AuthZ グラントは、登録種別が normal と device のクライアントにだけ許す
 
@@ -11779,7 +12273,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **下流は自分で認証せず、上流のアサーションを受け取る。****`NameIDFormat=emailAddress` の `NameID` をメアドとして扱い**、**`(上流の EntityID, NameID)` を連携キーに**、下流のアカウントへ結び付ける。**検証鍵は設定で与える**（`IdFederationSaml2CerFilePath`）— **`SpRp_RsaCerFilePath` は、この配備では自分の証明書として読まれている**ため。 |
+| 観点 | **下流は自分で認証せず、上流のアサーションを受け取る。****`NameIDFormat=emailAddress` の `NameID` をメアドとして扱い**、**`(上流の EntityID, NameID)` を連携キーに**、下流のアカウントへ結び付ける。**検証鍵は設定で与える**（`IdFederationSaml2CerFilePath`）— **`SpRp_RsaCerFilePath` は、自己テスト（相手が自分）の証明書を指している**ため。 |
 | 根拠 | SAML 2.0 Web Browser SSO Profile / #286 の段階 2 |
 | テスト | `SA0601_SAML2のID連携でサインインできる` |
 

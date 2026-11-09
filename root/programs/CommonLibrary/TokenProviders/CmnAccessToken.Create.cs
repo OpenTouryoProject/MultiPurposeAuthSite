@@ -31,6 +31,8 @@
 //*  2026/10/31  玄人 幸道         新規（CmnAccessToken.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         auth_time を数値（秒）に。Claims 経由でも claims を拾う。コメント（#294）
 //*  2026/11/01  玄人 幸道         使われていない IssuedTokenProvider への書き込みを外した（発行した access_token を保存するだけで、どこからも読まれていなかった。#321）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/09  玄人 幸道         CreateFromClaims（client_credentials・ROPC・JWT Bearer）でも、提示された証明書でトークンを縛る（#346）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -70,11 +72,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="expiresUtc">DateTimeOffset</param>
         /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
         /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
+        /// <param name="x509">トークンを縛るクライアント証明書（#346。無ければ null）</param>
         /// <returns>JWT文字列</returns>
         public static string CreateFromClaims(
             string clientId, string userName,
             IEnumerable<Claim> identityClaims, DateTimeOffset expiresUtc,
-            string alg = JwtConst.RS256, string jkt = null)
+            string alg = JwtConst.RS256, string jkt = null, X509Certificate2 x509 = null)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -151,7 +154,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   クレーム集合から id_token を作るため）。
             //   **クライアントごとに別の値**なので、**RP 同士の突き合わせには使えない。**
             if (!string.IsNullOrEmpty(sid))
-                tokenClaimSet.Add(Const.Sid, sid);
+                tokenClaimSet.Add(OAuth2AndOIDCConst.sid, sid);
 
             // claims（`CreatePayloadForCode` と同じ形で載せる。#294）
             if (!string.IsNullOrEmpty(claims))
@@ -195,13 +198,23 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
-            //  **DPoP の鍵に縛る**（#311 の段階 1）。
-            //    **この経路は mTLS の `cnf` を書いていない**（証明書を受けていない経路である）。
-            //    **DPoP は証明が在れば書ける**ので、ここで足す。
-            if (!string.IsNullOrEmpty(jkt))
+            //  **鍵に縛る**（DPoP は #311 の段階 1、mTLS は #346）。**書く値は `WriteCnf` と同じ**（RFC 8705 §3.1 / RFC 9449 §6）。
+            //    **以前は mTLS の `cnf` を書いていなかった**（証明書を受けていなかった）ので、
+            //    **client_credentials・ROPC・JWT Bearer のトークンは、`tls_client_auth` で認証しても縛られなかった。**
+            if (x509 != null || !string.IsNullOrEmpty(jkt))
             {
                 Dictionary<string, object> cnf = new Dictionary<string, object>();
-                cnf.Add(OAuth2AndOIDCConst.jkt, jkt);
+
+                if (x509 != null)
+                {
+                    cnf.Add(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256,
+                        CmnAccessToken.ComputeCertificateThumbprint(x509));
+                }
+
+                if (!string.IsNullOrEmpty(jkt))
+                {
+                    cnf.Add(OAuth2AndOIDCConst.jkt, jkt);
+                }
 
                 tokenClaimSet.Add(OAuth2AndOIDCConst.cnf, cnf);
             }
@@ -298,7 +311,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // sid（#310 の段階 1）
             if (!string.IsNullOrEmpty(sid))
-                tokenClaimSet.Add(Const.Sid, sid);
+                tokenClaimSet.Add(OAuth2AndOIDCConst.sid, sid);
 
             // claims
             if (!string.IsNullOrEmpty(claims)) tokenClaimSet.Add(
@@ -487,7 +500,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   **refresh_token で作り直すときに、同じ sid を引き継ぐ**ため。
             //   **ここで戻さないと、作り直した id_token から sid が消える**
             //   （**RP から見ると、同じセッションが別物に見える**）。
-            if (tokenClaimSet.TryGetValue(Const.Sid, out object sid))
+            if (tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.sid, out object sid))
             {
                 if (!string.IsNullOrEmpty((string)sid))
                 {

@@ -5,10 +5,15 @@
     **成果物は 1 つで、上流も下流も同じイメージを使う**（#281）。
     役の違いは docker-compose.yml の設定だけであるので、ここでは分けない。
     （#318 で 3_PublishUpstream.ps1 から改名した。上流だけのものではないため）
+    （#340 で 0_PublishIdP.ps1 から改名した。起動（2_DockerComposeUp.bat）と分け、..\Stub\ と同じ番号にした）
 
 .DESCRIPTION
     ＜何を用意するか＞
       1. **アプリの publish 成果物**（app\publish）
+         **appsettings.json は、雛形（_appsettings.json）に差し替える**（#340。..\Stub\1_PublishStub.ps1 と同じ）。
+         **開発者の手元の appsettings.json（秘密を含む）を、イメージに入れないため。**
+         手元のものは、**起動時にマウントする**（docker-compose.yml）。
+         **appsettings.Development.json は残す**（E2E は環境名 Development で動く。リポジトリに在るもので、秘密は無い）。
       2. **HTTPS の証明書**（cert\aspnetapp.pfx）と、そのパスワード（.env）
       3. **log4net の構成**（..\Common\LogConf.xml を app\ に写す。Stub と共用する。#318）
 
@@ -28,11 +33,11 @@
       ビルド済みの成果物とも揃う。
 
 .EXAMPLE
-    .\0_PublishIdP.ps1
+    .\1_PublishIdP.ps1
 
 .EXAMPLE
     # 証明書を作り直す（期限切れなど）
-    .\0_PublishIdP.ps1 -NewCertificate
+    .\1_PublishIdP.ps1 -NewCertificate
 
 .NOTES
     作成者          ：玄人 幸道
@@ -41,6 +46,7 @@
      ----------  ----------------  -------------------------------------------------
      2026/09/30  玄人 幸道         新規（#250 の段階 2）
      2026/10/31  玄人 幸道         store\ から Container\E2E\ へ移し、改名した（#318）
+     2026/11/07  玄人 幸道         0_PublishIdP.ps1 から改名し、appsettings.json を雛形に差し替えるようにした（#340）
 #>
 [CmdletBinding()]
 param(
@@ -51,7 +57,9 @@ $ErrorActionPreference = 'Stop'
 
 # パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
 $here = Split-Path -Parent $PSCommandPath
-$proj = Join-Path $here '..\..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.csproj'
+$coreDir = Join-Path $here '..\..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore'
+$proj = Join-Path $coreDir 'MultiPurposeAuthSiteCore.csproj'
+$template = Join-Path $coreDir '_appsettings.json'
 $pub = Join-Path $here 'app\publish'
 $art = Join-Path $here 'app\artifacts'
 $logConf = Join-Path $here '..\Common\LogConf.xml'
@@ -113,10 +121,17 @@ if ($LASTEXITCODE -ne 0)
     throw "publish に失敗しました。"
 }
 
+# **appsettings.json を雛形に差し替える**（手元の設定・秘密をイメージに入れない。#340）。
+#   **手元の appsettings.json は、起動時にマウントする**（docker-compose.yml。イメージの中の雛形を覆う）。
+#   **appsettings.Development.json は外さない**（E2E は環境名 Development で動き、これを読む。..\Stub\ は外す）。
+Copy-Item $template (Join-Path $pub 'appsettings.json') -Force
+
 # **log4net の構成**（Dockerfile が写す。原本は ..\Common\ に 1 つだけ置く。#318）
 Copy-Item $logConf (Join-Path $here 'app\LogConf.xml') -Force
 
-Write-Output "  publish しました : app\publish"
+Write-Output "  publish しました : app\publish（appsettings.json は雛形）"
 Write-Output ""
 Write-Output "  上流コンテナは https://localhost:44301 で待ち受けます（PathBase 無し）。"
 Write-Output "  下流コンテナ（docker compose up -d downstream）は https://localhost:44303 です。"
+Write-Output ""
+Write-Output "  起動 : .\2_DockerComposeUp.bat"

@@ -21,6 +21,8 @@
 //*  2026/10/31  玄人 幸道         「ログイン・ユーザの Client」をログインせずに選んだら、理由を出す（#294）
 //*  2026/10/31  玄人 幸道         「ログイン・ユーザの Client」は利用者名として client_id を引く（#294）
 //*  2026/11/04  玄人 幸道         自己テストのクライアント（normal 以外）を、名前ではなく client_mode で選ぶ
+//*  2026/11/07  玄人 幸道         FAPI1・FAPI2 の自己テストは、private_key_jwt を明示した登録を優先して選ぶ（#341）
+//*  2026/11/08  玄人 幸道         FAPI2 の MTLS のボタンを足した（tls_client_auth を明示した fapi2 の登録だけを選ぶ。#345）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -90,7 +92,23 @@ namespace MultiPurposeAuthSite.Controllers
                     this.ClarifyRedirectUri = model.ClarifyRedirectUri;
 
                     #region Client選択
-                    if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit())
+                    if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2_PAR_MTLS"]))
+                    {
+                        // **MTLS のボタン**（#345）。**fapi2 で tls_client_auth を明示した登録だけを選ぶ**
+                        //   （雛形の名前は FAPI2_MTLS_Client）。**無ければ始めない**（明示していない登録では、
+                        //   証明書を添えても通らない。#307 の段階 3）。
+                        this.ClientName = (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+                            ? Helper.GetInstance().GetClientNameByClientModeAndAuthMethod(
+                                model.ClientType, OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit())
+                            : "";
+
+                        if (string.IsNullOrEmpty(this.ClientName))
+                        {
+                            ModelState.AddModelError("",
+                                "The MTLS button needs the FAPI2 client type and a fapi2 client registered with token_endpoint_auth_method = tls_client_auth.");
+                        }
+                    }
+                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit())
                     {
                         // OAuth2.0 / OIDC用 Client
                         this.ClientName = "TestClient";
@@ -105,7 +123,16 @@ namespace MultiPurposeAuthSite.Controllers
                         //   **名前を変えても、配備済みの構成ファイルで選べなくならない**ため
                         //   （以前は TestClient1〜4 を直に書いていた。雛形の名前は FAPI1_Client・FAPI2_Client・
                         //   Device_Client・FAPI_CIBA_Client）。
-                        this.ClientName = Helper.GetInstance().GetClientNameByClientMode(model.ClientType, false);
+                        //   **FAPI1・FAPI2 は、private_key_jwt を明示した登録を優先する**（#341）。
+                        //   **自己テストは private_key_jwt で引き換える**が、方法を明示していない登録では通らない
+                        //   （#307 の段階 3）。**明示した登録が無ければ、従来どおり最初の 1 件**（雛形の FAPI1_Client など）。
+                        string preferredAuthMethod =
+                            (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
+                            || model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+                            ? OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit() : null;
+
+                        this.ClientName = Helper.GetInstance().GetClientNameByClientMode(
+                            model.ClientType, false, preferredAuthMethod);
                     }
                     else if (model.ClientType == HomeSaml2OAuth2StartersViewModel.RequirePkceClientType)
                     {
@@ -297,8 +324,10 @@ namespace MultiPurposeAuthSite.Controllers
                                 return fapi2;
                             }
                         }
-                        else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2_PAR"]))
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2_PAR"])
+                            || !string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2_PAR_MTLS"]))
                         {
+                            // **MTLS のボタンも同じ流れ**（選んだ登録が違うだけ。認証は登録の方法で決まる。#345）
                             return await this.AuthorizationCodeFAPI2ParAsync();
                         }
                         else if (!string.IsNullOrEmpty(Request.Form["submit.FAPI_CIBA_Profile"]))

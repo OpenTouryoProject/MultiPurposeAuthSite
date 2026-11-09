@@ -316,7 +316,7 @@ __pycache__/
 /container/Store/oracle/init/*.sql
 /container/Store/.env
 
-# ID 連携の IdP コンテナの生成物（0_PublishIdP.ps1 が作る。#250）
+# ID 連携の IdP コンテナの生成物（1_PublishIdP.ps1 が作る。#250。#340 で 0_PublishIdP.ps1 から改名）
 #   cert/ はホストの開発用証明書の秘密鍵、.env はそのパスワード
 #   app/LogConf.xml は ..\Common\ の原本を写したもの（#318）
 /container/E2E/cert/

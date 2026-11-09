@@ -47,6 +47,7 @@ cd root
 
 手で用意することもできます。`root\programs\3_BuildLibsAtOtherRepos.bat`（タグ `03-20`）を
 実行するか、Open棟梁 を別途 clone してビルドし、`mpas_dev.bat` で複写します。
+`mpas_dev.bat` は、2 つのリポジトリの場所を環境変数 `OT_OTR_PATH`・`OT_MPAS_PATH` から読みます（無ければ、カレント フォルダからの相対パス。[`BUILDING.md`](BUILDING.md) 10 節）。
 
 ### 2. 設定ファイルを作る
 

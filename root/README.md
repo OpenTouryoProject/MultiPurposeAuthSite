@@ -50,6 +50,8 @@ is kept, for diagnosis).
 
 You can also do it by hand: run `root\programs\3_BuildLibsAtOtherRepos.bat` (the `03-20` tag),
 or clone and build OpenTouryo separately and copy the output with `mpas_dev.bat`.
+`mpas_dev.bat` reads the locations of the two repositories from the environment variables `OT_OTR_PATH` and `OT_MPAS_PATH`
+(if either is missing, the paths are relative to the current folder. [`BUILDING.md`](BUILDING.md) section 10).
 
 ### 2. Create the configuration files
 

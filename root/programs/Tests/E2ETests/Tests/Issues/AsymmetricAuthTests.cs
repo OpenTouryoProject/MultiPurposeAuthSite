@@ -35,6 +35,7 @@
 //*  2026/10/19  玄人 幸道         方法を明示したTestClient_24に向けた（#307 の段階 3）
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/08  玄人 幸道         RT-239.5 : 自己テストの FAPI2 のボタンが PKCE を使うので、code_verifier も送る（#345）
 //**********************************************************************************
 
 using System;
@@ -357,6 +358,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 Skip.If(string.IsNullOrEmpty(location),
                     "FAPI2 の自己テストが動かない（起動 URL の食い違い。RT-197.1 を見ること）。");
 
+                //  **自己テストの FAPI2 のボタンは PKCE（S256）を使う**（#345）。
+                //    code_challenge は Request Object に入っているので、**code_verifier も送る**（RFC 7636 §4.6）。
+                string codeVerifier = client.SelfTestCodeVerifier();
+
+                Assert.False(string.IsNullOrEmpty(codeVerifier), "前提: 自己テストが code_verifier を Cookie に置くこと（#345）");
+
                 AuthZResponse authz = await client.AuthorizeAndGrantAsync(client.ToLocalUrl(location));
 
                 Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が発行されること");
@@ -367,7 +374,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         {
                             { "grant_type", "authorization_code" },
                             { "code", authz.Code },
-                            { "redirect_uri", reg.RedirectUri }
+                            { "redirect_uri", reg.RedirectUri },
+                            { "code_verifier", codeVerifier }
                         }, await client.IssuerAsync()));
 
                 string refreshToken = token.String("refresh_token");

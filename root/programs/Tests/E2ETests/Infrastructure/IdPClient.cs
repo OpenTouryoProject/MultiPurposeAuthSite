@@ -53,6 +53,8 @@
 //*  2026/10/28  玄人 幸道         Cookie の値を書き換える口（OverwriteCookie）を足した（#294）
 //*  2026/10/30  玄人 幸道         WebAuthn の登録の段階 0 で、パスワードを送る（#294）
 //*  2026/10/31  玄人 幸道         待ち時間を指定して POST する口を追加（自己テストのポーリング。#294）
+//*  2026/11/08  玄人 幸道         自己テストが Cookie に置いた code_verifier を読む口を追加（#345）
+//*  2026/11/09  玄人 幸道         クライアント証明書を添えて任意の口を POST する PostWithCertificateAsync を追加（device の /device_authz。#346）
 //**********************************************************************************
 
 using System;
@@ -151,6 +153,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             this._handler.CookieContainer.Add(uri, new Cookie(name, value, path));
+        }
+
+        /// <summary>
+        /// 自己テストのスターターが Cookie に置いた code_verifier を読む（#345）。
+        /// </summary>
+        /// <returns>code_verifier（無ければ空）</returns>
+        /// <remarks>
+        /// **自己テストの FAPI2 のボタンは、PKCE（S256）を使う**（#345）。
+        /// そのボタンで認可コードだけを取り、**引き換えはテストが自分で行う**ケース（`RT-238.4`・`RT-239.5`）は、
+        /// **`code_verifier` も送らないと引き換えられない**（RFC 7636 §4.6）。
+        /// **自己テストは `code_verifier` を Cookie `test_code_verifier`（平文）にも置く**（`SaveOAuth2Params`）ので、それを読む。
+        ///
+        /// **ほかの Cookie の値は読ませない**（`CookieNames` が値を返さないのと同じ考え）。
+        /// </remarks>
+        public string SelfTestCodeVerifier()
+        {
+            foreach (Cookie cookie in this._handler.CookieContainer.GetCookies(new Uri(this.Target.BaseUrl)))
+            {
+                if (cookie.Name.EndsWith("test_code_verifier", StringComparison.Ordinal))
+                {
+                    return cookie.Value ?? "";
+                }
+            }
+
+            return "";
         }
 
         /// <summary>コンストラクタ</summary>
@@ -1028,8 +1055,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// サーバがクライアント証明書を受け付けるのは、test.ps1 -Launch が net10.0 版に
         /// テスト専用のフック（Tests/MtlsTestHook）を読ませたときだけ。
         /// </remarks>
-        public async Task<JsonResponse> TokenWithCertificateAsync(
+        public Task<JsonResponse> TokenWithCertificateAsync(
             IDictionary<string, string> form, X509Certificate2 certificate)
+        {
+            return this.PostWithCertificateAsync("/token", form, certificate);
+        }
+
+        /// <summary>
+        /// 任意の口へ、クライアント証明書（mTLS）を添えてフォームを POST する（#346）。
+        /// </summary>
+        /// <param name="path">パス（`/token`・`/device_authz` など）</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="certificate">クライアント証明書（null なら添えない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>**`tls_client_auth` の device 登録は、`/device_authz` でも証明書で認証する**ので、トークンの口以外にも要る。</remarks>
+        public async Task<JsonResponse> PostWithCertificateAsync(
+            string path, IDictionary<string, string> form, X509Certificate2 certificate)
         {
             using (HttpClientHandler handler = new HttpClientHandler())
             {
@@ -1057,7 +1098,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     }
 
                     HttpResponseMessage res = await http.PostAsync(
-                        this.Absolute("/token"), new FormUrlEncodedContent(body));
+                        this.Absolute(path), new FormUrlEncodedContent(body));
 
                     return await ToJsonResponseAsync(res);
                 }

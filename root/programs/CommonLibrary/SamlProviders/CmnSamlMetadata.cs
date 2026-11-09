@@ -30,10 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/13  玄人 幸道         新規（#291）
 //*  2026/10/14  玄人 幸道         この配備のメタデータを作る処理を、両アプリから寄せた（#292 の段階 3）
+//*  2026/11/06  玄人 幸道         載せる証明書を、サーバ側のキー（SigningKeys.RsaCerFilePath）で読む（#339）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.Xml;
@@ -72,7 +74,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         ///
         /// | 広告する順 | 出どころ |
         /// |---|---|
-        /// | 1 本目 | **いま署名に使っている鍵の証明書**（`SpRp_RsaCerFilePath`） |
+        /// | 1 本目 | **いま署名に使っている鍵の証明書**（`RsaCerFilePath`。空なら `SpRp_RsaCerFilePath`。`SigningKeys.RsaCerFilePath`。#339） |
         /// | 2 本目以降 | **`PreviousSigningCerFilePaths`**（空白かカンマ区切り。`SAML2Bindings.AppendSigningCertificates`） |
         ///
         /// **読めない証明書は、黙って飛ばされる**（**メタデータが出せなくなる方が困る**ため）。
@@ -87,7 +89,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             XmlDocument metadata = SAML2Bindings.CreateMetadata(
                 CmnServerParams.IssuerId,
                 PrivacyEnhancedMail.GetBase64StringFromPemFilePath(
-                    CmnClientParams.RsaCerFilePath,
+                    SigningKeys.RsaCerFilePath,
                     PrivacyEnhancedMail.RFC7468Label.Certificate),
                 new SAML2Enum.NameIDFormat[]
                 {

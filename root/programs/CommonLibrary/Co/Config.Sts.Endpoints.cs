@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
+//*  2026/11/06  玄人 幸道         JwkSetUri・RequestObjectRegUri・AuthRequestPushUri を足した
+//*                                （Open棟梁 の OAuth2AndOIDCParams はクライアント役の値になった。OpenTouryo#666。#339）
 //**********************************************************************************
 
 using System;
@@ -243,6 +245,59 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Config.EndpointPathOrDefault("OAuth2EndSessionEndpoint", "/end_session");
+            }
+        }
+
+        #endregion
+
+        #region JWK Set・JAR・PAR
+
+        //  **この 3 つは、以前は Open棟梁 の `OAuth2AndOIDCParams` で読んでいた**（キー名が同じだった）。
+        //  **Open棟梁 では、あれは相手（OP）の口の URL**（クライアント役の値）で、
+        //  OpenTouryo#666 で `SpRp_JwkSetUri`・`SpRp_RequestObjectRegUri`・`SpRp_AuthRequestPushUri` に改名し、
+        //  **改名前の名前（ここのキー）を読まなくなった**（#339）。
+        //  **キー名と値は変えていない**（`JwkSetUri` など）。読む場所が、この認可サーバの設定（`Config`）に移っただけである。
+
+        /// <summary>
+        /// JWK Set のエンドポイント（OIDC Discovery §3 の jwks_uri）
+        /// </summary>
+        /// <remarks>
+        /// **この認可サーバの公開鍵を返す口**（`/jwkcerts`）。**Discovery の `jwks_uri` に広告する。** **レート制限の対象**（#305）。
+        /// **ID 連携の上流の JWK Set ではない**（そちらは `IdFederationJwkSetUri` / 上流の登録の `jwk_set_uri`）。
+        /// </remarks>
+        public static string JwkSetUri
+        {
+            get
+            {
+                return Config.EndpointPathOrDefault("JwkSetUri", "/jwkcerts");
+            }
+        }
+
+        /// <summary>
+        /// Request Object の登録のエンドポイント（独自の `/ros`。Request Object を登録して `request_uri` を返す）
+        /// </summary>
+        /// <remarks>
+        /// **Discovery に広告する**（`request_object_endpoint`）。**後方互換のため残している**（RFC の口は PAR）。
+        /// </remarks>
+        public static string RequestObjectRegUri
+        {
+            get
+            {
+                return Config.EndpointPathOrDefault("RequestObjectRegUri", "/ros");
+            }
+        }
+
+        /// <summary>
+        /// PAR のエンドポイント（RFC 9126 §5 の pushed_authorization_request_endpoint）
+        /// </summary>
+        /// <remarks>
+        /// **Discovery に広告する。** **レート制限の対象**（#305）。
+        /// </remarks>
+        public static string AuthRequestPushUri
+        {
+            get
+            {
+                return Config.EndpointPathOrDefault("AuthRequestPushUri", "/par");
             }
         }
 

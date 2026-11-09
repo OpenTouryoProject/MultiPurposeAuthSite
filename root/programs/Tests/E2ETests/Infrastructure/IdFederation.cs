@@ -32,6 +32,7 @@
 //*  2026/10/13  玄人 幸道         どの上流か（idpKey）を渡せるようにした（#292 の段階 1）
 //*  2026/10/29  玄人 幸道         FederateAsync に ReturnUrl を渡せるようにした（#294）
 //*  2026/11/04  玄人 幸道         上流の口は、test.ps1 が渡す環境変数を重ねた構成から引く（雛形ではコメントにした）
+//*  2026/11/07  玄人 幸道         Skip の文言のスクリプト名を、#340 の後のものにした（#340）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -119,7 +120,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             Skip.IfNot(up,
                 "上流の IdP（" + origin + "）が起動していません。"
-                + "container\\E2E\\1_DockerComposeUp.bat で建ててください（#250 の段階 5）。");
+                + "container\\E2E\\1_PublishIdP.ps1 → 2_DockerComposeUp.bat で建ててください（#250 の段階 5 / #340）。");
 
             return origin;
         }

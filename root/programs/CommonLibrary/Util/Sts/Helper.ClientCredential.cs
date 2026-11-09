@@ -31,6 +31,7 @@
 //*  2026/10/31  玄人 幸道         新規（Helper.cs から partial に分割。#294）
 //*  2026/10/31  玄人 幸道         構成ファイルに在るクライアントは、項目が無くても画面登録を読みに行かない（#294）
 //*  2026/10/31  玄人 幸道         画面登録の値が無いときも、null ではなく空を返す（#294）
+//*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -313,9 +314,9 @@ namespace MultiPurposeAuthSite.Util.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey(Const.ClientTlsClientAuthSubjectDn))
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey(OAuth2AndOIDCConst.tls_client_auth_subject_dn))
                 {
-                    return this.Oauth2ClientsInfo[client_id][Const.ClientTlsClientAuthSubjectDn];
+                    return this.Oauth2ClientsInfo[client_id][OAuth2AndOIDCConst.tls_client_auth_subject_dn];
                 }
 
                 // **構成ファイルに在るクライアントは、ここで打ち切る**（#294。`GetClientScopes` などと同じ流儀）。
