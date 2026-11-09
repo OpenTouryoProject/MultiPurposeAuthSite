@@ -50,7 +50,7 @@
 | **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15〜A-17 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 / B-12 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。**C-40〜C-46 は `CmnEndpoints.*.cs` のレビューで見つかり #294**。**C-47 / C-48 は `ManageController.*.cs` のレビューで、C-49 は 2 回目、C-50 / C-51 は 3 回目のレビューで見つかり #294**。**C-52 / C-53 は `CmnUserStore.*.cs` のレビューで、C-54 は 2 回目のレビューで見つかり #294**。**C-55 は `OAuth2EndpointController.*.cs` のレビューで見つかり #294**。**C-40 は「方法を明示した登録」で閉じ、空の登録は従来どおり**） |
-| **D. 機能不足** | **2 件 残り** : **D-14**（適合性テスト）・**D-16**（プロファイルの要件を、登録ごとに強制するオプション）。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
+| **D. 機能不足** | **1 件 残り** : **D-14**（適合性テスト）。**D-16（プロファイルの要件を、登録ごとに強制する）は ✅ #346**。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
 | **E. 品質** | **6 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）／**E-13**（refresh_token の失効で access_token も）／**E-15**（クライアント認証の方法を 1 要求に 1 つへ）／**E-16**（CIBA の送れなかった要求の後始末）／**E-17**（`user_code` の大文字小文字）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
 **7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
@@ -3563,7 +3563,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
 | D-13 | **レート制限 / ブルートフォース対策**（#305） | **✅ 解けた（#305）。** **段階 1** : ポーリングが `interval` より速ければ **`slow_down`**（`LastPolledAt`。`RT-305.1` / `.2`）。**段階 2** : **クライアント認証と `user_code` の投入の失敗を数え、一定回数で一定時間断る**（`AuthFailure` 表。`RT-305.3` / `.4`）。**段階 3** : **口ごとのレート制限** — **`client_id` ごと・送信元ごとに窓の中の要求を数え、超えた分に `429`**（`RateLimitProvider`。`RT-305.5` / `.6`）。**段階 4** : **失敗の数えを「クライアント ＋ 送信元」ごとにし**（`client_id` だけで数えると、**ロックアウトがそのまま妨害の手段になる**。`RT-305.7`）、**`/token` の `grant_type=password` を画面と同じ利用者ロックアウトに合流させた**（`RT-305.8`）。**行には寿命を入れた**（期限の切れた行を掃除する）。**判定は両アプリで 1 か所**（net48 に組み込みが無いため） | **既定は「制限しない」**（`RateLimitPerClientPermits` / `RateLimitPerIpPermits` が 0。**雛形は 120 回 / 600 回 / 60 秒**）。**失敗の数えは雛形で有効**（5 回 / 300 秒）。**プロセスの中に覚えるので、インスタンスを増やすとその数だけ緩くなる**（レート制限の方。失敗の数えは表に持つ）。**鍵の粒度は利用者の数に追随しない** — **同じ `client_id` に利用者が多数いる配備では、閾値をその全員分に合わせることになる**（`CONFIGURATION.md`） |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
-| D-16 | **プロファイル（FAPI 1.0 Advanced・FAPI 2.0・FAPI-CIBA）の要件を、登録ごとに強制するオプション** | **一部だけ在る**（認証の方法・PKCE）。**PAR・署名付きの Request Object・送信者の拘束（DPoP / MTLS）を必須にする手段が無い**（#346）。詳細は下の「クライアント モードとプロファイル（D-16）」 | **組み合わせは実現できる**が、**FAPI として登録したクライアントでも、それらを使わない要求が通る** |
+| D-16 | **プロファイル（FAPI 1.0 Advanced・FAPI 2.0・FAPI-CIBA）の要件を、登録ごとに強制するオプション** | **✅ 解けた（#346）。** **PAR・署名付きの Request Object・送信者の拘束（DPoP / MTLS）を、登録の 4 項目（標準のメタデータ）で必須にできる。** PAR・署名付きの Request Object は、サーバ全体の設定とも OR で効く。詳細は下の「クライアント モードとプロファイル（D-16）」 | **既定は変わらない**（4 項目・2 つの設定とも既定は false）。**必須にした登録・配備だけが、使わない要求を断る** |
 
 
 ### クライアント モードとプロファイル（D-16。2026/11/08 時点）
@@ -3575,6 +3575,17 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 （Request Object を使えるが、使わないと断る設定は無い、のと同じ扱い）。
 
 **列の意味** : **ClientModePolicy** = 表の行（経路 × 証明 → 通す `client_mode`）／**metadata** = クライアントの登録の項目／**option** = サーバ全体の設定。**✕ = その強制の手段が無い。**
+
+> **#346（2026/11/09）で、下の表の ✕ は埋まった。** 表は、埋める前の状態を経緯として残してある。
+>
+> | 強制 | metadata（登録） | option（サーバ全体） | 断る所・エラー |
+> |---|---|---|---|
+> | PAR | `require_pushed_authorization_requests` | `RequirePushedAuthorizationRequests` | 認可エンドポイント・`invalid_request`（RFC 9126 §4）。**`/ros` で預けた `request_uri` も断る**（PAR ではない） |
+> | 署名付きの Request Object | `require_signed_request_object` | `RequireSignedRequestObject` | 認可エンドポイント・`invalid_request`。**フォームだけの PAR は、PAR の口で 400 `invalid_request`**（RFC 9126 §2.3） |
+> | DPoP で縛る | `dpop_bound_access_tokens` | **足していない**（登録だけ） | トークン エンドポイント（全グラント）・`invalid_request` |
+> | MTLS で縛る | `tls_client_certificate_bound_access_tokens` | **足していない**（登録だけ） | トークン エンドポイント（全グラント）・`invalid_request`。**証明書が在れば、秘密で認証していても縛る** |
+>
+> **経路の見分け** : `/ros`・PAR で預けた中身に、**サーバが印を付ける**（`CmnRequestObjectEndpoint.MarkOrigin`。クライアントが同じ名前を入れても上書きする）。
 
 #### OAuth 2.1 / OIDC（`normal`）
 
@@ -3617,7 +3628,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 |---|---|---|---|
 | poll ＋ 署名付きの要求 ＋ `private_key_jwt` | CIBA × 問わない → fapi_ciba | `token_endpoint_auth_method` = `private_key_jwt`（**明示すれば秘密は通らない**。空なら `client_secret` も通る）、検証鍵 | `EnableCibaGrantType`（poll だけを広告。FAPI-CIBA（Draft-02）5.2.2 の 3〜5 は push を禁じ、poll を必須、ping を任意とする） |
 | Device AuthZ（パブリック） | Device AuthZ × 問わない → normal・device | `grant_types` | `EnableDeviceAuthZGrantType` |
-| （参考）認可コード | 認可コード × PkceS256・PrivateKeyJwt → **device にも開いている**（理由が表に書かれていない。**D-16 の主題（プロファイルの強制）の外の発見**で、#346 の「決めること」で扱う） | — | — |
+| （参考）認可コード | 認可コード × PkceS256 → **device にも開いている**（元の実装の例外措置。`FA-3.1`）。**PrivateKeyJwt の行からは device を外した**（#346。`FA-3.2`） | — | — |
 
 #### metadata と option の重なり
 
@@ -3649,18 +3660,18 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 |---|---|---|
 | 認可コード × PKCE だけ（認証なし）× **fapi1** | FAPI 1.0 Advanced はパブリック クライアントを扱わない（5.2.2 の 16） | `token_endpoint_auth_method` を明示する（`private_key_jwt` など。明示すれば PKCE だけでは通らない） |
 | CIBA × 問わない × **fapi_ciba** | FAPI-CIBA（Draft-02）は機密クライアントだけを扱い（5.2.2 の 1）、FAPI 1.0・2.0 の規定を引き継ぐ（6.1）。**認証の方法は、FAPI-CIBA の本文には書かれていない**（5.2.3.1 は FAPI の Part 1・Part 2 の「5.2.4」を参照するが、FAPI 1.0 Advanced（Final）の 5.2.4 は「(withdrawn)」で、方法の一覧は 5.2.2 の 14 にある。そこに秘密は無い） | 同上 |
-| fapi1・fapi2 × PAR なし／署名の無い要求／縛らないトークン | 上の ✕ | **無い**（#346 で足す） |
+| fapi1・fapi2 × PAR なし／署名の無い要求／縛らないトークン | 上の ✕ | **✅ #346 の登録の 4 項目**（**雛形の登録には書いていない** — 必要な配備が立てる） |
 
 #### #346 で足すもの
 
 | 段階 | 中身 |
 |---|---|
-| 1 | **✅ 入れた（2026/11/08）。** **登録のメタデータを 4 つ**（上の表。構成ファイル・管理画面・動的登録で読み書きする。既定は false）。列は `RequirePar`・`RequireSignedRequestObject`・`DPoPBoundAccessTokens`・`TlsCertBoundAccessTokens`（3 方言 ＋ `mem`。`ALTER` の手順は `CONFIGURATION.md`）。**動的登録の `PUT` では立てられるが下げられない。** **判定はまだ無い**（段階 3）。`RT-346.1` |
-| 2 | **サーバ全体の設定**：**PAR・署名付きの Request Object の 2 つ**（`RequirePkce` ＋ `require_pkce` と同じ OR。どちらも標準に AS のメタデータが在る）。**送信者の拘束の 2 つは、段階 1 の登録だけで強制する**（全体の設定を足すかは「決めること」） |
-| 3 | **判定**：PAR・署名付きの Request Object は認可エンドポイントで、送信者の拘束はトークン エンドポイント（refresh_token を含む）で断る |
-| 4 | **Discovery**：`require_pushed_authorization_requests`（今は false 固定）・`require_signed_request_object` を、サーバ全体の設定から出す |
-| 5 | **雛形と E2E**：E2E は、4 つそれぞれ、登録で必須にしたクライアントが「使えば通り、使わなければ断られる」ことを測る。**E2E が PKCE・PAR なしで使う `FAPI1_Client`・`FAPI2_Client` には書かない**（書くと既存の期待値が変わる） |
-| 決めること | **fapi1 × Hybrid** を開けるか。**device × 認可コード**の行を残すか。**送信者の拘束の 2 つに、サーバ全体の設定を足すか**（DPoP には標準の AS のメタデータが無い）。**雛形のプロファイルどおりのクライアント**（#341 の `FAPI1_PrivateKeyJwt_Client`、#345 の `FAPI2_MTLS_Client`）に、4 つを書くか |
+| 1 | **✅ 入れた（2026/11/08）。** **登録のメタデータを 4 つ**（上の表。構成ファイル・管理画面・動的登録で読み書きする。既定は false）。列は `RequirePar`・`RequireSignedRequestObject`・`DPoPBoundAccessTokens`・`TlsCertBoundAccessTokens`（3 方言 ＋ `mem`。`ALTER` の手順は `CONFIGURATION.md`）。**動的登録の `PUT` では立てられるが下げられない。** 判定は段階 3。`RT-346.1` |
+| 2 | **✅ 入れた（2026/11/09）。** **サーバ全体の設定**：**PAR・署名付きの Request Object の 2 つ**（`RequirePushedAuthorizationRequests`・`RequireSignedRequestObject`。`RequirePkce` ＋ `require_pkce` と同じ OR）。**送信者の拘束の 2 つは、登録だけで強制する**（下の「決めたこと」） |
+| 3 | **✅ 入れた（2026/11/09）。** **判定**：PAR・署名付きの Request Object は認可エンドポイント（`redirect_uri` を確かめた後。エラーは RP へ返る）で、送信者の拘束はトークン エンドポイントの**全グラント**（refresh_token を含む。**code などを消費する前**）で断る。エラーは `invalid_request`（RFC 9449 §5.2・RFC 9101 §10.5 はコードを決めていない。**`invalid_dpop_proof` は証明が在って通らないときのコード**なので使わない）。**✅ 修正済み（#346）: client_credentials・ROPC・device_code のトークンは、`tls_client_auth` で認証しても証明書に縛られていなかった**（client_credentials・ROPC はトークンを作る `CreateFromClaims` が証明書を受けておらず、device_code は `ProtectFromPayload` に null を渡していた。`RT-346.7`・`.8`）。**JWT Bearer はクライアント認証を通らないので、証明書を必須にした登録だけを縛る** |
+| 4 | **✅ 入れた（2026/11/09）。** **Discovery**：`require_pushed_authorization_requests`（以前は false 固定）・`require_signed_request_object` を、サーバ全体の設定から出す（`RT-346.6`） |
+| 5 | **✅ 入れた（2026/11/09）。** **E2E**：4 つそれぞれ、登録で必須にしたクライアント（種データの `TestClient_37`〜`40`）が「使えば通り、使わなければ断られる」ことを測る（`RT-346.2`〜`.5`）。**雛形には書かない**（下の「決めたこと」）。**サーバ全体の設定を true にしたときは、E2E では測っていない**（`RequirePkce` と同じ） |
+| 決めたこと（2026/11/09） | **fapi1 × Hybrid は開けない**（Hybrid は非推奨で、`code` ＋ JARM で代わりが利く）。**device × 認可コードは、PKCE だけの行を残し、`private_key_jwt` の行から device を外した**（device は入力の乏しい機器のための登録で、秘密鍵を持たせて認可コードを使う理由が無い。#224 で水準の比較から移しただけの行だった。`FA-3.2`）。**送信者の拘束の 2 つには、サーバ全体の設定を足さない**（DPoP には標準の AS のメタデータが無く、MTLS を全体で求めると配備の TLS の設定次第で全クライアントが止まる）。**雛形のクライアントには、4 つを書かない**（自己テストのボタンと既存の E2E の振る舞いを変えない） |
 
 ---
 

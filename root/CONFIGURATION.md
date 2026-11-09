@@ -1124,7 +1124,38 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN FrontChannelLogoutUri varchar(512) NULL;
 | `dpop_bound_access_tokens` | RFC 9449 §5.2 | **DPoP の証明の無いトークン要求を断る**（`refresh_token` も） | `DPoPBoundAccessTokens` |
 | `tls_client_certificate_bound_access_tokens` | RFC 8705 §3.4 | **クライアント証明書の無いトークン要求を断る**（`refresh_token` も。RFC は「エラーにするか、縛らないトークンを出すかはサーバが決める」としていて、**ここでは断る**） | `TlsCertBoundAccessTokens` |
 
-> **段階 1（登録の項目と列）だけが入っている。** **断る判定は段階 2 で足す**（それまでは、立てても振る舞いは変わらない）。
+**断る所とエラー**（段階 2）:
+
+| 項目 | 断る所 | エラー |
+|---|---|---|
+| PAR・署名付きの Request Object | **認可エンドポイント**（`redirect_uri` を確かめた後なので、**エラーは RP へ返る**） | `invalid_request`（RFC 9126 §4。RFC 9101 §10.5 はコードを決めていないので揃えた） |
+| 署名付きの Request Object（フォームだけの PAR） | **PAR の口**（預ける時点で） | **400** ＋ `invalid_request`（RFC 9126 §2.3） |
+| DPoP・クライアント証明書 | **トークン エンドポイントの全グラント**（`refresh_token` を含む。**code などを消費する前**） | `invalid_request`（**`invalid_dpop_proof` は「証明が在って通らない」ときのコード**なので使わない） |
+
+- **PAR を必須にすると、`/ros`（独自の口）で預けた `request_uri` も断られる**（PAR ではないため）。
+  経路は、預けた中身にサーバが付ける印で見分ける（クライアントが同じ名前を入れても上書きする）
+- **この実装は `request` パラメタを受けない**（`request_parameter_supported` は false）。
+  **署名付きの Request Object は、`/ros` か PAR の `request` に入れて預け、`request_uri` で送る**
+- **クライアント証明書を必須にした登録は、秘密・`private_key_jwt` で認証していても、提示された証明書でトークンを縛る**
+  （RFC 8705 §3 は、縛ることを認証の方法と切り離している）。**サイトがクライアント証明書を求めていないと、全て断られる**
+- **client_credentials・ROPC・device_code のトークンも、`tls_client_auth` で認証した証明書に縛るようにした**（#346）。
+  **以前は縛られず（bearer）**、認可コード・refresh_token・CIBA だけが縛られていた。
+  **mTLS で認証している client_credentials などのトークンを、証明書なしで保護されたリソースへ出している RP は、
+  証明書を添える必要がある**
+- **JWT Bearer（RFC 7523）は、クライアント認証を通らない**（assertion が資格）ので、
+  **`tls_client_auth` の登録でも縛らない。** **縛るのは、証明書を必須にした登録だけ**（提示された証明書で縛る）
+- **device の登録は、`private_key_jwt` で認可コードを引き換えられなくなった**（#346。`ClientModePolicy` の表）。
+  **該当する登録が在れば、`client_mode` を `normal` にする**（device の登録の認可コードは、PKCE だけの経路が残っている）
+
+**サーバ全体の設定**（PAR・署名付きの Request Object の 2 つ。**登録とは OR で効く**。`RequirePkce` と同じ形）:
+
+| キー | 既定 | Discovery |
+|---|---|---|
+| `RequirePushedAuthorizationRequests` | `false` | `require_pushed_authorization_requests`（RFC 9126 §5） |
+| `RequireSignedRequestObject` | `false` | `require_signed_request_object`（RFC 9101 §10.5） |
+
+**送信者の拘束の 2 つには、サーバ全体の設定を置いていない**（DPoP には標準の AS のメタデータが無く、
+MTLS を全体で求めると、配備の TLS の設定次第で全クライアントが止まるため）。**登録ごとに立てる。**
 
 | どこで登録するか | |
 |---|---|
@@ -3907,6 +3938,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる。**`EnableImplicitGrantType` が `false` なら、access_token をフロント チャネルで返す Hybrid / OIDC の Implicit（`code token` / `code id_token token` / `id_token token`）も断り、広告しない**（#314。`code id_token` は通る） |
+| `RequirePushedAuthorizationRequests` / `RequireSignedRequestObject` | `false` | **任意**（FAPI の配備なら `true`） | **FAPI の要件を、全クライアントに強制する**（#346）。登録の同名の項目とは OR。**`true` にすると、PAR・署名付きの Request Object を使わない既存のクライアントが止まる** |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
 | `RequireVerifiedEmailForAccountLinking` | **`true`**（#140 の段階 1 で追加） | `true` のまま | **外部 ID を既存アカウントに結び付けるとき、上流が `email_verified: true` と言ったメアドだけを鍵にする。** **未設定でも `true`**（他の `Require*` と既定の向きが違う）。`false` にすると従来どおり（上流の言い値で結び付ける）。**Google は `email_verified` を写すようにしたので自動リンクできる。Microsoft Account は示せないので、`/Manage/ManageLogins` での明示的な追加になる** |
 | `FacebookAuthentication` / `TwitterAuthentication` | `false` | **触らない** | **サポートを取り下げた**（#249）。**`true` にしても有効にならない**（アプリ側の登録をコメント アウトしてある）。**動かないからではなく、維持コストが便益に見合わないため。** キーを残してあるのは戻せるようにするため（`CommonLibrary/ANALYSIS.md` 12 節） |

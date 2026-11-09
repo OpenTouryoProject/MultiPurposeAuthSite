@@ -58,6 +58,7 @@
 //*  2026/11/04  玄人 幸道         認証デバイスの Android / iOS 版（AuthenticationDevice）を足し、RunAuthenticationDeviceFlowAsync でクライアントを選べるようにした
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/07  玄人 幸道         FAPI1_PrivateKeyJwt_Client を足した（#341）
+//*  2026/11/09  玄人 幸道         TestClient_37〜43 を追加（#346 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -402,6 +403,27 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>TestClient を写し、client_secret を**「:」だけを含む値**（ColonOnlySecret）にしたクライアント（RT-237.3。#294）</summary>
         public const string TestClient_35 = "TestClient_35";
 
+        /// <summary>TestClient を写し、**PAR を必須**にしたクライアント（require_pushed_authorization_requests。RT-346.2）</summary>
+        public const string TestClient_37 = "TestClient_37";
+
+        /// <summary>TestClient を写し、**署名付きの Request Object を必須**にしたクライアント（RT-346.3）</summary>
+        public const string TestClient_38 = "TestClient_38";
+
+        /// <summary>TestClient を写し、**トークン要求に DPoP を必須**にしたクライアント（RT-346.4）</summary>
+        public const string TestClient_39 = "TestClient_39";
+
+        /// <summary>TestClient を写し、**トークン要求にクライアント証明書を必須**にしたクライアント（RT-346.5）</summary>
+        public const string TestClient_40 = "TestClient_40";
+
+        /// <summary>TestClient を写し、**device ＋ private_key_jwt** にしたクライアント（FA-3.2。#346）</summary>
+        public const string TestClient_41 = "TestClient_41";
+
+        /// <summary>TestClient を写し、**normal ＋ tls_client_auth** にしたクライアント（RT-346.7。#346）</summary>
+        public const string TestClient_42 = "TestClient_42";
+
+        /// <summary>TestClient を写し、**device ＋ 証明書を必須**にしたクライアント（RT-346.8。#346）</summary>
+        public const string TestClient_43 = "TestClient_43";
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -471,7 +493,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_33, "e2e0tc33000000000000000000000000" },
                 { KnownClients.TestClient_34, "e2e0tc34000000000000000000000000" },
                 { KnownClients.TestClient_35, "e2e0tc35000000000000000000000000" },
-                { KnownClients.TestClient_36, "e2e0tc36000000000000000000000000" }
+                { KnownClients.TestClient_36, "e2e0tc36000000000000000000000000" },
+                { KnownClients.TestClient_37, "e2e0tc37000000000000000000000000" },
+                { KnownClients.TestClient_38, "e2e0tc38000000000000000000000000" },
+                { KnownClients.TestClient_39, "e2e0tc39000000000000000000000000" },
+                { KnownClients.TestClient_40, "e2e0tc40000000000000000000000000" },
+                { KnownClients.TestClient_41, "e2e0tc41000000000000000000000000" },
+                { KnownClients.TestClient_42, "e2e0tc42200000000000000000000000" },
+                { KnownClients.TestClient_43, "e2e0tc43300000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -1085,6 +1114,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient_29)
             {
                 // **登録の scope に `auth` を明記した**（#294）。client_secret は写す元のまま。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_37
+                || clientName == KnownClients.TestClient_38
+                || clientName == KnownClients.TestClient_39
+                || clientName == KnownClients.TestClient_40
+                || clientName == KnownClients.TestClient_41
+                || clientName == KnownClients.TestClient_42
+                || clientName == KnownClients.TestClient_43)
+            {
+                // **プロファイルを強制する登録**（#346）。client_secret・折り返し先・鍵は写す元のまま。
+                //   **TestClient_41 は private_key_jwt、TestClient_42 は tls_client_auth なので、秘密では認証できない。**
                 sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_18)

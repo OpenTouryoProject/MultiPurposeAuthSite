@@ -323,6 +323,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
 | `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` / `RT-246` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない。**自己テストの PAR ボタン**（Open棟梁 のクライアントで預けて認可する。`RT-246.1`） |
+| `Tests/Issues/ProfileEnforcementTests.cs` | `RT-346` | **FAPI の要件を、登録ごとに強制する**（#346）。**PAR を必須にした登録はクエリ・`/ros` の要求を断り、PAR だけ通す**（`RT-346.2`）、**署名付きの Request Object を必須にした登録は、クエリ・フォームだけの PAR を断る**（`RT-346.3`）、**DPoP を必須にした登録は、証明の無いトークン要求を断り、断られた code はまだ使える**（`RT-346.4`）、**証明書を必須にした登録は、証明書の無いトークン要求を断り、在れば秘密の認証でも縛る**（`RT-346.5`。core だけ）、**Discovery の 2 つの設定**（`RT-346.6`）、**`tls_client_auth` の client_credentials も縛られる**（`RT-346.7`。core だけ）、**証明書を必須にした device の登録は、device_code でも縛られる**（`RT-346.8`。core だけ）。`RT-346.1`（動的登録）は `ClientRegistrationTests` に在る |
 | `Tests/Issues/IssuerParameterTests.cs` | `RT-231` | 認可応答の `iss`（RFC 9207）。成功・失敗・JARM・Discovery の広告 |
 | `Tests/Issues/MalformedJwtTests.cs` | `RT-241` | JWT でない値・`iss` の無い JWT・未登録のクライアントで **500 にしない**（`/ros` と `client_assertion`） |
 | `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
@@ -414,7 +415,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 |---|---|---|
 | `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／`refresh_token` を発行しない／`client_secret` と PKCE の併用も、Hybrid も通らない） |
 | 〃 | `FA-2` | `fapi2`（`client_secret` も PKCE も通らない。x509 が要る） |
-| 〃 | `FA-3` | `device`（PKCE で通る。表の「PKCE の S256」の行） |
+| 〃 | `FA-3` | `device`（PKCE で通る。表の「PKCE の S256」の行。**`private_key_jwt` では通らない**。#346） |
 | 〃 | `FA-4` | Device AuthZ グラントは `normal` / `device` の登録にだけ許す（#224） |
 | `Tests/Fapi/CibaClientModeTests.cs` | `FA-5` | CIBA を `fapi_ciba` 以外の登録（`TestClient4_2`）や、既知でない登録値（`TestClient4_3`）で使うと、**開始（`/ciba_authz`）で**断る |
 | `Tests/Fapi/MtlsTests.cs` | `FA-6` | **mTLS**（#226）: `fapi2` は Subject が一致する証明書の認可コードで通る／証明書なし・不一致は `invalid_client`／既知でない登録値は証明書が一致しても通さない／**トークンの `cnf` は RFC 8705 の形式で、その証明書の要求でしか使えない**。**net48 版は `-NetFxMtls` のときだけ**（下記） |
@@ -590,7 +591,7 @@ cd root
 | 認可コード | `client_secret` ＋ PKCE | normal | `FA-1.3` |
 | 認可コード | PKCE plain | normal | `RT-220.2` |
 | 認可コード | PKCE S256 | normal / fapi1 / device | `FA-1.1` / `FA-3.1` |
-| 認可コード | `private_key_jwt` | normal / fapi1 / fapi2 / device | `RT-238.4` |
+| 認可コード | `private_key_jwt` | normal / fapi1 / fapi2（**device は外した**。#346） | `RT-238.4` / `FA-3.2`（device は断られる） |
 | 認可コード | mTLS | normal / fapi1 / fapi2 | `FA-6.1`（net10.0。net48 は `-NetFxMtls`） |
 | `refresh_token` | `private_key_jwt` | normal / fapi1 / fapi2 | `RT-239.5` |
 | `refresh_token` | mTLS | normal / fapi1 / fapi2 | **`FA-6.5`**（#245 で追加） |

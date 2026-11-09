@@ -6882,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=475b6b2e-844a-4d77-830f-e0966c47d5da&code=bogus
+1. GET /Account/EmailConfirmation?userId=6abd43c6-a5de-4e72-b105-94969ccbff44&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=475b6b2e-844a-4d77-830f-e0966c47d5da&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=475b6b2e-844a-4d77-830f-e0966c47d5da&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=6abd43c6-a5de-4e72-b105-94969ccbff44&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=6abd43c6-a5de-4e72-b105-94969ccbff44&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11149,6 +11149,154 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **判定（使わない要求を断ること）は、段階 2 で足す。** ここでは保存と読み戻しだけを測る。**`-UserStoreType` を切り替えて回すと、3 方言の列（Oracle は -1 / 0）を通る。**
 
+## RT-346.2 `require_pushed_authorization_requests` の登録は、PAR で預けた `request_uri` の無い認可要求を `invalid_request` で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、PAR 以外の認可要求を断ることを求める。****`/ros`（独自の口）で預けた `request_uri` も、PAR ではないので断る**（経路は、預けた中身にサーバが付けた印で見分ける）。**`redirect_uri` を確かめた後に断るので、エラーは RP へ返る。** |
+| 根拠 | RFC 9126 §4・§6 / FAPI 2.0 Security Profile 5.3.2.2 の 3 / #346 |
+| テスト | `RT34602_PARを必須にした登録はPARで預けた要求だけが通る` |
+
+**手順**
+
+1. クエリで認可要求を送る
+1. /ros で署名付きの Request Object を預け、その request_uri で送る
+1. PAR に預け、その request_uri で送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断られる（RP へ返る）
+- code は返らない
+- /ros の request_uri も invalid_request で断られる（PAR ではない）
+- PAR は HTTP 201
+- 認可コードが返る
+- state がそのまま返る
+
+## RT-346.3 `require_signed_request_object` の登録は、署名付きの Request Object で送られていない認可要求を断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は、署名付きの Request Object を求める。****この実装は `request` パラメタを受けない**ので、**署名付きの Request Object は `/ros` か PAR の `request` で預ける。****フォームのパラメタだけの PAR は、PAR の口で `invalid_request`（400）で断る**（RFC 9126 §2.3）。 |
+| 根拠 | RFC 9101 §10.5 / RFC 9126 §2.3 / FAPI 1.0 Advanced 5.2.2 の 1 / #346 |
+| テスト | `RT34603_署名付きのRequestObjectを必須にした登録はそれだけが通る` |
+
+**手順**
+
+1. クエリで認可要求を送る
+1. フォームのパラメタだけで PAR に預ける
+1. PAR の request に署名付きの Request Object を入れて預け、その request_uri で送る
+1. /ros に署名付きの Request Object を預け、その request_uri で送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断られる（RP へ返る）
+- HTTP 400 ＋ invalid_request
+- request_uri を返さない
+- PAR は HTTP 201
+- 認可コードが返る
+- 認可コードが返る
+
+## RT-346.4 `dpop_bound_access_tokens` の登録は、DPoP の証明の無いトークン要求を `invalid_request` で断る
+
+| | |
+|---|---|
+| 観点 | **RFC 9449 §5.2 は、証明の無いトークン要求を断ることを求める（MUST）が、エラー コードを決めていない。****`invalid_dpop_proof` は「証明が在って通らない」ときのコード**なので使わず、`invalid_request` にした。**code を消費する前に断る**ので、**断られた code は、証明を添えればまだ使える。** |
+| 根拠 | RFC 9449 §5.2 / FAPI 2.0 Security Profile 5.3.2.1 の 4・5 / #346 |
+| テスト | `RT34604_DPoPを必須にした登録は証明の無いトークン要求を断る` |
+
+**手順**
+
+1. client_credentials を、証明なしで要求する
+1. 同じ要求に、証明を添える
+1. 認可コードを取り、証明なしで交換する
+1. 同じ code を、証明を添えて交換する
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200
+- token_type は DPoP
+- HTTP 400 ＋ invalid_request
+- HTTP 200（断られた code は消費されていない）
+- access_token に cnf.jkt が入る
+
+## RT-346.5 `tls_client_certificate_bound_access_tokens` の登録は、クライアント証明書の無いトークン要求を `invalid_request` で断り、在れば、秘密で認証していても、その証明書でトークンを縛る
+
+| | |
+|---|---|
+| 観点 | **RFC 8705 §3.4 は「エラーにするか、縛らないトークンを出すかはサーバが決める」としている。この実装は断る。****縛るのは、認証の方法によらない**（RFC 8705 §3）。**以前は、証明書で認証した登録（`tls_client_auth`）のときだけ縛っていた**（秘密で認証すると、証明書を捨てていた）。 |
+| 根拠 | RFC 8705 §3・§3.1・§3.4 / FAPI 2.0 Security Profile 5.3.2.1 の 4・5 / #346 |
+| テスト | `RT34605_証明書を必須にした登録は証明書の無いトークン要求を断る` |
+
+**手順**
+
+1. client_credentials を、証明書なしで要求する
+1. 同じ要求に、クライアント証明書を添える
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-346.6 Discovery の `require_pushed_authorization_requests`・`require_signed_request_object` は、サーバ全体の設定の値（既定は false）
+
+| | |
+|---|---|
+| 観点 | **どちらも AS のメタデータとして標準に在る**（RFC 9126 §5・RFC 9101 §10.5）。**以前は `require_pushed_authorization_requests` を false に固定し、`require_signed_request_object` は出していなかった。****登録ごとの必須は、ここには出ない**（Discovery にクライアント別の項目は無い）。 |
+| 根拠 | RFC 9126 §5 / RFC 9101 §10.5 / RFC 8414 §2 / #346 |
+| テスト | `RT34606_サーバ全体の設定をDiscoveryに出す` |
+
+**検証（合否を判定する）**
+
+- require_pushed_authorization_requests は false（真偽値。既定の配備）
+- require_signed_request_object は false（真偽値。既定の配備）
+
+**補足**
+
+- **true にした配備は、E2E では測っていない**（既定の通しの他のテストが落ちる）。**値は `Config.RequirePushedAuthorizationRequests`・`Config.RequireSignedRequestObject` をそのまま出している。**
+
+## RT-346.7 `tls_client_auth` で認証した client_credentials のトークンは、その証明書に縛られる（`cnf.x5t#S256`）
+
+| | |
+|---|---|
+| 観点 | **以前は、client_credentials・ROPC・JWT Bearer のトークンを証明書に縛っていなかった**（トークンを作る `CreateFromClaims` が、証明書を受けていなかった）。**認可コード・refresh_token は縛っていた**ので、グラントによって振る舞いが違った。**#346 で、必須にした登録の縛りを足すときに見つけて、揃えた。** |
+| 根拠 | RFC 8705 §3・§3.1 / #346 |
+| テスト | `RT34607_tls_client_authのclient_credentialsは証明書に縛られる` |
+
+**手順**
+
+1. 証明書で認証して、client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token の cnf の x5t#S256 は、認証した証明書の SHA-256（BASE64URL）
+
+**補足**
+
+- **ROPC も同じ関数で作る**ので、同じ直し方で縛られる（E2E は client_credentials だけで測る）。**JWT Bearer はクライアント認証を通らない**ので、`tls_client_auth` の登録でも縛らない（証明書を必須にした登録だけ）。
+
+## RT-346.8 `tls_client_certificate_bound_access_tokens` の device の登録は、device_code の要求でも、証明書が無ければ断り、在ればトークンを縛る
+
+| | |
+|---|---|
+| 観点 | **device_code のグラントだけ、トークンを作るときに証明書を渡していなかった**（`ProtectFromPayload` に null）。**証明書を求めるのに、縛らない**ことになっていた（#346 のレビューで見つかった）。**断られた device_code は、まだ使える**（消費する前に断る）。 |
+| 根拠 | RFC 8705 §3・§3.1・§3.4 / RFC 8628 §3.4 / #346 |
+| テスト | `RT34608_証明書を必須にしたdeviceの登録はdevice_codeでも縛る` |
+
+**手順**
+
+1. 機器 : device_code と user_code を得て、ユーザが許可する
+1. 機器 : 証明書なしでトークンを要求する
+1. 機器 : 同じ device_code で、証明書を添えて要求する
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_request
+- HTTP 200（断られた device_code は消費されていない）
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -11290,6 +11438,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **表のこの行から device を外すと、ここは通らない。**表を書き換えるときは、この経路を壊さないこと（#224）。
 - **refresh_token の経路は normal の登録だけ**なので、device の登録には発行しない（#224 の段階 2。以前は発行していたが、使えなかった）。
+
+## FA-3.2 client_mode=device のクライアントは、private_key_jwt の認可コードではトークンを得られない
+
+| | |
+|---|---|
+| 観点 | **表の「認可コード × private_key_jwt」の行から device を外した**（#346）。#224 で「水準の大小」の比較を表に移したときに入った行で、意図の記録が無かった。**device は入力の乏しい機器のための登録**（RFC 8628）であり、秘密鍵を持たせて認可コードを使う理由が無い。**認証は通り、登録種別の判定で断られる**こと（`unauthorized_client`）を測る。 |
+| 根拠 | RFC 8628 / RFC 6749 §5.2 / #224 / #346 |
+| テスト | `FA0302_deviceはprivate_key_jwtの認可コードでは通らない` |
+
+**手順**
+
+1. 認可コードを取る（認可エンドポイントは、PKCE の行があるので device にも開いている）
+1. client_assertion（private_key_jwt）で交換する
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- エラーは unauthorized_client（認証は通り、登録種別で断られた）
+- access_token は返らない
+
+**補足**
+
+- **PKCE だけの経路（FA-3.1）は残してある**（元の実装の例外措置）。
 
 ## FA-4.1 Device AuthZ グラントは、登録種別が normal と device のクライアントにだけ許す
 

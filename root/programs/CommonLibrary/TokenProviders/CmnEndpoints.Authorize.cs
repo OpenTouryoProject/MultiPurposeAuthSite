@@ -32,6 +32,7 @@
 //*  2026/10/29  玄人 幸道         CheckAuthTime の記述を実装に合わせ、using を整理した（#294）
 //*  2026/10/29  玄人 幸道         scope の省略で 500 にしない。id_token 単独と、登録の grant_types に無い Implicit / Hybrid を、同意の前に断る（#294）
 //*  2026/11/01  玄人 幸道         CheckClientGrantType を internal にした（Extensions/Sts の CmnCibaEndpoint が使う。#321）
+//*  2026/11/09  玄人 幸道         PAR・署名付きの Request Object を必須にした登録・配備では、それを使わない認可要求を断る（#346 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -163,11 +164,20 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// code_challenge は、Config.RequirePkce が true のときだけ見る（#220）。
         /// 既定（false）では、渡さなくても従来どおり動く。
+        ///
+        /// **`pushed`・`signedRequestObject` は、要求がどの経路で来たか**（#346）。
+        /// **省略できない引数にした** — **呼び出し元が渡し忘れると、必須にした登録でも黙って通る**ため。
+        /// | 経路 | pushed | signedRequestObject |
+        /// |---|---|---|
+        /// | クエリ（`request_uri` 無し・引けない） | false | false |
+        /// | `/ros` で預けた `request_uri` | false | true |
+        /// | PAR（フォームのパラメタ） | true | false |
+        /// | PAR（`request` に JAR） | true | true |
         /// </remarks>
         public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
             ref string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge = "", string prompt = "")
+            string code_challenge, string prompt, bool pushed, bool signedRequestObject)
         {
             // **response_type を正規化する**（#267）。**ここで 1 回だけ掛ける。**
             //   **`ref` で受けているので、呼び出し元の変数も正規化された値になる。**
@@ -183,7 +193,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt);
+                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt,
+                pushed, signedRequestObject);
 
             if (!isValid && string.IsNullOrEmpty(valid_redirect_uri))
             {
@@ -212,7 +223,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         private static bool ValidateAuthZReqParamCore(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge, string prompt)
+            string code_challenge, string prompt, bool pushed, bool signedRequestObject)
         {
             valid_redirect_uri = "";
             // 各分岐で上書きする。ここは想定外のケースの既定値（#187）。
@@ -373,6 +384,33 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err = OAuth2AndOIDCConst.unauthorized_client;
                     errDescription = "This client is not allowed to use this response_type.";
+                    return false;
+                }
+
+                #endregion
+
+                #region PAR・署名付きの Request Object（#346 の段階 2）
+
+                // **必須にした登録・配備では、使わない認可要求を断る**（FAPI 2.0 Security Profile 5.3.2.2 の 3 / FAPI 1.0 Advanced 5.2.2 の 1）。
+                //   **サーバ全体（Config）と、クライアント個別（登録）の OR**（`require_pkce` と同じ形。#221）。
+                //   **エラーは `invalid_request`**（RFC 9126 §4・§2.3。RFC 9101 §10.5 はコードを決めていないので、揃えた）。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                //   ※ **経路は、預けた中身にサーバが付けた印で見分ける**（`CmnRequestObjectEndpoint.ReadOrigin`）。
+                if (!pushed
+                    && (Config.RequirePushedAuthorizationRequests
+                        || Helper.GetInstance().GetClientRequirePar(client_id)))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "This client must use the pushed authorization request (PAR).";
+                    return false;
+                }
+
+                if (!signedRequestObject
+                    && (Config.RequireSignedRequestObject
+                        || Helper.GetInstance().GetClientRequireSignedRequestObject(client_id)))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "This client must send the authorization request as a signed request object.";
                     return false;
                 }
 

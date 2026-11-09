@@ -353,6 +353,12 @@
     // PKCE で S256 だけを受け付けるか（OAuth 2.1 / FAPI は true）
     "RequirePkceS256": "false",
 
+    // [PAR・署名付きの Request Object]（#346）
+    // 認可要求を PAR で預けたものだけ受けるか（FAPI 2.0 は true）。登録の require_pushed_authorization_requests と OR で効く
+    "RequirePushedAuthorizationRequests": "false",
+    // 認可要求を署名付きの Request Object だけ受けるか（FAPI 1.0 Advanced は true）。登録の require_signed_request_object と OR で効く
+    "RequireSignedRequestObject": "false",
+
     // [DPoP]
     // **DPoP の証明に nonce を要求するか**（RFC 9449 §8 / §9。#311 の段階 4）。
     //   **既定は false** — **要求すると、nonce を知らないクライアントが全部止まる。**

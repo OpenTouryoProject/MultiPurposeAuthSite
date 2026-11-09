@@ -33,6 +33,7 @@
 //*  2026/10/30  玄人 幸道         refresh_token の利用者が居るか・SecurityStamp が変わっていないかを確かめる口を追加（#294）
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/02  玄人 幸道         ROPC の失敗の数えを、競合したら読み直してやり直す（E-14。#316）
+//*  2026/11/09  玄人 幸道         送信者の拘束（DPoP・クライアント証明書）を必須にした登録の判定を追加（#346 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -46,6 +47,7 @@ using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -353,6 +355,58 @@ namespace MultiPurposeAuthSite.TokenProviders
             err.Add(OAuth2AndOIDCConst.error_description, errDescription);
 
             return false;
+        }
+
+        #endregion
+
+        #region 送信者の拘束を必須にした登録（#346）
+
+        /// <summary>送信者の拘束を必須にした登録なら、その証明が在るか（#346）</summary>
+        /// <param name="client_id">認証できたクライアント</param>
+        /// <param name="presentedX509">提示されたクライアント証明書（認証で null にされる前のもの。無ければ null）</param>
+        /// <param name="x509">トークンを縛る証明書（**必須の登録では、提示されたものにする**）</param>
+        /// <param name="jkt">DPoP の証明の鍵の指紋（証明が無ければ空）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// | 登録 | 証明が無いとき | 根拠 |
+        /// |---|---|---|
+        /// | `dpop_bound_access_tokens` | **`invalid_request` で断る** | RFC 9449 §5.2（断る MUST。コードは決めていない） |
+        /// | `tls_client_certificate_bound_access_tokens` | **`invalid_request` で断る** | RFC 8705 §3.4（エラーか、縛らないトークンかはサーバが決める。**ここでは断る**） |
+        ///
+        /// **`invalid_dpop_proof` にしない** — それは「証明が在って、通らなかった」ときのコード（RFC 9449 §5）。
+        /// **`invalid_client` にしない** — クライアントの認証は通っている。
+        ///
+        /// **証明書は、提示されたものでトークンを縛る。** クライアント認証は、**秘密・`client_assertion` で認証したとき
+        /// x509 を null にする**（証明書で縛るのは `tls_client_auth` のときだけ）。**必須にした登録では、
+        /// 認証の方法によらず縛る**（RFC 8705 §3 は、縛ることを認証の方法と切り離している）。
+        /// **必須にしていない登録は、従来どおり**（x509 に触らない）。
+        /// </remarks>
+        private static bool CheckSenderConstraint(string client_id,
+            X509Certificate2 presentedX509, ref X509Certificate2 x509,
+            string jkt, Dictionary<string, string> err)
+        {
+            if (string.IsNullOrEmpty(jkt)
+                && Helper.GetInstance().GetClientDPoPBoundAccessTokens(client_id))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description, "A DPoP proof is required for this client.");
+                return false;
+            }
+
+            if (Helper.GetInstance().GetClientTlsCertBoundAccessTokens(client_id))
+            {
+                if (presentedX509 == null)
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    err.Add(OAuth2AndOIDCConst.error_description, "A client certificate is required for this client.");
+                    return false;
+                }
+
+                x509 = presentedX509;
+            }
+
+            return true;
         }
 
         #endregion

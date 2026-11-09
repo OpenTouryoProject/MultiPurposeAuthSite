@@ -159,7 +159,10 @@ git config core.hooksPath .githooks
 ### OIDC / OAuth2（`TokenProviders`・`Extensions.Sts`・`Controllers`）
 
 - [ ] `state`・`nonce`、`redirect_uri` の完全一致、PKCE
-- [ ] トークンの紐付け（mTLS・DPoP）、クライアントとトークン・コードの紐付け
+- [ ] トークンの紐付け（mTLS・DPoP）、クライアントとトークン・コードの紐付け。
+  **トークンを作る経路（`ProtectFromPayload` / `CreateFromClaims`）で、縛り（`cnf`）が揃っているか** —
+  **client_credentials・ROPC・device_code だけ、証明書に縛っていなかった**（#346。`RT-346.7`・`.8`）。
+  **縛る証明書は、認証で確かめたものか**（クライアント認証を通らない経路では、提示されただけの証明書が残る）
 - [ ] `alg` の固定（`none` を受けない）、`aud`・`iss`・`exp` の確認
 - [ ] **仕様の「だけ」を「も」と読んでいないか**（FAPI 2.0 の `aud` は issuer だけ。#323）。登録の種別で規定が変わらないか
 - [ ] **値が無いときに、検証を飛ばしていないか**（`nonce`・`aud`・署名など）

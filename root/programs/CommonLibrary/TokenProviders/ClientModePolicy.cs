@@ -32,6 +32,7 @@
 //*  2026/09/25  玄人 幸道         認可コード × private_key_jwt に fapi2 を足した（#238）
 //*  2026/09/26  玄人 幸道         refresh_token を、非対称の証明なら fapi1 / fapi2 にも開いた（#239 の段階 3）
 //*  2026/11/08  玄人 幸道         mTLS の行のコメント「net10.0 のみ」を、E2E の測り方の話だと分かる書き方にした（行は両版で効く。#345）
+//*  2026/11/09  玄人 幸道         認可コード × private_key_jwt の行から device を外した（#346。#224 で水準の比較から移しただけの行で、意図が無かった）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -171,7 +172,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   MTLS か private_key_jwt に限っており、**fapi2 は client_secret を通さない**ので、
             //   ここを塞ぐと mTLS を使えない fapi2 のクライアントがトークンを取れない。
             //   この行に E2E が無かったため、元の実装から引き継いだ穴が残っていた。
-            new Rule(Flow.AuthorizationCode,     Proof.PrivateKeyJwt,       Normal, Fapi1, Fapi2, Device),   // RT-238.4
+            //
+            //   **device を外した（#346）。** #224 で「水準の大小」の比較を表に移したときに入った行で、意図の記録が無かった。
+            //   **device は、入力の乏しい機器のための登録**（RFC 8628）であり、秘密鍵を持たせて認可コードを使う理由が無い。
+            //   **PKCE だけの行（上）の device は残す**（元の実装の例外措置で、FA-3.1 が守る）。
+            new Rule(Flow.AuthorizationCode,     Proof.PrivateKeyJwt,       Normal, Fapi1, Fapi2),    // RT-238.4 / FA-3.2
             new Rule(Flow.AuthorizationCode,     Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.1（E2E の既定は net10.0 だけ。net48 は -NetFxMtls のとき。行は両版で効く）
 
             // **refresh_token : 証明によって、通す登録種別が変わる（#239 の段階 3）。**

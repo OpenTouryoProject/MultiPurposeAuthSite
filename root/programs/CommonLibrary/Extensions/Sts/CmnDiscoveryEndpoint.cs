@@ -34,6 +34,7 @@
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Discovery.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //*  2026/11/06  玄人 幸道         CIBA の request の署名の alg のコメントを、Open棟梁 の現状（OpenTouryo#595・#596・#664）に合わせた（#337）
 //*  2026/11/06  玄人 幸道         jwks_uri・request_object_endpoint・PAR の口を、Config で読む（OpenTouryo#666。#339）
+//*  2026/11/09  玄人 幸道         require_pushed_authorization_requests・require_signed_request_object を、サーバ全体の設定から出す（#346 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -219,8 +220,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OpenIDConfig.Add("pushed_authorization_request_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri);
 
-            // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
-            OpenIDConfig.Add("require_pushed_authorization_requests", false);
+            // **PAR・署名付きの Request Object を必須にするかは、サーバ全体の設定**（#346）。
+            //   RFC 9126 §5 / RFC 9101 §10.5 の AS のメタデータ。**既定はどちらも false。**
+            //   **登録ごとの必須（同名のクライアントのメタデータ）は、ここには出ない**（Discovery にクライアント別の項目は無い）。
+            OpenIDConfig.Add("require_pushed_authorization_requests", Config.RequirePushedAuthorizationRequests);
+            OpenIDConfig.Add("require_signed_request_object", Config.RequireSignedRequestObject);
             #endregion
 
             #region ResponseObject(JARM)

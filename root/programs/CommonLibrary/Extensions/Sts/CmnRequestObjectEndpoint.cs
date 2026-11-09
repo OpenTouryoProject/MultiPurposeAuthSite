@@ -37,6 +37,7 @@
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.RequestObject.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //*  2026/11/06  玄人 幸道         /ros と PAR の Request Object の aud を issuer と照合する。FAPI の登録は exp・nbf を必須にし、寿命を 60 分以内に限る（#336）
 //*  2026/11/06  玄人 幸道         exp・nbf を Open棟梁 の TryReadNumericDate で読む。invalid_request_object を Open棟梁 の定数にし、根拠を RFC 9101 §7 に直した（#337）
+//*  2026/11/09  玄人 幸道         預ける Request Object に、PAR か・署名付きかの印を付ける（#346 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -78,6 +79,53 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JToken claims = (payload == null) ? null : payload[OAuth2AndOIDCConst.claims];
 
             return claims == null || claims.Type == JTokenType.Object;
+        }
+
+        #endregion
+
+        #region 預けた経路の印（#346）
+
+        /// <summary>預けた中身に付ける印：PAR で預けたか（サーバが付ける。#346）</summary>
+        /// <remarks>**URN の形にして、認可要求のパラメタと重ならないようにしてある。**</remarks>
+        public const string OriginPushedKey = "urn:mpas:origin:pushed";
+
+        /// <summary>預けた中身に付ける印：署名付きの Request Object だったか（サーバが付ける。#346）</summary>
+        public const string OriginSignedKey = "urn:mpas:origin:signed";
+
+        /// <summary>預ける中身に、経路の印を付ける（#346）</summary>
+        /// <param name="payload">預ける中身</param>
+        /// <param name="pushed">PAR で預けたか</param>
+        /// <param name="signed">署名付きの Request Object だったか</param>
+        /// <remarks>
+        /// **必ず上書きする。** **クライアントが同じ名前のクレーム・フォームの値を入れてきても、サーバの値が勝つ**
+        /// （**入れてきた値を信じると、`/ros` の Request Object が「PAR で預けた」と名乗れる**）。
+        /// </remarks>
+        private static void MarkOrigin(JObject payload, bool pushed, bool signed)
+        {
+            payload[CmnRequestObjectEndpoint.OriginPushedKey] = pushed;
+            payload[CmnRequestObjectEndpoint.OriginSignedKey] = signed;
+        }
+
+        /// <summary>預けた中身から、経路の印を読む（#346）</summary>
+        /// <param name="payload">預けた中身（null なら、どちらも false）</param>
+        /// <param name="pushed">PAR で預けたか</param>
+        /// <param name="signed">署名付きの Request Object だったか</param>
+        /// <remarks>**印が無い（この版より前に預けたもの）・真偽値でないものは false**（＝ 必須にした登録では断られる）。</remarks>
+        public static void ReadOrigin(JObject payload, out bool pushed, out bool signed)
+        {
+            pushed = CmnRequestObjectEndpoint.IsTrue(payload, CmnRequestObjectEndpoint.OriginPushedKey);
+            signed = CmnRequestObjectEndpoint.IsTrue(payload, CmnRequestObjectEndpoint.OriginSignedKey);
+        }
+
+        /// <summary>真偽値の true か</summary>
+        /// <param name="payload">JObject</param>
+        /// <param name="name">名前</param>
+        /// <returns>true なら true</returns>
+        private static bool IsTrue(JObject payload, string name)
+        {
+            JToken token = (payload == null) ? null : payload[name];
+
+            return token != null && token.Type == JTokenType.Boolean && (bool)token;
         }
 
         #endregion
@@ -255,6 +303,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 return false;
             }
+
+            //  **経路の印**（#346）。**/ros は、署名を確かめた Request Object だけを預かる**（PAR ではない）。
+            CmnRequestObjectEndpoint.MarkOrigin(payload, false, true);
+            requestObjectString = payload.ToString(Formatting.None);
 
             string urn = Guid.NewGuid().ToString("N");
 
@@ -494,6 +546,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //   **ここで正規化した値を payload に書き戻しておく**（並びを揃える）。
             string parResponseType = (string)payload[OAuth2AndOIDCConst.response_type];
 
+            //  **PAR そのもので預けるので `pushed` は true。** **`request`（JAR）なら署名付き。**
+            //    **署名付きを必須にした登録・配備では、フォームのパラメタだけの PAR を `invalid_request` で断る**
+            //    （RFC 9126 §2.3。#346）。
+            bool signedRequestObject = !string.IsNullOrEmpty(request);
+
             if (!CmnEndpoints.ValidateAuthZReqParam(
                 (string)payload[OAuth2AndOIDCConst.client_id],
                 (string)payload[OAuth2AndOIDCConst.redirect_uri],
@@ -502,7 +559,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 (string)payload[OAuth2AndOIDCConst.nonce],
                 out string _, out string error, out string errorDescription,
                 (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
-                (string)payload[OAuth2AndOIDCConst.prompt] ?? ""))
+                (string)payload[OAuth2AndOIDCConst.prompt] ?? "",
+                true, signedRequestObject))
             {
                 err.Add(OAuth2AndOIDCConst.error, error);
                 err.Add(OAuth2AndOIDCConst.error_description, errorDescription);
@@ -514,6 +572,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #endregion
 
             #region 預かる
+
+            //  **経路の印**（#346）。**フォームの値で同じ名前を入れてきても、ここで上書きする。**
+            CmnRequestObjectEndpoint.MarkOrigin(payload, true, signedRequestObject);
 
             string urn = Guid.NewGuid().ToString("N");
 
