@@ -6882,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=6e782ab1-4fde-4059-8fe5-10f162ce1eed&code=bogus
+1. GET /Account/EmailConfirmation?userId=12a3cf4c-3a03-4436-864e-4bb7ba689718&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=6e782ab1-4fde-4059-8fe5-10f162ce1eed&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=6e782ab1-4fde-4059-8fe5-10f162ce1eed&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=12a3cf4c-3a03-4436-864e-4bb7ba689718&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=12a3cf4c-3a03-4436-864e-4bb7ba689718&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11418,6 +11418,46 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **外側の JWE のヘッダには `kid` を入れていない**（RFC 7516 §4.1.6 で任意。#352 では扱わない）。
+
+## RT-353.1 トークン応答の expires_in は、JSON の数値で返る
+
+| | |
+|---|---|
+| 観点 | **トークン応答の数値は JSON の数値で返す**（`"3600"` のような文字列にしない）。応答は 1 か所（`CreateAccessTokenResponse`）で作るので、**認可コード・refresh_token・client_credentials** の 3 つのグラントで確かめる。 |
+| 根拠 | RFC 6749 §5.1 / #353 |
+| テスト | `RT35301_トークン応答のexpires_inは数値` |
+
+**手順**
+
+1. 認可コードを引き換える
+1. refresh_token で更新する
+1. client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- 認可コード：expires_in は JSON の数値
+- 認可コード：expires_in は正の整数
+- refresh_token：expires_in は JSON の数値
+- refresh_token：expires_in は正の整数
+- client_credentials：expires_in は JSON の数値
+- client_credentials：expires_in は正の整数
+
+## RT-353.2 PAR の応答の expires_in は、JSON の数値で返る
+
+| | |
+|---|---|
+| 観点 | **PAR の応答の `expires_in` は JSON の数値**（`request_uri` の有効期間の秒数）。 |
+| 根拠 | RFC 9126 §2.2 / #353 |
+| テスト | `RT35302_PARの応答のexpires_inは数値` |
+
+**手順**
+
+1. /par に認可要求を預ける
+
+**検証（合否を判定する）**
+
+- PAR：expires_in は JSON の数値
+- PAR：expires_in は正の整数
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

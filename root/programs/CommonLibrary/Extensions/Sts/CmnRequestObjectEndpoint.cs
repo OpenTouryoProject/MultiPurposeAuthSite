@@ -38,6 +38,7 @@
 //*  2026/11/06  玄人 幸道         /ros と PAR の Request Object の aud を issuer と照合する。FAPI の登録は exp・nbf を必須にし、寿命を 60 分以内に限る（#336）
 //*  2026/11/06  玄人 幸道         exp・nbf を Open棟梁 の TryReadNumericDate で読む。invalid_request_object を Open棟梁 の定数にし、根拠を RFC 9101 §7 に直した（#337）
 //*  2026/11/09  玄人 幸道         預ける Request Object に、PAR か・署名付きかの印を付ける（#346 の段階 2）
+//*  2026/11/10  玄人 幸道         PAR の応答の expires_in を JSON の数値にした（#353）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -341,7 +342,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="assertion">client_assertion（private_key_jwt）</param>
         /// <param name="x509">クライアント証明書（mTLS）</param>
         /// <param name="parameters">フォームのパラメタ（request を含むことがある）</param>
-        /// <param name="ret">応答（request_uri / expires_in）</param>
+        /// <param name="ret">応答（request_uri / expires_in。**expires_in は JSON の数値**。RFC 9126 §2.2。#353）</param>
         /// <param name="err">エラー</param>
         /// <returns>成否</returns>
         /// <remarks>
@@ -358,7 +359,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public static bool PushedAuthorizationRequest(
             string client_id, string client_secret, string assertion, X509Certificate2 x509,
             NameValueCollection parameters,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
             err = new Dictionary<string, string>();
@@ -580,10 +581,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             RequestObjectProvider.Create(urn, payload.ToString(Formatting.None));
 
-            ret = new Dictionary<string, string>()
+            //  **expires_in は JSON の数値**（RFC 9126 §2.2。#353。以前は文字列だった）。
+            ret = new Dictionary<string, object>()
             {
                 { OAuth2AndOIDCConst.request_uri, OAuth2AndOIDCConst.UrnRequestUriBase + urn },
-                { OAuth2AndOIDCConst.expires_in, ((int)Config.RequestObjectExpireTimeSpanFromSeconds.TotalSeconds).ToString() }
+                { OAuth2AndOIDCConst.expires_in, (int)Config.RequestObjectExpireTimeSpanFromSeconds.TotalSeconds }
             };
 
             return true;

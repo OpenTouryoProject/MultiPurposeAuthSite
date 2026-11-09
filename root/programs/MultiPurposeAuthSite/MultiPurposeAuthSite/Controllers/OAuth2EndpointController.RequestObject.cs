@@ -33,6 +33,7 @@
 //*  2026/10/30  玄人 幸道         /par で同じ名前のパラメタが 2 回来たら invalid_request で断る（#294）
 //*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnRequestObjectEndpoint）を呼ぶ（#321）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/10  玄人 幸道         PAR の応答を Dictionary<string, object> で受ける（expires_in を数値で返す。#353）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -125,7 +126,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (CmnRequestObjectEndpoint.PushedAuthorizationRequest(
                 client_id, client_secret, assertion, x509, parameters,
-                out Dictionary<string, string> ret, out err))
+                out Dictionary<string, object> ret, out err))
             {
                 // RFC 9126 §2.2 : 成功は 201
                 return this.Content(HttpStatusCode.Created,

@@ -132,6 +132,12 @@ ret.Add(OAuth2AndOIDCConst.expires_in,
 **修正:** `.Seconds` → `.TotalSeconds`（`(int)` にキャストして整数化）。
 併せて `expires_in` は RFC 6749 §5.1 で**数値**なので、応答の型も見直す（A-3 と同根）。
 
+> **✅ 修正済み（#353）: 型は、#182 では直っていなかった。** トークン応答と PAR の応答の `expires_in` は、
+> **文字列（`"3600"`）のまま**だった（応答を `Dictionary<string, string>` で作っていたため）。
+> 適合性テスト（#350。`ValidateExpiresIn`）で見つかった。**応答の型を `Dictionary<string, object>` にし、数値で返す**
+> （RFC 6749 §5.1・RFC 9126 §2.2。`RT-353.1`・`.2`）。Device Authorization・CIBA は #294 で直してあった。
+> **認可エンドポイントの応答（Implicit の fragment など）は URL のパラメタなので、文字列のまま**である。
+
 ### A-2. ~~`nonce` が無いと `id_token` が発行されない~~ **[Lib]** — **⚠️ 誤検出（#183）**
 
 ```csharp

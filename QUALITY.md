@@ -188,6 +188,9 @@ git config core.hooksPath .githooks
 - [ ] **出す JWT のヘッダの `kid` は、署名した鍵（`jwks_uri` に載る鍵）の `kid` か。**
   **Nested JWT（JWE の中の JWS）では、暗号化に使うクライアントの鍵の `kid` と取り違えやすい**（#352。`RT-352.1`）。
   **自己テスト（サーバとクライアントを兼ねる）では気付けない。** RP として、`kid` で `jwks_uri` から鍵を引いて確かめる
+- [ ] **応答の数値（`expires_in`・`interval` など）を、JSON の文字列にしていないか**（RFC 6749 §5.1「Numerical values are included as JSON numbers」）。
+  **`Dictionary<string, string>` で応答を作ると、数値が文字列になる**（#294・#353。`RT-294.75`・`RT-353`）。
+  **E2E の `JsonResponse.String` は数値も文字列にして返す**ので、型は `KindOf` で見る
 - [ ] **仕様の「だけ」を「も」と読んでいないか**（FAPI 2.0 の `aud` は issuer だけ。#323）。登録の種別で規定が変わらないか
 - [ ] **値が無いときに、検証を飛ばしていないか**（`nonce`・`aud`・署名など）
 - [ ] 検証を省く分岐（設定やパラメタで検証を飛ばせる経路）が増えていないか

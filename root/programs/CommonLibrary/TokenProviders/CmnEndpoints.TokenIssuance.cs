@@ -35,6 +35,7 @@
 //*  2026/11/02  玄人 幸道         ROPC の失敗の数えを、競合したら読み直してやり直す（E-14。#316）
 //*  2026/11/09  玄人 幸道         送信者の拘束（DPoP・クライアント証明書）を必須にした登録の判定を追加（#346 の段階 2）
 //*  2026/11/10  玄人 幸道         id_token の生成に pfx を渡さないようにした（鍵は SigningKeys から引く。#352）
+//*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -575,8 +576,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="jwkString">string</param>
         /// <param name="jkt">DPoP の鍵の指紋（#311 の段階 1。無ければ空）</param>
         /// <param name="expiresIn">access_token に付けた有効期間（null なら `OAuth2AccessTokenExpireTimeSpanFromMinutes`）</param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <returns>Dictionary(string, object)</returns>
         /// <remarks>
+        /// **`expires_in` は、JSON の数値で返す**（RFC 6749 §5.1「Numerical values are included as JSON numbers」。#353）。
+        /// **以前は文字列だった**（応答の型が Dictionary(string, string) だったため）。
+        ///
         /// **`expires_in` は、実際に付けた期間で返す**（#294）。
         /// **`client_registration` 専用のトークンは期間が短い**（`DcrAccessTokenExpireTimeSpanFromSeconds`）が、
         /// 以前は常に通常の期間を返していた。**クライアントが、切れたトークンを使い続ける**ことになる。
@@ -591,11 +595,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **クライアントは `token_type` を見て、使うときの出し方を決める**
         /// （`Authorization: DPoP …` ＋ 証明。**段階 2 で照合する**）。
         /// </remarks>
-        private static Dictionary<string, string> CreateAccessTokenResponse(
+        private static Dictionary<string, object> CreateAccessTokenResponse(
             string access_token, string refresh_token, string jwkString, string jkt = null,
             TimeSpan? expiresIn = null)
         {
-            Dictionary<string, string> ret = new Dictionary<string, string>();
+            Dictionary<string, object> ret = new Dictionary<string, object>();
 
             // token_type
             ret.Add(OAuth2AndOIDCConst.token_type,
@@ -653,9 +657,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
-            // expires_in
-            ret.Add(OAuth2AndOIDCConst.expires_in, ((int)(expiresIn
-                ?? Config.OAuth2AccessTokenExpireTimeSpanFromMinutes).TotalSeconds).ToString());
+            // expires_in（**JSON の数値**。RFC 6749 §5.1。#353）
+            ret.Add(OAuth2AndOIDCConst.expires_in, (int)(expiresIn
+                ?? Config.OAuth2AccessTokenExpireTimeSpanFromMinutes).TotalSeconds);
 
             // scope
             // 発行したスコープを返す。要求と異なる場合は必須（RFC 6749 5.1）。
