@@ -6,9 +6,11 @@
 @rem (faster than 3_BuildLibsAtOtherReposInTimeOfDev.bat).
 @rem
 @rem Where the two repositories are (#344, OpenTouryoProject/OpenTouryo#652):
-@rem   1. If both environment variables OTR_PATH (OpenTouryo) and MPAS_PATH (MultiPurposeAuthSite)
+@rem   1. If both environment variables OT_OTR_PATH (OpenTouryo) and OT_MPAS_PATH (MultiPurposeAuthSite)
 @rem      are set, they are used. This batch file can then be run from anywhere.
 @rem      To register them, see OpenTouryo root/files/tools/PowerShell/Register-RepoPaths.ps1.
+@rem      The old names OTR_PATH and MPAS_PATH are no longer read (renamed with the OT_ prefix,
+@rem      OpenTouryoProject/OpenTouryo#652).
 @rem   2. Otherwise, the paths are relative to the current folder, as before: it assumes that
 @rem      OpenTouryo and MultiPurposeAuthSite are cloned into the same folder, and that this
 @rem      batch file is copied to that folder and run there (double-click).
@@ -17,10 +19,10 @@
 
 setlocal
 
-if defined OTR_PATH if defined MPAS_PATH goto :fromenv
+if defined OT_OTR_PATH if defined OT_MPAS_PATH goto :fromenv
 
-if defined OTR_PATH echo  MPAS_PATH is not set, so OTR_PATH is not used either.
-if defined MPAS_PATH echo  OTR_PATH is not set, so MPAS_PATH is not used either.
+if defined OT_OTR_PATH echo  OT_MPAS_PATH is not set, so OT_OTR_PATH is not used either.
+if defined OT_MPAS_PATH echo  OT_OTR_PATH is not set, so OT_MPAS_PATH is not used either.
 
 set "OTR_ROOT=OpenTouryo"
 set "MPAS_ROOT=MultiPurposeAuthSite"
@@ -28,9 +30,9 @@ echo  Using the paths relative to the current folder: %CD%
 goto :copy
 
 :fromenv
-set "OTR_ROOT=%OTR_PATH%"
-set "MPAS_ROOT=%MPAS_PATH%"
-echo  Using the environment variables OTR_PATH and MPAS_PATH.
+set "OTR_ROOT=%OT_OTR_PATH%"
+set "MPAS_ROOT=%OT_MPAS_PATH%"
+echo  Using the environment variables OT_OTR_PATH and OT_MPAS_PATH.
 
 :copy
 echo    OpenTouryo           : %OTR_ROOT%
