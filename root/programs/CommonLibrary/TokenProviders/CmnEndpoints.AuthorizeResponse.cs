@@ -31,6 +31,7 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         ログの文言を経路に合わせ、using を整理した（#294）
 //*  2026/10/31  玄人 幸道         認可ログの User Account は、利用者名で引く（GetClientIdByUserName。#294）
+//*  2026/11/10  玄人 幸道         id_token の生成に pfx を渡さないようにした（鍵は SigningKeys から引く。#352）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -202,11 +203,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (s == OAuth2AndOIDCConst.Scope_Openid)
                         {
                             // **access_token に揃える**（#129 の段階 2）。
-                            //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
+                            //   **鍵は alg から引く**（#129 の段階 3。#352 で pfx の引数を消した）。
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
                                 HashClaimType.AtHash | HashClaimType.SHash,
-                                CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, jwkString, signingAlg);
+                                jwkString, signingAlg);
                         }
                     }
                 }
@@ -310,13 +311,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (s == OAuth2AndOIDCConst.Scope_Openid)
                 {
                     // **access_token に揃える**（#129 の段階 2）。
-                    //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
+                    //   **鍵は alg から引く**（#129 の段階 3。#352 で pfx の引数を消した）。
                     string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
 
                     id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                         access_token, code, state, // at_hash, c_hash, s_hash
                         HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                        CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, jwkString, signingAlg);
+                        jwkString, signingAlg);
                 }
             }
 

@@ -83,7 +83,7 @@
 | | CIBA (FAPI-CIBA) | ✓ | poll モードのみ。FCM プッシュ連携 |
 | | Refresh Token | ✓ | ローテーションあり |
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
-| | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
+| | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM。中の JWS は ES256。**✅ 修正済み（#352）: 中の JWS の `kid` が、署名した鍵ではなく、暗号化に使うクライアントの鍵の `kid` だった**（`kid` で `jwks_uri` から鍵を引く RP が検証できなかった。`RT-352.1`） |
 | | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/Sts/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |

@@ -34,6 +34,7 @@
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/02  玄人 幸道         ROPC の失敗の数えを、競合したら読み直してやり直す（E-14。#316）
 //*  2026/11/09  玄人 幸道         送信者の拘束（DPoP・クライアント証明書）を必須にした登録の判定を追加（#346 の段階 2）
+//*  2026/11/10  玄人 幸道         id_token の生成に pfx を渡さないようにした（鍵は SigningKeys から引く。#352）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -635,15 +636,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **鍵は alg から引く**（#129 の段階 3）ので、ここで alg ごとに分けない。
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, CmnServerParams.RsaPfxFilePath, CmnServerParams.RsaPfxPassword, "",
-                            (string)jObjHeader[JwtConst.alg]);
+                            HashClaimType.None, "", (string)jObjHeader[JwtConst.alg]);
                     }
                     else
                     {
-                        // JWE
+                        // JWE（**中の JWS は ES256。鍵と kid は SigningKeys から引く**。#352）
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, jwkString);
+                            HashClaimType.None, jwkString);
                     }
 
                     if (!string.IsNullOrEmpty(id_token))

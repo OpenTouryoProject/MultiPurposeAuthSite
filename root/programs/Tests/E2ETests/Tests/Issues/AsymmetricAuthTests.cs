@@ -36,6 +36,7 @@
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/08  玄人 幸道         RT-239.5 : 自己テストの FAPI2 のボタンが PKCE を使うので、code_verifier も送る（#345）
+//*  2026/11/10  玄人 幸道         WithClientAssertion を internal にした（RT-352 で使う。#352）
 //**********************************************************************************
 
 using System;
@@ -155,7 +156,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="items">フォームの中身</param>
         /// <param name="aud">aud（null ならトークン エンドポイントの URL。**fapi2 は issuer を渡す**。#323）</param>
         /// <returns>フォーム</returns>
-        private static Dictionary<string, string> WithClientAssertion(
+        internal static Dictionary<string, string> WithClientAssertion(
             IdPClient client, string clientId, IDictionary<string, string> items, string aud = null)
         {
             Dictionary<string, string> form = new Dictionary<string, string>(items)

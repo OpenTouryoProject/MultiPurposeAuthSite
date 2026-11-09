@@ -6882,7 +6882,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus
+1. GET /Account/EmailConfirmation?userId=6e782ab1-4fde-4059-8fe5-10f162ce1eed&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6891,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=6e782ab1-4fde-4059-8fe5-10f162ce1eed&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=6e782ab1-4fde-4059-8fe5-10f162ce1eed&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11392,6 +11392,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - HTTP 200
 - access_token の cnf の x5t#S256 は、認証した証明書の SHA-256（BASE64URL）
+
+## RT-352.1 fapi2 の id_token（Nested JWT）の中の JWS は、jwks_uri の鍵（kid）で検証できる
+
+| | |
+|---|---|
+| 観点 | **中の JWS の `kid` は、署名した IdP の鍵の `kid` であること**（JWK Set に鍵が複数あるなら `kid` は必須。RP は `kid` で `jwks_uri` から鍵を引く）。以前は、暗号化に使うクライアントの鍵（`jwk_rsa_publickey`）の `kid` が入っていた。**認可コードの引き換えと、refresh_token の更新の両方**で確かめる（どちらも同じ組み立てを通る）。 |
+| 根拠 | OIDC Core 1.0 §10.1 / RFC 7515 §4.1.4 / #352 |
+| テスト | `RT35201_fapi2のid_tokenの中のJWSはjwks_uriの鍵で検証できる` |
+
+**手順**
+
+1. FAPI2 の自己テストで code を得て、client_assertion で交換する
+1. client_assertion で refresh_token を更新し、返った id_token も同じく確かめる
+
+**検証（合否を判定する）**
+
+- 引き換え：id_token を、クライアントの秘密鍵で復号できる
+- 引き換え：中の JWS の kid は、jwks_uri の ES256（P-256）の鍵の kid
+- 引き換え：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+- 更新：id_token を、クライアントの秘密鍵で復号できる
+- 更新：中の JWS の kid は、jwks_uri の ES256（P-256）の鍵の kid
+- 更新：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+
+**補足**
+
+- **外側の JWE のヘッダには `kid` を入れていない**（RFC 7516 §4.1.6 で任意。#352 では扱わない）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

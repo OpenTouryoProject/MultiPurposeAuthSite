@@ -36,6 +36,7 @@
 //*  2026/10/02  玄人 幸道         RS384 / RS512 でも署名できるようにした（#129 の段階 2）
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //*  2026/10/21  玄人 幸道         sid クレームを残すようにした（#310 の段階 1）
+//*  2026/11/10  玄人 幸道         FAPI2（JWE）の中の JWS の kid を、署名した鍵の kid にした（#352）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -75,14 +76,17 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="code">string</param>
         /// <param name="state">string</param>
         /// <param name="hct">HashClaimType</param>
-        /// <param name="pfxFilePath">string（**JWE（FAPI2）のときだけ使う。**#129 の段階 3）</param>
-        /// <param name="pfxPassword">string（同上）</param>
-        /// <param name="cerJwkString">string</param>
+        /// <param name="cerJwkString">string（**クライアントの暗号化の鍵**。空でなければ JWE（FAPI2）にする）</param>
         /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
         /// <returns>id_token</returns>
+        /// <remarks>
+        /// **署名の鍵は、どちらの形でも `SigningKeys` の表から引く**（#129 の段階 3・#352）。
+        /// **以前は pfx のパスとパスワードを引数で受けていた**が、JWS では使わず、
+        /// JWE では受けた鍵と別の鍵の `kid` をヘッダに入れていた（#352）。引数を消して、鍵と `kid` の出どころを 1 つにした。
+        /// </remarks>
         public static string ChangeToIdTokenFromAccessToken(
             string access_token, string code, string state, HashClaimType hct,
-            string pfxFilePath, string pfxPassword, string cerJwkString, string alg = JwtConst.RS256)
+            string cerJwkString, string alg = JwtConst.RS256)
         {
             if (access_token.Contains("."))
             {
@@ -230,18 +234,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 EnumASymmetricAlgorithm.RsaCng, rpkc.JwkToParam(cerJwkString));
 
                             // JWS(ES256)
-                            JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(pfxFilePath, pfxPassword);
-                            // X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-                            // ECDSAは、MachineKeySetに入らない & ExportableはDigitalSignECDsaX509の既定値に指定。
-
-                            // ヘッダ ... access_tokenと同じではない。
-
-                            // JWSHeaderのセット
-                            Dictionary<string, string> jwk =
-                                JsonConvert.DeserializeObject<Dictionary<string, string>>(cerJwkString);
+                            //   **鍵と kid は、access_token と同じく SigningKeys の表から引く**（#352）。
+                            //   **kid は、署名した鍵（jwks_uri に載る ES256 の鍵）のもの**（OIDC Core 1.0 §10.1、RFC 7515 §4.1.4）。
+                            //   以前は、暗号化に使うクライアントの鍵（cerJwkString）の kid を入れていたので、
+                            //   **kid で jwks_uri から鍵を引く RP が、署名を確かめられなかった**（#352）。
+                            SigningKeys.Entry key = SigningKeys.Of(JwtConst.ES256);
+                            JWS_ECDSA jwsES256 = (JWS_ECDSA)key.CreateJwsFromPfx();
 
                             //  **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
-                            jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
+                            jwsES256.JWSHeader.kid = (string)key.JwkFromPfx()[JwtConst.kid];
 
                             // Create
                             // Nested JWT : JWSをJWEで暗号化する。

@@ -32,6 +32,7 @@
 //*  2026/09/11  玄人 幸道         ES256 の署名（CIBA の認証リクエスト用）を追加（#196）
 //*  2026/10/19  玄人 幸道         公開鍵の JWK を作る口を追加（#307 の段階 3）
 //*  2026/10/21  玄人 幸道         DPoP の証明を作る口を追加（#311 の段階 1）
+//*  2026/11/10  玄人 幸道         pfx を読む口を internal にした（JWE の復号で使う。#352）
 //**********************************************************************************
 
 using System;
@@ -358,7 +359,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="pathKey">pfx のパスの構成キー</param>
         /// <param name="passwordKey">pfx のパスワードの構成キー</param>
         /// <returns>X509Certificate2</returns>
-        private static X509Certificate2 LoadCertificate(IdPClient client, string pathKey, string passwordKey)
+        internal static X509Certificate2 LoadCertificate(IdPClient client, string pathKey, string passwordKey)
         {
             string path = client.Config.Get(pathKey);
             string password = client.Config.Get(passwordKey);
