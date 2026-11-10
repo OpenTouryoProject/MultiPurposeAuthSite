@@ -14,8 +14,13 @@ if not exist "..\E2E\.env" goto :noprep
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\Common\CheckPublishFreshness.ps1" -PublishDir "%~dp0..\E2E\app\publish"
 
+rem Prepare the nginx certificate for localhost.emobix.co.uk (certs\; the OP trusts only this one)
+rem and the values passed to compose (.env.cts: the owner of the DCR admin client) (#350).
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Prepare.ps1"
+if errorlevel 1 goto :error
+
 rem docker compose (v2). "--build" puts the published output into the OP image (#294).
-docker compose --env-file "..\E2E\.env" up -d --build
+docker compose --env-file "..\E2E\.env" --env-file ".env.cts" up -d --build
 if errorlevel 1 goto :error
 
 echo.

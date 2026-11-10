@@ -60,6 +60,11 @@ services:
           - localhost.emobix.co.uk
     depends_on:
       - server
+    # **証明書を、localhost.emobix.co.uk の名前を持つものに差し替える**（#350 ph3。Prepare.ps1 が certs\ に作る）。
+    #   原本の証明書は CN=localhost の自己署名で、**OP からのサーバ間の要求（Back-Channel Logout）が TLS で断られる**。
+    volumes:
+      - ./certs/nginx.crt:/etc/ssl/certs/nginx-selfsigned.crt:ro
+      - ./certs/nginx.key:/etc/ssl/private/nginx-selfsigned.key:ro
     logging:
       driver: "json-file"
       options:
@@ -113,22 +118,55 @@ services:
       - sessionState__SessionCookieName=MultiPurposeAuthSiteCtsSession
       - appSettings__AuthCookieName=.MultiPurposeAuthSiteCts
       - appSettings__CookieNamePrefix=cts_
+      # **Conformance Suite の nginx の証明書だけを信頼する**（#350 ph3。Back-Channel Logout の POST の宛先）。
+      #   .NET（Linux）は OpenSSL の SSL_CERT_FILE を信頼の起点に使う。**OP の検証は緩めていない**（名前と信頼の両方を確かめる）。
+      - SSL_CERT_FILE=/cts-ca/nginx.crt
       # **適合性テストのクライアント**（oidcc-basic・oidcc-config は client と client2 を使う。oidcc-basic は、client_secret_post 用の 3 つ目も使う。静的な登録）。
       #   折り返し先は Conformance Suite の口（https://localhost.emobix.co.uk:8443/test/a/<alias>/callback）。
       #   alias は config\*.json の "alias"（mpas-cts）と同じにすること。
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__client_secret=cts-client1-secret-for-conformance-test-only
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
-      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__redirect_uri_token=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__client_name=CtsClient1
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__client_secret=cts-client2-secret-for-conformance-test-only
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
-      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__redirect_uri_token=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__client_name=CtsClient2
       # **client_secret_post で認証するクライアント**（oidcc-server-client-secret-post が、設定の "client_secret_post" から使う。#350 ph2）
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__client_secret=cts-client3-secret-for-conformance-test-only
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
-      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__redirect_uri_token=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__client_name=CtsClient3
+      # **ログアウトのプランのクライアント**（#350 ph3。プランごとに分ける。RunTestPlan.ps1 の $plans と同じ値）。
+      #   **post_logout_redirect_uri・frontchannel_logout_uri・backchannel_logout_uri は、Conformance Suite が決めた口**
+      #   （折り返し先の /callback を、/post_logout_redirect・/frontchannel_logout・/backchannel_logout に替えたもの）。
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000004__client_secret=cts-client4-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000004__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000004__post_logout_redirect_uri=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/post_logout_redirect
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000004__client_name=CtsLogoutRp
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000005__client_secret=cts-client5-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000005__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000005__post_logout_redirect_uri=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/post_logout_redirect
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000005__frontchannel_logout_uri=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/frontchannel_logout
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000005__client_name=CtsLogoutFrontChannel
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__client_secret=cts-client6-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__post_logout_redirect_uri=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/post_logout_redirect
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__backchannel_logout_uri=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/backchannel_logout
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__client_name=CtsLogoutBackChannel
+      # **動的登録（DCR）を開ける**（#350 ph3。oidcc-dynamic。#307）。
+      #   **MPAS は、登録の要求に initial access token（scope が client_registration のアクセス トークン）を求める。**
+      #   RunTestPlan.ps1 が、下の管理クライアントで client_credentials のトークンを取り、設定の client.initial_access_token に埋める。
+      #   **client_registration は、登録に明記したクライアントにしか出ない**（Helper.FilterSupportedScopes）。
+      - appSettings__EnableDynamicClientRegistration=true
+      #   **トークンの期限を、プラン 1 つ分より長くする**（既定は 300 秒。1 つのトークンを、プランのすべてのモジュールで使い回すため）
+      - appSettings__DcrAccessTokenExpireTimeSpanFromSeconds=3600
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__client_secret=cts-client7-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__scope=client_registration
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__client_name=CtsRegistrationAdmin
+      #   **作った登録の所有者**（利用者名。#307 の段階 5-b）。**無いと、登録は 403（access_denied）で断られる。**
+      #   テスト利用者の名前は手元の appsettings.json で変わるので、Prepare.ps1 が .env.cts に書く
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__owner=${CTS_REGISTRATION_OWNER}
     volumes:
       - type: bind
         source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
@@ -138,5 +176,6 @@ services:
           create_host_path: false
       - ../E2E/cert:/https:ro
       - ./keys:/keys
+      - ./certs/nginx.crt:/cts-ca/nginx.crt:ro
       - C:/root/files/resource:/resource:ro
       - ./logs:/app/logs

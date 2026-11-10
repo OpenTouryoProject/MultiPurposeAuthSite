@@ -1,0 +1,777 @@
+{
+  "alias": "mpas-cts",
+  "description": "MultiPurposeAuthSite (net10.0, mem) - OpenID Connect Logout OP",
+  "server": {
+    "discoveryUrl": "https://mpas-cts.localhost:44311/.well-known/openid-configuration"
+  },
+  "client": {
+    "client_id": "@CLIENT_ID@",
+    "client_secret": "@CLIENT_SECRET@"
+  },
+  "consent": {},
+  "browser": [
+    {
+      "match": "https://mpas-cts.localhost:44311/authorize*",
+      "tasks": [
+        {
+          "task": "Login",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/Account/Login*",
+          "commands": [
+            [
+              "text",
+              "id",
+              "Email",
+              "@TEST_USER@",
+              "optional"
+            ],
+            [
+              "text",
+              "id",
+              "Password",
+              "@TEST_PASSWORD@",
+              "optional"
+            ],
+            [
+              "click",
+              "id",
+              "normal_signin"
+            ]
+          ]
+        },
+        {
+          "task": "Consent",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "commands": [
+            [
+              "click",
+              "name",
+              "submit.Grant"
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*/test/*/callback*",
+          "commands": [
+            [
+              "wait",
+              "id",
+              "submission_complete",
+              10
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "match": "https://mpas-cts.localhost:44311/end_session*",
+      "tasks": [
+        {
+          "task": "Confirm sign out",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "commands": [
+            [
+              "click",
+              "name",
+              "allow",
+              "optional"
+            ]
+          ]
+        },
+        {
+          "task": "Wait for redirect back",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/*",
+          "commands": [
+            [
+              "wait",
+              "contains",
+              "/post_logout_redirect",
+              10
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*/test/*/post_logout_redirect*"
+        }
+      ]
+    }
+  ],
+  "override": {
+    "oidcc-rp-initiated-logout-bad-post-logout-redirect-uri": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "expect the confirmation page that shows the error (RP-Initiated Logout 1.0 section 4 / 6: the OP does not redirect back)",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Expect error on the confirmation page",
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Do you want to sign out of this site",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-query-added-to-post-logout-redirect-uri": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "expect the confirmation page that shows the error (RP-Initiated Logout 1.0 section 4 / 6: the OP does not redirect back)",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Expect error on the confirmation page",
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Do you want to sign out of this site",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-modified-id-token-hint": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "expect the confirmation page that shows the error (RP-Initiated Logout 1.0 section 4 / 6: the OP does not redirect back)",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Expect error on the confirmation page",
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Do you want to sign out of this site",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-bad-id-token-hint": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "expect the confirmation page that shows the error (RP-Initiated Logout 1.0 section 4 / 6: the OP does not redirect back)",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Expect error on the confirmation page",
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Do you want to sign out of this site",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-no-id-token-hint": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "expect the confirmation page that shows the error (RP-Initiated Logout 1.0 section 4 / 6: the OP does not redirect back)",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Expect error on the confirmation page",
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Do you want to sign out of this site",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-no-params": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "confirm if asked, then expect the signed-out home page",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Confirm sign out",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "allow",
+                  "optional"
+                ]
+              ]
+            },
+            {
+              "task": "Expect the signed-out home page",
+              "match": "https://mpas-cts.localhost:44311/",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Sign-up",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-no-post-logout-redirect-uri": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "confirm if asked, then expect the signed-out home page",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Confirm sign out",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "allow",
+                  "optional"
+                ]
+              ]
+            },
+            {
+              "task": "Expect the signed-out home page",
+              "match": "https://mpas-cts.localhost:44311/",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Sign-up",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-rp-initiated-logout-only-state": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "comment": "confirm if asked, then expect the signed-out home page",
+          "match": "https://mpas-cts.localhost:44311/end_session*",
+          "tasks": [
+            {
+              "task": "Confirm sign out",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/end_session*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "allow",
+                  "optional"
+                ]
+              ]
+            },
+            {
+              "task": "Expect the signed-out home page",
+              "match": "https://mpas-cts.localhost:44311/",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Sign-up",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
