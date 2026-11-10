@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/09  玄人 幸道         新規（基本テストケースの追加）
 //*  2026/10/01  玄人 幸道         sub の値で利用者を判定しないようにした（#151 の段階 4）
+//*  2026/11/10  玄人 幸道         TC-6.5 : phone_number は値が無ければ項目ごと無いことを見る（空文字列を通していた。#354）
 //**********************************************************************************
 
 using System;
@@ -360,10 +361,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
 
                 JsonResponse u2 = await client.UserInfoAsync(t2.AccessToken);
 
-                r.Verify("phone を要求すれば phone_number が返る",
-                    u2.KindOf("phone_number") != JsonValueKind.Undefined,
-                    "phone_number あり",
-                    u2.KindOf("phone_number") == JsonValueKind.Undefined ? "なし" : "あり");
+                // **値が無ければ、名前ごと返さない**（OIDC Core §5.3.2。#354）。
+                //   **以前は「phone_number が返る」を見ていた**が、テストの利用者は電話番号を持たず、
+                //   **空文字列が返っていたから通っていた**（#354 の不具合そのもの）。
+                //   E2E には電話番号を登録する手段が無いので、**値の在る利用者で返ることは測っていない。**
+                JsonValueKind phoneKind = u2.KindOf("phone_number");
+                bool phoneOk = (phoneKind == JsonValueKind.String && !string.IsNullOrEmpty(u2.String("phone_number")))
+                    || phoneKind == JsonValueKind.Undefined;
+
+                r.Verify("phone を要求したとき、phone_number は値の在る文字列か、項目ごと無い（空文字列・null にしない）",
+                    phoneOk,
+                    "値の在る文字列、または項目なし",
+                    phoneKind == JsonValueKind.Undefined ? "項目なし"
+                        : (phoneKind == JsonValueKind.String && string.IsNullOrEmpty(u2.String("phone_number")))
+                            ? "**空文字列**" : "型 = " + phoneKind);
 
                 r.Verify("email_verified が真偽値である",
                     u2.KindOf("email_verified") == JsonValueKind.True

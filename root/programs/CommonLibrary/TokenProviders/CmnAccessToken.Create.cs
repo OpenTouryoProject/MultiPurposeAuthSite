@@ -33,6 +33,7 @@
 //*  2026/11/01  玄人 幸道         使われていない IssuedTokenProvider への書き込みを外した（発行した access_token を保存するだけで、どこからも読まれていなかった。#321）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/09  玄人 幸道         CreateFromClaims（client_credentials・ROPC・JWT Bearer）でも、提示された証明書でトークンを縛る（#346）
+//*  2026/11/10  玄人 幸道         access_token の email / phone のクレームも、値が無ければ出さない（userinfo とそろえた。#354）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -181,12 +182,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             UserClaims.AddClaims(tokenClaimSet, user, OAuth2AndOIDCConst.Scope_Profile);
                             break;
                         case OAuth2AndOIDCConst.Scope_Email:
-                            tokenClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
-                            tokenClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed);
-                            break;
                         case OAuth2AndOIDCConst.Scope_Phone:
-                            tokenClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
-                            tokenClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed);
+                            // **値が無ければ、名前ごと出さない**（userinfo と同じ部品。#354）。
+                            UserClaims.AddContactClaims(tokenClaimSet, user, scope);
                             break;
                         case OAuth2AndOIDCConst.Scope_Address:
                             // **返す項目は設定で決まる**（#230。UserClaims）。

@@ -312,7 +312,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/Issues/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
+| `Tests/Issues/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型。**`RT-184.2` は access_token を ROPC で取る**（認可コードの access_token には email / phone のクレームが載らない。**以前は毎回観測に落ちて、何も判定していなかった**。#356）。**`email_verified` は必ず在ることまで見る** |
 | `Tests/Issues/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
 | `Tests/Issues/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
@@ -326,6 +326,9 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ProfileEnforcementTests.cs` | `RT-346` | **FAPI の要件を、登録ごとに強制する**（#346）。**PAR を必須にした登録はクエリ・`/ros` の要求を断り、PAR だけ通す**（`RT-346.2`）、**署名付きの Request Object を必須にした登録は、クエリ・フォームだけの PAR を断る**（`RT-346.3`）、**DPoP を必須にした登録は、証明の無いトークン要求を断り、断られた code はまだ使える**（`RT-346.4`）、**証明書を必須にした登録は、証明書の無いトークン要求を断り、在れば秘密の認証でも縛る**（`RT-346.5`。core だけ）、**Discovery の 2 つの設定**（`RT-346.6`）、**`tls_client_auth` の client_credentials も縛られる**（`RT-346.7`。core だけ）、**証明書を必須にした device の登録は、device_code でも縛られる**（`RT-346.8`。core だけ）、**拘束を必須にした登録は Implicit・Hybrid の `token` を断られる**（`RT-346.9`）、**refresh_token でも DPoP の証明を求める**（`RT-346.10`）、**JWT Bearer は必須にした登録だけ縛る**（`RT-346.11`。core だけ）、**`tls_client_auth` の device 登録の device_code も縛られる**（`RT-346.12`。core だけ）。`RT-346.9`〜`.12` は別モデルのレビュー（#347）の指摘で足した。`RT-346.1`（動的登録）は `ClientRegistrationTests` に在る |
 | `Tests/Issues/IssuerParameterTests.cs` | `RT-231` | 認可応答の `iss`（RFC 9207）。成功・失敗・JARM・Discovery の広告 |
 | `Tests/Issues/MalformedJwtTests.cs` | `RT-241` | JWT でない値・`iss` の無い JWT・未登録のクライアントで **500 にしない**（`/ros` と `client_assertion`） |
+| `Tests/Issues/EmptyClaimTests.cs` | `RT-354` | **値の無いクレームを、空文字列で返さない**（#354。OIDC Core §5.3.2）。種データの利用者（電話番号なし）で、**`phone_number` と `phone_number_verified` が userinfo にも access_token（ROPC で取る。認可コードの access_token には email / phone が載らない）にも出ない**こと、対照として `email`・`email_verified` は返ること（`RT-354.1`）。**電話番号を持つ利用者で返ることは測っていない**（E2E では登録できない） |
+| `Tests/Issues/NumericResponseTests.cs` | `RT-353` | **トークン応答と PAR の応答の `expires_in` は JSON の数値**（#353。以前は文字列）。**`JsonResponse.String` は数値も文字列にして返すので、JSON の型（`KindOf`）で見る**。トークン応答は認可コード・refresh_token・client_credentials で見る（`RT-353.1`）、PAR は `RT-353.2` |
+| `Tests/Issues/IdTokenEncryptionTests.cs` | `RT-352`・`RT-355` | **fapi2 の id_token（JWE の中に JWS を入れた Nested JWT）を、RP として復号して確かめる**（#352・#355）。**中の JWS の `kid` が `jwks_uri` の鍵を指し、その鍵で署名を検証できること**を、引き換えと refresh_token の更新の両方で見る（`RT-352.1`。alg の登録が無いので `ES256`）。**`id_token_signed_response_alg=PS256` を登録したクライアント（`TestClient_45`）では、中の JWS が `PS256` で、access_token と同じ alg になること**（`RT-355.1`）。**復号は実装側のクラスを使わない**（`Infrastructure/Jwe.cs`。クライアントの秘密鍵は `SpRp_RsaPfxFilePath`） |
 | `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
 | `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |
 | `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |

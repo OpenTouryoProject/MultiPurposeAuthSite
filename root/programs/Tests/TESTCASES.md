@@ -544,7 +544,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - sub が id_token の sub と一致する
 - email スコープの属性が返る
 - 要求していない phone_number は返らない
-- phone を要求すれば phone_number が返る
+- phone を要求したとき、phone_number は値の在る文字列か、項目ごと無い（空文字列・null にしない）
 - email_verified が真偽値である
 - Bearer トークン無しではユーザ情報を返さない
 
@@ -2096,12 +2096,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. scope に email と phone を含めてトークンを取得し、型を見る
+1. grant_type=password で、scope に email と phone を含めて access_token を取得し、型を見る
 
-**観測（判定しない）**
+**検証（合否を判定する）**
 
-- 対象のクレーム
-  - スコープの絞り込み次第で載らないことがある。その場合は型を確かめようがない。
+- email_verified が真偽値で在る
 
 ## RT-184.3 UserInfo の email_verified / phone_number_verified が真偽値である
 
@@ -2120,7 +2119,6 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - UserInfo が JSON を返す
 - email_verified が真偽値である
-- phone_number_verified が真偽値である
 
 ## RT-185.1 トークン エンドポイントに不正な入力を送っても、JSON のエラー応答になる
 
@@ -6882,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus
+1. GET /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6891,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=93391966-3451-4a1f-bc90-8c94c7795607&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11392,6 +11390,132 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - HTTP 200
 - access_token の cnf の x5t#S256 は、認証した証明書の SHA-256（BASE64URL）
+
+## RT-352.1 fapi2 の id_token（Nested JWT）の中の JWS は、jwks_uri の鍵（kid）で検証できる
+
+| | |
+|---|---|
+| 観点 | **中の JWS の `kid` は、署名した IdP の鍵の `kid` であること**（JWK Set に鍵が複数あるなら `kid` は必須。RP は `kid` で `jwks_uri` から鍵を引く）。以前は、暗号化に使うクライアントの鍵（`jwk_rsa_publickey`）の `kid` が入っていた。**認可コードの引き換えと、refresh_token の更新の両方**で確かめる（どちらも同じ組み立てを通る）。 |
+| 根拠 | OIDC Core 1.0 §10.1 / RFC 7515 §4.1.4 / #352 |
+| テスト | `RT35201_fapi2のid_tokenの中のJWSはjwks_uriの鍵で検証できる` |
+
+**手順**
+
+1. FAPI2 の自己テストで code を得て、client_assertion で交換する
+1. client_assertion で refresh_token を更新し、返った id_token も同じく確かめる
+
+**検証（合否を判定する）**
+
+- 引き換え：id_token を、クライアントの秘密鍵で復号できる
+- 引き換え：中の JWS の alg
+- 引き換え：中の JWS の kid は、jwks_uri の ES256（P-256）の鍵の kid
+- 引き換え：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+- 更新：id_token を、クライアントの秘密鍵で復号できる
+- 更新：中の JWS の alg
+- 更新：中の JWS の kid は、jwks_uri の ES256（P-256）の鍵の kid
+- 更新：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+
+**補足**
+
+- **外側の JWE のヘッダには `kid` を入れていない**（RFC 7516 §4.1.6 で任意。#352 では扱わない）。
+
+## RT-353.1 トークン応答の expires_in は、JSON の数値で返る
+
+| | |
+|---|---|
+| 観点 | **トークン応答の数値は JSON の数値で返す**（`"3600"` のような文字列にしない）。応答は 1 か所（`CreateAccessTokenResponse`）で作るので、**認可コード・refresh_token・client_credentials** の 3 つのグラントで確かめる。 |
+| 根拠 | RFC 6749 §5.1 / #353 |
+| テスト | `RT35301_トークン応答のexpires_inは数値` |
+
+**手順**
+
+1. 認可コードを引き換える
+1. refresh_token で更新する
+1. client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- 認可コード：expires_in は JSON の数値
+- 認可コード：expires_in は正の整数
+- refresh_token：expires_in は JSON の数値
+- refresh_token：expires_in は正の整数
+- client_credentials：expires_in は JSON の数値
+- client_credentials：expires_in は正の整数
+
+## RT-353.2 PAR の応答の expires_in は、JSON の数値で返る
+
+| | |
+|---|---|
+| 観点 | **PAR の応答の `expires_in` は JSON の数値**（`request_uri` の有効期間の秒数）。 |
+| 根拠 | RFC 9126 §2.2 / #353 |
+| テスト | `RT35302_PARの応答のexpires_inは数値` |
+
+**手順**
+
+1. /par に認可要求を預ける
+
+**検証（合否を判定する）**
+
+- PAR：expires_in は JSON の数値
+- PAR：expires_in は正の整数
+
+## RT-354.1 値の無い phone_number は、userinfo にも access_token にも出ない（空文字列で返さない）
+
+| | |
+|---|---|
+| 観点 | **値の無いクレームは、名前ごと省く**（空文字列・null で返さない）。**`phone_number_verified` も、`phone_number` が無ければ出さない**（確かめた対象が無いため）。対照として、値の在る `email` と `email_verified` は返ることを見る。**JWT の access_token のクレームも、userinfo と同じ部品で作る。** |
+| 根拠 | OIDC Core 1.0 §5.3.2 / #354 |
+| テスト | `RT35401_値の無いphone_numberはuserinfoにもaccess_tokenにも出ない` |
+
+**手順**
+
+1. scope="openid email phone" で認可コードを引き換え、/userinfo を叩く
+1. grant_type=password で取った access_token（JWT）のペイロードを見る
+
+**検証（合否を判定する）**
+
+- userinfo：phone_number は、項目なしか値の在る文字列（空文字列・null にしない）
+- userinfo：phone_number_verified は、phone_number が在るときだけ在る
+- userinfo：（対照）値の在る email は返る
+- userinfo：（対照）email_verified は真偽値で返る
+- access_token：phone_number は、項目なしか値の在る文字列（空文字列・null にしない）
+- access_token：phone_number_verified は、phone_number が在るときだけ在る
+- access_token：（対照）値の在る email は返る
+- access_token：（対照）email_verified は真偽値で返る
+
+**観測（判定しない）**
+
+- userinfo の phone_number（種データの利用者は電話番号を持たない）
+  - 電話番号を持つ利用者なら、値の在る文字列で返る（E2E では登録できないので測っていない）。
+
+## RT-355.1 fapi2 の id_token（Nested JWT）の中の JWS は、登録の id_token_signed_response_alg（PS256）で署名される
+
+| | |
+|---|---|
+| 観点 | **暗号化しても、中の JWS は、登録の alg で署名する**（signed then encrypted）。**access_token と同じ alg になる。** 以前は登録にかかわらず ES256 だった。**`kid` は署名した鍵（`jwks_uri` の RSA の鍵）のもの**で、その鍵で検証できること。**認可コードの引き換えと、refresh_token の更新の両方**で確かめる。 |
+| 根拠 | OIDC Registration 1.0 §2（id_token_signed_response_alg）/ OIDC Core 1.0 §10.2 / #355 |
+| テスト | `RT35501_fapi2のid_tokenの中のJWSは登録のalgで署名される` |
+
+**手順**
+
+1. PKCE（S256）で認可コードを取り、client_assertion で交換する
+1. client_assertion で refresh_token を更新し、返った id_token も同じく確かめる
+
+**検証（合否を判定する）**
+
+- access_token のヘッダの alg は、登録の値
+- 引き換え：id_token を、クライアントの秘密鍵で復号できる
+- 引き換え：中の JWS の alg
+- 引き換え：中の JWS の kid は、jwks_uri の RSA の鍵の kid
+- 引き換え：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+- 更新：id_token を、クライアントの秘密鍵で復号できる
+- 更新：中の JWS の alg
+- 更新：中の JWS の kid は、jwks_uri の RSA の鍵の kid
+- 更新：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+
+**補足**
+
+- **登録が無い fapi2 のクライアントでは、中の JWS は ES256 のまま**（`RT-352.1`）。**暗号化しない側の既定（RS256）には倒さない**（FAPI 2.0 Security Profile §5.4.1 は RS256 を認めない）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

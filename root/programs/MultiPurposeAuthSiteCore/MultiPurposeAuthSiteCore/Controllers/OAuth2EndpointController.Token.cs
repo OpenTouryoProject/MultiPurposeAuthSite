@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         未知の grant_type を unsupported_grant_type、無いときを invalid_request で返す・grant_type を大文字小文字まで比べる・device_code で client_assertion も渡す（#294）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/10  玄人 幸道         トークン応答を Dictionary<string, object> で受ける（expires_in を数値で返す。#353）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -70,7 +71,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   成功・エラーのどちらの経路でも返すので、入口で付ける。
             this.SetNoStore();
 
-            Dictionary<string, string> ret = null;
+            Dictionary<string, object> ret = null; // **expires_in は数値**（#353）
             // grant_typeが未知・未指定、フォームデータ無しの経路でも使うので初期化する（#185）。
             Dictionary<string, string> err = new Dictionary<string, string>();
 

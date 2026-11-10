@@ -36,10 +36,13 @@
 //*  2026/10/02  玄人 幸道         RS384 / RS512 でも署名できるようにした（#129 の段階 2）
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //*  2026/10/21  玄人 幸道         sid クレームを残すようにした（#310 の段階 1）
+//*  2026/11/10  玄人 幸道         FAPI2（JWE）の中の JWS の kid を、署名した鍵の kid にした（#352）
+//*  2026/11/10  玄人 幸道         FAPI2（JWE）の中の JWS を、登録の id_token_signed_response_alg で署名するようにした（#355）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Util.Sts;
 
 #if NETCORE
 //using MultiPurposeAuthSite;
@@ -75,14 +78,17 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="code">string</param>
         /// <param name="state">string</param>
         /// <param name="hct">HashClaimType</param>
-        /// <param name="pfxFilePath">string（**JWE（FAPI2）のときだけ使う。**#129 の段階 3）</param>
-        /// <param name="pfxPassword">string（同上）</param>
-        /// <param name="cerJwkString">string</param>
-        /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
+        /// <param name="cerJwkString">string（**クライアントの暗号化の鍵**。空でなければ JWE（FAPI2）にする）</param>
+        /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2。**JWE のときは `SigningAlgForEncrypted` の値を渡す**。#355）</param>
         /// <returns>id_token</returns>
+        /// <remarks>
+        /// **署名の鍵は、どちらの形でも `SigningKeys` の表から引く**（#129 の段階 3・#352）。
+        /// **以前は pfx のパスとパスワードを引数で受けていた**が、JWS では使わず、
+        /// JWE では受けた鍵と別の鍵の `kid` をヘッダに入れていた（#352）。引数を消して、鍵と `kid` の出どころを 1 つにした。
+        /// </remarks>
         public static string ChangeToIdTokenFromAccessToken(
             string access_token, string code, string state, HashClaimType hct,
-            string pfxFilePath, string pfxPassword, string cerJwkString, string alg = JwtConst.RS256)
+            string cerJwkString, string alg = JwtConst.RS256)
         {
             if (access_token.Contains("."))
             {
@@ -205,14 +211,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             //   **`jku` は写さない**（#302。もう付けていない。RFC 9068 / D-10）。
                             if (!string.IsNullOrEmpty(jwsHeader.kid))
                             {
-                                if (key.IsRsa)
-                                {
-                                    ((JWS_RSA)jws).JWSHeader.kid = jwsHeader.kid;
-                                }
-                                else
-                                {
-                                    ((JWS_ECDSA)jws).JWSHeader.kid = jwsHeader.kid;
-                                }
+                                CmnIdToken.SetKid(jws, key, jwsHeader.kid);
                             }
 
                             // Create
@@ -229,23 +228,29 @@ namespace MultiPurposeAuthSite.TokenProviders
                             JWE_RsaOaepAesGcm_Param jweRsaOaep = new JWE_RsaOaepAesGcm_Param(
                                 EnumASymmetricAlgorithm.RsaCng, rpkc.JwkToParam(cerJwkString));
 
-                            // JWS(ES256)
-                            JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(pfxFilePath, pfxPassword);
-                            // X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-                            // ECDSAは、MachineKeySetに入らない & ExportableはDigitalSignECDsaX509の既定値に指定。
+                            // JWS（**alg は呼び出し元が決める**。`SigningAlgForEncrypted`。#355）
+                            //   **登録の `id_token_signed_response_alg` が在れば、それで署名する**（OIDC Registration 1.0 §2）。
+                            //   **以前は登録にかかわらず ES256 の固定**で、access_token（登録の alg）と食い違っていた（#355）。
+                            //   **鍵と kid は、access_token と同じく SigningKeys の表から引く**（#352）。
+                            //   **kid は、署名した鍵（jwks_uri に載る鍵）のもの**（OIDC Core 1.0 §10.1、RFC 7515 §4.1.4）。
+                            //   以前は、暗号化に使うクライアントの鍵（cerJwkString）の kid を入れていたので、
+                            //   **kid で jwks_uri から鍵を引く RP が、署名を確かめられなかった**（#352）。
+                            SigningKeys.Entry key = SigningKeys.Of(alg);
 
-                            // ヘッダ ... access_tokenと同じではない。
+                            if (key == null)
+                            {
+                                // 扱わない alg（入口の CheckClientMode で弾いてある）。
+                                return "";
+                            }
 
-                            // JWSHeaderのセット
-                            Dictionary<string, string> jwk =
-                                JsonConvert.DeserializeObject<Dictionary<string, string>>(cerJwkString);
+                            JWS jws = key.CreateJwsFromPfx();
 
                             //  **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
-                            jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
+                            CmnIdToken.SetKid(jws, key, (string)key.JwkFromPfx()[JwtConst.kid]);
 
                             // Create
                             // Nested JWT : JWSをJWEで暗号化する。
-                            return jweRsaOaep.Create(jwsES256.Create(newPayload));
+                            return jweRsaOaep.Create(jws.Create(newPayload));
 #endif
                         }
                     }
@@ -265,6 +270,40 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return "";
+        }
+
+        /// <summary>暗号化した id_token（fapi2 の Nested JWT）の中の JWS の alg を決める（#355）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg</returns>
+        /// <remarks>
+        /// | 登録の `id_token_signed_response_alg` | 中の JWS の alg |
+        /// |---|---|
+        /// | 在る | **登録の値**（access_token と同じ。OIDC Registration 1.0 §2） |
+        /// | 無い | **`ES256`**（従来どおり） |
+        ///
+        /// **登録が無いときに、暗号化しない側の既定（`RS256`）に倒さない。**
+        /// **FAPI 2.0 Security Profile §5.4.1 は PS256・ES256・EdDSA を求め、RS256 は入らない。**
+        /// **そのため、登録の無い fapi2 のクライアントでは、access_token（RS256）と食い違ったまま**である（`CONFIGURATION.md`）。
+        /// </remarks>
+        public static string SigningAlgForEncrypted(string client_id)
+        {
+            return Helper.GetInstance().GetRegisteredIdTokenSignedResponseAlg(client_id) ?? JwtConst.ES256;
+        }
+
+        /// <summary>JWS のヘッダに kid を入れる</summary>
+        /// <param name="jws">JWS（`SigningKeys.Entry.CreateJwsFromPfx` で作ったもの）</param>
+        /// <param name="key">SigningKeys.Entry</param>
+        /// <param name="kid">kid</param>
+        private static void SetKid(JWS jws, SigningKeys.Entry key, string kid)
+        {
+            if (key.IsRsa)
+            {
+                ((JWS_RSA)jws).JWSHeader.kid = kid;
+            }
+            else
+            {
+                ((JWS_ECDSA)jws).JWSHeader.kid = kid;
+            }
         }
     }
 }

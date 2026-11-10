@@ -1,0 +1,128 @@
+# ##################################################################################################
+# 適合性テスト（OpenID Foundation の Conformance Suite）と、その相手の OP（#350。ANALYSIS-IdP.md の D-14）
+#
+#   **Conformance Suite の版は固定する**（release-v5.3.4）。latest にすると、結果が Conformance Suite の更新で勝手に変わる。
+#   上げるときは、server と nginx の両方のタグを、同じ版に手で上げる。
+#   原本：https://gitlab.com/openid/conformance-suite（docker-compose-prebuilt.yml を元にした）
+#
+#   **相手の OP は、適合性テスト専用の MPAS（net10.0 版・mem）である。**
+#   **E2E の upstream（https://localhost:44301）は使えない** — Conformance Suite のコンテナから見ると、localhost は自分自身を指す。
+#   **issuer は、ブラウザと Conformance Suite の両方から、同じ URL で届くこと**が要る。
+#
+#   | 名前 | ブラウザ（手元の PC） | Conformance Suite（コンテナ） |
+#   |---|---|---|
+#   | localhost.emobix.co.uk（Conformance Suite） | 公開の DNS が 127.0.0.1 を返す | nginx のネットワークの別名 |
+#   | mpas-cts.localhost（OP） | Edge・Chrome は *.localhost を 127.0.0.1 に向ける（RFC 6761。hosts は要らない） | op のネットワークの別名 |
+#
+#   **ポートは、中と外で同じにする**（44311）。違うと、issuer の URL がどちらかで届かない。
+#   **44310 にしない**（スタブ（..\Stub\）の既定のポート。同時に起動できなくなる。#351 で見つけた）。
+#
+#   **OP の発行物と証明書は、E2E のものを使う**（..\E2E\1_PublishIdP.ps1 が用意する。#340）。
+#   証明書は localhost 向けの開発用のものなので、**ブラウザは mpas-cts.localhost で名前の不一致を警告する**（進んでよい）。
+#
+#   **ここに書いた client_secret は、適合性テスト専用の値である**（E2E の docker-compose.yml と同じ扱い）。
+#   **手元の appsettings.json（秘密を含む）はマウントするだけで、イメージには入れない**（#340）。
+# ##################################################################################################
+
+name: mpas-cts
+
+services:
+
+  mongodb:
+    image: mongo:6.0.13
+    restart: "no"
+    volumes:
+      - ./mongo/data:/data/db
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+
+  nginx:
+    image: registry.gitlab.com/openid/conformance-suite/nginx:release-v5.3.4
+    restart: "no"
+    ports:
+      - "8443:8443"
+      - "8444:8444"
+    networks:
+      default:
+        aliases:
+          # **Conformance Suite が自分の公開名に出す要求を、nginx へ届ける**（原本と同じ）
+          - localhost.emobix.co.uk
+    depends_on:
+      - server
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+
+  server:
+    image: registry.gitlab.com/openid/conformance-suite:release-v5.3.4
+    restart: "no"
+    environment:
+      BASE_URL: https://localhost.emobix.co.uk:8443
+      BASE_MTLS_URL: https://localhost.emobix.co.uk:8444
+      MONGODB_HOST: mongodb
+      SPRING_PROFILES_ACTIVE: dev
+      # **dev の構成で要る値**（原本の既定値のまま。外部の認証は使わない）
+      OIDC_GOOGLE_CLIENTID: google-client
+      OIDC_GOOGLE_SECRET: google-secret
+      OIDC_GITLAB_CLIENTID: gitlab-client
+      OIDC_GITLAB_SECRET: gitlab-secret
+    depends_on:
+      - mongodb
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+
+  op:
+    build: ../E2E/app
+    restart: "no"
+    ports:
+      - "44311:44311"
+    networks:
+      default:
+        aliases:
+          - mpas-cts.localhost
+    env_file:
+      - ../Common/mpas-common.env
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTPS_PORTS=44311
+      - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+      - Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
+      - appSettings__UserStoreType=mem
+      # **iss は、Discovery を取った URL と同じにする**（OIDC Discovery 1.0 §4.3。雛形の IssuerId は論理名で、URL と違う）
+      - appSettings__IssuerId=https://mpas-cts.localhost:44311
+      - appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://mpas-cts.localhost:44311
+      - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
+      - appSettings__DataProtectionKeyPath=/keys
+      - sessionState__SessionCookieName=MultiPurposeAuthSiteCtsSession
+      - appSettings__AuthCookieName=.MultiPurposeAuthSiteCts
+      - appSettings__CookieNamePrefix=cts_
+      # **適合性テストのクライアント**（oidcc-basic・oidcc-config は client と client2 の 2 つを使う。静的な登録）。
+      #   折り返し先は Conformance Suite の口（https://localhost.emobix.co.uk:8443/test/a/<alias>/callback）。
+      #   alias は config\*.json の "alias"（mpas-cts）と同じにすること。
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__client_secret=cts-client1-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__client_name=CtsClient1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__client_secret=cts-client2-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__client_name=CtsClient2
+    volumes:
+      - type: bind
+        source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
+        target: /app/appsettings.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - ../E2E/cert:/https:ro
+      - ./keys:/keys
+      - C:/root/files/resource:/resource:ro
+      - ./logs:/app/logs

@@ -37,6 +37,7 @@
 //*  2026/11/07  玄人 幸道         client_mode でクライアント名を引くとき、認証の方法を明示した登録を優先できるようにした（#341）
 //*  2026/11/08  玄人 幸道         client_mode と認証の方法の両方が合う登録だけを引く口を足した（自己テストの MTLS のボタン。#345）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を引く口を足した（#346 の段階 1）
+//*  2026/11/10  玄人 幸道         登録された id_token_signed_response_alg を、既定に倒さずに引く口を足した（#355）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -509,6 +510,21 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// </remarks>
         public string GetIdTokenSignedResponseAlg(string client_id)
         {
+            // 登録が無い
+            return this.GetRegisteredIdTokenSignedResponseAlg(client_id) ?? JwtConst.RS256;
+        }
+
+        /// <summary>client_id から、登録された id_token_signed_response_alg を取得する（#355）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（**登録が無ければ null**。空の登録値も null）</returns>
+        /// <remarks>
+        /// **`GetIdTokenSignedResponseAlg` と違い、既定値（RS256）に倒さない。**
+        /// **暗号化した id_token（fapi2 の Nested JWT）の中の JWS** は、
+        /// **登録が無ければ ES256 にする**（FAPI 2.0 Security Profile §5.4.1 は PS256・ES256・EdDSA を求め、RS256 は入らない）ので、
+        /// **「登録が在るか」を見分ける必要がある**（`CmnIdToken.SigningAlgForEncrypted`。#355）。
+        /// </remarks>
+        public string GetRegisteredIdTokenSignedResponseAlg(string client_id)
+        {
             client_id = client_id ?? "";
 
             // *.config内を検索
@@ -522,7 +538,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                     return dic[Const.ClientIdTokenSignedResponseAlg];
                 }
 
-                return JwtConst.RS256;
+                return null;
             }
 
             // saml2OAuth2Dataを検索
@@ -538,7 +554,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             }
 
             // 登録が無い
-            return JwtConst.RS256;
+            return null;
         }
 
         #endregion

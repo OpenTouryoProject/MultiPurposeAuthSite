@@ -83,7 +83,7 @@
 | | CIBA (FAPI-CIBA) | ✓ | poll モードのみ。FCM プッシュ連携 |
 | | Refresh Token | ✓ | ローテーションあり |
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
-| | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
+| | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM。**中の JWS は、登録の `id_token_signed_response_alg` が在ればその alg（access_token と同じ）、無ければ ES256**。**✅ 修正済み（#352）: 中の JWS の `kid` が、署名した鍵ではなく、暗号化に使うクライアントの鍵の `kid` だった**（`kid` で `jwks_uri` から鍵を引く RP が検証できなかった。`RT-352.1`）。**✅ 修正済み（#355）: 中の JWS が、登録にかかわらず ES256 だった**（OIDC Registration 1.0 §2。`RT-355.1`。登録が無いときに RS256 に倒さないのは、FAPI 2.0 Security Profile §5.4.1 が RS256 を認めないため） |
 | | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/Sts/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
@@ -131,6 +131,12 @@ ret.Add(OAuth2AndOIDCConst.expires_in,
 
 **修正:** `.Seconds` → `.TotalSeconds`（`(int)` にキャストして整数化）。
 併せて `expires_in` は RFC 6749 §5.1 で**数値**なので、応答の型も見直す（A-3 と同根）。
+
+> **✅ 修正済み（#353）: 型は、#182 では直っていなかった。** トークン応答と PAR の応答の `expires_in` は、
+> **文字列（`"3600"`）のまま**だった（応答を `Dictionary<string, string>` で作っていたため）。
+> 適合性テスト（#350。`ValidateExpiresIn`）で見つかった。**応答の型を `Dictionary<string, object>` にし、数値で返す**
+> （RFC 6749 §5.1・RFC 9126 §2.2。`RT-353.1`・`.2`）。Device Authorization・CIBA は #294 で直してあった。
+> **認可エンドポイントの応答（Implicit の fragment など）は URL のパラメタなので、文字列のまま**である。
 
 ### A-2. ~~`nonce` が無いと `id_token` が発行されない~~ **[Lib]** — **⚠️ 誤検出（#183）**
 
@@ -210,6 +216,12 @@ tokenClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToStrin
 OIDC Core §5.1 は **boolean** と定めている。JSON 的にも `"True"` は真偽値ではない。
 
 **修正:** `.ToString()` を外した。access_token / id_token と `/userinfo` の計 4 箇所。
+
+> **✅ 修正済み（#354）: 同じ箇所は、値の無い利用者に、空文字列の `email`・`phone_number` を返していた**
+> （電話番号の無い利用者に `"phone_number": ""` と `"phone_number_verified": false`）。
+> OIDC Core 1.0 §5.3.2 は「値の無いクレームは名前ごと省き、null や空文字列で返さない」。適合性テスト（#350。`ValidateUserInfoStandardClaims`）で見つかった。
+> **値が空なら、値の項目も `*_verified` も出さない**（`UserClaims.AddContactClaims`。`/userinfo` と access_token で共用。`RT-354.1`）。
+> profile / address（`UserClaims.AddClaims`。#230）は、以前から空の値を足していない。
 
 ### A-5. OIDC のとき `redirect_uri` が code に紐付かない（条件が反転している） **[Lib][Core]** — **✅ 修正済み（#186）**
 
@@ -1769,6 +1781,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 > **既定値のある引数は、渡し忘れても動く。** 測らないと分からない。
 
 - **CIBA は `ES256` のまま**（FAPI-CIBA が `PS256` / `ES256` を求めるため、登録値で上書きしない）
+- **fapi2 の暗号化した id_token（JWE）の中の JWS は、登録が在れば登録の alg、無ければ `ES256`**（#355。以前は登録にかかわらず `ES256`。
+  **登録が無いときは、access_token（`RS256`）と食い違ったまま**である。`RS256` は FAPI 2.0 Security Profile §5.4.1 が認めない）
 - **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま**
 - **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は
   **#262 で ✅ 足した**（**狭める側だけ**。受ける alg を広げるのは上流の対応が要る）

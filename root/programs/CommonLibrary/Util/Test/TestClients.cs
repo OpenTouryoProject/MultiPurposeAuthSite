@@ -49,6 +49,7 @@
 //*  2026/11/09  玄人 幸道         プロファイルを強制する登録の TestClient_37〜40 と、device × private_key_jwt の TestClient_41 を追加（#346 の段階 2）
 //*  2026/11/09  玄人 幸道         normal で tls_client_auth の TestClient_42、証明書を必須にした device の TestClient_43 を追加（#346）
 //*  2026/11/09  玄人 幸道         device で tls_client_auth の TestClient_44 を追加（必須にしていない登録の device_code も縛られる。#346）
+//*  2026/11/10  玄人 幸道         id_token_signed_response_alg を PS256 にした fapi2 の TestClient_45 を追加（#355）
 //**********************************************************************************
 
 using System;
@@ -583,6 +584,19 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
+                }
+            },
+            new Entry()
+            {
+                // **`id_token_signed_response_alg` を PS256 にした fapi2 のクライアント**（#355）。
+                //   **暗号化した id_token（Nested JWT）の中の JWS が、登録の alg で署名される**ことを測る（`RT-355.1`）。
+                //   **写し元は `FAPI2_Client`**（RSA の公開鍵を持つので、id_token は JWE になる）。認証は `TestClient_32` と同じ。
+                ClientName = "TestClient_45", ClientId = "e2e0tc45500000000000000000000000",
+                ClientMode = "fapi2", SourceName = "FAPI2_Client",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" },
+                    { Const.ClientIdTokenSignedResponseAlg, JwtConst.PS256 }
                 }
             },
             new Entry()

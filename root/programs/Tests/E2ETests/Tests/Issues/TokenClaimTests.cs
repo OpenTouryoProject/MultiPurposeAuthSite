@@ -29,8 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/11/10  玄人 幸道         RT-184.2 の access_token を ROPC で取り、email_verified を必須にした（#356）
 //**********************************************************************************
 
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -155,36 +157,48 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "OIDC Core §5.1（email_verified / phone_number_verified は boolean）"
                     + " / 修正前は文字列だった（#184）");
 
-                r.Target("client_name=" + KnownClients.MvcSample + " / scope=openid email phone");
-                r.Step("scope に email と phone を含めてトークンを取得し、型を見る");
+                r.Target("client_name=" + KnownClients.MvcSample + " / grant_type=password / scope=openid email phone / username="
+                    + TestEnv.TestUserName(targetKey) + "（種データの利用者。メール アドレスあり・電話番号なし。パスワードは構成ファイルから読む）");
+                r.Step("grant_type=password で、scope に email と phone を含めて access_token を取得し、型を見る");
 
-                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
-                    client, KnownClients.MvcSample, "openid email phone");
+                //  **email / phone のクレームを access_token に載せるのは `CreateFromClaims` の経路だけ**
+                //  （ROPC・JWT Bearer・Implicit）。**認可コードの access_token には載らない**（`CreatePayloadForCode`）。
+                //  **以前は認可コードで取っていたので、毎回「どちらも含まれていなかった」の観測に落ち、何も判定していなかった**（#356）。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "password");
 
-                Assert.True(string.IsNullOrEmpty(token.Error), "前提: トークンが取得できること");
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "password" },
+                    { "username", TestEnv.TestUserName(targetKey) },
+                    { "password", client.Config.Get("TestUserPWD") },
+                    { "scope", "openid email phone" },
+                    { "client_id", reg.ClientId },
+                    { "client_secret", reg.ClientSecret }
+                });
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: ROPC で access_token が返ること（" + token.ToString() + "）");
 
                 JsonElement accessToken = Jwt.Payload(token.AccessToken);
-                int seen = 0;
 
-                foreach (string claim in new string[] { "email_verified", "phone_number_verified" })
+                //  **種データの利用者はメール アドレスを持つので、email_verified は必ず載る**（#356）。
+                //  **載らなければ落とす**（載らないと型を確かめようがなく、また何も判定しなくなる）。
+                JsonValueKind emailVerified = Jwt.KindOf(accessToken, "email_verified");
+
+                r.Verify("email_verified が真偽値で在る",
+                    emailVerified == JsonValueKind.True || emailVerified == JsonValueKind.False,
+                    "boolean", emailVerified == JsonValueKind.Undefined ? "**項目なし**" : "email_verified の型 = " + emailVerified);
+
+                //  **phone_number_verified は、電話番号の無い利用者には出ない**（#354。`RT-354.1`）。
+                //  **在れば型を見る。** 値の在る利用者での型は、単体テスト（`UserClaimsTests`）で確かめている。
+                if (Jwt.Has(accessToken, "phone_number_verified"))
                 {
-                    if (!Jwt.Has(accessToken, claim))
-                    {
-                        continue;
-                    }
+                    JsonValueKind kind = Jwt.KindOf(accessToken, "phone_number_verified");
 
-                    seen++;
-                    JsonValueKind kind = Jwt.KindOf(accessToken, claim);
-
-                    r.Verify(claim + " が真偽値である",
+                    r.Verify("phone_number_verified が真偽値である",
                         kind == JsonValueKind.True || kind == JsonValueKind.False,
-                        "boolean", claim + " の型 = " + kind);
-                }
-
-                if (seen == 0)
-                {
-                    r.Observe("対象のクレーム", "どちらも含まれていなかった",
-                        "スコープの絞り込み次第で載らないことがある。その場合は型を確かめようがない。");
+                        "boolean", "phone_number_verified の型 = " + kind);
                 }
 
                 r.Done();

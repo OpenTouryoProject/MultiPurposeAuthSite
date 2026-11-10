@@ -38,6 +38,7 @@ copy .env.sample my-stub.env                           # パラメタを写し�
 | `STUB_SETTINGS` | `./appsettings.Stub.sample.json` | **アプリの追加の設定**（3 節）。土台に重ねて効く |
 | `STUB_CERT_DIR` / `STUB_CERT_ENV_FILE` | `./cert` / `./cert/cert.env` | HTTPS の証明書（4 節） |
 | `STUB_RESOURCE_DIR` | `C:/root/files/resource` | 署名鍵などのリソース |
+| `STUB_MTLS_HOOK` | 空（受け付けない） | **クライアント証明書（MTLS）を受け付けるか**（4 節。`/hooks/MtlsTestHook.dll` で受け付ける。**テスト専用**） |
 
 **管理者・テスト利用者・テスト用の口の開け閉めは、`.env` ではなく JSON の値を使う**（3 節）。
 
@@ -89,6 +90,52 @@ copy .env.sample my-stub.env                           # パラメタを写し�
 
 **自分の証明書を使う**なら、`aspnetapp.pfx` を置いたディレクトリを `STUB_CERT_DIR` に、
 `Kestrel__Certificates__Default__Password=<パスワード>` の 1 行を書いたファイルを `STUB_CERT_ENV_FILE` に指定する。
+
+### クライアント証明書（MTLS。#351）
+
+**既定では、クライアント証明書を受け付けない**（Kestrel が要求しない）。
+**`tls_client_auth` や、証明書に縛ったトークン（RFC 8705）を試す RP**（Open棟梁 の Sample4SpRp など）**のときだけ**、パラメタで受け付けさせる。
+
+```ini
+# my-stub.env
+STUB_MTLS_HOOK=/hooks/MtlsTestHook.dll
+```
+
+- **中身は E2E と同じテスト専用のフック**（`root\programs\Tests\MtlsTestHook`。`1_PublishStub.ps1` が `hooks\` に作る）。
+  **アプリのコードは変えず、起動時に読ませる**（`DOTNET_STARTUP_HOOKS`）
+- **発行元を問わずに証明書を受け付ける。** アプリは Subject と登録の `tls_client_auth_subject_dn` の一致だけを見るので、
+  **同じ Subject の証明書なら誰でも通る。テストのスタブ以外で使わないこと**
+  （フック自身も、`ASPNETCORE_ENVIRONMENT` が `Development`・`Stub` でなければ何もしない）
+- **要求するだけで、必須にはしない**（`AllowCertificate`）。証明書を出さない RP は、これまでどおり通る
+
+**確かめ方**（手で。**証明書は `SpRp_ClientCertPfxFilePath` のもの**（`CN=MPAS Test Client`。パスワードは `SpRp_ClientCertPfxPassword`）を使う）：
+
+1. `tls_client_auth` のクライアントを、追加の設定（`STUB_SETTINGS` の JSON。`my-stub.json` など）に登録する
+
+   ```json
+   "OAuth2ClientsInformation": {
+     "57ab0000000000000000000000000002": {
+       "redirect_uri_code": "-",
+       "redirect_uri_token": "-",
+       "client_name": "StubMtlsClient",
+       "token_endpoint_auth_method": "tls_client_auth",
+       "tls_client_auth_subject_dn": "CN=MPAS Test Client"
+     }
+   }
+   ```
+
+2. `STUB_MTLS_HOOK` を書いて起動し、**証明書を付けて** `client_credentials` でトークンを取る（PowerShell 5.1・7 のどちらでも）
+
+   ```powershell
+   $pfx  = 'C:\root\files\resource\X509\SHA256RSAClientCert.pfx'
+   $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfx, (Read-Host 'pfx のパスワード'))
+   $body = @{ grant_type = 'client_credentials'; client_id = '57ab0000000000000000000000000002' }
+   Invoke-RestMethod -Method Post -Uri https://localhost:44310/token -Body $body -Certificate $cert
+   ```
+
+   **`access_token` が返り、そのペイロードの `cnf` に `x5t#S256`（証明書の拇印）が入っていればよい**（RFC 8705 §3.1）
+
+3. **`-Certificate` を外すと `invalid_client`**（認証の手段が無い）。**`STUB_MTLS_HOOK` を空にして起動し直すと、証明書を付けても `invalid_client`**（Kestrel が受け取らない）
 
 ## 5. 他のリポジトリから使う
 

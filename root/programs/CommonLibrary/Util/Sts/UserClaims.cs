@@ -31,6 +31,7 @@
 //*  2026/09/25  玄人 幸道         新規（profile / address のクレームを設定で対応付ける。#230）
 //*  2026/10/03  玄人 幸道         クレームの型をJSONのまま返す（updated_atは数値）（#261）
 //*  2026/10/31  玄人 幸道         Extensions/Sts から Util/Sts へ移した（配置の見直し。#294）
+//*  2026/11/10  玄人 幸道         email / phone のクレームを、値が空なら出さない部品（AddContactClaims）を足した（#354）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -260,6 +261,46 @@ namespace MultiPurposeAuthSite.Util.Sts
             {
                 // **副フィールドから組み立てた方を優先する**（両方が設定されている場合）。
                 claimSet[UserClaims.AddressClaim] = address;
+            }
+        }
+
+        /// <summary>
+        /// email / phone の scope のクレームを、claimSet に足す（#354）
+        /// </summary>
+        /// <param name="claimSet">足す先（UserInfo / access_token のクレーム）</param>
+        /// <param name="user">利用者</param>
+        /// <param name="scope">scope（email / phone。ほかは何もしない）</param>
+        /// <remarks>
+        /// **値が無い・空なら、クレームを名前ごと出さない**（OIDC Core 1.0 §5.3.2
+        /// 「it SHOULD NOT be present with a null or empty string value」）。
+        /// **`*_verified` も出さない。** 確かめた対象（メール アドレス・電話番号）が無いのに、確かめたかどうかだけを言うことになるため。
+        ///
+        /// **以前は userinfo と access_token の組み立てが、値をそのまま足していた**ので、
+        /// 電話番号の無い利用者に `"phone_number": ""` を返していた（#354。適合性テストで見つかった）。
+        /// profile / address（`AddClaims`）は、以前から空の値を足していない。
+        /// </remarks>
+        public static void AddContactClaims(Dictionary<string, object> claimSet, ApplicationUser user, string scope)
+        {
+            if (claimSet == null || user == null)
+            {
+                return;
+            }
+
+            if (scope == OAuth2AndOIDCConst.Scope_Email)
+            {
+                if (!string.IsNullOrEmpty(user.Email))
+                {
+                    claimSet[OAuth2AndOIDCConst.Scope_Email] = user.Email;
+                    claimSet[OAuth2AndOIDCConst.email_verified] = user.EmailConfirmed;
+                }
+            }
+            else if (scope == OAuth2AndOIDCConst.Scope_Phone)
+            {
+                if (!string.IsNullOrEmpty(user.PhoneNumber))
+                {
+                    claimSet[OAuth2AndOIDCConst.phone_number] = user.PhoneNumber;
+                    claimSet[OAuth2AndOIDCConst.phone_number_verified] = user.PhoneNumberConfirmed;
+                }
             }
         }
 

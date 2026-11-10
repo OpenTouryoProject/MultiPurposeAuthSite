@@ -9,6 +9,8 @@
          **開発者の手元の appsettings.json（秘密を含む）を、イメージに入れないため。**
       2. **HTTPS の証明書**（cert\aspnetapp.pfx）と、そのパスワード（cert\cert.env）
       3. **log4net の構成**（..\Common\LogConf.xml を写す。二重に持たない）
+      4. **MTLS のテスト専用のフック**（hooks\MtlsTestHook.dll。#351）
+         **.env の STUB_MTLS_HOOK を書いたときだけ読む**（既定は読まない。README.md）。
 
     ＜証明書は、ホストの開発用証明書を書き出す＞
       **..\E2E\1_PublishIdP.ps1 と同じ。** ホストで既に信頼されているので、ブラウザが警告を出さない。
@@ -35,6 +37,7 @@
      2026/10/30  玄人 幸道         新規（#294）
      2026/10/31  玄人 幸道         stub\ から Container\Stub\ へ移した（#318）
      2026/11/07  玄人 幸道         起動の案内を 2_DockerComposeUp.bat にした。..\E2E\ の改名に合わせた（#340）
+     2026/11/10  玄人 幸道         MTLS のテスト専用のフックを hooks\ に作るようにした（#351）
 #>
 [CmdletBinding()]
 param(
@@ -109,6 +112,25 @@ Copy-Item $logConf (Join-Path $here 'app\LogConf.xml') -Force
 
 # **鍵とログの置き場**（compose がマウントする）
 New-Item -ItemType Directory -Force (Join-Path $here 'keys'), (Join-Path $here 'logs') | Out-Null
+
+# **MTLS のテスト専用のフック**（#351。.env の STUB_MTLS_HOOK で選んだときだけ読む。既定は読まない）。
+#   **イメージには入れない**（hooks を compose がマウントする）。作れなくても、スタブ自体は起動できる。
+$hookDir = Join-Path $here 'hooks'
+$hookArt = Join-Path $here 'app\artifacts-hook'
+New-Item -ItemType Directory -Force $hookDir | Out-Null
+Remove-Item (Join-Path $hookDir '*') -Force -ErrorAction SilentlyContinue
+
+dotnet build (Join-Path $here '..\..\root\programs\Tests\MtlsTestHook\MtlsTestHook.csproj') `
+    -c Debug -o $hookDir --artifacts-path $hookArt --nologo -v quiet | Out-Null
+
+if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $hookDir 'MtlsTestHook.dll')))
+{
+    Write-Output "  MTLS のフックを作りました : hooks\MtlsTestHook.dll（使うときだけ STUB_MTLS_HOOK を書く。README.md 4 節）"
+}
+else
+{
+    Write-Warning "MTLS のフックを作れませんでした（MTLS を使わないなら、そのまま起動できます）。"
+}
 
 Write-Output "  publish しました : app\publish（appsettings.json は雛形）"
 Write-Output ""

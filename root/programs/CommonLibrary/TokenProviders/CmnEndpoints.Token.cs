@@ -39,6 +39,8 @@
 //*  2026/11/06  玄人 幸道         JWT Bearer の assertion の検証のコメントを、Open棟梁 の現状（OpenTouryo#654）に合わせた（#337）
 //*  2026/11/09  玄人 幸道         DPoP・クライアント証明書を必須にした登録では、それの無いトークン要求を断る（全グラント。#346 の段階 2）
 //*  2026/11/09  玄人 幸道         client_credentials・ROPC・device_code でも、証明書でトークンを縛る（以前は縛っていなかった。JWT Bearer は必須にした登録だけ。#346）
+//*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
+//*  2026/11/10  玄人 幸道         応答の組み立てに client_id を渡すようにした（暗号化した id_token の中の JWS の alg。#355）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -92,14 +94,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="code_verifier">string</param>
         /// <param name="redirect_uri">string</param>
         /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
-        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="ret">Dictionary(string, object)（**`expires_in` は数値**。#353）</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantAuthorizationCodeCredentials(
             string grant_type, string client_id, string client_secret,
             string assertion, X509Certificate2 x509, string dPoPProof,
             string code, string code_verifier, string redirect_uri,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -337,7 +339,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
                     ret = CmnEndpoints.CreateAccessTokenResponse(
-                        access_token, refresh_token, jwkString, jkt);
+                        client_id, access_token, refresh_token, jwkString, jkt);
 
                     return true;
 
@@ -378,13 +380,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="x509">X509Certificate2</param>
         /// <param name="refresh_token">string</param>
         /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
-        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="ret">Dictionary(string, object)（**`expires_in` は数値**。#353）</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantRefreshTokenCredentials(
             string grant_type, string client_id, string client_secret, string clientAssertion,
             X509Certificate2 x509, string dPoPProof,
-            string refresh_token, out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            string refresh_token, out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -532,7 +534,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
                         ret = CmnEndpoints.CreateAccessTokenResponse(
-                            access_token, new_refresh_token, jwkString, jkt);
+                            client_id, access_token, new_refresh_token, jwkString, jkt);
 
                         return true;
                     }
@@ -575,7 +577,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="username">string</param>
         /// <param name="password">string</param>
         /// <param name="scopes">string</param>
-        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="ret">Dictionary(string, object)（**`expires_in` は数値**。#353）</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         /// <remarks>
@@ -608,7 +610,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             string grant_type, string client_id,
             string client_secret, string clientAssertion, X509Certificate2 x509,
             string dPoPProof, string username, string password, string scopes,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -751,7 +753,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                             // **`expires_in` は、実際に付けた期限で返す**（#294。専用 scope のトークンは短い）。
                             ret = CmnEndpoints.CreateAccessTokenResponse(
-                                access_token, "", jwkString, jkt, expires);
+                                client_id, access_token, "", jwkString, jkt, expires);
                             return true;
                         }
                         else
@@ -834,13 +836,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="x509">X509Certificate2</param>
         /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
         /// <param name="scopes">string</param>
-        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="ret">Dictionary(string, object)（**`expires_in` は数値**。#353）</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantClientCredentials(
             string grant_type, string client_id, string client_secret, string clientAssertion,
             X509Certificate2 x509, string dPoPProof,
-            string scopes, out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            string scopes, out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -984,7 +986,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // **`expires_in` は、実際に付けた期限で返す**（#294。専用 scope のトークンは短い）。
                     ret = CmnEndpoints.CreateAccessTokenResponse(
-                        access_token, "", jwkString, jkt, expires);
+                        client_id, access_token, "", jwkString, jkt, expires);
                     return true;
 
                     #endregion
@@ -1019,13 +1021,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="x509">X509Certificate2</param>
         /// <param name="scope">string（トークン要求の scope。RFC 7521 4.1 / RFC 7523 2.1）</param>
         /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
-        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="ret">Dictionary(string, object)（**`expires_in` は数値**。#353）</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantJwtBearerTokenCredentials(
             string grant_type, string assertion, X509Certificate2 x509, string dPoPProof,
             string scope,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -1132,7 +1134,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     "Passed the 'jwt bearer token flow' by {0}({1}).", iss, sub)); // Client Account
 
                                 ret = CmnEndpoints.CreateAccessTokenResponse(
-                                    access_token, "", jwkString, jkt);
+                                    iss, access_token, "", jwkString, jkt);
                                 return true;
                             }
                             else
@@ -1181,13 +1183,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="device_code">string</param>
         /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
-        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="ret">Dictionary(string, object)（**`expires_in` は数値**。#353）</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantDeviceAuthZ(
             string grant_type, string client_id, string client_secret, string clientAssertion,
             X509Certificate2 x509, string dPoPProof, string device_code,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
             err = new Dictionary<string, string>();
@@ -1335,7 +1337,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // **作った refresh_token を返す**（#294）。
                     //   **以前は作って保存するだけで、応答に入れていなかった**（使われない行が溜まっていた）。
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, "", jkt);
+                    ret = CmnEndpoints.CreateAccessTokenResponse(client_id, access_token, refresh_token, "", jkt);
 
                     return true;
                 }
@@ -1405,13 +1407,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="x509">X509Certificate2</param>
         /// <param name="auth_req_id">string</param>
         /// <param name="dPoPProof">DPoP の証明（#311 の段階 1。無ければ空）</param>
-        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="ret">Dictionary(string, object)（**`expires_in` は数値**。#353）</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantCiba(
             string grant_type, string client_id, string client_secret, string clientAssertion,
             X509Certificate2 x509, string dPoPProof, string auth_req_id,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -1532,7 +1534,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                         // Client Account
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "", jkt);
+                        ret = CmnEndpoints.CreateAccessTokenResponse(client_id, access_token, "", "", jkt);
 
                         return true;
                     }
