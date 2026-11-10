@@ -2096,12 +2096,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. scope に email と phone を含めてトークンを取得し、型を見る
+1. grant_type=password で、scope に email と phone を含めて access_token を取得し、型を見る
 
-**観測（判定しない）**
+**検証（合否を判定する）**
 
-- 対象のクレーム
-  - スコープの絞り込み次第で載らないことがある。その場合は型を確かめようがない。
+- email_verified が真偽値で在る
 
 ## RT-184.3 UserInfo の email_verified / phone_number_verified が真偽値である
 
@@ -6881,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=012d028b-a609-4abb-9e9a-3882493f5ddd&code=bogus
+1. GET /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6890,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=012d028b-a609-4abb-9e9a-3882493f5ddd&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=012d028b-a609-4abb-9e9a-3882493f5ddd&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**

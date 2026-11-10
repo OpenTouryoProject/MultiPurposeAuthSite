@@ -312,7 +312,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/Issues/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
+| `Tests/Issues/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型。**`RT-184.2` は access_token を ROPC で取る**（認可コードの access_token には email / phone のクレームが載らない。**以前は毎回観測に落ちて、何も判定していなかった**。#356）。**`email_verified` は必ず在ることまで見る** |
 | `Tests/Issues/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
 | `Tests/Issues/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
