@@ -12,6 +12,10 @@
     "client_id": "c75c11e0000000000000000000000002",
     "client_secret": "cts-client2-secret-for-conformance-test-only"
   },
+  "client_secret_post": {
+    "client_id": "c75c11e0000000000000000000000003",
+    "client_secret": "cts-client3-secret-for-conformance-test-only"
+  },
   "consent": {},
   "browser": [
     {
@@ -69,5 +73,164 @@
         }
       ]
     }
-  ]
+  ],
+  "override": {
+    "oidcc-prompt-login": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Use a local account to sign in.",
+                  "update-image-placeholder-optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-max-age-1": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Use a local account to sign in.",
+                  "update-image-placeholder-optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Consent",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "click",
+                  "name",
+                  "submit.Grant"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "match": "*/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-ensure-registered-redirect-uri": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Expect redirect uri mismatch error page",
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Invalid redirect_uri",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
 }

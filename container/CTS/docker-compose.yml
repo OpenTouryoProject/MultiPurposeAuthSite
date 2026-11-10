@@ -33,6 +33,14 @@ services:
     restart: "no"
     volumes:
       - ./mongo/data:/data/db
+    # **server は、MongoDB が応答してから起動する**（#350 ph2）。
+    #   データ（./mongo/data）は Windows のフォルダなので、開くのに 1 分ほどかかることがある。
+    #   server は 30 秒で諦めて終了するので、depends_on の起動の順だけでは間に合わない。
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
     logging:
       driver: "json-file"
       options:
@@ -72,7 +80,8 @@ services:
       OIDC_GITLAB_CLIENTID: gitlab-client
       OIDC_GITLAB_SECRET: gitlab-secret
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     logging:
       driver: "json-file"
       options:
@@ -104,7 +113,7 @@ services:
       - sessionState__SessionCookieName=MultiPurposeAuthSiteCtsSession
       - appSettings__AuthCookieName=.MultiPurposeAuthSiteCts
       - appSettings__CookieNamePrefix=cts_
-      # **適合性テストのクライアント**（oidcc-basic・oidcc-config は client と client2 の 2 つを使う。静的な登録）。
+      # **適合性テストのクライアント**（oidcc-basic・oidcc-config は client と client2 を使う。oidcc-basic は、client_secret_post 用の 3 つ目も使う。静的な登録）。
       #   折り返し先は Conformance Suite の口（https://localhost.emobix.co.uk:8443/test/a/<alias>/callback）。
       #   alias は config\*.json の "alias"（mpas-cts）と同じにすること。
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000001__client_secret=cts-client1-secret-for-conformance-test-only
@@ -115,6 +124,11 @@ services:
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000002__client_name=CtsClient2
+      # **client_secret_post で認証するクライアント**（oidcc-server-client-secret-post が、設定の "client_secret_post" から使う。#350 ph2）
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__client_secret=cts-client3-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__client_name=CtsClient3
     volumes:
       - type: bind
         source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
