@@ -1,0 +1,137 @@
+{
+  "alias": "mpas-cts",
+  "description": "MultiPurposeAuthSite (net10.0, mem) - FAPI OP",
+  "server": {
+    "discoveryUrl": "https://mpas-cts.localhost:44311/.well-known/openid-configuration"
+  },
+  "client": {
+    "client_id": "@CLIENT_ID@",
+    "scope": "openid email",
+    "jwks": "@CLIENT_JWKS@",
+    "dpop_signing_alg": "ES256"
+  },
+  "client2": {
+    "client_id": "@CLIENT2_ID@",
+    "scope": "openid email",
+    "jwks": "@CLIENT2_JWKS@",
+    "dpop_signing_alg": "ES256"
+  },
+  "mtls": {
+    "cert": "@MTLS_CERT@",
+    "key": "@MTLS_KEY@"
+  },
+  "mtls2": {
+    "cert": "@MTLS2_CERT@",
+    "key": "@MTLS2_KEY@"
+  },
+  "resource": {
+    "resourceUrl": "https://mpas-cts.localhost:44311/userinfo"
+  },
+  "browser": [
+    {
+      "match": "https://mpas-cts.localhost:44311/*",
+      "tasks": [
+        {
+          "task": "Login",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/Account/Login*",
+          "commands": [
+            [
+              "text",
+              "id",
+              "Email",
+              "@TEST_USER@",
+              "optional"
+            ],
+            [
+              "text",
+              "id",
+              "Password",
+              "@TEST_PASSWORD@",
+              "optional"
+            ],
+            [
+              "click",
+              "id",
+              "normal_signin"
+            ]
+          ]
+        },
+        {
+          "task": "Consent",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "commands": [
+            [
+              "click",
+              "name",
+              "submit.Grant"
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*/test/*/callback*",
+          "commands": [
+            [
+              "wait",
+              "id",
+              "submission_complete",
+              10
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "override": {
+    "fapi2-security-profile-final-par-attempt-to-use-request_uri-for-different-client": {
+      "browser": [
+        {
+          "comment": "expect an error page (the request_uri was pushed by another client)",
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Expect invalid request_uri error page",
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "The client_id does not match the request object",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "fapi2-message-signing-final-par-attempt-to-use-request_uri-for-different-client": {
+      "browser": [
+        {
+          "comment": "expect an error page (the request_uri was pushed by another client)",
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Expect invalid request_uri error page",
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "The client_id does not match the request object",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

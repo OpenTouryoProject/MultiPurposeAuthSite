@@ -118,9 +118,16 @@ services:
       - sessionState__SessionCookieName=MultiPurposeAuthSiteCtsSession
       - appSettings__AuthCookieName=.MultiPurposeAuthSiteCts
       - appSettings__CookieNamePrefix=cts_
+      # **認可コードの期限を 60 秒にする**（#350 ph4。FAPI 2.0 Security Profile は 60 秒以下を求める。雛形の既定は 600 秒）。
+      #   **この設定はサーバ全体に効く**（登録種別ごとには決められない）
+      - appSettings__OAuth2AuthorizationCodeExpireTimeSpanFromSeconds=60
       # **Conformance Suite の nginx の証明書だけを信頼する**（#350 ph3。Back-Channel Logout の POST の宛先）。
       #   .NET（Linux）は OpenSSL の SSL_CERT_FILE を信頼の起点に使う。**OP の検証は緩めていない**（名前と信頼の両方を確かめる）。
       - SSL_CERT_FILE=/cts-ca/nginx.crt
+      # **クライアント証明書を求める**（#350 ph4。FAPI の tls_client_auth・証明書に縛ったトークン）。
+      #   E2E・スタブと同じテスト専用のフック（Prepare.ps1 が hooks\ に作る）。**要求するだけで、必須にはしない**ので、ほかのプランは変わらない。
+      #   **発行元を問わずに受け付ける**（OP は Subject と tls_client_auth_subject_dn だけで照合する）。ASPNETCORE_ENVIRONMENT=Development のときだけ効く
+      - DOTNET_STARTUP_HOOKS=/hooks/MtlsTestHook.dll
       # **適合性テストのクライアント**（oidcc-basic・oidcc-config は client と client2 を使う。oidcc-basic は、client_secret_post 用の 3 つ目も使う。静的な登録）。
       #   折り返し先は Conformance Suite の口（https://localhost.emobix.co.uk:8443/test/a/<alias>/callback）。
       #   alias は config\*.json の "alias"（mpas-cts）と同じにすること。
@@ -167,6 +174,52 @@ services:
       #   **作った登録の所有者**（利用者名。#307 の段階 5-b）。**無いと、登録は 403（access_denied）で断られる。**
       #   テスト利用者の名前は手元の appsettings.json で変わるので、Prepare.ps1 が .env.cts に書く
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__owner=${CTS_REGISTRATION_OWNER}
+      # **FAPI 2.0 のクライアント**（#350 ph4。client_mode=fapi2。プランは client と client2 の 2 つを使う）。
+      #   8・9 : private_key_jwt（＋ DPoP）。公開鍵（jwk_ecdsa_publickey）は Prepare.ps1 が .env.cts に書く（秘密鍵は certs\ にあり、RunTestPlan.ps1 が設定に埋める）
+      #   10・11 : tls_client_auth（＋ 証明書に縛ったトークン）。Subject は Prepare.ps1 が作るクライアント証明書と同じ
+      #   **id_token_signed_response_alg=ES256 を登録する。** 登録が無いと id_token は RS256 になり、FAPI 2.0 の検査で全部止まる
+      #   （FAPI 2.0 Security Profile §5.4.1 は PS256・ES256・EdDSA。登録の無い fapi2 の既定が RS256 であることは #355 の「扱っていないもの」）
+      #   **FAPI 2.0 の要件を強制する登録の項目を立てる**（#346。CONFIGURATION.md「FAPI の要件を、登録ごとに強制する」。**どれも既定は false**）：
+      #   PAR の必須・PKCE の必須・送信者の拘束の必須（8・9 は DPoP、10・11 はクライアント証明書）。立てないと、PAR・PKCE の無い要求が通り、その検査が落ちる
+      #   **2 つ目のクライアント（9・11）は、クエリ付きの折り返し先（?dummy1=lorem&dummy2=ipsum）も登録する**（Conformance Suite は client2 にそれを使う）
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__dpop_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__client_name=CtsFapi2PrivateKeyJwt1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback?dummy1=lorem&dummy2=ipsum
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__dpop_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__client_name=CtsFapi2PrivateKeyJwt2
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__tls_client_certificate_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__token_endpoint_auth_method=tls_client_auth
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__tls_client_auth_subject_dn=CN=CTS FAPI Client 1
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000a__client_name=CtsFapi2Mtls1
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback?dummy1=lorem&dummy2=ipsum
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__tls_client_certificate_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__token_endpoint_auth_method=tls_client_auth
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__tls_client_auth_subject_dn=CN=CTS FAPI Client 2
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__client_name=CtsFapi2Mtls2
     volumes:
       - type: bind
         source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
@@ -177,5 +230,6 @@ services:
       - ../E2E/cert:/https:ro
       - ./keys:/keys
       - ./certs/nginx.crt:/cts-ca/nginx.crt:ro
+      - ./hooks:/hooks:ro
       - C:/root/files/resource:/resource:ro
       - ./logs:/app/logs

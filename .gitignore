@@ -350,6 +350,9 @@ __pycache__/
 /container/CTS/certs/
 #   .env.cts は Prepare.ps1 が作る compose に渡す値（DCR の管理クライアントの所有者。手元の appsettings.json から決まる）
 /container/CTS/.env.cts
+#   hooks/・hooks-build/ は Prepare.ps1 が作る MTLS のテスト専用のフックと、その作業場所（#350 ph4）
+/container/CTS/hooks/
+/container/CTS/hooks-build/
 
 # テストのスタブ（1_PublishStub.ps1 が作る。#294）
 #   cert/ はホストの開発用証明書の秘密鍵とパスワード。.env は起動側のパラメタ（.env.sample を写したもの）

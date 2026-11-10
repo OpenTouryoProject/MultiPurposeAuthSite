@@ -36,6 +36,7 @@
      ----------  ----------------  -------------------------------------------------
      2026/11/10  玄人 幸道         新規（#350）
      2026/11/10  玄人 幸道         段階 3 のプラン（Implicit・Hybrid・form_post・ログアウト・動的登録）を足した。雛形をプランの間で共有できるようにした（#350）
+     2026/11/11  玄人 幸道         段階 4 のプラン（FAPI）を足した。クライアントの鍵とクライアント証明書を埋める（#350）
 #>
 [CmdletBinding()]
 param(
@@ -43,7 +44,8 @@ param(
         'oidcc-implicit', 'oidcc-hybrid',
         'oidcc-formpost-basic', 'oidcc-formpost-implicit', 'oidcc-formpost-hybrid',
         'oidcc-rp-initiated-logout', 'oidcc-frontchannel-rp-initiated-logout', 'oidcc-backchannel-rp-initiated-logout',
-        'oidcc-dynamic')]
+        'oidcc-dynamic',
+        'fapi2-sp-private-key-jwt-dpop', 'fapi2-sp-mtls')]
     [string]$Plan = 'oidcc-basic',
 
     [int]$ModuleTimeoutSec = 180
@@ -82,11 +84,26 @@ $plans = @{
     #   管理クライアントの値は docker-compose.yml と同じ（**適合性テスト専用の値**）。雛形の @INITIAL_ACCESS_TOKEN@ を埋める
     'oidcc-dynamic' = @{ Name = 'oidcc-dynamic-certification-test-plan'; Variant = '{"response_type":"code"}'; Config = 'oidcc-dynamic'
                          RegistrationClientId = 'c75c11e0000000000000000000000007'; RegistrationClientSecret = 'cts-client7-secret-for-conformance-test-only' }
+    # **FAPI は、クライアントを 2 つ使う**（client・client2）。**鍵とクライアント証明書は Prepare.ps1 が certs\ に作り、ここで埋める**（Fapi = $true）。
+    #   バリアントは代表の組み合わせだけ（plain_fapi・openid_connect・simple・grant_management=disabled）
+    #   **モジュールを待つ上限を長くする**（ModuleTimeoutSec。PAR の request_uri の期限（OP は 300 秒）が切れるのを待つモジュールがある）
+    'fapi2-sp-private-key-jwt-dpop' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop"}'
+        ClientId = 'c75c11e0000000000000000000000008'; Client2Id = 'c75c11e0000000000000000000000009' }
+    'fapi2-sp-mtls' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"mtls","sender_constrain":"mtls"}'
+        ClientId = 'c75c11e000000000000000000000000a'; Client2Id = 'c75c11e000000000000000000000000b' }
 }
 
 # **OP のトークン エンドポイント（手元の PC から）**。issuer の mpas-cts.localhost は、PowerShell の名前解決では引けないことがあるので、localhost で叩く
 $opTokenEndpoint = 'https://localhost:44311/token'
 $p = $plans[$Plan]
+
+# **プランが長い上限を求めるなら、それに従う**（-ModuleTimeoutSec を明示したときは、それを使う）
+if ($p.ModuleTimeoutSec -and -not $PSBoundParameters.ContainsKey('ModuleTimeoutSec'))
+{
+    $ModuleTimeoutSec = $p.ModuleTimeoutSec
+}
 
 #region HTTP（自己署名の証明書。5.1 と 7 で API を分ける。root\CODING.md 5 節）
 
@@ -268,6 +285,34 @@ if ($p.ClientId)
 {
     $config = $config.Replace('@CLIENT_ID@', (ConvertTo-JsonString $p.ClientId))
     $config = $config.Replace('@CLIENT_SECRET@', (ConvertTo-JsonString $p.ClientSecret))
+}
+if ($p.Fapi)
+{
+    # **FAPI のクライアントの秘密鍵とクライアント証明書**（Prepare.ps1 が certs\ に作る。Git の管理外）
+    $certDir = Join-Path $here 'certs'
+    $config = $config.Replace('@CLIENT2_ID@', (ConvertTo-JsonString $p.Client2Id))
+
+    foreach ($n in 1, 2)
+    {
+        $suffixName = if ($n -eq 1) { '' } else { '2' }
+        $jwkPath = Join-Path $certDir ('fapi-client{0}.jwk.json' -f $n)
+        $crtPath = Join-Path $certDir ('mtls-client{0}.crt' -f $n)
+        $keyPath = Join-Path $certDir ('mtls-client{0}.key' -f $n)
+        foreach ($f in $jwkPath, $crtPath, $keyPath)
+        {
+            if (-not (Test-Path -LiteralPath $f))
+            {
+                Write-Host ('FAPI の鍵・証明書がありません（2_DockerComposeUp.bat が呼ぶ Prepare.ps1 で作る） : {0}' -f $f) -ForegroundColor Red
+                exit 2
+            }
+        }
+
+        # **jwks は JSON のオブジェクトで埋める**（雛形では引用符ごと差し込み口にしてある）
+        $jwks = '{"keys":[' + [IO.File]::ReadAllText($jwkPath).Trim() + ']}'
+        $config = $config.Replace(('"@CLIENT{0}_JWKS@"' -f $suffixName), $jwks)
+        $config = $config.Replace(('@MTLS{0}_CERT@' -f $suffixName), (ConvertTo-JsonString ([IO.File]::ReadAllText($crtPath))))
+        $config = $config.Replace(('@MTLS{0}_KEY@' -f $suffixName), (ConvertTo-JsonString ([IO.File]::ReadAllText($keyPath))))
+    }
 }
 if ($p.RegistrationClientId)
 {

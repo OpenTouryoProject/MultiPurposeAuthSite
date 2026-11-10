@@ -26,6 +26,9 @@ cd ..\CTS
 | `oidcc-formpost-basic`・`-implicit`・`-hybrid` | `oidcc-formpost-*-certification-test-plan`（`response_mode=form_post`） | `oidcc-basic.json` |
 | `oidcc-rp-initiated-logout`・`oidcc-frontchannel-rp-initiated-logout`・`oidcc-backchannel-rp-initiated-logout` | 同じ名前の `…-certification-test-plan`（`response_type=code`） | `oidcc-logout.json`（**クライアントはプランごとに別**） |
 | `oidcc-dynamic` | `oidcc-dynamic-certification-test-plan`（`response_type=code`） | `oidcc-dynamic.json` |
+| `fapi2-sp-private-key-jwt-dpop`・`fapi2-sp-mtls` | `fapi2-security-profile-final-test-plan`（`plain_fapi`・`openid_connect`・`simple`・`grant_management=disabled`。前者は `private_key_jwt`＋DPoP、後者は MTLS＋MTLS） | `fapi2.json`（**クライアントは 2 つずつ**。鍵とクライアント証明書を埋める） |
+
+- **FAPI のバリアントは、代表の組み合わせだけ**にしてある（軸を全部掛け合わせると数十通り。#350 の段階 4 で決めた）
 
 | | URL |
 |---|---|
@@ -63,6 +66,17 @@ cd ..\CTS
 - nginx は、それを原本の証明書の場所にマウントして使う。**OP のコンテナだけが、`SSL_CERT_FILE` でそれを信頼する**（.NET は Linux で OpenSSL の信頼の起点を使う）
 - 作り直すなら `certs\` を消す。手元のブラウザで Conformance Suite を開くと、自己署名の警告が出るのは前と同じ
 
+### FAPI の鍵・クライアント証明書と、MTLS（`Prepare.ps1`）
+
+| 作る物 | 置き場所 | 使い道 |
+|---|---|---|
+| **EC P-256 の鍵**（2 つ。`client`・`client2`） | `certs\fapi-client{1,2}.jwk.json`（秘密鍵の JWK） | `private_key_jwt`・DPoP の署名。**秘密鍵は `RunTestPlan.ps1` が設定の `client.jwks` に埋め、公開鍵は `.env.cts` 経由で OP の登録（`jwk_ecdsa_publickey`）に渡す** |
+| **クライアント証明書**（2 つ。自己署名の RSA） | `certs\mtls-client{1,2}.crt`・`.key` | `tls_client_auth` と、証明書に縛ったトークン。**Subject（`CN=CTS FAPI Client 1`・`2`）を OP の登録（`tls_client_auth_subject_dn`）に書く** |
+| **MTLS のテスト専用のフック** | `hooks\MtlsTestHook.dll` | **OP の Kestrel に、クライアント証明書を求めさせる**（E2E・スタブと同じ。`DOTNET_STARTUP_HOOKS`。**要求するだけで必須にはしない**ので、ほかのプランは変わらない。**発行元を問わずに受け付ける**ので、テスト専用） |
+
+- **鍵は ES256 にしてある。** OP の Discovery の `token_endpoint_auth_signing_alg_values_supported` は RS256・ES256 で、FAPI 2.0 は RS256 を認めない
+- どれも**在れば作らない**（作り直すなら `certs\`・`hooks\` を消す）。秘密鍵を含むので、**共有しない**
+
 ### 登録と、テスト利用者
 
 | | 置き場所 |
@@ -72,6 +86,8 @@ cd ..\CTS
 | クライアント（ログアウト。4〜6 つ目） | 同上。**プランごとに分ける**（RP-Initiated・Front-Channel・Back-Channel。登録したログアウトの口が、別のプランの検査に混ざらないように）。`RunTestPlan.ps1` が雛形の `@CLIENT_ID@`・`@CLIENT_SECRET@` を埋める |
 | 動的登録（DCR）の管理クライアント（7 つ目） | 同上。**`scope=client_registration` と `owner`（作った登録の所有者。利用者名）を登録する**（#307）。`owner` が無いと、登録は 403（`access_denied`）で断られる。**名前は `Prepare.ps1` が `.env.cts` に書く**（テスト利用者の名前は手元の `appsettings.json` で変わる） |
 | initial access token | **MPAS は、それの無い登録を受けない。** `RunTestPlan.ps1 -Plan oidcc-dynamic` が、回す直前に管理クライアントで `client_credentials` のトークンを取り、雛形の `@INITIAL_ACCESS_TOKEN@`（設定の `client.initial_access_token`）を埋める。期限はプラン 1 つ分より長くしてある（`DcrAccessTokenExpireTimeSpanFromSeconds=3600`。既定は 300 秒） |
+| FAPI 2.0 のクライアント（8〜11 つ目。`client_mode=fapi2`） | 同上。8・9 は `private_key_jwt`（＋ DPoP）、10・11 は `tls_client_auth`（＋ 証明書に縛ったトークン）。**次を登録する**：`id_token_signed_response_alg=ES256`（**登録が無いと RS256 になり、FAPI 2.0 の検査で全部止まる**。#355）、**FAPI の要件の強制**（`require_pushed_authorization_requests`・`require_pkce`・`dpop_bound_access_tokens` か `tls_client_certificate_bound_access_tokens`。#346。**どれも既定は false で、立てないと PAR・PKCE の無い要求が通る**） |
+| 認可コードの期限 | **60 秒にしてある**（`OAuth2AuthorizationCodeExpireTimeSpanFromSeconds`。FAPI 2.0 は 60 秒以下。雛形の既定は 600 秒。**サーバ全体に効く**） |
 | 折り返し先 | `https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback`（`alias` は設定の `"alias"` と同じ。Implicit・Hybrid の `redirect_uri_token` も同じ） |
 | ログアウトの口 | 折り返し先の `/callback` を `/post_logout_redirect`・`/frontchannel_logout`・`/backchannel_logout` に替えたもの（Conformance Suite が決めた口） |
 | テスト利用者 | OP の種データが作る一般の利用者（`tanaka` ＋ `TestUserSuffix`）。**パスワードは手元の `appsettings.json` の `TestUserPWD`** |
@@ -104,9 +120,13 @@ cd ..\CTS
 | ログアウトの戻り先が無い形（`-no-params`・`-no-post-logout-redirect-uri`・`-only-state`） | 確認の画面で「Yes」（`allow`）を押し、サインアウトした後のホーム（`Sign-up`） |
 | 動的登録の `-logo-uri`・`-policy-uri`・`-tos-uri` | サインインの画面 |
 | 動的登録の `redirect_uri` の誤り（`-ensure-redirect-uri-in-authorization-request`・`-query-mismatch`・`-query-added`） | エラー画面（`An error occurred while processing your request`） |
+| FAPI 2.0 の `par-attempt-to-use-request_uri-for-different-client` | エラー画面（`The client_id does not match the request object`） |
 
 - **REVIEW は、写しを人が見て合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない
 - **ログアウトの確認の画面**：MPAS は、`id_token_hint` が無い・一致しない・要求に誤りがあるとき、確認の画面を出す（RP-Initiated Logout 1.0 §2 の MUST）。雛形では「Yes」を任意の手順で押す
+- **自動では回せないモジュール**（FAPI 2.0。FAILED になるが、OP の不適合ではない）
+  - `…-user-rejects-authentication`：利用者が同意を断る操作が要る。**MPAS は同意を記録した後は同意の画面を出さず、サインインの画面には取り消しのボタンが無い**
+  - `…-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds`：**1 回目のサインインの画面では何もせず、2 回目で入る**操作が要る。自動操作は、同じ画面への訪問を区別できない
 
 ### `RunTestPlan.ps1`
 
@@ -130,6 +150,8 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 |---|---|
 | `mongo\` | Conformance Suite の結果（MongoDB のデータ）。**消すと、画面の一覧も消える** |
 | `keys\`・`logs\` | OP の DataProtection の鍵とログ |
-| `out\` | 実行用の設定（**テスト利用者のパスワード・initial access token を埋めたもの**）と、結果の JSON・報告書の zip |
+| `out\` | 実行用の設定（**テスト利用者のパスワード・initial access token・FAPI のクライアントの秘密鍵を埋めたもの**）と、結果の JSON・報告書の zip |
 | `certs\` | nginx の証明書と秘密鍵（`Prepare.ps1`。適合性テストの環境だけで使う自己署名） |
-| `.env.cts` | compose に渡す値（`Prepare.ps1`。DCR の管理クライアントの所有者の利用者名） |
+| `.env.cts` | compose に渡す値（`Prepare.ps1`。DCR の管理クライアントの所有者の利用者名、FAPI のクライアントの公開鍵） |
+| `certs\fapi-client*.jwk.json`・`certs\mtls-client*` | FAPI のクライアントの秘密鍵とクライアント証明書（`Prepare.ps1`。**秘密鍵を含む**） |
+| `hooks\`・`hooks-build\` | MTLS のテスト専用のフックと、その作業場所（`Prepare.ps1`） |
