@@ -105,6 +105,10 @@ Expectation-Change: <何が・なぜ変わったか（仕様の該当箇所・Is
 
 - **コミットするのは人なので、トレーラーを書くことが、人が差分を見て承認した記録になる**
 - 理由が複数あれば、行を分けて複数書く
+- **理由には、根拠の Issue 番号（`#NNN`）か仕様の節（`RFC 7636 4.2` など）を書く。** 無ければ検出器が警告する（止めない。OpenTouryoCodingAgentAssets#6）
+- **文面を提案したら、コミットの前に、突き合わせ役（サブエージェント [`opentouryo-expectation-reviewer`](.claude/agents/opentouryo-expectation-reviewer.md)。`model: sonnet`）で、理由と差分を突き合わせる。**
+  渡すのは対象（ステージした変更かコミット）とメッセージのファイルだけ。網羅・一致・根拠・方向・範囲外の観点で「合う／合わない／判断できない」が返る。
+  合わない点は理由を直すか人に聞き、回したら `Reviewed-with: opentouryo-expectation-reviewer (<モデル ID>)` を書く（無ければ警告。止めない）
 
 ### 3 段で塞ぐ
 
@@ -134,11 +138,11 @@ OpenTouryoCodingAgentAssets#3）。Open棟梁 も同じ本体を写して使う�
 |---|---|---|
 | `CheckExpectationChange.ps1` | 写し | 本体（段 1〜3 の判定。規則は持たない） |
 | `rules.common.psd1` | 写し | 共通の規則（仕組みのファイル・トレーラーの検査（`Found-By:`・`Tested-with:`・`Reviewed-with:`。5 節）・段 1 の判定） |
-| `ExpectationGuard.Tests/` | 写し | 判定の用例（「この差分なら検出する／しない」）。CI のジョブ `expectation-guard-tests` が回す |
+| `files/tools/ExpectationGuard.Tests/` | 写し | 判定の用例（「この差分なら検出する／しない」）。CI のジョブ `expectation-guard-tests` が回す。製品のソースの隣を避けて、道具の置き場所に置く（`install.ps1 -QualityGuardTestsPath`） |
 | `rules.psd1` | このリポジトリ | このリポジトリの規則（テストの属性・Skip・`Verify` と単体テストの `Assert.`・`[Basis(` の削除・`Report` の `basis`・`TESTCASES.md`） |
 
 - `.claude/hooks/ExpectationGuard.ps1`・`.githooks/commit-msg` も写しである。`expectation-change.yml` は雛形から作り、このリポジトリが持つ
-- **写しは直さない。** 原本を直して、`install.ps1 -TargetRoot <このリポジトリ> -IncludeQualityGuard -QualityGuardPath root -Force` で写し直す。
+- **写しは直さない。** 原本を直して、`install.ps1 -TargetRoot <このリポジトリ> -IncludeQualityGuard -QualityGuardPath root -QualityGuardTestsPath root/files/tools/ExpectationGuard.Tests -Force` で写し直す。
   **写し直しのコミットにも `Expectation-Change:` が要る**（印の行の版が変わるだけで「仕組みの変更」になる）。理由には、版の変化と中身が変わったかを書く
 - CI の `Verify copies` が、写しが写したときのままかを確かめる（ずれは警告。手元では `.\CheckExpectationChange.ps1 -VerifyCopy`）
 - **要確認**（`[Obsolete]`・`#pragma warning disable CS0618` の追加）は止めない・トレーラーを求めない。一覧に出し、CI では足した行に注釈を付ける。
@@ -168,7 +172,7 @@ git config core.hooksPath .githooks
 ### エージェントがすること
 
 - **期待値を変えたら、報告の冒頭に書く。** どのファイルの、どの値が、なぜ変わったか
-- **トレーラーの文面を提案する。** コミットは人が行う（[`AGENTS.md`](AGENTS.md)「Git 操作は行わない」）
+- **トレーラーの文面を提案し、コミットの前に突き合わせ役を回す**（上の「承認の記録」）。コミットは人が行う（[`AGENTS.md`](AGENTS.md)「Git 操作は行わない」）
 - **テストを通すために期待値を変えない。** 先にコードを疑う。期待値が誤っていると判断したら、その根拠（仕様の該当箇所）を示す
 
 ---
@@ -280,7 +284,8 @@ Open棟梁 と同じ形である（OpenTouryo#680）。
 
 - **主のモデルは、各自の設定に任せる**（共有の `.claude/settings.json` では揃えない。Open棟梁 と同じ判断。プロジェクトの設定は各自の設定より優先され、全員に同じモデルを強いるため）。
   **主もレビュー役と同じモデル（Sonnet）なら、別モデルのレビューにならない。** そう報告し、6 節の計測には数えない
-- **呼んだかどうかの記録は、完了コメントによる**
+- **呼んだかどうかの記録は、完了コメントと、コミットのトレーラー `Reviewed-with: quality-reviewer (<モデル ID>)`（5 節）による。**
+  リスク「高」の名前空間を `fixed` で変えたのに無ければ、検出器が警告する（止めない。`rules.psd1` の `TrailerRequirements`。`fixing` では警告しない）
 - **判定は検収の材料であり、検収の代わりではない。** 人は判定の結果を読んで検収する
 - **`.claude/agents/` は仕組みのファイルである**（定義を緩めれば、レビューも緩む）。**変更・削除にはトレーラーが要る**（共通の規則。OpenTouryoCodingAgentAssets `a815845`。3 節）
 
@@ -333,7 +338,7 @@ Reviewed-with: <役> [(<モデル ID>)]
   **語彙と意味の一次情報は [`rules.common.psd1`](root/rules.common.psd1) の規則**（本書には写さない）
 - **流していないテスト・回していないレビューは書かない。** 記録であって証明ではない。人はコミットのときに、経緯と合っているかを見る
 - 指摘の数（採用・却下・別モデルでだけ見つかった数）は長いので、完了コメントに書く（4 節）。トレーラーは「何で・誰が」だけ
-- 検出器が確かめる：**語彙に無い値は止める**（段 2・段 3）。書き忘れは見ない
+- 検出器が確かめる：**語彙に無い値は止める**（段 2・段 3）。**書き忘れは警告する**（止めない）：コード（`.cs`・`.vb`。コメント・空行だけの変更を除く）を変えたのに `Tested-with:` が無い（流していなければ `Tested-with: none`）、期待値の変更に突き合わせ役の `Reviewed-with:` が無い、リスク「高」の名前空間の `fixed` に `quality-reviewer` の `Reviewed-with:` が無い（4 節）
 - **トレーラーは最後の段落に並べる**（本文との間に空行を 1 つ。トレーラーの間に空行を挟まない）。git はそこしか読まないので、
   検出器は最後の段落に無いトレーラー・全角の「：」・名前の綴りの誤りも止め、直した行と直し方を出す
 
@@ -410,7 +415,7 @@ TestReport r = this.Report("EX-2.7",
 
 - [ ] 作業の対象が、品質マップ（1 節）のどの名前空間で、リスクはどれか
 - [ ] 「人が必ず見る箇所」に触れたか。触れたなら、報告の冒頭に書いたか
-- [ ] 期待値の変更（3 節）を含むか。含むなら、報告の冒頭に書き、トレーラーの文面を提案したか
+- [ ] 期待値の変更（3 節）を含むか。含むなら、報告の冒頭に書き、トレーラーの文面を提案したか。理由に Issue 番号か仕様の節を書き、コミットの前に `opentouryo-expectation-reviewer` で突き合わせたか
 - [ ] テストを足したなら、根拠を原典で確かめたか。判定できない値は `Observe` にしたか（2 節・7 節）
 - [ ] テストの文面を変えたなら、`TESTCASES.md` を作り直したか
 - [ ] リスクが「高」なら、4 節の観点で見直したか（セルフレビューを書き留めたか）

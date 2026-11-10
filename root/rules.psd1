@@ -65,4 +65,27 @@
             CommandPattern = 'TESTCASES\.md'
         }
     )
+
+    # 承認の理由の書き方に足す（共通の規則の ApprovalReasonPatterns に足される。OpenTouryoCodingAgentAssets#6）
+    #   テストの ID（RT-352.1 など）は Issue 番号を含む
+    ApprovalReasonPatterns = @('\bRT-\d+')
+
+    # 書き忘れの組（共通の規則の TrailerRequirements に足される。警告だけ。OpenTouryoCodingAgentAssets#6）
+    #   リスク「高」の名前空間（QUALITY.md 1 節の品質マップ）を fixed で変えたら、fixed の前に別モデルのレビュー（quality-reviewer。4 節）
+    TrailerRequirements = @(
+        @{
+            Name    = 'Reviewed-with'
+            Message = '(?i)\bfixed\s+#\d+'
+            Paths   = @(
+                '^root/programs/CommonLibrary/TokenProviders/'
+                '^root/programs/CommonLibrary/Extensions/Sts/'
+                '^root/programs/CommonLibrary/SamlProviders/'
+                '^root/programs/CommonLibrary/Extensions/FIDO/'
+                '^root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/Controllers/'
+                '^root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/Controllers/'
+            )
+            Value   = '^(quality-reviewer|human)\b'
+            Hint    = 'リスク「高」の名前空間（TokenProviders・Extensions.Sts・SamlProviders・Extensions.FIDO・Controllers）なので、fixed の前に quality-reviewer で別モデルのレビューを回し、Reviewed-with: quality-reviewer (<モデル ID>) を書く（QUALITY.md 4 節）'
+        }
+    )
 }
