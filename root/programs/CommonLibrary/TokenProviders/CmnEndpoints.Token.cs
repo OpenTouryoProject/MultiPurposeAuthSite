@@ -40,6 +40,7 @@
 //*  2026/11/09  玄人 幸道         DPoP・クライアント証明書を必須にした登録では、それの無いトークン要求を断る（全グラント。#346 の段階 2）
 //*  2026/11/09  玄人 幸道         client_credentials・ROPC・device_code でも、証明書でトークンを縛る（以前は縛っていなかった。JWT Bearer は必須にした登録だけ。#346）
 //*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
+//*  2026/11/10  玄人 幸道         応答の組み立てに client_id を渡すようにした（暗号化した id_token の中の JWS の alg。#355）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -338,7 +339,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
                     ret = CmnEndpoints.CreateAccessTokenResponse(
-                        access_token, refresh_token, jwkString, jkt);
+                        client_id, access_token, refresh_token, jwkString, jkt);
 
                     return true;
 
@@ -533,7 +534,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
                         ret = CmnEndpoints.CreateAccessTokenResponse(
-                            access_token, new_refresh_token, jwkString, jkt);
+                            client_id, access_token, new_refresh_token, jwkString, jkt);
 
                         return true;
                     }
@@ -752,7 +753,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                             // **`expires_in` は、実際に付けた期限で返す**（#294。専用 scope のトークンは短い）。
                             ret = CmnEndpoints.CreateAccessTokenResponse(
-                                access_token, "", jwkString, jkt, expires);
+                                client_id, access_token, "", jwkString, jkt, expires);
                             return true;
                         }
                         else
@@ -985,7 +986,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // **`expires_in` は、実際に付けた期限で返す**（#294。専用 scope のトークンは短い）。
                     ret = CmnEndpoints.CreateAccessTokenResponse(
-                        access_token, "", jwkString, jkt, expires);
+                        client_id, access_token, "", jwkString, jkt, expires);
                     return true;
 
                     #endregion
@@ -1133,7 +1134,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     "Passed the 'jwt bearer token flow' by {0}({1}).", iss, sub)); // Client Account
 
                                 ret = CmnEndpoints.CreateAccessTokenResponse(
-                                    access_token, "", jwkString, jkt);
+                                    iss, access_token, "", jwkString, jkt);
                                 return true;
                             }
                             else
@@ -1336,7 +1337,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // **作った refresh_token を返す**（#294）。
                     //   **以前は作って保存するだけで、応答に入れていなかった**（使われない行が溜まっていた）。
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, "", jkt);
+                    ret = CmnEndpoints.CreateAccessTokenResponse(client_id, access_token, refresh_token, "", jkt);
 
                     return true;
                 }
@@ -1533,7 +1534,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                         // Client Account
                             PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "", jkt);
+                        ret = CmnEndpoints.CreateAccessTokenResponse(client_id, access_token, "", "", jkt);
 
                         return true;
                     }

@@ -6881,7 +6881,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=7ea70bcc-d7bf-49dc-a910-733735c299b8&code=bogus
+1. GET /Account/EmailConfirmation?userId=012d028b-a609-4abb-9e9a-3882493f5ddd&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6890,8 +6890,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=7ea70bcc-d7bf-49dc-a910-733735c299b8&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=7ea70bcc-d7bf-49dc-a910-733735c299b8&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=012d028b-a609-4abb-9e9a-3882493f5ddd&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=012d028b-a609-4abb-9e9a-3882493f5ddd&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11408,9 +11408,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - 引き換え：id_token を、クライアントの秘密鍵で復号できる
+- 引き換え：中の JWS の alg
 - 引き換え：中の JWS の kid は、jwks_uri の ES256（P-256）の鍵の kid
 - 引き換え：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
 - 更新：id_token を、クライアントの秘密鍵で復号できる
+- 更新：中の JWS の alg
 - 更新：中の JWS の kid は、jwks_uri の ES256（P-256）の鍵の kid
 - 更新：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
 
@@ -11486,6 +11488,35 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - userinfo の phone_number（種データの利用者は電話番号を持たない）
   - 電話番号を持つ利用者なら、値の在る文字列で返る（E2E では登録できないので測っていない）。
+
+## RT-355.1 fapi2 の id_token（Nested JWT）の中の JWS は、登録の id_token_signed_response_alg（PS256）で署名される
+
+| | |
+|---|---|
+| 観点 | **暗号化しても、中の JWS は、登録の alg で署名する**（signed then encrypted）。**access_token と同じ alg になる。** 以前は登録にかかわらず ES256 だった。**`kid` は署名した鍵（`jwks_uri` の RSA の鍵）のもの**で、その鍵で検証できること。**認可コードの引き換えと、refresh_token の更新の両方**で確かめる。 |
+| 根拠 | OIDC Registration 1.0 §2（id_token_signed_response_alg）/ OIDC Core 1.0 §10.2 / #355 |
+| テスト | `RT35501_fapi2のid_tokenの中のJWSは登録のalgで署名される` |
+
+**手順**
+
+1. PKCE（S256）で認可コードを取り、client_assertion で交換する
+1. client_assertion で refresh_token を更新し、返った id_token も同じく確かめる
+
+**検証（合否を判定する）**
+
+- access_token のヘッダの alg は、登録の値
+- 引き換え：id_token を、クライアントの秘密鍵で復号できる
+- 引き換え：中の JWS の alg
+- 引き換え：中の JWS の kid は、jwks_uri の RSA の鍵の kid
+- 引き換え：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+- 更新：id_token を、クライアントの秘密鍵で復号できる
+- 更新：中の JWS の alg
+- 更新：中の JWS の kid は、jwks_uri の RSA の鍵の kid
+- 更新：中の JWS の kid が jwks_uri の鍵を指し、その鍵で署名を検証できる
+
+**補足**
+
+- **登録が無い fapi2 のクライアントでは、中の JWS は ES256 のまま**（`RT-352.1`）。**暗号化しない側の既定（RS256）には倒さない**（FAPI 2.0 Security Profile §5.4.1 は RS256 を認めない）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

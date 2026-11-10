@@ -83,7 +83,7 @@
 | | CIBA (FAPI-CIBA) | ✓ | poll モードのみ。FCM プッシュ連携 |
 | | Refresh Token | ✓ | ローテーションあり |
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
-| | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM。中の JWS は ES256。**✅ 修正済み（#352）: 中の JWS の `kid` が、署名した鍵ではなく、暗号化に使うクライアントの鍵の `kid` だった**（`kid` で `jwks_uri` から鍵を引く RP が検証できなかった。`RT-352.1`） |
+| | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM。**中の JWS は、登録の `id_token_signed_response_alg` が在ればその alg（access_token と同じ）、無ければ ES256**。**✅ 修正済み（#352）: 中の JWS の `kid` が、署名した鍵ではなく、暗号化に使うクライアントの鍵の `kid` だった**（`kid` で `jwks_uri` から鍵を引く RP が検証できなかった。`RT-352.1`）。**✅ 修正済み（#355）: 中の JWS が、登録にかかわらず ES256 だった**（OIDC Registration 1.0 §2。`RT-355.1`。登録が無いときに RS256 に倒さないのは、FAPI 2.0 Security Profile §5.4.1 が RS256 を認めないため） |
 | | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/Sts/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
@@ -1781,6 +1781,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 > **既定値のある引数は、渡し忘れても動く。** 測らないと分からない。
 
 - **CIBA は `ES256` のまま**（FAPI-CIBA が `PS256` / `ES256` を求めるため、登録値で上書きしない）
+- **fapi2 の暗号化した id_token（JWE）の中の JWS は、登録が在れば登録の alg、無ければ `ES256`**（#355。以前は登録にかかわらず `ES256`。
+  **登録が無いときは、access_token（`RS256`）と食い違ったまま**である。`RS256` は FAPI 2.0 Security Profile §5.4.1 が認めない）
 - **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま**
 - **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は
   **#262 で ✅ 足した**（**狭める側だけ**。受ける alg を広げるのは上流の対応が要る）

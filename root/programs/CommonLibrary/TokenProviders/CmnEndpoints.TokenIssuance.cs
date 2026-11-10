@@ -36,6 +36,7 @@
 //*  2026/11/09  玄人 幸道         送信者の拘束（DPoP・クライアント証明書）を必須にした登録の判定を追加（#346 の段階 2）
 //*  2026/11/10  玄人 幸道         id_token の生成に pfx を渡さないようにした（鍵は SigningKeys から引く。#352）
 //*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
+//*  2026/11/10  玄人 幸道         暗号化した id_token の中の JWS を、登録の alg で署名するよう、client_id を受けるようにした（#355）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -571,6 +572,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region CreateAccessTokenResponse
 
         /// <summary>CreateAccessTokenResponse</summary>
+        /// <param name="client_id">client_id（**暗号化した id_token の中の JWS の alg を、登録から引く**。#355）</param>
         /// <param name="access_token">string</param>
         /// <param name="refresh_token">string</param>
         /// <param name="jwkString">string</param>
@@ -596,7 +598,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// （`Authorization: DPoP …` ＋ 証明。**段階 2 で照合する**）。
         /// </remarks>
         private static Dictionary<string, object> CreateAccessTokenResponse(
-            string access_token, string refresh_token, string jwkString, string jkt = null,
+            string client_id, string access_token, string refresh_token, string jwkString, string jkt = null,
             TimeSpan? expiresIn = null)
         {
             Dictionary<string, object> ret = new Dictionary<string, object>();
@@ -644,10 +646,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
                     else
                     {
-                        // JWE（**中の JWS は ES256。鍵と kid は SigningKeys から引く**。#352）
+                        // JWE（**鍵と kid は SigningKeys から引く**。#352）
+                        //   **中の JWS は、登録の alg が在ればそれ（access_token と同じ）、無ければ ES256**（#355）。
+                        //   **以前は alg を渡さず、登録にかかわらず ES256 だった。**
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, jwkString);
+                            HashClaimType.None, jwkString, CmnIdToken.SigningAlgForEncrypted(client_id));
                     }
 
                     if (!string.IsNullOrEmpty(id_token))

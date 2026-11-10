@@ -322,6 +322,11 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 > **CIBA（`client_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
+> **fapi2 で id_token を暗号化する（`jwk_rsa_publickey` を登録した）クライアントは、この値を書かなければ、
+> id_token の中の JWS が `ES256` になる**（access_token は既定の `RS256`。**2 つは食い違う**）。
+> **既定の `RS256` は FAPI 2.0 Security Profile §5.4.1 が認めない**ので、そちらには倒さない。
+> **書けば、中の JWS も access_token も、その alg になる**（#355。以前は書いても `ES256` だった）。
+> **fapi2 なら `PS256` か `ES256` を書くとよい。**
 > **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
 
 ## 検証する側の alg を、クライアント単位で絞る（#262）
