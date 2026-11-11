@@ -318,6 +318,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/Issues/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
 | `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け。`RT-188.4`（使い切り）もここ |
+| `Tests/Issues/RequestUriTests.cs` | `RT-362` | **引けない `request_uri` を、黙って続けずに断る**（#362。OIDC Core 1.0 §3.1.2.6）。**外部の URL は `request_uri_not_supported`**（`RT-362.1`。取りに行くのは #374）、**存在しない・使用済みの `urn:` は `invalid_request_uri`**（`RT-362.2`・`.3`）。どちらもエラー画面で、RP へ返さない |
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |

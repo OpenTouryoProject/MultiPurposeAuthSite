@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=315c8b78-efe1-4377-b17a-095d0b0efd67&code=bogus
+1. GET /Account/EmailConfirmation?userId=d0c96e18-e009-4360-bbc9-2479e992572e&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=315c8b78-efe1-4377-b17a-095d0b0efd67&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=315c8b78-efe1-4377-b17a-095d0b0efd67&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=d0c96e18-e009-4360-bbc9-2479e992572e&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=d0c96e18-e009-4360-bbc9-2479e992572e&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -10674,7 +10674,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **検証（合否を判定する）**
 
-- **どの口も 500 にならない**（/token code=400, /token refresh_token=400, /token client_id=401, /token device_code=400, /token auth_req_id=400, /revoke token=200, /introspect token=200, /authorize request_uri=302）
+- **どの口も 500 にならない**（/token code=400, /token refresh_token=400, /token client_id=401, /token device_code=400, /token auth_req_id=400, /revoke token=200, /introspect token=200, /authorize request_uri=200）
 
 ## RT-331.10 DB の列の幅を超える値で、画面から同意・資格情報・管理の行を引いても 500 にしない
 
@@ -11863,6 +11863,62 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - invalid_request で断る
 - code も id_token も access_token も返さない
+
+## RT-362.1 外部の https の request_uri を付けた認可要求は、クエリだけで続けずに、request_uri_not_supported のエラー画面になる（RP へ返さない）
+
+| | |
+|---|---|
+| 観点 | **この OP は外部の request_uri を取りに行かない。** 取りに行かないなら、黙って続けずに断る（以前は、クエリだけで認可を続け、Request Object の state・nonce が落ちていた）。**`redirect_uri` を照合する前なので、RP へは返さない。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.6（request_uri_not_supported）/ #362 |
+| テスト | `RT36201_外部のrequest_uriはrequest_uri_not_supportedで断る` |
+
+**手順**
+
+1. GET /authorize に、クエリのパラメタと外部の request_uri を付けて送る
+
+**検証（合否を判定する）**
+
+- **code を返さない**（クエリだけで続けない）
+- **RP へ返さない**（Location が無い）
+- **エラー画面に request_uri_not_supported が出る**
+
+## RT-362.2 この OP の形（urn:）だが存在しない request_uri を付けた認可要求は、クエリだけで続けずに、invalid_request_uri のエラー画面になる（RP へ返さない）
+
+| | |
+|---|---|
+| 観点 | **存在しない・期限切れ・使用済みの request_uri は、預けた要求を引けない。** 黙って続けずに断る（以前は、クエリだけで認可を続けていた）。**`redirect_uri` を照合する前なので、RP へは返さない。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.6（invalid_request_uri）/ #362 |
+| テスト | `RT36202_引けないurnのrequest_uriはinvalid_request_uriで断る` |
+
+**手順**
+
+1. /ros に Request Object を預け、払い出された request_uri の形（urn:）を得る
+1. GET /authorize に、クエリのパラメタと、存在しない urn: の request_uri を付けて送る
+
+**検証（合否を判定する）**
+
+- **code を返さない**（クエリだけで続けない）
+- **RP へ返さない**（Location が無い）
+- **エラー画面に invalid_request_uri が出る**
+
+## RT-362.3 一度認可に使った request_uri を、クエリのパラメタと一緒にもう一度送ると、クエリだけで続けずに、invalid_request_uri のエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **預けた要求は、認可応答を作り終えた時点で消している**（#188）。**消した後の request_uri は「引けない urn:」として断る**（以前は、クエリだけで認可を続けていた）。 |
+| 根拠 | OIDC Core 1.0 §3.1.2.6（invalid_request_uri）/ RFC 9126 §2.2（request_uri は一回限り）/ #362 |
+| テスト | `RT36203_使用済みのrequest_uriはinvalid_request_uriで断る` |
+
+**手順**
+
+1. /ros に Request Object を預け、その request_uri で一度認可する
+1. 同じ request_uri を、クエリのパラメタと一緒にもう一度送る
+
+**検証（合否を判定する）**
+
+- **code を返さない**（クエリだけで続けない）
+- **RP へ返さない**（Location が無い）
+- **エラー画面に invalid_request_uri が出る**
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

@@ -35,6 +35,7 @@
 //*  2026/11/06  玄人 幸道         CIBA の request の署名の alg のコメントを、Open棟梁 の現状（OpenTouryo#595・#596・#664）に合わせた（#337）
 //*  2026/11/06  玄人 幸道         jwks_uri・request_object_endpoint・PAR の口を、Config で読む（OpenTouryo#666。#339）
 //*  2026/11/09  玄人 幸道         require_pushed_authorization_requests・require_signed_request_object を、サーバ全体の設定から出す（#346 の段階 2）
+//*  2026/11/12  玄人 幸道         request_uri_parameter_supported が指す範囲（この OP の urn: だけ）をコメントに書いた（#362）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -210,6 +211,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OpenIDConfig.Add("request_object_signing_alg_values_supported",
                 new List<string>(CmnEndpoints.RequestObjectSigningAlgs));
             OpenIDConfig.Add("request_parameter_supported", false);
+            //   **request_uri は、この OP が払い出した `urn:`（PAR・/ros）だけを受ける**（#362）。
+            //   **外部の request_uri（OIDC Core 1.0 §6.2）は `request_uri_not_supported` で断る**（取りに行くのは #374）。
+            //   **false にすると、PAR の request_uri まで受けないと読まれる**ので、true のままにしている。
             OpenIDConfig.Add("request_uri_parameter_supported", true);
             OpenIDConfig.Add("request_object_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.RequestObjectRegUri);

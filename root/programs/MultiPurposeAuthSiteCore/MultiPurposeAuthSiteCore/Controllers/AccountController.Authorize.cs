@@ -26,6 +26,7 @@
 //*  2026/10/31  玄人 幸道         claims の id_token がオブジェクトでなくても 500 にしない（AddAuthTimeClaim。#294）
 //*  2026/11/09  玄人 幸道         Request Object の経路（PAR か・署名付きか）を読み、認可要求の検証に渡す（#346 の段階 2）
 //*  2026/11/11  玄人 幸道         POST の認可要求を受ける（GET に詰め替えて送り返す）。同意の送信は <認可の口>/consent に移した（#359）
+//*  2026/11/12  玄人 幸道         request_uri を引けない要求を、黙って続けずに断る（request_uri_not_supported・invalid_request_uri。#362）
 //*  2026/11/11  玄人 幸道         Hybrid の応答を作る部品に response_type を渡す（at_hash を付けるかを決めるため。#360）
 //**********************************************************************************
 
@@ -355,10 +356,9 @@ namespace MultiPurposeAuthSite.Controllers
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
                 ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
-                out bool pushed, out bool signedRequestObject))
+                out bool pushed, out bool signedRequestObject, out err, out errDescription))
             {
-                err = OAuth2AndOIDCConst.invalid_request;
-                errDescription = "The client_id does not match the request object.";
+                // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }
             // **要求の検証を先に行う**（#247）。`redirect_uri` を照合できていないと、エラーを RP へ返せない。
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
@@ -678,10 +678,9 @@ namespace MultiPurposeAuthSite.Controllers
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
                 ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
-                out bool pushed, out bool signedRequestObject))
+                out bool pushed, out bool signedRequestObject, out err, out errDescription))
             {
-                err = OAuth2AndOIDCConst.invalid_request;
-                errDescription = "The client_id does not match the request object.";
+                // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
@@ -768,6 +767,12 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 要求の読み込み・発行・エラー
 
+        /// <summary>error : request_uri_not_supported（OIDC Core 1.0 §3.1.2.6。#362）</summary>
+        private const string RequestUriNotSupported = "request_uri_not_supported";
+
+        /// <summary>error : invalid_request_uri（OIDC Core 1.0 §3.1.2.6。#362）</summary>
+        private const string InvalidRequestUri = "invalid_request_uri";
+
         /// <summary>request_uri（PAR / JAR）の Request Object で、要求のパラメタを上書きする</summary>
         /// <param name="request_uri">request_uri（無ければ何もしない）</param>
         /// <param name="client_id">client_id</param>
@@ -783,29 +788,50 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="code_challenge">code_challenge</param>
         /// <param name="pushed">PAR で預けたものか（#346。引けなければ false）</param>
         /// <param name="signedRequestObject">署名付きの Request Object か（#346。引けなければ false）</param>
-        /// <returns>**クエリの client_id と、Request Object の client_id が食い違えば false**</returns>
+        /// <param name="err">断るときの error（#362）</param>
+        /// <param name="errDescription">断るときの error_description（#362）</param>
+        /// <returns>**Request Object を引けない・クエリの client_id と食い違うなら false**</returns>
         /// <remarks>
         /// **GET と POST に同じ 20 行があったので、1 つにした**（#294）。
         ///
         /// **クエリに client_id が在れば、Request Object の値と一致することを確かめる**
         /// （RFC 9126 §4 / RFC 9101 §5。#294）。以前は確かめずに上書きしていた。
         ///
-        /// **存在しない request_uri では、Request Object が null になる**（#185）。
-        /// その場合は上書きせず、後続の ValidateAuthZReqParam でエラーにする。
+        /// **request_uri が在るのに Request Object を引けなければ、断る**（#362。OIDC Core 1.0 §3.1.2.6）。
+        ///
+        /// | request_uri | error |
+        /// |---|---|
+        /// | **この OP が払い出した `urn:`（PAR・`/ros`）でない**（RP が置いた外部の URL など） | `request_uri_not_supported`（**外部の request_uri は取りに行かない**） |
+        /// | **この OP の `urn:` だが、引けない**（存在しない・期限切れ・使用済み） | `invalid_request_uri` |
+        ///
+        /// **以前は、引けなければ `request_uri` が無い要求としてクエリだけで続けていた**（#185 で null を上書きしないようにした後）。
+        /// **RP が Request Object に入れた `state`・`nonce` が応答から落ち、RP の検証が失敗した**（適合性テストの `oidcc-request-uri-signed-rs256`）。
+        /// **`redirect_uri` を照合する前なので、RP へは返さずエラー画面にする**（client_id が食い違うときと同じ）。
         /// </remarks>
         private bool OverwriteByRequestObject(string request_uri,
             ref string client_id, ref string redirect_uri, ref string response_type, ref string response_mode,
             ref string scope, ref string state, ref string nonce, ref string max_age, ref string prompt,
             ref JObject claims, ref string code_challenge,
-            out bool pushed, out bool signedRequestObject)
+            out bool pushed, out bool signedRequestObject, out string err, out string errDescription)
         {
-            //  **経路**（#346）。**Request Object が引けなければ、クエリの要求**（どちらも false）。
+            //  **経路**（#346）。**request_uri が無ければ、クエリの要求**（どちらも false）。
             pushed = false;
             signedRequestObject = false;
+            err = "";
+            errDescription = "";
 
             if (string.IsNullOrEmpty(request_uri))
             {
                 return true;
+            }
+
+            //  **この OP が払い出した `urn:` でなければ、取りに行かずに断る**（#362。OIDC Core 1.0 §3.1.2.6）。
+            //    **外部の request_uri（OIDC Core 1.0 §6.2）は、取りに行く先の制限を決めてから扱う**（#374）。
+            if (!request_uri.StartsWith(OAuth2AndOIDCConst.UrnRequestUriBase, StringComparison.Ordinal))
+            {
+                err = AccountController.RequestUriNotSupported;
+                errDescription = "Only the request_uri issued by this server (PAR or the request object endpoint) is supported.";
+                return false;
             }
 
             string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
@@ -815,7 +841,10 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (requestObjectPayload == null)
             {
-                return true;
+                //  **引けなければ断る**（#362）。**以前は、request_uri が無い要求としてクエリだけで続けていた。**
+                err = AccountController.InvalidRequestUri;
+                errDescription = "The request_uri is unknown, expired, or already used.";
+                return false;
             }
 
             //  **預けたときにサーバが付けた印で、経路を見分ける**（#346）。
@@ -825,6 +854,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (!string.IsNullOrEmpty(client_id) && client_id != requestObjectClientId)
             {
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "The client_id does not match the request object.";
                 return false;
             }
 
