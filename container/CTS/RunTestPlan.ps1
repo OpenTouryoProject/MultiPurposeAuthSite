@@ -37,6 +37,7 @@
      2026/11/10  玄人 幸道         新規（#350）
      2026/11/10  玄人 幸道         段階 3 のプラン（Implicit・Hybrid・form_post・ログアウト・動的登録）を足した。雛形をプランの間で共有できるようにした（#350）
      2026/11/11  玄人 幸道         段階 4 のプラン（FAPI）を足した。クライアントの鍵とクライアント証明書を埋める（#350）
+     2026/11/11  玄人 幸道         段階 4 のプラン（FAPI 2.0 Message Signing・FAPI 1.0 Advanced・FAPI-CIBA）と、CIBA の端末役（承認の自動化）を足した（#350）
 #>
 [CmdletBinding()]
 param(
@@ -45,7 +46,10 @@ param(
         'oidcc-formpost-basic', 'oidcc-formpost-implicit', 'oidcc-formpost-hybrid',
         'oidcc-rp-initiated-logout', 'oidcc-frontchannel-rp-initiated-logout', 'oidcc-backchannel-rp-initiated-logout',
         'oidcc-dynamic',
-        'fapi2-sp-private-key-jwt-dpop', 'fapi2-sp-mtls')]
+        'fapi2-sp-private-key-jwt-dpop', 'fapi2-sp-mtls',
+        'fapi2-ms-private-key-jwt-dpop',
+        'fapi1-adv-private-key-jwt-par',
+        'fapi-ciba-private-key-jwt-poll')]
     [string]$Plan = 'oidcc-basic',
 
     [int]$ModuleTimeoutSec = 180
@@ -93,6 +97,19 @@ $plans = @{
     'fapi2-sp-mtls' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
         Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"mtls","sender_constrain":"mtls"}'
         ClientId = 'c75c11e000000000000000000000000a'; Client2Id = 'c75c11e000000000000000000000000b' }
+    # **FAPI 2.0 Message Signing**：SP の private_key_jwt＋DPoP に、署名した Request Object（signed_non_repudiation）と JARM を足したもの
+    'fapi2-ms-private-key-jwt-dpop' = @{ Name = 'fapi2-message-signing-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop","fapi_request_method":"signed_non_repudiation","fapi_response_mode":"jarm"}'
+        ClientId = 'c75c11e0000000000000000000000008'; Client2Id = 'c75c11e0000000000000000000000009' }
+    # **FAPI 1.0 Advanced**：private_key_jwt・PAR（pushed）・plain_response
+    'fapi1-adv-private-key-jwt-par' = @{ Name = 'fapi1-advanced-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","client_auth_type":"private_key_jwt","fapi_auth_request_method":"pushed","fapi_response_mode":"plain_response"}'
+        ClientId = 'c75c11e000000000000000000000000c'; Client2Id = 'c75c11e000000000000000000000000d' }
+    # **FAPI-CIBA**：poll・private_key_jwt・静的な登録。**利用者の承認は、このスクリプトが認証デバイスの代わりに送る**（Ciba = $true。下の「CIBA の端末役」）
+    'fapi-ciba-private-key-jwt-poll' = @{ Name = 'fapi-ciba-id1-test-plan'; Config = 'fapi-ciba'; Fapi = $true; ModuleTimeoutSec = 420; Ciba = $true
+        Variant = '{"client_registration":"static_client","ciba_mode":"poll","client_auth_type":"private_key_jwt","fapi_ciba_profile":"plain_fapi"}'
+        ClientId = 'c75c11e000000000000000000000000f'; Client2Id = 'c75c11e0000000000000000000000010'
+        DeviceClientId = 'c75c11e000000000000000000000000e'; DeviceClientSecret = 'cts-client14-secret-for-conformance-test-only' }
 }
 
 # **OP のトークン エンドポイント（手元の PC から）**。issuer の mpas-cts.localhost は、PowerShell の名前解決では引けないことがあるので、localhost で叩く
@@ -223,6 +240,37 @@ function Get-InitialAccessToken([string]$ClientId, [string]$ClientSecret)
     return [string]$token
 }
 
+function Invoke-OpForm([string]$Path, [string]$Body, [string]$Authorization)
+{
+    # **OP の口をフォーム形式で叩き、状態コードと本文を返す**（手元の PC から。自己署名の証明書）
+    $uri = $opTokenEndpoint.Replace('/token', $Path)
+
+    if ($PSVersionTable.PSVersion.Major -ge 6)
+    {
+        $headers = @{}
+        if ($Authorization) { $headers['Authorization'] = $Authorization }
+        $res = Invoke-WebRequest -Method POST -Uri $uri -SkipCertificateCheck -TimeoutSec 60 -SkipHttpErrorCheck `
+            -Headers $headers -ContentType 'application/x-www-form-urlencoded' -Body $Body
+        return [pscustomobject]@{ Status = [int]$res.StatusCode; Content = [string]$res.Content }
+    }
+
+    $req = [System.Net.HttpWebRequest]::Create($uri)
+    $req.Method = 'POST'
+    $req.Timeout = 60000
+    if ($Authorization) { $req.Headers['Authorization'] = $Authorization }
+    $req.ContentType = 'application/x-www-form-urlencoded'
+    $bytes = [Text.Encoding]::UTF8.GetBytes($Body)
+    $req.ContentLength = $bytes.Length
+    $s = $req.GetRequestStream(); $s.Write($bytes, 0, $bytes.Length); $s.Close()
+    try { $res = $req.GetResponse() } catch [System.Net.WebException] { $res = $_.Exception.Response; if (-not $res) { throw } }
+    try
+    {
+        $content = (New-Object IO.StreamReader($res.GetResponseStream())).ReadToEnd()
+        return [pscustomobject]@{ Status = [int]$res.StatusCode; Content = $content }
+    }
+    finally { $res.Close() }
+}
+
 #endregion
 
 #region 前提
@@ -331,6 +379,70 @@ if ($p.RegistrationClientId)
 
 #endregion
 
+#region CIBA の端末役（Ciba = $true のプランだけ）
+
+# **CIBA は、利用者が認証デバイスで「許可」を押すまでトークンが出ない。** Conformance Suite はそれを待ち続ける。
+#   そこで、このスクリプトが認証デバイスの代わりをする（E2E の CibaTests と同じ流れ）：
+#   1. 端末役のクライアント（AuthenticationDeviceClientIds に挙げたもの）で、テスト利用者のトークンを ROPC で取る
+#   2. POST /SetDeviceToken で端末を登録する（**プッシュの宛先**。値は何でもよい）
+#   3. モジュールを待つ間に、OP の送信箱（.\fcm\。FcmOutboxDirectory）を見て、新しいプッシュの auth_req_id に POST /ciba_result（許可）を返す
+#   **全部「許可」する**ので、利用者の拒否を求めるモジュールは落ちる（自動では回せない）。
+$fcmDir = Join-Path $here 'fcm'
+$cibaToken = $null
+$cibaSeen = @{}
+
+if ($p.Ciba)
+{
+    $basicDevice = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(
+        [Uri]::EscapeDataString($p.DeviceClientId) + ':' + [Uri]::EscapeDataString($p.DeviceClientSecret)))
+
+    # **先にサインインの画面を 1 回開く**（OP の種データの利用者は、AccountController への最初の要求で作られる）
+    if ($PSVersionTable.PSVersion.Major -ge 6) { [void](Invoke-WebRequest -Uri $opTokenEndpoint.Replace('/token', '/Account/Login') -SkipCertificateCheck -TimeoutSec 60) }
+    else { ([System.Net.HttpWebRequest]::Create($opTokenEndpoint.Replace('/token', '/Account/Login'))).GetResponse().Close() }
+
+    $ropc = Invoke-OpForm '/token' ('grant_type=password&scope=openid&username=' + [Uri]::EscapeDataString($user) + '&password=' + [Uri]::EscapeDataString($password)) $basicDevice
+    $cibaToken = ($ropc.Content | ConvertFrom-Json).access_token
+    if ([string]::IsNullOrEmpty($cibaToken))
+    {
+        Write-Host ('CIBA の端末役のトークンを取れませんでした（{0}）。' -f $ropc.Status) -ForegroundColor Red
+        exit 2
+    }
+
+    $set = Invoke-OpForm '/SetDeviceToken' 'device_token=cts-authentication-device' ('Bearer ' + $cibaToken)
+    if ($set.Status -ne 200)
+    {
+        Write-Host ('CIBA の端末を登録できませんでした（/SetDeviceToken : {0} {1}）。' -f $set.Status, $set.Content) -ForegroundColor Red
+        exit 2
+    }
+
+    # **前の実行の送信箱は、数えない**（ファイルの名前を覚えておく）
+    New-Item -ItemType Directory -Force -Path $fcmDir | Out-Null
+    Get-ChildItem -LiteralPath $fcmDir -Filter '*.json' | ForEach-Object { $cibaSeen[$_.Name] = $true }
+}
+
+function Approve-CibaPush
+{
+    # **送信箱の新しいプッシュに、許可を返す**（auth_req_id は data の中）
+    #   **届いてから 8 秒置いてから返す。** Conformance Suite は、最初の問い合わせ（ポーリング）に
+    #   authorization_pending が返ることを確かめる（CIBA Core §11）。すぐに許可すると、最初からトークンが返り、その検査が落ちる。
+    #   問い合わせの間隔（interval）は 5 秒なので、1 回は「まだ」を返せる
+    foreach ($file in @(Get-ChildItem -LiteralPath $fcmDir -Filter '*.json'))
+    {
+        if ($cibaSeen.ContainsKey($file.Name)) { continue }
+        if (((Get-Date) - $file.LastWriteTime).TotalSeconds -lt 8) { continue }
+        $cibaSeen[$file.Name] = $true
+
+        try { $push = [IO.File]::ReadAllText($file.FullName) | ConvertFrom-Json } catch { continue }
+        $authReqId = [string]$push.data.auth_req_id
+        if ([string]::IsNullOrEmpty($authReqId)) { continue }
+
+        $r = Invoke-OpForm '/ciba_result' ('auth_req_id=' + [Uri]::EscapeDataString($authReqId) + '&result=true') ('Bearer ' + $cibaToken)
+        Write-Host ('    （CIBA の許可を返した : {0}）' -f $r.Status) -ForegroundColor DarkGray
+    }
+}
+
+#endregion
+
 #region プランを作り、モジュールを回す
 
 $query = 'api/plan?planName=' + [Uri]::EscapeDataString($p.Name)
@@ -361,6 +473,7 @@ foreach ($m in @($created.modules))
     do
     {
         Start-Sleep -Seconds 2
+        if ($p.Ciba) { Approve-CibaPush }
         $info = (Invoke-Cts 'GET' ('api/info/' + $testId) $null $null) | ConvertFrom-Json
     }
     while (($info.status -ne 'FINISHED') -and ($info.status -ne 'INTERRUPTED') -and ((Get-Date) -lt $deadline))

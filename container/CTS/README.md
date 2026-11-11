@@ -27,6 +27,9 @@ cd ..\CTS
 | `oidcc-rp-initiated-logout`・`oidcc-frontchannel-rp-initiated-logout`・`oidcc-backchannel-rp-initiated-logout` | 同じ名前の `…-certification-test-plan`（`response_type=code`） | `oidcc-logout.json`（**クライアントはプランごとに別**） |
 | `oidcc-dynamic` | `oidcc-dynamic-certification-test-plan`（`response_type=code`） | `oidcc-dynamic.json` |
 | `fapi2-sp-private-key-jwt-dpop`・`fapi2-sp-mtls` | `fapi2-security-profile-final-test-plan`（`plain_fapi`・`openid_connect`・`simple`・`grant_management=disabled`。前者は `private_key_jwt`＋DPoP、後者は MTLS＋MTLS） | `fapi2.json`（**クライアントは 2 つずつ**。鍵とクライアント証明書を埋める） |
+| `fapi2-ms-private-key-jwt-dpop` | `fapi2-message-signing-final-test-plan`（上の `private_key_jwt`＋DPoP に、署名した Request Object・JARM） | `fapi2.json`（クライアントは SP と同じ） |
+| `fapi1-adv-private-key-jwt-par` | `fapi1-advanced-final-test-plan`（`plain_fapi`・`private_key_jwt`・`pushed`・`plain_response`） | `fapi2.json`（クライアントは `client_mode=fapi1`） |
+| `fapi-ciba-private-key-jwt-poll` | `fapi-ciba-id1-test-plan`（`plain_fapi`・poll・`private_key_jwt`・静的な登録） | `fapi-ciba.json`（**利用者の承認は、`RunTestPlan.ps1` が認証デバイスの代わりに送る**。下の「CIBA の承認」） |
 
 - **FAPI のバリアントは、代表の組み合わせだけ**にしてある（軸を全部掛け合わせると数十通り。#350 の段階 4 で決めた）
 
@@ -75,6 +78,19 @@ cd ..\CTS
 | **MTLS のテスト専用のフック** | `hooks\MtlsTestHook.dll` | **OP の Kestrel に、クライアント証明書を求めさせる**（E2E・スタブと同じ。`DOTNET_STARTUP_HOOKS`。**要求するだけで必須にはしない**ので、ほかのプランは変わらない。**発行元を問わずに受け付ける**ので、テスト専用） |
 
 - **鍵は ES256 にしてある。** OP の Discovery の `token_endpoint_auth_signing_alg_values_supported` は RS256・ES256 で、FAPI 2.0 は RS256 を認めない
+- **署名した Request Object は、いまの OP では検証できない**（RS256 だけ。#370）。そのため FAPI 2.0 Message Signing・FAPI 1.0 Advanced は、大半のモジュールが PAR の所で止まる
+
+### CIBA の承認（`RunTestPlan.ps1` の端末役）
+
+**CIBA は、利用者が認証デバイスで「許可」を押すまでトークンが出ない。** Conformance Suite はそれを待ち続けるので、`RunTestPlan.ps1` が認証デバイスの代わりをする（E2E の `CibaTests` と同じ流れ）。
+
+1. **端末役のクライアント**（14 番目。CTS 専用。`AuthenticationDeviceClientIds` に挙げる）で、テスト利用者のトークンを ROPC で取る
+2. `POST /SetDeviceToken` で端末を登録する（プッシュの宛先）
+3. モジュールを待つ間に、OP の**送信箱**（`.\fcm\`。`FcmOutboxDirectory`。`IsDebug` のときだけ働くテスト用の設定）を見て、新しいプッシュの `auth_req_id` に `POST /ciba_result`（許可）を返す
+
+- **届いてから 8 秒置いてから許可する。** Conformance Suite は、最初の問い合わせに `authorization_pending` が返ることを確かめる（すぐに許可すると、その検査が落ちる）
+- **全部「許可」する**ので、利用者の拒否を求めるモジュール（`fapi-ciba-id1-user-rejects-authentication`）は自動では回せない
+- `/SetDeviceToken`・`/ciba_result` は `AuthenticationDeviceClientIds` のクライアントのトークンだけを受ける。**この環境では、同梱の認証デバイスの登録は使わない**
 - どれも**在れば作らない**（作り直すなら `certs\`・`hooks\` を消す）。秘密鍵を含むので、**共有しない**
 
 ### 登録と、テスト利用者
@@ -87,6 +103,8 @@ cd ..\CTS
 | 動的登録（DCR）の管理クライアント（7 つ目） | 同上。**`scope=client_registration` と `owner`（作った登録の所有者。利用者名）を登録する**（#307）。`owner` が無いと、登録は 403（`access_denied`）で断られる。**名前は `Prepare.ps1` が `.env.cts` に書く**（テスト利用者の名前は手元の `appsettings.json` で変わる） |
 | initial access token | **MPAS は、それの無い登録を受けない。** `RunTestPlan.ps1 -Plan oidcc-dynamic` が、回す直前に管理クライアントで `client_credentials` のトークンを取り、雛形の `@INITIAL_ACCESS_TOKEN@`（設定の `client.initial_access_token`）を埋める。期限はプラン 1 つ分より長くしてある（`DcrAccessTokenExpireTimeSpanFromSeconds=3600`。既定は 300 秒） |
 | FAPI 2.0 のクライアント（8〜11 つ目。`client_mode=fapi2`） | 同上。8・9 は `private_key_jwt`（＋ DPoP）、10・11 は `tls_client_auth`（＋ 証明書に縛ったトークン）。**次を登録する**：`id_token_signed_response_alg=ES256`（**登録が無いと RS256 になり、FAPI 2.0 の検査で全部止まる**。#355）、**FAPI の要件の強制**（`require_pushed_authorization_requests`・`require_pkce`・`dpop_bound_access_tokens` か `tls_client_certificate_bound_access_tokens`。#346。**どれも既定は false で、立てないと PAR・PKCE の無い要求が通る**） |
+| FAPI 1.0 Advanced のクライアント（12・13 番目。`client_mode=fapi1`） | 同上。`private_key_jwt`・`id_token_signed_response_alg=ES256`。鍵は FAPI 2.0 と同じ |
+| CIBA のクライアント（15・16 番目。`client_mode=fapi_ciba`）と端末役（14 番目） | 同上。CIBA の認証要求の署名は ES256 固定なので、公開鍵は `jwk_ecdsa_publickey`。端末役は秘密だけを持ち、`AuthenticationDeviceClientIds` に挙げる |
 | 認可コードの期限 | **60 秒にしてある**（`OAuth2AuthorizationCodeExpireTimeSpanFromSeconds`。FAPI 2.0 は 60 秒以下。雛形の既定は 600 秒。**サーバ全体に効く**） |
 | 折り返し先 | `https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback`（`alias` は設定の `"alias"` と同じ。Implicit・Hybrid の `redirect_uri_token` も同じ） |
 | ログアウトの口 | 折り返し先の `/callback` を `/post_logout_redirect`・`/frontchannel_logout`・`/backchannel_logout` に替えたもの（Conformance Suite が決めた口） |
@@ -155,3 +173,4 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 | `.env.cts` | compose に渡す値（`Prepare.ps1`。DCR の管理クライアントの所有者の利用者名、FAPI のクライアントの公開鍵） |
 | `certs\fapi-client*.jwk.json`・`certs\mtls-client*` | FAPI のクライアントの秘密鍵とクライアント証明書（`Prepare.ps1`。**秘密鍵を含む**） |
 | `hooks\`・`hooks-build\` | MTLS のテスト専用のフックと、その作業場所（`Prepare.ps1`） |
+| `fcm\` | OP のプッシュ通知の送信箱（CIBA の承認の自動化。**`device_token` を含む**） |

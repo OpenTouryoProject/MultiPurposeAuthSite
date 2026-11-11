@@ -182,6 +182,38 @@ services:
       #   **FAPI 2.0 の要件を強制する登録の項目を立てる**（#346。CONFIGURATION.md「FAPI の要件を、登録ごとに強制する」。**どれも既定は false**）：
       #   PAR の必須・PKCE の必須・送信者の拘束の必須（8・9 は DPoP、10・11 はクライアント証明書）。立てないと、PAR・PKCE の無い要求が通り、その検査が落ちる
       #   **2 つ目のクライアント（9・11）は、クエリ付きの折り返し先（?dummy1=lorem&dummy2=ipsum）も登録する**（Conformance Suite は client2 にそれを使う）
+      # **FAPI 1.0 Advanced のクライアント**（#350 ph4。client_mode=fapi1。12・13。private_key_jwt。鍵は FAPI 2.0 と同じ）
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__client_mode=fapi1
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__client_name=CtsFapi1PrivateKeyJwt1
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback?dummy1=lorem&dummy2=ipsum
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__client_mode=fapi1
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__client_name=CtsFapi1PrivateKeyJwt2
+      # **CIBA**（#350 ph4。fapi-ciba-id1。poll・private_key_jwt）。
+      #   **利用者の承認は、RunTestPlan.ps1 が認証デバイスの代わりに送る**：
+      #   OP はプッシュを送信箱（/fcm → .\fcm\）にファイルで書き（FcmOutboxDirectory。IsDebug のときだけ働くテスト用の設定）、
+      #   RunTestPlan.ps1 がそれを読んで POST /ciba_result（許可）を返す。
+      #   **/SetDeviceToken・/ciba_result は AuthenticationDeviceClientIds のクライアントのトークンだけを受ける**ので、
+      #   CTS 専用の端末役のクライアント（14。ROPC でテスト利用者のトークンを取る）を、そこに挙げる（同梱の認証デバイスの登録は、この環境では使わない）
+      - appSettings__FcmOutboxDirectory=/fcm
+      - appSettings__AuthenticationDeviceClientIds=c75c11e000000000000000000000000e
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000e__client_secret=cts-client14-secret-for-conformance-test-only
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000e__client_name=CtsAuthenticationDevice
+      #   15・16 : CIBA のクライアント（client_mode=fapi_ciba。認証要求の署名は ES256 固定なので、公開鍵は jwk_ecdsa_publickey）
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000f__client_mode=fapi_ciba
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000f__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000f__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000f__client_name=CtsCiba1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000010__client_mode=fapi_ciba
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000010__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000010__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000010__client_name=CtsCiba2
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__client_mode=fapi2
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__id_token_signed_response_alg=ES256
@@ -231,5 +263,6 @@ services:
       - ./keys:/keys
       - ./certs/nginx.crt:/cts-ca/nginx.crt:ro
       - ./hooks:/hooks:ro
+      - ./fcm:/fcm
       - C:/root/files/resource:/resource:ro
       - ./logs:/app/logs

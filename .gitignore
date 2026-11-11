@@ -353,6 +353,8 @@ __pycache__/
 #   hooks/・hooks-build/ は Prepare.ps1 が作る MTLS のテスト専用のフックと、その作業場所（#350 ph4）
 /container/CTS/hooks/
 /container/CTS/hooks-build/
+#   fcm/ は OP のプッシュ通知の送信箱（CIBA の承認の自動化。device_token を含む。#350 ph4）
+/container/CTS/fcm/
 
 # テストのスタブ（1_PublishStub.ps1 が作る。#294）
 #   cert/ はホストの開発用証明書の秘密鍵とパスワード。.env は起動側のパラメタ（.env.sample を写したもの）

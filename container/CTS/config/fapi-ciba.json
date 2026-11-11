@@ -1,0 +1,30 @@
+{
+  "alias": "mpas-cts",
+  "description": "MultiPurposeAuthSite (net10.0, mem) - FAPI-CIBA OP",
+  "server": {
+    "discoveryUrl": "https://mpas-cts.localhost:44311/.well-known/openid-configuration"
+  },
+  "client": {
+    "client_id": "@CLIENT_ID@",
+    "scope": "openid email",
+    "jwks": "@CLIENT_JWKS@",
+    "hint_type": "login_hint",
+    "hint_value": "@TEST_USER@"
+  },
+  "client2": {
+    "client_id": "@CLIENT2_ID@",
+    "scope": "openid email",
+    "jwks": "@CLIENT2_JWKS@"
+  },
+  "mtls": {
+    "cert": "@MTLS_CERT@",
+    "key": "@MTLS_KEY@"
+  },
+  "mtls2": {
+    "cert": "@MTLS2_CERT@",
+    "key": "@MTLS2_KEY@"
+  },
+  "resource": {
+    "resourceUrl": "https://mpas-cts.localhost:44311/userinfo"
+  }
+}
