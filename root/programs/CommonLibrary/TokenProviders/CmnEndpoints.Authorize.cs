@@ -35,6 +35,7 @@
 //*  2026/11/09  玄人 幸道         PAR・署名付きの Request Object を必須にした登録・配備では、それを使わない認可要求を断る（#346 の段階 2）
 //*  2026/11/09  玄人 幸道         送信者の拘束を必須にした登録には、認可エンドポイントで access_token を出さない（Implicit・Hybrid の token を断る。#346 の別モデルのレビュー）
 //*  2026/11/11  玄人 幸道         受け付ける response_type（Discovery）に id_token 単独を載せた（#360）
+//*  2026/11/11  玄人 幸道         response_type=code token では nonce を必須にしない（OIDC Core 1.0 §3.3.2.1。#361）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -492,7 +493,11 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // nonceパラメタ
                     // - Authorization Codeフロー（response_type=code）では任意（OIDC Core 3.1.2.1）
-                    // - Implicit / Hybridフローでは必須（OIDC Core 3.2.2.1 / 3.3.2.1）
+                    // - Implicitフロー（id_token / id_token token）では必須（OIDC Core 3.2.2.1）
+                    // - Hybridフローでは、**認可エンドポイントから id_token を返す形（code id_token / code id_token token）だけ必須**
+                    //   （OIDC Core 1.0 §3.3.2.1「REQUIRED if the Response Type of the request is code id_token or code id_token token」）。
+                    //   **`code token` は任意**（「OPTIONAL when the Response Type of the request is code token」。#361）。
+                    //   以前は `code token` も必須にしていたので、nonce を送らない RP が使えなかった。
                     if (string.IsNullOrEmpty(nonce))
                     {
                         string _response_type = response_type.ToLower();
@@ -500,7 +505,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (_response_type == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
                             || _response_type == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
                             || _response_type == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
-                            || _response_type == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
                             || _response_type == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                         {
                             err = OAuth2AndOIDCConst.invalid_request;

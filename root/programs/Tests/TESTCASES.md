@@ -2442,7 +2442,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | | |
 |---|---|
 | 観点 | **このフローでは nonce は必須。**id_token がリダイレクトで直接返るため、nonce が無いと RP は**トークンの再送（リプレイ）を検知できない。**Authorization Code フロー（RT-183.1）とは要否が逆になる。 |
-| 根拠 | OIDC Core §3.2.2.1（Implicit の nonce は REQUIRED） / §3.3.2.1（Hybrid も REQUIRED）/ #190 |
+| 根拠 | OIDC Core §3.2.2.1（Implicit の nonce は REQUIRED） / §3.3.2.1（Hybrid は code id_token・code id_token token で REQUIRED。code token は OPTIONAL。#361）/ #190 |
 | テスト | `RT190_01_Implicitでnonce無しは拒否される` |
 
 **手順**
@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=99ae4915-1096-41ac-bda9-d2a7661195c9&code=bogus
+1. GET /Account/EmailConfirmation?userId=315c8b78-efe1-4377-b17a-095d0b0efd67&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=99ae4915-1096-41ac-bda9-d2a7661195c9&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=99ae4915-1096-41ac-bda9-d2a7661195c9&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=315c8b78-efe1-4377-b17a-095d0b0efd67&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=315c8b78-efe1-4377-b17a-095d0b0efd67&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11812,6 +11812,57 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - **email・email_verified は入らない**
+
+## RT-361.1 Hybrid フローの response_type=code token は、nonce が無くても通り、code と access_token が返る
+
+| | |
+|---|---|
+| 観点 | **`code token` は認可エンドポイントから id_token を返さない**ので、nonce は任意である（守る対象の id_token が無い）。**以前は `code token` でも nonce を必須にしていた**ので、nonce を送らない RP が使えなかった（適合性テストの `oidcc-ensure-request-without-nonce-succeeds-for-code-flow [code token]` が落ちた）。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.1（nonce は code token では OPTIONAL）/ #361 |
+| テスト | `RT361_01_Hybridのcode_tokenはnonce無しでも通る` |
+
+**手順**
+
+1. GET /authorize を nonce 無しで送る
+
+**検証（合否を判定する）**
+
+- **エラーにならない**
+- code と access_token が返る
+
+## RT-361.2 Hybrid フローの response_type=code id_token は、nonce が無ければ invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **RT-361.1 の対照。** `code token` の nonce を任意にした後も、**認可エンドポイントから id_token を返す形では、これまでどおり必須**であることを確かめる。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.1（nonce は code id_token・code id_token token では REQUIRED）/ #361 |
+| テスト | `RT361_02_Hybridのcode_id_tokenはnonce無しを断る` |
+
+**手順**
+
+1. GET /authorize を nonce 無しで送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断る
+- code も id_token も返さない
+
+## RT-361.3 Hybrid フローの response_type=code id_token token は、nonce が無ければ invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **RT-361.1 の対照。** `code token` の nonce を任意にした後も、**3 つを返す形（id_token を含む）では、これまでどおり必須**であることを確かめる。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.1（nonce は code id_token・code id_token token では REQUIRED）/ #361 |
+| テスト | `RT361_03_Hybridのcode_id_token_tokenはnonce無しを断る` |
+
+**手順**
+
+1. GET /authorize を nonce 無しで送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断る
+- code も id_token も access_token も返さない
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
