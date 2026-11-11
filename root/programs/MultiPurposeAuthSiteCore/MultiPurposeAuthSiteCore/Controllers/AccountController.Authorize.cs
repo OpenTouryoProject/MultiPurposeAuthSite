@@ -55,6 +55,9 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -551,7 +554,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// - **偽造防止のトークンは確かめない**：RP からの遷移で、GET と同じ扱い（トークンを持ちようがない）。
         ///   **状態は何も変えない**（詰め替えて送り返すだけ）。**同意の送信は `OAuth2AuthorizeConsent`（トークンを確かめる）**
         /// - **同じ名前のパラメタが 2 回来たら、送り返さずにエラー画面**（RFC 6749 §3.1。クエリとフォームの両方に在る場合も）。
-        ///   **`redirect_uri` を確かめる前なので、RP へは返さない**（オープン リダイレクトにしない）
+        ///   **`redirect_uri` を確かめる前なので、RP へは返さない**（オープン リダイレクトにしない）。**クエリの中だけの重複も断る**
+        /// - **名前の無いパラメタは無視する**（送り返すクエリに載せない）
+        /// - **送り返すクエリが、転送の先の GET で受けられる長さ（`PostAuthorizeMaxQueryLength`）を超えたら、送り返さずにエラー画面**（転送の先で URL の上限に当たるため。#372）
         /// </remarks>
         [HttpPost]
         [AllowAnonymous]
@@ -568,8 +573,18 @@ namespace MultiPurposeAuthSite.Controllers
             //  **クエリとフォームを合わせる**（クエリにも何か付いていれば、それも引き継ぐ）
             NameValueCollection merged = this.AuthZRequestQuery();
 
+            //  **クエリの中で同じ名前が 2 回来ても断る**（RFC 6749 §3.1。「,」でつないで送り返さない）
+            if (PostAuthorizeHasDuplicate(merged))
+            {
+                return this.AuthorizeErrorResponse(null, null, null, "",
+                    OAuth2AndOIDCConst.invalid_request, "A parameter is included more than once.", null);
+            }
+
             foreach (string key in Request.Form.Keys)
             {
+                //  **名前の無いパラメタは無視する**（送り返す前に落としている。net48 と揃える）
+                if (string.IsNullOrEmpty(key)) continue;
+
                 //  **同じ名前が 2 回来たら断る**（RFC 6749 §3.1。フォームの中の重複も、クエリとの重複も）
                 if (1 < Request.Form[key].Count || merged[key] != null)
                 {
@@ -580,16 +595,37 @@ namespace MultiPurposeAuthSite.Controllers
                 merged[key] = Request.Form[key];
             }
 
-            //  **GET の認可要求へ 303 で送り返す**（303 は、次の要求を GET にする。RFC 9110 §15.4.4）
-            string query = string.Join("&", merged.AllKeys
-                .Where(k => !string.IsNullOrEmpty(k))
-                .Select(k => Uri.EscapeDataString(k) + "=" + Uri.EscapeDataString(merged[k] ?? "")));
+            //  **送り返す URL が長すぎるなら、送り返さずにエラー画面**（転送の先で URL の上限に当たる。#372）
+            string query = PostAuthorizeQuery(merged, this.PostAuthorizeMaxQueryLength());
+            if (query == null)
+            {
+                return this.AuthorizeErrorResponse(null, null, null, "",
+                    OAuth2AndOIDCConst.invalid_request, "The authorization request sent by POST is too long.", null);
+            }
 
+            //  **GET の認可要求へ 303 で送り返す**（303 は、次の要求を GET にする。RFC 9110 §15.4.4）
             Response.Headers.Location = UriHelper.BuildAbsolute(
                 Request.Scheme, Request.Host, Request.PathBase,
                 new PathString(Config.OAuth2AuthorizeEndpoint), new QueryString("?" + query));
 
             return new StatusCodeResult(StatusCodes.Status303SeeOther);
+        }
+
+        /// <summary>
+        /// 同意画面の送信の口を GET で開いたとき（#359）
+        /// GET: /authorize/consent
+        /// </summary>
+        /// <returns>ActionResult（**認可の口（同じクエリ）への 302**）</returns>
+        /// <remarks>
+        /// **同意画面を開いたままサインインが切れて送信すると、サインインの戻り先がこの口になる**（クラスの `[Authorize]`）。
+        /// **この口の送信は POST だけなので、サインインの後の GET が行き止まりにならないよう、認可の口へ戻す。**
+        /// 状態は何も変えない（同意は、認可の口から出し直した同意画面で、改めて求める）。
+        /// </remarks>
+        [HttpGet]
+        [ActionName("OAuth2AuthorizeConsent")]
+        public ActionResult OAuth2AuthorizeConsentGet()
+        {
+            return new RedirectResult(this.AuthorizeEndpointUrl());
         }
 
         /// <summary>
@@ -1329,6 +1365,65 @@ namespace MultiPurposeAuthSite.Controllers
             return UriHelper.BuildAbsolute(
                 Request.Scheme, Request.Host, Request.PathBase,
                 new PathString(Config.OAuth2AuthorizeEndpoint), Request.QueryString);
+        }
+
+        /// <summary>POST の認可要求を送り返すクエリの上限（文字数。#359）</summary>
+        /// <returns>上限</returns>
+        /// <remarks>
+        /// **転送の先の GET で断られる長さの要求は、送り返さずにエラー画面にする**ため、**GET で受けられる長さに合わせる。**
+        /// **Kestrel の要求行の上限（`MaxRequestLineSize`。既定 8 KB）から、「GET 」・パス・「?」・「 HTTP/1.1」と改行の分を引く。**
+        /// IIS の配下で動かすときは、IIS の上限（`maxQueryString`）も効く（ここでは見ない）。
+        /// 長い要求を POST のまま処理するのは #372。
+        /// </remarks>
+        private int PostAuthorizeMaxQueryLength()
+        {
+            long lineLimit = 8 * 1024;
+            KestrelServerOptions kestrel = HttpContext.RequestServices
+                .GetService<IOptions<KestrelServerOptions>>()?.Value;
+            if (kestrel?.Limits.MaxRequestLineSize != null)
+            {
+                lineLimit = kestrel.Limits.MaxRequestLineSize;
+            }
+
+            string path = (Request.PathBase + new PathString(Config.OAuth2AuthorizeEndpoint)).ToUriComponent();
+            return (int)Math.Max(0, lineLimit - ("GET ".Length + path.Length + "?".Length + " HTTP/1.1".Length + 2));  //  2 : 改行（CR LF）
+        }
+
+        /// <summary>クエリの中に、同じ名前のパラメタが 2 つ以上あるか（#359）</summary>
+        /// <param name="query">NameValueCollection</param>
+        /// <returns>あれば true（名前の無いパラメタは数えない）</returns>
+        private static bool PostAuthorizeHasDuplicate(NameValueCollection query)
+        {
+            foreach (string key in query.AllKeys)
+            {
+                if (string.IsNullOrEmpty(key)) continue;
+                string[] values = query.GetValues(key);
+                if (values != null && 1 < values.Length) return true;
+            }
+            return false;
+        }
+
+        /// <summary>POST の認可要求を送り返すクエリ（#359）</summary>
+        /// <param name="merged">クエリとフォームを合わせたもの</param>
+        /// <param name="maxLength">クエリの上限（文字数。`PostAuthorizeMaxQueryLength`）</param>
+        /// <returns>クエリ（先頭の「?」は付けない）。長すぎるなら null</returns>
+        private static string PostAuthorizeQuery(NameValueCollection merged, int maxLength)
+        {
+            //  **符号化の前に、生の長さで見る**（net48 の Uri.EscapeDataString は、長すぎる値で例外を投げる）
+            int rawLength = 0;
+            foreach (string key in merged.AllKeys)
+            {
+                if (string.IsNullOrEmpty(key)) continue;
+                rawLength += key.Length + (merged[key] ?? "").Length + 2;
+                if (maxLength < rawLength) return null;
+            }
+
+            string query = string.Join("&", merged.AllKeys
+                .Where(k => !string.IsNullOrEmpty(k))
+                .Select(k => Uri.EscapeDataString(k) + "=" + Uri.EscapeDataString(merged[k] ?? "")));
+
+            //  **符号化した後の長さでも見る**（符号化で長くなる）
+            return maxLength < query.Length ? null : query;
         }
 
         /// <summary>フォームの値（POST のときだけ使う）</summary>
