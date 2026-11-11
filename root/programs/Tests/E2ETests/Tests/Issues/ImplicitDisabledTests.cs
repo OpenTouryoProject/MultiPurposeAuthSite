@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/24  玄人 幸道         新規（#314）
 //*  2026/10/29  玄人 幸道         RT-314.4（id_token 単独も断る）を追加（#294）
+//*  2026/11/11  玄人 幸道         RT-314.1 に、id_token 単独を広告しないことを足した（#360）
 //**********************************************************************************
 
 using System;
@@ -142,6 +143,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.Verify("`" + type + "` を広告しない", !types.Contains(type),
                         "広告しない", types.Contains(type) ? "**広告している**" : "広告しない");
                 }
+
+                //  **`id_token` 単独も広告しない**（受け付けないため。RT-314.4。#360 で、Implicit を開いた配備では広告するようにした）
+                r.Verify("`id_token` を広告しない", !types.Contains("id_token"),
+                    "広告しない", types.Contains("id_token") ? "**広告している**" : "広告しない");
 
                 foreach (string type in new string[] { "code", "code id_token" })
                 {

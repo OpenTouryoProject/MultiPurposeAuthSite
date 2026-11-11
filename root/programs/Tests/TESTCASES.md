@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=ecdbced7-4fff-4a47-ad72-1ec281ec3d4d&code=bogus
+1. GET /Account/EmailConfirmation?userId=99ae4915-1096-41ac-bda9-d2a7661195c9&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=ecdbced7-4fff-4a47-ad72-1ec281ec3d4d&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=ecdbced7-4fff-4a47-ad72-1ec281ec3d4d&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=99ae4915-1096-41ac-bda9-d2a7661195c9&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=99ae4915-1096-41ac-bda9-d2a7661195c9&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11711,6 +11711,107 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **送り返さない・RP へ返さない**（Location が無い）
 - **エラー画面になる**
+
+## RT-360.1 response_type=id_token の id_token に、at_hash を付けない（access token を返さないため）
+
+| | |
+|---|---|
+| 観点 | **at_hash は、id_token と一緒に返した access token との結び付けである。** **access token を返さない応答に at_hash を付けても、RP は確かめられない**（以前は付けていた）。 |
+| 根拠 | OIDC Core 1.0 §3.2.2.10（at_hash は access token を出さないときは使わない）/ #360 |
+| テスト | `RT36001_id_tokenの応答のid_tokenにat_hashを付けない` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token と nonce を付けて送る
+
+**検証（合否を判定する）**
+
+- access_token は返さない
+- id_token の署名を JWKS で検証できる
+- nonce が送った値と一致する
+- **at_hash を付けない**
+
+## RT-360.2 response_type=id_token で scope=openid email phone を要求すると、email と email_verified が id_token に入る（値の無い phone_number は入らない）
+
+| | |
+|---|---|
+| 観点 | **access token を返さないので、RP は UserInfo を引けない。** scope のクレームは id_token で返す（以前は入れていなかった）。**値の無いクレームは名前ごと省く**（UserInfo と同じ。種データの利用者は電話番号を持たない）。 |
+| 根拠 | OIDC Core 1.0 §5.4（response_type=id_token ではクレームを ID Token で返す）/ OIDC Core 1.0 §5.3.2 / #360 |
+| テスト | `RT36002_id_tokenの応答のid_tokenにscopeのクレームを入れる` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token、scope=openid email phone を付けて送る
+
+**検証（合否を判定する）**
+
+- **email が文字列で入る**
+- **email_verified が真偽値で入る**
+- 値の無い phone_number・phone_number_verified は入らない
+- access token の項目（scopes・jti など）は入らない
+
+## RT-360.3 response_type=code id_token の id_token に、at_hash を付けない（c_hash は付けて、code と一致する。scope のクレームは入れない）
+
+| | |
+|---|---|
+| 観点 | **この形は access token を認可エンドポイントから返さない。** 仕様では、この形の at_hash は任意（OPTIONAL）である。**ただし、付けていた値は返さない access token のもの**で、トークン エンドポイントの access token とも別の値なので、**RP はどの access token とも突き合わせられない**（以前は付けていた。適合性テストの `oidcc-server [code id_token]` が落ちた）。**付けないことにした。** scope のクレームは UserInfo で受け取れるので、id_token には入れない（従来どおり）。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.11（at_hash は access token を返すとき REQUIRED、ほかは OPTIONAL。c_hash は REQUIRED）/ #360（付けない） |
+| テスト | `RT36003_code_id_tokenの応答のid_tokenにat_hashを付けない` |
+
+**手順**
+
+1. GET /authorize に response_type=code id_token、scope=openid email を付けて送る
+
+**検証（合否を判定する）**
+
+- **at_hash を付けない**
+- c_hash が、code から計算した値と一致する
+- scope のクレーム（email）は入れない
+
+## RT-360.4 response_type=id_token token の id_token には at_hash を付け、返した access_token から計算した値と一致する（scope のクレームは入れない）
+
+| | |
+|---|---|
+| 観点 | **at_hash を付けるのを「access token を返すとき」に絞った後も、返すときは付けている**ことを確かめる。**scope のクレームは、返した access token で UserInfo から受け取れるので、id_token には入れない**（従来どおり）。 |
+| 根拠 | OIDC Core 1.0 §3.2.2.10（access token を返すとき at_hash は REQUIRED）/ #360 |
+| テスト | `RT36004_id_token_tokenの応答のid_tokenのat_hashはaccess_tokenと一致する` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token token、scope=openid email を付けて送る
+
+**検証（合否を判定する）**
+
+- **at_hash が、access_token から計算した値と一致する**
+- scope のクレーム（email）は入れない
+
+## RT-360.5 Implicit を開いた配備の Discovery は、response_types_supported に id_token を載せる
+
+| | |
+|---|---|
+| 観点 | **受け付ける response_type は広告する。** 以前は `id_token` 単独を「受け付けるが広告しない」としていたので、Discovery を見る RP が `id_token` を選べなかった（Implicit を閉じた配備では、受け付けも広告もしない。RT-314.1・.4）。 |
+| 根拠 | OIDC Discovery 1.0 §3（response_types_supported）/ OIDC Core 1.0 §15.2（動的な OP は id_token を MUST）/ #360 |
+| テスト | `RT36005_Discoveryのresponse_types_supportedにid_tokenを載せる` |
+
+**検証（合否を判定する）**
+
+- **id_token を載せる**
+
+## RT-360.6 response_type=id_token で scope=openid だけを要求すると、email・email_verified は id_token に入らない
+
+| | |
+|---|---|
+| 観点 | **id_token に入れるのは、要求して許された scope のクレームだけ**である（RT-360.2 の対照）。**クレームを残す判定が、scope に関係なく利用者の値を出していないか**を確かめる。 |
+| 根拠 | OIDC Core 1.0 §5.4（scope の値で要求したクレームを返す）/ #360 |
+| テスト | `RT36006_id_tokenの応答でも要求していないscopeのクレームは入れない` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token、scope=openid を付けて送る
+
+**検証（合否を判定する）**
+
+- **email・email_verified は入らない**
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

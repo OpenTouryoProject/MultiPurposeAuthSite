@@ -26,6 +26,7 @@
 //*  2026/10/31  玄人 幸道         claims の id_token がオブジェクトでなくても 500 にしない（AddAuthTimeClaim。#294）
 //*  2026/11/09  玄人 幸道         Request Object の経路（PAR か・署名付きか）を読み、認可要求の検証に渡す（#346 の段階 2）
 //*  2026/11/11  玄人 幸道         POST の認可要求を受ける（GET に詰め替えて送り返す）。同意の送信は <認可の口>/consent に移した（#359）
+//*  2026/11/11  玄人 幸道         Hybrid の応答を作る部品に response_type を渡す（at_hash を付けるかを決めるため。#360）
 //**********************************************************************************
 
 /*
@@ -901,7 +902,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ★ Code & Tokenの生成（OIDC Hybrid Flow）
                 code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
-                    identity, query, client_id, state, scopes, claims, nonce,
+                    identity, query, response_type, client_id, state, scopes, claims, nonce,
                     out access_token, out id_token);
             }
 

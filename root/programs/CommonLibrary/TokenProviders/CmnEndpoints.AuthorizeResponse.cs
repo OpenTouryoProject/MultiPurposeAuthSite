@@ -33,6 +33,7 @@
 //*  2026/10/31  玄人 幸道         認可ログの User Account は、利用者名で引く（GetClientIdByUserName。#294）
 //*  2026/11/10  玄人 幸道         id_token の生成に pfx を渡さないようにした（鍵は SigningKeys から引く。#352）
 //*  2026/11/10  玄人 幸道         暗号化した id_token の中の JWS の alg を、/token と同じ決め方にした（#355）
+//*  2026/11/11  玄人 幸道         at_hash は access token を返すときだけ付け、response_type=id_token ではクレームを id_token に入れるようにした（#360）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -133,6 +134,19 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region ReturnsAccessToken
+
+        /// <summary>認可エンドポイントから access token を返す response_type か（#360）</summary>
+        /// <param name="response_type">response_type</param>
+        /// <returns>`token` を含むなら true</returns>
+        private static bool ReturnsAccessToken(string response_type)
+        {
+            return Array.IndexOf((response_type ?? "").ToLower().Split(' '),
+                OAuth2AndOIDCConst.ImplicitResponseType) != -1;
+        }
+
+        #endregion
+
         #region CreateAuthZRes4ImplicitFlow
 
         /// <summary>CreateAuthZRes4ImplicitFlow</summary>
@@ -198,6 +212,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // id_token
                 if (response_type.IndexOf(OAuth2AndOIDCConst.IDToken) != -1)
                 {
+                    //  **access token を返すときだけ at_hash を付ける**（#360）。
+                    //    **`response_type=id_token` は access token を返さない**ので、at_hash を付けない
+                    //    （OIDC Core 1.0 §3.2.2.10「it MAY NOT be used when no Access Token is issued」）。
+                    //    **以前は付けていた**（id_token を、返さない access token から作るため、値は在った）。
+                    //    **代わりに、scope のクレームを id_token に入れる**（OIDC Core 1.0 §5.4。UserInfo を引く access token が無い）。
+                    bool returnsAccessToken = CmnEndpoints.ReturnsAccessToken(response_type);
+
                     JArray jAry = (JArray)jObj[OAuth2AndOIDCConst.scopes];
                     foreach (string s in jAry)
                     {
@@ -208,9 +229,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                             //   **暗号化するなら、登録が無ければ ES256**（#355。`/token` と同じ決め方）。
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
-                                HashClaimType.AtHash | HashClaimType.SHash,
+                                returnsAccessToken
+                                    ? HashClaimType.AtHash | HashClaimType.SHash : HashClaimType.SHash,
                                 jwkString, string.IsNullOrEmpty(jwkString)
-                                    ? signingAlg : CmnIdToken.SigningAlgForEncrypted(client_id));
+                                    ? signingAlg : CmnIdToken.SigningAlgForEncrypted(client_id),
+                                !returnsAccessToken);
                         }
                     }
                 }
@@ -236,6 +259,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>CreateAuthNRes4HybridFlow</summary>
         /// <param name="identity">ClaimsIdentity</param>
         /// <param name="queryString">NameValueCollection</param>
+        /// <param name="response_type">string（at_hash を付けるかを決める。#360）</param>
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">IEnumerable(string)</param>
@@ -245,7 +269,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="id_token">out string</param>
         /// <returns></returns>
         public static string CreateAuthNRes4HybridFlow(
-            ClaimsIdentity identity, NameValueCollection queryString,
+            ClaimsIdentity identity, NameValueCollection queryString, string response_type,
             string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce,
             out string access_token, out string id_token)
         {
@@ -318,9 +342,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
 
                     //   **暗号化するなら、登録が無ければ ES256**（#355。`/token` と同じ決め方）。
+                    //   **access token を返すとき（`code id_token token`）だけ at_hash を付ける**（#360）。
+                    //   **`code id_token` は access token を認可エンドポイントから返さない**ので付けない
+                    //   （OIDC Core 1.0 §3.3.2.11 では、この形の at_hash は任意。**付けていた値は返さない access token のもの**で、
+                    //   トークン エンドポイントの access token とも別の値なので、RP は突き合わせられない）。
                     id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                         access_token, code, state, // at_hash, c_hash, s_hash
-                        HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
+                        CmnEndpoints.ReturnsAccessToken(response_type)
+                            ? HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash
+                            : HashClaimType.CHash | HashClaimType.SHash,
                         jwkString, string.IsNullOrEmpty(jwkString)
                             ? signingAlg : CmnIdToken.SigningAlgForEncrypted(client_id));
                 }

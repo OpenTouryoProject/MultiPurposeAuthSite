@@ -38,6 +38,7 @@
 //*  2026/10/21  玄人 幸道         sid クレームを残すようにした（#310 の段階 1）
 //*  2026/11/10  玄人 幸道         FAPI2（JWE）の中の JWS の kid を、署名した鍵の kid にした（#352）
 //*  2026/11/10  玄人 幸道         FAPI2（JWE）の中の JWS を、登録の id_token_signed_response_alg で署名するようにした（#355）
+//*  2026/11/11  玄人 幸道         response_type=id_token のとき、scope のクレームを id_token に残すようにした（#360）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -70,6 +71,19 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// <summary>CmnIdToken</summary>
     public class CmnIdToken
     {
+        /// <summary>scope で返すクレーム（OIDC Core 1.0 §5.4）か（#360）</summary>
+        /// <param name="claim">クレーム名</param>
+        /// <returns>profile・email・address・phone の scope のクレームなら true</returns>
+        private static bool IsScopeClaim(string claim)
+        {
+            return UserClaims.ProfileClaims.Contains(claim)
+                || claim == UserClaims.AddressClaim
+                || claim == OAuth2AndOIDCConst.Scope_Email
+                || claim == OAuth2AndOIDCConst.email_verified
+                || claim == OAuth2AndOIDCConst.phone_number
+                || claim == OAuth2AndOIDCConst.phone_number_verified;
+        }
+
         /// <summary>
         /// ChangeToIdTokenFromAccessToken
         ///   OIDC対応（AccessTokenからIdTokenを生成）
@@ -80,6 +94,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="hct">HashClaimType</param>
         /// <param name="cerJwkString">string（**クライアントの暗号化の鍵**。空でなければ JWE（FAPI2）にする）</param>
         /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2。**JWE のときは `SigningAlgForEncrypted` の値を渡す**。#355）</param>
+        /// <param name="withScopeClaims">
+        /// **scope のクレーム（profile・email・address・phone）を id_token に残すか**（#360）。
+        /// **access token を出さない `response_type=id_token` だけ true にする**（OIDC Core 1.0 §5.4
+        /// 「when no Access Token is issued (which is the case for the response_type value id_token),
+        /// the resulting Claims are returned in the ID Token」）。ほかは UserInfo で受け取れるので、従来どおり残さない。
+        /// </param>
         /// <returns>id_token</returns>
         /// <remarks>
         /// **署名の鍵は、どちらの形でも `SigningKeys` の表から引く**（#129 の段階 3・#352）。
@@ -88,7 +108,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         public static string ChangeToIdTokenFromAccessToken(
             string access_token, string code, string state, HashClaimType hct,
-            string cerJwkString, string alg = JwtConst.RS256)
+            string cerJwkString, string alg = JwtConst.RS256, bool withScopeClaims = false)
         {
             if (access_token.Contains("."))
             {
@@ -114,7 +134,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         List<string> keys = new List<string>();
                         foreach (KeyValuePair<string, JToken> item in tokenClaimSet)
                         {
-                            if ("iss sub aud client_id exp iat nonce auth_time sid".IndexOf(item.Key) == -1)
+                            if ("iss sub aud client_id exp iat nonce auth_time sid".IndexOf(item.Key) == -1
+                                //  **scope のクレームは、`response_type=id_token` のときだけ残す**（#360。OIDC Core 1.0 §5.4）。
+                                //    **値は access token の組み立て（`CmnAccessToken.CreateFromClaims`）が決めている**
+                                //    （許された scope の分だけ。値が空なら出さない。#354）。
+                                && !(withScopeClaims && CmnIdToken.IsScopeClaim(item.Key)))
                             {
                                 keys.Add(item.Key);
                             }

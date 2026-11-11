@@ -34,6 +34,7 @@
 //*  2026/11/01  玄人 幸道         CheckClientGrantType を internal にした（Extensions/Sts の CmnCibaEndpoint が使う。#321）
 //*  2026/11/09  玄人 幸道         PAR・署名付きの Request Object を必須にした登録・配備では、それを使わない認可要求を断る（#346 の段階 2）
 //*  2026/11/09  玄人 幸道         送信者の拘束を必須にした登録には、認可エンドポイントで access_token を出さない（Implicit・Hybrid の token を断る。#346 の別モデルのレビュー）
+//*  2026/11/11  玄人 幸道         受け付ける response_type（Discovery）に id_token 単独を載せた（#360）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -604,7 +605,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// | `code` | `EnableAuthorizationCodeGrantType` |
         /// | `token`（access_token をフロント チャネルで返す） | `EnableImplicitGrantType` |
         ///
-        /// **`id_token` 単独は広告しない**（従来どおり。受け付けはする）。
+        /// **`id_token` 単独も、`EnableImplicitGrantType` が true なら広告する**（#360）。
+        /// **受け付けるのは、OIDC の Implicit として `EnableImplicitGrantType` が true のときだけ**（`ValidateAuthZReqParam`。RT-314.4）なので、同じ条件にした。
+        /// **以前は「広告しない（受け付けはする）」としていた**ので、Discovery を見る RP が `id_token` を選べなかった
+        /// （OIDC Discovery 1.0 §3。動的な OP は `id_token` を MUST。OIDC Core 1.0 §15.2）。
         /// </remarks>
         public static List<string> SupportedResponseTypes()
         {
@@ -615,6 +619,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (code) { ret.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType); }
             if (token) { ret.Add(OAuth2AndOIDCConst.ImplicitResponseType); }
+            if (token) { ret.Add(OAuth2AndOIDCConst.OidcImplicit1_ResponseType); }
             if (token) { ret.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType); }
             if (code && token) { ret.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType); }
             if (code) { ret.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType); }
