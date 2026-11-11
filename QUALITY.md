@@ -33,10 +33,10 @@
 
 | 名前空間 | リスク | 正の根拠 | 検証の手段 | 人が必ず見る箇所 |
 |---|---|---|---|---|
-| `TokenProviders` | **高** | OAuth2 / OIDC の RFC・仕様 | E2E（両版） | 検証を省く分岐、トークンの紐付け、既定値の変更 |
-| `Extensions.Sts` | **高** | 拡張仕様（FAPI・CIBA・JAR・PAR・DPoP・Logout・Discovery など） | E2E（両版） | 同上。**OpenTouryo のアセンブリの更新** |
+| `TokenProviders` | **高** | OAuth2 / OIDC の RFC・仕様 | E2E（両版）、**適合性テスト**（2 節） | 検証を省く分岐、トークンの紐付け、既定値の変更 |
+| `Extensions.Sts` | **高** | 拡張仕様（FAPI・CIBA・JAR・PAR・DPoP・Logout・Discovery など） | E2E（両版）、**適合性テスト**（2 節） | 同上。**OpenTouryo のアセンブリの更新** |
 | `SamlProviders` | **高** | SAML2 の仕様（OASIS） | E2E（両版） | 署名の対象と消費する要素の一致。**OpenTouryo のアセンブリの更新** |
-| `Controllers` | **高** | OAuth2 / OIDC・SAML2 の仕様、[`ANALYSIS-IdP.md`](root/programs/ANALYSIS-IdP.md) | E2E（両版。net48 と net10.0 の差） | サインイン・同意・CSRF、既定値の変更 |
+| `Controllers` | **高** | OAuth2 / OIDC・SAML2 の仕様、[`ANALYSIS-IdP.md`](root/programs/ANALYSIS-IdP.md) | E2E（両版。net48 と net10.0 の差）、**適合性テスト**（2 節。net10.0 版） | サインイン・同意・CSRF、既定値の変更 |
 | `Extensions.FIDO` | **高** | WebAuthn・FIDO の仕様 | E2E（両版） | 署名の検証、チャレンジの扱い |
 | `Util.Sts`・`Util.IdP` | **中〜高** | 呼び出し元の仕様 | E2E（両版） | クライアントの解決、鍵の扱い |
 | `Password` | **中〜高** | パスワードのハッシュの方式 | E2E（両版） | 既定のアルゴリズム、既存のハッシュの互換性 |
@@ -69,7 +69,14 @@
   - **落ちない代わりに、前回の実行と比べて差分を報告する**（`2_RunAllTests.ps1` が [`CompareObservations.ps1`](root/CompareObservations.ps1) を呼ぶ。報告書の末尾と画面に出る）。
     **判定はせず、合否にも関わらない。** 変わってよいかは人が判断する
   - **前回の値はコミットしない**（`Result` に置く）。配備ごとの値や、サインイン中の利用者の名前を含む画面の文面が入るため
-- **外部の基準を、最終的な正とする。** 適合性テスト（OpenID Foundation の Conformance Suite。`ANALYSIS-IdP.md` の D-14）。**導入は品質の向上の後**である
+- **外部の基準を、最終的な正とする。** 適合性テスト（OpenID Foundation の Conformance Suite。`ANALYSIS-IdP.md` の D-14。**#350 で入れた**）。
+  回し方・プラン・結果の読み方は [`TESTING.md`](root/TESTING.md) 5 節「適合性テスト」と [`container/CTS/README.md`](container/CTS/README.md)
+  - **いつ回すか**：**(1) リリースの前に、全プランを回す。(2) 適合性テストで見つかった不適合を直す Issue では、`fixed` の前に、そのプランを回す。**
+    **普段の作業（`fixing`・ほかの `fixed`）では回さなくてよい**（Conformance Suite のコンテナがメモリを使い、全プランで 2〜3 時間かかる。E2E の通しには入れない）
+  - **結果の扱い**：落ちたものは、**環境（Conformance Suite の設定・自動操作）の不足か、OP の不適合かを仕分け**、不適合は原因ごとに Issue にする（セキュリティの弱点の疑いなら、公開する前に人に聞く。[`AGENTS.md`](AGENTS.md)）。
+    **結果（`container/CTS/out/`）はコミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む）
+  - **自動では回せないモジュールがある**（利用者が拒否する操作など。`container/CTS/README.md`）。**REVIEW（画面の写し）は、人が見て合否を付ける**
+  - **相手は net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る）
 
 ---
 
@@ -352,6 +359,8 @@ Reviewed-with: <役> [(<モデル ID>)]
 - 品質マップの単位で、根拠の種類（**外部の仕様 / Issue / リポジトリの前提**）の割合（7 節）
 - 別モデルのレビューで見つかり、書いたモデルのレビューでは見つからなかった指摘の数（判定で採用したもの。数え方は 4 節。完了コメントから拾う）
 - 品質マップの単位で、E2E のカバレッジ（[`COVERAGE.md`](root/programs/Tests/COVERAGE.md)。**判定には使わない**）
+- **適合性テストの、プランごとの PASSED・FAILED の数**（リリースの前に回したもの。2 節）と、**起票した不適合の数・直した数**。
+  **FAILED には、自動では回せないモジュールと、1 つの不適合で止まったモジュールも含まれる**ので、数だけで比べず、仕分けた結果と並べて見る
 - バグの Issue の、見つけた手段の内訳（5 節の `Found-By:`）。Git だけで集計できる：
 
   ```text
@@ -424,3 +433,4 @@ TestReport r = this.Report("EX-2.7",
 - [ ] 見つけた問題を、5 節の 3 か所に戻したか（セキュリティの弱点なら、まず人に報告したか）
 - [ ] バグの修正（`fixed #NNN`）なら、コミット メッセージの案に `Found-By:` を入れたか（5 節。経緯を推測で埋めていないか）
 - [ ] 流したテスト・回したレビューを、`Tested-with:`・`Reviewed-with:` で書いたか。トレーラーを最後の段落に並べたか（5 節）
+- [ ] 適合性テストで見つかった不適合を直したなら、`fixed` の前に、そのプランを回したか（2 節）

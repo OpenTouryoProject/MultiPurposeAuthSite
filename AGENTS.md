@@ -312,6 +312,7 @@ CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一�
 | 3 方言の DB（`container/Store`。`-UserStoreType sql`・`ora`・`npg`） | **DDL・SQL の組み立て（`Data`）に触れたとき。** 1 つずつ起動して測り、終わったら止める（同時に複数を起動するとメモリが尽きる） |
 | ID 連携の IdP のコンテナ（`container/E2E`） | 通しの前に起動しておく（止まっていると、`RT-140.*` などが Skip になり、`TESTCASES.md` から落ちる）。コンテナの中のサイトを変えたなら、発行し直す |
 | net48 版の mTLS（`-NetFxMtls`） | 証明書の準備が要る（[`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節）。準備が無ければ、回せていないと報告する |
+| 適合性テスト（`container/CTS`。#350） | **リリースの前と、適合性テストで見つかった不適合を直す `fixed` の前**（[`QUALITY.md`](QUALITY.md) 2 節）。メモリを使うので、ほかのコンテナを止めてから回す |
 
 **次のコミットがどちらの段階か分からなければ、人に確かめるか、fixed として回す。**
 **報告には、どの段階で回したかと、後回しにしたものを書く。** 後回しのまま「検証済み」と書かない。

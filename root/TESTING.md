@@ -4447,10 +4447,24 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 | | |
 |---|---|
 | 置き場所 | **`container/CTS/`**（Conformance Suite（版を固定）と、相手の OP（net10.0 版・`mem`）。手順と仕組みは `container/CTS/README.md`） |
-| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan oidcc-basic`**（`oidcc-config` も）→ `3_DockerComposeDown.bat` |
+| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan <プラン>`** → `3_DockerComposeDown.bat`。プランの一覧は `container/CTS/README.md`（OIDC の 11・FAPI の 5。FAPI は代表の組み合わせだけ） |
+| いつ回すか | **リリースの前に全プラン**、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（`QUALITY.md` 2 節）。全プランで 2〜3 時間、OIDC だけなら 1 時間ほど |
 | 相手 | **net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る） |
-| 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値を含む） |
-| 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。**落ちたものは、プランごとに Issue にして直す** |
+| 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む） |
+| 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。`RunTestPlan.ps1` の終了コードは、FAILED・時間切れが 1 つでもあれば 1（WARNING・REVIEW は数えない） |
+
+**落ちたものは、次の順で仕分ける**（#350 の段階 2〜4 で回したときの型）。
+
+| 仕分け | 見分け方 | 扱い |
+|---|---|---|
+| **環境の不足** | 設定の欄が無い（`GetStaticClientConfiguration`）、ブラウザの自動操作が合わない（`WebRunner` の `Unable to locate element`・`Unexpected URL`）、登録の項目の立て忘れ（FAPI の強制の項目は既定で false。#346）など | `container/CTS` を直す（設定の雛形・`docker-compose.yml`・`RunTestPlan.ps1`） |
+| **自動では回せない** | 利用者の拒否や、同じ画面への 2 回の訪問を区別する操作が要る | `container/CTS/README.md` に書き、合否から外して読む |
+| **自動操作のぶれ** | サインインのボタンを押しても `POST /Account/Login` が OP に届いていない（OP の ACCESS ログで見る） | 回し直す。同じモジュールで続けて落ちるなら、改めて見る |
+| **OP の不適合** | 上のどれでもなく、仕様の節と照らして OP の振る舞いが外れている | **原因ごとに Issue にする**（仕様の節を原典で確かめてから。セキュリティの弱点の疑いなら、公開する前に人に聞く） |
+
+- **1 つの不適合で、プランの大半が止まることがある**（#370・#371）。そのときは、直した後に回し直し、その先の結果を改めて仕分ける
+- **REVIEW（画面の写し）は、人が見て合否を付ける。** 自動では、待った画面が出たことまでしか確かめていない
+- **CI には載せていない**（#348（ビルドの CI）の後に決める）
 
 ## 6. 未修正の項目の扱い
 

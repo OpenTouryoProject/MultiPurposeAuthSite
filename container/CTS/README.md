@@ -6,6 +6,7 @@
 - 原本：https://gitlab.com/openid/conformance-suite（ビルド済みのイメージ。`docker-compose-prebuilt.yml` を元にした）
 - **版は固定する**（`release-v5.3.4`）。上げるときは、`docker-compose.yml` の server と nginx のタグを、同じ版に手で上げる
 - **認定（certification）を取るためのものではない。** 手元で回して、不適合を見つけて直すためのもの
+- **いつ回すか・結果の仕分け**は `QUALITY.md` 2 節と `root/TESTING.md` 5 節「適合性テスト」（リリースの前に全プラン、適合性テストで見つかった不適合を直すときにそのプラン）
 
 ## 手順
 
