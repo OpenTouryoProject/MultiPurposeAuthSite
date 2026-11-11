@@ -25,6 +25,7 @@
 //*  2026/10/31  玄人 幸道         Request Object の claims がオブジェクトでなくても 500 にしない（#294）
 //*  2026/10/31  玄人 幸道         claims の id_token がオブジェクトでなくても 500 にしない（AddAuthTimeClaim。#294）
 //*  2026/11/09  玄人 幸道         Request Object の経路（PAR か・署名付きか）を読み、認可要求の検証に渡す（#346 の段階 2）
+//*  2026/11/11  玄人 幸道         POST の認可要求を受ける（GET に詰め替えて送り返す）。同意の送信は <認可の口>/consent に移した（#359）
 //**********************************************************************************
 
 /*
@@ -531,6 +532,67 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>
+        /// 認可エンドポイント（POST の認可要求。#359）
+        /// POST: /authorize
+        /// </summary>
+        /// <returns>ActionResult（**GET の認可要求への 303**。読めない要求ならエラー画面）</returns>
+        /// <remarks>
+        /// **OIDC Core 1.0 §3.1.2.1 は、認可エンドポイントが GET と POST の両方を受けることを MUST としている**
+        /// （POST は Form Serialization。§13.2）。
+        ///
+        /// **フォームのパラメタを、そのままクエリに詰め替えて、GET の認可要求へ 303 で送り返す。**
+        /// **その後は GET の流れ（検証・サインイン・再認証・同意）を、そのまま通る。**
+        /// GET の流れは、未サインイン・再認証・`prompt=login`・OP のセッションの用意のたびに
+        /// **「同じ URL へ送り返す」作り**で、**パラメタが URL に在ることを前提にしている**ため、
+        /// ここで受けて処理すると、送り返すたびにパラメタが落ちる（以前のサインインの後と同じ落ち方）。
+        /// **転送の後は、パラメタが URL に出る**（GET で送られたときと同じ）。**POST のまま処理する正攻法は、別の Issue**。
+        ///
+        /// - **`[AllowAnonymous]`**：未サインインの要求も受ける（GET の口と同じ。サインインは転送の先で求める）
+        /// - **偽造防止のトークンは確かめない**：RP からの遷移で、GET と同じ扱い（トークンを持ちようがない）。
+        ///   **状態は何も変えない**（詰め替えて送り返すだけ）。**同意の送信は `OAuth2AuthorizeConsent`（トークンを確かめる）**
+        /// - **同じ名前のパラメタが 2 回来たら、送り返さずにエラー画面**（RFC 6749 §3.1。クエリとフォームの両方に在る場合も）。
+        ///   **`redirect_uri` を確かめる前なので、RP へは返さない**（オープン リダイレクトにしない）
+        /// </remarks>
+        [HttpPost]
+        [AllowAnonymous]
+        public ActionResult OAuth2Authorize()
+        {
+            //  **フォームの形でなければ受けない**（§3.1.2.1 : Form Serialization）
+            if (!Request.HasFormContentType)
+            {
+                return this.AuthorizeErrorResponse(null, null, null, "",
+                    OAuth2AndOIDCConst.invalid_request,
+                    "The authorization request sent by POST must use Form Serialization.", null);
+            }
+
+            //  **クエリとフォームを合わせる**（クエリにも何か付いていれば、それも引き継ぐ）
+            NameValueCollection merged = this.AuthZRequestQuery();
+
+            foreach (string key in Request.Form.Keys)
+            {
+                //  **同じ名前が 2 回来たら断る**（RFC 6749 §3.1。フォームの中の重複も、クエリとの重複も）
+                if (1 < Request.Form[key].Count || merged[key] != null)
+                {
+                    return this.AuthorizeErrorResponse(null, null, null, "",
+                        OAuth2AndOIDCConst.invalid_request, "A parameter is included more than once.", null);
+                }
+
+                merged[key] = Request.Form[key];
+            }
+
+            //  **GET の認可要求へ 303 で送り返す**（303 は、次の要求を GET にする。RFC 9110 §15.4.4）
+            string query = string.Join("&", merged.AllKeys
+                .Where(k => !string.IsNullOrEmpty(k))
+                .Select(k => Uri.EscapeDataString(k) + "=" + Uri.EscapeDataString(merged[k] ?? "")));
+
+            Response.Headers.Location = UriHelper.BuildAbsolute(
+                Request.Scheme, Request.Host, Request.PathBase,
+                new PathString(Config.OAuth2AuthorizeEndpoint), new QueryString("?" + query));
+
+            return new StatusCodeResult(StatusCodes.Status303SeeOther);
+        }
+
+        /// <summary>
         /// 認可エンドポイント
         /// 権限付与画面（同意画面）の結果を受け取り、
         /// response_type に応じて code / token を発行してRedirectエンドポイントへRedirect。
@@ -546,9 +608,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="max_age">string（OIDC 任意）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
+        /// <remarks>
+        /// **同意画面の送信だけを受ける口**（`<認可の口>/consent`。#359）。
+        /// **以前は `POST <認可の口>` で受けていた**ので、RP からの POST の認可要求（OIDC Core 1.0 §3.1.2.1）を受ける口が無かった。
+        /// **同意画面のフォームは、この口へ、認可要求のクエリをそのまま付けて送る**（`OAuth2Authorize.cshtml`）。
+        /// **偽造防止のトークンは、これまでどおり確かめる**（CSRF。同意の送信は、利用者のセッションで状態を変える）。
+        /// </remarks>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuth2Authorize(
+        public async Task<ActionResult> OAuth2AuthorizeConsent(
             string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
@@ -596,12 +664,14 @@ namespace MultiPurposeAuthSite.Controllers
                     List<string> iframeUrlsForSwitch = this.ClearOpSession();
                     await this.SignOutApplicationCookieAsync();
 
-                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。
+                    //  **ブラウザ経由で伝えてから、認可の口へ戻る**（#310）。
+                    //    **戻る先は「いまの URL」ではなく、認可の口（同じクエリ）**（#359）。
+                    //    この口は `<認可の口>/consent` で、GET の口が無い（戻すと行き止まりになる）。
                     ActionResult frontChannelForSwitch = this.FrontChannelLogoutView(
-                        iframeUrlsForSwitch, this.CurrentRequestUrl());
+                        iframeUrlsForSwitch, this.AuthorizeEndpointUrl());
                     if (frontChannelForSwitch != null) return frontChannelForSwitch;
 
-                    return new RedirectResult(this.CurrentRequestUrl());
+                    return new RedirectResult(this.AuthorizeEndpointUrl());
                 }
                 else if (!string.IsNullOrEmpty(this.FormValue("submit.Deny")))
                 {
@@ -1246,6 +1316,19 @@ namespace MultiPurposeAuthSite.Controllers
         private string CurrentRequestUrl()
         {
             return UriHelper.GetEncodedUrl(Request);
+        }
+
+        /// <summary>認可の口の URL（いまの要求のクエリを付けたもの。#359）</summary>
+        /// <returns>URL</returns>
+        /// <remarks>
+        /// **同意の送信の口（`<認可の口>/consent`）から、認可の口へ戻るときに使う。**
+        /// その口には GET が無いので、`CurrentRequestUrl` へ戻すと行き止まりになる。
+        /// </remarks>
+        private string AuthorizeEndpointUrl()
+        {
+            return UriHelper.BuildAbsolute(
+                Request.Scheme, Request.Host, Request.PathBase,
+                new PathString(Config.OAuth2AuthorizeEndpoint), Request.QueryString);
         }
 
         /// <summary>フォームの値（POST のときだけ使う）</summary>

@@ -19,6 +19,7 @@
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）のルートを追加（#232）
+//*  2026/11/11  玄人 幸道         同意画面の送信の口（<認可の口>/consent）のルートを追加（#359）
 //**********************************************************************************
 
 using System.Web.Mvc;
@@ -65,6 +66,13 @@ namespace MultiPurposeAuthSite
                 name: "OAuth2Authorize",
                 url: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "Account", action = "OAuth2Authorize" }
+            );
+
+            // **同意画面の送信の口**（#359）。**認可の口の POST は、RP からの POST の認可要求に明け渡した**（OIDC Core 1.0 §3.1.2.1）
+            routes.MapRoute(
+                name: "OAuth2AuthorizeConsent",
+                url: Config.OAuth2AuthorizeEndpoint.Substring(1) + "/consent",
+                defaults: new { controller = "Account", action = "OAuth2AuthorizeConsent" }
             );
 
             // RP-Initiated Logout（#232）

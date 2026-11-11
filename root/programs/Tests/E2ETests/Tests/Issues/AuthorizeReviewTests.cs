@@ -31,6 +31,7 @@
 //*  2026/10/28  玄人 幸道         新規（#294）
 //*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/11  玄人 幸道         RT-294.22 の送り先を、同意画面のフォームの action にした（同意画面の送信の口。#359）
 //**********************************************************************************
 
 using System;
@@ -447,7 +448,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) ボタンを付けずに POST する（トークンだけを送る）");
 
-                HttpResponseMessage post = await client.PostFormAsync(screen.RequestUrl, new Dictionary<string, string>()
+                //  **送り先は、同意画面のフォームの action**（同意画面の送信の口。#359）
+                HttpResponseMessage post = await client.PostFormAsync(IdPClient.ConsentFormUrl(screen), new Dictionary<string, string>()
                 {
                     { "__RequestVerificationToken", Html.Antiforgery(screen.Body) }
                 });
