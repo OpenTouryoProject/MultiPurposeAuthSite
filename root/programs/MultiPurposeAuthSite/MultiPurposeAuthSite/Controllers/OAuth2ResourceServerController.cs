@@ -39,6 +39,7 @@
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/25  玄人 幸道         登録の失敗の応答を OPERATION に記録する（障害対応のため。#294）
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
+//*  2026/11/12  玄人 幸道         動的登録で sector_identifier_uri を検査の前に取りに行くようにした（#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -215,6 +216,10 @@ namespace MultiPurposeAuthSite.Controllers
             //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
             await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
 
+            //  **`sector_identifier_uri` も、ここで 1 回取りに行く**（#364。OIDC Registration 1.0 §5）。
+            //    **中身に `redirect_uris` が無ければ・読めなければ、`Validate` が `400`。**
+            await ClientRegistrationProvider.WarmUpSectorIdentifierUriAsync(body);
+
             int status = ClientRegistrationProvider.Register(
                 body, identity, out Dictionary<string, object> ret,
                 out Dictionary<string, string> err);
@@ -280,6 +285,10 @@ namespace MultiPurposeAuthSite.Controllers
             //    **この口は async**。**クライアント認証の経路は同期で待てない**ので、
             //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
             await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
+
+            //  **`sector_identifier_uri` も、ここで 1 回取りに行く**（#364。OIDC Registration 1.0 §5）。
+            //    **中身に `redirect_uris` が無ければ・読めなければ、`Validate` が `400`。**
+            await ClientRegistrationProvider.WarmUpSectorIdentifierUriAsync(body);
 
             int status = ClientRegistrationProvider.Update(
                 client_id, body, this.GetRegistrationAccessToken(),

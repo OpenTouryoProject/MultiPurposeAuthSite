@@ -53,6 +53,7 @@
 //*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone を追加（CmnEndpoints と Helper の二重定義をやめた。#294）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前（OpenTouryo#634・#663）を外し、そちらを使うようにした（#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         sector_identifier_uri を追加（#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -553,6 +554,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>subject_type</summary>
         public const string ClientSubjectType = "subject_type";
+
+        /// <summary>sector_identifier_uri（OIDC DCR 1.0 §2・§5。#364）</summary>
+        public const string ClientSectorIdentifierUri = "sector_identifier_uri";
 
         /// <summary>id_token_signed_response_alg</summary>
         public const string ClientIdTokenSignedResponseAlg = "id_token_signed_response_alg";

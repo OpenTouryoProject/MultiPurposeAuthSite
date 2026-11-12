@@ -33,6 +33,7 @@
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを受けるようにした（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         sector_identifier_uri の中身に redirect_uris がすべて在るかを確かめるようにした（OIDC Registration 1.0 §5。#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -411,6 +412,52 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (usesToken)
             {
                 model.RedirectUriToken = uriList;
+            }
+
+            #endregion
+
+            #region sector_identifier_uri（OIDC Registration 1.0 §5。#364）
+
+            //  **中身（JSON の配列）に、登録する `redirect_uris` がすべて含まれていることを確かめる**（§5 の MUST）。
+            //    **確かめずに受けると、別の RP のホストを名乗れる**（Sector をそのホストにすると、
+            //    その RP と同じ pairwise の `sub` を得られる。OIDC Core 1.0 §8.1）。
+            //  **取りに行ったのは、この口の手前である**（`WarmUpSectorIdentifierUriAsync`）。
+            //    **`software_statement` が主張した値も、重ねた後のここで同じ検査を通る。**
+            //  **合わなければ `invalid_client_metadata`**（§5 は「登録を断る」。Conformance Suite もこのコードを見る）。
+            string sectorIdentifierUri = "";
+
+            if (!ClientRegistrationProvider.SetUri(metadata, Const.ClientSectorIdentifierUri,
+                Const.MaxLengthOfUri, v => sectorIdentifierUri = v, ref description))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(sectorIdentifierUri))
+            {
+                if (!SectorIdentifierProvider.IsUsable(sectorIdentifierUri))
+                {
+                    description = "The sector_identifier_uri must use https. (loopback may use http)";
+                    return false;
+                }
+
+                string[] listed = SectorIdentifierProvider.GetFetched(sectorIdentifierUri);
+
+                if (listed == null)
+                {
+                    description = "The sector_identifier_uri could not be read as a JSON array of redirect_uri values.";
+                    return false;
+                }
+
+                //  **比べ方は完全一致**（認可要求の `redirect_uri` と同じ。OIDC Core 1.0 §3.1.2.1）。
+                foreach (string redirectUri in redirectUris)
+                {
+                    if (!listed.Contains(redirectUri, StringComparer.Ordinal))
+                    {
+                        description = string.Format(
+                            "The sector_identifier_uri does not include the redirect_uri ({0}).", redirectUri);
+                        return false;
+                    }
+                }
             }
 
             #endregion
