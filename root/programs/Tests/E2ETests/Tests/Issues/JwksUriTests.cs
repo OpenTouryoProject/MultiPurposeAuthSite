@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
+//*  2026/11/12  玄人 幸道         RT-363.1（登録を直さずに鍵を入れ替えても、知らない kid の 1 回目から通る）を足した（#363）
 //**********************************************************************************
 
 using System;
@@ -55,9 +56,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | | 測ること |
     /// |---|---|
     /// | **`RT-309.1`** | **動的登録で `jwks_uri` を登録でき、その URL の鍵で `private_key_jwt` が通る**（**`jwks` との併記は `400`**／**読めない URL は `400`**） |
-    /// | **`RT-309.2`** | **画面から登録した `jwks_uri`**（**取りに行っていない**）**は、1 回目に断られ、背景で補充された後は通る** |
+    /// | **`RT-309.2`** | **画面から登録した `jwks_uri`**（**取りに行っていない**）**は、1 回目に断られ、背景で補充された後は通る**（**`kid` の無い assertion**。#363 の後も同じ） |
     /// | **`RT-309.3`** | **同じ URL の鍵を入れ替えると、`PUT` で読み直して新しい鍵で通る**（**読み直すまではキャッシュが効く**） |
     /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
+    /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
     /// **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の全部から呼ばれる。
@@ -447,11 +449,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.VerifyEqual("まだ RSA の鍵で通る（キャッシュが効いている）", "（無い）",
                             stillRsa.String("error") ?? "（無い）");
 
-                        r.Note("**取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）。"
-                            + "**`kid` を偽った要求を並べれば、外から取得を起こせる**ので、"
-                            + "**背景の補充には下限を置いてある。**"
-                            + "**何もしなくても、最大でその下限ぶんで追随する** — "
-                            + "**E2E では 1 分待たない**ので、ここは `PUT` で測る。");
+                        r.Note("**この assertion はヘッダに `kid` を入れない**ので、キャッシュに在る鍵（RSA）を試して通る。"
+                            + "**ヘッダに知らない `kid` があれば、その場で取り直して通す**（#363。`RT-363.1`）。"
+                            + "**取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）— "
+                            + "**`kid` を偽った要求を並べれば、外から取得を起こせる**ので、下限を置いてある。"
+                            + "ここは `PUT` で読み直す口を測る。");
 
                         r.Step("(3) PUT で同じ jwks_uri を出し直すと、読み直す");
 
@@ -592,6 +594,122 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-363.1
+
+        /// <summary>RT-363.1 登録を直さずに jwks_uri の鍵を入れ替えても、新しい鍵が 1 回目から通る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT36301_登録を直さずに鍵を入れ替えても新しい鍵が1回目から通る(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-363.1",
+                    "**`jwks_uri` に置いた鍵を、`kid` の違う鍵に入れ替える**と、**登録を直さなくても、"
+                    + "新しい鍵の `client_assertion`（ヘッダにその `kid`）が 1 回目から通る**",
+                    "**検証する側は、知らない `kid` を見たら `jwks_uri` を取り直す**（OIDC Core 1.0 §10.1.1。OP の鍵を RP が追う話を、RP の鍵を OP が追う向きに準用する）。"
+                    + "**以前は、キャッシュに無い `kid` の 1 本は断り、背景で取り直していた**ので、"
+                    + "**入れ替えの後の最初の 1 本が 401 になった**（適合性テストの `oidcc-refresh-token-rp-key-rotation`）。",
+                    "OIDC Core 1.0 §10.1.1（準用：RP の鍵の入れ替えを、検証する OP が追う）/ #363");
+
+                r.Target("POST /revoke（client_assertion。鍵は動的登録した jwks_uri の先）");
+
+                //  **回ごとに別の URL にする**（取り直しの下限はプロセスの中で URL ごと。同じサイトに 1 分以内に回し直しても当たらないように）。
+                string name = "rt363_1_" + targetKey + "_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        r.Step("(1) RSA の鍵を置いて動的登録し、その鍵で認証できることを見る");
+
+                        JwksUri.Write(name, JwsSigner.PublicRsaJwk(client));
+
+                        JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid email\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + JwksUri.Url(name) + "\"}");
+
+                        string clientId = created.String("client_id");
+
+                        Assert.False(string.IsNullOrEmpty(clientId),
+                            "前提: client_id が返ること（" + created.ToString() + "）");
+
+                        JsonResponse byRsa = await JwksUriTests.RevokeAsync(client, clientId, false);
+
+                        Assert.True(string.IsNullOrEmpty(byRsa.String("error")),
+                            "前提: RSA の鍵で通ること（" + byRsa.ToString() + "）");
+
+                        r.Step("(2) 置いてある鍵を EC に入れ替える（登録は直さない）");
+
+                        string ecJwk = JwsSigner.PublicEcJwk(client);
+                        JwksUri.Write(name, ecJwk);
+
+                        string ecKid;
+                        using (JsonDocument doc = JsonDocument.Parse(ecJwk))
+                        {
+                            ecKid = doc.RootElement.GetProperty("kid").GetString();
+                        }
+
+                        r.Step("(3) すぐに（取り直しの下限の内側で）、新しい鍵（ヘッダにその kid）で認証する");
+
+                        JsonResponse tooSoon = await client.RevokeAsync(JwksUriTests.WithAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "token", "e2e-rt363-unknown-token" }
+                            }, true, ecKid));
+
+                        r.VerifyEqual("**下限の内側では取り直さず、断る**（invalid_client）", "invalid_client",
+                            tooSoon.String("error") ?? "（無い）");
+
+                        r.Step("(4) 取り直しの下限（1 分）が過ぎるまで待つ");
+
+                        r.Note("**取り直すかどうかは、Open棟梁 の `RemoteJwkSetStore.GetJwkAsync` が、前に取った時刻から 1 分の下限で決める**"
+                            + "（`MinRefetchInterval`。`kid` を偽った要求で、外から何度も取得を起こせないように）。"
+                            + "**登録のときに取ってから 1 分経たないうちは、知らない `kid` でも取り直さない。**"
+                            + "**適合性テストの `oidcc-refresh-token-rp-key-rotation` も、入れ替えの後に 60 秒待ってから送る。**");
+
+                        await Task.Delay(TimeSpan.FromSeconds(65));
+
+                        r.Step("(5) 新しい鍵（EC / ES256）で、ヘッダに その kid（キャッシュに無い kid）を入れて、もう一度認証する");
+
+                        r.Note("**ヘッダに `kid` を入れて送る**（適合性テストの RP と同じ）。"
+                            + "**実装は、知らない `kid` を見たときに取り直す**（OIDC Core 1.0 §10.1.1）。"
+                            + "**`kid` の無い署名は、キャッシュに在る鍵を順に試すだけ**で、取り直さない。");
+
+                        Stopwatch sw = Stopwatch.StartNew();
+                        JsonResponse byEc = await client.RevokeAsync(JwksUriTests.WithAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "token", "e2e-rt363-unknown-token" }
+                            }, true, ecKid));
+                        sw.Stop();
+
+                        r.VerifyEqual("**下限を過ぎた後は、その場で取り直して通る**（error は無い。再試行を待たない）", "（無い）",
+                            byEc.String("error") ?? "（無い）");
+
+                        r.VerifyEqual("HTTP の状態は 200", "200", ((int)byEc.StatusCode).ToString());
+
+                        r.Observe("1 回目の応答までの時間", sw.ElapsedMilliseconds.ToString() + " ミリ秒",
+                            "取り直しを待つ上限は 3 秒（CmnEndpoints.JwksUriRefetchWait）。");
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 私的なヘルパ
 
         /// <summary>リダイレクトか（画面の成功）</summary>
@@ -664,18 +782,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="clientId">client_id（`iss` ＝ `sub`。RFC 7523 §3）</param>
         /// <param name="items">送る項目</param>
         /// <param name="es256">true なら ES256（EC の鍵）で署名する</param>
+        /// <param name="kid">ヘッダに入れる kid（ES256 のときだけ。null なら入れない。#363）</param>
         /// <returns>送る項目（アサーション入り）</returns>
         /// <remarks>
         /// **`aud` はトークン エンドポイント**である（実装が照合している）。
         /// **`/revoke` を叩くときも、`aud` はトークン エンドポイントのまま** —
         /// **RFC 7009 §2.1 が「同じクライアント認証」と定めている**ためである。
         ///
-        /// **ヘッダに `kid` は入れない**（RFC 7515 §4.1.4 は任意）。
+        /// **ヘッダに `kid` は、既定では入れない**（RFC 7515 §4.1.4 は任意）。
         /// **実装は、`kid` が無ければ JWK Set に在る鍵を順に試す**（上限あり）。
+        /// **鍵の入れ替え（`RT-363.1`）は `kid` を入れて測る** — 実装は、知らない `kid` を見たときに取り直す（OIDC Core 1.0 §10.1.1）。
         /// </remarks>
         private static Dictionary<string, string> WithAssertion(
             IdPClient client, string clientId,
-            IDictionary<string, string> items, bool es256 = false)
+            IDictionary<string, string> items, bool es256 = false, string kid = null)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -693,7 +813,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 {
                     "client_assertion",
-                    es256 ? JwsSigner.SignES256(client, payload)
+                    es256 ? JwsSigner.SignES256(client, payload, kid)
                           : JwsSigner.SignRS256(client, payload)
                 },
                 {

@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=d0c96e18-e009-4360-bbc9-2479e992572e&code=bogus
+1. GET /Account/EmailConfirmation?userId=12bf07ca-fbbf-4e32-b240-d8093b96bac8&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=d0c96e18-e009-4360-bbc9-2479e992572e&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=d0c96e18-e009-4360-bbc9-2479e992572e&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=12bf07ca-fbbf-4e32-b240-d8093b96bac8&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=12bf07ca-fbbf-4e32-b240-d8093b96bac8&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -9659,7 +9659,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）。**`kid` を偽った要求を並べれば、外から取得を起こせる**ので、**背景の補充には下限を置いてある。****何もしなくても、最大でその下限ぶんで追随する** — **E2E では 1 分待たない**ので、ここは `PUT` で測る。
+- **この assertion はヘッダに `kid` を入れない**ので、キャッシュに在る鍵（RSA）を試して通る。**ヘッダに知らない `kid` があれば、その場で取り直して通す**（#363。`RT-363.1`）。**取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）— **`kid` を偽った要求を並べれば、外から取得を起こせる**ので、下限を置いてある。ここは `PUT` で読み直す口を測る。
 - **登録の口は、取り直しの下限を見ない**（**毎回取りに行く**）。**認可が要り**（専用 scope のトークン）**レート制限も掛かっている**ので、**外から叩く経路にはならない。****鍵を入れ替えた相手は、`PUT` でその場で反映できる。**
 
 ## RT-309.4 **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**その URL の鍵で、1 回目のクライアント認証から通る**
@@ -11919,6 +11919,38 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **code を返さない**（クエリだけで続けない）
 - **RP へ返さない**（Location が無い）
 - **エラー画面に invalid_request_uri が出る**
+
+## RT-363.1 **`jwks_uri` に置いた鍵を、`kid` の違う鍵に入れ替える**と、**登録を直さなくても、新しい鍵の `client_assertion`（ヘッダにその `kid`）が 1 回目から通る**
+
+| | |
+|---|---|
+| 観点 | **検証する側は、知らない `kid` を見たら `jwks_uri` を取り直す**（OIDC Core 1.0 §10.1.1。OP の鍵を RP が追う話を、RP の鍵を OP が追う向きに準用する）。**以前は、キャッシュに無い `kid` の 1 本は断り、背景で取り直していた**ので、**入れ替えの後の最初の 1 本が 401 になった**（適合性テストの `oidcc-refresh-token-rp-key-rotation`）。 |
+| 根拠 | OIDC Core 1.0 §10.1.1（準用：RP の鍵の入れ替えを、検証する OP が追う）/ #363 |
+| テスト | `RT36301_登録を直さずに鍵を入れ替えても新しい鍵が1回目から通る` |
+
+**手順**
+
+1. RSA の鍵を置いて動的登録し、その鍵で認証できることを見る
+1. 置いてある鍵を EC に入れ替える（登録は直さない）
+1. すぐに（取り直しの下限の内側で）、新しい鍵（ヘッダにその kid）で認証する
+1. 取り直しの下限（1 分）が過ぎるまで待つ
+1. 新しい鍵（EC / ES256）で、ヘッダに その kid（キャッシュに無い kid）を入れて、もう一度認証する
+
+**検証（合否を判定する）**
+
+- **下限の内側では取り直さず、断る**（invalid_client）
+- **下限を過ぎた後は、その場で取り直して通る**（error は無い。再試行を待たない）
+- HTTP の状態は 200
+
+**観測（判定しない）**
+
+- 1 回目の応答までの時間
+  - 取り直しを待つ上限は 3 秒（CmnEndpoints.JwksUriRefetchWait）。
+
+**補足**
+
+- **取り直すかどうかは、Open棟梁 の `RemoteJwkSetStore.GetJwkAsync` が、前に取った時刻から 1 分の下限で決める**（`MinRefetchInterval`。`kid` を偽った要求で、外から何度も取得を起こせないように）。**登録のときに取ってから 1 分経たないうちは、知らない `kid` でも取り直さない。****適合性テストの `oidcc-refresh-token-rp-key-rotation` も、入れ替えの後に 60 秒待ってから送る。**
+- **ヘッダに `kid` を入れて送る**（適合性テストの RP と同じ）。**実装は、知らない `kid` を見たときに取り直す**（OIDC Core 1.0 §10.1.1）。**`kid` の無い署名は、キャッシュに在る鍵を順に試すだけ**で、取り直さない。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

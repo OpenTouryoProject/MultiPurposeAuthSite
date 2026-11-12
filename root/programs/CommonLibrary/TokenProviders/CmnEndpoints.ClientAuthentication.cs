@@ -42,6 +42,7 @@
 //*  2026/11/06  玄人 幸道         assertion の検証を、期待する iss・aud を渡す版の JwtAssertion.Verify にした。クライアント認証では sub が iss と一致することを確かめる（OpenTouryo#654。#336）
 //*  2026/11/06  玄人 幸道         TryVerifyAssertion の catch と、alg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#654・#664）に合わせた（#337）
 //*  2026/11/08  玄人 幸道         tls_client_auth の登録で、証明書が届かない・Subject が合わないときの理由を OPERATION に残す（#345）
+//*  2026/11/12  玄人 幸道         jwks_uri の控えに無い kid なら、その場で取り直して短く待つ（下限は RemoteJwkSetStore.GetJwkAsync に従う。#363）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -49,8 +50,10 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 
 using Newtonsoft.Json.Linq;
 
@@ -391,6 +394,105 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         private const int MaxJwksFromUri = 4;
 
+        /// <summary>`jwks_uri` を取り直すとき、要求の中で待つ上限（#363）</summary>
+        /// <remarks>
+        /// **知らない `kid` を見たら、その場で取り直す**（OIDC Core 1.0 §10.1.1 の準用。#363）。
+        /// **待つのは、この上限まで**（相手が遅いときに、要求のスレッドを長く塞がないため）。
+        /// 間に合わなければ、取り直しは背景で続き、この 1 本は断る（以前の振る舞い）。
+        /// </remarks>
+        private static readonly TimeSpan JwksUriRefetchWait = TimeSpan.FromSeconds(3);
+
+        /// <summary>要求の中で待っている取得の URL（#363）</summary>
+        /// <remarks>
+        /// **同じ URL で待つのは、同時に 1 本まで**（取得が終わるまで、待つ側が諦めた後も残す）。
+        /// **相手の `jwks_uri` が遅いと、取得が終わるまで Open棟梁 の下限（取得時刻）が進まない**ので、
+        /// これが無いと、その間に来た知らない `kid` の要求が、**それぞれ取得を起こして 3 秒ずつ塞がる**
+        /// （遅い `jwks_uri` を登録すれば、要求のスレッドを枯らせる）。
+        /// **キャッシュの下限は Open棟梁 に任せ**、ここは「同期で待つ」ことで生まれる塞がりだけを抑える。
+        /// </remarks>
+        private static readonly HashSet<string> _jwksUriWaiting = new HashSet<string>();
+
+        /// <summary>`_jwksUriWaiting` のロック</summary>
+        private static readonly object _jwksUriWaitingLock = new object();
+
+        /// <summary>`jwks_uri` から `kid` の鍵を、取り直してでも引き、上限まで待つ（#363）</summary>
+        /// <param name="jwksUri">jwks_uri</param>
+        /// <param name="kid">JWS のヘッダの kid（**空なら引かない**）</param>
+        /// <returns>JWK（JSON の文字列。引けなければ 0 件）</returns>
+        /// <remarks>
+        /// **取り直すかどうか（下限）は `RemoteJwkSetStore.GetJwkAsync` が決める**（Open棟梁。取得時刻から 1 分。`MinRefetchInterval`）。
+        /// **キャッシュの制御は Open棟梁 の 1 か所に置き、こちらは「同期の鎖の中で、上限まで待つ」ことだけを持つ。**
+        ///
+        /// **クライアント認証は同期の鎖**なので、**取得を `.Result` で待つと net48 で止まる**（#309）。
+        /// **同期コンテキストの無いスレッド（`Task.Run`）で取らせ、その Task を上限まで待つ** —
+        /// 継続は要求のスレッドへ戻らない（`RemoteJwkSetStore` の取得は `ConfigureAwait(false)`）ので、待っても塞がらない。
+        ///
+        /// **`kid` の無い JWS では呼ばない**（`GetJwkAsync` は `kid` で引く。§10.1.1 も「unfamiliar kid」を見たときの取り直し）。
+        /// その場合は、以前どおりキャッシュの鍵を順に試し、無ければ背景で補充して断る。
+        ///
+        /// **`GetJwkAsync` は、取得中の URL を重ねて取りに行きうる**（同時に来た要求のぶん。下限ごとに 1 回の束まで）。
+        /// Open棟梁 の側で直す（OpenTouryoProject/OpenTouryo#686）。
+        /// </remarks>
+        private static string[] WaitForJwkFromUri(string jwksUri, string kid)
+        {
+            if (string.IsNullOrEmpty(kid))
+            {
+                return new string[0];
+            }
+
+            //  **同じ URL で待っている取得が在れば、待たない**（この 1 本は、以前どおり断る）。
+            lock (CmnEndpoints._jwksUriWaitingLock)
+            {
+                if (!CmnEndpoints._jwksUriWaiting.Add(jwksUri))
+                {
+                    return new string[0];
+                }
+            }
+
+            Task<JObject> fetch = null;
+
+            try
+            {
+                fetch = Task.Run(() => RemoteJwkSetStore.GetJwkAsync(jwksUri, kid));
+
+                //  **印は、取得が終わったときに消す**（待つ側が上限で諦めても、取得中は残す）。
+                //    **失敗で終わったら、理由を残す**（上限を過ぎた後の失敗は、待つ側からは見えないため。鍵は出さない）。
+                fetch.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        Logging.MyOperationTrace(string.Format(
+                            "Fetching the jwks_uri for the client assertion failed. ({0})",
+                            t.Exception?.GetBaseException().GetType().Name));
+                    }
+
+                    lock (CmnEndpoints._jwksUriWaitingLock)
+                    {
+                        CmnEndpoints._jwksUriWaiting.Remove(jwksUri);
+                    }
+                }, TaskScheduler.Default);
+
+                if (fetch.Wait(CmnEndpoints.JwksUriRefetchWait) && fetch.Result != null)
+                {
+                    return new string[] { fetch.Result.ToString() };
+                }
+            }
+            catch (Exception)
+            {
+                //  **取得の失敗は「間に合わない」と同じ扱い**（この 1 本は断る）。
+                //  **取得を始められなかった（`Task.Run` が投げた）なら、ここで印を消す**（消す継続が無いため）。
+                if (fetch == null)
+                {
+                    lock (CmnEndpoints._jwksUriWaitingLock)
+                    {
+                        CmnEndpoints._jwksUriWaiting.Remove(jwksUri);
+                    }
+                }
+            }
+
+            return new string[0];
+        }
+
         /// <summary>ClientAuthentication</summary>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
@@ -439,8 +541,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //    **キャッシュを読むだけ**にする。**取りに行って待つと net48 で止まる**
                 //    （**継続が同期コンテキストへ戻れない**。#309 の起票）。
                 //
-                //  **引けなければ、背景で取り直して、この 1 本は断る**（段階 1 の決め (C)(1)）。
-                //    **次の試行で通る。** **理由はログに残す**（#253 の方針。**鍵は出さない**）。
+                //  **知らない `kid` なら、その場で取り直して、上限まで待つ**（#363。OIDC Core 1.0 §10.1.1 の準用
+                //    「The verifier knows to go back to the jwks_uri location to re-retrieve the keys when it sees an unfamiliar kid value.」）。
+                //    **以前は、背景で取り直して、この 1 本は断っていた**（#309 の段階 1 の決め (C)(1)）ので、
+                //    **鍵を入れ替えた RP の、入れ替えの後の最初の 1 本が 401 になった**（適合性テストの `oidcc-refresh-token-rp-key-rotation`）。
+                //    **取り直すかどうか（下限）は Open棟梁 の `GetJwkAsync` が決める。** 下限の内側・間に合わない・`kid` が無いときは、
+                //    以前どおり背景で取り直して、この 1 本は断る（決め (C)(1)）。
+                //    **理由はログに残す**（#253 の方針。**鍵は出さない**）。
                 if (!string.IsNullOrEmpty(assertionIss))
                 {
                     string jwksUri = Helper.GetInstance().GetJwksUri(assertionIss);
@@ -450,6 +557,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string[] fromUri = RemoteJwkSetStore.PickJwksFromCache(
                             jwksUri, JwtReader.TryReadKid(assertion),
                             CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
+
+                        if (fromUri.Length == 0)
+                        {
+                            fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, JwtReader.TryReadKid(assertion));
+                        }
 
                         if (fromUri.Length == 0)
                         {
