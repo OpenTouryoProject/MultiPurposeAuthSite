@@ -32,6 +32,7 @@
 //*  2026/10/16  玄人 幸道         client_secret も返す口を足した（#305 の段階 2）
 //*  2026/10/18  玄人 幸道         登録に渡す redirect_uri を指定できるようにした（#306）
 //*  2026/10/20  玄人 幸道         一覧の画面を見るようにした（#307 の段階 5-a-2）
+//*  2026/11/12  玄人 幸道         select の選択中の値を、属性の並び（selected が value より前）によらず拾うようにした（#364）
 //**********************************************************************************
 
 using System;
@@ -144,7 +145,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 RegexOptions.Singleline))
             {
                 string body = m.Groups["body"].Value;
-                Match selected = Regex.Match(body, "value=\"(?<value>[^\"]*)\"[^>]*\\bselected\\b");
+
+                //  **選択中の option は、`selected` が `value` より前に出る**（Razor の `DropDownListFor` は
+                //    `<option selected="selected" value="…">`）。**並びによらず、`selected` の在る option の `value` を拾う**
+                //    （以前は `value` が前の形だけを見ていたので、先頭の値に落ちていた。#364）。
+                Match selected = Regex.Match(body,
+                    "<option\\b(?=[^>]*\\bselected\\b)[^>]*\\bvalue=\"(?<value>[^\"]*)\"");
                 Match first = Regex.Match(body, "value=\"(?<value>[^\"]*)\"");
 
                 if (selected.Success)

@@ -440,24 +440,36 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
 
-                string[] listed = SectorIdentifierProvider.GetFetched(sectorIdentifierUri);
-
-                if (listed == null)
+                //  **ホスト名は、接頭辞を付けて Sector の列（256 文字）に入る長さまで**（`Const.MaxLengthOfSectorHost`）。
+                if (Const.MaxLengthOfSectorHost < new Uri(sectorIdentifierUri).Host.Length)
                 {
-                    description = "The sector_identifier_uri could not be read as a JSON array of redirect_uri values.";
+                    description = "The host of the sector_identifier_uri is too long.";
                     return false;
                 }
 
-                //  **比べ方は完全一致**（認可要求の `redirect_uri` と同じ。OIDC Core 1.0 §3.1.2.1）。
-                foreach (string redirectUri in redirectUris)
+                //  **`redirect_uris` の無い登録では受けない**（client_credentials・ROPC だけの登録など）。
+                //    **突き合わせる値が無いと、§5 の確認（ホストが、その登録の `redirect_uris` を並べて置いたか）が成り立たず、**
+                //    **中身が文字列の配列でありさえすれば、そのホストを Sector にできてしまう**（別モデルのレビューの指摘）。
+                if (redirectUris.Count == 0)
                 {
-                    if (!listed.Contains(redirectUri, StringComparer.Ordinal))
-                    {
-                        description = string.Format(
-                            "The sector_identifier_uri does not include the redirect_uri ({0}).", redirectUri);
-                        return false;
-                    }
+                    description = "The sector_identifier_uri requires redirect_uris.";
+                    return false;
                 }
+
+                string[] listed = SectorIdentifierProvider.GetFetched(sectorIdentifierUri);
+
+                //  **読めない・含まれていないは、同じ文言で断る**（取りに行った結果を、応答で撃ち分けない。
+                //    **読めたかどうかを返すと、登録の口が「その URL が読めるか」を確かめる道具になる**）。
+                //  **比べ方は完全一致**（認可要求の `redirect_uri` と同じ。OIDC Core 1.0 §3.1.2.1）。
+                if (listed == null
+                    || redirectUris.Any(u => !listed.Contains(u, StringComparer.Ordinal)))
+                {
+                    description = "The sector_identifier_uri must be a JSON array that includes all the redirect_uris.";
+                    return false;
+                }
+
+                //  **確かめた値だけを保存する**（pairwise の Sector に使う。`PPIDExtension.GetSector`。OIDC Core 1.0 §8.1）。
+                model.SectorIdentifierUri = sectorIdentifierUri;
             }
 
             #endregion

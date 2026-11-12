@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=12bf07ca-fbbf-4e32-b240-d8093b96bac8&code=bogus
+1. GET /Account/EmailConfirmation?userId=69166bec-e8a8-45c6-9ad6-025a3e2e0a0c&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=12bf07ca-fbbf-4e32-b240-d8093b96bac8&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=12bf07ca-fbbf-4e32-b240-d8093b96bac8&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=69166bec-e8a8-45c6-9ad6-025a3e2e0a0c&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=69166bec-e8a8-45c6-9ad6-025a3e2e0a0c&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11951,6 +11951,112 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **取り直すかどうかは、Open棟梁 の `RemoteJwkSetStore.GetJwkAsync` が、前に取った時刻から 1 分の下限で決める**（`MinRefetchInterval`。`kid` を偽った要求で、外から何度も取得を起こせないように）。**登録のときに取ってから 1 分経たないうちは、知らない `kid` でも取り直さない。****適合性テストの `oidcc-refresh-token-rp-key-rotation` も、入れ替えの後に 60 秒待ってから送る。**
 - **ヘッダに `kid` を入れて送る**（適合性テストの RP と同じ）。**実装は、知らない `kid` を見たときに取り直す**（OIDC Core 1.0 §10.1.1）。**`kid` の無い署名は、キャッシュに在る鍵を順に試すだけ**で、取り直さない。
+
+## RT-364.1 動的登録で `sector_identifier_uri` を付け、**その中身（JSON の配列）に `redirect_uris` がすべて在れば**、登録できる
+
+| | |
+|---|---|
+| 観点 | **OP は `sector_identifier_uri` を取りに行き、登録する `redirect_uris` がすべて含まれることを確かめる**（§5）。**含まれていれば登録する**（一覧に、登録しない URI が余分に在ってもよい）。 |
+| 根拠 | OIDC Registration 1.0 §5 / #364 |
+| テスト | `RT36401_sector_identifier_uriにredirect_urisが在れば登録できる` |
+
+**手順**
+
+1. redirect_uris の 2 つと、余分な 1 つを並べた配列を、その URL に置く
+1. redirect_uris に 2 つを入れ、sector_identifier_uri を付けて登録する
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- client_id が返る
+- 応答に sector_identifier_uri が返る（登録したメタデータ）
+
+## RT-364.2 `sector_identifier_uri` の中身に、**登録する `redirect_uris` の 1 つが無ければ**、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **登録する `redirect_uris` は、すべて中身に含まれなければならない**（§5）。**以前は確かめずに `201` で登録していた**（適合性テストの `oidcc-registration-sector-bad`）。**確かめずに受けると、別の RP のホストを名乗れる**（Sector をそのホストにすると、その RP と同じ pairwise の `sub` を得られる。OIDC Core 1.0 §8.1）。 |
+| 根拠 | OIDC Registration 1.0 §5 / #364 |
+| テスト | `RT36402_sector_identifier_uriに無いredirect_uriが在れば断る` |
+
+**手順**
+
+1. redirect_uris の 1 つ（a）だけを並べた配列を、その URL に置く
+1. redirect_uris に a と b を入れて登録する（b は中身に無い）
+1. 同じ中身で、redirect_uris を a だけにすれば登録できる（取りに行った中身で判定している）
+1. その登録を PUT（全置換）で a と b にしようとすると、同じく 400（更新の口でも確かめる）
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- HTTP の状態は 201
+- HTTP の状態は 400
+- error は invalid_client_metadata
+
+**観測（判定しない）**
+
+- error_description
+
+## RT-364.3 `sector_identifier_uri` が**読めなければ**（取れない・配列でない・文字列でない要素・`https` でない）、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **中身は `redirect_uri` の値を並べた JSON の配列で、URL は `https`**（§5）。**確かめられないものは、含まれていると見なさない。****ループバックだけは `http` を許す**（`jwks_uri` と同じ扱い。RFC 8252 §7.3）。 |
+| 根拠 | OIDC Registration 1.0 §5 / #364 |
+| テスト | `RT36403_読めないsector_identifier_uriは断る` |
+
+**手順**
+
+1. 置いていない URL（404）
+1. 配列でない（オブジェクト）
+1. 文字列でない要素が在る
+1. https でない（ループバックでもない http）
+
+**検証（合否を判定する）**
+
+- (1) 置いていない URL（404）：HTTP の状態は 400
+- (1) 置いていない URL（404）：error は invalid_client_metadata
+- (2) 配列でない（オブジェクト）：HTTP の状態は 400
+- (2) 配列でない（オブジェクト）：error は invalid_client_metadata
+- (3) 文字列でない要素が在る：HTTP の状態は 400
+- (3) 文字列でない要素が在る：error は invalid_client_metadata
+- (4) https でない（ループバックでもない http）：HTTP の状態は 400
+- (4) https でない（ループバックでもない http）：error は invalid_client_metadata
+
+## RT-364.4 同じ `sector_identifier_uri` で登録した **pairwise のクライアント 2 つは、同じ利用者に同じ `sub` を返す**。**付けないクライアントと、同じ `sector_identifier_uri` の public のクライアントは別の `sub`**。**管理画面で保存しても `sector_identifier_uri` は残る**
+
+| | |
+|---|---|
+| 観点 | **`sector_identifier_uri` が在れば、そのホストが pairwise の Sector になり、Sector ごとに `sub` を決める**（OIDC Core 1.0 §8.1）。**付けなければ、Sector は `client_id`**（以前どおり。クライアントごとに `sub` が変わる）。**ホストで揃えるのは pairwise だけ**（public のクライアントは Sector が `client_id`。**混ぜると、先に記録された `sub` が他方に返り、pairwise のクライアントに利用者 ID が出る**）。**以前は値を捨てていた**ので、同じ RP の複数のクライアントでも `sub` が揃わなかった。 |
+| 根拠 | OIDC Core 1.0 §8.1 / OIDC Registration 1.0 §2 / #364 |
+| テスト | `RT36404_同じsector_identifier_uriのクライアントは同じsubになる` |
+
+**手順**
+
+1. 先に、同じ sector_identifier_uri の public のクライアントを登録し、sub を出させる（対応表に先に記録させる）
+1. a と b を並べた配列で、a のクライアントと b のクライアントを、同じ sector_identifier_uri の pairwise で登録する
+1. sector_identifier_uri を付けない pairwise のクライアントを登録する
+1. 同じ利用者で、3 つのクライアントの認可コード フローを通し、id_token の sub を比べる
+1. a のクライアントを管理画面で開き、そのまま保存して、管理 API で読み直す
+1. 管理画面で、client_id を「host:」＋ そのホスト名にした pairwise の登録を作ろうとしても、作れない
+1. 管理画面の新規作成に、欄の無い SectorIdentifierUri を送って pairwise の登録を作っても、その値は使われない
+
+**検証（合否を判定する）**
+
+- sub が返る（3 つとも）
+- **同じ sector_identifier_uri の 2 つは、同じ sub**
+- **付けないクライアントは、別の sub**（Sector は client_id）
+- **同じ sector_identifier_uri の public のクライアントとは、別の sub**（先に記録された public の sub を返さない）
+- 画面には sector_identifier_uri の欄が無い
+- 画面で保存しても sector_identifier_uri が残る
+- 保存の後も、同じ sub
+- **「host:」で始まる client_id の登録は作られない**
+- **画面から送った sector_identifier_uri では、Sector が揃わない**（別の sub）
+
+**補足**
+
+- **Sector は `host:` ＋ ホスト名**（`client_id` の Sector と名前を分ける）。**管理画面では `host:` で始まる `client_id` を作れない**（(5)）。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

@@ -68,7 +68,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | **行き先** | **`https` だけ**（ループバックの `http` は許す。`jwks_uri` と同じ `UriOperator.IsHttpsOrLoopback`） |
     /// | **HttpClient** | **`OAuth2AndOIDCClient.HttpClient`**（ID 連携・`jwks_uri`・Back-Channel Logout と同じ。TLS・プロキシの扱いが揃う） |
     /// | **上限** | **時間は `Timeout`、大きさは `MaxResponseBytes`**（超えたら「読めない」） |
-    /// | **控えの寿命** | **`Freshness`**（同じ要求の中で読む前提。古い控えでは通さない） |
+    /// | **リダイレクト** | **別の URL から返った中身は「読めない」**（その URL に置かれた中身だけを見る） |
+    /// | **控えの寿命** | **`Freshness`**（同じ要求の中で読む前提。古い控えでは通さない）。**件数は `MaxEntries` まで** |
+    /// | **仕様との差** | **ループバックの `http` を許すのは、§2・§5 の "https" の MUST からの逸脱**（`jwks_uri` と同じ扱い。開発と試験のため） |
     /// </remarks>
     public static class SectorIdentifierProvider
     {
@@ -87,6 +89,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **古い控えで通さない**（相手が一覧から外した後に、以前の控えで登録できないように）。
         /// </remarks>
         private static readonly TimeSpan Freshness = TimeSpan.FromMinutes(1);
+
+        /// <summary>控えの件数の上限</summary>
+        /// <remarks>
+        /// **寿命の間に控える URL の数を絞る**（1 件は最大 `MaxResponseBytes` の一覧）。
+        /// **超えたら控えない**ので、その登録は「読めない」で断られる（断る側に倒す）。
+        /// </remarks>
+        private const int MaxEntries = 256;
 
         #endregion
 
@@ -157,6 +166,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             SectorIdentifierProvider.Prune();
 
+            if (SectorIdentifierProvider.MaxEntries <= _fetched.Count && !_fetched.ContainsKey(url))
+            {
+                Logging.MyOperationTrace("The sector_identifier_uri was not kept because too many were fetched recently.");
+                return;
+            }
+
             _fetched[url] = new Entry()
             {
                 Uris = uris,
@@ -223,6 +238,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
+                }
+
+                //  **リダイレクトで別の URL に移っていたら、読めないとして扱う**（§5 が見るのは、その URL に置かれた中身）。
+                //    **共有の HttpClient が追うかどうかに頼らない** —
+                //    **追っていれば、そのホストの開いたリダイレクトから、別の場所の中身で Sector を名乗れてしまう。**
+                Uri finalUri = response.RequestMessage?.RequestUri;
+
+                if (finalUri == null || !string.Equals(finalUri.AbsoluteUri, new Uri(url).AbsoluteUri, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException("The response came from another URL.");
                 }
 
                 using (Stream stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))

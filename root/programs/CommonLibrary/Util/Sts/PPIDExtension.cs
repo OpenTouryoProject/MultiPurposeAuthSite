@@ -29,6 +29,7 @@
 //*  2026/09/30  玄人 幸道         発行した sub を対応表から引き、無ければ記録するようにした（#151 の段階 2）
 //*  2026/10/12  玄人 幸道         SAML2 の属性で使う利用者を返すオーバーロードを足した（#286 の段階 4）
 //*  2026/10/31  玄人 幸道         Util から Util/Sts へ移した（配置の見直し。#294）
+//*  2026/11/12  玄人 幸道         sector_identifier_uri が在れば、そのホストを pairwise の Sector にした（OIDC Core 1.0 §8.1。#364）
 //**********************************************************************************
 
 #if NETFX
@@ -142,7 +143,9 @@ namespace MultiPurposeAuthSite.Util.Sts
                     // **pairwise だけが別**（それ以外は public。既定も public）。
                     if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
                     {
-                        sub = PPIDExtension.GeneratePPIDByUserID(clientId, user.Id); // PPID
+                        //  **PPID も Sector で作る**（#364）。**同じ Sector のクライアントは、同じ sub になる**（OIDC Core 1.0 §8.1）。
+                        //    **`sector_identifier_uri` の無いクライアントは、Sector が `client_id` なので、以前と同じ値。**
+                        sub = PPIDExtension.GeneratePPIDByUserID(PPIDExtension.GetSector(clientId, subjectTypes), user.Id); // PPID
                     }
                     else
                     {
@@ -155,7 +158,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                     //   **pairwise 専用ではなく、public も入れる。**
                     //   そうしないと、既定値の変更を無害にできない。
                     sub = SubjectIdProvider.GetOrAdd(
-                        PPIDExtension.GetSector(clientId), user.Id, sub);
+                        PPIDExtension.GetSector(clientId, subjectTypes), user.Id, sub);
                 }
             }
             return sub;
@@ -192,7 +195,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             //   **発行したときに記録してある**ので、**いまの subject_types の設定に関わらず引ける。**
             //   設定を変えた後でも、**以前の sub を持つ RP が壊れない**のはここが効くため。
             string recordedUserId = SubjectIdProvider.GetUserId(
-                PPIDExtension.GetSector(clientId), sub);
+                PPIDExtension.GetSector(clientId, subjectTypes), sub);
 
             if (!string.IsNullOrEmpty(recordedUserId))
             {
@@ -215,7 +218,7 @@ namespace MultiPurposeAuthSite.Util.Sts
                 //
                 //   **復元できても、実在する利用者かは確かめる**（外から来た値なので）。
                 //   FindById が null を返せば、そのまま null になる。
-                string userId = PPIDExtension.GetUserIDFromPPID(clientId, sub);
+                string userId = PPIDExtension.GetUserIDFromPPID(PPIDExtension.GetSector(clientId, subjectTypes), sub);
 
                 user = string.IsNullOrEmpty(userId) ? null : CmnUserStore.FindById(userId);
             }
@@ -263,24 +266,52 @@ namespace MultiPurposeAuthSite.Util.Sts
 
         #region private
 
-        /// <summary>client_id から Sector Identifier を決める（#151 の段階 2）</summary>
+        /// <summary>client_id から Sector Identifier を決める（#151 の段階 2・#364）</summary>
         /// <param name="clientId">client_id</param>
+        /// <param name="subjectTypes">登録の subject_types（呼び出し側が引いた値）</param>
         /// <returns>Sector Identifier</returns>
         /// <remarks>
-        /// **いまは `client_id` をそのまま返す。**
+        /// **pairwise の登録で、`sector_identifier_uri` が在れば、そのホスト**（OIDC Core 1.0 §8.1。#364）。
+        /// **public の登録では、`sector_identifier_uri` が在っても `client_id`**（登録を引かない）。
+        /// **対応表は (Sector, UserId) で、先に記録された `sub` を返す**ので、同じホストを Sector にする
+        /// public と pairwise のクライアントが混ざると、**pairwise のクライアントに利用者 ID がそのまま出る**（逆も）。
+        /// **Sector をホストで揃えるのは pairwise の機能**なので、pairwise に限る。
+        /// **同じ `sector_identifier_uri` のホストで登録したクライアント同士は、同じ `sub` になる。**
+        /// **値は、登録の口で取りに行き、中身に `redirect_uris` がすべて在ることを確かめてある**（OIDC Registration 1.0 §5）
+        /// ので、**別の RP のホストを名乗って、その RP と同じ `sub` を得ることはできない。**
         ///
-        /// **本来の Sector Identifier は、クライアントではなく RP の単位**である
-        /// （OIDC Core §8.1。`sector_identifier_uri` が在ればそのホスト、
-        /// 無ければ `redirect_uri` のホスト）。
-        /// **`sector_identifier_uri` は未対応**なので、いまは `client_id` が Sector である。
-        /// **同じ RP の複数クライアントで `sub` が変わる**のは、そのためである。
+        /// **無ければ `client_id`**（以前どおり）。
+        /// **§8.1 は「無ければ `redirect_uri` のホスト」とするが、そうしていない** —
+        /// **そうすると、既存の pairwise のクライアントの `sub` が変わる**ため（RP は `sub` を主キーとして保存している）。
+        /// **`redirect_uris` に複数のホストが在っても、`sector_identifier_uri` を求めない**のも、Sector が `client_id` だからである。
         ///
-        /// **対応するときは、ここだけを直せばよい。**
         /// 対応表（`SubjectIdentifier`）の列は **`Sector`**（意味）で持っているので、
         /// **既存行はそのまま有効**である（発行済みの `sub` は動かない）。
+        /// **Sector が変わると（`sector_identifier_uri` のホストを変える・省く、`subject_type` を変える）、そのクライアントの `sub` は変わり、**
+        /// **以前の Sector で発行した `sub` は引けなくなる**（対応表も PPID の復号も、いまの Sector で引くため）。
         /// </remarks>
-        private static string GetSector(string clientId)
+        private static string GetSector(string clientId, string subjectTypes)
         {
+            if (subjectTypes != OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
+            {
+                return clientId ?? "";
+            }
+
+            string sectorIdentifierUri = Helper.GetInstance().GetClientSectorIdentifierUri(clientId);
+
+            Uri uri;
+
+            //  **ホスト名が Sector の列に入らない長さなら使わない**（構成ファイルの値は、登録の口の検査を通らないため）。
+            if (!string.IsNullOrEmpty(sectorIdentifierUri)
+                && Uri.TryCreate(sectorIdentifierUri, UriKind.Absolute, out uri)
+                && !string.IsNullOrEmpty(uri.Host)
+                && uri.Host.Length <= Const.MaxLengthOfSectorHost)
+            {
+                //  **ホスト名だけ**（§8.1 : "the host component of that URL"）。`Uri.Host` は小文字にそろう。
+                //  **接頭辞を付けて、`client_id` の Sector と名前を分ける**（`Const.SectorHostPrefix`）。
+                return Const.SectorHostPrefix + uri.Host;
+            }
+
             return clientId ?? "";
         }
 

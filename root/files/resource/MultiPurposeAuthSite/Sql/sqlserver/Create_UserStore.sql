@@ -120,11 +120,11 @@ CREATE TABLE [RefreshTokenDictionary](
 -- sub（Subject Identifier）の対応表（#151 の段階 2）
 --   **発行した sub を記録する。** 以後はここから引くので、
 --   subject_types の既定や PPID の作り方を変えても、**発行済みの sub は動かない。**
---   Sector : いまは client_id。**sector_identifier_uri に対応したら、その解決結果が入る**
+--   Sector : client_id か、"host:" ＋ sector_identifier_uri のホスト名（pairwise の登録で、在れば。#364）
 --            （列の意味は「Sector Identifier」。OIDC Core 8.1）
 --   Sub    : uname のとき利用者名（最大 256）、public のとき UserId、pairwise のとき PPID
 CREATE TABLE [SubjectIdentifier](
-    [Sector] [nvarchar](256) NOT NULL,       -- *PK, Sector Identifier（いまは client_id）
+    [Sector] [nvarchar](256) NOT NULL,       -- *PK, Sector Identifier（client_id か host:＋ホスト名。#364）
     [UserId] [nvarchar](38) NOT NULL,        -- *PK, guid
     [Sub] [nvarchar](256) NOT NULL,          -- 発行した sub
     [CreatedDate] [smalldatetime] NOT NULL,
@@ -215,6 +215,8 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [RequireSignedRequestObject] [bit] NOT NULL DEFAULT 0, -- require_signed_request_object（RFC 9101 §10.5）
     [DPoPBoundAccessTokens] [bit] NOT NULL DEFAULT 0,      -- dpop_bound_access_tokens（RFC 9449 §5.2）
     [TlsCertBoundAccessTokens] [bit] NOT NULL DEFAULT 0,   -- tls_client_certificate_bound_access_tokens（RFC 8705 §3.4）
+    -- pairwise の Sector（#364）。末尾に足してある（ALTER … ADD で揃う）
+    [SectorIdentifierUri] [nvarchar](512) NULL,      -- sector_identifier_uri（OIDC Registration 1.0 §2）。Const.MaxLengthOfUri
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

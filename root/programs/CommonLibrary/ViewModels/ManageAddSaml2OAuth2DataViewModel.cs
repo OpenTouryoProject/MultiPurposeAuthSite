@@ -33,6 +33,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/06  玄人 幸道         RequestObjectSigningAlg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#664）に合わせた（#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         SectorIdentifierUri を追加（#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -878,6 +879,25 @@ namespace MultiPurposeAuthSite.ViewModels
         [JsonIgnore]
         [StringLength(38)]
         public string OwnerUserId { get; set; }
+
+        #endregion
+        #region sector_identifier_uri（OIDC DCR 1.0 §2・§5。#364）
+
+        /// <summary>SectorIdentifierUri（OIDC Registration 1.0 §2 の sector_identifier_uri）</summary>
+        /// <remarks>
+        /// **pairwise の登録なら、Sector を、この URL のホストにする**（OIDC Core 1.0 §8.1。`PPIDExtension.GetSector`。public の登録では使わない）。
+        /// **無ければ `client_id` が Sector**（以前どおり）。
+        ///
+        /// **入るのは動的登録からだけ**（登録の口で取りに行き、中身に `redirect_uris` がすべて在ることを確かめた値。§5）。
+        /// **画面には欄を出さない**（画面の保存では、取りに行って確かめられないため）。**画面の保存では持ち越す。**
+        /// **構成ファイルでは書ける**（`sector_identifier_uri`。配備の管理者が書くので、取りに行かない）。
+        /// </remarks>
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientSectorIdentifierUri)]
+        public string SectorIdentifierUri { get; set; }
 
         #endregion
         #region 編集中の印（#307 の段階 5-a-2）

@@ -558,6 +558,18 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>sector_identifier_uri（OIDC DCR 1.0 §2・§5。#364）</summary>
         public const string ClientSectorIdentifierUri = "sector_identifier_uri";
 
+        /// <summary>ホスト名の Sector に付ける接頭辞（#364）</summary>
+        /// <remarks>
+        /// **Sector には `client_id` と、`sector_identifier_uri` のホスト名の 2 種類が入る**（`PPIDExtension.GetSector`）。
+        /// **接頭辞で名前を分ける** — **分けないと、`client_id` を別の RP のホスト名と同じ文字列にした登録が、その RP と同じ `sub` になる。**
+        /// **管理画面は、この接頭辞で始まる `client_id` を作らない**（動的登録の `client_id` は発行するので当たらない）。
+        /// </remarks>
+        public const string SectorHostPrefix = "host:";
+
+        /// <summary>Sector にできるホスト名の長さの上限（#364）</summary>
+        /// <remarks>**Sector の列は 256 文字**（`SubjectIdentifier.Sector`）。接頭辞の分を引く。</remarks>
+        public const int MaxLengthOfSectorHost = 256 - 5;
+
         /// <summary>id_token_signed_response_alg</summary>
         public const string ClientIdTokenSignedResponseAlg = "id_token_signed_response_alg";
 

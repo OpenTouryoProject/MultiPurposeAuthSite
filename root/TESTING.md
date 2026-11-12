@@ -1169,6 +1169,29 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### 動的登録の `sector_identifier_uri`（`RT-364.*`。#364）
+
+| | 測ること |
+|---|---|
+| **`RT-364.1`** | **中身（JSON の配列）に `redirect_uris` がすべて在れば、登録できる**（`201`。**一覧に余分な URI が在ってもよい**。**応答に `sector_identifier_uri` が返る**） |
+| **`RT-364.2`** | **1 つでも無ければ `400` ＋ `invalid_client_metadata`**（OIDC Registration 1.0 §5）。**同じ中身で、在る URI だけを登録すれば `201`** |
+| **`RT-364.3`** | **読めなければ `400` ＋ `invalid_client_metadata`**（置いていない URL・配列でない・文字列でない要素・`https` でない http） |
+| **`RT-364.4`** | **同じ `sector_identifier_uri` で登録した pairwise のクライアント 2 つは、同じ利用者に同じ `sub` を返し、付けないクライアントと、同じ `sector_identifier_uri` の public のクライアント（先に `sub` を出させる）は別の `sub`**（OIDC Core 1.0 §8.1。ホストで揃えるのは pairwise だけ）。**管理画面で保存しても `sector_identifier_uri` が残り、`sub` も変わらない** |
+
+- **相手の `sector_identifier_uri` は、`jwks_uri` と同じ静的配信のコンテナで用意する**（`Infrastructure.JwksUri.WriteRaw`。44305。**上がっていなければ Skip**）
+- **名前は回ごとに乱数を付ける**（控えは URL ごとに 1 分残るので、回し直しで前の回の控えに当たらないように）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **取りに行く上限（10 秒・64KB）** | 静的配信のコンテナは応答を遅らせられない。大きい中身は置けるが、通しの時間に見合わない |
+| **リダイレクトで別の URL から返った中身を「読めない」にすること** | 静的配信のコンテナはリダイレクトを返さない（`SectorIdentifierProvider.GetStringAsync` の最終の URL の比べ。**net48 で最終の URL が取れるかも未確認**） |
+| **`redirect_uris` の無い登録で断ること** | 登録の口から届かない見込み（`response_types` の既定が `code` で、先に `redirect_uris` が必須になる）。守りとして入れた |
+| **`PUT` で `sector_identifier_uri` を変える・省く** | 全置換の扱いは `RT-307.9`〜`.13` と同じ経路（`Update` の 1. の群）。**変えると以降の `sub` が変わる**ことは `CONFIGURATION.md` に書いた |
+| **認可の無い登録の要求では、取りに行かないこと**（`jwks_uri` も） | 取りに行ったかどうかは、応答からは分からない（どちらも `401` / `403`）。**コードで確かめた**（`MayWarmUpForRegister` / `MayWarmUpForUpdate`） |
+| **設定ファイルの `sector_identifier_uri`** | 設定ファイルのクライアントを足すと、他のテストの前提が変わる（`Helper.GetRegisteredValue` は動的登録と同じ口） |
+
 ##### DPoP の縛りを前と後ろへ広げる（`RT-311.10`〜`.14`。#311 の段階 4）
 
 | | 測ること | いつ回るか |

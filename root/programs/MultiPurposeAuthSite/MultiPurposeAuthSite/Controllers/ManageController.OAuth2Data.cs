@@ -19,6 +19,7 @@
 //*  2026/10/30  玄人 幸道         ほかで使われている client_id では、登録を作らない（#294）
 //*  2026/10/31  玄人 幸道         client_id の重なりは HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
 //*  2026/11/03  玄人 幸道         自己テストの受け口を閉じた配備では、折り返し先の既定値を入れない（#294）
+//*  2026/11/12  玄人 幸道         画面の保存で SectorIdentifierUri を持ち越す。Sector の接頭辞（host:）で始まる client_id を作らない（#364）
 //**********************************************************************************
 
 /*
@@ -223,6 +224,11 @@ namespace MultiPurposeAuthSite.Controllers
                             //    **更新ではなく「作成」に落ちる** —
                             //    **他人の行は、この経路でも書き換えられない**
                             //    （**`Create` は、既に在る `client_id` では通らない**）。
+                            //  **`sector_identifier_uri` は、フォームから受けない**（#364）。**画面には欄が無いが、送れば束ねられる。**
+                            //    **入るのは、動的登録で取りに行って確かめた値だけ**（OIDC Registration 1.0 §5）。
+                            //    **確かめていない値が Sector になると、別の RP と同じ `sub` を得られる。** **更新の分岐は、下で現行の行から持ち越す。**
+                            model.SectorIdentifierUri = null;
+
                             ManageAddSaml2OAuth2DataViewModel owned
                                 = Sts.Saml2OAuth2DataProvider.GetByOwnerAndClientID(user.Id, model.ClientID);
 
@@ -245,6 +251,10 @@ namespace MultiPurposeAuthSite.Controllers
                                 //  **画面に欄の無い列も持ち越す**（行を丸ごと上書きするので、**持ち越さないと消える**）。
                                 //    **EC の公開鍵**は、動的登録の `jwks` か構成ファイルから入る（`RT-307.28`）。
                                 model.JwkECDsaPublickey = owned.JwkECDsaPublickey;
+
+                                //    **`sector_identifier_uri`** は、動的登録で取りに行って確かめた値だけが入る（#364）。
+                                //    **画面には欄が無い**（画面の保存では確かめられない）ので、**持ち越さないと消え、pairwise の `sub` が変わる。**
+                                model.SectorIdentifierUri = owned.SectorIdentifierUri;
 
                                 //  **動的登録で作られた行を、画面から書き替えた**（#307 の段階 6）。
                                 //    **記録に残す** —
@@ -279,8 +289,13 @@ namespace MultiPurposeAuthSite.Controllers
                                 return RedirectToAction("Saml2OAuth2DataList", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                             }
                             else if (!string.IsNullOrEmpty(model.ClientID)
-                                && Helper.GetInstance().HasClient(model.ClientID))
+                                && (Helper.GetInstance().HasClient(model.ClientID)
+                                    || model.ClientID.StartsWith(Const.SectorHostPrefix, StringComparison.OrdinalIgnoreCase)))
                             {
+                                //  **Sector の接頭辞（`host:`）で始まる `client_id` も作らない**（#364）。
+                                //    **pairwise の Sector は `client_id` か `host:` ＋ `sector_identifier_uri` のホスト名**なので、
+                                //    **その形の `client_id` を許すと、別の RP の Sector と同じになり、同じ `sub` を得られる。**
+                                //    **使えない `client_id` として、同じ文言で断る**（撃ち分けない）。
                                 //  **ほかで使われている `client_id` では作らない**（#294）。
                                 //    **以前は、mem では何もせずに「成功」と出し、DB では主キーの違反で 500 になっていた。**
                                 //    **構成ファイルのクライアントとも重ねない**（引くときは構成ファイルが勝つので、作っても効かない）。

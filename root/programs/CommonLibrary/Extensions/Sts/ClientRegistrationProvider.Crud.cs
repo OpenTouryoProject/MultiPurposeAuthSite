@@ -32,6 +32,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/08  玄人 幸道         更新（PUT）で、プロファイルを強制する 4 つのメタデータは、立てられるが下げられないようにした（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を、検査の前に取りに行くようにした（WarmUpSectorIdentifierUriAsync。#364）
+//*  2026/11/12  玄人 幸道         取りに行くのは、呼び出し元の認可を確かめた後だけにした（MayWarmUpForRegister / MayWarmUpForUpdate。#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -140,6 +141,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //    **断るのは `Validate`** である。
                 await SectorIdentifierProvider.WarmUpAsync(url);
             }
+        }
+
+        /// <summary>**登録（`POST`）で、取りに行ってよいか**（呼び出し元の認可を確かめた後か。#364）</summary>
+        /// <param name="identity">検証済みのアクセス トークンの ClaimsIdentity（無効なら null）</param>
+        /// <returns>取りに行ってよいなら true</returns>
+        /// <remarks>
+        /// **認可の無い要求で、OP に外の URL を取りに行かせない**（`jwks_uri`・`sector_identifier_uri`）。
+        /// **見るのは `Register` の認可の前半**（トークンが有効で、専用 scope を持つ）。所有者の決定は見ない
+        /// （**専用 scope のトークンを持てるのは、登録を作れる者だけ**。所有者が決まらなければ `Register` が `403` で断る）。
+        /// </remarks>
+        public static bool MayWarmUpForRegister(ClaimsIdentity identity)
+        {
+            return identity != null
+                && identity.Claims.Any(x =>
+                    x.Type == OAuth2AndOIDCConst.UrnScopesClaim
+                    && x.Value == Const.ScopeClientRegistration);
+        }
+
+        /// <summary>**更新（`PUT`）で、取りに行ってよいか**（`registration_access_token` を確かめた後か。#364）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="bearerToken">提示された registration_access_token</param>
+        /// <returns>取りに行ってよいなら true</returns>
+        /// <remarks>**`Update` と同じ `Authorize` で確かめる**（**認可の無い要求で、OP に外の URL を取りに行かせない**）。</remarks>
+        public static bool MayWarmUpForUpdate(string client_id, string bearerToken)
+        {
+            return ClientRegistrationProvider.Authorize(client_id, bearerToken,
+                out ManageAddSaml2OAuth2DataViewModel _, out Dictionary<string, string> _) == 0;
         }
 
         /// <summary>本文と `software_statement` の主張から、1 つの名前の値を集める</summary>
@@ -452,7 +480,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | 順 | 列 | 扱い |
         /// |---|---|---|
-        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**） |
+        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
         /// | 2 | `Jwk*` ↔ `JwksUri` | **要求が片方を入れたら、もう片方は消える**（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
         /// | 3 | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` | **要求に在れば置き換え、無ければ持ち越す** |
         /// | 4 | `ClientMode` | **持ち越す**（**空のときだけ `normal`**。管理画面で FAPI の登録にしたものを、`PUT` で下げない） |
@@ -587,6 +615,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             model.SoftwareVersion = requested.SoftwareVersion;
             model.SubjectTypes = requested.SubjectTypes;
             model.IdTokenSignedResponseAlg = requested.IdTokenSignedResponseAlg;
+
+            //    **`sector_identifier_uri` も全置換**（#364）。**ホストを変えたり省いたりすると Sector が変わり、pairwise の `sub` が変わる**
+            //    （**以前の `sub` は引けなくなる**。RP 自身の操作なので許す。`GET` の応答をそのまま戻せば残る）。
+            model.SectorIdentifierUri = requested.SectorIdentifierUri;
 
             //    **省いたら、秘密ベース（`client_secret_basic` / `client_secret_post`）に戻る。**
             model.TokenEndpointAuthMethod = requested.TokenEndpointAuthMethod;

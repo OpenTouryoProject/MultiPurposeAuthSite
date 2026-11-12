@@ -1206,6 +1206,33 @@ ALTER TABLE Saml2OAuth2Data
     ADD COLUMN TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false;
 ```
 
+### pairwise の Sector を `sector_identifier_uri` で決める（#364）
+
+**動的登録（RFC 7591）で `sector_identifier_uri` を付けると、pairwise の登録では、`sub` の Sector が、その URL のホストになる**（OIDC Core 1.0 §8.1）。**public の登録では使わない**（Sector は `client_id`。同じホストの public と pairwise が混ざると、先に記録された `sub` が他方に返るため）。
+**同じホストの `sector_identifier_uri` で登録したクライアント同士は、同じ利用者に同じ `sub` を返す**（同じ RP の複数のクライアント）。
+**付けなければ、Sector は `client_id`**（以前どおり。クライアントごとに `sub` が変わる）。経緯は [`ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) の D-14。
+
+| | |
+|---|---|
+| **登録のときに確かめる** | **その URL を取りに行き、中身（`redirect_uri` を並べた JSON の配列）に、登録する `redirect_uris` がすべて在ることを確かめる**（OIDC Registration 1.0 §5）。**無い・読めない・`https` でないなら `400` ＋ `invalid_client_metadata`**（読めない・無いは同じ文言。**リダイレクトで別の URL から返った中身も「読めない」**）。**`redirect_uris` の無い登録（client_credentials・ROPC だけなど）では受けない**（突き合わせる値が無いため）。**ループバックだけ `http` を許すのは、§2・§5 の `https` の MUST からの逸脱**（`jwks_uri` と同じ扱い。開発と試験のため） |
+| **取りに行く上限** | 10 秒・64KB（`SectorIdentifierProvider`） |
+| **`PUT`（RFC 7592）** | **全置換**（省いたら消える）。**ホストを変えたり省いたりすると Sector が変わり、そのクライアントの `sub` が変わる。** **以前に発行した `sub`（その `sub` のトークン・`id_token_hint`）は、新しい Sector では利用者に引けなくなる**（RP から見ると別人になる。`subject_type` を変えたときも同じ）。**読んで直して返せば（`GET` の応答をそのまま戻せば）、値は残る** |
+| **クライアント登録の画面** | **欄を出さない**（画面の保存では取りに行って確かめられないため）。**保存しても、動的登録で入れた値を持ち越す** |
+| **設定ファイル**（`OAuth2ClientsInformation`） | **`sector_identifier_uri` を書ける**（配備の管理者が書くので、**取りに行かない**） |
+| **Sector の値** | **`host:` ＋ ホスト名**（`client_id` の Sector と名前を分ける）。**ホスト名は 251 文字まで**（Sector の列が 256 文字）。**クライアント登録の画面では、`host:` で始まる `client_id` を作れない**（作れると、別の RP の Sector と同じになる） |
+| **`redirect_uris` のホストが複数のとき** | **`sector_identifier_uri` を求めない**（Sector が `client_id` なので、§8.1 の前提に当たらない） |
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 以前どおり `client_id` が Sector）になる。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [SectorIdentifierUri] [nvarchar](512) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("SectorIdentifierUri" NVARCHAR2(512) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
+```
+
 ### `redirect_uri` の記号
 
 `test_self_code` / `test_self_token` は URL ではなく**記号**である。

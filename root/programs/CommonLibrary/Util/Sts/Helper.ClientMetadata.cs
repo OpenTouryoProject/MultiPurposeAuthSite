@@ -38,6 +38,7 @@
 //*  2026/11/08  玄人 幸道         client_mode と認証の方法の両方が合う登録だけを引く口を足した（自己テストの MTLS のボタン。#345）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を引く口を足した（#346 の段階 1）
 //*  2026/11/10  玄人 幸道         登録された id_token_signed_response_alg を、既定に倒さずに引く口を足した（#355）
+//*  2026/11/12  玄人 幸道         登録された sector_identifier_uri を引く口を足した（#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -403,6 +404,16 @@ namespace MultiPurposeAuthSite.Util.Sts
         {
             return this.GetRegisteredFlag(client_id,
                 Const.ClientTlsClientCertificateBoundAccessTokens, model => model.TlsCertBoundAccessTokens);
+        }
+
+        /// <summary>登録された sector_identifier_uri を引く（OIDC Registration 1.0 §2。#364）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>sector_identifier_uri（**登録が無ければ null**）</returns>
+        /// <remarks>**pairwise の Sector を決めるのに使う**（`PPIDExtension.GetSector`。OIDC Core 1.0 §8.1）。</remarks>
+        public string GetClientSectorIdentifierUri(string client_id)
+        {
+            return this.GetRegisteredValue(client_id,
+                Const.ClientSectorIdentifierUri, model => model.SectorIdentifierUri);
         }
 
         /// <summary>登録された真偽値を引く（構成ファイル → saml2OAuth2Data。#346）</summary>

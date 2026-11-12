@@ -39,6 +39,7 @@
 //*  2026/10/31  玄人 幸道         CORS の public の判定のため、GetAllUris で token_endpoint_auth_method も読む（#294）
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の列（4 つ）を追加（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         SectorIdentifierUri の列を追加（#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -148,7 +149,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             "RequirePar",
             "RequireSignedRequestObject",
             "DPoPBoundAccessTokens",
-            "TlsCertBoundAccessTokens"
+            "TlsCertBoundAccessTokens",
+            //  **pairwise の Sector**（#364）。**末尾に足す**（同上）。
+            "SectorIdentifierUri"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -360,6 +363,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             Saml2OAuth2DataProvider.AddFlag(prm, "DPoPBoundAccessTokens", model.DPoPBoundAccessTokens, storeType);
             Saml2OAuth2DataProvider.AddFlag(prm, "TlsCertBoundAccessTokens", model.TlsCertBoundAccessTokens, storeType);
 
+            //  **pairwise の Sector**（#364）。
+            prm.Add("SectorIdentifierUri", model.SectorIdentifierUri);
+
             return prm;
         }
 
@@ -477,7 +483,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 RequirePar = model.RequirePar,
                 RequireSignedRequestObject = model.RequireSignedRequestObject,
                 DPoPBoundAccessTokens = model.DPoPBoundAccessTokens,
-                TlsCertBoundAccessTokens = model.TlsCertBoundAccessTokens
+                TlsCertBoundAccessTokens = model.TlsCertBoundAccessTokens,
+                //  **pairwise の Sector**（#364）。
+                SectorIdentifierUri = model.SectorIdentifierUri
             };
         }
 

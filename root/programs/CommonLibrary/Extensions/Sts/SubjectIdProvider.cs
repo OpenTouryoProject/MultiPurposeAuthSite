@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/30  玄人 幸道         新規（#151 の段階 2）
 //*  2026/11/03  玄人 幸道         記録の失敗のうち、競合だけを無視する（#331）
+//*  2026/11/12  玄人 幸道         Sector の説明を、sector_identifier_uri に対応した後のものにした（#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -66,8 +67,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// むしろ表の意味が **「この RP には、この利用者を、この `sub` で名乗った」**になり、
     /// **守りたい契約そのもの**を記録することになる。
     ///
-    /// **Sector は、いまは `client_id`。**
-    /// `sector_identifier_uri`（OIDC Core §8.1）に対応したら、その解決結果が入る。
+    /// **Sector は、登録に `sector_identifier_uri` が在ればそのホスト、無ければ `client_id`**
+    /// （OIDC Core §8.1。#364。`PPIDExtension.GetSector`）。
     /// **列の意味は「Sector Identifier」**なので、対応しても**既存行はそのまま有効**である。
     ///
     /// **利用者を削除したときの後始末は、DB では外部キー（ON DELETE CASCADE）が行う。**
@@ -100,7 +101,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <summary>
         /// 記録済みの `sub` を返す。無ければ `newSub` を記録して返す。
         /// </summary>
-        /// <param name="sector">Sector Identifier（いまは client_id）</param>
+        /// <param name="sector">Sector Identifier（sector_identifier_uri のホストか client_id。#364）</param>
         /// <param name="userId">UserId</param>
         /// <param name="newSub">記録されていないときに記録する値</param>
         /// <returns>sub</returns>
