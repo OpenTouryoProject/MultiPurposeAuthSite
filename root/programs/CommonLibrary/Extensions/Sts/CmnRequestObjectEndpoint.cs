@@ -39,6 +39,7 @@
 //*  2026/11/06  玄人 幸道         exp・nbf を Open棟梁 の TryReadNumericDate で読む。invalid_request_object を Open棟梁 の定数にし、根拠を RFC 9101 §7 に直した（#337）
 //*  2026/11/09  玄人 幸道         預ける Request Object に、PAR か・署名付きかの印を付ける（#346 の段階 2）
 //*  2026/11/10  玄人 幸道         PAR の応答の expires_in を JSON の数値にした（#353）
+//*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを確かめ、その鍵の指紋を dpop_jkt として預ける。dpop_jkt と食い違えば断る（RFC 9449 §10.1。#365）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -342,6 +343,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="assertion">client_assertion（private_key_jwt）</param>
         /// <param name="x509">クライアント証明書（mTLS）</param>
         /// <param name="parameters">フォームのパラメタ（request を含むことがある）</param>
+        /// <param name="dPoPProof">`DPoP` ヘッダの値（**無ければ空**。RFC 9449 §10.1。#365）</param>
         /// <param name="ret">応答（request_uri / expires_in。**expires_in は JSON の数値**。RFC 9126 §2.2。#353）</param>
         /// <param name="err">エラー</param>
         /// <returns>成否</returns>
@@ -355,10 +357,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | 応答 | iss / aud / request_uri / exp | **request_uri / expires_in**（§2.2） |
         ///
         /// 有効期限と使い切りは、#188 で入れた RequestObjectProvider の仕組みをそのまま使う。
+        ///
+        /// **`DPoP` ヘッダが在れば、その鍵に認可コードを縛る**（RFC 9449 §10.1。#365）。
+        /// **以前はヘッダを見ておらず、`dpop_jkt` を送った場合だけ縛っていた**（#311 の段階 4）。
+        /// **2 つの縛り方は、どちらも受けなければならない**（§10.1 の MUST）。
         /// </remarks>
         public static bool PushedAuthorizationRequest(
             string client_id, string client_secret, string assertion, X509Certificate2 x509,
-            NameValueCollection parameters,
+            NameValueCollection parameters, string dPoPProof,
             out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -572,6 +578,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
+            #region DPoP の証明（RFC 9449 §10.1。#365）
+
+            //  **ほかの検証をすべて通った後で見る** — **断る要求で、証明の `jti` を使い済みにしない**
+            //    （**`CmnDPoP.Verify` は、通った証明を台帳に記録する**）。
+            if (!CmnRequestObjectEndpoint.BindDPoPProof(dPoPProof, payload, err))
+            {
+                return false;
+            }
+
+            #endregion
+
             #region 預かる
 
             //  **経路の印**（#346）。**フォームの値で同じ名前を入れてきても、ここで上書きする。**
@@ -591,6 +608,61 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return true;
 
             #endregion
+        }
+
+        /// <summary>PAR の `DPoP` ヘッダを確かめ、その鍵の指紋を `dpop_jkt` として預ける（#365）</summary>
+        /// <param name="dPoPProof">`DPoP` ヘッダの値（無ければ空）</param>
+        /// <param name="payload">預ける中身（**`dpop_jkt` を書き込む**）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// RFC 9449 §10.1 :
+        ///
+        /// | 来たもの | 振る舞い |
+        /// |---|---|
+        /// | **ヘッダ無し** | **何もしない**（`dpop_jkt` が在れば、これまでどおりそれで縛る。#311 の段階 4） |
+        /// | **ヘッダが通らない** | **`invalid_dpop_proof`**（nonce が要るなら `use_dpop_nonce`。`/token` と同じ。§5・§8） |
+        /// | **ヘッダが通り、`dpop_jkt` が違う** | **`invalid_request`**（**証明は正しく、要求が食い違っている**。§10.1 は断ることだけを求め、エラー コードを決めていない） |
+        /// | **ヘッダが通り、`dpop_jkt` が無いか同じ** | **指紋を `dpop_jkt` として預ける**（**コードがその鍵に縛られる**） |
+        ///
+        /// **縛りの実体は、預けた中身の `dpop_jkt`**（`AuthorizationCodeProvider` が読む）なので、
+        /// **ここで書き込めば、`/token` 側は変えずに済む。**
+        /// **`htu` は設定から作る**（`CmnDPoP.ParEndpointUri`。**要求の `Host` を信じない**）。
+        /// </remarks>
+        private static bool BindDPoPProof(
+            string dPoPProof, JObject payload, Dictionary<string, string> err)
+        {
+            if (string.IsNullOrEmpty(dPoPProof))
+            {
+                return true;
+            }
+
+            if (!CmnDPoP.Verify(dPoPProof, "POST", CmnDPoP.ParEndpointUri, CmnDPoP.PurposeAs,
+                out string jkt, out string error, out string errDescription))
+            {
+                //  **`use_dpop_nonce` なら、各アプリの `OAuth2Error` が `DPoP-Nonce` を付ける**（§8）。
+                err.Add(OAuth2AndOIDCConst.error, error);
+                err.Add(OAuth2AndOIDCConst.error_description, errDescription);
+                return false;
+            }
+
+            //  **`dpop_jkt` も来ていたら、指紋と一致すること**（§10.1 の MUST）。
+            //    **文字列でない値も「一致しない」として断る**（外から来る値である）。
+            JToken requested = payload[OAuth2AndOIDCConst.dpop_jkt];
+
+            if (requested != null
+                && (requested.Type != JTokenType.String
+                    || !string.Equals((string)requested, jkt, StringComparison.Ordinal)))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The dpop_jkt does not match the key of the DPoP proof.");
+                return false;
+            }
+
+            payload[OAuth2AndOIDCConst.dpop_jkt] = jkt;
+
+            return true;
         }
 
         #endregion

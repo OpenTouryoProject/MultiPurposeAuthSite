@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=69166bec-e8a8-45c6-9ad6-025a3e2e0a0c&code=bogus
+1. GET /Account/EmailConfirmation?userId=cf75deb5-e531-43c6-93a0-5f22becc3583&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=69166bec-e8a8-45c6-9ad6-025a3e2e0a0c&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=69166bec-e8a8-45c6-9ad6-025a3e2e0a0c&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=cf75deb5-e531-43c6-93a0-5f22becc3583&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=cf75deb5-e531-43c6-93a0-5f22becc3583&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12057,6 +12057,89 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **Sector は `host:` ＋ ホスト名**（`client_id` の Sector と名前を分ける）。**管理画面では `host:` で始まる `client_id` を作れない**（(5)）。
+
+## RT-365.1 **PAR の要求に `DPoP` ヘッダを付けると、その `code` はその鍵の証明でしか引き換えられない**（別の鍵・証明なしは `invalid_grant`）。**ヘッダを付けない PAR は、従来どおり縛られない**
+
+| | |
+|---|---|
+| 観点 | **§10.1 は、PAR の `DPoP` ヘッダの鍵の指紋を「`dpop_jkt` で渡されたもの」として扱えとしている** — **続くトークン要求は、同じ鍵の証明でなければ断る。****以前はヘッダを見ておらず、`code` が鍵に縛られなかった**（**盗まれた `code` への備えの 1 つが効いていなかった**）。 |
+| 根拠 | RFC 9449 §10.1 / #365 |
+| テスト | `RT36501_PARのDPoPヘッダの鍵にcodeが縛られる` |
+
+**手順**
+
+1. EC の鍵の証明を付けて PAR に預け、その code を EC の証明で引き換える
+1. EC の鍵の証明で預けた code を、**別の鍵（RSA）の証明**で引き換える
+1. 同じ code を、**証明なし**で引き換える
+1. **その code は、まだ使える**（EC の証明で引き換える）
+1. `DPoP` ヘッダを付けない PAR の code は、従来どおり証明なしで引き換えられる
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- token_type が DPoP
+- cnf.jkt が PAR の証明の鍵の指紋と一致する
+- invalid_grant
+- 400
+- invalid_grant
+- 400
+- HTTP 200（断りで消費していない）
+- HTTP 200
+- token_type は bearer
+
+## RT-365.2 **PAR に `dpop_jkt` と `DPoP` ヘッダの両方が来て、指紋が違えば `400` ＋ `invalid_request` で断る。****同じなら受け付け、その鍵に縛る**
+
+| | |
+|---|---|
+| 観点 | **§10.1 は、`dpop_jkt` の指紋が `DPoP` ヘッダの公開鍵と合わなければ、要求を断れとしている**（MUST）。**エラー コードは決めていない。** **証明は正しく、要求が食い違っている**ので `invalid_request` にした（**証明が通らないときの `invalid_dpop_proof` と分ける**。RT-365.3）。 |
+| 根拠 | RFC 9449 §10.1 / #365 |
+| テスト | `RT36502_dpop_jktとDPoPヘッダの鍵が違えばPARで断る` |
+
+**手順**
+
+1. `dpop_jkt` に RSA の鍵の指紋、`DPoP` ヘッダに EC の鍵の証明を付けて預ける
+1. `dpop_jkt` も EC の鍵の指紋にして預け、その code を RSA の証明で引き換える
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- invalid_request
+- request_uri を返さない
+- invalid_grant（EC の鍵に縛られている）
+
+**補足**
+
+- **`request`（JAR）の中の `dpop_jkt` も、同じ所で照合している**（預ける中身を作った後で見る）。**JAR の経路は測っていない。**
+
+## RT-365.3 **PAR の `DPoP` ヘッダが通らなければ `400` ＋ `invalid_dpop_proof` で断る**（壊れた証明・宛先（`htu`）の違う証明・使い回した証明）。**ほかの理由で断った PAR では、証明を使い済みにしない**
+
+| | |
+|---|---|
+| 観点 | **§10.1 は、PAR の証明を §4.3 のとおり確かめよとしている**（MUST）。**通らない証明を黙って捨てると、縛ったつもりのクライアントが縛られない**（`/token` で `invalid_dpop_proof` にしているのと同じ。§5）。**証明は一度しか通らない**（§11.1）ので、**別の理由で断る要求が証明を使い済みにすると、クライアントは作り直しを強いられる。** |
+| 根拠 | RFC 9449 §10.1 / RFC 9449 §4.3 / #365 |
+| テスト | `RT36503_PARのDPoPの証明も確かめる` |
+
+**手順**
+
+1. JWT として読めない値を `DPoP` ヘッダに入れて預ける
+1. **`/token` 宛ての証明**（`htu` が違う）で預ける
+1. 正しい証明で、**`request_uri` を付けた（断られる）PAR** を送り、同じ証明で正しい PAR を送る
+1. その証明を、**もう一度**使って預ける
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- invalid_dpop_proof
+- HTTP 400
+- invalid_dpop_proof
+- 先の PAR は invalid_request
+- 同じ証明の PAR は HTTP 201（**先の断りで使い済みになっていない**）
+- HTTP 400
+- invalid_dpop_proof（使い回し）
+
+**補足**
+
+- **`nonce` を要求する配備（`EnableDPoPNonce`）では、PAR の口も `use_dpop_nonce` ＋ `DPoP-Nonce` で答える**（`/token` と同じ用途の nonce）。**既定の配備では要求しないので、測っていない。**
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

@@ -1169,6 +1169,25 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
+
+| | 測ること |
+|---|---|
+| **`RT-365.1`** | **PAR の要求に `DPoP` ヘッダを付けると、その `code` はその鍵の証明でしか引き換えられない**（RFC 9449 §10.1。**別の鍵・証明なしは `invalid_grant`**。**断られた `code` はまだ使える**。**ヘッダを付けない PAR は、従来どおり縛られない**） |
+| **`RT-365.2`** | **`dpop_jkt` と `DPoP` ヘッダの鍵が違えば、PAR で `400` ＋ `invalid_request`**（§10.1 はエラー コードを決めていない。**証明は正しく、要求が食い違っている**）。**同じなら受け付け、その鍵に縛る** |
+| **`RT-365.3`** | **PAR の証明が通らなければ `400` ＋ `invalid_dpop_proof`**（壊れた証明・`/token` 宛ての証明・使い回した証明）。**ほかの理由で断った PAR では、証明を使い済みにしない** |
+
+- **縛りの実体は、預ける中身の `dpop_jkt`**（`CmnRequestObjectEndpoint.BindDPoPProof` が書き込み、`AuthorizationCodeProvider` が読む）。`/token` 側は変えていない
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`request`（JAR）の中の `dpop_jkt` との照合** | 預ける中身を作った後の同じ所で照合している（フォームの経路と同じ）。JAR を組むテストの補助は RT-229.3 に在るが、組み合わせは足していない |
+| **`nonce` を要求する配備（`EnableDPoPNonce`）での PAR の `use_dpop_nonce`** | 既定の配備では要求しない。`/token` と同じ用途の nonce・同じ `OAuth2Error` の経路（`DPoP-Nonce` を付ける） |
+| **`private_key_jwt`・mTLS のクライアント、`dpop_bound_access_tokens` を必須にした登録での PAR** | クライアント認証は従来の経路のまま。`DPoP` ヘッダの扱いは認証の方法によらない。適合性テストの `fapi2-sp-private-key-jwt-dpop`（`private_key_jwt`・`dpop_bound_access_tokens` の登録）で測る |
+| **空の `dpop_jkt`（`dpop_jkt=`）と `DPoP` ヘッダの組み合わせ** | 指紋と一致しないので `invalid_request` で断る（`BindDPoPProof`）。ヘッダの無い空の `dpop_jkt` は、従来どおり縛らない（`AuthorizationCodeProvider.GetDPoPJkt` が空を「申告なし」と読む） |
+
 ##### 動的登録の `sector_identifier_uri`（`RT-364.*`。#364）
 
 | | 測ること |
