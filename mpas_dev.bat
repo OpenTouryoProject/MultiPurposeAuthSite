@@ -8,7 +8,7 @@
 @rem Where the two repositories are (#344, OpenTouryoProject/OpenTouryo#652):
 @rem   1. If both environment variables OT_OTR_PATH (OpenTouryo) and OT_MPAS_PATH (MultiPurposeAuthSite)
 @rem      are set, they are used. This batch file can then be run from anywhere.
-@rem      To register them, see OpenTouryo root/files/tools/PowerShell/Register-RepoPaths.ps1.
+@rem      To register them, see OpenTouryo root/files/tools/PowerShell/RepoPaths/Register-RepoPaths.ps1.
 @rem      The old names OTR_PATH and MPAS_PATH are no longer read (renamed with the OT_ prefix,
 @rem      OpenTouryoProject/OpenTouryo#652).
 @rem   2. Otherwise, the paths are relative to the current folder, as before: it assumes that

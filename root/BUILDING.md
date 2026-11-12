@@ -296,7 +296,7 @@ OpenTouryo を別途 clone してビルドし、`mpas_dev.bat` で複写する�
 **名前は `OT_` で始まる**（OpenTouryoProject/OpenTouryo#652 の追加の修正で、`OTR_PATH`・`MPAS_PATH` から変わった）。
 **古い名前は読まない**（OpenTouryo と同じく、互換の分岐を残さない）。古い名前で登録していたら、登録し直す。
 環境変数は、リポジトリの場所を引く約束（OpenTouryoProject/OpenTouryo#652）で、
-**登録は OpenTouryo の `root/files/tools/PowerShell/Register-RepoPaths.ps1`**（一覧と既定の場所は、同じフォルダの `_RepoPaths.csv`）。
+**登録は OpenTouryo の `root/files/tools/PowerShell/RepoPaths/Register-RepoPaths.ps1`**（一覧と既定の場所は、同じフォルダの `_RepoPaths.csv`）。
 
 > **取得ステップの合否は、出力ではなくフォルダの実在で判定している。**
 > `xcopy` の失敗は `: error` の形で出ないため、出力解析では拾えない。
