@@ -40,6 +40,7 @@
 //*  2026/11/06  玄人 幸道         /ros・/par の URL と、SAML2 の応答を検証する証明書を、サーバの値で読む（OpenTouryo#666。#339）
 //*  2026/11/08  玄人 幸道         Request Object を Open棟梁 の版（有効期間と code_challenge を受ける。OpenTouryo#675）で作り、自前の署名し直しをやめた（#345）
 //*  2026/11/08  玄人 幸道         トークン エンドポイント系の認証を、登録の token_endpoint_auth_method で決める（PAR も。OpenTouryo#676。#345）
+//*  2026/11/13  玄人 幸道         Request Object を PS256 で署名する（FAPI の登録は RS256 の Request Object を断るようになった。#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -257,6 +258,11 @@ namespace MultiPurposeAuthSite.Util.Test
         /// **`code_challenge` を渡すと、`code_challenge_method` = `S256` と一緒に Request Object に入る**
         /// （RFC 9101 §4、RFC 7636 §4.3。#345）。**FAPI 2.0 は PAR と S256 の PKCE を求める**
         /// （FAPI 2.0 Security Profile §5.3.3.2）。FAPI1 のボタンは空で呼ぶ（PKCE のクレームは入らない）。
+        ///
+        /// **署名は PS256**（#370）。**FAPI の登録は RS256 の Request Object を断る**（FAPI 1.0 Advanced §8.6、
+        /// FAPI 2.0 Security Profile §5.4.1）。**このクライアントのボタンは、どれも FAPI の登録で預ける。**
+        /// **Open棟梁 の `RequestObject.Create` は RS256 で署名する**ので、
+        /// **中身（payload）とヘッダの `typ` はそのまま、同じ RSA の鍵で PS256 に署名し直す。**
         /// </remarks>
         public static string CreateRequestObject(
             string clientId, string responseType, string responseMode,
@@ -275,8 +281,31 @@ namespace MultiPurposeAuthSite.Util.Test
                 TimeSpan.FromSeconds(SelfTestClient.RequestObjectLifetimeSeconds),
                 rsa);
 
+            // **PS256 に署名し直す**（#370。中身と typ は変えない）。
+            JObject payload = JwtReader.TryReadPayload(requestObject);
+            string typ = JwtReader.TryReadTyp(requestObject);
+            JWS signer = JwsFactory.CreateFromRsaParameters(JwtConst.PS256, rsa);
+
+            if (payload == null || signer == null)
+            {
+                return "";
+            }
+
+            if (!string.IsNullOrEmpty(typ))
+            {
+                signer.JWSHeader.typ = typ;
+            }
+
+            requestObject = signer.Create(payload.ToString(Newtonsoft.Json.Formatting.None));
+
             // 検証テスト（作ったものを、自分の公開鍵で、期待する aud で検証できるか）
-            if (!RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out string _, rsa))
+            JWS verifier = JwsFactory.CreateFromRsaParameters(JwtConst.PS256, new RSAParameters()
+            {
+                Modulus = rsa.Modulus,
+                Exponent = rsa.Exponent
+            });
+
+            if (!RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out string _, verifier))
             {
                 return "";
             }

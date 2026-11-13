@@ -45,6 +45,7 @@
 //*  2026/11/12  玄人 幸道         jwks_uri の控えに無い kid なら、その場で取り直して短く待つ（下限は RemoteJwkSetStore.GetJwkAsync に従う。#363）
 //*  2026/11/13  玄人 幸道         資格情報で認証したかを返す（IsConfidentialProof・Device AuthZ の confidential。refresh_token を DPoP の鍵に縛るか。#367）
 //*  2026/11/13  玄人 幸道         client_assertion_type の無い client_assertion を受けない GetClientAssertion を足した（RFC 7521 §4.2。Open棟梁 の回避。#368）
+//*  2026/11/13  玄人 幸道         Request Object で受ける alg に PS256・ES256 を足し、FAPI の登録の alg（FapiRequestObjectSigningAlgs）を足した（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -790,15 +791,38 @@ namespace MultiPurposeAuthSite.TokenProviders
             JwtConst.RS256
         };
 
-        /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262）</summary>
+        /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262・#370）</summary>
         /// <remarks>
-        /// **使っている版の `RequestObject.Verify`（JWK を受ける版）が `JWS_RS256_Param` 固定**なので、いまは `RS256` だけ。
-        /// **広げるのは、まだ起票していない別の作業**である（検証鍵 `JWS` を受ける版が在る。OpenTouryo#664）。
-        /// **CIBA の `request` は別**（使っている版の `VerifyCiba` が `ES256` 固定。仕様でも別の登録項目）。
+        /// **この一覧が、広告（`request_object_signing_alg_values_supported`）と、
+        /// 登録値の検証（`request_object_signing_alg`）と、画面の選択肢を決める**（#262）。
+        ///
+        /// **検証鍵は、ヘッダの alg と登録の鍵から作る**（`CmnRequestObjectEndpoint.SelectVerifyingJws`。#370）。
+        ///
+        /// | alg | 鍵 |
+        /// |---|---|
+        /// | `RS256`・`PS256` | 登録の RSA 公開鍵（`jwk_rsa_publickey`） |
+        /// | `ES256` | 登録の EC 公開鍵（`jwk_ecdsa_publickey`。P-256） |
+        ///
+        /// **以前は `RS256` だけだった**（使っていた `RequestObject.Verify` の版が `JWS_RS256_Param` 固定だったため）。
+        /// **FAPI は `RS256` を認めない**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ので、
+        /// **FAPI 2.0 Message Signing・FAPI 1.0 Advanced を満たせなかった**（#370）。
+        /// **FAPI の登録は、さらに `FapiRequestObjectSigningAlgs` に絞る。**
+        /// **CIBA の `request` は別**（`VerifyCiba` で `ES256`。仕様でも別の登録項目）。
         /// </remarks>
         public static readonly string[] RequestObjectSigningAlgs = new string[]
         {
-            JwtConst.RS256
+            JwtConst.RS256, JwtConst.PS256, JwtConst.ES256
+        };
+
+        /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`）が、Request Object で使ってよい alg（#370）</summary>
+        /// <remarks>
+        /// **FAPI 1.0 Advanced §8.6**（PS256 か ES256 を使う。RS256 などの RSASSA-PKCS1-v1_5 は使わない）、
+        /// **FAPI 2.0 Security Profile §5.4.1 の 1**（PS256・ES256・EdDSA。**EdDSA は扱っていない**）。
+        /// **`RequestObjectSigningAlgs` の部分集合**であること。
+        /// </remarks>
+        public static readonly string[] FapiRequestObjectSigningAlgs = new string[]
+        {
+            JwtConst.PS256, JwtConst.ES256
         };
 
         #endregion

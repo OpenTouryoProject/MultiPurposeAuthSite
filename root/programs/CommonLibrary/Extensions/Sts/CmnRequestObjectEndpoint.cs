@@ -41,6 +41,7 @@
 //*  2026/11/10  玄人 幸道         PAR の応答の expires_in を JSON の数値にした（#353）
 //*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを確かめ、その鍵の指紋を dpop_jkt として預ける。dpop_jkt と食い違えば断る（RFC 9449 §10.1。#365）
 //*  2026/11/13  玄人 幸道         認可エンドポイントと同じ検証に code_challenge_method を渡す（fapi2 の S256。#366）
+//*  2026/11/13  玄人 幸道         Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証する。FAPI の登録は PS256・ES256 に限る（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -133,6 +134,98 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region 検証鍵の選択（#370）
+
+        /// <summary>Request Object の検証鍵を、ヘッダの alg と登録の鍵から選ぶ（#370）</summary>
+        /// <param name="client_id">Request Object を署名したクライアント</param>
+        /// <param name="requestObject">Request Object（JWS のコンパクト形式）</param>
+        /// <param name="algAllowed">ヘッダの alg を受けてよいか</param>
+        /// <returns>検証鍵（**決まらなければ null** ＝ 検証失敗）</returns>
+        /// <remarks>
+        /// **alg を受けてよいか**（`algAllowed`）は、次のすべてを満たすとき。
+        ///
+        /// | 確かめること | 根拠 |
+        /// |---|---|
+        /// | `CmnEndpoints.RequestObjectSigningAlgs` に在る | この実装が扱う alg（広告と同じ一覧） |
+        /// | 登録の `request_object_signing_alg` が在れば、それと同じ | OIDC Registration 1.0 §2（#262） |
+        /// | FAPI の登録なら、`CmnEndpoints.FapiRequestObjectSigningAlgs` に在る | FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1 |
+        ///
+        /// **鍵は、登録の RSA 公開鍵・EC 公開鍵のうち、alg に合うほう**（`JwsFactory.IsSameKeyType`。EC は曲線まで見る）。
+        /// **ヘッダの alg と鍵の種類が食い違えば、鍵は決まらない**（RFC 8725 §3.1。アルゴリズムの取り違えを防ぐ）。
+        /// **登録の値が壊れていても例外にしない**（#294。`DecodeRegisteredJwk` は空を返す）。
+        /// </remarks>
+        internal static JWS SelectVerifyingJws(string client_id, string requestObject, out bool algAllowed)
+        {
+            string alg = JwtReader.TryReadAlg(requestObject);
+
+            algAllowed = !string.IsNullOrEmpty(alg)
+                && Array.IndexOf(CmnEndpoints.RequestObjectSigningAlgs, alg) >= 0
+                && CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
+                    CmnEndpoints.RequestObjectSigningAlgs, alg)
+                && (!CmnRequestObjectEndpoint.IsFapiClient(client_id)
+                    || Array.IndexOf(CmnEndpoints.FapiRequestObjectSigningAlgs, alg) >= 0);
+
+            if (!algAllowed)
+            {
+                return null;
+            }
+
+            string[] registeredKeys = new string[]
+            {
+                Helper.GetInstance().GetJwkRsaPublickey(client_id),
+                Helper.GetInstance().GetJwkECDsaPublickey(client_id)
+            };
+
+            foreach (string registeredKey in registeredKeys)
+            {
+                JObject jwk = CmnRequestObjectEndpoint.TryParseJwk(
+                    JwtUtil.DecodeRegisteredJwk(registeredKey));
+
+                if (jwk != null && JwsFactory.IsSameKeyType(jwk, alg))
+                {
+                    // **読めなければ null**（Open棟梁 の JwsFactory は、外から来る値で例外にしない）。
+                    return JwsFactory.CreateFromJwk(alg, jwk);
+                }
+            }
+
+            // alg に合う鍵が登録されていない。
+            return null;
+        }
+
+        /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`）か（#370）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>FAPI の登録なら true</returns>
+        private static bool IsFapiClient(string client_id)
+        {
+            string mode = Helper.GetInstance().GetClientMode(client_id);
+
+            return mode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+        }
+
+        /// <summary>登録の JWK（JSON の文字列）を読む。読めなければ null（#370）</summary>
+        /// <param name="json">JWK の JSON（空なら null を返す）</param>
+        /// <returns>JObject</returns>
+        private static JObject TryParseJwk(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JToken.Parse(json) as JObject;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        #endregion
+
         #region FAPI の時刻のクレーム（#336）
 
         /// <summary>FAPI の Request Object の寿命の上限（秒）</summary>
@@ -156,10 +249,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         private static bool VerifyFapiTimeClaims(string client_id, JObject payload)
         {
-            string mode = Helper.GetInstance().GetClientMode(client_id);
-
-            if (mode != OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
-                && mode != OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+            if (!CmnRequestObjectEndpoint.IsFapiClient(client_id))
             {
                 return true;
             }
@@ -252,16 +342,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 // F-API2 CC
 
-                // - 公開鍵取得を取り出す。
-                pubKey = JwtUtil.DecodeRegisteredJwk(
-                    Helper.GetInstance().GetJwkRsaPublickey(iss));
-
-                // **登録 request_object_signing_alg で絞る**（#262）。
+                // **検証鍵は、ヘッダの alg と登録の鍵で決める**（#370。以前は登録の RSA 鍵による RS256 だけ）。
+                //   **alg は、扱う一覧・登録 request_object_signing_alg（#262）・FAPI の登録の制限（PS256・ES256）で絞る。**
                 //   **CIBA（上の分岐）は対象外**。あちらは ES256 だけを受け（Discovery の広告と同じ）、仕様でも別の登録項目。
-                if (!CmnEndpoints.AllowsVerifyingAlg(
-                    Helper.GetInstance().GetRequestObjectSigningAlg(iss),
-                    CmnEndpoints.RequestObjectSigningAlgs,
-                    JwtReader.TryReadAlg(requestObject)))
+                JWS jws = CmnRequestObjectEndpoint.SelectVerifyingJws(iss, requestObject, out bool _);
+
+                if (jws == null)
                 {
                     return false;
                 }
@@ -271,8 +357,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //   **以前は署名しか確かめず、期限の過ぎたもの・別の認可サーバ宛てのものも預かっていた。**
                 //   必須のクレームと、在る時刻のクレームは Open棟梁 が確かめる（OpenTouryo#653）。
                 //   **FAPI の登録は、exp・nbf を必須にし、寿命を 60 分以内に限る**（`VerifyFapiTimeClaims`）。
-                result = !string.IsNullOrEmpty(pubKey)
-                    && RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out iss, pubKey)
+                result = RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out iss, jws)
                     && CmnRequestObjectEndpoint.VerifyFapiTimeClaims(iss, payload);
             }
 
@@ -413,32 +498,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (!string.IsNullOrEmpty(request))
             {
-                // **署名付き Request Object（JAR）。** /ros と同じ鍵で検証する。
-                //   **登録の値が壊れていても例外にしない**（#294。`DecodeRegisteredJwk` は空を返す）。
-                string pubKey = JwtUtil.DecodeRegisteredJwk(
-                    Helper.GetInstance().GetJwkRsaPublickey(client_id));
+                // **署名付き Request Object（JAR）。** /ros と同じく、ヘッダの alg と登録の鍵で検証する（#370）。
+                //   **alg は、扱う一覧・登録 request_object_signing_alg（#262）・FAPI の登録の制限（PS256・ES256）で絞る。**
+                JWS jws = CmnRequestObjectEndpoint.SelectVerifyingJws(client_id, request, out bool algAllowed);
 
-                if (string.IsNullOrEmpty(pubKey))
+                if (!algAllowed)
                 {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "The request object is not signed with an allowed alg "
+                        + "(the registered request_object_signing_alg, or PS256 / ES256 for FAPI clients).");
+                    return false;
+                }
+
+                if (jws == null)
+                {
+                    // **alg に合う鍵が登録されていない**（RS256・PS256 は RSA、ES256 は EC の鍵）。
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
                     err.Add(OAuth2AndOIDCConst.error_description, "This client has no registered key for the request object.");
                     return false;
                 }
 
-                // **登録 request_object_signing_alg で絞る**（#262）。
-                if (!CmnEndpoints.AllowsVerifyingAlg(
-                    Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
-                    CmnEndpoints.RequestObjectSigningAlgs,
-                    JwtReader.TryReadAlg(request)))
-                {
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
-                    err.Add(OAuth2AndOIDCConst.error_description,
-                        "The request object is not signed with the registered request_object_signing_alg.");
-                    return false;
-                }
-
                 //  **aud は issuer だけ**（RFC 9101 §4 / FAPI。#336。`RegisterRequestObject` と同じ）。
-                if (!RequestObject.Verify(request, CmnServerParams.IssuerId, out string iss, pubKey))
+                if (!RequestObject.Verify(request, CmnServerParams.IssuerId, out string iss, jws))
                 {
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object is not verified.");

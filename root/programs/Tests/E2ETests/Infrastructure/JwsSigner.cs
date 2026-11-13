@@ -34,6 +34,7 @@
 //*  2026/10/21  玄人 幸道         DPoP の証明を作る口を追加（#311 の段階 1）
 //*  2026/11/10  玄人 幸道         pfx を読む口を internal にした（JWE の復号で使う。#352）
 //*  2026/11/12  玄人 幸道         ES256 の署名で、ヘッダに kid を入れられるようにした（鍵の入れ替えを測る。#363）
+//*  2026/11/13  玄人 幸道         PS256 の署名を足した（FAPI の登録の Request Object。#370）
 //**********************************************************************************
 
 using System;
@@ -85,6 +86,36 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 byte[] signature = rsa.SignData(
                     Encoding.UTF8.GetBytes(signingInput),
                     HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+                return signingInput + "." + Base64Url.Encode(signature);
+            }
+        }
+
+        /// <summary>ペイロードに PS256 で署名し、JWS（コンパクト形式）を返す（#370）</summary>
+        /// <param name="client">IdPClient（署名鍵の場所を構成ファイルから読む）</param>
+        /// <param name="payload">ペイロード（クレーム）</param>
+        /// <returns>JWS</returns>
+        /// <remarks>
+        /// **鍵は RS256 と同じ `SpRp_RsaPfxFilePath`**（RSA の 1 本の鍵を RS256・PS256 で共有する）。
+        /// **PS256 は RSASSA-PSS・SHA-256・MGF1 SHA-256・salt は 32 バイト**（RFC 7518 §3.5）。
+        /// .NET の `RSASignaturePadding.Pss` は、salt の長さをハッシュの長さにする。
+        /// </remarks>
+        public static string SignPS256(IdPClient client, IDictionary<string, object> payload)
+        {
+            string signingInput = SigningInput("PS256", payload);
+
+            using (X509Certificate2 cert = LoadCertificate(client, "SpRp_RsaPfxFilePath", "SpRp_RsaPfxPassword"))
+            using (RSA rsa = cert.GetRSAPrivateKey())
+            {
+                if (rsa == null)
+                {
+                    throw new InvalidOperationException(
+                        "RSAの秘密鍵を取り出せませんでした: " + client.Config.Get("SpRp_RsaPfxFilePath"));
+                }
+
+                byte[] signature = rsa.SignData(
+                    Encoding.UTF8.GetBytes(signingInput),
+                    HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
 
                 return signingInput + "." + Base64Url.Encode(signature);
             }

@@ -34,6 +34,7 @@
 //*  2026/11/06  玄人 幸道         RequestObjectSigningAlg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#664）に合わせた（#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         SectorIdentifierUri を追加（#364）
+//*  2026/11/13  玄人 幸道         RequestObjectSigningAlg の選択肢の説明を、PS256・ES256 を足したことに合わせた（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -426,9 +427,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>RequestObjectSigningAlg アイテムリスト</summary>
         /// <remarks>
         /// **一覧は `CmnEndpoints.RequestObjectSigningAlgs` が持つ。**
-        /// **いまは `RS256` だけ**である（使っている版の `RequestObject.Verify` が RS256 固定のため。
-        /// 検証鍵 `JWS` を受ける版は在る（OpenTouryo#664）。広げるのは、まだ起票していない別の作業）。
-        /// **増やすのは「広げる側」の話**で、#262 では扱っていない。
+        /// **`RS256`・`PS256`・`ES256`**（#370 で広げた。以前は `RS256` だけ）。
+        /// **FAPI の登録は、ここで選ばなくても `PS256`・`ES256` に限られる**（`CmnEndpoints.FapiRequestObjectSigningAlgs`）。
         /// </remarks>
         // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
         //   **付けていないと、選択肢そのものが saml2OAuth2Data に書き込まれる。**

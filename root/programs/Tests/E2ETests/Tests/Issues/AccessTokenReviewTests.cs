@@ -32,6 +32,7 @@
 //*  2026/10/31  玄人 幸道         RT-294.91 / .92（claims の id_token がオブジェクトでなくても 500 にしない・/ros の claims）を足した（#294）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
+//*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
 //**********************************************************************************
 
 using System;
@@ -410,7 +411,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) claims を文字列にした Request Object を預ける");
 
-                string bad = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
+                string bad = await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "response_type", "code" },
                     { "scope", "openid" },
@@ -427,7 +428,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) claims をオブジェクトにすれば預かる（対照）");
 
-                string good = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
+                string good = await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "response_type", "code" },
                     { "scope", "openid" },

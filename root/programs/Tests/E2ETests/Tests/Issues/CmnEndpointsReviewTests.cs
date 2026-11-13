@@ -36,6 +36,7 @@
 //*  2026/11/02  玄人 幸道         RT-328.1 を追加した（#328）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
+//*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
 //**********************************************************************************
 
 using System;
@@ -1224,7 +1225,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Target("POST /par（client_name=" + KnownClients.Fapi2Client + "。request の client_id だけを他のクライアントにする）");
 
-                string request = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
+                string request = await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "client_id", other.ClientId },
                     { "response_type", "code" },
@@ -1333,7 +1334,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) client_id が他のクライアント");
 
-                string mismatched = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
+                string mismatched = await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "client_id", other.ClientId },
                     { "response_type", "code" },
@@ -1350,7 +1351,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) client_id が署名したクライアント（従来どおり預かる）");
 
-                string matched = await RequestObjectBuilder.CreateAsync(client, reg.ClientId, new Dictionary<string, object>()
+                string matched = await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "response_type", "code" },
                     { "scope", "openid" },

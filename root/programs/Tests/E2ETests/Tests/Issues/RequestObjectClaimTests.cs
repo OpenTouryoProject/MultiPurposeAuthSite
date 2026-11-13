@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/06  玄人 幸道         新規（#336）
 //*  2026/11/13  玄人 幸道         RT-336.6 の fapi2 の PAR に S256 の PKCE を足した（fapi2 は PKCE 無しを断るようになった。#366）
+//*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
 //**********************************************************************************
 
 using System;
@@ -372,7 +373,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(1) exp・nbf があり、寿命が 60 分ちょうど（受ける）");
 
                 VerifyAccepted(r, "寿命 60 分", await RegisterAsync(client,
-                    await RequestObjectBuilder.CreateAsync(client, fapi.ClientId,
+                    await RequestObjectBuilder.CreateFapiAsync(client, fapi.ClientId,
                         Parameters(fapi, "state-rt3364-1", new Dictionary<string, object>()
                         {
                             { "nbf", now },
@@ -390,7 +391,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.Step(c.Key);
 
                     VerifyRejected(r, c.Key, await RegisterAsync(client,
-                        await RequestObjectBuilder.CreateAsync(client, fapi.ClientId,
+                        await RequestObjectBuilder.CreateFapiAsync(client, fapi.ClientId,
                             Parameters(fapi, "state-rt3364-2", c.Value))));
                 }
 
@@ -482,7 +483,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 JsonResponse ok = await client.PostJsonAsync(endpoint, new Dictionary<string, string>()
                 {
-                    { "request", await RequestObjectBuilder.CreateAsync(client, reg.ClientId,
+                    { "request", await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId,
                         Parameters(reg, "state-rt3366-1", RequestObjectClaimTests.Fapi2Pkce())) },
                     { "client_assertion_type", JwtBearerAssertionType },
                     { "client_assertion", ClientAssertion(client, reg.ClientId, reg.ClientId, issuer) }
@@ -494,7 +495,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 VerifyParRejected(r, "exp が無い", await client.PostJsonAsync(endpoint, new Dictionary<string, string>()
                 {
-                    { "request", await RequestObjectBuilder.CreateAsync(client, reg.ClientId,
+                    { "request", await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId,
                         Parameters(reg, "state-rt3366-2", RequestObjectClaimTests.Fapi2Pkce(
                             new Dictionary<string, object>() { { RequestObjectBuilder.RemoveClaim, "exp" } }))) },
                     { "client_assertion_type", JwtBearerAssertionType },

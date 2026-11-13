@@ -32,6 +32,7 @@
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（ES256 で署名）を作る CreateCiba を追加（#196）
 //*  2026/09/25  玄人 幸道         aud に Discovery の issuer を使うため CreateCibaAsync に改めた（#234 の段階 1）
 //*  2026/11/06  玄人 幸道         Create も aud に Discovery の issuer を使うため CreateAsync に改めた。RemoveClaim も受ける（/ros・PAR が aud を照合する。#336）
+//*  2026/11/13  玄人 幸道         署名の alg を選べるようにし（RS256・PS256・ES256）、FAPI の登録向けの CreateFapiAsync（PS256）を足した（#370）
 //**********************************************************************************
 
 using System;
@@ -77,6 +78,37 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static async Task<string> CreateAsync(
             IdPClient client, string clientId, IDictionary<string, object> parameters)
         {
+            return await RequestObjectBuilder.CreateAsync(client, clientId, parameters, "RS256");
+        }
+
+        /// <summary>
+        /// FAPI の登録（`client_mode` が `fapi1`・`fapi2`）向けの Request Object を、PS256 で作る（#370）。
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id（iss にも入れる）</param>
+        /// <param name="parameters">認可リクエストのパラメタ</param>
+        /// <returns>JWS</returns>
+        /// <remarks>
+        /// **FAPI の登録は、RS256 の Request Object を断る**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1。#370）。
+        /// **鍵は RS256 と同じ RSA の鍵**（登録の `jwk_rsa_publickey`）。
+        /// </remarks>
+        public static async Task<string> CreateFapiAsync(
+            IdPClient client, string clientId, IDictionary<string, object> parameters)
+        {
+            return await RequestObjectBuilder.CreateAsync(client, clientId, parameters, "PS256");
+        }
+
+        /// <summary>
+        /// Request Object（署名付きJWT）を、指定した alg で作る（#370）。
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id（iss にも入れる）</param>
+        /// <param name="parameters">認可リクエストのパラメタ</param>
+        /// <param name="alg">`RS256`・`PS256`（RSA の鍵）・`ES256`（EC の鍵）</param>
+        /// <returns>JWS</returns>
+        public static async Task<string> CreateAsync(
+            IdPClient client, string clientId, IDictionary<string, object> parameters, string alg)
+        {
             Dictionary<string, object> payload = new Dictionary<string, object>();
 
             // RFC 9101 4: iss は client_id、aud は認可サーバ（の issuer）。
@@ -105,7 +137,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
             }
 
-            return JwsSigner.SignRS256(client, payload);
+            switch (alg)
+            {
+                case "RS256":
+                    return JwsSigner.SignRS256(client, payload);
+                case "PS256":
+                    return JwsSigner.SignPS256(client, payload);
+                case "ES256":
+                    return JwsSigner.SignES256(client, payload);
+                default:
+                    throw new ArgumentException("扱わない alg : " + alg, nameof(alg));
+            }
         }
 
         /// <summary>

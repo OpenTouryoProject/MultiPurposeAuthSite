@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/13  玄人 幸道         新規（#366）
+//*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
 //**********************************************************************************
 
 using System;
@@ -154,7 +155,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             return await client.PostJsonAsync(endpoint, new Dictionary<string, string>()
             {
-                { "request", await RequestObjectBuilder.CreateAsync(client, reg.ClientId,
+                { "request", await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId,
                     PkceS256Tests.Parameters(reg, state, pkce)) },
                 { "client_assertion_type", PkceS256Tests.JwtBearerAssertionType },
                 { "client_assertion", PkceS256Tests.ClientAssertion(client, reg.ClientId, issuer) }
