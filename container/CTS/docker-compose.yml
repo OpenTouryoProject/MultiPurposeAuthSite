@@ -124,6 +124,9 @@ services:
       # **Conformance Suite の nginx の証明書だけを信頼する**（#350 ph3。Back-Channel Logout の POST の宛先）。
       #   .NET（Linux）は OpenSSL の SSL_CERT_FILE を信頼の起点に使う。**OP の検証は緩めていない**（名前と信頼の両方を確かめる）。
       - SSL_CERT_FILE=/cts-ca/nginx.crt
+      # **TLS 1.2 の暗号スイートを、BCP 195 が勧めるもの（ECDHE と AES-GCM）に絞る**（#369。FAPI 2.0 Security Profile §5.2.2）。
+      #   .NET（Linux）は、CipherSuitesPolicy を指定しなければ OpenSSL の設定に従う。**アプリのコードは変えていない**（中身は tls\openssl.cnf）
+      - OPENSSL_CONF=/cts-tls/openssl.cnf
       # **クライアント証明書を求める**（#350 ph4。FAPI の tls_client_auth・証明書に縛ったトークン）。
       #   E2E・スタブと同じテスト専用のフック（Prepare.ps1 が hooks\ に作る）。**要求するだけで、必須にはしない**ので、ほかのプランは変わらない。
       #   **発行元を問わずに受け付ける**（OP は Subject と tls_client_auth_subject_dn だけで照合する）。ASPNETCORE_ENVIRONMENT=Development のときだけ効く
@@ -262,6 +265,7 @@ services:
       - ../E2E/cert:/https:ro
       - ./keys:/keys
       - ./certs/nginx.crt:/cts-ca/nginx.crt:ro
+      - ./tls/openssl.cnf:/cts-tls/openssl.cnf:ro
       - ./hooks:/hooks:ro
       - ./fcm:/fcm
       - C:/root/files/resource:/resource:ro

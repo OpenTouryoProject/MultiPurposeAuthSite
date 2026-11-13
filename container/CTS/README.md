@@ -70,6 +70,15 @@ cd ..\CTS
 - nginx は、それを原本の証明書の場所にマウントして使う。**OP のコンテナだけが、`SSL_CERT_FILE` でそれを信頼する**（.NET は Linux で OpenSSL の信頼の起点を使う）
 - 作り直すなら `certs\` を消す。手元のブラウザで Conformance Suite を開くと、自己署名の警告が出るのは前と同じ
 
+### OP の TLS の暗号スイート（`tls\openssl.cnf`）
+
+**OP（Kestrel が TLS を終端）の TLS 1.2 の暗号スイートを、BCP 195 が勧めるもの（ECDHE と AES-GCM の 4 つ）に絞ってある**（#369。FAPI 2.0 Security Profile §5.2.2）。
+**アプリのコードは変えていない。** .NET は Linux で、OpenSSL の設定に従う。`docker-compose.yml` の `OPENSSL_CONF` で、`tls\openssl.cnf`（Git の管理下）を読ませる。
+
+- **絞らないと、FAPI 2.0 の `happy-flow`・`ensure-holder-of-key-required` が FAILED になる**（`RequireOnlyBCP195RecommendedCiphersForTLS12`。CBC のスイートで繋がる）
+- **ほかのプランは変わらない**（Conformance Suite は GCM を話す）。OP が外へ出す TLS（Back-Channel Logout の POST）にも効く
+- 配備で絞る方法（Linux・Windows・リバース プロキシ）は [`CONFIGURATION.md`](../../root/CONFIGURATION.md)「TLS の暗号スイートを絞る」
+
 ### FAPI の鍵・クライアント証明書と、MTLS（`Prepare.ps1`）
 
 | 作る物 | 置き場所 | 使い道 |

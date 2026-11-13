@@ -1214,6 +1214,51 @@ ALTER TABLE Saml2OAuth2Data
     ADD COLUMN TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false;
 ```
 
+### TLS の暗号スイートを絞る（FAPI。#369）
+
+**FAPI 2.0 で使うなら、TLS 1.2 の暗号スイートを、BCP 195 が勧めるものだけにする**
+（FAPI 2.0 Security Profile §5.2.2 の 1「servers shall only permit the cipher suites recommended in [BCP195]」・§5.2.3 の 2）。
+**MPAS のコードと設定（`appsettings.json`・`app.config`）では決まらない。配備の TLS の設定で絞る。**
+OS・TLS の終端の既定のままだと、CBC のスイート（`TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384` など）も受け付ける
+（適合性テストの `RequireOnlyBCP195RecommendedCiphersForTLS12` が FAILED になる。#369）。
+
+| 許すもの（TLS 1.2。RFC 9325 §4.2） | OpenSSL の名前 |
+|---|---|
+| `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` | `ECDHE-ECDSA-AES128-GCM-SHA256` |
+| `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` | `ECDHE-RSA-AES128-GCM-SHA256` |
+| `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` | `ECDHE-ECDSA-AES256-GCM-SHA384` |
+| `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` | `ECDHE-RSA-AES256-GCM-SHA384` |
+
+- **TLS 1.3 のスイートは、絞らなくてよい**（どれも AEAD）。**TLS 1.1 以前は断る**
+- **サーバ全体に効く**（FAPI でないクライアントにも効く）。いまのブラウザ・HTTP クライアントは、どれも上の組を話す
+- サーバ証明書が RSA なら、使われるのは RSA の 2 つ（ECDSA の 2 つは、ECDSA の証明書のときに使われる）
+
+| 配備 | 絞る所 |
+|---|---|
+| **net10.0 版（Linux・Kestrel が TLS を終端）** | **OpenSSL の設定**（下の例）。.NET は、`CipherSuitesPolicy` を指定しなければ、OpenSSL の設定に従う。**環境変数 `OPENSSL_CONF` で、その設定ファイルを指す** |
+| **net10.0 版（Windows・Kestrel / IIS）・net48 版（IIS）** | **Windows（Schannel）の設定**（グループ ポリシーの「SSL 暗号の順位」、PowerShell の `Disable-TlsCipherSuite`・`Enable-TlsCipherSuite`）。**マシン全体に効き、OS の再起動が要る** |
+| **リバース プロキシで TLS を終端** | **プロキシの設定**（nginx なら `ssl_protocols TLSv1.2 TLSv1.3;` と `ssl_ciphers` に上の OpenSSL の名前） |
+
+```ini
+# OpenSSL の設定の例（Linux。適合性テストの OP は container/CTS/tls/openssl.cnf でこれを使う）
+openssl_conf = openssl_init
+
+[openssl_init]
+ssl_conf = ssl_sect
+
+[ssl_sect]
+system_default = system_default_sect
+
+[system_default_sect]
+MinProtocol = TLSv1.2
+CipherString = ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+```
+
+- **OpenSSL の設定は、そのプロセスが外へ出す TLS**（Back-Channel Logout の POST、`jwks_uri`・`sector_identifier_uri` の取得、ID 連携）**にも効く。** 相手が上の組を話さないと繋がらない
+- **確かめ方**：`openssl s_client -connect <ホスト>:<ポート> -tls1_2 -cipher ECDHE-RSA-AES256-SHA384` が `handshake failure` で断られ、
+  `-cipher ECDHE-RSA-AES128-GCM-SHA256` が繋がること
+- **アプリで絞る形（Kestrel の `CipherSuitesPolicy`）は入れていない**（#369 で見送った。Linux・macOS でしか効かず、Windows では例外になる。OpenSSL の設定と役割が重なる）
+
 ### pairwise の Sector を `sector_identifier_uri` で決める（#364）
 
 **動的登録（RFC 7591）で `sector_identifier_uri` を付けると、pairwise の登録では、`sub` の Sector が、その URL のホストになる**（OIDC Core 1.0 §8.1）。**public の登録では使わない**（Sector は `client_id`。同じホストの public と pairwise が混ざると、先に記録された `sub` が他方に返るため）。
