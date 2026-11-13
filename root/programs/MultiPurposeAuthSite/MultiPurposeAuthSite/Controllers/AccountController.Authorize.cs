@@ -28,6 +28,7 @@
 //*  2026/11/11  玄人 幸道         POST の認可要求を受ける（GET に詰め替えて送り返す）。同意の送信は <認可の口>/consent に移した（#359）
 //*  2026/11/12  玄人 幸道         request_uri を引けない要求を、黙って続けずに断る（request_uri_not_supported・invalid_request_uri。#362）
 //*  2026/11/11  玄人 幸道         Hybrid の応答を作る部品に response_type を渡す（at_hash を付けるかを決めるため。#360）
+//*  2026/11/13  玄人 幸道         認可要求の検証に code_challenge_method を渡す（Request Object の値も読む。fapi2 の S256。#366）
 //**********************************************************************************
 
 /*
@@ -345,12 +346,13 @@ namespace MultiPurposeAuthSite.Controllers
             // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
             NameValueCollection query = this.AuthZRequestQuery();
             string code_challenge = query[OAuth2AndOIDCConst.code_challenge];
+            string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
-                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
+                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
                 out bool pushed, out bool signedRequestObject, out err, out errDescription))
             {
                 // **err・errDescription は OverwriteByRequestObject が決める**（#362）
@@ -358,7 +360,7 @@ namespace MultiPurposeAuthSite.Controllers
             // **要求の検証を先に行う**（#247）。`redirect_uri` を照合できていないと、エラーを RP へ返せない。
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt, pushed, signedRequestObject))
+                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, prompt, pushed, signedRequestObject))
             {
                 // **max_age と auth_time の照合**（判定は CommonLibrary）。
                 //   **どちらの Cookie も、改ざんできない形で読む**（#294。`AuthTimeCookie`）。
@@ -671,12 +673,13 @@ namespace MultiPurposeAuthSite.Controllers
             // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
             NameValueCollection query = this.AuthZRequestQuery();
             string code_challenge = query[OAuth2AndOIDCConst.code_challenge];
+            string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
-                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
+                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
                 out bool pushed, out bool signedRequestObject, out err, out errDescription))
             {
                 // **err・errDescription は OverwriteByRequestObject が決める**（#362）
@@ -684,7 +687,7 @@ namespace MultiPurposeAuthSite.Controllers
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription,
-                code_challenge, prompt, pushed, signedRequestObject))
+                code_challenge, code_challenge_method, prompt, pushed, signedRequestObject))
             {
                 if (!this.IsSupportedResponseMode(response_type, response_mode))
                 {
@@ -785,6 +788,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="prompt">prompt</param>
         /// <param name="claims">claims</param>
         /// <param name="code_challenge">code_challenge</param>
+        /// <param name="code_challenge_method">code_challenge_method（#366）</param>
         /// <param name="pushed">PAR で預けたものか（#346。引けなければ false）</param>
         /// <param name="signedRequestObject">署名付きの Request Object か（#346。引けなければ false）</param>
         /// <param name="err">断るときの error（#362）</param>
@@ -810,7 +814,7 @@ namespace MultiPurposeAuthSite.Controllers
         private bool OverwriteByRequestObject(string request_uri,
             ref string client_id, ref string redirect_uri, ref string response_type, ref string response_mode,
             ref string scope, ref string state, ref string nonce, ref string max_age, ref string prompt,
-            ref JObject claims, ref string code_challenge,
+            ref JObject claims, ref string code_challenge, ref string code_challenge_method,
             out bool pushed, out bool signedRequestObject, out string err, out string errDescription)
         {
             //  **経路**（#346）。**request_uri が無ければ、クエリの要求**（どちらも false）。
@@ -871,6 +875,7 @@ namespace MultiPurposeAuthSite.Controllers
             //    （PAR が文字列のまま預けていたため。いまは PAR で JSON のオブジェクトに直して預ける）。
             claims = requestObjectPayload[OAuth2AndOIDCConst.claims] as JObject;
             code_challenge = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
+            code_challenge_method = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge_method];
 
             return true;
         }

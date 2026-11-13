@@ -1169,6 +1169,24 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### FAPI 2.0 の登録では、S256 の PKCE を必須にする（`RT-366.*`。#366）
+
+| | 測ること |
+|---|---|
+| **`RT-366.1`** | **fapi2 の登録の PAR は、S256 だけを受け、plain・`code_challenge_method` の省略・PKCE 無しを `400` ＋ `invalid_request` で断る**（FAPI 2.0 Security Profile §5.3.2.2 の 5。**省略は plain の扱い**。RFC 7636 §4.3）。**S256 で預けた `request_uri` は、認可の口でも断られない**（Request Object の `code_challenge_method` を読む） |
+| **`RT-366.2`** | **fapi2 でない登録は、従来どおり plain・PKCE 無しを受ける**（既定の `RequirePkceS256=false`） |
+| **`RT-366.3`** | **PAR を使わない `/authorize`（クエリ）でも、fapi2 の登録の plain・省略・小文字の `s256`・PKCE 無しを `invalid_request` で RP へ返す**（RFC 6749 §4.1.2.1）。S256 なら code を出す |
+
+- **判定は `CmnEndpoints.ValidateAuthZReqParam`**（PAR と `/authorize` で共通）。**`/token` の照合（`VerifyPkce`）は変えていない**
+- **fapi2 の登録を使う既存のテストの認可要求・PAR に、S256 の PKCE を足した**（`FA-2.1`・`FA-6.*`・`RT-238.1`〜`.3`・`RT-336.6`。**測る段と検証は変えていない**。fapi2 は PKCE 無しの認可要求を断るようになったため。`FA-6.*` は交換に `code_verifier` も送る）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
+| **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |

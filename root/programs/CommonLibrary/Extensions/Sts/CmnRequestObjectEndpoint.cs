@@ -40,6 +40,7 @@
 //*  2026/11/09  玄人 幸道         預ける Request Object に、PAR か・署名付きかの印を付ける（#346 の段階 2）
 //*  2026/11/10  玄人 幸道         PAR の応答の expires_in を JSON の数値にした（#353）
 //*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを確かめ、その鍵の指紋を dpop_jkt として預ける。dpop_jkt と食い違えば断る（RFC 9449 §10.1。#365）
+//*  2026/11/13  玄人 幸道         認可エンドポイントと同じ検証に code_challenge_method を渡す（fapi2 の S256。#366）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -566,6 +567,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 (string)payload[OAuth2AndOIDCConst.nonce],
                 out string _, out string error, out string errorDescription,
                 (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
+                (string)payload[OAuth2AndOIDCConst.code_challenge_method] ?? "",
                 (string)payload[OAuth2AndOIDCConst.prompt] ?? "",
                 true, signedRequestObject))
             {

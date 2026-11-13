@@ -4059,11 +4059,15 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    | キー | 何を求めるか | どこで弾くか | 有効にすると通らなくなるもの |
    |---|---|---|---|
    | `RequirePkce` | PKCE 自体（`code_challenge`） | 認可エンドポイント（`invalid_request`） | **PKCE を使っていない既存クライアント** |
-   | `RequirePkceS256` | 使うなら `S256` に限る | トークン エンドポイント | `plain` を使っているクライアント |
+   | `RequirePkceS256` | 使うなら `S256` に限る（**`code_challenge_method` の省略も plain の扱いで断る**） | **認可要求（PAR・認可エンドポイント。`invalid_request`。#366）**とトークン エンドポイント | `plain` を使っているクライアント |
 
    **両方 `true` が OAuth 2.1 相当。** ただし**クライアントが揃っていないと繋がらなくなる**ので、
    既存の登録を確かめてから切り替える。**Device AuthZ / CIBA は `RequirePkce` の対象外**
    （認可エンドポイントを通らないため）。
+
+   **`client_mode=fapi2` の登録には、この 2 つを常に掛ける**（FAPI 2.0 Security Profile §5.3.2.2 の 5。#366）。
+   **Discovery の `code_challenge_methods_supported` は、サーバ全体の `RequirePkceS256` だけで決まる**ので、
+   既定では `plain` を載せたままである（登録ごとの違いは出せない）。fapi2 の登録の RP は `S256` を使う。
 
    **`RequirePkce` は、クライアント単位でも指定できる**（#221）。
    クライアント登録に `require_pkce` を書くと、**そのクライアントにだけ**必須になる。

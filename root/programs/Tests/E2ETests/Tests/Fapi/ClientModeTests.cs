@@ -37,6 +37,7 @@
 //*  2026/10/29  玄人 幸道         FA-2.1 の PKCE だけの拒否を invalid_client にした（C-40。#294）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/09  玄人 幸道         FA-3.2（device は private_key_jwt の認可コードでは通らない）を追加（#346）
+//*  2026/11/13  玄人 幸道         FA-2.1 の (1) の認可要求に S256 の PKCE を付けた（fapi2 は PKCE 無しの認可要求を断るようになった。#366）
 //**********************************************************************************
 
 using System;
@@ -91,12 +92,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
         /// <summary>認可コードを取り、client_secret で交換する（PKCE 無し）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="reg">ClientRegistration</param>
+        /// <param name="authzExtra">認可要求に足すパラメタ（無ければ null）</param>
         /// <returns>JsonResponse（認可で失敗したら null）</returns>
+        /// <remarks>
+        /// **`authzExtra` に PKCE を渡しても、交換には `code_verifier` を送らない**（client_secret だけで交換する）。
+        /// **fapi2 の登録は、PKCE 無しの認可要求を断る**ので（#366）、その登録で交換の段を測るときに使う。
+        /// </remarks>
         private static async Task<JsonResponse> CodeWithSecretAsync(
-            IdPClient client, ClientRegistration reg)
+            IdPClient client, ClientRegistration reg, IDictionary<string, string> authzExtra = null)
         {
             AuthZResponse authz = await Flows.AuthorizeCodeAsync(
-                client, reg, redirectUri: reg.RedirectUri);
+                client, reg, redirectUri: reg.RedirectUri, extra: authzExtra);
 
             if (string.IsNullOrEmpty(authz.Code))
             {
@@ -479,9 +485,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Target("client_name=" + KnownClients.Fapi2Client + "（fapi2 登録）");
 
-                r.Step("(1) client_secret（PKCE 無し）");
+                r.Step("(1) client_secret（交換に code_verifier を送らない）");
 
-                JsonResponse withSecret = await ClientModeTests.CodeWithSecretAsync(client, reg);
+                //  **認可要求には S256 の PKCE を付ける** — **fapi2 の登録は、PKCE 無しの認可要求を断る**
+                //    （FAPI 2.0 Security Profile §5.3.2.2。#366）。**ここで測るのは交換の段**である。
+                JsonResponse withSecret = await ClientModeTests.CodeWithSecretAsync(
+                    client, reg, ClientModeTests.Pkce());
 
                 r.Verify("client_secret では通らない",
                     withSecret != null && string.IsNullOrEmpty(withSecret.AccessToken),

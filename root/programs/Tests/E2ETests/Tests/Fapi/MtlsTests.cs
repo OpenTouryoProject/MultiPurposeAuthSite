@@ -33,6 +33,7 @@
 //*  2026/09/26  玄人 幸道         fapi2 でも refresh_token が発行される期待に改めた（#239 の段階 3）
 //*  2026/09/29  玄人 幸道         FA-6.5（mTLS で refresh_token を使える）を追加（#245 の段階 1）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/13  玄人 幸道         fapi2 の認可要求に S256 の PKCE を付け、交換に code_verifier を送る（fapi2 は PKCE 無しを断るようになった。#366）
 //**********************************************************************************
 
 using System;
@@ -113,15 +114,30 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 + "（test.ps1 -Launch のときだけ受け付けさせる。net48 版は -NetFxMtls も要る。#226）。");
         }
 
+        /// <summary>RFC 7636 Appendix B の code_verifier</summary>
+        private const string PkceVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+
+        /// <summary>PkceVerifier の S256（RFC 7636 Appendix B）</summary>
+        private const string PkceChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
         /// <summary>認可コードを取り、クライアント証明書を添えて交換する（client_secret なし）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="reg">ClientRegistration</param>
         /// <param name="certificate">クライアント証明書（null なら添えない）</param>
         /// <returns>トークン応答</returns>
+        /// <remarks>
+        /// **S256 の PKCE を付ける** — **fapi2 の登録は、PKCE 無しの認可要求を断る**（FAPI 2.0 Security Profile §5.3.2.2。#366）。
+        /// **交換には `code_verifier` も送る**（PKCE と mTLS の併用。ANALYSIS-IdP.md の N1）。
+        /// </remarks>
         private static async Task<JsonResponse> CodeWithCertificateAsync(
             IdPClient client, ClientRegistration reg, X509Certificate2 certificate)
         {
-            AuthZResponse authz = await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri);
+            AuthZResponse authz = await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri,
+                extra: new Dictionary<string, string>()
+                {
+                    { "code_challenge", MtlsTests.PkceChallenge },
+                    { "code_challenge_method", "S256" }
+                });
 
             Assert.False(string.IsNullOrEmpty(authz.Code),
                 "前提: 認可コードが取得できること（error=" + (authz.Error ?? "なし") + "）");
@@ -131,7 +147,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 { "grant_type", "authorization_code" },
                 { "code", authz.Code },
                 { "client_id", reg.ClientId },
-                { "redirect_uri", reg.RedirectUri }
+                { "redirect_uri", reg.RedirectUri },
+                { "code_verifier", MtlsTests.PkceVerifier }
             }, certificate);
         }
 

@@ -31,6 +31,7 @@
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/24  玄人 幸道         EnableOpenIDConnect を廃止した（#314）
 //*  2026/11/09  玄人 幸道         PAR・署名付きの Request Object を、サーバ全体で必須にする設定を追加（#346 の段階 2）
+//*  2026/11/13  玄人 幸道         RequirePkceS256 の説明を、認可要求でも判定する形に合わせた（#366）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -186,7 +187,7 @@ namespace MultiPurposeAuthSite.Co
         ///
         /// **RequirePkceS256 とは別のもの。**
         /// - RequirePkce     : PKCE 自体を求める（認可エンドポイントで判定）
-        /// - RequirePkceS256 : 使うなら S256 に限る（トークン エンドポイントで判定）
+        /// - RequirePkceS256 : 使うなら S256 に限る（認可要求とトークン エンドポイントで判定。#366）
         ///
         /// Device AuthZ / CIBA は認可エンドポイントを通らないので、この判定に掛からない。
         /// </remarks>

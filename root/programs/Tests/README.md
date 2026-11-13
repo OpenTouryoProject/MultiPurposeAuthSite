@@ -321,6 +321,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/RequestUriTests.cs` | `RT-362` | **引けない `request_uri` を、黙って続けずに断る**（#362。OIDC Core 1.0 §3.1.2.6）。**外部の URL は `request_uri_not_supported`**（`RT-362.1`。取りに行くのは #374）、**存在しない・使用済みの `urn:` は `invalid_request_uri`**（`RT-362.2`・`.3`）。どちらもエラー画面で、RP へ返さない |
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
+| `Tests/Issues/PkceS256Tests.cs` | `RT-366` | **FAPI 2.0 の登録では、S256 の PKCE を必須にする**（#366。FAPI 2.0 Security Profile §5.3.2.2）。**fapi2 の登録の PAR は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断り**、**S256 で預けた `request_uri` は認可の口でも通る**こと（`RT-366.1`）、**fapi2 でない登録は従来どおり**（`RT-366.2`）、**PAR を使わない `/authorize` でも同じ**（`RT-366.3`） |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
 | `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` / `RT-246` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない。**自己テストの PAR ボタン**（Open棟梁 のクライアントで預けて認可する。`RT-246.1`） |

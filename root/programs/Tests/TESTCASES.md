@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=cf75deb5-e531-43c6-93a0-5f22becc3583&code=bogus
+1. GET /Account/EmailConfirmation?userId=e8ae3bba-96c2-4dff-bd5a-1e4d1baf7b2a&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=cf75deb5-e531-43c6-93a0-5f22becc3583&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=cf75deb5-e531-43c6-93a0-5f22becc3583&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=e8ae3bba-96c2-4dff-bd5a-1e4d1baf7b2a&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=e8ae3bba-96c2-4dff-bd5a-1e4d1baf7b2a&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12141,6 +12141,82 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **`nonce` を要求する配備（`EnableDPoPNonce`）では、PAR の口も `use_dpop_nonce` ＋ `DPoP-Nonce` で答える**（`/token` と同じ用途の nonce）。**既定の配備では要求しないので、測っていない。**
 
+## RT-366.1 fapi2 の登録の /par は、S256 の PKCE だけを受け、plain・code_challenge_method の省略・PKCE 無しを invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、認可サーバに「S256 の PKCE を必須にする」ことを求める。****code_challenge_method を省くと plain の扱い**（RFC 7636 §4.3）なので、これも断る。**以前は plain で預けた要求にも code を出していた**（適合性テストの par-plain-pkce-rejected）。**S256 で預けた request_uri は、認可の口でも断られない**（Request Object の code_challenge_method を読む）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / RFC 7636 §4.3 / RFC 7636 §4.4.1 / #366 |
+| テスト | `RT36601_fapi2の登録のPARはS256のPKCEだけを受ける` |
+
+**手順**
+
+1. S256 で預ける（受ける）
+1. その request_uri で認可の口へ行く（断られない）
+1. plain で預ける
+1. code_challenge_method を省く（plain の扱い）
+1. PKCE を使わない
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- 認可の口で断られない（同意画面か code）
+- plain : HTTP 400
+- plain : invalid_request
+- plain : request_uri を返さない
+- code_challenge_method の省略 : HTTP 400
+- code_challenge_method の省略 : invalid_request
+- code_challenge_method の省略 : request_uri を返さない
+- PKCE 無し : HTTP 400
+- PKCE 無し : invalid_request
+- PKCE 無し : request_uri を返さない
+
+## RT-366.2 fapi2 でない登録の /par は、従来どおり plain の PKCE と PKCE 無しを受ける
+
+| | |
+|---|---|
+| 観点 | **S256 に限るのは、fapi2 の登録と、サーバ全体の RequirePkceS256 だけ。****既定の配備（RequirePkceS256=false）の normal の登録は、振る舞いを変えない**（RFC 7636 §4.2 は plain も定義している）。 |
+| 根拠 | RFC 7636 §4.2 / RFC 7636 §4.3 / #366 |
+| テスト | `RT36602_fapi2でない登録は従来どおりplainを受ける` |
+
+**手順**
+
+1. plain で預ける
+1. PKCE を使わずに預ける
+
+**検証（合否を判定する）**
+
+- plain : HTTP 201
+- PKCE 無し : HTTP 201
+
+## RT-366.3 PAR を使わない /authorize（クエリ）でも、fapi2 の登録の plain・code_challenge_method の省略・小文字の s256・PKCE 無しを invalid_request で断り、S256 なら code を出す
+
+| | |
+|---|---|
+| 観点 | **判定は PAR と同じ所（認可要求の検証）にある。** 認可の口では、**クエリの code_challenge_method を読む。****エラーは RP へリダイレクトで返す**（redirect_uri を照合した後の判定のため。RFC 6749 §4.1.2.1）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / RFC 7636 §4.2 / RFC 7636 §4.3 / RFC 7636 §4.4.1 / RFC 6749 §4.1.2.1 / #366 |
+| テスト | `RT36603_authorizeのクエリでもfapi2はS256だけを受ける` |
+
+**手順**
+
+1. S256（code を出す）
+1. plain
+1. code_challenge_method の省略
+1. 小文字の s256
+1. PKCE 無し
+
+**検証（合否を判定する）**
+
+- S256 : code が返る
+- plain : code を出さない
+- plain : RP へ invalid_request を返す
+- code_challenge_method の省略 : code を出さない
+- code_challenge_method の省略 : RP へ invalid_request を返す
+- 小文字の s256 : code を出さない
+- 小文字の s256 : RP へ invalid_request を返す
+- PKCE 無し : code を出さない
+- PKCE 無し : RP へ invalid_request を返す
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -12248,7 +12324,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. client_secret（PKCE 無し）
+1. client_secret（交換に code_verifier を送らない）
 1. PKCE(S256)（client_secret 無し）
 
 **検証（合否を判定する）**
