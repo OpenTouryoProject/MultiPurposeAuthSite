@@ -140,6 +140,7 @@ cd ..\CTS
 | 動的登録の `-logo-uri`・`-policy-uri`・`-tos-uri` | サインインの画面 |
 | 動的登録の `redirect_uri` の誤り（`-ensure-redirect-uri-in-authorization-request`・`-query-mismatch`・`-query-added`） | エラー画面（`An error occurred while processing your request`） |
 | FAPI 2.0 の `par-attempt-to-use-request_uri-for-different-client` | エラー画面（`The client_id does not match the request object`） |
+| FAPI 2.0 の `par-attempt-reuse-request_uri`・`par-attempt-to-use-expired-request_uri` | 使用済み・期限切れの `request_uri` のエラー画面（`The request_uri is unknown, expired, or already used.`。#368）。**reuse は 1 回目を通常どおり進め、2 回目でこの画面を待つ**（callback を待つ手順の `match` は、Conformance Suite のホストから書く。認可の URL が `redirect_uri` に callback の URL を載せるため） |
 
 - **REVIEW は、写しを人が見て合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない
 - **ログアウトの確認の画面**：MPAS は、`id_token_hint` が無い・一致しない・要求に誤りがあるとき、確認の画面を出す（RP-Initiated Logout 1.0 §2 の MUST）。雛形では「Yes」を任意の手順で押す

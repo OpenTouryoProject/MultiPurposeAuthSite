@@ -1169,6 +1169,22 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### `client_assertion_type` の無い `client_assertion` を受けない（`RT-368.*`。#368）
+
+| | 測ること |
+|---|---|
+| **`RT-368.1`** | **型の無い `client_assertion` は、PAR でも `/revoke` でも `invalid_client`**（RFC 7521 §4.2 の REQUIRED）。**型を付ければ通る** |
+
+- **判定は `CmnEndpoints.GetClientAssertion`**（両版の 6 つの口が使う）。**Open棟梁 の `OAuth2AndOIDCSpec.GetClientAssertion` の回避**（型が来ていなければ、そのまま返していた）。**Open棟梁 で直したら外す**
+- **型が違えば断る**ことは `RT-238.3`、**従来の名前 `assertion` だけのクライアントを通す**ことは `RT-238.2` が測る
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`/token`・Device AuthZ・CIBA・`/introspect` での型の無い `client_assertion`** | どの口も同じ `GetClientAssertion` を通る（呼び出しの書き換えだけ）。PAR と `/revoke` で代表させた |
+| **型の無い `client_assertion` と、正しい `client_secret` を併せて送る要求** | **アサーションを無いものとして扱うので、`client_secret` を持つ登録は秘密で認証される。** 複数の認証の方法を併せた要求を断るか（RFC 6749 §2.3）は、型の有無と別の、従来からの扱い |
+
 ##### FAPI 2.0 の登録では refresh_token を入れ替えず、秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（`RT-367.*`・`RT-311.11`。#367）
 
 | | 測ること |
@@ -4549,6 +4565,8 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 | **OP の不適合** | 上のどれでもなく、仕様の節と照らして OP の振る舞いが外れている | **原因ごとに Issue にする**（仕様の節を原典で確かめてから。セキュリティの弱点の疑いなら、公開する前に人に聞く） |
 
 - **1 つの不適合で、プランの大半が止まることがある**（#370・#371）。そのときは、直した後に回し直し、その先の結果を改めて仕分ける
+- **自動操作の `match` の `*` は、クエリの中にも当たる。** **認可の URL は `redirect_uri` に Conformance Suite の callback の URL を（符号化せずに）載せる**ので、
+  **`*/test/*/callback*` は認可のエラー画面にも当たる**（#368。callback を待つ手順は `https://localhost.emobix.co.uk:8443/test/*/callback*` と、先頭から書く）
 - **REVIEW（画面の写し）は、人が見て合否を付ける。** 自動では、待った画面が出たことまでしか確かめていない
 - **CI には載せていない**（#348（ビルドの CI）の後に決める）
 

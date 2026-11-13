@@ -32,6 +32,7 @@
 //*  2026/10/30  玄人 幸道         /ciba_result を認証デバイスのトークンに限る・expires_in / interval を数値で返す・requested_expiry を上限で頭打ちにする（#294）
 //*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnCibaEndpoint）を呼ぶ（#321）
 //*  2026/11/02  玄人 幸道         client_notification_token を CibaProvider.Create に渡さない（#328）
+//*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -109,7 +110,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 // private_key_jwt / mTLS
-                string assertion = OAuth2AndOIDCSpec.GetClientAssertion(
+                string assertion = Token.CmnEndpoints.GetClientAssertion(
                     formData[OAuth2AndOIDCConst.client_assertion],
                     formData[OAuth2AndOIDCConst.client_assertion_type],
                     formData[OAuth2AndOIDCConst.assertion]);

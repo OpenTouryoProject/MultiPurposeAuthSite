@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         client_assertion（private_key_jwt）も受ける・expires_in / interval を数値で返す（#294）
+//*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -91,7 +92,7 @@ namespace MultiPurposeAuthSite.Controllers
                 X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
                 //  **private_key_jwt も受ける**（#294。/token・/par と同じ取り出し方）。
                 //    **client_id は、認証できたクライアント**（アサーションのときは `iss`）を使う。
-                string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
+                string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
                     formData[OAuth2AndOIDCConst.client_assertion],
                     formData[OAuth2AndOIDCConst.client_assertion_type],
                     formData[OAuth2AndOIDCConst.assertion]);

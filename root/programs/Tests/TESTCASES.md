@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=9f50ea78-3e63-4499-a4ba-02e2a474f8bb&code=bogus
+1. GET /Account/EmailConfirmation?userId=bde4c3fd-cdb0-4783-bf51-4636ac479e6b&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=9f50ea78-3e63-4499-a4ba-02e2a474f8bb&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=9f50ea78-3e63-4499-a4ba-02e2a474f8bb&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=bde4c3fd-cdb0-4783-bf51-4636ac479e6b&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=bde4c3fd-cdb0-4783-bf51-4636ac479e6b&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12250,6 +12250,28 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 200
 - 新しい refresh_token を返す（入れ替える）
 - invalid_grant（使用済み）
+
+## RT-368.1 client_assertion_type の無い client_assertion は、PAR でも /revoke でも invalid_client で断り、型を付ければ通す
+
+| | |
+|---|---|
+| 観点 | **RFC 7521 §4.2 は、client_assertion_type を REQUIRED としている。****以前は、型が来ていなければ client_assertion をそのまま検証して通していた**（型が違うときだけ断っていた。RT-238.3）。**断るときのエラーは invalid_client**（クライアント認証の失敗。RFC 6749 §5.2）。 |
+| 根拠 | RFC 7521 §4.2 / RFC 6749 §5.2 / #368 |
+| テスト | `RT36801_client_assertion_typeの無いclient_assertionはinvalid_client` |
+
+**手順**
+
+1. client_assertion_type を付けずに POST /par
+1. client_assertion_type を付けずに POST /revoke
+1. 同じクライアントで、client_assertion_type を付けて POST /revoke（通る）
+
+**検証（合否を判定する）**
+
+- PAR : HTTP 401
+- PAR : invalid_client
+- PAR : request_uri を返さない
+- /revoke : invalid_client
+- /revoke : 認証が通る（HTTP 200）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

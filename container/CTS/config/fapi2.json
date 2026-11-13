@@ -132,6 +132,262 @@
           ]
         }
       ]
+    },
+    "fapi2-security-profile-final-par-attempt-reuse-request_uri": {
+      "browser": [
+        {
+          "comment": "1st: sign in and complete. 2nd: the used request_uri shows an error page (#368). Verify Complete matches only the suite's host (the authorize URL carries the callback URL as redirect_uri)",
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Expect invalid request_uri error page",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "The request_uri is unknown, expired, or already used.",
+                  "update-image-placeholder"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "optional": true,
+              "match": "https://localhost.emobix.co.uk:8443/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "fapi2-security-profile-final-par-attempt-to-use-expired-request_uri": {
+      "browser": [
+        {
+          "comment": "the expired request_uri shows an error page (#368). Verify Complete matches only the suite's host (the authorize URL carries the callback URL as redirect_uri)",
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Expect invalid request_uri error page",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "The request_uri is unknown, expired, or already used.",
+                  "update-image-placeholder"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "optional": true,
+              "match": "https://localhost.emobix.co.uk:8443/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "fapi2-message-signing-final-par-attempt-reuse-request_uri": {
+      "browser": [
+        {
+          "comment": "1st: sign in and complete. 2nd: the used request_uri shows an error page (#368). Verify Complete matches only the suite's host (the authorize URL carries the callback URL as redirect_uri)",
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Expect invalid request_uri error page",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "The request_uri is unknown, expired, or already used.",
+                  "update-image-placeholder"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "optional": true,
+              "match": "https://localhost.emobix.co.uk:8443/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "fapi2-message-signing-final-par-attempt-to-use-expired-request_uri": {
+      "browser": [
+        {
+          "comment": "the expired request_uri shows an error page (#368). Verify Complete matches only the suite's host (the authorize URL carries the callback URL as redirect_uri)",
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Login",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "text",
+                  "id",
+                  "Email",
+                  "@TEST_USER@",
+                  "optional"
+                ],
+                [
+                  "text",
+                  "id",
+                  "Password",
+                  "@TEST_PASSWORD@",
+                  "optional"
+                ],
+                [
+                  "click",
+                  "id",
+                  "normal_signin"
+                ]
+              ]
+            },
+            {
+              "task": "Expect invalid request_uri error page",
+              "optional": true,
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "The request_uri is unknown, expired, or already used.",
+                  "update-image-placeholder"
+                ]
+              ]
+            },
+            {
+              "task": "Verify Complete",
+              "optional": true,
+              "match": "https://localhost.emobix.co.uk:8443/test/*/callback*",
+              "commands": [
+                [
+                  "wait",
+                  "id",
+                  "submission_complete",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
     }
   }
 }
