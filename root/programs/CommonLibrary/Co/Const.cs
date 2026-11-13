@@ -54,6 +54,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前（OpenTouryo#634・#663）を外し、そちらを使うようにした（#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を追加（#364）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg（JARM の署名の alg の登録）を足した（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -575,6 +576,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>request_object_signing_alg</summary>
         public const string ClientRequestObjectSigningAlg = "request_object_signing_alg";
+
+        /// <summary>authorization_signed_response_alg（JARM §3。#370）</summary>
+        public const string ClientAuthorizationSignedResponseAlg = "authorization_signed_response_alg";
 
         /// <summary>token_endpoint_auth_signing_alg</summary>
         public const string ClientTokenEndpointAuthSigningAlg = "token_endpoint_auth_signing_alg";

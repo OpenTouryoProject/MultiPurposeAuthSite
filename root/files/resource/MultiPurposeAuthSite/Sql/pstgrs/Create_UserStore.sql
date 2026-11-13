@@ -189,6 +189,8 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false,   -- tls_client_certificate_bound_access_tokens（RFC 8705 §3.4）
     -- pairwise の Sector（#364）。末尾に足してある（ALTER … ADD で揃う）
     SectorIdentifierUri varchar(512) NULL,           -- sector_identifier_uri（OIDC Registration 1.0 §2）。Const.MaxLengthOfUri
+    -- JARM の署名 alg（#370）。末尾に足してある（ALTER … ADD で揃う）
+    AuthorizationSignedResponseAlg varchar(16) NULL, -- authorization_signed_response_alg（JARM §3）
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

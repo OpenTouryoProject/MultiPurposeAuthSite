@@ -101,9 +101,11 @@ $plans = @{
     'fapi2-ms-private-key-jwt-dpop' = @{ Name = 'fapi2-message-signing-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
         Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop","fapi_request_method":"signed_non_repudiation","fapi_response_mode":"jarm"}'
         ClientId = 'c75c11e0000000000000000000000008'; Client2Id = 'c75c11e0000000000000000000000009' }
-    # **FAPI 1.0 Advanced**：private_key_jwt・PAR（pushed）・plain_response
+    # **FAPI 1.0 Advanced**：private_key_jwt・PAR（pushed）・JARM（#370）
+    #   **plain_response（Hybrid の code id_token）にしない。** MPAS は fapi1 の登録に Hybrid を許さない（FA-1.4）ので、
+    #   FAPI 1.0 Advanced §5.2.2 の 2 の「code ＋ JARM」の側で回す（#350 で plain_response にしていたのは誤り。#370 で見つけた）
     'fapi1-adv-private-key-jwt-par' = @{ Name = 'fapi1-advanced-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
-        Variant = '{"fapi_profile":"plain_fapi","client_auth_type":"private_key_jwt","fapi_auth_request_method":"pushed","fapi_response_mode":"plain_response"}'
+        Variant = '{"fapi_profile":"plain_fapi","client_auth_type":"private_key_jwt","fapi_auth_request_method":"pushed","fapi_response_mode":"jarm"}'
         ClientId = 'c75c11e000000000000000000000000c'; Client2Id = 'c75c11e000000000000000000000000d' }
     # **FAPI-CIBA**：poll・private_key_jwt・静的な登録。**利用者の承認は、このスクリプトが認証デバイスの代わりに送る**（Ciba = $true。下の「CIBA の端末役」）
     'fapi-ciba-private-key-jwt-poll' = @{ Name = 'fapi-ciba-id1-test-plan'; Config = 'fapi-ciba'; Fapi = $true; ModuleTimeoutSec = 420; Ciba = $true

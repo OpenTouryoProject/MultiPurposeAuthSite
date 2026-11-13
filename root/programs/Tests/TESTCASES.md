@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=bde4c3fd-cdb0-4783-bf51-4636ac479e6b&code=bogus
+1. GET /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=bde4c3fd-cdb0-4783-bf51-4636ac479e6b&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=bde4c3fd-cdb0-4783-bf51-4636ac479e6b&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12272,6 +12272,118 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PAR : request_uri を返さない
 - /revoke : invalid_client
 - /revoke : 認証が通る（HTTP 200）
+
+## RT-370.1 FAPI でない登録の /ros は、RS256・PS256（登録の RSA の鍵）と ES256（登録の EC の鍵）の Request Object を預かる。Discovery の request_object_signing_alg_values_supported も 3 つを広告する
+
+| | |
+|---|---|
+| 観点 | **検証鍵は、ヘッダの alg と登録の鍵から作る**（RS256・PS256 は RSA、ES256 は EC）。**以前は登録の RSA の鍵による RS256 しか検証できず、ES256 の Request Object を断っていた**（適合性テストの FAPI 2.0 Message Signing・FAPI 1.0 Advanced）。**既存の RS256 の RP は変わらない。** |
+| 根拠 | RFC 9101 §6.2 / RFC 7518 §3.1 / OIDC Discovery 1.0 §3 / #370 |
+| テスト | `RT37001_FAPIでない登録はRS256とPS256とES256のRequestObjectを預かる` |
+
+**手順**
+
+1. RS256
+1. PS256
+1. ES256
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- RS256 : request_uri が返る
+- PS256 : request_uri が返る
+- ES256 : request_uri が返る
+- request_object_signing_alg_values_supported に RS256 が在る
+- request_object_signing_alg_values_supported に PS256 が在る
+- request_object_signing_alg_values_supported に ES256 が在る
+
+## RT-370.2 FAPI の登録（fapi1・fapi2）の /ros は、RS256 の Request Object を預からず、PS256・ES256 なら預かる
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は PS256 か ES256 を使い、RS256（RSASSA-PKCS1-v1_5）を使わないことを、FAPI 2.0 は PS256・ES256・EdDSA を使うことを求める。****登録の request_object_signing_alg が無くても、FAPI の登録はこの 2 つに限る。** |
+| 根拠 | FAPI 1.0 Advanced §8.6 / FAPI 2.0 Security Profile §5.4.1 / #370 |
+| テスト | `RT37002_FAPIの登録はRS256のRequestObjectを預からない` |
+
+**手順**
+
+1. fapi2
+1. fapi1
+
+**検証（合否を判定する）**
+
+- fapi2 の RS256 : request_uri を返さない
+- fapi2 の RS256 : HTTP 400
+- fapi2 の PS256 : request_uri が返る
+- fapi2 の ES256 : request_uri が返る
+- fapi1 の RS256 : request_uri を返さない
+- fapi1 の RS256 : HTTP 400
+- fapi1 の PS256 : request_uri が返る
+
+## RT-370.3 RSA の鍵だけを登録したクライアントの、ES256 の Request Object を預からない。alg が none の Request Object も預からない
+
+| | |
+|---|---|
+| 観点 | **ヘッダの alg と鍵の種類が食い違えば、検証しない**（アルゴリズムの取り違えを防ぐ）。**EC の鍵を登録していないので、ES256 の署名を確かめる鍵が無い。****none は扱う alg の一覧に無いので、鍵を選ぶ前に断る。** |
+| 根拠 | RFC 8725 §3.1 / RFC 8725 §2.1 / RFC 9101 §6.2 / #370 |
+| テスト | `RT37003_algに合う鍵が登録されていなければ預からない` |
+
+**手順**
+
+1. alg が none（署名の無い JWT）
+
+**検証（合否を判定する）**
+
+- ES256 : request_uri を返さない
+- ES256 : HTTP 400
+- none : request_uri を返さない
+- none : HTTP 400
+
+## RT-370.4 fapi2 の登録の /par は、RS256 の request を 400 ＋ invalid_request_object で断り、PS256 なら預かる
+
+| | |
+|---|---|
+| 観点 | **Request Object が受けられない alg なら invalid_request_object**（RFC 9101 §7。PAR の口の誤りは 400。RFC 9126 §2.3）。**FAPI の登録は RS256 を受けない**（RT-370.2 と同じ判定を PAR でも行う）。 |
+| 根拠 | RFC 9101 §7 / RFC 9126 §2.3 / FAPI 2.0 Security Profile §5.4.1 / #370 |
+| テスト | `RT37004_PARはFAPIの登録のRS256をinvalid_request_objectで断る` |
+
+**手順**
+
+1. RS256
+1. PS256
+
+**検証（合否を判定する）**
+
+- RS256 : HTTP 400
+- RS256 : invalid_request_object
+- PS256 : HTTP 201
+- PS256 : request_uri が返る
+
+## RT-370.5 JARM の応答は、登録の authorization_signed_response_alg（PS256）で署名され、登録が無ければ RS256 のまま。Discovery の authorization_signing_alg_values_supported も、選べる alg を広告する
+
+| | |
+|---|---|
+| 観点 | **JARM §3 の authorization_signed_response_alg は、応答の署名 alg を選ぶ登録項目で、既定は RS256。****以前は登録で選べず、RS256 に固定だった。****鍵は id_token と同じ表（jwks_uri に載る）なので、RP は kid で引いて検証できる。** |
+| 根拠 | JARM §3 / JARM §4 / #370 |
+| テスト | `RT37005_JARMは登録のalgで署名され登録が無ければRS256` |
+
+**手順**
+
+1. 登録が PS256
+1. 登録が無い（FAPI でない）
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- response（JWT）が返る
+- PS256 の登録の JARM : alg
+- PS256 の登録の JARM : 署名を JWKS で検証できる
+- response（JWT）が返る
+- 登録の無い JARM : alg
+- 登録の無い JARM : 署名を JWKS で検証できる
+- authorization_signing_alg_values_supported に RS256 が在る
+- authorization_signing_alg_values_supported に PS256 が在る
+- authorization_signing_alg_values_supported に ES256 が在る
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

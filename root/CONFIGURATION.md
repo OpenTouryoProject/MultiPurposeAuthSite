@@ -292,7 +292,7 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 | 値 | ダイジェスト | パディング | 鍵 | 設定キー | |
 |---|---|---|---|---|---|
-| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ） |
+| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ。**FAPI の登録も**。下の注） |
 | `RS384` | SHA-384 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `RS512` | SHA-512 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `PS256` | SHA-256 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | #129 の段階 4。**FAPI が求める値** |
@@ -322,12 +322,36 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 > **CIBA（`client_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
+> **FAPI の登録（`client_mode=fapi1`・`fapi2`）も、この値を書かなければ `RS256`。** **FAPI は `RS256` を認めない**
+> （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ので、**FAPI で使う登録には `PS256` か `ES256` を書く**（JARM も同じ。下の `authorization_signed_response_alg`）。
+> **既定を `ES256` にしないのは、Open棟梁 の RP 側の検証（`CmnJwtToken.Verify`）が、暗号化しない `ES256` の JWT を受けないため**
+> （同梱の自己テストのクライアントを含め、Open棟梁 で作った RP が検証できなくなる。#370 で試して見つけた）。
 > **fapi2 で id_token を暗号化する（`jwk_rsa_publickey` を登録した）クライアントは、この値を書かなければ、
-> id_token の中の JWS が `ES256` になる**（access_token は既定の `RS256`。**2 つは食い違う**）。
-> **既定の `RS256` は FAPI 2.0 Security Profile §5.4.1 が認めない**ので、そちらには倒さない。
-> **書けば、中の JWS も access_token も、その alg になる**（#355。以前は書いても `ES256` だった）。
-> **fapi2 なら `PS256` か `ES256` を書くとよい。**
-> **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
+> id_token の中の JWS が `ES256` になる**（access_token は既定の `RS256`。**2 つは食い違う**。#355）。
+> **書けば、中の JWS も access_token も、その alg になる。**
+
+### `authorization_signed_response_alg` — JARM の署名アルゴリズム（#370）
+
+**JARM の応答（`response_mode` が `*.jwt` のときの `response`）の署名 alg**（JARM §3）。
+
+| 登録 | 署名 alg |
+|---|---|
+| 書かない | **`RS256`**（JARM §3 の既定。従来どおり。**FAPI の登録も**。理由は上の注と同じ。**FAPI で使う登録には `PS256` か `ES256` を書く**） |
+| 書く | **その alg**（**上の表の 9 つ**。鍵も上の表と同じ） |
+| **書ける値の外** | **入口で拒否する**（`unauthorized_client`。id_token と同じ） |
+
+- **以前は `RS256` に固定で、登録で選べなかった**（FAPI 2.0 Message Signing の JARM を満たせなかった。#370）
+- **画面・動的登録（RFC 7591）・構成ファイルで書ける。** Discovery の `authorization_signing_alg_values_supported` は上の表の 9 つ
+- **列 `AuthorizationSignedResponseAlg` が増える**（`Saml2OAuth2Data`。`Create_UserStore.sql` には入っている）。**既に配備された DB には、列を足すこと**（空 ＝ 既定）
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [AuthorizationSignedResponseAlg] [nvarchar](16) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("AuthorizationSignedResponseAlg" NVARCHAR2(16) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN AuthorizationSignedResponseAlg varchar(16) NULL;
+```
 
 ## 検証する側の alg を、クライアント単位で絞る（#262）
 
@@ -338,7 +362,7 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 | 登録項目 | 効く口 | 書ける値 |
 |---|---|---|
 | `token_endpoint_auth_signing_alg` | `/token` の `client_assertion`（`private_key_jwt`） | **`RS256` / `ES256`** |
-| `request_object_signing_alg` | Request Object（`/ros` / `/par` / `request`） | **`RS256`** |
+| `request_object_signing_alg` | Request Object（`/ros` / `/par` / `request`） | **`RS256` / `PS256` / `ES256`**（#370） |
 
 **どちらも、書かなければ絞らない**（＝ 従来どおり）。**画面からも選べる**（先頭が「絞らない」）。
 
@@ -358,15 +382,20 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 **E2E** : `RT-262.1`（絞ると `ES256` が通らない）／`RT-129.1`（絞らなければ両方通る）。
 
-### `request_object_signing_alg` は、いま書ける値が 1 つだけ
+### Request Object の alg と鍵（#370）
 
-**受ける側は `RS256` 固定**である（上流の `RequestObject.Verify` が `JWS_RS256_Param` 決め打ち）。
-**そのため、絞っても結果は変わらない。**
+**検証鍵は、ヘッダの `alg` と登録の鍵から作る**（`CmnRequestObjectEndpoint.SelectVerifyingJws`）。
+**以前は `RS256` だけ**だった（上流の `RequestObject.Verify` の版が `JWS_RS256_Param` 決め打ちだった。検証鍵を受ける版は OpenTouryo#664）。
 
-**それでも項目を用意してある。**
-`request_object_signing_alg_values_supported`（広告）に対して
-**登録側の項目が無いという非対称を、先に解消しておくため**である。
-**受ける alg が増えた時点で、値を書けるようになるだけ**になる。
+| `alg` | 検証に使う登録の鍵 |
+|---|---|
+| `RS256`・`PS256` | `jwk_rsa_publickey` |
+| `ES256` | `jwk_ecdsa_publickey`（P-256） |
+
+- **alg に合う鍵が登録されていなければ断る**（例：RSA の鍵だけの登録に `ES256`）。**`jwks_uri` の鍵は、まだ使わない**（`private_key_jwt` は使う）
+- **FAPI の登録（`client_mode=fapi1`・`fapi2`）は、`request_object_signing_alg` を書かなくても `PS256`・`ES256` に限る**
+  （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）。**以前は `RS256` を受けていたので、`RS256` で署名している FAPI の RP は通らなくなる**
+- **PAR のエラー**：受けられない alg は `invalid_request_object`（RFC 9101 §7）、alg に合う鍵が無ければ `invalid_request`（従来の文言）
 
 > **CIBA の `request` は対象外**である。**`ES256` 固定**で、
 > **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。

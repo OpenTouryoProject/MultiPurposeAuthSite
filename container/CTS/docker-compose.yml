@@ -181,18 +181,23 @@ services:
       #   8・9 : private_key_jwt（＋ DPoP）。公開鍵（jwk_ecdsa_publickey）は Prepare.ps1 が .env.cts に書く（秘密鍵は certs\ にあり、RunTestPlan.ps1 が設定に埋める）
       #   10・11 : tls_client_auth（＋ 証明書に縛ったトークン）。Subject は Prepare.ps1 が作るクライアント証明書と同じ
       #   **id_token_signed_response_alg=ES256 を登録する。** 登録が無いと id_token は RS256 になり、FAPI 2.0 の検査で全部止まる
+      #   **JARM も authorization_signed_response_alg=ES256 を登録する**（#370。登録が無いと RS256。Message Signing は 8・9 で JARM を使う）
       #   （FAPI 2.0 Security Profile §5.4.1 は PS256・ES256・EdDSA。登録の無い fapi2 の既定が RS256 であることは #355 の「扱っていないもの」）
       #   **FAPI 2.0 の要件を強制する登録の項目を立てる**（#346。CONFIGURATION.md「FAPI の要件を、登録ごとに強制する」。**どれも既定は false**）：
       #   PAR の必須・PKCE の必須・送信者の拘束の必須（8・9 は DPoP、10・11 はクライアント証明書）。立てないと、PAR・PKCE の無い要求が通り、その検査が落ちる
       #   **2 つ目のクライアント（9・11）は、クエリ付きの折り返し先（?dummy1=lorem&dummy2=ipsum）も登録する**（Conformance Suite は client2 にそれを使う）
       # **FAPI 1.0 Advanced のクライアント**（#350 ph4。client_mode=fapi1。12・13。private_key_jwt。鍵は FAPI 2.0 と同じ）
+      #   **JARM で応答する**（#370。プランのバリアントは fapi_response_mode=jarm。**MPAS は fapi1 の登録に Hybrid を許さない**（FA-1.4）ので、
+      #   FAPI 1.0 Advanced §5.2.2 の 2 の「code ＋ JARM」の側で回す）。**JARM の署名は authorization_signed_response_alg=ES256**（登録が無いと RS256）
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__authorization_signed_response_alg=ES256
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__client_mode=fapi1
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__id_token_signed_response_alg=ES256
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__token_endpoint_auth_method=private_key_jwt
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000c__client_name=CtsFapi1PrivateKeyJwt1
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback?dummy1=lorem&dummy2=ipsum
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__authorization_signed_response_alg=ES256
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__client_mode=fapi1
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__id_token_signed_response_alg=ES256
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000d__token_endpoint_auth_method=private_key_jwt
@@ -220,6 +225,7 @@ services:
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__client_mode=fapi2
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__authorization_signed_response_alg=ES256
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__require_pushed_authorization_requests=true
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__require_pkce=true
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000008__dpop_bound_access_tokens=true
@@ -229,6 +235,7 @@ services:
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback?dummy1=lorem&dummy2=ipsum
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__client_mode=fapi2
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__authorization_signed_response_alg=ES256
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__require_pushed_authorization_requests=true
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__require_pkce=true
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000009__dpop_bound_access_tokens=true

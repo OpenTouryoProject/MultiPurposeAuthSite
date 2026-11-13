@@ -1169,6 +1169,29 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### Request Object・JARM の署名 alg（`RT-370.*`。#370）
+
+| | 測ること |
+|---|---|
+| **`RT-370.1`** | **FAPI でない登録の `/ros` は、RS256・PS256（RSA の鍵）と ES256（EC の鍵）の Request Object を預かる**。Discovery も 3 つを広告する |
+| **`RT-370.2`** | **FAPI の登録（fapi1・fapi2）は、RS256 の Request Object を預からず、PS256・ES256 なら預かる**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1） |
+| **`RT-370.3`** | **alg に合う鍵が登録されていなければ預からない**（RSA の鍵だけの登録に ES256）。**alg が none も預からない** |
+| **`RT-370.4`** | **PAR では、FAPI の登録の RS256 を `invalid_request_object` で断り、PS256 なら預かる** |
+| **`RT-370.5`** | **JARM は、登録の `authorization_signed_response_alg`（PS256）で署名され、登録が無ければ RS256**（JARM §3）。Discovery も選べる alg を広告する |
+
+- **FAPI の登録で Request Object を作る既存のテストは、PS256 で署名する**（`RequestObjectBuilder.CreateFapiAsync`）。
+  **RS256 のままだと、測りたい理由（`exp` が無い、`client_id` が違う、など）より先に alg で断られ、測ったことにならない**
+- **自己テストのクライアント（`SelfTestClient`）も、Request Object を PS256 で署名する**（ボタンはどれも FAPI の登録で預ける。`RT-246.1`）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **登録した `request_object_signing_alg`（PS256・ES256）と違う alg の Request Object** | 絞る仕組みは #262 の `AllowsVerifyingAlg` のまま（`RT-262.*` が RS256 で測る） |
+| **構成ファイルに扱えない `authorization_signed_response_alg` を書いた登録の、JARM のエラー応答** | 構成の誤りの経路（RS256 で署名して記録に残す）。構成ファイルの登録を E2E で壊せない |
+| **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
+| **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
+
 ##### `client_assertion_type` の無い `client_assertion` を受けない（`RT-368.*`。#368）
 
 | | 測ること |

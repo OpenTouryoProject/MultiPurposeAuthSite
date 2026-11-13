@@ -50,6 +50,8 @@
 //*  2026/11/09  玄人 幸道         normal で tls_client_auth の TestClient_42、証明書を必須にした device の TestClient_43 を追加（#346）
 //*  2026/11/09  玄人 幸道         device で tls_client_auth の TestClient_44 を追加（必須にしていない登録の device_code も縛られる。#346）
 //*  2026/11/10  玄人 幸道         id_token_signed_response_alg を PS256 にした fapi2 の TestClient_45 を追加（#355）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg を書けるようにした（#370）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg を PS256 にした TestClient_46 を追加（#370）
 //**********************************************************************************
 
 using System;
@@ -601,6 +603,17 @@ namespace MultiPurposeAuthSite.Util.Test
             },
             new Entry()
             {
+                // **`authorization_signed_response_alg` を PS256 にしたクライアント**（#370）。
+                //   **JARM の応答が、登録の alg で署名される**ことを測る（`RT-370.5`）。写し元は `TestClient`（normal）。
+                ClientName = "TestClient_46", ClientId = "e2e0tc46600000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientAuthorizationSignedResponseAlg, JwtConst.PS256 }
+                }
+            },
+            new Entry()
+            {
                 // **client_credentials の sub を測るクライアント**（S3。#294）。
                 //   **テストが同じ名前の利用者を作り、トークンがその利用者に結び付かないことを見る**（`RT-294.50`）。
                 ClientName = "TestClient_33", ClientId = "e2e0tc33000000000000000000000000",
@@ -892,6 +905,10 @@ namespace MultiPurposeAuthSite.Util.Test
 
                 case Const.ClientIdTokenSignedResponseAlg:
                     model.IdTokenSignedResponseAlg = value;
+                    break;
+
+                case Const.ClientAuthorizationSignedResponseAlg:
+                    model.AuthorizationSignedResponseAlg = value;
                     break;
 
                 case Const.ClientTokenEndpointAuthSigningAlg:

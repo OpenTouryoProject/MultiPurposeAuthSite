@@ -163,7 +163,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 && CmnEndpoints.AllowsVerifyingAlg(
                     Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
                     CmnEndpoints.RequestObjectSigningAlgs, alg)
-                && (!CmnRequestObjectEndpoint.IsFapiClient(client_id)
+                && (!Helper.GetInstance().IsFapiClient(client_id)
                     || Array.IndexOf(CmnEndpoints.FapiRequestObjectSigningAlgs, alg) >= 0);
 
             if (!algAllowed)
@@ -191,17 +191,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // alg に合う鍵が登録されていない。
             return null;
-        }
-
-        /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`）か（#370）</summary>
-        /// <param name="client_id">client_id</param>
-        /// <returns>FAPI の登録なら true</returns>
-        private static bool IsFapiClient(string client_id)
-        {
-            string mode = Helper.GetInstance().GetClientMode(client_id);
-
-            return mode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
-                || mode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
         }
 
         /// <summary>登録の JWK（JSON の文字列）を読む。読めなければ null（#370）</summary>
@@ -249,7 +238,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         private static bool VerifyFapiTimeClaims(string client_id, JObject payload)
         {
-            if (!CmnRequestObjectEndpoint.IsFapiClient(client_id))
+            if (!Helper.GetInstance().IsFapiClient(client_id))
             {
                 return true;
             }

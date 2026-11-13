@@ -29,7 +29,7 @@ cd ..\CTS
 | `oidcc-dynamic` | `oidcc-dynamic-certification-test-plan`（`response_type=code`） | `oidcc-dynamic.json` |
 | `fapi2-sp-private-key-jwt-dpop`・`fapi2-sp-mtls` | `fapi2-security-profile-final-test-plan`（`plain_fapi`・`openid_connect`・`simple`・`grant_management=disabled`。前者は `private_key_jwt`＋DPoP、後者は MTLS＋MTLS） | `fapi2.json`（**クライアントは 2 つずつ**。鍵とクライアント証明書を埋める） |
 | `fapi2-ms-private-key-jwt-dpop` | `fapi2-message-signing-final-test-plan`（上の `private_key_jwt`＋DPoP に、署名した Request Object・JARM） | `fapi2.json`（クライアントは SP と同じ） |
-| `fapi1-adv-private-key-jwt-par` | `fapi1-advanced-final-test-plan`（`plain_fapi`・`private_key_jwt`・`pushed`・`plain_response`） | `fapi2.json`（クライアントは `client_mode=fapi1`） |
+| `fapi1-adv-private-key-jwt-par` | `fapi1-advanced-final-test-plan`（`plain_fapi`・`private_key_jwt`・`pushed`・`jarm`。**`plain_response`（Hybrid）ではない**：MPAS は fapi1 の登録に Hybrid を許さない（FA-1.4）。#370） | `fapi2.json`（クライアントは `client_mode=fapi1`） |
 | `fapi-ciba-private-key-jwt-poll` | `fapi-ciba-id1-test-plan`（`plain_fapi`・poll・`private_key_jwt`・静的な登録） | `fapi-ciba.json`（**利用者の承認は、`RunTestPlan.ps1` が認証デバイスの代わりに送る**。下の「CIBA の承認」） |
 
 - **FAPI のバリアントは、代表の組み合わせだけ**にしてある（軸を全部掛け合わせると数十通り。#350 の段階 4 で決めた）
@@ -88,7 +88,8 @@ cd ..\CTS
 | **MTLS のテスト専用のフック** | `hooks\MtlsTestHook.dll` | **OP の Kestrel に、クライアント証明書を求めさせる**（E2E・スタブと同じ。`DOTNET_STARTUP_HOOKS`。**要求するだけで必須にはしない**ので、ほかのプランは変わらない。**発行元を問わずに受け付ける**ので、テスト専用） |
 
 - **鍵は ES256 にしてある。** OP の Discovery の `token_endpoint_auth_signing_alg_values_supported` は RS256・ES256 で、FAPI 2.0 は RS256 を認めない
-- **署名した Request Object は、いまの OP では検証できない**（RS256 だけ。#370）。そのため FAPI 2.0 Message Signing・FAPI 1.0 Advanced は、大半のモジュールが PAR の所で止まる
+- **ES256 で署名した Request Object は、登録の `jwk_ecdsa_publickey` で検証する**（#370。以前は RS256 だけで、FAPI 2.0 Message Signing・FAPI 1.0 Advanced は、大半のモジュールが PAR の所で止まっていた）
+- **JARM の署名は、登録の `authorization_signed_response_alg=ES256`**（#370。FAPI 2.0 の 8・9 と、FAPI 1.0 Advanced の 12・13。登録が無いと RS256 で、FAPI の検査で落ちる）
 
 ### CIBA の承認（`RunTestPlan.ps1` の端末役）
 

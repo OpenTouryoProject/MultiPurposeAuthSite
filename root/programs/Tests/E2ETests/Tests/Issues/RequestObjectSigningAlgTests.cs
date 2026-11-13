@@ -54,7 +54,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// |---|---|
     /// | **`RT-370.1`** | **FAPI でない登録は、RS256・PS256（RSA の鍵）と ES256（EC の鍵）の Request Object を預かる**。Discovery も 3 つを広告する |
     /// | **`RT-370.2`** | **FAPI の登録（fapi1・fapi2）は、RS256 の Request Object を預からず、PS256・ES256 なら預かる** |
-    /// | **`RT-370.3`** | **alg に合う鍵が登録されていなければ預からない**（RSA の鍵だけの登録に ES256） |
+    /// | **`RT-370.3`** | **alg に合う鍵が登録されていなければ預からない**（RSA の鍵だけの登録に ES256）。**alg が none も預からない** |
     /// | **`RT-370.4`** | **PAR では、FAPI の登録の RS256 を `invalid_request_object` で断り、PS256 なら預かる** |
     /// </remarks>
     public class RequestObjectSigningAlgTests : TargetTestBase
@@ -130,6 +130,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             r.Verify(label + " : request_uri を返さない", string.IsNullOrEmpty(requestUri),
                 "返さない", string.IsNullOrEmpty(requestUri) ? "返さなかった" : "**返した**");
             r.VerifyEqual(label + " : HTTP 400", "400", ((int)res.StatusCode).ToString());
+        }
+
+        /// <summary>署名した JWT から、alg が none の署名の無い JWT を作る（RFC 7519 §6.1）</summary>
+        /// <param name="signed">署名した JWT（payload を借りる）</param>
+        /// <returns>`{"alg":"none"}.payload.`</returns>
+        private static string Unsigned(string signed)
+        {
+            string header = Base64Url.Encode(System.Text.Encoding.UTF8.GetBytes("{\"alg\":\"none\"}"));
+
+            return header + "." + signed.Split('.')[1] + ".";
         }
 
         /// <summary>RS256 の client_assertion を作る（RFC 7523 §2.2。fapi2 の aud は issuer）</summary>
@@ -260,10 +270,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-370.3",
-                    "RSA の鍵だけを登録したクライアントの、ES256 の Request Object を預からない",
+                    "RSA の鍵だけを登録したクライアントの、ES256 の Request Object を預からない。alg が none の Request Object も預からない",
                     "**ヘッダの alg と鍵の種類が食い違えば、検証しない**（アルゴリズムの取り違えを防ぐ）。"
-                    + "**EC の鍵を登録していないので、ES256 の署名を確かめる鍵が無い。**",
-                    "RFC 8725 §3.1 / RFC 9101 §6.2 / #370");
+                    + "**EC の鍵を登録していないので、ES256 の署名を確かめる鍵が無い。**"
+                    + "**none は扱う alg の一覧に無いので、鍵を選ぶ前に断る。**",
+                    "RFC 8725 §3.1 / RFC 8725 §2.1 / RFC 9101 §6.2 / #370");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi1Client);
 
@@ -271,6 +282,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 RequestObjectSigningAlgTests.VerifyRejected(r, "ES256",
                     await RequestObjectSigningAlgTests.RosAsync(client, reg, "ES256", "state-rt3703-1"));
+
+                r.Step("alg が none（署名の無い JWT）");
+
+                ClientRegistration normal = Flows.Registration(client, KnownClients.TestClient);
+                string unsigned = RequestObjectSigningAlgTests.Unsigned(
+                    await RequestObjectBuilder.CreateAsync(client, normal.ClientId,
+                        RequestObjectSigningAlgTests.Parameters(normal, "state-rt3703-2"), "RS256"));
+
+                RequestObjectSigningAlgTests.VerifyRejected(r, "none",
+                    await client.PostTextAsync(RequestObjectBuilder.RegistrationPath, unsigned));
 
                 r.Done();
             }

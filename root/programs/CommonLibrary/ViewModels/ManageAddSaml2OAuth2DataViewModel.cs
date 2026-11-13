@@ -35,6 +35,7 @@
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         SectorIdentifierUri を追加（#364）
 //*  2026/11/13  玄人 幸道         RequestObjectSigningAlg の選択肢の説明を、PS256・ES256 を足したことに合わせた（#370）
+//*  2026/11/13  玄人 幸道         AuthorizationSignedResponseAlg を追加した（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -334,19 +335,52 @@ namespace MultiPurposeAuthSite.ViewModels
         {
             get
             {
-                List<SelectListItem> items = new List<SelectListItem>();
+                return ManageAddSaml2OAuth2DataViewModel.SigningAlgItems();
+            }
+        }
 
-                foreach (string alg in JwsFactory.SupportedAlgs)
+        /// <summary>発行する側の alg の選択肢を作る（JARM と共用。#370）</summary>
+        /// <returns>選択肢</returns>
+        private static List<SelectListItem> SigningAlgItems()
+        {
+            List<SelectListItem> items = new List<SelectListItem>();
+
+            foreach (string alg in JwsFactory.SupportedAlgs)
+            {
+                items.Add(new SelectListItem()
                 {
-                    items.Add(new SelectListItem()
-                    {
-                        // 先頭が既定（登録しなかったときの値）。
-                        Text = (items.Count == 0) ? string.Format(Resources.CommonViewModels.DdlDefaultAlg, alg) : alg,
-                        Value = alg
-                    });
-                }
+                    // 先頭が既定（登録しなかったときの値）。
+                    Text = (items.Count == 0) ? string.Format(Resources.CommonViewModels.DdlDefaultAlg, alg) : alg,
+                    Value = alg
+                });
+            }
 
-                return items;
+            return items;
+        }
+
+        #endregion
+
+        #region AuthorizationSignedResponseAlg（JARM §3。#370）
+
+        /// <summary>AuthorizationSignedResponseAlg</summary>
+        /// <remarks>
+        /// **JARM の応答（`response`）の署名 alg**（JARM §3 の `authorization_signed_response_alg`）。
+        /// **空なら `RS256`**（JARM §3 の既定。FAPI の登録も。`Helper.GetAuthorizationSignedResponseAlg`）。
+        /// </remarks>
+        [Display(Name = "AuthorizationSignedResponseAlg", Description = "AuthorizationSignedResponseAlgDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientAuthorizationSignedResponseAlg)]
+        public string AuthorizationSignedResponseAlg { get; set; }
+
+        /// <summary>AuthorizationSignedResponseAlg アイテムリスト</summary>
+        /// <remarks>**id_token と同じ一覧**（鍵も同じ `SigningKeys` の表）。</remarks>
+        // **直列化しない**（画面の選択肢。上の DdlIdTokenSignedResponseAlgItems と同じ理由）。
+        [JsonIgnore]
+        public List<SelectListItem> DdlAuthorizationSignedResponseAlgItems
+        {
+            get
+            {
+                return ManageAddSaml2OAuth2DataViewModel.SigningAlgItems();
             }
         }
 

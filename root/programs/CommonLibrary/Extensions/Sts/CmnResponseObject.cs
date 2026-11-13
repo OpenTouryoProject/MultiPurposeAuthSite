@@ -33,9 +33,12 @@
 //*  2026/10/15  玄人 幸道         ヘッダにjkuを入れないようにした（#302）
 //*  2026/10/31  玄人 幸道         clientId を必須にし、iss・aud・exp の無い応答を作らないようにした（JARM 2.1。#317）
 //*  2026/10/31  玄人 幸道         TokenProviders から Extensions/Sts へ移した（配置の見直し。#294）
+//*  2026/11/13  玄人 幸道         JARM の署名を、登録の authorization_signed_response_alg（既定は RS256）と SigningKeys の鍵で行う（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;
@@ -81,33 +84,50 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return ResponseObject.Create(
-                responseDictionary, CmnResponseObject.CreateJws(),
+                responseDictionary, CmnResponseObject.CreateJws(clientId),
                 CmnServerParams.IssuerId, clientId, expiresUtc);
         }
 
-        /// <summary>署名に使う JWS（RS256。kid は、その鍵の JWK の kid）</summary>
+        /// <summary>署名に使う JWS（alg は登録の authorization_signed_response_alg。kid は、その鍵の JWK の kid）</summary>
+        /// <param name="clientId">client_id</param>
         /// <returns>JWS</returns>
-        /// <remarks>**`jku` は入れない**（#302）。**鍵は `kid` で引く。**</remarks>
-        private static JWS CreateJws()
+        /// <remarks>
+        /// **alg は登録の `authorization_signed_response_alg`**（JARM §3。#370）。
+        /// **登録が無ければ RS256**（JARM §3。FAPI の登録も。`Helper.GetAuthorizationSignedResponseAlg`）。
+        /// **以前は RS256 に固定だった**（FAPI 2.0 Message Signing は RS256 を認めない）。
+        /// **鍵は `SigningKeys` の表が持つ**（id_token と同じ鍵。`jwks_uri` に載る）。
+        /// **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
+        /// **扱わない alg の登録（構成ファイルの誤り）は、成功の応答なら入口（`CmnEndpoints.CheckClientMode`）で断ってある。**
+        /// **ただし、要求の検証で断るエラー応答は、その確かめより前に JARM で返る**ので、ここに来うる。
+        /// **そのときは `RS256`（JARM §3 の既定）で署名し、記録に残す**（例外にすると 500 になる。別モデルのレビューの指摘）。
+        /// </remarks>
+        private static JWS CreateJws(string clientId)
         {
-            // 秘密鍵
-            string pfxFilePath = CmnServerParams.RsaPfxFilePath;
-            string pfxPassword = CmnServerParams.RsaPfxPassword;
+            string alg = Helper.GetInstance().GetAuthorizationSignedResponseAlg(clientId);
+            SigningKeys.Entry key = SigningKeys.Of(alg);
 
-            // JWS(RS256)
-            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(pfxFilePath, pfxPassword);
+            if (key == null)
+            {
+                Logging.MyOperationTrace(string.Format(
+                    "The registered authorization_signed_response_alg is not supported. RS256 is used. ({0})",
+                    alg)); // 構成ファイルの登録値（外から来る値ではない）
 
-            // 鍵変換
-            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+                key = SigningKeys.Of(JwtConst.RS256);
+            }
 
-            // JWSHeaderのセット
-            Dictionary<string, string> jwk =
-                JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    rpkc.X509PfxToJwk(pfxFilePath, pfxPassword));
+            JWS jws = key.CreateJwsFromPfx();
+            string kid = (string)key.JwkFromPfx()[JwtConst.kid];
 
-            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
+            if (key.IsRsa)
+            {
+                ((JWS_RSA)jws).JWSHeader.kid = kid;
+            }
+            else
+            {
+                ((JWS_ECDSA)jws).JWSHeader.kid = kid;
+            }
 
-            return jwsRS256;
+            return jws;
         }
 
         // VerifyはClient側のみなので、

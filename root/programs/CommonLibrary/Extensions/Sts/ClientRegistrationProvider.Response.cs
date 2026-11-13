@@ -33,6 +33,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを、立っていれば返すようにした（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を返すようにした（#364）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg を応答に返す（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -261,6 +262,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareVersion, model.SoftwareVersion);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSubjectType, model.SubjectTypes);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientIdTokenSignedResponseAlg, model.IdTokenSignedResponseAlg);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientAuthorizationSignedResponseAlg, model.AuthorizationSignedResponseAlg);
             ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.tls_client_auth_subject_dn, model.TlsClientAuthSubjectDn);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
 

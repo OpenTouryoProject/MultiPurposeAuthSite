@@ -36,6 +36,7 @@
 //*  2026/11/06  玄人 幸道         jwks_uri・request_object_endpoint・PAR の口を、Config で読む（OpenTouryo#666。#339）
 //*  2026/11/09  玄人 幸道         require_pushed_authorization_requests・require_signed_request_object を、サーバ全体の設定から出す（#346 の段階 2）
 //*  2026/11/12  玄人 幸道         request_uri_parameter_supported が指す範囲（この OP の urn: だけ）をコメントに書いた（#362）
+//*  2026/11/13  玄人 幸道         authorization_signing_alg_values_supported を、登録で選べる alg（JwsFactory.SupportedAlgs）にした（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -239,10 +240,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // **応答の署名アルゴリズムを広告していなかった**（JARM §4。#189 の 8）。
             //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
-            //   実装は CmnResponseObject の JWS(RS256)。
-            OpenIDConfig.Add("authorization_signing_alg_values_supported", new List<string> {
-                "RS256"
-            });
+            //   **登録の authorization_signed_response_alg で選べる**（#370。以前は RS256 だけ）。
+            //   **一覧は id_token と同じ JwsFactory.SupportedAlgs**（鍵も同じ SigningKeys の表）。
+            OpenIDConfig.Add("authorization_signing_alg_values_supported",
+                new List<string>(JwsFactory.SupportedAlgs));
             #endregion
 
             #region RP-Initiated Logout（#232）

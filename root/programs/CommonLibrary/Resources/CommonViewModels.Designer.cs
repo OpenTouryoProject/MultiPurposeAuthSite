@@ -653,6 +653,24 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("IdTokenSignedResponseAlgDescription", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Signing algorithm of the authorization response (authorization_signed_response_alg) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthorizationSignedResponseAlg {
+            get {
+                return ResourceManager.GetString("AuthorizationSignedResponseAlg", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Signing algorithm of the JARM response. When empty, the default is used. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AuthorizationSignedResponseAlgDescription {
+            get {
+                return ResourceManager.GetString("AuthorizationSignedResponseAlgDescription", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   TokenEndpointAuthSigningAlgDescription に類似しているローカライズされた文字列を検索します。

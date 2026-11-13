@@ -483,6 +483,12 @@
   <data name="DdlClientTypeLoginUser" xml:space="preserve">
     <value>ログイン・ユーザの Client</value>
   </data>
+  <data name="AuthorizationSignedResponseAlg" xml:space="preserve">
+    <value>認可応答の署名アルゴリズム（authorization_signed_response_alg）</value>
+  </data>
+  <data name="AuthorizationSignedResponseAlgDescription" xml:space="preserve">
+    <value>JARM の応答の署名アルゴリズム。**空なら既定。**</value>
+  </data>
   <data name="DdlDefaultAlg" xml:space="preserve">
     <value>{0}（既定）</value>
   </data>

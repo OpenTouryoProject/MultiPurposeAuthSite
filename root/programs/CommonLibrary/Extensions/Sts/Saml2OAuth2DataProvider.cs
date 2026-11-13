@@ -40,6 +40,7 @@
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の列（4 つ）を追加（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         SectorIdentifierUri の列を追加（#364）
+//*  2026/11/13  玄人 幸道         AuthorizationSignedResponseAlg の列を追加（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -151,7 +152,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             "DPoPBoundAccessTokens",
             "TlsCertBoundAccessTokens",
             //  **pairwise の Sector**（#364）。**末尾に足す**（同上）。
-            "SectorIdentifierUri"
+            "SectorIdentifierUri",
+            //  **JARM の署名 alg**（#370）。**末尾に足す**（同上）。
+            "AuthorizationSignedResponseAlg"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -366,6 +369,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **pairwise の Sector**（#364）。
             prm.Add("SectorIdentifierUri", model.SectorIdentifierUri);
 
+            //  **JARM の署名 alg**（#370）。
+            prm.Add("AuthorizationSignedResponseAlg", model.AuthorizationSignedResponseAlg);
+
             return prm;
         }
 
@@ -485,7 +491,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 DPoPBoundAccessTokens = model.DPoPBoundAccessTokens,
                 TlsCertBoundAccessTokens = model.TlsCertBoundAccessTokens,
                 //  **pairwise の Sector**（#364）。
-                SectorIdentifierUri = model.SectorIdentifierUri
+                SectorIdentifierUri = model.SectorIdentifierUri,
+                //  **JARM の署名 alg**（#370）。
+                AuthorizationSignedResponseAlg = model.AuthorizationSignedResponseAlg
             };
         }
 

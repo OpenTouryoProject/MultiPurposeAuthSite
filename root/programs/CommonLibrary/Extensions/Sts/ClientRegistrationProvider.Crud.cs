@@ -33,6 +33,7 @@
 //*  2026/11/08  玄人 幸道         更新（PUT）で、プロファイルを強制する 4 つのメタデータは、立てられるが下げられないようにした（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を、検査の前に取りに行くようにした（WarmUpSectorIdentifierUriAsync。#364）
 //*  2026/11/12  玄人 幸道         取りに行くのは、呼び出し元の認可を確かめた後だけにした（MayWarmUpForRegister / MayWarmUpForUpdate。#364）
+//*  2026/11/13  玄人 幸道         PUT で authorization_signed_response_alg も全置換する（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -615,6 +616,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             model.SoftwareVersion = requested.SoftwareVersion;
             model.SubjectTypes = requested.SubjectTypes;
             model.IdTokenSignedResponseAlg = requested.IdTokenSignedResponseAlg;
+            model.AuthorizationSignedResponseAlg = requested.AuthorizationSignedResponseAlg;
 
             //    **`sector_identifier_uri` も全置換**（#364）。**ホストを変えたり省いたりすると Sector が変わり、pairwise の `sub` が変わる**
             //    （**以前の `sub` は引けなくなる**。RP 自身の操作なので許す。`GET` の応答をそのまま戻せば残る）。

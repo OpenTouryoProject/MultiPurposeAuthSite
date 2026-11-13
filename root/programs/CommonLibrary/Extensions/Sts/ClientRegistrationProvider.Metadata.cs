@@ -34,6 +34,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを受けるようにした（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri の中身に redirect_uris がすべて在るかを確かめるようにした（OIDC Registration 1.0 §5。#364）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg を受ける（JARM §3。#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -585,6 +586,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
 
                 model.IdTokenSignedResponseAlg = signingAlg;
+            }
+
+            //  **`authorization_signed_response_alg`**（JARM §3。#370）。**id_token と同じく、扱える alg でなければ断る。**
+            string jarmAlg = ClientRegistrationProvider.GetString(
+                metadata, Const.ClientAuthorizationSignedResponseAlg);
+
+            if (!string.IsNullOrEmpty(jarmAlg))
+            {
+                if (!JwsFactory.IsSupported(jarmAlg))
+                {
+                    description = string.Format(
+                        "The authorization_signed_response_alg ({0}) is not supported.", jarmAlg);
+                    return false;
+                }
+
+                model.AuthorizationSignedResponseAlg = jarmAlg;
             }
 
             #endregion

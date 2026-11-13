@@ -60,6 +60,7 @@
 //*  2026/11/07  玄人 幸道         FAPI1_PrivateKeyJwt_Client を足した（#341）
 //*  2026/11/09  玄人 幸道         TestClient_37〜44 を追加（#346 の段階 2）
 //*  2026/11/10  玄人 幸道         TestClient_45（fapi2。id_token_signed_response_alg=PS256）を追加（#355）
+//*  2026/11/13  玄人 幸道         TestClient_46（authorization_signed_response_alg=PS256）を追加（#370）
 //**********************************************************************************
 
 using System;
@@ -431,6 +432,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>FAPI2_Client（fapi2）を写し、**private_key_jwt ＋ id_token_signed_response_alg を PS256** にしたクライアント（RT-355.1。#355）</summary>
         public const string TestClient_45 = "TestClient_45";
 
+        /// <summary>TestClient を写し、**authorization_signed_response_alg を PS256** にしたクライアント（RT-370.5。#370）</summary>
+        public const string TestClient_46 = "TestClient_46";
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -509,7 +513,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_42, "e2e0tc42200000000000000000000000" },
                 { KnownClients.TestClient_43, "e2e0tc43300000000000000000000000" },
                 { KnownClients.TestClient_44, "e2e0tc44400000000000000000000000" },
-                { KnownClients.TestClient_45, "e2e0tc45500000000000000000000000" }
+                { KnownClients.TestClient_45, "e2e0tc45500000000000000000000000" },
+                { KnownClients.TestClient_46, "e2e0tc46600000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -1134,8 +1139,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 || clientName == KnownClients.TestClient_41
                 || clientName == KnownClients.TestClient_42
                 || clientName == KnownClients.TestClient_43
-                || clientName == KnownClients.TestClient_44)
+                || clientName == KnownClients.TestClient_44
+                || clientName == KnownClients.TestClient_46)
             {
+                // TestClient_46 は、**JARM の署名 alg を PS256 にした**（#370）。
                 // **プロファイルを強制する登録**（#346）。client_secret・折り返し先・鍵は写す元のまま。
                 //   **TestClient_41 は private_key_jwt、TestClient_42 は tls_client_auth なので、秘密では認証できない。**
                 sourceName = KnownClients.TestClient;

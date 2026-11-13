@@ -37,6 +37,7 @@
 //*  2026/11/10  玄人 幸道         id_token の生成に pfx を渡さないようにした（鍵は SigningKeys から引く。#352）
 //*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
 //*  2026/11/10  玄人 幸道         暗号化した id_token の中の JWS を、登録の alg で署名するよう、client_id を受けるようにした（#355）
+//*  2026/11/13  玄人 幸道         登録された authorization_signed_response_alg も、扱える値かを確かめる（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -252,6 +253,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
                 err.Add(OAuth2AndOIDCConst.error_description,
                     "The registered id_token_signed_response_alg is not supported.");
+                return false;
+            }
+
+            // **JARM の署名 alg も同じく確かめる**（#370）。**応答を返す直前に例外にしないため。**
+            if (!JwsFactory.IsSupported(Helper.GetInstance().GetAuthorizationSignedResponseAlg(client_id)))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The registered authorization_signed_response_alg is not supported.");
                 return false;
             }
 
