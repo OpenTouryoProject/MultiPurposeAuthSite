@@ -317,6 +317,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/Issues/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
+| `Tests/Issues/RefreshTokenRotationTests.cs` | `RT-367` | **FAPI 2.0 の登録では refresh_token を入れ替えない**（#367。FAPI 2.0 Security Profile §5.3.2.1）。**fapi2 の登録は、新しい refresh_token を返さず、同じものを（DPoP の鍵を作り直しても）何度でも使える**こと（`RT-367.1`）、**ほかの登録は従来どおり入れ替える**こと（`RT-367.2`） |
 | `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け。`RT-188.4`（使い切り）もここ |
 | `Tests/Issues/RequestUriTests.cs` | `RT-362` | **引けない `request_uri` を、黙って続けずに断る**（#362。OIDC Core 1.0 §3.1.2.6）。**外部の URL は `request_uri_not_supported`**（`RT-362.1`。取りに行くのは #374）、**存在しない・使用済みの `urn:` は `invalid_request_uri`**（`RT-362.2`・`.3`）。どちらもエラー画面で、RP へ返さない |
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
@@ -355,7 +356,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ManageUserAttributeTests.cs` | `RT-277` | **管理画面での属性変更**（利用者名・パスワード・メアド）。**変えたら、その値で使えること**まで見る（**新しい値で入れて、古い値では入れない**／**元に戻せる**）。**メアドは確認メールを挟む**ので、**押しただけでは変わらない**ことを押さえる。**使い捨ての利用者を `/UsersAdmin` で作り、後片付けで消す**（テスト利用者は使わない） |
 | `Tests/Issues/ManageWebAuthnTests.cs` | `RT-277` | **WebAuthn の資格情報の削除**（`/Manage/RemoveWebAuthnData`。#277 の段階 6）。**選んだものだけが、選んだ数だけ消える**こと。**種データの資格情報を使う**（上記）。**描画は `UI-1.1` で測る**（`class="form-control"` でチェックの印が消えていた件は、**ブラウザでなければ見えない**）。**net48 版は Skip**（口が無い） |
 | `Tests/WebUI/RemoveWebAuthnRenderingTests.cs` | `UI-1` | **ブラウザでしか測れないもの**（#277 の段階 7）。WebAuthn の削除画面で、**チェックを入れたか外したかが見て分かる**こと（入れる前と後の見た目を比べる）。**ブラウザが無ければ Skip する**（下記）。**net48 版は対象外**（口が無い） |
-| `Tests/Issues/DPoPBindingTests.cs` | `RT-311` | **`code` と `refresh_token` も DPoP の鍵に縛る**（#311 の段階 4）。**認可要求の `dpop_jkt` で `code` が縛られる**こと（`RT-311.10`。**別の鍵・証明なしは `invalid_grant`**。**断られた `code` はまだ使える**）、**`refresh_token` も同じ鍵でしか使えない**こと（`RT-311.11`。**ローテーションした後も**。**縛っていないものからの乗り換え先も縛られる**） |
+| `Tests/Issues/DPoPBindingTests.cs` | `RT-311` | **`code` と `refresh_token` も DPoP の鍵に縛る**（#311 の段階 4）。**認可要求の `dpop_jkt` で `code` が縛られる**こと（`RT-311.10`。**別の鍵・証明なしは `invalid_grant`**。**断られた `code` はまだ使える**）、**秘密を持つクライアントの `refresh_token` は鍵に縛られない**こと（`RT-311.11`。RFC 9449 §5。**#367 で期待値を変えた**。以前は同じ鍵でしか使えなかった） |
 | `Tests/Issues/DPoPChallengeTests.cs` | `RT-311` | **チャレンジのスキームが `DPoP` になる**（#311 の段階 4）。**`DPoP` スキームで来た要求には `WWW-Authenticate: DPoP` ＋ `algs`**、**`Bearer` で来た要求には従来どおり `Bearer`**（`RT-311.12`） |
 | `Tests/Issues/DPoPNonceTests.cs` | `RT-311` | **DPoP の `nonce` を要求する**（#311 の段階 4）。**`/token` は `use_dpop_nonce` ＋ 400**（`RT-311.13`。**`DPoP-Nonce` で値を渡す**。**`code` は消費されていない**）、**保護されたリソースは 401 ＋ チャレンジ**（`RT-311.14`）。**`/token` と保護されたリソースの nonce は別物**。**`test.ps1 -DPoPNonce` のときだけ走る**（既定では除外） |
 | `Tests/Issues/ImplicitDisabledTests.cs` | `RT-314` | **Implicit を閉じた配備では、Hybrid / OIDC の Implicit も閉じる**（#314）。**Discovery が `token` を含む response_type を広告しない**（`RT-314.1`）、**`token` を含む response_type を `unsupported_response_type` で断る**（`RT-314.2`）、**`code id_token` は通る**（`RT-314.3`）。**`id_token` 単独も断る**（`RT-314.4`。#294）。**`test.ps1 -NoImplicit` のときだけ走る**（既定では除外） |

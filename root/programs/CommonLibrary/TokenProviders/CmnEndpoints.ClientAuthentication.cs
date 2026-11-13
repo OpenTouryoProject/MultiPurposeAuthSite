@@ -43,6 +43,7 @@
 //*  2026/11/06  玄人 幸道         TryVerifyAssertion の catch と、alg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#654・#664）に合わせた（#337）
 //*  2026/11/08  玄人 幸道         tls_client_auth の登録で、証明書が届かない・Subject が合わないときの理由を OPERATION に残す（#345）
 //*  2026/11/12  玄人 幸道         jwks_uri の控えに無い kid なら、その場で取り直して短く待つ（下限は RemoteJwkSetStore.GetJwkAsync に従う。#363）
+//*  2026/11/13  玄人 幸道         資格情報で認証したかを返す（IsConfidentialProof・Device AuthZ の confidential。refresh_token を DPoP の鍵に縛るか。#367）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -296,12 +297,28 @@ namespace MultiPurposeAuthSite.TokenProviders
                 Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.DeviceAuthZ);
         }
 
+        /// <summary>Device AuthZのクライアント認証（認証したかを返さない版。Controller の口が使う）</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="clientAssertion">client_assertion（private_key_jwt。無ければ空）</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="authnedClientId">認証できたクライアントの client_id</param>
+        /// <returns>bool</returns>
+        public static bool DeviceAuthZClientAuthentication(
+            string client_id, string client_secret, string clientAssertion,
+            ref X509Certificate2 x509, out string authnedClientId)
+        {
+            return CmnEndpoints.DeviceAuthZClientAuthentication(
+                client_id, client_secret, clientAssertion, ref x509, out authnedClientId, out bool _);
+        }
+
         /// <summary>Device AuthZのクライアント認証（`client_assertion` も受ける。#294）</summary>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="clientAssertion">client_assertion（private_key_jwt。無ければ空）</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="authnedClientId">認証できたクライアントの client_id</param>
+        /// <param name="confidential">資格情報で認証したか（公開クライアントとして client_id だけを確かめたなら false。#367）</param>
         /// <returns>bool</returns>
         /// <remarks>
         /// RFC 8628
@@ -317,9 +334,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         public static bool DeviceAuthZClientAuthentication(
             string client_id, string client_secret, string clientAssertion,
-            ref X509Certificate2 x509, out string authnedClientId)
+            ref X509Certificate2 x509, out string authnedClientId, out bool confidential)
         {
             authnedClientId = client_id;
+            confidential = false;
 
             if (!string.IsNullOrEmpty(clientAssertion))
             {
@@ -328,6 +346,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     return false;
                 }
+
+                confidential = true;
 
                 return string.IsNullOrEmpty(client_id)
                     || string.Equals(client_id, authnedClientId, StringComparison.Ordinal);
@@ -371,6 +391,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 || !string.IsNullOrEmpty(Helper.GetInstance().GetJwksUri(client_id))
                 || x509 != null)
             {
+                confidential = true;
+
                 return CmnEndpoints.ClientAuthentication(
                     client_id, client_secret, ref x509,
                     out ClientModePolicy.Proof _);
@@ -816,6 +838,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return CmnEndpoints.TokenEndpointAuthMethods
                     .Where(x => x != CmnEndpoints.TokenEndpointAuthMethodNone).ToArray();
             }
+        }
+
+        /// <summary>資格情報で認証した証明か（秘密を持つクライアントか。#367）</summary>
+        /// <param name="proof">ClientAuthentication などが返した証明</param>
+        /// <returns>client_secret・private_key_jwt・mTLS なら true（PKCE だけ・証明なしは false）</returns>
+        /// <remarks>
+        /// **RFC 9449 §5 : 秘密を持つクライアントの refresh_token は、DPoP の鍵に縛らない**
+        /// （クライアント認証で既に縛られている）。**公開クライアントの refresh_token は縛る。**
+        /// </remarks>
+        public static bool IsConfidentialProof(ClientModePolicy.Proof proof)
+        {
+            return proof == ClientModePolicy.Proof.ClientSecret
+                || proof == ClientModePolicy.Proof.ClientSecretAndPkce
+                || proof == ClientModePolicy.Proof.PrivateKeyJwt
+                || proof == ClientModePolicy.Proof.Mtls;
         }
 
         /// <summary>`token_endpoint_auth_method` に `none` を登録したクライアントか（#294）</summary>

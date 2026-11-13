@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=e8ae3bba-96c2-4dff-bd5a-1e4d1baf7b2a&code=bogus
+1. GET /Account/EmailConfirmation?userId=9f50ea78-3e63-4499-a4ba-02e2a474f8bb&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=e8ae3bba-96c2-4dff-bd5a-1e4d1baf7b2a&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=e8ae3bba-96c2-4dff-bd5a-1e4d1baf7b2a&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=9f50ea78-3e63-4499-a4ba-02e2a474f8bb&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=9f50ea78-3e63-4499-a4ba-02e2a474f8bb&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -10239,43 +10239,35 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **`invalid_dpop_proof` ではなく `invalid_grant` で断っている** — **証明そのものは正しく、「この `code` のものではない」**のである。**証明の作りが悪いのか、持ち主が違うのかを、クライアントが区別できる。**
 - **デバイス / CIBA の経路には `dpop_jkt` が無い**（**認可要求がブラウザを通らない**ため）。**そこは測っていない。**
 
-## RT-311.11 **縛った `access_token` と一緒に出た `refresh_token` は、同じ鍵でしか使えない**（別の鍵・証明なしは `invalid_grant`）。**ローテーションした後も縛られている**
+## RT-311.11 **秘密を持つクライアントの `refresh_token` は、DPoP の鍵に縛られない**（証明なしでも、別の鍵の証明でも更新できる）。**更新で出る `access_token` は、その要求の証明の鍵に縛られる**
 
 | | |
 |---|---|
-| 観点 | **`access_token` だけを縛っても、更新で縛りの無いものに乗り換えられる**なら、**縛りは寿命の分しか効かない**（RFC 9449 §5）。**漏えいして困るのは、むしろ長命な `refresh_token` の方**である。**断るときに消費してはいけない** — **ローテーションの一族ごと失効させては、持ち主が巻き込まれる**（#188 の段階 3）。 |
-| 根拠 | RFC 9449 §5 / #311 の段階 4 |
-| テスト | `RT31111_refresh_tokenも同じ鍵に縛られる` |
+| 観点 | **秘密を持つクライアントの `refresh_token` は、クライアント認証で既に縛られている**ので、**DPoP の鍵には縛らない**（RFC 9449 §5）。**鍵を作り直したクライアントも、更新を続けられる。****縛りが要るのは `access_token` の方**で、**それは更新の要求の証明で縛る。****以前は縛っていた**ので、**鍵を作り直すと更新できなかった**（適合性テストの `refresh-token`）。 |
+| 根拠 | RFC 9449 §5 / #311 の段階 4 / #367 |
+| テスト | `RT31111_秘密を持つクライアントのrefresh_tokenは鍵に縛られない` |
 
 **手順**
 
-1. 証明を添えて code を引き換え、縛られた refresh_token を得る
+1. EC の証明を添えて code を引き換える
+1. **別の鍵（RSA）の証明**で更新する（鍵を作り直したクライアント）
 1. **証明なし**で更新する
-1. **別の鍵（RSA）の証明**で更新する
-1. **同じ鍵（EC）の証明**で更新する
-1. **ローテーションした refresh_token も縛られている**
-1. 縛っていない refresh_token は、従来どおり証明なしで使える
-1. 縛っていない refresh_token を、**証明を添えて**更新すると、**出てくる refresh_token は縛られている**
+1. **元の鍵（EC）の証明**で更新する
 
 **検証（合否を判定する）**
 
 - token_type が DPoP
-- invalid_grant
-- 400
-- invalid_grant
-- 400
-- HTTP 200（断りで消費していない）
+- HTTP 200（縛られていない）
 - token_type が DPoP
-- cnf.jkt が同じ鍵の指紋
-- invalid_grant
+- cnf.jkt が、この要求の鍵（RSA）の指紋
+- HTTP 200（縛られていない）
+- token_type は bearer（証明が無いので縛らない）
 - HTTP 200
-- token_type は bearer
-- 乗り換えられる（token_type が DPoP）
-- 乗り換えた先も縛られている（invalid_grant）
+- cnf.jkt が、この要求の鍵（EC）の指紋
 
 **補足**
 
-- **縛っていない `refresh_token` を、証明を添えて使うと、縛られたトークンが出る**（`RT-311.3`）。**その向きは RFC 9449 も禁じていない** — **塞いだのは逆向き（縛られたものを、証明なしで使う）である。****(7) は、乗り換えた先の `refresh_token` にも縛りが付くことを見ている。**
+- **どの更新でも、クライアント認証（client_secret）は求めている**（`DPoPBindingTests.RefreshAsync` が送る）。
 
 ## RT-311.12 **`DPoP` スキームで来た要求を断るときは、`WWW-Authenticate: DPoP` ＋ `algs` で答える**。**`Bearer` で来た要求には、従来どおり `Bearer`**
 
@@ -12216,6 +12208,48 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 小文字の s256 : RP へ invalid_request を返す
 - PKCE 無し : code を出さない
 - PKCE 無し : RP へ invalid_request を返す
+
+## RT-367.1 fapi2 の登録は、更新で新しい refresh_token を返さず、同じ refresh_token で（DPoP の鍵を作り直しても）何度でも更新できる
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、特別な事情が無い限り refresh_token を入れ替えない**ことを求める。**新しい refresh_token を返さなければ、クライアントは今のものを使い続ける**（RFC 6749 §6）。**秘密を持つクライアント（private_key_jwt）の refresh_token は、DPoP の鍵に縛らない**（RFC 9449 §5）。**以前は入れ替えて前のものを使用済みにし、鍵にも縛っていた**ので、適合性テストの refresh-token が落ちた。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 6749 §6 / RFC 9449 §5 / #367 |
+| テスト | `RT36701_fapi2の登録はrefresh_tokenを入れ替えない` |
+
+**手順**
+
+1. PKCE（S256）と client_assertion で、認可コードを引き換える
+1. EC の鍵の DPoP の証明を添えて更新する
+1. 同じ refresh_token で、**作り直した鍵（RSA）**の証明を添えて、もう一度更新する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- cnf.jkt が EC の鍵の指紋
+- 新しい refresh_token を返さない（入れ替えない）
+- HTTP 200（使用済みにしていない・鍵に縛っていない）
+- cnf.jkt が、作り直した鍵（RSA）の指紋
+
+## RT-367.2 fapi2 でない登録は、従来どおり更新のたびに refresh_token を入れ替え、前のものは invalid_grant で断る
+
+| | |
+|---|---|
+| 観点 | **入れ替えないのは fapi2 の登録だけ。** **ほかの登録は、盗まれた refresh_token への備えとして入れ替えを続ける**（再利用の検知。#188 の段階 3）。 |
+| 根拠 | RFC 6749 §6 / #188 / #367 |
+| テスト | `RT36702_fapi2でない登録は従来どおり入れ替える` |
+
+**手順**
+
+1. 認可コード フローで refresh_token を得る
+1. 更新する
+1. 前の refresh_token で、もう一度更新する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- 新しい refresh_token を返す（入れ替える）
+- invalid_grant（使用済み）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

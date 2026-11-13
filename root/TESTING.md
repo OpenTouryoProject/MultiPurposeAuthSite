@@ -1169,6 +1169,26 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### FAPI 2.0 の登録では refresh_token を入れ替えず、秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（`RT-367.*`・`RT-311.11`。#367）
+
+| | 測ること |
+|---|---|
+| **`RT-367.1`** | **fapi2 の登録は、更新で新しい refresh_token を返さず、同じ refresh_token で何度でも更新できる**（FAPI 2.0 Security Profile §5.3.2.1 の 9。RFC 6749 §6）。**2 回目は DPoP の鍵を作り直して更新する**（適合性テストと同じ形。private_key_jwt の refresh_token を鍵に縛らない。RFC 9449 §5） |
+| **`RT-367.2`** | **fapi2 でない登録は、従来どおり入れ替え、前の refresh_token は `invalid_grant`**（#188） |
+| **`RT-311.11`** | **秘密を持つクライアントの `refresh_token` は、DPoP の鍵に縛られない**（RFC 9449 §5。**期待値を変えた**） |
+
+- **秘密を持つかどうかは、その要求でクライアントが何で認証したか**（`CmnEndpoints.IsConfidentialProof`。client_secret・private_key_jwt・mTLS）で決める。デバイスの経路は `DeviceAuthZClientAuthentication` が返す
+- **`IsConfidentialProof` の真偽表は、単体テスト（`Tests/UnitTests/Sts/ConfidentialProofTests.cs`）で固定した**（公開クライアントを縛る側は、E2E では通らないため）
+- **入れ替えない登録（fapi2）の refresh_token の有効期限は、最初に出した時点から数える**（入れ替えないので延びない）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **公開クライアントの `refresh_token` を DPoP の鍵に縛ること** | **公開クライアント（`none`）は、`refresh_token` の経路で認証できない**（クライアント認証を必須にしている）。発行のときに縛るが、更新で照合する場面が無い |
+| **fapi2 の登録で、利用者が消された・パスワードを変えたときに、入れ替えない refresh_token を失効させること** | 入れ替える登録と同じ `CheckUserOfRefreshToken` で断り、続けて失効させる。利用者を消す操作を fapi2 のテストに足していない |
+| **デバイスの経路で、秘密を持つクライアントの `refresh_token` を縛らないこと** | `DeviceAuthZClientAuthentication` の `confidential` を読むだけ。DPoP の証明を添えたデバイスの経路の組み合わせを足していない |
+
 ##### FAPI 2.0 の登録では、S256 の PKCE を必須にする（`RT-366.*`。#366）
 
 | | 測ること |
@@ -1234,7 +1254,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | | 測ること | いつ回るか |
 |---|---|---|
 | **`RT-311.10`** | **認可要求の `dpop_jkt` で、`code` が鍵に縛られる**（§10） | いつでも |
-| **`RT-311.11`** | **`refresh_token` も同じ鍵に縛られる**（§5）。**ローテーションした後も** | いつでも |
+| **`RT-311.11`** | **秘密を持つクライアントの `refresh_token` は、鍵に縛られない**（§5。**#367 で期待値を変えた**。以前は同じ鍵に縛っていた）。**更新で出る `access_token` は、その要求の証明の鍵に縛られる** | いつでも |
 | **`RT-311.12`** | **`DPoP` スキームで来た要求には `WWW-Authenticate: DPoP` ＋ `algs`** で答える（§7.1） | いつでも |
 | **`RT-311.13`** | **`/token` が `nonce` を要求する**（`use_dpop_nonce` ＋ `DPoP-Nonce`。§8） | **`-DPoPNonce`** |
 | **`RT-311.14`** | **保護されたリソースが `nonce` を要求する**（§9）。**`/token` の nonce は通らない** | **`-DPoPNonce`** |
@@ -1242,8 +1262,8 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 ###### どれも「断った後、やり直せる」ことまで見る
 
 **`RT-311.10`** は **断られた `code` が、正しい鍵でまだ引き換えられる**こと。
-**`RT-311.11`** は **断られた `refresh_token` が、正しい鍵でまだ使える**こと
-（**ローテーションの一族ごと失効させない**）。
+**`RT-311.11`** は、#367 の後は **鍵を作り直したクライアント（別の鍵・証明なし）も更新を続けられる**こと
+（**秘密を持つクライアントの `refresh_token` は縛らない**。RFC 9449 §5）。
 **`RT-311.13`** は **断られた `code` が、貰った `nonce` で引き換えられる**こと。
 
 **縛りが「利用者を閉じ出す仕掛け」になっていないことを、そこで押さえる。**
@@ -1262,6 +1282,10 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **預ける payload が、もともと `cnf.jkt` を持っている**ので、
 > **書き直さなくても縛りは残る** — **効くのは「縛っていない → 縛る」の乗り換えだけ**だった。
 > **そのケース（`RT-311.11` の (7)）を足してから、落ちることを確かめた。**
+>
+> **#367 で、`RT-311.11` を「秘密を持つクライアントの `refresh_token` は縛らない」期待に改めた**ので、
+> **上の 2 行（`refresh_token` の縛り）は、いまの `RT-311.11` には当たらない**（実測は #311 の時点のもの）。
+> **公開クライアントの `refresh_token` は、いまも縛る**が、**公開クライアントは `refresh_token` の経路で認証できない**ので、E2E では測れない（下の #367）。
 
 ###### 測っていないこと
 
