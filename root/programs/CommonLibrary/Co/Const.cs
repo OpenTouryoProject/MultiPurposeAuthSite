@@ -53,6 +53,8 @@
 //*  2026/10/31  玄人 幸道         TokenEndpointAuthMethodNone を追加（CmnEndpoints と Helper の二重定義をやめた。#294）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前（OpenTouryo#634・#663）を外し、そちらを使うようにした（#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         sector_identifier_uri を追加（#364）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg（JARM の署名の alg の登録）を足した（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -554,11 +556,29 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>subject_type</summary>
         public const string ClientSubjectType = "subject_type";
 
+        /// <summary>sector_identifier_uri（OIDC DCR 1.0 §2・§5。#364）</summary>
+        public const string ClientSectorIdentifierUri = "sector_identifier_uri";
+
+        /// <summary>ホスト名の Sector に付ける接頭辞（#364）</summary>
+        /// <remarks>
+        /// **Sector には `client_id` と、`sector_identifier_uri` のホスト名の 2 種類が入る**（`PPIDExtension.GetSector`）。
+        /// **接頭辞で名前を分ける** — **分けないと、`client_id` を別の RP のホスト名と同じ文字列にした登録が、その RP と同じ `sub` になる。**
+        /// **管理画面は、この接頭辞で始まる `client_id` を作らない**（動的登録の `client_id` は発行するので当たらない）。
+        /// </remarks>
+        public const string SectorHostPrefix = "host:";
+
+        /// <summary>Sector にできるホスト名の長さの上限（#364）</summary>
+        /// <remarks>**Sector の列は 256 文字**（`SubjectIdentifier.Sector`）。接頭辞の分を引く。</remarks>
+        public const int MaxLengthOfSectorHost = 256 - 5;
+
         /// <summary>id_token_signed_response_alg</summary>
         public const string ClientIdTokenSignedResponseAlg = "id_token_signed_response_alg";
 
         /// <summary>request_object_signing_alg</summary>
         public const string ClientRequestObjectSigningAlg = "request_object_signing_alg";
+
+        /// <summary>authorization_signed_response_alg（JARM §3。#370）</summary>
+        public const string ClientAuthorizationSignedResponseAlg = "authorization_signed_response_alg";
 
         /// <summary>token_endpoint_auth_signing_alg</summary>
         public const string ClientTokenEndpointAuthSigningAlg = "token_endpoint_auth_signing_alg";

@@ -55,6 +55,7 @@
 //*  2026/10/31  玄人 幸道         待ち時間を指定して POST する口を追加（自己テストのポーリング。#294）
 //*  2026/11/08  玄人 幸道         自己テストが Cookie に置いた code_verifier を読む口を追加（#345）
 //*  2026/11/09  玄人 幸道         クライアント証明書を添えて任意の口を POST する PostWithCertificateAsync を追加（device の /device_authz。#346）
+//*  2026/11/11  玄人 幸道         同意画面の許可・拒否を、フォームの action（同意画面の送信の口）へ送るようにした（ConsentFormUrl。#359）
 //**********************************************************************************
 
 using System;
@@ -858,11 +859,29 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         }
 
         /// <summary>
+        /// 同意画面のフォームの送信先（絶対 URL。#359）
+        /// </summary>
+        /// <param name="authz">同意画面が返ってきた応答</param>
+        /// <returns>送信先</returns>
+        /// <remarks>
+        /// **同意画面のフォームは、同意画面の送信の口（`<認可の口>/consent`。認可要求のクエリ付き）へ送る**（#359）。
+        /// **以前は action が無く、認可要求と同じ URL へ送っていた**（その POST の口は、RP からの POST の認可要求に明け渡した）。
+        /// **ブラウザと同じく、フォームの action を読んで送る。** action が無ければ、従来どおり要求の URL。
+        /// </remarks>
+        public static string ConsentFormUrl(AuthZResponse authz)
+        {
+            string action = Html.FormAttributeContaining(authz.Body, "submit.Grant", "action");
+
+            return string.IsNullOrEmpty(action)
+                ? authz.RequestUrl
+                : new Uri(new Uri(authz.RequestUrl), action).AbsoluteUri;
+        }
+
+        /// <summary>
         /// 同意画面（OAuth2Authorize）で「許可」を押す。
         ///
         /// prompt=none を付けない認可リクエスト（Request Object 経由など）は、
-        /// 一度この画面で止まる。フォームは action を持たず、
-        /// 認可リクエストと同じURL（クエリ文字列込み）へPOSTされる。
+        /// 一度この画面で止まる。**フォームは、同意画面の送信の口（action）へ POST する**（#359）。
         /// </summary>
         /// <param name="authz">同意画面が返ってきた応答</param>
         /// <returns>AuthZResponse</returns>
@@ -888,7 +907,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { "submit.Grant", "Grant" }
             };
 
-            HttpResponseMessage res = await this.PostFormAsync(authz.RequestUrl, form);
+            HttpResponseMessage res = await this.PostFormAsync(IdPClient.ConsentFormUrl(authz), form);
             return await ToAuthZResponseAsync(res);
         }
 
@@ -943,8 +962,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// 同意画面（OAuth2Authorize）で「拒否」を押す（E-6 / #272 の段階 2）。
         ///
         /// prompt=none を付けない認可リクエスト（Request Object 経由など）は、
-        /// 一度この画面で止まる。フォームは action を持たず、
-        /// 認可リクエストと同じURL（クエリ文字列込み）へPOSTされる。
+        /// 一度この画面で止まる。**フォームは、同意画面の送信の口（action）へ POST する**（#359）。
         /// </summary>
         /// <param name="authz">同意画面が返ってきた応答</param>
         /// <returns>AuthZResponse</returns>
@@ -970,7 +988,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { "submit.Deny", "Deny" }
             };
 
-            HttpResponseMessage res = await this.PostFormAsync(authz.RequestUrl, form);
+            HttpResponseMessage res = await this.PostFormAsync(IdPClient.ConsentFormUrl(authz), form);
             return await ToAuthZResponseAsync(res);
         }
 

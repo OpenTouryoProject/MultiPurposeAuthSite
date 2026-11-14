@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/22  玄人 幸道         新規（#311 の段階 4）
 //*  2026/10/22  玄人 幸道         縛っていない refresh_token からの乗り換えを追加（歯抜けで測り漏れが出た）
+//*  2026/11/13  玄人 幸道         RT-311.11 を、秘密を持つクライアントの refresh_token は鍵に縛らない期待に改めた（RFC 9449 §5。#367）
 //**********************************************************************************
 
 using System;
@@ -54,7 +55,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | | 測ること |
     /// |---|---|
     /// | **`RT-311.10`** | **認可要求の `dpop_jkt` で、`code` が鍵に縛られる**（RFC 9449 §10） |
-    /// | **`RT-311.11`** | **縛った `access_token` と一緒に出た `refresh_token` も、同じ鍵に縛られる**（§5） |
+    /// | **`RT-311.11`** | **秘密を持つクライアントの `refresh_token` は、鍵に縛られない**（§5。**#367 で期待値を変えた**。以前は同じ鍵に縛っていた）。**更新で出る `access_token` は、その要求の証明の鍵に縛られる** |
     ///
     /// **どちらも「断るときに資格情報を消費しない」ことまで見る** —
     /// **断られた後、正しい鍵でやり直せなければ、縛りは利用者を閉じ出す仕掛けになる。**
@@ -170,34 +171,40 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region RT-311.11
 
-        /// <summary>RT-311.11 refresh_token も同じ鍵に縛られる</summary>
+        /// <summary>RT-311.11 秘密を持つクライアントの refresh_token は、DPoP の鍵に縛られない</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
+        /// <remarks>
+        /// **#367 で期待値を変えた。** **以前は、秘密を持つクライアントの refresh_token も、同じ鍵に縛っていた**
+        /// （証明なし・別の鍵は `invalid_grant`）。**RFC 9449 §5 は、秘密を持つクライアントの refresh_token は縛らない**としている
+        /// （クライアント認証で既に縛られている）。**公開クライアントの refresh_token は縛る**が、
+        /// **いまは公開クライアントが refresh_token の経路で認証できない**ので、E2E では測れない（`TESTING.md`）。
+        /// </remarks>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT31111_refresh_tokenも同じ鍵に縛られる(string targetKey)
+        public async Task RT31111_秘密を持つクライアントのrefresh_tokenは鍵に縛られない(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("RT-311.11",
-                    "**縛った `access_token` と一緒に出た `refresh_token` は、同じ鍵でしか使えない**"
-                    + "（別の鍵・証明なしは `invalid_grant`）。"
-                    + "**ローテーションした後も縛られている**",
-                    "**`access_token` だけを縛っても、更新で縛りの無いものに乗り換えられる**"
-                    + "なら、**縛りは寿命の分しか効かない**（RFC 9449 §5）。"
-                    + "**漏えいして困るのは、むしろ長命な `refresh_token` の方**である。"
-                    + "**断るときに消費してはいけない** — "
-                    + "**ローテーションの一族ごと失効させては、持ち主が巻き込まれる**（#188 の段階 3）。",
-                    "RFC 9449 §5 / #311 の段階 4");
+                    "**秘密を持つクライアントの `refresh_token` は、DPoP の鍵に縛られない**"
+                    + "（証明なしでも、別の鍵の証明でも更新できる）。"
+                    + "**更新で出る `access_token` は、その要求の証明の鍵に縛られる**",
+                    "**秘密を持つクライアントの `refresh_token` は、クライアント認証で既に縛られている**ので、"
+                    + "**DPoP の鍵には縛らない**（RFC 9449 §5）。**鍵を作り直したクライアントも、更新を続けられる。**"
+                    + "**縛りが要るのは `access_token` の方**で、**それは更新の要求の証明で縛る。**"
+                    + "**以前は縛っていた**ので、**鍵を作り直すと更新できなかった**（適合性テストの `refresh-token`）。",
+                    "RFC 9449 §5 / #311 の段階 4 / #367");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
                 string tokenEndpoint = await DPoPBindingTests.TokenEndpointAsync(client);
 
                 string ecJkt = JwsSigner.DPoPJkt(client);
+                string rsaJkt = JwsSigner.DPoPJkt(client, es256: false);
 
-                r.Target("POST /token（grant_type=refresh_token）");
+                r.Target("POST /token（grant_type=refresh_token。client_name=" + KnownClients.TestClient + "。client_secret で認証する）");
 
-                r.Step("(1) 証明を添えて code を引き換え、縛られた refresh_token を得る");
+                r.Step("(1) EC の証明を添えて code を引き換える");
 
                 string code = await DPoPBindingTests.CodeAsync(client, reg, null, "nonce-rt31111");
 
@@ -214,100 +221,46 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     Skip.If(true, "この配備は refresh_token を返していません（EnableRefreshToken）。");
                 }
 
-                r.Step("(2) **証明なし**で更新する");
-
-                JsonResponse noProof = await DPoPBindingTests.RefreshAsync(
-                    client, reg, tokenEndpoint, refreshToken, null);
-
-                r.VerifyEqual("invalid_grant", "invalid_grant", noProof.Error ?? "なし");
-
-                r.VerifyEqual("400", "400", ((int)noProof.StatusCode).ToString());
-
-                r.Step("(3) **別の鍵（RSA）の証明**で更新する");
+                r.Step("(2) **別の鍵（RSA）の証明**で更新する（鍵を作り直したクライアント）");
 
                 JsonResponse otherKey = await DPoPBindingTests.RefreshAsync(
                     client, reg, tokenEndpoint, refreshToken,
                     DPoPBindingTests.Proof(client, tokenEndpoint, es256: false));
 
-                r.VerifyEqual("invalid_grant", "invalid_grant", otherKey.Error ?? "なし");
+                r.VerifyEqual("HTTP 200（縛られていない）", "200", ((int)otherKey.StatusCode).ToString());
 
-                r.VerifyEqual("400", "400", ((int)otherKey.StatusCode).ToString());
+                r.VerifyEqual("token_type が DPoP", "DPoP", otherKey.String("token_type") ?? "なし");
 
-                r.Step("(4) **同じ鍵（EC）の証明**で更新する");
+                r.VerifyEqual("cnf.jkt が、この要求の鍵（RSA）の指紋",
+                    "一致", (DPoPBindingTests.JktOf(otherKey.AccessToken) == rsaJkt) ? "一致" : "**違う値**");
 
-                JsonResponse renewed = await DPoPBindingTests.RefreshAsync(
-                    client, reg, tokenEndpoint, refreshToken,
-                    DPoPBindingTests.Proof(client, tokenEndpoint));
+                //  **normal の登録は、従来どおり入れ替える**（#188。fapi2 は入れ替えない。#367）。
+                string rotated = string.IsNullOrEmpty(otherKey.RefreshToken) ? refreshToken : otherKey.RefreshToken;
 
-                r.VerifyEqual("HTTP 200（断りで消費していない）", "200",
-                    ((int)renewed.StatusCode).ToString());
+                r.Step("(3) **証明なし**で更新する");
 
-                r.VerifyEqual("token_type が DPoP", "DPoP", renewed.String("token_type") ?? "なし");
-
-                r.VerifyEqual("cnf.jkt が同じ鍵の指紋",
-                    "一致", (DPoPBindingTests.JktOf(renewed.AccessToken) == ecJkt) ? "一致" : "**違う値**");
-
-                r.Step("(5) **ローテーションした refresh_token も縛られている**");
-
-                string rotated = renewed.RefreshToken;
-
-                if (string.IsNullOrEmpty(rotated))
-                {
-                    Skip.If(true, "この配備は refresh_token をローテーションしていません。");
-                }
-
-                JsonResponse rotatedNoProof = await DPoPBindingTests.RefreshAsync(
+                JsonResponse noProof = await DPoPBindingTests.RefreshAsync(
                     client, reg, tokenEndpoint, rotated, null);
 
-                r.VerifyEqual("invalid_grant", "invalid_grant", rotatedNoProof.Error ?? "なし");
+                r.VerifyEqual("HTTP 200（縛られていない）", "200", ((int)noProof.StatusCode).ToString());
 
-                r.Step("(6) 縛っていない refresh_token は、従来どおり証明なしで使える");
+                r.VerifyEqual("token_type は bearer（証明が無いので縛らない）", "bearer",
+                    (noProof.String("token_type") ?? "なし").ToLower());
 
-                JsonResponse plain = await Flows.RunAuthorizationCodeFlowAsync(
-                    client, KnownClients.TestClient, "openid email", "nonce-rt31111-6");
+                rotated = string.IsNullOrEmpty(noProof.RefreshToken) ? rotated : noProof.RefreshToken;
 
-                if (string.IsNullOrEmpty(plain.RefreshToken))
-                {
-                    Skip.If(true, "この配備は refresh_token を返していません（EnableRefreshToken）。");
-                }
+                r.Step("(4) **元の鍵（EC）の証明**で更新する");
 
-                JsonResponse plainRenewed = await DPoPBindingTests.RefreshAsync(
-                    client, reg, tokenEndpoint, plain.RefreshToken, null);
-
-                r.VerifyEqual("HTTP 200", "200", ((int)plainRenewed.StatusCode).ToString());
-
-                r.VerifyEqual("token_type は bearer", "bearer",
-                    (plainRenewed.String("token_type") ?? "なし").ToLower());
-
-                r.Step("(7) 縛っていない refresh_token を、**証明を添えて**更新すると、"
-                    + "**出てくる refresh_token は縛られている**");
-
-                //  **ここが歯抜けで見つかった測り漏れ**である（#311 の段階 4）。
-                //    **ローテーションで縛りを書き直さなくても、(5) は通ってしまう** —
-                //    **預けた payload が、もともと `cnf.jkt` を持っている**ためである。
-                //    **書き直しが効くのは、この「縛っていない → 縛る」の乗り換え**だけ。
-                JsonResponse upgraded = await DPoPBindingTests.RefreshAsync(
-                    client, reg, tokenEndpoint, plainRenewed.RefreshToken,
+                JsonResponse renewed = await DPoPBindingTests.RefreshAsync(
+                    client, reg, tokenEndpoint, rotated,
                     DPoPBindingTests.Proof(client, tokenEndpoint));
 
-                r.VerifyEqual("乗り換えられる（token_type が DPoP）", "DPoP",
-                    upgraded.String("token_type") ?? "なし");
+                r.VerifyEqual("HTTP 200", "200", ((int)renewed.StatusCode).ToString());
 
-                if (string.IsNullOrEmpty(upgraded.RefreshToken))
-                {
-                    Skip.If(true, "この配備は refresh_token をローテーションしていません。");
-                }
+                r.VerifyEqual("cnf.jkt が、この要求の鍵（EC）の指紋",
+                    "一致", (DPoPBindingTests.JktOf(renewed.AccessToken) == ecJkt) ? "一致" : "**違う値**");
 
-                JsonResponse afterUpgrade = await DPoPBindingTests.RefreshAsync(
-                    client, reg, tokenEndpoint, upgraded.RefreshToken, null);
-
-                r.VerifyEqual("乗り換えた先も縛られている（invalid_grant）", "invalid_grant",
-                    afterUpgrade.Error ?? "なし");
-
-                r.Note("**縛っていない `refresh_token` を、証明を添えて使うと、縛られたトークンが出る**"
-                    + "（`RT-311.3`）。**その向きは RFC 9449 も禁じていない** — "
-                    + "**塞いだのは逆向き（縛られたものを、証明なしで使う）である。**"
-                    + "**(7) は、乗り換えた先の `refresh_token` にも縛りが付くことを見ている。**");
+                r.Note("**どの更新でも、クライアント認証（client_secret）は求めている**（`DPoPBindingTests.RefreshAsync` が送る）。");
 
                 r.Done();
             }

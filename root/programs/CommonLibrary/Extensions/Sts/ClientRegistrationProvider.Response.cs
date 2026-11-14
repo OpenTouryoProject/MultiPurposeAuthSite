@@ -32,6 +32,8 @@
 //*  2026/11/01  玄人 幸道         登録された鍵・JWT のクレームの読み出しを Util/Sts/JwtUtil から呼ぶ（#321）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを、立っていれば返すようにした（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         sector_identifier_uri を返すようにした（#364）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg を応答に返す（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -260,6 +262,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSoftwareVersion, model.SoftwareVersion);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSubjectType, model.SubjectTypes);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientIdTokenSignedResponseAlg, model.IdTokenSignedResponseAlg);
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientAuthorizationSignedResponseAlg, model.AuthorizationSignedResponseAlg);
             ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.tls_client_auth_subject_dn, model.TlsClientAuthSubjectDn);
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientTokenEndpointAuthSigningAlg, model.TokenEndpointAuthSigningAlg);
 
@@ -274,6 +277,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **`jwks_uri` は、そのまま返す**（**`jwks` とは排他**）。
             ClientRegistrationProvider.AddIfNotEmpty(ret, OAuth2AndOIDCConst.jwks_uri, model.JwksUri);
+
+            //  **`sector_identifier_uri` も返す**（#364。登録したメタデータは返す。OIDC Registration 1.0 §3.2）。
+            //    **`PUT` は返された全てを入れ直す**ので、返さないと次の `PUT` で消える。
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSectorIdentifierUri, model.SectorIdentifierUri);
 
             if (!string.IsNullOrEmpty(model.Contacts))
             {

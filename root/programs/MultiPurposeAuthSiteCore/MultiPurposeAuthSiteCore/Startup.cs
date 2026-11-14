@@ -44,6 +44,7 @@
 //*  2026/10/27  玄人 幸道         利用者名の文字の制限を AllowOnlyAlphanumericUserNames に合わせた（#294）
 //*  2026/11/03  玄人 幸道         読めないフォームを 400 で断る（#331）
 //*  2026/11/06  玄人 幸道         /jwkcerts・/par・/ros のルートを、Config のパスで張る（OpenTouryo#666。#339）
+//*  2026/11/11  玄人 幸道         同意画面の送信の口（<認可の口>/consent）のルートを追加（#359）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -382,6 +383,12 @@ namespace MultiPurposeAuthSite
                    name: "OAuth2Authorize",
                    pattern: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
+
+                // **同意画面の送信の口**（#359）。**認可の口の POST は、RP からの POST の認可要求に明け渡した**（OIDC Core 1.0 §3.1.2.1）
+                endpoints.MapControllerRoute(
+                   name: "OAuth2AuthorizeConsent",
+                   pattern: Config.OAuth2AuthorizeEndpoint.Substring(1) + "/consent",
+                   defaults: new { controller = "Account", action = "OAuth2AuthorizeConsent" });
 
                 // **RP からのログアウト**（RP-Initiated Logout 1.0。#232）
                 endpoints.MapControllerRoute(

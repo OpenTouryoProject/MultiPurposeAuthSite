@@ -50,7 +50,7 @@
 | **A. 応答形式** | **全件 ✅**（A-2 は**誤検出**。A-3 の残り（JARM）は #201、A-5 の `request_uri` 経路は #197、A-10 の残り（#189 の 9〜14）は **#228 で決着**。A-15〜A-17 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **B. 異常系の 500** | **全件 ✅**（#185。B-7 は後から E2E で見つかり #199。B-9 はレビューで見つかり #294。B-10 は E2E の拡充で見つかり #294。B-11 / B-12 は `CmnEndpoints.*.cs` のレビューで見つかり #294） |
 | **C. セキュリティ** | **全件 ✅**（nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。**C-40〜C-46 は `CmnEndpoints.*.cs` のレビューで見つかり #294**。**C-47 / C-48 は `ManageController.*.cs` のレビューで、C-49 は 2 回目、C-50 / C-51 は 3 回目のレビューで見つかり #294**。**C-52 / C-53 は `CmnUserStore.*.cs` のレビューで、C-54 は 2 回目のレビューで見つかり #294**。**C-55 は `OAuth2EndpointController.*.cs` のレビューで見つかり #294**。**C-40 は「方法を明示した登録」で閉じ、空の登録は従来どおり**） |
-| **D. 機能不足** | **1 件 残り** : **D-14**（適合性テスト）。**D-16（プロファイルの要件を、登録ごとに強制する）は ✅ #346**。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
+| **D. 機能不足** | **全件 ✅**。**D-14（適合性テスト）は ✅ #350**（仕組みを入れた。**見つかった不適合は #359〜#371 で直す**。✅ 修正済み：#359〜#370）。**D-16（プロファイルの要件を、登録ごとに強制する）は ✅ #346**。**D-3（DPoP）は ✅ #311**（段階 1〜4）、**D-4（DCR）は ✅ #307 / #308 / #309**（段階 1〜6 ＋ 発行者の台帳 ＋ `jwks_uri`） |
 | **E. 品質** | **6 件 残り** : **E-1**（Minimal Hosting）／**E-8**（Controller の切り出し）／**E-13**（refresh_token の失効で access_token も）／**E-15**（クライアント認証の方法を 1 要求に 1 つへ）／**E-16**（CIBA の送れなかった要求の後始末）／**E-17**（`user_code` の大文字小文字）。**E-6 は「同意画面の scope が生の識別子のまま」だけが残る** |
 
 **7 節のフェーズ 0 〜 3 は完了**（D-10 は #302 で解けた）。
@@ -965,9 +965,9 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 
 - **`pairwise` 専用ではない。** `uname` / `public` の `sub` も入れる
   （そうしないと、`subject_types` の既定値の変更を無害にできない）
-- **`Sector` は、いまは `client_id`。** `sector_identifier_uri`（OIDC Core §8.1）に対応したら
-  その解決結果が入る。**列の意味は「Sector Identifier」**なので、**対応しても既存行は有効**である。
-  変えるのは `PPIDExtension.GetSector` の 1 箇所だけ
+- **`Sector` は、登録に `sector_identifier_uri` が在ればそのホスト、無ければ `client_id`**（OIDC Core §8.1。#364 で対応した）。
+  **列の意味は「Sector Identifier」**なので、**対応しても既存行は有効**だった。
+  変えたのは `PPIDExtension.GetSector` の 1 箇所（と、PPID の鍵材料を Sector にしたこと。`sector_identifier_uri` の無いクライアントでは同じ値）
 - **引く順** … **まず表**（設定に関わらず引ける）→ 無ければ `subject_types` で引く
   （表を入れる前に発行した `sub` のため）
 
@@ -1596,6 +1596,7 @@ PKCE 無しの認可コード フローがそのまま通る。
 - 値の出どころは `request_uri`（JAR / PAR）が在ればその中、無ければクエリ文字列。
   `AuthorizationCodeProvider.GetAuthorizationRequestParams` と同じ決め方（#197）
 - **`RequirePkce` と `RequirePkceS256` は別物。** 前者は PKCE 自体を求め、後者は使うなら `S256` に限る
+- **#366 で、`RequirePkceS256` を認可要求の時点でも見るようにし、fapi2 の登録には両方を常に掛けた**（FAPI 2.0 Security Profile §5.3.2.2 の 5。D-14）
 - E2E テスト : **`RT-220.3`**（既定では `code_challenge` 無しでも認可コードが返る）
 
 **対応（#221）: クライアント単位の PKCE 必須化。**
@@ -1718,11 +1719,11 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
 | `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる。登録 `token_endpoint_auth_signing_alg` で片方に絞れる**（#262） |
-| `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`client_mode=fapi_ciba` は ES256 固定 |
+| `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2。**FAPI の登録も既定は RS256**（FAPI で使うなら登録で PS256・ES256 を書く。Open棟梁 の RP 側の検証が暗号化しない ES256 を受けないため。#370））。`client_mode=fapi_ciba` は ES256 固定 |
 | access_token | （広告しない） | 同上（9 つ） | 同上（`id_token` と同じ alg になる） |
-| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify`。**登録 `request_object_signing_alg` で絞れる**が、受ける集合が 1 つなので結果は変わらない（#262） |
+| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256","PS256","ES256"]`（#370） | **RS256 / PS256 / ES256**（#370。以前は RS256 固定）。**FAPI の登録は PS256 / ES256** | `CmnRequestObjectEndpoint.SelectVerifyingJws`（**登録の RSA・EC の鍵のうち、alg に合うほう**）。**登録 `request_object_signing_alg` で絞れる**（#262） |
 | CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
-| 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
+| 認可応答（JARM） | `authorization_signing_alg_values_supported` : **id_token と同じ 9 つ**（#370） | **左の 9 つ**（#370。以前は RS256 固定） | `CmnResponseObject`。**登録 `authorization_signed_response_alg` で決まる**（既定は RS256。FAPI の登録も） |
 
 **広告と実装は一致している**（#189 / A-10 で整えた）。
 
@@ -1954,6 +1955,7 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
 **絞っても結果は変わらない。** **それでも項目を用意したのは、広告との非対称を先に解消しておくため**で、
 **受ける alg が増えた時点で、値を書けるようになるだけ**になる。
 **受ける alg を広げるのは「広げる側」の話**で、#262 では扱っていない（上流の対応が要る）。
+**→ #370 で、RS256・PS256・ES256 に広げた**（上流の検証鍵を受ける版。OpenTouryo#664）。
 
 **CIBA の `request` は対象外**である。**`ES256` 固定**で、
 **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
@@ -2281,6 +2283,10 @@ A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce �
 無ければ `invalid_request` を返すようにした（Authorization Code フローは OPTIONAL のまま）。
 このブロックは `scope=openid` の内側に在るため、**単純にコメントを外すと
 Authorization Code フローまで必須になってしまう**点が要だった。
+
+**#361 で、Hybrid の `code token` は必須から外した。** OIDC Core 1.0 §3.3.2.1 は、Hybrid の `nonce` を
+**`code id_token`・`code id_token token` では REQUIRED、`code token` では OPTIONAL** としている（認可エンドポイントから id_token を返さないため）。
+#190 では Hybrid をまとめて必須にしていた（`RT-361.1`・`.2`・`.3`）。
 
 ### C-15. `response_type` の照合が文字列完全一致 **[Lib]** — **✅ 修正済み（#267）**
 
@@ -3258,7 +3264,7 @@ CORS の許可オリジンに、`redirect_uri_code` のオリジンを入れる�
 
 > **`CmnEndpoints.*.cs` の 2 回目のレビュー（C-40〜C-45・A-16・B-12）で、判断して見送ったもの。**
 > **`client_assertion` / JWT Bearer の `assertion` の `jti` による使い切り**（RFC 7523 §3 は MAY）、
-> **パブリック クライアントの PAR**（RFC 9126 §2 は認める）、**Hybrid の `code token` の `nonce` を任意にする**（OIDC Core §3.3.2.1 は OPTIONAL。#190 で必須にした）。
+> **パブリック クライアントの PAR**（RFC 9126 §2 は認める）、**Hybrid の `code token` の `nonce` を任意にする**（OIDC Core §3.3.2.1 は OPTIONAL。#190 で必須にした）。**→ 適合性テストで不適合とされたので、#361 で任意にした**（`RT-361.1`）。
 > **設計の変更が要るものは E-13 / E-14 に残した。**
 
 ### C-47. 利用者名を変えても、WebAuthn の資格情報が元の名前に残っていた **[Lib][Core]** — **✅ 修正済み（#294）**
@@ -3576,7 +3582,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 | D-11 | 応答の `scope` | **✅ 返している**（`CmnEndpoints.CreateAccessTokenResponse`。**#198 でスコープを絞るようにしたときに、同時に入った**）。**発行したスコープを空白区切りで返す** — **要求と違うことがあるので必須**（RFC 6749 §5.1）。**測定は `RT-198.*`**（「トークン応答の `scope` が、発行したスコープと一致する」） | **解けた。** 要求と付与が違っても RP が判別できる |
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
 | D-13 | **レート制限 / ブルートフォース対策**（#305） | **✅ 解けた（#305）。** **段階 1** : ポーリングが `interval` より速ければ **`slow_down`**（`LastPolledAt`。`RT-305.1` / `.2`）。**段階 2** : **クライアント認証と `user_code` の投入の失敗を数え、一定回数で一定時間断る**（`AuthFailure` 表。`RT-305.3` / `.4`）。**段階 3** : **口ごとのレート制限** — **`client_id` ごと・送信元ごとに窓の中の要求を数え、超えた分に `429`**（`RateLimitProvider`。`RT-305.5` / `.6`）。**段階 4** : **失敗の数えを「クライアント ＋ 送信元」ごとにし**（`client_id` だけで数えると、**ロックアウトがそのまま妨害の手段になる**。`RT-305.7`）、**`/token` の `grant_type=password` を画面と同じ利用者ロックアウトに合流させた**（`RT-305.8`）。**行には寿命を入れた**（期限の切れた行を掃除する）。**判定は両アプリで 1 か所**（net48 に組み込みが無いため） | **既定は「制限しない」**（`RateLimitPerClientPermits` / `RateLimitPerIpPermits` が 0。**雛形は 120 回 / 600 回 / 60 秒**）。**失敗の数えは雛形で有効**（5 回 / 300 秒）。**プロセスの中に覚えるので、インスタンスを増やすとその数だけ緩くなる**（レート制限の方。失敗の数えは表に持つ）。**鍵の粒度は利用者の数に追随しない** — **同じ `client_id` に利用者が多数いる配備では、閾値をその全員分に合わせることになる**（`CONFIGURATION.md`） |
-| D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
+| D-14 | **適合性テスト** | **✅ 仕組みを入れた（#350）。** OpenID Foundation の Conformance Suite（版を固定）と相手の OP（net10.0 版）を `container/CTS/` で起動し、`RunTestPlan.ps1` でプランを回す。**OIDC の 11 プラン**（basic・config・implicit・hybrid・form_post の 3 つ・ログアウトの 3 つ・dynamic）と、**FAPI の 5 プラン**（FAPI 2.0 Security Profile の 2 通り・Message Signing・FAPI 1.0 Advanced・FAPI-CIBA。代表の組み合わせだけ）。いつ回すか・結果の仕分けは `QUALITY.md` 2 節・`TESTING.md` 5 節 | **見つかった OP の不適合は 13 件**（#359〜#371。どれも起票して直す）。**✅ 修正済み（#359）：POST の認可要求**（GET の認可要求へ 303 で詰め替える。POST のまま処理するのは #372）。**✅ 修正済み（#360）：access token を返さない応答の id_token**（`id_token`・`code id_token` に at_hash を付けない。`response_type=id_token` では scope のクレームを id_token に入れる。Discovery に `id_token` を載せる）。**✅ 修正済み（#361）：`response_type=code token` で nonce を必須にしない**（OIDC Core 1.0 §3.3.2.1）。**✅ 修正済み（#362）：引けない `request_uri` を、黙って続けずに断る**（外部の URL は `request_uri_not_supported`、存在しない・期限切れ・使用済みの `urn:` は `invalid_request_uri`。**外部の `request_uri` を取りに行くのは #374**。`oidcc-request-uri-signed-rs256` は #374 まで断る形で落ちる。**Discovery の `request_uri_parameter_supported` は true のまま**（PAR・`/ros` の `urn:` は受けるため。false にすると PAR まで受けないと読まれる。外部を受けないこととは食い違う）。**✅ 修正済み（#363）：`jwks_uri` の鍵を入れ替えた RP の、最初の 1 本が 401 になる**（**ヘッダに知らない `kid` があれば、その場で取り直して上限 3 秒まで待つ**。取り直すかどうか（1 分の下限）は Open棟梁 の `RemoteJwkSetStore.GetJwkAsync` が決める。**`kid` の無い assertion は、#309 の決め (C)(1)「1 本は断り、背景で取り直す」のまま**）。**✅ 修正済み（#364）：`sector_identifier_uri` を確かめずに登録し、値を捨てていた**（**登録の口で取りに行き、中身に `redirect_uris` がすべて在ることを確かめる**（OIDC Registration 1.0 §5。無い・読めない・`https` でない・`redirect_uris` の無い登録なら `invalid_client_metadata`。**ループバックの `http` を許すのは §5 からの逸脱**で、`jwks_uri` と同じ扱い）。**確かめた値を保存し、pairwise の登録では、そのホストを Sector にする**（OIDC Core 1.0 §8.1。**同じホストの pairwise のクライアント同士で `sub` が揃う**。public の登録では使わない。**Sector は `host:` ＋ ホスト名**で、`client_id` の Sector と名前を分け、**画面では `host:` で始まる `client_id` を作れない**）。**付けなければ Sector は `client_id` のまま**（§8.1 の「`redirect_uri` のホスト」にはしない。既存の pairwise の `sub` を変えないため）。**列 `SectorIdentifierUri` を足した**（3 方言 ＋ `mem`。`ALTER` は `CONFIGURATION.md`）。**あわせて、登録の口（`POST` / `PUT`）が `jwks_uri` を取りに行くのを、呼び出し元の認可を確かめた後だけにした**（#309 からは、トークンを確かめる前に取りに行っていた。`sector_identifier_uri` も同じ扱い。別モデルのレビューの指摘）。`RT-364.1`〜`.4`）。**✅ 修正済み（#370）：Request Object を RS256 でしか検証できず、JARM も RS256 固定**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1。**Request Object は、登録の RSA・EC の鍵とヘッダの alg（RS256・PS256・ES256）で検証する**（`CmnRequestObjectEndpoint.SelectVerifyingJws`）。**FAPI の登録は PS256・ES256 に限る**（RS256 を断る）。**JARM の署名 alg を登録 `authorization_signed_response_alg` で選べる**（JARM §3。列 `AuthorizationSignedResponseAlg` を足した）。**既定は RS256 のまま（FAPI の登録も）** — **Open棟梁 の RP 側の検証（`CmnJwtToken.Verify`）が、暗号化しない ES256 を受けない**ので、既定を ES256 にすると、同梱の自己テストのクライアントを含む Open棟梁 製の RP が検証できなくなる（Open棟梁 に起票）。**適合性テストの FAPI 1.0 Advanced は、バリアントを `plain_response`（Hybrid）から `jarm` にした**（MPAS は fapi1 の登録に Hybrid を許さない。FA-1.4）。`RT-370.1`〜`.5`）。**✅ 修正済み（#369）：TLS 1.2 で、BCP 195 が勧めていない暗号スイート（CBC）を受け付ける**（FAPI 2.0 Security Profile §5.2.2 の 1。**MPAS のコードではなく、配備の TLS の設定で決まる**ので、**アプリのコードは変えていない**。**適合性テストの OP は、`container/CTS/tls/openssl.cnf`（`OPENSSL_CONF`）で ECDHE と AES-GCM の 4 つ（RFC 9325 §4.2）に絞った**。**配備で絞る方法（Linux の OpenSSL・Windows の Schannel・リバース プロキシ）は `CONFIGURATION.md`「TLS の暗号スイートを絞る」**。Kestrel の `CipherSuitesPolicy` を設定で指定できるようにする案は見送った（Linux・macOS だけで効く））。**✅ 修正済み（#368）：PAR の request_uri の誤りと、client_assertion_type の確かめ方**（**期限切れ・使用済みの `request_uri` は、従来どおり RP へ返さずエラー画面で断る**（`redirect_uri` を確かめられないため。#362）。**Conformance Suite はエラー画面も受け付ける**（REVIEW）ので、**自動操作の設定（`container/CTS/config/fapi2.json`）に、エラー画面を写しにする指定を足した**（**OP は変えていない**）。**`client_assertion_type` の無い `client_assertion` を `invalid_client` で断る**（RFC 7521 §4.2。**Open棟梁 の `GetClientAssertion` の回避を `CmnEndpoints.GetClientAssertion` に入れた**。`RT-368.1`））。**✅ 修正済み（#367）：refresh_token の入れ替えと DPoP の縛りが、FAPI 2.0・RFC 9449 §5 と合わない**（**fapi2 の登録は refresh_token を入れ替えない**（FAPI 2.0 Security Profile §5.3.2.1 の 9。新しいものを返さず、同じものを使い続ける。有効期限は最初に出した時点から数える）。**秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない**（RFC 9449 §5。クライアント認証で縛られている。以前に縛って出したものも、次の更新から外れる）。**公開クライアントは発行のときに縛る**。`RT-367.1`・`.2`、`RT-311.11` の期待値を変えた）。**✅ 修正済み（#366）：FAPI 2.0 の登録でも、plain の PKCE を受け付ける**（FAPI 2.0 Security Profile §5.3.2.2 の 5。**fapi2 の登録は、`require_pkce` によらず PKCE を必須にし、S256 に限る**。**サーバ全体の `RequirePkceS256` も、`/token` だけでなく認可要求（PAR・`/authorize`）の時点で plain を断る**。`code_challenge_method` の省略は plain の扱い（RFC 7636 §4.3）。エラーは `invalid_request`。`RT-366.1`〜`.3`）。**✅ 修正済み（#365）：PAR の `DPoP` ヘッダの鍵に、認可コードが縛られない**（RFC 9449 §10.1。**PAR の口で `DPoP` ヘッダの証明を `/token` と同じく確かめ、その鍵の指紋を預ける中身の `dpop_jkt` にする**（**`/token` 側は変えずに、`dpop_jkt` と同じ経路で縛る**）。**`dpop_jkt` とヘッダの鍵が違えば `invalid_request`**、**証明が通らなければ `invalid_dpop_proof`**（§10.1 はエラー コードを決めていない）。**証明はほかの検証を通った後で見る**（断る要求で `jti` を使い済みにしない）。**以前は `dpop_jkt` を送った場合だけ縛っていた**（#311 の段階 4）。`RT-365.1`〜`.3`）。**FAPI 2.0 Message Signing・FAPI 1.0 Advanced は、#370 を直して最後まで回るようになった**（**その先で見えた不適合は、仕分けて起票する**）。**FAPI-CIBA は #371（`aud` に CIBA の口の URL を断る）で、大半が止まる**（直した後に回し直す）。**A・B は、ほぼ直した後に回したので、出たのは応答の型と値（A-1・A-4 の残り。#353・#354）だけだった** |
 | D-16 | **プロファイル（FAPI 1.0 Advanced・FAPI 2.0・FAPI-CIBA）の要件を、登録ごとに強制するオプション** | **✅ 解けた（#346）。** **PAR・署名付きの Request Object・送信者の拘束（DPoP / MTLS）を、登録の 4 項目（標準のメタデータ）で必須にできる。** PAR・署名付きの Request Object は、サーバ全体の設定とも OR で効く。詳細は下の「クライアント モードとプロファイル（D-16）」 | **既定は変わらない**（4 項目・2 つの設定とも既定は false）。**必須にした登録・配備だけが、使わない要求を断る** |
 
 
@@ -3801,7 +3807,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 
 | 項目 |
 |---|
-| D-14 適合性テスト（OpenID Foundation Conformance Suite）を回す手順の整備 |
+| ✅ **D-14 適合性テスト（OpenID Foundation Conformance Suite）を回す手順の整備**（**#350**。`container/CTS/`。見つかった不適合は #359〜#371） |
 | E-1 Minimal Hosting への移行 |
 | E-8 `AccountController` からの STS 部分の切り出し |
 

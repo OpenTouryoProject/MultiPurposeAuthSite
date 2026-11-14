@@ -292,7 +292,7 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 | 値 | ダイジェスト | パディング | 鍵 | 設定キー | |
 |---|---|---|---|---|---|
-| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ） |
+| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ。**FAPI の登録も**。下の注） |
 | `RS384` | SHA-384 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `RS512` | SHA-512 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `PS256` | SHA-256 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | #129 の段階 4。**FAPI が求める値** |
@@ -322,12 +322,36 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 > **CIBA（`client_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
+> **FAPI の登録（`client_mode=fapi1`・`fapi2`）も、この値を書かなければ `RS256`。** **FAPI は `RS256` を認めない**
+> （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ので、**FAPI で使う登録には `PS256` か `ES256` を書く**（JARM も同じ。下の `authorization_signed_response_alg`）。
+> **既定を `ES256` にしないのは、Open棟梁 の RP 側の検証（`CmnJwtToken.Verify`）が、暗号化しない `ES256` の JWT を受けないため**
+> （同梱の自己テストのクライアントを含め、Open棟梁 で作った RP が検証できなくなる。#370 で試して見つけた）。
 > **fapi2 で id_token を暗号化する（`jwk_rsa_publickey` を登録した）クライアントは、この値を書かなければ、
-> id_token の中の JWS が `ES256` になる**（access_token は既定の `RS256`。**2 つは食い違う**）。
-> **既定の `RS256` は FAPI 2.0 Security Profile §5.4.1 が認めない**ので、そちらには倒さない。
-> **書けば、中の JWS も access_token も、その alg になる**（#355。以前は書いても `ES256` だった）。
-> **fapi2 なら `PS256` か `ES256` を書くとよい。**
-> **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
+> id_token の中の JWS が `ES256` になる**（access_token は既定の `RS256`。**2 つは食い違う**。#355）。
+> **書けば、中の JWS も access_token も、その alg になる。**
+
+### `authorization_signed_response_alg` — JARM の署名アルゴリズム（#370）
+
+**JARM の応答（`response_mode` が `*.jwt` のときの `response`）の署名 alg**（JARM §3）。
+
+| 登録 | 署名 alg |
+|---|---|
+| 書かない | **`RS256`**（JARM §3 の既定。従来どおり。**FAPI の登録も**。理由は上の注と同じ。**FAPI で使う登録には `PS256` か `ES256` を書く**） |
+| 書く | **その alg**（**上の表の 9 つ**。鍵も上の表と同じ） |
+| **書ける値の外** | **入口で拒否する**（`unauthorized_client`。id_token と同じ） |
+
+- **以前は `RS256` に固定で、登録で選べなかった**（FAPI 2.0 Message Signing の JARM を満たせなかった。#370）
+- **画面・動的登録（RFC 7591）・構成ファイルで書ける。** Discovery の `authorization_signing_alg_values_supported` は上の表の 9 つ
+- **列 `AuthorizationSignedResponseAlg` が増える**（`Saml2OAuth2Data`。`Create_UserStore.sql` には入っている）。**既に配備された DB には、列を足すこと**（空 ＝ 既定）
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [AuthorizationSignedResponseAlg] [nvarchar](16) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("AuthorizationSignedResponseAlg" NVARCHAR2(16) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN AuthorizationSignedResponseAlg varchar(16) NULL;
+```
 
 ## 検証する側の alg を、クライアント単位で絞る（#262）
 
@@ -338,7 +362,7 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 | 登録項目 | 効く口 | 書ける値 |
 |---|---|---|
 | `token_endpoint_auth_signing_alg` | `/token` の `client_assertion`（`private_key_jwt`） | **`RS256` / `ES256`** |
-| `request_object_signing_alg` | Request Object（`/ros` / `/par` / `request`） | **`RS256`** |
+| `request_object_signing_alg` | Request Object（`/ros` / `/par` / `request`） | **`RS256` / `PS256` / `ES256`**（#370） |
 
 **どちらも、書かなければ絞らない**（＝ 従来どおり）。**画面からも選べる**（先頭が「絞らない」）。
 
@@ -358,15 +382,20 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 **E2E** : `RT-262.1`（絞ると `ES256` が通らない）／`RT-129.1`（絞らなければ両方通る）。
 
-### `request_object_signing_alg` は、いま書ける値が 1 つだけ
+### Request Object の alg と鍵（#370）
 
-**受ける側は `RS256` 固定**である（上流の `RequestObject.Verify` が `JWS_RS256_Param` 決め打ち）。
-**そのため、絞っても結果は変わらない。**
+**検証鍵は、ヘッダの `alg` と登録の鍵から作る**（`CmnRequestObjectEndpoint.SelectVerifyingJws`）。
+**以前は `RS256` だけ**だった（上流の `RequestObject.Verify` の版が `JWS_RS256_Param` 決め打ちだった。検証鍵を受ける版は OpenTouryo#664）。
 
-**それでも項目を用意してある。**
-`request_object_signing_alg_values_supported`（広告）に対して
-**登録側の項目が無いという非対称を、先に解消しておくため**である。
-**受ける alg が増えた時点で、値を書けるようになるだけ**になる。
+| `alg` | 検証に使う登録の鍵 |
+|---|---|
+| `RS256`・`PS256` | `jwk_rsa_publickey` |
+| `ES256` | `jwk_ecdsa_publickey`（P-256） |
+
+- **alg に合う鍵が登録されていなければ断る**（例：RSA の鍵だけの登録に `ES256`）。**`jwks_uri` の鍵は、まだ使わない**（`private_key_jwt` は使う）
+- **FAPI の登録（`client_mode=fapi1`・`fapi2`）は、`request_object_signing_alg` を書かなくても `PS256`・`ES256` に限る**
+  （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）。**以前は `RS256` を受けていたので、`RS256` で署名している FAPI の RP は通らなくなる**
+- **PAR のエラー**：受けられない alg は `invalid_request_object`（RFC 9101 §7）、alg に合う鍵が無ければ `invalid_request`（従来の文言）
 
 > **CIBA の `request` は対象外**である。**`ES256` 固定**で、
 > **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
@@ -784,10 +813,18 @@ CREATE TABLE [DPoPProof](
 | | |
 |---|---|
 | **どこに持つか** | **預ける payload の `cnf.jkt`**（`CmnAccessToken.BindJkt`。**DDL は増えない**） |
-| **いつ縛るか** | **証明が通って `access_token` を縛ったとき**（認可コード / 更新 / デバイス） |
-| **ローテーション** | **引き継ぐ。** **縛っていないものを証明付きで更新したときは、そこで縛る** |
+| **いつ縛るか** | **公開クライアントで、証明が通って `access_token` を縛ったとき**（認可コード / 更新 / デバイス） |
+| **秘密を持つクライアント** | **縛らない**（RFC 9449 §5。**クライアント認証で既に縛られている**。#367）。**client_secret・private_key_jwt・mTLS で認証した要求**のこと。**以前に縛って出したものも、次の更新で外れる**。**更新で出る `access_token` は、その要求の証明の鍵に縛る** |
+| **ローテーション** | **公開クライアントなら引き継ぐ。** **縛っていないものを証明付きで更新したときは、そこで縛る** |
 | **断り方** | **`invalid_grant`。** **消費しないで断る** — **一族ごと失効させては、持ち主が巻き込まれる**（#188 の段階 3） |
 | **逆向き** | **縛っていない `refresh_token` を、証明を添えて使うのは通る**（RFC 9449 も禁じていない） |
+
+> **いまは、公開クライアント（`token_endpoint_auth_method=none`）は `refresh_token` の経路で認証できない**（クライアント認証を必須にしている）。
+> **そのため、縛った `refresh_token` を更新で照合する場面は、いまは無い**（#367）。
+
+> **`client_mode=fapi2` の登録は、`refresh_token` を入れ替えない**（FAPI 2.0 Security Profile §5.3.2.1 の 9。#367）。
+> **更新で新しい `refresh_token` を返さず、同じものを使い続ける。** **有効期限は、最初に出した時点から数える**（入れ替えないので延びない）。
+> **ほかの登録は、従来どおり入れ替える**（使用済みが再び出されたら一族ごと失効。#188 の段階 3）。
 
 ##### `WWW-Authenticate: DPoP`
 
@@ -1204,6 +1241,78 @@ ALTER TABLE Saml2OAuth2Data
     ADD COLUMN RequireSignedRequestObject boolean NOT NULL DEFAULT false,
     ADD COLUMN DPoPBoundAccessTokens boolean NOT NULL DEFAULT false,
     ADD COLUMN TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false;
+```
+
+### TLS の暗号スイートを絞る（FAPI。#369）
+
+**FAPI 2.0 で使うなら、TLS 1.2 の暗号スイートを、BCP 195 が勧めるものだけにする**
+（FAPI 2.0 Security Profile §5.2.2 の 1「servers shall only permit the cipher suites recommended in [BCP195]」・§5.2.3 の 2）。
+**MPAS のコードと設定（`appsettings.json`・`app.config`）では決まらない。配備の TLS の設定で絞る。**
+OS・TLS の終端の既定のままだと、CBC のスイート（`TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384` など）も受け付ける
+（適合性テストの `RequireOnlyBCP195RecommendedCiphersForTLS12` が FAILED になる。#369）。
+
+| 許すもの（TLS 1.2。RFC 9325 §4.2） | OpenSSL の名前 |
+|---|---|
+| `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` | `ECDHE-ECDSA-AES128-GCM-SHA256` |
+| `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` | `ECDHE-RSA-AES128-GCM-SHA256` |
+| `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` | `ECDHE-ECDSA-AES256-GCM-SHA384` |
+| `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` | `ECDHE-RSA-AES256-GCM-SHA384` |
+
+- **TLS 1.3 のスイートは、絞らなくてよい**（どれも AEAD）。**TLS 1.1 以前は断る**
+- **サーバ全体に効く**（FAPI でないクライアントにも効く）。いまのブラウザ・HTTP クライアントは、どれも上の組を話す
+- サーバ証明書が RSA なら、使われるのは RSA の 2 つ（ECDSA の 2 つは、ECDSA の証明書のときに使われる）
+
+| 配備 | 絞る所 |
+|---|---|
+| **net10.0 版（Linux・Kestrel が TLS を終端）** | **OpenSSL の設定**（下の例）。.NET は、`CipherSuitesPolicy` を指定しなければ、OpenSSL の設定に従う。**環境変数 `OPENSSL_CONF` で、その設定ファイルを指す** |
+| **net10.0 版（Windows・Kestrel / IIS）・net48 版（IIS）** | **Windows（Schannel）の設定**（グループ ポリシーの「SSL 暗号の順位」、PowerShell の `Disable-TlsCipherSuite`・`Enable-TlsCipherSuite`）。**マシン全体に効き、OS の再起動が要る** |
+| **リバース プロキシで TLS を終端** | **プロキシの設定**（nginx なら `ssl_protocols TLSv1.2 TLSv1.3;` と `ssl_ciphers` に上の OpenSSL の名前） |
+
+```ini
+# OpenSSL の設定の例（Linux。適合性テストの OP は container/CTS/tls/openssl.cnf でこれを使う）
+openssl_conf = openssl_init
+
+[openssl_init]
+ssl_conf = ssl_sect
+
+[ssl_sect]
+system_default = system_default_sect
+
+[system_default_sect]
+MinProtocol = TLSv1.2
+CipherString = ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+```
+
+- **OpenSSL の設定は、そのプロセスが外へ出す TLS**（Back-Channel Logout の POST、`jwks_uri`・`sector_identifier_uri` の取得、ID 連携）**にも効く。** 相手が上の組を話さないと繋がらない
+- **確かめ方**：`openssl s_client -connect <ホスト>:<ポート> -tls1_2 -cipher ECDHE-RSA-AES256-SHA384` が `handshake failure` で断られ、
+  `-cipher ECDHE-RSA-AES128-GCM-SHA256` が繋がること
+- **アプリで絞る形（Kestrel の `CipherSuitesPolicy`）は入れていない**（#369 で見送った。Linux・macOS でしか効かず、Windows では例外になる。OpenSSL の設定と役割が重なる）
+
+### pairwise の Sector を `sector_identifier_uri` で決める（#364）
+
+**動的登録（RFC 7591）で `sector_identifier_uri` を付けると、pairwise の登録では、`sub` の Sector が、その URL のホストになる**（OIDC Core 1.0 §8.1）。**public の登録では使わない**（Sector は `client_id`。同じホストの public と pairwise が混ざると、先に記録された `sub` が他方に返るため）。
+**同じホストの `sector_identifier_uri` で登録したクライアント同士は、同じ利用者に同じ `sub` を返す**（同じ RP の複数のクライアント）。
+**付けなければ、Sector は `client_id`**（以前どおり。クライアントごとに `sub` が変わる）。経緯は [`ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) の D-14。
+
+| | |
+|---|---|
+| **登録のときに確かめる** | **その URL を取りに行き、中身（`redirect_uri` を並べた JSON の配列）に、登録する `redirect_uris` がすべて在ることを確かめる**（OIDC Registration 1.0 §5）。**無い・読めない・`https` でないなら `400` ＋ `invalid_client_metadata`**（読めない・無いは同じ文言。**リダイレクトで別の URL から返った中身も「読めない」**）。**`redirect_uris` の無い登録（client_credentials・ROPC だけなど）では受けない**（突き合わせる値が無いため）。**ループバックだけ `http` を許すのは、§2・§5 の `https` の MUST からの逸脱**（`jwks_uri` と同じ扱い。開発と試験のため） |
+| **取りに行く上限** | 10 秒・64KB（`SectorIdentifierProvider`） |
+| **`PUT`（RFC 7592）** | **全置換**（省いたら消える）。**ホストを変えたり省いたりすると Sector が変わり、そのクライアントの `sub` が変わる。** **以前に発行した `sub`（その `sub` のトークン・`id_token_hint`）は、新しい Sector では利用者に引けなくなる**（RP から見ると別人になる。`subject_type` を変えたときも同じ）。**読んで直して返せば（`GET` の応答をそのまま戻せば）、値は残る** |
+| **クライアント登録の画面** | **欄を出さない**（画面の保存では取りに行って確かめられないため）。**保存しても、動的登録で入れた値を持ち越す** |
+| **設定ファイル**（`OAuth2ClientsInformation`） | **`sector_identifier_uri` を書ける**（配備の管理者が書くので、**取りに行かない**） |
+| **Sector の値** | **`host:` ＋ ホスト名**（`client_id` の Sector と名前を分ける）。**ホスト名は 251 文字まで**（Sector の列が 256 文字）。**クライアント登録の画面では、`host:` で始まる `client_id` を作れない**（作れると、別の RP の Sector と同じになる） |
+| **`redirect_uris` のホストが複数のとき** | **`sector_identifier_uri` を求めない**（Sector が `client_id` なので、§8.1 の前提に当たらない） |
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 以前どおり `client_id` が Sector）になる。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [SectorIdentifierUri] [nvarchar](512) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("SectorIdentifierUri" NVARCHAR2(512) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 ```
 
 ### `redirect_uri` の記号
@@ -4032,11 +4141,15 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    | キー | 何を求めるか | どこで弾くか | 有効にすると通らなくなるもの |
    |---|---|---|---|
    | `RequirePkce` | PKCE 自体（`code_challenge`） | 認可エンドポイント（`invalid_request`） | **PKCE を使っていない既存クライアント** |
-   | `RequirePkceS256` | 使うなら `S256` に限る | トークン エンドポイント | `plain` を使っているクライアント |
+   | `RequirePkceS256` | 使うなら `S256` に限る（**`code_challenge_method` の省略も plain の扱いで断る**） | **認可要求（PAR・認可エンドポイント。`invalid_request`。#366）**とトークン エンドポイント | `plain` を使っているクライアント |
 
    **両方 `true` が OAuth 2.1 相当。** ただし**クライアントが揃っていないと繋がらなくなる**ので、
    既存の登録を確かめてから切り替える。**Device AuthZ / CIBA は `RequirePkce` の対象外**
    （認可エンドポイントを通らないため）。
+
+   **`client_mode=fapi2` の登録には、この 2 つを常に掛ける**（FAPI 2.0 Security Profile §5.3.2.2 の 5。#366）。
+   **Discovery の `code_challenge_methods_supported` は、サーバ全体の `RequirePkceS256` だけで決まる**ので、
+   既定では `plain` を載せたままである（登録ごとの違いは出せない）。fapi2 の登録の RP は `S256` を使う。
 
    **`RequirePkce` は、クライアント単位でも指定できる**（#221）。
    クライアント登録に `require_pkce` を書くと、**そのクライアントにだけ**必須になる。

@@ -97,11 +97,11 @@ CREATE TABLE RefreshTokenDictionary(
 -- sub（Subject Identifier）の対応表（#151 の段階 2）
 --   **発行した sub を記録する。** 以後はここから引くので、
 --   subject_types の既定や PPID の作り方を変えても、**発行済みの sub は動かない。**
---   Sector : いまは client_id。**sector_identifier_uri に対応したら、その解決結果が入る**
+--   Sector : client_id か、"host:" ＋ sector_identifier_uri のホスト名（pairwise の登録で、在れば。#364）
 --            （列の意味は「Sector Identifier」。OIDC Core 8.1）
 --   Sub    : uname のとき利用者名（最大 256）、public のとき UserId、pairwise のとき PPID
 CREATE TABLE SubjectIdentifier(
-    Sector varchar(256) NOT NULL,            -- *PK, Sector Identifier（いまは client_id）
+    Sector varchar(256) NOT NULL,            -- *PK, Sector Identifier（client_id か host:＋ホスト名。#364）
     UserId varchar(38) NOT NULL,             -- *PK, guid
     Sub varchar(256) NOT NULL,               -- 発行した sub
     CreatedDate timestamp NOT NULL,
@@ -187,6 +187,10 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     RequireSignedRequestObject boolean NOT NULL DEFAULT false, -- require_signed_request_object（RFC 9101 §10.5）
     DPoPBoundAccessTokens boolean NOT NULL DEFAULT false,      -- dpop_bound_access_tokens（RFC 9449 §5.2）
     TlsCertBoundAccessTokens boolean NOT NULL DEFAULT false,   -- tls_client_certificate_bound_access_tokens（RFC 8705 §3.4）
+    -- pairwise の Sector（#364）。末尾に足してある（ALTER … ADD で揃う）
+    SectorIdentifierUri varchar(512) NULL,           -- sector_identifier_uri（OIDC Registration 1.0 §2）。Const.MaxLengthOfUri
+    -- JARM の署名 alg（#370）。末尾に足してある（ALTER … ADD で揃う）
+    AuthorizationSignedResponseAlg varchar(16) NULL, -- authorization_signed_response_alg（JARM §3）
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

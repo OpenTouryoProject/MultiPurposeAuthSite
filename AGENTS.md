@@ -23,6 +23,8 @@ https://github.com/OpenTouryoProject/MultiPurposeAuthSite
 作業の対象がどの名前空間で、リスクはどれか。人が必ず見る箇所に触れるか。
 **期待値の変更**（テストの削除・Skip の追加・検証の削除・根拠の変更）を含むか。
 含むなら報告の冒頭に書き、トレーラー `Expectation-Change: <理由>` の文面を提案する。
+**文面を提案したら、コミットの前に突き合わせ役（サブエージェント `opentouryo-expectation-reviewer`）に、対象とメッセージのファイルだけを渡して回し、結果を報告に書く**（理由と差分が合っているか。OpenTouryoCodingAgentAssets#6）。
+理由には根拠の Issue 番号か仕様の節を書く。
 
 ### 完了の前に、別モデルのレビューを回す（#347）
 
@@ -126,7 +128,7 @@ Git 操作は人が手動で行う。
 推測で埋めず、分からなければ人に聞く。機能の追加には付けない。語彙は `root/rules.common.psd1`。
 
 **確かめ方も、トレーラーで残す**（[`QUALITY.md`](QUALITY.md) 5 節。OpenTouryoCodingAgentAssets#12）。
-テストを流したら `Tested-with: <種類>[, <種類>]`、レビュー役（`.claude/agents/` の役の定義）か人がレビューしたら
+テストを流したら `Tested-with: <種類>[, <種類>]`（コードを変えて流していなければ `Tested-with: none`。無いと警告）、レビュー役（`.claude/agents/` の役の定義）か人がレビューしたら
 `Reviewed-with: <役> [(<モデル ID>)]`（人は `human`。役ごとに行を分ける）。**流していないテスト・回していないレビューは書かない。**
 トレーラーは**最後の段落**（本文との間に空行を 1 つ）に、空行を挟まずに並べる。git はそこしか読まない（検出器も止める）。
 
@@ -310,6 +312,7 @@ CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一�
 | 3 方言の DB（`container/Store`。`-UserStoreType sql`・`ora`・`npg`） | **DDL・SQL の組み立て（`Data`）に触れたとき。** 1 つずつ起動して測り、終わったら止める（同時に複数を起動するとメモリが尽きる） |
 | ID 連携の IdP のコンテナ（`container/E2E`） | 通しの前に起動しておく（止まっていると、`RT-140.*` などが Skip になり、`TESTCASES.md` から落ちる）。コンテナの中のサイトを変えたなら、発行し直す |
 | net48 版の mTLS（`-NetFxMtls`） | 証明書の準備が要る（[`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節）。準備が無ければ、回せていないと報告する |
+| 適合性テスト（`container/CTS`。#350） | **リリースの前と、適合性テストで見つかった不適合を直す `fixed` の前**（[`QUALITY.md`](QUALITY.md) 2 節）。メモリを使うので、ほかのコンテナを止めてから回す |
 
 **次のコミットがどちらの段階か分からなければ、人に確かめるか、fixed として回す。**
 **報告には、どの段階で回したかと、後回しにしたものを書く。** 後回しのまま「検証済み」と書かない。

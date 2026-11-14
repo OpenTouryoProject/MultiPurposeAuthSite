@@ -39,6 +39,8 @@
 //*  2026/10/22  玄人 幸道         チャレンジを DPoP にし、DPoP-Nonce を返す（#311 の段階 4）
 //*  2026/10/25  玄人 幸道         登録の失敗の応答を OPERATION に記録する（障害対応のため。#294）
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
+//*  2026/11/12  玄人 幸道         動的登録で sector_identifier_uri を検査の前に取りに行くようにした（#364）
+//*  2026/11/12  玄人 幸道         jwks_uri・sector_identifier_uri を取りに行くのは、認可を確かめた後だけにした（#364）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -210,10 +212,19 @@ namespace MultiPurposeAuthSite.Controllers
                 identity = verified;
             }
 
-            //  **本文の `jwks_uri` は、ここで 1 回取りに行く**（#309 の段階 1）。
-            //    **この口は async**。**クライアント認証の経路は同期で待てない**ので、
-            //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
-            await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
+            //  **取りに行くのは、認可を確かめた後だけ**（#364）。**認可の無い要求で、OP に外の URL を取りに行かせない。**
+            //    **認可が無ければ取りに行かず、`Register` が `401` / `403` で断る。**
+            if (ClientRegistrationProvider.MayWarmUpForRegister(identity))
+            {
+                //  **本文の `jwks_uri` は、ここで 1 回取りに行く**（#309 の段階 1）。
+                //    **この口は async**。**クライアント認証の経路は同期で待てない**ので、
+                //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
+                await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
+
+                //  **`sector_identifier_uri` も、ここで 1 回取りに行く**（#364。OIDC Registration 1.0 §5）。
+                //    **中身に `redirect_uris` が無ければ・読めなければ、`Validate` が `400`。**
+                await ClientRegistrationProvider.WarmUpSectorIdentifierUriAsync(body);
+            }
 
             int status = ClientRegistrationProvider.Register(
                 body, identity, out Dictionary<string, object> ret,
@@ -276,10 +287,19 @@ namespace MultiPurposeAuthSite.Controllers
 
             string body = await this.Request.Content.ReadAsStringAsync();
 
-            //  **本文の `jwks_uri` は、ここで 1 回取りに行く**（#309 の段階 1）。
-            //    **この口は async**。**クライアント認証の経路は同期で待てない**ので、
-            //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
-            await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
+            //  **取りに行くのは、`registration_access_token` を確かめた後だけ**（#364）。
+            //    **認可の無い要求で、OP に外の URL を取りに行かせない**（**無ければ `Update` が `401` で断る**）。
+            if (ClientRegistrationProvider.MayWarmUpForUpdate(client_id, this.GetRegistrationAccessToken()))
+            {
+                //  **本文の `jwks_uri` は、ここで 1 回取りに行く**（#309 の段階 1）。
+                //    **この口は async**。**クライアント認証の経路は同期で待てない**ので、
+                //    **登録の時点でキャッシュへ載せる**（**取れなければ `Validate` が `400`**）。
+                await ClientRegistrationProvider.WarmUpJwksUriAsync(body);
+
+                //  **`sector_identifier_uri` も、ここで 1 回取りに行く**（#364。OIDC Registration 1.0 §5）。
+                //    **中身に `redirect_uris` が無ければ・読めなければ、`Validate` が `400`。**
+                await ClientRegistrationProvider.WarmUpSectorIdentifierUriAsync(body);
+            }
 
             int status = ClientRegistrationProvider.Update(
                 client_id, body, this.GetRegistrationAccessToken(),

@@ -33,10 +33,10 @@
 
 | 名前空間 | リスク | 正の根拠 | 検証の手段 | 人が必ず見る箇所 |
 |---|---|---|---|---|
-| `TokenProviders` | **高** | OAuth2 / OIDC の RFC・仕様 | E2E（両版） | 検証を省く分岐、トークンの紐付け、既定値の変更 |
-| `Extensions.Sts` | **高** | 拡張仕様（FAPI・CIBA・JAR・PAR・DPoP・Logout・Discovery など） | E2E（両版） | 同上。**OpenTouryo のアセンブリの更新** |
+| `TokenProviders` | **高** | OAuth2 / OIDC の RFC・仕様 | E2E（両版）、**適合性テスト**（2 節） | 検証を省く分岐、トークンの紐付け、既定値の変更 |
+| `Extensions.Sts` | **高** | 拡張仕様（FAPI・CIBA・JAR・PAR・DPoP・Logout・Discovery など） | E2E（両版）、**適合性テスト**（2 節） | 同上。**OpenTouryo のアセンブリの更新** |
 | `SamlProviders` | **高** | SAML2 の仕様（OASIS） | E2E（両版） | 署名の対象と消費する要素の一致。**OpenTouryo のアセンブリの更新** |
-| `Controllers` | **高** | OAuth2 / OIDC・SAML2 の仕様、[`ANALYSIS-IdP.md`](root/programs/ANALYSIS-IdP.md) | E2E（両版。net48 と net10.0 の差） | サインイン・同意・CSRF、既定値の変更 |
+| `Controllers` | **高** | OAuth2 / OIDC・SAML2 の仕様、[`ANALYSIS-IdP.md`](root/programs/ANALYSIS-IdP.md) | E2E（両版。net48 と net10.0 の差）、**適合性テスト**（2 節。net10.0 版） | サインイン・同意・CSRF、既定値の変更 |
 | `Extensions.FIDO` | **高** | WebAuthn・FIDO の仕様 | E2E（両版） | 署名の検証、チャレンジの扱い |
 | `Util.Sts`・`Util.IdP` | **中〜高** | 呼び出し元の仕様 | E2E（両版） | クライアントの解決、鍵の扱い |
 | `Password` | **中〜高** | パスワードのハッシュの方式 | E2E（両版） | 既定のアルゴリズム、既存のハッシュの互換性 |
@@ -69,7 +69,14 @@
   - **落ちない代わりに、前回の実行と比べて差分を報告する**（`2_RunAllTests.ps1` が [`CompareObservations.ps1`](root/CompareObservations.ps1) を呼ぶ。報告書の末尾と画面に出る）。
     **判定はせず、合否にも関わらない。** 変わってよいかは人が判断する
   - **前回の値はコミットしない**（`Result` に置く）。配備ごとの値や、サインイン中の利用者の名前を含む画面の文面が入るため
-- **外部の基準を、最終的な正とする。** 適合性テスト（OpenID Foundation の Conformance Suite。`ANALYSIS-IdP.md` の D-14）。**導入は品質の向上の後**である
+- **外部の基準を、最終的な正とする。** 適合性テスト（OpenID Foundation の Conformance Suite。`ANALYSIS-IdP.md` の D-14。**#350 で入れた**）。
+  回し方・プラン・結果の読み方は [`TESTING.md`](root/TESTING.md) 5 節「適合性テスト」と [`container/CTS/README.md`](container/CTS/README.md)
+  - **いつ回すか**：**(1) リリースの前に、全プランを回す。(2) 適合性テストで見つかった不適合を直す Issue では、`fixed` の前に、そのプランを回す。**
+    **普段の作業（`fixing`・ほかの `fixed`）では回さなくてよい**（Conformance Suite のコンテナがメモリを使い、全プランで 2〜3 時間かかる。E2E の通しには入れない）
+  - **結果の扱い**：落ちたものは、**環境（Conformance Suite の設定・自動操作）の不足か、OP の不適合かを仕分け**、不適合は原因ごとに Issue にする（セキュリティの弱点の疑いなら、公開する前に人に聞く。[`AGENTS.md`](AGENTS.md)）。
+    **結果（`container/CTS/out/`）はコミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む）
+  - **自動では回せないモジュールがある**（利用者が拒否する操作など。`container/CTS/README.md`）。**REVIEW（画面の写し）は、人が見て合否を付ける**
+  - **相手は net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る）
 
 ---
 
@@ -105,6 +112,10 @@ Expectation-Change: <何が・なぜ変わったか（仕様の該当箇所・Is
 
 - **コミットするのは人なので、トレーラーを書くことが、人が差分を見て承認した記録になる**
 - 理由が複数あれば、行を分けて複数書く
+- **理由には、根拠の Issue 番号（`#NNN`）か仕様の節（`RFC 7636 4.2` など）を書く。** 無ければ検出器が警告する（止めない。OpenTouryoCodingAgentAssets#6）
+- **文面を提案したら、コミットの前に、突き合わせ役（サブエージェント [`opentouryo-expectation-reviewer`](.claude/agents/opentouryo-expectation-reviewer.md)。`model: sonnet`）で、理由と差分を突き合わせる。**
+  渡すのは対象（ステージした変更かコミット）とメッセージのファイルだけ。網羅・一致・根拠・方向・範囲外の観点で「合う／合わない／判断できない」が返る。
+  合わない点は理由を直すか人に聞き、回したら `Reviewed-with: opentouryo-expectation-reviewer (<モデル ID>)` を書く（無ければ警告。止めない）
 
 ### 3 段で塞ぐ
 
@@ -134,11 +145,11 @@ OpenTouryoCodingAgentAssets#3）。Open棟梁 も同じ本体を写して使う�
 |---|---|---|
 | `CheckExpectationChange.ps1` | 写し | 本体（段 1〜3 の判定。規則は持たない） |
 | `rules.common.psd1` | 写し | 共通の規則（仕組みのファイル・トレーラーの検査（`Found-By:`・`Tested-with:`・`Reviewed-with:`。5 節）・段 1 の判定） |
-| `ExpectationGuard.Tests/` | 写し | 判定の用例（「この差分なら検出する／しない」）。CI のジョブ `expectation-guard-tests` が回す |
+| `files/tools/ExpectationGuard.Tests/` | 写し | 判定の用例（「この差分なら検出する／しない」）。CI のジョブ `expectation-guard-tests` が回す。製品のソースの隣を避けて、道具の置き場所に置く（`install.ps1 -QualityGuardTestsPath`） |
 | `rules.psd1` | このリポジトリ | このリポジトリの規則（テストの属性・Skip・`Verify` と単体テストの `Assert.`・`[Basis(` の削除・`Report` の `basis`・`TESTCASES.md`） |
 
 - `.claude/hooks/ExpectationGuard.ps1`・`.githooks/commit-msg` も写しである。`expectation-change.yml` は雛形から作り、このリポジトリが持つ
-- **写しは直さない。** 原本を直して、`install.ps1 -TargetRoot <このリポジトリ> -IncludeQualityGuard -QualityGuardPath root -Force` で写し直す。
+- **写しは直さない。** 原本を直して、`install.ps1 -TargetRoot <このリポジトリ> -IncludeQualityGuard -QualityGuardPath root -QualityGuardTestsPath root/files/tools/ExpectationGuard.Tests -Force` で写し直す。
   **写し直しのコミットにも `Expectation-Change:` が要る**（印の行の版が変わるだけで「仕組みの変更」になる）。理由には、版の変化と中身が変わったかを書く
 - CI の `Verify copies` が、写しが写したときのままかを確かめる（ずれは警告。手元では `.\CheckExpectationChange.ps1 -VerifyCopy`）
 - **要確認**（`[Obsolete]`・`#pragma warning disable CS0618` の追加）は止めない・トレーラーを求めない。一覧に出し、CI では足した行に注釈を付ける。
@@ -168,7 +179,7 @@ git config core.hooksPath .githooks
 ### エージェントがすること
 
 - **期待値を変えたら、報告の冒頭に書く。** どのファイルの、どの値が、なぜ変わったか
-- **トレーラーの文面を提案する。** コミットは人が行う（[`AGENTS.md`](AGENTS.md)「Git 操作は行わない」）
+- **トレーラーの文面を提案し、コミットの前に突き合わせ役を回す**（上の「承認の記録」）。コミットは人が行う（[`AGENTS.md`](AGENTS.md)「Git 操作は行わない」）
 - **テストを通すために期待値を変えない。** 先にコードを疑う。期待値が誤っていると判断したら、その根拠（仕様の該当箇所）を示す
 
 ---
@@ -186,18 +197,32 @@ git config core.hooksPath .githooks
   **縛る証明書は、認証で確かめたものか**（クライアント認証を通らない経路では、提示されただけの証明書が残る）。
   **トークンを出す口は、トークン エンドポイントだけではない** — **認可エンドポイントの Implicit・Hybrid も access_token を出す。**
   **強制（送信者の拘束の必須など）を、出すすべての口で揃えたか**（#346。`RT-346.9`）
+- [ ] **縛る鍵を受け取る口が複数あるとき、すべてを見ているか。**
+  **PAR では、`dpop_jkt` と `DPoP` ヘッダのどちらでも `code` を縛る**（RFC 9449 §10.1 の MUST。両方が来たら一致を確かめる）。
+  **`dpop_jkt` だけを見て、ヘッダを捨てていた**（#365。`RT-365.1`・`.2`）
+- [ ] **縛るかどうかが、クライアントの種別で変わらないか。**
+  **RFC 9449 §5 は、公開クライアントの `refresh_token` だけを DPoP の鍵に縛る**（秘密を持つクライアントは、クライアント認証で縛られている）。
+  **種別によらず縛ると、鍵を作り直したクライアントが更新できなくなる**（#367。`RT-311.11`）。
+  **入れ替え（ローテーション）も同じ** — **FAPI 2.0 は入れ替えないことを求める**（#367。`RT-367.1`）
 - [ ] `alg` の固定（`none` を受けない）、`aud`・`iss`・`exp` の確認
 - [ ] **出す JWT のヘッダの `kid` は、署名した鍵（`jwks_uri` に載る鍵）の `kid` か。**
   **Nested JWT（JWE の中の JWS）では、暗号化に使うクライアントの鍵の `kid` と取り違えやすい**（#352。`RT-352.1`）。
   **自己テスト（サーバとクライアントを兼ねる）では気付けない。** RP として、`kid` で `jwks_uri` から鍵を引いて確かめる
 - [ ] **出す JWT の `alg` は、登録（`id_token_signed_response_alg`）に従っているか。** **形（JWS / JWE）や経路ごとに、alg を決める箇所が分かれていないか** —
   **暗号化した id_token の中の JWS だけ、登録にかかわらず ES256 だった**（#355。`RT-355.1`）。
-  **登録が無いときの既定が、プロファイル（FAPI 2.0 は RS256 を認めない）に合うか**も見る
+  **JARM の応答は、登録で選べず RS256 に固定だった**（#370。`RT-370.5`）。
+  **登録が無いときの既定が、プロファイル（FAPI は RS256 を認めない）に合うか**も見る。
+  **既定を変えるなら、相手（Open棟梁 で作った RP・同梱の自己テストのクライアント）がその alg を検証できるか**も見る（**Open棟梁 の RP 側の検証は、暗号化しない ES256 を受けない**ので、FAPI の登録の既定を ES256 にするのを見送った。#370）
+- [ ] **受ける JWT（Request Object など）の alg は、鍵の種類と食い違っていないか。プロファイルが認めない alg を受けていないか。**
+  **Request Object を RS256 でしか検証できず、FAPI の RP の ES256 を断っていた。一方で FAPI の登録の RS256 は受けていた**（#370。`RT-370.1`〜`.4`）。
+  **受ける alg を変えたら、その alg で作っている既存のテスト（と自己テストのクライアント）が、測りたい理由より先に alg で断られていないか**も見る
 - [ ] **応答の数値（`expires_in`・`interval` など）を、JSON の文字列にしていないか**（RFC 6749 §5.1「Numerical values are included as JSON numbers」）。
   **`Dictionary<string, string>` で応答を作ると、数値が文字列になる**（#294・#353。`RT-294.75`・`RT-353`）。
   **E2E の `JsonResponse.String` は数値も文字列にして返す**ので、型は `KindOf` で見る
 - [ ] **値の無いクレームを、空文字列・null で返していないか**（OIDC Core 1.0 §5.3.2。名前ごと省く）。
   **利用者の値をそのまま足すと、持っていない項目が `""` で出る**（#354。`RT-354.1`）。**`*_verified` も、値が無ければ出さない**
+- [ ] **登録で受けた URL の中身を、確かめずに識別に使っていないか**（`sector_identifier_uri` は、中身に `redirect_uris` がすべて在ることを確かめてから、pairwise の Sector に使う。OIDC Registration 1.0 §5）。
+  **以前は確かめずに受け、値を捨てていた**（#364。`RT-364.2`）。**受けた値を黙って捨てる**のも、利用者には「効いている」と読める
 - [ ] **仕様の「だけ」を「も」と読んでいないか**（FAPI 2.0 の `aud` は issuer だけ。#323）。登録の種別で規定が変わらないか
 - [ ] **値が無いときに、検証を飛ばしていないか**（`nonce`・`aud`・署名など）
 - [ ] 検証を省く分岐（設定やパラメタで検証を飛ばせる経路）が増えていないか
@@ -280,7 +305,8 @@ Open棟梁 と同じ形である（OpenTouryo#680）。
 
 - **主のモデルは、各自の設定に任せる**（共有の `.claude/settings.json` では揃えない。Open棟梁 と同じ判断。プロジェクトの設定は各自の設定より優先され、全員に同じモデルを強いるため）。
   **主もレビュー役と同じモデル（Sonnet）なら、別モデルのレビューにならない。** そう報告し、6 節の計測には数えない
-- **呼んだかどうかの記録は、完了コメントによる**
+- **呼んだかどうかの記録は、完了コメントと、コミットのトレーラー `Reviewed-with: quality-reviewer (<モデル ID>)`（5 節）による。**
+  リスク「高」の名前空間を `fixed` で変えたのに無ければ、検出器が警告する（止めない。`rules.psd1` の `TrailerRequirements`。`fixing` では警告しない）
 - **判定は検収の材料であり、検収の代わりではない。** 人は判定の結果を読んで検収する
 - **`.claude/agents/` は仕組みのファイルである**（定義を緩めれば、レビューも緩む）。**変更・削除にはトレーラーが要る**（共通の規則。OpenTouryoCodingAgentAssets `a815845`。3 節）
 
@@ -333,7 +359,7 @@ Reviewed-with: <役> [(<モデル ID>)]
   **語彙と意味の一次情報は [`rules.common.psd1`](root/rules.common.psd1) の規則**（本書には写さない）
 - **流していないテスト・回していないレビューは書かない。** 記録であって証明ではない。人はコミットのときに、経緯と合っているかを見る
 - 指摘の数（採用・却下・別モデルでだけ見つかった数）は長いので、完了コメントに書く（4 節）。トレーラーは「何で・誰が」だけ
-- 検出器が確かめる：**語彙に無い値は止める**（段 2・段 3）。書き忘れは見ない
+- 検出器が確かめる：**語彙に無い値は止める**（段 2・段 3）。**書き忘れは警告する**（止めない）：コード（`.cs`・`.vb`。コメント・空行だけの変更を除く）を変えたのに `Tested-with:` が無い（流していなければ `Tested-with: none`）、期待値の変更に突き合わせ役の `Reviewed-with:` が無い、リスク「高」の名前空間の `fixed` に `quality-reviewer` の `Reviewed-with:` が無い（4 節）
 - **トレーラーは最後の段落に並べる**（本文との間に空行を 1 つ。トレーラーの間に空行を挟まない）。git はそこしか読まないので、
   検出器は最後の段落に無いトレーラー・全角の「：」・名前の綴りの誤りも止め、直した行と直し方を出す
 
@@ -347,6 +373,8 @@ Reviewed-with: <役> [(<モデル ID>)]
 - 品質マップの単位で、根拠の種類（**外部の仕様 / Issue / リポジトリの前提**）の割合（7 節）
 - 別モデルのレビューで見つかり、書いたモデルのレビューでは見つからなかった指摘の数（判定で採用したもの。数え方は 4 節。完了コメントから拾う）
 - 品質マップの単位で、E2E のカバレッジ（[`COVERAGE.md`](root/programs/Tests/COVERAGE.md)。**判定には使わない**）
+- **適合性テストの、プランごとの PASSED・FAILED の数**（リリースの前に回したもの。2 節）と、**起票した不適合の数・直した数**。
+  **FAILED には、自動では回せないモジュールと、1 つの不適合で止まったモジュールも含まれる**ので、数だけで比べず、仕分けた結果と並べて見る
 - バグの Issue の、見つけた手段の内訳（5 節の `Found-By:`）。Git だけで集計できる：
 
   ```text
@@ -410,7 +438,7 @@ TestReport r = this.Report("EX-2.7",
 
 - [ ] 作業の対象が、品質マップ（1 節）のどの名前空間で、リスクはどれか
 - [ ] 「人が必ず見る箇所」に触れたか。触れたなら、報告の冒頭に書いたか
-- [ ] 期待値の変更（3 節）を含むか。含むなら、報告の冒頭に書き、トレーラーの文面を提案したか
+- [ ] 期待値の変更（3 節）を含むか。含むなら、報告の冒頭に書き、トレーラーの文面を提案したか。理由に Issue 番号か仕様の節を書き、コミットの前に `opentouryo-expectation-reviewer` で突き合わせたか
 - [ ] テストを足したなら、根拠を原典で確かめたか。判定できない値は `Observe` にしたか（2 節・7 節）
 - [ ] テストの文面を変えたなら、`TESTCASES.md` を作り直したか
 - [ ] リスクが「高」なら、4 節の観点で見直したか（セルフレビューを書き留めたか）
@@ -419,3 +447,4 @@ TestReport r = this.Report("EX-2.7",
 - [ ] 見つけた問題を、5 節の 3 か所に戻したか（セキュリティの弱点なら、まず人に報告したか）
 - [ ] バグの修正（`fixed #NNN`）なら、コミット メッセージの案に `Found-By:` を入れたか（5 節。経緯を推測で埋めていないか）
 - [ ] 流したテスト・回したレビューを、`Tested-with:`・`Reviewed-with:` で書いたか。トレーラーを最後の段落に並べたか（5 節）
+- [ ] 適合性テストで見つかった不適合を直したなら、`fixed` の前に、そのプランを回したか（2 節）

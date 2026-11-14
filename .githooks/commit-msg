@@ -1,5 +1,5 @@
 #!/bin/sh
-# expectation-guard-source: OpenTouryoCodingAgentAssets@d2f87d1f651f src/quality/ExpectationGuard/commit-msg sha256:945b7524c0ec0a174718e318a7ba2e76056ff1faa6fa3a529843155cab112747
+# expectation-guard-source: OpenTouryoCodingAgentAssets@ade897953a72 src/quality/ExpectationGuard/commit-msg sha256:945b7524c0ec0a174718e318a7ba2e76056ff1faa6fa3a529843155cab112747
 # Expectation-change guard (stage 2. OpenTouryoCodingAgentAssets#3).
 #   Rejects a commit that changes test expectations without an "Expectation-Change: <reason>" trailer
 #   in the commit message. The detection itself is root/CheckExpectationChange.ps1 (shared with the CI check);

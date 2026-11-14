@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/18  玄人 幸道         既定で無効にした機能に依存するテストを Skip 対象にした（#220）
+//*  2026/11/11  玄人 幸道         RT-361.1〜.3（code token では nonce を必須にしない）を追加し、RT-190.1 の根拠を §3.3.2.1 の条件に合わせた（#361）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -44,7 +45,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
-    /// RT-183 / RT-190 / RT-191. nonce の扱いの回帰テスト。
+    /// RT-183 / RT-190 / RT-191 / RT-361. nonce の扱いの回帰テスト。
     /// </summary>
     public class NonceTests : TargetTestBase
     {
@@ -185,7 +186,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "nonce が無いと RP は**トークンの再送（リプレイ）を検知できない。**"
                     + "Authorization Code フロー（RT-183.1）とは要否が逆になる。",
                     "OIDC Core §3.2.2.1（Implicit の nonce は REQUIRED）"
-                    + " / §3.3.2.1（Hybrid も REQUIRED）/ #190");
+                    + " / §3.3.2.1（Hybrid は code id_token・code id_token token で REQUIRED。code token は OPTIONAL。#361）/ #190");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
@@ -271,6 +272,135 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Done();
             }
+        }
+
+        /// <summary>RT-361.1 Hybrid の code token は nonce が無くても通る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT361_01_Hybridのcode_tokenはnonce無しでも通る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                // **`code token` は access token をフロント チャネルで返すので、Implicit が要る**（#314）。
+                //   **Implicit は雛形の既定で無効**（#220）。有効な環境でだけ測る（RT-190 と同じ）。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "implicit");
+
+                TestReport r = this.Report("RT-361.1",
+                    "Hybrid フローの response_type=code token は、nonce が無くても通り、code と access_token が返る",
+                    "**`code token` は認可エンドポイントから id_token を返さない**ので、nonce は任意である（守る対象の id_token が無い）。"
+                    + "**以前は `code token` でも nonce を必須にしていた**ので、nonce を送らない RP が使えなかった（適合性テストの "
+                    + "`oidcc-ensure-request-without-nonce-succeeds-for-code-flow [code token]` が落ちた）。",
+                    "OIDC Core 1.0 §3.3.2.1（nonce は code token では OPTIONAL）/ #361");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + " / response_type=code token / scope=openid");
+                r.Step("GET /authorize を nonce 無しで送る");
+
+                AuthZResponse res = await NonceTests.AuthorizeWithoutNonceAsync(client, reg, "code token");
+
+                r.Verify("**エラーにならない**", string.IsNullOrEmpty(res.Error),
+                    "error なし", res.Error == null ? "error なし" : "**error=" + res.Error + " / " + res.ErrorDescription + "**");
+
+                r.Verify("code と access_token が返る",
+                    !string.IsNullOrEmpty(res.Code) && !string.IsNullOrEmpty(res.Get("access_token")),
+                    "どちらもあり",
+                    "code = " + (res.Code == null ? "なし" : "あり") + " / access_token = " + (res.Get("access_token") == null ? "なし" : "あり"));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-361.2 Hybrid の code id_token は nonce が無ければ断る（RT-361.1 の対照）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT361_02_Hybridのcode_id_tokenはnonce無しを断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-361.2",
+                    "Hybrid フローの response_type=code id_token は、nonce が無ければ invalid_request で断る",
+                    "**RT-361.1 の対照。** `code token` の nonce を任意にした後も、"
+                    + "**認可エンドポイントから id_token を返す形では、これまでどおり必須**であることを確かめる。",
+                    "OIDC Core 1.0 §3.3.2.1（nonce は code id_token・code id_token token では REQUIRED）/ #361");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + " / response_type=code id_token / scope=openid");
+                r.Step("GET /authorize を nonce 無しで送る");
+
+                AuthZResponse res = await NonceTests.AuthorizeWithoutNonceAsync(client, reg, "code id_token");
+
+                r.VerifyEqual("invalid_request で断る", "invalid_request", res.Error ?? "（error なし）");
+
+                r.Verify("code も id_token も返さない",
+                    string.IsNullOrEmpty(res.Code) && string.IsNullOrEmpty(res.Get("id_token")),
+                    "どちらも返さない", "params = [" + string.Join(", ", res.Parameters.Keys) + "]");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-361.3 Hybrid の code id_token token は nonce が無ければ断る（RT-361.1 の対照）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT361_03_Hybridのcode_id_token_tokenはnonce無しを断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                // **`code id_token token` は access token をフロント チャネルで返すので、Implicit が要る**（#314）。
+                //   **Implicit は雛形の既定で無効**（#220）。有効な環境でだけ測る（RT-190 と同じ）。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "implicit");
+
+                TestReport r = this.Report("RT-361.3",
+                    "Hybrid フローの response_type=code id_token token は、nonce が無ければ invalid_request で断る",
+                    "**RT-361.1 の対照。** `code token` の nonce を任意にした後も、"
+                    + "**3 つを返す形（id_token を含む）では、これまでどおり必須**であることを確かめる。",
+                    "OIDC Core 1.0 §3.3.2.1（nonce は code id_token・code id_token token では REQUIRED）/ #361");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + " / response_type=code id_token token / scope=openid");
+                r.Step("GET /authorize を nonce 無しで送る");
+
+                AuthZResponse res = await NonceTests.AuthorizeWithoutNonceAsync(client, reg, "code id_token token");
+
+                r.VerifyEqual("invalid_request で断る", "invalid_request", res.Error ?? "（error なし）");
+
+                r.Verify("code も id_token も access_token も返さない",
+                    string.IsNullOrEmpty(res.Code) && string.IsNullOrEmpty(res.Get("id_token")) && string.IsNullOrEmpty(res.Get("access_token")),
+                    "どれも返さない", "params = [" + string.Join(", ", res.Parameters.Keys) + "]");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>nonce を付けずに認可要求を送る（同意画面が出たら許可する）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">クライアント</param>
+        /// <param name="responseType">response_type</param>
+        /// <returns>AuthZResponse</returns>
+        private static async Task<AuthZResponse> AuthorizeWithoutNonceAsync(
+            IdPClient client, ClientRegistration reg, string responseType)
+        {
+            AuthZResponse res = await client.AuthorizeAsync(new Dictionary<string, string>()
+            {
+                { "response_type", responseType },
+                { "client_id", reg.ClientId },
+                { "scope", "openid" },
+                { "redirect_uri", reg.RedirectUriToken },
+                { "state", "state-rt361" }
+
+                // nonce を送らない
+            });
+
+            return res.NeedsConsent ? await client.GrantConsentAsync(res) : res;
         }
     }
 }

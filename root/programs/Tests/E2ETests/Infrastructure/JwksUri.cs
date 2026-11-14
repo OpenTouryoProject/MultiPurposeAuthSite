@@ -31,6 +31,7 @@
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
 //*  2026/10/31  玄人 幸道         store\ から Container\E2E\ へ移したのに合わせた（#318）
 //*  2026/11/07  玄人 幸道         コメントと Skip の文言のスクリプト名を、#340 の後のものにした（#340）
+//*  2026/11/12  玄人 幸道         中身をそのまま置く WriteRaw を足した（sector_identifier_uri。#364）
 //**********************************************************************************
 
 using System;
@@ -105,6 +106,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             File.WriteAllText(
                 Path.Combine(JwksUri.DirectoryPath, name + ".json"),
                 "{\"keys\":[" + string.Join(",", jwks) + "]}");
+        }
+
+        /// <summary>中身をそのまま置く（既に在れば書き替える）</summary>
+        /// <param name="name">名前（拡張子は付けない）</param>
+        /// <param name="content">中身（JSON の文字列）</param>
+        /// <remarks>
+        /// **JWK Set でないもの**を置くのに使う（`sector_identifier_uri` の配列や、読めない中身。#364）。
+        /// **URL は `Url(name)`、消すのは `Delete(name)`**（JWK Set と同じ）。
+        /// </remarks>
+        public static void WriteRaw(string name, string content)
+        {
+            Directory.CreateDirectory(JwksUri.DirectoryPath);
+
+            File.WriteAllText(Path.Combine(JwksUri.DirectoryPath, name + ".json"), content);
         }
 
         /// <summary>置いた JWK Set を消す（後片付け）</summary>

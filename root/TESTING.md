@@ -1060,6 +1060,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 | **`RT-309.2`** | **画面から登録した `jwks_uri`**（**取りに行っていない**）**は、1 回目のクライアント認証で断られ、背景で補充された後は通る** |
 | **`RT-309.3`** | **同じ URL の中身を入れ替えると、`PUT` で読み直して新しい鍵（EC / ES256）で通り、古い鍵（RSA）では通らなくなる** |
 | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
+| **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を `kid` の違う鍵に入れ替えても、新しい鍵（ヘッダに知らない `kid`）が、取り直しの下限（1 分）を過ぎた後の 1 回目から通る**（下限の内側では断る）（OIDC Core 1.0 §10.1.1 の準用。#363。**知らない `kid` なら、`RemoteJwkSetStore.GetJwkAsync` の下限に従ってその場で取り直し、上限 3 秒まで待つ**。**`kid` の無い assertion は、以前どおり**＝`RT-309.2`）。**登録のときの取得から 1 分は取り直さない**ので、**入れ替えの後に 65 秒待ってから送る**（適合性テストも 60 秒待つ。このケースだけで約 1 分×2） |
 
 ###### 相手の `jwks_uri` は、静的配信のコンテナで用意する
 
@@ -1144,7 +1145,8 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **何もせずに 1 分待つと追随すること** | **背景の取り直しの下限は 1 分**である。**E2E で 1 分待たない**ので、**`PUT` で読み直す形で測っている**（`RT-309.3`） |
 | **起動のときの温め** | **E2E では測れない**（上の「目視の手順」で確かめた）。**`ora` / `npg` の列挙は測っていない** |
 | **`https` の `jwks_uri`** | **ループバックの `http` で測っている**（**配信に証明書を用意していない**）。**`https` を要求する分岐は、読めない URL（`RT-309.1` の (5)）で通っている** |
-| **`kid` が在るアサーション** | **`kid` を入れずに測っている**（**在る鍵を順に試す経路**）。**`kid` で引く分岐は、`RT-140.*` が ID 連携で通している** |
+| **`kid` が在るアサーション** | **`RT-309.*` は `kid` を入れずに測っている**（**在る鍵を順に試す経路**）。**`kid` で引く分岐は、`RT-140.*` が ID 連携で、知らない `kid` で取り直して待つ分岐は `RT-363.1`（#363）が通している** |
+| **知らない `kid` で待つときの、残りの分岐**（#363） | **同じ URL で待っている最中の要求（待たずに断る）・3 秒の時間切れ・取得の失敗は、E2E では通らない**（静的配信のコンテナは応答を遅らせられない）。**net48 で止まらないことは、`RT-363.1` の netfx で確かめた** |
 
 **実測（2026/10/21）。**
 
@@ -1167,12 +1169,131 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **1 日に何度も回した後は、この 2 つを先に疑うこと。** **どちらも変更の経路とは別**である
 > （**`CN-5.*` は公開済みイメージのコンテナ同士**、**`RT-305.5` は時間に依る**）。
 
+##### Request Object・JARM の署名 alg（`RT-370.*`。#370）
+
+| | 測ること |
+|---|---|
+| **`RT-370.1`** | **FAPI でない登録の `/ros` は、RS256・PS256（RSA の鍵）と ES256（EC の鍵）の Request Object を預かる**。Discovery も 3 つを広告する |
+| **`RT-370.2`** | **FAPI の登録（fapi1・fapi2）は、RS256 の Request Object を預からず、PS256・ES256 なら預かる**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1） |
+| **`RT-370.3`** | **alg に合う鍵が登録されていなければ預からない**（RSA の鍵だけの登録に ES256）。**alg が none も預からない** |
+| **`RT-370.4`** | **PAR では、FAPI の登録の RS256 を `invalid_request_object` で断り、PS256 なら預かる** |
+| **`RT-370.5`** | **JARM は、登録の `authorization_signed_response_alg`（PS256）で署名され、登録が無ければ RS256**（JARM §3）。Discovery も選べる alg を広告する |
+
+- **FAPI の登録で Request Object を作る既存のテストは、PS256 で署名する**（`RequestObjectBuilder.CreateFapiAsync`）。
+  **RS256 のままだと、測りたい理由（`exp` が無い、`client_id` が違う、など）より先に alg で断られ、測ったことにならない**
+- **自己テストのクライアント（`SelfTestClient`）も、Request Object を PS256 で署名する**（ボタンはどれも FAPI の登録で預ける。`RT-246.1`）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **登録した `request_object_signing_alg`（PS256・ES256）と違う alg の Request Object** | 絞る仕組みは #262 の `AllowsVerifyingAlg` のまま（`RT-262.*` が RS256 で測る） |
+| **構成ファイルに扱えない `authorization_signed_response_alg` を書いた登録の、JARM のエラー応答** | 構成の誤りの経路（RS256 で署名して記録に残す）。構成ファイルの登録を E2E で壊せない |
+| **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
+| **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
+
+##### `client_assertion_type` の無い `client_assertion` を受けない（`RT-368.*`。#368）
+
+| | 測ること |
+|---|---|
+| **`RT-368.1`** | **型の無い `client_assertion` は、PAR でも `/revoke` でも `invalid_client`**（RFC 7521 §4.2 の REQUIRED）。**型を付ければ通る** |
+
+- **判定は `CmnEndpoints.GetClientAssertion`**（両版の 6 つの口が使う）。**Open棟梁 の `OAuth2AndOIDCSpec.GetClientAssertion` の回避**（型が来ていなければ、そのまま返していた）。**Open棟梁 で直したら外す**
+- **型が違えば断る**ことは `RT-238.3`、**従来の名前 `assertion` だけのクライアントを通す**ことは `RT-238.2` が測る
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`/token`・Device AuthZ・CIBA・`/introspect` での型の無い `client_assertion`** | どの口も同じ `GetClientAssertion` を通る（呼び出しの書き換えだけ）。PAR と `/revoke` で代表させた |
+| **型の無い `client_assertion` と、正しい `client_secret` を併せて送る要求** | **アサーションを無いものとして扱うので、`client_secret` を持つ登録は秘密で認証される。** 複数の認証の方法を併せた要求を断るか（RFC 6749 §2.3）は、型の有無と別の、従来からの扱い |
+
+##### FAPI 2.0 の登録では refresh_token を入れ替えず、秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（`RT-367.*`・`RT-311.11`。#367）
+
+| | 測ること |
+|---|---|
+| **`RT-367.1`** | **fapi2 の登録は、更新で新しい refresh_token を返さず、同じ refresh_token で何度でも更新できる**（FAPI 2.0 Security Profile §5.3.2.1 の 9。RFC 6749 §6）。**2 回目は DPoP の鍵を作り直して更新する**（適合性テストと同じ形。private_key_jwt の refresh_token を鍵に縛らない。RFC 9449 §5） |
+| **`RT-367.2`** | **fapi2 でない登録は、従来どおり入れ替え、前の refresh_token は `invalid_grant`**（#188） |
+| **`RT-311.11`** | **秘密を持つクライアントの `refresh_token` は、DPoP の鍵に縛られない**（RFC 9449 §5。**期待値を変えた**） |
+
+- **秘密を持つかどうかは、その要求でクライアントが何で認証したか**（`CmnEndpoints.IsConfidentialProof`。client_secret・private_key_jwt・mTLS）で決める。デバイスの経路は `DeviceAuthZClientAuthentication` が返す
+- **`IsConfidentialProof` の真偽表は、単体テスト（`Tests/UnitTests/Sts/ConfidentialProofTests.cs`）で固定した**（公開クライアントを縛る側は、E2E では通らないため）
+- **入れ替えない登録（fapi2）の refresh_token の有効期限は、最初に出した時点から数える**（入れ替えないので延びない）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **公開クライアントの `refresh_token` を DPoP の鍵に縛ること** | **公開クライアント（`none`）は、`refresh_token` の経路で認証できない**（クライアント認証を必須にしている）。発行のときに縛るが、更新で照合する場面が無い |
+| **fapi2 の登録で、利用者が消された・パスワードを変えたときに、入れ替えない refresh_token を失効させること** | 入れ替える登録と同じ `CheckUserOfRefreshToken` で断り、続けて失効させる。利用者を消す操作を fapi2 のテストに足していない |
+| **デバイスの経路で、秘密を持つクライアントの `refresh_token` を縛らないこと** | `DeviceAuthZClientAuthentication` の `confidential` を読むだけ。DPoP の証明を添えたデバイスの経路の組み合わせを足していない |
+
+##### FAPI 2.0 の登録では、S256 の PKCE を必須にする（`RT-366.*`。#366）
+
+| | 測ること |
+|---|---|
+| **`RT-366.1`** | **fapi2 の登録の PAR は、S256 だけを受け、plain・`code_challenge_method` の省略・PKCE 無しを `400` ＋ `invalid_request` で断る**（FAPI 2.0 Security Profile §5.3.2.2 の 5。**省略は plain の扱い**。RFC 7636 §4.3）。**S256 で預けた `request_uri` は、認可の口でも断られない**（Request Object の `code_challenge_method` を読む） |
+| **`RT-366.2`** | **fapi2 でない登録は、従来どおり plain・PKCE 無しを受ける**（既定の `RequirePkceS256=false`） |
+| **`RT-366.3`** | **PAR を使わない `/authorize`（クエリ）でも、fapi2 の登録の plain・省略・小文字の `s256`・PKCE 無しを `invalid_request` で RP へ返す**（RFC 6749 §4.1.2.1）。S256 なら code を出す |
+
+- **判定は `CmnEndpoints.ValidateAuthZReqParam`**（PAR と `/authorize` で共通）。**`/token` の照合（`VerifyPkce`）は変えていない**
+- **fapi2 の登録を使う既存のテストの認可要求・PAR に、S256 の PKCE を足した**（`FA-2.1`・`FA-6.*`・`RT-238.1`〜`.3`・`RT-336.6`。**測る段と検証は変えていない**。fapi2 は PKCE 無しの認可要求を断るようになったため。`FA-6.*` は交換に `code_verifier` も送る）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
+| **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
+
+##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
+
+| | 測ること |
+|---|---|
+| **`RT-365.1`** | **PAR の要求に `DPoP` ヘッダを付けると、その `code` はその鍵の証明でしか引き換えられない**（RFC 9449 §10.1。**別の鍵・証明なしは `invalid_grant`**。**断られた `code` はまだ使える**。**ヘッダを付けない PAR は、従来どおり縛られない**） |
+| **`RT-365.2`** | **`dpop_jkt` と `DPoP` ヘッダの鍵が違えば、PAR で `400` ＋ `invalid_request`**（§10.1 はエラー コードを決めていない。**証明は正しく、要求が食い違っている**）。**同じなら受け付け、その鍵に縛る** |
+| **`RT-365.3`** | **PAR の証明が通らなければ `400` ＋ `invalid_dpop_proof`**（壊れた証明・`/token` 宛ての証明・使い回した証明）。**ほかの理由で断った PAR では、証明を使い済みにしない** |
+
+- **縛りの実体は、預ける中身の `dpop_jkt`**（`CmnRequestObjectEndpoint.BindDPoPProof` が書き込み、`AuthorizationCodeProvider` が読む）。`/token` 側は変えていない
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`request`（JAR）の中の `dpop_jkt` との照合** | 預ける中身を作った後の同じ所で照合している（フォームの経路と同じ）。JAR を組むテストの補助は RT-229.3 に在るが、組み合わせは足していない |
+| **`nonce` を要求する配備（`EnableDPoPNonce`）での PAR の `use_dpop_nonce`** | 既定の配備では要求しない。`/token` と同じ用途の nonce・同じ `OAuth2Error` の経路（`DPoP-Nonce` を付ける） |
+| **`private_key_jwt`・mTLS のクライアント、`dpop_bound_access_tokens` を必須にした登録での PAR** | クライアント認証は従来の経路のまま。`DPoP` ヘッダの扱いは認証の方法によらない。適合性テストの `fapi2-sp-private-key-jwt-dpop`（`private_key_jwt`・`dpop_bound_access_tokens` の登録）で測る |
+| **空の `dpop_jkt`（`dpop_jkt=`）と `DPoP` ヘッダの組み合わせ** | 指紋と一致しないので `invalid_request` で断る（`BindDPoPProof`）。ヘッダの無い空の `dpop_jkt` は、従来どおり縛らない（`AuthorizationCodeProvider.GetDPoPJkt` が空を「申告なし」と読む） |
+
+##### 動的登録の `sector_identifier_uri`（`RT-364.*`。#364）
+
+| | 測ること |
+|---|---|
+| **`RT-364.1`** | **中身（JSON の配列）に `redirect_uris` がすべて在れば、登録できる**（`201`。**一覧に余分な URI が在ってもよい**。**応答に `sector_identifier_uri` が返る**） |
+| **`RT-364.2`** | **1 つでも無ければ `400` ＋ `invalid_client_metadata`**（OIDC Registration 1.0 §5）。**同じ中身で、在る URI だけを登録すれば `201`** |
+| **`RT-364.3`** | **読めなければ `400` ＋ `invalid_client_metadata`**（置いていない URL・配列でない・文字列でない要素・`https` でない http） |
+| **`RT-364.4`** | **同じ `sector_identifier_uri` で登録した pairwise のクライアント 2 つは、同じ利用者に同じ `sub` を返し、付けないクライアントと、同じ `sector_identifier_uri` の public のクライアント（先に `sub` を出させる）は別の `sub`**（OIDC Core 1.0 §8.1。ホストで揃えるのは pairwise だけ）。**管理画面で保存しても `sector_identifier_uri` が残り、`sub` も変わらない** |
+
+- **相手の `sector_identifier_uri` は、`jwks_uri` と同じ静的配信のコンテナで用意する**（`Infrastructure.JwksUri.WriteRaw`。44305。**上がっていなければ Skip**）
+- **名前は回ごとに乱数を付ける**（控えは URL ごとに 1 分残るので、回し直しで前の回の控えに当たらないように）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **取りに行く上限（10 秒・64KB）** | 静的配信のコンテナは応答を遅らせられない。大きい中身は置けるが、通しの時間に見合わない |
+| **リダイレクトで別の URL から返った中身を「読めない」にすること** | 静的配信のコンテナはリダイレクトを返さない（`SectorIdentifierProvider.GetStringAsync` の最終の URL の比べ。**net48 で最終の URL が取れるかも未確認**） |
+| **`redirect_uris` の無い登録で断ること** | 登録の口から届かない見込み（`response_types` の既定が `code` で、先に `redirect_uris` が必須になる）。守りとして入れた |
+| **`PUT` で `sector_identifier_uri` を変える・省く** | 全置換の扱いは `RT-307.9`〜`.13` と同じ経路（`Update` の 1. の群）。**変えると以降の `sub` が変わる**ことは `CONFIGURATION.md` に書いた |
+| **認可の無い登録の要求では、取りに行かないこと**（`jwks_uri` も） | 取りに行ったかどうかは、応答からは分からない（どちらも `401` / `403`）。**コードで確かめた**（`MayWarmUpForRegister` / `MayWarmUpForUpdate`） |
+| **設定ファイルの `sector_identifier_uri`** | 設定ファイルのクライアントを足すと、他のテストの前提が変わる（`Helper.GetRegisteredValue` は動的登録と同じ口） |
+
 ##### DPoP の縛りを前と後ろへ広げる（`RT-311.10`〜`.14`。#311 の段階 4）
 
 | | 測ること | いつ回るか |
 |---|---|---|
 | **`RT-311.10`** | **認可要求の `dpop_jkt` で、`code` が鍵に縛られる**（§10） | いつでも |
-| **`RT-311.11`** | **`refresh_token` も同じ鍵に縛られる**（§5）。**ローテーションした後も** | いつでも |
+| **`RT-311.11`** | **秘密を持つクライアントの `refresh_token` は、鍵に縛られない**（§5。**#367 で期待値を変えた**。以前は同じ鍵に縛っていた）。**更新で出る `access_token` は、その要求の証明の鍵に縛られる** | いつでも |
 | **`RT-311.12`** | **`DPoP` スキームで来た要求には `WWW-Authenticate: DPoP` ＋ `algs`** で答える（§7.1） | いつでも |
 | **`RT-311.13`** | **`/token` が `nonce` を要求する**（`use_dpop_nonce` ＋ `DPoP-Nonce`。§8） | **`-DPoPNonce`** |
 | **`RT-311.14`** | **保護されたリソースが `nonce` を要求する**（§9）。**`/token` の nonce は通らない** | **`-DPoPNonce`** |
@@ -1180,8 +1301,8 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 ###### どれも「断った後、やり直せる」ことまで見る
 
 **`RT-311.10`** は **断られた `code` が、正しい鍵でまだ引き換えられる**こと。
-**`RT-311.11`** は **断られた `refresh_token` が、正しい鍵でまだ使える**こと
-（**ローテーションの一族ごと失効させない**）。
+**`RT-311.11`** は、#367 の後は **鍵を作り直したクライアント（別の鍵・証明なし）も更新を続けられる**こと
+（**秘密を持つクライアントの `refresh_token` は縛らない**。RFC 9449 §5）。
 **`RT-311.13`** は **断られた `code` が、貰った `nonce` で引き換えられる**こと。
 
 **縛りが「利用者を閉じ出す仕掛け」になっていないことを、そこで押さえる。**
@@ -1200,6 +1321,10 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 > **預ける payload が、もともと `cnf.jkt` を持っている**ので、
 > **書き直さなくても縛りは残る** — **効くのは「縛っていない → 縛る」の乗り換えだけ**だった。
 > **そのケース（`RT-311.11` の (7)）を足してから、落ちることを確かめた。**
+>
+> **#367 で、`RT-311.11` を「秘密を持つクライアントの `refresh_token` は縛らない」期待に改めた**ので、
+> **上の 2 行（`refresh_token` の縛り）は、いまの `RT-311.11` には当たらない**（実測は #311 の時点のもの）。
+> **公開クライアントの `refresh_token` は、いまも縛る**が、**公開クライアントは `refresh_token` の経路で認証できない**ので、E2E では測れない（下の #367）。
 
 ###### 測っていないこと
 
@@ -4447,10 +4572,26 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 | | |
 |---|---|
 | 置き場所 | **`container/CTS/`**（Conformance Suite（版を固定）と、相手の OP（net10.0 版・`mem`）。手順と仕組みは `container/CTS/README.md`） |
-| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan oidcc-basic`**（`oidcc-config` も）→ `3_DockerComposeDown.bat` |
+| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan <プラン>`** → `3_DockerComposeDown.bat`。プランの一覧は `container/CTS/README.md`（OIDC の 11・FAPI の 5。FAPI は代表の組み合わせだけ） |
+| いつ回すか | **リリースの前に全プラン**、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（`QUALITY.md` 2 節）。全プランで 2〜3 時間、OIDC だけなら 1 時間ほど |
 | 相手 | **net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る） |
-| 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値を含む） |
-| 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。**落ちたものは、プランごとに Issue にして直す** |
+| 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む） |
+| 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。`RunTestPlan.ps1` の終了コードは、FAILED・時間切れが 1 つでもあれば 1（WARNING・REVIEW は数えない） |
+
+**落ちたものは、次の順で仕分ける**（#350 の段階 2〜4 で回したときの型）。
+
+| 仕分け | 見分け方 | 扱い |
+|---|---|---|
+| **環境の不足** | 設定の欄が無い（`GetStaticClientConfiguration`）、ブラウザの自動操作が合わない（`WebRunner` の `Unable to locate element`・`Unexpected URL`）、登録の項目の立て忘れ（FAPI の強制の項目は既定で false。#346）など | `container/CTS` を直す（設定の雛形・`docker-compose.yml`・`RunTestPlan.ps1`） |
+| **自動では回せない** | 利用者の拒否や、同じ画面への 2 回の訪問を区別する操作が要る | `container/CTS/README.md` に書き、合否から外して読む |
+| **自動操作のぶれ** | サインインのボタンを押しても `POST /Account/Login` が OP に届いていない（OP の ACCESS ログで見る） | 回し直す。同じモジュールで続けて落ちるなら、改めて見る |
+| **OP の不適合** | 上のどれでもなく、仕様の節と照らして OP の振る舞いが外れている | **原因ごとに Issue にする**（仕様の節を原典で確かめてから。セキュリティの弱点の疑いなら、公開する前に人に聞く） |
+
+- **1 つの不適合で、プランの大半が止まることがある**（#370・#371）。そのときは、直した後に回し直し、その先の結果を改めて仕分ける
+- **自動操作の `match` の `*` は、クエリの中にも当たる。** **認可の URL は `redirect_uri` に Conformance Suite の callback の URL を（符号化せずに）載せる**ので、
+  **`*/test/*/callback*` は認可のエラー画面にも当たる**（#368。callback を待つ手順は `https://localhost.emobix.co.uk:8443/test/*/callback*` と、先頭から書く）
+- **REVIEW（画面の写し）は、人が見て合否を付ける。** 自動では、待った画面が出たことまでしか確かめていない
+- **CI には載せていない**（#348（ビルドの CI）の後に決める）
 
 ## 6. 未修正の項目の扱い
 

@@ -25,6 +25,10 @@
 //*  2026/10/31  玄人 幸道         Request Object の claims がオブジェクトでなくても 500 にしない（#294）
 //*  2026/10/31  玄人 幸道         claims の id_token がオブジェクトでなくても 500 にしない（AddAuthTimeClaim。#294）
 //*  2026/11/09  玄人 幸道         Request Object の経路（PAR か・署名付きか）を読み、認可要求の検証に渡す（#346 の段階 2）
+//*  2026/11/11  玄人 幸道         POST の認可要求を受ける（GET に詰め替えて送り返す）。同意の送信は <認可の口>/consent に移した（#359）
+//*  2026/11/12  玄人 幸道         request_uri を引けない要求を、黙って続けずに断る（request_uri_not_supported・invalid_request_uri。#362）
+//*  2026/11/11  玄人 幸道         Hybrid の応答を作る部品に response_type を渡す（at_hash を付けるかを決めるため。#360）
+//*  2026/11/13  玄人 幸道         認可要求の検証に code_challenge_method を渡す（Request Object の値も読む。fapi2 の S256。#366）
 //**********************************************************************************
 
 /*
@@ -49,6 +53,7 @@ using System.Security.Claims;
 
 using System.Web;
 using System.Web.Mvc;
+using System.Web.Configuration;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -341,21 +346,21 @@ namespace MultiPurposeAuthSite.Controllers
             // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
             NameValueCollection query = this.AuthZRequestQuery();
             string code_challenge = query[OAuth2AndOIDCConst.code_challenge];
+            string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
-                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
-                out bool pushed, out bool signedRequestObject))
+                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
+                out bool pushed, out bool signedRequestObject, out err, out errDescription))
             {
-                err = OAuth2AndOIDCConst.invalid_request;
-                errDescription = "The client_id does not match the request object.";
+                // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }
             // **要求の検証を先に行う**（#247）。`redirect_uri` を照合できていないと、エラーを RP へ返せない。
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt, pushed, signedRequestObject))
+                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, prompt, pushed, signedRequestObject))
             {
                 // **max_age と auth_time の照合**（判定は CommonLibrary）。
                 //   **どちらの Cookie も、改ざんできない形で読む**（#294。`AuthTimeCookie`）。
@@ -528,6 +533,104 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>
+        /// 認可エンドポイント（POST の認可要求。#359）
+        /// POST: /authorize
+        /// </summary>
+        /// <returns>ActionResult（**GET の認可要求への 303**。読めない要求ならエラー画面）</returns>
+        /// <remarks>
+        /// **OIDC Core 1.0 §3.1.2.1 は、認可エンドポイントが GET と POST の両方を受けることを MUST としている**
+        /// （POST は Form Serialization。§13.2）。
+        ///
+        /// **フォームのパラメタを、そのままクエリに詰め替えて、GET の認可要求へ 303 で送り返す。**
+        /// **その後は GET の流れ（検証・サインイン・再認証・同意）を、そのまま通る。**
+        /// GET の流れは、未サインイン・再認証・`prompt=login`・OP のセッションの用意のたびに
+        /// **「同じ URL へ送り返す」作り**で、**パラメタが URL に在ることを前提にしている**ため、
+        /// ここで受けて処理すると、送り返すたびにパラメタが落ちる（以前のサインインの後と同じ落ち方）。
+        /// **転送の後は、パラメタが URL に出る**（GET で送られたときと同じ）。**POST のまま処理する正攻法は、別の Issue**。
+        ///
+        /// - **`[AllowAnonymous]`**：未サインインの要求も受ける（GET の口と同じ。サインインは転送の先で求める）
+        /// - **偽造防止のトークンは確かめない**：RP からの遷移で、GET と同じ扱い（トークンを持ちようがない）。
+        ///   **状態は何も変えない**（詰め替えて送り返すだけ）。**同意の送信は `OAuth2AuthorizeConsent`（トークンを確かめる）**
+        /// - **同じ名前のパラメタが 2 回来たら、送り返さずにエラー画面**（RFC 6749 §3.1。クエリとフォームの両方に在る場合も）。
+        ///   **`redirect_uri` を確かめる前なので、RP へは返さない**（オープン リダイレクトにしない）。**クエリの中だけの重複も断る**
+        /// - **名前の無いパラメタは無視する**（送り返すクエリに載せない）
+        /// - **送り返すクエリが、転送の先の GET で受けられる長さ（`PostAuthorizeMaxQueryLength`）を超えたら、送り返さずにエラー画面**（転送の先で URL の上限に当たるため。#372）
+        /// </remarks>
+        [HttpPost]
+        [AllowAnonymous]
+        public ActionResult OAuth2Authorize()
+        {
+            //  **フォームの形でなければ受けない**（§3.1.2.1 : Form Serialization）
+            string contentType = Request.ContentType ?? "";
+            if (!contentType.StartsWith("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)
+                && !contentType.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+            {
+                return this.AuthorizeErrorResponse(null, null, null, "",
+                    OAuth2AndOIDCConst.invalid_request,
+                    "The authorization request sent by POST must use Form Serialization.", null);
+            }
+
+            //  **クエリとフォームを合わせる**（クエリにも何か付いていれば、それも引き継ぐ）
+            NameValueCollection merged = new NameValueCollection(this.AuthZRequestQuery());
+
+            //  **クエリの中で同じ名前が 2 回来ても断る**（RFC 6749 §3.1。「,」でつないで送り返さない）
+            if (PostAuthorizeHasDuplicate(merged))
+            {
+                return this.AuthorizeErrorResponse(null, null, null, "",
+                    OAuth2AndOIDCConst.invalid_request, "A parameter is included more than once.", null);
+            }
+
+            foreach (string key in Request.Form.AllKeys)
+            {
+                //  **名前の無いパラメタは無視する**（送り返す前に落としている。net10.0 と揃える）
+                if (string.IsNullOrEmpty(key)) continue;
+
+                string[] values = Request.Form.GetValues(key);
+
+                //  **同じ名前が 2 回来たら断る**（RFC 6749 §3.1。フォームの中の重複も、クエリとの重複も）
+                if (values == null || 1 < values.Length || merged[key] != null)
+                {
+                    return this.AuthorizeErrorResponse(null, null, null, "",
+                        OAuth2AndOIDCConst.invalid_request, "A parameter is included more than once.", null);
+                }
+
+                merged[key] = values[0];
+            }
+
+            //  **送り返す URL が長すぎるなら、送り返さずにエラー画面**（転送の先で URL の上限に当たる。#372）
+            //  （net48 の Uri.EscapeDataString は、長すぎる値で例外を投げる。先に長さを見て、例外にしない）
+            string query = PostAuthorizeQuery(merged, this.PostAuthorizeMaxQueryLength());
+            if (query == null)
+            {
+                return this.AuthorizeErrorResponse(null, null, null, "",
+                    OAuth2AndOIDCConst.invalid_request, "The authorization request sent by POST is too long.", null);
+            }
+
+            //  **GET の認可要求へ 303 で送り返す**（303 は、次の要求を GET にする。RFC 9110 §15.4.4）
+            Response.RedirectLocation = new Uri(Request.Url,
+                Url.Content("~" + Config.OAuth2AuthorizeEndpoint)).AbsoluteUri + "?" + query;
+
+            return new HttpStatusCodeResult(303);
+        }
+
+        /// <summary>
+        /// 同意画面の送信の口を GET で開いたとき（#359）
+        /// GET: /authorize/consent
+        /// </summary>
+        /// <returns>ActionResult（**認可の口（同じクエリ）への 302**）</returns>
+        /// <remarks>
+        /// **同意画面を開いたままサインインが切れて送信すると、サインインの戻り先がこの口になる**（クラスの `[Authorize]`）。
+        /// **この口の送信は POST だけなので、サインインの後の GET が行き止まりにならないよう、認可の口へ戻す。**
+        /// 状態は何も変えない（同意は、認可の口から出し直した同意画面で、改めて求める）。
+        /// </remarks>
+        [HttpGet]
+        [ActionName("OAuth2AuthorizeConsent")]
+        public ActionResult OAuth2AuthorizeConsentGet()
+        {
+            return new RedirectResult(this.AuthorizeEndpointUrl());
+        }
+
+        /// <summary>
         /// 認可エンドポイント
         /// 権限付与画面（同意画面）の結果を受け取り、
         /// response_type に応じて code / token を発行してRedirectエンドポイントへRedirect。
@@ -543,9 +646,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="max_age">string（OIDC 任意）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
+        /// <remarks>
+        /// **同意画面の送信だけを受ける口**（`<認可の口>/consent`。#359）。
+        /// **以前は `POST <認可の口>` で受けていた**ので、RP からの POST の認可要求（OIDC Core 1.0 §3.1.2.1）を受ける口が無かった。
+        /// **同意画面のフォームは、この口へ、認可要求のクエリをそのまま付けて送る**（`OAuth2Authorize.cshtml`）。
+        /// **偽造防止のトークンは、これまでどおり確かめる**（CSRF。同意の送信は、利用者のセッションで状態を変える）。
+        /// </remarks>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuth2Authorize(
+        public async Task<ActionResult> OAuth2AuthorizeConsent(
             string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
@@ -564,21 +673,21 @@ namespace MultiPurposeAuthSite.Controllers
             // code_challenge（PKCE必須かの確認に使う）と request_uri は、クエリ文字列から読む。
             NameValueCollection query = this.AuthZRequestQuery();
             string code_challenge = query[OAuth2AndOIDCConst.code_challenge];
+            string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
             if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
-                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge,
-                out bool pushed, out bool signedRequestObject))
+                ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
+                out bool pushed, out bool signedRequestObject, out err, out errDescription))
             {
-                err = OAuth2AndOIDCConst.invalid_request;
-                errDescription = "The client_id does not match the request object.";
+                // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription,
-                code_challenge, prompt, pushed, signedRequestObject))
+                code_challenge, code_challenge_method, prompt, pushed, signedRequestObject))
             {
                 if (!this.IsSupportedResponseMode(response_type, response_mode))
                 {
@@ -593,12 +702,14 @@ namespace MultiPurposeAuthSite.Controllers
                     List<string> iframeUrlsForSwitch = this.ClearOpSession();
                     await this.SignOutApplicationCookieAsync();
 
-                    //  **ブラウザ経由で伝えてから、同じ URL へ進む**（#310）。
+                    //  **ブラウザ経由で伝えてから、認可の口へ戻る**（#310）。
+                    //    **戻る先は「いまの URL」ではなく、認可の口（同じクエリ）**（#359）。
+                    //    この口は `<認可の口>/consent` で、GET の口が無い（戻すと行き止まりになる）。
                     ActionResult frontChannelForSwitch = this.FrontChannelLogoutView(
-                        iframeUrlsForSwitch, this.CurrentRequestUrl());
+                        iframeUrlsForSwitch, this.AuthorizeEndpointUrl());
                     if (frontChannelForSwitch != null) return frontChannelForSwitch;
 
-                    return new RedirectResult(this.CurrentRequestUrl());
+                    return new RedirectResult(this.AuthorizeEndpointUrl());
                 }
                 else if (!string.IsNullOrEmpty(this.FormValue("submit.Deny")))
                 {
@@ -658,6 +769,12 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 要求の読み込み・発行・エラー
 
+        /// <summary>error : request_uri_not_supported（OIDC Core 1.0 §3.1.2.6。#362）</summary>
+        private const string RequestUriNotSupported = "request_uri_not_supported";
+
+        /// <summary>error : invalid_request_uri（OIDC Core 1.0 §3.1.2.6。#362）</summary>
+        private const string InvalidRequestUri = "invalid_request_uri";
+
         /// <summary>request_uri（PAR / JAR）の Request Object で、要求のパラメタを上書きする</summary>
         /// <param name="request_uri">request_uri（無ければ何もしない）</param>
         /// <param name="client_id">client_id</param>
@@ -671,31 +788,53 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="prompt">prompt</param>
         /// <param name="claims">claims</param>
         /// <param name="code_challenge">code_challenge</param>
+        /// <param name="code_challenge_method">code_challenge_method（#366）</param>
         /// <param name="pushed">PAR で預けたものか（#346。引けなければ false）</param>
         /// <param name="signedRequestObject">署名付きの Request Object か（#346。引けなければ false）</param>
-        /// <returns>**クエリの client_id と、Request Object の client_id が食い違えば false**</returns>
+        /// <param name="err">断るときの error（#362）</param>
+        /// <param name="errDescription">断るときの error_description（#362）</param>
+        /// <returns>**Request Object を引けない・クエリの client_id と食い違うなら false**</returns>
         /// <remarks>
         /// **GET と POST に同じ 20 行があったので、1 つにした**（#294）。
         ///
         /// **クエリに client_id が在れば、Request Object の値と一致することを確かめる**
         /// （RFC 9126 §4 / RFC 9101 §5。#294）。以前は確かめずに上書きしていた。
         ///
-        /// **存在しない request_uri では、Request Object が null になる**（#185）。
-        /// その場合は上書きせず、後続の ValidateAuthZReqParam でエラーにする。
+        /// **request_uri が在るのに Request Object を引けなければ、断る**（#362。OIDC Core 1.0 §3.1.2.6）。
+        ///
+        /// | request_uri | error |
+        /// |---|---|
+        /// | **この OP が払い出した `urn:`（PAR・`/ros`）でない**（RP が置いた外部の URL など） | `request_uri_not_supported`（**外部の request_uri は取りに行かない**） |
+        /// | **この OP の `urn:` だが、引けない**（存在しない・期限切れ・使用済み） | `invalid_request_uri` |
+        ///
+        /// **以前は、引けなければ `request_uri` が無い要求としてクエリだけで続けていた**（#185 で null を上書きしないようにした後）。
+        /// **RP が Request Object に入れた `state`・`nonce` が応答から落ち、RP の検証が失敗した**（適合性テストの `oidcc-request-uri-signed-rs256`）。
+        /// **`redirect_uri` を照合する前なので、RP へは返さずエラー画面にする**（client_id が食い違うときと同じ）。
         /// </remarks>
         private bool OverwriteByRequestObject(string request_uri,
             ref string client_id, ref string redirect_uri, ref string response_type, ref string response_mode,
             ref string scope, ref string state, ref string nonce, ref string max_age, ref string prompt,
-            ref JObject claims, ref string code_challenge,
-            out bool pushed, out bool signedRequestObject)
+            ref JObject claims, ref string code_challenge, ref string code_challenge_method,
+            out bool pushed, out bool signedRequestObject, out string err, out string errDescription)
         {
-            //  **経路**（#346）。**Request Object が引けなければ、クエリの要求**（どちらも false）。
+            //  **経路**（#346）。**request_uri が無ければ、クエリの要求**（どちらも false）。
             pushed = false;
             signedRequestObject = false;
+            err = "";
+            errDescription = "";
 
             if (string.IsNullOrEmpty(request_uri))
             {
                 return true;
+            }
+
+            //  **この OP が払い出した `urn:` でなければ、取りに行かずに断る**（#362。OIDC Core 1.0 §3.1.2.6）。
+            //    **外部の request_uri（OIDC Core 1.0 §6.2）は、取りに行く先の制限を決めてから扱う**（#374）。
+            if (!request_uri.StartsWith(OAuth2AndOIDCConst.UrnRequestUriBase, StringComparison.Ordinal))
+            {
+                err = AccountController.RequestUriNotSupported;
+                errDescription = "Only the request_uri issued by this server (PAR or the request object endpoint) is supported.";
+                return false;
             }
 
             string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
@@ -705,7 +844,10 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (requestObjectPayload == null)
             {
-                return true;
+                //  **引けなければ断る**（#362）。**以前は、request_uri が無い要求としてクエリだけで続けていた。**
+                err = AccountController.InvalidRequestUri;
+                errDescription = "The request_uri is unknown, expired, or already used.";
+                return false;
             }
 
             //  **預けたときにサーバが付けた印で、経路を見分ける**（#346）。
@@ -715,6 +857,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (!string.IsNullOrEmpty(client_id) && client_id != requestObjectClientId)
             {
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "The client_id does not match the request object.";
                 return false;
             }
 
@@ -731,6 +875,7 @@ namespace MultiPurposeAuthSite.Controllers
             //    （PAR が文字列のまま預けていたため。いまは PAR で JSON のオブジェクトに直して預ける）。
             claims = requestObjectPayload[OAuth2AndOIDCConst.claims] as JObject;
             code_challenge = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
+            code_challenge_method = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge_method];
 
             return true;
         }
@@ -793,7 +938,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ★ Code & Tokenの生成（OIDC Hybrid Flow）
                 code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
-                    identity, query, client_id, state, scopes, claims, nonce,
+                    identity, query, response_type, client_id, state, scopes, claims, nonce,
                     out access_token, out id_token);
             }
 
@@ -1245,6 +1390,71 @@ namespace MultiPurposeAuthSite.Controllers
         private string CurrentRequestUrl()
         {
             return Request.RawUrl;
+        }
+
+        /// <summary>認可の口の URL（いまの要求のクエリを付けたもの。#359）</summary>
+        /// <returns>URL</returns>
+        /// <remarks>
+        /// **同意の送信の口（`<認可の口>/consent`）から、認可の口へ戻るときに使う。**
+        /// その口には GET が無いので、`CurrentRequestUrl` へ戻すと行き止まりになる。
+        /// </remarks>
+        private string AuthorizeEndpointUrl()
+        {
+            return Url.Content("~" + Config.OAuth2AuthorizeEndpoint) + Request.Url.Query;
+        }
+
+        /// <summary>POST の認可要求を送り返すクエリの上限（文字数。#359）</summary>
+        /// <returns>上限</returns>
+        /// <remarks>
+        /// **転送の先の GET で断られる長さの要求は、送り返さずにエラー画面にする**ため、**GET で受けられる長さに合わせる。**
+        /// **ASP.NET の `httpRuntime` の `maxQueryStringLength`（既定 2048）を読む。**
+        /// IIS の `maxQueryString`（`requestFiltering`。既定は同じ 2048）も効く（ここでは見ない。上げるなら両方を上げる）。
+        /// **`Uri.EscapeDataString` の上限（約 65520 文字）より下に抑える**（超えると例外になる）。
+        /// 長い要求を POST のまま処理するのは #372。
+        /// </remarks>
+        private int PostAuthorizeMaxQueryLength()
+        {
+            HttpRuntimeSection runtime =
+                WebConfigurationManager.GetSection("system.web/httpRuntime") as HttpRuntimeSection;
+            int limit = (runtime == null) ? 2048 : runtime.MaxQueryStringLength;
+            return Math.Min(limit, 65000);
+        }
+
+        /// <summary>クエリの中に、同じ名前のパラメタが 2 つ以上あるか（#359）</summary>
+        /// <param name="query">NameValueCollection</param>
+        /// <returns>あれば true（名前の無いパラメタは数えない）</returns>
+        private static bool PostAuthorizeHasDuplicate(NameValueCollection query)
+        {
+            foreach (string key in query.AllKeys)
+            {
+                if (string.IsNullOrEmpty(key)) continue;
+                string[] values = query.GetValues(key);
+                if (values != null && 1 < values.Length) return true;
+            }
+            return false;
+        }
+
+        /// <summary>POST の認可要求を送り返すクエリ（#359）</summary>
+        /// <param name="merged">クエリとフォームを合わせたもの</param>
+        /// <param name="maxLength">クエリの上限（文字数。`PostAuthorizeMaxQueryLength`）</param>
+        /// <returns>クエリ（先頭の「?」は付けない）。長すぎるなら null</returns>
+        private static string PostAuthorizeQuery(NameValueCollection merged, int maxLength)
+        {
+            //  **符号化の前に、生の長さで見る**（net48 の Uri.EscapeDataString は、長すぎる値で例外を投げる）
+            int rawLength = 0;
+            foreach (string key in merged.AllKeys)
+            {
+                if (string.IsNullOrEmpty(key)) continue;
+                rawLength += key.Length + (merged[key] ?? "").Length + 2;
+                if (maxLength < rawLength) return null;
+            }
+
+            string query = string.Join("&", merged.AllKeys
+                .Where(k => !string.IsNullOrEmpty(k))
+                .Select(k => Uri.EscapeDataString(k) + "=" + Uri.EscapeDataString(merged[k] ?? "")));
+
+            //  **符号化した後の長さでも見る**（符号化で長くなる）
+            return maxLength < query.Length ? null : query;
         }
 
         /// <summary>フォームの値（POST のときだけ使う）</summary>

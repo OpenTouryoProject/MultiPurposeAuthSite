@@ -39,6 +39,9 @@
 //*  2026/11/06  玄人 幸道         exp・nbf を Open棟梁 の TryReadNumericDate で読む。invalid_request_object を Open棟梁 の定数にし、根拠を RFC 9101 §7 に直した（#337）
 //*  2026/11/09  玄人 幸道         預ける Request Object に、PAR か・署名付きかの印を付ける（#346 の段階 2）
 //*  2026/11/10  玄人 幸道         PAR の応答の expires_in を JSON の数値にした（#353）
+//*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを確かめ、その鍵の指紋を dpop_jkt として預ける。dpop_jkt と食い違えば断る（RFC 9449 §10.1。#365）
+//*  2026/11/13  玄人 幸道         認可エンドポイントと同じ検証に code_challenge_method を渡す（fapi2 の S256。#366）
+//*  2026/11/13  玄人 幸道         Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証する。FAPI の登録は PS256・ES256 に限る（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -131,6 +134,87 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region 検証鍵の選択（#370）
+
+        /// <summary>Request Object の検証鍵を、ヘッダの alg と登録の鍵から選ぶ（#370）</summary>
+        /// <param name="client_id">Request Object を署名したクライアント</param>
+        /// <param name="requestObject">Request Object（JWS のコンパクト形式）</param>
+        /// <param name="algAllowed">ヘッダの alg を受けてよいか</param>
+        /// <returns>検証鍵（**決まらなければ null** ＝ 検証失敗）</returns>
+        /// <remarks>
+        /// **alg を受けてよいか**（`algAllowed`）は、次のすべてを満たすとき。
+        ///
+        /// | 確かめること | 根拠 |
+        /// |---|---|
+        /// | `CmnEndpoints.RequestObjectSigningAlgs` に在る | この実装が扱う alg（広告と同じ一覧） |
+        /// | 登録の `request_object_signing_alg` が在れば、それと同じ | OIDC Registration 1.0 §2（#262） |
+        /// | FAPI の登録なら、`CmnEndpoints.FapiRequestObjectSigningAlgs` に在る | FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1 |
+        ///
+        /// **鍵は、登録の RSA 公開鍵・EC 公開鍵のうち、alg に合うほう**（`JwsFactory.IsSameKeyType`。EC は曲線まで見る）。
+        /// **ヘッダの alg と鍵の種類が食い違えば、鍵は決まらない**（RFC 8725 §3.1。アルゴリズムの取り違えを防ぐ）。
+        /// **登録の値が壊れていても例外にしない**（#294。`DecodeRegisteredJwk` は空を返す）。
+        /// </remarks>
+        internal static JWS SelectVerifyingJws(string client_id, string requestObject, out bool algAllowed)
+        {
+            string alg = JwtReader.TryReadAlg(requestObject);
+
+            algAllowed = !string.IsNullOrEmpty(alg)
+                && Array.IndexOf(CmnEndpoints.RequestObjectSigningAlgs, alg) >= 0
+                && CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
+                    CmnEndpoints.RequestObjectSigningAlgs, alg)
+                && (!Helper.GetInstance().IsFapiClient(client_id)
+                    || Array.IndexOf(CmnEndpoints.FapiRequestObjectSigningAlgs, alg) >= 0);
+
+            if (!algAllowed)
+            {
+                return null;
+            }
+
+            string[] registeredKeys = new string[]
+            {
+                Helper.GetInstance().GetJwkRsaPublickey(client_id),
+                Helper.GetInstance().GetJwkECDsaPublickey(client_id)
+            };
+
+            foreach (string registeredKey in registeredKeys)
+            {
+                JObject jwk = CmnRequestObjectEndpoint.TryParseJwk(
+                    JwtUtil.DecodeRegisteredJwk(registeredKey));
+
+                if (jwk != null && JwsFactory.IsSameKeyType(jwk, alg))
+                {
+                    // **読めなければ null**（Open棟梁 の JwsFactory は、外から来る値で例外にしない）。
+                    return JwsFactory.CreateFromJwk(alg, jwk);
+                }
+            }
+
+            // alg に合う鍵が登録されていない。
+            return null;
+        }
+
+        /// <summary>登録の JWK（JSON の文字列）を読む。読めなければ null（#370）</summary>
+        /// <param name="json">JWK の JSON（空なら null を返す）</param>
+        /// <returns>JObject</returns>
+        private static JObject TryParseJwk(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return JToken.Parse(json) as JObject;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        #endregion
+
         #region FAPI の時刻のクレーム（#336）
 
         /// <summary>FAPI の Request Object の寿命の上限（秒）</summary>
@@ -154,10 +238,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </remarks>
         private static bool VerifyFapiTimeClaims(string client_id, JObject payload)
         {
-            string mode = Helper.GetInstance().GetClientMode(client_id);
-
-            if (mode != OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
-                && mode != OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+            if (!Helper.GetInstance().IsFapiClient(client_id))
             {
                 return true;
             }
@@ -250,16 +331,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 // F-API2 CC
 
-                // - 公開鍵取得を取り出す。
-                pubKey = JwtUtil.DecodeRegisteredJwk(
-                    Helper.GetInstance().GetJwkRsaPublickey(iss));
-
-                // **登録 request_object_signing_alg で絞る**（#262）。
+                // **検証鍵は、ヘッダの alg と登録の鍵で決める**（#370。以前は登録の RSA 鍵による RS256 だけ）。
+                //   **alg は、扱う一覧・登録 request_object_signing_alg（#262）・FAPI の登録の制限（PS256・ES256）で絞る。**
                 //   **CIBA（上の分岐）は対象外**。あちらは ES256 だけを受け（Discovery の広告と同じ）、仕様でも別の登録項目。
-                if (!CmnEndpoints.AllowsVerifyingAlg(
-                    Helper.GetInstance().GetRequestObjectSigningAlg(iss),
-                    CmnEndpoints.RequestObjectSigningAlgs,
-                    JwtReader.TryReadAlg(requestObject)))
+                JWS jws = CmnRequestObjectEndpoint.SelectVerifyingJws(iss, requestObject, out bool _);
+
+                if (jws == null)
                 {
                     return false;
                 }
@@ -269,8 +346,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //   **以前は署名しか確かめず、期限の過ぎたもの・別の認可サーバ宛てのものも預かっていた。**
                 //   必須のクレームと、在る時刻のクレームは Open棟梁 が確かめる（OpenTouryo#653）。
                 //   **FAPI の登録は、exp・nbf を必須にし、寿命を 60 分以内に限る**（`VerifyFapiTimeClaims`）。
-                result = !string.IsNullOrEmpty(pubKey)
-                    && RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out iss, pubKey)
+                result = RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out iss, jws)
                     && CmnRequestObjectEndpoint.VerifyFapiTimeClaims(iss, payload);
             }
 
@@ -342,6 +418,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="assertion">client_assertion（private_key_jwt）</param>
         /// <param name="x509">クライアント証明書（mTLS）</param>
         /// <param name="parameters">フォームのパラメタ（request を含むことがある）</param>
+        /// <param name="dPoPProof">`DPoP` ヘッダの値（**無ければ空**。RFC 9449 §10.1。#365）</param>
         /// <param name="ret">応答（request_uri / expires_in。**expires_in は JSON の数値**。RFC 9126 §2.2。#353）</param>
         /// <param name="err">エラー</param>
         /// <returns>成否</returns>
@@ -355,10 +432,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | 応答 | iss / aud / request_uri / exp | **request_uri / expires_in**（§2.2） |
         ///
         /// 有効期限と使い切りは、#188 で入れた RequestObjectProvider の仕組みをそのまま使う。
+        ///
+        /// **`DPoP` ヘッダが在れば、その鍵に認可コードを縛る**（RFC 9449 §10.1。#365）。
+        /// **以前はヘッダを見ておらず、`dpop_jkt` を送った場合だけ縛っていた**（#311 の段階 4）。
+        /// **2 つの縛り方は、どちらも受けなければならない**（§10.1 の MUST）。
         /// </remarks>
         public static bool PushedAuthorizationRequest(
             string client_id, string client_secret, string assertion, X509Certificate2 x509,
-            NameValueCollection parameters,
+            NameValueCollection parameters, string dPoPProof,
             out Dictionary<string, object> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -406,32 +487,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (!string.IsNullOrEmpty(request))
             {
-                // **署名付き Request Object（JAR）。** /ros と同じ鍵で検証する。
-                //   **登録の値が壊れていても例外にしない**（#294。`DecodeRegisteredJwk` は空を返す）。
-                string pubKey = JwtUtil.DecodeRegisteredJwk(
-                    Helper.GetInstance().GetJwkRsaPublickey(client_id));
+                // **署名付き Request Object（JAR）。** /ros と同じく、ヘッダの alg と登録の鍵で検証する（#370）。
+                //   **alg は、扱う一覧・登録 request_object_signing_alg（#262）・FAPI の登録の制限（PS256・ES256）で絞る。**
+                JWS jws = CmnRequestObjectEndpoint.SelectVerifyingJws(client_id, request, out bool algAllowed);
 
-                if (string.IsNullOrEmpty(pubKey))
+                if (!algAllowed)
                 {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "The request object is not signed with an allowed alg "
+                        + "(the registered request_object_signing_alg, or PS256 / ES256 for FAPI clients).");
+                    return false;
+                }
+
+                if (jws == null)
+                {
+                    // **alg に合う鍵が登録されていない**（RS256・PS256 は RSA、ES256 は EC の鍵）。
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
                     err.Add(OAuth2AndOIDCConst.error_description, "This client has no registered key for the request object.");
                     return false;
                 }
 
-                // **登録 request_object_signing_alg で絞る**（#262）。
-                if (!CmnEndpoints.AllowsVerifyingAlg(
-                    Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
-                    CmnEndpoints.RequestObjectSigningAlgs,
-                    JwtReader.TryReadAlg(request)))
-                {
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
-                    err.Add(OAuth2AndOIDCConst.error_description,
-                        "The request object is not signed with the registered request_object_signing_alg.");
-                    return false;
-                }
-
                 //  **aud は issuer だけ**（RFC 9101 §4 / FAPI。#336。`RegisterRequestObject` と同じ）。
-                if (!RequestObject.Verify(request, CmnServerParams.IssuerId, out string iss, pubKey))
+                if (!RequestObject.Verify(request, CmnServerParams.IssuerId, out string iss, jws))
                 {
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object is not verified.");
@@ -560,6 +638,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 (string)payload[OAuth2AndOIDCConst.nonce],
                 out string _, out string error, out string errorDescription,
                 (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
+                (string)payload[OAuth2AndOIDCConst.code_challenge_method] ?? "",
                 (string)payload[OAuth2AndOIDCConst.prompt] ?? "",
                 true, signedRequestObject))
             {
@@ -569,6 +648,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             payload[OAuth2AndOIDCConst.response_type] = parResponseType;
+
+            #endregion
+
+            #region DPoP の証明（RFC 9449 §10.1。#365）
+
+            //  **ほかの検証をすべて通った後で見る** — **断る要求で、証明の `jti` を使い済みにしない**
+            //    （**`CmnDPoP.Verify` は、通った証明を台帳に記録する**）。
+            if (!CmnRequestObjectEndpoint.BindDPoPProof(dPoPProof, payload, err))
+            {
+                return false;
+            }
 
             #endregion
 
@@ -591,6 +681,61 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return true;
 
             #endregion
+        }
+
+        /// <summary>PAR の `DPoP` ヘッダを確かめ、その鍵の指紋を `dpop_jkt` として預ける（#365）</summary>
+        /// <param name="dPoPProof">`DPoP` ヘッダの値（無ければ空）</param>
+        /// <param name="payload">預ける中身（**`dpop_jkt` を書き込む**）</param>
+        /// <param name="err">エラーを入れる辞書</param>
+        /// <returns>続けてよければ true</returns>
+        /// <remarks>
+        /// RFC 9449 §10.1 :
+        ///
+        /// | 来たもの | 振る舞い |
+        /// |---|---|
+        /// | **ヘッダ無し** | **何もしない**（`dpop_jkt` が在れば、これまでどおりそれで縛る。#311 の段階 4） |
+        /// | **ヘッダが通らない** | **`invalid_dpop_proof`**（nonce が要るなら `use_dpop_nonce`。`/token` と同じ。§5・§8） |
+        /// | **ヘッダが通り、`dpop_jkt` が違う** | **`invalid_request`**（**証明は正しく、要求が食い違っている**。§10.1 は断ることだけを求め、エラー コードを決めていない） |
+        /// | **ヘッダが通り、`dpop_jkt` が無いか同じ** | **指紋を `dpop_jkt` として預ける**（**コードがその鍵に縛られる**） |
+        ///
+        /// **縛りの実体は、預けた中身の `dpop_jkt`**（`AuthorizationCodeProvider` が読む）なので、
+        /// **ここで書き込めば、`/token` 側は変えずに済む。**
+        /// **`htu` は設定から作る**（`CmnDPoP.ParEndpointUri`。**要求の `Host` を信じない**）。
+        /// </remarks>
+        private static bool BindDPoPProof(
+            string dPoPProof, JObject payload, Dictionary<string, string> err)
+        {
+            if (string.IsNullOrEmpty(dPoPProof))
+            {
+                return true;
+            }
+
+            if (!CmnDPoP.Verify(dPoPProof, "POST", CmnDPoP.ParEndpointUri, CmnDPoP.PurposeAs,
+                out string jkt, out string error, out string errDescription))
+            {
+                //  **`use_dpop_nonce` なら、各アプリの `OAuth2Error` が `DPoP-Nonce` を付ける**（§8）。
+                err.Add(OAuth2AndOIDCConst.error, error);
+                err.Add(OAuth2AndOIDCConst.error_description, errDescription);
+                return false;
+            }
+
+            //  **`dpop_jkt` も来ていたら、指紋と一致すること**（§10.1 の MUST）。
+            //    **文字列でない値も「一致しない」として断る**（外から来る値である）。
+            JToken requested = payload[OAuth2AndOIDCConst.dpop_jkt];
+
+            if (requested != null
+                && (requested.Type != JTokenType.String
+                    || !string.Equals((string)requested, jkt, StringComparison.Ordinal)))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The dpop_jkt does not match the key of the DPoP proof.");
+                return false;
+            }
+
+            payload[OAuth2AndOIDCConst.dpop_jkt] = jkt;
+
+            return true;
         }
 
         #endregion

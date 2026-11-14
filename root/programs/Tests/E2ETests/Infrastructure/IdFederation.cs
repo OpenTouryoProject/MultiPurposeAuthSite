@@ -33,8 +33,10 @@
 //*  2026/10/29  玄人 幸道         FederateAsync に ReturnUrl を渡せるようにした（#294）
 //*  2026/11/04  玄人 幸道         上流の口は、test.ps1 が渡す環境変数を重ねた構成から引く（雛形ではコメントにした）
 //*  2026/11/07  玄人 幸道         Skip の文言のスクリプト名を、#340 の後のものにした（#340）
+//*  2026/11/11  玄人 幸道         上流の同意を、フォームの action（同意画面の送信の口）へ送るようにした（#359）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -221,9 +223,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 return false;
             }
 
-            // **フォームは action を持たない**ので、認可要求と同じ URL へ POST される。
+            // **フォームは、同意画面の送信の口（action）へ POST する**（#359。ブラウザと同じく action を読む）。
+            //   **以前は action が無く、認可要求と同じ URL へ送っていた**（無ければ、従来どおりその URL）。
+            string action = Html.FormAttributeContaining(html, "submit.Grant", "action");
+            string consentUrl = string.IsNullOrEmpty(action) ? url : new Uri(new Uri(url), action).AbsoluteUri;
+
             HttpResponseMessage granted = await client.PostFormAsync(
-                url,
+                consentUrl,
                 new Dictionary<string, string>()
                 {
                     { "__RequestVerificationToken", m.Groups["value"].Value },

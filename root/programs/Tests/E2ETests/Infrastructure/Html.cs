@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         form_post の自動送信フォームの解析を追加（拡張仕様のテスト）
 //*  2026/10/02  玄人 幸道         画面の入力欄と検証エラーを読む口を追加（#257）
+//*  2026/11/11  玄人 幸道         目印を含むフォームの属性を読む口を追加（同意画面の送信先。#359）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -119,6 +120,36 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             Match form = FormRegex.Match(body);
             return form.Success ? Attribute(form.Value, attribute) : null;
         }
+
+        /// <summary>
+        /// 目印（ボタンの name など）を中に含む form の属性を返す（無ければ null。#359）。
+        /// **同意画面の送信先（action）を読むために使う**（レイアウトのフォームが先に在っても取り違えない）。
+        /// </summary>
+        /// <param name="body">HTML</param>
+        /// <param name="marker">form の中に在る文字列（`submit.Grant` など）</param>
+        /// <param name="attribute">属性名</param>
+        /// <returns>値（HTML の文字参照は戻す。属性が無ければ null）</returns>
+        public static string FormAttributeContaining(string body, string marker, string attribute)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return null;
+            }
+
+            foreach (Match form in FormBlockRegex.Matches(body))
+            {
+                if (form.Value.Contains(marker))
+                {
+                    return Attribute(Regex.Match(form.Value, "<form\\b[^>]*>", RegexOptions.IgnoreCase).Value, attribute);
+                }
+            }
+
+            return null;
+        }
+
+        private static readonly Regex FormBlockRegex = new Regex(
+            "<form\\b[^>]*>.*?</form>",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
         /// <summary>
         /// hidden の input を、name → value の辞書で返す。

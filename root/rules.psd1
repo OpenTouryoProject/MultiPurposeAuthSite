@@ -24,7 +24,12 @@
             Name  = 'Skip の追加'
             Paths = @('^root/programs/Tests/.+\.cs$')
             Count = 'Added'
-            Match = @( @{ Pattern = '\bSkip\s*\.\s*(If|IfNot)\s*\(|[\[,(]\s*Skip\s*=|\bSkipException\s*\(|[\[,]\s*(Ignore|Explicit)\s*[\],(]' } )
+            Match = @(
+                @{ Pattern = '\bSkip\s*\.\s*(If|IfNot)\s*\(|[\[,(]\s*Skip\s*=|\bSkipException\s*\(|[\[,]\s*(Ignore|Explicit)\s*[\],(]' }
+                # Skip を包んだヘルパー（Flows.SkipIfGrantTypeNotSupportedAsync・MtlsTests.SkipIfNoMtls・UsersAdmin.SkipIfLockedDownAsync など）の呼び出し。
+                #   定義の行（Task・Task<…>・void・bool の後）は数えない。OpenTouryoCodingAgentAssets#6 の初回の計測で、突き合わせ役が 4 件に見つけた
+                @{ Pattern = '(?<!(\bTask|\bvoid|\bbool|>)\s+)\bSkipIf\w*\s*\(' }
+            )
         }
         @{
             # 単体テストの検証は Assert と [Basis]。**E2E の Assert は前提の確認なので、数えない**（#324）
@@ -63,6 +68,29 @@
             ExemptTrailer  = 'TestCases-Unchanged'
             Hint           = @('root で .\2_RunAllTests.ps1 -Launch -UpdateTestCases を回してください。')
             CommandPattern = 'TESTCASES\.md'
+        }
+    )
+
+    # 承認の理由の書き方に足す（共通の規則の ApprovalReasonPatterns に足される。OpenTouryoCodingAgentAssets#6）
+    #   テストの ID（RT-352.1 など）は Issue 番号を含む
+    ApprovalReasonPatterns = @('\bRT-\d+')
+
+    # 書き忘れの組（共通の規則の TrailerRequirements に足される。警告だけ。OpenTouryoCodingAgentAssets#6）
+    #   リスク「高」の名前空間（QUALITY.md 1 節の品質マップ）を fixed で変えたら、fixed の前に別モデルのレビュー（quality-reviewer。4 節）
+    TrailerRequirements = @(
+        @{
+            Name    = 'Reviewed-with'
+            Message = '(?i)\bfixed\s+#\d+'
+            Paths   = @(
+                '^root/programs/CommonLibrary/TokenProviders/'
+                '^root/programs/CommonLibrary/Extensions/Sts/'
+                '^root/programs/CommonLibrary/SamlProviders/'
+                '^root/programs/CommonLibrary/Extensions/FIDO/'
+                '^root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/Controllers/'
+                '^root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/Controllers/'
+            )
+            Value   = '^(quality-reviewer|human)\b'
+            Hint    = 'リスク「高」の名前空間（TokenProviders・Extensions.Sts・SamlProviders・Extensions.FIDO・Controllers）なので、fixed の前に quality-reviewer で別モデルのレビューを回し、Reviewed-with: quality-reviewer (<モデル ID>) を書く（QUALITY.md 4 節）'
         }
     )
 }

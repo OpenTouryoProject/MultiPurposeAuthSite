@@ -346,6 +346,15 @@ __pycache__/
 /container/CTS/logs/
 #   out/ は RunTestPlan.ps1 が作る実行用の設定（テスト利用者のパスワードを埋めたもの）と、結果・報告書
 /container/CTS/out/
+#   certs/ は Prepare.ps1 が作る nginx の証明書と秘密鍵（適合性テストの環境だけで使う自己署名。#350 ph3）
+/container/CTS/certs/
+#   .env.cts は Prepare.ps1 が作る compose に渡す値（DCR の管理クライアントの所有者。手元の appsettings.json から決まる）
+/container/CTS/.env.cts
+#   hooks/・hooks-build/ は Prepare.ps1 が作る MTLS のテスト専用のフックと、その作業場所（#350 ph4）
+/container/CTS/hooks/
+/container/CTS/hooks-build/
+#   fcm/ は OP のプッシュ通知の送信箱（CIBA の承認の自動化。device_token を含む。#350 ph4）
+/container/CTS/fcm/
 
 # テストのスタブ（1_PublishStub.ps1 が作る。#294）
 #   cert/ はホストの開発用証明書の秘密鍵とパスワード。.env は起動側のパラメタ（.env.sample を写したもの）

@@ -38,6 +38,8 @@
 //*  2026/11/08  玄人 幸道         client_mode と認証の方法の両方が合う登録だけを引く口を足した（自己テストの MTLS のボタン。#345）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を引く口を足した（#346 の段階 1）
 //*  2026/11/10  玄人 幸道         登録された id_token_signed_response_alg を、既定に倒さずに引く口を足した（#355）
+//*  2026/11/12  玄人 幸道         登録された sector_identifier_uri を引く口を足した（#364）
+//*  2026/11/13  玄人 幸道         authorization_signed_response_alg を引く口と、FAPI の登録かを見る IsFapiClient を足した（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -405,6 +407,16 @@ namespace MultiPurposeAuthSite.Util.Sts
                 Const.ClientTlsClientCertificateBoundAccessTokens, model => model.TlsCertBoundAccessTokens);
         }
 
+        /// <summary>登録された sector_identifier_uri を引く（OIDC Registration 1.0 §2。#364）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>sector_identifier_uri（**登録が無ければ null**）</returns>
+        /// <remarks>**pairwise の Sector を決めるのに使う**（`PPIDExtension.GetSector`。OIDC Core 1.0 §8.1）。</remarks>
+        public string GetClientSectorIdentifierUri(string client_id)
+        {
+            return this.GetRegisteredValue(client_id,
+                Const.ClientSectorIdentifierUri, model => model.SectorIdentifierUri);
+        }
+
         /// <summary>登録された真偽値を引く（構成ファイル → saml2OAuth2Data。#346）</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="key">*.config の項目名</param>
@@ -502,16 +514,46 @@ namespace MultiPurposeAuthSite.Util.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | 登録が無い | **`RS256`**（＝ 従来どおり） |
+        /// | 登録が無い | **`RS256`**（＝ 従来どおり。**FAPI の登録も**。下の注） |
         /// | 既知でない値 | **入口で拒否する**（`CmnEndpoints.CheckClientMode`。#224 と同じ方針） |
         ///
         /// **CIBA は ES256 のまま**である（FAPI-CIBA が PS256 / ES256 を求めるため、登録値で上書きしない）。
-        /// **JARM（`authorization_signing_alg_values_supported`）も RS256 のまま。**
+        /// **JARM は別の登録項目**（`GetAuthorizationSignedResponseAlg`。#370）。
+        ///
+        /// **FAPI の登録も、登録が無ければ `RS256`**（FAPI は認めないので、FAPI で使う登録には `PS256`・`ES256` を書く）。
+        /// **既定を `ES256` にしないのは、Open棟梁 の RP 側の検証（`CmnJwtToken.Verify`）が、
+        /// 暗号化しない `ES256` の JWT を受けないため**（同梱の自己テストのクライアントを含め、Open棟梁 で作った RP が検証できなくなる。#370）。
         /// </remarks>
         public string GetIdTokenSignedResponseAlg(string client_id)
         {
             // 登録が無い
             return this.GetRegisteredIdTokenSignedResponseAlg(client_id) ?? JwtConst.RS256;
+        }
+
+        /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`）か（#370）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>FAPI の登録なら true</returns>
+        public bool IsFapiClient(string client_id)
+        {
+            string mode = this.GetClientMode(client_id);
+
+            return mode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+        }
+
+        /// <summary>client_id から authorization_signed_response_alg を取得する（JARM §3。#370）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（登録が無ければ RS256）</returns>
+        /// <remarks>
+        /// **JARM の応答（`response`）の署名 alg。**
+        /// **以前は RS256 に固定で、登録で選べなかった**ので、**FAPI 2.0 Message Signing を満たせなかった**（#370）。
+        /// **JARM §3 の既定は RS256**（**FAPI の登録も、登録が無ければ RS256**。理由は `GetIdTokenSignedResponseAlg` と同じ）。
+        /// **既知でない値は、入口で拒否する**（`CmnEndpoints.CheckClientMode`。id_token と同じ）。
+        /// </remarks>
+        public string GetAuthorizationSignedResponseAlg(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, Const.ClientAuthorizationSignedResponseAlg,
+                model => model.AuthorizationSignedResponseAlg) ?? JwtConst.RS256;
         }
 
         /// <summary>client_id から、登録された id_token_signed_response_alg を取得する（#355）</summary>

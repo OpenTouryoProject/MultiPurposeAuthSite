@@ -2442,7 +2442,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | | |
 |---|---|
 | 観点 | **このフローでは nonce は必須。**id_token がリダイレクトで直接返るため、nonce が無いと RP は**トークンの再送（リプレイ）を検知できない。**Authorization Code フロー（RT-183.1）とは要否が逆になる。 |
-| 根拠 | OIDC Core §3.2.2.1（Implicit の nonce は REQUIRED） / §3.3.2.1（Hybrid も REQUIRED）/ #190 |
+| 根拠 | OIDC Core §3.2.2.1（Implicit の nonce は REQUIRED） / §3.3.2.1（Hybrid は code id_token・code id_token token で REQUIRED。code token は OPTIONAL。#361）/ #190 |
 | テスト | `RT190_01_Implicitでnonce無しは拒否される` |
 
 **手順**
@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus
+1. GET /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=995193f0-3cbf-4324-89df-50bd279c479a&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -9659,7 +9659,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）。**`kid` を偽った要求を並べれば、外から取得を起こせる**ので、**背景の補充には下限を置いてある。****何もしなくても、最大でその下限ぶんで追随する** — **E2E では 1 分待たない**ので、ここは `PUT` で測る。
+- **この assertion はヘッダに `kid` を入れない**ので、キャッシュに在る鍵（RSA）を試して通る。**ヘッダに知らない `kid` があれば、その場で取り直して通す**（#363。`RT-363.1`）。**取り直しの下限は 1 分**（`RemoteJwkSetStore.MinRefetchInterval`）— **`kid` を偽った要求を並べれば、外から取得を起こせる**ので、下限を置いてある。ここは `PUT` で読み直す口を測る。
 - **登録の口は、取り直しの下限を見ない**（**毎回取りに行く**）。**認可が要り**（専用 scope のトークン）**レート制限も掛かっている**ので、**外から叩く経路にはならない。****鍵を入れ替えた相手は、`PUT` でその場で反映できる。**
 
 ## RT-309.4 **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**その URL の鍵で、1 回目のクライアント認証から通る**
@@ -10239,43 +10239,35 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **`invalid_dpop_proof` ではなく `invalid_grant` で断っている** — **証明そのものは正しく、「この `code` のものではない」**のである。**証明の作りが悪いのか、持ち主が違うのかを、クライアントが区別できる。**
 - **デバイス / CIBA の経路には `dpop_jkt` が無い**（**認可要求がブラウザを通らない**ため）。**そこは測っていない。**
 
-## RT-311.11 **縛った `access_token` と一緒に出た `refresh_token` は、同じ鍵でしか使えない**（別の鍵・証明なしは `invalid_grant`）。**ローテーションした後も縛られている**
+## RT-311.11 **秘密を持つクライアントの `refresh_token` は、DPoP の鍵に縛られない**（証明なしでも、別の鍵の証明でも更新できる）。**更新で出る `access_token` は、その要求の証明の鍵に縛られる**
 
 | | |
 |---|---|
-| 観点 | **`access_token` だけを縛っても、更新で縛りの無いものに乗り換えられる**なら、**縛りは寿命の分しか効かない**（RFC 9449 §5）。**漏えいして困るのは、むしろ長命な `refresh_token` の方**である。**断るときに消費してはいけない** — **ローテーションの一族ごと失効させては、持ち主が巻き込まれる**（#188 の段階 3）。 |
-| 根拠 | RFC 9449 §5 / #311 の段階 4 |
-| テスト | `RT31111_refresh_tokenも同じ鍵に縛られる` |
+| 観点 | **秘密を持つクライアントの `refresh_token` は、クライアント認証で既に縛られている**ので、**DPoP の鍵には縛らない**（RFC 9449 §5）。**鍵を作り直したクライアントも、更新を続けられる。****縛りが要るのは `access_token` の方**で、**それは更新の要求の証明で縛る。****以前は縛っていた**ので、**鍵を作り直すと更新できなかった**（適合性テストの `refresh-token`）。 |
+| 根拠 | RFC 9449 §5 / #311 の段階 4 / #367 |
+| テスト | `RT31111_秘密を持つクライアントのrefresh_tokenは鍵に縛られない` |
 
 **手順**
 
-1. 証明を添えて code を引き換え、縛られた refresh_token を得る
+1. EC の証明を添えて code を引き換える
+1. **別の鍵（RSA）の証明**で更新する（鍵を作り直したクライアント）
 1. **証明なし**で更新する
-1. **別の鍵（RSA）の証明**で更新する
-1. **同じ鍵（EC）の証明**で更新する
-1. **ローテーションした refresh_token も縛られている**
-1. 縛っていない refresh_token は、従来どおり証明なしで使える
-1. 縛っていない refresh_token を、**証明を添えて**更新すると、**出てくる refresh_token は縛られている**
+1. **元の鍵（EC）の証明**で更新する
 
 **検証（合否を判定する）**
 
 - token_type が DPoP
-- invalid_grant
-- 400
-- invalid_grant
-- 400
-- HTTP 200（断りで消費していない）
+- HTTP 200（縛られていない）
 - token_type が DPoP
-- cnf.jkt が同じ鍵の指紋
-- invalid_grant
+- cnf.jkt が、この要求の鍵（RSA）の指紋
+- HTTP 200（縛られていない）
+- token_type は bearer（証明が無いので縛らない）
 - HTTP 200
-- token_type は bearer
-- 乗り換えられる（token_type が DPoP）
-- 乗り換えた先も縛られている（invalid_grant）
+- cnf.jkt が、この要求の鍵（EC）の指紋
 
 **補足**
 
-- **縛っていない `refresh_token` を、証明を添えて使うと、縛られたトークンが出る**（`RT-311.3`）。**その向きは RFC 9449 も禁じていない** — **塞いだのは逆向き（縛られたものを、証明なしで使う）である。****(7) は、乗り換えた先の `refresh_token` にも縛りが付くことを見ている。**
+- **どの更新でも、クライアント認証（client_secret）は求めている**（`DPoPBindingTests.RefreshAsync` が送る）。
 
 ## RT-311.12 **`DPoP` スキームで来た要求を断るときは、`WWW-Authenticate: DPoP` ＋ `algs` で答える**。**`Bearer` で来た要求には、従来どおり `Bearer`**
 
@@ -10674,7 +10666,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **検証（合否を判定する）**
 
-- **どの口も 500 にならない**（/token code=400, /token refresh_token=400, /token client_id=401, /token device_code=400, /token auth_req_id=400, /revoke token=200, /introspect token=200, /authorize request_uri=302）
+- **どの口も 500 にならない**（/token code=400, /token refresh_token=400, /token client_id=401, /token device_code=400, /token auth_req_id=400, /revoke token=200, /introspect token=200, /authorize request_uri=200）
 
 ## RT-331.10 DB の列の幅を超える値で、画面から同意・資格情報・管理の行を引いても 500 にしない
 
@@ -11517,6 +11509,882 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **登録が無い fapi2 のクライアントでは、中の JWS は ES256 のまま**（`RT-352.1`）。**暗号化しない側の既定（RS256）には倒さない**（FAPI 2.0 Security Profile §5.4.1 は RS256 を認めない）。
 
+## RT-359.1 未サインインで POST の認可要求を送ると、GET の認可要求へ送り返され、サインインの後も元の要求のパラメタで続く
+
+| | |
+|---|---|
+| 観点 | **以前は、POST の口が同意画面の送信の口で、サインインの戻り先（ReturnUrl）にパラメタが残らず、サインインの後に `client_id not set` のエラー画面になった。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.1（認可エンドポイントは GET と POST を受ける）/ #359 |
+| テスト | `RT35901_未サインインのPOSTの認可要求はサインインの後も続く` |
+
+**手順**
+
+1. POST /authorize（フォームの本文に client_id・redirect_uri・state など）
+1. 送り返された GET の認可要求を開く（未サインインなので、サインイン画面へ）
+1. サインインして、元の要求（送り返された GET）で続ける
+
+**検証（合否を判定する）**
+
+- **303 で送り返す**（次の要求を GET にする）
+- **送り返す先は、GET の認可要求（同じパラメタ）**
+- **サインイン画面の戻り先（ReturnUrl）に、元の要求のパラメタが残る**
+- **認可コードが返る**
+- state がそのまま返る
+
+## RT-359.2 サインイン済みで POST の認可要求を送ると、GET と同じく認可コードまで進む
+
+| | |
+|---|---|
+| 観点 | **以前は、POST の口が同意画面の送信の口で、偽造防止のトークンの無い要求として断られていた。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.1（認可エンドポイントは GET と POST を受ける）/ #359 |
+| テスト | `RT35902_サインイン済みのPOSTの認可要求は認可コードまで進む` |
+
+**手順**
+
+1. POST /authorize（フォームの本文にパラメタ）
+1. 送り返された GET の認可要求で続ける（同意画面が出たら許可する）
+
+**検証（合否を判定する）**
+
+- **303 で送り返す**
+- **認可コードが返る**
+- state がそのまま返る
+
+## RT-359.3 クエリとフォームの両方に同じパラメタ（state）がある POST の認可要求は、送り返さず、RP へも返さず、エラー画面になる
+
+| | |
+|---|---|
+| 観点 | **どちらの値を使うかを決められない。** `redirect_uri` を確かめる前なので、RP へは返さない（オープン リダイレクトにしない）。 |
+| 根拠 | RFC 6749 §3.1（要求のパラメタを 2 回含めてはならない）/ #359 |
+| テスト | `RT35903_同じパラメタが2回来たPOSTの認可要求はエラー画面` |
+
+**手順**
+
+1. POST /authorize?state=…（フォームの本文にも state）
+
+**検証（合否を判定する）**
+
+- **送り返さない・RP へ返さない**（Location が無い）
+- **エラー画面になる**
+
+## RT-359.4 同意画面で「別のアカウント」を押すと、サインアウトして、認可の口（同じ要求）へ戻る
+
+| | |
+|---|---|
+| 観点 | **同意画面の送信の口を `<認可の口>/consent` に移したので、「同じ URL へ戻す」では、GET の無いその口へ戻って行き止まりになる。**戻る先は認可の口でなければならない。 |
+| 根拠 | #359（同意画面の送信の口を移した後の戻り先） |
+| テスト | `RT35904_同意画面の別のアカウントは認可の口へ戻す` |
+
+**手順**
+
+1. 同意画面を出す
+1. 「別のアカウント」（submit.Login）を押す
+
+**検証（合否を判定する）**
+
+- **同意画面の送信先は、同意画面の送信の口**（`<認可の口>/consent`）
+- **戻る先は、認可の口（同じ要求）**（`/consent` ではない）
+
+## RT-359.5 同意画面の送信の口（`<認可の口>/consent`）に、偽造防止のトークンを付けずに「許可」を送っても、認可コードは返らない
+
+| | |
+|---|---|
+| 観点 | **同意の送信を別の口に移した後も、偽造防止のトークンを確かめている。** POST の認可要求の口（トークンを確かめない）と取り違えて、同意を偽造できる口にしていない。 |
+| 根拠 | #359（同意の送信の口を移した後の CSRF の対策） |
+| テスト | `RT35905_偽造防止のトークンの無い同意の送信は受けない` |
+
+**手順**
+
+1. 同意画面を出す
+1. 偽造防止のトークンを付けずに「許可」（submit.Grant）を送る
+
+**検証（合否を判定する）**
+
+- **認可コードが返らない**
+- **RP の折り返し先へ送らない**
+
+## RT-359.6 本文が text/plain の POST の認可要求は、送り返さず、RP へも返さず、エラー画面になる
+
+| | |
+|---|---|
+| 観点 | **POST の認可要求は Form Serialization でなければならない。** `redirect_uri` を確かめる前なので、RP へは返さない。 |
+| 根拠 | OIDC Core 1.0 §3.1.2.1（POST は Form Serialization）/ OIDC Core 1.0 §13.2 / #359 |
+| テスト | `RT35906_フォームの形でないPOSTの認可要求はエラー画面` |
+
+**手順**
+
+1. POST /authorize（本文は text/plain。中身はフォームと同じ文字列）
+
+**検証（合否を判定する）**
+
+- **送り返さない・RP へ返さない**（Location が無い）
+- **エラー画面になる**
+
+## RT-359.7 クエリの中だけで同じパラメタ（prompt）が 2 回ある POST の認可要求は、送り返さず、RP へも返さず、エラー画面になる
+
+| | |
+|---|---|
+| 観点 | **2 つの値を「,」でつないだ 1 つの値として送り返さない。** `redirect_uri` を確かめる前なので、RP へは返さない。 |
+| 根拠 | RFC 6749 §3.1（要求のパラメタを 2 回含めてはならない）/ #359 |
+| テスト | `RT35907_クエリの中で同じパラメタが2回来たPOSTの認可要求はエラー画面` |
+
+**手順**
+
+1. POST /authorize?prompt=login&prompt=none（フォームの本文にほかのパラメタ）
+
+**検証（合否を判定する）**
+
+- **送り返さない・RP へ返さない**（Location が無い）
+- **エラー画面になる**
+
+## RT-359.8 送り返すクエリが 8192 文字を超える POST の認可要求は、送り返さず、RP へも返さず、エラー画面になる（500 にならない）
+
+| | |
+|---|---|
+| 観点 | **送り返した先の GET で URL の上限に当たる要求を、そのまま送り返さない。** net48 は、長すぎる値の符号化で例外になりうる（500 にしない）。長い要求を POST のまま処理するのは #372。 |
+| 根拠 | #359（POST の認可要求を 303 で GET に詰め替える形の制約）/ #372 |
+| テスト | `RT35908_長すぎるPOSTの認可要求はエラー画面` |
+
+**手順**
+
+1. POST /authorize（フォームの本文の login_hint に 9000 文字）
+
+**検証（合否を判定する）**
+
+- **送り返さない・RP へ返さない**（Location が無い）
+- **エラー画面になる**（500 ではない）
+
+## RT-359.9 クエリが 3000 文字ほどになる POST の認可要求は、エラー画面になるか、送り返した先の GET が受け付けられる（送り返した先で 4xx・5xx にならない）
+
+| | |
+|---|---|
+| 観点 | **上限は、転送の先の GET で受けられる長さに合わせている**（net48 は `maxQueryStringLength`。既定 2048。net10.0 は Kestrel の要求行の上限。既定 8 KB）。**どちらの版でも、行き止まりの 303 を返さない。** |
+| 根拠 | #359（POST の認可要求を 303 で GET に詰め替える形の制約）/ #372 |
+| テスト | `RT35909_転送の先のGETで断られるURLへは送り返さない` |
+
+**手順**
+
+1. POST /authorize（フォームの本文の login_hint に 3000 文字）
+1. 送り返された GET の認可要求を開く
+
+**検証（合否を判定する）**
+
+- **送り返した先の GET が受け付けられる**（4xx・5xx ではない）
+
+## RT-359.10 同意画面の送信の口（`<認可の口>/consent?…`）を GET で開くと、認可の口（同じクエリ）へ戻る
+
+| | |
+|---|---|
+| 観点 | **同意画面を開いたままサインインが切れて送信すると、サインインの戻り先がこの口になる。** この口の送信は POST だけなので、サインインの後の GET が行き止まり（404・405）にならないよう、認可の口へ戻す。 |
+| 根拠 | #359（同意画面の送信の口を移した後の、サインインの戻り先） |
+| テスト | `RT35910_同意画面の送信の口をGETで開くと認可の口へ戻す` |
+
+**手順**
+
+1. 同意画面を出し、その送信先（`/authorize/consent?…`）を GET で開く
+
+**検証（合否を判定する）**
+
+- **認可の口（同じ要求）へ戻る**（`/consent` ではない）
+
+## RT-359.11 フォームの本文の中だけで同じパラメタ（redirect_uri）が 2 回ある POST の認可要求は、送り返さず、RP へも返さず、エラー画面になる
+
+| | |
+|---|---|
+| 観点 | **どちらの値を使うかを決められない。** `redirect_uri` を確かめる前なので、RP へは返さない（オープン リダイレクトにしない）。 |
+| 根拠 | RFC 6749 §3.1（要求のパラメタを 2 回含めてはならない）/ #359 |
+| テスト | `RT35911_フォームの中で同じパラメタが2回来たPOSTの認可要求はエラー画面` |
+
+**手順**
+
+1. POST /authorize（フォームの本文に redirect_uri を 2 回）
+
+**検証（合否を判定する）**
+
+- **送り返さない・RP へ返さない**（Location が無い）
+- **エラー画面になる**
+
+## RT-360.1 response_type=id_token の id_token に、at_hash を付けない（access token を返さないため）
+
+| | |
+|---|---|
+| 観点 | **at_hash は、id_token と一緒に返した access token との結び付けである。** **access token を返さない応答に at_hash を付けても、RP は確かめられない**（以前は付けていた）。 |
+| 根拠 | OIDC Core 1.0 §3.2.2.10（at_hash は access token を出さないときは使わない）/ #360 |
+| テスト | `RT36001_id_tokenの応答のid_tokenにat_hashを付けない` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token と nonce を付けて送る
+
+**検証（合否を判定する）**
+
+- access_token は返さない
+- id_token の署名を JWKS で検証できる
+- nonce が送った値と一致する
+- **at_hash を付けない**
+
+## RT-360.2 response_type=id_token で scope=openid email phone を要求すると、email と email_verified が id_token に入る（値の無い phone_number は入らない）
+
+| | |
+|---|---|
+| 観点 | **access token を返さないので、RP は UserInfo を引けない。** scope のクレームは id_token で返す（以前は入れていなかった）。**値の無いクレームは名前ごと省く**（UserInfo と同じ。種データの利用者は電話番号を持たない）。 |
+| 根拠 | OIDC Core 1.0 §5.4（response_type=id_token ではクレームを ID Token で返す）/ OIDC Core 1.0 §5.3.2 / #360 |
+| テスト | `RT36002_id_tokenの応答のid_tokenにscopeのクレームを入れる` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token、scope=openid email phone を付けて送る
+
+**検証（合否を判定する）**
+
+- **email が文字列で入る**
+- **email_verified が真偽値で入る**
+- 値の無い phone_number・phone_number_verified は入らない
+- access token の項目（scopes・jti など）は入らない
+
+## RT-360.3 response_type=code id_token の id_token に、at_hash を付けない（c_hash は付けて、code と一致する。scope のクレームは入れない）
+
+| | |
+|---|---|
+| 観点 | **この形は access token を認可エンドポイントから返さない。** 仕様では、この形の at_hash は任意（OPTIONAL）である。**ただし、付けていた値は返さない access token のもの**で、トークン エンドポイントの access token とも別の値なので、**RP はどの access token とも突き合わせられない**（以前は付けていた。適合性テストの `oidcc-server [code id_token]` が落ちた）。**付けないことにした。** scope のクレームは UserInfo で受け取れるので、id_token には入れない（従来どおり）。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.11（at_hash は access token を返すとき REQUIRED、ほかは OPTIONAL。c_hash は REQUIRED）/ #360（付けない） |
+| テスト | `RT36003_code_id_tokenの応答のid_tokenにat_hashを付けない` |
+
+**手順**
+
+1. GET /authorize に response_type=code id_token、scope=openid email を付けて送る
+
+**検証（合否を判定する）**
+
+- **at_hash を付けない**
+- c_hash が、code から計算した値と一致する
+- scope のクレーム（email）は入れない
+
+## RT-360.4 response_type=id_token token の id_token には at_hash を付け、返した access_token から計算した値と一致する（scope のクレームは入れない）
+
+| | |
+|---|---|
+| 観点 | **at_hash を付けるのを「access token を返すとき」に絞った後も、返すときは付けている**ことを確かめる。**scope のクレームは、返した access token で UserInfo から受け取れるので、id_token には入れない**（従来どおり）。 |
+| 根拠 | OIDC Core 1.0 §3.2.2.10（access token を返すとき at_hash は REQUIRED）/ #360 |
+| テスト | `RT36004_id_token_tokenの応答のid_tokenのat_hashはaccess_tokenと一致する` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token token、scope=openid email を付けて送る
+
+**検証（合否を判定する）**
+
+- **at_hash が、access_token から計算した値と一致する**
+- scope のクレーム（email）は入れない
+
+## RT-360.5 Implicit を開いた配備の Discovery は、response_types_supported に id_token を載せる
+
+| | |
+|---|---|
+| 観点 | **受け付ける response_type は広告する。** 以前は `id_token` 単独を「受け付けるが広告しない」としていたので、Discovery を見る RP が `id_token` を選べなかった（Implicit を閉じた配備では、受け付けも広告もしない。RT-314.1・.4）。 |
+| 根拠 | OIDC Discovery 1.0 §3（response_types_supported）/ OIDC Core 1.0 §15.2（動的な OP は id_token を MUST）/ #360 |
+| テスト | `RT36005_Discoveryのresponse_types_supportedにid_tokenを載せる` |
+
+**検証（合否を判定する）**
+
+- **id_token を載せる**
+
+## RT-360.6 response_type=id_token で scope=openid だけを要求すると、email・email_verified は id_token に入らない
+
+| | |
+|---|---|
+| 観点 | **id_token に入れるのは、要求して許された scope のクレームだけ**である（RT-360.2 の対照）。**クレームを残す判定が、scope に関係なく利用者の値を出していないか**を確かめる。 |
+| 根拠 | OIDC Core 1.0 §5.4（scope の値で要求したクレームを返す）/ #360 |
+| テスト | `RT36006_id_tokenの応答でも要求していないscopeのクレームは入れない` |
+
+**手順**
+
+1. GET /authorize に response_type=id_token、scope=openid を付けて送る
+
+**検証（合否を判定する）**
+
+- **email・email_verified は入らない**
+
+## RT-361.1 Hybrid フローの response_type=code token は、nonce が無くても通り、code と access_token が返る
+
+| | |
+|---|---|
+| 観点 | **`code token` は認可エンドポイントから id_token を返さない**ので、nonce は任意である（守る対象の id_token が無い）。**以前は `code token` でも nonce を必須にしていた**ので、nonce を送らない RP が使えなかった（適合性テストの `oidcc-ensure-request-without-nonce-succeeds-for-code-flow [code token]` が落ちた）。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.1（nonce は code token では OPTIONAL）/ #361 |
+| テスト | `RT361_01_Hybridのcode_tokenはnonce無しでも通る` |
+
+**手順**
+
+1. GET /authorize を nonce 無しで送る
+
+**検証（合否を判定する）**
+
+- **エラーにならない**
+- code と access_token が返る
+
+## RT-361.2 Hybrid フローの response_type=code id_token は、nonce が無ければ invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **RT-361.1 の対照。** `code token` の nonce を任意にした後も、**認可エンドポイントから id_token を返す形では、これまでどおり必須**であることを確かめる。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.1（nonce は code id_token・code id_token token では REQUIRED）/ #361 |
+| テスト | `RT361_02_Hybridのcode_id_tokenはnonce無しを断る` |
+
+**手順**
+
+1. GET /authorize を nonce 無しで送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断る
+- code も id_token も返さない
+
+## RT-361.3 Hybrid フローの response_type=code id_token token は、nonce が無ければ invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **RT-361.1 の対照。** `code token` の nonce を任意にした後も、**3 つを返す形（id_token を含む）では、これまでどおり必須**であることを確かめる。 |
+| 根拠 | OIDC Core 1.0 §3.3.2.1（nonce は code id_token・code id_token token では REQUIRED）/ #361 |
+| テスト | `RT361_03_Hybridのcode_id_token_tokenはnonce無しを断る` |
+
+**手順**
+
+1. GET /authorize を nonce 無しで送る
+
+**検証（合否を判定する）**
+
+- invalid_request で断る
+- code も id_token も access_token も返さない
+
+## RT-362.1 外部の https の request_uri を付けた認可要求は、クエリだけで続けずに、request_uri_not_supported のエラー画面になる（RP へ返さない）
+
+| | |
+|---|---|
+| 観点 | **この OP は外部の request_uri を取りに行かない。** 取りに行かないなら、黙って続けずに断る（以前は、クエリだけで認可を続け、Request Object の state・nonce が落ちていた）。**`redirect_uri` を照合する前なので、RP へは返さない。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.6（request_uri_not_supported）/ #362 |
+| テスト | `RT36201_外部のrequest_uriはrequest_uri_not_supportedで断る` |
+
+**手順**
+
+1. GET /authorize に、クエリのパラメタと外部の request_uri を付けて送る
+
+**検証（合否を判定する）**
+
+- **code を返さない**（クエリだけで続けない）
+- **RP へ返さない**（Location が無い）
+- **エラー画面に request_uri_not_supported が出る**
+
+## RT-362.2 この OP の形（urn:）だが存在しない request_uri を付けた認可要求は、クエリだけで続けずに、invalid_request_uri のエラー画面になる（RP へ返さない）
+
+| | |
+|---|---|
+| 観点 | **存在しない・期限切れ・使用済みの request_uri は、預けた要求を引けない。** 黙って続けずに断る（以前は、クエリだけで認可を続けていた）。**`redirect_uri` を照合する前なので、RP へは返さない。** |
+| 根拠 | OIDC Core 1.0 §3.1.2.6（invalid_request_uri）/ #362 |
+| テスト | `RT36202_引けないurnのrequest_uriはinvalid_request_uriで断る` |
+
+**手順**
+
+1. /ros に Request Object を預け、払い出された request_uri の形（urn:）を得る
+1. GET /authorize に、クエリのパラメタと、存在しない urn: の request_uri を付けて送る
+
+**検証（合否を判定する）**
+
+- **code を返さない**（クエリだけで続けない）
+- **RP へ返さない**（Location が無い）
+- **エラー画面に invalid_request_uri が出る**
+
+## RT-362.3 一度認可に使った request_uri を、クエリのパラメタと一緒にもう一度送ると、クエリだけで続けずに、invalid_request_uri のエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **預けた要求は、認可応答を作り終えた時点で消している**（#188）。**消した後の request_uri は「引けない urn:」として断る**（以前は、クエリだけで認可を続けていた）。 |
+| 根拠 | OIDC Core 1.0 §3.1.2.6（invalid_request_uri）/ RFC 9126 §2.2（request_uri は一回限り）/ #362 |
+| テスト | `RT36203_使用済みのrequest_uriはinvalid_request_uriで断る` |
+
+**手順**
+
+1. /ros に Request Object を預け、その request_uri で一度認可する
+1. 同じ request_uri を、クエリのパラメタと一緒にもう一度送る
+
+**検証（合否を判定する）**
+
+- **code を返さない**（クエリだけで続けない）
+- **RP へ返さない**（Location が無い）
+- **エラー画面に invalid_request_uri が出る**
+
+## RT-363.1 **`jwks_uri` に置いた鍵を、`kid` の違う鍵に入れ替える**と、**登録を直さなくても、新しい鍵の `client_assertion`（ヘッダにその `kid`）が 1 回目から通る**
+
+| | |
+|---|---|
+| 観点 | **検証する側は、知らない `kid` を見たら `jwks_uri` を取り直す**（OIDC Core 1.0 §10.1.1。OP の鍵を RP が追う話を、RP の鍵を OP が追う向きに準用する）。**以前は、キャッシュに無い `kid` の 1 本は断り、背景で取り直していた**ので、**入れ替えの後の最初の 1 本が 401 になった**（適合性テストの `oidcc-refresh-token-rp-key-rotation`）。 |
+| 根拠 | OIDC Core 1.0 §10.1.1（準用：RP の鍵の入れ替えを、検証する OP が追う）/ #363 |
+| テスト | `RT36301_登録を直さずに鍵を入れ替えても新しい鍵が1回目から通る` |
+
+**手順**
+
+1. RSA の鍵を置いて動的登録し、その鍵で認証できることを見る
+1. 置いてある鍵を EC に入れ替える（登録は直さない）
+1. すぐに（取り直しの下限の内側で）、新しい鍵（ヘッダにその kid）で認証する
+1. 取り直しの下限（1 分）が過ぎるまで待つ
+1. 新しい鍵（EC / ES256）で、ヘッダに その kid（キャッシュに無い kid）を入れて、もう一度認証する
+
+**検証（合否を判定する）**
+
+- **下限の内側では取り直さず、断る**（invalid_client）
+- **下限を過ぎた後は、その場で取り直して通る**（error は無い。再試行を待たない）
+- HTTP の状態は 200
+
+**観測（判定しない）**
+
+- 1 回目の応答までの時間
+  - 取り直しを待つ上限は 3 秒（CmnEndpoints.JwksUriRefetchWait）。
+
+**補足**
+
+- **取り直すかどうかは、Open棟梁 の `RemoteJwkSetStore.GetJwkAsync` が、前に取った時刻から 1 分の下限で決める**（`MinRefetchInterval`。`kid` を偽った要求で、外から何度も取得を起こせないように）。**登録のときに取ってから 1 分経たないうちは、知らない `kid` でも取り直さない。****適合性テストの `oidcc-refresh-token-rp-key-rotation` も、入れ替えの後に 60 秒待ってから送る。**
+- **ヘッダに `kid` を入れて送る**（適合性テストの RP と同じ）。**実装は、知らない `kid` を見たときに取り直す**（OIDC Core 1.0 §10.1.1）。**`kid` の無い署名は、キャッシュに在る鍵を順に試すだけ**で、取り直さない。
+
+## RT-364.1 動的登録で `sector_identifier_uri` を付け、**その中身（JSON の配列）に `redirect_uris` がすべて在れば**、登録できる
+
+| | |
+|---|---|
+| 観点 | **OP は `sector_identifier_uri` を取りに行き、登録する `redirect_uris` がすべて含まれることを確かめる**（§5）。**含まれていれば登録する**（一覧に、登録しない URI が余分に在ってもよい）。 |
+| 根拠 | OIDC Registration 1.0 §5 / #364 |
+| テスト | `RT36401_sector_identifier_uriにredirect_urisが在れば登録できる` |
+
+**手順**
+
+1. redirect_uris の 2 つと、余分な 1 つを並べた配列を、その URL に置く
+1. redirect_uris に 2 つを入れ、sector_identifier_uri を付けて登録する
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- client_id が返る
+- 応答に sector_identifier_uri が返る（登録したメタデータ）
+
+## RT-364.2 `sector_identifier_uri` の中身に、**登録する `redirect_uris` の 1 つが無ければ**、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **登録する `redirect_uris` は、すべて中身に含まれなければならない**（§5）。**以前は確かめずに `201` で登録していた**（適合性テストの `oidcc-registration-sector-bad`）。**確かめずに受けると、別の RP のホストを名乗れる**（Sector をそのホストにすると、その RP と同じ pairwise の `sub` を得られる。OIDC Core 1.0 §8.1）。 |
+| 根拠 | OIDC Registration 1.0 §5 / #364 |
+| テスト | `RT36402_sector_identifier_uriに無いredirect_uriが在れば断る` |
+
+**手順**
+
+1. redirect_uris の 1 つ（a）だけを並べた配列を、その URL に置く
+1. redirect_uris に a と b を入れて登録する（b は中身に無い）
+1. 同じ中身で、redirect_uris を a だけにすれば登録できる（取りに行った中身で判定している）
+1. その登録を PUT（全置換）で a と b にしようとすると、同じく 400（更新の口でも確かめる）
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- HTTP の状態は 201
+- HTTP の状態は 400
+- error は invalid_client_metadata
+
+**観測（判定しない）**
+
+- error_description
+
+## RT-364.3 `sector_identifier_uri` が**読めなければ**（取れない・配列でない・文字列でない要素・`https` でない）、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **中身は `redirect_uri` の値を並べた JSON の配列で、URL は `https`**（§5）。**確かめられないものは、含まれていると見なさない。****ループバックだけは `http` を許す**（`jwks_uri` と同じ扱い。RFC 8252 §7.3）。 |
+| 根拠 | OIDC Registration 1.0 §5 / #364 |
+| テスト | `RT36403_読めないsector_identifier_uriは断る` |
+
+**手順**
+
+1. 置いていない URL（404）
+1. 配列でない（オブジェクト）
+1. 文字列でない要素が在る
+1. https でない（ループバックでもない http）
+
+**検証（合否を判定する）**
+
+- (1) 置いていない URL（404）：HTTP の状態は 400
+- (1) 置いていない URL（404）：error は invalid_client_metadata
+- (2) 配列でない（オブジェクト）：HTTP の状態は 400
+- (2) 配列でない（オブジェクト）：error は invalid_client_metadata
+- (3) 文字列でない要素が在る：HTTP の状態は 400
+- (3) 文字列でない要素が在る：error は invalid_client_metadata
+- (4) https でない（ループバックでもない http）：HTTP の状態は 400
+- (4) https でない（ループバックでもない http）：error は invalid_client_metadata
+
+## RT-364.4 同じ `sector_identifier_uri` で登録した **pairwise のクライアント 2 つは、同じ利用者に同じ `sub` を返す**。**付けないクライアントと、同じ `sector_identifier_uri` の public のクライアントは別の `sub`**。**管理画面で保存しても `sector_identifier_uri` は残る**
+
+| | |
+|---|---|
+| 観点 | **`sector_identifier_uri` が在れば、そのホストが pairwise の Sector になり、Sector ごとに `sub` を決める**（OIDC Core 1.0 §8.1）。**付けなければ、Sector は `client_id`**（以前どおり。クライアントごとに `sub` が変わる）。**ホストで揃えるのは pairwise だけ**（public のクライアントは Sector が `client_id`。**混ぜると、先に記録された `sub` が他方に返り、pairwise のクライアントに利用者 ID が出る**）。**以前は値を捨てていた**ので、同じ RP の複数のクライアントでも `sub` が揃わなかった。 |
+| 根拠 | OIDC Core 1.0 §8.1 / OIDC Registration 1.0 §2 / #364 |
+| テスト | `RT36404_同じsector_identifier_uriのクライアントは同じsubになる` |
+
+**手順**
+
+1. 先に、同じ sector_identifier_uri の public のクライアントを登録し、sub を出させる（対応表に先に記録させる）
+1. a と b を並べた配列で、a のクライアントと b のクライアントを、同じ sector_identifier_uri の pairwise で登録する
+1. sector_identifier_uri を付けない pairwise のクライアントを登録する
+1. 同じ利用者で、3 つのクライアントの認可コード フローを通し、id_token の sub を比べる
+1. a のクライアントを管理画面で開き、そのまま保存して、管理 API で読み直す
+1. 管理画面で、client_id を「host:」＋ そのホスト名にした pairwise の登録を作ろうとしても、作れない
+1. 管理画面の新規作成に、欄の無い SectorIdentifierUri を送って pairwise の登録を作っても、その値は使われない
+
+**検証（合否を判定する）**
+
+- sub が返る（3 つとも）
+- **同じ sector_identifier_uri の 2 つは、同じ sub**
+- **付けないクライアントは、別の sub**（Sector は client_id）
+- **同じ sector_identifier_uri の public のクライアントとは、別の sub**（先に記録された public の sub を返さない）
+- 画面には sector_identifier_uri の欄が無い
+- 画面で保存しても sector_identifier_uri が残る
+- 保存の後も、同じ sub
+- **「host:」で始まる client_id の登録は作られない**
+- **画面から送った sector_identifier_uri では、Sector が揃わない**（別の sub）
+
+**補足**
+
+- **Sector は `host:` ＋ ホスト名**（`client_id` の Sector と名前を分ける）。**管理画面では `host:` で始まる `client_id` を作れない**（(5)）。
+
+## RT-365.1 **PAR の要求に `DPoP` ヘッダを付けると、その `code` はその鍵の証明でしか引き換えられない**（別の鍵・証明なしは `invalid_grant`）。**ヘッダを付けない PAR は、従来どおり縛られない**
+
+| | |
+|---|---|
+| 観点 | **§10.1 は、PAR の `DPoP` ヘッダの鍵の指紋を「`dpop_jkt` で渡されたもの」として扱えとしている** — **続くトークン要求は、同じ鍵の証明でなければ断る。****以前はヘッダを見ておらず、`code` が鍵に縛られなかった**（**盗まれた `code` への備えの 1 つが効いていなかった**）。 |
+| 根拠 | RFC 9449 §10.1 / #365 |
+| テスト | `RT36501_PARのDPoPヘッダの鍵にcodeが縛られる` |
+
+**手順**
+
+1. EC の鍵の証明を付けて PAR に預け、その code を EC の証明で引き換える
+1. EC の鍵の証明で預けた code を、**別の鍵（RSA）の証明**で引き換える
+1. 同じ code を、**証明なし**で引き換える
+1. **その code は、まだ使える**（EC の証明で引き換える）
+1. `DPoP` ヘッダを付けない PAR の code は、従来どおり証明なしで引き換えられる
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- token_type が DPoP
+- cnf.jkt が PAR の証明の鍵の指紋と一致する
+- invalid_grant
+- 400
+- invalid_grant
+- 400
+- HTTP 200（断りで消費していない）
+- HTTP 200
+- token_type は bearer
+
+## RT-365.2 **PAR に `dpop_jkt` と `DPoP` ヘッダの両方が来て、指紋が違えば `400` ＋ `invalid_request` で断る。****同じなら受け付け、その鍵に縛る**
+
+| | |
+|---|---|
+| 観点 | **§10.1 は、`dpop_jkt` の指紋が `DPoP` ヘッダの公開鍵と合わなければ、要求を断れとしている**（MUST）。**エラー コードは決めていない。** **証明は正しく、要求が食い違っている**ので `invalid_request` にした（**証明が通らないときの `invalid_dpop_proof` と分ける**。RT-365.3）。 |
+| 根拠 | RFC 9449 §10.1 / #365 |
+| テスト | `RT36502_dpop_jktとDPoPヘッダの鍵が違えばPARで断る` |
+
+**手順**
+
+1. `dpop_jkt` に RSA の鍵の指紋、`DPoP` ヘッダに EC の鍵の証明を付けて預ける
+1. `dpop_jkt` も EC の鍵の指紋にして預け、その code を RSA の証明で引き換える
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- invalid_request
+- request_uri を返さない
+- invalid_grant（EC の鍵に縛られている）
+
+**補足**
+
+- **`request`（JAR）の中の `dpop_jkt` も、同じ所で照合している**（預ける中身を作った後で見る）。**JAR の経路は測っていない。**
+
+## RT-365.3 **PAR の `DPoP` ヘッダが通らなければ `400` ＋ `invalid_dpop_proof` で断る**（壊れた証明・宛先（`htu`）の違う証明・使い回した証明）。**ほかの理由で断った PAR では、証明を使い済みにしない**
+
+| | |
+|---|---|
+| 観点 | **§10.1 は、PAR の証明を §4.3 のとおり確かめよとしている**（MUST）。**通らない証明を黙って捨てると、縛ったつもりのクライアントが縛られない**（`/token` で `invalid_dpop_proof` にしているのと同じ。§5）。**証明は一度しか通らない**（§11.1）ので、**別の理由で断る要求が証明を使い済みにすると、クライアントは作り直しを強いられる。** |
+| 根拠 | RFC 9449 §10.1 / RFC 9449 §4.3 / #365 |
+| テスト | `RT36503_PARのDPoPの証明も確かめる` |
+
+**手順**
+
+1. JWT として読めない値を `DPoP` ヘッダに入れて預ける
+1. **`/token` 宛ての証明**（`htu` が違う）で預ける
+1. 正しい証明で、**`request_uri` を付けた（断られる）PAR** を送り、同じ証明で正しい PAR を送る
+1. その証明を、**もう一度**使って預ける
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- invalid_dpop_proof
+- HTTP 400
+- invalid_dpop_proof
+- 先の PAR は invalid_request
+- 同じ証明の PAR は HTTP 201（**先の断りで使い済みになっていない**）
+- HTTP 400
+- invalid_dpop_proof（使い回し）
+
+**補足**
+
+- **`nonce` を要求する配備（`EnableDPoPNonce`）では、PAR の口も `use_dpop_nonce` ＋ `DPoP-Nonce` で答える**（`/token` と同じ用途の nonce）。**既定の配備では要求しないので、測っていない。**
+
+## RT-366.1 fapi2 の登録の /par は、S256 の PKCE だけを受け、plain・code_challenge_method の省略・PKCE 無しを invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、認可サーバに「S256 の PKCE を必須にする」ことを求める。****code_challenge_method を省くと plain の扱い**（RFC 7636 §4.3）なので、これも断る。**以前は plain で預けた要求にも code を出していた**（適合性テストの par-plain-pkce-rejected）。**S256 で預けた request_uri は、認可の口でも断られない**（Request Object の code_challenge_method を読む）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / RFC 7636 §4.3 / RFC 7636 §4.4.1 / #366 |
+| テスト | `RT36601_fapi2の登録のPARはS256のPKCEだけを受ける` |
+
+**手順**
+
+1. S256 で預ける（受ける）
+1. その request_uri で認可の口へ行く（断られない）
+1. plain で預ける
+1. code_challenge_method を省く（plain の扱い）
+1. PKCE を使わない
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- 認可の口で断られない（同意画面か code）
+- plain : HTTP 400
+- plain : invalid_request
+- plain : request_uri を返さない
+- code_challenge_method の省略 : HTTP 400
+- code_challenge_method の省略 : invalid_request
+- code_challenge_method の省略 : request_uri を返さない
+- PKCE 無し : HTTP 400
+- PKCE 無し : invalid_request
+- PKCE 無し : request_uri を返さない
+
+## RT-366.2 fapi2 でない登録の /par は、従来どおり plain の PKCE と PKCE 無しを受ける
+
+| | |
+|---|---|
+| 観点 | **S256 に限るのは、fapi2 の登録と、サーバ全体の RequirePkceS256 だけ。****既定の配備（RequirePkceS256=false）の normal の登録は、振る舞いを変えない**（RFC 7636 §4.2 は plain も定義している）。 |
+| 根拠 | RFC 7636 §4.2 / RFC 7636 §4.3 / #366 |
+| テスト | `RT36602_fapi2でない登録は従来どおりplainを受ける` |
+
+**手順**
+
+1. plain で預ける
+1. PKCE を使わずに預ける
+
+**検証（合否を判定する）**
+
+- plain : HTTP 201
+- PKCE 無し : HTTP 201
+
+## RT-366.3 PAR を使わない /authorize（クエリ）でも、fapi2 の登録の plain・code_challenge_method の省略・小文字の s256・PKCE 無しを invalid_request で断り、S256 なら code を出す
+
+| | |
+|---|---|
+| 観点 | **判定は PAR と同じ所（認可要求の検証）にある。** 認可の口では、**クエリの code_challenge_method を読む。****エラーは RP へリダイレクトで返す**（redirect_uri を照合した後の判定のため。RFC 6749 §4.1.2.1）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / RFC 7636 §4.2 / RFC 7636 §4.3 / RFC 7636 §4.4.1 / RFC 6749 §4.1.2.1 / #366 |
+| テスト | `RT36603_authorizeのクエリでもfapi2はS256だけを受ける` |
+
+**手順**
+
+1. S256（code を出す）
+1. plain
+1. code_challenge_method の省略
+1. 小文字の s256
+1. PKCE 無し
+
+**検証（合否を判定する）**
+
+- S256 : code が返る
+- plain : code を出さない
+- plain : RP へ invalid_request を返す
+- code_challenge_method の省略 : code を出さない
+- code_challenge_method の省略 : RP へ invalid_request を返す
+- 小文字の s256 : code を出さない
+- 小文字の s256 : RP へ invalid_request を返す
+- PKCE 無し : code を出さない
+- PKCE 無し : RP へ invalid_request を返す
+
+## RT-367.1 fapi2 の登録は、更新で新しい refresh_token を返さず、同じ refresh_token で（DPoP の鍵を作り直しても）何度でも更新できる
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、特別な事情が無い限り refresh_token を入れ替えない**ことを求める。**新しい refresh_token を返さなければ、クライアントは今のものを使い続ける**（RFC 6749 §6）。**秘密を持つクライアント（private_key_jwt）の refresh_token は、DPoP の鍵に縛らない**（RFC 9449 §5）。**以前は入れ替えて前のものを使用済みにし、鍵にも縛っていた**ので、適合性テストの refresh-token が落ちた。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 6749 §6 / RFC 9449 §5 / #367 |
+| テスト | `RT36701_fapi2の登録はrefresh_tokenを入れ替えない` |
+
+**手順**
+
+1. PKCE（S256）と client_assertion で、認可コードを引き換える
+1. EC の鍵の DPoP の証明を添えて更新する
+1. 同じ refresh_token で、**作り直した鍵（RSA）**の証明を添えて、もう一度更新する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- cnf.jkt が EC の鍵の指紋
+- 新しい refresh_token を返さない（入れ替えない）
+- HTTP 200（使用済みにしていない・鍵に縛っていない）
+- cnf.jkt が、作り直した鍵（RSA）の指紋
+
+## RT-367.2 fapi2 でない登録は、従来どおり更新のたびに refresh_token を入れ替え、前のものは invalid_grant で断る
+
+| | |
+|---|---|
+| 観点 | **入れ替えないのは fapi2 の登録だけ。** **ほかの登録は、盗まれた refresh_token への備えとして入れ替えを続ける**（再利用の検知。#188 の段階 3）。 |
+| 根拠 | RFC 6749 §6 / #188 / #367 |
+| テスト | `RT36702_fapi2でない登録は従来どおり入れ替える` |
+
+**手順**
+
+1. 認可コード フローで refresh_token を得る
+1. 更新する
+1. 前の refresh_token で、もう一度更新する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- 新しい refresh_token を返す（入れ替える）
+- invalid_grant（使用済み）
+
+## RT-368.1 client_assertion_type の無い client_assertion は、PAR でも /revoke でも invalid_client で断り、型を付ければ通す
+
+| | |
+|---|---|
+| 観点 | **RFC 7521 §4.2 は、client_assertion_type を REQUIRED としている。****以前は、型が来ていなければ client_assertion をそのまま検証して通していた**（型が違うときだけ断っていた。RT-238.3）。**断るときのエラーは invalid_client**（クライアント認証の失敗。RFC 6749 §5.2）。 |
+| 根拠 | RFC 7521 §4.2 / RFC 6749 §5.2 / #368 |
+| テスト | `RT36801_client_assertion_typeの無いclient_assertionはinvalid_client` |
+
+**手順**
+
+1. client_assertion_type を付けずに POST /par
+1. client_assertion_type を付けずに POST /revoke
+1. 同じクライアントで、client_assertion_type を付けて POST /revoke（通る）
+
+**検証（合否を判定する）**
+
+- PAR : HTTP 401
+- PAR : invalid_client
+- PAR : request_uri を返さない
+- /revoke : invalid_client
+- /revoke : 認証が通る（HTTP 200）
+
+## RT-370.1 FAPI でない登録の /ros は、RS256・PS256（登録の RSA の鍵）と ES256（登録の EC の鍵）の Request Object を預かる。Discovery の request_object_signing_alg_values_supported も 3 つを広告する
+
+| | |
+|---|---|
+| 観点 | **検証鍵は、ヘッダの alg と登録の鍵から作る**（RS256・PS256 は RSA、ES256 は EC）。**以前は登録の RSA の鍵による RS256 しか検証できず、ES256 の Request Object を断っていた**（適合性テストの FAPI 2.0 Message Signing・FAPI 1.0 Advanced）。**既存の RS256 の RP は変わらない。** |
+| 根拠 | RFC 9101 §6.2 / RFC 7518 §3.1 / OIDC Discovery 1.0 §3 / #370 |
+| テスト | `RT37001_FAPIでない登録はRS256とPS256とES256のRequestObjectを預かる` |
+
+**手順**
+
+1. RS256
+1. PS256
+1. ES256
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- RS256 : request_uri が返る
+- PS256 : request_uri が返る
+- ES256 : request_uri が返る
+- request_object_signing_alg_values_supported に RS256 が在る
+- request_object_signing_alg_values_supported に PS256 が在る
+- request_object_signing_alg_values_supported に ES256 が在る
+
+## RT-370.2 FAPI の登録（fapi1・fapi2）の /ros は、RS256 の Request Object を預からず、PS256・ES256 なら預かる
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は PS256 か ES256 を使い、RS256（RSASSA-PKCS1-v1_5）を使わないことを、FAPI 2.0 は PS256・ES256・EdDSA を使うことを求める。****登録の request_object_signing_alg が無くても、FAPI の登録はこの 2 つに限る。** |
+| 根拠 | FAPI 1.0 Advanced §8.6 / FAPI 2.0 Security Profile §5.4.1 / #370 |
+| テスト | `RT37002_FAPIの登録はRS256のRequestObjectを預からない` |
+
+**手順**
+
+1. fapi2
+1. fapi1
+
+**検証（合否を判定する）**
+
+- fapi2 の RS256 : request_uri を返さない
+- fapi2 の RS256 : HTTP 400
+- fapi2 の PS256 : request_uri が返る
+- fapi2 の ES256 : request_uri が返る
+- fapi1 の RS256 : request_uri を返さない
+- fapi1 の RS256 : HTTP 400
+- fapi1 の PS256 : request_uri が返る
+
+## RT-370.3 RSA の鍵だけを登録したクライアントの、ES256 の Request Object を預からない。alg が none の Request Object も預からない
+
+| | |
+|---|---|
+| 観点 | **ヘッダの alg と鍵の種類が食い違えば、検証しない**（アルゴリズムの取り違えを防ぐ）。**EC の鍵を登録していないので、ES256 の署名を確かめる鍵が無い。****none は扱う alg の一覧に無いので、鍵を選ぶ前に断る。** |
+| 根拠 | RFC 8725 §3.1 / RFC 8725 §2.1 / RFC 9101 §6.2 / #370 |
+| テスト | `RT37003_algに合う鍵が登録されていなければ預からない` |
+
+**手順**
+
+1. alg が none（署名の無い JWT）
+
+**検証（合否を判定する）**
+
+- ES256 : request_uri を返さない
+- ES256 : HTTP 400
+- none : request_uri を返さない
+- none : HTTP 400
+
+## RT-370.4 fapi2 の登録の /par は、RS256 の request を 400 ＋ invalid_request_object で断り、PS256 なら預かる
+
+| | |
+|---|---|
+| 観点 | **Request Object が受けられない alg なら invalid_request_object**（RFC 9101 §7。PAR の口の誤りは 400。RFC 9126 §2.3）。**FAPI の登録は RS256 を受けない**（RT-370.2 と同じ判定を PAR でも行う）。 |
+| 根拠 | RFC 9101 §7 / RFC 9126 §2.3 / FAPI 2.0 Security Profile §5.4.1 / #370 |
+| テスト | `RT37004_PARはFAPIの登録のRS256をinvalid_request_objectで断る` |
+
+**手順**
+
+1. RS256
+1. PS256
+
+**検証（合否を判定する）**
+
+- RS256 : HTTP 400
+- RS256 : invalid_request_object
+- PS256 : HTTP 201
+- PS256 : request_uri が返る
+
+## RT-370.5 JARM の応答は、登録の authorization_signed_response_alg（PS256）で署名され、登録が無ければ RS256 のまま。Discovery の authorization_signing_alg_values_supported も、選べる alg を広告する
+
+| | |
+|---|---|
+| 観点 | **JARM §3 の authorization_signed_response_alg は、応答の署名 alg を選ぶ登録項目で、既定は RS256。****以前は登録で選べず、RS256 に固定だった。****鍵は id_token と同じ表（jwks_uri に載る）なので、RP は kid で引いて検証できる。** |
+| 根拠 | JARM §3 / JARM §4 / #370 |
+| テスト | `RT37005_JARMは登録のalgで署名され登録が無ければRS256` |
+
+**手順**
+
+1. 登録が PS256
+1. 登録が無い（FAPI でない）
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- response（JWT）が返る
+- PS256 の登録の JARM : alg
+- PS256 の登録の JARM : 署名を JWKS で検証できる
+- response（JWT）が返る
+- 登録の無い JARM : alg
+- 登録の無い JARM : 署名を JWKS で検証できる
+- authorization_signing_alg_values_supported に RS256 が在る
+- authorization_signing_alg_values_supported に PS256 が在る
+- authorization_signing_alg_values_supported に ES256 が在る
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -11624,7 +12492,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. client_secret（PKCE 無し）
+1. client_secret（交換に code_verifier を送らない）
 1. PKCE(S256)（client_secret 無し）
 
 **検証（合否を判定する）**

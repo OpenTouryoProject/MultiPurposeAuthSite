@@ -483,6 +483,12 @@
   <data name="DdlClientTypeLoginUser" xml:space="preserve">
     <value>Client of the signed-in user</value>
   </data>
+  <data name="AuthorizationSignedResponseAlg" xml:space="preserve">
+    <value>Signing algorithm of the authorization response (authorization_signed_response_alg)</value>
+  </data>
+  <data name="AuthorizationSignedResponseAlgDescription" xml:space="preserve">
+    <value>Signing algorithm of the JARM response. When empty, the default is used.</value>
+  </data>
   <data name="DdlDefaultAlg" xml:space="preserve">
     <value>{0} (default)</value>
   </data>

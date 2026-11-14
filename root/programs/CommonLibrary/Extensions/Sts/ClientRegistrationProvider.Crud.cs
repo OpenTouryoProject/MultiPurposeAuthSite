@@ -31,6 +31,9 @@
 //*  2026/10/26  玄人 幸道         新規（ClientRegistrationProvider.cs から partial に分割。#294）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/08  玄人 幸道         更新（PUT）で、プロファイルを強制する 4 つのメタデータは、立てられるが下げられないようにした（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         sector_identifier_uri を、検査の前に取りに行くようにした（WarmUpSectorIdentifierUriAsync。#364）
+//*  2026/11/12  玄人 幸道         取りに行くのは、呼び出し元の認可を確かめた後だけにした（MayWarmUpForRegister / MayWarmUpForUpdate。#364）
+//*  2026/11/13  玄人 幸道         PUT で authorization_signed_response_alg も全置換する（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -63,7 +66,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// <summary>ClientRegistrationProvider（前処理・登録・管理 API）</summary>
     public static partial class ClientRegistrationProvider
     {
-        #region 前処理（jwks_uri を先に取りに行く。#309）
+        #region 前処理（jwks_uri・sector_identifier_uri を先に取りに行く。#309・#364）
 
         /// <summary>**本文と `software_statement` の `jwks_uri` を、検査の前に 1 回取りに行く**</summary>
         /// <param name="requestBody">要求の本文（JSON）</param>
@@ -98,35 +101,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return;
             }
 
-            List<string> urls = new List<string>();
-
-            try
-            {
-                JObject metadata = JsonConvert.DeserializeObject<JObject>(requestBody);
-
-                if (metadata == null)
-                {
-                    return;
-                }
-
-                urls.Add(ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.jwks_uri));
-
-                //  **statement が主張した分。**
-                //    **payload を先に読む**ので、**JWT でない値でも例外にしない**
-                //    （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
-                JObject claims = JwtReader.TryReadPayload(
-                    ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.software_statement));
-
-                if (claims != null)
-                {
-                    urls.Add((string)claims[OAuth2AndOIDCConst.jwks_uri]);
-                }
-            }
-            catch (JsonException)
-            {
-                //  **本文が JSON でない。** **`Register` / `Update` が `400` で断る。**
-                return;
-            }
+            List<string> urls = ClientRegistrationProvider.CollectUrls(
+                requestBody, OAuth2AndOIDCConst.jwks_uri);
 
             foreach (string url in urls)
             {
@@ -138,6 +114,107 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     await RemoteJwkSetStore.WarmUpAsync(url);
                 }
             }
+        }
+
+        /// <summary>**本文と `software_statement` の `sector_identifier_uri` を、検査の前に 1 回取りに行く**（#364）</summary>
+        /// <param name="requestBody">要求の本文（JSON）</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **OIDC Registration 1.0 §5**：中身に、登録する `redirect_uris` がすべて含まれていることを確かめる（MUST）。
+        /// **判定はしない。** **`Validate` が、控え（`SectorIdentifierProvider.GetFetched`）を見て決める**
+        /// （`WarmUpJwksUriAsync` と同じ流儀。**statement の主張も取りに行ってよい理由も同じ**）。
+        /// **`https` でなければ、取りにも行かない**（**ループバックの `http` は許す**）。
+        /// </remarks>
+        public static async Task WarmUpSectorIdentifierUriAsync(string requestBody)
+        {
+            if (!Config.EnableDynamicClientRegistration
+                || string.IsNullOrWhiteSpace(requestBody))
+            {
+                return;
+            }
+
+            List<string> urls = ClientRegistrationProvider.CollectUrls(
+                requestBody, Const.ClientSectorIdentifierUri);
+
+            foreach (string url in urls.Where(u => !string.IsNullOrEmpty(u)).Distinct())
+            {
+                //  **取れなくても例外にしない**（`SectorIdentifierProvider` が飲み、「読めない」を控える）。
+                //    **断るのは `Validate`** である。
+                await SectorIdentifierProvider.WarmUpAsync(url);
+            }
+        }
+
+        /// <summary>**登録（`POST`）で、取りに行ってよいか**（呼び出し元の認可を確かめた後か。#364）</summary>
+        /// <param name="identity">検証済みのアクセス トークンの ClaimsIdentity（無効なら null）</param>
+        /// <returns>取りに行ってよいなら true</returns>
+        /// <remarks>
+        /// **認可の無い要求で、OP に外の URL を取りに行かせない**（`jwks_uri`・`sector_identifier_uri`）。
+        /// **見るのは `Register` の認可の前半**（トークンが有効で、専用 scope を持つ）。所有者の決定は見ない
+        /// （**専用 scope のトークンを持てるのは、登録を作れる者だけ**。所有者が決まらなければ `Register` が `403` で断る）。
+        /// </remarks>
+        public static bool MayWarmUpForRegister(ClaimsIdentity identity)
+        {
+            return identity != null
+                && identity.Claims.Any(x =>
+                    x.Type == OAuth2AndOIDCConst.UrnScopesClaim
+                    && x.Value == Const.ScopeClientRegistration);
+        }
+
+        /// <summary>**更新（`PUT`）で、取りに行ってよいか**（`registration_access_token` を確かめた後か。#364）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="bearerToken">提示された registration_access_token</param>
+        /// <returns>取りに行ってよいなら true</returns>
+        /// <remarks>**`Update` と同じ `Authorize` で確かめる**（**認可の無い要求で、OP に外の URL を取りに行かせない**）。</remarks>
+        public static bool MayWarmUpForUpdate(string client_id, string bearerToken)
+        {
+            return ClientRegistrationProvider.Authorize(client_id, bearerToken,
+                out ManageAddSaml2OAuth2DataViewModel _, out Dictionary<string, string> _) == 0;
+        }
+
+        /// <summary>本文と `software_statement` の主張から、1 つの名前の値を集める</summary>
+        /// <param name="requestBody">要求の本文（JSON）</param>
+        /// <param name="name">メタデータの名前</param>
+        /// <returns>値の一覧（本文が JSON でなければ空。値の無いものは null・空文字のまま入る）</returns>
+        /// <remarks>
+        /// **statement の署名は、ここでは検証しない**（**検証は `Validate` の中**。理由は `WarmUpJwksUriAsync`）。
+        /// **payload を先に読む**ので、**JWT でない値でも例外にしない**
+        /// （`JwtReader.TryReadPayload`。#241 と同じ扱い）。
+        /// </remarks>
+        private static List<string> CollectUrls(string requestBody, string name)
+        {
+            List<string> urls = new List<string>();
+
+            try
+            {
+                JObject metadata = JsonConvert.DeserializeObject<JObject>(requestBody);
+
+                if (metadata == null)
+                {
+                    return urls;
+                }
+
+                urls.Add(ClientRegistrationProvider.GetString(metadata, name));
+
+                //  **statement が主張した分。**
+                JObject claims = JwtReader.TryReadPayload(
+                    ClientRegistrationProvider.GetString(metadata, OAuth2AndOIDCConst.software_statement));
+
+                if (claims != null)
+                {
+                    JToken claimed = claims[name];
+
+                    if (claimed != null && claimed.Type == JTokenType.String)
+                    {
+                        urls.Add((string)claimed);
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                //  **本文が JSON でない。** **`Register` / `Update` が `400` で断る。**
+            }
+
+            return urls;
         }
 
         #endregion
@@ -404,7 +481,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | 順 | 列 | 扱い |
         /// |---|---|---|
-        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**） |
+        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
         /// | 2 | `Jwk*` ↔ `JwksUri` | **要求が片方を入れたら、もう片方は消える**（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
         /// | 3 | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` | **要求に在れば置き換え、無ければ持ち越す** |
         /// | 4 | `ClientMode` | **持ち越す**（**空のときだけ `normal`**。管理画面で FAPI の登録にしたものを、`PUT` で下げない） |
@@ -539,6 +616,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             model.SoftwareVersion = requested.SoftwareVersion;
             model.SubjectTypes = requested.SubjectTypes;
             model.IdTokenSignedResponseAlg = requested.IdTokenSignedResponseAlg;
+            model.AuthorizationSignedResponseAlg = requested.AuthorizationSignedResponseAlg;
+
+            //    **`sector_identifier_uri` も全置換**（#364）。**ホストを変えたり省いたりすると Sector が変わり、pairwise の `sub` が変わる**
+            //    （**以前の `sub` は引けなくなる**。RP 自身の操作なので許す。`GET` の応答をそのまま戻せば残る）。
+            model.SectorIdentifierUri = requested.SectorIdentifierUri;
 
             //    **省いたら、秘密ベース（`client_secret_basic` / `client_secret_post`）に戻る。**
             model.TokenEndpointAuthMethod = requested.TokenEndpointAuthMethod;

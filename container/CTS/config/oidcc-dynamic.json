@@ -1,0 +1,214 @@
+{
+  "alias": "mpas-cts",
+  "description": "MultiPurposeAuthSite (net10.0, mem) - OpenID Connect Dynamic OP",
+  "server": {
+    "discoveryUrl": "https://mpas-cts.localhost:44311/.well-known/openid-configuration"
+  },
+  "client": {
+    "initial_access_token": "@INITIAL_ACCESS_TOKEN@"
+  },
+  "client2": {
+    "initial_access_token": "@INITIAL_ACCESS_TOKEN@"
+  },
+  "consent": {},
+  "browser": [
+    {
+      "match": "https://mpas-cts.localhost:44311/*",
+      "tasks": [
+        {
+          "task": "Login",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/Account/Login*",
+          "commands": [
+            [
+              "text",
+              "id",
+              "Email",
+              "@TEST_USER@",
+              "optional"
+            ],
+            [
+              "text",
+              "id",
+              "Password",
+              "@TEST_PASSWORD@",
+              "optional"
+            ],
+            [
+              "click",
+              "id",
+              "normal_signin"
+            ]
+          ]
+        },
+        {
+          "task": "Consent",
+          "optional": true,
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "commands": [
+            [
+              "click",
+              "name",
+              "submit.Grant"
+            ]
+          ]
+        },
+        {
+          "task": "Verify Complete",
+          "match": "*/test/*/callback*",
+          "commands": [
+            [
+              "wait",
+              "id",
+              "submission_complete",
+              10
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "override": {
+    "oidcc-registration-logo-uri": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Expect the login page",
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Use a local account to sign in.",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-registration-policy-uri": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Expect the login page",
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Use a local account to sign in.",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-registration-tos-uri": {
+      "browser": [
+        {
+          "match": "https://mpas-cts.localhost:44311/*",
+          "tasks": [
+            {
+              "task": "Expect the login page",
+              "match": "https://mpas-cts.localhost:44311/Account/Login*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "Use a local account to sign in.",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-ensure-redirect-uri-in-authorization-request": {
+      "browser": [
+        {
+          "comment": "expect an immediate error page (the OP does not redirect to an unregistered redirect_uri)",
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Expect redirect uri error page",
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "An error occurred while processing your request",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-redirect-uri-query-mismatch": {
+      "browser": [
+        {
+          "comment": "expect an immediate error page (the OP does not redirect to an unregistered redirect_uri)",
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Expect redirect uri error page",
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "An error occurred while processing your request",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "oidcc-redirect-uri-query-added": {
+      "browser": [
+        {
+          "comment": "expect an immediate error page (the OP does not redirect to an unregistered redirect_uri)",
+          "match": "https://mpas-cts.localhost:44311/authorize*",
+          "tasks": [
+            {
+              "task": "Expect redirect uri error page",
+              "match": "https://mpas-cts.localhost:44311/authorize*",
+              "commands": [
+                [
+                  "wait",
+                  "xpath",
+                  "//*",
+                  10,
+                  "An error occurred while processing your request",
+                  "update-image-placeholder"
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

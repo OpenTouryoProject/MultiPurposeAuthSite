@@ -1,4 +1,4 @@
-﻿# expectation-guard-source: OpenTouryoCodingAgentAssets@d2f87d1f651f src/quality/ExpectationGuard/tests/Run-Tests.ps1 sha256:8900e946e255b22e6f546a7258bbca8f957a78a8e7d666e8f7a9150c77770535
+﻿# expectation-guard-source: OpenTouryoCodingAgentAssets@ade897953a72 src/quality/ExpectationGuard/tests/Run-Tests.ps1 sha256:9583d474a29e4831c9c8ee07374cad770c2e92dd7479f6c1aad9c8f05af3941e
 <#
 .SYNOPSIS
     期待値の変更の検出器の、判定の用例（cases.psd1）を回す（OpenTouryoCodingAgentAssets#3）。
@@ -28,7 +28,19 @@ param(
 $ErrorActionPreference = "Stop"
 
 $here    = $PSScriptRoot
-$guard   = Split-Path -Parent $here
+# 本体の場所。install.ps1 が写すときに、導入先のルートからのフォルダで埋める（判定の用例を本体と別の場所に置けるように。#13）。
+#   埋まっていなければ（原本のまま）、1 つ上のフォルダ。
+$checkerDir = 'root'
+if ($checkerDir.StartsWith('@@'))
+{
+    $guard = Split-Path -Parent $here
+}
+else
+{
+    $top = (& git -C $here rev-parse --show-toplevel 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $top) { Write-Host ("  リポジトリの中で実行してください : {0}" -f $here) -ForegroundColor Red; exit 2 }
+    $guard = [IO.Path]::GetFullPath((Join-Path $top $checkerDir))
+}
 $checker = Join-Path $guard "CheckExpectationChange.ps1"
 $common  = Join-Path $guard "rules.common.psd1"
 foreach ($f in @($checker, $common, (Join-Path $here "cases.psd1"), (Join-Path $here "rules.test.psd1"), (Join-Path $here "TestComparer.ps1")))
@@ -158,7 +170,8 @@ function Invoke-Case($Case)
         $reviewKinds = @($reviewItems | ForEach-Object { $_.Kind } | Sort-Object -Unique)
         $detail = (@($r | ForEach-Object { $_.Findings } | ForEach-Object { "{0} : {1}" -f $_.Kind, $_.Path }) + @($reviewItems | ForEach-Object { "要確認 {0} : {1}" -f $_.Kind, $_.Path }) + @($r | ForEach-Object { $_.Errors })) -join " / "
         $errs = @($r | ForEach-Object { $_.Errors }).Count
-        return [pscustomobject]@{ Exit = $code; Kinds = $kinds; Warnings = $warn; Errors = $errs; Review = $reviewItems.Count; ReviewKinds = $reviewKinds; Ask = $null; Detail = $detail }
+        $appr = @($r | ForEach-Object { $_.Approved }).Count
+        return [pscustomobject]@{ Exit = $code; Kinds = $kinds; Warnings = $warn; Errors = $errs; Approved = $appr; Review = $reviewItems.Count; ReviewKinds = $reviewKinds; Ask = $null; Detail = $detail }
     }
     finally
     {
@@ -182,6 +195,7 @@ foreach ($c in $cases)
             if (($want -join "|") -cne (@($a.Kinds) -join "|")) { $why += ("検出 [{0}]（期待 [{1}]）" -f (@($a.Kinds) -join ", "), ($want -join ", ")) }
         }
         if ($null -ne $e.Warnings -and $a.Warnings -ne [int]$e.Warnings) { $why += ("警告 {0} 件（期待 {1}）" -f $a.Warnings, $e.Warnings) }
+        if ($null -ne $e.Approved -and $a.Approved -ne [int]$e.Approved) { $why += ("承認の理由 {0} 件（期待 {1}）" -f $a.Approved, $e.Approved) }
         if ($null -ne $e.Errors -and $a.Errors -ne [int]$e.Errors) { $why += ("誤り {0} 件（期待 {1}）" -f $a.Errors, $e.Errors) }
         if ($null -ne $e.Review -and $a.Review -ne [int]$e.Review) { $why += ("要確認 {0} 件（期待 {1}）" -f $a.Review, $e.Review) }
         if ($null -ne $e.ReviewKinds)

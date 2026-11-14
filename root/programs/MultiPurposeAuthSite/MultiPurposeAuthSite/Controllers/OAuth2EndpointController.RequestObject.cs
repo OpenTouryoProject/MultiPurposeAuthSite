@@ -34,6 +34,8 @@
 //*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnRequestObjectEndpoint）を呼ぶ（#321）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/10  玄人 幸道         PAR の応答を Dictionary<string, object> で受ける（expires_in を数値で返す。#353）
+//*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを渡す（RFC 9449 §10.1。#365）
+//*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -101,7 +103,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // private_key_jwt / mTLS
-            string assertion = OAuth2AndOIDCSpec.GetClientAssertion(
+            string assertion = Token.CmnEndpoints.GetClientAssertion(
                 formData[OAuth2AndOIDCConst.client_assertion],
                 formData[OAuth2AndOIDCConst.client_assertion_type],
                 formData[OAuth2AndOIDCConst.assertion]);
@@ -124,8 +126,11 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
+            //  **`DPoP` ヘッダが在れば、その鍵にコードを縛る**（RFC 9449 §10.1。#365）。
+            string dPoPProof = HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_DPoP];
+
             if (CmnRequestObjectEndpoint.PushedAuthorizationRequest(
-                client_id, client_secret, assertion, x509, parameters,
+                client_id, client_secret, assertion, x509, parameters, dPoPProof,
                 out Dictionary<string, object> ret, out err))
             {
                 // RFC 9126 §2.2 : 成功は 201

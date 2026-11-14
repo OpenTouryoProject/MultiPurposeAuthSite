@@ -1,0 +1,28 @@
+# ##################################################################################################
+# 適合性テストの OP（op のコンテナ）の OpenSSL の設定（#369）
+#
+#   **TLS 1.2 の暗号スイートを、BCP 195 が勧めるものに絞る**
+#   （FAPI 2.0 Security Profile §5.2.2 の 1・§5.2.3 の 2。勧めるものは RFC 9325 §4.2 の 4 つ）。
+#   OpenSSL の既定のままだと、CBC のスイート（TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 など）も受け付け、
+#   Conformance Suite の RequireOnlyBCP195RecommendedCiphersForTLS12 が FAILED になる。
+#
+#   **アプリ（MPAS）のコードは変えていない。** .NET は Linux で、CipherSuitesPolicy を指定しなければ
+#   OpenSSL の設定（system_default）の CipherString に従う。docker-compose.yml の OPENSSL_CONF で、この設定を読ませる。
+#   配備で絞る方法は root/CONFIGURATION.md「TLS の暗号スイートを絞る」（Linux の OpenSSL・Windows の Schannel・リバース プロキシ）。
+#
+#   - CipherString は TLS 1.2 以前にだけ効く。TLS 1.3 のスイート（Ciphersuites）は、OpenSSL の既定のまま（どれも AEAD）
+#   - MinProtocol で、TLS 1.1 以前も断る
+#   - この設定は、OP が外へ出す TLS（Back-Channel Logout の POST）にも効く。宛先の nginx は GCM を受け付ける
+# ##################################################################################################
+
+openssl_conf = openssl_init
+
+[openssl_init]
+ssl_conf = ssl_sect
+
+[ssl_sect]
+system_default = system_default_sect
+
+[system_default_sect]
+MinProtocol = TLSv1.2
+CipherString = ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384

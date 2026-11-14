@@ -37,6 +37,7 @@
 //*  2026/10/22  玄人 幸道         認可要求の dpop_jkt を code に紐付ける（#311 の段階 4）
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //*  2026/11/04  玄人 幸道         消せた 1 つだけが引き換える（同時に引き換えると、複数にトークンが出ていた。#332）
+//*  2026/11/12  玄人 幸道         見つからない request_uri のコメントを、Controller が先に断る形に合わせた（#362）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -255,7 +256,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (string.IsNullOrEmpty(requestObjectPayloadString))
             {
-                // 見つからない request_uri（Controller と同じく、クエリ文字列の値で続ける）
+                // 見つからない request_uri（**Controller が先に断る**ので、通常は来ない。#362。
+                //   以前は Controller もクエリ文字列の値で続けていた）
                 return queryString;
             }
 

@@ -42,6 +42,10 @@
 //*  2026/11/06  玄人 幸道         assertion の検証を、期待する iss・aud を渡す版の JwtAssertion.Verify にした。クライアント認証では sub が iss と一致することを確かめる（OpenTouryo#654。#336）
 //*  2026/11/06  玄人 幸道         TryVerifyAssertion の catch と、alg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#654・#664）に合わせた（#337）
 //*  2026/11/08  玄人 幸道         tls_client_auth の登録で、証明書が届かない・Subject が合わないときの理由を OPERATION に残す（#345）
+//*  2026/11/12  玄人 幸道         jwks_uri の控えに無い kid なら、その場で取り直して短く待つ（下限は RemoteJwkSetStore.GetJwkAsync に従う。#363）
+//*  2026/11/13  玄人 幸道         資格情報で認証したかを返す（IsConfidentialProof・Device AuthZ の confidential。refresh_token を DPoP の鍵に縛るか。#367）
+//*  2026/11/13  玄人 幸道         client_assertion_type の無い client_assertion を受けない GetClientAssertion を足した（RFC 7521 §4.2。Open棟梁 の回避。#368）
+//*  2026/11/13  玄人 幸道         Request Object で受ける alg に PS256・ES256 を足し、FAPI の登録の alg（FapiRequestObjectSigningAlgs）を足した（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -49,8 +53,10 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 
 using Newtonsoft.Json.Linq;
 
@@ -293,12 +299,28 @@ namespace MultiPurposeAuthSite.TokenProviders
                 Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.DeviceAuthZ);
         }
 
+        /// <summary>Device AuthZのクライアント認証（認証したかを返さない版。Controller の口が使う）</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="clientAssertion">client_assertion（private_key_jwt。無ければ空）</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="authnedClientId">認証できたクライアントの client_id</param>
+        /// <returns>bool</returns>
+        public static bool DeviceAuthZClientAuthentication(
+            string client_id, string client_secret, string clientAssertion,
+            ref X509Certificate2 x509, out string authnedClientId)
+        {
+            return CmnEndpoints.DeviceAuthZClientAuthentication(
+                client_id, client_secret, clientAssertion, ref x509, out authnedClientId, out bool _);
+        }
+
         /// <summary>Device AuthZのクライアント認証（`client_assertion` も受ける。#294）</summary>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="clientAssertion">client_assertion（private_key_jwt。無ければ空）</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="authnedClientId">認証できたクライアントの client_id</param>
+        /// <param name="confidential">資格情報で認証したか（公開クライアントとして client_id だけを確かめたなら false。#367）</param>
         /// <returns>bool</returns>
         /// <remarks>
         /// RFC 8628
@@ -314,9 +336,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         public static bool DeviceAuthZClientAuthentication(
             string client_id, string client_secret, string clientAssertion,
-            ref X509Certificate2 x509, out string authnedClientId)
+            ref X509Certificate2 x509, out string authnedClientId, out bool confidential)
         {
             authnedClientId = client_id;
+            confidential = false;
 
             if (!string.IsNullOrEmpty(clientAssertion))
             {
@@ -325,6 +348,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     return false;
                 }
+
+                confidential = true;
 
                 return string.IsNullOrEmpty(client_id)
                     || string.Equals(client_id, authnedClientId, StringComparison.Ordinal);
@@ -368,6 +393,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 || !string.IsNullOrEmpty(Helper.GetInstance().GetJwksUri(client_id))
                 || x509 != null)
             {
+                confidential = true;
+
                 return CmnEndpoints.ClientAuthentication(
                     client_id, client_secret, ref x509,
                     out ClientModePolicy.Proof _);
@@ -390,6 +417,105 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **鍵を何十本も並べた JWK Set を出す相手に、検証を何十回もさせられないため。**
         /// </remarks>
         private const int MaxJwksFromUri = 4;
+
+        /// <summary>`jwks_uri` を取り直すとき、要求の中で待つ上限（#363）</summary>
+        /// <remarks>
+        /// **知らない `kid` を見たら、その場で取り直す**（OIDC Core 1.0 §10.1.1 の準用。#363）。
+        /// **待つのは、この上限まで**（相手が遅いときに、要求のスレッドを長く塞がないため）。
+        /// 間に合わなければ、取り直しは背景で続き、この 1 本は断る（以前の振る舞い）。
+        /// </remarks>
+        private static readonly TimeSpan JwksUriRefetchWait = TimeSpan.FromSeconds(3);
+
+        /// <summary>要求の中で待っている取得の URL（#363）</summary>
+        /// <remarks>
+        /// **同じ URL で待つのは、同時に 1 本まで**（取得が終わるまで、待つ側が諦めた後も残す）。
+        /// **相手の `jwks_uri` が遅いと、取得が終わるまで Open棟梁 の下限（取得時刻）が進まない**ので、
+        /// これが無いと、その間に来た知らない `kid` の要求が、**それぞれ取得を起こして 3 秒ずつ塞がる**
+        /// （遅い `jwks_uri` を登録すれば、要求のスレッドを枯らせる）。
+        /// **キャッシュの下限は Open棟梁 に任せ**、ここは「同期で待つ」ことで生まれる塞がりだけを抑える。
+        /// </remarks>
+        private static readonly HashSet<string> _jwksUriWaiting = new HashSet<string>();
+
+        /// <summary>`_jwksUriWaiting` のロック</summary>
+        private static readonly object _jwksUriWaitingLock = new object();
+
+        /// <summary>`jwks_uri` から `kid` の鍵を、取り直してでも引き、上限まで待つ（#363）</summary>
+        /// <param name="jwksUri">jwks_uri</param>
+        /// <param name="kid">JWS のヘッダの kid（**空なら引かない**）</param>
+        /// <returns>JWK（JSON の文字列。引けなければ 0 件）</returns>
+        /// <remarks>
+        /// **取り直すかどうか（下限）は `RemoteJwkSetStore.GetJwkAsync` が決める**（Open棟梁。取得時刻から 1 分。`MinRefetchInterval`）。
+        /// **キャッシュの制御は Open棟梁 の 1 か所に置き、こちらは「同期の鎖の中で、上限まで待つ」ことだけを持つ。**
+        ///
+        /// **クライアント認証は同期の鎖**なので、**取得を `.Result` で待つと net48 で止まる**（#309）。
+        /// **同期コンテキストの無いスレッド（`Task.Run`）で取らせ、その Task を上限まで待つ** —
+        /// 継続は要求のスレッドへ戻らない（`RemoteJwkSetStore` の取得は `ConfigureAwait(false)`）ので、待っても塞がらない。
+        ///
+        /// **`kid` の無い JWS では呼ばない**（`GetJwkAsync` は `kid` で引く。§10.1.1 も「unfamiliar kid」を見たときの取り直し）。
+        /// その場合は、以前どおりキャッシュの鍵を順に試し、無ければ背景で補充して断る。
+        ///
+        /// **`GetJwkAsync` は、取得中の URL を重ねて取りに行きうる**（同時に来た要求のぶん。下限ごとに 1 回の束まで）。
+        /// Open棟梁 の側で直す（OpenTouryoProject/OpenTouryo#686）。
+        /// </remarks>
+        private static string[] WaitForJwkFromUri(string jwksUri, string kid)
+        {
+            if (string.IsNullOrEmpty(kid))
+            {
+                return new string[0];
+            }
+
+            //  **同じ URL で待っている取得が在れば、待たない**（この 1 本は、以前どおり断る）。
+            lock (CmnEndpoints._jwksUriWaitingLock)
+            {
+                if (!CmnEndpoints._jwksUriWaiting.Add(jwksUri))
+                {
+                    return new string[0];
+                }
+            }
+
+            Task<JObject> fetch = null;
+
+            try
+            {
+                fetch = Task.Run(() => RemoteJwkSetStore.GetJwkAsync(jwksUri, kid));
+
+                //  **印は、取得が終わったときに消す**（待つ側が上限で諦めても、取得中は残す）。
+                //    **失敗で終わったら、理由を残す**（上限を過ぎた後の失敗は、待つ側からは見えないため。鍵は出さない）。
+                fetch.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        Logging.MyOperationTrace(string.Format(
+                            "Fetching the jwks_uri for the client assertion failed. ({0})",
+                            t.Exception?.GetBaseException().GetType().Name));
+                    }
+
+                    lock (CmnEndpoints._jwksUriWaitingLock)
+                    {
+                        CmnEndpoints._jwksUriWaiting.Remove(jwksUri);
+                    }
+                }, TaskScheduler.Default);
+
+                if (fetch.Wait(CmnEndpoints.JwksUriRefetchWait) && fetch.Result != null)
+                {
+                    return new string[] { fetch.Result.ToString() };
+                }
+            }
+            catch (Exception)
+            {
+                //  **取得の失敗は「間に合わない」と同じ扱い**（この 1 本は断る）。
+                //  **取得を始められなかった（`Task.Run` が投げた）なら、ここで印を消す**（消す継続が無いため）。
+                if (fetch == null)
+                {
+                    lock (CmnEndpoints._jwksUriWaitingLock)
+                    {
+                        CmnEndpoints._jwksUriWaiting.Remove(jwksUri);
+                    }
+                }
+            }
+
+            return new string[0];
+        }
 
         /// <summary>ClientAuthentication</summary>
         /// <param name="client_id">string</param>
@@ -439,8 +565,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //    **キャッシュを読むだけ**にする。**取りに行って待つと net48 で止まる**
                 //    （**継続が同期コンテキストへ戻れない**。#309 の起票）。
                 //
-                //  **引けなければ、背景で取り直して、この 1 本は断る**（段階 1 の決め (C)(1)）。
-                //    **次の試行で通る。** **理由はログに残す**（#253 の方針。**鍵は出さない**）。
+                //  **知らない `kid` なら、その場で取り直して、上限まで待つ**（#363。OIDC Core 1.0 §10.1.1 の準用
+                //    「The verifier knows to go back to the jwks_uri location to re-retrieve the keys when it sees an unfamiliar kid value.」）。
+                //    **以前は、背景で取り直して、この 1 本は断っていた**（#309 の段階 1 の決め (C)(1)）ので、
+                //    **鍵を入れ替えた RP の、入れ替えの後の最初の 1 本が 401 になった**（適合性テストの `oidcc-refresh-token-rp-key-rotation`）。
+                //    **取り直すかどうか（下限）は Open棟梁 の `GetJwkAsync` が決める。** 下限の内側・間に合わない・`kid` が無いときは、
+                //    以前どおり背景で取り直して、この 1 本は断る（決め (C)(1)）。
+                //    **理由はログに残す**（#253 の方針。**鍵は出さない**）。
                 if (!string.IsNullOrEmpty(assertionIss))
                 {
                     string jwksUri = Helper.GetInstance().GetJwksUri(assertionIss);
@@ -450,6 +581,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string[] fromUri = RemoteJwkSetStore.PickJwksFromCache(
                             jwksUri, JwtReader.TryReadKid(assertion),
                             CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
+
+                        if (fromUri.Length == 0)
+                        {
+                            fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, JwtReader.TryReadKid(assertion));
+                        }
 
                         if (fromUri.Length == 0)
                         {
@@ -655,15 +791,38 @@ namespace MultiPurposeAuthSite.TokenProviders
             JwtConst.RS256
         };
 
-        /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262）</summary>
+        /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262・#370）</summary>
         /// <remarks>
-        /// **使っている版の `RequestObject.Verify`（JWK を受ける版）が `JWS_RS256_Param` 固定**なので、いまは `RS256` だけ。
-        /// **広げるのは、まだ起票していない別の作業**である（検証鍵 `JWS` を受ける版が在る。OpenTouryo#664）。
-        /// **CIBA の `request` は別**（使っている版の `VerifyCiba` が `ES256` 固定。仕様でも別の登録項目）。
+        /// **この一覧が、広告（`request_object_signing_alg_values_supported`）と、
+        /// 登録値の検証（`request_object_signing_alg`）と、画面の選択肢を決める**（#262）。
+        ///
+        /// **検証鍵は、ヘッダの alg と登録の鍵から作る**（`CmnRequestObjectEndpoint.SelectVerifyingJws`。#370）。
+        ///
+        /// | alg | 鍵 |
+        /// |---|---|
+        /// | `RS256`・`PS256` | 登録の RSA 公開鍵（`jwk_rsa_publickey`） |
+        /// | `ES256` | 登録の EC 公開鍵（`jwk_ecdsa_publickey`。P-256） |
+        ///
+        /// **以前は `RS256` だけだった**（使っていた `RequestObject.Verify` の版が `JWS_RS256_Param` 固定だったため）。
+        /// **FAPI は `RS256` を認めない**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ので、
+        /// **FAPI 2.0 Message Signing・FAPI 1.0 Advanced を満たせなかった**（#370）。
+        /// **FAPI の登録は、さらに `FapiRequestObjectSigningAlgs` に絞る。**
+        /// **CIBA の `request` は別**（`VerifyCiba` で `ES256`。仕様でも別の登録項目）。
         /// </remarks>
         public static readonly string[] RequestObjectSigningAlgs = new string[]
         {
-            JwtConst.RS256
+            JwtConst.RS256, JwtConst.PS256, JwtConst.ES256
+        };
+
+        /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`）が、Request Object で使ってよい alg（#370）</summary>
+        /// <remarks>
+        /// **FAPI 1.0 Advanced §8.6**（PS256 か ES256 を使う。RS256 などの RSASSA-PKCS1-v1_5 は使わない）、
+        /// **FAPI 2.0 Security Profile §5.4.1 の 1**（PS256・ES256・EdDSA。**EdDSA は扱っていない**）。
+        /// **`RequestObjectSigningAlgs` の部分集合**であること。
+        /// </remarks>
+        public static readonly string[] FapiRequestObjectSigningAlgs = new string[]
+        {
+            JwtConst.PS256, JwtConst.ES256
         };
 
         #endregion
@@ -704,6 +863,47 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return CmnEndpoints.TokenEndpointAuthMethods
                     .Where(x => x != CmnEndpoints.TokenEndpointAuthMethodNone).ToArray();
             }
+        }
+
+        /// <summary>クライアント認証のアサーションを取り出す（`client_assertion_type` を必須にする。#368）</summary>
+        /// <param name="client_assertion">client_assertion（RFC 7523 §2.2）</param>
+        /// <param name="client_assertion_type">client_assertion_type</param>
+        /// <param name="assertion">assertion（Open棟梁 の古いクライアントが送る名前）</param>
+        /// <returns>アサーション（無い・受け付けられないなら空）</returns>
+        /// <remarks>
+        /// **`client_assertion` があるのに `client_assertion_type` が無ければ、アサーションは無いものとして扱う**
+        /// （RFC 7521 §4.2 : `client_assertion_type` は REQUIRED）。**private_key_jwt だけの登録は、それで `invalid_client` になる。**
+        /// **値が違うときと、従来の名前 `assertion` だけのとき**（OpenTouryo#592 より前のクライアント。`RT-238.2`）は、
+        /// **Open棟梁 の `OAuth2AndOIDCSpec.GetClientAssertion` に任せる**（従来どおり）。
+        ///
+        /// **回避である。** 原因は Open棟梁 の `GetClientAssertion`（**型が来ていなければ、`client_assertion` をそのまま返す**）。
+        /// **Open棟梁 で直したら、この関数を外して、呼び出し元を元に戻す。**
+        /// </remarks>
+        public static string GetClientAssertion(
+            string client_assertion, string client_assertion_type, string assertion)
+        {
+            if (!string.IsNullOrEmpty(client_assertion)
+                && string.IsNullOrEmpty(client_assertion_type))
+            {
+                return "";
+            }
+
+            return OAuth2AndOIDCSpec.GetClientAssertion(client_assertion, client_assertion_type, assertion);
+        }
+
+        /// <summary>資格情報で認証した証明か（秘密を持つクライアントか。#367）</summary>
+        /// <param name="proof">ClientAuthentication などが返した証明</param>
+        /// <returns>client_secret・private_key_jwt・mTLS なら true（PKCE だけ・証明なしは false）</returns>
+        /// <remarks>
+        /// **RFC 9449 §5 : 秘密を持つクライアントの refresh_token は、DPoP の鍵に縛らない**
+        /// （クライアント認証で既に縛られている）。**公開クライアントの refresh_token は縛る。**
+        /// </remarks>
+        public static bool IsConfidentialProof(ClientModePolicy.Proof proof)
+        {
+            return proof == ClientModePolicy.Proof.ClientSecret
+                || proof == ClientModePolicy.Proof.ClientSecretAndPkce
+                || proof == ClientModePolicy.Proof.PrivateKeyJwt
+                || proof == ClientModePolicy.Proof.Mtls;
         }
 
         /// <summary>`token_endpoint_auth_method` に `none` を登録したクライアントか（#294）</summary>

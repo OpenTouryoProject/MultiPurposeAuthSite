@@ -32,6 +32,7 @@
 //*  2026/11/01  玄人 幸道         fapi2 の登録の client_assertion は、aud を issuer にした（#323）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/08  玄人 幸道         RT-238.4 : 自己テストの FAPI2 のボタンが PKCE を使うので、code_verifier も送る（#345）
+//*  2026/11/13  玄人 幸道         RT-238.1〜.3 の PAR に S256 の PKCE を足した（fapi2 は PKCE 無しを断るようになった。#366）
 //**********************************************************************************
 
 using System;
@@ -125,7 +126,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "response_type", "code" },
                     { "scope", "openid" },
                     { "redirect_uri", reg.RedirectUri },
-                    { "state", "state1" }
+                    { "state", "state1" },
+                    //  **fapi2 の登録は、S256 の PKCE 無しの PAR を断る**（FAPI 2.0 Security Profile §5.3.2.2。#366）
+                    { "code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" },
+                    { "code_challenge_method", "S256" }
                 });
 
                 r.VerifyEqual("HTTP 201（RFC 9126 §2.2）", "201", ((int)res.StatusCode).ToString());
@@ -171,7 +175,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "response_type", "code" },
                     { "scope", "openid" },
                     { "redirect_uri", reg.RedirectUri },
-                    { "state", "state1" }
+                    { "state", "state1" },
+                    //  **fapi2 の登録は、S256 の PKCE 無しの PAR を断る**（FAPI 2.0 Security Profile §5.3.2.2。#366）
+                    { "code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" },
+                    { "code_challenge_method", "S256" }
                 });
 
                 r.VerifyEqual("HTTP 201", "201", ((int)res.StatusCode).ToString());
@@ -214,7 +221,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "response_type", "code" },
                     { "scope", "openid" },
                     { "redirect_uri", reg.RedirectUri },
-                    { "state", "state1" }
+                    { "state", "state1" },
+                    //  **fapi2 の登録は、S256 の PKCE 無しの PAR を断る**（FAPI 2.0 Security Profile §5.3.2.2。#366）
+                    { "code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" },
+                    { "code_challenge_method", "S256" }
                 });
 
                 r.VerifyEqual("HTTP 401", "401", ((int)res.StatusCode).ToString());

@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/06  玄人 幸道         新規（#336）
+//*  2026/11/13  玄人 幸道         RT-336.6 の fapi2 の PAR に S256 の PKCE を足した（fapi2 は PKCE 無しを断るようになった。#366）
+//*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
 //**********************************************************************************
 
 using System;
@@ -97,6 +99,29 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
 
             return parameters;
+        }
+
+        /// <summary>fapi2 の登録に要る S256 の PKCE を足す（FAPI 2.0 Security Profile §5.3.2.2。#366）</summary>
+        /// <param name="overrides">ほかの上書き（無ければ null）</param>
+        /// <returns>上書き</returns>
+        /// <remarks>**fapi2 の登録は、PKCE 無しの PAR を `invalid_request` で断る**（#366）。値は RFC 7636 Appendix B。</remarks>
+        private static Dictionary<string, object> Fapi2Pkce(IDictionary<string, object> overrides = null)
+        {
+            Dictionary<string, object> pkce = new Dictionary<string, object>()
+            {
+                { "code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" },
+                { "code_challenge_method", "S256" }
+            };
+
+            if (overrides != null)
+            {
+                foreach (KeyValuePair<string, object> p in overrides)
+                {
+                    pkce[p.Key] = p.Value;
+                }
+            }
+
+            return pkce;
         }
 
         /// <summary>/ros に預ける</summary>
@@ -348,7 +373,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(1) exp・nbf があり、寿命が 60 分ちょうど（受ける）");
 
                 VerifyAccepted(r, "寿命 60 分", await RegisterAsync(client,
-                    await RequestObjectBuilder.CreateAsync(client, fapi.ClientId,
+                    await RequestObjectBuilder.CreateFapiAsync(client, fapi.ClientId,
                         Parameters(fapi, "state-rt3364-1", new Dictionary<string, object>()
                         {
                             { "nbf", now },
@@ -366,7 +391,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.Step(c.Key);
 
                     VerifyRejected(r, c.Key, await RegisterAsync(client,
-                        await RequestObjectBuilder.CreateAsync(client, fapi.ClientId,
+                        await RequestObjectBuilder.CreateFapiAsync(client, fapi.ClientId,
                             Parameters(fapi, "state-rt3364-2", c.Value))));
                 }
 
@@ -458,8 +483,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 JsonResponse ok = await client.PostJsonAsync(endpoint, new Dictionary<string, string>()
                 {
-                    { "request", await RequestObjectBuilder.CreateAsync(client, reg.ClientId,
-                        Parameters(reg, "state-rt3366-1", null)) },
+                    { "request", await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId,
+                        Parameters(reg, "state-rt3366-1", RequestObjectClaimTests.Fapi2Pkce())) },
                     { "client_assertion_type", JwtBearerAssertionType },
                     { "client_assertion", ClientAssertion(client, reg.ClientId, reg.ClientId, issuer) }
                 });
@@ -470,8 +495,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 VerifyParRejected(r, "exp が無い", await client.PostJsonAsync(endpoint, new Dictionary<string, string>()
                 {
-                    { "request", await RequestObjectBuilder.CreateAsync(client, reg.ClientId,
-                        Parameters(reg, "state-rt3366-2", new Dictionary<string, object>() { { RequestObjectBuilder.RemoveClaim, "exp" } })) },
+                    { "request", await RequestObjectBuilder.CreateFapiAsync(client, reg.ClientId,
+                        Parameters(reg, "state-rt3366-2", RequestObjectClaimTests.Fapi2Pkce(
+                            new Dictionary<string, object>() { { RequestObjectBuilder.RemoveClaim, "exp" } }))) },
                     { "client_assertion_type", JwtBearerAssertionType },
                     { "client_assertion", ClientAssertion(client, reg.ClientId, reg.ClientId, issuer) }
                 }));

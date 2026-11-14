@@ -31,7 +31,7 @@
 | カバレッジを品質マップの単位で集計する（`-Update` で `COVERAGE.md` を更新） | `.\CoverageReport.ps1` | [`COVERAGE.md`](programs/Tests/COVERAGE.md) |
 | 期待値の変更にトレーラーがあるかを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD` | [`QUALITY.md`](../QUALITY.md) 3 節 |
 | TESTCASES.md の作り直しの漏れを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD -CheckGenerated` | [`QUALITY.md`](../QUALITY.md) 3 節 |
-| 検出器の判定の用例を回す | `.\ExpectationGuard.Tests\Run-Tests.ps1` | [`QUALITY.md`](../QUALITY.md) 3 節 |
+| 検出器の判定の用例を回す | `.\files\tools\ExpectationGuard.Tests\Run-Tests.ps1` | [`QUALITY.md`](../QUALITY.md) 3 節 |
 | 検出器の写しが、写したときのままかを見る | `.\CheckExpectationChange.ps1 -VerifyCopy` | [`QUALITY.md`](../QUALITY.md) 3 節 |
 | 根拠を種類ごとに数える | `.\CountBasis.ps1` | [`QUALITY.md`](../QUALITY.md) 6 節 |
 | commit-msg フックを有効にする（各自の手元で 1 回） | `git config core.hooksPath .githooks` | [`QUALITY.md`](../QUALITY.md) 3 節 |

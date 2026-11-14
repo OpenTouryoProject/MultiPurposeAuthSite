@@ -33,6 +33,9 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/06  玄人 幸道         RequestObjectSigningAlg の一覧のコメントを、Open棟梁 の現状（OpenTouryo#664）に合わせた（#337）
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
+//*  2026/11/12  玄人 幸道         SectorIdentifierUri を追加（#364）
+//*  2026/11/13  玄人 幸道         RequestObjectSigningAlg の選択肢の説明を、PS256・ES256 を足したことに合わせた（#370）
+//*  2026/11/13  玄人 幸道         AuthorizationSignedResponseAlg を追加した（#370）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -332,19 +335,52 @@ namespace MultiPurposeAuthSite.ViewModels
         {
             get
             {
-                List<SelectListItem> items = new List<SelectListItem>();
+                return ManageAddSaml2OAuth2DataViewModel.SigningAlgItems();
+            }
+        }
 
-                foreach (string alg in JwsFactory.SupportedAlgs)
+        /// <summary>発行する側の alg の選択肢を作る（JARM と共用。#370）</summary>
+        /// <returns>選択肢</returns>
+        private static List<SelectListItem> SigningAlgItems()
+        {
+            List<SelectListItem> items = new List<SelectListItem>();
+
+            foreach (string alg in JwsFactory.SupportedAlgs)
+            {
+                items.Add(new SelectListItem()
                 {
-                    items.Add(new SelectListItem()
-                    {
-                        // 先頭が既定（登録しなかったときの値）。
-                        Text = (items.Count == 0) ? string.Format(Resources.CommonViewModels.DdlDefaultAlg, alg) : alg,
-                        Value = alg
-                    });
-                }
+                    // 先頭が既定（登録しなかったときの値）。
+                    Text = (items.Count == 0) ? string.Format(Resources.CommonViewModels.DdlDefaultAlg, alg) : alg,
+                    Value = alg
+                });
+            }
 
-                return items;
+            return items;
+        }
+
+        #endregion
+
+        #region AuthorizationSignedResponseAlg（JARM §3。#370）
+
+        /// <summary>AuthorizationSignedResponseAlg</summary>
+        /// <remarks>
+        /// **JARM の応答（`response`）の署名 alg**（JARM §3 の `authorization_signed_response_alg`）。
+        /// **空なら `RS256`**（JARM §3 の既定。FAPI の登録も。`Helper.GetAuthorizationSignedResponseAlg`）。
+        /// </remarks>
+        [Display(Name = "AuthorizationSignedResponseAlg", Description = "AuthorizationSignedResponseAlgDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientAuthorizationSignedResponseAlg)]
+        public string AuthorizationSignedResponseAlg { get; set; }
+
+        /// <summary>AuthorizationSignedResponseAlg アイテムリスト</summary>
+        /// <remarks>**id_token と同じ一覧**（鍵も同じ `SigningKeys` の表）。</remarks>
+        // **直列化しない**（画面の選択肢。上の DdlIdTokenSignedResponseAlgItems と同じ理由）。
+        [JsonIgnore]
+        public List<SelectListItem> DdlAuthorizationSignedResponseAlgItems
+        {
+            get
+            {
+                return ManageAddSaml2OAuth2DataViewModel.SigningAlgItems();
             }
         }
 
@@ -425,9 +461,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>RequestObjectSigningAlg アイテムリスト</summary>
         /// <remarks>
         /// **一覧は `CmnEndpoints.RequestObjectSigningAlgs` が持つ。**
-        /// **いまは `RS256` だけ**である（使っている版の `RequestObject.Verify` が RS256 固定のため。
-        /// 検証鍵 `JWS` を受ける版は在る（OpenTouryo#664）。広げるのは、まだ起票していない別の作業）。
-        /// **増やすのは「広げる側」の話**で、#262 では扱っていない。
+        /// **`RS256`・`PS256`・`ES256`**（#370 で広げた。以前は `RS256` だけ）。
+        /// **FAPI の登録は、ここで選ばなくても `PS256`・`ES256` に限られる**（`CmnEndpoints.FapiRequestObjectSigningAlgs`）。
         /// </remarks>
         // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
         //   **付けていないと、選択肢そのものが saml2OAuth2Data に書き込まれる。**
@@ -878,6 +913,25 @@ namespace MultiPurposeAuthSite.ViewModels
         [JsonIgnore]
         [StringLength(38)]
         public string OwnerUserId { get; set; }
+
+        #endregion
+        #region sector_identifier_uri（OIDC DCR 1.0 §2・§5。#364）
+
+        /// <summary>SectorIdentifierUri（OIDC Registration 1.0 §2 の sector_identifier_uri）</summary>
+        /// <remarks>
+        /// **pairwise の登録なら、Sector を、この URL のホストにする**（OIDC Core 1.0 §8.1。`PPIDExtension.GetSector`。public の登録では使わない）。
+        /// **無ければ `client_id` が Sector**（以前どおり）。
+        ///
+        /// **入るのは動的登録からだけ**（登録の口で取りに行き、中身に `redirect_uris` がすべて在ることを確かめた値。§5）。
+        /// **画面には欄を出さない**（画面の保存では、取りに行って確かめられないため）。**画面の保存では持ち越す。**
+        /// **構成ファイルでは書ける**（`sector_identifier_uri`。配備の管理者が書くので、取りに行かない）。
+        /// </remarks>
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientSectorIdentifierUri)]
+        public string SectorIdentifierUri { get; set; }
 
         #endregion
         #region 編集中の印（#307 の段階 5-a-2）

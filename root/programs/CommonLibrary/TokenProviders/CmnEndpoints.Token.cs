@@ -41,6 +41,7 @@
 //*  2026/11/09  玄人 幸道         client_credentials・ROPC・device_code でも、証明書でトークンを縛る（以前は縛っていなかった。JWT Bearer は必須にした登録だけ。#346）
 //*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
 //*  2026/11/10  玄人 幸道         応答の組み立てに client_id を渡すようにした（暗号化した id_token の中の JWS の alg。#355）
+//*  2026/11/13  玄人 幸道         秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（RFC 9449 §5）。fapi2 の登録は refresh_token を入れ替えない（FAPI 2.0 Security Profile §5.3.2.1。#367）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -322,13 +323,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                         && ClientModePolicy.MayUse(clientMode, ClientModePolicy.Flow.RefreshToken)
                         && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
-                        // **access_token を縛ったなら、refresh_token も同じ鍵に縛る**
+                        // **公開クライアントなら、access_token を縛った鍵に refresh_token も縛る**
                         //   （RFC 9449 §5。#311 の段階 4）。
-                        //   **access_token だけを縛っても、更新で縛りの無いものに乗り換えられる。**
+                        //   **秘密を持つクライアントの refresh_token は、鍵に縛らない**（同 §5。#367） —
+                        //   **クライアント認証で既に縛られている**（更新にはクライアントの資格情報が要る）。
                         // **利用者の SecurityStamp も書く**（#294。更新のときに照合する）。
                         refresh_token = RefreshTokenProvider.Create(
                             CmnEndpoints.BindUserOfRefreshToken(client_id, sub,
-                                CmnAccessToken.BindJkt(tokenPayload, jkt)));
+                                CmnAccessToken.BindJkt(tokenPayload,
+                                    CmnEndpoints.IsConfidentialProof(proof) ? "" : jkt)));
                     }
 
                     // オペレーション・トレース・ログ出力
@@ -431,7 +434,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //    （RFC 9449 §5。#311 の段階 4）。
                 //    **消費する前に断る** — **断られた後、同じ refresh_token でやり直せる**
                 //    （**ローテーションで一族ごと失効させてしまわない**。#188 の段階 3）。
-                if (authned && !CmnEndpoints.CheckDPoPJktOfRefreshToken(refresh_token, jkt, err))
+                //  **秘密を持つクライアント（資格情報で認証した要求）では見ない**（同 §5。#367） —
+                //    **クライアント認証で縛られている**ので、**別の鍵の証明で更新してよい**
+                //    （**以前に縛って出した refresh_token も、ここで縛りが外れる**。下の発行も縛らない）。
+                //    ※ **いまは refresh_token の経路が資格情報の認証を必須にしている**ので、ここを通るのは公開クライアントが更新できるようになったときである。
+                if (authned && !CmnEndpoints.IsConfidentialProof(proof)
+                    && !CmnEndpoints.CheckDPoPJktOfRefreshToken(refresh_token, jkt, err))
                 {
                     return false;
                 }
@@ -477,9 +485,19 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     #region 発行
 
+                    // **fapi2 の登録は、refresh_token を入れ替えない**（FAPI 2.0 Security Profile §5.3.2.1 の 9。#367）。
+                    //   **消費せずに読み**（Refer）、**新しい refresh_token は返さない**（RFC 6749 §6 : 返さなければ、クライアントは今のものを使い続ける）。
+                    //   **有効期限は、最初に出した時点から数える**（入れ替えないので延びない）。
+                    //   **FAPI 2.0 は送信者の拘束とクライアント認証を求める**ので、入れ替えで盗まれた refresh_token に備える必要が無い。
+                    //   **ほかの登録は、従来どおり入れ替える**（#188 の段階 3）。
+                    bool rotate = (clientMode != OAuth2AndOIDCEnum.ClientMode.fapi2);
+
                     // **一族（FamilyId）を引き継ぐ**（#188 の段階 3）。
                     //   使用済みが再び提示されたら、Receive の中で一族ごと失効させ、空を返す。
-                    string tokenPayload = RefreshTokenProvider.Receive(refresh_token, out string familyId);
+                    string familyId = "";
+                    string tokenPayload = rotate
+                        ? RefreshTokenProvider.Receive(refresh_token, out familyId)
+                        : RefreshTokenProvider.Refer(refresh_token);
 
                     //  **利用者が消された・SecurityStamp が変わった（パスワードの変更など）なら、断る**（#294）。
                     //    **以前は確かめず、預けた payload から作り直していた**ので、
@@ -488,6 +506,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!string.IsNullOrEmpty(tokenPayload)
                         && !CmnEndpoints.CheckUserOfRefreshToken(client_id, ref tokenPayload))
                     {
+                        //  **入れ替えない登録では、消費していない**ので、ここで失効させて終わらせる（#367）。
+                        if (!rotate)
+                        {
+                            RefreshTokenProvider.Delete(refresh_token);
+                        }
+
                         err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
                         err.Add(OAuth2AndOIDCConst.error_description, "The refresh_token is no longer valid for the user.");
                         return false;
@@ -519,12 +543,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                             return false;
                         }
 
-                        // **縛りは、ローテーションしても引き継ぐ**（#311 の段階 4）。
+                        // **公開クライアントなら、縛りはローテーションしても引き継ぐ**（#311 の段階 4）。
                         //   **引き継がないと、1 回更新するだけで縛りが外れる。**
+                        //   **秘密を持つクライアントは縛らない**（RFC 9449 §5。#367。以前に縛ったものも、ここで外れる）。
+                        //   **入れ替えない登録（fapi2）は、新しいものを出さない**（上。#367）。
                         //   （`EnableRefreshToken` は、この関数の入口で見ている）
-                        string new_refresh_token = RefreshTokenProvider.Create(
-                            CmnEndpoints.BindUserOfRefreshToken(client_id, sub,
-                                CmnAccessToken.BindJkt(tokenPayload, jkt)), familyId);
+                        string new_refresh_token = rotate
+                            ? RefreshTokenProvider.Create(
+                                CmnEndpoints.BindUserOfRefreshToken(client_id, sub,
+                                    CmnAccessToken.BindJkt(tokenPayload,
+                                        CmnEndpoints.IsConfidentialProof(proof) ? "" : jkt)), familyId)
+                            : "";
 
                         // オペレーション・トレース・ログ出力
                         string name = Helper.GetInstance().GetClientName(client_id);
@@ -1214,7 +1243,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //    AuthorizationCodeProvider.Receive(code, client_id, "")で確認される。
                 //  **`client_assertion`（private_key_jwt）も受ける**（#294）。**client_id は認証できたもの**を使う。
                 if (!CmnEndpoints.DeviceAuthZClientAuthentication(
-                    client_id, client_secret, clientAssertion, ref x509, out client_id))
+                    client_id, client_secret, clientAssertion, ref x509, out client_id,
+                    out bool confidential))
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
@@ -1318,14 +1348,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                             Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.RefreshToken)
                         && CmnEndpoints.CheckClientGrantType(client_id, ClientModePolicy.Flow.RefreshToken))
                     {
-                        // **この経路でも、縛ったなら refresh_token も縛る**（#311 の段階 4）。
+                        // **この経路でも、公開クライアントなら refresh_token も縛る**（#311 の段階 4）。
                         //   **デバイスの経路に `dpop_jkt` は無い**（認可要求がブラウザを通らない）が、
                         //   **`/token` で証明を受けていれば、access_token は縛られている** —
                         //   **refresh_token だけ縛られないのは、穴になる。**
+                        //   **秘密を持つクライアント（認証した要求）は縛らない**（RFC 9449 §5。#367）。
                         // **利用者の SecurityStamp も書く**（#294。更新のときに照合する）。
                         refresh_token = RefreshTokenProvider.Create(
                             CmnEndpoints.BindUserOfRefreshToken(client_id, sub,
-                                CmnAccessToken.BindJkt(tokenPayload, jkt)));
+                                CmnAccessToken.BindJkt(tokenPayload, confidential ? "" : jkt)));
                     }
 
                     // オペレーション・トレース・ログ出力
