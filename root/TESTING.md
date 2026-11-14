@@ -1195,6 +1195,22 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
 | **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
 
+##### FAPI の登録は、署名の alg を登録していなければ ES256 で署名する（`RT-394.*`。#394）
+
+| | 測ること |
+|---|---|
+| **`RT-394.1`** | **alg を登録していない fapi1 の登録（`FAPI1_Client`）の access_token・id_token・JARM が `ES256` で、JWKS で検証できる**（FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1）。**FAPI でない登録（`MVC_Sample`）は `RS256` のまま** |
+
+- **既定は `Helper.DefaultSigningAlg` の 1 か所**（`GetIdTokenSignedResponseAlg`・`GetAuthorizationSignedResponseAlg` が使う）。**登録が在れば、従来どおりその alg**
+- **#370 では見送った**（Open棟梁 の RP 側の検証が、暗号化しない ES256 を受けなかった）。**OpenTouryo#695 で直り、同梱の自己テスト（RP 側の `IdToken.Verify`・`AccessToken.Verify`・`ResponseObject.Verify`）も ES256 で通る**
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi2 の登録の access_token・JARM** | 同じ関数で決まる（fapi1 で代表させた）。fapi2 のトークンは PAR・DPoP・private_key_jwt が要り、id_token は暗号化している（中の JWS は以前から ES256。`RT-352.1`） |
+| **logout_token** | 同じ `GetIdTokenSignedResponseAlg` で決まる。ログアウトの E2E はテストのクライアント（normal）で測る |
+
 ##### SP の役で作る SAML2 の要求に、送り先の `Destination` を入れる（`RT-391.*`・`SA-6.1`。#391）
 
 | | 測ること |

@@ -40,6 +40,7 @@
 //*  2026/11/10  玄人 幸道         登録された id_token_signed_response_alg を、既定に倒さずに引く口を足した（#355）
 //*  2026/11/12  玄人 幸道         登録された sector_identifier_uri を引く口を足した（#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を引く口と、FAPI の登録かを見る IsFapiClient を足した（#370）
+//*  2026/11/14  玄人 幸道         FAPI の登録は、署名の alg を登録していなければ ES256 にした（DefaultSigningAlg。FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1。#394）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -504,7 +505,7 @@ namespace MultiPurposeAuthSite.Util.Sts
 
         /// <summary>client_id から id_token_signed_response_alg を取得する（#129 の段階 2）</summary>
         /// <param name="client_id">client_id</param>
-        /// <returns>alg（登録が無ければ RS256）</returns>
+        /// <returns>alg（登録が無ければ、FAPI の登録は ES256、それ以外は RS256）</returns>
         /// <remarks>
         /// **そのクライアントに発行する access_token と id_token の署名 alg** である
         /// （OIDC Dynamic Registration の `id_token_signed_response_alg`）。
@@ -514,20 +515,34 @@ namespace MultiPurposeAuthSite.Util.Sts
         ///
         /// | | |
         /// |---|---|
-        /// | 登録が無い | **`RS256`**（＝ 従来どおり。**FAPI の登録も**。下の注） |
+        /// | 登録が無い（FAPI でない登録） | **`RS256`**（＝ 従来どおり。OIDC Core の既定） |
+        /// | 登録が無い（**FAPI の登録**。`fapi1`・`fapi2`） | **`ES256`**（`DefaultSigningAlg`。#394） |
         /// | 既知でない値 | **入口で拒否する**（`CmnEndpoints.CheckClientMode`。#224 と同じ方針） |
         ///
         /// **CIBA は ES256 のまま**である（FAPI-CIBA が PS256 / ES256 を求めるため、登録値で上書きしない）。
         /// **JARM は別の登録項目**（`GetAuthorizationSignedResponseAlg`。#370）。
-        ///
-        /// **FAPI の登録も、登録が無ければ `RS256`**（FAPI は認めないので、FAPI で使う登録には `PS256`・`ES256` を書く）。
-        /// **既定を `ES256` にしないのは、Open棟梁 の RP 側の検証（`CmnJwtToken.Verify`）が、
-        /// 暗号化しない `ES256` の JWT を受けないため**（同梱の自己テストのクライアントを含め、Open棟梁 で作った RP が検証できなくなる。#370）。
         /// </remarks>
         public string GetIdTokenSignedResponseAlg(string client_id)
         {
-            // 登録が無い
-            return this.GetRegisteredIdTokenSignedResponseAlg(client_id) ?? JwtConst.RS256;
+            return this.GetRegisteredIdTokenSignedResponseAlg(client_id)
+                ?? this.DefaultSigningAlg(client_id);
+        }
+
+        /// <summary>署名の alg を登録していないときの既定（#394）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>FAPI の登録なら ES256、それ以外は RS256</returns>
+        /// <remarks>
+        /// **FAPI は RS256 を認めない**（FAPI 1.0 Advanced §8.6「shall use PS256 or ES256」、
+        /// FAPI 2.0 Security Profile §5.4.1「PS256, ES256, or EdDSA」）ので、**FAPI の登録の既定は ES256**。
+        /// **FAPI でない登録は RS256 のまま**（OIDC Core 1.0 §2 の `id_token_signed_response_alg`・JARM §3 の既定）。
+        ///
+        /// **#370 では、既定を ES256 にするのを見送った**（Open棟梁 の RP 側の検証 `CmnJwtToken.Verify` が、
+        /// 暗号化しない ES256 の JWT を受けなかった）。**OpenTouryo#695 で直った**ので、ここで変えた。
+        /// **ES256 にしたのは、MPAS のほかの FAPI の既定**（CIBA、fapi2 の暗号化した id_token の中の JWS。#355）**とそろえるため。**
+        /// </remarks>
+        private string DefaultSigningAlg(string client_id)
+        {
+            return this.IsFapiClient(client_id) ? JwtConst.ES256 : JwtConst.RS256;
         }
 
         /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`）か（#370）</summary>
@@ -543,17 +558,17 @@ namespace MultiPurposeAuthSite.Util.Sts
 
         /// <summary>client_id から authorization_signed_response_alg を取得する（JARM §3。#370）</summary>
         /// <param name="client_id">client_id</param>
-        /// <returns>alg（登録が無ければ RS256）</returns>
+        /// <returns>alg（登録が無ければ、FAPI の登録は ES256、それ以外は RS256）</returns>
         /// <remarks>
         /// **JARM の応答（`response`）の署名 alg。**
         /// **以前は RS256 に固定で、登録で選べなかった**ので、**FAPI 2.0 Message Signing を満たせなかった**（#370）。
-        /// **JARM §3 の既定は RS256**（**FAPI の登録も、登録が無ければ RS256**。理由は `GetIdTokenSignedResponseAlg` と同じ）。
+        /// **JARM §3 の既定は RS256。** **FAPI の登録は、登録が無ければ ES256**（`DefaultSigningAlg`。#394）。
         /// **既知でない値は、入口で拒否する**（`CmnEndpoints.CheckClientMode`。id_token と同じ）。
         /// </remarks>
         public string GetAuthorizationSignedResponseAlg(string client_id)
         {
             return this.GetRegisteredValue(client_id, Const.ClientAuthorizationSignedResponseAlg,
-                model => model.AuthorizationSignedResponseAlg) ?? JwtConst.RS256;
+                model => model.AuthorizationSignedResponseAlg) ?? this.DefaultSigningAlg(client_id);
         }
 
         /// <summary>client_id から、登録された id_token_signed_response_alg を取得する（#355）</summary>

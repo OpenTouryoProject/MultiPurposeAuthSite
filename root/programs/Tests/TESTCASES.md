@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=5c4220a0-d37c-4438-af78-459bccc3f5cf&code=bogus
+1. GET /Account/EmailConfirmation?userId=c51504bd-1227-4502-b151-6153a91fc358&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=5c4220a0-d37c-4438-af78-459bccc3f5cf&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=5c4220a0-d37c-4438-af78-459bccc3f5cf&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=c51504bd-1227-4502-b151-6153a91fc358&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=c51504bd-1227-4502-b151-6153a91fc358&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12526,6 +12526,33 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - Destination が、要求を送った先と同じ
 - Destination が、要求を送った先と同じ
 - Destination が、要求を送った先と同じ
+
+## RT-394.1 **署名の alg を登録していない FAPI の登録（fapi1）の access_token・id_token・JARM は ES256 で署名され、JWKS で検証できる。FAPI でない登録は RS256 のまま**
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced §8.6 は PS256 か ES256 を、FAPI 2.0 Security Profile §5.4.1 は PS256・ES256・EdDSA を求め、RS256 を認めない。****以前は FAPI の登録も、登録が無ければ RS256 だった**（#370 で見送った。OpenTouryo#695 で RP 側の検証が直った）。**FAPI でない登録の既定は RS256**（OIDC Core・JARM §3）。 |
+| 根拠 | FAPI 1.0 Advanced §8.6 / FAPI 2.0 Security Profile §5.4.1 / #394 |
+| テスト | `RT39401_algを登録していないFAPIの登録はES256で署名する` |
+
+**手順**
+
+1. fapi1 : 認可コード（PKCE）を引き換える
+1. fapi1 : JARM（response_mode=query.jwt）
+1. 対照 : FAPI でない登録（normal）は RS256 のまま
+
+**検証（合否を判定する）**
+
+- fapi1 の access_token : alg
+- fapi1 の access_token : 署名を JWKS で検証できる
+- fapi1 の id_token : alg
+- fapi1 の id_token : 署名を JWKS で検証できる
+- fapi1 の JARM : alg
+- fapi1 の JARM : 署名を JWKS で検証できる
+- normal の access_token : alg
+- normal の access_token : 署名を JWKS で検証できる
+- normal の id_token : alg
+- normal の id_token : 署名を JWKS で検証できる
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

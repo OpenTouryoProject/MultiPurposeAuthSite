@@ -292,13 +292,13 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 | 値 | ダイジェスト | パディング | 鍵 | 設定キー | |
 |---|---|---|---|---|---|
-| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ。**FAPI の登録も**。下の注） |
+| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ。**FAPI の登録は `ES256`**。下の注） |
 | `RS384` | SHA-384 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `RS512` | SHA-512 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `PS256` | SHA-256 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | #129 の段階 4。**FAPI が求める値** |
 | `PS384` | SHA-384 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | 同上 |
 | `PS512` | SHA-512 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | 同上 |
-| `ES256` | SHA-256 | － | EC（**P-256**） | `EcdsaPfxFilePath` | |
+| `ES256` | SHA-256 | － | EC（**P-256**） | `EcdsaPfxFilePath` | **FAPI の登録の既定**（書かなければこれ。#394） |
 | `ES384` | SHA-384 | － | EC（**P-384**） | `Ecdsa384PfxFilePath` | #129 の段階 3 |
 | `ES512` | SHA-512 | － | EC（**P-521**） | `Ecdsa512PfxFilePath` | 同上。**曲線は 521**（512 ではない） |
 
@@ -322,12 +322,15 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 > **CIBA（`client_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
-> **FAPI の登録（`client_mode=fapi1`・`fapi2`）も、この値を書かなければ `RS256`。** **FAPI は `RS256` を認めない**
-> （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ので、**FAPI で使う登録には `PS256` か `ES256` を書く**（JARM も同じ。下の `authorization_signed_response_alg`）。
-> **既定を `ES256` にしないのは、Open棟梁 の RP 側の検証（`CmnJwtToken.Verify`）が、暗号化しない `ES256` の JWT を受けないため**
-> （同梱の自己テストのクライアントを含め、Open棟梁 で作った RP が検証できなくなる。#370 で試して見つけた）。
+> **FAPI の登録（`client_mode=fapi1`・`fapi2`）は、この値を書かなければ `ES256`**（#394）。**FAPI は `RS256` を認めない**
+> （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ため（JARM も同じ。下の `authorization_signed_response_alg`）。
+> **#370 までは FAPI の登録も `RS256` だった**（Open棟梁 の RP 側の検証 `CmnJwtToken.Verify` が、暗号化しない `ES256` の JWT を受けなかった。OpenTouryo#695 で直った）。
+> **既定が変わるので、FAPI の登録でこの値を書いていない RP・リソース サーバは、`ES256` を検証できる必要がある**（鍵は `jwks_uri` に載り、`kid` で引ける）。
+> **`ES256` の鍵（`EcdsaPfxFilePath`）が要る。** 雛形の構成ファイルには入っている（CIBA・fapi2 の暗号化した id_token の中の JWS も使う）。**外している配備で、alg を書いていない FAPI の登録があれば、鍵を設定するか、登録に alg を書く。**
+> **RSA の鍵のまま移るなら、この値に `PS256` を書く**（FAPI の要件に合う。RP・リソース サーバは PS256 を検証できる必要がある）。
+> **`RS256` のままにしたい FAPI の登録は、この値に `RS256` を書く**（FAPI の要件には合わない）。
 > **fapi2 で id_token を暗号化する（`jwk_rsa_publickey` を登録した）クライアントは、この値を書かなければ、
-> id_token の中の JWS が `ES256` になる**（access_token は既定の `RS256`。**2 つは食い違う**。#355）。
+> id_token の中の JWS も access_token も `ES256` になる**（#355 では、中の JWS だけ `ES256` で access_token と食い違っていた。#394 でそろった）。
 > **書けば、中の JWS も access_token も、その alg になる。**
 
 ### `authorization_signed_response_alg` — JARM の署名アルゴリズム（#370）
@@ -336,7 +339,7 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 | 登録 | 署名 alg |
 |---|---|
-| 書かない | **`RS256`**（JARM §3 の既定。従来どおり。**FAPI の登録も**。理由は上の注と同じ。**FAPI で使う登録には `PS256` か `ES256` を書く**） |
+| 書かない | **`RS256`**（JARM §3 の既定。従来どおり）。**FAPI の登録は `ES256`**（#394。理由は上の注と同じ） |
 | 書く | **その alg**（**上の表の 9 つ**。鍵も上の表と同じ） |
 | **書ける値の外** | **入口で拒否する**（`unauthorized_client`。id_token と同じ） |
 

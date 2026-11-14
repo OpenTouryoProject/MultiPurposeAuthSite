@@ -36,6 +36,7 @@
 //*  2026/11/12  玄人 幸道         SectorIdentifierUri を追加（#364）
 //*  2026/11/13  玄人 幸道         RequestObjectSigningAlg の選択肢の説明を、PS256・ES256 を足したことに合わせた（#370）
 //*  2026/11/13  玄人 幸道         AuthorizationSignedResponseAlg を追加した（#370）
+//*  2026/11/14  玄人 幸道         署名の alg の既定のコメントを、FAPI の登録は ES256 に合わせた（#394）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -312,7 +313,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>IdTokenSignedResponseAlg</summary>
         /// <remarks>
         /// **そのクライアントに発行する access_token と id_token の署名 alg**（#129 の段階 2）。
-        /// **空なら `RS256`**（＝ 従来どおり）。
+        /// **空なら `RS256`**（＝ 従来どおり）。**FAPI の登録は `ES256`**（#394。`Helper.GetIdTokenSignedResponseAlg`）。
         /// </remarks>
         [Display(Name = "IdTokenSignedResponseAlg", Description = "IdTokenSignedResponseAlgDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
@@ -365,7 +366,7 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>AuthorizationSignedResponseAlg</summary>
         /// <remarks>
         /// **JARM の応答（`response`）の署名 alg**（JARM §3 の `authorization_signed_response_alg`）。
-        /// **空なら `RS256`**（JARM §3 の既定。FAPI の登録も。`Helper.GetAuthorizationSignedResponseAlg`）。
+        /// **空なら `RS256`**（JARM §3 の既定）。**FAPI の登録は `ES256`**（#394。`Helper.GetAuthorizationSignedResponseAlg`）。
         /// </remarks>
         [Display(Name = "AuthorizationSignedResponseAlg", Description = "AuthorizationSignedResponseAlgDescription",
             ResourceType = typeof(Resources.CommonViewModels))]

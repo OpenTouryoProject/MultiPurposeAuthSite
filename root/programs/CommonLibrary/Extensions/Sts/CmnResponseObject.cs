@@ -34,6 +34,7 @@
 //*  2026/10/31  玄人 幸道         clientId を必須にし、iss・aud・exp の無い応答を作らないようにした（JARM 2.1。#317）
 //*  2026/10/31  玄人 幸道         TokenProviders から Extensions/Sts へ移した（配置の見直し。#294）
 //*  2026/11/13  玄人 幸道         JARM の署名を、登録の authorization_signed_response_alg（既定は RS256）と SigningKeys の鍵で行う（#370）
+//*  2026/11/14  玄人 幸道         JARM の既定の alg のコメントを、FAPI の登録は ES256 に合わせた（#394）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -93,7 +94,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>JWS</returns>
         /// <remarks>
         /// **alg は登録の `authorization_signed_response_alg`**（JARM §3。#370）。
-        /// **登録が無ければ RS256**（JARM §3。FAPI の登録も。`Helper.GetAuthorizationSignedResponseAlg`）。
+        /// **登録が無ければ RS256**（JARM §3）。**FAPI の登録は ES256**（#394。`Helper.GetAuthorizationSignedResponseAlg`）。
         /// **以前は RS256 に固定だった**（FAPI 2.0 Message Signing は RS256 を認めない）。
         /// **鍵は `SigningKeys` の表が持つ**（id_token と同じ鍵。`jwks_uri` に載る）。
         /// **`jku` は入れない**（#302）。**鍵は `kid` で引く。**
