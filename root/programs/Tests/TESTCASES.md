@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus
+1. GET /Account/EmailConfirmation?userId=b86b2bad-a0e9-4ed7-83ca-79c2009ea081&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=b86b2bad-a0e9-4ed7-83ca-79c2009ea081&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=b86b2bad-a0e9-4ed7-83ca-79c2009ea081&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12384,6 +12384,72 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - authorization_signing_alg_values_supported に RS256 が在る
 - authorization_signing_alg_values_supported に PS256 が在る
 - authorization_signing_alg_values_supported に ES256 が在る
+
+## RT-371.1 **/ciba_authz は、client_assertion の aud に CIBA の口（Backchannel Authentication Endpoint）の URL を受ける。PAR の口の URL は受けない**
+
+| | |
+|---|---|
+| 観点 | **CIBA Core 1.0 §7.1 は、OP が issuer・トークン エンドポイントの URL・CIBA の口の URL を aud として受けることを求める（MUST）。****以前は、トークン エンドポイントの URL と issuer だけを受けていた**ので、CIBA の口の URL を書いた RP は invalid_client で断られた。**足すのはその口の URL だけ**（ほかの口に宛てたアサーションは受けない）。 |
+| 根拠 | CIBA Core 1.0 §7.1 / #371 |
+| テスト | `RT37101_ciba_authzはaudにCIBAの口のURLを受ける` |
+
+**手順**
+
+1. aud = CIBA の口の URL（通る）
+1. aud = PAR の口の URL（ほかの口の URL は受けない）
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id が返る（認証が通る）
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- HTTP 401
+- invalid_client
+
+## RT-371.2 **/par は、client_assertion の aud に PAR の口の URL を受ける。CIBA の口の URL は受けない。/revoke は PAR の口の URL を受けない**
+
+| | |
+|---|---|
+| 観点 | **RFC 9126 §2 は、認可サーバが issuer・トークン エンドポイントの URL・PAR の口の URL を aud として受けることを求める（MUST）。****以前は、トークン エンドポイントの URL と issuer だけを受けていた**ので、PAR の口の URL を書いた RP は invalid_client で断られた。**足すのはその口の URL だけ**（ほかの口に宛てたアサーションは受けない）。 |
+| 根拠 | RFC 9126 §2 / #371 |
+| テスト | `RT37102_parはaudにPARの口のURLを受ける` |
+
+**手順**
+
+1. /par に aud = PAR の口の URL（通る）
+1. /par に aud = CIBA の口の URL（ほかの口の URL は受けない）
+1. /revoke に aud = PAR の口の URL（PAR の口でしか受けない）
+1. 対照：/revoke に aud = トークン エンドポイントの URL（同じクライアント・同じ鍵で通る）
+
+**検証（合否を判定する）**
+
+- HTTP 201（RFC 9126 §2.2）
+- request_uri が返る
+- HTTP 401
+- invalid_client
+- invalid_client
+- 認証が通る（HTTP 200）
+
+## RT-371.3 **fapi2 の登録は、/par でも client_assertion の aud に issuer だけを受ける（PAR の口の URL は受けない）**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 Security Profile §5.3.2.1 は、issuer だけを文字列で受けることを求める**（RFC 9126 §2 より狭い）。**口の URL を足したのは fapi2 以外の登録**で、fapi2 は口によらず issuer だけ（RT-323.1）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / #323 / #371 |
+| テスト | `RT37103_fapi2の登録はparでもaudにissuerだけを受ける` |
+
+**手順**
+
+1. aud = issuer（通る）
+1. aud = PAR の口の URL（fapi2 は受けない）
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- HTTP 401
+- invalid_client
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

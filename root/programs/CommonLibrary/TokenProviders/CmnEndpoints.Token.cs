@@ -1099,7 +1099,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
                     //    **iss・aud も Open棟梁 が照合する**（OpenTouryo#654。#336）。
                     //    **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。
-                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, out string _))
+                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, null, out string _))
                     {
                         string iss = assertionIss;
 

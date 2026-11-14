@@ -42,6 +42,7 @@
 //*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを確かめ、その鍵の指紋を dpop_jkt として預ける。dpop_jkt と食い違えば断る（RFC 9449 §10.1。#365）
 //*  2026/11/13  玄人 幸道         認可エンドポイントと同じ検証に code_challenge_method を渡す（fapi2 の S256。#366）
 //*  2026/11/13  玄人 幸道         Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証する。FAPI の登録は PS256・ES256 に限る（#370）
+//*  2026/11/14  玄人 幸道         client_assertion の aud に、PAR の口の URL も受ける（RFC 9126 §2。#371）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -452,8 +453,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(assertion))
             {
                 // private_key_jwt
+                //  **aud に、この口（PAR）の URL も受ける**（RFC 9126 §2 の MUST。#371）。
                 authned = CmnEndpoints.ClientAuthentication(
-                    assertion, out client_id, ref x509, out ClientModePolicy.Proof _);
+                    assertion,
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri,
+                    out client_id, ref x509, out ClientModePolicy.Proof _);
             }
             else
             {

@@ -1192,6 +1192,26 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
 | **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
 
+##### `client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける（`RT-371.*`。#371）
+
+| | 測ること |
+|---|---|
+| **`RT-371.1`** | **`/ciba_authz` は、CIBA の口の URL を `aud` として受ける**（CIBA Core 1.0 §7.1 の MUST。`auth_req_id` が返る）。**PAR の口の URL は `invalid_client`** |
+| **`RT-371.2`** | **`/par` は、PAR の口の URL を受ける**（RFC 9126 §2 の MUST。201）。**CIBA の口の URL は `invalid_client`**。**`/revoke` は PAR の口の URL を受けない**（対照として、同じクライアントでトークン エンドポイントの URL なら通る） |
+| **`RT-371.3`** | **fapi2 の登録は、`/par` でも issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。PAR の口の URL は `invalid_client`） |
+
+- **判定は `CmnEndpoints.AssertionAudiences`**（Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsAssertionAudience` の判定を、ここで決める）。**口の URL を渡すのは PAR・CIBA の口だけ**（`ClientAuthentication(assertion, endpointUrl, …)`）
+- **足すのはその口の URL だけ**。**クライアント認証の JWT の `jti` は使用済みとして記録していない**ので、すべての口で全部の URL を受けると、ある口に宛てたアサーションを別の口で使える
+- **配列の `aud` は変えていない**（`RT-294.54`。MPAS の判定（`IsAssertionAudience`）が文字列に限る。要素 2 つ以上の配列は、Open棟梁 の `JwtAssertion.Verify` も受けない（唯一の値に限る。OpenTouryo#654））
+- **`RT-371.1` は利用者の端末を登録する**ので、CIBA のほかのテストと同じコレクション（`CibaTests.DeviceCollection`）に入れた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **口の URL を、Discovery の広告から引くこと** | テストは `BaseUrl` ＋ 口のパスで作る（`RT-294.54` のトークン エンドポイントと同じ）。**サーバの側は、Discovery と同じ `OAuth2AuthorizationServerEndpointsRootURI` ＋ 設定の口のパスで作る** |
+| **ES256 の PAR・RS256 の CIBA のアサーション** | alg の扱いは `aud` と別（`RT-129.1`・`RT-294.43`） |
+
 ##### `client_assertion_type` の無い `client_assertion` を受けない（`RT-368.*`。#368）
 
 | | 測ること |

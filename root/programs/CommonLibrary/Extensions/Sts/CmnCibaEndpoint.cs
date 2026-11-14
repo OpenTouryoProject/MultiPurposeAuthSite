@@ -35,6 +35,7 @@
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Ciba.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
 //*  2026/11/06  玄人 幸道         request の検証を、aud を渡す版の RequestObject.VerifyCiba にした（OpenTouryo#653。#336）
 //*  2026/11/06  玄人 幸道         クレームを Open棟梁 の TryGetStringClaim で取り出し、要求を日付に変えずに読む。任意のクレームも、読めなければ断る（OpenTouryo#662。#337）
+//*  2026/11/14  玄人 幸道         client_assertion の aud に、CIBA の口の URL も受ける（CIBA Core 1.0 §7.1。#371）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -108,8 +109,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(assertion))
             {
                 // private_key_jwt（FAPI-CIBA が求める方式）
+                //  **aud に、この口（Backchannel Authentication Endpoint）の URL も受ける**（CIBA Core 1.0 §7.1 の MUST。#371）。
                 authned = CmnEndpoints.ClientAuthentication(
-                    assertion, out client_id, ref x509, out ClientModePolicy.Proof _);
+                    assertion,
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint,
+                    out client_id, ref x509, out ClientModePolicy.Proof _);
             }
             else
             {
