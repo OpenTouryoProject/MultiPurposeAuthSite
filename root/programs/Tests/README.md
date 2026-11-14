@@ -337,6 +337,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
 | `Tests/Issues/RequestObjectSigningAlgTests.cs` | `RT-370` | **Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証し、FAPI の登録は PS256・ES256 に限る**（#370。`RT-370.1`〜`.4`） |
 | `Tests/Issues/JarmSigningAlgTests.cs` | `RT-370` | **JARM の署名 alg を登録（`authorization_signed_response_alg`）で選べ、登録が無ければ RS256**（#370。`RT-370.5`） |
+| `Tests/Issues/PollingClientBindingTests.cs` | `RT-387` | **CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する**（#387。CIBA Core 1.0 §11・RFC 6749 §5.2）。**別のクライアントは承認の前も後も `invalid_grant`**、**正規のクライアントは影響を受けない**（`slow_down` にならず、承認の後にトークンを受け取れる）こと（`RT-387.1`・`.2`） |
 | `Tests/Issues/ClientAssertionAudienceTests.cs` | `RT-371` | **`client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける**（#371。CIBA Core 1.0 §7.1・RFC 9126 §2）。**ほかの口の URL は受けない**こと、**fapi2 は `/par` でも issuer だけ**であること（`RT-371.1`〜`.3`） |
 | `Tests/Issues/ClientAssertionTypeTests.cs` | `RT-368` | **`client_assertion_type` の無い `client_assertion` を受けない**（#368。RFC 7521 §4.2）。**PAR でも `/revoke` でも `invalid_client`**、**型を付ければ通る**こと（`RT-368.1`） |
 | `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |

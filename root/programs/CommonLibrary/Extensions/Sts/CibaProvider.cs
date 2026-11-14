@@ -32,6 +32,7 @@
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
 //*  2026/11/02  玄人 幸道         client_notification_token を保存のキーに使わない（poll で 500。#328）
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
+//*  2026/11/14  玄人 幸道         auth_req_id を出したクライアント（ClientID）を記録し、トークン要求のクライアントと違えば記録に触れずに not_found を返す（CIBA Core 1.0 §11。#387）
 //**********************************************************************************
 
 using System;
@@ -75,6 +76,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **誰宛ての要求かを記録する。** ReceiveResult が、返答者と突き合わせるために使う。
         /// PPID により sub はクライアントごとに変わるので、利用者に固定な Id を使う。
         /// </param>
+        /// <param name="clientId">
+        /// auth_req_id を出したクライアントの client_id（#387）。
+        /// **トークン要求のクライアントと突き合わせる**（`ReceiveTokenReq`。CIBA Core 1.0 §11）。
+        /// </param>
         /// <param name="authReqId">string</param>
         //  **`client_notification_token` は保存しない**（#328）。
         //    **この実装は poll だけを扱い**、この値は ping / push の通知にしか使わない（CIBA Core §7.1）ので、読む箇所が無い。
@@ -83,7 +88,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         //    **その列には、一意な乱数である `auth_req_id` を入れる。** 列の名前と中身は合わないが、DDL を変えずに済む。
         //    **ping / push を実装するときは、DDL を変えて、本来の値を持たせる。**
         public static void Create(
-            long authReqExp, string authZCode, string unstructuredData, string userId, out string authReqId)
+            long authReqExp, string authZCode, string unstructuredData, string userId, string clientId,
+            out string authReqId)
         {
             authReqId = ""; // 初期化
 
@@ -103,6 +109,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             { Const.PollingAuthZCode, authZCode },
                             { "unstructuredData", unstructuredData },
                             { Const.PollingUserId, userId },
+                            { Const.PollingClientId, clientId },
                             { Const.PollingResult, "" }
                         };
                         
@@ -125,15 +132,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     cnn.Execute(
                                         "INSERT INTO [CibaData]"
-                                        + " ([ClientNotificationToken], [AuthReqId], [AuthReqExp], [AuthZCode], [UnstructuredData], [UserId])"
-                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId)",
+                                        + " ([ClientNotificationToken], [AuthReqId], [AuthReqExp], [AuthZCode], [UnstructuredData], [UserId], [ClientID])"
+                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId, @ClientID)",
                                         new {
                                             ClientNotificationToken = authReqId,
                                             AuthReqId = authReqId,
                                             AuthReqExp = authReqExp,
                                             AuthZCode = authZCode,
                                             UnstructuredData = unstructuredData,
-                                            UserId = userId
+                                            UserId = userId,
+                                            ClientID = clientId
                                         });
                                      break;
 
@@ -141,8 +149,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     cnn.Execute(
                                         "INSERT INTO \"CibaData\""
-                                        + " (\"ClientNotificationToken\", \"AuthReqId\", \"AuthReqExp\", \"AuthZCode\", \"UnstructuredData\", \"UserId\")"
-                                        + " VALUES (:ClientNotificationToken, :AuthReqId, :AuthReqExp, :AuthZCode, :UnstructuredData, :UserId)",
+                                        + " (\"ClientNotificationToken\", \"AuthReqId\", \"AuthReqExp\", \"AuthZCode\", \"UnstructuredData\", \"UserId\", \"ClientID\")"
+                                        + " VALUES (:ClientNotificationToken, :AuthReqId, :AuthReqExp, :AuthZCode, :UnstructuredData, :UserId, :ClientID)",
                                         new
                                         {
                                             ClientNotificationToken = authReqId,
@@ -150,7 +158,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                             AuthReqExp = authReqExp,
                                             AuthZCode = authZCode,
                                             UnstructuredData = unstructuredData,
-                                            UserId = userId
+                                            UserId = userId,
+                                            ClientID = clientId
                                         });
 
                                     break;
@@ -159,8 +168,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     cnn.Execute(
                                         "INSERT INTO \"cibadata\""
-                                        + " (\"clientnotificationtoken\", \"authreqid\", \"authreqexp\", \"authzcode\", \"unstructureddata\", \"userid\")"
-                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId)",
+                                        + " (\"clientnotificationtoken\", \"authreqid\", \"authreqexp\", \"authzcode\", \"unstructureddata\", \"userid\", \"clientid\")"
+                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId, @ClientID)",
                                          new
                                          {
                                              ClientNotificationToken = authReqId,
@@ -168,7 +177,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                              AuthReqExp = authReqExp,
                                              AuthZCode = authZCode,
                                              UnstructuredData = unstructuredData,
-                                             UserId = userId
+                                             UserId = userId,
+                                             ClientID = clientId
                                          });
 
                                     break;
@@ -346,12 +356,33 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 lastPolledAt, Config.CibaPollingIntervalSeconds);
         }
 
+        /// <summary>auth_req_id を、このクライアントに出したか（#387）</summary>
+        /// <param name="issuedTo">記録した client_id（列を足す前の記録では空）</param>
+        /// <param name="clientId">トークン要求で認証したクライアント</param>
+        /// <returns>同じなら true（**どちらかが空なら false**）</returns>
+        private static bool IsIssuedTo(string issuedTo, string clientId)
+        {
+            return !string.IsNullOrEmpty(issuedTo)
+                && !string.IsNullOrEmpty(clientId)
+                && issuedTo == clientId;
+        }
+
         /// <summary>ReceiveTokenReq</summary>
         /// <param name="authReqId">string</param>
+        /// <param name="clientId">トークン要求で認証したクライアント（#387）</param>
         /// <param name="authZCode">string</param>
         /// <param name="states">CibaState</param>
         /// <returns>結果</returns>
-        public static bool ReceiveTokenReq(string authReqId, out string authZCode, out OAuth2AndOIDCEnum.CibaState states)
+        /// <remarks>
+        /// **auth_req_id を出したクライアントと違えば、`not_found` を返し、記録に触れない**（#387）。
+        /// CIBA Core 1.0 §11 は「issued to another Client」に `invalid_grant` を求める（呼び出し側が `not_found` を `invalid_grant` にする）。
+        /// **以前は照合せずに、状態（`authorization_pending`・`slow_down`）を返し、ポーリングの時刻を書き換え、
+        /// 承認済みなら記録を消していた**（認可コードも、`AuthorizationCodeProvider.Receive` が照合の前に消す）ので、
+        /// **auth_req_id を知る別のクライアントが先に引くと、正規のクライアントが結果を受け取れなかった。**
+        /// **照合は、状態を見る前に行う。** 列を足す前の記録（`ClientID` が空）は、照合できないので断る。
+        /// </remarks>
+        public static bool ReceiveTokenReq(
+            string authReqId, string clientId, out string authZCode, out OAuth2AndOIDCEnum.CibaState states)
         {
             bool retVal = false;
             authZCode = "";
@@ -395,6 +426,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                 if (authReqId == dic[Const.PollingAuthReqId])
                                 {
+                                    //  **別のクライアントに出したものなら、記録に触れずに「無い」とする**（#387）。
+                                    if (!CibaProvider.IsIssuedTo(
+                                        dic.TryGetValue(Const.PollingClientId, out string issuedTo) ? issuedTo : "",
+                                        clientId))
+                                    {
+                                        states = OAuth2AndOIDCEnum.CibaState.not_found;
+                                        break;
+                                    }
+
                                     clientNotificationToken = _clientNotificationToken;
 
                                     // Code
@@ -461,13 +501,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             {   
                                 case EnumUserStoreType.SqlServer:
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT [AuthReqExp], [AuthZCode], [Result], [LastPolledAt] FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
+                                        "SELECT [AuthReqExp], [AuthZCode], [Result], [LastPolledAt], [ClientID] FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
-                                    if (dyn == null)
+                                    if (dyn == null || !CibaProvider.IsIssuedTo((string)dyn.ClientID, clientId))
                                     {
-                                        // レコードなし。
+                                        // レコードなし、または別のクライアントに出したもの（#387）。
+                                        //   **記録に触れずに返す**（下の更新・削除をしない）。
                                         states = OAuth2AndOIDCEnum.CibaState.not_found;
+                                        break;
                                     }
                                     else
                                     {
@@ -519,13 +561,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                 case EnumUserStoreType.ODPManagedDriver:
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\", \"LastPolledAt\"" + " FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
+                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\", \"LastPolledAt\", \"ClientID\"" + " FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
                                         new { AuthReqId = authReqId });
 
-                                    if (dyn == null)
+                                    if (dyn == null || !CibaProvider.IsIssuedTo((string)dyn.ClientID, clientId))
                                     {
-                                        // レコードなし。
+                                        // レコードなし、または別のクライアントに出したもの（#387）。
+                                        //   **記録に触れずに返す**（下の更新・削除をしない）。
                                         states = OAuth2AndOIDCEnum.CibaState.not_found;
+                                        break;
                                     }
                                     else
                                     {
@@ -582,13 +626,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                 case EnumUserStoreType.PostgreSQL:
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"authreqexp\", \"authzcode\", \"result\", \"lastpolledat\"" + " FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
+                                        "SELECT \"authreqexp\", \"authzcode\", \"result\", \"lastpolledat\", \"clientid\"" + " FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
-                                    if (dyn == null)
+                                    if (dyn == null || !CibaProvider.IsIssuedTo((string)dyn.clientid, clientId))
                                     {
-                                        // レコードなし。
+                                        // レコードなし、または別のクライアントに出したもの（#387）。
+                                        //   **記録に触れずに返す**（下の更新・削除をしない）。
                                         states = OAuth2AndOIDCEnum.CibaState.not_found;
+                                        break;
                                     }
                                     else
                                     {

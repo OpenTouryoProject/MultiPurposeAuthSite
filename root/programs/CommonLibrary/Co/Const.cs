@@ -55,6 +55,7 @@
 //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）を追加（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を追加（#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg（JARM の署名の alg の登録）を足した（#370）
+//*  2026/11/14  玄人 幸道         PollingClientId を追加（#387）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -719,6 +720,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>利用者の Id（CIBA）</summary>
         public const string PollingUserId = "userId";
+
+        /// <summary>auth_req_id を出したクライアントの client_id（CIBA。#387）</summary>
+        public const string PollingClientId = "clientId";
 
         /// <summary>user_code（Device Authorization Grant）</summary>
         public const string PollingUserCode = "userCode";

@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=b86b2bad-a0e9-4ed7-83ca-79c2009ea081&code=bogus
+1. GET /Account/EmailConfirmation?userId=a8c6ff6a-0929-4b4a-85c9-e0fdfa61b8eb&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=b86b2bad-a0e9-4ed7-83ca-79c2009ea081&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=b86b2bad-a0e9-4ed7-83ca-79c2009ea081&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=a8c6ff6a-0929-4b4a-85c9-e0fdfa61b8eb&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=a8c6ff6a-0929-4b4a-85c9-e0fdfa61b8eb&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12450,6 +12450,60 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-387.1 **CIBA のトークン要求で、別のクライアントに出した auth_req_id は、承認の前も後も invalid_grant。正規のクライアントは影響を受けない**
+
+| | |
+|---|---|
+| 観点 | **CIBA Core 1.0 §11 は、別のクライアントに出した auth_req_id に invalid_grant を求める（MUST）。****以前は照合する前に、状態を返し、ポーリングの時刻を書き換え、承認済みなら記録と認可コードを消していた**ので、auth_req_id を知る別のクライアントが先に引くと、正規のクライアントが結果を受け取れなかった。 |
+| 根拠 | CIBA Core 1.0 §11 / #387 |
+| テスト | `RT38701_CIBAの別のクライアントはinvalid_grantで正規のクライアントは影響を受けない` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録し、FAPI_CIBA_Client が CIBA を始める
+1. 承認の前に、別のクライアントが、その auth_req_id でトークンを要求する
+1. 続けて、正規のクライアントがポーリングする
+1. 利用者 : 認証デバイスで許可する
+1. 承認の後に、別のクライアントが、その auth_req_id でトークンを要求する
+1. 正規のクライアントがポーリングする（記録と認可コードが残っている）
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- invalid_grant（authorization_pending を返さない）
+- authorization_pending（slow_down にならない ＝ 別のクライアントの要求は、ポーリングの時刻を書き換えていない）
+- invalid_grant
+- トークンを出さない
+- access_token が返る
+
+## RT-387.2 **Device のトークン要求で、別のクライアントに出した device_code は、承認の前も後も invalid_grant。正規のクライアントは影響を受けない**
+
+| | |
+|---|---|
+| 観点 | **RFC 8628 §3.5 は RFC 6749 §5.2 のエラーを使い、§5.2 の invalid_grant は「issued to another client」を含む。****以前は CIBA と同じく、照合する前に、状態を返し、ポーリングの時刻を書き換え、承認済みなら記録と認可コードを消していた。** |
+| 根拠 | RFC 8628 §3.5 / RFC 6749 §5.2 / #387 |
+| テスト | `RT38702_Deviceの別のクライアントはinvalid_grantで正規のクライアントは影響を受けない` |
+
+**手順**
+
+1. 機器 : Device_Client が POST /device_authz で device_code を得る
+1. 承認の前に、別のクライアントが、その device_code でトークンを要求する
+1. 続けて、正規のクライアントがポーリングする
+1. 利用者 : user_code を入力して許可する
+1. 承認の後に、別のクライアントが、その device_code でトークンを要求する
+1. 正規のクライアントがポーリングする（記録と認可コードが残っている）
+
+**検証（合否を判定する）**
+
+- invalid_grant（authorization_pending を返さない）
+- authorization_pending（slow_down にならない ＝ 別のクライアントの要求は、ポーリングの時刻を書き換えていない）
+- invalid_grant
+- トークンを出さない
+- access_token が返る
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

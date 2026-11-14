@@ -1195,6 +1195,26 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
 | **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
 
+##### CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する（`RT-387.*`。#387）
+
+| | 測ること |
+|---|---|
+| **`RT-387.1`** | **CIBA**：別のクライアントは、承認の前も後も `invalid_grant`（CIBA Core 1.0 §11 の MUST）。**その後も、正規のクライアントは `authorization_pending`（`slow_down` でない）を受け、承認の後にトークンを受け取れる** |
+| **`RT-387.2`** | **Device**：同じことを `device_code` で（RFC 8628 §3.5・RFC 6749 §5.2） |
+
+- **照合は `CibaProvider.ReceiveTokenReq`・`DeviceAuthZProvider.ReceiveTokenReq` が、状態を見る前に行う。** 違えば `not_found` を返し、**記録（状態・ポーリングの時刻）に触れない**（呼び出し側が `invalid_grant` にする）
+- **CIBA は、記録に `ClientID` 列を足した**（DDL。`CONFIGURATION.md`）。**Device は、記録の `TempData` の `client_id` と比べる**
+- **正規のクライアントが `slow_down` を受けないこと**で、**別のクライアントの要求がポーリングの時刻を書き換えていない**ことを確かめる
+- **以前は、承認済みの記録と認可コードを、照合の前に消していた**ので、別のクライアントが先に引くと、正規のクライアントが結果を受け取れなかった
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **列を足す前に作られた CIBA の要求（`ClientID` が空）** | 配備の切り替えのときだけの記録。E2E は DDL を流し直すので作れない。**照合できないので断る**（`IsIssuedTo` が空を一致としない） |
+| **`TempData` が読めない Device の記録** | 自分で作る記録で、壊れた値を E2E から入れられない。**読めなければ断る** |
+| **期限切れの `auth_req_id`・`device_code` を、別のクライアントが引く** | 寿命が切れるまで待つ必要があり、通しに入れられない。**照合は状態の判定より前**なので、別のクライアントには `invalid_grant` を返して記録に触れず、正規のクライアントは従来どおり `expired_token` を受ける |
+
 ##### `client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける（`RT-371.*`。#371）
 
 | | 測ること |

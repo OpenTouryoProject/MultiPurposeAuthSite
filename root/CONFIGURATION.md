@@ -3552,6 +3552,25 @@ ALTER TABLE "OAuth2Revocation" ADD "ExpiresAt" NUMBER(19) NULL;
 ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
 ```
 
+### CIBA の要求を出したクライアント（`CibaData.ClientID`。#387）
+
+**`auth_req_id` を出したクライアントを `ClientID` に記録し、トークン要求で認証したクライアントと照合する**（CIBA Core 1.0 §11）。
+**違えば、記録に触れずに `invalid_grant` を返す。** 以前は照合する前に状態を返し、承認済みなら記録を消していた。
+（Device Authorization Grant は、記録の `TempData` に `client_id` を持っているので、列は増えない。）
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。
+**足さないと、CIBA の認証要求（`/ciba_authz`）が失敗する**（記録の `INSERT` が失敗する）。
+**列を足す前に作られた要求は `ClientID` が空で、照合できないので `invalid_grant` になる**（CIBA の要求の寿命は短いので、配備の後に始め直してもらう）。
+
+```sql
+-- SQL Server
+ALTER TABLE [CibaData] ADD [ClientID] [nvarchar](256) NULL
+-- Oracle
+ALTER TABLE "CibaData" ADD ("ClientID" NVARCHAR2(256) NULL);
+-- PostgreSQL
+ALTER TABLE CibaData ADD COLUMN ClientID varchar(256) NULL;
+```
+
 ## 8. 証明書
 
 ```json
