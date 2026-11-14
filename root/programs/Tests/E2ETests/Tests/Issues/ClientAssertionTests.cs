@@ -33,6 +33,7 @@
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/08  玄人 幸道         RT-238.4 : 自己テストの FAPI2 のボタンが PKCE を使うので、code_verifier も送る（#345）
 //*  2026/11/13  玄人 幸道         RT-238.1〜.3 の PAR に S256 の PKCE を足した（fapi2 は PKCE 無しを断るようになった。#366）
+//*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
 //**********************************************************************************
 
 using System;
@@ -72,7 +73,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
         }
 
-        /// <summary>client_assertion（RS256 で署名した JWT）を作る</summary>
+        /// <summary>client_assertion（PS256 で署名した JWT）を作る（#395。以前は RS256）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="issuer">issuer（aud に入れる）</param>
@@ -84,7 +85,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            //  **PS256 で署名する**（#395。FAPI の登録は RS256 の client_assertion を断る。FAPI 1.0 Advanced §8.6）。
+            return JwsSigner.SignPS256(client, new Dictionary<string, object>()
             {
                 { "iss", clientId },
                 { "sub", clientId },
@@ -116,7 +118,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Target("client_name=" + KnownClients.Fapi2Client + "（fapi2。jwk_rsa_publickey を登録済み）");
 
-                r.Step("(1) client_assertion（RS256）を作り、client_assertion_type を添えて POST /par");
+                r.Step("(1) client_assertion（PS256）を作り、client_assertion_type を添えて POST /par");
 
                 JsonResponse res = await client.PostJsonAsync("/par", new Dictionary<string, string>()
                 {

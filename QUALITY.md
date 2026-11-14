@@ -216,7 +216,9 @@ git config core.hooksPath .githooks
   **見送ったときは、相手の側の Issue と、直ったら何をするかを、コードのコメントと文書に残す**（#370 の見送りは、Open棟梁 の更新の知らせで拾えた）
 - [ ] **受ける JWT（Request Object など）の alg は、鍵の種類と食い違っていないか。プロファイルが認めない alg を受けていないか。**
   **Request Object を RS256 でしか検証できず、FAPI の RP の ES256 を断っていた。一方で FAPI の登録の RS256 は受けていた**（#370。`RT-370.1`〜`.4`）。
-  **受ける alg を変えたら、その alg で作っている既存のテスト（と自己テストのクライアント）が、測りたい理由より先に alg で断られていないか**も見る
+  **受ける alg を変えたら、その alg で作っている既存のテスト（と自己テストのクライアント）が、測りたい理由より先に alg で断られていないか**も見る。
+  **受ける JWT ごとに、alg の扱いがそろっているか**も見る — **Request Object は PS256 を受けて FAPI の RS256 を断るのに、`client_assertion` と CIBA の要求は PS256 を受けなかった**（#395。`RT-395.1`・`.2`）。
+  **鍵の種類（`kty`）で alg を決める版の `Verify` は、PS256 を通せない**（RSA の鍵は RS256 に決まる）。**ヘッダの alg を受けてよいと決めてから、その alg と鍵から検証鍵を作る**（OpenTouryo#664 の `JWS` を受ける版）
 - [ ] **応答の数値（`expires_in`・`interval` など）を、JSON の文字列にしていないか**（RFC 6749 §5.1「Numerical values are included as JSON numbers」）。
   **`Dictionary<string, string>` で応答を作ると、数値が文字列になる**（#294・#353。`RT-294.75`・`RT-353`）。
   **E2E の `JsonResponse.String` は数値も文字列にして返す**ので、型は `KindOf` で見る

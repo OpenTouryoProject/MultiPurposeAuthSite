@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/14  玄人 幸道         新規（#371）
+//*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
 //**********************************************************************************
 
 using System;
@@ -163,7 +164,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string cibaUrl = client.Target.BaseUrl + "/ciba_authz";
 
                 r.Target("POST /par・POST /revoke（client_name=" + KnownClients.TestClient_24
-                    + "。normal。private_key_jwt（RS256）で認証する）");
+                    + "。normal。private_key_jwt（PS256）で認証する）");
 
                 r.Step("(1) /par に aud = PAR の口の URL（通る）");
 
@@ -186,7 +187,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     { "token", "not-a-token" },
                     { "client_assertion_type", ClientAssertionAudienceTests.JwtBearerAssertionType },
-                    { "client_assertion", ClientAssertionAudienceTests.ClientAssertionRS256(client, reg.ClientId, parUrl) }
+                    { "client_assertion", ClientAssertionAudienceTests.ClientAssertionPS256(client, reg.ClientId, parUrl) }
                 });
 
                 r.VerifyEqual("invalid_client", "invalid_client", revoke.Error ?? "（無い）");
@@ -197,7 +198,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     { "token", "not-a-token" },
                     { "client_assertion_type", ClientAssertionAudienceTests.JwtBearerAssertionType },
-                    { "client_assertion", ClientAssertionAudienceTests.ClientAssertionRS256(
+                    { "client_assertion", ClientAssertionAudienceTests.ClientAssertionPS256(
                         client, reg.ClientId, client.Target.BaseUrl + "/token") }
                 });
 
@@ -229,7 +230,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistration reg = Flows.Registration(client, KnownClients.Fapi2Client);
                 string issuer = await client.IssuerAsync();
 
-                r.Target("POST /par（client_name=" + KnownClients.Fapi2Client + "。fapi2。private_key_jwt（RS256）で認証する）");
+                r.Target("POST /par（client_name=" + KnownClients.Fapi2Client + "。fapi2。private_key_jwt（PS256）で認証する）");
 
                 r.Step("(1) aud = issuer（通る）");
 
@@ -289,7 +290,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             });
         }
 
-        /// <summary>client_assertion（RS256）で POST /par する</summary>
+        /// <summary>client_assertion（PS256）で POST /par する</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="reg">クライアント（private_key_jwt）</param>
         /// <param name="aud">client_assertion の aud</param>
@@ -302,7 +303,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "client_id", reg.ClientId },
                 { "client_assertion_type", ClientAssertionAudienceTests.JwtBearerAssertionType },
-                { "client_assertion", ClientAssertionAudienceTests.ClientAssertionRS256(client, reg.ClientId, aud) },
+                { "client_assertion", ClientAssertionAudienceTests.ClientAssertionPS256(client, reg.ClientId, aud) },
                 { "response_type", "code" },
                 { "scope", "openid" },
                 { "redirect_uri", reg.RedirectUri },
@@ -313,16 +314,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             });
         }
 
-        /// <summary>RS256 の client_assertion を作る（RFC 7523 §2.2）</summary>
+        /// <summary>PS256 の client_assertion を作る（RFC 7523 §2.2。FAPI の登録は RS256 を断る。#395）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="aud">aud</param>
         /// <returns>client_assertion</returns>
-        private static string ClientAssertionRS256(IdPClient client, string clientId, string aud)
+        private static string ClientAssertionPS256(IdPClient client, string clientId, string aud)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            return JwsSigner.SignPS256(client, new Dictionary<string, object>()
             {
                 { "iss", clientId },
                 { "sub", clientId },

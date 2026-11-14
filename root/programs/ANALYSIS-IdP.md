@@ -1718,11 +1718,11 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
-| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる。登録 `token_endpoint_auth_signing_alg` で片方に絞れる**（#262） |
+| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","PS256","ES256"]` | **RS256 / PS256 / ES256**（#129 の段階 2 で ES256、**✅ #395 で PS256 を足した**） | `CmnEndpoints.ClientAuthentication` が、**ヘッダの alg を受けてよいと決めてから、その alg に合う種類の登録の鍵で検証する**（検証鍵 `JWS` を受ける `JwtAssertion.Verify`。OpenTouryo#664。#395）。**登録 `token_endpoint_auth_signing_alg` で 1 つに絞れる**（#262）。**FAPI の登録（fapi1・fapi2・fapi_ciba）は PS256・ES256 だけ**（RS256 を断る。FAPI 1.0 Advanced §8.6・FAPI-CIBA ID1 §7.10。#395） |
 | `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2。**FAPI の登録の既定は ES256**（✅ #394。#370 では、Open棟梁 の RP 側の検証が暗号化しない ES256 を受けなかったので見送った。OpenTouryo#695 で直った））。`client_mode=fapi_ciba` は ES256 固定 |
 | access_token | （広告しない） | 同上（9 つ） | 同上（`id_token` と同じ alg になる） |
 | Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256","PS256","ES256"]`（#370） | **RS256 / PS256 / ES256**（#370。以前は RS256 固定）。**FAPI の登録は PS256 / ES256** | `CmnRequestObjectEndpoint.SelectVerifyingJws`（**登録の RSA・EC の鍵のうち、alg に合うほう**）。**登録 `request_object_signing_alg` で絞れる**（#262） |
-| CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
+| CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["PS256","ES256"]` | **PS256 / ES256**（**✅ #395 で PS256 を足した**。以前は ES256 固定） | `RequestObject.VerifyCiba`（検証鍵 `JWS` を受ける版。鍵は、PS256 なら登録の RSA、ES256 なら登録の EC。`CmnRequestObjectEndpoint.SelectCibaVerifyingJws`）。**RS256 は受けない**（FAPI-CIBA ID1 §7.10） |
 | 認可応答（JARM） | `authorization_signing_alg_values_supported` : **id_token と同じ 9 つ**（#370） | **左の 9 つ**（#370。以前は RS256 固定） | `CmnResponseObject`。**登録 `authorization_signed_response_alg` で決まる**（既定は RS256。**FAPI の登録は ES256**。#394） |
 
 **広告と実装は一致している**（#189 / A-10 で整えた）。

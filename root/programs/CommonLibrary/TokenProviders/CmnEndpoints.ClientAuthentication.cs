@@ -47,6 +47,7 @@
 //*  2026/11/13  玄人 幸道         client_assertion_type の無い client_assertion を受けない GetClientAssertion を足した（RFC 7521 §4.2。Open棟梁 の回避。#368）
 //*  2026/11/13  玄人 幸道         Request Object で受ける alg に PS256・ES256 を足し、FAPI の登録の alg（FapiRequestObjectSigningAlgs）を足した（#370）
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、受けた口（PAR・CIBA）の URL も受ける版を足した（RFC 9126 §2・CIBA Core 1.0 §7.1。#371）
+//*  2026/11/15  玄人 幸道         client_assertion の検証鍵を、ヘッダの alg と登録の鍵から作る（JWS を受ける JwtAssertion.Verify）。PS256 を受け、FAPI の登録は RS256 を断る（FAPI 1.0 Advanced §8.6。OpenTouryo#664。#395）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -575,13 +576,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //
                 // **登録された公開鍵を、RSA → ECDSA の順に試す**（#129 の段階 2）。
                 //   **以前は jwk_rsa_publickey しか渡しておらず、RS256 しか通らなかった。**
-                //   `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、
-                //   **ECDSA の公開鍵を渡せば ES256 が通る**（框は両方に対応していた）。
                 //
-                // **アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。
-                //   **登録済みの鍵で順に検証する**だけなので、外から alg を選ばせていない。
-                //   **どちらの鍵でも通る**が、どちらも配備者が登録した鍵である。
-                //   （片方だけ登録すれば、その方式だけになる。）
+                // **鍵は、ヘッダの alg を受けてよいと決めてから、その alg に合う種類の鍵だけを使う**（#395）。
+                //   **alg は、受ける一覧（`TokenEndpointAuthSigningAlgs`）・登録 `token_endpoint_auth_signing_alg`（#262）・
+                //   FAPI の登録の制限（PS256・ES256）で絞る**（`AllowsClientAssertionAlg`）。
+                //   **ヘッダの alg と鍵の種類が食い違えば、その鍵は使わない**（`VerifyingJwsOf`。RFC 8725 §3.1。C-8 と同じ轍を踏まない）。
+                //   **以前は JWK を受ける版の `JwtAssertion.Verify` を使い、`kty` で RS256 か ES256 に決めていた**ので、PS256 を受けられなかった。
                 string[] pubKeys = string.IsNullOrEmpty(assertionIss)
                     ? new string[0]
                     : new string[]
@@ -639,10 +639,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   **登録が在れば、その alg でなければ通さない**
                 //   （鍵を両方登録したクライアントを、片方に絞れるようにするため）。
                 //   **既知でない値が登録されていれば拒否する**（#224 と同じ方針）。
-                if (!CmnEndpoints.AllowsVerifyingAlg(
-                    Helper.GetInstance().GetTokenEndpointAuthSigningAlg(assertionIss),
-                    CmnEndpoints.TokenEndpointAuthSigningAlgs,
-                    JwtReader.TryReadAlg(assertion)))
+                string assertionAlg = JwtReader.TryReadAlg(assertion);
+
+                if (!CmnEndpoints.AllowsClientAssertionAlg(assertionIss, assertionAlg))
                 {
                     proof = ClientModePolicy.Proof.None;
                     client_id = "";
@@ -651,16 +650,18 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 foreach (string pubKey in pubKeys)
                 {
-                    if (string.IsNullOrEmpty(pubKey))
+                    //  **その alg に合う種類の鍵だけを使う**（#395。合わなければ、登録されていないのと同じ）。
+                    JWS jws = CmnEndpoints.VerifyingJwsOf(pubKey, assertionAlg);
+
+                    if (jws == null)
                     {
-                        // その方式の公開鍵が登録されていない
                         continue;
                     }
 
                     // 署名検証 ≒ クライアント認証
                     //  **sub は iss（client_id）と一致すること**（RFC 7523 §3 の 2 の B、OIDC Core §9。#336）。
                     //    Open棟梁 の `JwtAssertion.Verify` は sub が在ることだけを見る（OpenTouryo#654）ので、ここで照合する。
-                    if (CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, endpointUrl, out string sub)
+                    if (CmnEndpoints.TryVerifyAssertion(assertion, jws, assertionIss, endpointUrl, out string sub)
                         && sub == assertionIss)
                     {
                         string iss = assertionIss;
@@ -806,15 +807,103 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **この一覧が、広告（`token_endpoint_auth_signing_alg_values_supported`）と、
         /// 登録値の検証（`token_endpoint_auth_signing_alg`）の両方を決める。**
         ///
-        /// **中身は、いま使っている版の都合である。** JWK を受ける `JwtAssertion.Verify` は
-        /// **JWK の `kty` を見て `JWS_RS256_Param` / `JWS_ES256_Param` を選ぶ**ので、この 2 つになる。
-        /// **広げるのは、まだ起票していない別の作業**である（#129 は発行する側の alg で、閉じている）。検証鍵 `JWS` を受ける版が在る（`JwsFactory.CreateFromJwk(alg, jwk)` で鍵を作り、
-        /// ヘッダの alg が鍵と違えば断る。OpenTouryo#664）。**広げると振る舞いが変わるので、#337 では変えていない。**
+        /// **検証鍵は、ヘッダの alg と登録の鍵から作る**（`VerifyingJwsOf`。検証鍵 `JWS` を受ける `JwtAssertion.Verify`。OpenTouryo#664。#395）。
+        ///
+        /// | alg | 鍵 |
+        /// |---|---|
+        /// | `RS256`・`PS256` | 登録の RSA 公開鍵（`jwk_rsa_publickey`）・`jwks_uri` の RSA の鍵 |
+        /// | `ES256` | 登録の EC 公開鍵（`jwk_ecdsa_publickey`。P-256）・`jwks_uri` の EC の鍵 |
+        ///
+        /// **以前は `RS256`・`ES256` だけだった**（JWK を受ける版の `JwtAssertion.Verify` が、`kty` で RS256 か ES256 に決めていた）。
+        /// **PS256 を使う FAPI のクライアントは、認証できなかった**（FAPI 1.0 Advanced §8.6。#395）。
+        /// **FAPI の登録は、さらに `FapiTokenEndpointAuthSigningAlgs` に絞る**（RS256 を断る）。
+        /// **Request Object（`RequestObjectSigningAlgs`）と同じ 3 つ**にそろえた。
         /// </remarks>
         public static readonly string[] TokenEndpointAuthSigningAlgs = new string[]
         {
-            JwtConst.RS256, JwtConst.ES256
+            JwtConst.RS256, JwtConst.PS256, JwtConst.ES256
         };
+
+        /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`・`fapi_ciba`）が、`client_assertion` で使ってよい alg（#395）</summary>
+        /// <remarks>
+        /// **FAPI 1.0 Advanced §8.6**（「Both clients and authorization servers: shall use PS256 or ES256 algorithms」）、
+        /// **FAPI 2.0 Security Profile §5.4.1**（PS256・ES256・EdDSA。**EdDSA は扱っていない**）、
+        /// **FAPI-CIBA ID1 §7.10**（「shall use PS256 or ES256 algorithms」）。
+        /// **`TokenEndpointAuthSigningAlgs` の部分集合**であること。Request Object の `FapiRequestObjectSigningAlgs`（#370）と同じ。
+        /// </remarks>
+        public static readonly string[] FapiTokenEndpointAuthSigningAlgs = new string[]
+        {
+            JwtConst.PS256, JwtConst.ES256
+        };
+
+        /// <summary>CIBA の署名した要求（`request`）で受ける alg（#395）</summary>
+        /// <remarks>
+        /// **この一覧が、広告（`backchannel_authentication_request_signing_alg_values_supported`）と、検証の両方を決める。**
+        /// **FAPI-CIBA ID1 §7.10 は PS256 か ES256 を求める**（RS256 は受けない。§7.6 は FAPI 1.0 Advanced §8.6 に従うとする）。
+        /// **以前は `ES256` だけだった**（JWK を受ける版の `RequestObject.VerifyCiba` が ES256 に固定）。
+        /// **検証鍵は、ヘッダの alg と登録の鍵から作る**（`CmnRequestObjectEndpoint.SelectCibaVerifyingJws`。OpenTouryo#664）。
+        /// </remarks>
+        public static readonly string[] CibaRequestSigningAlgs = new string[]
+        {
+            JwtConst.PS256, JwtConst.ES256
+        };
+
+        /// <summary>`client_assertion` のヘッダの alg を受けてよいか（#262・#395）</summary>
+        /// <param name="client_id">アサーションの iss（クライアント）</param>
+        /// <param name="alg">ヘッダの alg</param>
+        /// <returns>受けてよければ true</returns>
+        /// <remarks>
+        /// | 確かめること | 根拠 |
+        /// |---|---|
+        /// | `TokenEndpointAuthSigningAlgs` に在る | この実装が扱う alg（広告と同じ一覧） |
+        /// | 登録の `token_endpoint_auth_signing_alg` が在れば、それと同じ | OIDC Registration 1.0 §2（#262） |
+        /// | FAPI の登録（`fapi1`・`fapi2`・`fapi_ciba`）なら、`FapiTokenEndpointAuthSigningAlgs` に在る | FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1、FAPI-CIBA ID1 §7.10（#395） |
+        ///
+        /// **`fapi_ciba` も含める**（FAPI-CIBA ID1 §7.10「shall use PS256 or ES256 algorithms」）。
+        /// **同じ登録の CIBA の署名した要求も RS256 を断る**（`CibaRequestSigningAlgs`）ので、扱いがそろう。
+        /// </remarks>
+        internal static bool AllowsClientAssertionAlg(string client_id, string alg)
+        {
+            bool fapi = Helper.GetInstance().IsFapiClient(client_id)
+                || Helper.GetInstance().GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit();
+
+            return !string.IsNullOrEmpty(alg)
+                && Array.IndexOf(CmnEndpoints.TokenEndpointAuthSigningAlgs, alg) >= 0
+                && CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetTokenEndpointAuthSigningAlg(client_id),
+                    CmnEndpoints.TokenEndpointAuthSigningAlgs, alg)
+                && (!fapi || Array.IndexOf(CmnEndpoints.FapiTokenEndpointAuthSigningAlgs, alg) >= 0);
+        }
+
+        /// <summary>JWK（JSON の文字列）と alg から、検証鍵を作る（#395）</summary>
+        /// <param name="jwkJson">JWK の JSON（空なら null を返す）</param>
+        /// <param name="alg">ヘッダの alg（受けてよいと決めたもの）</param>
+        /// <returns>検証鍵（**鍵の種類が alg と合わない・読めなければ null**）</returns>
+        /// <remarks>
+        /// **鍵の種類が alg と合わなければ、使わない**（`JwsFactory.IsSameKeyType`。EC は曲線まで見る。RFC 8725 §3.1）。
+        /// **登録の値が壊れていても例外にしない**（#294。Open棟梁 の `JwsFactory` も、外から来る値で例外にしない）。
+        /// </remarks>
+        internal static JWS VerifyingJwsOf(string jwkJson, string alg)
+        {
+            if (string.IsNullOrEmpty(jwkJson) || string.IsNullOrEmpty(alg))
+            {
+                return null;
+            }
+
+            JObject jwk;
+
+            try
+            {
+                jwk = JToken.Parse(jwkJson) as JObject;
+            }
+            catch (Newtonsoft.Json.JsonException)
+            {
+                return null;
+            }
+
+            return (jwk != null && JwsFactory.IsSameKeyType(jwk, alg))
+                ? JwsFactory.CreateFromJwk(alg, jwk) : null;
+        }
 
         /// <summary>JWT Bearer グラント（RFC 7523 §2.1）の `assertion` で受ける alg（#294）</summary>
         /// <remarks>
@@ -1043,13 +1132,14 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>assertion の署名・iss・aud・期限を検証する（読めない形なら false。#294・#336）</summary>
         /// <param name="assertion">assertion（JWT）</param>
-        /// <param name="pubKey">公開鍵（JWK）</param>
+        /// <param name="jws">検証鍵（`VerifyingJwsOf` で、ヘッダの alg と鍵から作ったもの。#395）</param>
         /// <param name="iss">期待する iss（assertion の iss から鍵を引いたクライアント）</param>
         /// <param name="endpointUrl">受けた口の URL（null・空なら足さない。#371）</param>
         /// <param name="sub">sub</param>
         /// <returns>検証できれば true</returns>
         /// <remarks>
         /// **期待する iss・aud を渡す版の `JwtAssertion.Verify`（OpenTouryo#654）を使う**（#336）。
+        /// **検証鍵 `JWS` を受ける版**（OpenTouryo#664。#395）。
         /// 以前の版は iss・aud を照合せず（`[Obsolete]`）、sub・nbf も見なかった。
         ///
         /// - **aud は、トークン エンドポイントの URL か issuer**（PAR・CIBA の口では、その口の URL も。`AssertionAudiences`。#371）。
@@ -1062,6 +1152,41 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// - **catch に落ちるのは、登録の鍵が壊れているとき**（JWK の JSON として読めない、`n`・`e` などが無い）。
         ///   **運用の誤りなので、認証の失敗にして理由を残す。**
         ///   iss・aud が空のとき（`ArgumentNullException`）も落ちるが、呼び出し側は空の iss・鍵では呼ばない
+        /// </remarks>
+        private static bool TryVerifyAssertion(
+            string assertion, JWS jws, string iss, string endpointUrl, out string sub)
+        {
+            //  **署名の alg は、渡した検証鍵で決まる**（検証鍵 `JWS` を受ける版。OpenTouryo#664。#395）。
+            //    **ヘッダの alg が鍵の alg と違えば、Open棟梁 が false を返す**（RFC 8725 §3.1）。
+            //    確かめる中身（iss・aud・sub・exp・nbf）は、JWK を受ける版（下）と同じ。
+            try
+            {
+                return JwtAssertion.Verify(
+                    assertion, iss,
+                    CmnEndpoints.AssertionAudiences(endpointUrl),
+                    out sub, out string _, out JObject _, jws);
+            }
+            catch (Exception ex)
+            {
+                // 登録の鍵が壊れている（JWK を受ける版の remarks）。
+                Logging.MyOperationTrace(string.Format(
+                    "The assertion could not be verified. ({0})", ex.GetType().Name));
+
+                sub = "";
+                return false;
+            }
+        }
+
+        /// <summary>assertion の署名・iss・aud・期限を、JWK で検証する（JWT Bearer グラント。#294・#336）</summary>
+        /// <param name="assertion">assertion（JWT）</param>
+        /// <param name="pubKey">公開鍵（JWK。kty が RSA なら RS256、EC なら ES256）</param>
+        /// <param name="iss">期待する iss</param>
+        /// <param name="endpointUrl">受けた口の URL（null・空なら足さない。#371）</param>
+        /// <param name="sub">sub</param>
+        /// <returns>検証できれば true</returns>
+        /// <remarks>
+        /// **クライアント認証（`client_assertion`）は、`JWS` を受ける版（上）を使う**（#395）。
+        /// **JWT Bearer グラント（RFC 7523 §2.1）は RS256 だけ**（`JwtBearerSigningAlgs`）なので、この版のまま。
         /// </remarks>
         private static bool TryVerifyAssertion(
             string assertion, string pubKey, string iss, string endpointUrl, out string sub)

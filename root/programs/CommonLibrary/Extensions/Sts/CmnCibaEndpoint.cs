@@ -36,6 +36,7 @@
 //*  2026/11/06  玄人 幸道         request の検証を、aud を渡す版の RequestObject.VerifyCiba にした（OpenTouryo#653。#336）
 //*  2026/11/06  玄人 幸道         クレームを Open棟梁 の TryGetStringClaim で取り出し、要求を日付に変えずに読む。任意のクレームも、読めなければ断る（OpenTouryo#662。#337）
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、CIBA の口の URL も受ける（CIBA Core 1.0 §7.1。#371）
+//*  2026/11/15  玄人 幸道         CIBA の署名した要求を PS256 でも受ける（JWS を受ける RequestObject.VerifyCiba。#395）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -51,6 +52,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
@@ -157,19 +159,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 // 署名の検証に使う公開鍵は、登録（iss ＝ client_id）から引く。
                 //   **登録の値が壊れていても例外にしない**（`DecodeRegisteredJwk` は空を返す。#294）。
-                string pubKey = JwtUtil.DecodeRegisteredJwk(
-                    Helper.GetInstance().GetJwkECDsaPublickey(unverifiedIss));
-
-                if (string.IsNullOrEmpty(pubKey))
+                if (string.IsNullOrEmpty(JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkECDsaPublickey(unverifiedIss)))
+                    && string.IsNullOrEmpty(JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(unverifiedIss))))
                 {
-                    // 登録されていないクライアント（CIBA Core 13 : invalid_client）
+                    // 鍵を登録していないクライアント（CIBA Core 13 : invalid_client）
                     err = OAuth2AndOIDCConst.invalid_client;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
                     return false;
                 }
 
+                //  **検証鍵は、ヘッダの alg（PS256・ES256）と登録の鍵で決める**（#395。以前は EC の鍵による ES256 だけ）。
+                //    **alg が受ける一覧に無い・alg に合う鍵が無ければ、検証できない**（下の invalid_request）。
+                JWS jws = CmnRequestObjectEndpoint.SelectCibaVerifyingJws(unverifiedIss, request);
+
                 //  **aud は issuer**（CIBA Core §7.1.1。#336）。`ValidateCibaAuthZReqParam` も同じ値を確かめている。
-                if (!RequestObject.VerifyCiba(request, CmnServerParams.IssuerId, out string _, pubKey))
+                if (jws == null
+                    || !RequestObject.VerifyCiba(request, CmnServerParams.IssuerId, out string _, jws))
                 {
                     errDescription = "The request is not verified.";
                     return false;

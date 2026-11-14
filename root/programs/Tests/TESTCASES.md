@@ -1539,7 +1539,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **以前は RS256 しか通らなかった。**`CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡していなかった**ため（框の `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、**ECDSA の公開鍵を渡せば ES256 が通る**）。**登録された RSA / ECDSA の鍵を順に試す**ようにした（#129 の段階 2）。**アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。 |
+| 観点 | **以前は RS256 しか通らなかった。**`CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡していなかった**ため（框の `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、**ECDSA の公開鍵を渡せば ES256 が通る**）。**登録された RSA / ECDSA の鍵を順に試す**ようにした（#129 の段階 2）。**いまは、ヘッダの alg を受けてよいと決めてから、その alg に合う種類の鍵だけを使う**（#395。C-8 と同じ轍を踏まない）。 |
 | 根拠 | RFC 7523 §2.2 / OIDC Core §9（private_key_jwt）/ #129 の段階 2 |
 | テスト | `RT12901_ES256のclient_assertionでも認証できる` |
 
@@ -1557,7 +1557,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。**`PS256` は通らない**（Open棟梁 に `JWS_PS*` が無い）。
+- **広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。**`PS256` は #395 で足した**（検証鍵 `JWS` を受ける `JwtAssertion.Verify`。OpenTouryo#664）。
 
 ## RT-129.2 ヘッダの alg を書き換えたトークンを、認可サーバが受け付けない
 
@@ -4247,7 +4247,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. client_assertion（RS256）を作り、client_assertion_type を添えて POST /par
+1. client_assertion（PS256）を作り、client_assertion_type を添えて POST /par
 
 **検証（合否を判定する）**
 
@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=c51504bd-1227-4502-b151-6153a91fc358&code=bogus
+1. GET /Account/EmailConfirmation?userId=024ac8ce-a830-4c35-bfc4-90039d2d0162&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=c51504bd-1227-4502-b151-6153a91fc358&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=c51504bd-1227-4502-b151-6153a91fc358&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=024ac8ce-a830-4c35-bfc4-90039d2d0162&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=024ac8ce-a830-4c35-bfc4-90039d2d0162&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12262,6 +12262,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. client_assertion_type を付けずに POST /par
+1. (1') 対照 : 同じアサーションの作り方で、client_assertion_type を付けて POST /par（通る）
 1. client_assertion_type を付けずに POST /revoke
 1. 同じクライアントで、client_assertion_type を付けて POST /revoke（通る）
 
@@ -12270,6 +12271,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PAR : HTTP 401
 - PAR : invalid_client
 - PAR : request_uri を返さない
+- PAR（型あり）: HTTP 201
 - /revoke : invalid_client
 - /revoke : 認証が通る（HTTP 200）
 
@@ -12553,6 +12555,57 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - normal の access_token : 署名を JWKS で検証できる
 - normal の id_token : alg
 - normal の id_token : 署名を JWKS で検証できる
+
+## RT-395.1 **client_assertion は PS256 でも通る（FAPI でない登録・fapi2 の登録）。fapi2 の登録の RS256 は invalid_client。Discovery は PS256 を広告する**
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced §8.6 は、クライアントも認可サーバも PS256 か ES256 を使うことを求める**（FAPI 2.0 Security Profile §5.4.1 も同じ）。**以前は RS256・ES256 だけを受け**、PS256 の FAPI のクライアントは認証できなかった。**FAPI の登録は RS256 を断る**（Request Object と同じ。#370）。 |
+| 根拠 | FAPI 1.0 Advanced §8.6 / FAPI 2.0 Security Profile §5.4.1 / RFC 7523 §2.2 / #395 |
+| テスト | `RT39501_client_assertionでPS256を受けfapi2の登録のRS256は断る` |
+
+**手順**
+
+1. FAPI でない登録 : PS256 のアサーション
+1. fapi2 の登録 : PS256 のアサーション（aud は issuer）
+1. fapi2 の登録 : RS256 のアサーション（FAPI は RS256 を認めない）
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- 認証が通る（HTTP 200）
+- 認証が通る（HTTP 200）
+- invalid_client
+- token_endpoint_auth_signing_alg_values_supported に PS256 が在る
+
+## RT-395.2 **CIBA の署名した要求（request）は、PS256（RSA の鍵）でも ES256（EC の鍵）でも受け付け（auth_req_id が返る）、RS256 は断る。Discovery は PS256・ES256 を広告する**
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA ID1 §7.10 は、PS256 か ES256 を求める**（§7.6 は FAPI 1.0 Advanced §8.6 に従うとする）。**以前は ES256 だけを受けていた**（使っていた版の `RequestObject.VerifyCiba` が ES256 に固定）。**検証鍵は、ヘッダの alg と登録の鍵（PS256 は RSA、ES256 は EC）で決める。** |
+| 根拠 | FAPI-CIBA ID1 §7.10 / CIBA Core 1.0 §7.1.1 / #395 |
+| テスト | `RT39502_CIBAの署名した要求でPS256を受けRS256は断る` |
+
+**手順**
+
+1. PS256 で署名した要求（受け付ける）
+1. ES256 で署名した要求（同じクライアント。EC の鍵で検証する）
+1. RS256 で署名した要求（FAPI-CIBA は RS256 を認めない）
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- auth_req_id を返さない
+- invalid_request
+- backchannel_authentication_request_signing_alg_values_supported
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

@@ -87,7 +87,7 @@ cd ..\CTS
 | **クライアント証明書**（2 つ。自己署名の RSA） | `certs\mtls-client{1,2}.crt`・`.key` | `tls_client_auth` と、証明書に縛ったトークン。**Subject（`CN=CTS FAPI Client 1`・`2`）を OP の登録（`tls_client_auth_subject_dn`）に書く** |
 | **MTLS のテスト専用のフック** | `hooks\MtlsTestHook.dll` | **OP の Kestrel に、クライアント証明書を求めさせる**（E2E・スタブと同じ。`DOTNET_STARTUP_HOOKS`。**要求するだけで必須にはしない**ので、ほかのプランは変わらない。**発行元を問わずに受け付ける**ので、テスト専用） |
 
-- **鍵は ES256 にしてある。** OP の Discovery の `token_endpoint_auth_signing_alg_values_supported` は RS256・ES256 で、FAPI 2.0 は RS256 を認めない
+- **鍵は ES256 にしてある。** OP の Discovery の `token_endpoint_auth_signing_alg_values_supported` は RS256・PS256・ES256 で（#395）、FAPI 2.0 は RS256 を認めない（OP も FAPI の登録の RS256 を断る）
 - **ES256 で署名した Request Object は、登録の `jwk_ecdsa_publickey` で検証する**（#370。以前は RS256 だけで、FAPI 2.0 Message Signing・FAPI 1.0 Advanced は、大半のモジュールが PAR の所で止まっていた）
 - **JARM の署名は、登録の `authorization_signed_response_alg=ES256`**（#370。FAPI 2.0 の 8・9 と、FAPI 1.0 Advanced の 12・13。登録が無いと RS256 で、FAPI の検査で落ちる）
 

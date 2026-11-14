@@ -37,6 +37,7 @@
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
 //*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
+//*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
 //**********************************************************************************
 
 using System;
@@ -777,7 +778,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "code_verifier", CmnEndpointsReviewTests.Verifier },
                     { "redirect_uri", reg.RedirectUri },
                     { "client_assertion_type", JwtBearerAssertionType },
-                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, issuer) }
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionPS256(client, reg.ClientId, issuer) }
                 });
 
                 r.Verify("access_token が返る", !string.IsNullOrEmpty(token.AccessToken),
@@ -797,7 +798,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "code_verifier", CmnEndpointsReviewTests.Verifier + "x" },
                     { "redirect_uri", reg.RedirectUri },
                     { "client_assertion_type", JwtBearerAssertionType },
-                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, issuer) }
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionPS256(client, reg.ClientId, issuer) }
                 });
 
                 r.Verify("access_token を返さない", string.IsNullOrEmpty(wrong.AccessToken),
@@ -1239,7 +1240,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     { "request", request },
                     { "client_assertion_type", JwtBearerAssertionType },
-                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, await client.IssuerAsync()) }
+                    { "client_assertion", CmnEndpointsReviewTests.ClientAssertionPS256(client, reg.ClientId, await client.IssuerAsync()) }
                 });
 
                 r.VerifyEqual("invalid_request_object", "invalid_request_object", res.Error ?? "（無い）");
@@ -1439,20 +1440,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "token", "not-a-token" },
                 { "client_assertion_type", JwtBearerAssertionType },
-                { "client_assertion", CmnEndpointsReviewTests.ClientAssertionRS256(client, reg.ClientId, aud) }
+                { "client_assertion", CmnEndpointsReviewTests.ClientAssertionPS256(client, reg.ClientId, aud) }
             });
         }
 
-        /// <summary>RS256 の client_assertion を作る（RFC 7523 §2.2）</summary>
+        /// <summary>PS256 の client_assertion を作る（RFC 7523 §2.2。FAPI の登録は RS256 を断る。#395）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="aud">aud（null ならトークン エンドポイントの URL）</param>
         /// <returns>client_assertion</returns>
-        private static string ClientAssertionRS256(IdPClient client, string clientId, object aud)
+        private static string ClientAssertionPS256(IdPClient client, string clientId, object aud)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            return JwsSigner.SignPS256(client, new Dictionary<string, object>()
             {
                 { "iss", clientId },
                 { "sub", clientId },

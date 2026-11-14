@@ -31,6 +31,7 @@
 //*  2026/11/06  玄人 幸道         新規（#336）
 //*  2026/11/13  玄人 幸道         RT-336.6 の fapi2 の PAR に S256 の PKCE を足した（fapi2 は PKCE 無しを断るようになった。#366）
 //*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
+//*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
 //**********************************************************************************
 
 using System;
@@ -184,7 +185,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             r.VerifyEqual(label + " : invalid_request_object", "invalid_request_object", res.Error ?? "（無い）");
         }
 
-        /// <summary>RS256 の client_assertion を作る（RFC 7523 §2.2）</summary>
+        /// <summary>PS256 の client_assertion を作る（RFC 7523 §2.2。#395）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id（iss）</param>
         /// <param name="sub">sub</param>
@@ -194,7 +195,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            //  **PS256 で署名する**（#395。FAPI の登録は RS256 の client_assertion を断る。FAPI 1.0 Advanced §8.6）。
+            return JwsSigner.SignPS256(client, new Dictionary<string, object>()
             {
                 { "iss", clientId },
                 { "sub", sub },

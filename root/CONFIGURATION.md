@@ -400,13 +400,24 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN AuthorizationSignedResponseAlg varchar(16
   （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）。**以前は `RS256` を受けていたので、`RS256` で署名している FAPI の RP は通らなくなる**
 - **PAR のエラー**：受けられない alg は `invalid_request_object`（RFC 9101 §7）、alg に合う鍵が無ければ `invalid_request`（従来の文言）
 
-> **CIBA の `request` は対象外**である。**`ES256` 固定**で、
-> **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+> **CIBA の `request` は対象外**である（**仕様でも別の登録項目** `backchannel_authentication_request_signing_alg`）。
+> **`PS256`・`ES256` を受ける**（#395。以前は `ES256` 固定）。鍵は、`PS256` なら `jwk_rsa_publickey`、`ES256` なら `jwk_ecdsa_publickey`。
+> **`RS256` は受けない**（FAPI-CIBA ID1 §7.10）。`backchannel_authentication_request_signing_alg` の登録は扱っていない。
+
+### `client_assertion` の alg と鍵（#395）
+
+**検証鍵は、ヘッダの `alg` と登録の鍵（`jwk_rsa_publickey`・`jwk_ecdsa_publickey`・`jwks_uri` の鍵）から作る**（Request Object と同じ表）。
+**受けるのは `RS256`・`PS256`・`ES256`**（以前は `RS256`・`ES256`。`PS256` は #395 で足した）。
+
+- **登録 `token_endpoint_auth_signing_alg` を書けば、その alg だけを受ける**（#262）
+- **FAPI の登録（`client_mode=fapi1`・`fapi2`・`fapi_ciba`）は、`PS256`・`ES256` だけを受ける**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1、FAPI-CIBA ID1 §7.10）。
+  **以前は `RS256` を受けていたので、`RS256` で署名している FAPI のクライアントは `invalid_client` になる**（`PS256` の鍵は `RS256` と同じ RSA の鍵）
+- **JWT Bearer グラント（`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer` の `assertion`）は、`RS256` だけのまま**
 
 ### 一覧は 1 か所から作る
 
 **受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs` /
-`CmnEndpoints.RequestObjectSigningAlgs`** にあり、
+`CmnEndpoints.RequestObjectSigningAlgs` / `CmnEndpoints.CibaRequestSigningAlgs`** にあり、
 **広告（Discovery）と、登録値の検証と、画面の選択肢が、同じものを見る。**
 （発行する側が `SigningKeys` の表 1 か所を見るのと、同じ考え方。#129 の段階 3）
 

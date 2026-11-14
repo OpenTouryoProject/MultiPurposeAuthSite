@@ -1195,6 +1195,29 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
 | **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
 
+##### `client_assertion` と CIBA の署名した要求で PS256 を受け、FAPI の登録・CIBA は RS256 を断る（`RT-395.*`。#395）
+
+| | 測ること |
+|---|---|
+| **`RT-395.1`** | **`client_assertion`**：FAPI でない登録（`TestClient_24`）・fapi2 の登録（`FAPI2_Client`）とも **PS256 で通る**。**fapi2 の登録の RS256 は `invalid_client`**（FAPI 1.0 Advanced §8.6）。広告に PS256 が在る |
+| **`RT-395.2`** | **CIBA の署名した要求**：RSA と EC の鍵を登録した fapi_ciba の登録（`TestClient4_5`）で、**PS256（RSA の鍵）でも ES256（EC の鍵）でも `auth_req_id` が返り、RS256 は `invalid_request`**（FAPI-CIBA ID1 §7.10）。広告は `PS256 ES256` |
+| **`RT-129.1`（期待値を変えた）** | `token_endpoint_auth_signing_alg_values_supported` が `RS256, PS256, ES256` |
+| **`RT-368.1`（確かめを足した）** | fapi2 の登録のアサーションを PS256 にし、**型を付ければ同じアサーションで PAR が通る**ことを足した（**RS256 のままだと、型の無いことより先に alg で断られ、測ったことにならない**。#395 のレビュー） |
+
+- **検証鍵は、ヘッダの alg を受けてよいと決めてから、その alg に合う種類の鍵で作る**（`CmnEndpoints.AllowsClientAssertionAlg`・`VerifyingJwsOf`、`CmnRequestObjectEndpoint.SelectCibaVerifyingJws`。検証鍵 `JWS` を受ける版。OpenTouryo#664）
+- **FAPI の登録で RS256 のアサーションを送っていた既存のテストは、PS256 で署名するようにした**（確かめる中身は変えていない）。**同梱の自己テストのクライアント（`SelfTestClient`）も、FAPI の登録のアサーションを PS256 で署名する**
+- **`TestClient4_5` は `TestClient` を写して fapi_ciba にした**（`FAPI_CIBA_Client` は EC の鍵しか持たない）
+- **`RT-395.2` は利用者の端末を登録する**ので、CIBA のほかのテストと同じコレクションに入れた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ヘッダの alg と鍵の種類が食い違う JWT**（例：`PS256` と名乗る EC の鍵の署名） | テストの署名の補助は、名乗りと鍵をそろえて作る。**食い違いは鍵を作らずに断る**（`JwsFactory.IsSameKeyType`）。Open棟梁 の `JWS` を受ける版も、ヘッダと鍵の alg が違えば `false` を返す（OpenTouryo#664） |
+| **`jwks_uri` から引いた鍵での PS256** | 鍵の選び方は登録の鍵と同じ関数（`VerifyingJwsOf`）。`jwks_uri` のテスト（`RT-309.*`）は RS256 で測る |
+| **fapi1・fapi_ciba の登録の RS256 の `client_assertion`** | 判定は fapi2 と同じ関数（`AllowsClientAssertionAlg`）。E2E の fapi1 の登録は秘密で認証し、fapi_ciba の private_key_jwt の登録（`TestClient4_4`）は EC の鍵しか持たない（RS256 は鍵が無いので、alg の判定を測れない） |
+| **`/ros` に預ける CIBA の要求（ping・push）** | この実装は poll だけを扱い、`/ros` の CIBA の分岐（`client_notification_token` が在る要求）は E2E で作れない。鍵の選び方は `/ciba_authz` と同じ関数 |
+
 ##### FAPI の登録は、署名の alg を登録していなければ ES256 で署名する（`RT-394.*`。#394）
 
 | | 測ること |

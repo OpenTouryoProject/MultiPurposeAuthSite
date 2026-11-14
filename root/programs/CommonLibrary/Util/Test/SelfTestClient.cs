@@ -41,6 +41,7 @@
 //*  2026/11/08  玄人 幸道         Request Object を Open棟梁 の版（有効期間と code_challenge を受ける。OpenTouryo#675）で作り、自前の署名し直しをやめた（#345）
 //*  2026/11/08  玄人 幸道         トークン エンドポイント系の認証を、登録の token_endpoint_auth_method で決める（PAR も。OpenTouryo#676。#345）
 //*  2026/11/13  玄人 幸道         Request Object を PS256 で署名する（FAPI の登録は RS256 の Request Object を断るようになった。#370）
+//*  2026/11/15  玄人 幸道         FAPI の登録の client_assertion を PS256 で署名する（#395）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -127,15 +128,45 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <remarks>
         /// **`aud` はトークン エンドポイント**（RFC 7523 §3）。**fapi2 の登録は issuer**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
         /// **サーバ側（`CmnEndpoints.ClientAuthentication`）がそこを見る**ので、外すと認証できない。
+        ///
+        /// **FAPI の登録は、PS256 で署名する**（#395）。**サーバは FAPI の登録の RS256 のアサーションを断る**
+        /// （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）。
+        /// **Open棟梁 の `JwtAssertion.CreateByRsa` は RS256 で署名する**ので、
+        /// **中身（payload）とヘッダの `typ` はそのまま、同じ RSA の鍵で PS256 に署名し直す**（`CreateRequestObject` と同じ。#370）。
+        /// **FAPI でない登録は RS256 のまま**（`token_endpoint_auth_signing_alg` に RS256 を登録したクライアントでも通るように）。
         /// </remarks>
         public static string CreateClientAssertion(string clientId, TimeSpan lifetime, string scopes)
         {
-            return JwtAssertion.CreateByRsa(
+            RSAParameters rsa = SelfTestClient.RsaPrivateKey();
+
+            string assertion = JwtAssertion.CreateByRsa(
                 clientId,
                 Helper.GetInstance().GetClientMode(clientId) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit()
                     ? CmnServerParams.IssuerId
                     : Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
-                lifetime, scopes, SelfTestClient.RsaPrivateKey());
+                lifetime, scopes, rsa);
+
+            if (!Helper.GetInstance().IsFapiClient(clientId))
+            {
+                return assertion;
+            }
+
+            // **PS256 に署名し直す**（#395。中身と typ は変えない）。
+            JObject payload = JwtReader.TryReadPayload(assertion);
+            string typ = JwtReader.TryReadTyp(assertion);
+            JWS signer = JwsFactory.CreateFromRsaParameters(JwtConst.PS256, rsa);
+
+            if (payload == null || signer == null)
+            {
+                return "";
+            }
+
+            if (!string.IsNullOrEmpty(typ))
+            {
+                signer.JWSHeader.typ = typ;
+            }
+
+            return signer.Create(payload.ToString(Newtonsoft.Json.Formatting.None));
         }
 
         #endregion

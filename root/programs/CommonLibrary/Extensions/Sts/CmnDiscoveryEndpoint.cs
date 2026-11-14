@@ -37,6 +37,7 @@
 //*  2026/11/09  玄人 幸道         require_pushed_authorization_requests・require_signed_request_object を、サーバ全体の設定から出す（#346 の段階 2）
 //*  2026/11/12  玄人 幸道         request_uri_parameter_supported が指す範囲（この OP の urn: だけ）をコメントに書いた（#362）
 //*  2026/11/13  玄人 幸道         authorization_signing_alg_values_supported を、登録で選べる alg（JwsFactory.SupportedAlgs）にした（#370）
+//*  2026/11/15  玄人 幸道         backchannel_authentication_request_signing_alg_values_supported を CibaRequestSigningAlgs から作る（PS256・ES256。#395）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -375,21 +376,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                    //OAuth2AndOIDCEnum.CibaMode.push.ToStringByEmit()
                 });
 
-                // **FAPI-CIBA が求める Request Object の署名は ES256 または PS256 だが、
-                //   この実装は ES256 だけを受け付ける**（#129 の段階 0 で、記述を実装に合わせた）。
-                //
-                //   **以前は「ES256 と PS256のみ許可」と書いてあったが、PS256 は通らない。**
-                //   使っている版の `RequestObject.VerifyCiba`（JWK を受ける版）は ES256 に固定されている。
-                //   **Open棟梁 には `JWS_PS256/384/512` と `JwsFactory` が在り**（OpenTouryo#595・#596）、
-                //   **検証鍵 `JWS` を受ける `VerifyCiba` も在る**（OpenTouryo#664）ので、PS256 を通すのは MPAS 側の対応である（まだ起票していない。#129 は発行する側の alg で、閉じている）。
-                //
-                //   ちなみに、Tokenの署名は、FAPI2に準拠する。
+                // **FAPI-CIBA が求める署名した要求の alg は PS256 か ES256**（FAPI 1.0 Advanced §8.6 に従う）。
+                //   **一覧は `CmnEndpoints.CibaRequestSigningAlgs`**（検証と同じ 1 か所。#395）。
+                //   **以前は ES256 だけだった**（使っていた版の `RequestObject.VerifyCiba` が ES256 に固定。
+                //   検証鍵 `JWS` を受ける版（OpenTouryo#664）に替えて、PS256 も受けるようにした）。
                 //
                 // **配列と boolean で広告する**（CIBA Core §4。#189 の 3・4）。
                 //   以前は文字列だったため、素直に読む RP は型で落ちる。
-                OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", new List<string> {
-                    "ES256"
-                });
+                OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported",
+                    new List<string>(CmnEndpoints.CibaRequestSigningAlgs));
                 OpenIDConfig.Add("backchannel_user_code_parameter_supported", false);
             }
 
