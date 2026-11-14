@@ -106,6 +106,7 @@ $env:MPAS_CONNSTR_SQL = '...'
 #### E2E 用の DBMS は `container/Store/` で立てる（#250 の段階 1）
 
 **このリポジトリの `container/Store/` が、3 方言を定義している**（SQL Server / Oracle / PostgreSQL）。
+**接続文字列・ポート・起動の手順は [`container/Store/README.md`](../container/Store/README.md) にまとめてある。**
 **ID 連携の IdP 群は `container/E2E/` に在る**（下の「上流の IdP は `container/E2E/` で立てる」。#318 で `store/` から分けた）。
 
 ```powershell
@@ -244,6 +245,8 @@ $env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;Initial Catalog=UserStore;Us
 $env:MPAS_CONNSTR_ODP = 'User Id=SCOTT;Password=<pw>;Data Source=localhost:1522/FREEPDB1;'
 $env:MPAS_CONNSTR_NPS = 'HOST=localhost;PORT=5433;DATABASE=UserStore;USER ID=postgres;PASSWORD=<pw>;'
 ```
+
+**`<pw>` の実値は [`container/Store/README.md`](../container/Store/README.md) の「接続文字列」を見ること。**
 
 - **DDL は `0_CopyInitSql.ps1` が repo から流し込む**（`1_DockerComposeUp.bat` が先に呼ぶ）。
   コピー先は**生成物**で `.gitignore` 済み。**原本は `root/files/resource/.../Sql/` だけ**
