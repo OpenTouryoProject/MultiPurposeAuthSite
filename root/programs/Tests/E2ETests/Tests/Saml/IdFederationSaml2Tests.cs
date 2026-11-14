@@ -32,6 +32,7 @@
 //*  2026/10/13  玄人 幸道         SA-6.5（署名を壊した要求）を足した（#293 の段階 4）
 //*  2026/10/14  玄人 幸道         SA-6.6（上流の証明書が2本）を足した（#292 の段階 3）
 //*  2026/11/06  玄人 幸道         コメントと観点の設定キーを、#339 の後の役割に合わせた（#339）
+//*  2026/11/14  玄人 幸道         SA-6.1 に、AuthnRequest の Destination が上流の SSO の口であることの確かめを足した（#391）
 //**********************************************************************************
 
 using System.Threading.Tasks;
@@ -140,6 +141,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 r.Verify("IsPassive は付けない（上流が画面を出してよい）", !isPassive,
                     "IsPassive なし", isPassive ? "**付いている**" : "付いていない");
+
+                //  **Destination は、要求を送った先（上流の SSO の口）**（SAML Bindings §3.4.5.2。#391）。
+                //    **署名した要求には要る。** 以前は入れていなかった（Open棟梁 の従来の版。OpenTouryo#693）。
+                r.VerifyEqual("Destination が、要求を送った先（上流の SSO の口）と同じ（#391）",
+                    fed.SsoUrl.Split('?')[0], RequestDestinationTests.DestinationOf(request) ?? "（無い）");
 
                 r.Step("(4) 上流がアサーションを返し、下流の ACS が受け取る");
 

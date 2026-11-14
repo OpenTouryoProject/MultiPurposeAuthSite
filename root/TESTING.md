@@ -1195,6 +1195,23 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
 | **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
 
+##### SP の役で作る SAML2 の要求に、送り先の `Destination` を入れる（`RT-391.*`・`SA-6.1`。#391）
+
+| | 測ること |
+|---|---|
+| **`RT-391.1`** | **自己テストの SP の 4 通りの要求**（Redirect・POST）の `Destination` が、**要求を送った先（リダイレクト先・フォームの `action`）と同じ**（SAML Bindings §3.4.5.2・§3.5.5.2 の MUST） |
+| **`SA-6.1`（足した確かめ）** | **ID 連携の `AuthnRequest` の `Destination` が、上流の SSO の口と同じ** |
+
+- **Open棟梁 の部品の更新（OpenTouryo#693）で、従来の `SAML2Client.CreateRedirectRequest`・`CreatePostRequest` が `[Obsolete]` になった。** `destination` を受ける版に替え、ビルドの `CS0618` を 0 件に戻した
+- **MPAS の IdP の側（`VerifyRequest`）は `Destination` を照合しない**ので、流れは従来どおり通る（`SA-1.1`〜`.4`・`SA-6.*`）
+- **部品の更新のほかの変化**（OpenTouryo#683 の `CmnJwtToken.Verify` など）は、両版の E2E の通しで確かめた（MPAS に、その例外を catch して分岐している箇所は無い）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **上流の IdP が `Destination` を照合して断るか** | MPAS の IdP は照合しない。テストの上流もこの IdP（コンテナ）なので、照合する IdP で測れない |
+
 ##### CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する（`RT-387.*`。#387）
 
 | | 測ること |

@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/31  玄人 幸道         新規（HomeController.cs から partial に分割。#294）
+//*  2026/11/14  玄人 幸道         自己テストの SAML2 の要求に、送り先を Destination として入れる（SAML Bindings §3.4.5.2・§3.5.5.2。OpenTouryo#693。#391）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -60,6 +61,19 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        /// <summary>要求の送り先（この配備の IdP の SAML2 の口。要求の `Destination` に入れる）</summary>
+        /// <remarks>
+        /// **署名した要求には `Destination` が要る**（SAML Bindings §3.4.5.2・§3.5.5.2。#391）。
+        /// **リダイレクト・フォームの宛先と同じ値**にする（Open棟梁 の `Destination` を入れる版。OpenTouryo#693）。
+        /// </remarks>
+        private string Saml2Destination
+        {
+            get
+            {
+                return Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
+            }
+        }
+
         #region Action Method
 
         #region SAML2
@@ -75,7 +89,7 @@ namespace MultiPurposeAuthSite.Controllers
                 SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpRedirect,
                 this.ToNameIDFormat(),
-                this.Issuer, this.RedirectUri, this.State, out id);
+                this.Issuer, this.RedirectUri, this.Saml2Destination, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
             this.SamlRequestId = id;
@@ -99,7 +113,7 @@ namespace MultiPurposeAuthSite.Controllers
                 SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpPost,
                 this.ToNameIDFormat(),
-                this.Issuer, this.RedirectUri, this.State, out id);
+                this.Issuer, this.RedirectUri, this.Saml2Destination, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
             this.SamlRequestId = id;
@@ -122,7 +136,7 @@ namespace MultiPurposeAuthSite.Controllers
             string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpPost,
                 this.ToNameIDFormat(),
-                this.Issuer, this.RedirectUri, this.State, out id);
+                this.Issuer, this.RedirectUri, this.Saml2Destination, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
             this.SamlRequestId = id;
@@ -152,7 +166,7 @@ namespace MultiPurposeAuthSite.Controllers
             string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpRedirect,
                 this.ToNameIDFormat(),
-                this.Issuer, this.RedirectUri, this.State, out id);
+                this.Issuer, this.RedirectUri, this.Saml2Destination, this.State, out id);
 
             // **応答の InResponseTo と照合する**（#276）。
             this.SamlRequestId = id;

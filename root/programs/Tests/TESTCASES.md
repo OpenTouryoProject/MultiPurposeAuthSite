@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=a8c6ff6a-0929-4b4a-85c9-e0fdfa61b8eb&code=bogus
+1. GET /Account/EmailConfirmation?userId=5c4220a0-d37c-4438-af78-459bccc3f5cf&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=a8c6ff6a-0929-4b4a-85c9-e0fdfa61b8eb&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=a8c6ff6a-0929-4b4a-85c9-e0fdfa61b8eb&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=5c4220a0-d37c-4438-af78-459bccc3f5cf&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=5c4220a0-d37c-4438-af78-459bccc3f5cf&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12505,6 +12505,28 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - トークンを出さない
 - access_token が返る
 
+## RT-391.1 **自己テストの SP の 4 通りの SAML2 の要求（Redirect・POST）に、送った先と同じ Destination が入る**
+
+| | |
+|---|---|
+| 観点 | **SAML Bindings §3.4.5.2（Redirect）・§3.5.5.2（POST）は、署名した要求の Destination を、送り先の URL にすることを求める（MUST）。****以前は Open棟梁 の従来の版（OpenTouryo#693 で Obsolete）を使い、Destination を入れていなかった。** |
+| 根拠 | SAML Bindings §3.4.5.2 / §3.5.5.2 / #391 |
+| テスト | `RT39101_自己テストのSPの要求のDestinationは送った先と同じ` |
+
+**手順**
+
+1. submit.Saml2RedirectRedirectBinding（要求は Redirect）
+1. submit.Saml2RedirectPostBinding（要求は Redirect）
+1. submit.Saml2PostPostBinding（要求は POST）
+1. submit.Saml2PostRedirectBinding（要求は POST）
+
+**検証（合否を判定する）**
+
+- Destination が、要求を送った先と同じ
+- Destination が、要求を送った先と同じ
+- Destination が、要求を送った先と同じ
+- Destination が、要求を送った先と同じ
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -13405,6 +13427,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - SAMLRequest を読める
 - NameIDFormat に emailAddress を要求する
 - IsPassive は付けない（上流が画面を出してよい）
+- Destination が、要求を送った先（上流の SSO の口）と同じ（#391）
 - 上流が下流の ACS を指す
 - 応答が読める
 - StatusCode が Success

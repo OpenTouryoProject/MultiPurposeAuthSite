@@ -239,6 +239,9 @@ git config core.hooksPath .githooks
 
 - [ ] 署名の対象と、消費する要素の一致（XSW）
 - [ ] リプレイ（`InResponseTo`・`ID`）、`Audience`、有効期限（`NotBefore` / `NotOnOrAfter`）
+- [ ] **SP の役で送る署名した要求に、送り先の `Destination` を入れているか**（SAML Bindings §3.4.5.2・§3.5.5.2 の MUST）。
+  **自己テストと ID 連携の `AuthnRequest` に入れていなかった**（Open棟梁 の従来の版。OpenTouryo#693 で `[Obsolete]`。#391。`RT-391.1`・`SA-6.1`）。
+  **OpenTouryo のアセンブリを更新したら、`CS0618`（`[Obsolete]`）の警告が増えていないかを見る** — **入れ替えで増えた警告は、上流が直し方を示している**
 
 ### Web のセキュリティ（`Controllers`）
 

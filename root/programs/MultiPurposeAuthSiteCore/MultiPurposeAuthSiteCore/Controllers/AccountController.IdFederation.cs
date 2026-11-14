@@ -22,6 +22,7 @@
 //*  2026/11/03  玄人 幸道         /userinfo に email・sub が無いときも、理由を OPERATION に記録する（#331）
 //*  2026/11/06  玄人 幸道         aud の照合のコメントを、Open棟梁 が aud を照合するようになった後（OpenTouryo#601・#603）の状態に直した（#337）
 //*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
+//*  2026/11/14  玄人 幸道         SAML2 の ID 連携の要求に、上流の SSO の口を Destination として渡す（#391）
 //**********************************************************************************
 
 /*
@@ -798,9 +799,10 @@ namespace MultiPurposeAuthSite.Controllers
 
             // **要求の組み立ては `IdFederationSaml2Request` に 1 か所だけ置いてある**（#292。**両アプリに同文で置かない**）。
             // **署名鍵は、行に `signing_pfx_file_path` が在れば、その鍵**（無ければ共通設定。Open棟梁 #606 の口で渡している）。
+            // **送り先（ssoUrl）を `Destination` に入れる**（署名した要求には要る。SAML Bindings §3.4.5.2。#391）。
             string id = "";
             string queryString = SamlProviders.IdFederationSaml2Request
-                .CreateRedirectRequest(upstream, state, out id);
+                .CreateRedirectRequest(upstream, ssoUrl, state, out id);
 
             HttpContext.Session.SetString(Const.IdFederationSaml2State, state);
 

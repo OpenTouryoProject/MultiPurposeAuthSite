@@ -3580,6 +3580,15 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 - **CIBA は、記録に `ClientID` 列を足した**（DDL。配備済みの DB への手順は `CONFIGURATION.md`）。**列を足す前の記録は、照合できないので断る**
 - **Device は、記録の `TempData`（`/device_authz` で受けた要求）の `client_id` と比べる**（列は増えない）
 
+### C-61. SP の役で送る署名した SAML2 の要求に、`Destination` を入れていなかった **[Lib][Core][NetFx]** — **✅ 修正済み（#391）**
+
+**SAML Bindings §3.4.5.2（Redirect）・§3.5.5.2（POST）は、署名した要求の `Destination` を、送り先の URL にすることを求める**（MUST）。
+**自己テストの SP と、ID 連携の SP（上流へ送る `AuthnRequest`）は、Open棟梁 の従来の版の `SAML2Client.CreateRedirectRequest`・`CreatePostRequest` を使っていて、`Destination` を入れていなかった。**
+**Open棟梁 の部品の更新（OpenTouryo#693）で従来の版が `[Obsolete]` になり、ビルドの `CS0618` で見つかった。**
+
+- **`destination` を受ける版に替えた**（自己テストは `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint`、ID 連携は上流の SSO の口。`RT-391.1`・`SA-6.1`）
+- **MPAS の IdP の側（`VerifyRequest`）は `Destination` を照合しない**（従来どおり）。**応答の `Audience` を SP の entityID にするのは #389**
+
 ## 5. D. 最新の IdP として不足している機能
 
 | # | 仕様 | 状況 | 影響 |

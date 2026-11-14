@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 4-a。Open棟梁 #606 の追随）
+//*  2026/11/14  玄人 幸道         送り先（上流の SSO の口）を Destination に入れる版の SAML2Client.CreateRedirectRequest にした（SAML Bindings §3.4.5.2。OpenTouryo#693。#391）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -65,6 +66,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// その上流へ送る `AuthnRequest`（Redirect Binding）のクエリ文字列を作る。
         /// </summary>
         /// <param name="upstream">上流の登録</param>
+        /// <param name="destination">送り先（上流の SSO の口。メタデータ → 設定の順で決めたもの。#391）</param>
         /// <param name="relayState">RelayState（送った state）</param>
         /// <param name="id">out 作った要求の ID（応答の `InResponseTo` と照合する）</param>
         /// <returns>クエリ文字列（`SAMLRequest` ＋ `SigAlg` ＋ `Signature`）</returns>
@@ -75,13 +77,17 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// **ACS URL は入れない**（**上流が登録値（`redirect_uri_saml`）から解決する**。#276）。
         ///
         /// **`NameIDFormat` は `EmailAddress`**（#286 の決め事）。
+        ///
+        /// **`Destination` に送り先を入れる**（#391）。**署名した要求には `Destination` が要る**
+        /// （SAML Bindings §3.4.5.2）。**以前は入れていなかった**（Open棟梁 の従来の版。OpenTouryo#693 で `[Obsolete]` になった）。
+        /// **送り先が空なら作らない**（Open棟梁 の版も空を受けない。呼び出し側は、空なら送らずにエラー画面にしている）。
         /// </remarks>
         public static string CreateRedirectRequest(
-            IdFederationUpstream upstream, string relayState, out string id)
+            IdFederationUpstream upstream, string destination, string relayState, out string id)
         {
             id = "";
 
-            if (upstream == null)
+            if (upstream == null || string.IsNullOrEmpty(destination))
             {
                 return "";
             }
@@ -98,7 +104,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                     SAML2Enum.RequestOrResponse.Request,
                     SAML2Enum.ProtocolBinding.HttpRedirect,
                     SAML2Enum.NameIDFormat.EmailAddress,
-                    issuer, "", relayState, out id);
+                    issuer, "", destination, relayState, out id);
             }
 
             //  **この上流用の鍵で署名する**（Open棟梁 #606 の口）。
@@ -106,7 +112,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                 SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpRedirect,
                 SAML2Enum.NameIDFormat.EmailAddress,
-                issuer, "", relayState, digitalSign, out id);
+                issuer, "", destination, relayState, digitalSign, out id);
         }
 
         /// <summary>その上流用の署名鍵（無ければ null）</summary>
