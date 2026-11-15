@@ -48,6 +48,7 @@
 //*  2026/11/13  玄人 幸道         Request Object で受ける alg に PS256・ES256 を足し、FAPI の登録の alg（FapiRequestObjectSigningAlgs）を足した（#370）
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、受けた口（PAR・CIBA）の URL も受ける版を足した（RFC 9126 §2・CIBA Core 1.0 §7.1。#371）
 //*  2026/11/15  玄人 幸道         client_assertion の検証鍵を、ヘッダの alg と登録の鍵から作る（JWS を受ける JwtAssertion.Verify）。PS256 を受け、FAPI の登録は RS256 を断る（FAPI 1.0 Advanced §8.6。OpenTouryo#664。#395）
+//*  2026/11/15  玄人 幸道         FAPI の登録の判定を Helper.IsFapiProfileClient にまとめた（#384）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -864,8 +865,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         internal static bool AllowsClientAssertionAlg(string client_id, string alg)
         {
-            bool fapi = Helper.GetInstance().IsFapiClient(client_id)
-                || Helper.GetInstance().GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit();
+            bool fapi = Helper.GetInstance().IsFapiProfileClient(client_id);
 
             return !string.IsNullOrEmpty(alg)
                 && Array.IndexOf(CmnEndpoints.TokenEndpointAuthSigningAlgs, alg) >= 0

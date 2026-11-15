@@ -41,6 +41,7 @@
 //*  2026/11/12  玄人 幸道         登録された sector_identifier_uri を引く口を足した（#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を引く口と、FAPI の登録かを見る IsFapiClient を足した（#370）
 //*  2026/11/14  玄人 幸道         FAPI の登録は、署名の alg を登録していなければ ES256 にした（DefaultSigningAlg。FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1。#394）
+//*  2026/11/15  玄人 幸道         fapi_ciba を含めた FAPI の登録かを返す IsFapiProfileClient を足した（#384・#395）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -554,6 +555,20 @@ namespace MultiPurposeAuthSite.Util.Sts
 
             return mode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
                 || mode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+        }
+
+        /// <summary>FAPI の登録（`client_mode` が `fapi1`・`fapi2`・`fapi_ciba`）か（#384・#395）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>FAPI・FAPI-CIBA の登録なら true</returns>
+        /// <remarks>
+        /// **`IsFapiClient` に `fapi_ciba` を足したもの。** FAPI-CIBA は FAPI 1.0 Advanced に従う
+        /// （FAPI-CIBA ID1 §7.6・§7.10）ので、alg の制限（#395）・`x-fapi-interaction-id`（#384）は、`fapi_ciba` にも当てる。
+        /// **FAPI の登録は、FAPI で認めた流れしか通れない**（`ClientModePolicy`）ので、この登録のトークンは、FAPI のやりとりで出たものである。
+        /// </remarks>
+        public bool IsFapiProfileClient(string client_id)
+        {
+            return this.IsFapiClient(client_id)
+                || this.GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit();
         }
 
         /// <summary>client_id から authorization_signed_response_alg を取得する（JARM §3。#370）</summary>

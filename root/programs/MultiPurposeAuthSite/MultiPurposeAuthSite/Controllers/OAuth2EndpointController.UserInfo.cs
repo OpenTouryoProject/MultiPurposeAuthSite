@@ -32,10 +32,12 @@
 //*  2026/10/30  玄人 幸道         aud の無いトークンで落ちない・何もしていなかった claims のループを削除（#294）
 //*  2026/10/30  玄人 幸道         POST も受ける（OIDC Core 5.3.1）・openid スコープの無いトークンを 403（insufficient_scope）で断る（#294）
 //*  2026/11/10  玄人 幸道         値の無い email / phone のクレームを返さないようにした（OIDC Core 1.0 §5.3.2。#354）
+//*  2026/11/15  玄人 幸道         FAPI の登録のトークンなら、x-fapi-interaction-id を応答に付け、ログに残す（FAPI 1.0 Baseline §6.2.1 の 11・12。#384）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Util.Sts;
 
@@ -89,6 +91,11 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
                 {
+                    //  **FAPI の登録のトークンなら、`x-fapi-interaction-id` を応答に付け、ログに残す**
+                    //    （FAPI 1.0 Baseline §6.2.1 の 11・12。#384）。**この後のエラー（縛り・スコープ）の応答にも付く。**
+                    //    **トークンを検証できないエラーには付けない**（FAPI の登録かどうかが分からない）。
+                    this.SetFapiInteractionId(identity);
+
                     // **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 3）。
                     //   紐づいていないトークン（cnf 無し）は、これまでどおり bearer として扱う。
                     if (!Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
@@ -208,6 +215,37 @@ namespace MultiPurposeAuthSite.Controllers
             // RFC 6750 3.1 : エラー情報を付けず、Bearer が要ることだけを示す（#196）。
 
             return this.UserInfoError(err); // 失敗（RFC 6750 3 : 401 ＋ WWW-Authenticate）（#196）
+        }
+
+        /// <summary>FAPI の登録のトークンなら、`x-fapi-interaction-id` を応答に付け、ログに残す（#384）</summary>
+        /// <param name="identity">検証できた access_token の ClaimsIdentity</param>
+        /// <remarks>
+        /// **FAPI 1.0 Baseline §6.2.1 の 11**：要求の値（無ければ RFC 4122 の UUID）を応答のヘッダに付ける。
+        /// **§6.2.1 の 12**：その値をログに残す（OPERATION。**トークン・利用者の属性は書かない**）。
+        ///
+        /// **FAPI の登録（`fapi1`・`fapi2`・`fapi_ciba`）のトークンのときだけ付ける**（#384 の決め）。
+        /// **判別は、トークンの `aud`（client_id）で引いた登録の `client_mode`**（`Helper.IsFapiProfileClient`。
+        /// MPAS 独自の `fapi` クレームには頼らない）。**FAPI の登録は FAPI で認めた流れしか通れない**（`ClientModePolicy`）。
+        /// **値は `CmnEndpoints.FapiInteractionIdOf` が決める**（UUID の形でなければ、新しい UUID）。
+        /// </remarks>
+        private void SetFapiInteractionId(ClaimsIdentity identity)
+        {
+            Claim audience = identity.Claims.Where(
+                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+            if (audience == null || !Helper.GetInstance().IsFapiProfileClient(audience.Value))
+            {
+                return;
+            }
+
+            string interactionId = Token.CmnEndpoints.FapiInteractionIdOf(
+                HttpContext.Current.Request.Headers[Token.CmnEndpoints.HttpHeader_FapiInteractionId]);
+
+            HttpContext.Current.Response.AppendHeader(Token.CmnEndpoints.HttpHeader_FapiInteractionId, interactionId);
+
+            Logging.MyOperationTrace(string.Format(
+                "/userinfo was called with x-fapi-interaction-id: {0} (client_id: {1})",
+                interactionId, audience.Value));
         }
 
         /// <summary>/userinfo のエラー応答を作る（RFC 6750 3 / OIDC Core 5.3.3）</summary>

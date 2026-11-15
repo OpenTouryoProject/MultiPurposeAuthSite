@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=024ac8ce-a830-4c35-bfc4-90039d2d0162&code=bogus
+1. GET /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=024ac8ce-a830-4c35-bfc4-90039d2d0162&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=024ac8ce-a830-4c35-bfc4-90039d2d0162&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12452,6 +12452,37 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-384.1 **FAPI の登録（fapi1）のトークンの /userinfo は、要求の x-fapi-interaction-id（UUID）をそのまま返し、無い・UUID の形でないときは新しい UUID を返す。FAPI でない登録・検証できないトークンには付けない**
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Baseline §6.2.1 の 11 は、保護された資源が、要求の値か RFC 4122 の UUID を応答のヘッダに付けることを求める。****§6.2.2 の 5 は、クライアントが送る値を UUID とする**ので、形の違う値は使わず新しく作る（ヘッダとログに外の値を書かない）。**以前はこのヘッダを扱っていなかった。** |
+| 根拠 | FAPI 1.0 Baseline §6.2.1 の 11 / §6.2.2 の 5 / #384 |
+| テスト | `RT38401_FAPIの登録のトークンのuserinfoはx_fapi_interaction_idを返す` |
+
+**手順**
+
+1. fapi1 : 要求に UUID を付ける（そのまま返る）
+1. fapi1 : 要求に付けない（新しい UUID が返る）
+1. fapi1 : UUID の形でない値を付ける（使わずに、新しい UUID が返る）
+1. (3') fapi1 : openid の無いトークン（検証できた後の 403。付く）
+1. FAPI でない登録（normal）のトークン（付けない）
+1. 検証できないトークン（FAPI の登録かどうか分からないので、付けない）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- x-fapi-interaction-id が要求の値
+- x-fapi-interaction-id が UUID
+- x-fapi-interaction-id が UUID
+- 要求の値は返さない
+- HTTP 403
+- x-fapi-interaction-id が要求の値
+- HTTP 200
+- x-fapi-interaction-id を付けない
+- HTTP 401
+- x-fapi-interaction-id を付けない
 
 ## RT-387.1 **CIBA のトークン要求で、別のクライアントに出した auth_req_id は、承認の前も後も invalid_grant。正規のクライアントは影響を受けない**
 

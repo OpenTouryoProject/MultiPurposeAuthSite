@@ -107,6 +107,7 @@
 //*  2026/10/24  玄人 幸道         独自 scope の userid を廃止した（pairwise の sub を打ち消すため。#294）
 //*  2026/10/29  玄人 幸道         partial に分割した（CmnEndpoints.*.cs。#294）
 //*  2026/10/29  玄人 幸道         using を整理した（#294）
+//*  2026/11/15  玄人 幸道         x-fapi-interaction-id の値を決める FapiInteractionIdOf を足した（UUID の形でなければ新しい UUID。FAPI 1.0 Baseline §6.2.1 の 11。#384）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -380,6 +381,38 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return error;
+        }
+
+        #endregion
+
+        #region x-fapi-interaction-id（FAPI 1.0 Baseline §6.2.1 の 11・12。#384）
+
+        /// <summary>`x-fapi-interaction-id` のヘッダ名（FAPI 1.0 Baseline §6.2.1 の 11）</summary>
+        public const string HttpHeader_FapiInteractionId = "x-fapi-interaction-id";
+
+        /// <summary>応答に付ける `x-fapi-interaction-id` の値を決める（#384）</summary>
+        /// <param name="requested">要求の `x-fapi-interaction-id`（無ければ null・空）</param>
+        /// <returns>要求の値（**RFC 4122 の UUID の形のときだけ**）、または新しい UUID</returns>
+        /// <remarks>
+        /// **FAPI 1.0 Baseline §6.2.1 の 11**：保護された資源は「shall set the response header x-fapi-interaction-id to the value
+        /// received from the corresponding FAPI client request header or to a RFC4122 UUID value if the request header was not provided」。
+        /// **§6.2.2 の 5**：クライアントが送る値は「shall be a RFC4122 UUID」。
+        ///
+        /// **UUID の形（`8-4-4-4-12` の 16 進）でなければ、要求の値を使わず、新しい UUID を返す**（#384 の決め）。
+        /// **外から来た値を、確かめずに応答のヘッダとログ（§6.2.1 の 12）に書かないため**（改行などでログを崩されない）。
+        /// **要求は断らない**（仕様は資源に断ることを求めていない）。**要求の値は、大文字・小文字も含めてそのまま返す。**
+        /// **36 文字ちょうどであることも確かめる**（`Guid.TryParseExact` が前後の空白を許しても、空白の付いた値は使わない。#384 のレビュー）。
+        /// </remarks>
+        public static string FapiInteractionIdOf(string requested)
+        {
+            if (!string.IsNullOrEmpty(requested)
+                && requested.Length == 36
+                && Guid.TryParseExact(requested, "D", out Guid _))
+            {
+                return requested;
+            }
+
+            return Guid.NewGuid().ToString("D");
         }
 
         #endregion

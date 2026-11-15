@@ -1195,6 +1195,27 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
 | **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
 
+##### FAPI の登録のトークンの `/userinfo` は `x-fapi-interaction-id` を返す（`RT-384.*`。#384）
+
+| | 測ること |
+|---|---|
+| **`RT-384.1`** | **fapi1 の登録のトークン**：要求の UUID をそのまま返す。**無い・UUID の形でない値なら、新しい UUID を返す**（FAPI 1.0 Baseline §6.2.1 の 11・§6.2.2 の 5）。**検証できた後のエラー（`openid` の無いトークンの 403）にも付く。** **FAPI でない登録のトークン・検証できないトークン（401）には付けない** |
+
+- **付けるのは `/userinfo` だけ**（MPAS が RP に見せる保護された資源。#384 の決め）
+- **FAPI の判別は、トークンの `aud` で引いた登録の `client_mode`**（`Helper.IsFapiProfileClient`。fapi1・fapi2・fapi_ciba）。MPAS 独自の `fapi` クレームには頼らない
+- **値は `CmnEndpoints.FapiInteractionIdOf`**（UUID の形でなければ、要求の値を使わない。ヘッダとログに外の値を書かないため）
+- **§6.2.1 の 12（ログ）は、OPERATION に 1 行残す**（client_id と値。E2E では見ない）
+- **net48 は `HttpContext.Current.Response` に足す**（Web API の応答に引き継がれる。`SetNoStore` と同じ）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi2・fapi_ciba の登録のトークン** | 判別は同じ関数（`IsFapiProfileClient`）。適合性テストの FAPI 1.0 Advanced・FAPI-CIBA が測る |
+| **縛り（証明書・DPoP）のエラーの応答** | 付けるのはトークンを検証した直後で、縛りの確かめより前（`openid` の 403 と同じ位置）。fapi1 の登録で縛りの合わない要求を作りにくい |
+| **前後に空白の付いた UUID** | HTTP のヘッダは前後の空白を落として届く。**36 文字ちょうどでなければ使わない**（`FapiInteractionIdOf`） |
+| **ログの行** | OPERATION のログは E2E の対象外 |
+
 ##### `client_assertion` と CIBA の署名した要求で PS256 を受け、FAPI の登録・CIBA は RS256 を断る（`RT-395.*`。#395）
 
 | | 測ること |
