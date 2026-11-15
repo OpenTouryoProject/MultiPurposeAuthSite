@@ -136,6 +136,21 @@ Expectation-Change: <何が・なぜ変わったか（仕様の該当箇所・Is
 - **導入の PR は、検査されない。** ベース側に検出器が無いので、PR の側の版で動く。**人が差分を確かめ、必須のチェックにするのはマージの後**
 - **`-Range`（段 3）は、導入より前のコミットを見ない。** `-Commit` で個別に見れば、導入前でも見る（6 節の計測に使える）
 
+#### CI で止まったとき（OpenTouryoCodingAgentAssets#14）
+
+段 3 は、PR のマージでないコミットを 1 つずつ、そのコミットのメッセージで判定する。止まったら、上から順に選ぶ
+（止めたときの表示にも同じ順で出る。詳しくは OpenTouryoCodingAgentAssets の `docs/expectation-guard.md` 10 節）。
+**push したコミットのメッセージは書き直さない**（`--amend`・`rebase` と force push）。`5th_agent` などの共有のブランチでは、ほかの人・セッションの手元が壊れる。
+
+1. **後のコミットで承認する**（履歴を書き換えない）：
+   `git commit --allow-empty -m "期待値の変更を承認する" -m "Expectation-Change-For: <止まったコミットの sha> <何が・なぜ変わったか（#NNN）>"` を push する。
+   1 行に 1 コミット。効くのは CI だけで、手元のフックの判定は変わらない。
+   **トレーラーの書き方の誤り**（最後の段落に無い・全角の「：」・綴り・語彙に無い値）で止まったときも、これで直す。理由に、直した行を書く
+   （例：`Expectation-Change-For: 1a2b3c4d トレーラーの書き方の誤り（#NNN。直した行 Found-By: review-other-model）`）。
+   **CI はベース側の検出器で判定する**ので、宛先のブランチ（develop）に、この写し（OpenTouryoCodingAgentAssets@945878d 以降）が入るまでは効かない。そのときは 2
+2. **管理者が、その PR だけ保護を迂回してマージする**（マージの画面の「Merge without waiting for requirements to be met」）。期待値を変えた理由を、PR のコメントに残す。
+   必須のチェック（`expectation-change`・`testcases-regenerated`）を外す・ワークフローを止める、はしない（すべての PR の保護が外れる／チェックが結果を返さず、PR がかえって止まる）
+
 #### 共通の本体と、このリポジトリの規則（#335）
 
 **検出器の本体は、OpenTouryoCodingAgentAssets の共通の本体の写しである**（原本は同リポジトリの `src/quality/ExpectationGuard/`。
