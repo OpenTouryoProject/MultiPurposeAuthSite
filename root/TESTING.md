@@ -1407,6 +1407,18 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
 
+##### CIBA の署名した要求の寿命は 60 分まで（`RT-388.*`。#388）
+
+| | 測ること |
+|---|---|
+| **`RT-388.1`** | **`exp` が `nbf` から 70 分先・`nbf` が 70 分前の要求は、`400` ＋ `invalid_request`**（FAPI-CIBA ID1 §5.2.2 の 9）。**`auth_req_id` を返さない。** 断る理由が寿命であることも `error_description` で確かめる |
+| **`RT-388.2`** | **境界**：寿命がちょうど 60 分の要求は寿命では断らず（その先の確かめで止まってよい）、60 分 1 秒なら断る |
+
+- **判定は `CmnCibaEndpoint.ValidateCibaAuthZReqParam`**（`request` と、`/ros` に預けた `request_uri` の両方の経路が通る。**テストは `request` の経路**。`/ros` の `VerifyFapiTimeClaims` は fapi1・fapi2 の登録だけで、`fapi_ciba` には掛からない）。**`nbf` が 60 分より前でなく、`exp` が `nbf` から 60 分以内**（PAR・`/ros` の FAPI の登録の `VerifyFapiTimeClaims` と同じ形。#336）
+- **CIBA のすべての要求に掛ける**（CIBA は `fapi_ciba` の登録にしか許していないので、`fapi_ciba` だけに掛けるのと同じ範囲。本文の「決めること」）
+- **寿命の短い要求（既定の 10 分）が通ることは `RT-233.1`・`EX-8` が測る**
+- 直す前は、(1) の要求が寿命では断られず、その先の `access_denied`（端末の登録が無い）になった（net10.0 版で確かめた）
+
 ##### fapi1 の登録は、JARM の認可要求だけを受ける（`RT-381.*`。#381）
 
 | | 測ること |
@@ -4691,6 +4703,8 @@ E2E で 2 件測っている。
 - **`-Filter` と併せて使う。** 寿命が短いので、他のテストは落ちる
 - **既定の通しでは、`RT-188` を除外している**（`test.ps1` が `FullyQualifiedName!~LifetimeTests` を足す）。
   既定の寿命では測れず、**xUnit は「ケースが 0 件の Theory」を失敗として数える**ため
+- **除外は名前の部分一致である。** **クラス名に `LifetimeTests`・`DPoPNonceTests`・`ImplicitDisabledTests` を含めると、既定の通しから黙って外れる**
+  （#388 で `CibaRequestLifetimeTests` と名付け、`-Filter` で回しても 0 件になった。`CibaRequestExpiryTests` に改めた）
 - そのため **`RT-188` は `TESTCASES.md`（原本）に載らない。**
   原本は通しの結果から作るので、`-ShortLifetimes` の実行で `-UpdateTestCases` を付けないこと
   （付けると、その 6 件だけの原本に置き換わる）

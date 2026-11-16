@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=a5d0b528-6821-4b2f-95c1-1adfb60720c6&code=bogus
+1. GET /Account/EmailConfirmation?userId=2b8a178e-1c5e-4a43-af8c-f20ebe4a2bcb&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=a5d0b528-6821-4b2f-95c1-1adfb60720c6&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=a5d0b528-6821-4b2f-95c1-1adfb60720c6&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=2b8a178e-1c5e-4a43-af8c-f20ebe4a2bcb&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=2b8a178e-1c5e-4a43-af8c-f20ebe4a2bcb&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12653,6 +12653,51 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - invalid_grant
 - トークンを出さない
 - access_token が返る
+
+## RT-388.1 CIBA の署名した要求の寿命が 60 分を超える（exp が nbf から 70 分先・nbf が 70 分前）なら、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA は、署名した認証要求に nbf・exp を求め、寿命を 60 分以内に限ることを求める。****以前は exp が過ぎていないこと・nbf が先でないことだけを見ていた**（適合性テストの ensure-request-object-exp-is-70-minutes-in-future-fails・nbf-is-70-minutes-in-past-fails）。 |
+| 根拠 | FAPI-CIBA ID1 §5.2.2 / CIBA Core §13 / #388 |
+| テスト | `RT38801_CIBAの要求の寿命が60分を超えるなら断る` |
+
+**手順**
+
+1. exp が nbf から 70 分先（nbf は今）
+1. nbf が 70 分前（exp は 5 分先）
+
+**検証（合否を判定する）**
+
+- exp が 70 分先 : auth_req_id を返さない（利用者へ通知しない）
+- exp が 70 分先 : HTTP 400
+- exp が 70 分先 : invalid_request
+- exp が 70 分先 : 断る理由は寿命
+- nbf が 70 分前 : auth_req_id を返さない（利用者へ通知しない）
+- nbf が 70 分前 : HTTP 400
+- nbf が 70 分前 : invalid_request
+- nbf が 70 分前 : 断る理由は寿命
+
+## RT-388.2 CIBA の署名した要求の寿命がちょうど 60 分なら寿命では断らず、60 分 1 秒なら invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA は寿命を「60 分以内」に限る**（60 分ちょうどは許す）。**境界の取り違え（< と <=）を測る。** 60 分ちょうどの要求は、寿命の後の確かめ（端末の登録など）で止まってよい。 |
+| 根拠 | FAPI-CIBA ID1 §5.2.2 / #388 |
+| テスト | `RT38802_寿命がちょうど60分なら寿命では断らない` |
+
+**手順**
+
+1. 寿命がちょうど 60 分（nbf は今、exp は 3600 秒先）は、寿命では断らない
+1. 寿命が 60 分 1 秒（exp は 3601 秒先）は、断る
+
+**検証（合否を判定する）**
+
+- 60 分ちょうど : 寿命では断らない
+- 60 分 1 秒 : auth_req_id を返さない（利用者へ通知しない）
+- 60 分 1 秒 : HTTP 400
+- 60 分 1 秒 : invalid_request
+- 60 分 1 秒 : 断る理由は寿命
 
 ## RT-390.1 鍵を登録していない SP の要求で、NCName の形でない ID を、応答の InResponseTo に使わない
 
