@@ -189,6 +189,8 @@
 - [ ] リプレイ（`InResponseTo`・`ID`）、`Audience`、有効期限（`NotBefore` / `NotOnOrAfter`）
 - [ ] **SP の役で送る署名した要求に、送り先の `Destination` を入れているか**（SAML Bindings §3.4.5.2・§3.5.5.2 の MUST）。
   **自己テストと ID 連携の `AuthnRequest` に入れていなかった**（Open棟梁 の従来の版。OpenTouryo#693 で `[Obsolete]`。#391。`RT-391.1`・`SA-6.1`）。
+  **IdP の役で受けた要求の `Destination` を、受けた口の URL と照合しているか**（在れば照合し、違えば捨てる。SAML Core 3.2.1。署名した要求には必須）。
+  **送る側だけ直して、受ける側を照合していなかった**（#392。`RT-392.1`・`.2`）。
   **OpenTouryo のアセンブリを更新したら、`CS0618`（`[Obsolete]`）の警告が増えていないかを見る** — **入れ替えで増えた警告は、上流が直し方を示している**
 - [ ] **応答に入れる値のうち、外（要求を送る側・利用者）が決められるものの形を確かめているか。** **部品は値を文字列の置換で埋め込む**（Open棟梁 の `SAML2Bindings.CreateResponse`・`CreateAssertion`）。
   **要求の `ID`（`InResponseTo`）と、EmailAddress の形式の NameID（利用者のメアド）で、署名する応答の構造を変えられた**（#390。`RT-390.1`〜`.3`）。

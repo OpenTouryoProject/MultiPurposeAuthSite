@@ -31,12 +31,14 @@
 //*  2026/10/07  玄人 幸道         新規（#275）
 //*  2026/10/11  玄人 幸道         FromRedirectQuery でSAMLRequestも読めるようにした（#286 の段階 3）
 //*  2026/10/13  玄人 幸道         クエリ文字列の 1 つの値を差し替える口を追加（#293 の段階 4）
+//*  2026/11/16  玄人 幸道         要求に Destination を入れる引数と、署名した Redirect のクエリを作る口を追加（#392）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
 
@@ -55,7 +57,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// | 未登録の `Issuer` | 同上 |
     /// | 壊れた `SAMLRequest` | 同上 |
     ///
-    /// **署名は付けない。**
+    /// **署名は、原則として付けない**（署名した要求が要るときは `ToSignedRedirectQuery`。#392）。
     /// **`jwk_rsa_publickey` を登録していないクライアントは、署名の無い要求を通す**
     /// （`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
     /// **E2E 専用の `TestClient_21` / `TestClient_22` が、その形で登録されている**（`KnownClients`）。
@@ -106,6 +108,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="nameIdFormat">NameIDPolicy の Format（null なら要素を入れない）</param>
         /// <param name="protocolBinding">応答の受け取り方（null なら属性を入れない＝ IdP の既定は Redirect）</param>
         /// <param name="acsUrl">AssertionConsumerServiceURL（null なら属性を入れない＝登録値が使われる）</param>
+        /// <param name="destination">Destination（null なら属性を入れない。#392）</param>
         /// <returns>XML</returns>
         /// <remarks>
         /// **Open棟梁 の `SAML2Const.RequestTemplate` と同じ形**にしてある。
@@ -114,7 +117,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static string BuildAuthnRequest(
             string id, string issuer,
             string nameIdFormat = FormatUnspecified,
-            string protocolBinding = null, string acsUrl = null)
+            string protocolBinding = null, string acsUrl = null, string destination = null)
         {
             StringBuilder sb = new StringBuilder();
 
@@ -130,6 +133,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             if (acsUrl != null)
             {
                 sb.Append(" AssertionConsumerServiceURL=\"" + Xml(acsUrl) + "\"");
+            }
+
+            if (destination != null)
+            {
+                sb.Append(" Destination=\"" + Xml(destination) + "\"");
             }
 
             sb.Append(" xmlns:saml=\"" + UrnAssertion + "\"");
@@ -160,7 +168,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **DEFLATE（生。zlib のヘッダを付けない）→ base64 → URL 符号化**
         /// （SAML 2.0 Bindings 3.4.4.1）。
-        /// **署名は付けない**（この基盤は署名を作らない。クラスの説明を参照）。
+        /// **署名は付けない**（署名したクエリは `ToSignedRedirectQuery`。クラスの説明を参照）。
         /// </remarks>
         public static string ToRedirectQuery(string xml, string relayState = null)
         {
@@ -174,6 +182,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return query;
+        }
+
+        /// <summary>Redirect Binding の、署名したクエリ文字列にする（#392）</summary>
+        /// <param name="xml">AuthnRequest の XML</param>
+        /// <param name="rsa">SP の秘密鍵（RSA）</param>
+        /// <returns>クエリ文字列（`SAMLRequest`・`SigAlg`・`Signature`。先頭に ? は付かない）</returns>
+        /// <remarks>
+        /// **署名の対象は `SAMLRequest=…&amp;SigAlg=…`（送るままの URL 符号化した値）**、RSA-SHA256（SAML Bindings 3.4.4.1）。
+        /// **実装側の部品は使わず、System.Security.Cryptography だけで組む**（`JwsSigner` と同じ考え）。
+        /// </remarks>
+        public static string ToSignedRedirectQuery(string xml, RSA rsa)
+        {
+            string signedOctets = Saml2.ToRedirectQuery(xml)
+                + "&SigAlg=" + Uri.EscapeDataString("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256");
+
+            byte[] signature = rsa.SignData(
+                Encoding.ASCII.GetBytes(signedOctets), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+            return signedOctets + "&Signature=" + Uri.EscapeDataString(Convert.ToBase64String(signature));
         }
 
         /// <summary>POST Binding の SAMLRequest の値にする（#275）</summary>

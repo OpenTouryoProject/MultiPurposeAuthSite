@@ -3587,7 +3587,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 **Open棟梁 の部品の更新（OpenTouryo#693）で従来の版が `[Obsolete]` になり、ビルドの `CS0618` で見つかった。**
 
 - **`destination` を受ける版に替えた**（自己テストは `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint`、ID 連携は上流の SSO の口。`RT-391.1`・`SA-6.1`）
-- **MPAS の IdP の側（`VerifyRequest`）は `Destination` を照合しない**（従来どおり）。**応答の `Audience` を SP の entityID にするのは #389**
+- **MPAS の IdP の側の照合は #392（C-63）**。**応答の `Audience` を SP の entityID にするのは #389**
 
 ### C-62. SAML2 の応答に、要求の `ID` と利用者のメアドを、形を確かめずに入れていた **[Lib][Core][NetFx]** — **✅ 修正済み（#390）**
 
@@ -3607,6 +3607,19 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - **ほかの形式の NameID**（Unspecified の `user.Id`・Persistent の PPID）**と、属性**（DOM の API で入る）**は当たらない**
 - **鍵を登録していない SP の、署名の無い要求を通す扱いは続ける**（返す先は登録した ACS だけ。#276）
 - **残りの値（`Issuer`・`Destination`・`Recipient`。設定と登録の値）も含めて、部品の側で DOM の API で入れる直しは Open棟梁 で行う**（OpenTouryo#700）
+
+### C-63. SAML2 の IdP が、要求の `Destination` を、受けた口の URL と照合していなかった **[Lib][Core][NetFx]** — **✅ 修正済み（#392）**
+
+**SAML Core 3.2.1 は、要求に `Destination` が在れば、受けた場所と一致することを確かめ、違えば要求を捨てることを求める**（MUST。署名の有無によらない）。
+**SAML Bindings §3.4.5.2・§3.5.5.2 は、署名した要求に `Destination` を入れ、受け手が一致を確かめることを求める**（MUST）。
+**Open棟梁 の `SAML2Client.VerifyRequest` は署名と XML の構造までで、MPAS の側でも照合していなかった。** 別の IdP 宛ての署名した要求を、この IdP で使えた。
+**#391（SP の役で送る要求に `Destination` を入れる）の作業中に、原典の 2 文目で気付いた。**
+
+- **`SamlProviders/CmnEndpoints.VerifySamlRequest` で照合する**：`Destination` が在れば `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint` と一字一句で比べる。**署名を検証できた要求には、在ることを求める**
+- **合わなければ、要求を捨てる**（SP へ応答を返さず、エラー画面。理由は OPERATION のログ）。`RT-392.1`・`.2`
+- **署名の無い要求で `Destination` が無いものは、従来どおり通す**（鍵を登録していない SP。#390 の決め）
+- **比べる先は、受けた URL ではなく構成の URL**（SP に知らせている SSO の口。メタデータの `SingleSignOnService` と同じ根）。リバース プロキシの背後でも、SP が送る先と一致する。**構成の URL と、SP に知らせている URL を揃えておくこと**（末尾の `/`・大文字小文字の揺れも違いとして断る）
+- **影響**：**OpenTouryo#693 より前の Open棟梁 で作り、鍵を登録した SP**（`Destination` を入れずに署名する）は、断られるようになる。**署名しない要求でも、`Destination` が違う（空を含む）なら断られるようになる。** 同梱の自己テストと ID 連携の SP は #391 で入れている
 
 ## 5. D. 最新の IdP として不足している機能
 

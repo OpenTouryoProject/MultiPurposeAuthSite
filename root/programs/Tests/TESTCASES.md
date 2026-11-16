@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=6e9f9f57-c88b-4e51-8ce8-9d3686489e30&code=bogus
+1. GET /Account/EmailConfirmation?userId=7bc1772c-7c6d-466a-baf4-207d9b2461fb&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=6e9f9f57-c88b-4e51-8ce8-9d3686489e30&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=6e9f9f57-c88b-4e51-8ce8-9d3686489e30&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=7bc1772c-7c6d-466a-baf4-207d9b2461fb&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=7bc1772c-7c6d-466a-baf4-207d9b2461fb&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12666,6 +12666,67 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - Destination が、要求を送った先と同じ
 - Destination が、要求を送った先と同じ
 - Destination が、要求を送った先と同じ
+
+## RT-392.1 鍵を登録していない SP の、署名の無い要求でも、Destination が受けた口と違えば捨てる（エラー画面）
+
+| | |
+|---|---|
+| 観点 | **SAML Core 3.2.1 は、署名の有無によらず、Destination が在れば受けた場所と照合し、違えば要求を捨てることを求める（MUST）。** **以前は照合していなかった**（#392）。**Destination の無い署名の無い要求は、従来どおり通す**（Bindings の MUST は署名した要求だけ）。 |
+| 根拠 | SAML Core 3.2.1 / #392 |
+| テスト | `RT39201_署名の無い要求でも違うDestinationは捨てる` |
+
+**手順**
+
+1. 対照：Destination が受けた口と同じなら、通る
+1. Destination が無ければ、従来どおり通る
+1. Destination が受けた口と違えば、捨てる（SP へ応答を返さない）
+1. 空の Destination も、受けた場所を指さないので、捨てる
+
+**検証（合否を判定する）**
+
+- SP へ応答を返す
+- StatusCode
+- SP へ応答を返す
+- StatusCode
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+
+## RT-392.2 鍵を登録した SP の署名した要求（Redirect）は、Destination が無いか受けた口と違えば捨てる（エラー画面）
+
+| | |
+|---|---|
+| 観点 | **SAML Bindings 3.4.5.2 は、署名した要求の Destination に送り先の URL を入れ、受け手は受けた場所と一致することを確かめることを求める（MUST）。****以前は照合していなかった**ので、別の IdP 宛ての署名した要求を、この IdP で使えた（#392）。 |
+| 根拠 | SAML Bindings §3.4.5.2 / SAML Core 3.2.1 / #392 |
+| テスト | `RT39202_署名した要求はDestinationが無いか違えば捨てる` |
+
+**手順**
+
+1. 対照：署名して、Destination が受けた口と同じなら、通る（署名を検証できている）
+1. 署名して、Destination が無ければ、捨てる
+1. 署名して、Destination が受けた口と違えば、捨てる
+1. 署名しないで、Destination が受けた口と違えば、署名の検証の失敗（Requester）ではなく、捨てる
+
+**検証（合否を判定する）**
+
+- SP へ応答を返す
+- StatusCode
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+
+**補足**
+
+- **同梱の自己テストと ID 連携の SP は、Destination を入れて署名する**（#391。`RT-391.1`・`SA-6.1`）ので、**流れは従来どおり通る**（`SA-1.*`・`SA-6.*`）。
 
 ## RT-394.1 **署名の alg を登録していない FAPI の登録（fapi1）の access_token・id_token・JARM は ES256 で署名され、JWKS で検証できる。FAPI でない登録は RS256 のまま**
 

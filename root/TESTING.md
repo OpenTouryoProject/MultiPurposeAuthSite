@@ -1263,14 +1263,33 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`SA-6.1`（足した確かめ）** | **ID 連携の `AuthnRequest` の `Destination` が、上流の SSO の口と同じ** |
 
 - **Open棟梁 の部品の更新（OpenTouryo#693）で、従来の `SAML2Client.CreateRedirectRequest`・`CreatePostRequest` が `[Obsolete]` になった。** `destination` を受ける版に替え、ビルドの `CS0618` を 0 件に戻した
-- **MPAS の IdP の側（`VerifyRequest`）は `Destination` を照合しない**ので、流れは従来どおり通る（`SA-1.1`〜`.4`・`SA-6.*`）
+- **MPAS の IdP の側も、#392 で `Destination` を照合するようになった**（`RT-392.*`）。自己テスト・ID 連携の要求は正しい `Destination` を入れるので、流れは従来どおり通る（`SA-1.1`〜`.4`・`SA-6.*`）
 - **部品の更新のほかの変化**（OpenTouryo#683 の `CmnJwtToken.Verify` など）は、両版の E2E の通しで確かめた（MPAS に、その例外を catch して分岐している箇所は無い）
 
 ###### 測っていないこと
 
 | | なぜ |
 |---|---|
-| **上流の IdP が `Destination` を照合して断るか** | MPAS の IdP は照合しない。テストの上流もこの IdP（コンテナ）なので、照合する IdP で測れない |
+| **上流の IdP が `Destination` を照合して断るか** | テストの上流もこの IdP（コンテナ）。**#392 で照合するようになり、`SA-6.*` が通ることで、ID 連携の要求の `Destination` が上流の口と一致していることも確かめている** |
+
+##### SAML2 の IdP は、要求の `Destination` を受けた口の URL と照合する（`RT-392.*`。#392）
+
+| | 測ること |
+|---|---|
+| **`RT-392.1`** | **鍵を登録していない SP の、署名の無い要求**：`Destination` が受けた口と同じ・無いなら通る。**違う・空なら捨てる**（SP へ応答を返さず、エラー画面。SAML Core 3.2.1） |
+| **`RT-392.2`** | **鍵を登録した SP の、署名した要求（Redirect）**：`Destination` が同じなら通る。**無い・違うなら捨てる**（SAML Bindings §3.4.5.2）。**署名しない要求でも、違えば（署名の検証の失敗の `Requester` ではなく）捨てる** |
+
+- **比べる先は `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint`**（自己テスト・ID 連携の SP が入れる値と同じ。#391）。**一字一句で比べる**（ACS URL の照合と同じ扱い）
+- **署名は、テストの側で `SpRp_RsaPfxFilePath` の鍵で付ける**（`Saml2.ToSignedRedirectQuery`。実装側の部品は使わない）。(1) の対照が通ることで、署名を検証できていることも確かめる
+- **照合するのは、署名の検証の後**（署名を検証できたかで「無い」を断るかが決まる）、**`ID` の形の確かめより前**（理由は OPERATION のログに 1 行）
+- 直す前は、どちらも SP へ署名した応答を返していた（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **POST Binding の署名した要求** | 照合は Binding によらず、読み込んだ要求の根の要素で行う。テストの側で XML 署名を作る基盤が無い |
+| **配備の前にリバース プロキシがあり、受けた URL と構成の URL が違う場合** | 比べるのは構成の URL（`OAuth2AuthorizationServerEndpointsRootURI`）。SP に知らせている URL と同じであることが前提 |
 
 ##### SAML2 の応答に、形の合わない要求の `ID`・NameID を入れない（`RT-390.*`。#390）
 

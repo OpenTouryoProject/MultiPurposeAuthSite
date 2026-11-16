@@ -36,6 +36,7 @@
 //*  2026/10/12  玄人 幸道         アサーションにAttributeStatementを足した（#286 の段階 4）
 //*  2026/11/16  玄人 幸道         要求の ID は NCName の形だけを使うようにした（#390）
 //*  2026/11/16  玄人 幸道         NameID に埋め込めない文字を含む値なら、アサーションを作らないようにした（#390）
+//*  2026/11/16  玄人 幸道         要求の Destination を受けた口の URL と照合し、合わなければ捨てるようにした（#392）
 //**********************************************************************************
 
 #if NETFX
@@ -74,6 +75,10 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="iss">out string（要求の Issuer。この製品では client_id）</param>
         /// <param name="inResponseTo">out string（要求の ID。NCName の形でなければ空文字。#390）</param>
         /// <param name="samlRequest2">out XmlDocument（要求。読めなければ null）</param>
+        /// <param name="discard">
+        /// out bool（**要求を捨てる**か。`Destination` が受けた口と合わない・署名した要求に無い。#392）。
+        /// **true なら、SP へ応答を返さず、エラー画面にする**（SAML Core 3.2.1「the request MUST be discarded」）
+        /// </param>
         /// <returns>検証できたか</returns>
         /// <remarks>
         /// **検証は Open棟梁 の `SAML2Client.VerifyRequest`**（署名と XML の構造。#294）。
@@ -82,12 +87,15 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// **鍵が無い SP の要求は、従来どおり通す**（この製品の決め）。
         /// **Open棟梁 は通さない**（鍵を返す処理が null を返せば false）ので、
         /// **その判断はここで行う**（Open棟梁 #634 の補足 3-5）。
+        ///
+        /// **`Destination` は、ここで照合する**（Open棟梁 の `VerifyRequest` は見ない。#392）。
         /// </remarks>
         public static bool VerifySamlRequest(
             string queryString, string samlRequest,
-            out string iss, out string inResponseTo, out XmlDocument samlRequest2)
+            out string iss, out string inResponseTo, out XmlDocument samlRequest2, out bool discard)
         {
             bool hasNoKey = false;
+            discard = false;
 
             bool verified = SAML2Client.VerifyRequest(queryString, samlRequest,
                 requestIss =>
@@ -98,8 +106,33 @@ namespace MultiPurposeAuthSite.SamlProviders
                 },
                 out iss, out inResponseTo, out samlRequest2);
 
+            // **署名を検証できたか**（鍵が無くて通す要求は、署名を確かめていない）。
+            bool signatureVerified = verified;
+
             // - iss : 当該IdP/Stsの仕様（client_idを流用するので）
             iss = CmnEndpoints.ClientIdOf(iss);
+
+            // **Destination の照合**（#392）
+            //   - **在れば、受けた口の URL と一致すること**（SAML Core 3.2.1。署名の有無によらない）
+            //   - **署名を検証できた要求には、在ること**（SAML Bindings 3.4.5.2・3.5.5.2）
+            //   **合わなければ、要求を捨てる**（SP へ応答を返さない。3.2.1「MUST be discarded」）。
+            if (samlRequest2 != null && samlRequest2.DocumentElement != null)
+            {
+                XmlElement root = samlRequest2.DocumentElement;
+                bool hasDestination = root.HasAttribute(SAML2Const.AttrDestination);
+
+                if ((hasDestination && root.GetAttribute(SAML2Const.AttrDestination) != CmnEndpoints.Saml2RequestUrl)
+                    || (!hasDestination && signatureVerified))
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "SAML2 request was discarded: the Destination {0} (Issuer: {1}).",
+                        hasDestination ? "does not match the SAML2 endpoint" : "is missing in the signed request",
+                        LogSanitizer.Sanitize(iss)));
+
+                    discard = true;
+                    return false;
+                }
+            }
 
             if (!verified && hasNoKey)
             {
@@ -276,6 +309,19 @@ namespace MultiPurposeAuthSite.SamlProviders
         }
 
         #region private
+
+        /// <summary>この IdP の SAML2 の口の URL（要求の `Destination` と比べる。#392）</summary>
+        /// <remarks>
+        /// **自己テスト・ID 連携の SP が `Destination` に入れる値と同じ**（#391）。
+        /// **一字一句で比べる**（事前登録の ACS URL の照合と同じ扱い。#276）。
+        /// </remarks>
+        private static string Saml2RequestUrl
+        {
+            get
+            {
+                return Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
+            }
+        }
 
         /// <summary>要求の Issuer から、client_id を作る</summary>
         /// <param name="iss">要求の Issuer</param>
