@@ -1,4 +1,4 @@
-﻿# expectation-guard-source: OpenTouryoCodingAgentAssets@945878daf458 src/quality/ExpectationGuard/tests/Run-Tests.ps1 sha256:da9b3124dbec6d749e067611edb98d5d5ef6603b8432ecda1375f81f6264a741
+﻿# expectation-guard-source: OpenTouryoCodingAgentAssets@b1665b271e4f src/quality/ExpectationGuard/tests/Run-Tests.ps1 sha256:da9b3124dbec6d749e067611edb98d5d5ef6603b8432ecda1375f81f6264a741
 <#
 .SYNOPSIS
     期待値の変更の検出器の、判定の用例（cases.psd1）を回す（OpenTouryoCodingAgentAssets#3）。

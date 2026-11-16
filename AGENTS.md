@@ -19,7 +19,7 @@ https://github.com/OpenTouryoProject/MultiPurposeAuthSite
 
 ### 変更の前に QUALITY.md を読む（#315）
 
-**どこを・何で・どれだけ確かめるかは [`QUALITY.md`](QUALITY.md)（品質の羅針盤）が決める。**
+**どこを・何で・どれだけ確かめるかは [`QUALITY.md`](QUALITY.md)（品質の羅針盤）と、共通の決まり [`QUALITY.common.md`](QUALITY.common.md) が決める**（節の番号は同じ。common は OpenTouryoCodingAgentAssets の配布物で、ここでは直さない）。
 作業の対象がどの名前空間で、リスクはどれか。人が必ず見る箇所に触れるか。
 **期待値の変更**（テストの削除・Skip の追加・検証の削除・根拠の変更）を含むか。
 含むなら報告の冒頭に書き、トレーラー `Expectation-Change: <理由>` の文面を提案する。
@@ -41,7 +41,7 @@ https://github.com/OpenTouryoProject/MultiPurposeAuthSite
 
 | 段 | エージェント | 人 |
 |---|---|---|
-| **1. 着手**（#NNN の投入） | Issue を読み直し（`gh issue view … --comments`）、[`QUALITY.md`](QUALITY.md) で名前空間・リスク・人が必ず見る箇所を引く。**計画を示す**：何を、どの順で、どこで区切るか（`fixing` の単位）、回す検証、**本文の案と違うところ**、決めてほしいこと | 計画を承認する。決めることに答える |
+| **1. 着手**（#NNN の投入） | Issue を読み直し（`gh issue view NNN --json title,body,comments`）、[`QUALITY.md`](QUALITY.md) で名前空間・リスク・人が必ず見る箇所を引く。**計画を示す**：何を、どの順で、どこで区切るか（`fixing` の単位）、回す検証、**本文の案と違うところ**、決めてほしいこと | 計画を承認する。決めることに答える |
 | **2. 途中**（`fixing #NNN`。n 回） | 一区切りを実装し、変えたところに届くテストを回す（下の「コミットの段階で、回す量を変える」）。**報告に、変えたファイル・回したもの・後回しにしたもの・コミット メッセージの案と、残りの計画を書く** | コミットする |
 | **3. 完了**（`fixed #NNN`） | **後回しの分も含めて回す**（コミットの直前の状態で。両版の E2E の通し、テストを変えたなら `TESTCASES.md` の作り直し）。**リスク「高」なら、別モデルのレビュー（`quality-reviewer`）も回し、指摘に判定を付ける**（上の節）。報告に、結果・**コミット メッセージの案**（`Expectation-Change:`・`Found-By:` が要るなら、その文面も。回したテスト・レビューの `Tested-with:`・`Reviewed-with:` も）を書く。続けて**完了コメントの文面**を示す | コミットする。完了コメントを承認する。Issue を閉じる（`fixed` のコミットが develop に入ると閉じる） |
 
@@ -97,6 +97,15 @@ https://github.com/OpenTouryoProject/MultiPurposeAuthSite
 - **推測と、動かして確かめたことを分けて書く。** 起票の前に確かめられるなら、確かめる
 - **依存パッケージの脆弱性は、この節ではなく「依存パッケージの脆弱性を見つけたら」に従う**（その場で直す）
 
+### 作業の見える化（`AGENT-DASHBOARD.md`）
+
+**サブ エージェントを呼ぶか、人に依頼・判断を仰ぐ作業では、ルートの `AGENT-DASHBOARD.md`（git の管理外）を書き続ける**（OpenTouryoCodingAgentAssets#19）。
+途中で呼ぶことになったら、**呼ぶ前に**作る（`quality-reviewer`・`opentouryo-expectation-reviewer` を回すときも同じ）。
+
+- 書くのは主のセッションだけ。形はルートの `AGENT-DASHBOARD.sample.md`（最初に作るときに読む）。セッションごとの節で、自分の節だけを書く直前に読み直して書き換える
+- 書き直すのは、作業の始まりと終わり・サブ エージェントを呼んだときと報告を受けたとき・人に聞いたときと答えを受けたとき（時刻はそのとき取る）
+- 終わったら自分の節を「終了」にし、次に始めたら終了した節を消す（人への依頼が残る節は、消さずに人に確かめる）
+
 ### Git 操作は行わない（状態を変える操作をしない）
 
 **成果物の検収は人が行う。** エージェントは作業結果をワーキング ツリーに残すところまでを担当し、
@@ -123,11 +132,11 @@ Git 操作は人が手動で行う。
 
 エージェント自身がコミットするよう指示された場合は、その時の指定に従う（上記は**提示する文面**の話）。
 
-**バグを直すコミット（`fixed #NNN`）には、見つけた手段のトレーラー `Found-By: <手段> [<補足>]` を付ける**（[`QUALITY.md`](QUALITY.md) 5 節。#335）。
+**バグを直すコミット（`fixed #NNN`）には、見つけた手段のトレーラー `Found-By: <手段> [<補足>]` を付ける**（[`QUALITY.common.md`](QUALITY.common.md) 5 節。#335）。
 **見つけた経緯は、そのセッションのエージェントが最もよく知っている。** コミット メッセージの案に入れる。
 推測で埋めず、分からなければ人に聞く。機能の追加には付けない。語彙は `root/rules.common.psd1`。
 
-**確かめ方も、トレーラーで残す**（[`QUALITY.md`](QUALITY.md) 5 節。OpenTouryoCodingAgentAssets#12）。
+**確かめ方も、トレーラーで残す**（[`QUALITY.common.md`](QUALITY.common.md) 5 節。OpenTouryoCodingAgentAssets#12）。
 テストを流したら `Tested-with: <種類>[, <種類>]`（コードを変えて流していなければ `Tested-with: none`。無いと警告）、レビュー役（`.claude/agents/` の役の定義）か人がレビューしたら
 `Reviewed-with: <役> [(<モデル ID>)]`（人は `human`。役ごとに行を分ける）。**流していないテスト・回していないレビューは書かない。**
 トレーラーは**最後の段落**（本文との間に空行を 1 つ）に、空行を挟まずに並べる。git はそこしか読まない（検出器も止める）。
