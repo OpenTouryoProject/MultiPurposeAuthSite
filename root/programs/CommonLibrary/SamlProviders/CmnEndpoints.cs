@@ -34,6 +34,8 @@
 //*  2026/10/07  玄人 幸道         アサーションの有効期限の単位を直した（分→秒。#276）
 //*  2026/10/07  玄人 幸道         エラー応答にAssertionを組み込まないようにした（#278）
 //*  2026/10/12  玄人 幸道         アサーションにAttributeStatementを足した（#286 の段階 4）
+//*  2026/11/16  玄人 幸道         要求の ID は NCName の形だけを使うようにした（#390）
+//*  2026/11/16  玄人 幸道         NameID に埋め込めない文字を含む値なら、アサーションを作らないようにした（#390）
 //**********************************************************************************
 
 #if NETFX
@@ -43,6 +45,7 @@ using MultiPurposeAuthSite.Entity;
 #endif
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Util.Sts;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
@@ -55,6 +58,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.Log;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Jwt;
@@ -68,7 +72,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="queryString">string（Redirect Binding のときのクエリ文字列。POST なら空）</param>
         /// <param name="samlRequest">string（POST Binding のときの SAMLRequest）</param>
         /// <param name="iss">out string（要求の Issuer。この製品では client_id）</param>
-        /// <param name="inResponseTo">out string（要求の ID）</param>
+        /// <param name="inResponseTo">out string（要求の ID。NCName の形でなければ空文字。#390）</param>
         /// <param name="samlRequest2">out XmlDocument（要求。読めなければ null）</param>
         /// <returns>検証できたか</returns>
         /// <remarks>
@@ -101,6 +105,22 @@ namespace MultiPurposeAuthSite.SamlProviders
             {
                 // 鍵がない場合は、通す。
                 verified = true;
+            }
+
+            // **要求の ID は、xs:ID（NCName）の形のものだけを使う**（SAML Core 1.3.4。#390）。
+            //   **ID は送る側が決める値で、署名の検証より前に取り出される。**
+            //   **この値は、IdP が署名する応答の InResponseTo に入る**（成功の応答にも、エラー応答にも）。
+            //   **Open棟梁 の部品は、値を文字列の置換で応答に埋め込む**ので、
+            //   形の合わない値は、検証の失敗として扱い、応答にも使わない。
+            if (!CmnEndpoints.IsNCName(inResponseTo))
+            {
+                // **署名の検証の失敗と見分けられるよう、別に残す**（値は書かない）。
+                Logging.MyOperationTrace(string.Format(
+                    "SAML2 request was refused: the ID is not an NCName (Issuer: {0}).",
+                    LogSanitizer.Sanitize(iss)));
+
+                inResponseTo = "";
+                verified = false;
             }
 
             return verified;
@@ -209,6 +229,23 @@ namespace MultiPurposeAuthSite.SamlProviders
                 {
                     attributes = CmnEndpoints.AttributesOf(user.Email, user.UserName, user.EmailConfirmed);
                 }
+
+                // **NameID に `<`・`&`・`{`・XML で使えない文字を含む値は入れない**（#390）。
+                //   **Open棟梁 の部品は、NameID を文字列の置換で要素の中に埋め込む**ので、
+                //   これらの文字はアサーションの構造や値を変えるか、XML を壊す。
+                //   **EmailAddress の形式では、利用者のメアドがそのまま入る**（net10.0 版の検証は `<` を通す）。
+                //   **エスケープはしない**（部品が値を DOM の API で入れるようになったとき、二重になるため）。
+                //   **アサーションを作らず、Responder のエラー応答にする**（SAML Core 3.2.2.2）。
+                if (CmnEndpoints.HasXmlMarkup(sub))
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "SAML2 response was not issued: the NameID ({0}) contains characters that cannot be embedded (client_id: {1}).",
+                        nameIDFormat.Value, LogSanitizer.Sanitize(iss)));
+
+                    statusCode = SAML2Enum.StatusCode.Responder;
+                    sub = "";
+                    attributes = null;
+                }
             }
 
             //  **応答の組み立てと署名は Open棟梁 の `SAML2Client`**（#294）。
@@ -247,6 +284,61 @@ namespace MultiPurposeAuthSite.SamlProviders
         private static string ClientIdOf(string iss)
         {
             return (iss ?? "").Replace("http://", "");
+        }
+
+        /// <summary>値が NCName（xs:ID の字句の形）か</summary>
+        /// <param name="value">値</param>
+        /// <returns>NCName なら true（null・空は false）</returns>
+        /// <remarks>
+        /// **NCName は、引用符・`&lt;`・`&amp;`・空白・`:` を含まない**（Namespaces in XML 1.0 §3）。
+        /// </remarks>
+        private static bool IsNCName(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            try
+            {
+                XmlConvert.VerifyNCName(value);
+                return true;
+            }
+            catch (XmlException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>テンプレートの要素の中身に、文字列の置換で入れられない値か</summary>
+        /// <param name="value">値</param>
+        /// <returns>入れられなければ true</returns>
+        /// <remarks>
+        /// - `&lt;`・`&amp;`：XML の構造を変えるか壊す
+        /// - `{`：部品は置換を順に行うので、後の置換の印（`{Recipient}` など）が書き換わる
+        /// - XML で使えない文字（制御文字など）：XML を壊す
+        /// </remarks>
+        private static bool HasXmlMarkup(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            if (value.IndexOfAny(new char[] { '<', '&', '{' }) >= 0)
+            {
+                return true;
+            }
+
+            try
+            {
+                XmlConvert.VerifyXmlChars(value);
+                return false;
+            }
+            catch (XmlException)
+            {
+                return true;
+            }
         }
 
         /// <summary>client_id に登録された、署名を検証する鍵（RSA）</summary>

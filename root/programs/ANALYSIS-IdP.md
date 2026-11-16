@@ -3589,6 +3589,25 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 - **`destination` を受ける版に替えた**（自己テストは `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint`、ID 連携は上流の SSO の口。`RT-391.1`・`SA-6.1`）
 - **MPAS の IdP の側（`VerifyRequest`）は `Destination` を照合しない**（従来どおり）。**応答の `Audience` を SP の entityID にするのは #389**
 
+### C-62. SAML2 の応答に、要求の `ID` と利用者のメアドを、形を確かめずに入れていた **[Lib][Core][NetFx]** — **✅ 修正済み（#390）**
+
+**Open棟梁 の部品（`SAML2Bindings.CreateResponse`・`CreateAssertion`）は、値を文字列の置換で XML のテンプレートに埋め込む**（エスケープしない）。
+MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。外から決められる値が 2 つ入っていた。
+
+| 値 | 入る所 | 誰が決めるか |
+|---|---|---|
+| **要求の `ID`** | 応答の `InResponseTo`（成功の応答にも、エラー応答にも） | **要求を送る側。** 署名の検証より前に取り出される（**鍵を登録した SP でも、検証に失敗したエラー応答に入る**） |
+| **NameID**（EmailAddress の形式） | アサーションの `NameID` | **利用者**（メアド。**net10.0 版の `[EmailAddress]` は `<` を通す**） |
+
+**どちらも、応答の構造を変えられた**（E2E で確かめた）。
+
+- **要求の `ID` は、`xs:ID`（NCName）の形のものだけを使う**（SAML Core 1.3.4。`SamlProviders/CmnEndpoints.VerifySamlRequest`）。**形が違えば検証の失敗として扱い、エラー応答にも使わない**（`InResponseTo` は空）。`RT-390.1`・`.2`
+- **要求の `ID` の形で断ったときは、署名の検証の失敗とは別の行をログに残す。** 署名した要求でも、`ID` が NCName でなければ断る（xs:ID に反する SP だけが当たる）
+- **NameID に `<`・`&`・`{`・XML で使えない文字を含むなら、アサーションを作らず `Responder` のエラー応答にする**（`CreateSamlResponse`。`{` は、部品が置換を順に行うので、後の置換の印が書き換わるため）。**エスケープはしない**（部品が値を DOM の API で入れるようになったとき、二重になるため）。`&` は、以前から XML が壊れてエラーになっていた。`RT-390.3`
+- **ほかの形式の NameID**（Unspecified の `user.Id`・Persistent の PPID）**と、属性**（DOM の API で入る）**は当たらない**
+- **鍵を登録していない SP の、署名の無い要求を通す扱いは続ける**（返す先は登録した ACS だけ。#276）
+- **残りの値（`Issuer`・`Destination`・`Recipient`。設定と登録の値）も含めて、部品の側で DOM の API で入れる直しは Open棟梁 で行う**（OpenTouryo#700）
+
 ## 5. D. 最新の IdP として不足している機能
 
 | # | 仕様 | 状況 | 影響 |

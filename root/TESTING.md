@@ -1272,6 +1272,28 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **上流の IdP が `Destination` を照合して断るか** | MPAS の IdP は照合しない。テストの上流もこの IdP（コンテナ）なので、照合する IdP で測れない |
 
+##### SAML2 の応答に、形の合わない要求の `ID`・NameID を入れない（`RT-390.*`。#390）
+
+| | 測ること |
+|---|---|
+| **`RT-390.1`** | **鍵を登録していない SP**：NCName の `ID`（`_`・`.`・`-` を含む）は通り、`InResponseTo` に返る。**引用符・空白、`<`・`&` を含む `ID`、数字で始まる `ID`、`:` を含む `ID` は `Requester` で、`InResponseTo` は空、応答の構造が変わらない**（SAML Core 1.3.4） |
+| **`RT-390.2`** | **鍵を登録した SP の署名の無い要求**（エラー応答の経路）でも、同じく構造が変わらない |
+| **`RT-390.3`** | **NameID（EmailAddress の形式の利用者のメアド）に `<`・`&` を含むなら、アサーションを作らず `Responder`。** 使い捨ての利用者を管理画面から作る（**net48 版は要求の検証がフォームの `<` を断るので、`&` で測る**） |
+
+- **Open棟梁 の部品は、値を文字列の置換で応答に埋め込む。** 直す前は、`RT-390.1`・`.2` で `Response` の根の要素に属性が、`RT-390.3` でアサーションに要素が増えていた（net10.0 版で確かめた）
+- **要求の XML は、テストの側でエスケープして組み立てる**（`Saml2.BuildAuthnRequest`）。要求そのものは正しい XML で、IdP が取り出す値が上の文字を含む
+- **エスケープはしない**（部品が値を DOM の API で入れるようになったとき、二重になるため）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ID 連携で上流から来たメアド** | 同じ `CreateSamlResponse` の確認を通る（利用者の値として入る） |
+| **`Issuer`・`Destination`・`Recipient`** | 設定と登録の値。部品の側で DOM の API で入れる直しを Open棟梁 で行う（OpenTouryo#700） |
+| **NameID の `{`・XML で使えない文字** | 同じ確認（`HasXmlMarkup`）で断る。`{` は、部品が置換を順に行うので、後の置換の印（`{Recipient}` など）が書き換わるため |
+| **Redirect Binding で返る応答** | 確認は応答を作る前（`VerifySamlRequest`・`CreateSamlResponse`）で、Binding によらない |
+| **鍵を登録した SP の、署名した要求の NCName でない `ID`** | 署名の有無によらず同じ確認で断る（ログは署名の失敗と別の行に残す） |
+
 ##### CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する（`RT-387.*`。#387）
 
 | | 測ること |

@@ -190,6 +190,9 @@
 - [ ] **SP の役で送る署名した要求に、送り先の `Destination` を入れているか**（SAML Bindings §3.4.5.2・§3.5.5.2 の MUST）。
   **自己テストと ID 連携の `AuthnRequest` に入れていなかった**（Open棟梁 の従来の版。OpenTouryo#693 で `[Obsolete]`。#391。`RT-391.1`・`SA-6.1`）。
   **OpenTouryo のアセンブリを更新したら、`CS0618`（`[Obsolete]`）の警告が増えていないかを見る** — **入れ替えで増えた警告は、上流が直し方を示している**
+- [ ] **応答に入れる値のうち、外（要求を送る側・利用者）が決められるものの形を確かめているか。** **部品は値を文字列の置換で埋め込む**（Open棟梁 の `SAML2Bindings.CreateResponse`・`CreateAssertion`）。
+  **要求の `ID`（`InResponseTo`）と、EmailAddress の形式の NameID（利用者のメアド）で、署名する応答の構造を変えられた**（#390。`RT-390.1`〜`.3`）。
+  **要求から取った値は、署名の検証に失敗したエラー応答にも入る**ので、鍵を登録した SP でも当たる
 
 ### Web のセキュリティ（`Controllers`）
 

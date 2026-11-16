@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus
+1. GET /Account/EmailConfirmation?userId=6e9f9f57-c88b-4e51-8ce8-9d3686489e30&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=6e9f9f57-c88b-4e51-8ce8-9d3686489e30&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=6e9f9f57-c88b-4e51-8ce8-9d3686489e30&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12537,6 +12537,113 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - invalid_grant
 - トークンを出さない
 - access_token が返る
+
+## RT-390.1 鍵を登録していない SP の要求で、NCName の形でない ID を、応答の InResponseTo に使わない
+
+| | |
+|---|---|
+| 観点 | **要求の `ID` は送る側が決め、署名の検証より前に取り出され、IdP が署名する応答に入る。****Open棟梁 の部品は値を文字列の置換で埋め込む**ので、**XML として意味のある文字を含む `ID` で、応答の構造が変わっていた。****`ID` は `xs:ID`（NCName）なので、形の合わないものは検証の失敗とし、応答に使わない**（#390）。 |
+| 根拠 | SAML Core 1.3.4 / SAML Core 3.2.2 / #390 |
+| テスト | `RT39001_NCNameでないIDを応答に使わない` |
+
+**手順**
+
+1. 対照：NCName の ID（`_`・`.`・`-` を含む）は通り、InResponseTo に返る
+1. 引用符と空白を含む ID は Requester で、応答の構造が変わらない
+1. `<`・`&` を含む ID も Requester で、応答を読める
+1. 数字で始まる ID・`:` を含む ID も NCName ではないので、Requester
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- StatusCode
+- InResponseTo（送った要求の ID）
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+
+**補足**
+
+- **鍵の無い SP の要求を、署名を確かめずに通す扱いは続ける**（#390 の決め）。**要求から取った値（`ID`）の形を確かめる**ことで、応答に入る値を絞る。**`nameID`・ACS の URL を DOM の API で入れる直しは、Open棟梁 の側で行う。**
+
+## RT-390.2 鍵を登録した SP の、署名の無い要求（エラー応答の経路）でも、NCName の形でない ID を使わない
+
+| | |
+|---|---|
+| 観点 | **署名の検証に失敗しても、IdP は要求の `ID` を `InResponseTo` に入れた、署名したエラー応答を返す**（`AccountController.Saml2` の Error Response の枝）。**`ID` は検証の前に取り出される**ので、**鍵を登録した SP でも当たっていた**（#390）。 |
+| 根拠 | SAML Core 1.3.4 / SAML Core 3.2.2 / #390 |
+| テスト | `RT39002_エラー応答でもNCNameでないIDを使わない` |
+
+**手順**
+
+1. 引用符と空白を含む ID で、署名の無い要求を送る
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+
+**補足**
+
+- **NCName の ID なら、エラー応答の `InResponseTo` に返る**（`SA-5.1`・`SA-5.4`）。
+
+## RT-390.3 NameID（EmailAddress の形式の利用者のメアド）に < や & を含むなら、アサーションを作らず Responder を返す
+
+| | |
+|---|---|
+| 観点 | **Open棟梁 の部品は、NameID を文字列の置換で要素の中に埋め込む。****EmailAddress の形式では利用者のメアドがそのまま入り、net10.0 版の `[EmailAddress]` は `<` を通す。****`<`・`&` を含む値は、アサーションの構造を変えるか XML を壊すので、アサーションを作らない**（#390）。**エスケープはしない**（部品が値を DOM の API で入れるようになったとき、二重になるため）。 |
+| 根拠 | SAML Core 3.2.2.2 / #390 |
+| テスト | `RT39003_NameIDにマークアップの文字を含むならアサーションを作らない` |
+
+**手順**
+
+1. メアドに `<` を含む利用者を作る（受けない版は `&` にする）
+1. EmailAddress の形式で要求する
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答に、要素が増えていない（構造が変わらない）
+- StatusCode
+- Assertion を入れない
+
+**補足**
+
+- **ほかの形式（Unspecified の `user.Id`・Persistent の PPID）は、サーバが作る値**なので当たらない。**値を DOM の API で入れる直しは、Open棟梁 の側で行う。**
 
 ## RT-391.1 **自己テストの SP の 4 通りの SAML2 の要求（Redirect・POST）に、送った先と同じ Destination が入る**
 
