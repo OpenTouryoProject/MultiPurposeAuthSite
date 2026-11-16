@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=62e2d9ae-821f-4f21-916c-e1d4e4cc0266&code=bogus
+1. GET /Account/EmailConfirmation?userId=a15af95a-ee41-4171-a930-12b596d48b17&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=62e2d9ae-821f-4f21-916c-e1d4e4cc0266&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=62e2d9ae-821f-4f21-916c-e1d4e4cc0266&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=a15af95a-ee41-4171-a930-12b596d48b17&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=a15af95a-ee41-4171-a930-12b596d48b17&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12452,6 +12452,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-382.1 fapi1 の登録の openid の認可要求は、nonce が無ければ invalid_request で断る（クエリ・PAR とも）。openid を含まない要求・fapi1 でない登録は従来どおり
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Baseline は、openid を要求するクライアントに対して、認可サーバが nonce を求めることを求める。****以前は response_type=code の fapi1 の要求が nonce 無しで通っていた**（適合性テストの ensure-request-object-without-nonce-fails）。**OIDC Core の Authorization Code フローでは nonce は任意**なので、fapi1 でない登録は変えない。 |
+| 根拠 | FAPI 1.0 Baseline §5.2.2.2 / OIDC Core 1.0 §3.1.2.1 / #382 |
+| テスト | `RT38201_fapi1の登録のopenidの要求はnonceが無ければ断る` |
+
+**手順**
+
+1. fapi1・openid・nonce 無し（クエリ）は、invalid_request を RP へ返す
+1. 対照：fapi1・openid・nonce 在り（クエリ）は、code を返す
+1. fapi1・openid・nonce 無し（PAR）は、400 ＋ invalid_request
+1. fapi1・openid を含まない要求は、nonce 無しでも nonce では断らない
+1. fapi1 でない登録・openid・nonce 無しは、従来どおり code を返す（OIDC Core では任意）
+
+**検証（合否を判定する）**
+
+- error
+- code を返さない
+- fapi1・nonce 在り : code が返る
+- PAR : HTTP 400
+- PAR : invalid_request
+- fapi1・openid 無し : code が返る
+- normal・nonce 無し : code が返る
 
 ## RT-383.1 fapi1 の登録の /par は、S256 の PKCE だけを受け、plain・code_challenge_method の省略・PKCE 無しを invalid_request で断る
 

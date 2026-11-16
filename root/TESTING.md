@@ -1407,6 +1407,23 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
 
+##### fapi1 の登録の `openid` の認可要求では、`nonce` を必須にする（`RT-382.*`。#382）
+
+| | 測ること |
+|---|---|
+| **`RT-382.1`** | **fapi1 の登録の `openid` の要求は、`nonce` が無ければ `invalid_request`**（クエリは RP へ返す。PAR は `400`）。`nonce` が在れば code を返す。**`openid` を含まない fapi1 の要求・fapi1 でない登録は、従来どおり `nonce` 無しで通る**（OIDC Core 1.0 §3.1.2.1 では任意） |
+
+- **判定は `CmnEndpoints.ValidateAuthZReqParam` の「OIDC チェック 2」**（PAR と `/authorize` で共通）。**`response_type` によらず、fapi1 の登録なら必須**（FAPI 1.0 Baseline §5.2.2.2 の 1）
+- **Request Object の外の `nonce` は使わない**（FAPI 1.0 Advanced §5.2.2 の 10）ので、Request Object の中に無ければ「無い」として断る（適合性テストの `ensure-request-object-without-nonce-fails`）
+- **fapi2 は `nonce` を求めない**（FAPI 2.0 Security Profile）ので変えていない
+- 直す前は、(1) の要求に `code` が返った（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi1 の登録の Request Object（JAR）で、外にだけ `nonce` を置いた要求** | Request Object の外の値を使わないのは既存の振る舞い。適合性テストの FAPI 1.0 Advanced が測る |
+
 ##### fapi1 の登録の PAR では、S256 の PKCE を必須にする（`RT-383.*`。#383）
 
 | | 測ること |

@@ -38,6 +38,7 @@
 //*  2026/11/11  玄人 幸道         response_type=code token では nonce を必須にしない（OIDC Core 1.0 §3.3.2.1。#361）
 //*  2026/11/13  玄人 幸道         fapi2 の登録では PKCE を必須にし、S256 に限る。RequirePkceS256 でも認可要求で plain を断る（FAPI 2.0 Security Profile §5.3.2.2。#366）
 //*  2026/11/16  玄人 幸道         fapi1 の登録の PAR の要求でも、S256 の PKCE を必須にした（FAPI 1.0 Advanced §5.2.2 の 18。#383）
+//*  2026/11/16  玄人 幸道         fapi1 の登録の openid の要求では、nonce を必須にした（FAPI 1.0 Baseline §5.2.2.2 の 1。#382）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -542,9 +543,22 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //   （OIDC Core 1.0 §3.3.2.1「REQUIRED if the Response Type of the request is code id_token or code id_token token」）。
                     //   **`code token` は任意**（「OPTIONAL when the Response Type of the request is code token」。#361）。
                     //   以前は `code token` も必須にしていたので、nonce を送らない RP が使えなかった。
+                    //
+                    // **fapi1 の登録は、response_type によらず必須**
+                    //   （FAPI 1.0 Baseline §5.2.2.2 の 1「shall require the nonce parameter」。#382）。
+                    //   **PAR・Request Object でも同じ**（Request Object の外の値は使わないので、中に無ければ無い扱い。Advanced §5.2.2 の 10）。
+                    //   **fapi2 は求めない**（FAPI 2.0 Security Profile。適合性テストの without-nonce-success）。
                     if (string.IsNullOrEmpty(nonce))
                     {
                         string _response_type = response_type.ToLower();
+
+                        if (Helper.GetInstance().GetClientMode(client_id)
+                            == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
+                        {
+                            err = OAuth2AndOIDCConst.invalid_request;
+                            errDescription = "nonce is required for this client (FAPI 1.0).";
+                            return false;
+                        }
 
                         if (_response_type == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
                             || _response_type == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
