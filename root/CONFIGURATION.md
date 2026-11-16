@@ -292,13 +292,13 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 | 値 | ダイジェスト | パディング | 鍵 | 設定キー | |
 |---|---|---|---|---|---|
-| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ。**FAPI の登録も**。下の注） |
+| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ。**FAPI の登録は `ES256`**。下の注） |
 | `RS384` | SHA-384 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `RS512` | SHA-512 | 同上 | **同じ RSA の鍵** | 同上 | |
 | `PS256` | SHA-256 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | #129 の段階 4。**FAPI が求める値** |
 | `PS384` | SHA-384 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | 同上 |
 | `PS512` | SHA-512 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | 同上 |
-| `ES256` | SHA-256 | － | EC（**P-256**） | `EcdsaPfxFilePath` | |
+| `ES256` | SHA-256 | － | EC（**P-256**） | `EcdsaPfxFilePath` | **FAPI の登録の既定**（書かなければこれ。#394） |
 | `ES384` | SHA-384 | － | EC（**P-384**） | `Ecdsa384PfxFilePath` | #129 の段階 3 |
 | `ES512` | SHA-512 | － | EC（**P-521**） | `Ecdsa512PfxFilePath` | 同上。**曲線は 521**（512 ではない） |
 
@@ -322,12 +322,15 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 > **CIBA（`client_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
-> **FAPI の登録（`client_mode=fapi1`・`fapi2`）も、この値を書かなければ `RS256`。** **FAPI は `RS256` を認めない**
-> （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ので、**FAPI で使う登録には `PS256` か `ES256` を書く**（JARM も同じ。下の `authorization_signed_response_alg`）。
-> **既定を `ES256` にしないのは、Open棟梁 の RP 側の検証（`CmnJwtToken.Verify`）が、暗号化しない `ES256` の JWT を受けないため**
-> （同梱の自己テストのクライアントを含め、Open棟梁 で作った RP が検証できなくなる。#370 で試して見つけた）。
+> **FAPI の登録（`client_mode=fapi1`・`fapi2`）は、この値を書かなければ `ES256`**（#394）。**FAPI は `RS256` を認めない**
+> （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）ため（JARM も同じ。下の `authorization_signed_response_alg`）。
+> **#370 までは FAPI の登録も `RS256` だった**（Open棟梁 の RP 側の検証 `CmnJwtToken.Verify` が、暗号化しない `ES256` の JWT を受けなかった。OpenTouryo#695 で直った）。
+> **既定が変わるので、FAPI の登録でこの値を書いていない RP・リソース サーバは、`ES256` を検証できる必要がある**（鍵は `jwks_uri` に載り、`kid` で引ける）。
+> **`ES256` の鍵（`EcdsaPfxFilePath`）が要る。** 雛形の構成ファイルには入っている（CIBA・fapi2 の暗号化した id_token の中の JWS も使う）。**外している配備で、alg を書いていない FAPI の登録があれば、鍵を設定するか、登録に alg を書く。**
+> **RSA の鍵のまま移るなら、この値に `PS256` を書く**（FAPI の要件に合う。RP・リソース サーバは PS256 を検証できる必要がある）。
+> **`RS256` のままにしたい FAPI の登録は、この値に `RS256` を書く**（FAPI の要件には合わない）。
 > **fapi2 で id_token を暗号化する（`jwk_rsa_publickey` を登録した）クライアントは、この値を書かなければ、
-> id_token の中の JWS が `ES256` になる**（access_token は既定の `RS256`。**2 つは食い違う**。#355）。
+> id_token の中の JWS も access_token も `ES256` になる**（#355 では、中の JWS だけ `ES256` で access_token と食い違っていた。#394 でそろった）。
 > **書けば、中の JWS も access_token も、その alg になる。**
 
 ### `authorization_signed_response_alg` — JARM の署名アルゴリズム（#370）
@@ -336,7 +339,7 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 
 | 登録 | 署名 alg |
 |---|---|
-| 書かない | **`RS256`**（JARM §3 の既定。従来どおり。**FAPI の登録も**。理由は上の注と同じ。**FAPI で使う登録には `PS256` か `ES256` を書く**） |
+| 書かない | **`RS256`**（JARM §3 の既定。従来どおり）。**FAPI の登録は `ES256`**（#394。理由は上の注と同じ） |
 | 書く | **その alg**（**上の表の 9 つ**。鍵も上の表と同じ） |
 | **書ける値の外** | **入口で拒否する**（`unauthorized_client`。id_token と同じ） |
 
@@ -397,13 +400,24 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN AuthorizationSignedResponseAlg varchar(16
   （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）。**以前は `RS256` を受けていたので、`RS256` で署名している FAPI の RP は通らなくなる**
 - **PAR のエラー**：受けられない alg は `invalid_request_object`（RFC 9101 §7）、alg に合う鍵が無ければ `invalid_request`（従来の文言）
 
-> **CIBA の `request` は対象外**である。**`ES256` 固定**で、
-> **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+> **CIBA の `request` は対象外**である（**仕様でも別の登録項目** `backchannel_authentication_request_signing_alg`）。
+> **`PS256`・`ES256` を受ける**（#395。以前は `ES256` 固定）。鍵は、`PS256` なら `jwk_rsa_publickey`、`ES256` なら `jwk_ecdsa_publickey`。
+> **`RS256` は受けない**（FAPI-CIBA ID1 §7.10）。`backchannel_authentication_request_signing_alg` の登録は扱っていない。
+
+### `client_assertion` の alg と鍵（#395）
+
+**検証鍵は、ヘッダの `alg` と登録の鍵（`jwk_rsa_publickey`・`jwk_ecdsa_publickey`・`jwks_uri` の鍵）から作る**（Request Object と同じ表）。
+**受けるのは `RS256`・`PS256`・`ES256`**（以前は `RS256`・`ES256`。`PS256` は #395 で足した）。
+
+- **登録 `token_endpoint_auth_signing_alg` を書けば、その alg だけを受ける**（#262）
+- **FAPI の登録（`client_mode=fapi1`・`fapi2`・`fapi_ciba`）は、`PS256`・`ES256` だけを受ける**（FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1、FAPI-CIBA ID1 §7.10）。
+  **以前は `RS256` を受けていたので、`RS256` で署名している FAPI のクライアントは `invalid_client` になる**（`PS256` の鍵は `RS256` と同じ RSA の鍵）
+- **JWT Bearer グラント（`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer` の `assertion`）は、`RS256` だけのまま**
 
 ### 一覧は 1 か所から作る
 
 **受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs` /
-`CmnEndpoints.RequestObjectSigningAlgs`** にあり、
+`CmnEndpoints.RequestObjectSigningAlgs` / `CmnEndpoints.CibaRequestSigningAlgs`** にあり、
 **広告（Discovery）と、登録値の検証と、画面の選択肢が、同じものを見る。**
 （発行する側が `SigningKeys` の表 1 か所を見るのと、同じ考え方。#129 の段階 3）
 
@@ -3550,6 +3564,25 @@ ALTER TABLE [OAuth2Revocation] ADD [ExpiresAt] [bigint] NULL
 ALTER TABLE "OAuth2Revocation" ADD "ExpiresAt" NUMBER(19) NULL;
 -- PostgreSQL
 ALTER TABLE OAuth2Revocation ADD COLUMN ExpiresAt bigint NULL;
+```
+
+### CIBA の要求を出したクライアント（`CibaData.ClientID`。#387）
+
+**`auth_req_id` を出したクライアントを `ClientID` に記録し、トークン要求で認証したクライアントと照合する**（CIBA Core 1.0 §11）。
+**違えば、記録に触れずに `invalid_grant` を返す。** 以前は照合する前に状態を返し、承認済みなら記録を消していた。
+（Device Authorization Grant は、記録の `TempData` に `client_id` を持っているので、列は増えない。）
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。
+**足さないと、CIBA の認証要求（`/ciba_authz`）が失敗する**（記録の `INSERT` が失敗する）。
+**列を足す前に作られた要求は `ClientID` が空で、照合できないので `invalid_grant` になる**（CIBA の要求の寿命は短いので、配備の後に始め直してもらう）。
+
+```sql
+-- SQL Server
+ALTER TABLE [CibaData] ADD [ClientID] [nvarchar](256) NULL
+-- Oracle
+ALTER TABLE "CibaData" ADD ("ClientID" NVARCHAR2(256) NULL);
+-- PostgreSQL
+ALTER TABLE CibaData ADD COLUMN ClientID varchar(256) NULL;
 ```
 
 ## 8. 証明書

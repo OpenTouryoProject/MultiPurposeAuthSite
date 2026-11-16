@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/13  玄人 幸道         新規（#366）
 //*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
+//*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
 //**********************************************************************************
 
 using System;
@@ -121,7 +122,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             return parameters;
         }
 
-        /// <summary>RS256 の client_assertion を作る（RFC 7523 §2.2。fapi2 の aud は issuer）</summary>
+        /// <summary>PS256 の client_assertion を作る（RFC 7523 §2.2。fapi2 の aud は issuer。#395）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="issuer">issuer</param>
@@ -130,7 +131,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            //  **PS256 で署名する**（#395。FAPI の登録は RS256 の client_assertion を断る。FAPI 1.0 Advanced §8.6）。
+            return JwsSigner.SignPS256(client, new Dictionary<string, object>()
             {
                 { "iss", clientId },
                 { "sub", clientId },

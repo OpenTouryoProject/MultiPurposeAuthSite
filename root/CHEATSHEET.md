@@ -29,12 +29,12 @@
 | **テストを足した・変えた**ので、テストケースの原本を作り直す | `.\2_RunAllTests.ps1 -Launch -UpdateTestCases` | [`TESTING.md`](TESTING.md) 10 節 |
 | サイトのコード カバレッジを測る | `.\2_RunAllTests.ps1 -Launch -Coverage` | [`TESTING.md`](TESTING.md) 1 節 |
 | カバレッジを品質マップの単位で集計する（`-Update` で `COVERAGE.md` を更新） | `.\CoverageReport.ps1` | [`COVERAGE.md`](programs/Tests/COVERAGE.md) |
-| 期待値の変更にトレーラーがあるかを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD` | [`QUALITY.md`](../QUALITY.md) 3 節 |
+| 期待値の変更にトレーラーがあるかを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD` | [`QUALITY.common.md`](../QUALITY.common.md) 3 節 |
 | TESTCASES.md の作り直しの漏れを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD -CheckGenerated` | [`QUALITY.md`](../QUALITY.md) 3 節 |
-| 検出器の判定の用例を回す | `.\files\tools\ExpectationGuard.Tests\Run-Tests.ps1` | [`QUALITY.md`](../QUALITY.md) 3 節 |
-| 検出器の写しが、写したときのままかを見る | `.\CheckExpectationChange.ps1 -VerifyCopy` | [`QUALITY.md`](../QUALITY.md) 3 節 |
+| 検出器の判定の用例を回す | `.\files\tools\ExpectationGuard.Tests\Run-Tests.ps1` | [`QUALITY.common.md`](../QUALITY.common.md) 3 節 |
+| 検出器の写しが、写したときのままかを見る | `.\CheckExpectationChange.ps1 -VerifyCopy` | [`QUALITY.common.md`](../QUALITY.common.md) 3 節 |
 | 根拠を種類ごとに数える | `.\CountBasis.ps1` | [`QUALITY.md`](../QUALITY.md) 6 節 |
-| commit-msg フックを有効にする（各自の手元で 1 回） | `git config core.hooksPath .githooks` | [`QUALITY.md`](../QUALITY.md) 3 節 |
+| commit-msg フックを有効にする（各自の手元で 1 回） | `git config core.hooksPath .githooks` | [`QUALITY.common.md`](../QUALITY.common.md) 3 節 |
 
 ### 特別な構成で回す（`-Filter` と併せて使う。`-UpdateTestCases` は付けない）
 

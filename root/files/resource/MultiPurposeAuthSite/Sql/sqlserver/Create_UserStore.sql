@@ -304,6 +304,9 @@ CREATE TABLE [CibaData](
     [UnstructuredData] [nvarchar](max) NULL,             -- binding_message, user_code, etc.
     [Result] [bit] NULL,                                 -- Result of CIBA
     [UserId] [nvarchar](128) NULL,                       -- 承認する利用者 (Users.Id)
+    -- **auth_req_id を出したクライアント**（#387）。**トークン要求のクライアントと違えば、記録に触れずに invalid_grant**（CIBA Core 1.0 §11）。
+    --   **NULL は、列を足す前に作られた要求**（照合できないので断る）。
+    [ClientID] [nvarchar](256) NULL,
     -- **最後にポーリングされた時刻**（UNIX 時刻。#305 の段階 1）。
     --   **interval より短い間隔で来たら slow_down を返す**（RFC 8628 §3.5 / CIBA §11）。
     --   **NULL は「まだ 1 度も来ていない」**（初回は slow_down にしない）。

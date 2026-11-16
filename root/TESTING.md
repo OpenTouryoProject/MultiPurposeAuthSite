@@ -106,6 +106,7 @@ $env:MPAS_CONNSTR_SQL = '...'
 #### E2E 用の DBMS は `container/Store/` で立てる（#250 の段階 1）
 
 **このリポジトリの `container/Store/` が、3 方言を定義している**（SQL Server / Oracle / PostgreSQL）。
+**接続文字列・ポート・起動の手順は [`container/Store/README.md`](../container/Store/README.md) にまとめてある。**
 **ID 連携の IdP 群は `container/E2E/` に在る**（下の「上流の IdP は `container/E2E/` で立てる」。#318 で `store/` から分けた）。
 
 ```powershell
@@ -244,6 +245,8 @@ $env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;Initial Catalog=UserStore;Us
 $env:MPAS_CONNSTR_ODP = 'User Id=SCOTT;Password=<pw>;Data Source=localhost:1522/FREEPDB1;'
 $env:MPAS_CONNSTR_NPS = 'HOST=localhost;PORT=5433;DATABASE=UserStore;USER ID=postgres;PASSWORD=<pw>;'
 ```
+
+**`<pw>` の実値は [`container/Store/README.md`](../container/Store/README.md) の「接続文字列」を見ること。**
 
 - **DDL は `0_CopyInitSql.ps1` が repo から流し込む**（`1_DockerComposeUp.bat` が先に呼ぶ）。
   コピー先は**生成物**で `.gitignore` 済み。**原本は `root/files/resource/.../Sql/` だけ**
@@ -1191,6 +1194,123 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **構成ファイルに扱えない `authorization_signed_response_alg` を書いた登録の、JARM のエラー応答** | 構成の誤りの経路（RS256 で署名して記録に残す）。構成ファイルの登録を E2E で壊せない |
 | **ES256 の JARM** | PS256 で代表させた（鍵の表と `SigningKeys` の引き方は id_token と同じ）。ES256 の JARM は適合性テスト（FAPI 2.0 Message Signing。登録で ES256 を書いた）が測る |
 | **画面・動的登録で `authorization_signed_response_alg` を書くこと** | `id_token_signed_response_alg` と同じ通り道（`RT-129.*`・`RT-307.*` が測る形）。E2E は構成ファイルに書いた登録（`TestClient_46`）で測った |
+
+##### FAPI の登録のトークンの `/userinfo` は `x-fapi-interaction-id` を返す（`RT-384.*`。#384）
+
+| | 測ること |
+|---|---|
+| **`RT-384.1`** | **fapi1 の登録のトークン**：要求の UUID をそのまま返す。**無い・UUID の形でない値なら、新しい UUID を返す**（FAPI 1.0 Baseline §6.2.1 の 11・§6.2.2 の 5）。**検証できた後のエラー（`openid` の無いトークンの 403）にも付く。** **FAPI でない登録のトークン・検証できないトークン（401）には付けない** |
+
+- **付けるのは `/userinfo` だけ**（MPAS が RP に見せる保護された資源。#384 の決め）
+- **FAPI の判別は、トークンの `aud` で引いた登録の `client_mode`**（`Helper.IsFapiProfileClient`。fapi1・fapi2・fapi_ciba）。MPAS 独自の `fapi` クレームには頼らない
+- **値は `CmnEndpoints.FapiInteractionIdOf`**（UUID の形でなければ、要求の値を使わない。ヘッダとログに外の値を書かないため）
+- **§6.2.1 の 12（ログ）は、OPERATION に 1 行残す**（client_id と値。E2E では見ない）
+- **net48 は `HttpContext.Current.Response` に足す**（Web API の応答に引き継がれる。`SetNoStore` と同じ）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi2・fapi_ciba の登録のトークン** | 判別は同じ関数（`IsFapiProfileClient`）。適合性テストの FAPI 1.0 Advanced・FAPI-CIBA が測る |
+| **縛り（証明書・DPoP）のエラーの応答** | 付けるのはトークンを検証した直後で、縛りの確かめより前（`openid` の 403 と同じ位置）。fapi1 の登録で縛りの合わない要求を作りにくい |
+| **前後に空白の付いた UUID** | HTTP のヘッダは前後の空白を落として届く。**36 文字ちょうどでなければ使わない**（`FapiInteractionIdOf`） |
+| **ログの行** | OPERATION のログは E2E の対象外 |
+
+##### `client_assertion` と CIBA の署名した要求で PS256 を受け、FAPI の登録・CIBA は RS256 を断る（`RT-395.*`。#395）
+
+| | 測ること |
+|---|---|
+| **`RT-395.1`** | **`client_assertion`**：FAPI でない登録（`TestClient_24`）・fapi2 の登録（`FAPI2_Client`）とも **PS256 で通る**。**fapi2 の登録の RS256 は `invalid_client`**（FAPI 1.0 Advanced §8.6）。広告に PS256 が在る |
+| **`RT-395.2`** | **CIBA の署名した要求**：RSA と EC の鍵を登録した fapi_ciba の登録（`TestClient4_5`）で、**PS256（RSA の鍵）でも ES256（EC の鍵）でも `auth_req_id` が返り、RS256 は `invalid_request`**（FAPI-CIBA ID1 §7.10）。広告は `PS256 ES256` |
+| **`RT-129.1`（期待値を変えた）** | `token_endpoint_auth_signing_alg_values_supported` が `RS256, PS256, ES256` |
+| **`RT-368.1`（確かめを足した）** | fapi2 の登録のアサーションを PS256 にし、**型を付ければ同じアサーションで PAR が通る**ことを足した（**RS256 のままだと、型の無いことより先に alg で断られ、測ったことにならない**。#395 のレビュー） |
+
+- **検証鍵は、ヘッダの alg を受けてよいと決めてから、その alg に合う種類の鍵で作る**（`CmnEndpoints.AllowsClientAssertionAlg`・`VerifyingJwsOf`、`CmnRequestObjectEndpoint.SelectCibaVerifyingJws`。検証鍵 `JWS` を受ける版。OpenTouryo#664）
+- **FAPI の登録で RS256 のアサーションを送っていた既存のテストは、PS256 で署名するようにした**（確かめる中身は変えていない）。**同梱の自己テストのクライアント（`SelfTestClient`）も、FAPI の登録のアサーションを PS256 で署名する**
+- **`TestClient4_5` は `TestClient` を写して fapi_ciba にした**（`FAPI_CIBA_Client` は EC の鍵しか持たない）
+- **`RT-395.2` は利用者の端末を登録する**ので、CIBA のほかのテストと同じコレクションに入れた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ヘッダの alg と鍵の種類が食い違う JWT**（例：`PS256` と名乗る EC の鍵の署名） | テストの署名の補助は、名乗りと鍵をそろえて作る。**食い違いは鍵を作らずに断る**（`JwsFactory.IsSameKeyType`）。Open棟梁 の `JWS` を受ける版も、ヘッダと鍵の alg が違えば `false` を返す（OpenTouryo#664） |
+| **`jwks_uri` から引いた鍵での PS256** | 鍵の選び方は登録の鍵と同じ関数（`VerifyingJwsOf`）。`jwks_uri` のテスト（`RT-309.*`）は RS256 で測る |
+| **fapi1・fapi_ciba の登録の RS256 の `client_assertion`** | 判定は fapi2 と同じ関数（`AllowsClientAssertionAlg`）。E2E の fapi1 の登録は秘密で認証し、fapi_ciba の private_key_jwt の登録（`TestClient4_4`）は EC の鍵しか持たない（RS256 は鍵が無いので、alg の判定を測れない） |
+| **`/ros` に預ける CIBA の要求（ping・push）** | この実装は poll だけを扱い、`/ros` の CIBA の分岐（`client_notification_token` が在る要求）は E2E で作れない。鍵の選び方は `/ciba_authz` と同じ関数 |
+
+##### FAPI の登録は、署名の alg を登録していなければ ES256 で署名する（`RT-394.*`。#394）
+
+| | 測ること |
+|---|---|
+| **`RT-394.1`** | **alg を登録していない fapi1 の登録（`FAPI1_Client`）の access_token・id_token・JARM が `ES256` で、JWKS で検証できる**（FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1）。**FAPI でない登録（`MVC_Sample`）は `RS256` のまま** |
+
+- **既定は `Helper.DefaultSigningAlg` の 1 か所**（`GetIdTokenSignedResponseAlg`・`GetAuthorizationSignedResponseAlg` が使う）。**登録が在れば、従来どおりその alg**
+- **#370 では見送った**（Open棟梁 の RP 側の検証が、暗号化しない ES256 を受けなかった）。**OpenTouryo#695 で直り、同梱の自己テスト（RP 側の `IdToken.Verify`・`AccessToken.Verify`・`ResponseObject.Verify`）も ES256 で通る**
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi2 の登録の access_token・JARM** | 同じ関数で決まる（fapi1 で代表させた）。fapi2 のトークンは PAR・DPoP・private_key_jwt が要り、id_token は暗号化している（中の JWS は以前から ES256。`RT-352.1`） |
+| **logout_token** | 同じ `GetIdTokenSignedResponseAlg` で決まる。ログアウトの E2E はテストのクライアント（normal）で測る |
+
+##### SP の役で作る SAML2 の要求に、送り先の `Destination` を入れる（`RT-391.*`・`SA-6.1`。#391）
+
+| | 測ること |
+|---|---|
+| **`RT-391.1`** | **自己テストの SP の 4 通りの要求**（Redirect・POST）の `Destination` が、**要求を送った先（リダイレクト先・フォームの `action`）と同じ**（SAML Bindings §3.4.5.2・§3.5.5.2 の MUST） |
+| **`SA-6.1`（足した確かめ）** | **ID 連携の `AuthnRequest` の `Destination` が、上流の SSO の口と同じ** |
+
+- **Open棟梁 の部品の更新（OpenTouryo#693）で、従来の `SAML2Client.CreateRedirectRequest`・`CreatePostRequest` が `[Obsolete]` になった。** `destination` を受ける版に替え、ビルドの `CS0618` を 0 件に戻した
+- **MPAS の IdP の側（`VerifyRequest`）は `Destination` を照合しない**ので、流れは従来どおり通る（`SA-1.1`〜`.4`・`SA-6.*`）
+- **部品の更新のほかの変化**（OpenTouryo#683 の `CmnJwtToken.Verify` など）は、両版の E2E の通しで確かめた（MPAS に、その例外を catch して分岐している箇所は無い）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **上流の IdP が `Destination` を照合して断るか** | MPAS の IdP は照合しない。テストの上流もこの IdP（コンテナ）なので、照合する IdP で測れない |
+
+##### CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する（`RT-387.*`。#387）
+
+| | 測ること |
+|---|---|
+| **`RT-387.1`** | **CIBA**：別のクライアントは、承認の前も後も `invalid_grant`（CIBA Core 1.0 §11 の MUST）。**その後も、正規のクライアントは `authorization_pending`（`slow_down` でない）を受け、承認の後にトークンを受け取れる** |
+| **`RT-387.2`** | **Device**：同じことを `device_code` で（RFC 8628 §3.5・RFC 6749 §5.2） |
+
+- **照合は `CibaProvider.ReceiveTokenReq`・`DeviceAuthZProvider.ReceiveTokenReq` が、状態を見る前に行う。** 違えば `not_found` を返し、**記録（状態・ポーリングの時刻）に触れない**（呼び出し側が `invalid_grant` にする）
+- **CIBA は、記録に `ClientID` 列を足した**（DDL。`CONFIGURATION.md`）。**Device は、記録の `TempData` の `client_id` と比べる**
+- **正規のクライアントが `slow_down` を受けないこと**で、**別のクライアントの要求がポーリングの時刻を書き換えていない**ことを確かめる
+- **以前は、承認済みの記録と認可コードを、照合の前に消していた**ので、別のクライアントが先に引くと、正規のクライアントが結果を受け取れなかった
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **列を足す前に作られた CIBA の要求（`ClientID` が空）** | 配備の切り替えのときだけの記録。E2E は DDL を流し直すので作れない。**照合できないので断る**（`IsIssuedTo` が空を一致としない） |
+| **`TempData` が読めない Device の記録** | 自分で作る記録で、壊れた値を E2E から入れられない。**読めなければ断る** |
+| **期限切れの `auth_req_id`・`device_code` を、別のクライアントが引く** | 寿命が切れるまで待つ必要があり、通しに入れられない。**照合は状態の判定より前**なので、別のクライアントには `invalid_grant` を返して記録に触れず、正規のクライアントは従来どおり `expired_token` を受ける |
+
+##### `client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける（`RT-371.*`。#371）
+
+| | 測ること |
+|---|---|
+| **`RT-371.1`** | **`/ciba_authz` は、CIBA の口の URL を `aud` として受ける**（CIBA Core 1.0 §7.1 の MUST。`auth_req_id` が返る）。**PAR の口の URL は `invalid_client`** |
+| **`RT-371.2`** | **`/par` は、PAR の口の URL を受ける**（RFC 9126 §2 の MUST。201）。**CIBA の口の URL は `invalid_client`**。**`/revoke` は PAR の口の URL を受けない**（対照として、同じクライアントでトークン エンドポイントの URL なら通る） |
+| **`RT-371.3`** | **fapi2 の登録は、`/par` でも issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。PAR の口の URL は `invalid_client`） |
+
+- **判定は `CmnEndpoints.AssertionAudiences`**（Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsAssertionAudience` の判定を、ここで決める）。**口の URL を渡すのは PAR・CIBA の口だけ**（`ClientAuthentication(assertion, endpointUrl, …)`）
+- **足すのはその口の URL だけ**。**クライアント認証の JWT の `jti` は使用済みとして記録していない**ので、すべての口で全部の URL を受けると、ある口に宛てたアサーションを別の口で使える
+- **配列の `aud` は変えていない**（`RT-294.54`。MPAS の判定（`IsAssertionAudience`）が文字列に限る。要素 2 つ以上の配列は、Open棟梁 の `JwtAssertion.Verify` も受けない（唯一の値に限る。OpenTouryo#654））
+- **`RT-371.1` は利用者の端末を登録する**ので、CIBA のほかのテストと同じコレクション（`CibaTests.DeviceCollection`）に入れた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **口の URL を、Discovery の広告から引くこと** | テストは `BaseUrl` ＋ 口のパスで作る（`RT-294.54` のトークン エンドポイントと同じ）。**サーバの側は、Discovery と同じ `OAuth2AuthorizationServerEndpointsRootURI` ＋ 設定の口のパスで作る** |
+| **ES256 の PAR・RS256 の CIBA のアサーション** | alg の扱いは `aud` と別（`RT-129.1`・`RT-294.43`） |
 
 ##### `client_assertion_type` の無い `client_assertion` を受けない（`RT-368.*`。#368）
 

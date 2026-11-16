@@ -337,6 +337,11 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
 | `Tests/Issues/RequestObjectSigningAlgTests.cs` | `RT-370` | **Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証し、FAPI の登録は PS256・ES256 に限る**（#370。`RT-370.1`〜`.4`） |
 | `Tests/Issues/JarmSigningAlgTests.cs` | `RT-370` | **JARM の署名 alg を登録（`authorization_signed_response_alg`）で選べ、登録が無ければ RS256**（#370。`RT-370.5`） |
+| `Tests/Issues/FapiInteractionIdTests.cs` | `RT-384` | **FAPI の登録のトークンの `/userinfo` は `x-fapi-interaction-id` を返す**（#384。FAPI 1.0 Baseline §6.2.1 の 11）。要求の UUID をそのまま、無い・形が違えば新しい UUID。FAPI でない登録・検証できないトークンには付けない（`RT-384.1`） |
+| `Tests/Issues/Ps256VerificationTests.cs` | `RT-395` | **`client_assertion` と CIBA の署名した要求で PS256 を受け、FAPI の登録・CIBA は RS256 を断る**（#395。FAPI 1.0 Advanced §8.6）。`client_assertion` は FAPI でない登録・fapi2 とも PS256 で通り、fapi2 の RS256 は `invalid_client`（`RT-395.1`）。CIBA は PS256 で受け付け、RS256 は断る（`RT-395.2`。`TestClient4_5`） |
+| `Tests/Issues/FapiDefaultSigningAlgTests.cs` | `RT-394` | **FAPI の登録は、署名の alg を登録していなければ ES256 で署名する**（#394。FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1）。fapi1 の access_token・id_token・JARM が ES256 で JWKS で検証でき、**FAPI でない登録は RS256 のまま**（`RT-394.1`） |
+| `Tests/Issues/PollingClientBindingTests.cs` | `RT-387` | **CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する**（#387。CIBA Core 1.0 §11・RFC 6749 §5.2）。**別のクライアントは承認の前も後も `invalid_grant`**、**正規のクライアントは影響を受けない**（`slow_down` にならず、承認の後にトークンを受け取れる）こと（`RT-387.1`・`.2`） |
+| `Tests/Issues/ClientAssertionAudienceTests.cs` | `RT-371` | **`client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける**（#371。CIBA Core 1.0 §7.1・RFC 9126 §2）。**ほかの口の URL は受けない**こと、**fapi2 は `/par` でも issuer だけ**であること（`RT-371.1`〜`.3`） |
 | `Tests/Issues/ClientAssertionTypeTests.cs` | `RT-368` | **`client_assertion_type` の無い `client_assertion` を受けない**（#368。RFC 7521 §4.2）。**PAR でも `/revoke` でも `invalid_client`**、**型を付ければ通る**こと（`RT-368.1`） |
 | `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |
 | `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |
@@ -451,6 +456,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/SignInFlowTests.cs` | `SA-4` | **未サインイン → サインイン画面 → アサーション**（SP-initiated SSO の本来の形） |
 | `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
 | `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `container/E2E/` のコンテナ**。**建っていなければ Skip**。**`SA-6.5` は、署名を壊した `AuthnRequest` を上流が弾くこと**（#293 の段階 4。(2) の検証が効いていること）。**`SA-6.6` は、上流が証明書を 2 本広告していても連携できること**（#292 の段階 3。**受け取る側は全部試す**） |
+| `Tests/Saml/RequestDestinationTests.cs` | `RT-391` | **SP の役で作る SAML2 の要求に、送った先と同じ `Destination` を入れる**（#391。SAML Bindings §3.4.5.2・§3.5.5.2）。自己テストの 4 通り（`RT-391.1`）。**ID 連携の要求は `SA-6.1` が測る** |
 | `Tests/Saml/AttributeStatementTests.cs` | `SA-7` | **アサーションの `AttributeStatement`**（#286 の段階 4）。**メアド・利用者名・`email_verified` を属性で返すこと**（`urn:oid:…` ＋ `FriendlyName` ＋ `NameFormat`）／**`persistent` の `NameID` でも属性でメアドが分かること**（段階 4 の目的）。**自己テストの口で測る**ので、上流コンテナは要らない |
 
 > **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**

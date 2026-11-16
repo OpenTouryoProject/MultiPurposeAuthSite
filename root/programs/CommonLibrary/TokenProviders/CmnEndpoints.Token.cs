@@ -42,6 +42,7 @@
 //*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
 //*  2026/11/10  玄人 幸道         応答の組み立てに client_id を渡すようにした（暗号化した id_token の中の JWS の alg。#355）
 //*  2026/11/13  玄人 幸道         秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（RFC 9449 §5）。fapi2 の登録は refresh_token を入れ替えない（FAPI 2.0 Security Profile §5.3.2.1。#367）
+//*  2026/11/14  玄人 幸道         CIBA・Device のトークン要求で、auth_req_id・device_code を出したクライアントと照合する（#387）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1099,7 +1100,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
                     //    **iss・aud も Open棟梁 が照合する**（OpenTouryo#654。#336）。
                     //    **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。
-                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, out string _))
+                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, null, out string _))
                     {
                         string iss = assertionIss;
 
@@ -1295,7 +1296,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
-                if (DeviceAuthZProvider.ReceiveTokenReq(device_code, out code, out deviceState))
+                //  **device_code を出したクライアントと違えば、状態によらず invalid_grant**（RFC 6749 §5.2。#387）。
+                //    `ReceiveTokenReq` が、記録に触れずに `not_found` を返す（下で invalid_grant）。
+                if (DeviceAuthZProvider.ReceiveTokenReq(device_code, client_id, out code, out deviceState))
                 {
                     // = OAuth2AndOIDCEnum.CibaState.access_permitted
                     // Tokenレスポンス（正常）
@@ -1513,7 +1516,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string code = ""; 
                     OAuth2AndOIDCEnum.CibaState cibaState = OAuth2AndOIDCEnum.CibaState.not_found;
 
-                    if (CibaProvider.ReceiveTokenReq(auth_req_id, out code,  out cibaState))
+                    //  **auth_req_id を出したクライアントと違えば、状態によらず invalid_grant**（CIBA Core 1.0 §11。#387）。
+                    //    `ReceiveTokenReq` が、記録に触れずに `not_found` を返す（下の default で invalid_grant）。
+                    if (CibaProvider.ReceiveTokenReq(auth_req_id, client_id, out code, out cibaState))
                     {
                         // = OAuth2AndOIDCEnum.CibaState.access_permitted
                         // Tokenレスポンス（正常）

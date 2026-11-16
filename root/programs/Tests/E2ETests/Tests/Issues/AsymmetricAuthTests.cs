@@ -37,6 +37,7 @@
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/08  玄人 幸道         RT-239.5 : 自己テストの FAPI2 のボタンが PKCE を使うので、code_verifier も送る（#345）
 //*  2026/11/10  玄人 幸道         WithClientAssertion を internal にした（RT-352 で使う。#352）
+//*  2026/11/15  玄人 幸道         fapi2 の client_assertion を PS256 で署名し、RT-129.1 の広告に PS256 を足した（#395）
 //**********************************************************************************
 
 using System;
@@ -92,13 +93,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <summary>client_assertion を作る（#129 の段階 2 で ES256 を足した）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
-        /// <param name="es256">true なら ES256、false なら RS256</param>
-        /// <param name="aud">aud（null ならトークン エンドポイントの URL）</param>
+        /// <param name="es256">true なら ES256、false なら RS256（`aud` を渡したときは PS256）</param>
+        /// <param name="aud">aud（null ならトークン エンドポイントの URL。**fapi2 の登録は issuer を渡す**。#323）</param>
         /// <returns>JWS</returns>
         /// <remarks>
         /// **署名鍵は、クライアント登録の公開鍵と対になる構成ファイルの鍵。**
         /// RS256 は `jwk_rsa_publickey` ↔ `SpRp_RsaPfxFilePath`、
         /// ES256 は `jwk_ecdsa_publickey` ↔ `SpRp_EcdsaPfxFilePath`。
+        ///
+        /// **`aud` を渡すのは fapi2 の登録のときだけ**（`WithClientAssertion` の呼び出し）。**そのときは PS256 で署名する**
+        /// （#395。FAPI の登録は RS256 の client_assertion を断る。FAPI 1.0 Advanced §8.6）。PS256 の鍵は RS256 と同じ RSA の鍵。
         /// </remarks>
         private static string CreateClientAssertion(IdPClient client, string clientId, bool es256, string aud = null)
         {
@@ -114,8 +118,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 { "exp", now + 300 }
             };
 
-            return es256
-                ? JwsSigner.SignES256(client, payload) : JwsSigner.SignRS256(client, payload);
+            if (es256)
+            {
+                return JwsSigner.SignES256(client, payload);
+            }
+
+            return (aud == null)
+                ? JwsSigner.SignRS256(client, payload) : JwsSigner.SignPS256(client, payload);
         }
 
         /// <summary>認可コードを取り、client_assertion で交換する（#307 の段階 3）</summary>
@@ -500,7 +509,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "（框の `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、"
                     + "**ECDSA の公開鍵を渡せば ES256 が通る**）。"
                     + "**登録された RSA / ECDSA の鍵を順に試す**ようにした（#129 の段階 2）。"
-                    + "**アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。",
+                    + "**いまは、ヘッダの alg を受けてよいと決めてから、その alg に合う種類の鍵だけを使う**（#395。C-8 と同じ轍を踏まない）。",
                     "RFC 7523 §2.2 / OIDC Core §9（private_key_jwt）/ #129 の段階 2");
 
                 r.Target("client_name=" + KnownClients.TestClient_24
@@ -551,10 +560,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 }
 
                 r.VerifyEqual("token_endpoint_auth_signing_alg_values_supported",
-                    "RS256, ES256", string.Join(", ", algList));
+                    "RS256, PS256, ES256", string.Join(", ", algList));
 
                 r.Note("**広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。"
-                    + "**`PS256` は通らない**（Open棟梁 に `JWS_PS*` が無い）。");
+                    + "**`PS256` は #395 で足した**（検証鍵 `JWS` を受ける `JwtAssertion.Verify`。OpenTouryo#664）。");
 
                 r.Done();
             }

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/13  玄人 幸道         新規（#368）
+//*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名し、型を付ければ通る対照を足した（FAPI の登録は RS256 を断るようになった。#395）
 //**********************************************************************************
 
 using System;
@@ -67,7 +68,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
         }
 
-        /// <summary>RS256 の client_assertion を作る（RFC 7523 §3。aud は issuer）</summary>
+        /// <summary>PS256 の client_assertion を作る（RFC 7523 §3。aud は issuer）</summary>
+        /// <remarks>**FAPI の登録は RS256 の client_assertion を断る**（#395）ので、PS256 で署名する（alg で先に断られないように）。</remarks>
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="issuer">issuer</param>
@@ -76,7 +78,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            return JwsSigner.SignPS256(client, new Dictionary<string, object>()
             {
                 { "iss", clientId },
                 { "sub", clientId },
@@ -131,6 +133,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.VerifyEqual("PAR : invalid_client", "invalid_client", par.Error ?? "（無し）");
                 r.Verify("PAR : request_uri を返さない", string.IsNullOrEmpty(par.String("request_uri")),
                     "返さない", string.IsNullOrEmpty(par.String("request_uri")) ? "返さなかった" : "**返した**");
+
+                r.Step("(1') 対照 : 同じアサーションの作り方で、client_assertion_type を付けて POST /par（通る）");
+
+                //  **断られた理由が「型が無い」ことだと分かるように、型を付ければ通ることを確かめる**（#395 のレビュー）。
+                //    **alg（PS256）・aud・鍵は (1) と同じ**なので、断られたのは型が無いためである。
+                JsonResponse parWithType = await client.PostJsonAsync("/par", new Dictionary<string, string>()
+                {
+                    { "client_id", fapi2.ClientId },
+                    { "client_assertion_type", ClientAssertionTypeTests.JwtBearerAssertionType },
+                    { "client_assertion", ClientAssertionTypeTests.ClientAssertion(client, fapi2.ClientId, issuer) },
+                    { "response_type", "code" },
+                    { "scope", "openid" },
+                    { "redirect_uri", fapi2.RedirectUri },
+                    { "state", "state-rt3681-2" },
+                    { "code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" },
+                    { "code_challenge_method", "S256" }
+                });
+
+                r.VerifyEqual("PAR（型あり）: HTTP 201", "201", ((int)parWithType.StatusCode).ToString());
 
                 r.Step("(2) client_assertion_type を付けずに POST /revoke");
 

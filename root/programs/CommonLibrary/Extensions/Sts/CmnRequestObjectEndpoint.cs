@@ -42,6 +42,8 @@
 //*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを確かめ、その鍵の指紋を dpop_jkt として預ける。dpop_jkt と食い違えば断る（RFC 9449 §10.1。#365）
 //*  2026/11/13  玄人 幸道         認可エンドポイントと同じ検証に code_challenge_method を渡す（fapi2 の S256。#366）
 //*  2026/11/13  玄人 幸道         Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証する。FAPI の登録は PS256・ES256 に限る（#370）
+//*  2026/11/14  玄人 幸道         client_assertion の aud に、PAR の口の URL も受ける（RFC 9126 §2。#371）
+//*  2026/11/15  玄人 幸道         CIBA の署名した要求の検証鍵を、ヘッダの alg（PS256・ES256）と登録の鍵から選ぶ SelectCibaVerifyingJws を足した（#395）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -193,6 +195,45 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return null;
         }
 
+        /// <summary>CIBA の署名した要求の検証鍵を、ヘッダの alg と登録の鍵から選ぶ（#395）</summary>
+        /// <param name="client_id">要求を署名したクライアント（要求の iss）</param>
+        /// <param name="request">署名した要求（JWS のコンパクト形式）</param>
+        /// <returns>検証鍵（**決まらなければ null** ＝ 検証失敗）</returns>
+        /// <remarks>
+        /// **alg は `CmnEndpoints.CibaRequestSigningAlgs`（PS256・ES256）に在ること**（FAPI-CIBA は FAPI 1.0 Advanced §8.6 に従う）。
+        /// **鍵は、登録の RSA 公開鍵（PS256）・EC 公開鍵（ES256）のうち、alg に合うほう**（RFC 8725 §3.1）。
+        /// **以前は登録の EC 公開鍵による ES256 だけ**だった（JWK を受ける版の `RequestObject.VerifyCiba`）。
+        /// **Request Object の `request_object_signing_alg` の登録では絞らない**（CIBA の要求は別の登録項目
+        /// `backchannel_authentication_request_signing_alg`。MPAS はその登録項目を扱っていない）。
+        /// </remarks>
+        internal static JWS SelectCibaVerifyingJws(string client_id, string request)
+        {
+            string alg = JwtReader.TryReadAlg(request);
+
+            if (string.IsNullOrEmpty(alg)
+                || Array.IndexOf(CmnEndpoints.CibaRequestSigningAlgs, alg) < 0)
+            {
+                return null;
+            }
+
+            foreach (string registeredKey in new string[]
+            {
+                Helper.GetInstance().GetJwkRsaPublickey(client_id),
+                Helper.GetInstance().GetJwkECDsaPublickey(client_id)
+            })
+            {
+                JWS jws = CmnEndpoints.VerifyingJwsOf(JwtUtil.DecodeRegisteredJwk(registeredKey), alg);
+
+                if (jws != null)
+                {
+                    return jws;
+                }
+            }
+
+            // alg に合う鍵が登録されていない。
+            return null;
+        }
+
         /// <summary>登録の JWK（JSON の文字列）を読む。読めなければ null（#370）</summary>
         /// <param name="json">JWK の JSON（空なら null を返す）</param>
         /// <returns>JObject</returns>
@@ -305,7 +346,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string requestObjectString = payload.ToString(Formatting.None);
             // **文字列でない iss で例外にしない**（#294）。
             string iss = JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.iss);
-            string pubKey = "";
             bool result = false;
 
             if (string.IsNullOrEmpty(iss))
@@ -318,14 +358,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 // CIBA
 
-                // - 公開鍵取得を取り出す。
-                pubKey = JwtUtil.DecodeRegisteredJwk(
-                    Helper.GetInstance().GetJwkECDsaPublickey(iss));
+                // - 検証鍵は、ヘッダの alg（PS256・ES256）と登録の鍵で決める（#395。以前は EC の鍵による ES256 だけ）。
+                JWS cibaJws = CmnRequestObjectEndpoint.SelectCibaVerifyingJws(iss, requestObject);
 
                 // 署名とクレームの検証
                 //   **aud は issuer**（CIBA Core §7.1.1。#336）。必須のクレームと時刻は Open棟梁 が確かめる（OpenTouryo#653）。
-                result = !string.IsNullOrEmpty(pubKey)
-                    && RequestObject.VerifyCiba(requestObject, CmnServerParams.IssuerId, out iss, pubKey);
+                result = cibaJws != null
+                    && RequestObject.VerifyCiba(requestObject, CmnServerParams.IssuerId, out iss, cibaJws);
             }
             else
             {
@@ -452,8 +491,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(assertion))
             {
                 // private_key_jwt
+                //  **aud に、この口（PAR）の URL も受ける**（RFC 9126 §2 の MUST。#371）。
                 authned = CmnEndpoints.ClientAuthentication(
-                    assertion, out client_id, ref x509, out ClientModePolicy.Proof _);
+                    assertion,
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri,
+                    out client_id, ref x509, out ClientModePolicy.Proof _);
             }
             else
             {

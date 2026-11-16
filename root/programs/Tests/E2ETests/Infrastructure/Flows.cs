@@ -61,6 +61,7 @@
 //*  2026/11/09  玄人 幸道         TestClient_37〜44 を追加（#346 の段階 2）
 //*  2026/11/10  玄人 幸道         TestClient_45（fapi2。id_token_signed_response_alg=PS256）を追加（#355）
 //*  2026/11/13  玄人 幸道         TestClient_46（authorization_signed_response_alg=PS256）を追加（#370）
+//*  2026/11/15  玄人 幸道         TestClient4_5 を追加（#395）
 //**********************************************************************************
 
 using System;
@@ -143,6 +144,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **構成ファイルには無い。** 種データ（`TestClients`）で登録される。
         /// </remarks>
         public const string TestClient4_4 = "TestClient4_4";
+
+        /// <summary>
+        /// TestClient（normal。RSA と ECDSA の両方の公開鍵を持つ）を写し、**登録種別を fapi_ciba にした**クライアント（#395）。
+        /// </summary>
+        /// <remarks>
+        /// **CIBA の署名した要求を PS256（RSA の鍵）で受けることを測る**（`RT-395.2`）。
+        /// **`FAPI_CIBA_Client` は ECDSA の公開鍵しか持たない**ので、写し元を `TestClient` にした。
+        /// **`/ciba_authz` は秘密（Basic）で認証する**（写し元の秘密）。**構成ファイルには無い。** 種データ（`TestClients`）で登録される。
+        /// </remarks>
+        public const string TestClient4_5 = "TestClient4_5";
 
         /// <summary>
         /// FAPI2_Client（fapi2）を写し、tls_client_auth_subject_dn をテスト専用の値（MtlsSubjectDn）にしたクライアント（#226）。
@@ -485,6 +496,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
                 { KnownClients.TestClient4_4, "e2e0tc44000000000000000000000000" },
+                { KnownClients.TestClient4_5, "e2e0tc45000000000000000000000000" },
                 { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
                 { KnownClients.TestClient2_3, "e2e0tc23000000000000000000000000" },
                 { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
@@ -1092,6 +1104,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 // **alg を絞った `private_key_jwt` のクライアント**（#307 の段階 3）。
                 //   **client_secret は写す元のまま**だが、**秘密では認証できない。**
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient4_5)
+            {
+                // **TestClient を写して fapi_ciba にした**（#395）。client_secret は写す元のまま（Basic で認証する）。
                 sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_24)

@@ -32,6 +32,7 @@
 //*  2026/10/01  玄人 幸道         codeのidentityに利用者名を入れる（subではない）（#151 の段階 4）
 //*  2026/10/16  玄人 幸道         速すぎるポーリングに slow_down を返す（#305 の段階 1）
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
+//*  2026/11/14  玄人 幸道         device_code を出したクライアント（TempData の client_id）と、トークン要求のクライアントが違えば、記録に触れずに not_found を返す（RFC 6749 §5.2。#387）
 //**********************************************************************************
 
 using System;
@@ -384,12 +385,49 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 lastPolledAt, Config.DeviceAuthZPollingIntervalSeconds);
         }
 
+        /// <summary>device_code を、このクライアントに出したか（#387）</summary>
+        /// <param name="tempData">記録の TempData（device_authz の要求の内容。JSON）</param>
+        /// <param name="clientId">トークン要求で認証したクライアント</param>
+        /// <returns>同じなら true（**読めない・どちらかが空なら false**）</returns>
+        private static bool IsIssuedTo(string tempData, string clientId)
+        {
+            if (string.IsNullOrEmpty(tempData) || string.IsNullOrEmpty(clientId))
+            {
+                return false;
+            }
+
+            try
+            {
+                Dictionary<string, string> tempdic =
+                    JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
+
+                return tempdic != null
+                    && tempdic.TryGetValue(OAuth2AndOIDCConst.client_id, out string issuedTo)
+                    && !string.IsNullOrEmpty(issuedTo)
+                    && issuedTo == clientId;
+            }
+            catch (JsonException)
+            {
+                // 読めない記録は、照合できないので断る。
+                return false;
+            }
+        }
+
         /// <summary>ReceiveTokenReq</summary>
         /// <param name="deviceCode">string</param>
+        /// <param name="clientId">トークン要求で認証したクライアント（#387）</param>
         /// <param name="authZCode">string</param>
         /// <param name="states">DeviceAuthZState</param>
         /// <returns>結果</returns>
-        public static bool ReceiveTokenReq(string deviceCode, out string authZCode, out OAuth2AndOIDCEnum.DeviceAuthZState states)
+        /// <remarks>
+        /// **device_code を出したクライアントと違えば、`not_found` を返し、記録に触れない**（#387）。
+        /// RFC 8628 §3.5 は RFC 6749 §5.2 のエラーを使い、§5.2 の `invalid_grant` は「issued to another client」を含む
+        /// （呼び出し側が `not_found` を `invalid_grant` にする）。
+        /// **以前は照合せずに、状態を返し、ポーリングの時刻を書き換え、承認済みなら記録を消していた**（CIBA と同じ形）。
+        /// **照合は、状態を見る前に行う。** 記録の `TempData` の `client_id`（device_authz で受けたもの）と比べる。
+        /// </remarks>
+        public static bool ReceiveTokenReq(
+            string deviceCode, string clientId, out string authZCode, out OAuth2AndOIDCEnum.DeviceAuthZState states)
         {
             bool retVal = false;
             authZCode = "";
@@ -430,7 +468,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             // 正常レコード
                             Dictionary<string, string> dic
                                 = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
-                            
+
+                            //  **別のクライアントに出したものなら、記録に触れずに「無い」とする**（#387）。
+                            if (!DeviceAuthZProvider.IsIssuedTo(
+                                dic.TryGetValue(Const.PollingTempData, out string tempData) ? tempData : "",
+                                clientId))
+                            {
+                                states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
+                                break;
+                            }
+
                             // 結果の判別
                             if (DeviceAuthZProvider.GetState(dic[Const.PollingAuthReqExp], dic[Const.PollingResult], out states))
                             {
@@ -495,15 +542,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     // 参照
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT [AuthReqExp], [AuthZCode], [Result], [LastPolledAt]"
+                                        "SELECT [AuthReqExp], [AuthZCode], [Result], [LastPolledAt], [TempData]"
                                         + " FROM [DeviceAuthZData]"
                                         + " WHERE [DeviceCode] = @DeviceCode",
                                         new { DeviceCode = deviceCode });
 
-                                    if (dyn == null)
+                                    if (dyn == null || !DeviceAuthZProvider.IsIssuedTo((string)dyn.TempData, clientId))
                                     {
-                                        // レコードなし。
+                                        // レコードなし、または別のクライアントに出したもの（#387）。
+                                        //   **記録に触れずに返す**（下の更新・削除をしない）。
                                         states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
+                                        break;
                                     }
                                     else
                                     {
@@ -564,15 +613,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     // 参照
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\", \"LastPolledAt\""
+                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\", \"LastPolledAt\", \"TempData\""
                                         + " FROM \"DeviceAuthZData\""
                                         + " WHERE \"DeviceCode\" = :DeviceCode",
                                         new { DeviceCode = deviceCode });
 
-                                    if (dyn == null)
+                                    if (dyn == null || !DeviceAuthZProvider.IsIssuedTo((string)dyn.TempData, clientId))
                                     {
-                                        // レコードなし。
+                                        // レコードなし、または別のクライアントに出したもの（#387）。
+                                        //   **記録に触れずに返す**（下の更新・削除をしない）。
                                         states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
+                                        break;
                                     }
                                     else
                                     {
@@ -642,15 +693,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     // 参照
                                     dyn = cnn.QueryFirstOrDefault(
-                                        "SELECT \"authreqexp\", \"authzcode\", \"result\", \"lastpolledat\""
+                                        "SELECT \"authreqexp\", \"authzcode\", \"result\", \"lastpolledat\", \"tempdata\""
                                         + " FROM \"deviceauthzdata\""
                                         + " WHERE \"devicecode\" = @DeviceCode",
                                         new { DeviceCode = deviceCode });
 
-                                    if (dyn == null)
+                                    if (dyn == null || !DeviceAuthZProvider.IsIssuedTo((string)dyn.tempdata, clientId))
                                     {
-                                        // レコードなし。
+                                        // レコードなし、または別のクライアントに出したもの（#387）。
+                                        //   **記録に触れずに返す**（下の更新・削除をしない）。
                                         states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
+                                        break;
                                     }
                                     else
                                     {

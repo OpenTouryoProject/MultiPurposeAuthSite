@@ -56,6 +56,7 @@
 //*  2026/11/08  玄人 幸道         自己テストが Cookie に置いた code_verifier を読む口を追加（#345）
 //*  2026/11/09  玄人 幸道         クライアント証明書を添えて任意の口を POST する PostWithCertificateAsync を追加（device の /device_authz。#346）
 //*  2026/11/11  玄人 幸道         同意画面の許可・拒否を、フォームの action（同意画面の送信の口）へ送るようにした（ConsentFormUrl。#359）
+//*  2026/11/15  玄人 幸道         /userinfo に要求ヘッダを足して呼ぶ UserInfoWithHeadersAsync を足した（#384）
 //**********************************************************************************
 
 using System;
@@ -1176,13 +1177,32 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </summary>
         /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
         /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> UserInfoWithAuthorizationAsync(string authorization)
+        public Task<JsonResponse> UserInfoWithAuthorizationAsync(string authorization)
+        {
+            return this.UserInfoWithHeadersAsync(authorization, null);
+        }
+
+        /// <summary>
+        /// UserInfoエンドポイントを、Authorization ヘッダとほかの要求ヘッダを指定して呼ぶ（#384）。
+        /// </summary>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <param name="headers">足す要求ヘッダ（例 `x-fapi-interaction-id`。null なら足さない）</param>
+        /// <returns>JsonResponse（応答のヘッダは `Header(name)` で読む）</returns>
+        public async Task<JsonResponse> UserInfoWithHeadersAsync(string authorization, IDictionary<string, string> headers)
         {
             HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Get, this.Absolute("/userinfo"));
 
             if (authorization != null)
             {
                 req.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
+
+            if (headers != null)
+            {
+                foreach (KeyValuePair<string, string> header in headers)
+                {
+                    req.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
             }
 
             HttpResponseMessage res = await this._http.SendAsync(req);

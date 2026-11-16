@@ -370,3 +370,6 @@ __pycache__/
 /container/Stub/app/artifacts-hook/
 #   起動側のパラメタと設定（.env.sample / appsettings.Stub.sample.json を写したもの）。my- で始めれば追跡しない
 /container/Stub/my-*
+
+# 作業の見える化のダッシュボード（主のセッションが書き続ける。OpenTouryoCodingAgentAssets#19）
+AGENT-DASHBOARD.md

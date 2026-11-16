@@ -1539,7 +1539,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **以前は RS256 しか通らなかった。**`CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡していなかった**ため（框の `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、**ECDSA の公開鍵を渡せば ES256 が通る**）。**登録された RSA / ECDSA の鍵を順に試す**ようにした（#129 の段階 2）。**アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。 |
+| 観点 | **以前は RS256 しか通らなかった。**`CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡していなかった**ため（框の `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、**ECDSA の公開鍵を渡せば ES256 が通る**）。**登録された RSA / ECDSA の鍵を順に試す**ようにした（#129 の段階 2）。**いまは、ヘッダの alg を受けてよいと決めてから、その alg に合う種類の鍵だけを使う**（#395。C-8 と同じ轍を踏まない）。 |
 | 根拠 | RFC 7523 §2.2 / OIDC Core §9（private_key_jwt）/ #129 の段階 2 |
 | テスト | `RT12901_ES256のclient_assertionでも認証できる` |
 
@@ -1557,7 +1557,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。**`PS256` は通らない**（Open棟梁 に `JWS_PS*` が無い）。
+- **広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。**`PS256` は #395 で足した**（検証鍵 `JWS` を受ける `JwtAssertion.Verify`。OpenTouryo#664）。
 
 ## RT-129.2 ヘッダの alg を書き換えたトークンを、認可サーバが受け付けない
 
@@ -4247,7 +4247,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. client_assertion（RS256）を作り、client_assertion_type を添えて POST /par
+1. client_assertion（PS256）を作り、client_assertion_type を添えて POST /par
 
 **検証（合否を判定する）**
 
@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus
+1. GET /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=fe68d17c-c95f-4025-99c0-399cfd2c08e8&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12262,6 +12262,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. client_assertion_type を付けずに POST /par
+1. (1') 対照 : 同じアサーションの作り方で、client_assertion_type を付けて POST /par（通る）
 1. client_assertion_type を付けずに POST /revoke
 1. 同じクライアントで、client_assertion_type を付けて POST /revoke（通る）
 
@@ -12270,6 +12271,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PAR : HTTP 401
 - PAR : invalid_client
 - PAR : request_uri を返さない
+- PAR（型あり）: HTTP 201
 - /revoke : invalid_client
 - /revoke : 認証が通る（HTTP 200）
 
@@ -12384,6 +12386,257 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - authorization_signing_alg_values_supported に RS256 が在る
 - authorization_signing_alg_values_supported に PS256 が在る
 - authorization_signing_alg_values_supported に ES256 が在る
+
+## RT-371.1 **/ciba_authz は、client_assertion の aud に CIBA の口（Backchannel Authentication Endpoint）の URL を受ける。PAR の口の URL は受けない**
+
+| | |
+|---|---|
+| 観点 | **CIBA Core 1.0 §7.1 は、OP が issuer・トークン エンドポイントの URL・CIBA の口の URL を aud として受けることを求める（MUST）。****以前は、トークン エンドポイントの URL と issuer だけを受けていた**ので、CIBA の口の URL を書いた RP は invalid_client で断られた。**足すのはその口の URL だけ**（ほかの口に宛てたアサーションは受けない）。 |
+| 根拠 | CIBA Core 1.0 §7.1 / #371 |
+| テスト | `RT37101_ciba_authzはaudにCIBAの口のURLを受ける` |
+
+**手順**
+
+1. aud = CIBA の口の URL（通る）
+1. aud = PAR の口の URL（ほかの口の URL は受けない）
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id が返る（認証が通る）
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- HTTP 401
+- invalid_client
+
+## RT-371.2 **/par は、client_assertion の aud に PAR の口の URL を受ける。CIBA の口の URL は受けない。/revoke は PAR の口の URL を受けない**
+
+| | |
+|---|---|
+| 観点 | **RFC 9126 §2 は、認可サーバが issuer・トークン エンドポイントの URL・PAR の口の URL を aud として受けることを求める（MUST）。****以前は、トークン エンドポイントの URL と issuer だけを受けていた**ので、PAR の口の URL を書いた RP は invalid_client で断られた。**足すのはその口の URL だけ**（ほかの口に宛てたアサーションは受けない）。 |
+| 根拠 | RFC 9126 §2 / #371 |
+| テスト | `RT37102_parはaudにPARの口のURLを受ける` |
+
+**手順**
+
+1. /par に aud = PAR の口の URL（通る）
+1. /par に aud = CIBA の口の URL（ほかの口の URL は受けない）
+1. /revoke に aud = PAR の口の URL（PAR の口でしか受けない）
+1. 対照：/revoke に aud = トークン エンドポイントの URL（同じクライアント・同じ鍵で通る）
+
+**検証（合否を判定する）**
+
+- HTTP 201（RFC 9126 §2.2）
+- request_uri が返る
+- HTTP 401
+- invalid_client
+- invalid_client
+- 認証が通る（HTTP 200）
+
+## RT-371.3 **fapi2 の登録は、/par でも client_assertion の aud に issuer だけを受ける（PAR の口の URL は受けない）**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 Security Profile §5.3.2.1 は、issuer だけを文字列で受けることを求める**（RFC 9126 §2 より狭い）。**口の URL を足したのは fapi2 以外の登録**で、fapi2 は口によらず issuer だけ（RT-323.1）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / #323 / #371 |
+| テスト | `RT37103_fapi2の登録はparでもaudにissuerだけを受ける` |
+
+**手順**
+
+1. aud = issuer（通る）
+1. aud = PAR の口の URL（fapi2 は受けない）
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- HTTP 401
+- invalid_client
+
+## RT-384.1 **FAPI の登録（fapi1）のトークンの /userinfo は、要求の x-fapi-interaction-id（UUID）をそのまま返し、無い・UUID の形でないときは新しい UUID を返す。FAPI でない登録・検証できないトークンには付けない**
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Baseline §6.2.1 の 11 は、保護された資源が、要求の値か RFC 4122 の UUID を応答のヘッダに付けることを求める。****§6.2.2 の 5 は、クライアントが送る値を UUID とする**ので、形の違う値は使わず新しく作る（ヘッダとログに外の値を書かない）。**以前はこのヘッダを扱っていなかった。** |
+| 根拠 | FAPI 1.0 Baseline §6.2.1 の 11 / §6.2.2 の 5 / #384 |
+| テスト | `RT38401_FAPIの登録のトークンのuserinfoはx_fapi_interaction_idを返す` |
+
+**手順**
+
+1. fapi1 : 要求に UUID を付ける（そのまま返る）
+1. fapi1 : 要求に付けない（新しい UUID が返る）
+1. fapi1 : UUID の形でない値を付ける（使わずに、新しい UUID が返る）
+1. (3') fapi1 : openid の無いトークン（検証できた後の 403。付く）
+1. FAPI でない登録（normal）のトークン（付けない）
+1. 検証できないトークン（FAPI の登録かどうか分からないので、付けない）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- x-fapi-interaction-id が要求の値
+- x-fapi-interaction-id が UUID
+- x-fapi-interaction-id が UUID
+- 要求の値は返さない
+- HTTP 403
+- x-fapi-interaction-id が要求の値
+- HTTP 200
+- x-fapi-interaction-id を付けない
+- HTTP 401
+- x-fapi-interaction-id を付けない
+
+## RT-387.1 **CIBA のトークン要求で、別のクライアントに出した auth_req_id は、承認の前も後も invalid_grant。正規のクライアントは影響を受けない**
+
+| | |
+|---|---|
+| 観点 | **CIBA Core 1.0 §11 は、別のクライアントに出した auth_req_id に invalid_grant を求める（MUST）。****以前は照合する前に、状態を返し、ポーリングの時刻を書き換え、承認済みなら記録と認可コードを消していた**ので、auth_req_id を知る別のクライアントが先に引くと、正規のクライアントが結果を受け取れなかった。 |
+| 根拠 | CIBA Core 1.0 §11 / #387 |
+| テスト | `RT38701_CIBAの別のクライアントはinvalid_grantで正規のクライアントは影響を受けない` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録し、FAPI_CIBA_Client が CIBA を始める
+1. 承認の前に、別のクライアントが、その auth_req_id でトークンを要求する
+1. 続けて、正規のクライアントがポーリングする
+1. 利用者 : 認証デバイスで許可する
+1. 承認の後に、別のクライアントが、その auth_req_id でトークンを要求する
+1. 正規のクライアントがポーリングする（記録と認可コードが残っている）
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- invalid_grant（authorization_pending を返さない）
+- authorization_pending（slow_down にならない ＝ 別のクライアントの要求は、ポーリングの時刻を書き換えていない）
+- invalid_grant
+- トークンを出さない
+- access_token が返る
+
+## RT-387.2 **Device のトークン要求で、別のクライアントに出した device_code は、承認の前も後も invalid_grant。正規のクライアントは影響を受けない**
+
+| | |
+|---|---|
+| 観点 | **RFC 8628 §3.5 は RFC 6749 §5.2 のエラーを使い、§5.2 の invalid_grant は「issued to another client」を含む。****以前は CIBA と同じく、照合する前に、状態を返し、ポーリングの時刻を書き換え、承認済みなら記録と認可コードを消していた。** |
+| 根拠 | RFC 8628 §3.5 / RFC 6749 §5.2 / #387 |
+| テスト | `RT38702_Deviceの別のクライアントはinvalid_grantで正規のクライアントは影響を受けない` |
+
+**手順**
+
+1. 機器 : Device_Client が POST /device_authz で device_code を得る
+1. 承認の前に、別のクライアントが、その device_code でトークンを要求する
+1. 続けて、正規のクライアントがポーリングする
+1. 利用者 : user_code を入力して許可する
+1. 承認の後に、別のクライアントが、その device_code でトークンを要求する
+1. 正規のクライアントがポーリングする（記録と認可コードが残っている）
+
+**検証（合否を判定する）**
+
+- invalid_grant（authorization_pending を返さない）
+- authorization_pending（slow_down にならない ＝ 別のクライアントの要求は、ポーリングの時刻を書き換えていない）
+- invalid_grant
+- トークンを出さない
+- access_token が返る
+
+## RT-391.1 **自己テストの SP の 4 通りの SAML2 の要求（Redirect・POST）に、送った先と同じ Destination が入る**
+
+| | |
+|---|---|
+| 観点 | **SAML Bindings §3.4.5.2（Redirect）・§3.5.5.2（POST）は、署名した要求の Destination を、送り先の URL にすることを求める（MUST）。****以前は Open棟梁 の従来の版（OpenTouryo#693 で Obsolete）を使い、Destination を入れていなかった。** |
+| 根拠 | SAML Bindings §3.4.5.2 / §3.5.5.2 / #391 |
+| テスト | `RT39101_自己テストのSPの要求のDestinationは送った先と同じ` |
+
+**手順**
+
+1. submit.Saml2RedirectRedirectBinding（要求は Redirect）
+1. submit.Saml2RedirectPostBinding（要求は Redirect）
+1. submit.Saml2PostPostBinding（要求は POST）
+1. submit.Saml2PostRedirectBinding（要求は POST）
+
+**検証（合否を判定する）**
+
+- Destination が、要求を送った先と同じ
+- Destination が、要求を送った先と同じ
+- Destination が、要求を送った先と同じ
+- Destination が、要求を送った先と同じ
+
+## RT-394.1 **署名の alg を登録していない FAPI の登録（fapi1）の access_token・id_token・JARM は ES256 で署名され、JWKS で検証できる。FAPI でない登録は RS256 のまま**
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced §8.6 は PS256 か ES256 を、FAPI 2.0 Security Profile §5.4.1 は PS256・ES256・EdDSA を求め、RS256 を認めない。****以前は FAPI の登録も、登録が無ければ RS256 だった**（#370 で見送った。OpenTouryo#695 で RP 側の検証が直った）。**FAPI でない登録の既定は RS256**（OIDC Core・JARM §3）。 |
+| 根拠 | FAPI 1.0 Advanced §8.6 / FAPI 2.0 Security Profile §5.4.1 / #394 |
+| テスト | `RT39401_algを登録していないFAPIの登録はES256で署名する` |
+
+**手順**
+
+1. fapi1 : 認可コード（PKCE）を引き換える
+1. fapi1 : JARM（response_mode=query.jwt）
+1. 対照 : FAPI でない登録（normal）は RS256 のまま
+
+**検証（合否を判定する）**
+
+- fapi1 の access_token : alg
+- fapi1 の access_token : 署名を JWKS で検証できる
+- fapi1 の id_token : alg
+- fapi1 の id_token : 署名を JWKS で検証できる
+- fapi1 の JARM : alg
+- fapi1 の JARM : 署名を JWKS で検証できる
+- normal の access_token : alg
+- normal の access_token : 署名を JWKS で検証できる
+- normal の id_token : alg
+- normal の id_token : 署名を JWKS で検証できる
+
+## RT-395.1 **client_assertion は PS256 でも通る（FAPI でない登録・fapi2 の登録）。fapi2 の登録の RS256 は invalid_client。Discovery は PS256 を広告する**
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced §8.6 は、クライアントも認可サーバも PS256 か ES256 を使うことを求める**（FAPI 2.0 Security Profile §5.4.1 も同じ）。**以前は RS256・ES256 だけを受け**、PS256 の FAPI のクライアントは認証できなかった。**FAPI の登録は RS256 を断る**（Request Object と同じ。#370）。 |
+| 根拠 | FAPI 1.0 Advanced §8.6 / FAPI 2.0 Security Profile §5.4.1 / RFC 7523 §2.2 / #395 |
+| テスト | `RT39501_client_assertionでPS256を受けfapi2の登録のRS256は断る` |
+
+**手順**
+
+1. FAPI でない登録 : PS256 のアサーション
+1. fapi2 の登録 : PS256 のアサーション（aud は issuer）
+1. fapi2 の登録 : RS256 のアサーション（FAPI は RS256 を認めない）
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- 認証が通る（HTTP 200）
+- 認証が通る（HTTP 200）
+- invalid_client
+- token_endpoint_auth_signing_alg_values_supported に PS256 が在る
+
+## RT-395.2 **CIBA の署名した要求（request）は、PS256（RSA の鍵）でも ES256（EC の鍵）でも受け付け（auth_req_id が返る）、RS256 は断る。Discovery は PS256・ES256 を広告する**
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA ID1 §7.10 は、PS256 か ES256 を求める**（§7.6 は FAPI 1.0 Advanced §8.6 に従うとする）。**以前は ES256 だけを受けていた**（使っていた版の `RequestObject.VerifyCiba` が ES256 に固定）。**検証鍵は、ヘッダの alg と登録の鍵（PS256 は RSA、ES256 は EC）で決める。** |
+| 根拠 | FAPI-CIBA ID1 §7.10 / CIBA Core 1.0 §7.1.1 / #395 |
+| テスト | `RT39502_CIBAの署名した要求でPS256を受けRS256は断る` |
+
+**手順**
+
+1. PS256 で署名した要求（受け付ける）
+1. ES256 で署名した要求（同じクライアント。EC の鍵で検証する）
+1. RS256 で署名した要求（FAPI-CIBA は RS256 を認めない）
+1. Discovery の広告
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- auth_req_id を返さない
+- invalid_request
+- backchannel_authentication_request_signing_alg_values_supported
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
@@ -13285,6 +13538,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - SAMLRequest を読める
 - NameIDFormat に emailAddress を要求する
 - IsPassive は付けない（上流が画面を出してよい）
+- Destination が、要求を送った先（上流の SSO の口）と同じ（#391）
 - 上流が下流の ACS を指す
 - 応答が読める
 - StatusCode が Success

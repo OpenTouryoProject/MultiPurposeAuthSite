@@ -52,6 +52,7 @@
 //*  2026/11/10  玄人 幸道         id_token_signed_response_alg を PS256 にした fapi2 の TestClient_45 を追加（#355）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を書けるようにした（#370）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を PS256 にした TestClient_46 を追加（#370）
+//*  2026/11/15  玄人 幸道         RSA の公開鍵を持つ fapi_ciba の TestClient4_5 を追加（#395）
 //**********************************************************************************
 
 using System;
@@ -159,6 +160,15 @@ namespace MultiPurposeAuthSite.Util.Test
                 {
                     { OAuth2AndOIDCConst.token_endpoint_auth_method, "private_key_jwt" }
                 }
+            },
+            new Entry()
+            {
+                // **RSA の公開鍵を持つ fapi_ciba のクライアント**（#395）。
+                //   **CIBA の署名した要求を PS256 で受けることを測る**（`RT-395.2`）。
+                //   **`FAPI_CIBA_Client` は ECDSA の公開鍵しか持たない**ので、**RSA と ECDSA の両方を持つ `TestClient` を写す。**
+                //   **秘密で認証する**（`/ciba_authz` は Basic。写し元の秘密）。
+                ClientName = "TestClient4_5", ClientId = "e2e0tc45000000000000000000000000",
+                ClientMode = "fapi_ciba", SourceName = "TestClient"
             },
             new Entry()
             {

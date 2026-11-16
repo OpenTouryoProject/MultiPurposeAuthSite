@@ -34,6 +34,7 @@
 //*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnCibaEndpoint）を呼ぶ（#321）
 //*  2026/11/02  玄人 幸道         client_notification_token を CibaProvider.Create に渡さない（#328）
 //*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
+//*  2026/11/14  玄人 幸道         auth_req_id を出したクライアントを記録する（#387）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -205,8 +206,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // CIBA情報をストア
                             // **誰宛ての要求かを記録する**（user は login_hint で解決した利用者）。
+                            // **どのクライアントに出したかも記録する**（トークン要求で照合する。CIBA Core 1.0 §11。#387）。
                             Sts.CibaProvider.Create(
-                               authReqExp, code, binding_message, user.Id, out authReqId);
+                               authReqExp, code, binding_message, user.Id, client_id, out authReqId);
 
 #pragma warning disable 162
 
