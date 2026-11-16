@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/07  玄人 幸道         新規（#341）
 //*  2026/11/07  玄人 幸道         RT-341.2（「FAPI1 PC, PKCE」のボタン）を足した（OpenTouryo#670 の取り込みの後。#341）
+//*  2026/11/17  玄人 幸道         FAPI1 のボタンは JARM で要求するので、応答を Unwrap して読む。RT-341.2 に response_mode の確かめを足した（#381）
 //**********************************************************************************
 
 using System.Net;
@@ -53,6 +54,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// **「FAPI1 PC, PKCE」は `RT-341.2`。** アサーションと `code_verifier` を一緒に送る口が
     /// Open棟梁 のクライアントに無かったので、足してから測った（OpenTouryo#670）。
+    ///
+    /// **FAPI1 のボタンは JARM（`response_mode=jwt`）で要求する**（fapi1 の登録は JARM の要求だけを受ける。#381）。
+    /// **応答は `response`（JWT）で返る**ので、`Unwrap` で code を読む。**戻りの画面へは、受け取った URL をそのまま渡す**（自己テストの受け口が JARM を検証する）。
     /// </remarks>
     public class SelfTestFapi1Tests : TargetTestBase
     {
@@ -107,7 +111,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.VerifyEqual(starter + " : client_id は " + KnownClients.Fapi1PrivateKeyJwtClient, configured,
                         Saml2.QueryValue(authorizeUrl, "client_id"));
 
-                    AuthZResponse authz = await client.AuthorizeAndGrantAsync(client.ToLocalUrl(authorizeUrl));
+                    AuthZResponse authz = (await client.AuthorizeAndGrantAsync(client.ToLocalUrl(authorizeUrl))).Unwrap();
                     Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが返ること（" + authz.ToString() + "）");
 
                     HttpResponseMessage screen = await client.GetAsync(authz.Location);
@@ -184,9 +188,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("code_challenge が付く", !string.IsNullOrEmpty(challenge),
                     "付く", string.IsNullOrEmpty(challenge) ? "**付かない**" : "付く");
 
+                //  **fapi1 の登録は JARM の要求だけを受ける**（FAPI 1.0 Advanced §5.2.2 の 2。#381）。
+                r.VerifyEqual("response_mode は jwt（JARM）", "jwt",
+                    Saml2.QueryValue(authorizeUrl, "response_mode") ?? "（無い）");
+
                 r.Step("(2) 認可して、戻りの画面を開く（トークン要求は private_key_jwt ＋ code_verifier）");
 
-                AuthZResponse authz = await client.AuthorizeAndGrantAsync(client.ToLocalUrl(authorizeUrl));
+                AuthZResponse authz = (await client.AuthorizeAndGrantAsync(client.ToLocalUrl(authorizeUrl))).Unwrap();
                 Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが返ること（" + authz.ToString() + "）");
 
                 HttpResponseMessage screen = await client.GetAsync(authz.Location);

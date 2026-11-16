@@ -62,6 +62,7 @@
 //*  2026/11/10  玄人 幸道         TestClient_45（fapi2。id_token_signed_response_alg=PS256）を追加（#355）
 //*  2026/11/13  玄人 幸道         TestClient_46（authorization_signed_response_alg=PS256）を追加（#370）
 //*  2026/11/15  玄人 幸道         TestClient4_5 を追加（#395）
+//*  2026/11/17  玄人 幸道         fapi1 の認可要求に JARM（response_mode=jwt）を足す WithJarm を追加（#381）
 //**********************************************************************************
 
 using System;
@@ -740,6 +741,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             await Flows.AuthorizeCodeAsync(
                 client, registration, scope, "state-consent", "nonce-consent",
                 registration.RedirectUri);
+        }
+
+        /// <summary>認可要求の追加パラメタに、JARM（`response_mode=jwt`）を足す（#381）</summary>
+        /// <param name="extra">追加パラメタ（null 可。書き換えない）</param>
+        /// <returns>`response_mode=jwt` を足した写し</returns>
+        /// <remarks>
+        /// **fapi1 の登録は JARM の認可要求だけを受ける**（FAPI 1.0 Advanced §5.2.2 の 2。#381）。
+        /// **応答の code・state・error は、`AuthZResponse.Unwrap()` で読む。**
+        /// </remarks>
+        public static Dictionary<string, string> WithJarm(IDictionary<string, string> extra = null)
+        {
+            Dictionary<string, string> ret = (extra == null)
+                ? new Dictionary<string, string>() : new Dictionary<string, string>(extra);
+
+            ret["response_mode"] = "jwt";
+
+            return ret;
         }
 
         /// <summary>

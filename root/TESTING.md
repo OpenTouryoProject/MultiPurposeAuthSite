@@ -1407,6 +1407,27 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
 
+##### fapi1 の登録は、JARM の認可要求だけを受ける（`RT-381.*`。#381）
+
+| | 測ること |
+|---|---|
+| **`RT-381.1`** | **fapi1 の登録で JARM でない要求（`response_mode` 無し・`query`）は `invalid_request`**（クエリは RP へ返す。PAR は `400`）。**断る理由が JARM であることも `error_description` で確かめる。** JARM（`jwt`・`query.jwt`・`fragment.jwt`・大文字の `JWT`）なら、code を URL に直接載せず、`response` の中で返す。**fapi1 でない登録は、従来どおり code をクエリで返す** |
+
+- **FAPI 1.0 Advanced §5.2.2 の 2 は「`code id_token`、または `code` ＋ `response_mode=jwt`」を求める。MPAS は fapi1 に Hybrid を許さない**（`ClientModePolicy`。`FA-1.4`）**ので、満たせる形は `code` ＋ JARM だけ**
+- **判定は `CmnEndpoints.ValidateAuthZReqParam`**（PAR と `/authorize` で共通。**`response_mode` を引数に足した**）。**経路（クエリ・PAR・`/ros`）によらない**
+- **同梱の自己テストの FAPI1 のボタンは、画面で JARM を選んでいなければ `response_mode=jwt` で要求する**（両版の `HomeController.Fapi.cs`。受け口は JARM を検証して読む。`RT-341.2` で確かめる）
+- **fapi1 の登録を使う既存のテストは、要求に `response_mode=jwt` を足し、応答を `AuthZResponse.Unwrap()` で読むようにした**（`FA-1.1`〜`.3`・`RT-341.*`・`RT-382.1`・`RT-383.*`・`RT-384.1`・`RT-394.1`。**測る段と検証は変えていない**）。**`RT-382.1` は、JARM を付けないと `nonce` より先に JARM で断られる**ので、**断る理由が `nonce` であることも確かめるようにした**
+- **`AuthZResponse.Get` は変えていない**（`EX-6` が「JARM の応答では code を URL に直接載せない」ことを `Code` で測っているため）。**`Unwrap()` は `response` の JWT のペイロードを広げた写しを返す**（署名は確かめない。JARM の署名は JARM のテストが測る）
+- 直す前は、(1) の要求に code が返った（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`form_post.jwt`** | 同じ `IsJarmResponseMode` で JARM と判定する。返し方の違い（自動送信フォーム）は JARM のテスト（`EX-6`）が測る |
+| **`/ros` に `response_mode` 無しで預けた fapi1 の `request_uri`** | Request Object の値で上書きするのは既存の振る舞い（無ければ「無い」として JARM の確かめで断る） |
+| **fapi1 の Hybrid（`code id_token`）** | この確かめより前に `ClientModePolicy` が `unauthorized_client` で断る（`FA-1.4`） |
+
 ##### fapi1 の登録の `openid` の認可要求では、`nonce` を必須にする（`RT-382.*`。#382）
 
 | | 測ること |

@@ -33,6 +33,7 @@
 //*  2026/09/12  玄人 幸道         本文を文字列として読む Text を追加（"OK" / "NG" で答えるエンドポイント用）（#196）
 //*  2026/09/18  玄人 幸道         discovery の配列を見る ArrayContains を追加（#220）
 //*  2026/10/02  玄人 幸道         配列を並びのまま返す Strings を追加（#129 の段階 2）
+//*  2026/11/17  玄人 幸道         JARM の応答（response）の中のパラメタを広げて読む Unwrap を追加（#381）
 //**********************************************************************************
 
 using System;
@@ -106,6 +107,88 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             string value;
             return this.Parameters.TryGetValue(name, out value) ? value : null;
+        }
+
+        /// <summary>JARM の応答（`response` に JWT）なら、JWT のペイロードのパラメタを広げた写しを返す（#381）</summary>
+        /// <returns>
+        /// 写し（**外のパラメタが優先**。JARM でなければ、同じ中身の写し）。
+        /// </returns>
+        /// <remarks>
+        /// **fapi1 の登録は JARM の要求だけを受ける**（#381）ので、その応答の `Code`・`State`・`Error` を読むために使う。
+        /// **`Get` は変えていない**（JARM の応答で「`code` を URL に直接載せない」ことを測るテストがあるため。`EX-6`）。
+        /// **署名は確かめない**（読むだけ。JARM の署名・`iss`・`aud` は JARM のテストが測る）。
+        /// </remarks>
+        public AuthZResponse Unwrap()
+        {
+            Dictionary<string, string> merged = new Dictionary<string, string>();
+            Dictionary<string, string> jarm = this.JarmParameters();
+
+            if (jarm != null)
+            {
+                foreach (KeyValuePair<string, string> p in jarm)
+                {
+                    merged[p.Key] = p.Value;
+                }
+            }
+
+            foreach (KeyValuePair<string, string> p in this.Parameters)
+            {
+                merged[p.Key] = p.Value;
+            }
+
+            return new AuthZResponse()
+            {
+                StatusCode = this.StatusCode,
+                Location = this.Location,
+                RedirectTo = this.RedirectTo,
+                Where = this.Where,
+                Parameters = merged,
+                Body = this.Body,
+                RequestUrl = this.RequestUrl
+            };
+        }
+
+        /// <summary>JARM の応答（`response`）のペイロードのパラメタ（JARM でなければ null）</summary>
+        /// <returns>パラメタ</returns>
+        private Dictionary<string, string> JarmParameters()
+        {
+            string jwt;
+
+            if (!this.Parameters.TryGetValue("response", out jwt) || string.IsNullOrEmpty(jwt))
+            {
+                return null;
+            }
+
+            string[] parts = jwt.Split('.');
+
+            if (parts.Length != 3)
+            {
+                return null;
+            }
+
+            try
+            {
+                string b64 = parts[1].Replace('-', '+').Replace('_', '/');
+                b64 = b64.PadRight(b64.Length + ((4 - b64.Length % 4) % 4), '=');
+
+                using (JsonDocument doc = JsonDocument.Parse(Convert.FromBase64String(b64)))
+                {
+                    Dictionary<string, string> ret = new Dictionary<string, string>();
+
+                    foreach (JsonProperty p in doc.RootElement.EnumerateObject())
+                    {
+                        ret[p.Name] = (p.Value.ValueKind == JsonValueKind.String)
+                            ? p.Value.GetString() : p.Value.GetRawText();
+                    }
+
+                    return ret;
+                }
+            }
+            catch (Exception)
+            {
+                // 暗号化した JARM（JWE）や壊れた値は読まない
+                return null;
+            }
         }
 
         /// <summary>認可コード</summary>

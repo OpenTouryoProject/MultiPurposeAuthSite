@@ -29,6 +29,7 @@
 //*  2026/11/12  玄人 幸道         request_uri を引けない要求を、黙って続けずに断る（request_uri_not_supported・invalid_request_uri。#362）
 //*  2026/11/11  玄人 幸道         Hybrid の応答を作る部品に response_type を渡す（at_hash を付けるかを決めるため。#360）
 //*  2026/11/13  玄人 幸道         認可要求の検証に code_challenge_method を渡す（Request Object の値も読む。fapi2 の S256。#366）
+//*  2026/11/17  玄人 幸道         認可要求の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
 //**********************************************************************************
 
 /*
@@ -365,7 +366,7 @@ namespace MultiPurposeAuthSite.Controllers
             // **要求の検証を先に行う**（#247）。`redirect_uri` を照合できていないと、エラーを RP へ返せない。
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, prompt, pushed, signedRequestObject))
+                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, response_mode, prompt, pushed, signedRequestObject))
             {
                 // **max_age と auth_time の照合**（判定は CommonLibrary）。
                 //   **どちらの Cookie も、改ざんできない形で読む**（#294。`AuthTimeCookie`）。
@@ -688,7 +689,7 @@ namespace MultiPurposeAuthSite.Controllers
             else if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription,
-                code_challenge, code_challenge_method, prompt, pushed, signedRequestObject))
+                code_challenge, code_challenge_method, response_mode, prompt, pushed, signedRequestObject))
             {
                 if (!this.IsSupportedResponseMode(response_type, response_mode))
                 {

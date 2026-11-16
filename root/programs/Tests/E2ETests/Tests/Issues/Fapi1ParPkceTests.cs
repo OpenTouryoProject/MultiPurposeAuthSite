@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/16  玄人 幸道         新規（#383）
+//*  2026/11/17  玄人 幸道         fapi1 の要求を JARM にした（fapi1 は JARM の要求だけを受けるようになった。#381）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -111,11 +112,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 using (IdPClient user = await this.SignedInClientAsync(targetKey))
                 {
-                    AuthZResponse authz = await user.AuthorizeAsync(new Dictionary<string, string>()
+                    AuthZResponse authz = (await user.AuthorizeAsync(new Dictionary<string, string>()
                     {
                         { "client_id", reg.ClientId },
                         { "request_uri", requestUri }
-                    });
+                    })).Unwrap();
 
                     r.Verify("認可の口で断られない（同意画面か code）",
                         authz.Error == null && (authz.NeedsConsent || !string.IsNullOrEmpty(authz.Code)),
@@ -178,7 +179,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) PKCE を付けずに、クエリで認可要求を送る");
 
-                AuthZResponse authz = await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri);
+                //  **fapi1 は JARM の要求だけを受ける**（#381）。**PKCE は付けない。**
+                AuthZResponse authz = (await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri, extra: Flows.WithJarm())).Unwrap();
 
                 r.Verify("code が返る（PKCE 無しで断らない）",
                     authz.Error == null && !string.IsNullOrEmpty(authz.Code),
@@ -208,7 +211,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             return client.ToLocalUrl(endpoint);
         }
 
-        /// <summary>fapi1 の登録（client_secret_basic）で、フォームのパラメタを PAR に預ける</summary>
+        /// <summary>fapi1 の登録（client_secret_basic）で、フォームのパラメタを PAR に預ける（JARM。#381）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="reg">クライアント</param>
         /// <param name="endpoint">PAR の口</param>
@@ -224,7 +227,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 { "redirect_uri", reg.RedirectUri },
                 { "scope", "openid" },
                 { "state", state },
-                { "nonce", "nonce-" + state }
+                { "nonce", "nonce-" + state },
+                { "response_mode", "jwt" }      // fapi1 は JARM の要求だけを受ける（#381）
             };
 
             if (pkce != null)

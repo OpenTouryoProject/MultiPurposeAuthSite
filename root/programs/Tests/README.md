@@ -323,6 +323,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceS256Tests.cs` | `RT-366` | **FAPI 2.0 の登録では、S256 の PKCE を必須にする**（#366。FAPI 2.0 Security Profile §5.3.2.2）。**fapi2 の登録の PAR は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断り**、**S256 で預けた `request_uri` は認可の口でも通る**こと（`RT-366.1`）、**fapi2 でない登録は従来どおり**（`RT-366.2`）、**PAR を使わない `/authorize` でも同じ**（`RT-366.3`） |
+| `Tests/Issues/Fapi1JarmTests.cs` | `RT-381` | **fapi1 の登録は、JARM の認可要求だけを受ける**（#381。FAPI 1.0 Advanced §5.2.2 の 2）。`response_mode` 無し・`query` は `invalid_request`（クエリ・PAR とも）、JARM（`jwt`・`query.jwt`）は `response` の中で code を返す。fapi1 でない登録は従来どおり（`RT-381.1`）。**fapi1 を使うほかのテストは `Flows.WithJarm` と `AuthZResponse.Unwrap()` を使う** |
 | `Tests/Issues/Fapi1NonceTests.cs` | `RT-382` | **fapi1 の登録の `openid` の認可要求では、`nonce` を必須にする**（#382。FAPI 1.0 Baseline §5.2.2.2 の 1）。クエリ・PAR とも `invalid_request`。`openid` を含まない要求・fapi1 でない登録は従来どおり（`RT-382.1`） |
 | `Tests/Issues/Fapi1ParPkceTests.cs` | `RT-383` | **fapi1 の登録の PAR では、S256 の PKCE を必須にする**（#383。FAPI 1.0 Advanced §5.2.2 の 18）。**fapi1 の登録の `/par` は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断る**（`RT-383.1`）、**PAR を使わない fapi1 の要求は従来どおり**（`RT-383.2`） |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |

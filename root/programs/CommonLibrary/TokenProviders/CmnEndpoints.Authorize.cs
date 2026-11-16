@@ -39,6 +39,7 @@
 //*  2026/11/13  玄人 幸道         fapi2 の登録では PKCE を必須にし、S256 に限る。RequirePkceS256 でも認可要求で plain を断る（FAPI 2.0 Security Profile §5.3.2.2。#366）
 //*  2026/11/16  玄人 幸道         fapi1 の登録の PAR の要求でも、S256 の PKCE を必須にした（FAPI 1.0 Advanced §5.2.2 の 18。#383）
 //*  2026/11/16  玄人 幸道         fapi1 の登録の openid の要求では、nonce を必須にした（FAPI 1.0 Baseline §5.2.2.2 の 1。#382）
+//*  2026/11/17  玄人 幸道         fapi1 の登録は、JARM の認可要求だけを受けるようにした（FAPI 1.0 Advanced §5.2.2 の 2。#381）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -161,6 +162,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="errDescription">string</param>
         /// <param name="code_challenge">string</param>
         /// <param name="code_challenge_method">string（#366。省略は plain の扱い）</param>
+        /// <param name="response_mode">string（#381。fapi1 の登録では JARM に限る。空は既定の返し方）</param>
         /// <param name="prompt">string</param>
         /// <returns>成功 or 失敗</returns>
         /// <remarks>
@@ -186,7 +188,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
             ref string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge, string code_challenge_method,
+            string code_challenge, string code_challenge_method, string response_mode,
             string prompt, bool pushed, bool signedRequestObject)
         {
             // **response_type を正規化する**（#267）。**ここで 1 回だけ掛ける。**
@@ -203,7 +205,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, prompt,
+                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, response_mode, prompt,
                 pushed, signedRequestObject);
 
             if (!isValid && string.IsNullOrEmpty(valid_redirect_uri))
@@ -230,11 +232,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="errDescription">string</param>
         /// <param name="code_challenge">string</param>
         /// <param name="code_challenge_method">string</param>
+        /// <param name="response_mode">string（#381）</param>
         /// <returns>成功 or 失敗</returns>
         private static bool ValidateAuthZReqParamCore(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge, string code_challenge_method,
+            string code_challenge, string code_challenge_method, string response_mode,
             string prompt, bool pushed, bool signedRequestObject)
         {
             valid_redirect_uri = "";
@@ -513,6 +516,26 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
 
+                #region response_mode（FAPI 1.0 Advanced。#381）
+
+                // **fapi1 の登録は、JARM（response_mode が jwt・query.jwt・fragment.jwt・form_post.jwt）の要求だけを受ける**
+                //   （FAPI 1.0 Advanced §5.2.2 の 2「shall require the response_type value code id_token,
+                //   or the response_type value code in conjunction with the response_mode value jwt」。#381）。
+                //   **MPAS は fapi1 の登録に Hybrid（code id_token）を許さない**（ClientModePolicy。FA-1.4）ので、
+                //   **満たせる形は code ＋ JARM だけ**である。
+                //   **経路（クエリ・PAR・/ros）によらない**（原典は経路を限っていない。#381 の決め）。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                if (issuesCode
+                    && clientMode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
+                    && !CmnEndpoints.IsJarmResponseMode(response_mode))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "This client requires JARM (response_mode=jwt) for the authorization response (FAPI 1.0 Advanced).";
+                    return false;
+                }
+
+                #endregion
+
                 #region prompt（#272 の段階 1）
 
                 // **`none` を他の値と併記していないか**（OIDC Core §3.1.2.1）。
@@ -582,6 +605,20 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         #endregion
+
+        /// <summary>response_mode が JARM（jwt・query.jwt・fragment.jwt・form_post.jwt）か（#381）</summary>
+        /// <param name="response_mode">response_mode</param>
+        /// <returns>JARM なら true</returns>
+        /// <remarks>**`.` と `_` は同じに扱う**（両版の AccountController の TryResolveResponseMode と同じ）。</remarks>
+        public static bool IsJarmResponseMode(string response_mode)
+        {
+            string mode = (response_mode ?? "").ToLower().Replace('.', '_');
+
+            return mode == OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit();
+        }
 
         #region 扱うグラント（#294）
 

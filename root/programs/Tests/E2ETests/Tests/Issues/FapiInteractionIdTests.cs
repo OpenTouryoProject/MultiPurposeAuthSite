@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/15  玄人 幸道         新規（#384）
+//*  2026/11/17  玄人 幸道         fapi1 の認可要求を JARM にした（fapi1 は JARM の要求だけを受けるようになった。#381）
 //**********************************************************************************
 
 using System;
@@ -96,7 +97,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Target("GET /userinfo（" + KnownClients.Fapi1Client + "（fapi1）のトークン・"
                     + KnownClients.MvcSample + "（normal）のトークン）");
 
-                string fapiToken = await FapiInteractionIdTests.AccessTokenAsync(client, fapi1, withPkce: true);
+                string fapiToken = await FapiInteractionIdTests.AccessTokenAsync(client, fapi1, withPkce: true, jarm: true);
                 string normalToken = await FapiInteractionIdTests.AccessTokenAsync(client, normal, withPkce: false);
 
                 Assert.False(string.IsNullOrEmpty(fapiToken) || string.IsNullOrEmpty(normalToken),
@@ -133,7 +134,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(3') fapi1 : openid の無いトークン（検証できた後の 403。付く）");
 
                 //  **トークンを検証できた後のエラーにも付ける**（#384 のレビュー）。**openid の無いトークンは 403 / insufficient_scope。**
-                string noOpenidToken = await FapiInteractionIdTests.AccessTokenAsync(client, fapi1, withPkce: true, scope: "profile");
+                string noOpenidToken = await FapiInteractionIdTests.AccessTokenAsync(client, fapi1, withPkce: true, scope: "profile", jarm: true);
 
                 Assert.False(string.IsNullOrEmpty(noOpenidToken), "前提: openid の無い access_token を受け取れること");
 
@@ -188,20 +189,28 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="reg">クライアント</param>
         /// <param name="withPkce">PKCE（S256）で引き換えるか（false なら client_secret）</param>
         /// <param name="scope">scope（null なら既定。openid を含む）</param>
+        /// <param name="jarm">JARM（response_mode=jwt）で要求するか（fapi1 の登録。#381）</param>
         /// <returns>access_token（取れなければ null）</returns>
         private static async Task<string> AccessTokenAsync(
-            IdPClient client, ClientRegistration reg, bool withPkce, string scope = null)
+            IdPClient client, ClientRegistration reg, bool withPkce, string scope = null, bool jarm = false)
         {
-            AuthZResponse authz = (scope == null)
-                ? await FapiInteractionIdTests.AuthorizeAsync(client, reg, withPkce)
-                : await Flows.AuthorizeCodeAsync(client, reg, scope, nonce: null, redirectUri: reg.RedirectUri,
-                    extra: withPkce
-                        ? new Dictionary<string, string>()
-                        {
-                            { "code_challenge", FapiInteractionIdTests.Challenge },
-                            { "code_challenge_method", "S256" }
-                        }
-                        : null);
+            Dictionary<string, string> extra = withPkce
+                ? new Dictionary<string, string>()
+                {
+                    { "code_challenge", FapiInteractionIdTests.Challenge },
+                    { "code_challenge_method", "S256" }
+                }
+                : null;
+
+            if (jarm)
+            {
+                extra = Flows.WithJarm(extra);
+            }
+
+            AuthZResponse authz = ((scope == null)
+                ? await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri, extra: extra)
+                : await Flows.AuthorizeCodeAsync(client, reg, scope, nonce: null, redirectUri: reg.RedirectUri, extra: extra))
+                .Unwrap();
 
             if (string.IsNullOrEmpty(authz.Code))
             {
@@ -230,22 +239,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             return token.AccessToken;
         }
 
-        /// <summary>既定の scope で認可コードを取る</summary>
-        /// <param name="client">IdPClient</param>
-        /// <param name="reg">クライアント</param>
-        /// <param name="withPkce">PKCE（S256）を付けるか</param>
-        /// <returns>AuthZResponse</returns>
-        private static Task<AuthZResponse> AuthorizeAsync(IdPClient client, ClientRegistration reg, bool withPkce)
-        {
-            return Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri,
-                extra: withPkce
-                    ? new Dictionary<string, string>()
-                    {
-                        { "code_challenge", FapiInteractionIdTests.Challenge },
-                        { "code_challenge_method", "S256" }
-                    }
-                    : null);
-        }
 
         #endregion
     }

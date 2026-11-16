@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=a15af95a-ee41-4171-a930-12b596d48b17&code=bogus
+1. GET /Account/EmailConfirmation?userId=a5d0b528-6821-4b2f-95c1-1adfb60720c6&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=a15af95a-ee41-4171-a930-12b596d48b17&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=a15af95a-ee41-4171-a930-12b596d48b17&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=a5d0b528-6821-4b2f-95c1-1adfb60720c6&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=a5d0b528-6821-4b2f-95c1-1adfb60720c6&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11013,6 +11013,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - client_id は FAPI1_PrivateKeyJwt_Client
 - code_challenge_method は S256
 - code_challenge が付く
+- response_mode は jwt（JARM）
 - 結果の画面が返る（エラー画面にならない）
 - access_token が出る（トークン要求が通った）
 - id_token が出る
@@ -12453,6 +12454,47 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 401
 - invalid_client
 
+## RT-381.1 fapi1 の登録は、JARM でない認可要求（response_mode 無し・query）を invalid_request で断り（クエリ・PAR とも）、JARM の要求には code を返す。fapi1 でない登録は従来どおり
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は、認可サーバが「code id_token、または code と response_mode=jwt の組」を求めることを求める。****MPAS は fapi1 に Hybrid を許さないので、code ＋ JARM だけを受ける。****以前は fapi1 の素の code（クエリ）に code を返していた**（適合性テストの ensure-response-type-code-fails・ensure-response-mode-query）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2 / JARM §2.3 / #381 |
+| テスト | `RT38101_fapi1の登録はJARMの認可要求だけを受ける` |
+
+**手順**
+
+1. fapi1・response_mode 無し（クエリ）は、invalid_request を RP へ返す
+1. fapi1・response_mode=query は、invalid_request を RP へ返す
+1. fapi1・JARM（jwt・query.jwt・fragment.jwt・大文字の JWT）は、code を返す
+1. fapi1・response_mode 無し（PAR）は、400 ＋ invalid_request。jwt なら 201
+1. 対照：fapi1 でない登録・response_mode 無しは、従来どおり code をクエリで返す
+
+**検証（合否を判定する）**
+
+- response_mode 無し : error
+- response_mode 無し : 断る理由は JARM
+- response_mode 無し : code を返さない
+- response_mode=query : error
+- response_mode=query : 断る理由は JARM
+- response_mode=query : code を返さない
+- response_mode=jwt : code を URL に直接載せず、JARM の response で返す
+- response_mode=jwt : response の中に code が在る
+- response_mode=query.jwt : code を URL に直接載せず、JARM の response で返す
+- response_mode=query.jwt : response の中に code が在る
+- response_mode=fragment.jwt : code を URL に直接載せず、JARM の response で返す
+- response_mode=fragment.jwt : response の中に code が在る
+- response_mode=JWT : code を URL に直接載せず、JARM の response で返す
+- response_mode=JWT : response の中に code が在る
+- PAR・response_mode 無し : HTTP 400
+- PAR・response_mode 無し : invalid_request
+- PAR・response_mode=jwt : HTTP 201
+- normal : code が返る
+
+**補足**
+
+- **fapi1 の Hybrid（code id_token）は、この確かめより前に `ClientModePolicy` が `unauthorized_client` で断る**（`FA-1.4`）。
+
 ## RT-382.1 fapi1 の登録の openid の認可要求は、nonce が無ければ invalid_request で断る（クエリ・PAR とも）。openid を含まない要求・fapi1 でない登録は従来どおり
 
 | | |
@@ -12472,10 +12514,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - error
+- クエリ : 断る理由は nonce
 - code を返さない
 - fapi1・nonce 在り : code が返る
 - PAR : HTTP 400
 - PAR : invalid_request
+- PAR : 断る理由は nonce
 - fapi1・openid 無し : code が返る
 - normal・nonce 無し : code が返る
 

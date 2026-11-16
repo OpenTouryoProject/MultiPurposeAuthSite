@@ -44,6 +44,7 @@
 //*  2026/11/13  玄人 幸道         Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証する。FAPI の登録は PS256・ES256 に限る（#370）
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、PAR の口の URL も受ける（RFC 9126 §2。#371）
 //*  2026/11/15  玄人 幸道         CIBA の署名した要求の検証鍵を、ヘッダの alg（PS256・ES256）と登録の鍵から選ぶ SelectCibaVerifyingJws を足した（#395）
+//*  2026/11/17  玄人 幸道         PAR の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -681,6 +682,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 out string _, out string error, out string errorDescription,
                 (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
                 (string)payload[OAuth2AndOIDCConst.code_challenge_method] ?? "",
+                (string)payload[OAuth2AndOIDCConst.response_mode] ?? "",
                 (string)payload[OAuth2AndOIDCConst.prompt] ?? "",
                 true, signedRequestObject))
             {

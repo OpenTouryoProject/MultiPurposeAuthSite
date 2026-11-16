@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/16  玄人 幸道         新規（#382）
+//*  2026/11/17  玄人 幸道         fapi1 の要求を JARM にし、断る理由が nonce であることも確かめる（fapi1 は JARM の要求だけを受けるようになった。#381）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -53,6 +54,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-382.1`** | **fapi1 の登録の `openid` の要求は、`nonce` が無ければ `invalid_request`**（クエリは RP へ返す。PAR は `400`）。`nonce` が在れば通る。**`openid` を含まない要求・fapi1 でない登録は従来どおり** |
     ///
     /// **fapi2 は `nonce` を求めない**（FAPI 2.0 Security Profile）ので、変えていない。
+    ///
+    /// **fapi1 の要求は JARM（`response_mode=jwt`）で送る**（fapi1 の登録は JARM の要求だけを受ける。#381）。
+    /// **JARM を付けないと、`nonce` より先に JARM の確かめで断られる**ので、**断る理由が `nonce` であることも `error_description` で確かめる。**
     /// </remarks>
     public class Fapi1NonceTests : TargetTestBase
     {
@@ -86,17 +90,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) fapi1・openid・nonce 無し（クエリ）は、invalid_request を RP へ返す");
 
-                AuthZResponse noNonce = await Flows.AuthorizeCodeAsync(
-                    client, fapi1, "openid", "state-rt3821-1", nonce: null, redirectUri: fapi1.RedirectUri);
+                AuthZResponse noNonce = (await Flows.AuthorizeCodeAsync(
+                    client, fapi1, "openid", "state-rt3821-1", nonce: null, redirectUri: fapi1.RedirectUri,
+                    extra: Flows.WithJarm())).Unwrap();
 
                 r.VerifyEqual("error", "invalid_request", noNonce.Error ?? "（無い）");
+                Fapi1NonceTests.VerifyReasonIsNonce(r, "クエリ", noNonce.ErrorDescription);
                 r.Verify("code を返さない", string.IsNullOrEmpty(noNonce.Code),
                     "返さない", string.IsNullOrEmpty(noNonce.Code) ? "返さなかった" : "**返した**");
 
                 r.Step("(2) 対照：fapi1・openid・nonce 在り（クエリ）は、code を返す");
 
-                AuthZResponse withNonce = await Flows.AuthorizeCodeAsync(
-                    client, fapi1, "openid", "state-rt3821-2", "nonce-rt3821-2", fapi1.RedirectUri);
+                AuthZResponse withNonce = (await Flows.AuthorizeCodeAsync(
+                    client, fapi1, "openid", "state-rt3821-2", "nonce-rt3821-2", fapi1.RedirectUri,
+                    Flows.WithJarm())).Unwrap();
 
                 Fapi1NonceTests.VerifyCode(r, "fapi1・nonce 在り", withNonce);
 
@@ -106,11 +113,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.VerifyEqual("PAR : HTTP 400", "400", ((int)par.StatusCode).ToString());
                 r.VerifyEqual("PAR : invalid_request", "invalid_request", par.Error ?? "（無い）");
+                Fapi1NonceTests.VerifyReasonIsNonce(r, "PAR", par.String("error_description"));
 
                 r.Step("(4) fapi1・openid を含まない要求は、nonce 無しでも nonce では断らない");
 
-                AuthZResponse noOpenid = await Flows.AuthorizeCodeAsync(
-                    client, fapi1, "profile", "state-rt3821-4", nonce: null, redirectUri: fapi1.RedirectUri);
+                AuthZResponse noOpenid = (await Flows.AuthorizeCodeAsync(
+                    client, fapi1, "profile", "state-rt3821-4", nonce: null, redirectUri: fapi1.RedirectUri,
+                    extra: Flows.WithJarm())).Unwrap();
 
                 Fapi1NonceTests.VerifyCode(r, "fapi1・openid 無し", noOpenid);
 
@@ -140,7 +149,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     : "**error=" + (authz.Error ?? "なし") + "（" + (authz.ErrorDescription ?? "") + "）**");
         }
 
-        /// <summary>fapi1 の登録（client_secret_basic）で、nonce の無い要求を PAR に預ける（S256 の PKCE は付ける。#383）</summary>
+        /// <summary>断る理由が nonce であることを確かめる（JARM の確かめで先に断られていないこと。#381）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">どの経路か</param>
+        /// <param name="description">error_description</param>
+        private static void VerifyReasonIsNonce(TestReport r, string label, string description)
+        {
+            bool isNonce = !string.IsNullOrEmpty(description) && description.Contains("nonce");
+
+            r.Verify(label + " : 断る理由は nonce", isNonce,
+                "nonce", isNonce ? "nonce" : "**" + (description ?? "（無い）") + "**");
+        }
+
+        /// <summary>fapi1 の登録（client_secret_basic）で、nonce の無い要求を PAR に預ける（S256 の PKCE と JARM は付ける。#383・#381）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="reg">クライアント</param>
         /// <returns>応答</returns>
@@ -157,6 +178,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 { "redirect_uri", reg.RedirectUri },
                 { "scope", "openid" },
                 { "state", "state-rt3821-3" },
+                { "response_mode", "jwt" },
                 { "code_challenge", "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" },
                 { "code_challenge_method", "S256" }
             }, reg.ClientId, reg.ClientSecret);
