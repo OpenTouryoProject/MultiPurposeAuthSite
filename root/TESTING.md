@@ -1407,6 +1407,23 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
 
+##### fapi1 の登録の PAR では、S256 の PKCE を必須にする（`RT-383.*`。#383）
+
+| | 測ること |
+|---|---|
+| **`RT-383.1`** | **fapi1 の登録の `/par` は、S256 だけを受け、plain・`code_challenge_method` の省略・PKCE 無しを `400` ＋ `invalid_request` で断る**（FAPI 1.0 Advanced §5.2.2 の 18）。**S256 で預けた `request_uri` は、認可の口で読み直しても断られない**（`pushed` の経路） |
+| **`RT-383.2`** | **PAR を使わない fapi1 の要求（`/authorize` のクエリ）は、従来どおり PKCE 無しでも断らない**（原典は PAR の要求だけ。#383 の決め） |
+
+- **判定は #366 と同じ `CmnEndpoints.ValidateAuthZReqParam`**。**`pushed`（`/par` と、`/authorize` で預けた要求を読むとき）で、fapi1 の登録なら fapi2 と同じ式に入れる**
+- **以前は、秘密や鍵で認証する fapi1 は、PAR に PKCE 無し・plain で預けても code を引き換えられた**（公開クライアントは `/token` で S256 以外を `ClientModePolicy` が断っていた）
+- 直す前は、`RT-383.1` の plain の PAR が `201` で受けられた（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi1 の登録の、`request`（JAR）・`private_key_jwt` での PAR** | 判定は認証の方法や `request` の有無によらない（同じ `ValidateAuthZReqParam`）。適合性テストの FAPI 1.0 Advanced（`private_key_jwt`・PAR・`jarm`）が測る |
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |

@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=7bc1772c-7c6d-466a-baf4-207d9b2461fb&code=bogus
+1. GET /Account/EmailConfirmation?userId=62e2d9ae-821f-4f21-916c-e1d4e4cc0266&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=7bc1772c-7c6d-466a-baf4-207d9b2461fb&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=7bc1772c-7c6d-466a-baf4-207d9b2461fb&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=62e2d9ae-821f-4f21-916c-e1d4e4cc0266&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=62e2d9ae-821f-4f21-916c-e1d4e4cc0266&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12452,6 +12452,52 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-383.1 fapi1 の登録の /par は、S256 の PKCE だけを受け、plain・code_challenge_method の省略・PKCE 無しを invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は、認可サーバに「PAR の要求には S256 の PKCE を求める」ことを求める。****code_challenge_method を省くと plain の扱い**（RFC 7636 §4.3）なので、これも断る。**以前は fapi1 の登録の PAR が、PKCE 無し・plain でも受けていた**（適合性テストの par-ensure-pkce-required・par-plain-pkce-rejected）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2 / RFC 7636 §4.3 / RFC 7636 §4.4.1 / #383 |
+| テスト | `RT38301_fapi1の登録のPARはS256のPKCEだけを受ける` |
+
+**手順**
+
+1. S256 で預ける（受ける）
+1. (1') その request_uri で認可の口へ行く（預けた要求を読み直しても断られない）
+1. plain で預ける
+1. code_challenge_method を省く（plain の扱い）
+1. PKCE を使わない
+
+**検証（合否を判定する）**
+
+- S256 : HTTP 201
+- 認可の口で断られない（同意画面か code）
+- plain : HTTP 400
+- plain : invalid_request
+- plain : request_uri を返さない
+- code_challenge_method の省略 : HTTP 400
+- code_challenge_method の省略 : invalid_request
+- code_challenge_method の省略 : request_uri を返さない
+- PKCE 無し : HTTP 400
+- PKCE 無し : invalid_request
+- PKCE 無し : request_uri を返さない
+
+## RT-383.2 PAR を使わない fapi1 の登録の要求（/authorize のクエリ）は、従来どおり PKCE 無しでも断らない
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced §5.2.2 の 18 が S256 の PKCE を求めるのは、PAR の要求だけ。****PAR を使わない fapi1 の RP を壊さない**（#383 の決め。fapi2 は #366 で全要求に必須）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2 / #383 |
+| テスト | `RT38302_PARを使わないfapi1の要求は従来どおり` |
+
+**手順**
+
+1. PKCE を付けずに、クエリで認可要求を送る
+
+**検証（合否を判定する）**
+
+- code が返る（PKCE 無しで断らない）
 
 ## RT-384.1 **FAPI の登録（fapi1）のトークンの /userinfo は、要求の x-fapi-interaction-id（UUID）をそのまま返し、無い・UUID の形でないときは新しい UUID を返す。FAPI でない登録・検証できないトークンには付けない**
 

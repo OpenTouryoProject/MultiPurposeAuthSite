@@ -37,6 +37,7 @@
 //*  2026/11/11  玄人 幸道         受け付ける response_type（Discovery）に id_token 単独を載せた（#360）
 //*  2026/11/11  玄人 幸道         response_type=code token では nonce を必須にしない（OIDC Core 1.0 §3.3.2.1。#361）
 //*  2026/11/13  玄人 幸道         fapi2 の登録では PKCE を必須にし、S256 に限る。RequirePkceS256 でも認可要求で plain を断る（FAPI 2.0 Security Profile §5.3.2.2。#366）
+//*  2026/11/16  玄人 幸道         fapi1 の登録の PAR の要求でも、S256 の PKCE を必須にした（FAPI 1.0 Advanced §5.2.2 の 18。#383）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -168,8 +169,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 判定そのもの（順序・エラー コード）は ValidateAuthZReqParamCore のまま変えない。
         /// ここで足すのは、**失敗したときの返し先**だけ。
         ///
-        /// code_challenge は、PKCE を必須にしたとき（Config.RequirePkce・登録の require_pkce・fapi2 の登録）だけ見る（#220・#366）。
-        /// code_challenge_method は、S256 に限るとき（RequirePkceS256・fapi2 の登録）だけ見る（#366）。
+        /// code_challenge は、PKCE を必須にしたとき（Config.RequirePkce・登録の require_pkce・fapi2 の登録・fapi1 の登録の PAR）だけ見る（#220・#366・#383）。
+        /// code_challenge_method は、S256 に限るとき（RequirePkceS256・fapi2 の登録・fapi1 の登録の PAR）だけ見る（#366・#383）。
         /// 既定では、渡さなくても従来どおり動く。
         ///
         /// **`pushed`・`signedRequestObject` は、要求がどの経路で来たか**（#346）。
@@ -465,12 +466,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   （FAPI 2.0 Security Profile §5.3.2.2 の 5「shall require PKCE with S256」。#366）。
                 //   **以前は、方式を絞るのはサーバ全体の RequirePkceS256 だけで、それも /token で見ていた**ので、
                 //   **plain で預けた要求にも code を出していた**（適合性テストの par-plain-pkce-rejected）。
-                bool isFapi2 = Helper.GetInstance().GetClientMode(client_id)
-                    == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+                string clientMode = Helper.GetInstance().GetClientMode(client_id);
+
+                bool isFapi2 = clientMode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+
+                // **fapi1 の登録の PAR の要求も、S256 の PKCE を必須にする**
+                //   （FAPI 1.0 Advanced §5.2.2 の 18「shall require PAR requests ... to use PKCE with S256」。#383）。
+                //   **PAR に預けた要求だけ**（pushed。/par と、/authorize で預けた要求を読むときの両方）。
+                //   **PAR を使わない fapi1 の要求は、従来どおり**（原典は PAR の要求だけを求める。#383 の決め）。
+                bool isFapi1Par = pushed
+                    && clientMode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit();
 
                 bool requirePkce = Config.RequirePkce
                     || Helper.GetInstance().GetClientRequirePkce(client_id)
-                    || isFapi2;
+                    || isFapi2
+                    || isFapi1Par;
 
                 bool issuesCode = response_type.ToLower().Split(' ').Any(
                     x => x == OAuth2AndOIDCConst.AuthorizationCodeResponseType);
@@ -484,13 +494,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
-                // **PKCE を使うなら、S256 に限る**（サーバ全体の RequirePkceS256 か、fapi2 の登録。#366）。
+                // **PKCE を使うなら、S256 に限る**（サーバ全体の RequirePkceS256 か、fapi2 の登録。#366。fapi1 の登録の PAR。#383）。
                 //   **PKCE を使うかどうかは、上の requirePkce で決まる**（RequirePkceS256 だけの配備は、PKCE 無しを通す。従来どおり）。
                 //   **使えない code を出さずに、認可要求の時点で断る**（RFC 7636 §4.4.1 の invalid_request）。
                 //   **code_challenge_method の省略は plain の扱い**（RFC 7636 §4.3）なので、これも断る。
                 //   **値は大文字小文字を区別する**（RFC 7636 §4.2 の S256）。
                 //   ※ /token の照合（VerifyPkce）は変えない。RequirePkceS256 では、そこでも plain を断る。
-                if ((CmnServerParams.RequirePkceS256 || isFapi2)
+                if ((CmnServerParams.RequirePkceS256 || isFapi2 || isFapi1Par)
                     && issuesCode
                     && !string.IsNullOrEmpty(code_challenge)
                     && !string.Equals(code_challenge_method, OAuth2AndOIDCConst.PKCE_S256, StringComparison.Ordinal))
