@@ -35,6 +35,7 @@
 //*  2026/10/31  玄人 幸道         TokenProviders から Extensions/Sts へ移した（配置の見直し。#294）
 //*  2026/11/13  玄人 幸道         JARM の署名を、登録の authorization_signed_response_alg（既定は RS256）と SigningKeys の鍵で行う（#370）
 //*  2026/11/14  玄人 幸道         JARM の既定の alg のコメントを、FAPI の登録は ES256 に合わせた（#394）
+//*  2026/11/17  玄人 幸道         値の無いパラメタ（null・空文字）を JWT に入れないようにした（"state": null を出さない。#378）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -73,6 +74,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// **呼び出しは `AccountController.CreateAuthorizationResponse` の 1 か所**（両版。#294）で、
         /// **照合済みの `redirect_uri` へ返すときだけ**通る（`client_id` は確かめ済み）。
+        ///
+        /// **値の無いパラメタ（null・空文字）は、JWT に入れない**（#378）。
+        /// **呼び出し側は、要求に無かった `state` も null のまま辞書に入れる**（成功・エラーとも）。
+        /// **以前はそのまま `"state": null` として JWT に載っていた**（`state` は要求に在ったときだけ返す文字列。RFC 6749 §4.1.2・JARM §2.1.1）。
+        /// **クエリ・フラグメントの経路（Open棟梁 の `OAuth2AndOIDCSpec.BuildRedirectUrl`）も、値の無いパラメタを省く**ので、それと揃える。
         /// </remarks>
         public static string Create(
             Dictionary<string, string> responseDictionary,
@@ -84,8 +90,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     "JARM requires aud (client_id). JARM 2.1");
             }
 
+            Dictionary<string, string> parameters = new Dictionary<string, string>();
+
+            if (responseDictionary != null)
+            {
+                foreach (KeyValuePair<string, string> kv in responseDictionary)
+                {
+                    if (!string.IsNullOrEmpty(kv.Value))
+                    {
+                        parameters[kv.Key] = kv.Value;
+                    }
+                }
+            }
+
             return ResponseObject.Create(
-                responseDictionary, CmnResponseObject.CreateJws(clientId),
+                parameters, CmnResponseObject.CreateJws(clientId),
                 CmnServerParams.IssuerId, clientId, expiresUtc);
         }
 

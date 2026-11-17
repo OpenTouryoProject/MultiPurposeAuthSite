@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=b1481f8e-cd7d-44ce-b6ca-5dd3e88f8fb4&code=bogus
+1. GET /Account/EmailConfirmation?userId=0703d59a-0cb9-46db-bc2c-30f21b17b183&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=b1481f8e-cd7d-44ce-b6ca-5dd3e88f8fb4&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=b1481f8e-cd7d-44ce-b6ca-5dd3e88f8fb4&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=0703d59a-0cb9-46db-bc2c-30f21b17b183&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=0703d59a-0cb9-46db-bc2c-30f21b17b183&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12453,6 +12453,28 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-378.1 state を送らない認可要求の JARM（response の JWT）には、成功・エラーとも state の名前を入れない。state を送れば、その値が入る
+
+| | |
+|---|---|
+| 観点 | **state は要求に在ったときだけ返す文字列である。****以前は、要求に無い state が "state": null として JWT に載り、型を確かめる RP（適合性テスト）が応答を断っていた。****クエリの応答では値の無いパラメタを省いていたので、JARM だけで起きていた。** |
+| 根拠 | RFC 6749 §4.1.2 / RFC 6749 §4.1.2.1 / JARM §2.1.1 / #378 |
+| テスト | `RT37801_stateを送らない要求のJARMにstateを入れない` |
+
+**手順**
+
+1. state を送らずに要求する（成功の応答）
+1. state を送らずに、エラーになる要求をする（prompt=none login。エラーの応答）
+1. 対照：state を送れば、その値が JWT に入る
+
+**検証（合否を判定する）**
+
+- 成功 : code が在る
+- 成功 : JWT に state の名前が無い（"state": null も出さない）
+- エラー : error が在る
+- エラー : JWT に state の名前が無い（"state": null も出さない）
+- state を送ったとき : state
 
 ## RT-380.1 PAR に預ける Request Object の中に request_uri が在れば、400 ＋ invalid_request_object で断る。無ければ 201。フォームの request_uri は従来どおり invalid_request
 

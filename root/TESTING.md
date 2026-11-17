@@ -1407,6 +1407,23 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
 
+##### `state` を送らない要求の JARM には、`state` を入れない（`RT-378.*`。#378）
+
+| | 測ること |
+|---|---|
+| **`RT-378.1`** | **`state` 無しの要求の JARM（`response` の JWT）に、`state` の名前が無い**（成功の応答・エラーの応答（`prompt=none login`）とも。`"state": null` も出さない）。**`state` を送れば、その値が入る** |
+
+- **直したのは `CmnResponseObject.Create`**（両版の JARM の唯一の入口）。**値の無いパラメタ（null・空文字）を JWT に入れない**
+- **呼び出し側（両版の `AccountController.Authorize`）は、要求に無い `state` も null のまま辞書に入れる**（成功・エラーとも）。**クエリ・フラグメントの経路（Open棟梁 の `BuildRedirectUrl`）は値の無いパラメタを省くので、JARM だけで起きていた**
+- **JWT の中の名前は、`AuthZResponse.Unwrap()` の `Parameters` で見る**（JSON の null は文字列の `null` になるので、名前の有無で確かめる）
+- 直す前は、(1) の JWT に `"state": null` が在った（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **空の `state`（`state=`）を送った要求** | 値の無いパラメタとして省く。**クエリの経路（`BuildRedirectUrl` の `IsNullOrEmpty`）と同じ扱い**で、JARM とクエリの振る舞いが揃う |
+
 ##### PAR の Request Object の中の `request_uri` を断る（`RT-380.*`。#380）
 
 | | 測ること |
