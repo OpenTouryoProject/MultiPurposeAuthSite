@@ -24,6 +24,7 @@
 //*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
 //*  2026/11/14  玄人 幸道         SAML2 の ID 連携の要求に、上流の SSO の口を Destination として渡す（#391）
 //*  2026/11/17  玄人 幸道         SAML2 の ID 連携は、応答の Audience を自分の entityID（要求の Issuer）と照合する（OpenTouryo#693 の版。#389）
+//*  2026/11/17  玄人 幸道         SAML2 の ID 連携の要求を、上流の SSO の口のクエリに足す形でつなぐ（SAML Bindings §3.4.4.1。#393）
 //**********************************************************************************
 
 /*
@@ -816,7 +817,8 @@ namespace MultiPurposeAuthSite.Controllers
             // **応答の InResponseTo と照合する**（#276 と同じ）。
             HttpContext.Session.SetString(Const.IdFederationSaml2RequestId, id);
 
-            return Redirect(ssoUrl + "?" + queryString);
+            // **上流の SSO の口がクエリを持っていれば & でつなぐ**（SAML Bindings §3.4.4.1。#393）。
+            return Redirect(SamlProviders.CmnSaml2Response.AppendQuery(ssoUrl, queryString));
         }
 
         /// <summary>

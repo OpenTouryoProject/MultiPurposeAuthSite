@@ -1255,6 +1255,23 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **fapi2 の登録の access_token・JARM** | 同じ関数で決まる（fapi1 で代表させた）。fapi2 のトークンは PAR・DPoP・private_key_jwt が要り、id_token は暗号化している（中の JWS は以前から ES256。`RT-352.1`） |
 | **logout_token** | 同じ `GetIdTokenSignedResponseAlg` で決まる。ログアウトの E2E はテストのクライアント（normal）で測る |
 
+##### Redirect Binding の送り先がクエリを持っていれば、`&` でつなぐ（単体テスト `AppendQueryTests`。#393）
+
+| | 測ること |
+|---|---|
+| **`Tests/UnitTests/Saml/AppendQueryTests.cs`** | **`CmnSaml2Response.AppendQuery`**：クエリを持たない送り先には `?`、持つ送り先には `&` でつなぐ（SAML Bindings §3.4.4.1 の 4）。`?`・`&` で終わる送り先には区切りを重ねない。足すものが空なら送り先のまま |
+
+- **使うのは 2 か所**：SAML2 の ID 連携の要求（上流の SSO の口。両版の `AccountController.IdFederation`）と、IdP の役の Redirect Binding の応答（SP の登録済みの ACS URL。両版の `AccountController.Saml2`）。**以前はどちらも常に `?` でつないでいた**
+- **E2E では測れない**（E2E の上流の SSO の口も、種データの ACS URL も、クエリを持たない）ので、組み立てを単体テストで確かめる
+- **自己テストの SP（`HomeController.Saml2`）は変えていない**（送り先は自サイトの `Saml2RequestEndpoint` で、設定の口のパスはクエリを持たない）
+- **直したのを外すと**（常に `?` でつなぐと）、`AppendQueryTests` の 3 件が落ちることを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
+
 ##### SAML2 の応答の `Audience` は SP の entityID（`RT-389.*`。#389）
 
 | | 測ること |

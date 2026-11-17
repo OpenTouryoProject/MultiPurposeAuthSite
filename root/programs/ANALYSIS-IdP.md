@@ -3590,6 +3590,7 @@ Open棟梁 の `RequestObject.Verify` がクレームを確かめていなかっ
 
 - **`destination` を受ける版に替えた**（自己テストは `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint`、ID 連携は上流の SSO の口。`RT-391.1`・`SA-6.1`）
 - **MPAS の IdP の側の照合は #392（C-63）**。**応答の `Audience` を SP の entityID にするのは #389**
+- **✅ #393：Redirect Binding の送り先がクエリを持っていると、`?` が 2 つになっていた**（ID 連携の要求の上流の SSO の口と、IdP の役の応答の SP の ACS URL。**`CmnSaml2Response.AppendQuery` で、クエリを持つ送り先には `&` でつなぐ**。SAML Bindings §3.4.4.1。単体テスト `AppendQueryTests`）
 
 ### C-62. SAML2 の応答に、要求の `ID` と利用者のメアドを、形を確かめずに入れていた **[Lib][Core][NetFx]** — **✅ 修正済み（#390）**
 

@@ -19,6 +19,7 @@
 //*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を SelfTest.cs へ移した（#294）
 //*  2026/10/29  玄人 幸道         Redirect Binding の署名の対象を、受け取ったままのクエリにした（#294）
 //*  2026/11/16  玄人 幸道         Destination が合わない要求を、エラー画面で捨てるようにした（#392）
+//*  2026/11/17  玄人 幸道         Redirect Binding の応答を、ACS URL のクエリに足す形でつなぐ（SAML Bindings §3.4.4.1。#393）
 //**********************************************************************************
 
 /*
@@ -191,8 +192,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (protocolBinding == SAML2Enum.ProtocolBinding.HttpRedirect)
             {
-                // Redirect
-                return Redirect(rtnUrl + "?" + queryString);
+                // Redirect（**登録済みの ACS URL がクエリを持っていれば & でつなぐ**。SAML Bindings §3.4.4.1。#393）
+                return Redirect(SamlProviders.CmnSaml2Response.AppendQuery(rtnUrl, queryString));
             }
             else if (protocolBinding == SAML2Enum.ProtocolBinding.HttpPost)
             {
