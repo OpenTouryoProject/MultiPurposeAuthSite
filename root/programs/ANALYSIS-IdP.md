@@ -2782,6 +2782,8 @@ else
 **対応（#286 の段階 5）。** **判定を `CommonLibrary` に置き**（**`Extensions.Sts.IdTokenAudience`**）、
 **両アプリの `IDFederationRedirectEndPoint` で、`IdToken.Verify` の直後に確認する。**
 
+**✅ #358：上流の鍵が決まらなければ断る。** **以前は、上流の鍵（期待する `issuer` ＋ `jwks_uri` か証明書）が決まらないと、鍵を指定しない `IdToken.Verify`（この配備の設定の鍵と `SpRp_Issuer`）に進んでいた**（1:1 のテスト構成の名残）。通るのは上流と下流が同じ鍵を持つ構成のときだけで、**設定漏れが「鍵が合わない」として現れていた**。いまは理由をログに残して断る（`RT-358.1`）。**`aud` の確認（`IdTokenAudience`）は残す**（鍵を指定する版の照合に重ねる）。
+
 | | |
 |---|---|
 | 期待値 | **`OAuth2AndOIDCParams.ClientID`**（**開始処理が `client_id` に使った値**と同じもの） |

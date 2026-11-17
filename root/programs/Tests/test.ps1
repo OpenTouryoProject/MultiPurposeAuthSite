@@ -623,6 +623,15 @@ $script:IdFederationClients = @{
     }
 }
 
+# **テストにも、下流ごとのクライアントを渡す**（#358。RT-358.1 が、管理画面で同じクライアントの上流の行を足すため）。
+#   **サイトの OAuth2AndOidcClientID は、後から起動した版の値で上書きされる**ので、下流ごとの名前で置く。
+#   **値はテスト専用**（上流の登録は container\E2E\docker-compose.yml）。
+foreach ($k in $script:IdFederationClients.Keys)
+{
+    [Environment]::SetEnvironmentVariable('E2E_IdFederationClientId_' + $k, $script:IdFederationClients[$k].ClientId, 'Process')
+    [Environment]::SetEnvironmentVariable('E2E_IdFederationClientSecret_' + $k, $script:IdFederationClients[$k].Secret, 'Process')
+}
+
 <#
 .SYNOPSIS
     ID フェデレーションの下流として振る舞う設定を、環境変数に置く（#250 の段階 5）。

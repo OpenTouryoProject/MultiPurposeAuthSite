@@ -3657,7 +3657,7 @@ ALTER TABLE CibaData ADD COLUMN ClientID varchar(256) NULL;
 > |---|---|
 > | `JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` | **キー名と値は変えていない。** 読む場所が `Config` になった。**Open棟梁 は相手の口を `SpRp_JwkSetUri` などで読み、このキーを読まなくなった**（OpenTouryo#666） |
 > | `RsaCerFilePath` / `EcdsaCerFilePath` / `Ecdsa384CerFilePath` / `Ecdsa512CerFilePath` | **足した**（空なら `SpRp_*CerFilePath`） |
-> | `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` | **クライアント役の値として残る**（Open棟梁 の `IdToken.Verify` の鍵を指定しない版・SAML2 の応答の検証） |
+> | `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` | **クライアント役の値として残る**（SAML2 の応答の検証など。**ID 連携の上流の id_token の検証には使わない**：上流の鍵が決まらなければ断る。#358） |
 > | `SpRp_Ecdsa384CerFilePath` / `SpRp_Ecdsa512CerFilePath` | **雛形から外した**（読むのは、サーバ側のキーが空のときだけ） |
 >
 > **本当に足りなかった「上流（相手）の値」は、`IdFederation*` のキーが持つ**（#286 / #289 / #291 で揃えた）。

@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=37a2d270-7a39-4643-af0d-0fd1e9d35a8d&code=bogus
+1. GET /Account/EmailConfirmation?userId=8fa7e355-ac53-4cb3-81c4-61a95fbcca8e&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=37a2d270-7a39-4643-af0d-0fd1e9d35a8d&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=37a2d270-7a39-4643-af0d-0fd1e9d35a8d&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=8fa7e355-ac53-4cb3-81c4-61a95fbcca8e&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=8fa7e355-ac53-4cb3-81c4-61a95fbcca8e&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -11511,6 +11511,25 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **登録が無い fapi2 のクライアントでは、中の JWS は ES256 のまま**（`RT-352.1`）。**暗号化しない側の既定（RS256）には倒さない**（FAPI 2.0 Security Profile §5.4.1 は RS256 を認めない）。
+
+## RT-358.1 **上流の鍵（issuer ＋ jwks_uri か証明書）を決められない OIDC の上流で ID 連携すると、上流が認可コードを返しても、下流にはサインインさせない**
+
+| | |
+|---|---|
+| 観点 | **上流の鍵が決まらなければ、id_token を検証できないので断る。****以前は、この配備の設定の鍵で検証する版に進んでいた**（1:1 のテスト構成の名残。上流と下流が同じ鍵を持つ構成でだけ通った）。**直す前も、上流の鍵が違うので落ちていた**（理由の違いはサイトのログにしか出ない）。**「通す」側に戻らないことを測る。** |
+| 根拠 | OIDC Core 1.0 §3.1.3.7 / #358 |
+| テスト | `RT35801_上流の鍵が決まらないID連携はサインインさせない` |
+
+**手順**
+
+1. 管理画面で、issuer・jwks_uri・discovery・証明書の無い OIDC の上流の行を足す
+1. 上流でサインインしておき、下流でその上流を選んで ID 連携する
+1. 下流は、上流の鍵が決まらないので id_token を受けず、サインインさせない
+
+**検証（合否を判定する）**
+
+- 上流は認可コードを返す（上流の行の口とクライアントは正しい）
+- 下流にサインインしていない
 
 ## RT-359.1 未サインインで POST の認可要求を送ると、GET の認可要求へ送り返され、サインインの後も元の要求のパラメタで続く
 

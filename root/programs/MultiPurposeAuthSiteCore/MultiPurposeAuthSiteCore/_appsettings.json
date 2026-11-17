@@ -797,7 +797,7 @@
     //   （以前は SpRp_Isser。改名前の名前も読む。OpenTouryo#666）
     "SpRp_Issuer": "https://ssoauth.opentouryo.com",
     // 相手の Token・SAML2 の応答の検証用（自己テストでは相手が自分なので、自分の証明書を指す）。
-    //   ID 連携で上流の鍵が決まらないとき（1:1 の構成の名残）の検証にも使う（期待する iss は SpRp_Issuer）。
+    //   **ID 連携の上流の id_token の検証には使わない**（上流の鍵が決まらなければ断る。#358。以前は 1:1 の構成の名残として使っていた）。
     //   **この認可サーバ自身の証明書は、上の RsaCerFilePath ほか**（以前はここを読んでいた。空なら今も読む。#339）
     "SpRp_RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
     "SpRp_EcdsaCerFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.cer",

@@ -25,6 +25,7 @@
 //*  2026/11/14  玄人 幸道         SAML2 の ID 連携の要求に、上流の SSO の口を Destination として渡す（#391）
 //*  2026/11/17  玄人 幸道         SAML2 の ID 連携は、応答の Audience を自分の entityID（要求の Issuer）と照合する（OpenTouryo#693 の版。#389）
 //*  2026/11/17  玄人 幸道         SAML2 の ID 連携の要求を、上流の SSO の口のクエリに足す形でつなぐ（SAML Bindings §3.4.4.1。#393）
+//*  2026/11/17  玄人 幸道         OIDC の ID 連携で上流の鍵が決まらなければ断る（鍵を指定しない IdToken.Verify に進まない。1:1 の構成の名残をなくした。#358）
 //**********************************************************************************
 
 /*
@@ -298,9 +299,9 @@ namespace MultiPurposeAuthSite.Controllers
                         //   |---|---|---|---|
                         //   | 1 | 上流の JWK Set を kid で引く（ロールオーバーに追随。#289 / #290） | jwk_set_uri、無ければ discovery_url → jwks_uri | IdFederationJwkSetUri、無ければ IdFederationOidcDiscoveryUrl → jwks_uri |
                         //   | 2 | 上流の証明書（1 が引けなかったときの受け皿） | cer_file_path | IdFederationOidcCerFilePath |
-                        //   | 3 | 渡さない（この配備の設定の鍵で検証する。下の if） | － | － |
+                        //   | 3 | **どちらも無ければ断る**（#358。以前は、この配備の設定の鍵で検証していた） | － | － |
                         //
-                        //   **期待する iss** は、n 件設定は issuer、1 件設定は SpRp_Issuer。**空なら 1・2 は使えない**（3 に進む）。
+                        //   **期待する iss** は、n 件設定は issuer、1 件設定は SpRp_Issuer。**空なら 1・2 は使えない**（断る）。
                         //   **自分の /jwkcerts（JwkSetUri）は、自分が発行するトークンの鍵を広告する口**で、ここでは使わない。
                         JWS upstreamKey = null;
 
@@ -321,50 +322,49 @@ namespace MultiPurposeAuthSite.Controllers
                             // **証明書だけ在って期待する `iss` が空**なら、渡せない。
                             //   iss に対応する証明書である確証がなく、
                             //   鍵を指定する版の IdToken.Verify は iss が空なら例外にする（OpenTouryo#601）。
-                            //   この後は、鍵を指定しない版に進む。**理由を残す**（#253）。
+                            //   **この後、断る**（#358）。**理由を残す**（#253）。
                             Logging.MyOperationTrace("The ID federation has a certificate but no expected issuer.");
                         }
                         else
                         {
-                            // iss も .cer も無い。鍵を指定しない版の IdToken.Verify に進む（1:1 の構成）。
-                            //   **理由を残す**（#253）。一般の OP ならこの後の検証で必ず落ちるので、
+                            // iss も .cer も無い。**この後、断る**（#358。以前は鍵を指定しない版の IdToken.Verify に進んでいた）。
+                            //   **理由を残す**（#253）。
                             //   **設定漏れ（issuer / cer_file_path、1 件設定では SpRp_Issuer / IdFederationOidcCerFilePath）と区別できるようにする。**
                             Logging.MyOperationTrace(
-                                "The ID federation has neither an expected issuer nor a certificate. (verified with the client settings)");
+                                "The ID federation has neither an expected issuer nor a certificate.");
                         }
 
-                        // **結果を控えておく**（#253）。**失敗したときに、どちらで落ちたかを残すため。**
-                        bool idTokenVerified = false;
-
+                        //  **上流の鍵が決まらなければ、断る**（#358）。
+                        //    **以前は、鍵を指定しない版の IdToken.Verify（この配備の設定の鍵と SpRp_Issuer）に進んでいた**（1:1 のテスト構成の名残）。
+                        //    **通るのは上流と下流が同じ鍵を持つ構成のときだけ**で、一般の上流では必ず落ち、**設定漏れが「鍵が合わない」として現れていた。**
+                        //    **理由は上の分岐で残している**（#253）。**期待する iss は在るのに鍵が引けない**（jwks_uri に届かない・kid が無い、証明書も無い）ときは、ここで残す。
                         if (upstreamKey == null)
                         {
-                            // 鍵を指定しない版（1:1のテスト構成の名残）
-                            //   上流の鍵ではなく、この配備の設定の鍵で検証するので、通るのは上流・下流が同じ鍵を持つ構成のときだけ。
-                            //   - 鍵：kid があれば、自分の JWK Set ファイル（JwkSetFilePath）から kid で引く。
-                            //         kid が無い・引けなければ CmnClientParams.RsaCerFilePath (SpRp_RsaCerFilePath) を使う。
-                            //   - iss：SpRp_Issuer
-                            //   **n 件設定でも、上流の鍵が決まらなければここに来る**（上の表の 3）。
-                            idTokenVerified = IdToken.Verify(
-                                id_token, access_token, code, state,
-                                out sub, out nonce, out jobj);
+                            if (!string.IsNullOrEmpty(upstream.Issuer))
+                            {
+                                Logging.MyOperationTrace(
+                                    "The ID federation could not determine the upstream key (no JWK for the id_token and no certificate).");
+                            }
+
+                            Logging.MyOperationTrace(
+                                "The id_token of the ID federation was not accepted. (the upstream key was not determined)");
+
+                            return View("Error");
                         }
-                        else
-                        {
-                            // 鍵を指定する版
-                            idTokenVerified = IdToken.Verify(
-                                id_token, access_token, code, state,
-                                upstreamKey, upstream.Issuer, upstream.ClientId,
-                                out sub, out nonce, out jobj);
-                        }
+
+                        // 鍵を指定する版（上流の鍵・期待する iss・aud）
+                        bool idTokenVerified = IdToken.Verify(
+                            id_token, access_token, code, state,
+                            upstreamKey, upstream.Issuer, upstream.ClientId,
+                            out sub, out nonce, out jobj);
 
                         bool nonceMatched =
                             (nonce == (string)HttpContext.Session.GetString(Const.IdFederationSigninNonce));
 
                         //  **`aud` は、呼び出し側でも確認する**（#286・#337）。
                         //    **以前は `IdToken.Verify` がこの配備では `aud` を見なかった**（OpenTouryo#601）。
-                        //    いまは、鍵を指定する版は `upstream.ClientId` を、鍵を指定しない版は設定の client_id のどれかを照合する（OpenTouryo#601・#603）。
-                        //    **鍵を指定しない版が見るのは設定の client_id**（1:1 の構成の値）で、この上流のクライアント ID とは限らないので、
-                        //    ここで `upstream.ClientId` と照合する（`IdTokenAudience`）。
+                        //    いまは、鍵を指定する版が `upstream.ClientId` を照合する（OpenTouryo#601・#603）。**ここでも重ねて照合する**（#358 で、鍵を指定しない版を使わなくなった後も残す。人と決めた）。
+                        //    **Open棟梁 の照合が将来変わっても、この上流のクライアント ID で照合することを、ここで保つ**（`IdTokenAudience`）。
                         //
                         //    **期待値は、開始処理が `client_id` に使った値**（自分のクライアント ID）。
                         bool audMatched =

@@ -1272,6 +1272,23 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### OIDC の ID 連携で、上流の鍵が決まらなければ断る（`RT-358.*`。#358）
+
+| | 測ること |
+|---|---|
+| **`RT-358.1`** | **管理画面で、`issuer`・`jwks_uri`・discovery・証明書の無い OIDC の上流の行を足し、その上流で ID 連携すると、上流は認可コードを返すが、下流にはサインインできない** |
+
+- **以前は、上流の鍵が決まらないと、鍵を指定しない `IdToken.Verify`（この配備の設定の鍵と `SpRp_Issuer`）に進んでいた**（1:1 のテスト構成の名残）。いまは理由をログに残して断る（両版の `AccountController.IdFederation`）
+- **上流のクライアントは、既定の上流と同じもの**（`test.ps1` が `E2E_IdFederationClientId_<core|netfx>`・`E2E_IdFederationClientSecret_<core|netfx>` で渡す。サイトの `OAuth2AndOidcClientID` は後から起動した版の値で上書きされるため）
+- **`aud` の確認（`IdTokenAudience`）は残した**（鍵を指定する版の照合に重ねる。人と決めた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **直す前に落ちること** | **`container/E2E` の上流は下流と別の鍵を使う**ので、直す前も鍵の検証で落ちていた（画面は同じエラー）。**断る理由の違いはサイトのログにしか出ず**、E2E はログを読めない。「通す」側に戻らないことだけを測る |
+| **期待する `issuer` は在るが、`jwks_uri` に届かず証明書も無い上流** | 同じ分岐（鍵が `null`）で断る。上流を止めずには作れない |
+
 ##### SAML2 の応答の `Audience` は SP の entityID（`RT-389.*`。#389）
 
 | | 測ること |
