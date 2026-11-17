@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=0867832d-f207-42df-a539-a08eaaea4026&code=bogus
+1. GET /Account/EmailConfirmation?userId=0debeefe-85f3-4781-824b-6805e6144838&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=0867832d-f207-42df-a539-a08eaaea4026&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=0867832d-f207-42df-a539-a08eaaea4026&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=0debeefe-85f3-4781-824b-6805e6144838&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=0debeefe-85f3-4781-824b-6805e6144838&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7305,18 +7305,18 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 500 にならない
 - code が返る
 
-## RT-294.54 **fapi2 以外の登録の client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**（配列は、500 にせず invalid_client で断る）
+## RT-294.54 **fapi2 以外の登録の client_assertion の aud も、issuer の文字列だけを受ける**（トークン エンドポイントの URL・配列は、500 にせず invalid_client で断る）
 
 | | |
 |---|---|
-| 観点 | **RFC 7523 §3 は、認可サーバを指す値を求め、トークン エンドポイントの URL も認める。****fapi2 の登録は、issuer だけを受ける**（RT-323.1）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は断る**（**以前は HTTP 500** だった）。**RFC 10070 §4 は、issuer を唯一の値としない JWT を断ることを求める**ので、**issuer を含む要素 2 つ以上の配列（適合性テストの test-array-as-audience-for-client-JWT-assertion の形）も断る**（#397）。**トークン エンドポイントの URL を受けることは、RFC 10070 §4 が禁じた。扱いは #398 で決める**。 |
-| 根拠 | RFC 7523 §3 / RFC 10070 §4 / RFC 7519 §4.1.3 / #294 / #397 |
-| テスト | `RT29454_client_assertionのaudにissuerを受ける` |
+| 観点 | **RFC 10070 §4 は、クライアント認証の JWT の aud を issuer の唯一の値に限り、そうでない JWT を断ることを求め、トークン エンドポイントの URL を audience にすることを禁じた**（RFC 7523 §3 の 3 を置き換えた）。**#294 では RFC 7523 §3 に従い、トークン エンドポイントの URL と issuer を受けていた**（#398 でトークン エンドポイントの URL をやめた）。**#294 より前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は断る**（**以前は HTTP 500** だった）。**issuer を含む要素 2 つ以上の配列（適合性テストの test-array-as-audience-for-client-JWT-assertion の形）も断る**（#397）。 |
+| 根拠 | RFC 10070 §4 / RFC 7519 §4.1.3 / #294 / #397 / #398 |
+| テスト | `RT29454_client_assertionのaudはissuerだけを受ける` |
 
 **手順**
 
 1. aud = issuer
-1. aud = トークン エンドポイント
+1. aud = トークン エンドポイント（RFC 10070 §4。#398）
 1. aud = 他の値
 1. aud = [issuer]（配列）
 1. aud = [issuer, 他の値]（配列。RFC 10070 §4。#397）
@@ -7324,7 +7324,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - 認証が通る（HTTP 200）
-- 認証が通る（HTTP 200）
+- invalid_client（500 にしない）
 - invalid_client（500 にしない）
 - invalid_client（500 にしない）
 - invalid_client（500 にしない）
@@ -12413,25 +12413,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 401
 - invalid_client
 
-## RT-371.2 **/par は、client_assertion の aud に PAR の口の URL を受ける。CIBA の口の URL は受けない。/revoke は PAR の口の URL を受けない**
+## RT-371.2 **/par は、client_assertion の aud に issuer だけを受ける。PAR の口の URL・CIBA の口の URL・トークン エンドポイントの URL は受けない。/revoke も PAR の口の URL を受けない**
 
 | | |
 |---|---|
-| 観点 | **RFC 9126 §2 は、認可サーバが issuer・トークン エンドポイントの URL・PAR の口の URL を aud として受けることを求める（MUST）。****以前は、トークン エンドポイントの URL と issuer だけを受けていた**ので、PAR の口の URL を書いた RP は invalid_client で断られた。**足すのはその口の URL だけ**（ほかの口に宛てたアサーションは受けない）。 |
-| 根拠 | RFC 9126 §2 / #371 |
-| テスト | `RT37102_parはaudにPARの口のURLを受ける` |
+| 観点 | **RFC 10070 §5 は、RFC 9126 §2 が認めていたトークン エンドポイントの URL・PAR の口の URL を外し、issuer を唯一の aud とした**（§4：認可サーバは、そうでない JWT を断らなければならない）。**#371 では、RFC 9126 §2 に従って PAR の口の URL も受けるようにしていた**（#398 でやめた）。 |
+| 根拠 | RFC 10070 §5 / RFC 10070 §4 / #371 / #398 |
+| テスト | `RT37102_parはaudにissuerだけを受ける` |
 
 **手順**
 
-1. /par に aud = PAR の口の URL（通る）
+1. /par に aud = issuer（通る）
+1. (1b) /par に aud = PAR の口の URL（RFC 10070 §5。受けない）
+1. (1c) /par に aud = トークン エンドポイントの URL（RFC 10070 §4・§5。受けない）
 1. /par に aud = CIBA の口の URL（ほかの口の URL は受けない）
 1. /revoke に aud = PAR の口の URL（PAR の口でしか受けない）
-1. 対照：/revoke に aud = トークン エンドポイントの URL（同じクライアント・同じ鍵で通る）
+1. 対照：/revoke に aud = issuer（同じクライアント・同じ鍵で通る）
 
 **検証（合否を判定する）**
 
 - HTTP 201（RFC 9126 §2.2）
 - request_uri が返る
+- HTTP 401
+- invalid_client
+- HTTP 401
+- invalid_client
 - HTTP 401
 - invalid_client
 - invalid_client
@@ -13040,6 +13046,48 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - auth_req_id を返さない
 - invalid_request
 - backchannel_authentication_request_signing_alg_values_supported
+
+## RT-398.1 **/token の client_credentials は、client_assertion の aud にトークン エンドポイントの URL を受けず（invalid_client）、issuer なら通る**
+
+| | |
+|---|---|
+| 観点 | **RFC 10070 §4 は、クライアント認証の JWT の aud を issuer の唯一の値に限り、トークン エンドポイントの URL を audience にすることを禁じた**（認可サーバは、そうでない JWT を断らなければならない）。**以前は、fapi2 以外の登録でトークン エンドポイントの URL も受けていた**（#294）。 |
+| 根拠 | RFC 10070 §4 / #398 |
+| テスト | `RT39801_tokenのclient_credentialsはaudにissuerだけを受ける` |
+
+**手順**
+
+1. aud = トークン エンドポイントの URL
+1. 対照：aud = issuer（同じクライアント・同じ鍵）
+
+**検証（合否を判定する）**
+
+- invalid_client
+- HTTP 401
+- トークンを出さない
+- トークンが返る
+
+## RT-398.2 **/token の CIBA のグラントは、client_assertion の aud に issuer とトークン エンドポイントの URL を受ける。CIBA の口・PAR の口の URL は受けない**
+
+| | |
+|---|---|
+| 観点 | **CIBA の流れは以前のまま**（RFC 10070 は CIBA を直接の対象にしていない。#398 で人と決めた）。**ほかのグラントは issuer だけ**（RT-398.1）。**知らない auth_req_id で測る**：クライアント認証を通れば invalid_grant（CIBA Core 1.0 §11）、通らなければ invalid_client。 |
+| 根拠 | CIBA Core 1.0 §11 / RFC 10070 §4 / #398 |
+| テスト | `RT39802_tokenのCIBAのグラントはaudにトークンエンドポイントのURLも受ける` |
+
+**手順**
+
+1. aud = issuer（クライアント認証を通る）
+1. aud = トークン エンドポイントの URL（クライアント認証を通る）
+1. aud = CIBA の口の URL（/token では受けない）
+1. aud = PAR の口の URL
+
+**検証（合否を判定する）**
+
+- invalid_grant（知らない auth_req_id。invalid_client ではない）
+- invalid_grant（知らない auth_req_id。invalid_client ではない）
+- invalid_client
+- invalid_client
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

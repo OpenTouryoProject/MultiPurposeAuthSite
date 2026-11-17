@@ -1333,15 +1333,36 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`TempData` が読めない Device の記録** | 自分で作る記録で、壊れた値を E2E から入れられない。**読めなければ断る** |
 | **期限切れの `auth_req_id`・`device_code` を、別のクライアントが引く** | 寿命が切れるまで待つ必要があり、通しに入れられない。**照合は状態の判定より前**なので、別のクライアントには `invalid_grant` を返して記録に触れず、正規のクライアントは従来どおり `expired_token` を受ける |
 
-##### `client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける（`RT-371.*`。#371）
+##### クライアント認証の `client_assertion` の `aud` は issuer だけを受ける（`RT-398.*`。#398）
+
+| | 測ること |
+|---|---|
+| **`RT-398.1`** | **`/token` の client_credentials は、トークン エンドポイントの URL を `invalid_client`（401）で断り、issuer なら通る**（RFC 10070 §4） |
+| **`RT-398.2`** | **`/token` の CIBA のグラントは、issuer・トークン エンドポイントの URL を受ける**（知らない `auth_req_id` で測り、`invalid_grant`。CIBA の流れは以前のまま）。**CIBA の口・PAR の口の URL は `invalid_client`** |
+
+- **RFC 10070**（2026 年 11 月。RFC 7523・RFC 9126 を更新）**の §4 は、クライアント認証の JWT の `aud` を issuer の唯一の値に限り、トークン エンドポイントの URL を禁じた。§5 は PAR の口の URL を外した**
+- **CIBA の流れ（`/ciba_authz` と、`/token` の CIBA のグラント）だけは以前のまま**（RFC 10070 は CIBA を直接の対象にしていない。人と決めた。`/ciba_authz` は CIBA Core 1.0 §7.1 の MUST）
+- **設定で以前の受け方に戻す分岐は作っていない**（人と決めた）
+- **JWT Bearer グラントの `assertion`** は、トークン エンドポイントの URL も受けるまま（RFC 10070 §4 の 1。`JwtBearerAudiences`。`JwtBearerTests`）
+- **E2E の `client_assertion` のヘルパーは、既定の `aud` を issuer にした**（`IdPClient.Issuer()`）。**同梱の自己テストのクライアント（`SelfTestClient.CreateClientAssertion`）も issuer にした**
+- **直したのを外すと**（トークン エンドポイントの URL を受け直すと）、net10.0 版で `RT-398.1` が落ちることを確かめた
+- **期待値が変わったテスト**：`RT-294.54`（トークン エンドポイントの URL を受ける → 断る）・`RT-371.2`（PAR の口の URL を受ける → 断る）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`/introspect`・Device の口・`/ros` のトークン エンドポイントの URL** | 判定は同じ `ClientAssertionAudiences`（口の URL を渡さない）。`/revoke`（`RT-294.54`）・`/token`（`RT-398.1`）・`/par`（`RT-371.2`）で測る |
+
+##### `client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける（`RT-371.*`。#371。PAR は #398 で issuer だけにした）
 
 | | 測ること |
 |---|---|
 | **`RT-371.1`** | **`/ciba_authz` は、CIBA の口の URL を `aud` として受ける**（CIBA Core 1.0 §7.1 の MUST。`auth_req_id` が返る）。**PAR の口の URL は `invalid_client`** |
-| **`RT-371.2`** | **`/par` は、PAR の口の URL を受ける**（RFC 9126 §2 の MUST。201）。**CIBA の口の URL は `invalid_client`**。**`/revoke` は PAR の口の URL を受けない**（対照として、同じクライアントでトークン エンドポイントの URL なら通る） |
+| **`RT-371.2`** | **`/par` は issuer だけを受ける**（RFC 10070 §5。201）。**PAR の口の URL・トークン エンドポイントの URL・CIBA の口の URL は `invalid_client`**（#398。#371 では PAR の口の URL を受けていた）。**`/revoke` は PAR の口の URL を受けない**（対照として、同じクライアントで issuer なら通る） |
 | **`RT-371.3`** | **fapi2 の登録は、`/par` でも issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。PAR の口の URL は `invalid_client`） |
 
-- **判定は `CmnEndpoints.AssertionAudiences`**（Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsAssertionAudience` の判定を、ここで決める）。**口の URL を渡すのは PAR・CIBA の口だけ**（`ClientAuthentication(assertion, endpointUrl, …)`）
+- **判定は `CmnEndpoints.ClientAssertionAudiences`**（Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsClientAssertionAudience` の判定を、ここで決める。#398 で `AssertionAudiences` から分けた）。**口の URL を渡すのは CIBA の口と CIBA のトークン要求だけ**（#398。以前は PAR の口も渡していた）
 - **足すのはその口の URL だけ**。**クライアント認証の JWT の `jti` は使用済みとして記録していない**ので、すべての口で全部の URL を受けると、ある口に宛てたアサーションを別の口で使える
 - **配列の `aud` は変えていない**（**RFC 10070 §4 が、issuer を唯一の値としない JWT を断ることを求める**。#397。`RT-294.54`。MPAS の判定（`IsAssertionAudience`）が文字列に限る。要素 2 つ以上の配列は、Open棟梁 の `JwtAssertion.Verify` も受けない（唯一の値に限る。OpenTouryo#654））
 - **`RT-371.1` は利用者の端末を登録する**ので、CIBA のほかのテストと同じコレクション（`CibaTests.DeviceCollection`）に入れた
@@ -4495,7 +4516,7 @@ The ID federation did not complete. (the error view was returned)
 | `RT-294.51` | **fapi2 のクライアントが、PKCE と private_key_jwt を併用して認可コードを引き換えられる**（違う `code_verifier` では通らない） | **`code_verifier` が在ると `client_assertion` を無視した**（fapi2 は通らなかった） |
 | `RT-294.52` | **方法を明示したクライアントは PKCE だけでは引き換えられず、`none` のクライアントは PKCE だけで引き換えられる**（秘密では通らない） | **登録に関わらず PKCE だけで引き換えられた**（C-40） |
 | `RT-294.53` | **scope を省いた認可要求**でも code が返る | **500** |
-| `RT-294.54` | **client_assertion の `aud` に issuer を受ける**（配列は 500 にせず `invalid_client`。**issuer を含む要素 2 つ以上の配列も断る**（RFC 10070 §4。#397）。トークン エンドポイントの URL を受けることの扱いは #398） | **issuer は `invalid_client`、配列は 500** |
+| `RT-294.54` | **client_assertion の `aud` は issuer だけを受ける**（トークン エンドポイントの URL・配列は 500 にせず `invalid_client`。**issuer を含む要素 2 つ以上の配列も断る**（RFC 10070 §4。#397・#398）） | **issuer は `invalid_client`、配列は 500** |
 | `RT-294.55` | **grant_types に `implicit` が無いクライアントの Hybrid** は、同意の前に `unauthorized_client` | **同意の後で `server_error`** |
 | `RT-294.56` | **poll の CIBA は、`client_notification_token` も `binding_message` も無い request で受け付ける** | **`invalid_request`** |
 | `RT-294.57` | **PAR の Request Object の `client_id` が、認証したクライアントと違えば `invalid_request_object`** | **受け付けて、別のクライアントの名義で預けた**（C-41） |

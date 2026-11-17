@@ -414,6 +414,21 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN AuthorizationSignedResponseAlg varchar(16
   **以前は `RS256` を受けていたので、`RS256` で署名している FAPI のクライアントは `invalid_client` になる**（`PS256` の鍵は `RS256` と同じ RSA の鍵）
 - **JWT Bearer グラント（`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer` の `assertion`）は、`RS256` だけのまま**
 
+### `client_assertion` の `aud`（#398）
+
+**クライアント認証の `client_assertion` の `aud` は、issuer（Discovery の `issuer`。設定の `IssuerId`）だけを受ける**（**RFC 10070 §4・§5**。2026 年 11 月。RFC 7523・RFC 9126 を更新）。
+
+| 口 | 受ける `aud` |
+|---|---|
+| `/token`（CIBA のグラントを除く）・`/par`・`/revoke`・`/introspect`・`/ros`・Device の口 | **issuer だけ** |
+| `/ciba_authz`・`/token` の CIBA のグラント | issuer・トークン エンドポイントの URL（`/ciba_authz` は CIBA の口の URL も。CIBA Core 1.0 §7.1。**RFC 10070 は CIBA を直接の対象にしていない**） |
+| JWT Bearer グラントの `assertion`（クライアント認証ではない） | issuer・トークン エンドポイントの URL（RFC 10070 §4 の 1） |
+
+- **以前は、fapi2 以外の登録でトークン エンドポイントの URL も受け、`/par` では PAR の口の URL も受けていた。** それらを `aud` にする RP は `invalid_client` になる
+- **移行：RP の `client_assertion` の `aud` を issuer にする**（RFC 10070 §6 は、クライアントを先に、または合わせて更新するよう勧めている）。issuer を `aud` にする RP は、以前の版の MPAS でも通る
+- **設定で以前の受け方に戻すことはできない**（検証を緩める分岐を作らない。#398 で決めた）
+- 同梱の自己テストのクライアントは、issuer を `aud` にする
+
 ### 一覧は 1 か所から作る
 
 **受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs` /

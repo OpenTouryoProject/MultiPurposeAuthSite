@@ -38,6 +38,7 @@
 //*  2026/11/08  玄人 幸道         RT-239.5 : 自己テストの FAPI2 のボタンが PKCE を使うので、code_verifier も送る（#345）
 //*  2026/11/10  玄人 幸道         WithClientAssertion を internal にした（RT-352 で使う。#352）
 //*  2026/11/15  玄人 幸道         fapi2 の client_assertion を PS256 で署名し、RT-129.1 の広告に PS256 を足した（#395）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -84,7 +85,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <returns>JWS</returns>
-        /// <remarks>`aud` はトークン エンドポイントの URL（**fapi2 の登録には使えない**。#323）。</remarks>
+        /// <remarks>`aud` は issuer（RFC 10070 §4。#398）。</remarks>
         private static string CreateClientAssertion(IdPClient client, string clientId)
         {
             return AsymmetricAuthTests.CreateClientAssertion(client, clientId, false);
@@ -94,7 +95,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="es256">true なら ES256、false なら RS256（`aud` を渡したときは PS256）</param>
-        /// <param name="aud">aud（null ならトークン エンドポイントの URL。**fapi2 の登録は issuer を渡す**。#323）</param>
+        /// <param name="aud">aud（null なら issuer。RFC 10070 §4。#398）</param>
         /// <returns>JWS</returns>
         /// <remarks>
         /// **署名鍵は、クライアント登録の公開鍵と対になる構成ファイルの鍵。**
@@ -112,7 +113,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", clientId },
                 { "sub", clientId },
-                { "aud", aud ?? (client.Target.BaseUrl + "/token") },
+                { "aud", aud ?? client.Issuer() },
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }
@@ -163,7 +164,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id</param>
         /// <param name="items">フォームの中身</param>
-        /// <param name="aud">aud（null ならトークン エンドポイントの URL。**fapi2 は issuer を渡す**。#323）</param>
+        /// <param name="aud">aud（null なら issuer。RFC 10070 §4。#398）</param>
         /// <returns>フォーム</returns>
         internal static Dictionary<string, string> WithClientAssertion(
             IdPClient client, string clientId, IDictionary<string, string> items, string aud = null)

@@ -33,6 +33,7 @@
 //*  2026/10/30  玄人 幸道         RT-294.80（/userinfo の POST と openid の無いトークン）を足した（#294）
 //*  2026/11/04  玄人 幸道         RT-294.73：Android / iOS 版（AuthenticationDevice）のトークンも受けることを確かめる
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -370,7 +371,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     { "iss", reg.ClientId },
                     { "sub", reg.ClientId },
-                    { "aud", client.Target.BaseUrl + "/token" },
+                    { "aud", client.Issuer() },
                     { "jti", Guid.NewGuid().ToString("N") },
                     { "iat", now },
                     { "exp", now + 300 }

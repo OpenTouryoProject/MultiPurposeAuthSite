@@ -43,6 +43,7 @@
 //*  2026/11/10  玄人 幸道         応答の組み立てに client_id を渡すようにした（暗号化した id_token の中の JWS の alg。#355）
 //*  2026/11/13  玄人 幸道         秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（RFC 9449 §5）。fapi2 の登録は refresh_token を入れ替えない（FAPI 2.0 Security Profile §5.3.2.1。#367）
 //*  2026/11/14  玄人 幸道         CIBA・Device のトークン要求で、auth_req_id・device_code を出したクライアントと照合する（#387）
+//*  2026/11/17  玄人 幸道         JWT Bearer グラントの aud の判定を、クライアント認証と分けた（JwtBearerAudiences）。CIBA のトークン要求は、トークン エンドポイントの URL も受ける（#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1100,14 +1101,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
                     //    **iss・aud も Open棟梁 が照合する**（OpenTouryo#654。#336）。
                     //    **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。
-                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, null, out string _))
+                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, out string _))
                     {
                         string iss = assertionIss;
 
                         string scopes = JwtUtil.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.scope);
 
                         // aud 検証
-                        //   **トークン エンドポイントの URL か issuer**（RFC 7523 §3。#294）。配列は受けない（`IsAssertionAudience`）。
+                        //   **トークン エンドポイントの URL か issuer**（RFC 7523 §3・RFC 10070 §4 の 1。#294・#398）。配列は受けない（`IsAssertionAudience`）。
+                        //   **クライアント認証（issuer だけ）とは分けてある**（`JwtBearerAudiences`。#398）。
                         if (CmnEndpoints.IsAssertionAudience(assertionPayload))
                         {
                             //  **このグラントはクライアント認証を通らない**（assertion が資格）ので、
@@ -1476,8 +1478,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // client_secret / mTLS / private_key_jwt（#294）
                     //   **以前は `client_assertion` を読んでいなかった。**
                     //   **`/ciba_authz` は受けるのに、ここで断られた**（FAPI-CIBA は private_key_jwt か mTLS を求める）。
+                    //   **client_assertion の aud は、issuer とトークン エンドポイントの URL を受ける**（CIBA の流れは以前のまま。
+                    //   RFC 10070 は CIBA を直接の対象にしていない。ほかのグラントは issuer だけ。#398）。
                     authned = CmnEndpoints.ClientAuthentication(
                         client_id, client_secret, clientAssertion,
+                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
                         ref x509, out client_id, out proof);
                 }
 

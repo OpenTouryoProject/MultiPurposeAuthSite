@@ -38,6 +38,7 @@
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、CIBA の口の URL も受ける（CIBA Core 1.0 §7.1。#371）
 //*  2026/11/15  玄人 幸道         CIBA の署名した要求を PS256 でも受ける（JWS を受ける RequestObject.VerifyCiba。#395）
 //*  2026/11/17  玄人 幸道         CIBA の署名した要求の寿命を 60 分までにした（FAPI-CIBA ID1 §5.2.2 の 9。#388）
+//*  2026/11/17  玄人 幸道         CIBA の口の aud は CIBA Core 1.0 §7.1 に従うことを書いた（RFC 10070 は CIBA を更新していない。#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -112,7 +113,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(assertion))
             {
                 // private_key_jwt（FAPI-CIBA が求める方式）
-                //  **aud に、この口（Backchannel Authentication Endpoint）の URL も受ける**（CIBA Core 1.0 §7.1 の MUST。#371）。
+                //  **aud に、この口（Backchannel Authentication Endpoint）の URL とトークン エンドポイントの URL も受ける**（CIBA Core 1.0 §7.1 の MUST。#371）。
+                //    **ほかの口は issuer だけ**（RFC 10070 §4・§5）。**RFC 10070 は CIBA を更新していないので、CIBA Core に従う**（#398）。
                 authned = CmnEndpoints.ClientAuthentication(
                     assertion,
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint,

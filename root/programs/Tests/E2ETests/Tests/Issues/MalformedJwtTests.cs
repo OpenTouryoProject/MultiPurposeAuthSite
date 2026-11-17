@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/26  玄人 幸道         新規（#241）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -203,7 +204,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string noIss = JwsSigner.SignRS256(client, new Dictionary<string, object>()
                 {
                     { "sub", "dummy" },
-                    { "aud", client.Target.BaseUrl + "/token" }
+                    { "aud", client.Issuer() }
                 });
 
                 JsonResponse res1 = await client.PostJsonAsync("/introspect", MalformedJwtTests.Form(noIss));
@@ -217,7 +218,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 {
                     { "iss", "00000000000000000000000000000000" },
                     { "sub", "00000000000000000000000000000000" },
-                    { "aud", client.Target.BaseUrl + "/token" },
+                    { "aud", client.Issuer() },
                     { "jti", Guid.NewGuid().ToString("N") }
                 });
 

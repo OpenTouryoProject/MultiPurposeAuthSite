@@ -50,6 +50,7 @@
 //*  2026/11/15  玄人 幸道         client_assertion の検証鍵を、ヘッダの alg と登録の鍵から作る（JWS を受ける JwtAssertion.Verify）。PS256 を受け、FAPI の登録は RS256 を断る（FAPI 1.0 Advanced §8.6。OpenTouryo#664。#395）
 //*  2026/11/15  玄人 幸道         FAPI の登録の判定を Helper.IsFapiProfileClient にまとめた（#384）
 //*  2026/11/17  玄人 幸道         配列の aud を断る根拠を RFC 10070 §4 に書き換えた。振る舞いは変えていない（#397）
+//*  2026/11/17  玄人 幸道         クライアント認証の assertion の aud を issuer だけにした（CIBA の口・CIBA のトークン要求を除く）。JWT Bearer グラントの aud は分けた（RFC 10070 §4・§5。#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -106,11 +107,32 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id, string client_secret, string clientAssertion,
             ref X509Certificate2 x509, out string authnedClientId, out ClientModePolicy.Proof proof)
         {
+            return CmnEndpoints.ClientAuthentication(
+                client_id, client_secret, clientAssertion, null,
+                ref x509, out authnedClientId, out proof);
+        }
+
+        /// <summary>クライアント認証（送られてきた資格情報の種類を問わない。受けた口の URL を渡す版。#398）</summary>
+        /// <param name="client_id">client_id（client_secret / mTLS のとき）</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="clientAssertion">client_assertion（private_key_jwt）</param>
+        /// <param name="endpointUrl">受けた口の URL（client_assertion の aud の例外を決める。`ClientAssertionAudiences`）</param>
+        /// <param name="x509">クライアント証明書（mTLS）</param>
+        /// <param name="authnedClientId">認証できたクライアントの client_id</param>
+        /// <param name="proof">何を証明したか</param>
+        /// <returns>認証できたか</returns>
+        /// <remarks>
+        /// **CIBA のトークン要求（`/token` の CIBA のグラント）だけが、トークン エンドポイントの URL を渡す**（#398）。
+        /// </remarks>
+        public static bool ClientAuthentication(
+            string client_id, string client_secret, string clientAssertion, string endpointUrl,
+            ref X509Certificate2 x509, out string authnedClientId, out ClientModePolicy.Proof proof)
+        {
             if (!string.IsNullOrEmpty(clientAssertion))
             {
                 // private_key_jwt（client_id はアサーションから得る）
                 return CmnEndpoints.ClientAuthentication(
-                    clientAssertion, out authnedClientId, ref x509, out proof);
+                    clientAssertion, endpointUrl, out authnedClientId, ref x509, out proof);
             }
 
             authnedClientId = client_id;
@@ -528,8 +550,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="proof">何を証明したか（成功なら private_key_jwt）</param>
         /// <returns>bool</returns>
         /// <remarks>
-        /// **aud は、トークン エンドポイントの URL か issuer**（RFC 7523 §3）。
-        /// **PAR・CIBA の口は、口の URL を渡す版を使う**（#371）。
+        /// **aud は issuer だけ**（RFC 10070 §4。#398）。
+        /// **CIBA の流れだけは、口の URL を渡す版を使う**（`ClientAssertionAudiences`。#371・#398）。
         /// </remarks>
         public static bool ClientAuthentication(string assertion, out string client_id,
             ref X509Certificate2 x509, out ClientModePolicy.Proof proof)
@@ -541,21 +563,22 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>ClientAuthentication（受けた口の URL も aud として受ける。#371）</summary>
         /// <param name="assertion">client_assertion</param>
         /// <param name="endpointUrl">
-        /// 要求を受けた口の URL（**この口でだけ、aud として受ける**。null・空なら足さない）
+        /// 要求を受けた口の URL（**CIBA の口・CIBA のトークン要求のときだけ使う**。ほかの口の URL・null・空は無視する。#398）
         /// </param>
         /// <param name="client_id">認証できたクライアントの client_id（assertion の iss）</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="proof">何を証明したか（成功なら private_key_jwt）</param>
         /// <returns>bool</returns>
         /// <remarks>
-        /// **口の URL を aud として受けることを、口ごとの仕様が求めている**（#371）。
+        /// **クライアント認証の aud は issuer だけ**（RFC 10070 §4・§5。#398）。**CIBA の流れだけが例外**（`ClientAssertionAudiences`）。
         ///
         /// | 口 | 仕様 | 受ける aud |
         /// |---|---|---|
-        /// | `/par` | **RFC 9126 §2**（MUST） | issuer・トークン エンドポイントの URL・**PAR の口の URL** |
-        /// | `/ciba_authz` | **CIBA Core 1.0 §7.1**（MUST） | issuer・トークン エンドポイントの URL・**CIBA の口の URL** |
+        /// | `/ciba_authz` | **CIBA Core 1.0 §7.1**（MUST。RFC 10070 は CIBA を更新していない） | issuer・トークン エンドポイントの URL・**CIBA の口の URL** |
+        /// | `/token` の CIBA のグラント | CIBA の流れは以前のまま（RFC 10070 は CIBA を直接の対象にしていない） | issuer・トークン エンドポイントの URL |
+        /// | ほかの口（`/token` のほかのグラント・`/par`・`/revoke` など） | **RFC 10070 §4・§5** | **issuer だけ** |
         ///
-        /// **足すのは、その口の URL だけ**（ほかの口の URL は受けない）。
+        /// **以前は、どの口でもトークン エンドポイントの URL を受け、PAR の口では PAR の URL も受けていた**（RFC 9126 §2 の旧い規定。#371。RFC 10070 §5 が外した）。
         /// **クライアント認証の JWT の `jti` は使用済みとして記録していない**ので、
         /// **すべての口で全部の URL を受けると、ある口に宛てたアサーションを、期限内なら別の口でも使えてしまう。**
         /// **fapi2 の登録は、口によらず issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
@@ -673,9 +696,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //  **登録された方法でなければ通さない**（#307 の段階 3）。
                         //    **`private_key_jwt` の明示が要る** — **鍵を登録しただけでは通らない。**
                         //    **`client_id` はアサーションの `iss`**（RFC 7523 §3）なので、それで引く。
-                        //  **aud は、トークン エンドポイントの URL か、この IdP の issuer**（#294）。
-                        //    **fapi2 の登録は issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
-                        //    **PAR・CIBA の口では、その口の URL も受ける**（RFC 9126 §2・CIBA Core 1.0 §7.1。#371）。
+                        //  **aud は、この IdP の issuer だけ**（RFC 10070 §4・§5。#398）。
+                        //    **fapi2 の登録は、口によらず issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
+                        //    **CIBA の流れだけは例外**（`/ciba_authz` は CIBA Core 1.0 §7.1。CIBA のトークン要求も以前のまま。`ClientAssertionAudiences`。#371・#398）。
                         if (CmnEndpoints.IsClientAssertionAudience(payload, iss, endpointUrl)
                             && CmnEndpoints.AllowsAuthMethod(
                                 iss, ClientModePolicy.Proof.PrivateKeyJwt))
@@ -1060,94 +1083,127 @@ namespace MultiPurposeAuthSite.TokenProviders
                 || registered == CmnEndpoints.TokenEndpointAuthMethodNone;
         }
 
-        /// <summary>assertion の aud が、この IdP を指しているか（#294）</summary>
+        /// <summary>JWT Bearer グラントの assertion の aud が、この IdP を指しているか（#294・#398）</summary>
         /// <param name="payload">assertion の payload（署名は別に確かめること）</param>
         /// <returns>指していれば true</returns>
         /// <remarks>
-        /// **トークン エンドポイントの URL か、issuer**（RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1）。
+        /// **認可グラント（RFC 7523 §2.1）の assertion だけに使う。** 受ける値は `JwtBearerAudiences`（トークン エンドポイントの URL か issuer）。
+        /// **クライアント認証の assertion は `IsClientAssertionAudience`**（issuer だけ。RFC 10070 §4。#398）。
         ///
         /// **配列の aud は受けない。** RFC 7519 §4.1.3 は配列を認めるが、
         /// **RFC 10070 §4（RFC 7523 を更新し、§3 の 3 を置き換えた）は、クライアント認証の JWT の aud を issuer の唯一の値に限り、
         /// そうでない JWT を断ることを求める**（MUST）。**issuer を含む要素 2 つ以上の配列も断る**（#397。Open棟梁 も同じ。OpenTouryo#697）。
         /// **要素 1 つの配列も、こちらは受けない**（Open棟梁 は受ける。OpenTouryo#654。`RT-294.54`。#336）。
+        /// **認可グラントについて、RFC 10070 §4 は配列を断ることを求めていない**が、こちらはクライアント認証と同じく文字列に限る（求める利用者がいない）。
         /// **適合性テスト（5.3.4）の `test-array-as-audience-for-client-JWT-assertion` は、`[issuer, ダミー]` を受けることを求める。**
         /// これは置き換えられた RFC 7523 §3 の 3（「含む」）には沿うが、RFC 10070 §4 とは食い違うので、**MPAS では落ちるのが正しい**（#397）。
-        /// **トークン エンドポイントの URL を受けることも、RFC 10070 §4 は禁じた**（扱いは #398）。
         /// </remarks>
         private static bool IsAssertionAudience(JObject payload)
-        {
-            return CmnEndpoints.IsAssertionAudience(payload, null);
-        }
-
-        /// <summary>assertion の aud が、この IdP（と、受けた口）を指しているか（#371）</summary>
-        /// <param name="payload">assertion の payload（署名は別に確かめること）</param>
-        /// <param name="endpointUrl">受けた口の URL（null・空なら足さない。`ClientAuthentication` の remarks）</param>
-        /// <returns>指していれば true</returns>
-        private static bool IsAssertionAudience(JObject payload, string endpointUrl)
         {
             string aud = JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.aud);
 
             return !string.IsNullOrEmpty(aud)
-                && CmnEndpoints.AssertionAudiences(endpointUrl).Contains(aud);
+                && CmnEndpoints.JwtBearerAudiences().Contains(aud);
         }
 
-        /// <summary>クライアント認証の assertion の aud として受ける値（fapi2 以外の登録。#294・#371）</summary>
-        /// <param name="endpointUrl">受けた口の URL（null・空なら足さない）</param>
-        /// <returns>トークン エンドポイントの URL・issuer（と、受けた口の URL）</returns>
+        /// <summary>JWT Bearer グラントの assertion の aud として受ける値（#294・#398）</summary>
+        /// <returns>トークン エンドポイントの URL・issuer</returns>
         /// <remarks>
+        /// **RFC 10070 §4 の 1 は、認可グラントでは、認可サーバを issuer かトークン エンドポイントの URL で示してよいとしている**（クライアント認証とは違う）。
         /// **Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsAssertionAudience` の判定を、この 1 か所で決める**
         /// （2 か所で集合がずれると、片方で通ってもう片方で断る）。
         /// </remarks>
-        private static string[] AssertionAudiences(string endpointUrl)
+        private static string[] JwtBearerAudiences()
         {
-            List<string> auds = new List<string>()
+            return new string[]
             {
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
                 CmnServerParams.IssuerId
             };
-
-            if (!string.IsNullOrEmpty(endpointUrl) && !auds.Contains(endpointUrl))
-            {
-                auds.Add(endpointUrl);
-            }
-
-            return auds.ToArray();
         }
 
-        /// <summary>クライアント認証の assertion の aud が、そのクライアントに認められた値か（#323）</summary>
+        /// <summary>クライアント認証の assertion の aud として受ける値（#294・#371・#398）</summary>
+        /// <param name="endpointUrl">受けた口の URL（**CIBA の口と、CIBA のトークン要求のときだけ使う**。ほかの口の URL・null・空は無視する）</param>
+        /// <returns>issuer（CIBA の口では、トークン エンドポイントの URL と CIBA の口の URL も。CIBA のトークン要求では、トークン エンドポイントの URL も）</returns>
+        /// <remarks>
+        /// **issuer だけ**（RFC 10070 §4：クライアント認証の JWT の aud は issuer を唯一の値とし、
+        /// **トークン エンドポイントの URL を audience にしてはならない**。§5：PAR も同じく、PAR の口の URL を受けていた規定を外した）。
+        /// **以前はトークン エンドポイントの URL も受け、PAR の口では PAR の URL も受けていた**（#294・#371）。
+        /// **改訂の理由は、aud を広く受けることで成り立つ攻撃の型（audience injection）である**（#398）。
+        ///
+        /// **CIBA の流れだけは、以前のまま**（**RFC 10070 は CIBA を直接の対象にしていない**。人と決めた。#398）。**CIBA Core が改訂されたら見直す。**
+        ///
+        /// | 口 | 受ける aud | 渡す endpointUrl |
+        /// |---|---|---|
+        /// | `/ciba_authz` | issuer・トークン エンドポイントの URL・CIBA の口の URL（**CIBA Core 1.0 §7.1 の MUST**） | CIBA の口の URL |
+        /// | `/token` の CIBA のグラント（ポーリング） | issuer・トークン エンドポイントの URL | トークン エンドポイントの URL |
+        /// | ほか（`/token` のほかのグラント・`/par`・`/revoke` など） | **issuer だけ** | null（渡しても無視する） |
+        ///
+        /// **トークン エンドポイントの URL は、渡したときだけ受ける。** `/token` のほかのグラントは渡さないので issuer だけになる。
+        ///
+        /// **Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsClientAssertionAudience` の判定を、この 1 か所で決める**
+        /// （2 か所で集合がずれると、片方で通ってもう片方で断る）。
+        /// </remarks>
+        private static string[] ClientAssertionAudiences(string endpointUrl)
+        {
+            string cibaUrl = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint;
+
+            string tokenUrl = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+
+            if (!string.IsNullOrEmpty(endpointUrl) && endpointUrl == cibaUrl)
+            {
+                return new string[] { CmnServerParams.IssuerId, tokenUrl, cibaUrl };
+            }
+
+            if (!string.IsNullOrEmpty(endpointUrl) && endpointUrl == tokenUrl)
+            {
+                // CIBA のトークン要求（`GrantCiba`）だけが渡す。
+                return new string[] { CmnServerParams.IssuerId, tokenUrl };
+            }
+
+            return new string[] { CmnServerParams.IssuerId };
+        }
+
+        /// <summary>クライアント認証の assertion の aud が、そのクライアントに認められた値か（#323・#398）</summary>
         /// <param name="payload">assertion のペイロード</param>
         /// <param name="client_id">署名を検証したクライアント（assertion の iss）</param>
-        /// <param name="endpointUrl">受けた口の URL（null・空なら足さない。#371）</param>
+        /// <param name="endpointUrl">受けた口の URL（CIBA の口・CIBA のトークン要求のときだけ使う。`ClientAssertionAudiences`）</param>
         /// <returns>認められた値か</returns>
         /// <remarks>
-        /// **FAPI 2.0 Security Profile §5.3.2.1 は、issuer を文字列で受けることだけを認める**
-        /// （"shall only accept its issuer identifier value"）ので、**fapi2 の登録は issuer に限る**（口の URL も受けない）。
-        /// **それ以外の登録は変えない**（RFC 7523 §3 は、トークン エンドポイントの URL を認めている）。
-        /// **PAR・CIBA の口では、その口の URL も受ける**（RFC 9126 §2・CIBA Core 1.0 §7.1。#371）。
+        /// **issuer の文字列だけ**（RFC 10070 §4。CIBA の流れの例外は `ClientAssertionAudiences`。#398）。配列は受けない（`IsAssertionAudience` の remarks）。
+        /// **fapi2 の登録は、口によらず issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1 の "shall only accept its issuer identifier value"。#323）。
         /// </remarks>
         private static bool IsClientAssertionAudience(JObject payload, string client_id, string endpointUrl)
         {
-            if (Helper.GetInstance().GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+            string aud = JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.aud);
+
+            if (string.IsNullOrEmpty(aud))
             {
-                return JwtUtil.StringClaimOf(payload, OAuth2AndOIDCConst.aud) == CmnServerParams.IssuerId;
+                return false;
             }
 
-            return CmnEndpoints.IsAssertionAudience(payload, endpointUrl);
+            if (Helper.GetInstance().GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+            {
+                return aud == CmnServerParams.IssuerId;
+            }
+
+            return CmnEndpoints.ClientAssertionAudiences(endpointUrl).Contains(aud);
         }
 
         /// <summary>assertion の署名・iss・aud・期限を検証する（読めない形なら false。#294・#336）</summary>
         /// <param name="assertion">assertion（JWT）</param>
         /// <param name="jws">検証鍵（`VerifyingJwsOf` で、ヘッダの alg と鍵から作ったもの。#395）</param>
         /// <param name="iss">期待する iss（assertion の iss から鍵を引いたクライアント）</param>
-        /// <param name="endpointUrl">受けた口の URL（null・空なら足さない。#371）</param>
+        /// <param name="endpointUrl">受けた口の URL（CIBA の口・CIBA のトークン要求のときだけ使う。`ClientAssertionAudiences`。#398）</param>
         /// <param name="sub">sub</param>
         /// <returns>検証できれば true</returns>
         /// <remarks>
+        /// **クライアント認証（`client_assertion`）に使う。**
         /// **期待する iss・aud を渡す版の `JwtAssertion.Verify`（OpenTouryo#654）を使う**（#336）。
         /// **検証鍵 `JWS` を受ける版**（OpenTouryo#664。#395）。
         /// 以前の版は iss・aud を照合せず（`[Obsolete]`）、sub・nbf も見なかった。
         ///
-        /// - **aud は、トークン エンドポイントの URL か issuer**（PAR・CIBA の口では、その口の URL も。`AssertionAudiences`。#371）。
+        /// - **aud は issuer だけ**（CIBA の流れの例外は `ClientAssertionAudiences`。RFC 10070 §4。#398）。
         ///   **登録の種別ごとの絞り込み**（fapi2 は issuer だけ。#323）と、**文字列に限ること**（RT-294.54。RFC 10070 §4。#397）は、
         ///   **呼び出し側が `IsClientAssertionAudience`・`IsAssertionAudience` で続けて行う**
         ///   （Open棟梁 は要素 1 つの配列も受けるが、こちらは受けない）
@@ -1168,7 +1224,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 return JwtAssertion.Verify(
                     assertion, iss,
-                    CmnEndpoints.AssertionAudiences(endpointUrl),
+                    CmnEndpoints.ClientAssertionAudiences(endpointUrl),
                     out sub, out string _, out JObject _, jws);
             }
             catch (Exception ex)
@@ -1186,21 +1242,21 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="assertion">assertion（JWT）</param>
         /// <param name="pubKey">公開鍵（JWK。kty が RSA なら RS256、EC なら ES256）</param>
         /// <param name="iss">期待する iss</param>
-        /// <param name="endpointUrl">受けた口の URL（null・空なら足さない。#371）</param>
         /// <param name="sub">sub</param>
         /// <returns>検証できれば true</returns>
         /// <remarks>
+        /// **aud はトークン エンドポイントの URL か issuer**（`JwtBearerAudiences`。RFC 10070 §4 の 1。#398）。
         /// **クライアント認証（`client_assertion`）は、`JWS` を受ける版（上）を使う**（#395）。
         /// **JWT Bearer グラント（RFC 7523 §2.1）は RS256 だけ**（`JwtBearerSigningAlgs`）なので、この版のまま。
         /// </remarks>
         private static bool TryVerifyAssertion(
-            string assertion, string pubKey, string iss, string endpointUrl, out string sub)
+            string assertion, string pubKey, string iss, out string sub)
         {
             try
             {
                 return JwtAssertion.Verify(
                     assertion, iss,
-                    CmnEndpoints.AssertionAudiences(endpointUrl),
+                    CmnEndpoints.JwtBearerAudiences(),
                     out sub, out string _, out JObject _, pubKey);
             }
             catch (Exception ex)

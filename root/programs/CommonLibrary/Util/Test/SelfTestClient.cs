@@ -42,6 +42,7 @@
 //*  2026/11/08  玄人 幸道         トークン エンドポイント系の認証を、登録の token_endpoint_auth_method で決める（PAR も。OpenTouryo#676。#345）
 //*  2026/11/13  玄人 幸道         Request Object を PS256 で署名する（FAPI の登録は RS256 の Request Object を断るようになった。#370）
 //*  2026/11/15  玄人 幸道         FAPI の登録の client_assertion を PS256 で署名する（#395）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を、登録によらず issuer にした（RFC 10070 §4。#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -126,8 +127,9 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <param name="scopes">scope（サーバは見ないが、従来と同じ値を入れる）</param>
         /// <returns>署名付き JWT</returns>
         /// <remarks>
-        /// **`aud` はトークン エンドポイント**（RFC 7523 §3）。**fapi2 の登録は issuer**（FAPI 2.0 Security Profile §5.3.2.1。#323）。
-        /// **サーバ側（`CmnEndpoints.ClientAuthentication`）がそこを見る**ので、外すと認証できない。
+        /// **`aud` は issuer**（RFC 10070 §4。クライアント認証の JWT は issuer を唯一の audience にする。#398）。
+        /// **以前は fapi2 の登録だけ issuer で、ほかはトークン エンドポイントだった**（#323）。**サーバが issuer だけを受けるようになった**ので揃えた。
+        /// **JWT Bearer グラントの assertion にも使う**（自己テストの JWT Bearer Token Flow）。グラントは issuer もトークン エンドポイントも受ける（RFC 10070 §4 の 1）。
         ///
         /// **FAPI の登録は、PS256 で署名する**（#395）。**サーバは FAPI の登録の RS256 のアサーションを断る**
         /// （FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1）。
@@ -140,11 +142,7 @@ namespace MultiPurposeAuthSite.Util.Test
             RSAParameters rsa = SelfTestClient.RsaPrivateKey();
 
             string assertion = JwtAssertion.CreateByRsa(
-                clientId,
-                Helper.GetInstance().GetClientMode(clientId) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit()
-                    ? CmnServerParams.IssuerId
-                    : Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
-                lifetime, scopes, rsa);
+                clientId, CmnServerParams.IssuerId, lifetime, scopes, rsa);
 
             if (!Helper.GetInstance().IsFapiClient(clientId))
             {

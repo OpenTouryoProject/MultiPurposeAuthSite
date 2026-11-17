@@ -21,6 +21,7 @@
 //*  2026/10/31  玄人 幸道         Device AuthZ の開始で、/device_authz が断った理由を画面に出す（#294）
 //*  2026/10/31  玄人 幸道         client_id は ResolveClientId で引く（利用者名とクライアント名を分けた。#294）
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
+//*  2026/11/17  玄人 幸道         JWT Bearer Token Flow の assertion の aud が issuer になったことをコメントに書いた（#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -262,7 +263,7 @@ namespace MultiPurposeAuthSite.Controllers
             // ClientNameから、client_id(iss)を取得。
             string iss = this.ResolveClientId();
 
-            // **アサーションの組み立ては SelfTestClient**（#246。aud はトークン エンドポイント）。
+            // **アサーションの組み立ては SelfTestClient**（#246。aud は issuer。#398）。
             string response = await SelfTestWebApi.JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
                 SelfTestClient.CreateClientAssertion(

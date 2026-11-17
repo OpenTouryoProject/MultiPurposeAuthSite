@@ -57,6 +57,7 @@
 //*  2026/11/09  玄人 幸道         クライアント証明書を添えて任意の口を POST する PostWithCertificateAsync を追加（device の /device_authz。#346）
 //*  2026/11/11  玄人 幸道         同意画面の許可・拒否を、フォームの action（同意画面の送信の口）へ送るようにした（ConsentFormUrl。#359）
 //*  2026/11/15  玄人 幸道         /userinfo に要求ヘッダを足して呼ぶ UserInfoWithHeadersAsync を足した（#384）
+//*  2026/11/17  玄人 幸道         IssuerAsync の同期版 Issuer を足した（client_assertion の aud に使う。#398）
 //**********************************************************************************
 
 using System;
@@ -233,6 +234,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return this._issuer;
+        }
+
+        /// <summary>
+        /// OP の Issuer Identifier（`IssuerAsync` の同期版。#398）。
+        /// </summary>
+        /// <returns>issuer</returns>
+        /// <remarks>
+        /// **client_assertion の aud に使う**（クライアント認証は issuer だけを受ける。RFC 10070 §4）。
+        /// 同期のヘルパーから呼ぶための版（xUnit は同期コンテキストを持たないので、待っても塞がらない）。
+        /// </remarks>
+        public string Issuer()
+        {
+            return this.IssuerAsync().GetAwaiter().GetResult();
         }
 
         #endregion

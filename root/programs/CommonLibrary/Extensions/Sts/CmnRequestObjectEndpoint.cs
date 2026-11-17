@@ -46,6 +46,7 @@
 //*  2026/11/15  玄人 幸道         CIBA の署名した要求の検証鍵を、ヘッダの alg（PS256・ES256）と登録の鍵から選ぶ SelectCibaVerifyingJws を足した（#395）
 //*  2026/11/17  玄人 幸道         PAR の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
 //*  2026/11/17  玄人 幸道         PAR の Request Object の中の request_uri を断るようにした（RFC 9126 §2.1。#380）
+//*  2026/11/17  玄人 幸道         PAR のクライアント認証の aud を issuer だけにした（RFC 10070 §5。#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -493,11 +494,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(assertion))
             {
                 // private_key_jwt
-                //  **aud に、この口（PAR）の URL も受ける**（RFC 9126 §2 の MUST。#371）。
+                //  **aud は issuer だけ**（RFC 10070 §5 が、RFC 9126 §2 の PAR の口の URL・トークン エンドポイントの URL を外した。#398）。
+                //    **以前は、この口の URL も受けていた**（#371）。
                 authned = CmnEndpoints.ClientAuthentication(
-                    assertion,
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri,
-                    out client_id, ref x509, out ClientModePolicy.Proof _);
+                    assertion, out client_id, ref x509, out ClientModePolicy.Proof _);
             }
             else
             {

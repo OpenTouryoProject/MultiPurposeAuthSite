@@ -160,6 +160,10 @@ cd ..\CTS
   - `…-user-rejects-authentication`：利用者が同意を断る操作が要る。**MPAS は同意を記録した後は同意の画面を出さず、サインインの画面には取り消しのボタンが無い**
   - `…-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds`：**1 回目のサインインの画面では何もせず、2 回目で入る**操作が要る。自動操作は、同じ画面への訪問を区別できない
 - **落ちるのが正しいモジュール**（Conformance Suite 5.3.4 の求める受け方が、今の仕様と食い違う）
+  - **FAPI 1.0 Advanced の大半**：Conformance Suite のクライアントは、**トークン エンドポイントへの要求で client_assertion の `aud` をトークン エンドポイントの URL にする**（PAR では issuer）。
+    **RFC 10070 §4 はトークン エンドポイントの URL を audience にすることを禁じた**ので、MPAS は `invalid_client` で断る（#398。設定で以前の受け方に戻す分岐は作っていない）。
+    `par-test-pushed-authorization-url-as-audience-for-client-JWT-assertion`・`par-token-endpoint-url-as-audience-for-client-JWT-assertion` も同じ理由で落ちる（RFC 10070 §5）
+  - **FAPI-CIBA は落ちない**：CIBA の流れ（`/ciba_authz` と、`/token` の CIBA のグラント）は以前のまま、トークン エンドポイントの URL も受ける（RFC 10070 は CIBA を直接の対象にしていない。#398）
   - FAPI 1.0 Advanced の `test-array-as-audience-for-client-JWT-assertion`：client_assertion の `aud` を `[issuer, ダミー]` にして、受けることを求める。**RFC 10070 §4（RFC 7523 §3 の 3 を置き換えた）は、issuer を唯一の値としない JWT を断ることを求める**ので、MPAS は `invalid_client` で断る（モジュールの求める受け方は、置き換えられた RFC 7523 §3 の 3（「含む」）に沿う。#397）
 
 **Discovery の検査の WARNING を、1 つだけ許す**（#385。`fapi2.json`・`fapi-ciba.json`・`oidcc-config.json` の `server.allow_unexpected_metadata_fields`）。

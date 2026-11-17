@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
 //*  2026/11/12  玄人 幸道         RT-363.1（登録を直さずに鍵を入れ替えても、知らない kid の 1 回目から通る）を足した（#363）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -803,7 +804,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", clientId },
                 { "sub", clientId },
-                { "aud", client.Target.BaseUrl + "/token" },
+                { "aud", client.Issuer() },
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }
