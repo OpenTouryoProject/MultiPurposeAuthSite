@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus
+1. GET /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=5990d654-254f-47c8-bae6-a563d39008ac&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7305,25 +7305,27 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 500 にならない
 - code が返る
 
-## RT-294.54 **fapi2 以外の登録の client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**（配列は、500 にせず invalid_client で断る）
+## RT-294.54 **fapi2 以外の登録の client_assertion の aud も、issuer の文字列だけを受ける**（トークン エンドポイントの URL・配列は、500 にせず invalid_client で断る）
 
 | | |
 |---|---|
-| 観点 | **RFC 7523 §3 は、認可サーバを指す値を求め、トークン エンドポイントの URL も認める。****fapi2 の登録は、issuer だけを受ける**（RT-323.1）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**（**以前は HTTP 500** だった）。 |
-| 根拠 | RFC 7523 §3 / RFC 7519 §4.1.3 / #294 |
-| テスト | `RT29454_client_assertionのaudにissuerを受ける` |
+| 観点 | **RFC 10070 §4 は、クライアント認証の JWT の aud を issuer の唯一の値に限り、そうでない JWT を断ることを求め、トークン エンドポイントの URL を audience にすることを禁じた**（RFC 7523 §3 の 3 を置き換えた）。**#294 では RFC 7523 §3 に従い、トークン エンドポイントの URL と issuer を受けていた**（#398 でトークン エンドポイントの URL をやめた）。**#294 より前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は断る**（**以前は HTTP 500** だった）。**issuer を含む要素 2 つ以上の配列（適合性テストの test-array-as-audience-for-client-JWT-assertion の形）も断る**（#397）。 |
+| 根拠 | RFC 10070 §4 / RFC 7519 §4.1.3 / #294 / #397 / #398 |
+| テスト | `RT29454_client_assertionのaudはissuerだけを受ける` |
 
 **手順**
 
 1. aud = issuer
-1. aud = トークン エンドポイント
+1. aud = トークン エンドポイント（RFC 10070 §4。#398）
 1. aud = 他の値
 1. aud = [issuer]（配列）
+1. aud = [issuer, 他の値]（配列。RFC 10070 §4。#397）
 
 **検証（合否を判定する）**
 
 - 認証が通る（HTTP 200）
-- 認証が通る（HTTP 200）
+- invalid_client（500 にしない）
+- invalid_client（500 にしない）
 - invalid_client（500 にしない）
 - invalid_client（500 にしない）
 
@@ -11013,6 +11015,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - client_id は FAPI1_PrivateKeyJwt_Client
 - code_challenge_method は S256
 - code_challenge が付く
+- response_mode は jwt（JARM）
 - 結果の画面が返る（エラー画面にならない）
 - access_token が出る（トークン要求が通った）
 - id_token が出る
@@ -11508,6 +11511,25 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **登録が無い fapi2 のクライアントでは、中の JWS は ES256 のまま**（`RT-352.1`）。**暗号化しない側の既定（RS256）には倒さない**（FAPI 2.0 Security Profile §5.4.1 は RS256 を認めない）。
+
+## RT-358.1 **上流の鍵（issuer ＋ jwks_uri か証明書）を決められない OIDC の上流で ID 連携すると、上流が認可コードを返しても、下流にはサインインさせない**
+
+| | |
+|---|---|
+| 観点 | **上流の鍵が決まらなければ、id_token を検証できないので断る。****以前は、この配備の設定の鍵で検証する版に進んでいた**（1:1 のテスト構成の名残。上流と下流が同じ鍵を持つ構成でだけ通った）。**直す前も、上流の鍵が違うので落ちていた**（理由の違いはサイトのログにしか出ない）。**「通す」側に戻らないことを測る。** |
+| 根拠 | OIDC Core 1.0 §3.1.3.7 / #358 |
+| テスト | `RT35801_上流の鍵が決まらないID連携はサインインさせない` |
+
+**手順**
+
+1. 管理画面で、issuer・jwks_uri・discovery・証明書の無い OIDC の上流の行を足す
+1. 上流でサインインしておき、下流でその上流を選んで ID 連携する
+1. 下流は、上流の鍵が決まらないので id_token を受けず、サインインさせない
+
+**検証（合否を判定する）**
+
+- 上流は認可コードを返す（上流の行の口とクライアントは正しい）
+- 下流にサインインしていない
 
 ## RT-359.1 未サインインで POST の認可要求を送ると、GET の認可要求へ送り返され、サインインの後も元の要求のパラメタで続く
 
@@ -12410,25 +12432,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 401
 - invalid_client
 
-## RT-371.2 **/par は、client_assertion の aud に PAR の口の URL を受ける。CIBA の口の URL は受けない。/revoke は PAR の口の URL を受けない**
+## RT-371.2 **/par は、client_assertion の aud に issuer だけを受ける。PAR の口の URL・CIBA の口の URL・トークン エンドポイントの URL は受けない。/revoke も PAR の口の URL を受けない**
 
 | | |
 |---|---|
-| 観点 | **RFC 9126 §2 は、認可サーバが issuer・トークン エンドポイントの URL・PAR の口の URL を aud として受けることを求める（MUST）。****以前は、トークン エンドポイントの URL と issuer だけを受けていた**ので、PAR の口の URL を書いた RP は invalid_client で断られた。**足すのはその口の URL だけ**（ほかの口に宛てたアサーションは受けない）。 |
-| 根拠 | RFC 9126 §2 / #371 |
-| テスト | `RT37102_parはaudにPARの口のURLを受ける` |
+| 観点 | **RFC 10070 §5 は、RFC 9126 §2 が認めていたトークン エンドポイントの URL・PAR の口の URL を外し、issuer を唯一の aud とした**（§4：認可サーバは、そうでない JWT を断らなければならない）。**#371 では、RFC 9126 §2 に従って PAR の口の URL も受けるようにしていた**（#398 でやめた）。 |
+| 根拠 | RFC 10070 §5 / RFC 10070 §4 / #371 / #398 |
+| テスト | `RT37102_parはaudにissuerだけを受ける` |
 
 **手順**
 
-1. /par に aud = PAR の口の URL（通る）
+1. /par に aud = issuer（通る）
+1. (1b) /par に aud = PAR の口の URL（RFC 10070 §5。受けない）
+1. (1c) /par に aud = トークン エンドポイントの URL（RFC 10070 §4・§5。受けない）
 1. /par に aud = CIBA の口の URL（ほかの口の URL は受けない）
 1. /revoke に aud = PAR の口の URL（PAR の口でしか受けない）
-1. 対照：/revoke に aud = トークン エンドポイントの URL（同じクライアント・同じ鍵で通る）
+1. 対照：/revoke に aud = issuer（同じクライアント・同じ鍵で通る）
 
 **検証（合否を判定する）**
 
 - HTTP 201（RFC 9126 §2.2）
 - request_uri が返る
+- HTTP 401
+- invalid_client
+- HTTP 401
+- invalid_client
 - HTTP 401
 - invalid_client
 - invalid_client
@@ -12452,6 +12480,193 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-378.1 state を送らない認可要求の JARM（response の JWT）には、成功・エラーとも state の名前を入れない。state を送れば、その値が入る
+
+| | |
+|---|---|
+| 観点 | **state は要求に在ったときだけ返す文字列である。****以前は、要求に無い state が "state": null として JWT に載り、型を確かめる RP（適合性テスト）が応答を断っていた。****クエリの応答では値の無いパラメタを省いていたので、JARM だけで起きていた。** |
+| 根拠 | RFC 6749 §4.1.2 / RFC 6749 §4.1.2.1 / JARM §2.1.1 / #378 |
+| テスト | `RT37801_stateを送らない要求のJARMにstateを入れない` |
+
+**手順**
+
+1. state を送らずに要求する（成功の応答）
+1. state を送らずに、エラーになる要求をする（prompt=none login。エラーの応答）
+1. 対照：state を送れば、その値が JWT に入る
+
+**検証（合否を判定する）**
+
+- 成功 : code が在る
+- 成功 : JWT に state の名前が無い（"state": null も出さない）
+- エラー : error が在る
+- エラー : JWT に state の名前が無い（"state": null も出さない）
+- state を送ったとき : state
+
+## RT-379.1 Discovery の response_modes_supported に jwt を広告し（*.jwt も従来どおり）、広告した jwt で要求すると JARM で返る
+
+| | |
+|---|---|
+| 観点 | **jwt は、応答の型の既定の置き場所で JARM にする短い形である。****以前は受けていたのに広告していなかった**（適合性テストの discovery-end-point-verification）。**広告と受け付けが一致していること**を、要求まで送って確かめる。 |
+| 根拠 | JARM §2.3.4 / OpenID Connect Discovery 1.0 §3 / #379 |
+| テスト | `RT37901_response_modes_supportedにjwtを広告する` |
+
+**手順**
+
+1. response_modes_supported を読む
+1. 広告した jwt で要求すると、JARM（response）で返る
+
+**検証（合否を判定する）**
+
+- response_modes_supported に jwt が在る
+- response_modes_supported に query.jwt が在る
+- response_modes_supported に fragment.jwt が在る
+- response_modes_supported に form_post.jwt が在る
+- response_mode=jwt : code を URL に直接載せず、response で返る
+- response_mode=jwt : response の中に code が在る
+
+## RT-380.1 PAR に預ける Request Object の中に request_uri が在れば、400 ＋ invalid_request_object で断る。無ければ 201。フォームの request_uri は従来どおり invalid_request
+
+| | |
+|---|---|
+| 観点 | **RFC 9126 は、PAR の要求で request_uri を使うことを禁じる。Request Object で預ける形も PAR の要求である。****以前は、フォームの request_uri だけを断り、Request Object の中は見ていなかった**（適合性テストの par-authorization-request-containing-request_uri）。 |
+| 根拠 | RFC 9126 §2.1 / RFC 9126 §3 / RFC 9101 §7 / #380 |
+| テスト | `RT38001_PARのRequestObjectの中のrequest_uriを断る` |
+
+**手順**
+
+1. 対照：request_uri の無い Request Object は 201
+1. Request Object の中に request_uri を入れる（値が在る・空文字）
+1. 対照：フォームの request_uri は、従来どおり invalid_request
+
+**検証（合否を判定する）**
+
+- request_uri 無し : HTTP 201
+- 中の request_uri : HTTP 400
+- 中の request_uri : invalid_request_object
+- 中の request_uri : 断る理由は request_uri
+- 中の request_uri : request_uri を返さない
+- 中の空の request_uri : HTTP 400
+- 中の空の request_uri : invalid_request_object
+- 中の空の request_uri : 断る理由は request_uri
+- 中の空の request_uri : request_uri を返さない
+- フォームの request_uri : HTTP 400
+- フォームの request_uri : invalid_request
+
+## RT-381.1 fapi1 の登録は、JARM でない認可要求（response_mode 無し・query）を invalid_request で断り（クエリ・PAR とも）、JARM の要求には code を返す。fapi1 でない登録は従来どおり
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は、認可サーバが「code id_token、または code と response_mode=jwt の組」を求めることを求める。****MPAS は fapi1 に Hybrid を許さないので、code ＋ JARM だけを受ける。****以前は fapi1 の素の code（クエリ）に code を返していた**（適合性テストの ensure-response-type-code-fails・ensure-response-mode-query）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2 / JARM §2.3 / #381 |
+| テスト | `RT38101_fapi1の登録はJARMの認可要求だけを受ける` |
+
+**手順**
+
+1. fapi1・response_mode 無し（クエリ）は、invalid_request を RP へ返す
+1. fapi1・response_mode=query は、invalid_request を RP へ返す
+1. fapi1・JARM（jwt・query.jwt・fragment.jwt・大文字の JWT）は、code を返す
+1. fapi1・response_mode 無し（PAR）は、400 ＋ invalid_request。jwt なら 201
+1. 対照：fapi1 でない登録・response_mode 無しは、従来どおり code をクエリで返す
+
+**検証（合否を判定する）**
+
+- response_mode 無し : error
+- response_mode 無し : 断る理由は JARM
+- response_mode 無し : code を返さない
+- response_mode=query : error
+- response_mode=query : 断る理由は JARM
+- response_mode=query : code を返さない
+- response_mode=jwt : code を URL に直接載せず、JARM の response で返す
+- response_mode=jwt : response の中に code が在る
+- response_mode=query.jwt : code を URL に直接載せず、JARM の response で返す
+- response_mode=query.jwt : response の中に code が在る
+- response_mode=fragment.jwt : code を URL に直接載せず、JARM の response で返す
+- response_mode=fragment.jwt : response の中に code が在る
+- response_mode=JWT : code を URL に直接載せず、JARM の response で返す
+- response_mode=JWT : response の中に code が在る
+- PAR・response_mode 無し : HTTP 400
+- PAR・response_mode 無し : invalid_request
+- PAR・response_mode=jwt : HTTP 201
+- normal : code が返る
+
+**補足**
+
+- **fapi1 の Hybrid（code id_token）は、この確かめより前に `ClientModePolicy` が `unauthorized_client` で断る**（`FA-1.4`）。
+
+## RT-382.1 fapi1 の登録の openid の認可要求は、nonce が無ければ invalid_request で断る（クエリ・PAR とも）。openid を含まない要求・fapi1 でない登録は従来どおり
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Baseline は、openid を要求するクライアントに対して、認可サーバが nonce を求めることを求める。****以前は response_type=code の fapi1 の要求が nonce 無しで通っていた**（適合性テストの ensure-request-object-without-nonce-fails）。**OIDC Core の Authorization Code フローでは nonce は任意**なので、fapi1 でない登録は変えない。 |
+| 根拠 | FAPI 1.0 Baseline §5.2.2.2 / OIDC Core 1.0 §3.1.2.1 / #382 |
+| テスト | `RT38201_fapi1の登録のopenidの要求はnonceが無ければ断る` |
+
+**手順**
+
+1. fapi1・openid・nonce 無し（クエリ）は、invalid_request を RP へ返す
+1. 対照：fapi1・openid・nonce 在り（クエリ）は、code を返す
+1. fapi1・openid・nonce 無し（PAR）は、400 ＋ invalid_request
+1. fapi1・openid を含まない要求は、nonce 無しでも nonce では断らない
+1. fapi1 でない登録・openid・nonce 無しは、従来どおり code を返す（OIDC Core では任意）
+
+**検証（合否を判定する）**
+
+- error
+- クエリ : 断る理由は nonce
+- code を返さない
+- fapi1・nonce 在り : code が返る
+- PAR : HTTP 400
+- PAR : invalid_request
+- PAR : 断る理由は nonce
+- fapi1・openid 無し : code が返る
+- normal・nonce 無し : code が返る
+
+## RT-383.1 fapi1 の登録の /par は、S256 の PKCE だけを受け、plain・code_challenge_method の省略・PKCE 無しを invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced は、認可サーバに「PAR の要求には S256 の PKCE を求める」ことを求める。****code_challenge_method を省くと plain の扱い**（RFC 7636 §4.3）なので、これも断る。**以前は fapi1 の登録の PAR が、PKCE 無し・plain でも受けていた**（適合性テストの par-ensure-pkce-required・par-plain-pkce-rejected）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2 / RFC 7636 §4.3 / RFC 7636 §4.4.1 / #383 |
+| テスト | `RT38301_fapi1の登録のPARはS256のPKCEだけを受ける` |
+
+**手順**
+
+1. S256 で預ける（受ける）
+1. (1') その request_uri で認可の口へ行く（預けた要求を読み直しても断られない）
+1. plain で預ける
+1. code_challenge_method を省く（plain の扱い）
+1. PKCE を使わない
+
+**検証（合否を判定する）**
+
+- S256 : HTTP 201
+- 認可の口で断られない（同意画面か code）
+- plain : HTTP 400
+- plain : invalid_request
+- plain : request_uri を返さない
+- code_challenge_method の省略 : HTTP 400
+- code_challenge_method の省略 : invalid_request
+- code_challenge_method の省略 : request_uri を返さない
+- PKCE 無し : HTTP 400
+- PKCE 無し : invalid_request
+- PKCE 無し : request_uri を返さない
+
+## RT-383.2 PAR を使わない fapi1 の登録の要求（/authorize のクエリ）は、従来どおり PKCE 無しでも断らない
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced §5.2.2 の 18 が S256 の PKCE を求めるのは、PAR の要求だけ。****PAR を使わない fapi1 の RP を壊さない**（#383 の決め。fapi2 は #366 で全要求に必須）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2 / #383 |
+| テスト | `RT38302_PARを使わないfapi1の要求は従来どおり` |
+
+**手順**
+
+1. PKCE を付けずに、クエリで認可要求を送る
+
+**検証（合否を判定する）**
+
+- code が返る（PKCE 無しで断らない）
 
 ## RT-384.1 **FAPI の登録（fapi1）のトークンの /userinfo は、要求の x-fapi-interaction-id（UUID）をそのまま返し、無い・UUID の形でないときは新しい UUID を返す。FAPI でない登録・検証できないトークンには付けない**
 
@@ -12538,6 +12753,189 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - トークンを出さない
 - access_token が返る
 
+## RT-388.1 CIBA の署名した要求の寿命が 60 分を超える（exp が nbf から 70 分先・nbf が 70 分前）なら、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA は、署名した認証要求に nbf・exp を求め、寿命を 60 分以内に限ることを求める。****以前は exp が過ぎていないこと・nbf が先でないことだけを見ていた**（適合性テストの ensure-request-object-exp-is-70-minutes-in-future-fails・nbf-is-70-minutes-in-past-fails）。 |
+| 根拠 | FAPI-CIBA ID1 §5.2.2 / CIBA Core §13 / #388 |
+| テスト | `RT38801_CIBAの要求の寿命が60分を超えるなら断る` |
+
+**手順**
+
+1. exp が nbf から 70 分先（nbf は今）
+1. nbf が 70 分前（exp は 5 分先）
+
+**検証（合否を判定する）**
+
+- exp が 70 分先 : auth_req_id を返さない（利用者へ通知しない）
+- exp が 70 分先 : HTTP 400
+- exp が 70 分先 : invalid_request
+- exp が 70 分先 : 断る理由は寿命
+- nbf が 70 分前 : auth_req_id を返さない（利用者へ通知しない）
+- nbf が 70 分前 : HTTP 400
+- nbf が 70 分前 : invalid_request
+- nbf が 70 分前 : 断る理由は寿命
+
+## RT-388.2 CIBA の署名した要求の寿命がちょうど 60 分なら寿命では断らず、60 分 1 秒なら invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **FAPI-CIBA は寿命を「60 分以内」に限る**（60 分ちょうどは許す）。**境界の取り違え（< と <=）を測る。** 60 分ちょうどの要求は、寿命の後の確かめ（端末の登録など）で止まってよい。 |
+| 根拠 | FAPI-CIBA ID1 §5.2.2 / #388 |
+| テスト | `RT38802_寿命がちょうど60分なら寿命では断らない` |
+
+**手順**
+
+1. 寿命がちょうど 60 分（nbf は今、exp は 3600 秒先）は、寿命では断らない
+1. 寿命が 60 分 1 秒（exp は 3601 秒先）は、断る
+
+**検証（合否を判定する）**
+
+- 60 分ちょうど : 寿命では断らない
+- 60 分 1 秒 : auth_req_id を返さない（利用者へ通知しない）
+- 60 分 1 秒 : HTTP 400
+- 60 分 1 秒 : invalid_request
+- 60 分 1 秒 : 断る理由は寿命
+
+## RT-389.1 **SAML2 の応答の Audience は、要求の Issuer（SP の entityID）と一致し、ACS の URL ではない。Recipient は ACS の URL**
+
+| | |
+|---|---|
+| 観点 | **SAML Profiles §4.1.4.2 は、bearer の確認を持つアサーションの AudienceRestriction に、SP の一意の識別子（entityID）を入れることを求める。****以前は ACS の URL を入れていた**ので、Audience を entityID と照合する SP とは通らなかった。 |
+| 根拠 | SAML Profiles §4.1.4.2 / #389 |
+| テスト | `RT38901_SAML2の応答のAudienceはSPのentityID` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- StatusCode
+- Audience は、要求の Issuer（SP の entityID）
+- Audience は ACS の URL ではない
+- Recipient（ACS の URL）は在る
+
+## RT-389.2 **Redirect Binding の応答でも、Audience は要求の Issuer（SP の entityID）と一致し、ACS の URL ではない**
+
+| | |
+|---|---|
+| 観点 | **SAML Profiles §4.1.4.2 は、AudienceRestriction に SP の entityID を求める。****Binding ごとに応答を作る関数が分かれている**（CreateRedirectResponse・CreatePostResponse）ので、両方を測る（RT-389.1 は POST）。 |
+| 根拠 | SAML Profiles §4.1.4.2 / #389 |
+| テスト | `RT38902_Redirectの応答でもAudienceはSPのentityID` |
+
+**検証（合否を判定する）**
+
+- SP（ACS）へリダイレクトで返る
+- StatusCode
+- Audience は、要求の Issuer（SP の entityID）
+- Audience は ACS の URL ではない
+
+## RT-390.1 署名した要求で、NCName の形でない ID を、応答の InResponseTo に使わない
+
+| | |
+|---|---|
+| 観点 | **要求の `ID` は送る側が決め、署名の検証より前に取り出され、IdP が署名する応答に入る。****Open棟梁 の部品は値を文字列の置換で埋め込む**ので、**XML として意味のある文字を含む `ID` で、応答の構造が変わっていた。****`ID` は `xs:ID`（NCName）なので、形の合わないものは検証の失敗とし、応答に使わない**（#390）。 |
+| 根拠 | SAML Core 1.3.4 / SAML Core 3.2.2 / #390 |
+| テスト | `RT39001_NCNameでないIDを応答に使わない` |
+
+**手順**
+
+1. 対照：NCName の ID（`_`・`.`・`-` を含む）は通り、InResponseTo に返る
+1. 引用符と空白を含む ID は Requester で、応答の構造が変わらない
+1. `<`・`&` を含む ID も Requester で、応答を読める
+1. 数字で始まる ID・`:` を含む ID も NCName ではないので、Requester
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- StatusCode
+- InResponseTo（送った要求の ID）
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+
+**補足**
+
+- **鍵の無い SP の要求を、署名を確かめずに通す扱いは続ける**（#390 の決め）。**要求から取った値（`ID`）の形を確かめる**ことで、応答に入る値を絞る。**`nameID`・ACS の URL を DOM の API で入れる直しは、Open棟梁 の側で行う。**
+
+## RT-390.2 鍵を登録した SP の、署名の無い要求（エラー応答の経路）でも、NCName の形でない ID を使わない
+
+| | |
+|---|---|
+| 観点 | **署名の検証に失敗しても、IdP は要求の `ID` を `InResponseTo` に入れた、署名したエラー応答を返す**（`AccountController.Saml2` の Error Response の枝）。**`ID` は検証の前に取り出される**ので、**鍵を登録した SP でも当たっていた**（#390）。 |
+| 根拠 | SAML Core 1.3.4 / SAML Core 3.2.2 / #390 |
+| テスト | `RT39002_エラー応答でもNCNameでないIDを使わない` |
+
+**手順**
+
+1. 引用符と空白を含む ID で、署名の無い要求を送る
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答のどの要素にも、属性が増えていない（構造が変わらない）
+- StatusCode
+- InResponseTo に送った ID を入れない
+- エラー応答に Assertion を入れない
+
+**補足**
+
+- **NCName の ID なら、エラー応答の `InResponseTo` に返る**（`SA-5.1`・`SA-5.4`）。
+
+## RT-390.3 NameID（EmailAddress の形式の利用者のメアド）に < や & を含むなら、アサーションを作らず Responder を返す
+
+| | |
+|---|---|
+| 観点 | **Open棟梁 の部品は、NameID を文字列の置換で要素の中に埋め込む。****EmailAddress の形式では利用者のメアドがそのまま入り、net10.0 版の `[EmailAddress]` は `<` を通す。****`<`・`&` を含む値は、アサーションの構造を変えるか XML を壊すので、アサーションを作らない**（#390）。**エスケープはしない**（部品が値を DOM の API で入れるようになったとき、二重になるため）。 |
+| 根拠 | SAML Core 3.2.2.2 / #390 |
+| テスト | `RT39003_NameIDにマークアップの文字を含むならアサーションを作らない` |
+
+**手順**
+
+1. メアドに `<` を含む利用者を作る（受けない版は `&` にする）
+1. EmailAddress の形式で要求する
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- SAMLResponse がある
+- 応答を XML として読める
+- 応答に、要素が増えていない（構造が変わらない）
+- StatusCode
+- Assertion を入れない
+
+**補足**
+
+- **ほかの形式（Unspecified の `user.Id`・Persistent の PPID）は、サーバが作る値**なので当たらない。**値を DOM の API で入れる直しは、Open棟梁 の側で行う。**
+
 ## RT-391.1 **自己テストの SP の 4 通りの SAML2 の要求（Redirect・POST）に、送った先と同じ Destination が入る**
 
 | | |
@@ -12559,6 +12957,67 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - Destination が、要求を送った先と同じ
 - Destination が、要求を送った先と同じ
 - Destination が、要求を送った先と同じ
+
+## RT-392.1 署名の無い要求でも、Destination が受けた口と違えば捨てる（エラー画面）。合う・無い Destination なら、署名を確かめられないので Requester のエラー応答
+
+| | |
+|---|---|
+| 観点 | **SAML Core 3.2.1 は、署名の有無によらず、Destination が在れば受けた場所と照合し、違えば要求を捨てることを求める（MUST）。** **以前は照合していなかった**（#392）。**Destination の照合は、署名の確かめより前に行う**（違えば捨てる）。**照合を通った署名の無い要求は、署名を確かめられないので Requester で断る**（#400。以前は、鍵を登録していない SP の要求を通していた）。 |
+| 根拠 | SAML Core 3.2.1 / #392 / #400 |
+| テスト | `RT39201_署名の無い要求でも違うDestinationは捨てる` |
+
+**手順**
+
+1. Destination が受けた口と同じなら、照合は通り、署名が無いので Requester（#400）
+1. Destination が無ければ、照合は通り、署名が無いので Requester（#400）
+1. Destination が受けた口と違えば、捨てる（SP へ応答を返さない）
+1. 空の Destination も、受けた場所を指さないので、捨てる
+
+**検証（合否を判定する）**
+
+- SP へ応答を返す（捨てない）
+- StatusCode（署名を確かめられない）
+- SP へ応答を返す（捨てない）
+- StatusCode（署名を確かめられない）
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+
+## RT-392.2 鍵を登録した SP の署名した要求（Redirect）は、Destination が無いか受けた口と違えば捨てる（エラー画面）
+
+| | |
+|---|---|
+| 観点 | **SAML Bindings 3.4.5.2 は、署名した要求の Destination に送り先の URL を入れ、受け手は受けた場所と一致することを確かめることを求める（MUST）。****以前は照合していなかった**ので、別の IdP 宛ての署名した要求を、この IdP で使えた（#392）。 |
+| 根拠 | SAML Bindings §3.4.5.2 / SAML Core 3.2.1 / #392 |
+| テスト | `RT39202_署名した要求はDestinationが無いか違えば捨てる` |
+
+**手順**
+
+1. 対照：署名して、Destination が受けた口と同じなら、通る（署名を検証できている）
+1. 署名して、Destination が無ければ、捨てる
+1. 署名して、Destination が受けた口と違えば、捨てる
+1. 署名しないで、Destination が受けた口と違えば、署名の検証の失敗（Requester）ではなく、捨てる
+
+**検証（合否を判定する）**
+
+- SP へ応答を返す
+- StatusCode
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+- 500 にしない
+- SP へ応答を返さない（捨てる）
+- エラー画面が開く
+
+**補足**
+
+- **同梱の自己テストと ID 連携の SP は、Destination を入れて署名する**（#391。`RT-391.1`・`SA-6.1`）ので、**流れは従来どおり通る**（`SA-1.*`・`SA-6.*`）。
 
 ## RT-394.1 **署名の alg を登録していない FAPI の登録（fapi1）の access_token・id_token・JARM は ES256 で署名され、JWKS で検証できる。FAPI でない登録は RS256 のまま**
 
@@ -12637,6 +13096,64 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - auth_req_id を返さない
 - invalid_request
 - backchannel_authentication_request_signing_alg_values_supported
+
+## RT-398.1 **/token の client_credentials は、client_assertion の aud にトークン エンドポイントの URL を受けず（invalid_client）、issuer なら通る**
+
+| | |
+|---|---|
+| 観点 | **RFC 10070 §4 は、クライアント認証の JWT の aud を issuer の唯一の値に限り、トークン エンドポイントの URL を audience にすることを禁じた**（認可サーバは、そうでない JWT を断らなければならない）。**以前は、fapi2 以外の登録でトークン エンドポイントの URL も受けていた**（#294）。 |
+| 根拠 | RFC 10070 §4 / #398 |
+| テスト | `RT39801_tokenのclient_credentialsはaudにissuerだけを受ける` |
+
+**手順**
+
+1. aud = トークン エンドポイントの URL
+1. 対照：aud = issuer（同じクライアント・同じ鍵）
+
+**検証（合否を判定する）**
+
+- invalid_client
+- HTTP 401
+- トークンを出さない
+- トークンが返る
+
+## RT-398.2 **/token の CIBA のグラントは、client_assertion の aud に issuer とトークン エンドポイントの URL を受ける。CIBA の口・PAR の口の URL は受けない**
+
+| | |
+|---|---|
+| 観点 | **CIBA の流れは以前のまま**（RFC 10070 は CIBA を直接の対象にしていない。#398 で人と決めた）。**ほかのグラントは issuer だけ**（RT-398.1）。**知らない auth_req_id で測る**：クライアント認証を通れば invalid_grant（CIBA Core 1.0 §11）、通らなければ invalid_client。 |
+| 根拠 | CIBA Core 1.0 §11 / RFC 10070 §4 / #398 |
+| テスト | `RT39802_tokenのCIBAのグラントはaudにトークンエンドポイントのURLも受ける` |
+
+**手順**
+
+1. aud = issuer（クライアント認証を通る）
+1. aud = トークン エンドポイントの URL（クライアント認証を通る）
+1. aud = CIBA の口の URL（/token では受けない）
+1. aud = PAR の口の URL
+
+**検証（合否を判定する）**
+
+- invalid_grant（知らない auth_req_id。invalid_client ではない）
+- invalid_grant（知らない auth_req_id。invalid_client ではない）
+- invalid_client
+- invalid_client
+
+## RT-400.1 **鍵を登録していない SP の、署名の無い要求は、登録済みの ACS URL へ Requester のエラー応答を返す（アサーションを入れない）**
+
+| | |
+|---|---|
+| 観点 | **メタデータの WantAuthnRequestsSigned=true は、この IdP が受ける AuthnRequest に署名を求めることを示す。****以前は、鍵を登録していない SP の要求を、署名を確かめずに通していた**（振る舞いと広告が食い違っていた）。**署名を確かめられない要求は、署名の検証に失敗した要求と同じく断る**（#400）。 |
+| 根拠 | SAML Metadata（IDPSSODescriptor の WantAuthnRequestsSigned） / #400 |
+| テスト | `RT40001_鍵を登録していないSPの署名の無い要求は断る` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- 登録済みの ACS URL へ応答を返す
+- StatusCode（署名を確かめられない要求は断る）
+- アサーション（NameID）を入れない
+- InResponseTo（送った要求の ID）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
@@ -13083,6 +13600,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る
@@ -13129,6 +13647,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る
@@ -13170,6 +13689,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る
@@ -13217,6 +13737,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る
@@ -13264,7 +13785,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - WantAuthnRequestsSigned
-  - **固定で true を出している**（Open棟梁 の雛形）。**実際は、`jwk_rsa_publickey` を登録していないクライアントの要求は、署名が無くても通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**広告と振る舞いが揃っていない**ので、`CONFIGURATION.md` に明記してある。
+  - **固定で true を出している**（Open棟梁 の雛形）。**振る舞いも揃えた**：署名を確かめられない要求は、鍵を登録していないクライアントのものも断る（#400。以前は通していた。`RT-400.1`）。
 
 ## SA-2.2 メタデータは、退役させる途中の署名証明書も並べて広告する
 
@@ -13487,7 +14008,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **`jwk_rsa_publickey` を登録していれば、署名を検証する。****登録していなければ、署名の無い要求も通す**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**`AuthnRequest` の署名は SAML では任意**で、**応答が事前登録の ACS URL にしか飛ばない**ことで守っている。**登録した場合に、それが効いていること**をここで測る。 |
+| 観点 | **`jwk_rsa_publickey` を登録していれば、署名を検証する。****登録していなければ、署名を確かめられないので、やはり断る**（#400。以前は「鍵がない場合は、通す」で通していた。`RT-400.1`）。**応答は事前登録の ACS URL にしか飛ばない**ので、断る応答も登録値へ返る。**登録した場合に、署名の検証が効いていること**をここで測る。 |
 | 根拠 | SAML Core 3.4 / Web SSO Profile / #275 |
 | テスト | `SA0504_鍵を登録したクライアントの署名の無い要求を断る` |
 
@@ -13511,7 +14032,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **`TestClient_21` は鍵を登録していない**ので、**同じ要求が `SA-3.*` では通る。** 差は登録だけである。
+- **鍵を登録していない SP の署名の無い要求も、同じく Requester で断る**（#400。`RT-400.1`）。**`SA-3.*` は、`TestClient_21` の鍵で署名して送るので通る。**
 - **上流（Open棟梁 #598）で 2 つが直っている。****`VerifyByXPath` が `StatusCode` を見るようになり**、**`VerifyResponse` の `out statusCode` が検証の前に設定される**ようになった。**そのため、こちら側に回避を置かずに理由を出せている。**
 
 ## SA-6.1 上流の IdP へ SAML2 で委譲して、下流にサインインできる
@@ -13639,7 +14160,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **(2)（下流 → 上流の `AuthnRequest`）の署名が検証されていること**（#293 の段階 2）。**上流に `jwk_rsa_publickey` を登録していなければ、`VerifySamlRequest` は「鍵がない場合は、通す」経路に入る**ので、**壊した署名でも通ってしまう** — **それを落とすのがこのケースである。****製品が署名した本物の要求の、署名だけを 1 バイト変えて送る**ので、**配備を壊さずに歯抜けが測れる**（段階 4）。 |
+| 観点 | **(2)（下流 → 上流の `AuthnRequest`）の署名が検証されていること**（#293 の段階 2）。**以前は、上流に `jwk_rsa_publickey` を登録していなければ、`VerifySamlRequest` が「鍵がない場合は、通す」経路に入り、壊した署名でも通った**（#400 で、鍵が無ければ断るようにした）。**上流に鍵を登録し、署名の検証が効いていることを測る。****製品が署名した本物の要求の、署名だけを 1 バイト変えて送る**ので、**配備を壊さずに歯抜けが測れる**（段階 4）。 |
 | 根拠 | SAML 2.0 Bindings 3.4.4.1 / #275 / #293 の段階 2 |
 | テスト | `SA0605_署名を壊したAuthnRequestを上流が弾く` |
 

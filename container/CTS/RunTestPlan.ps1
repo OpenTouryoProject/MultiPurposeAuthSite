@@ -38,6 +38,7 @@
      2026/11/10  玄人 幸道         段階 3 のプラン（Implicit・Hybrid・form_post・ログアウト・動的登録）を足した。雛形をプランの間で共有できるようにした（#350）
      2026/11/11  玄人 幸道         段階 4 のプラン（FAPI）を足した。クライアントの鍵とクライアント証明書を埋める（#350）
      2026/11/11  玄人 幸道         段階 4 のプラン（FAPI 2.0 Message Signing・FAPI 1.0 Advanced・FAPI-CIBA）と、CIBA の端末役（承認の自動化）を足した（#350）
+     2026/11/17  玄人 幸道         FAPI 2.0 Message Signing のクライアントを、署名した Request Object を必須にした登録（17・18）に分けた（#385）
 #>
 [CmdletBinding()]
 param(
@@ -98,9 +99,10 @@ $plans = @{
         Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"mtls","sender_constrain":"mtls"}'
         ClientId = 'c75c11e000000000000000000000000a'; Client2Id = 'c75c11e000000000000000000000000b' }
     # **FAPI 2.0 Message Signing**：SP の private_key_jwt＋DPoP に、署名した Request Object（signed_non_repudiation）と JARM を足したもの
+    #   **クライアントは SP と分ける**（17・18。署名した Request Object を必須にした登録。SP のプランは署名の無い PAR を送るので、8・9 には立てられない。#385）
     'fapi2-ms-private-key-jwt-dpop' = @{ Name = 'fapi2-message-signing-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
         Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop","fapi_request_method":"signed_non_repudiation","fapi_response_mode":"jarm"}'
-        ClientId = 'c75c11e0000000000000000000000008'; Client2Id = 'c75c11e0000000000000000000000009' }
+        ClientId = 'c75c11e0000000000000000000000011'; Client2Id = 'c75c11e0000000000000000000000012' }
     # **FAPI 1.0 Advanced**：private_key_jwt・PAR（pushed）・JARM（#370）
     #   **plain_response（Hybrid の code id_token）にしない。** MPAS は fapi1 の登録に Hybrid を許さない（FA-1.4）ので、
     #   FAPI 1.0 Advanced §5.2.2 の 2 の「code ＋ JARM」の側で回す（#350 で plain_response にしていたのは誤り。#370 で見つけた）

@@ -145,7 +145,7 @@
     <value>Issuer differs from the expected value: {0} (expected: {1})</value>
   </data>
   <data name="Saml2AudienceMismatch" xml:space="preserve">
-    <value>Audience differs from this ACS URL: {0} (expected: {1})</value>
+    <value>Audience differs from this SP entityID: {0} (expected: {1})</value>
   </data>
   <data name="Saml2RecipientMismatch" xml:space="preserve">
     <value>Recipient differs from this ACS URL: {0} (expected: {1})</value>

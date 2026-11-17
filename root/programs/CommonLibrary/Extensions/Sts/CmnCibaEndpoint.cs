@@ -37,6 +37,8 @@
 //*  2026/11/06  玄人 幸道         クレームを Open棟梁 の TryGetStringClaim で取り出し、要求を日付に変えずに読む。任意のクレームも、読めなければ断る（OpenTouryo#662。#337）
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、CIBA の口の URL も受ける（CIBA Core 1.0 §7.1。#371）
 //*  2026/11/15  玄人 幸道         CIBA の署名した要求を PS256 でも受ける（JWS を受ける RequestObject.VerifyCiba。#395）
+//*  2026/11/17  玄人 幸道         CIBA の署名した要求の寿命を 60 分までにした（FAPI-CIBA ID1 §5.2.2 の 9。#388）
+//*  2026/11/17  玄人 幸道         CIBA の口の aud は CIBA Core 1.0 §7.1 に従うことを書いた（RFC 10070 は CIBA を更新していない。#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -111,7 +113,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(assertion))
             {
                 // private_key_jwt（FAPI-CIBA が求める方式）
-                //  **aud に、この口（Backchannel Authentication Endpoint）の URL も受ける**（CIBA Core 1.0 §7.1 の MUST。#371）。
+                //  **aud に、この口（Backchannel Authentication Endpoint）の URL とトークン エンドポイントの URL も受ける**（CIBA Core 1.0 §7.1 の MUST。#371）。
+                //    **ほかの口は issuer だけ**（RFC 10070 §4・§5）。**RFC 10070 は CIBA を更新していないので、CIBA Core に従う**（#398）。
                 authned = CmnEndpoints.ClientAuthentication(
                     assertion,
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint,
@@ -483,6 +486,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
             }
+            // **寿命は 60 分まで**（FAPI-CIBA ID1 §5.2.2 の 9「limit the lifetime of the request to no more than 60 minutes」。#388）。
+            //   **nbf が 60 分より前でなく、exp が nbf から 60 分以内**（PAR・/ros の FAPI の登録の確かめ `VerifyFapiTimeClaims` と同じ形。#336）。
+            //   **CIBA のすべての要求に掛ける**（CIBA は fapi_ciba の登録にしか許していないので、上の ClientModePolicy と同じ範囲になる）。
+            //   **過ぎていないか・始まっているかは、上の VerifyExp・VerifyNbf が見る。**
+            if (!CmnCibaEndpoint.IsWithinCibaRequestLifetime(json))
+            {
+                // CIBA Core 13 : invalid_request
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "The lifetime of the request must not exceed 60 minutes.";
+                return false;
+            }
             // jti
             // **同じ要求を二度受け付けない（#234 の段階 2）。**
             //   CIBA Core 7.1.1 は jti を「署名した認証要求の一意な識別子」としている。
@@ -583,6 +597,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             return true;
+        }
+
+        /// <summary>CIBA の署名した要求の寿命の上限（秒）。FAPI-CIBA ID1 §5.2.2 の 9（#388）</summary>
+        private const long CibaRequestMaxLifetimeSeconds = 60 * 60;
+
+        /// <summary>CIBA の署名した要求の寿命が 60 分以内か（#388）</summary>
+        /// <param name="json">要求の中身（exp・nbf が在ることは確かめた後であること）</param>
+        /// <returns>nbf が 60 分より前でなく、exp が nbf から 60 分以内なら true（読めなければ false）</returns>
+        /// <remarks>
+        /// **読み方は Open棟梁 の `CmnJwtToken.TryReadNumericDate`**（PAR・/ros の `VerifyFapiTimeClaims` と同じ。#336）。
+        /// **文字列の数値も受ける**（この経路の `exp`・`nbf` は、従来から文字列として読んで確かめている。寿命の上限だけを足す）。
+        /// </remarks>
+        private static bool IsWithinCibaRequestLifetime(JObject json)
+        {
+            if (!CmnJwtToken.TryReadNumericDate(json[OAuth2AndOIDCConst.exp], true, out decimal exp)
+                || !CmnJwtToken.TryReadNumericDate(json[OAuth2AndOIDCConst.nbf], true, out decimal nbf))
+            {
+                return false;
+            }
+
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            return nbf >= now - CmnCibaEndpoint.CibaRequestMaxLifetimeSeconds
+                && exp - nbf <= CmnCibaEndpoint.CibaRequestMaxLifetimeSeconds;
         }
 
         /// <summary>CIBA の認証リクエストのクレームを取り出す（CmnJwtToken.TryGetStringClaim の包み）</summary>

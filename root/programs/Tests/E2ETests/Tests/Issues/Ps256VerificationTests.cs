@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/15  玄人 幸道         新規（#395）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -97,7 +98,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(1) FAPI でない登録 : PS256 のアサーション");
 
                 JsonResponse normalPs256 = await Ps256VerificationTests.RevokeAsync(client,
-                    JwsSigner.SignPS256(client, Ps256VerificationTests.AssertionPayload(normal.ClientId, client.Target.BaseUrl + "/token")));
+                    JwsSigner.SignPS256(client, Ps256VerificationTests.AssertionPayload(normal.ClientId, issuer)));
 
                 r.VerifyEqual("認証が通る（HTTP 200）", "200", ((int)normalPs256.StatusCode).ToString());
 

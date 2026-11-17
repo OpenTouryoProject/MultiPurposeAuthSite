@@ -62,6 +62,9 @@
 //*  2026/11/10  玄人 幸道         TestClient_45（fapi2。id_token_signed_response_alg=PS256）を追加（#355）
 //*  2026/11/13  玄人 幸道         TestClient_46（authorization_signed_response_alg=PS256）を追加（#370）
 //*  2026/11/15  玄人 幸道         TestClient4_5 を追加（#395）
+//*  2026/11/17  玄人 幸道         fapi1 の認可要求に JARM（response_mode=jwt）を足す WithJarm を追加（#381）
+//*  2026/11/17  玄人 幸道         TestClient_21 の説明を、鍵を持つ形に直した（#400）
+//*  2026/11/17  玄人 幸道         鍵を登録していない SAML2 の SP（TestClient_23）を足した（#400）
 //**********************************************************************************
 
 using System;
@@ -366,13 +369,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>SAML2 を測るクライアント（#275）</summary>
         /// <remarks>
-        /// **`jwk_rsa_publickey` を持たない**（写す元が Device_Client）ので、
-        /// **署名の無い AuthnRequest が通る**。**要求を自前で組み立てられる。**
+        /// **`jwk_rsa_publickey` を持つ**（写す元が TestClient。#400）。**要求は `Saml2.SignedRequestQuery` で署名して送る。**
+        /// **要求を自前で組み立てられる。**
         /// </remarks>
         public const string TestClient_21 = "TestClient_21";
 
         /// <summary>SAML2 の PPID を RP ごとに比べるための 2 つ目（#275）</summary>
         public const string TestClient_22 = "TestClient_22";
+
+        /// <summary>鍵を登録していない SAML2 の SP（#400）</summary>
+        /// <remarks>**`jwk_rsa_publickey` を持たない**（写す元が Device_Client）。**IdP がその要求を断ることを測る**（`RT-400.1`）。</remarks>
+        public const string TestClient_23 = "TestClient_23";
 
         /// <summary>
         /// TestClient（normal）を写し、**`token_endpoint_auth_method` を `private_key_jwt`**
@@ -492,6 +499,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_29, "e2e0tc29000000000000000000000000" },
                 { KnownClients.TestClient_21, "e2e0sa21000000000000000000000000" },
                 { KnownClients.TestClient_22, "e2e0sa22000000000000000000000000" },
+                { KnownClients.TestClient_23, "e2e0sa23000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
@@ -740,6 +748,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             await Flows.AuthorizeCodeAsync(
                 client, registration, scope, "state-consent", "nonce-consent",
                 registration.RedirectUri);
+        }
+
+        /// <summary>認可要求の追加パラメタに、JARM（`response_mode=jwt`）を足す（#381）</summary>
+        /// <param name="extra">追加パラメタ（null 可。書き換えない）</param>
+        /// <returns>`response_mode=jwt` を足した写し</returns>
+        /// <remarks>
+        /// **fapi1 の登録は JARM の認可要求だけを受ける**（FAPI 1.0 Advanced §5.2.2 の 2。#381）。
+        /// **応答の code・state・error は、`AuthZResponse.Unwrap()` で読む。**
+        /// </remarks>
+        public static Dictionary<string, string> WithJarm(IDictionary<string, string> extra = null)
+        {
+            Dictionary<string, string> ret = (extra == null)
+                ? new Dictionary<string, string>() : new Dictionary<string, string>(extra);
+
+            ret["response_mode"] = "jwt";
+
+            return ret;
         }
 
         /// <summary>

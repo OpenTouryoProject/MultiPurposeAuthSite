@@ -1255,6 +1255,71 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **fapi2 の登録の access_token・JARM** | 同じ関数で決まる（fapi1 で代表させた）。fapi2 のトークンは PAR・DPoP・private_key_jwt が要り、id_token は暗号化している（中の JWS は以前から ES256。`RT-352.1`） |
 | **logout_token** | 同じ `GetIdTokenSignedResponseAlg` で決まる。ログアウトの E2E はテストのクライアント（normal）で測る |
 
+##### Redirect Binding の送り先がクエリを持っていれば、`&` でつなぐ（単体テスト `AppendQueryTests`。#393）
+
+| | 測ること |
+|---|---|
+| **`Tests/UnitTests/Saml/AppendQueryTests.cs`** | **`CmnSaml2Response.AppendQuery`**：クエリを持たない送り先には `?`、持つ送り先には `&` でつなぐ（SAML Bindings §3.4.4.1 の 4）。`?`・`&` で終わる送り先には区切りを重ねない。足すものが空なら送り先のまま |
+
+- **使うのは 2 か所**：SAML2 の ID 連携の要求（上流の SSO の口。両版の `AccountController.IdFederation`）と、IdP の役の Redirect Binding の応答（SP の登録済みの ACS URL。両版の `AccountController.Saml2`）。**以前はどちらも常に `?` でつないでいた**
+- **E2E では測れない**（E2E の上流の SSO の口も、種データの ACS URL も、クエリを持たない）ので、組み立てを単体テストで確かめる
+- **自己テストの SP（`HomeController.Saml2`）は変えていない**（送り先は自サイトの `Saml2RequestEndpoint` で、設定の口のパスはクエリを持たない）
+- **直したのを外すと**（常に `?` でつなぐと）、`AppendQueryTests` の 3 件が落ちることを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
+
+##### SAML2 の IdP は、署名を確かめられない要求を断る（`RT-400.*`。#400）
+
+| | 測ること |
+|---|---|
+| **`RT-400.1`** | **鍵を登録していない SP（`TestClient_23`）の、署名の無い要求は、登録済みの ACS URL へ `Requester` のエラー応答（アサーションを入れない。`InResponseTo` は要求の ID）** |
+
+- **以前は、鍵を登録していない SP の要求を、署名を確かめずに通していた**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**メタデータは `WantAuthnRequestsSigned="true"` を広告していた**ので、振る舞いを揃えた
+- **要求を直に組み立てる E2E は、署名して送るようにした**（`Saml2.SignedRequestQuery`。`SpRp_RsaPfxFilePath` の鍵。`Destination` が無ければ IdP の口の URL を補う）。**`TestClient_21`・`_22` の写す元を、鍵を持つ `TestClient` にした**
+- **署名しないまま送るテスト**：`SA-5.4`（鍵を登録した SP）・`RT-390.2`（エラー応答の経路の ID）・`RT-392.1`（`Destination` の照合は署名の確かめより前。合う・無い `Destination` は `Requester`）・`RT-392.2` の (4)・`RT-400.1`
+- **期待値が変わったテスト**：`RT-392.1`（合う・無い `Destination` の署名の無い要求：`Success` → `Requester`）
+- **直したのを外すと**（鍵が無ければ通すと）、net10.0 版で `RT-400.1` が落ちることを確かめた
+
+##### OIDC の ID 連携で、上流の鍵が決まらなければ断る（`RT-358.*`。#358）
+
+| | 測ること |
+|---|---|
+| **`RT-358.1`** | **管理画面で、`issuer`・`jwks_uri`・discovery・証明書の無い OIDC の上流の行を足し、その上流で ID 連携すると、上流は認可コードを返すが、下流にはサインインできない** |
+
+- **以前は、上流の鍵が決まらないと、鍵を指定しない `IdToken.Verify`（この配備の設定の鍵と `SpRp_Issuer`）に進んでいた**（1:1 のテスト構成の名残）。いまは理由をログに残して断る（両版の `AccountController.IdFederation`）
+- **上流のクライアントは、既定の上流と同じもの**（`test.ps1` が `E2E_IdFederationClientId_<core|netfx>`・`E2E_IdFederationClientSecret_<core|netfx>` で渡す。サイトの `OAuth2AndOidcClientID` は後から起動した版の値で上書きされるため）
+- **`aud` の確認（`IdTokenAudience`）は残した**（鍵を指定する版の照合に重ねる。人と決めた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **直す前に落ちること** | **`container/E2E` の上流は下流と別の鍵を使う**ので、直す前も鍵の検証で落ちていた（画面は同じエラー）。**断る理由の違いはサイトのログにしか出ず**、E2E はログを読めない。「通す」側に戻らないことだけを測る |
+| **期待する `issuer` は在るが、`jwks_uri` に届かず証明書も無い上流** | 同じ分岐（鍵が `null`）で断る。上流を止めずには作れない |
+
+##### SAML2 の応答の `Audience` は SP の entityID（`RT-389.*`。#389）
+
+| | 測ること |
+|---|---|
+| **`RT-389.1`** | **POST Binding の応答の `Audience` が要求の `Issuer`（"http://" ＋ client_id）と一致し、ACS URL ではない。`Recipient` は ACS URL**（SAML Profiles §4.1.4.2） |
+| **`RT-389.2`** | **Redirect Binding の応答でも同じ**（`CreateRedirectResponse` に `audience` を渡す分岐） |
+
+- **IdP の役**：`SamlProviders.CmnEndpoints.CreateSamlResponse` が、要求の `Issuer` を `audience` を受ける版の `SAML2Client.CreateRedirectResponse`・`CreatePostResponse`（OpenTouryo#693）に渡す。**`iss`（client_id）は `http://` を外した値なので使わない**
+- **SP の役**（自己テスト・ID 連携）：`Audience` を自分の entityID と照合する版の `VerifyResponseWithReason` にした。**自己テストの画面の Audience の行は「✓ 自分の entityID」**（`SA-1.*` が測る）
+- **設定で以前の値（ACS URL）に戻す分岐は作っていない**（人と決めた）
+- **直したのを外すと**（`audience` を渡さないと）、net10.0 版で `RT-389.1` と `SA-1.1`〜`.4` が落ちることを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ID 連携の上流が `Audience` に ACS URL を入れたときに断ること** | 上流（`container/E2E`）は同じ版の汎用認証サイトで、entityID を入れる。**通る側は `IdFederationSaml2Tests` が測る**（照合する値を取り違えると落ちる） |
+| **Open棟梁 の外の SP（`SpRp_Saml2SpEntityId` を設定した Sample4SpRp など）** | E2E の範囲の外。照合の判定は Open棟梁 の `VerifyResponseWithReason`（OpenTouryo#693 が測る） |
+
 ##### SP の役で作る SAML2 の要求に、送り先の `Destination` を入れる（`RT-391.*`・`SA-6.1`。#391）
 
 | | 測ること |
@@ -1263,14 +1328,55 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`SA-6.1`（足した確かめ）** | **ID 連携の `AuthnRequest` の `Destination` が、上流の SSO の口と同じ** |
 
 - **Open棟梁 の部品の更新（OpenTouryo#693）で、従来の `SAML2Client.CreateRedirectRequest`・`CreatePostRequest` が `[Obsolete]` になった。** `destination` を受ける版に替え、ビルドの `CS0618` を 0 件に戻した
-- **MPAS の IdP の側（`VerifyRequest`）は `Destination` を照合しない**ので、流れは従来どおり通る（`SA-1.1`〜`.4`・`SA-6.*`）
+- **MPAS の IdP の側も、#392 で `Destination` を照合するようになった**（`RT-392.*`）。自己テスト・ID 連携の要求は正しい `Destination` を入れるので、流れは従来どおり通る（`SA-1.1`〜`.4`・`SA-6.*`）
 - **部品の更新のほかの変化**（OpenTouryo#683 の `CmnJwtToken.Verify` など）は、両版の E2E の通しで確かめた（MPAS に、その例外を catch して分岐している箇所は無い）
 
 ###### 測っていないこと
 
 | | なぜ |
 |---|---|
-| **上流の IdP が `Destination` を照合して断るか** | MPAS の IdP は照合しない。テストの上流もこの IdP（コンテナ）なので、照合する IdP で測れない |
+| **上流の IdP が `Destination` を照合して断るか** | テストの上流もこの IdP（コンテナ）。**#392 で照合するようになり、`SA-6.*` が通ることで、ID 連携の要求の `Destination` が上流の口と一致していることも確かめている** |
+
+##### SAML2 の IdP は、要求の `Destination` を受けた口の URL と照合する（`RT-392.*`。#392）
+
+| | 測ること |
+|---|---|
+| **`RT-392.1`** | **署名の無い要求**：`Destination` が受けた口と同じ・無いなら、照合は通り、署名を確かめられないので `Requester` のエラー応答（#400。以前は通っていた）。**違う・空なら捨てる**（SP へ応答を返さず、エラー画面。SAML Core 3.2.1。署名の確かめより前） |
+| **`RT-392.2`** | **鍵を登録した SP の、署名した要求（Redirect）**：`Destination` が同じなら通る。**無い・違うなら捨てる**（SAML Bindings §3.4.5.2）。**署名しない要求でも、違えば（署名の検証の失敗の `Requester` ではなく）捨てる** |
+
+- **比べる先は `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint`**（自己テスト・ID 連携の SP が入れる値と同じ。#391）。**一字一句で比べる**（ACS URL の照合と同じ扱い）
+- **署名は、テストの側で `SpRp_RsaPfxFilePath` の鍵で付ける**（`Saml2.ToSignedRedirectQuery`。実装側の部品は使わない）。(1) の対照が通ることで、署名を検証できていることも確かめる
+- **照合するのは、署名の検証の後**（署名を検証できたかで「無い」を断るかが決まる）、**`ID` の形の確かめより前**（理由は OPERATION のログに 1 行）
+- 直す前は、どちらも SP へ署名した応答を返していた（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **POST Binding の署名した要求** | 照合は Binding によらず、読み込んだ要求の根の要素で行う。テストの側で XML 署名を作る基盤が無い |
+| **配備の前にリバース プロキシがあり、受けた URL と構成の URL が違う場合** | 比べるのは構成の URL（`OAuth2AuthorizationServerEndpointsRootURI`）。SP に知らせている URL と同じであることが前提 |
+
+##### SAML2 の応答に、形の合わない要求の `ID`・NameID を入れない（`RT-390.*`。#390）
+
+| | 測ること |
+|---|---|
+| **`RT-390.1`** | **鍵を登録していない SP**：NCName の `ID`（`_`・`.`・`-` を含む）は通り、`InResponseTo` に返る。**引用符・空白、`<`・`&` を含む `ID`、数字で始まる `ID`、`:` を含む `ID` は `Requester` で、`InResponseTo` は空、応答の構造が変わらない**（SAML Core 1.3.4） |
+| **`RT-390.2`** | **鍵を登録した SP の署名の無い要求**（エラー応答の経路）でも、同じく構造が変わらない |
+| **`RT-390.3`** | **NameID（EmailAddress の形式の利用者のメアド）に `<`・`&` を含むなら、アサーションを作らず `Responder`。** 使い捨ての利用者を管理画面から作る（**net48 版は要求の検証がフォームの `<` を断るので、`&` で測る**） |
+
+- **Open棟梁 の部品は、値を文字列の置換で応答に埋め込む。** 直す前は、`RT-390.1`・`.2` で `Response` の根の要素に属性が、`RT-390.3` でアサーションに要素が増えていた（net10.0 版で確かめた）
+- **要求の XML は、テストの側でエスケープして組み立てる**（`Saml2.BuildAuthnRequest`）。要求そのものは正しい XML で、IdP が取り出す値が上の文字を含む
+- **エスケープはしない**（部品が値を DOM の API で入れるようになったとき、二重になるため）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ID 連携で上流から来たメアド** | 同じ `CreateSamlResponse` の確認を通る（利用者の値として入る） |
+| **`Issuer`・`Destination`・`Recipient`** | 設定と登録の値。部品の側で DOM の API で入れる直しを Open棟梁 で行う（OpenTouryo#700） |
+| **NameID の `{`・XML で使えない文字** | 同じ確認（`HasXmlMarkup`）で断る。`{` は、部品が置換を順に行うので、後の置換の印（`{Recipient}` など）が書き換わるため |
+| **Redirect Binding で返る応答** | 確認は応答を作る前（`VerifySamlRequest`・`CreateSamlResponse`）で、Binding によらない |
+| **鍵を登録した SP の、署名した要求の NCName でない `ID`** | 署名の有無によらず同じ確認で断る（ログは署名の失敗と別の行に残す） |
 
 ##### CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する（`RT-387.*`。#387）
 
@@ -1292,17 +1398,38 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`TempData` が読めない Device の記録** | 自分で作る記録で、壊れた値を E2E から入れられない。**読めなければ断る** |
 | **期限切れの `auth_req_id`・`device_code` を、別のクライアントが引く** | 寿命が切れるまで待つ必要があり、通しに入れられない。**照合は状態の判定より前**なので、別のクライアントには `invalid_grant` を返して記録に触れず、正規のクライアントは従来どおり `expired_token` を受ける |
 
-##### `client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける（`RT-371.*`。#371）
+##### クライアント認証の `client_assertion` の `aud` は issuer だけを受ける（`RT-398.*`。#398）
+
+| | 測ること |
+|---|---|
+| **`RT-398.1`** | **`/token` の client_credentials は、トークン エンドポイントの URL を `invalid_client`（401）で断り、issuer なら通る**（RFC 10070 §4） |
+| **`RT-398.2`** | **`/token` の CIBA のグラントは、issuer・トークン エンドポイントの URL を受ける**（知らない `auth_req_id` で測り、`invalid_grant`。CIBA の流れは以前のまま）。**CIBA の口・PAR の口の URL は `invalid_client`** |
+
+- **RFC 10070**（2026 年 11 月。RFC 7523・RFC 9126 を更新）**の §4 は、クライアント認証の JWT の `aud` を issuer の唯一の値に限り、トークン エンドポイントの URL を禁じた。§5 は PAR の口の URL を外した**
+- **CIBA の流れ（`/ciba_authz` と、`/token` の CIBA のグラント）だけは以前のまま**（RFC 10070 は CIBA を直接の対象にしていない。人と決めた。`/ciba_authz` は CIBA Core 1.0 §7.1 の MUST）
+- **設定で以前の受け方に戻す分岐は作っていない**（人と決めた）
+- **JWT Bearer グラントの `assertion`** は、トークン エンドポイントの URL も受けるまま（RFC 10070 §4 の 1。`JwtBearerAudiences`。`JwtBearerTests`）
+- **E2E の `client_assertion` のヘルパーは、既定の `aud` を issuer にした**（`IdPClient.Issuer()`）。**同梱の自己テストのクライアント（`SelfTestClient.CreateClientAssertion`）も issuer にした**
+- **直したのを外すと**（トークン エンドポイントの URL を受け直すと）、net10.0 版で `RT-398.1` が落ちることを確かめた
+- **期待値が変わったテスト**：`RT-294.54`（トークン エンドポイントの URL を受ける → 断る）・`RT-371.2`（PAR の口の URL を受ける → 断る）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`/introspect`・Device の口・`/ros` のトークン エンドポイントの URL** | 判定は同じ `ClientAssertionAudiences`（口の URL を渡さない）。`/revoke`（`RT-294.54`）・`/token`（`RT-398.1`）・`/par`（`RT-371.2`）で測る |
+
+##### `client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける（`RT-371.*`。#371。PAR は #398 で issuer だけにした）
 
 | | 測ること |
 |---|---|
 | **`RT-371.1`** | **`/ciba_authz` は、CIBA の口の URL を `aud` として受ける**（CIBA Core 1.0 §7.1 の MUST。`auth_req_id` が返る）。**PAR の口の URL は `invalid_client`** |
-| **`RT-371.2`** | **`/par` は、PAR の口の URL を受ける**（RFC 9126 §2 の MUST。201）。**CIBA の口の URL は `invalid_client`**。**`/revoke` は PAR の口の URL を受けない**（対照として、同じクライアントでトークン エンドポイントの URL なら通る） |
+| **`RT-371.2`** | **`/par` は issuer だけを受ける**（RFC 10070 §5。201）。**PAR の口の URL・トークン エンドポイントの URL・CIBA の口の URL は `invalid_client`**（#398。#371 では PAR の口の URL を受けていた）。**`/revoke` は PAR の口の URL を受けない**（対照として、同じクライアントで issuer なら通る） |
 | **`RT-371.3`** | **fapi2 の登録は、`/par` でも issuer だけ**（FAPI 2.0 Security Profile §5.3.2.1。PAR の口の URL は `invalid_client`） |
 
-- **判定は `CmnEndpoints.AssertionAudiences`**（Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsAssertionAudience` の判定を、ここで決める）。**口の URL を渡すのは PAR・CIBA の口だけ**（`ClientAuthentication(assertion, endpointUrl, …)`）
+- **判定は `CmnEndpoints.ClientAssertionAudiences`**（Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsClientAssertionAudience` の判定を、ここで決める。#398 で `AssertionAudiences` から分けた）。**口の URL を渡すのは CIBA の口と CIBA のトークン要求だけ**（#398。以前は PAR の口も渡していた）
 - **足すのはその口の URL だけ**。**クライアント認証の JWT の `jti` は使用済みとして記録していない**ので、すべての口で全部の URL を受けると、ある口に宛てたアサーションを別の口で使える
-- **配列の `aud` は変えていない**（`RT-294.54`。MPAS の判定（`IsAssertionAudience`）が文字列に限る。要素 2 つ以上の配列は、Open棟梁 の `JwtAssertion.Verify` も受けない（唯一の値に限る。OpenTouryo#654））
+- **配列の `aud` は変えていない**（**RFC 10070 §4 が、issuer を唯一の値としない JWT を断ることを求める**。#397。`RT-294.54`。MPAS の判定（`IsAssertionAudience`）が文字列に限る。要素 2 つ以上の配列は、Open棟梁 の `JwtAssertion.Verify` も受けない（唯一の値に限る。OpenTouryo#654））
 - **`RT-371.1` は利用者の端末を登録する**ので、CIBA のほかのテストと同じコレクション（`CibaTests.DeviceCollection`）に入れた
 
 ###### 測っていないこと
@@ -1365,6 +1492,120 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
+
+##### Discovery の `response_modes_supported` に `jwt` を広告する（`RT-379.*`。#379）
+
+| | 測ること |
+|---|---|
+| **`RT-379.1`** | **`response_modes_supported` に `jwt` が在る**（`query.jwt`・`fragment.jwt`・`form_post.jwt` も従来どおり。JARM §2.3.4）。**広告した `jwt` で要求すると、JARM（`response`）で返る**（広告と受け付けの一致） |
+
+- **直したのは `CmnDiscoveryEndpoint` の 1 行**（`AccountController.TryResolveResponseMode` は以前から `jwt` を受けていた）
+- 直す前は、`jwt` が広告に無かった（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **code 以外の `response_type` での `jwt`（`fragment.jwt` に載ること）** | 置き場所を決めるのは従来の `TryResolveResponseMode`（この Issue では変えていない）。Hybrid ＋ `fragment.jwt` は `AuthorizeReviewTests` が通る |
+
+##### `state` を送らない要求の JARM には、`state` を入れない（`RT-378.*`。#378）
+
+| | 測ること |
+|---|---|
+| **`RT-378.1`** | **`state` 無しの要求の JARM（`response` の JWT）に、`state` の名前が無い**（成功の応答・エラーの応答（`prompt=none login`）とも。`"state": null` も出さない）。**`state` を送れば、その値が入る** |
+
+- **直したのは `CmnResponseObject.Create`**（両版の JARM の唯一の入口）。**値の無いパラメタ（null・空文字）を JWT に入れない**
+- **呼び出し側（両版の `AccountController.Authorize`）は、要求に無い `state` も null のまま辞書に入れる**（成功・エラーとも）。**クエリ・フラグメントの経路（Open棟梁 の `BuildRedirectUrl`）は値の無いパラメタを省くので、JARM だけで起きていた**
+- **JWT の中の名前は、`AuthZResponse.Unwrap()` の `Parameters` で見る**（JSON の null は文字列の `null` になるので、名前の有無で確かめる）
+- 直す前は、(1) の JWT に `"state": null` が在った（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **空の `state`（`state=`）を送った要求** | 値の無いパラメタとして省く。**クエリの経路（`BuildRedirectUrl` の `IsNullOrEmpty`）と同じ扱い**で、JARM とクエリの振る舞いが揃う |
+
+##### PAR の Request Object の中の `request_uri` を断る（`RT-380.*`。#380）
+
+| | 測ること |
+|---|---|
+| **`RT-380.1`** | **PAR に預ける Request Object（`request`）の中に `request_uri` が在れば（空文字も）`400` ＋ `invalid_request_object`**（RFC 9126 §2.1、RFC 9101 §7。理由が `request_uri` であることも確かめる）。`request_uri` の無い Request Object は `201`。**フォームの `request_uri` は従来どおり `invalid_request`** |
+
+- **判定は `CmnRequestObjectEndpoint.RegisterParRequest` の `request` の枝**（署名・`iss`・`client_id` を確かめた後）。**値によらず、在れば断る**
+- 直す前は、(2) の要求が `201` で受けられた（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`/ros` に預ける Request Object の中の `request_uri`** | `/ros` は RFC 9101 §5.2.1 の独自の口で、RFC 9126 の対象ではない（この Issue の範囲外） |
+
+##### CIBA の署名した要求の寿命は 60 分まで（`RT-388.*`。#388）
+
+| | 測ること |
+|---|---|
+| **`RT-388.1`** | **`exp` が `nbf` から 70 分先・`nbf` が 70 分前の要求は、`400` ＋ `invalid_request`**（FAPI-CIBA ID1 §5.2.2 の 9）。**`auth_req_id` を返さない。** 断る理由が寿命であることも `error_description` で確かめる |
+| **`RT-388.2`** | **境界**：寿命がちょうど 60 分の要求は寿命では断らず（その先の確かめで止まってよい）、60 分 1 秒なら断る |
+
+- **判定は `CmnCibaEndpoint.ValidateCibaAuthZReqParam`**（`request` と、`/ros` に預けた `request_uri` の両方の経路が通る。**テストは `request` の経路**。`/ros` の `VerifyFapiTimeClaims` は fapi1・fapi2 の登録だけで、`fapi_ciba` には掛からない）。**`nbf` が 60 分より前でなく、`exp` が `nbf` から 60 分以内**（PAR・`/ros` の FAPI の登録の `VerifyFapiTimeClaims` と同じ形。#336）
+- **CIBA のすべての要求に掛ける**（CIBA は `fapi_ciba` の登録にしか許していないので、`fapi_ciba` だけに掛けるのと同じ範囲。本文の「決めること」）
+- **寿命の短い要求（既定の 10 分）が通ることは `RT-233.1`・`EX-8` が測る**
+- 直す前は、(1) の要求が寿命では断られず、その先の `access_denied`（端末の登録が無い）になった（net10.0 版で確かめた）
+
+##### fapi1 の登録は、JARM の認可要求だけを受ける（`RT-381.*`。#381）
+
+| | 測ること |
+|---|---|
+| **`RT-381.1`** | **fapi1 の登録で JARM でない要求（`response_mode` 無し・`query`）は `invalid_request`**（クエリは RP へ返す。PAR は `400`）。**断る理由が JARM であることも `error_description` で確かめる。** JARM（`jwt`・`query.jwt`・`fragment.jwt`・大文字の `JWT`）なら、code を URL に直接載せず、`response` の中で返す。**fapi1 でない登録は、従来どおり code をクエリで返す** |
+
+- **FAPI 1.0 Advanced §5.2.2 の 2 は「`code id_token`、または `code` ＋ `response_mode=jwt`」を求める。MPAS は fapi1 に Hybrid を許さない**（`ClientModePolicy`。`FA-1.4`）**ので、満たせる形は `code` ＋ JARM だけ**
+- **判定は `CmnEndpoints.ValidateAuthZReqParam`**（PAR と `/authorize` で共通。**`response_mode` を引数に足した**）。**経路（クエリ・PAR・`/ros`）によらない**
+- **同梱の自己テストの FAPI1 のボタンは、画面で JARM を選んでいなければ `response_mode=jwt` で要求する**（両版の `HomeController.Fapi.cs`。受け口は JARM を検証して読む。`RT-341.2` で確かめる）
+- **fapi1 の登録を使う既存のテストは、要求に `response_mode=jwt` を足し、応答を `AuthZResponse.Unwrap()` で読むようにした**（`FA-1.1`〜`.3`・`RT-341.*`・`RT-382.1`・`RT-383.*`・`RT-384.1`・`RT-394.1`。**測る段と検証は変えていない**）。**`RT-382.1` は、JARM を付けないと `nonce` より先に JARM で断られる**ので、**断る理由が `nonce` であることも確かめるようにした**
+- **`AuthZResponse.Get` は変えていない**（`EX-6` が「JARM の応答では code を URL に直接載せない」ことを `Code` で測っているため）。**`Unwrap()` は `response` の JWT のペイロードを広げた写しを返す**（署名は確かめない。JARM の署名は JARM のテストが測る）
+- 直す前は、(1) の要求に code が返った（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`form_post.jwt`** | 同じ `IsJarmResponseMode` で JARM と判定する。返し方の違い（自動送信フォーム）は JARM のテスト（`EX-6`）が測る |
+| **`/ros` に `response_mode` 無しで預けた fapi1 の `request_uri`** | Request Object の値で上書きするのは既存の振る舞い（無ければ「無い」として JARM の確かめで断る） |
+| **fapi1 の Hybrid（`code id_token`）** | この確かめより前に `ClientModePolicy` が `unauthorized_client` で断る（`FA-1.4`） |
+
+##### fapi1 の登録の `openid` の認可要求では、`nonce` を必須にする（`RT-382.*`。#382）
+
+| | 測ること |
+|---|---|
+| **`RT-382.1`** | **fapi1 の登録の `openid` の要求は、`nonce` が無ければ `invalid_request`**（クエリは RP へ返す。PAR は `400`）。`nonce` が在れば code を返す。**`openid` を含まない fapi1 の要求・fapi1 でない登録は、従来どおり `nonce` 無しで通る**（OIDC Core 1.0 §3.1.2.1 では任意） |
+
+- **判定は `CmnEndpoints.ValidateAuthZReqParam` の「OIDC チェック 2」**（PAR と `/authorize` で共通）。**`response_type` によらず、fapi1 の登録なら必須**（FAPI 1.0 Baseline §5.2.2.2 の 1）
+- **Request Object の外の `nonce` は使わない**（FAPI 1.0 Advanced §5.2.2 の 10）ので、Request Object の中に無ければ「無い」として断る（適合性テストの `ensure-request-object-without-nonce-fails`）
+- **fapi2 は `nonce` を求めない**（FAPI 2.0 Security Profile）ので変えていない
+- 直す前は、(1) の要求に `code` が返った（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi1 の登録の Request Object（JAR）で、外にだけ `nonce` を置いた要求** | Request Object の外の値を使わないのは既存の振る舞い。適合性テストの FAPI 1.0 Advanced が測る |
+
+##### fapi1 の登録の PAR では、S256 の PKCE を必須にする（`RT-383.*`。#383）
+
+| | 測ること |
+|---|---|
+| **`RT-383.1`** | **fapi1 の登録の `/par` は、S256 だけを受け、plain・`code_challenge_method` の省略・PKCE 無しを `400` ＋ `invalid_request` で断る**（FAPI 1.0 Advanced §5.2.2 の 18）。**S256 で預けた `request_uri` は、認可の口で読み直しても断られない**（`pushed` の経路） |
+| **`RT-383.2`** | **PAR を使わない fapi1 の要求（`/authorize` のクエリ）は、従来どおり PKCE 無しでも断らない**（原典は PAR の要求だけ。#383 の決め） |
+
+- **判定は #366 と同じ `CmnEndpoints.ValidateAuthZReqParam`**。**`pushed`（`/par` と、`/authorize` で預けた要求を読むとき）で、fapi1 の登録なら fapi2 と同じ式に入れる**
+- **以前は、秘密や鍵で認証する fapi1 は、PAR に PKCE 無し・plain で預けても code を引き換えられた**（公開クライアントは `/token` で S256 以外を `ClientModePolicy` が断っていた）
+- 直す前は、`RT-383.1` の plain の PAR が `201` で受けられた（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi1 の登録の、`request`（JAR）・`private_key_jwt` での PAR** | 判定は認証の方法や `request` の有無によらない（同じ `ValidateAuthZReqParam`）。適合性テストの FAPI 1.0 Advanced（`private_key_jwt`・PAR・`jarm`）が測る |
 
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
@@ -3907,7 +4148,7 @@ cd root
 
 | | ケース | 何が落ちたら気付けるか |
 |---|---|---|
-| **(2) の署名の検証** | **`SA-6.5`** | **上流の `jwk_rsa_publickey` の登録**（外れると「鍵がない場合は、通す」に入る） |
+| **(2) の署名の検証** | **`SA-6.5`** | **上流の `jwk_rsa_publickey` の登録**（外れると、#400 の後は鍵が無いので断られ、`SA-6.*` の正常系が落ちる。以前は「鍵がない場合は、通す」に入った） |
 | **脚ごとの鍵の分離** | **`CN-1.5`** | **上流コンテナの `RsaPfxFilePath` / `JwkSetFilePath` の上書き**（外れると上流と下流が同じ鍵になる） |
 
 **`SA-6.5` は、配備を壊さない。**
@@ -4340,7 +4581,7 @@ The ID federation did not complete. (the error view was returned)
 | `RT-294.51` | **fapi2 のクライアントが、PKCE と private_key_jwt を併用して認可コードを引き換えられる**（違う `code_verifier` では通らない） | **`code_verifier` が在ると `client_assertion` を無視した**（fapi2 は通らなかった） |
 | `RT-294.52` | **方法を明示したクライアントは PKCE だけでは引き換えられず、`none` のクライアントは PKCE だけで引き換えられる**（秘密では通らない） | **登録に関わらず PKCE だけで引き換えられた**（C-40） |
 | `RT-294.53` | **scope を省いた認可要求**でも code が返る | **500** |
-| `RT-294.54` | **client_assertion の `aud` に issuer を受ける**（配列は 500 にせず `invalid_client`） | **issuer は `invalid_client`、配列は 500** |
+| `RT-294.54` | **client_assertion の `aud` は issuer だけを受ける**（トークン エンドポイントの URL・配列は 500 にせず `invalid_client`。**issuer を含む要素 2 つ以上の配列も断る**（RFC 10070 §4。#397・#398）） | **issuer は `invalid_client`、配列は 500** |
 | `RT-294.55` | **grant_types に `implicit` が無いクライアントの Hybrid** は、同意の前に `unauthorized_client` | **同意の後で `server_error`** |
 | `RT-294.56` | **poll の CIBA は、`client_notification_token` も `binding_message` も無い request で受け付ける** | **`invalid_request`** |
 | `RT-294.57` | **PAR の Request Object の `client_id` が、認証したクライアントと違えば `invalid_request_object`** | **受け付けて、別のクライアントの名義で預けた**（C-41） |
@@ -4595,6 +4836,8 @@ E2E で 2 件測っている。
 - **`-Filter` と併せて使う。** 寿命が短いので、他のテストは落ちる
 - **既定の通しでは、`RT-188` を除外している**（`test.ps1` が `FullyQualifiedName!~LifetimeTests` を足す）。
   既定の寿命では測れず、**xUnit は「ケースが 0 件の Theory」を失敗として数える**ため
+- **除外は名前の部分一致である。** **クラス名に `LifetimeTests`・`DPoPNonceTests`・`ImplicitDisabledTests` を含めると、既定の通しから黙って外れる**
+  （#388 で `CibaRequestLifetimeTests` と名付け、`-Filter` で回しても 0 件になった。`CibaRequestExpiryTests` に改めた）
 - そのため **`RT-188` は `TESTCASES.md`（原本）に載らない。**
   原本は通しの結果から作るので、`-ShortLifetimes` の実行で `-UpdateTestCases` を付けないこと
   （付けると、その 6 件だけの原本に置き換わる）

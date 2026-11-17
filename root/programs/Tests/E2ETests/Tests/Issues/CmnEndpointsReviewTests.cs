@@ -38,6 +38,8 @@
 //*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
 //*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
 //*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
+//*  2026/11/17  玄人 幸道         RT-294.54 に、issuer を含む要素 2 つ以上の配列の aud を断ることを足し、根拠に RFC 10070 §4 を足した（#397）
+//*  2026/11/17  玄人 幸道         RT-294.54 を、トークン エンドポイントの URL を断る形に改めた。client_assertion の既定の aud を issuer にした（RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -906,48 +908,44 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region RT-294.54
 
-        /// <summary>RT-294.54 client_assertion の aud に issuer を受ける</summary>
+        /// <summary>RT-294.54 client_assertion の aud は issuer だけを受ける</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT29454_client_assertionのaudにissuerを受ける(string targetKey)
+        public async Task RT29454_client_assertionのaudはissuerだけを受ける(string targetKey)
         {
             using (IdPClient client = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-294.54",
-                    "**fapi2 以外の登録の client_assertion の aud は、トークン エンドポイントの URL のほか、issuer でもよい**"
-                    + "（配列は、500 にせず invalid_client で断る）",
-                    "**RFC 7523 §3 は、認可サーバを指す値を求め、トークン エンドポイントの URL も認める。**"
-                    + "**fapi2 の登録は、issuer だけを受ける**（RT-323.1）。"
-                    + "**以前はトークン エンドポイントの URL との完全一致だけ**だったので、"
+                    "**fapi2 以外の登録の client_assertion の aud も、issuer の文字列だけを受ける**"
+                    + "（トークン エンドポイントの URL・配列は、500 にせず invalid_client で断る）",
+                    "**RFC 10070 §4 は、クライアント認証の JWT の aud を issuer の唯一の値に限り、そうでない JWT を断ることを求め、"
+                    + "トークン エンドポイントの URL を audience にすることを禁じた**（RFC 7523 §3 の 3 を置き換えた）。"
+                    + "**#294 では RFC 7523 §3 に従い、トークン エンドポイントの URL と issuer を受けていた**（#398 でトークン エンドポイントの URL をやめた）。"
+                    + "**#294 より前はトークン エンドポイントの URL との完全一致だけ**だったので、"
                     + "**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。"
-                    + "**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**"
-                    + "（**以前は HTTP 500** だった）。",
-                    "RFC 7523 §3 / RFC 7519 §4.1.3 / #294");
+                    + "**配列の aud は断る**（**以前は HTTP 500** だった）。"
+                    + "**issuer を含む要素 2 つ以上の配列（適合性テストの test-array-as-audience-for-client-JWT-assertion の形）も断る**（#397）。",
+                    "RFC 10070 §4 / RFC 7519 §4.1.3 / #294 / #397 / #398");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_24);
                 string issuer = await client.IssuerAsync();
 
                 r.Target("POST /revoke（client_name=" + KnownClients.TestClient_24 + "。private_key_jwt で認証する）");
 
-                foreach (KeyValuePair<string, object> aud in new Dictionary<string, object>()
-                {
-                    { "issuer", issuer },
-                    { "トークン エンドポイント", client.Target.BaseUrl + "/token" }
-                })
-                {
-                    r.Step("aud = " + aud.Key);
+                r.Step("aud = issuer");
 
-                    JsonResponse res = await CmnEndpointsReviewTests.RevokeWithAssertionAsync(client, reg, aud.Value);
+                JsonResponse accepted = await CmnEndpointsReviewTests.RevokeWithAssertionAsync(client, reg, issuer);
 
-                    r.VerifyEqual("認証が通る（HTTP 200）", "200", ((int)res.StatusCode).ToString());
-                }
+                r.VerifyEqual("認証が通る（HTTP 200）", "200", ((int)accepted.StatusCode).ToString());
 
                 foreach (KeyValuePair<string, object> aud in new Dictionary<string, object>()
                 {
+                    { "トークン エンドポイント（RFC 10070 §4。#398）", client.Target.BaseUrl + "/token" },
                     { "他の値", "https://other.example" },
-                    { "[issuer]（配列）", new string[] { issuer } }
+                    { "[issuer]（配列）", new string[] { issuer } },
+                    { "[issuer, 他の値]（配列。RFC 10070 §4。#397）", new string[] { issuer, "https://other.example" } }
                 })
                 {
                     r.Step("aud = " + aud.Key);
@@ -1457,7 +1455,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", clientId },
                 { "sub", clientId },
-                { "aud", aud ?? (client.Target.BaseUrl + "/token") },
+                { "aud", aud ?? client.Issuer() },
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }
@@ -1505,7 +1503,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", clientId },
                 { "sub", clientId },
-                { "aud", client.Target.BaseUrl + "/token" },
+                { "aud", client.Issuer() },
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }

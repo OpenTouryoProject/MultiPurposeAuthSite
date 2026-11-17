@@ -12,7 +12,7 @@ MultiPurposeAuthSite の**ビルド確認**と **E2E テスト**。
 | `COVERAGE.md` | **E2E のカバレッジ。** 品質マップの単位の値と、届いていない箇所（#315） |
 | `test.ps1` | サイトを起動して E2E テストを実行する |
 | `E2ETests/` | xUnit のテスト プロジェクト（net10.0） |
-| `UnitTests/` | **単体テスト**（xUnit・net10.0）。`dotnet test root/programs/Tests/UnitTests`。E2E が届かない部品を、`NetCoreLibrary` に直接当てる。**`#if NETFX` の分岐は確かめられない**（#324） |
+| `UnitTests/` | **単体テスト**（xUnit・net10.0）。`dotnet test root/programs/Tests/UnitTests`。E2E が届かない部品を、`NetCoreLibrary` に直接当てる（例：`Saml/AppendQueryTests.cs`。Redirect Binding の送り先のクエリ。#393）。**`#if NETFX` の分岐は確かめられない**（#324） |
 
 **通しで回すときは `root` のスクリプトを使う。**
 OpenTouryo が `root/programs/*.ps1` から `CS/*.bat` を呼ぶのと同じ構造で、
@@ -87,7 +87,8 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `RequirePKCE_Client` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
 | `TestClient_19` | 同じく写し。**どのテストも「許可」を押さない**（#272 の段階 2）。**「同意の記録が無い」状態を測るためだけに在る**（`RT-272.3` / `RT-272.4`）。**押すと記録が残り、DB ストアでは 2 回目から測れなくなる** | 同上 |
 | `TestClient_20` | 同じく写し。**同意の取り消しを測るためだけに在る**（#272 の段階 2。`RT-272.7`）。**「許可 → 取り消し → prompt=none」**を回すので、**終わった時点で記録を残さない** | 同上 |
-| `TestClient_21` | **写す元が `Device_Client`**（旧 `TestClient3`。#275）。**`jwk_rsa_publickey` を持たない**ので、**署名の無い `AuthnRequest` が通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録してある — **応答は辿らず、返ってきた場所と `SAMLResponse` を読むだけ**。`SA-1` 以外の SAML のテストが使う | 同上 |
+| `TestClient_21` | **写す元が `TestClient`**（`jwk_rsa_publickey` を持つ。#400。以前は `Device_Client` で鍵が無く、署名の無い `AuthnRequest` を通していた）。**要求は `Saml2.SignedRequestQuery` で署名して送る**。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録する（#275） | 同上 |
+| `TestClient_23` | **写す元が `Device_Client`**（`jwk_rsa_publickey` が無い。#400）。**鍵の無い SP の署名の無い要求を、IdP が断ることを測る**（`RT-400.1`。`https://saml.e2e.example/acs3`） | 同上 |
 | `TestClient_22` | 同じく（`https://saml.e2e.example/acs2`）。**`NameIDPolicy=persistent` の PPID が RP ごとに違うこと**を測るための 2 つ目（`SA-3.3`） | 同上 |
 | `TestClient_36` | `TestClient` の写しで、**登録の `scope` を `openid profile email` に制限**し、`redirect_uri_code` を `http://localhost:12346/` にしたもの（#198。`RT-198.3` / `.4`、`EX-2.7`）。**旧 `TestClient5`**（雛形に在ったが、E2E だけが使うので移した）。**scope は `ScopeTests.RestrictedScope` と同じ値にしておくこと** | 同上 |
 
@@ -323,6 +324,13 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceS256Tests.cs` | `RT-366` | **FAPI 2.0 の登録では、S256 の PKCE を必須にする**（#366。FAPI 2.0 Security Profile §5.3.2.2）。**fapi2 の登録の PAR は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断り**、**S256 で預けた `request_uri` は認可の口でも通る**こと（`RT-366.1`）、**fapi2 でない登録は従来どおり**（`RT-366.2`）、**PAR を使わない `/authorize` でも同じ**（`RT-366.3`） |
+| `Tests/Issues/DiscoveryJarmModeTests.cs` | `RT-379` | **Discovery の `response_modes_supported` に `jwt` を広告する**（#379。JARM §2.3.4）。広告した `jwt` で要求すると JARM で返る（`RT-379.1`） |
+| `Tests/Issues/JarmNoStateTests.cs` | `RT-378` | **`state` を送らない要求の JARM には、`state` を入れない**（#378。RFC 6749 §4.1.2・JARM §2.1.1）。成功・エラーの応答とも `"state": null` を出さない。`state` を送ればその値が入る（`RT-378.1`） |
+| `Tests/Issues/ParRequestObjectRequestUriTests.cs` | `RT-380` | **PAR の Request Object の中の `request_uri` を断る**（#380。RFC 9126 §2.1）。中に在れば `invalid_request_object`、無ければ `201`、フォームの `request_uri` は従来どおり `invalid_request`（`RT-380.1`） |
+| `Tests/Issues/CibaRequestExpiryTests.cs` | `RT-388` | **CIBA の署名した要求の寿命は 60 分まで**（#388。FAPI-CIBA ID1 §5.2.2 の 9）。`exp` が 70 分先・`nbf` が 70 分前は `invalid_request`（`RT-388.1`）、60 分ちょうどは寿命では断らず 60 分 1 秒は断る（`RT-388.2`）。**クラス名に `LifetimeTests` を含めない**（既定の通しの除外に当たる。`TESTING.md`） |
+| `Tests/Issues/Fapi1JarmTests.cs` | `RT-381` | **fapi1 の登録は、JARM の認可要求だけを受ける**（#381。FAPI 1.0 Advanced §5.2.2 の 2）。`response_mode` 無し・`query` は `invalid_request`（クエリ・PAR とも）、JARM（`jwt`・`query.jwt`）は `response` の中で code を返す。fapi1 でない登録は従来どおり（`RT-381.1`）。**fapi1 を使うほかのテストは `Flows.WithJarm` と `AuthZResponse.Unwrap()` を使う** |
+| `Tests/Issues/Fapi1NonceTests.cs` | `RT-382` | **fapi1 の登録の `openid` の認可要求では、`nonce` を必須にする**（#382。FAPI 1.0 Baseline §5.2.2.2 の 1）。クエリ・PAR とも `invalid_request`。`openid` を含まない要求・fapi1 でない登録は従来どおり（`RT-382.1`） |
+| `Tests/Issues/Fapi1ParPkceTests.cs` | `RT-383` | **fapi1 の登録の PAR では、S256 の PKCE を必須にする**（#383。FAPI 1.0 Advanced §5.2.2 の 18）。**fapi1 の登録の `/par` は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断る**（`RT-383.1`）、**PAR を使わない fapi1 の要求は従来どおり**（`RT-383.2`） |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
 | `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` / `RT-246` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない。**自己テストの PAR ボタン**（Open棟梁 のクライアントで預けて認可する。`RT-246.1`） |
@@ -341,7 +349,8 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/Ps256VerificationTests.cs` | `RT-395` | **`client_assertion` と CIBA の署名した要求で PS256 を受け、FAPI の登録・CIBA は RS256 を断る**（#395。FAPI 1.0 Advanced §8.6）。`client_assertion` は FAPI でない登録・fapi2 とも PS256 で通り、fapi2 の RS256 は `invalid_client`（`RT-395.1`）。CIBA は PS256 で受け付け、RS256 は断る（`RT-395.2`。`TestClient4_5`） |
 | `Tests/Issues/FapiDefaultSigningAlgTests.cs` | `RT-394` | **FAPI の登録は、署名の alg を登録していなければ ES256 で署名する**（#394。FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1）。fapi1 の access_token・id_token・JARM が ES256 で JWKS で検証でき、**FAPI でない登録は RS256 のまま**（`RT-394.1`） |
 | `Tests/Issues/PollingClientBindingTests.cs` | `RT-387` | **CIBA・Device のトークン要求は、`auth_req_id`・`device_code` を出したクライアントと照合する**（#387。CIBA Core 1.0 §11・RFC 6749 §5.2）。**別のクライアントは承認の前も後も `invalid_grant`**、**正規のクライアントは影響を受けない**（`slow_down` にならず、承認の後にトークンを受け取れる）こと（`RT-387.1`・`.2`） |
-| `Tests/Issues/ClientAssertionAudienceTests.cs` | `RT-371` | **`client_assertion` の `aud` に、受けた口（CIBA・PAR）の URL を受ける**（#371。CIBA Core 1.0 §7.1・RFC 9126 §2）。**ほかの口の URL は受けない**こと、**fapi2 は `/par` でも issuer だけ**であること（`RT-371.1`〜`.3`） |
+| `Tests/Issues/ClientAssertionAudienceTests.cs` | `RT-371` | **`client_assertion` の `aud` に、CIBA の口では CIBA の URL を受ける**（#371。CIBA Core 1.0 §7.1）。**`/par` は issuer だけ**（RFC 10070 §5。#398）、**ほかの口の URL は受けない**こと、**fapi2 は `/par` でも issuer だけ**であること（`RT-371.1`〜`.3`） |
+| `Tests/Issues/ClientAssertionIssuerOnlyTests.cs` | `RT-398` | **クライアント認証の `client_assertion` の `aud` は issuer だけ**（#398。RFC 10070 §4）。`/token` の client_credentials はトークン エンドポイントの URL を断る（`RT-398.1`）。**CIBA のトークン要求は以前のまま**、issuer とトークン エンドポイントの URL を受ける（`RT-398.2`） |
 | `Tests/Issues/ClientAssertionTypeTests.cs` | `RT-368` | **`client_assertion_type` の無い `client_assertion` を受けない**（#368。RFC 7521 §4.2）。**PAR でも `/revoke` でも `invalid_client`**、**型を付ければ通る**こと（`RT-368.1`） |
 | `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |
 | `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |
@@ -383,6 +392,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/SectorIdentifierTests.cs` | `RT-364` | **動的登録の `sector_identifier_uri`**（#364）。**中身（JSON の配列）に `redirect_uris` がすべて在れば登録でき**（`RT-364.1`）、**無ければ・読めなければ `400` ＋ `invalid_client_metadata`**（`RT-364.2`・`.3`。OIDC Registration 1.0 §5）。**同じ `sector_identifier_uri` の pairwise のクライアント同士は同じ `sub` になり（public のクライアントとは混ざらない）、管理画面で保存しても残る**（`RT-364.4`。OIDC Core 1.0 §8.1）。**相手の `sector_identifier_uri` は `jwks_uri` と同じ静的配信のコンテナ**（44305）**で用意する** — **上がっていなければ Skip** |
 | `Tests/Issues/SoftwareStatementAdminTests.cs` | `RT-308` | **発行者（ベンダ）の台帳を DB ＋ 画面で持つ**（#308）。**画面から足して・直して・消せる**こと（`RT-308.1`）、**DB に PEM を貼った発行者の `software_statement` で登録が通り、消すとその場で通らなくなる**こと（`RT-308.2`。**`CerFilePath` は空 ＝ 本文だけで検証**）、**設定ファイルに在る鍵は画面から足せない**こと（`RT-308.3`。**同じ鍵なら設定が勝つ**）。**鍵は対象ごとに分ける**（DB ストアでは 1 つの DB を共有するため）。**署名は `RsaPfxFilePath`、貼る証明書は `RsaCerFilePath`**（空なら `SpRp_RsaCerFilePath`。#339）（**対になっている方**） |
 | `Tests/Issues/ManageSaml2OAuth2DataTests.cs` | `RT-277` | **管理画面のクライアント登録**（`/Manage/AddSaml2OAuth2Data`。#277 の段階 1・3）。**3 回押さないと登録できない**こと（`client_id` → `client_secret` → 登録。**1 回目で「登録」を押しても黙って何も起きない**）、**折り返し先の候補が `datalist` に出る**こと、**新規登録の `redirect_uri_code` の既定が `test_self_code`** であること。**サインイン中の利用者自身の登録を使い、測り終えたら消す**。**`RT-297.1` は、クライアント登録の `client_secret` が暗号化しても往復すること**（#297。**発行 → 登録 → 読み直し**）。**`RT-277.9` 〜 `.11` は、管理画面の一覧**（#307 の段階 5-a-2）— **2 件登録して一覧に並ぶこと・`client_id` の昇順であること・2 件目だけを編集できること**（`RT-277.9`）、**自分の物でない `client_id` では編集も削除もできないこと**（`RT-277.10`。**種データのクライアント ＝ 所有者の無い行で測る**）、**一覧から 1 件だけ消せること**（`RT-277.11`） |
+| `Tests/Issues/IdFederationUpstreamKeyTests.cs` | `RT-358` | **OIDC の ID 連携で、上流の鍵が決まらなければサインインさせない**（#358。管理画面で鍵を決められない上流の行を足して流す。`RT-358.1`） |
 | `Tests/Issues/IdFederationAdminTests.cs` | `RT-292` | **上流 IdP の登録を、user store と管理画面で扱う**（`/IdFederationAdmin`。#292 の段階 2）。**足して・直して・消せること**／**足した上流がサインイン画面の導線に出ること**（**設定 → user store の順に読む**）／**`SystemAdmin` でなければ開かないこと**。**4 つのストアで測った**（`mem` / `sql` / `ora` / `npg`）。**`RT-297.2` は、上流の登録の `client_secret` が暗号化しても往復すること**（#297）。**`RT-292.4` は、上流ごとの署名鍵（`.pfx` のパスとパスワード）が往復すること**（#292 の段階 4-b。**パスワードは暗号化して保管する**） |
 | `Tests/Issues/WebAuthnTests.cs` | `RT-137` | **WebAuthn**（`Fido2` 4.2.0）。登録・認証の**要求を組み立てる段**（`CredentialCreateOptions` / `AssertionOptions`）、**壊れた入力を封筒に入れて 200 で返すこと**、**challenge を使い回していないこと**。**net48 版には口が無いこと**も測る |
 
@@ -457,6 +467,10 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/ErrorResponseTests.cs` | `SA-5` | 異常系（**ACS URL の不一致**／未登録の `Issuer`／壊れた `SAMLRequest`／**署名の無い要求**） |
 | `Tests/Saml/IdFederationSaml2Tests.cs` | `SA-6` | **SAML2 の ID 連携**（#286）。**この IdP が上流の IdP に対して SP になる。** 一巡してサインインできること／**二度目も同じ利用者**（連携キーは `(上流の EntityID, NameID)`）／**上流が未サインインなら成立しない**（`IsPassive` を送らないので、上流がサインイン画面を出す）／**属性（`mail` / `uid` / `email_verified`）を使うこと**（段階 4）。**上流は `container/E2E/` のコンテナ**。**建っていなければ Skip**。**`SA-6.5` は、署名を壊した `AuthnRequest` を上流が弾くこと**（#293 の段階 4。(2) の検証が効いていること）。**`SA-6.6` は、上流が証明書を 2 本広告していても連携できること**（#292 の段階 3。**受け取る側は全部試す**） |
 | `Tests/Saml/RequestDestinationTests.cs` | `RT-391` | **SP の役で作る SAML2 の要求に、送った先と同じ `Destination` を入れる**（#391。SAML Bindings §3.4.5.2・§3.5.5.2）。自己テストの 4 通り（`RT-391.1`）。**ID 連携の要求は `SA-6.1` が測る** |
+| `Tests/Saml/RequestDestinationCheckTests.cs` | `RT-392` | **SAML2 の IdP は、要求の `Destination` を受けた口の URL と照合し、合わなければ捨てる**（#392。SAML Core 3.2.1・SAML Bindings §3.4.5.2）。署名の無い要求の違う `Destination`（`RT-392.1`）、署名した要求の無い・違う `Destination`（`RT-392.2`。テストの側で SP の鍵で署名する） |
+| `Tests/Issues/Saml2AudienceEntityIdTests.cs` | `RT-389` | **SAML2 の応答の `Audience` は、SP の entityID（要求の `Issuer`）**（#389。SAML Profiles §4.1.4.2）。ACS URL ではない。`Recipient` は ACS URL（`RT-389.1`。Redirect Binding は `RT-389.2`） |
+| `Tests/Saml/UnsignedRequestTests.cs` | `RT-400` | **SAML2 の IdP は、署名を確かめられない要求を断る**（#400。鍵を登録していない SP の要求を含む。`RT-400.1`） |
+| `Tests/Saml/Saml2RequestIdTests.cs` | `RT-390` | **SAML2 の応答に、形の合わない要求の `ID`・NameID を入れない**（#390。SAML Core 1.3.4）。NCName でない `ID` は `Requester` で `InResponseTo` を空に（鍵の無い SP `RT-390.1`・鍵を登録した SP のエラー応答 `RT-390.2`）。NameID（EmailAddress の形式のメアド）に `<`・`&` を含むならアサーションを作らない（`RT-390.3`。使い捨ての利用者を作って消す） |
 | `Tests/Saml/AttributeStatementTests.cs` | `SA-7` | **アサーションの `AttributeStatement`**（#286 の段階 4）。**メアド・利用者名・`email_verified` を属性で返すこと**（`urn:oid:…` ＋ `FriendlyName` ＋ `NameFormat`）／**`persistent` の `NameID` でも属性でメアドが分かること**（段階 4 の目的）。**自己テストの口で測る**ので、上流コンテナは要らない |
 
 > **`RT-246.4` / `.5` / `.7` は `Tests/Issues/` に残してある。**
@@ -467,10 +481,9 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 > **自己テストのボタンは、どれも正しい値しか送らない**ので、
 > **`NameIDPolicy` の差・ACS URL の不一致・壊れた要求は、それでしか測れない。**
 >
-> **署名は作らない。**
-> **`TestClient_21` / `TestClient_22` は `jwk_rsa_publickey` を持たない**ので
-> （写す元を `Device_Client` にしてある）、**署名の無い要求が通る。**
-> **`TestClient` は持っている**ので、同じ要求が `SA-5.4` で落ちる。**差は登録だけである。**
+> **要求は署名して送る**（`Saml2.SignedRequestQuery`。`SpRp_RsaPfxFilePath` の鍵。`Destination` を補う）。**IdP は署名を確かめられない要求を断る**（#400）。
+> **`TestClient_21` / `TestClient_22` は、`TestClient` と同じ `jwk_rsa_publickey` を持つ**（写す元を `TestClient` にしてある）。
+> **署名の無い要求が断られることは `SA-5.4`（鍵を登録した SP）と `RT-400.1`（鍵の無い `TestClient_23`）が測る。**
 >
 > **`client_id` の接頭辞は `sa`**（`e2e0sa21…`）。
 > **`tcNN` は `TestClient_NN` という意味ではない** — `TestClient2_2` が `e2e0tc22`、

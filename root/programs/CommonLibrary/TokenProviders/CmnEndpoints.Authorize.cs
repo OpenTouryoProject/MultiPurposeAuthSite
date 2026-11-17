@@ -37,6 +37,9 @@
 //*  2026/11/11  玄人 幸道         受け付ける response_type（Discovery）に id_token 単独を載せた（#360）
 //*  2026/11/11  玄人 幸道         response_type=code token では nonce を必須にしない（OIDC Core 1.0 §3.3.2.1。#361）
 //*  2026/11/13  玄人 幸道         fapi2 の登録では PKCE を必須にし、S256 に限る。RequirePkceS256 でも認可要求で plain を断る（FAPI 2.0 Security Profile §5.3.2.2。#366）
+//*  2026/11/16  玄人 幸道         fapi1 の登録の PAR の要求でも、S256 の PKCE を必須にした（FAPI 1.0 Advanced §5.2.2 の 18。#383）
+//*  2026/11/16  玄人 幸道         fapi1 の登録の openid の要求では、nonce を必須にした（FAPI 1.0 Baseline §5.2.2.2 の 1。#382）
+//*  2026/11/17  玄人 幸道         fapi1 の登録は、JARM の認可要求だけを受けるようにした（FAPI 1.0 Advanced §5.2.2 の 2。#381）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -159,6 +162,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="errDescription">string</param>
         /// <param name="code_challenge">string</param>
         /// <param name="code_challenge_method">string（#366。省略は plain の扱い）</param>
+        /// <param name="response_mode">string（#381。fapi1 の登録では JARM に限る。空は既定の返し方）</param>
         /// <param name="prompt">string</param>
         /// <returns>成功 or 失敗</returns>
         /// <remarks>
@@ -168,8 +172,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 判定そのもの（順序・エラー コード）は ValidateAuthZReqParamCore のまま変えない。
         /// ここで足すのは、**失敗したときの返し先**だけ。
         ///
-        /// code_challenge は、PKCE を必須にしたとき（Config.RequirePkce・登録の require_pkce・fapi2 の登録）だけ見る（#220・#366）。
-        /// code_challenge_method は、S256 に限るとき（RequirePkceS256・fapi2 の登録）だけ見る（#366）。
+        /// code_challenge は、PKCE を必須にしたとき（Config.RequirePkce・登録の require_pkce・fapi2 の登録・fapi1 の登録の PAR）だけ見る（#220・#366・#383）。
+        /// code_challenge_method は、S256 に限るとき（RequirePkceS256・fapi2 の登録・fapi1 の登録の PAR）だけ見る（#366・#383）。
         /// 既定では、渡さなくても従来どおり動く。
         ///
         /// **`pushed`・`signedRequestObject` は、要求がどの経路で来たか**（#346）。
@@ -184,7 +188,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
             ref string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge, string code_challenge_method,
+            string code_challenge, string code_challenge_method, string response_mode,
             string prompt, bool pushed, bool signedRequestObject)
         {
             // **response_type を正規化する**（#267）。**ここで 1 回だけ掛ける。**
@@ -201,7 +205,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, prompt,
+                out valid_redirect_uri, out err, out errDescription, code_challenge, code_challenge_method, response_mode, prompt,
                 pushed, signedRequestObject);
 
             if (!isValid && string.IsNullOrEmpty(valid_redirect_uri))
@@ -228,11 +232,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="errDescription">string</param>
         /// <param name="code_challenge">string</param>
         /// <param name="code_challenge_method">string</param>
+        /// <param name="response_mode">string（#381）</param>
         /// <returns>成功 or 失敗</returns>
         private static bool ValidateAuthZReqParamCore(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge, string code_challenge_method,
+            string code_challenge, string code_challenge_method, string response_mode,
             string prompt, bool pushed, bool signedRequestObject)
         {
             valid_redirect_uri = "";
@@ -465,12 +470,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   （FAPI 2.0 Security Profile §5.3.2.2 の 5「shall require PKCE with S256」。#366）。
                 //   **以前は、方式を絞るのはサーバ全体の RequirePkceS256 だけで、それも /token で見ていた**ので、
                 //   **plain で預けた要求にも code を出していた**（適合性テストの par-plain-pkce-rejected）。
-                bool isFapi2 = Helper.GetInstance().GetClientMode(client_id)
-                    == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+                string clientMode = Helper.GetInstance().GetClientMode(client_id);
+
+                bool isFapi2 = clientMode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+
+                // **fapi1 の登録の PAR の要求も、S256 の PKCE を必須にする**
+                //   （FAPI 1.0 Advanced §5.2.2 の 18「shall require PAR requests ... to use PKCE with S256」。#383）。
+                //   **PAR に預けた要求だけ**（pushed。/par と、/authorize で預けた要求を読むときの両方）。
+                //   **PAR を使わない fapi1 の要求は、従来どおり**（原典は PAR の要求だけを求める。#383 の決め）。
+                bool isFapi1Par = pushed
+                    && clientMode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit();
 
                 bool requirePkce = Config.RequirePkce
                     || Helper.GetInstance().GetClientRequirePkce(client_id)
-                    || isFapi2;
+                    || isFapi2
+                    || isFapi1Par;
 
                 bool issuesCode = response_type.ToLower().Split(' ').Any(
                     x => x == OAuth2AndOIDCConst.AuthorizationCodeResponseType);
@@ -484,19 +498,39 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
-                // **PKCE を使うなら、S256 に限る**（サーバ全体の RequirePkceS256 か、fapi2 の登録。#366）。
+                // **PKCE を使うなら、S256 に限る**（サーバ全体の RequirePkceS256 か、fapi2 の登録。#366。fapi1 の登録の PAR。#383）。
                 //   **PKCE を使うかどうかは、上の requirePkce で決まる**（RequirePkceS256 だけの配備は、PKCE 無しを通す。従来どおり）。
                 //   **使えない code を出さずに、認可要求の時点で断る**（RFC 7636 §4.4.1 の invalid_request）。
                 //   **code_challenge_method の省略は plain の扱い**（RFC 7636 §4.3）なので、これも断る。
                 //   **値は大文字小文字を区別する**（RFC 7636 §4.2 の S256）。
                 //   ※ /token の照合（VerifyPkce）は変えない。RequirePkceS256 では、そこでも plain を断る。
-                if ((CmnServerParams.RequirePkceS256 || isFapi2)
+                if ((CmnServerParams.RequirePkceS256 || isFapi2 || isFapi1Par)
                     && issuesCode
                     && !string.IsNullOrEmpty(code_challenge)
                     && !string.Equals(code_challenge_method, OAuth2AndOIDCConst.PKCE_S256, StringComparison.Ordinal))
                 {
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "code_challenge_method must be S256.";
+                    return false;
+                }
+
+                #endregion
+
+                #region response_mode（FAPI 1.0 Advanced。#381）
+
+                // **fapi1 の登録は、JARM（response_mode が jwt・query.jwt・fragment.jwt・form_post.jwt）の要求だけを受ける**
+                //   （FAPI 1.0 Advanced §5.2.2 の 2「shall require the response_type value code id_token,
+                //   or the response_type value code in conjunction with the response_mode value jwt」。#381）。
+                //   **MPAS は fapi1 の登録に Hybrid（code id_token）を許さない**（ClientModePolicy。FA-1.4）ので、
+                //   **満たせる形は code ＋ JARM だけ**である。
+                //   **経路（クエリ・PAR・/ros）によらない**（原典は経路を限っていない。#381 の決め）。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                if (issuesCode
+                    && clientMode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit()
+                    && !CmnEndpoints.IsJarmResponseMode(response_mode))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "This client requires JARM (response_mode=jwt) for the authorization response (FAPI 1.0 Advanced).";
                     return false;
                 }
 
@@ -532,9 +566,22 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //   （OIDC Core 1.0 §3.3.2.1「REQUIRED if the Response Type of the request is code id_token or code id_token token」）。
                     //   **`code token` は任意**（「OPTIONAL when the Response Type of the request is code token」。#361）。
                     //   以前は `code token` も必須にしていたので、nonce を送らない RP が使えなかった。
+                    //
+                    // **fapi1 の登録は、response_type によらず必須**
+                    //   （FAPI 1.0 Baseline §5.2.2.2 の 1「shall require the nonce parameter」。#382）。
+                    //   **PAR・Request Object でも同じ**（Request Object の外の値は使わないので、中に無ければ無い扱い。Advanced §5.2.2 の 10）。
+                    //   **fapi2 は求めない**（FAPI 2.0 Security Profile。適合性テストの without-nonce-success）。
                     if (string.IsNullOrEmpty(nonce))
                     {
                         string _response_type = response_type.ToLower();
+
+                        if (Helper.GetInstance().GetClientMode(client_id)
+                            == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
+                        {
+                            err = OAuth2AndOIDCConst.invalid_request;
+                            errDescription = "nonce is required for this client (FAPI 1.0).";
+                            return false;
+                        }
 
                         if (_response_type == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
                             || _response_type == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
@@ -558,6 +605,20 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         #endregion
+
+        /// <summary>response_mode が JARM（jwt・query.jwt・fragment.jwt・form_post.jwt）か（#381）</summary>
+        /// <param name="response_mode">response_mode</param>
+        /// <returns>JARM なら true</returns>
+        /// <remarks>**`.` と `_` は同じに扱う**（両版の AccountController の TryResolveResponseMode と同じ）。</remarks>
+        public static bool IsJarmResponseMode(string response_mode)
+        {
+            string mode = (response_mode ?? "").ToLower().Replace('.', '_');
+
+            return mode == OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit()
+                || mode == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit();
+        }
 
         #region 扱うグラント（#294）
 

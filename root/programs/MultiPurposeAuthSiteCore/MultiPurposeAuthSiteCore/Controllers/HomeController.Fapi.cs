@@ -19,6 +19,7 @@
 //*  2026/10/31  玄人 幸道         FAPI2 で Request Object を預けられなければ再表示（500 にしない）。値を URL 符号化（#294）
 //*  2026/10/31  玄人 幸道         CIBA の login_hint に TestUserSuffix を付ける（ROPC と揃える。#294）
 //*  2026/11/08  玄人 幸道         FAPI2 のボタンで PKCE（S256）を使う。PAR の認証は登録の方法で送り、MTLS のボタンを足した（#345）
+//*  2026/11/17  玄人 幸道         FAPI1 のスターターは、JARM（response_mode=jwt）で要求するようにした（#381）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -57,6 +58,10 @@ namespace MultiPurposeAuthSite.Controllers
                     Enc(OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State));
             // テストコードで、clientを識別するために、Stateに細工する。
 
+            // **fapi1 の登録は JARM の要求だけを受ける**（FAPI 1.0 Advanced §5.2.2 の 2。#381）。
+            //   **画面で JARM を選んでいなければ、jwt にする。**
+            this.UseJarmForFapi1();
+
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
             return temp;
@@ -77,9 +82,27 @@ namespace MultiPurposeAuthSite.Controllers
                     + "&nonce=" + Enc(this.Nonce);
             // テストコードで、clientを識別するために、Stateに細工する。
 
+            // **fapi1 の登録は JARM の要求だけを受ける**（FAPI 1.0 Advanced §5.2.2 の 2。#381）。
+            //   **画面で JARM を選んでいなければ、jwt にする。**
+            this.UseJarmForFapi1();
+
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
             return temp;
+        }
+
+        /// <summary>FAPI1 のスターターの response_mode を、JARM にする（#381）</summary>
+        /// <remarks>
+        /// **fapi1 の登録は、JARM（jwt・query.jwt・fragment.jwt・form_post.jwt）の要求だけを受ける**（FAPI 1.0 Advanced §5.2.2 の 2）。
+        /// **画面で JARM を選んでいれば、それを使う。** それ以外（空・query など）は jwt にする。
+        /// **受け口（AccountController の自己テスト）は JARM を検証して読む。**
+        /// </remarks>
+        private void UseJarmForFapi1()
+        {
+            if (!CmnEndpoints.IsJarmResponseMode(this.ResponseMode))
+            {
+                this.ResponseMode = OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit();
+            }
         }
 
         /// <summary>FAPI2CCスターターを組み立てて返す</summary>

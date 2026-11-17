@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
+//*  2026/11/17  玄人 幸道         要求を署名して送る（IdP が署名の無い要求を断るようになった。#400）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -93,7 +94,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 string xml = Saml2.BuildAuthnRequest(
                     id, "http://" + clientId, Saml2.FormatUnspecified, Saml2.BindingPost);
 
-                string url = "/saml2request?" + Saml2.ToRedirectQuery(xml);
+                string url = "/saml2request?" + Saml2.SignedRequestQuery(client, xml);
 
                 r.Target("GET /saml2request（サインインしていない状態）");
 

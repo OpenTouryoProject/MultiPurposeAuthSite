@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/14  玄人 幸道         新規（#387）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -245,7 +246,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", other.ClientId },
                 { "sub", other.ClientId },
-                { "aud", client.Target.BaseUrl + "/token" },
+                { "aud", client.Issuer() },
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }

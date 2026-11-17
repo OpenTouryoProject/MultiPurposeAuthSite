@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/14  玄人 幸道         新規（#394）
+//*  2026/11/17  玄人 幸道         fapi1 の認可要求を JARM にした（fapi1 は JARM の要求だけを受けるようになった。#381）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -96,7 +97,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) fapi1 : 認可コード（PKCE）を引き換える");
 
-                JsonResponse fapiToken = await FapiDefaultSigningAlgTests.CodeAsync(client, fapi1, withPkce: true);
+                JsonResponse fapiToken = await FapiDefaultSigningAlgTests.CodeAsync(client, fapi1, withPkce: true, jarm: true);
 
                 Assert.False(fapiToken == null || string.IsNullOrEmpty(fapiToken.AccessToken),
                     "前提: fapi1 の登録がトークンを受け取れること（" + (fapiToken == null ? "認可で失敗" : fapiToken.ToString()) + "）");
@@ -139,17 +140,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="reg">クライアント</param>
         /// <param name="withPkce">PKCE（S256）で引き換えるか（false なら client_secret）</param>
+        /// <param name="jarm">JARM（response_mode=jwt）で要求するか（fapi1 の登録。#381）</param>
         /// <returns>JsonResponse（認可で失敗したら null）</returns>
-        private static async Task<JsonResponse> CodeAsync(IdPClient client, ClientRegistration reg, bool withPkce)
+        private static async Task<JsonResponse> CodeAsync(IdPClient client, ClientRegistration reg, bool withPkce, bool jarm = false)
         {
-            AuthZResponse authz = await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri,
-                extra: withPkce
-                    ? new Dictionary<string, string>()
-                    {
-                        { "code_challenge", FapiDefaultSigningAlgTests.Challenge },
-                        { "code_challenge_method", "S256" }
-                    }
-                    : null);
+            Dictionary<string, string> extra = withPkce
+                ? new Dictionary<string, string>()
+                {
+                    { "code_challenge", FapiDefaultSigningAlgTests.Challenge },
+                    { "code_challenge_method", "S256" }
+                }
+                : null;
+
+            AuthZResponse authz = (await Flows.AuthorizeCodeAsync(client, reg, redirectUri: reg.RedirectUri,
+                extra: jarm ? Flows.WithJarm(extra) : extra)).Unwrap();
 
             if (string.IsNullOrEmpty(authz.Code))
             {

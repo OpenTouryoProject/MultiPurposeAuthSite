@@ -53,6 +53,7 @@
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を書けるようにした（#370）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を PS256 にした TestClient_46 を追加（#370）
 //*  2026/11/15  玄人 幸道         RSA の公開鍵を持つ fapi_ciba の TestClient4_5 を追加（#395）
+//*  2026/11/17  玄人 幸道         SAML2 のテストのクライアント（TestClient_21・_22）の写す元を、鍵を持つ TestClient にした（IdP が署名の無い要求を断るようになった。#400）
 //**********************************************************************************
 
 using System;
@@ -689,12 +690,10 @@ namespace MultiPurposeAuthSite.Util.Test
             new Entry()
             {
                 // **SAML2 を測るためのクライアント**（#275）。
-                //   **写す元を Device_Client にしているのは、
-                //   そこに `jwk_rsa_publickey` が無いからである。**
-                //   **鍵が無いクライアントの AuthnRequest は、署名が無くても通る**
-                //   （`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
-                //   **そのため、要求を自前で組み立てて測れる**
-                //   （NameIDPolicy の差い、ACS URL の不一致など）。
+                //   **写す元を TestClient にしている**（`jwk_rsa_publickey` を持つ。#400）。
+                //   **IdP は署名を確かめられない要求を断る**ので、テストは `SpRp_RsaPfxFilePath` の鍵（TestClient と同じ）で要求に署名する（`Saml2.SignedRequestQuery`）。
+                //   **以前は写す元を Device_Client（鍵が無い）にし、署名の無い要求を通していた**（「鍵がない場合は、通す」。#400 でやめた）。
+                //   **要求を自前で組み立てて測れる**（NameIDPolicy の差い、ACS URL の不一致など）。
                 //
                 //   **ACS URL は存在しない URL でよい。** 応答は辣らず、
                 //   **返ってきた場所と SAMLResponse を読むだけ**である。
@@ -705,7 +704,7 @@ namespace MultiPurposeAuthSite.Util.Test
                 //     **`e2e0tc22` を取ろうとして衝突した**（先に在る方が登録され、
                 //     こちらは「登録されていない」ことになり、応答が返らなかった）。
                 ClientName = "TestClient_21", ClientId = "e2e0sa21000000000000000000000000",
-                ClientMode = "normal", SourceName = "Device_Client",
+                ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientRedirectUriSaml, "https://saml.e2e.example/acs" }
@@ -717,10 +716,22 @@ namespace MultiPurposeAuthSite.Util.Test
                 //   `NameIDFormat=persistent` は `GeneratePPIDByUserID(iss, user.Id)` なので、
                 //   **iss が違えば値が違う**ことを確かめる。
                 ClientName = "TestClient_22", ClientId = "e2e0sa22000000000000000000000000",
-                ClientMode = "normal", SourceName = "Device_Client",
+                ClientMode = "normal", SourceName = "TestClient",
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientRedirectUriSaml, "https://saml.e2e.example/acs2" }
+                }
+            },
+            new Entry()
+            {
+                // **鍵を登録していない SAML2 の SP**（#400）。
+                //   **IdP が、署名を確かめられない要求（鍵の無い SP の要求）を断ることを測る**（`RT-400.1`）。
+                //   写す元は Device_Client（`jwk_rsa_publickey` が無い）。
+                ClientName = "TestClient_23", ClientId = "e2e0sa23000000000000000000000000",
+                ClientMode = "normal", SourceName = "Device_Client",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientRedirectUriSaml, "https://saml.e2e.example/acs3" }
                 }
             }
         };

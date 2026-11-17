@@ -17,6 +17,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/25  玄人 幸道         新規（AccountController.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         自己テストの ACS（AssertionConsumerService）を SelfTest.cs へ移した（#294）
+//*  2026/11/16  玄人 幸道         Destination が合わない要求を、エラー画面で捨てるようにした（#392）
+//*  2026/11/17  玄人 幸道         Redirect Binding の応答を、ACS URL のクエリに足す形でつなぐ（SAML Bindings §3.4.4.1。#393）
 //**********************************************************************************
 
 /*
@@ -63,6 +65,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             string iss = "";
             string id = "";
+            bool discard = false;
 
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -82,13 +85,20 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // VerifySamlRequest（展開と読み込みも行う）
                     verified = Saml.CmnEndpoints.VerifySamlRequest(
-                        queryString, "", out iss, out id, out samlRequest2);
+                        queryString, "", out iss, out id, out samlRequest2, out discard);
                 }
                 else if (Request.HttpMethod.ToLower() == "post")
                 {
                     // VerifySamlRequest（展開と読み込みも行う）
                     verified = Saml.CmnEndpoints.VerifySamlRequest(
-                        "", samlRequest, out iss, out id, out samlRequest2);
+                        "", samlRequest, out iss, out id, out samlRequest2, out discard);
+                }
+
+                // **Destination が合わない要求は捨てる**（SP へ応答を返さない。SAML Core 3.2.1。#392）。
+                //   理由は VerifySamlRequest がログに残している。
+                if (discard)
+                {
+                    return View("Error");
                 }
 
                 // XmlNamespaceManager（応答の組み立てで、要求の ACS URL などを読む）
@@ -178,8 +188,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (protocolBinding == SAML2Enum.ProtocolBinding.HttpRedirect)
             {
-                // Redirect
-                return Redirect(rtnUrl + "?" + queryString);
+                // Redirect（**登録済みの ACS URL がクエリを持っていれば & でつなぐ**。SAML Bindings §3.4.4.1。#393）
+                return Redirect(SamlProviders.CmnSaml2Response.AppendQuery(rtnUrl, queryString));
             }
             else if (protocolBinding == SAML2Enum.ProtocolBinding.HttpPost)
             {

@@ -44,6 +44,9 @@
 //*  2026/11/13  玄人 幸道         Request Object を、登録の鍵とヘッダの alg（RS256・PS256・ES256）で検証する。FAPI の登録は PS256・ES256 に限る（#370）
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、PAR の口の URL も受ける（RFC 9126 §2。#371）
 //*  2026/11/15  玄人 幸道         CIBA の署名した要求の検証鍵を、ヘッダの alg（PS256・ES256）と登録の鍵から選ぶ SelectCibaVerifyingJws を足した（#395）
+//*  2026/11/17  玄人 幸道         PAR の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
+//*  2026/11/17  玄人 幸道         PAR の Request Object の中の request_uri を断るようにした（RFC 9126 §2.1。#380）
+//*  2026/11/17  玄人 幸道         PAR のクライアント認証の aud を issuer だけにした（RFC 10070 §5。#398）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -491,11 +494,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(assertion))
             {
                 // private_key_jwt
-                //  **aud に、この口（PAR）の URL も受ける**（RFC 9126 §2 の MUST。#371）。
+                //  **aud は issuer だけ**（RFC 10070 §5 が、RFC 9126 §2 の PAR の口の URL・トークン エンドポイントの URL を外した。#398）。
+                //    **以前は、この口の URL も受けていた**（#371）。
                 authned = CmnEndpoints.ClientAuthentication(
-                    assertion,
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri,
-                    out client_id, ref x509, out ClientModePolicy.Proof _);
+                    assertion, out client_id, ref x509, out ClientModePolicy.Proof _);
             }
             else
             {
@@ -585,6 +587,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The client_id in the request object does not match the authenticated client.");
+                    return false;
+                }
+
+                //  **Request Object の中にも request_uri を置かせない**（RFC 9126 §2.1 の MUST NOT。Request Object で預ける形（§3）も PAR の要求である。#380）。
+                //    **フォームの request_uri は上で断っている。** 以前は、読んだ後の payload を見ていなかった。
+                //    **値によらず、在れば断る**（null・空文字も）。
+                if (payload.ContainsKey(OAuth2AndOIDCConst.request_uri))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
+                    err.Add(OAuth2AndOIDCConst.error_description, "The request object must not contain request_uri.");
                     return false;
                 }
 
@@ -681,6 +693,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 out string _, out string error, out string errorDescription,
                 (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
                 (string)payload[OAuth2AndOIDCConst.code_challenge_method] ?? "",
+                (string)payload[OAuth2AndOIDCConst.response_mode] ?? "",
                 (string)payload[OAuth2AndOIDCConst.prompt] ?? "",
                 true, signedRequestObject))
             {

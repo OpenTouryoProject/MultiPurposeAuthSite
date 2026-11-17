@@ -38,6 +38,7 @@
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/09  玄人 幸道         FA-3.2（device は private_key_jwt の認可コードでは通らない）を追加（#346）
 //*  2026/11/13  玄人 幸道         FA-2.1 の (1) の認可要求に S256 の PKCE を付けた（fapi2 は PKCE 無しの認可要求を断るようになった。#366）
+//*  2026/11/17  玄人 幸道         FA-1.1〜.3 の fapi1 の認可要求を JARM にした（fapi1 は JARM の要求だけを受けるようになった。#381）
 //**********************************************************************************
 
 using System;
@@ -93,16 +94,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
         /// <param name="client">IdPClient</param>
         /// <param name="reg">ClientRegistration</param>
         /// <param name="authzExtra">認可要求に足すパラメタ（無ければ null）</param>
+        /// <param name="jarm">JARM（response_mode=jwt）で要求するか（fapi1 の登録。#381）</param>
         /// <returns>JsonResponse（認可で失敗したら null）</returns>
         /// <remarks>
         /// **`authzExtra` に PKCE を渡しても、交換には `code_verifier` を送らない**（client_secret だけで交換する）。
         /// **fapi2 の登録は、PKCE 無しの認可要求を断る**ので（#366）、その登録で交換の段を測るときに使う。
         /// </remarks>
         private static async Task<JsonResponse> CodeWithSecretAsync(
-            IdPClient client, ClientRegistration reg, IDictionary<string, string> authzExtra = null)
+            IdPClient client, ClientRegistration reg, IDictionary<string, string> authzExtra = null, bool jarm = false)
         {
-            AuthZResponse authz = await Flows.AuthorizeCodeAsync(
-                client, reg, redirectUri: reg.RedirectUri, extra: authzExtra);
+            AuthZResponse authz = (await Flows.AuthorizeCodeAsync(
+                client, reg, redirectUri: reg.RedirectUri, extra: jarm ? Flows.WithJarm(authzExtra) : authzExtra)).Unwrap();
 
             if (string.IsNullOrEmpty(authz.Code))
             {
@@ -122,12 +124,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
         /// <summary>認可コードを取り、PKCE（S256）で交換する（client_secret 無し）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="reg">ClientRegistration</param>
+        /// <param name="jarm">JARM（response_mode=jwt）で要求するか（fapi1 の登録。#381）</param>
         /// <returns>JsonResponse（認可で失敗したら null）</returns>
         private static async Task<JsonResponse> CodeWithPkceAsync(
-            IdPClient client, ClientRegistration reg)
+            IdPClient client, ClientRegistration reg, bool jarm = false)
         {
-            AuthZResponse authz = await Flows.AuthorizeCodeAsync(
-                client, reg, redirectUri: reg.RedirectUri, extra: ClientModeTests.Pkce());
+            AuthZResponse authz = (await Flows.AuthorizeCodeAsync(
+                client, reg, redirectUri: reg.RedirectUri,
+                extra: jarm ? Flows.WithJarm(ClientModeTests.Pkce()) : ClientModeTests.Pkce())).Unwrap();
 
             if (string.IsNullOrEmpty(authz.Code))
             {
@@ -195,7 +199,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Step("(2) fapi1 ＋ client_secret（PKCE 無し）");
 
-                JsonResponse withSecret = await ClientModeTests.CodeWithSecretAsync(client, reg);
+                JsonResponse withSecret = await ClientModeTests.CodeWithSecretAsync(client, reg, jarm: true);
 
                 r.Verify("client_secret だけでは通らない",
                     withSecret != null && string.IsNullOrEmpty(withSecret.AccessToken),
@@ -208,7 +212,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Step("(3) fapi1 ＋ PKCE(S256)（client_secret 無し）");
 
-                JsonResponse withPkce = await ClientModeTests.CodeWithPkceAsync(client, reg);
+                JsonResponse withPkce = await ClientModeTests.CodeWithPkceAsync(client, reg, jarm: true);
 
                 r.Verify("PKCE(S256) なら通る",
                     withPkce != null && !string.IsNullOrEmpty(withPkce.AccessToken),
@@ -293,7 +297,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Step("(2) fapi1 で PKCE(S256) のトークンを取る");
 
-                JsonResponse token = await ClientModeTests.CodeWithPkceAsync(client, reg);
+                JsonResponse token = await ClientModeTests.CodeWithPkceAsync(client, reg, jarm: true);
                 Assert.False(token == null || string.IsNullOrEmpty(token.AccessToken),
                     "前提: fapi1 で PKCE のトークンが取得できること");
 
@@ -352,8 +356,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 r.Target("client_name=" + KnownClients.Fapi1Client + "（fapi1 登録。client_secret 登録あり）");
                 r.Step("PKCE(S256) で認可コードを取り、client_secret と code_verifier の両方を送って交換する");
 
-                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
-                    client, reg, redirectUri: reg.RedirectUri, extra: ClientModeTests.Pkce());
+                //  **fapi1 は JARM の要求だけを受ける**（#381）。
+                AuthZResponse authz = (await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri, extra: Flows.WithJarm(ClientModeTests.Pkce()))).Unwrap();
 
                 Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が取得できること");
 

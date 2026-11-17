@@ -37,6 +37,7 @@
 //*  2026/10/29  玄人 幸道         RT-307.5 で expires_in も絞った期限であることを見る（#294）
 //*  2026/10/30  玄人 幸道         RT-307.16 の (6)（device_code × private_key_jwt を断る）を外した（受けるようにした。#294）
 //*  2026/11/08  玄人 幸道         RT-346.1（プロファイルを強制する 4 つのメタデータを、動的登録で立てて読み戻す）を追加（#346 の段階 1）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -3860,7 +3861,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <returns>フォーム</returns>
         /// <remarks>
         /// **署名鍵は、登録した `jwks` と対になる構成ファイルの鍵**
-        /// （`SpRp_RsaPfxFilePath`）。**`aud` は、この実装が求めるトークン エンドポイント。**
+        /// （`SpRp_RsaPfxFilePath`）。**`aud` は issuer**（RFC 10070 §4。#398）。
         /// </remarks>
         private static Dictionary<string, string> WithClientAssertion(
             IdPClient client, string clientId, IDictionary<string, string> items)
@@ -3871,7 +3872,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 { "iss", clientId },
                 { "sub", clientId },
-                { "aud", client.Target.BaseUrl + "/token" },
+                { "aud", client.Issuer() },
                 { "jti", System.Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }

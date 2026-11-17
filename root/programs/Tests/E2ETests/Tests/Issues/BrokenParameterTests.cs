@@ -31,6 +31,7 @@
 //*  2026/09/29  玄人 幸道         新規（#245 の段階 2）
 //*  2026/10/03  玄人 幸道         RT-245.4のSkipを外した（#263）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
+//*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //**********************************************************************************
 
 using System;
@@ -467,7 +468,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 JsonResponse expired = await BrokenParameterTests.ClientCredentialsAsync(
                     client, reg, BrokenParameterTests.Assertion(
-                        client, reg.ClientId, client.Target.BaseUrl + "/token", -60));
+                        client, reg.ClientId, client.Issuer(), -60));
 
                 r.Verify("トークンを発行しない", string.IsNullOrEmpty(expired.AccessToken),
                     "発行しない", string.IsNullOrEmpty(expired.AccessToken) ? "発行しない" : "**発行した**");
@@ -478,7 +479,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 JsonResponse ok = await BrokenParameterTests.ClientCredentialsAsync(
                     client, reg, BrokenParameterTests.Assertion(
-                        client, reg.ClientId, client.Target.BaseUrl + "/token", 300));
+                        client, reg.ClientId, client.Issuer(), 300));
 
                 r.Verify("トークンが返る", !string.IsNullOrEmpty(ok.AccessToken),
                     "返る", string.IsNullOrEmpty(ok.AccessToken) ? "**返らない**（" + ok.ToString() + "）" : "返った");

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/14  玄人 幸道         新規（#371）
 //*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
+//*  2026/11/17  玄人 幸道         RT-371.2 を、/par は PAR の口の URL を受けない（issuer だけ）形に改めた（RFC 10070 §5。#398）
 //**********************************************************************************
 
 using System;
@@ -55,11 +56,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | | 測ること |
     /// |---|---|
     /// | **`RT-371.1`** | **`/ciba_authz` は、CIBA の口の URL を受ける。** PAR の口の URL は受けない |
-    /// | **`RT-371.2`** | **`/par` は、PAR の口の URL を受ける。** CIBA の口の URL は受けない。**`/revoke` は PAR の口の URL を受けない** |
+    /// | **`RT-371.2`** | **`/par` は issuer だけを受ける**（PAR の口の URL・CIBA の口の URL・トークン エンドポイントの URL は受けない。RFC 10070 §5。#398）。**`/revoke` も PAR の口の URL を受けない** |
     /// | **`RT-371.3`** | **fapi2 の登録は、`/par` でも issuer だけ**（PAR の口の URL も受けない。#323） |
     ///
     /// **足すのは、その口の URL だけ**（クライアント認証の JWT の `jti` は使用済みとして記録していないので、
     /// **ある口に宛てたアサーションを、別の口で使えないようにする**）。
+    /// **RFC 10070**（2026 年 11 月）**は、PAR を含むクライアント認証の aud を issuer の唯一の値に限った**（§4・§5）ので、
+    /// **PAR の口の URL を受けるのはやめた**（#398）。**CIBA の口は、CIBA Core 1.0 §7.1 のまま**（RFC 10070 は CIBA を更新していない）。
     /// **口の URL は、テストの側では `BaseUrl` ＋ 口のパスで作る**（`RT-294.54` のトークン エンドポイントと同じ）。
     /// **配列の `aud` は、この Issue では変えない**（`RT-294.54`）。
     ///
@@ -143,21 +146,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region RT-371.2
 
-        /// <summary>RT-371.2 /par は、client_assertion の aud に PAR の口の URL を受ける</summary>
+        /// <summary>RT-371.2 /par は、client_assertion の aud に issuer だけを受ける（PAR の口の URL は受けない）</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT37102_parはaudにPARの口のURLを受ける(string targetKey)
+        public async Task RT37102_parはaudにissuerだけを受ける(string targetKey)
         {
             using (IdPClient client = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-371.2",
-                    "**/par は、client_assertion の aud に PAR の口の URL を受ける。CIBA の口の URL は受けない。/revoke は PAR の口の URL を受けない**",
-                    "**RFC 9126 §2 は、認可サーバが issuer・トークン エンドポイントの URL・PAR の口の URL を aud として受けることを求める（MUST）。**"
-                    + "**以前は、トークン エンドポイントの URL と issuer だけを受けていた**ので、PAR の口の URL を書いた RP は invalid_client で断られた。"
-                    + "**足すのはその口の URL だけ**（ほかの口に宛てたアサーションは受けない）。",
-                    "RFC 9126 §2 / #371");
+                    "**/par は、client_assertion の aud に issuer だけを受ける。PAR の口の URL・CIBA の口の URL・トークン エンドポイントの URL は受けない。/revoke も PAR の口の URL を受けない**",
+                    "**RFC 10070 §5 は、RFC 9126 §2 が認めていたトークン エンドポイントの URL・PAR の口の URL を外し、issuer を唯一の aud とした**"
+                    + "（§4：認可サーバは、そうでない JWT を断らなければならない）。"
+                    + "**#371 では、RFC 9126 §2 に従って PAR の口の URL も受けるようにしていた**（#398 でやめた）。",
+                    "RFC 10070 §5 / RFC 10070 §4 / #371 / #398");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_24);
                 string parUrl = client.Target.BaseUrl + "/par";
@@ -166,13 +169,30 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Target("POST /par・POST /revoke（client_name=" + KnownClients.TestClient_24
                     + "。normal。private_key_jwt（PS256）で認証する）");
 
-                r.Step("(1) /par に aud = PAR の口の URL（通る）");
+                string issuer = await client.IssuerAsync();
 
-                JsonResponse accepted = await ClientAssertionAudienceTests.ParAsync(client, reg, parUrl, "state-rt3712-1");
+                r.Step("(1) /par に aud = issuer（通る）");
+
+                JsonResponse accepted = await ClientAssertionAudienceTests.ParAsync(client, reg, issuer, "state-rt3712-1");
 
                 r.VerifyEqual("HTTP 201（RFC 9126 §2.2）", "201", ((int)accepted.StatusCode).ToString());
                 r.Verify("request_uri が返る", !string.IsNullOrEmpty(accepted.String("request_uri")),
                     "あり", string.IsNullOrEmpty(accepted.String("request_uri")) ? "**無い**（" + accepted.ToString() + "）" : "あり");
+
+                r.Step("(1b) /par に aud = PAR の口の URL（RFC 10070 §5。受けない）");
+
+                JsonResponse parAud = await ClientAssertionAudienceTests.ParAsync(client, reg, parUrl, "state-rt3712-1b");
+
+                r.VerifyEqual("HTTP 401", "401", ((int)parAud.StatusCode).ToString());
+                r.VerifyEqual("invalid_client", "invalid_client", parAud.Error ?? "（無い）");
+
+                r.Step("(1c) /par に aud = トークン エンドポイントの URL（RFC 10070 §4・§5。受けない）");
+
+                JsonResponse tokenAud = await ClientAssertionAudienceTests.ParAsync(
+                    client, reg, client.Target.BaseUrl + "/token", "state-rt3712-1c");
+
+                r.VerifyEqual("HTTP 401", "401", ((int)tokenAud.StatusCode).ToString());
+                r.VerifyEqual("invalid_client", "invalid_client", tokenAud.Error ?? "（無い）");
 
                 r.Step("(2) /par に aud = CIBA の口の URL（ほかの口の URL は受けない）");
 
@@ -192,14 +212,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.VerifyEqual("invalid_client", "invalid_client", revoke.Error ?? "（無い）");
 
-                r.Step("(4) 対照：/revoke に aud = トークン エンドポイントの URL（同じクライアント・同じ鍵で通る）");
+                r.Step("(4) 対照：/revoke に aud = issuer（同じクライアント・同じ鍵で通る）");
 
                 JsonResponse control = await client.RevokeAsync(new Dictionary<string, string>()
                 {
                     { "token", "not-a-token" },
                     { "client_assertion_type", ClientAssertionAudienceTests.JwtBearerAssertionType },
                     { "client_assertion", ClientAssertionAudienceTests.ClientAssertionPS256(
-                        client, reg.ClientId, client.Target.BaseUrl + "/token") }
+                        client, reg.ClientId, issuer) }
                 });
 
                 r.VerifyEqual("認証が通る（HTTP 200）", "200", ((int)control.StatusCode).ToString());

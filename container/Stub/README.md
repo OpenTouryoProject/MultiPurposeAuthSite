@@ -63,7 +63,7 @@ copy .env.sample my-stub.env                           # パラメタを写し�
 | `client_secret` | 秘密 |
 | `redirect_uri_code` | 認可コード フローの戻り先。**登録値と 1 文字も違ってはならない** |
 | `redirect_uri_token` | Implicit の戻り先（使わなければ `-`） |
-| `redirect_uri_saml` | SAML2 の ACS（使わなければ省く） |
+| `redirect_uri_saml` | SAML2 の ACS（使わなければ省く）。**応答の `Audience` は ACS ではなく SP の entityID（要求の `Issuer`）**（#389）。**Open棟梁 の SP は `SpRp_Saml2SpEntityId` に、要求の `Issuer` と同じ値を設定する**（無いと `Audience` を ACS の URL と照合し、`AudienceMismatch` で断る） |
 | `client_name` | 名前 |
 
 ほかの項目と、機能の切り替え（`EnableDynamicClientRegistration` など）は `root\CONFIGURATION.md` を参照。

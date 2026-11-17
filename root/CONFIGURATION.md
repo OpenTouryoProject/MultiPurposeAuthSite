@@ -414,6 +414,21 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN AuthorizationSignedResponseAlg varchar(16
   **以前は `RS256` を受けていたので、`RS256` で署名している FAPI のクライアントは `invalid_client` になる**（`PS256` の鍵は `RS256` と同じ RSA の鍵）
 - **JWT Bearer グラント（`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer` の `assertion`）は、`RS256` だけのまま**
 
+### `client_assertion` の `aud`（#398）
+
+**クライアント認証の `client_assertion` の `aud` は、issuer（Discovery の `issuer`。設定の `IssuerId`）だけを受ける**（**RFC 10070 §4・§5**。2026 年 11 月。RFC 7523・RFC 9126 を更新）。
+
+| 口 | 受ける `aud` |
+|---|---|
+| `/token`（CIBA のグラントを除く）・`/par`・`/revoke`・`/introspect`・`/ros`・Device の口 | **issuer だけ** |
+| `/ciba_authz`・`/token` の CIBA のグラント | issuer・トークン エンドポイントの URL（`/ciba_authz` は CIBA の口の URL も。CIBA Core 1.0 §7.1。**RFC 10070 は CIBA を直接の対象にしていない**） |
+| JWT Bearer グラントの `assertion`（クライアント認証ではない） | issuer・トークン エンドポイントの URL（RFC 10070 §4 の 1） |
+
+- **以前は、fapi2 以外の登録でトークン エンドポイントの URL も受け、`/par` では PAR の口の URL も受けていた。** それらを `aud` にする RP は `invalid_client` になる
+- **移行：RP の `client_assertion` の `aud` を issuer にする**（RFC 10070 §6 は、クライアントを先に、または合わせて更新するよう勧めている）。issuer を `aud` にする RP は、以前の版の MPAS でも通る
+- **設定で以前の受け方に戻すことはできない**（検証を緩める分岐を作らない。#398 で決めた）
+- 同梱の自己テストのクライアントは、issuer を `aud` にする
+
 ### 一覧は 1 か所から作る
 
 **受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs` /
@@ -2924,6 +2939,14 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `redirect_uri_saml` | **ACS URL**（`AssertionConsumerServiceURL`） |
 | `jwk_rsa_publickey` | **`AuthnRequest` の署名を検証する鍵**（OAuth2 側と共用） |
 
+**応答の `Audience` は、SP の entityID（要求の `Issuer` そのもの）**（SAML Profiles §4.1.4.2。#389）。**`Recipient` は ACS URL**（従来どおり）。
+
+- **以前は `Audience` に ACS URL を入れていた。** **`Audience` を ACS URL と照合する SP は、`AudienceMismatch` で断る**ようになる
+- **移行：SP の側で、`Audience` を自分の entityID（要求に入れる `Issuer`）と照合する。** Open棟梁 の SP は、**`SpRp_Saml2SpEntityId` に、要求の `Issuer` と同じ値を設定する**（OpenTouryo#693。無ければ `Audience` を ACS URL と照合する）
+- **設定で以前の値（ACS URL）に戻すことはできない**（#389 で決めた）
+- **この配備の SP の役（自己テスト・ID 連携）は、`Audience` を自分の entityID（"http://" ＋ client_id）と照合する**
+- **SAML2 の ID 連携の上流 IdP も、`Audience` に entityID（この配備が要求に入れる `Issuer`）を入れなければならない。** **#389 より前の版の汎用認証サイトなど、`Audience` に ACS URL を入れる上流とは、`AudienceMismatch` で通らない**（上流を先に更新する。この配備の側で ACS URL に戻す設定は無い）
+
 > `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
 > **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
 
@@ -2975,7 +2998,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > `jwk_rsa_publickey` を登録した**（値は **`*_Client.cer` の JWK** ＝ 下流が (2) の署名に使う鍵の対）。
 >
 > **以前は登録していなかったので、上流は「鍵がない場合は、通す」経路に入り、
-> 署名が検証されていなかった**（`CmnEndpoints.VerifySamlRequest`）。
+> 署名が検証されていなかった**（`CmnEndpoints.VerifySamlRequest`）。**#400 で、鍵が無ければ断るようにした**（上流の登録に鍵が無いと、ID 連携は通らない）。
 >
 > **相互運用では、上流に自分の公開鍵を登録してもらうこと。**
 > **OIDC の (2) には署名が無い**ので、この登録は SAML2 のためである。
@@ -3493,12 +3516,17 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 > **自己テストの SP 役（`SelfTestClient.VerifySaml2Response`）も、同じ本体を使う。**
 > **渡す引数が違うだけ**である（**自分の証明書と、自分の `IssuerId`**）。
 
-#### 署名のない `AuthnRequest` は通る
+#### 署名を確かめられない `AuthnRequest` は断る（#400）
 
-**`jwk_rsa_publickey` を登録していないクライアントの `AuthnRequest` は、署名が無くても通る**
-（`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
+**署名の無い要求・署名を確かめられない要求（`jwk_rsa_publickey` を登録していない SP の要求を含む）は、登録済みの ACS URL へ `Requester` のエラー応答を返す**
+（`SamlProviders/CmnEndpoints.VerifySamlRequest`）。**メタデータの `WantAuthnRequestsSigned="true"`（Open棟梁 の雛形が固定で出す）と振る舞いを揃えた。**
 
-**SAML では `AuthnRequest` の署名は任意**であり、**守りは別のところで効いている。**
+- **以前は、`jwk_rsa_publickey` を登録していないクライアントの `AuthnRequest` を、署名が無くても通していた**（「鍵がない場合は、通す」）
+- **移行：SAML2 の SP は、`jwk_rsa_publickey`（`AuthnRequest` の署名を検証する鍵）を登録し、要求に署名する。** 鍵を登録していない SP は通らない
+- **設定で以前の受け方に戻すことはできない**（#400 で決めた）
+- **`Destination` の照合は、署名の確かめより前に行う**（違えば、応答を返さずに捨てる。#392）
+
+**返す先の守りは、以前から別のところで効いている**（署名が無くても「他人の ACS へアサーションを飛ばす」ことはできない）。
 
 | | |
 |---|---|
@@ -3506,19 +3534,13 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 | **不一致なら、登録値へ `Requester`** | **要求の URL へは返さない** |
 | **登録が無ければ、応答しない** | **返す先が決まらない**ので、エラー画面を返す（SAML Core 3.2.1） |
 
-**つまり、署名が無くても「他人の ACS へアサーションを飛ばす」ことはできない。**
-**署名を必須にしたい配備では、`jwk_rsa_publickey` を登録すること。**
-
-> **メタデータは `WantAuthnRequestsSigned="true"` を固定で出している**（Open棟梁 の雛形）。
-> **鍵を登録していない配備では、広告と振る舞いが揃っていない。**
-> 測定は `SA-2.1`（広告）と `SA-5.4`（登録した場合に効くこと）。
+> 測定は `SA-2.1`（広告）、`SA-5.4`（鍵を登録した SP の署名の無い要求を断る）、`RT-400.1`（鍵を登録していない SP の署名の無い要求を断る）。
 
 > **「登録すれば検証される」ことは `SA-6.5` が測っている**（#293 の段階 4）。
 > **製品が署名した本物の `AuthnRequest` の、署名だけを 1 バイト変えて送り**、
 > **`Requester` で返ることを見る。**
 >
-> **登録を外すと、このケースは `Success` になって落ちる**（実測。「鍵がない場合は、通す」）。
-> **つまり、登録が外れたことにも気付ける。**
+> **以前は、登録を外すと、このケースは `Success` になって落ちた**（「鍵がない場合は、通す」）。**#400 の後は、登録を外すと鍵が無いので断られ、ID 連携そのものが通らない**（`SA-6.*` の正常系が落ちて気付ける）。
 
 ---
 
@@ -3634,7 +3656,7 @@ ALTER TABLE CibaData ADD COLUMN ClientID varchar(256) NULL;
 > |---|---|
 > | `JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` | **キー名と値は変えていない。** 読む場所が `Config` になった。**Open棟梁 は相手の口を `SpRp_JwkSetUri` などで読み、このキーを読まなくなった**（OpenTouryo#666） |
 > | `RsaCerFilePath` / `EcdsaCerFilePath` / `Ecdsa384CerFilePath` / `Ecdsa512CerFilePath` | **足した**（空なら `SpRp_*CerFilePath`） |
-> | `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` | **クライアント役の値として残る**（Open棟梁 の `IdToken.Verify` の鍵を指定しない版・SAML2 の応答の検証） |
+> | `SpRp_RsaCerFilePath` / `SpRp_EcdsaCerFilePath` | **クライアント役の値として残る**（SAML2 の応答の検証など。**ID 連携の上流の id_token の検証には使わない**：上流の鍵が決まらなければ断る。#358） |
 > | `SpRp_Ecdsa384CerFilePath` / `SpRp_Ecdsa512CerFilePath` | **雛形から外した**（読むのは、サーバ側のキーが空のときだけ） |
 >
 > **本当に足りなかった「上流（相手）の値」は、`IdFederation*` のキーが持つ**（#286 / #289 / #291 で揃えた）。

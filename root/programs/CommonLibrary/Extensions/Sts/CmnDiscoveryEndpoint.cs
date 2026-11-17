@@ -38,6 +38,7 @@
 //*  2026/11/12  玄人 幸道         request_uri_parameter_supported が指す範囲（この OP の urn: だけ）をコメントに書いた（#362）
 //*  2026/11/13  玄人 幸道         authorization_signing_alg_values_supported を、登録で選べる alg（JwsFactory.SupportedAlgs）にした（#370）
 //*  2026/11/15  玄人 幸道         backchannel_authentication_request_signing_alg_values_supported を CibaRequestSigningAlgs から作る（PS256・ES256。#395）
+//*  2026/11/17  玄人 幸道         response_modes_supported に jwt を足した（JARM §2.3.4。#379）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -234,6 +235,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #endregion
 
             #region ResponseObject(JARM)
+            // **`jwt` も広告する**（JARM §2.3.4。応答の型の既定の置き場所で JARM にする短い形。#379）。
+            //   **受けていたのに広告していなかった**（`AccountController.TryResolveResponseMode` は `jwt` を受ける。code は query.jwt、それ以外は fragment.jwt）。
+            response_modes_supported.Add(OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit());
+
             // 「.」がね...。
             response_modes_supported.Add(Const.ResponseModeQueryJwt);
             response_modes_supported.Add(Const.ResponseModeFragmentJwt);

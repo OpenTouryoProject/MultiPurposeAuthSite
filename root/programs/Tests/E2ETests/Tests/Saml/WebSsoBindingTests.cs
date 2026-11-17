@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
+//*  2026/11/17  玄人 幸道         自己テストの SP 役の Audience の照合を「✓ 自分の entityID」で確かめる（#389）
 //**********************************************************************************
 
 using System;
@@ -260,7 +261,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 {
                     "✓ 検証できた",            // 署名
                     "✓ 一致",                  // Issuer
-                    "✓ 自分の ACS URL",        // Audience / Recipient
+                    "✓ 自分の entityID",       // Audience（#389）
+                    "✓ 自分の ACS URL",        // Recipient
                     "✓ 送った要求の ID と一致", // InResponseTo
                     "✓ 期限内",                // NotOnOrAfter
                 })
