@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=678a0ba4-ac70-49ad-a47d-2f60f1eb0f0f&code=bogus
+1. GET /Account/EmailConfirmation?userId=0867832d-f207-42df-a539-a08eaaea4026&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=678a0ba4-ac70-49ad-a47d-2f60f1eb0f0f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=678a0ba4-ac70-49ad-a47d-2f60f1eb0f0f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=0867832d-f207-42df-a539-a08eaaea4026&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=0867832d-f207-42df-a539-a08eaaea4026&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7309,8 +7309,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **RFC 7523 §3 は、認可サーバを指す値を求め、トークン エンドポイントの URL も認める。****fapi2 の登録は、issuer だけを受ける**（RT-323.1）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**（**以前は HTTP 500** だった）。 |
-| 根拠 | RFC 7523 §3 / RFC 7519 §4.1.3 / #294 |
+| 観点 | **RFC 7523 §3 は、認可サーバを指す値を求め、トークン エンドポイントの URL も認める。****fapi2 の登録は、issuer だけを受ける**（RT-323.1）。**以前はトークン エンドポイントの URL との完全一致だけ**だったので、**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。**配列の aud は断る**（**以前は HTTP 500** だった）。**RFC 10070 §4 は、issuer を唯一の値としない JWT を断ることを求める**ので、**issuer を含む要素 2 つ以上の配列（適合性テストの test-array-as-audience-for-client-JWT-assertion の形）も断る**（#397）。**トークン エンドポイントの URL を受けることは、RFC 10070 §4 が禁じた。扱いは #398 で決める**。 |
+| 根拠 | RFC 7523 §3 / RFC 10070 §4 / RFC 7519 §4.1.3 / #294 / #397 |
 | テスト | `RT29454_client_assertionのaudにissuerを受ける` |
 
 **手順**
@@ -7319,11 +7319,13 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 1. aud = トークン エンドポイント
 1. aud = 他の値
 1. aud = [issuer]（配列）
+1. aud = [issuer, 他の値]（配列。RFC 10070 §4。#397）
 
 **検証（合否を判定する）**
 
 - 認証が通る（HTTP 200）
 - 認証が通る（HTTP 200）
+- invalid_client（500 にしない）
 - invalid_client（500 にしない）
 - invalid_client（500 にしない）
 

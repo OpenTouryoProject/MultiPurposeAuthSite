@@ -49,6 +49,7 @@
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、受けた口（PAR・CIBA）の URL も受ける版を足した（RFC 9126 §2・CIBA Core 1.0 §7.1。#371）
 //*  2026/11/15  玄人 幸道         client_assertion の検証鍵を、ヘッダの alg と登録の鍵から作る（JWS を受ける JwtAssertion.Verify）。PS256 を受け、FAPI の登録は RS256 を断る（FAPI 1.0 Advanced §8.6。OpenTouryo#664。#395）
 //*  2026/11/15  玄人 幸道         FAPI の登録の判定を Helper.IsFapiProfileClient にまとめた（#384）
+//*  2026/11/17  玄人 幸道         配列の aud を断る根拠を RFC 10070 §4 に書き換えた。振る舞いは変えていない（#397）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1066,8 +1067,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **トークン エンドポイントの URL か、issuer**（RFC 7523 §3 / FAPI 2.0 Security Profile §5.3.2.1）。
         ///
         /// **配列の aud は受けない。** RFC 7519 §4.1.3 は配列を認めるが、
-        /// 以前は **Open棟梁 の `JwtAssertion.Verify` が aud を文字列として読み**、配列だと検証そのものができなかった。
-        /// **Open棟梁 は要素 1 つの配列を受けるようになった**（OpenTouryo#654）が、**こちらは変えていない**（`RT-294.54`。#336）。
+        /// **RFC 10070 §4（RFC 7523 を更新し、§3 の 3 を置き換えた）は、クライアント認証の JWT の aud を issuer の唯一の値に限り、
+        /// そうでない JWT を断ることを求める**（MUST）。**issuer を含む要素 2 つ以上の配列も断る**（#397。Open棟梁 も同じ。OpenTouryo#697）。
+        /// **要素 1 つの配列も、こちらは受けない**（Open棟梁 は受ける。OpenTouryo#654。`RT-294.54`。#336）。
+        /// **適合性テスト（5.3.4）の `test-array-as-audience-for-client-JWT-assertion` は、`[issuer, ダミー]` を受けることを求める。**
+        /// これは置き換えられた RFC 7523 §3 の 3（「含む」）には沿うが、RFC 10070 §4 とは食い違うので、**MPAS では落ちるのが正しい**（#397）。
+        /// **トークン エンドポイントの URL を受けることも、RFC 10070 §4 は禁じた**（扱いは #398）。
         /// </remarks>
         private static bool IsAssertionAudience(JObject payload)
         {
@@ -1143,7 +1148,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 以前の版は iss・aud を照合せず（`[Obsolete]`）、sub・nbf も見なかった。
         ///
         /// - **aud は、トークン エンドポイントの URL か issuer**（PAR・CIBA の口では、その口の URL も。`AssertionAudiences`。#371）。
-        ///   **登録の種別ごとの絞り込み**（fapi2 は issuer だけ。#323）と、**文字列に限ること**（RT-294.54）は、
+        ///   **登録の種別ごとの絞り込み**（fapi2 は issuer だけ。#323）と、**文字列に限ること**（RT-294.54。RFC 10070 §4。#397）は、
         ///   **呼び出し側が `IsClientAssertionAudience`・`IsAssertionAudience` で続けて行う**
         ///   （Open棟梁 は要素 1 つの配列も受けるが、こちらは受けない）
         /// - **sub は在ることだけ**を Open棟梁 が確かめる。**クライアント認証なら、呼び出し側が iss と照合する**

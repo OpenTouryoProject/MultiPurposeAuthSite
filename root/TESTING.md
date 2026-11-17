@@ -1343,7 +1343,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 - **判定は `CmnEndpoints.AssertionAudiences`**（Open棟梁 の `JwtAssertion.Verify` に渡す期待値と、`IsAssertionAudience` の判定を、ここで決める）。**口の URL を渡すのは PAR・CIBA の口だけ**（`ClientAuthentication(assertion, endpointUrl, …)`）
 - **足すのはその口の URL だけ**。**クライアント認証の JWT の `jti` は使用済みとして記録していない**ので、すべての口で全部の URL を受けると、ある口に宛てたアサーションを別の口で使える
-- **配列の `aud` は変えていない**（`RT-294.54`。MPAS の判定（`IsAssertionAudience`）が文字列に限る。要素 2 つ以上の配列は、Open棟梁 の `JwtAssertion.Verify` も受けない（唯一の値に限る。OpenTouryo#654））
+- **配列の `aud` は変えていない**（**RFC 10070 §4 が、issuer を唯一の値としない JWT を断ることを求める**。#397。`RT-294.54`。MPAS の判定（`IsAssertionAudience`）が文字列に限る。要素 2 つ以上の配列は、Open棟梁 の `JwtAssertion.Verify` も受けない（唯一の値に限る。OpenTouryo#654））
 - **`RT-371.1` は利用者の端末を登録する**ので、CIBA のほかのテストと同じコレクション（`CibaTests.DeviceCollection`）に入れた
 
 ###### 測っていないこと
@@ -4495,7 +4495,7 @@ The ID federation did not complete. (the error view was returned)
 | `RT-294.51` | **fapi2 のクライアントが、PKCE と private_key_jwt を併用して認可コードを引き換えられる**（違う `code_verifier` では通らない） | **`code_verifier` が在ると `client_assertion` を無視した**（fapi2 は通らなかった） |
 | `RT-294.52` | **方法を明示したクライアントは PKCE だけでは引き換えられず、`none` のクライアントは PKCE だけで引き換えられる**（秘密では通らない） | **登録に関わらず PKCE だけで引き換えられた**（C-40） |
 | `RT-294.53` | **scope を省いた認可要求**でも code が返る | **500** |
-| `RT-294.54` | **client_assertion の `aud` に issuer を受ける**（配列は 500 にせず `invalid_client`） | **issuer は `invalid_client`、配列は 500** |
+| `RT-294.54` | **client_assertion の `aud` に issuer を受ける**（配列は 500 にせず `invalid_client`。**issuer を含む要素 2 つ以上の配列も断る**（RFC 10070 §4。#397）。トークン エンドポイントの URL を受けることの扱いは #398） | **issuer は `invalid_client`、配列は 500** |
 | `RT-294.55` | **grant_types に `implicit` が無いクライアントの Hybrid** は、同意の前に `unauthorized_client` | **同意の後で `server_error`** |
 | `RT-294.56` | **poll の CIBA は、`client_notification_token` も `binding_message` も無い request で受け付ける** | **`invalid_request`** |
 | `RT-294.57` | **PAR の Request Object の `client_id` が、認証したクライアントと違えば `invalid_request_object`** | **受け付けて、別のクライアントの名義で預けた**（C-41） |

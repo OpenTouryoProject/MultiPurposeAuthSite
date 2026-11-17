@@ -38,6 +38,7 @@
 //*  2026/11/06  玄人 幸道         Request Object を RequestObjectBuilder.CreateAsync で作る（aud を issuer にした。#336）
 //*  2026/11/13  玄人 幸道         fapi の登録の Request Object を PS256 で署名する（fapi の登録は RS256 を断るようになった。#370）
 //*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
+//*  2026/11/17  玄人 幸道         RT-294.54 に、issuer を含む要素 2 つ以上の配列の aud を断ることを足し、根拠に RFC 10070 §4 を足した（#397）
 //**********************************************************************************
 
 using System;
@@ -922,9 +923,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**fapi2 の登録は、issuer だけを受ける**（RT-323.1）。"
                     + "**以前はトークン エンドポイントの URL との完全一致だけ**だったので、"
                     + "**issuer を入れる FAPI 2.0 のクライアントは invalid_client になった**（N4）。"
-                    + "**配列の aud は、上流（`JwtAssertion.Verify`）が文字列として読むので受けられない**"
-                    + "（**以前は HTTP 500** だった）。",
-                    "RFC 7523 §3 / RFC 7519 §4.1.3 / #294");
+                    + "**配列の aud は断る**（**以前は HTTP 500** だった）。"
+                    + "**RFC 10070 §4 は、issuer を唯一の値としない JWT を断ることを求める**ので、"
+                    + "**issuer を含む要素 2 つ以上の配列（適合性テストの test-array-as-audience-for-client-JWT-assertion の形）も断る**（#397）。"
+                    + "**トークン エンドポイントの URL を受けることは、RFC 10070 §4 が禁じた。扱いは #398 で決める**。",
+                    "RFC 7523 §3 / RFC 10070 §4 / RFC 7519 §4.1.3 / #294 / #397");
 
                 ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_24);
                 string issuer = await client.IssuerAsync();
@@ -947,7 +950,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 foreach (KeyValuePair<string, object> aud in new Dictionary<string, object>()
                 {
                     { "他の値", "https://other.example" },
-                    { "[issuer]（配列）", new string[] { issuer } }
+                    { "[issuer]（配列）", new string[] { issuer } },
+                    { "[issuer, 他の値]（配列。RFC 10070 §4。#397）", new string[] { issuer, "https://other.example" } }
                 })
                 {
                     r.Step("aud = " + aud.Key);
