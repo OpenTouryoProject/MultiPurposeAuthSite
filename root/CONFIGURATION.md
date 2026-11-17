@@ -2998,7 +2998,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > `jwk_rsa_publickey` を登録した**（値は **`*_Client.cer` の JWK** ＝ 下流が (2) の署名に使う鍵の対）。
 >
 > **以前は登録していなかったので、上流は「鍵がない場合は、通す」経路に入り、
-> 署名が検証されていなかった**（`CmnEndpoints.VerifySamlRequest`）。
+> 署名が検証されていなかった**（`CmnEndpoints.VerifySamlRequest`）。**#400 で、鍵が無ければ断るようにした**（上流の登録に鍵が無いと、ID 連携は通らない）。
 >
 > **相互運用では、上流に自分の公開鍵を登録してもらうこと。**
 > **OIDC の (2) には署名が無い**ので、この登録は SAML2 のためである。
@@ -3516,12 +3516,17 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 > **自己テストの SP 役（`SelfTestClient.VerifySaml2Response`）も、同じ本体を使う。**
 > **渡す引数が違うだけ**である（**自分の証明書と、自分の `IssuerId`**）。
 
-#### 署名のない `AuthnRequest` は通る
+#### 署名を確かめられない `AuthnRequest` は断る（#400）
 
-**`jwk_rsa_publickey` を登録していないクライアントの `AuthnRequest` は、署名が無くても通る**
-（`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
+**署名の無い要求・署名を確かめられない要求（`jwk_rsa_publickey` を登録していない SP の要求を含む）は、登録済みの ACS URL へ `Requester` のエラー応答を返す**
+（`SamlProviders/CmnEndpoints.VerifySamlRequest`）。**メタデータの `WantAuthnRequestsSigned="true"`（Open棟梁 の雛形が固定で出す）と振る舞いを揃えた。**
 
-**SAML では `AuthnRequest` の署名は任意**であり、**守りは別のところで効いている。**
+- **以前は、`jwk_rsa_publickey` を登録していないクライアントの `AuthnRequest` を、署名が無くても通していた**（「鍵がない場合は、通す」）
+- **移行：SAML2 の SP は、`jwk_rsa_publickey`（`AuthnRequest` の署名を検証する鍵）を登録し、要求に署名する。** 鍵を登録していない SP は通らない
+- **設定で以前の受け方に戻すことはできない**（#400 で決めた）
+- **`Destination` の照合は、署名の確かめより前に行う**（違えば、応答を返さずに捨てる。#392）
+
+**返す先の守りは、以前から別のところで効いている**（署名が無くても「他人の ACS へアサーションを飛ばす」ことはできない）。
 
 | | |
 |---|---|
@@ -3529,19 +3534,13 @@ appSettings__IdFederationSaml2MetadataUrl=http://upstream:8080/samlmetadata
 | **不一致なら、登録値へ `Requester`** | **要求の URL へは返さない** |
 | **登録が無ければ、応答しない** | **返す先が決まらない**ので、エラー画面を返す（SAML Core 3.2.1） |
 
-**つまり、署名が無くても「他人の ACS へアサーションを飛ばす」ことはできない。**
-**署名を必須にしたい配備では、`jwk_rsa_publickey` を登録すること。**
-
-> **メタデータは `WantAuthnRequestsSigned="true"` を固定で出している**（Open棟梁 の雛形）。
-> **鍵を登録していない配備では、広告と振る舞いが揃っていない。**
-> 測定は `SA-2.1`（広告）と `SA-5.4`（登録した場合に効くこと）。
+> 測定は `SA-2.1`（広告）、`SA-5.4`（鍵を登録した SP の署名の無い要求を断る）、`RT-400.1`（鍵を登録していない SP の署名の無い要求を断る）。
 
 > **「登録すれば検証される」ことは `SA-6.5` が測っている**（#293 の段階 4）。
 > **製品が署名した本物の `AuthnRequest` の、署名だけを 1 バイト変えて送り**、
 > **`Requester` で返ることを見る。**
 >
-> **登録を外すと、このケースは `Success` になって落ちる**（実測。「鍵がない場合は、通す」）。
-> **つまり、登録が外れたことにも気付ける。**
+> **以前は、登録を外すと、このケースは `Success` になって落ちた**（「鍵がない場合は、通す」）。**#400 の後は、登録を外すと鍵が無いので断られ、ID 連携そのものが通らない**（`SA-6.*` の正常系が落ちて気付ける）。
 
 ---
 

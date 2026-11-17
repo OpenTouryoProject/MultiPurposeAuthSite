@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=8fa7e355-ac53-4cb3-81c4-61a95fbcca8e&code=bogus
+1. GET /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=8fa7e355-ac53-4cb3-81c4-61a95fbcca8e&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=8fa7e355-ac53-4cb3-81c4-61a95fbcca8e&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12829,7 +12829,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - Audience は、要求の Issuer（SP の entityID）
 - Audience は ACS の URL ではない
 
-## RT-390.1 鍵を登録していない SP の要求で、NCName の形でない ID を、応答の InResponseTo に使わない
+## RT-390.1 署名した要求で、NCName の形でない ID を、応答の InResponseTo に使わない
 
 | | |
 |---|---|
@@ -12958,27 +12958,27 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - Destination が、要求を送った先と同じ
 - Destination が、要求を送った先と同じ
 
-## RT-392.1 鍵を登録していない SP の、署名の無い要求でも、Destination が受けた口と違えば捨てる（エラー画面）
+## RT-392.1 署名の無い要求でも、Destination が受けた口と違えば捨てる（エラー画面）。合う・無い Destination なら、署名を確かめられないので Requester のエラー応答
 
 | | |
 |---|---|
-| 観点 | **SAML Core 3.2.1 は、署名の有無によらず、Destination が在れば受けた場所と照合し、違えば要求を捨てることを求める（MUST）。** **以前は照合していなかった**（#392）。**Destination の無い署名の無い要求は、従来どおり通す**（Bindings の MUST は署名した要求だけ）。 |
-| 根拠 | SAML Core 3.2.1 / #392 |
+| 観点 | **SAML Core 3.2.1 は、署名の有無によらず、Destination が在れば受けた場所と照合し、違えば要求を捨てることを求める（MUST）。** **以前は照合していなかった**（#392）。**Destination の照合は、署名の確かめより前に行う**（違えば捨てる）。**照合を通った署名の無い要求は、署名を確かめられないので Requester で断る**（#400。以前は、鍵を登録していない SP の要求を通していた）。 |
+| 根拠 | SAML Core 3.2.1 / #392 / #400 |
 | テスト | `RT39201_署名の無い要求でも違うDestinationは捨てる` |
 
 **手順**
 
-1. 対照：Destination が受けた口と同じなら、通る
-1. Destination が無ければ、従来どおり通る
+1. Destination が受けた口と同じなら、照合は通り、署名が無いので Requester（#400）
+1. Destination が無ければ、照合は通り、署名が無いので Requester（#400）
 1. Destination が受けた口と違えば、捨てる（SP へ応答を返さない）
 1. 空の Destination も、受けた場所を指さないので、捨てる
 
 **検証（合否を判定する）**
 
-- SP へ応答を返す
-- StatusCode
-- SP へ応答を返す
-- StatusCode
+- SP へ応答を返す（捨てない）
+- StatusCode（署名を確かめられない）
+- SP へ応答を返す（捨てない）
+- StatusCode（署名を確かめられない）
 - 500 にしない
 - SP へ応答を返さない（捨てる）
 - エラー画面が開く
@@ -13138,6 +13138,22 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - invalid_grant（知らない auth_req_id。invalid_client ではない）
 - invalid_client
 - invalid_client
+
+## RT-400.1 **鍵を登録していない SP の、署名の無い要求は、登録済みの ACS URL へ Requester のエラー応答を返す（アサーションを入れない）**
+
+| | |
+|---|---|
+| 観点 | **メタデータの WantAuthnRequestsSigned=true は、この IdP が受ける AuthnRequest に署名を求めることを示す。****以前は、鍵を登録していない SP の要求を、署名を確かめずに通していた**（振る舞いと広告が食い違っていた）。**署名を確かめられない要求は、署名の検証に失敗した要求と同じく断る**（#400）。 |
+| 根拠 | SAML Metadata（IDPSSODescriptor の WantAuthnRequestsSigned） / #400 |
+| テスト | `RT40001_鍵を登録していないSPの署名の無い要求は断る` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- 登録済みの ACS URL へ応答を返す
+- StatusCode（署名を確かめられない要求は断る）
+- アサーション（NameID）を入れない
+- InResponseTo（送った要求の ID）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
@@ -13769,7 +13785,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - WantAuthnRequestsSigned
-  - **固定で true を出している**（Open棟梁 の雛形）。**実際は、`jwk_rsa_publickey` を登録していないクライアントの要求は、署名が無くても通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**広告と振る舞いが揃っていない**ので、`CONFIGURATION.md` に明記してある。
+  - **固定で true を出している**（Open棟梁 の雛形）。**振る舞いも揃えた**：署名を確かめられない要求は、鍵を登録していないクライアントのものも断る（#400。以前は通していた。`RT-400.1`）。
 
 ## SA-2.2 メタデータは、退役させる途中の署名証明書も並べて広告する
 
@@ -13992,7 +14008,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **`jwk_rsa_publickey` を登録していれば、署名を検証する。****登録していなければ、署名の無い要求も通す**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**`AuthnRequest` の署名は SAML では任意**で、**応答が事前登録の ACS URL にしか飛ばない**ことで守っている。**登録した場合に、それが効いていること**をここで測る。 |
+| 観点 | **`jwk_rsa_publickey` を登録していれば、署名を検証する。****登録していなければ、署名を確かめられないので、やはり断る**（#400。以前は「鍵がない場合は、通す」で通していた。`RT-400.1`）。**応答は事前登録の ACS URL にしか飛ばない**ので、断る応答も登録値へ返る。**登録した場合に、署名の検証が効いていること**をここで測る。 |
 | 根拠 | SAML Core 3.4 / Web SSO Profile / #275 |
 | テスト | `SA0504_鍵を登録したクライアントの署名の無い要求を断る` |
 
@@ -14016,7 +14032,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **`TestClient_21` は鍵を登録していない**ので、**同じ要求が `SA-3.*` では通る。** 差は登録だけである。
+- **鍵を登録していない SP の署名の無い要求も、同じく Requester で断る**（#400。`RT-400.1`）。**`SA-3.*` は、`TestClient_21` の鍵で署名して送るので通る。**
 - **上流（Open棟梁 #598）で 2 つが直っている。****`VerifyByXPath` が `StatusCode` を見るようになり**、**`VerifyResponse` の `out statusCode` が検証の前に設定される**ようになった。**そのため、こちら側に回避を置かずに理由を出せている。**
 
 ## SA-6.1 上流の IdP へ SAML2 で委譲して、下流にサインインできる
@@ -14144,7 +14160,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **(2)（下流 → 上流の `AuthnRequest`）の署名が検証されていること**（#293 の段階 2）。**上流に `jwk_rsa_publickey` を登録していなければ、`VerifySamlRequest` は「鍵がない場合は、通す」経路に入る**ので、**壊した署名でも通ってしまう** — **それを落とすのがこのケースである。****製品が署名した本物の要求の、署名だけを 1 バイト変えて送る**ので、**配備を壊さずに歯抜けが測れる**（段階 4）。 |
+| 観点 | **(2)（下流 → 上流の `AuthnRequest`）の署名が検証されていること**（#293 の段階 2）。**以前は、上流に `jwk_rsa_publickey` を登録していなければ、`VerifySamlRequest` が「鍵がない場合は、通す」経路に入り、壊した署名でも通った**（#400 で、鍵が無ければ断るようにした）。**上流に鍵を登録し、署名の検証が効いていることを測る。****製品が署名した本物の要求の、署名だけを 1 バイト変えて送る**ので、**配備を壊さずに歯抜けが測れる**（段階 4）。 |
 | 根拠 | SAML 2.0 Bindings 3.4.4.1 / #275 / #293 の段階 2 |
 | テスト | `SA0605_署名を壊したAuthnRequestを上流が弾く` |
 

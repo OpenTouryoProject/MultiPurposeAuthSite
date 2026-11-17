@@ -198,6 +198,7 @@
 
 - [ ] 署名の対象と、消費する要素の一致（XSW）
 - [ ] リプレイ（`InResponseTo`・`ID`）、`Audience`、有効期限（`NotBefore` / `NotOnOrAfter`）
+- [ ] **広告（メタデータ）と振る舞いが揃っているか**（`WantAuthnRequestsSigned="true"` を広告しながら、鍵を登録していない SP の署名の無い要求を通していた。#400。`RT-400.1`）。**テストが「通る」前提に頼っていないか**（要求を直に送る E2E の多くが、署名の無い要求を送っていた）
 - [ ] **Redirect Binding の送り先の URL にクエリ文字列をつなぐとき、送り先が既にクエリを持っていないか**（SAML Bindings §3.4.4.1。**常に `?` でつないでいた**。#393。`AppendQueryTests`）。**同じ組み立てが、ID 連携の要求と IdP の役の応答の両方にあった**
 - [ ] **`Audience` は SP の entityID か**（SAML Profiles §4.1.4.2）。**ACS URL を入れていた・ACS URL と照合していた**（#389。`RT-389.1`）。**IdP の役で入れる値と、SP の役で照合する値を、両方そろえて変える**（片方だけ変えると、自己テスト・ID 連携が通らない）
 - [ ] **SP の役で送る署名した要求に、送り先の `Destination` を入れているか**（SAML Bindings §3.4.5.2・§3.5.5.2 の MUST）。

@@ -32,6 +32,7 @@
 //*  2026/10/11  玄人 幸道         FromRedirectQuery でSAMLRequestも読めるようにした（#286 の段階 3）
 //*  2026/10/13  玄人 幸道         クエリ文字列の 1 つの値を差し替える口を追加（#293 の段階 4）
 //*  2026/11/16  玄人 幸道         要求に Destination を入れる引数と、署名した Redirect のクエリを作る口を追加（#392）
+//*  2026/11/17  玄人 幸道         SP の鍵で署名し、Destination を補う SignedRequestQuery を追加（IdP は署名の無い要求を断るようになった。#400）
 //**********************************************************************************
 
 using System;
@@ -39,6 +40,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Xml;
 
@@ -57,12 +59,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// | 未登録の `Issuer` | 同上 |
     /// | 壊れた `SAMLRequest` | 同上 |
     ///
-    /// **署名は、原則として付けない**（署名した要求が要るときは `ToSignedRedirectQuery`。#392）。
-    /// **`jwk_rsa_publickey` を登録していないクライアントは、署名の無い要求を通す**
-    /// （`SamlProviders/CmnEndpoints.VerifySamlRequest` の「鍵がない場合は、通す」）。
-    /// **E2E 専用の `TestClient_21` / `TestClient_22` が、その形で登録されている**（`KnownClients`）。
+    /// **要求は署名して送る**（`SignedRequestQuery`。**IdP は署名を確かめられない要求を断る**。#400）。
+    /// **以前は、`jwk_rsa_publickey` を登録していないクライアントの署名の無い要求を通していた**（「鍵がない場合は、通す」。#400 でやめた）。
+    /// **E2E 専用の `TestClient_21` / `TestClient_22` は、`TestClient` と同じ鍵を登録している**（`KnownClients`）。
     ///
-    /// **鍵を登録しているクライアント（`TestClient`）へ送れば、署名の検証が落ちることを measure できる。**
+    /// **署名の無い要求を送れば、断られることを測れる**（`ToRedirectQuery`。`SA-5.4`・`RT-400.1`）。
     /// </remarks>
     public static class Saml2
     {
@@ -194,13 +195,58 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public static string ToSignedRedirectQuery(string xml, RSA rsa)
         {
-            string signedOctets = Saml2.ToRedirectQuery(xml)
+            return Saml2.ToSignedRedirectQuery(xml, rsa, null);
+        }
+
+        /// <summary>Redirect Binding の、署名したクエリ文字列にする（RelayState を付ける版。#400）</summary>
+        /// <param name="xml">AuthnRequest の XML</param>
+        /// <param name="rsa">SP の秘密鍵（RSA）</param>
+        /// <param name="relayState">RelayState（空なら付けない）</param>
+        /// <returns>クエリ文字列（`SAMLRequest`・`RelayState`・`SigAlg`・`Signature`。先頭に ? は付かない）</returns>
+        /// <remarks>**署名の対象は `SAMLRequest`・`RelayState`・`SigAlg` をこの順に並べたもの**（SAML Bindings 3.4.4.1）。</remarks>
+        public static string ToSignedRedirectQuery(string xml, RSA rsa, string relayState)
+        {
+            string signedOctets = Saml2.ToRedirectQuery(xml, relayState)
                 + "&SigAlg=" + Uri.EscapeDataString("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256");
 
             byte[] signature = rsa.SignData(
                 Encoding.ASCII.GetBytes(signedOctets), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 
             return signedOctets + "&Signature=" + Uri.EscapeDataString(Convert.ToBase64String(signature));
+        }
+
+        /// <summary>IdP の SAML2 の口の URL（要求の `Destination` に入れる値。#392・#400）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <returns>URL</returns>
+        public static string RequestEndpointOf(IdPClient client)
+        {
+            return client.Target.BaseUrl + "/saml2request";
+        }
+
+        /// <summary>要求を SP の鍵で署名し、Redirect Binding のクエリ文字列にする（#400）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="xml">AuthnRequest の XML（`BuildAuthnRequest`）</param>
+        /// <param name="relayState">RelayState（空なら付けない）</param>
+        /// <returns>クエリ文字列（先頭に ? は付かない）</returns>
+        /// <remarks>
+        /// **IdP は、署名を確かめられない要求を断る**（鍵を登録していない SP の要求を含む。#400）。
+        /// **鍵は構成ファイルの `SpRp_RsaPfxFilePath`**（`TestClient`・`TestClient_21`・`_22` の `jwk_rsa_publickey` と対）。
+        /// **`Destination` が無ければ、IdP の口の URL を補う**（署名した要求には要る。SAML Bindings 3.4.5.2。#392）。
+        /// **`Destination` を測るテストは、`ToSignedRedirectQuery` で組み立てたまま送る**（`RequestDestinationCheckTests`）。
+        /// </remarks>
+        public static string SignedRequestQuery(IdPClient client, string xml, string relayState = null)
+        {
+            if (xml.IndexOf(" Destination=\"", StringComparison.Ordinal) < 0)
+            {
+                xml = xml.Replace("<samlp:AuthnRequest ",
+                    "<samlp:AuthnRequest Destination=\"" + Xml(Saml2.RequestEndpointOf(client)) + "\" ");
+            }
+
+            using (X509Certificate2 cert = JwsSigner.LoadCertificate(client, "SpRp_RsaPfxFilePath", "SpRp_RsaPfxPassword"))
+            using (RSA rsa = cert.GetRSAPrivateKey())
+            {
+                return Saml2.ToSignedRedirectQuery(xml, rsa, relayState);
+            }
         }
 
         /// <summary>POST Binding の SAMLRequest の値にする（#275）</summary>

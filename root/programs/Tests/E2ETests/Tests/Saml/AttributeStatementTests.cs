@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/12  玄人 幸道         新規（#286 の段階 4）
+//*  2026/11/17  玄人 幸道         要求を署名して送る（#400）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -246,7 +247,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         /// <returns>Saml2Response</returns>
         /// <remarks>
         /// **`SA-3` の補助と同じ形**である（`NameIdFormatTests`）。
-        /// **`TestClient_21` は `jwk_rsa_publickey` を持たない**ので、署名の無い要求が通る。
+        /// **要求は `TestClient_21` の鍵で署名して送る**（IdP は署名の無い要求を断る。#400）。
         /// </remarks>
         private async Task<Saml2Response> RequestAsync(
             IdPClient client, TestReport r, string clientName, string nameIdFormat)
@@ -262,7 +263,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 id, "http://" + clientId, nameIdFormat, Saml2.BindingPost);
 
             HttpResponseMessage res = await client.GetAsync(
-                "/saml2request?" + Saml2.ToRedirectQuery(xml));
+                "/saml2request?" + Saml2.SignedRequestQuery(client, xml));
 
             r.VerifyEqual("HTTP 200（自動送信フォーム）", "200", ((int)res.StatusCode).ToString());
 

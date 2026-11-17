@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/07  玄人 幸道         新規（#275）
 //*  2026/10/07  玄人 幸道         エラー応答にAssertionを入れないことと、画面の理由を測る（#278）
+//*  2026/11/17  玄人 幸道         要求を署名して送る。SA-5.4 の観点を、鍵の無い要求も断る形に直した（#400）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -60,9 +61,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     /// **要求は自前で組み立てる**（`Infrastructure/Saml2`）。
     /// **自己テストのボタンは、どれも正しい値しか送らない**ので、ここは測れない。
     ///
-    /// **署名は付けない。**
-    /// **`TestClient_21` は `jwk_rsa_publickey` を持たない**ので、署名の無い要求が通る。
-    /// **`TestClient` は持っている**ので、同じ要求が `SA-5.4` で落ちる。
+    /// **要求は `TestClient_21` の鍵で署名して送る**（IdP は署名の無い要求を断る。#400）。
+    /// **署名の無い要求が断られることは `SA-5.4`・`RT-400.1` が測る。**
     /// </remarks>
     public class ErrorResponseTests : TargetTestBase
     {
@@ -260,11 +260,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 TestReport r = this.Report("SA-5.4",
                     "鍵を登録したクライアントの、署名の無い要求は断る",
                     "**`jwk_rsa_publickey` を登録していれば、署名を検証する。**"
-                    + "**登録していなければ、署名の無い要求も通す**"
-                    + "（`VerifySamlRequest` の「鍵がない場合は、通す」）。"
-                    + "**`AuthnRequest` の署名は SAML では任意**で、"
-                    + "**応答が事前登録の ACS URL にしか飛ばない**ことで守っている。"
-                    + "**登録した場合に、それが効いていること**をここで測る。",
+                    + "**登録していなければ、署名を確かめられないので、やはり断る**（#400。以前は「鍵がない場合は、通す」で通していた。`RT-400.1`）。"
+                    + "**応答は事前登録の ACS URL にしか飛ばない**ので、断る応答も登録値へ返る。"
+                    + "**登録した場合に、署名の検証が効いていること**をここで測る。",
                     "SAML Core 3.4 / Web SSO Profile / #275");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
@@ -279,7 +277,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                     id, "http://" + reg.ClientId,
                     Saml2.FormatUnspecified, Saml2.BindingPost);
 
-                HttpResponseMessage res = await this.SendRedirectAsync(client, xml);
+                HttpResponseMessage res = await this.SendRedirectAsync(client, xml, sign: false);
 
                 r.VerifyEqual("HTTP 200（自動送信フォーム）", "200", ((int)res.StatusCode).ToString());
 
@@ -303,8 +301,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
                 r.Verify("エラー応答に Assertion を入れない（#278）", !decoded.HasAssertion,
                     "入れない", decoded.HasAssertion ? "**入っている**" : "入れていない");
 
-                r.Note("**`TestClient_21` は鍵を登録していない**ので、"
-                    + "**同じ要求が `SA-3.*` では通る。** 差は登録だけである。");
+                r.Note("**鍵を登録していない SP の署名の無い要求も、同じく Requester で断る**（#400。`RT-400.1`）。"
+                    + "**`SA-3.*` は、`TestClient_21` の鍵で署名して送るので通る。**");
 
                 r.Step("(3) SP の画面が「エラー応答である」と出す");
 
@@ -361,10 +359,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         /// <summary>Redirect Binding で /saml2request に要求を送る</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="xml">AuthnRequest の XML</param>
+        /// <param name="sign">署名するか（既定は署名する。IdP は署名の無い要求を断る。#400）</param>
         /// <returns>HttpResponseMessage</returns>
-        private Task<HttpResponseMessage> SendRedirectAsync(IdPClient client, string xml)
+        private Task<HttpResponseMessage> SendRedirectAsync(IdPClient client, string xml, bool sign = true)
         {
-            return client.GetAsync("/saml2request?" + Saml2.ToRedirectQuery(xml));
+            return client.GetAsync("/saml2request?" + (sign ? Saml2.SignedRequestQuery(client, xml) : Saml2.ToRedirectQuery(xml)));
         }
 
         /// <summary>エラー画面が返ることを確かめる</summary>

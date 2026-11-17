@@ -38,6 +38,7 @@
 //*  2026/11/16  玄人 幸道         NameID に埋め込めない文字を含む値なら、アサーションを作らないようにした（#390）
 //*  2026/11/16  玄人 幸道         要求の Destination を受けた口の URL と照合し、合わなければ捨てるようにした（#392）
 //*  2026/11/17  玄人 幸道         応答の Audience を、ACS の URL から SP の entityID（要求の Issuer）にした（SAML Profiles §4.1.4.2。OpenTouryo#693。#389）
+//*  2026/11/17  玄人 幸道         鍵を登録していない SP の、署名の無い要求を断るようにした（メタデータの WantAuthnRequestsSigned=true と揃えた。#400）
 //**********************************************************************************
 
 #if NETFX
@@ -85,9 +86,10 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// **検証は Open棟梁 の `SAML2Client.VerifyRequest`**（署名と XML の構造。#294）。
         /// **鍵は、要求の Issuer（＝ client_id）の登録から引く。**
         ///
-        /// **鍵が無い SP の要求は、従来どおり通す**（この製品の決め）。
-        /// **Open棟梁 は通さない**（鍵を返す処理が null を返せば false）ので、
-        /// **その判断はここで行う**（Open棟梁 #634 の補足 3-5）。
+        /// **署名を確かめられない要求は断る**（鍵を登録していない SP の要求を含む。#400）。
+        /// **以前は、鍵が無い SP の要求を、署名を確かめずに通していた**（この製品の決め。Open棟梁 #634 の補足 3-5）。
+        /// **メタデータは `WantAuthnRequestsSigned="true"` を広告している**（Open棟梁 の部品が固定で埋め込む）ので、振る舞いを揃えた。
+        /// **設定で以前の受け方に戻す分岐は作らない**（#400 で決めた）。断った要求には、登録済みの ACS URL へ Requester のエラー応答を返す（呼び出し側）。
         ///
         /// **`Destination` は、ここで照合する**（Open棟梁 の `VerifyRequest` は見ない。#392）。
         /// </remarks>
@@ -137,8 +139,11 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             if (!verified && hasNoKey)
             {
-                // 鍵がない場合は、通す。
-                verified = true;
+                // **鍵が無い SP の要求は、署名を確かめられないので断る**（#400。以前は通していた）。
+                //   **署名の検証の失敗と見分けられるよう、別に残す。**
+                Logging.MyOperationTrace(string.Format(
+                    "SAML2 request was refused: no key is registered to verify the signature (Issuer: {0}).",
+                    LogSanitizer.Sanitize(iss)));
             }
 
             // **要求の ID は、xs:ID（NCName）の形のものだけを使う**（SAML Core 1.3.4。#390）。

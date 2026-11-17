@@ -56,7 +56,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// - **entityID は、要求の `Issuer` そのもの**（`http://` ＋ client_id）。IdP が client_id を引くために外す `http://` は、`Audience` では外さない
     /// - **自己テストの SP 役が entityID で照合する**ことは、`WebSsoBindingTests`（画面の「✓ 自分の entityID」）が測る
-    /// - `TestClient_21` は `jwk_rsa_publickey` を持たないので、署名の無い要求が通る（`NameIdFormatTests` と同じ）
+    /// - 要求は `TestClient_21` の鍵で署名して送る（`Saml2.SignedRequestQuery`。IdP は署名の無い要求を断る。#400）
     /// </remarks>
     public class Saml2AudienceEntityIdTests : TargetTestBase
     {
@@ -95,7 +95,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 string xml = Saml2.BuildAuthnRequest(id, issuer, Saml2.FormatUnspecified, Saml2.BindingPost);
 
-                HttpResponseMessage res = await client.GetAsync("/saml2request?" + Saml2.ToRedirectQuery(xml));
+                HttpResponseMessage res = await client.GetAsync("/saml2request?" + Saml2.SignedRequestQuery(client, xml));
 
                 r.VerifyEqual("HTTP 200（自動送信フォーム）", "200", ((int)res.StatusCode).ToString());
 
@@ -148,7 +148,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 string xml = Saml2.BuildAuthnRequest(Saml2.NewId(), issuer, Saml2.FormatUnspecified, Saml2.BindingRedirect);
 
-                HttpResponseMessage res = await client.GetAsync("/saml2request?" + Saml2.ToRedirectQuery(xml));
+                HttpResponseMessage res = await client.GetAsync("/saml2request?" + Saml2.SignedRequestQuery(client, xml));
 
                 bool redirected = (res.Headers.Location != null);
 

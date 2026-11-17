@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/16  玄人 幸道         新規（#392）
+//*  2026/11/17  玄人 幸道         RT-392.1：署名の無い要求は、Destination の照合を通っても Requester で断られる形に改めた（#400）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -56,7 +57,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
     ///
     /// | | 測ること |
     /// |---|---|
-    /// | `RT-392.1` | 鍵を登録していない SP（署名の無い要求）：正しい `Destination`・無い `Destination` は通る。**違う・空の `Destination` は捨てる** |
+    /// | `RT-392.1` | 署名の無い要求：正しい `Destination`・無い `Destination` は、`Destination` の照合は通り、署名を確かめられないので Requester のエラー応答（#400）。**違う・空の `Destination` は捨てる**（署名の確かめより前） |
     /// | `RT-392.2` | 鍵を登録した SP の署名した要求（Redirect）：正しい `Destination` は通る。**無い・違う `Destination` は捨てる。** 署名しない要求でも、違えば捨てる |
     ///
     /// **署名は、構成ファイルの `SpRp_RsaPfxFilePath`（`TestClient` の `jwk_rsa_publickey` と対の鍵）で付ける。**
@@ -69,7 +70,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         {
         }
 
-        /// <summary>RT-392.1 鍵を登録していない SP の要求でも、違う Destination は捨てる</summary>
+        /// <summary>RT-392.1 署名の無い要求でも、違う Destination は捨てる</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
@@ -79,25 +80,26 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("RT-392.1",
-                    "鍵を登録していない SP の、署名の無い要求でも、Destination が受けた口と違えば捨てる（エラー画面）",
+                    "署名の無い要求でも、Destination が受けた口と違えば捨てる（エラー画面）。合う・無い Destination なら、署名を確かめられないので Requester のエラー応答",
                     "**SAML Core 3.2.1 は、署名の有無によらず、Destination が在れば受けた場所と照合し、"
                     + "違えば要求を捨てることを求める（MUST）。** **以前は照合していなかった**（#392）。"
-                    + "**Destination の無い署名の無い要求は、従来どおり通す**（Bindings の MUST は署名した要求だけ）。",
-                    "SAML Core 3.2.1 / #392");
+                    + "**Destination の照合は、署名の確かめより前に行う**（違えば捨てる）。"
+                    + "**照合を通った署名の無い要求は、署名を確かめられないので Requester で断る**（#400。以前は、鍵を登録していない SP の要求を通していた）。",
+                    "SAML Core 3.2.1 / #392 / #400");
 
                 string issuer = "http://" + KnownClients.SeededClientId(KnownClients.TestClient_21);
                 string endpoint = RequestDestinationCheckTests.EndpointOf(client);
 
-                r.Target("GET /saml2request（TestClient_21 は jwk_rsa_publickey を登録していない）");
+                r.Target("GET /saml2request（TestClient_21。署名しないで送る）");
 
-                r.Step("(1) 対照：Destination が受けた口と同じなら、通る");
+                r.Step("(1) Destination が受けた口と同じなら、照合は通り、署名が無いので Requester（#400）");
 
-                await RequestDestinationCheckTests.VerifyAcceptedAsync(r, client,
+                await RequestDestinationCheckTests.VerifyRequesterAsync(r, client,
                     Saml2.ToRedirectQuery(RequestDestinationCheckTests.Request(issuer, endpoint)));
 
-                r.Step("(2) Destination が無ければ、従来どおり通る");
+                r.Step("(2) Destination が無ければ、照合は通り、署名が無いので Requester（#400）");
 
-                await RequestDestinationCheckTests.VerifyAcceptedAsync(r, client,
+                await RequestDestinationCheckTests.VerifyRequesterAsync(r, client,
                     Saml2.ToRedirectQuery(RequestDestinationCheckTests.Request(issuer, null)));
 
                 r.Step("(3) Destination が受けた口と違えば、捨てる（SP へ応答を返さない）");
@@ -211,6 +213,29 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
             Assert.NotNull(decoded);
 
             r.VerifyEqual("StatusCode", Saml2.StatusSuccess, decoded.StatusCode);
+        }
+
+        /// <summary>要求は捨てず、SP へ Requester のエラー応答を返すことを確かめる（署名を確かめられない要求。#400）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="client">IdPClient</param>
+        /// <param name="query">クエリ文字列</param>
+        /// <returns>Task</returns>
+        private static async Task VerifyRequesterAsync(TestReport r, IdPClient client, string query)
+        {
+            HttpResponseMessage res = await client.GetAsync("/saml2request?" + query);
+            Dictionary<string, string> hidden = Html.HiddenInputs(await res.Content.ReadAsStringAsync());
+
+            bool has = hidden.ContainsKey("SAMLResponse") && !string.IsNullOrEmpty(hidden["SAMLResponse"]);
+
+            r.Verify("SP へ応答を返す（捨てない）", has, "返す", has ? "返す" : "**返さない**");
+
+            Assert.True(has, "前提: 応答が返ること");
+
+            Saml2Response decoded = Saml2.ReadResponse(Saml2.FromPostValue(hidden["SAMLResponse"]));
+
+            Assert.NotNull(decoded);
+
+            r.VerifyEqual("StatusCode（署名を確かめられない）", Saml2.StatusRequester, decoded.StatusCode);
         }
 
         /// <summary>要求を捨て、SP へ応答を返さず、エラー画面になることを確かめる</summary>

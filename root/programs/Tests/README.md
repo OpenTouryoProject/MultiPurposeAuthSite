@@ -87,7 +87,8 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `RequirePKCE_Client` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
 | `TestClient_19` | 同じく写し。**どのテストも「許可」を押さない**（#272 の段階 2）。**「同意の記録が無い」状態を測るためだけに在る**（`RT-272.3` / `RT-272.4`）。**押すと記録が残り、DB ストアでは 2 回目から測れなくなる** | 同上 |
 | `TestClient_20` | 同じく写し。**同意の取り消しを測るためだけに在る**（#272 の段階 2。`RT-272.7`）。**「許可 → 取り消し → prompt=none」**を回すので、**終わった時点で記録を残さない** | 同上 |
-| `TestClient_21` | **写す元が `Device_Client`**（旧 `TestClient3`。#275）。**`jwk_rsa_publickey` を持たない**ので、**署名の無い `AuthnRequest` が通る**（`VerifySamlRequest` の「鍵がない場合は、通す」）。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録してある — **応答は辿らず、返ってきた場所と `SAMLResponse` を読むだけ**。`SA-1` 以外の SAML のテストが使う | 同上 |
+| `TestClient_21` | **写す元が `TestClient`**（`jwk_rsa_publickey` を持つ。#400。以前は `Device_Client` で鍵が無く、署名の無い `AuthnRequest` を通していた）。**要求は `Saml2.SignedRequestQuery` で署名して送る**。`redirect_uri_saml` に**存在しない URL**（`https://saml.e2e.example/acs`）を登録する（#275） | 同上 |
+| `TestClient_23` | **写す元が `Device_Client`**（`jwk_rsa_publickey` が無い。#400）。**鍵の無い SP の署名の無い要求を、IdP が断ることを測る**（`RT-400.1`。`https://saml.e2e.example/acs3`） | 同上 |
 | `TestClient_22` | 同じく（`https://saml.e2e.example/acs2`）。**`NameIDPolicy=persistent` の PPID が RP ごとに違うこと**を測るための 2 つ目（`SA-3.3`） | 同上 |
 | `TestClient_36` | `TestClient` の写しで、**登録の `scope` を `openid profile email` に制限**し、`redirect_uri_code` を `http://localhost:12346/` にしたもの（#198。`RT-198.3` / `.4`、`EX-2.7`）。**旧 `TestClient5`**（雛形に在ったが、E2E だけが使うので移した）。**scope は `ScopeTests.RestrictedScope` と同じ値にしておくこと** | 同上 |
 
@@ -468,6 +469,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/RequestDestinationTests.cs` | `RT-391` | **SP の役で作る SAML2 の要求に、送った先と同じ `Destination` を入れる**（#391。SAML Bindings §3.4.5.2・§3.5.5.2）。自己テストの 4 通り（`RT-391.1`）。**ID 連携の要求は `SA-6.1` が測る** |
 | `Tests/Saml/RequestDestinationCheckTests.cs` | `RT-392` | **SAML2 の IdP は、要求の `Destination` を受けた口の URL と照合し、合わなければ捨てる**（#392。SAML Core 3.2.1・SAML Bindings §3.4.5.2）。署名の無い要求の違う `Destination`（`RT-392.1`）、署名した要求の無い・違う `Destination`（`RT-392.2`。テストの側で SP の鍵で署名する） |
 | `Tests/Issues/Saml2AudienceEntityIdTests.cs` | `RT-389` | **SAML2 の応答の `Audience` は、SP の entityID（要求の `Issuer`）**（#389。SAML Profiles §4.1.4.2）。ACS URL ではない。`Recipient` は ACS URL（`RT-389.1`。Redirect Binding は `RT-389.2`） |
+| `Tests/Saml/UnsignedRequestTests.cs` | `RT-400` | **SAML2 の IdP は、署名を確かめられない要求を断る**（#400。鍵を登録していない SP の要求を含む。`RT-400.1`） |
 | `Tests/Saml/Saml2RequestIdTests.cs` | `RT-390` | **SAML2 の応答に、形の合わない要求の `ID`・NameID を入れない**（#390。SAML Core 1.3.4）。NCName でない `ID` は `Requester` で `InResponseTo` を空に（鍵の無い SP `RT-390.1`・鍵を登録した SP のエラー応答 `RT-390.2`）。NameID（EmailAddress の形式のメアド）に `<`・`&` を含むならアサーションを作らない（`RT-390.3`。使い捨ての利用者を作って消す） |
 | `Tests/Saml/AttributeStatementTests.cs` | `SA-7` | **アサーションの `AttributeStatement`**（#286 の段階 4）。**メアド・利用者名・`email_verified` を属性で返すこと**（`urn:oid:…` ＋ `FriendlyName` ＋ `NameFormat`）／**`persistent` の `NameID` でも属性でメアドが分かること**（段階 4 の目的）。**自己テストの口で測る**ので、上流コンテナは要らない |
 
@@ -479,10 +481,9 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 > **自己テストのボタンは、どれも正しい値しか送らない**ので、
 > **`NameIDPolicy` の差・ACS URL の不一致・壊れた要求は、それでしか測れない。**
 >
-> **署名は作らない。**
-> **`TestClient_21` / `TestClient_22` は `jwk_rsa_publickey` を持たない**ので
-> （写す元を `Device_Client` にしてある）、**署名の無い要求が通る。**
-> **`TestClient` は持っている**ので、同じ要求が `SA-5.4` で落ちる。**差は登録だけである。**
+> **要求は署名して送る**（`Saml2.SignedRequestQuery`。`SpRp_RsaPfxFilePath` の鍵。`Destination` を補う）。**IdP は署名を確かめられない要求を断る**（#400）。
+> **`TestClient_21` / `TestClient_22` は、`TestClient` と同じ `jwk_rsa_publickey` を持つ**（写す元を `TestClient` にしてある）。
+> **署名の無い要求が断られることは `SA-5.4`（鍵を登録した SP）と `RT-400.1`（鍵の無い `TestClient_23`）が測る。**
 >
 > **`client_id` の接頭辞は `sa`**（`e2e0sa21…`）。
 > **`tcNN` は `TestClient_NN` という意味ではない** — `TestClient2_2` が `e2e0tc22`、

@@ -1272,6 +1272,18 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### SAML2 の IdP は、署名を確かめられない要求を断る（`RT-400.*`。#400）
+
+| | 測ること |
+|---|---|
+| **`RT-400.1`** | **鍵を登録していない SP（`TestClient_23`）の、署名の無い要求は、登録済みの ACS URL へ `Requester` のエラー応答（アサーションを入れない。`InResponseTo` は要求の ID）** |
+
+- **以前は、鍵を登録していない SP の要求を、署名を確かめずに通していた**（`VerifySamlRequest` の「鍵がない場合は、通す」）。**メタデータは `WantAuthnRequestsSigned="true"` を広告していた**ので、振る舞いを揃えた
+- **要求を直に組み立てる E2E は、署名して送るようにした**（`Saml2.SignedRequestQuery`。`SpRp_RsaPfxFilePath` の鍵。`Destination` が無ければ IdP の口の URL を補う）。**`TestClient_21`・`_22` の写す元を、鍵を持つ `TestClient` にした**
+- **署名しないまま送るテスト**：`SA-5.4`（鍵を登録した SP）・`RT-390.2`（エラー応答の経路の ID）・`RT-392.1`（`Destination` の照合は署名の確かめより前。合う・無い `Destination` は `Requester`）・`RT-392.2` の (4)・`RT-400.1`
+- **期待値が変わったテスト**：`RT-392.1`（合う・無い `Destination` の署名の無い要求：`Success` → `Requester`）
+- **直したのを外すと**（鍵が無ければ通すと）、net10.0 版で `RT-400.1` が落ちることを確かめた
+
 ##### OIDC の ID 連携で、上流の鍵が決まらなければ断る（`RT-358.*`。#358）
 
 | | 測ること |
@@ -1329,7 +1341,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 | | 測ること |
 |---|---|
-| **`RT-392.1`** | **鍵を登録していない SP の、署名の無い要求**：`Destination` が受けた口と同じ・無いなら通る。**違う・空なら捨てる**（SP へ応答を返さず、エラー画面。SAML Core 3.2.1） |
+| **`RT-392.1`** | **署名の無い要求**：`Destination` が受けた口と同じ・無いなら、照合は通り、署名を確かめられないので `Requester` のエラー応答（#400。以前は通っていた）。**違う・空なら捨てる**（SP へ応答を返さず、エラー画面。SAML Core 3.2.1。署名の確かめより前） |
 | **`RT-392.2`** | **鍵を登録した SP の、署名した要求（Redirect）**：`Destination` が同じなら通る。**無い・違うなら捨てる**（SAML Bindings §3.4.5.2）。**署名しない要求でも、違えば（署名の検証の失敗の `Requester` ではなく）捨てる** |
 
 - **比べる先は `OAuth2AuthorizationServerEndpointsRootURI + Saml2RequestEndpoint`**（自己テスト・ID 連携の SP が入れる値と同じ。#391）。**一字一句で比べる**（ACS URL の照合と同じ扱い）
@@ -4136,7 +4148,7 @@ cd root
 
 | | ケース | 何が落ちたら気付けるか |
 |---|---|---|
-| **(2) の署名の検証** | **`SA-6.5`** | **上流の `jwk_rsa_publickey` の登録**（外れると「鍵がない場合は、通す」に入る） |
+| **(2) の署名の検証** | **`SA-6.5`** | **上流の `jwk_rsa_publickey` の登録**（外れると、#400 の後は鍵が無いので断られ、`SA-6.*` の正常系が落ちる。以前は「鍵がない場合は、通す」に入った） |
 | **脚ごとの鍵の分離** | **`CN-1.5`** | **上流コンテナの `RsaPfxFilePath` / `JwkSetFilePath` の上書き**（外れると上流と下流が同じ鍵になる） |
 
 **`SA-6.5` は、配備を壊さない。**

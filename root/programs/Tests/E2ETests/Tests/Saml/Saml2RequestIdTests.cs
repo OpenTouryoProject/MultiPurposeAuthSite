@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/16  玄人 幸道         新規（#390）
+//*  2026/11/17  玄人 幸道         要求を署名して送る（RT-390.2 は署名しないまま）。IdP が署名の無い要求を断るようになった（#400）
 //**********************************************************************************
 
 using System;
@@ -95,7 +96,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("RT-390.1",
-                    "鍵を登録していない SP の要求で、NCName の形でない ID を、応答の InResponseTo に使わない",
+                    "署名した要求で、NCName の形でない ID を、応答の InResponseTo に使わない",
                     "**要求の `ID` は送る側が決め、署名の検証より前に取り出され、IdP が署名する応答に入る。**"
                     + "**Open棟梁 の部品は値を文字列の置換で埋め込む**ので、"
                     + "**XML として意味のある文字を含む `ID` で、応答の構造が変わっていた。**"
@@ -104,7 +105,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 string clientId = KnownClients.SeededClientId(KnownClients.TestClient_21);
 
-                r.Target("GET /saml2request（TestClient_21 は jwk_rsa_publickey を登録していない）");
+                r.Target("GET /saml2request（TestClient_21。SpRp_RsaPfxFilePath の鍵で署名する。#400）");
 
                 r.Step("(1) 対照：NCName の ID（`_`・`.`・`-` を含む）は通り、InResponseTo に返る");
 
@@ -166,7 +167,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 r.Step("(1) 引用符と空白を含む ID で、署名の無い要求を送る");
 
-                Saml2Response quote = await this.SendAsync(r, client, Saml2RequestIdTests.QuoteId, "http://" + reg.ClientId);
+                Saml2Response quote = await this.SendAsync(r, client, Saml2RequestIdTests.QuoteId, "http://" + reg.ClientId, sign: false);
 
                 Saml2RequestIdTests.VerifyNotUsed(r, quote);
 
@@ -294,16 +295,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
         /// <param name="id">要求の ID</param>
         /// <param name="issuer">要求の Issuer</param>
         /// <param name="nameIdFormat">NameIDPolicy の Format</param>
+        /// <param name="sign">署名するか（既定は署名する。IdP は署名の無い要求を断る。#400）</param>
         /// <returns>Saml2Response</returns>
         private async Task<Saml2Response> SendAsync(
-            TestReport r, IdPClient client, string id, string issuer, string nameIdFormat = Saml2.FormatUnspecified)
+            TestReport r, IdPClient client, string id, string issuer, string nameIdFormat = Saml2.FormatUnspecified, bool sign = true)
         {
             // **要求の XML は、ID をエスケープして組み立てる**（`Saml2.BuildAuthnRequest`）。
             //   **要求そのものは正しい XML で、IdP が取り出す ID の値が、上の文字を含む。**
             string xml = Saml2.BuildAuthnRequest(
                 id, issuer, nameIdFormat, Saml2.BindingPost);
 
-            HttpResponseMessage res = await client.GetAsync("/saml2request?" + Saml2.ToRedirectQuery(xml));
+            HttpResponseMessage res = await client.GetAsync("/saml2request?" + (sign ? Saml2.SignedRequestQuery(client, xml) : Saml2.ToRedirectQuery(xml)));
 
             r.VerifyEqual("HTTP 200（自動送信フォーム）", "200", ((int)res.StatusCode).ToString());
 
