@@ -45,6 +45,7 @@
 //*  2026/11/14  玄人 幸道         client_assertion の aud に、PAR の口の URL も受ける（RFC 9126 §2。#371）
 //*  2026/11/15  玄人 幸道         CIBA の署名した要求の検証鍵を、ヘッダの alg（PS256・ES256）と登録の鍵から選ぶ SelectCibaVerifyingJws を足した（#395）
 //*  2026/11/17  玄人 幸道         PAR の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
+//*  2026/11/17  玄人 幸道         PAR の Request Object の中の request_uri を断るようにした（RFC 9126 §2.1。#380）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -586,6 +587,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The client_id in the request object does not match the authenticated client.");
+                    return false;
+                }
+
+                //  **Request Object の中にも request_uri を置かせない**（RFC 9126 §2.1 の MUST NOT。Request Object で預ける形（§3）も PAR の要求である。#380）。
+                //    **フォームの request_uri は上で断っている。** 以前は、読んだ後の payload を見ていなかった。
+                //    **値によらず、在れば断る**（null・空文字も）。
+                if (payload.ContainsKey(OAuth2AndOIDCConst.request_uri))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
+                    err.Add(OAuth2AndOIDCConst.error_description, "The request object must not contain request_uri.");
                     return false;
                 }
 

@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=2b8a178e-1c5e-4a43-af8c-f20ebe4a2bcb&code=bogus
+1. GET /Account/EmailConfirmation?userId=b1481f8e-cd7d-44ce-b6ca-5dd3e88f8fb4&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=2b8a178e-1c5e-4a43-af8c-f20ebe4a2bcb&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=2b8a178e-1c5e-4a43-af8c-f20ebe4a2bcb&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=b1481f8e-cd7d-44ce-b6ca-5dd3e88f8fb4&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=b1481f8e-cd7d-44ce-b6ca-5dd3e88f8fb4&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12453,6 +12453,34 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-380.1 PAR に預ける Request Object の中に request_uri が在れば、400 ＋ invalid_request_object で断る。無ければ 201。フォームの request_uri は従来どおり invalid_request
+
+| | |
+|---|---|
+| 観点 | **RFC 9126 は、PAR の要求で request_uri を使うことを禁じる。Request Object で預ける形も PAR の要求である。****以前は、フォームの request_uri だけを断り、Request Object の中は見ていなかった**（適合性テストの par-authorization-request-containing-request_uri）。 |
+| 根拠 | RFC 9126 §2.1 / RFC 9126 §3 / RFC 9101 §7 / #380 |
+| テスト | `RT38001_PARのRequestObjectの中のrequest_uriを断る` |
+
+**手順**
+
+1. 対照：request_uri の無い Request Object は 201
+1. Request Object の中に request_uri を入れる（値が在る・空文字）
+1. 対照：フォームの request_uri は、従来どおり invalid_request
+
+**検証（合否を判定する）**
+
+- request_uri 無し : HTTP 201
+- 中の request_uri : HTTP 400
+- 中の request_uri : invalid_request_object
+- 中の request_uri : 断る理由は request_uri
+- 中の request_uri : request_uri を返さない
+- 中の空の request_uri : HTTP 400
+- 中の空の request_uri : invalid_request_object
+- 中の空の request_uri : 断る理由は request_uri
+- 中の空の request_uri : request_uri を返さない
+- フォームの request_uri : HTTP 400
+- フォームの request_uri : invalid_request
 
 ## RT-381.1 fapi1 の登録は、JARM でない認可要求（response_mode 無し・query）を invalid_request で断り（クエリ・PAR とも）、JARM の要求には code を返す。fapi1 でない登録は従来どおり
 

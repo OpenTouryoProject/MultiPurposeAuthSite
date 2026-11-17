@@ -1407,6 +1407,21 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
 
+##### PAR の Request Object の中の `request_uri` を断る（`RT-380.*`。#380）
+
+| | 測ること |
+|---|---|
+| **`RT-380.1`** | **PAR に預ける Request Object（`request`）の中に `request_uri` が在れば（空文字も）`400` ＋ `invalid_request_object`**（RFC 9126 §2.1、RFC 9101 §7。理由が `request_uri` であることも確かめる）。`request_uri` の無い Request Object は `201`。**フォームの `request_uri` は従来どおり `invalid_request`** |
+
+- **判定は `CmnRequestObjectEndpoint.RegisterParRequest` の `request` の枝**（署名・`iss`・`client_id` を確かめた後）。**値によらず、在れば断る**
+- 直す前は、(2) の要求が `201` で受けられた（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`/ros` に預ける Request Object の中の `request_uri`** | `/ros` は RFC 9101 §5.2.1 の独自の口で、RFC 9126 の対象ではない（この Issue の範囲外） |
+
 ##### CIBA の署名した要求の寿命は 60 分まで（`RT-388.*`。#388）
 
 | | 測ること |
