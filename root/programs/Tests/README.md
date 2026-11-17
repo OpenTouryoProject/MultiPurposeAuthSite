@@ -323,6 +323,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceS256Tests.cs` | `RT-366` | **FAPI 2.0 の登録では、S256 の PKCE を必須にする**（#366。FAPI 2.0 Security Profile §5.3.2.2）。**fapi2 の登録の PAR は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断り**、**S256 で預けた `request_uri` は認可の口でも通る**こと（`RT-366.1`）、**fapi2 でない登録は従来どおり**（`RT-366.2`）、**PAR を使わない `/authorize` でも同じ**（`RT-366.3`） |
+| `Tests/Issues/DiscoveryJarmModeTests.cs` | `RT-379` | **Discovery の `response_modes_supported` に `jwt` を広告する**（#379。JARM §2.3.4）。広告した `jwt` で要求すると JARM で返る（`RT-379.1`） |
 | `Tests/Issues/JarmNoStateTests.cs` | `RT-378` | **`state` を送らない要求の JARM には、`state` を入れない**（#378。RFC 6749 §4.1.2・JARM §2.1.1）。成功・エラーの応答とも `"state": null` を出さない。`state` を送ればその値が入る（`RT-378.1`） |
 | `Tests/Issues/ParRequestObjectRequestUriTests.cs` | `RT-380` | **PAR の Request Object の中の `request_uri` を断る**（#380。RFC 9126 §2.1）。中に在れば `invalid_request_object`、無ければ `201`、フォームの `request_uri` は従来どおり `invalid_request`（`RT-380.1`） |
 | `Tests/Issues/CibaRequestExpiryTests.cs` | `RT-388` | **CIBA の署名した要求の寿命は 60 分まで**（#388。FAPI-CIBA ID1 §5.2.2 の 9）。`exp` が 70 分先・`nbf` が 70 分前は `invalid_request`（`RT-388.1`）、60 分ちょうどは寿命では断らず 60 分 1 秒は断る（`RT-388.2`）。**クラス名に `LifetimeTests` を含めない**（既定の通しの除外に当たる。`TESTING.md`） |

@@ -1407,6 +1407,21 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RequirePkceS256=true` の配備で、認可要求の時点で plain を断ること** | 既定の配備では false。判定は fapi2 と同じ式の OR |
 | **Hybrid（`code id_token` など）での fapi2 の plain** | `code` を含む `response_type` で同じ式を通る。fapi2 の登録は Hybrid を `ClientModePolicy` で先に断る |
 
+##### Discovery の `response_modes_supported` に `jwt` を広告する（`RT-379.*`。#379）
+
+| | 測ること |
+|---|---|
+| **`RT-379.1`** | **`response_modes_supported` に `jwt` が在る**（`query.jwt`・`fragment.jwt`・`form_post.jwt` も従来どおり。JARM §2.3.4）。**広告した `jwt` で要求すると、JARM（`response`）で返る**（広告と受け付けの一致） |
+
+- **直したのは `CmnDiscoveryEndpoint` の 1 行**（`AccountController.TryResolveResponseMode` は以前から `jwt` を受けていた）
+- 直す前は、`jwt` が広告に無かった（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **code 以外の `response_type` での `jwt`（`fragment.jwt` に載ること）** | 置き場所を決めるのは従来の `TryResolveResponseMode`（この Issue では変えていない）。Hybrid ＋ `fragment.jwt` は `AuthorizeReviewTests` が通る |
+
 ##### `state` を送らない要求の JARM には、`state` を入れない（`RT-378.*`。#378）
 
 | | 測ること |

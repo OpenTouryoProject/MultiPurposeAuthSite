@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=0703d59a-0cb9-46db-bc2c-30f21b17b183&code=bogus
+1. GET /Account/EmailConfirmation?userId=678a0ba4-ac70-49ad-a47d-2f60f1eb0f0f&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=0703d59a-0cb9-46db-bc2c-30f21b17b183&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=0703d59a-0cb9-46db-bc2c-30f21b17b183&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=678a0ba4-ac70-49ad-a47d-2f60f1eb0f0f&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=678a0ba4-ac70-49ad-a47d-2f60f1eb0f0f&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12475,6 +12475,28 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラー : error が在る
 - エラー : JWT に state の名前が無い（"state": null も出さない）
 - state を送ったとき : state
+
+## RT-379.1 Discovery の response_modes_supported に jwt を広告し（*.jwt も従来どおり）、広告した jwt で要求すると JARM で返る
+
+| | |
+|---|---|
+| 観点 | **jwt は、応答の型の既定の置き場所で JARM にする短い形である。****以前は受けていたのに広告していなかった**（適合性テストの discovery-end-point-verification）。**広告と受け付けが一致していること**を、要求まで送って確かめる。 |
+| 根拠 | JARM §2.3.4 / OpenID Connect Discovery 1.0 §3 / #379 |
+| テスト | `RT37901_response_modes_supportedにjwtを広告する` |
+
+**手順**
+
+1. response_modes_supported を読む
+1. 広告した jwt で要求すると、JARM（response）で返る
+
+**検証（合否を判定する）**
+
+- response_modes_supported に jwt が在る
+- response_modes_supported に query.jwt が在る
+- response_modes_supported に fragment.jwt が在る
+- response_modes_supported に form_post.jwt が在る
+- response_mode=jwt : code を URL に直接載せず、response で返る
+- response_mode=jwt : response の中に code が在る
 
 ## RT-380.1 PAR に預ける Request Object の中に request_uri が在れば、400 ＋ invalid_request_object で断る。無ければ 201。フォームの request_uri は従来どおり invalid_request
 
