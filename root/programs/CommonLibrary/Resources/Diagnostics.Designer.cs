@@ -142,7 +142,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
-        ///   Audience differs from this ACS URL: {0} (expected: {1}) に類似しているローカライズされた文字列を検索します。
+        ///   Audience differs from this SP entityID: {0} (expected: {1}) に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string Saml2AudienceMismatch {
             get {

@@ -2939,6 +2939,14 @@ SessionStoreType が SqlServer なので、SessionStoreConnectionString が必�
 | `redirect_uri_saml` | **ACS URL**（`AssertionConsumerServiceURL`） |
 | `jwk_rsa_publickey` | **`AuthnRequest` の署名を検証する鍵**（OAuth2 側と共用） |
 
+**応答の `Audience` は、SP の entityID（要求の `Issuer` そのもの）**（SAML Profiles §4.1.4.2。#389）。**`Recipient` は ACS URL**（従来どおり）。
+
+- **以前は `Audience` に ACS URL を入れていた。** **`Audience` を ACS URL と照合する SP は、`AudienceMismatch` で断る**ようになる
+- **移行：SP の側で、`Audience` を自分の entityID（要求に入れる `Issuer`）と照合する。** Open棟梁 の SP は、**`SpRp_Saml2SpEntityId` に、要求の `Issuer` と同じ値を設定する**（OpenTouryo#693。無ければ `Audience` を ACS URL と照合する）
+- **設定で以前の値（ACS URL）に戻すことはできない**（#389 で決めた）
+- **この配備の SP の役（自己テスト・ID 連携）は、`Audience` を自分の entityID（"http://" ＋ client_id）と照合する**
+- **SAML2 の ID 連携の上流 IdP も、`Audience` に entityID（この配備が要求に入れる `Issuer`）を入れなければならない。** **#389 より前の版の汎用認証サイトなど、`Audience` に ACS URL を入れる上流とは、`AudienceMismatch` で通らない**（上流を先に更新する。この配備の側で ACS URL に戻す設定は無い）
+
 > `saml_name_id_format` という登録項目が雛形に書かれているが、**実装は読んでいない。**
 > **`NameID` の形は、要求の `NameIDPolicy` だけで決まる。**
 

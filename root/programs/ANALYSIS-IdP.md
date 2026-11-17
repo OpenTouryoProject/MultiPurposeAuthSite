@@ -2776,7 +2776,7 @@ else
 | `id_token` の `iss` / `exp` | `IdToken.Verify` が見ていた |
 | **`id_token` の `aud`** | **見ていなかった** |
 
-**SAML2 の ID 連携は `Audience` を照合している**（`CmnSaml2Response` の `expectedAcsUrl`。#276）。
+**SAML2 の ID 連携は `Audience` を照合している**（`CmnSaml2Response` の `expectedAcsUrl`。#276）。**✅ #389 で、照合する値を ACS URL から自分の entityID（要求の `Issuer`）にした**（SAML Profiles §4.1.4.2。**IdP の役で出す応答の `Audience` も、ACS URL から SP の entityID にした**。OpenTouryo#693 の版。`RT-389.1`）。
 **OIDC 側だけが抜けていた。**
 
 **対応（#286 の段階 5）。** **判定を `CommonLibrary` に置き**（**`Extensions.Sts.IdTokenAudience`**）、

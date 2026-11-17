@@ -37,6 +37,7 @@
 //*  2026/11/16  玄人 幸道         要求の ID は NCName の形だけを使うようにした（#390）
 //*  2026/11/16  玄人 幸道         NameID に埋め込めない文字を含む値なら、アサーションを作らないようにした（#390）
 //*  2026/11/16  玄人 幸道         要求の Destination を受けた口の URL と照合し、合わなければ捨てるようにした（#392）
+//*  2026/11/17  玄人 幸道         応答の Audience を、ACS の URL から SP の entityID（要求の Issuer）にした（SAML Profiles §4.1.4.2。OpenTouryo#693。#389）
 //**********************************************************************************
 
 #if NETFX
@@ -286,20 +287,26 @@ namespace MultiPurposeAuthSite.SamlProviders
             //    **有効期間は `Config` の値を渡す**（無ければ id_token の期間に倒す。Open棟梁 #634 の補足 3-4）。
             double expiresInSeconds = Config.Saml2AssertionExpireTimeSpanFromMinutes * 60;
 
+            //  **Audience は、SP の entityID（要求の Issuer そのもの）**（SAML Profiles §4.1.4.2。#389）。
+            //    **`iss` は "http://" を外した client_id** なので使わない（`ClientIdOf`）。要求の Issuer を読み直す。
+            //    **以前は ACS の URL を入れていた**（Open棟梁 の `audience` を受けない版）。**設定で戻す分岐は作らない**（#389 で決めた）。
+            //    要求の Issuer は登録と照合済み（登録が無ければ、上で応答しない）。
+            string audience = SAML2Bindings.GetIssuerInRequest(samlRequest, samlNsMgr);
+
             // 返しのProtocol Binding
             switch (protocolBinding)
             {
                 case SAML2Enum.ProtocolBinding.HttpRedirect:
                     // SamlResponseのエンコと、QueryStringを生成（ + 署名）
                     queryString = SAML2Client.CreateRedirectResponse(
-                        CmnServerParams.IssuerId, rtnUrl, inResponseTo, statusCode,
+                        CmnServerParams.IssuerId, rtnUrl, audience, inResponseTo, statusCode,
                         sub, nameIDFormat.Value, authnContextClassRef,
                         expiresInSeconds, attributes, relayState, dsX509);
                     break;
                 case SAML2Enum.ProtocolBinding.HttpPost:
                     // SamlResponseのエンコと署名
                     samlResponse = SAML2Client.CreatePostResponse(
-                        CmnServerParams.IssuerId, rtnUrl, inResponseTo, statusCode,
+                        CmnServerParams.IssuerId, rtnUrl, audience, inResponseTo, statusCode,
                         sub, nameIDFormat.Value, authnContextClassRef,
                         expiresInSeconds, attributes, dsX509.X509Certificate.GetRSAPrivateKey());
                     break;

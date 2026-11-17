@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=0debeefe-85f3-4781-824b-6805e6144838&code=bogus
+1. GET /Account/EmailConfirmation?userId=70a479f3-afbf-4eae-89f3-a16cd6b277af&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=0debeefe-85f3-4781-824b-6805e6144838&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=0debeefe-85f3-4781-824b-6805e6144838&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=70a479f3-afbf-4eae-89f3-a16cd6b277af&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=70a479f3-afbf-4eae-89f3-a16cd6b277af&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12779,6 +12779,37 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 60 分 1 秒 : invalid_request
 - 60 分 1 秒 : 断る理由は寿命
 
+## RT-389.1 **SAML2 の応答の Audience は、要求の Issuer（SP の entityID）と一致し、ACS の URL ではない。Recipient は ACS の URL**
+
+| | |
+|---|---|
+| 観点 | **SAML Profiles §4.1.4.2 は、bearer の確認を持つアサーションの AudienceRestriction に、SP の一意の識別子（entityID）を入れることを求める。****以前は ACS の URL を入れていた**ので、Audience を entityID と照合する SP とは通らなかった。 |
+| 根拠 | SAML Profiles §4.1.4.2 / #389 |
+| テスト | `RT38901_SAML2の応答のAudienceはSPのentityID` |
+
+**検証（合否を判定する）**
+
+- HTTP 200（自動送信フォーム）
+- StatusCode
+- Audience は、要求の Issuer（SP の entityID）
+- Audience は ACS の URL ではない
+- Recipient（ACS の URL）は在る
+
+## RT-389.2 **Redirect Binding の応答でも、Audience は要求の Issuer（SP の entityID）と一致し、ACS の URL ではない**
+
+| | |
+|---|---|
+| 観点 | **SAML Profiles §4.1.4.2 は、AudienceRestriction に SP の entityID を求める。****Binding ごとに応答を作る関数が分かれている**（CreateRedirectResponse・CreatePostResponse）ので、両方を測る（RT-389.1 は POST）。 |
+| 根拠 | SAML Profiles §4.1.4.2 / #389 |
+| テスト | `RT38902_Redirectの応答でもAudienceはSPのentityID` |
+
+**検証（合否を判定する）**
+
+- SP（ACS）へリダイレクトで返る
+- StatusCode
+- Audience は、要求の Issuer（SP の entityID）
+- Audience は ACS の URL ではない
+
 ## RT-390.1 鍵を登録していない SP の要求で、NCName の形でない ID を、応答の InResponseTo に使わない
 
 | | |
@@ -13534,6 +13565,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る
@@ -13580,6 +13612,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る
@@ -13621,6 +13654,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る
@@ -13668,6 +13702,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 照合していない項目が無い
 - 画面に「✓ 検証できた」が出る
 - 画面に「✓ 一致」が出る
+- 画面に「✓ 自分の entityID」が出る
 - 画面に「✓ 自分の ACS URL」が出る
 - 画面に「✓ 送った要求の ID と一致」が出る
 - 画面に「✓ 期限内」が出る

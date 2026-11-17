@@ -145,7 +145,7 @@
     <value>Issuer が期待値と違う : {0}（期待 : {1}）</value>
   </data>
   <data name="Saml2AudienceMismatch" xml:space="preserve">
-    <value>Audience が自分の ACS URL と違う : {0}（期待 : {1}）</value>
+    <value>Audience が自分の entityID と違う : {0}（期待 : {1}）</value>
   </data>
   <data name="Saml2RecipientMismatch" xml:space="preserve">
     <value>Recipient が自分の ACS URL と違う : {0}（期待 : {1}）</value>

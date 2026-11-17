@@ -23,6 +23,7 @@
 //*  2026/11/06  玄人 幸道         aud の照合のコメントを、Open棟梁 が aud を照合するようになった後（OpenTouryo#601・#603）の状態に直した（#337）
 //*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
 //*  2026/11/14  玄人 幸道         SAML2 の ID 連携の要求に、上流の SSO の口を Destination として渡す（#391）
+//*  2026/11/17  玄人 幸道         SAML2 の ID 連携は、応答の Audience を自分の entityID（要求の Issuer）と照合する（OpenTouryo#693 の版。#389）
 //**********************************************************************************
 
 /*
@@ -900,8 +901,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             //  **POST Binding のときは、クエリ文字列を渡さない**（空なら POST として検証する）。
             SAML2VerifyResult result = SAML2Client.VerifyResponseWithReason(
-                queryString, isGet ? null : samlResponse, upstreamKeys, upstream.Issuer,
-                Config.IdFederationSaml2ResponseEndpoint, requestId, relayState, state);
+                queryString, isGet ? null : samlResponse, upstreamKeys, upstream.Issuer, SamlProviders.IdFederationSaml2Request.IssuerOf(upstream),
+                Config.IdFederationSaml2ResponseEndpoint, requestId, relayState, state, null);
 
             if (!result.IsValid)
             {
@@ -909,7 +910,7 @@ namespace MultiPurposeAuthSite.Controllers
                 Logging.MyOperationTrace(string.Format(
                     "The SAML2 ID federation was not accepted. (reason: {0})",
                     SamlProviders.CmnSaml2Response.ReasonOf(
-                        result, upstream.Issuer, Config.IdFederationSaml2ResponseEndpoint, requestId)));
+                        result, upstream.Issuer, SamlProviders.IdFederationSaml2Request.IssuerOf(upstream), Config.IdFederationSaml2ResponseEndpoint, requestId)));
 
                 return View("Error");
             }

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 4-a。Open棟梁 #606 の追随）
 //*  2026/11/14  玄人 幸道         送り先（上流の SSO の口）を Destination に入れる版の SAML2Client.CreateRedirectRequest にした（SAML Bindings §3.4.5.2。OpenTouryo#693。#391）
+//*  2026/11/17  玄人 幸道         要求の Issuer（この SP の entityID）を IssuerOf にまとめた（応答の Audience と照合する。#389）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -93,7 +94,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             }
 
             // **上流に登録された client_id**（OIDC の ID 連携と同じものを使う）。
-            string issuer = "http://" + upstream.ClientId;
+            string issuer = IdFederationSaml2Request.IssuerOf(upstream);
 
             DigitalSign digitalSign = IdFederationSaml2Request.SigningKeyOf(upstream);
 
@@ -113,6 +114,18 @@ namespace MultiPurposeAuthSite.SamlProviders
                 SAML2Enum.ProtocolBinding.HttpRedirect,
                 SAML2Enum.NameIDFormat.EmailAddress,
                 issuer, "", destination, relayState, digitalSign, out id);
+        }
+
+        /// <summary>この SP（汎用認証サイト）の、上流に対する entityID（要求の Issuer）</summary>
+        /// <param name="upstream">上流の登録</param>
+        /// <returns>entityID（"http://" ＋ 上流に登録された client_id）</returns>
+        /// <remarks>
+        /// **要求の Issuer に入れ、応答の Audience と照合する**（SAML Profiles §4.1.4.2。#389）。
+        /// **同じ値を 1 か所で作る**（送る値と照合する値がずれないように）。
+        /// </remarks>
+        public static string IssuerOf(IdFederationUpstream upstream)
+        {
+            return "http://" + upstream.ClientId;
         }
 
         /// <summary>その上流用の署名鍵（無ければ null）</summary>

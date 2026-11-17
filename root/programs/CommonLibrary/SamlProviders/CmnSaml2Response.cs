@@ -32,6 +32,7 @@
 //*  2026/10/12  玄人 幸道         SigAlgの固定をやめ、RSAを受ける版に移した（Open棟梁 #604）
 //*  2026/10/13  玄人 幸道         検証鍵にRSAを受けるオーバーロードを足した（#291）
 //*  2026/10/14  玄人 幸道         鍵の列を受ける版を足した（#292 の段階 3）
+//*  2026/11/17  玄人 幸道         ReasonOf に SP の entityID を受け、Audience の不一致の理由に出す（#389）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -80,7 +81,8 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <summary>判定の理由（画面とログに出す）</summary>
         /// <param name="result">`SAML2Client.VerifyResponseWithReason` の結果</param>
         /// <param name="expectedIssuer">期待した Issuer</param>
-        /// <param name="expectedAcsUrl">自分の ACS URL</param>
+        /// <param name="expectedSpEntityId">自分（SP）の entityID（Audience と照合する。#389）</param>
+        /// <param name="expectedAcsUrl">自分の ACS URL（Recipient と照合する）</param>
         /// <param name="expectedInResponseTo">送った AuthnRequest の ID</param>
         /// <returns>理由（日本語）</returns>
         /// <remarks>
@@ -89,7 +91,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// **ID は秘密ではないが、照合の証拠になる**ので出す。
         /// </remarks>
         public static string ReasonOf(SAML2VerifyResult result,
-            string expectedIssuer, string expectedAcsUrl, string expectedInResponseTo)
+            string expectedIssuer, string expectedSpEntityId, string expectedAcsUrl, string expectedInResponseTo)
         {
             switch (result.Reason)
             {
@@ -127,8 +129,9 @@ namespace MultiPurposeAuthSite.SamlProviders
                         CmnSaml2Response.OrNone(result.Issuer), expectedIssuer);
 
                 case SAML2VerifyResult.Reasons.AudienceMismatch:
+                    //  **Audience は SP の entityID と照合する**（SAML Profiles §4.1.4.2。#389。以前は ACS の URL）。
                     return string.Format(Resources.Diagnostics.Saml2AudienceMismatch,
-                        CmnSaml2Response.OrNone(result.Audience), expectedAcsUrl);
+                        CmnSaml2Response.OrNone(result.Audience), expectedSpEntityId);
 
                 case SAML2VerifyResult.Reasons.RecipientMismatch:
                     return string.Format(Resources.Diagnostics.Saml2RecipientMismatch,

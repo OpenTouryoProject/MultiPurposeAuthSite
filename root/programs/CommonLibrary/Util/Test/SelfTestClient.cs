@@ -43,6 +43,7 @@
 //*  2026/11/13  玄人 幸道         Request Object を PS256 で署名する（FAPI の登録は RS256 の Request Object を断るようになった。#370）
 //*  2026/11/15  玄人 幸道         FAPI の登録の client_assertion を PS256 で署名する（#395）
 //*  2026/11/17  玄人 幸道         client_assertion の aud を、登録によらず issuer にした（RFC 10070 §4。#398）
+//*  2026/11/17  玄人 幸道         自己テストの SP 役は、Audience を自分の entityID と照合する（OpenTouryo#693 の版。#389）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -816,7 +817,7 @@ namespace MultiPurposeAuthSite.Util.Test
         /// <param name="relayState">RelayState</param>
         /// <param name="expectedRelayState">送った state（照合する。無ければ空）</param>
         /// <param name="isGet">GET（Redirect Binding）で受け取ったか</param>
-        /// <param name="expectedAcsUrl">自分の ACS URL（#276。空なら照合しない）</param>
+        /// <param name="expectedAcsUrl">自分の ACS URL（#276。Recipient と照合する。空なら照合しない）</param>
         /// <param name="expectedInResponseTo">送った AuthnRequest の ID（空なら照合しない）</param>
         /// <returns>結果（画面で見せる）</returns>
         /// <remarks>
@@ -835,15 +836,15 @@ namespace MultiPurposeAuthSite.Util.Test
         public static SAML2VerifyResult VerifySaml2Response(
             string samlResponse, string queryString,
             string relayState, string expectedRelayState, bool isGet,
-            string expectedAcsUrl = null, string expectedInResponseTo = null)
+            string expectedAcsUrl = null, string expectedInResponseTo = null, string expectedSpEntityId = null)
         {
             //  **読めない証明書は、鍵が無いものとして扱う**（`NoKey` で落ちる）。
             //  **POST Binding のときは、クエリ文字列を渡さない**（空なら POST として検証する）。
             return SAML2Client.VerifyResponseWithReason(
                 isGet ? queryString : null, isGet ? null : samlResponse,
                 new RSA[] { CmnSaml2Response.RsaFromCerFile(SigningKeys.RsaCerFilePath) },
-                CmnServerParams.IssuerId, expectedAcsUrl, expectedInResponseTo,
-                relayState, expectedRelayState);
+                CmnServerParams.IssuerId, expectedSpEntityId, expectedAcsUrl, expectedInResponseTo,
+                relayState, expectedRelayState, null);
         }
 
         #endregion

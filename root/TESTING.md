@@ -1255,6 +1255,25 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **fapi2 の登録の access_token・JARM** | 同じ関数で決まる（fapi1 で代表させた）。fapi2 のトークンは PAR・DPoP・private_key_jwt が要り、id_token は暗号化している（中の JWS は以前から ES256。`RT-352.1`） |
 | **logout_token** | 同じ `GetIdTokenSignedResponseAlg` で決まる。ログアウトの E2E はテストのクライアント（normal）で測る |
 
+##### SAML2 の応答の `Audience` は SP の entityID（`RT-389.*`。#389）
+
+| | 測ること |
+|---|---|
+| **`RT-389.1`** | **POST Binding の応答の `Audience` が要求の `Issuer`（"http://" ＋ client_id）と一致し、ACS URL ではない。`Recipient` は ACS URL**（SAML Profiles §4.1.4.2） |
+| **`RT-389.2`** | **Redirect Binding の応答でも同じ**（`CreateRedirectResponse` に `audience` を渡す分岐） |
+
+- **IdP の役**：`SamlProviders.CmnEndpoints.CreateSamlResponse` が、要求の `Issuer` を `audience` を受ける版の `SAML2Client.CreateRedirectResponse`・`CreatePostResponse`（OpenTouryo#693）に渡す。**`iss`（client_id）は `http://` を外した値なので使わない**
+- **SP の役**（自己テスト・ID 連携）：`Audience` を自分の entityID と照合する版の `VerifyResponseWithReason` にした。**自己テストの画面の Audience の行は「✓ 自分の entityID」**（`SA-1.*` が測る）
+- **設定で以前の値（ACS URL）に戻す分岐は作っていない**（人と決めた）
+- **直したのを外すと**（`audience` を渡さないと）、net10.0 版で `RT-389.1` と `SA-1.1`〜`.4` が落ちることを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ID 連携の上流が `Audience` に ACS URL を入れたときに断ること** | 上流（`container/E2E`）は同じ版の汎用認証サイトで、entityID を入れる。**通る側は `IdFederationSaml2Tests` が測る**（照合する値を取り違えると落ちる） |
+| **Open棟梁 の外の SP（`SpRp_Saml2SpEntityId` を設定した Sample4SpRp など）** | E2E の範囲の外。照合の判定は Open棟梁 の `VerifyResponseWithReason`（OpenTouryo#693 が測る） |
+
 ##### SP の役で作る SAML2 の要求に、送り先の `Destination` を入れる（`RT-391.*`・`SA-6.1`。#391）
 
 | | 測ること |

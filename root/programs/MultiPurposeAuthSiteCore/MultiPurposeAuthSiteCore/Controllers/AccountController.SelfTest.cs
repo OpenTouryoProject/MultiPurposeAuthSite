@@ -25,6 +25,7 @@
 //*  2026/11/06  玄人 幸道         コメントの設定キー SpRp_Isser を、改名後の SpRp_Issuer にした（OpenTouryo#666。#339）
 //*  2026/11/07  玄人 幸道         「FAPI1 PC, PKCE」のボタンで、code_verifier も送る（OpenTouryo#670。#341）
 //*  2026/11/08  玄人 幸道         FAPI2 の引き換えと、結果の画面の更新・取り消し・照会を、登録の方法で送る。FAPI2 は code_verifier も送る（OpenTouryo#676。#345）
+//*  2026/11/17  玄人 幸道         自己テストの SP 役は、応答の Audience を自分の entityID と照合する（#389）
 //**********************************************************************************
 
 /*
@@ -797,19 +798,22 @@ namespace MultiPurposeAuthSite.Controllers
                 out nonce_InSessionOrCookie,
                 out code_verifier_InSessionOrCookie);
 
-            // **自分の ACS URL**（#276。Audience / Recipient と照合する）。
+            // **自分の ACS URL**（#276。Recipient と照合する。Audience は entityID と照合する。#389）。
             //   **IdP は登録値「test_self_saml」をこの形に展開して入れる**
             //   （`SamlProviders/CmnEndpoints`）。
             string acsUrl = Config.OAuth2ClientEndpointsRootURI + Config.Saml2ResponseEndpoint;
 
             string requestId = this.LoadTestSamlRequestId();
 
+            // **自分の entityID**（#389。Audience と照合する）。**自己テストの AuthnRequest の Issuer と同じ値**（"http://" ＋ client_id）。
+            string spEntityId = "http://" + clientId_InSessionOrCookie;
+
             SAML2VerifyResult result = SelfTestClient.VerifySaml2Response(
                 samlResponse, queryString, relayState,
-                state_InSessionOrCookie, isGet, acsUrl, requestId);
+                state_InSessionOrCookie, isGet, acsUrl, requestId, spEntityId);
 
             ViewBag.Verdict = SamlProviders.CmnSaml2Response.VerdictOf(result);
-            ViewBag.Reason = SamlProviders.CmnSaml2Response.ReasonOf(result, CmnServerParams.IssuerId, acsUrl, requestId);
+            ViewBag.Reason = SamlProviders.CmnSaml2Response.ReasonOf(result, CmnServerParams.IssuerId, spEntityId, acsUrl, requestId);
             ViewBag.Binding = SamlProviders.CmnSaml2Response.BindingOf(result);
             ViewBag.SigAlg = result.SigAlg;
             ViewBag.RelayState = result.RelayState;
