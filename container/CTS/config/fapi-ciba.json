@@ -2,7 +2,10 @@
   "alias": "mpas-cts",
   "description": "MultiPurposeAuthSite (net10.0, mem) - FAPI-CIBA OP",
   "server": {
-    "discoveryUrl": "https://mpas-cts.localhost:44311/.well-known/openid-configuration"
+    "discoveryUrl": "https://mpas-cts.localhost:44311/.well-known/openid-configuration",
+    "allow_unexpected_metadata_fields": [
+      "request_object_endpoint"
+    ]
   },
   "client": {
     "client_id": "@CLIENT_ID@",
