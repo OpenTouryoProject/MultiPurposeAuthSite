@@ -30,11 +30,13 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 2）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/18  玄人 幸道         専用の HttpClient（プロキシの組は ProxyForBackChannelLogout。クライアント証明書を持たない。リダイレクトを追わない）で送るようにした（#406）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Util.Sts;
@@ -257,15 +259,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             try
             {
-                // **ID 連携や /token と同じ HttpClient**（TLS・プロキシの扱いが揃う）。
-                //   **`Helper` の初期化が設定する**ので、先に初期化させてから読む。
-                Helper.GetInstance();
-                HttpClient client = OAuth2AndOIDCClient.HttpClient;
-
-                if (client == null)
-                {
-                    return false;
-                }
+                //  **専用の HttpClient で送る**（#406）。**以前は ID 連携や /token と同じ共有の HttpClient**で、
+                //    **プロキシの組を分けられず、OP のクライアント証明書を RP に提示しえた。**
+                HttpClient client = BackChannelLogout.HttpClient;
 
                 FormUrlEncodedContent content = new FormUrlEncodedContent(
                     new Dictionary<string, string>()
@@ -291,5 +287,43 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
         }
+
+        #region HttpClient（#406）
+
+        /// <summary>Back-Channel Logout の POST を送る HttpClient（#406）</summary>
+        private static readonly Lazy<HttpClient> _httpClient = new Lazy<HttpClient>(BackChannelLogout.CreateHttpClient);
+
+        /// <summary>Back-Channel Logout の POST を送る HttpClient（#406）</summary>
+        /// <remarks>
+        /// - **プロキシの組は設定 `ProxyForBackChannelLogout` で選ぶ**（既定 `Intranet`。以前は共有の HttpClient の `Intranet`）
+        /// - **OP のクライアント証明書は持たない**（RP は `logout_token` の署名で OP を確かめる。共有の HttpClient は持つので、RP が求めれば提示しえた）
+        /// - **リダイレクトを追わない**（RP は 200 を返す。POST を別の場所へ移させない）
+        /// - **時間と大きさの上限**（#375）。要求ごとの上限（`Timeout`。10 秒）が先に効く
+        /// </remarks>
+        private static HttpClient HttpClient
+        {
+            get
+            {
+                return BackChannelLogout._httpClient.Value;
+            }
+        }
+
+        /// <summary>HttpClient を作る</summary>
+        /// <returns>HttpClient</returns>
+        private static HttpClient CreateHttpClient()
+        {
+            EnumProxyType proxyType = CreateProxy.ForBackChannelLogout;
+
+            HttpClientHandler handler = new HttpClientHandler()
+            {
+                AllowAutoRedirect = false,
+                Proxy = CreateProxy.GetProxy(proxyType),
+                UseProxy = CreateProxy.UsesProxy(proxyType)
+            };
+
+            return OutboundHttpLimits.ApplyConfigured(new HttpClient(handler));
+        }
+
+        #endregion
     }
 }
