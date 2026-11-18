@@ -52,6 +52,7 @@
 //*  2026/11/17  玄人 幸道         配列の aud を断る根拠を RFC 10070 §4 に書き換えた。振る舞いは変えていない（#397）
 //*  2026/11/17  玄人 幸道         クライアント認証の assertion の aud を issuer だけにした（CIBA の口・CIBA のトークン要求を除く）。JWT Bearer グラントの aud は分けた（RFC 10070 §4・§5。#398）
 //*  2026/11/18  玄人 幸道         jwks_uri を取りに行く前に、行き先のアドレスを判定するようにした（#376）
+//*  2026/11/19  玄人 幸道         jwks_uri の鍵の引き方を KeysFromJwksUri に切り出し、Request Object・CIBA の要求の検証でも使うようにした（振る舞いは変えていない。#408）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -544,6 +545,51 @@ namespace MultiPurposeAuthSite.TokenProviders
             return new string[0];
         }
 
+        /// <summary>登録の `jwks_uri` から、JWS のヘッダの `kid` の鍵を引く（#309・#363・#376・#408）</summary>
+        /// <param name="client_id">JWS を署名したクライアント</param>
+        /// <param name="jws">JWS（コンパクト形式。ヘッダの `kid` で引く）</param>
+        /// <param name="purpose">ログに書く、何の JWS か（鍵は出さない）</param>
+        /// <returns>JWK（JSON の文字列。**`jwks_uri` が登録されていない・引けなければ 0 件**）</returns>
+        /// <remarks>
+        /// **クライアント認証（`client_assertion`）・Request Object・CIBA の署名した要求で、同じ引き方にする**（#408。以前はクライアント認証だけが `jwks_uri` を見た）。
+        ///
+        /// - **同期の経路から呼ばれる**ので、**控えを読む**（`RemoteJwkSetStore.PickJwksFromCache`。取りに行って待つと net48 で止まる。#309）
+        /// - **知らない `kid` なら、その場で取り直して、上限まで待つ**（`WaitForJwkFromUri`。OIDC Core 1.0 §10.1.1 の準用。#363）
+        /// - **控えに無く、取りに行くときだけ、行き先のアドレスを判定する**（#376。登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い）
+        /// - **間に合わなければ、背景で取り直して、この 1 本は断る**（理由はログに残す。#253）
+        /// </remarks>
+        internal static string[] KeysFromJwksUri(string client_id, string jws, string purpose)
+        {
+            string jwksUri = string.IsNullOrEmpty(client_id) ? null : Helper.GetInstance().GetJwksUri(client_id);
+
+            if (string.IsNullOrEmpty(jwksUri))
+            {
+                return new string[0];
+            }
+
+            string kid = JwtReader.TryReadKid(jws);
+
+            string[] fromUri = RemoteJwkSetStore.PickJwksFromCache(
+                jwksUri, kid, CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
+
+            bool fetchable = fromUri.Length != 0 || MultiPurposeAuthSite.Extensions.Sts.OutboundUrlPolicy.IsAllowed(jwksUri);
+
+            if (fromUri.Length == 0 && fetchable)
+            {
+                fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, kid);
+            }
+
+            if (fromUri.Length == 0 && fetchable)
+            {
+                RemoteJwkSetStore.RefillInBackground(jwksUri);
+
+                Logging.MyOperationTrace(string.Format(
+                    "The key of the {0} was not in the jwks_uri cache. ({1})", purpose, client_id));
+            }
+
+            return fromUri;
+        }
+
         /// <summary>ClientAuthentication</summary>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
@@ -634,34 +680,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //    **理由はログに残す**（#253 の方針。**鍵は出さない**）。
                 if (!string.IsNullOrEmpty(assertionIss))
                 {
-                    string jwksUri = Helper.GetInstance().GetJwksUri(assertionIss);
-
-                    if (!string.IsNullOrEmpty(jwksUri))
-                    {
-                        string[] fromUri = RemoteJwkSetStore.PickJwksFromCache(
-                            jwksUri, JwtReader.TryReadKid(assertion),
-                            CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
-
-                        //  **控えに無く、取りに行くときだけ、行き先のアドレスを判定する**（#376）。
-                        //    **登録の後で名前解決の結果が変わっていれば、取りに行かない**（鍵が無いのと同じ扱い）。
-                        bool fetchable = fromUri.Length != 0 || MultiPurposeAuthSite.Extensions.Sts.OutboundUrlPolicy.IsAllowed(jwksUri);
-
-                        if (fromUri.Length == 0 && fetchable)
-                        {
-                            fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, JwtReader.TryReadKid(assertion));
-                        }
-
-                        if (fromUri.Length == 0 && fetchable)
-                        {
-                            RemoteJwkSetStore.RefillInBackground(jwksUri);
-
-                            Logging.MyOperationTrace(string.Format(
-                                "The key of the client assertion was not in the jwks_uri cache. ({0})",
-                                assertionIss));
-                        }
-
-                        pubKeys = pubKeys.Concat(fromUri).ToArray();
-                    }
+                    //  **引き方は、Request Object・CIBA の要求の検証と同じ部品**（`KeysFromJwksUri`。#408）。
+                    pubKeys = pubKeys.Concat(
+                        CmnEndpoints.KeysFromJwksUri(assertionIss, assertion, "client assertion")).ToArray();
                 }
 
                 // **登録 token_endpoint_auth_signing_alg で絞る**（#262）。

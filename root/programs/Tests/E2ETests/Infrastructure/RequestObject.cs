@@ -34,6 +34,7 @@
 //*  2026/11/06  玄人 幸道         Create も aud に Discovery の issuer を使うため CreateAsync に改めた。RemoveClaim も受ける（/ros・PAR が aud を照合する。#336）
 //*  2026/11/13  玄人 幸道         署名の alg を選べるようにし（RS256・PS256・ES256）、FAPI の登録向けの CreateFapiAsync（PS256）を足した（#370）
 //*  2026/11/18  玄人 幸道         Request Object を生の UTF-8 で書く CreateRawUtf8Async を足した（#404）
+//*  2026/11/19  玄人 幸道         CIBA の署名した要求のヘッダに kid を入れられるようにした（jwks_uri の鍵を測る。#408）
 //**********************************************************************************
 
 using System;
@@ -192,13 +193,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id（iss に入れる）</param>
         /// <param name="parameters">既定の値を上書きするクレーム</param>
+        /// <param name="kid">ヘッダに入れる kid（null なら入れない。#408）</param>
         /// <returns>JWS</returns>
         /// <remarks>
         /// **aud は Discovery の issuer を使う**（CIBA Core 7.1.1 : OP の Issuer Identifier。#234 の段階 1）。
         /// 待ち受けている URL とは別の値なので、**テストに書かずに引く**。
         /// </remarks>
         public static async Task<string> CreateCibaAsync(
-            IdPClient client, string clientId, IDictionary<string, object> parameters)
+            IdPClient client, string clientId, IDictionary<string, object> parameters, string kid = null)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -229,7 +231,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 payload[p.Key] = p.Value;
             }
 
-            return JwsSigner.SignES256(client, payload);
+            //  **kid は、`jwks_uri` から鍵を引かせるときに入れる**（#408。無ければ入れない）。
+            return JwsSigner.SignES256(client, payload, kid);
         }
 
         /// <summary>

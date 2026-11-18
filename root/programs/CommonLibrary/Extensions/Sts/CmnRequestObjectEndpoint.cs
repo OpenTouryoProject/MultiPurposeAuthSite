@@ -50,6 +50,7 @@
 //*  2026/11/18  玄人 幸道         Request Object の中の認可要求の値（redirect_uri・scope・state・nonce・dpop_jkt など）が文字列でなければ（max_age は数値も受ける）、PAR・/ros で断る（#377）
 //*  2026/11/18  玄人 幸道         預ける Request Object を、日付の形の文字列を日付に変えずに読む（PAR・/ros。#403）
 //*  2026/11/18  玄人 幸道         PAR の署名付き Request Object の payload を、us-ascii ではなく UTF-8 で読む（#404）
+//*  2026/11/19  玄人 幸道         Request Object・CIBA の要求の検証鍵に、jwks_uri から kid で引いた鍵も加え、候補を順に試すようにした（#408）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -212,7 +213,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="client_id">Request Object を署名したクライアント</param>
         /// <param name="requestObject">Request Object（JWS のコンパクト形式）</param>
         /// <param name="algAllowed">ヘッダの alg を受けてよいか</param>
-        /// <returns>検証鍵（**決まらなければ null** ＝ 検証失敗）</returns>
+        /// <returns>検証鍵の候補（**決まらなければ 0 件** ＝ 検証失敗。**呼び出し元は、順に試す**）</returns>
         /// <remarks>
         /// **alg を受けてよいか**（`algAllowed`）は、次のすべてを満たすとき。
         ///
@@ -222,12 +223,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | 登録の `request_object_signing_alg` が在れば、それと同じ | OIDC Registration 1.0 §2（#262） |
         /// | FAPI の登録なら、`CmnEndpoints.FapiRequestObjectSigningAlgs` に在る | FAPI 1.0 Advanced §8.6、FAPI 2.0 Security Profile §5.4.1 |
         ///
-        /// **鍵は、登録の RSA 公開鍵・EC 公開鍵のうち、alg に合うほう**（`JwsFactory.IsSameKeyType`。EC は曲線まで見る）。
+        /// **鍵は、登録の RSA 公開鍵・EC 公開鍵と、`jwks_uri` から `kid` で引いた鍵のうち、alg に合うもの**（`JwsFactory.IsSameKeyType`。EC は曲線まで見る）。
+        /// **`jwks_uri` の鍵は、クライアント認証と同じ部品で引く**（`CmnEndpoints.KeysFromJwksUri`。#408。以前は登録の列の鍵だけを見たので、`jwks_uri` で鍵を登録したクライアントの Request Object を検証できなかった）。
         /// **ヘッダの alg と鍵の種類が食い違えば、鍵は決まらない**（RFC 8725 §3.1。アルゴリズムの取り違えを防ぐ）。
         /// **登録の値が壊れていても例外にしない**（#294。`DecodeRegisteredJwk` は空を返す）。
         /// </remarks>
-        internal static JWS SelectVerifyingJws(string client_id, string requestObject, out bool algAllowed)
+        internal static List<JWS> SelectVerifyingJws(string client_id, string requestObject, out bool algAllowed)
         {
+            List<JWS> candidates = new List<JWS>();
+
             string alg = JwtReader.TryReadAlg(requestObject);
 
             algAllowed = !string.IsNullOrEmpty(alg)
@@ -240,68 +244,121 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (!algAllowed)
             {
-                return null;
+                return candidates;
             }
 
-            string[] registeredKeys = new string[]
+            List<string> keys = new List<string>()
             {
-                Helper.GetInstance().GetJwkRsaPublickey(client_id),
-                Helper.GetInstance().GetJwkECDsaPublickey(client_id)
+                JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(client_id)),
+                JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkECDsaPublickey(client_id))
             };
 
-            foreach (string registeredKey in registeredKeys)
+            //  **`jwks_uri` の鍵も候補にする**（#408。控え・知らない kid の取り直し・行き先の判定は、クライアント認証と同じ）。
+            keys.AddRange(CmnEndpoints.KeysFromJwksUri(client_id, requestObject, "request object"));
+
+            foreach (string key in keys)
             {
-                JObject jwk = CmnRequestObjectEndpoint.TryParseJwk(
-                    JwtUtil.DecodeRegisteredJwk(registeredKey));
+                JObject jwk = CmnRequestObjectEndpoint.TryParseJwk(key);
 
                 if (jwk != null && JwsFactory.IsSameKeyType(jwk, alg))
                 {
                     // **読めなければ null**（Open棟梁 の JwsFactory は、外から来る値で例外にしない）。
-                    return JwsFactory.CreateFromJwk(alg, jwk);
+                    JWS jws = JwsFactory.CreateFromJwk(alg, jwk);
+
+                    if (jws != null)
+                    {
+                        candidates.Add(jws);
+                    }
                 }
             }
 
-            // alg に合う鍵が登録されていない。
-            return null;
+            // 0 件なら、alg に合う鍵が登録されていない。
+            return candidates;
         }
 
         /// <summary>CIBA の署名した要求の検証鍵を、ヘッダの alg と登録の鍵から選ぶ（#395）</summary>
         /// <param name="client_id">要求を署名したクライアント（要求の iss）</param>
         /// <param name="request">署名した要求（JWS のコンパクト形式）</param>
-        /// <returns>検証鍵（**決まらなければ null** ＝ 検証失敗）</returns>
+        /// <returns>検証鍵の候補（**決まらなければ 0 件** ＝ 検証失敗。**呼び出し元は、順に試す**）</returns>
         /// <remarks>
         /// **alg は `CmnEndpoints.CibaRequestSigningAlgs`（PS256・ES256）に在ること**（FAPI-CIBA は FAPI 1.0 Advanced §8.6 に従う）。
-        /// **鍵は、登録の RSA 公開鍵（PS256）・EC 公開鍵（ES256）のうち、alg に合うほう**（RFC 8725 §3.1）。
+        /// **鍵は、登録の RSA 公開鍵（PS256）・EC 公開鍵（ES256）と、`jwks_uri` から `kid` で引いた鍵のうち、alg に合うもの**（RFC 8725 §3.1。`jwks_uri` は #408）。
         /// **以前は登録の EC 公開鍵による ES256 だけ**だった（JWK を受ける版の `RequestObject.VerifyCiba`）。
         /// **Request Object の `request_object_signing_alg` の登録では絞らない**（CIBA の要求は別の登録項目
         /// `backchannel_authentication_request_signing_alg`。MPAS はその登録項目を扱っていない）。
         /// </remarks>
-        internal static JWS SelectCibaVerifyingJws(string client_id, string request)
+        internal static List<JWS> SelectCibaVerifyingJws(string client_id, string request)
         {
+            List<JWS> candidates = new List<JWS>();
             string alg = JwtReader.TryReadAlg(request);
 
             if (string.IsNullOrEmpty(alg)
                 || Array.IndexOf(CmnEndpoints.CibaRequestSigningAlgs, alg) < 0)
             {
-                return null;
+                return candidates;
             }
 
-            foreach (string registeredKey in new string[]
+            List<string> keys = new List<string>()
             {
-                Helper.GetInstance().GetJwkRsaPublickey(client_id),
-                Helper.GetInstance().GetJwkECDsaPublickey(client_id)
-            })
+                JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(client_id)),
+                JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkECDsaPublickey(client_id))
+            };
+
+            //  **`jwks_uri` の鍵も候補にする**（#408）。
+            keys.AddRange(CmnEndpoints.KeysFromJwksUri(client_id, request, "CIBA request"));
+
+            foreach (string key in keys)
             {
-                JWS jws = CmnEndpoints.VerifyingJwsOf(JwtUtil.DecodeRegisteredJwk(registeredKey), alg);
+                JWS jws = CmnEndpoints.VerifyingJwsOf(key, alg);
 
                 if (jws != null)
                 {
-                    return jws;
+                    candidates.Add(jws);
                 }
             }
 
-            // alg に合う鍵が登録されていない。
-            return null;
+            // 0 件なら、alg に合う鍵が登録されていない。
+            return candidates;
+        }
+
+        /// <summary>候補の鍵のどれかで、Request Object を検証する（#408）</summary>
+        /// <param name="requestObject">Request Object</param>
+        /// <param name="candidates">検証鍵の候補</param>
+        /// <param name="iss">iss</param>
+        /// <returns>どれかで検証できれば true</returns>
+        internal static bool VerifyWithAny(string requestObject, List<JWS> candidates, out string iss)
+        {
+            iss = null;
+
+            foreach (JWS jws in candidates)
+            {
+                if (RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out iss, jws))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>候補の鍵のどれかで、CIBA の署名した要求を検証する（#408）</summary>
+        /// <param name="request">CIBA の署名した要求</param>
+        /// <param name="candidates">検証鍵の候補</param>
+        /// <param name="iss">iss</param>
+        /// <returns>どれかで検証できれば true</returns>
+        internal static bool VerifyCibaWithAny(string request, List<JWS> candidates, out string iss)
+        {
+            iss = null;
+
+            foreach (JWS jws in candidates)
+            {
+                if (RequestObject.VerifyCiba(request, CmnServerParams.IssuerId, out iss, jws))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>登録の JWK（JSON の文字列）を読む。読めなければ null（#370）</summary>
@@ -431,12 +488,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // CIBA
 
                 // - 検証鍵は、ヘッダの alg（PS256・ES256）と登録の鍵で決める（#395。以前は EC の鍵による ES256 だけ）。
-                JWS cibaJws = CmnRequestObjectEndpoint.SelectCibaVerifyingJws(iss, requestObject);
+                //   **`jwks_uri` の鍵も候補にし、順に試す**（#408）。
+                List<JWS> cibaJws = CmnRequestObjectEndpoint.SelectCibaVerifyingJws(iss, requestObject);
 
                 // 署名とクレームの検証
                 //   **aud は issuer**（CIBA Core §7.1.1。#336）。必須のクレームと時刻は Open棟梁 が確かめる（OpenTouryo#653）。
-                result = cibaJws != null
-                    && RequestObject.VerifyCiba(requestObject, CmnServerParams.IssuerId, out iss, cibaJws);
+                result = CmnRequestObjectEndpoint.VerifyCibaWithAny(requestObject, cibaJws, out iss);
             }
             else
             {
@@ -445,9 +502,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // **検証鍵は、ヘッダの alg と登録の鍵で決める**（#370。以前は登録の RSA 鍵による RS256 だけ）。
                 //   **alg は、扱う一覧・登録 request_object_signing_alg（#262）・FAPI の登録の制限（PS256・ES256）で絞る。**
                 //   **CIBA（上の分岐）は対象外**。あちらは ES256 だけを受け（Discovery の広告と同じ）、仕様でも別の登録項目。
-                JWS jws = CmnRequestObjectEndpoint.SelectVerifyingJws(iss, requestObject, out bool _);
+                //   **`jwks_uri` の鍵も候補にし、順に試す**（#408）。
+                List<JWS> jws = CmnRequestObjectEndpoint.SelectVerifyingJws(iss, requestObject, out bool _);
 
-                if (jws == null)
+                if (jws.Count == 0)
                 {
                     return false;
                 }
@@ -457,7 +515,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //   **以前は署名しか確かめず、期限の過ぎたもの・別の認可サーバ宛てのものも預かっていた。**
                 //   必須のクレームと、在る時刻のクレームは Open棟梁 が確かめる（OpenTouryo#653）。
                 //   **FAPI の登録は、exp・nbf を必須にし、寿命を 60 分以内に限る**（`VerifyFapiTimeClaims`）。
-                result = RequestObject.Verify(requestObject, CmnServerParams.IssuerId, out iss, jws)
+                result = CmnRequestObjectEndpoint.VerifyWithAny(requestObject, jws, out iss)
                     && CmnRequestObjectEndpoint.VerifyFapiTimeClaims(iss, payload);
             }
 
@@ -609,7 +667,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 // **署名付き Request Object（JAR）。** /ros と同じく、ヘッダの alg と登録の鍵で検証する（#370）。
                 //   **alg は、扱う一覧・登録 request_object_signing_alg（#262）・FAPI の登録の制限（PS256・ES256）で絞る。**
-                JWS jws = CmnRequestObjectEndpoint.SelectVerifyingJws(client_id, request, out bool algAllowed);
+                //   **`jwks_uri` の鍵も候補にし、順に試す**（#408）。
+                List<JWS> jws = CmnRequestObjectEndpoint.SelectVerifyingJws(client_id, request, out bool algAllowed);
 
                 if (!algAllowed)
                 {
@@ -620,7 +679,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
 
-                if (jws == null)
+                if (jws.Count == 0)
                 {
                     // **alg に合う鍵が登録されていない**（RS256・PS256 は RSA、ES256 は EC の鍵）。
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
@@ -629,7 +688,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
 
                 //  **aud は issuer だけ**（RFC 9101 §4 / FAPI。#336。`RegisterRequestObject` と同じ）。
-                if (!RequestObject.Verify(request, CmnServerParams.IssuerId, out string iss, jws))
+                if (!CmnRequestObjectEndpoint.VerifyWithAny(request, jws, out string iss))
                 {
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The request object is not verified.");
