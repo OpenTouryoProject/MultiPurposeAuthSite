@@ -1272,6 +1272,25 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### 預けた Request Object の中の日付の形の文字列が、応答で書き換わらない（`RT-403.*`。#403）
+
+| | 測ること |
+|---|---|
+| **`RT-403.1`** | **PAR**（`Z`・`+05:30`）・**`/ros`**（`-03:00`）に日付の形の `state` を預け、`prompt=none`（サインインしていない）で `/authorize` に行く。`login_required` の応答の `state` が預けた値のまま |
+
+- **以前は、日付の形の文字列が、既定の JSON の読み方（`DateParseHandling.DateTime`）で `Date` になっていた**（OpenTouryo#662）。
+  **`/authorize` で読み直すと** `2026-11-18T10:00:00Z` → `11/18/2026 10:00:00`、**預かるときに読むと** `-03:00` → 手元の時差（`+09:00`）に直った値で返った（両版）
+- **預けた中身を読む 5 か所**（PAR・`/ros` が預かるとき、両版の `AccountController`・`AuthorizationCodeProvider` が読み直すとき）を、**日付に変えない読み方**（`JwtUtil.TryParseObjectAsIs`・`TryReadPayloadAsIs`。#337）にした。CIBA が `/ros` から読む箇所は #337 で直してあった
+- **時差は、手元の機械の時差と違う値にする。** 手元と同じ時差（`+09:00`）では書き換わらず、直す前でも通ってしまう
+- **直したのを外すと**、net10.0 版で落ちることを確かめた（`AccountController` の読み方だけを戻すと `Z` の場合、`/ros` の預かる側だけを戻すと `-03:00` の場合）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`dpop_jkt`・`code_challenge`・`redirect_uri` の日付の形の値が、code に正しく縛られること** | 読み方は同じ関数（`TryParseObjectAsIs`）で、`state` で測った。日付の形の鍵の指紋・PKCE の値は、現実には来ない |
+| **成功の応答（サインイン後）の `state`** | 応答の `state` を作る経路は、エラー応答と同じ預けた中身 |
+
 ##### Request Object の中の、認可要求の値が文字列でなければ、預からない（`RT-377.*`。#377）
 
 | | 測ること |
@@ -1295,7 +1314,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`/authorize` が 500 にならないこと** | 文字列でない値を、もう預けられない（PAR・`/ros` で断る）。`AuthorizationCodeProvider` の守りは、預かった後の値を書き換えないと通らない |
 | **`/ros` の `dpop_jkt` 以外の値** | 判定は PAR と同じ関数（`AreAuthZParamsWellTyped`）。`RT-377.1` が値ごとに測る |
 | **配列の `scope`・`response_type`** | **Open棟梁 の `RequestObject.Verify` が先に断る**（`The request object is not verified.`）。この判定には届かない（判定の一覧には入れてある） |
-| **日付の形の値が、`/authorize` の後も元のまま保たれること** | **保たれない**（以前から。`/authorize`・`AuthorizationCodeProvider` が読み直すときに `Date` になり、書式が変わる。日付の形の `state` は `11/18/2026 10:00:00` で返った）。**別の Issue で扱う**（#377 の範囲は 500 にしないこと） |
+| **日付の形の値が、`/authorize` の後も元のまま保たれること** | **#403 で直した**（`RT-403.1`） |
 | **`max_age` の小数・真偽値・`null`、CIBA の署名した要求（`/ros`）での型の誤り** | 断る・通す分岐は同じ関数で、`RT-377.1` が配列・整数で測る。CIBA の正しい要求が通ることは、通しの CIBA のテストが測る |
 
 ##### SAML2 の IdP は、署名を確かめられない要求を断る（`RT-400.*`。#400）

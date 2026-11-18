@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=1a9b6d3f-62c4-4e47-846b-9ac692dd965d&code=bogus
+1. GET /Account/EmailConfirmation?userId=6fd11e34-9605-4837-85a5-0d54edccddcd&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=1a9b6d3f-62c4-4e47-846b-9ac692dd965d&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=1a9b6d3f-62c4-4e47-846b-9ac692dd965d&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=6fd11e34-9605-4837-85a5-0d54edccddcd&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=6fd11e34-9605-4837-85a5-0d54edccddcd&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13226,6 +13226,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - StatusCode（署名を確かめられない要求は断る）
 - アサーション（NameID）を入れない
 - InResponseTo（送った要求の ID）
+
+## RT-403.1 PAR・/ros に預けた Request Object の中の日付の形の state（UTC・時差付き）が、/authorize の応答（prompt=none の login_required）で預けた値のまま返る
+
+| | |
+|---|---|
+| 観点 | **state は、受けた値をそのまま返す。****以前は、日付の形の文字列が JSON の読み方で Date になり、書式の変わった文字列（11/18/2026 10:00:00）で返っていた**（OpenTouryo#662）。 |
+| 根拠 | RFC 6749 §4.1.2.1 / #403 |
+| テスト | `RT40301_預けたRequestObjectの日付の形のstateが応答で書き換わらない` |
+
+**手順**
+
+1. PAR：state=2026-11-18T10:00:00Z
+1. PAR：state=2026-11-18T10:00:00+05:30
+1. /ros：state=2026-11-18T10:00:00-03:00
+
+**検証（合否を判定する）**
+
+- PAR（2026-11-18T10:00:00Z） : HTTP 201
+- PAR（2026-11-18T10:00:00Z） : 応答の state
+- PAR（2026-11-18T10:00:00+05:30） : HTTP 201
+- PAR（2026-11-18T10:00:00+05:30） : 応答の state
+- /ros : request_uri を返す
+- /ros : 応答の state
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

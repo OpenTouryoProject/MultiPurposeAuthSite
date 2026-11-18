@@ -48,6 +48,7 @@
 //*  2026/11/17  玄人 幸道         PAR の Request Object の中の request_uri を断るようにした（RFC 9126 §2.1。#380）
 //*  2026/11/17  玄人 幸道         PAR のクライアント認証の aud を issuer だけにした（RFC 10070 §5。#398）
 //*  2026/11/18  玄人 幸道         Request Object の中の認可要求の値（redirect_uri・scope・state・nonce・dpop_jkt など）が文字列でなければ（max_age は数値も受ける）、PAR・/ros で断る（#377）
+//*  2026/11/18  玄人 幸道         預ける Request Object を、日付の形の文字列を日付に変えずに読む（PAR・/ros。#403）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -123,8 +124,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **数値・真偽値も断る**（`dpop_jkt` は鍵の指紋の文字列。RFC 9449 §10。以前は `"123"` として code に縛られ、引き換えられない code が出ていた）。
         /// **`max_age` だけは、文字列に加えて整数を受ける**（OIDC Core 1.0 §3.1.2.1 の秒数。Request Object では数値で書くのが普通）。
         /// **PAR・`/ros` の両方で、預かる前に確かめる**（`invalid_request_object`。RFC 9101 §7。claims の形と同じ扱い）。
-        /// **`Date` も文字列として受ける。** PAR（`JsonConvert.DeserializeObject`）・`/ros`（Open棟梁 の `JwtReader.TryReadPayload`）は既定の読み方で、
-        /// **日付の形の JSON の文字列を `Date` にする**（OpenTouryo#662。#337 と同じ落とし穴）。`Date` は JSON の文字列からしか生まれない。
+        /// **`Date` も文字列として受ける**（念のため）。**PAR・`/ros` は、日付の形の文字列を日付に変えない読み方で読む**（`JwtUtil.TryParseObjectAsIs`。#403）ので、
+        /// 今は `Date` は来ない。**以前は既定の読み方で、日付の形の JSON の文字列を `Date` にしていた**（OpenTouryo#662。#377 の時点）。
         /// </remarks>
         private static bool AreAuthZParamsWellTyped(JObject payload, out string name)
         {
@@ -404,7 +405,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // 公開鍵取得にissが必要。
             // - issを取り出す。
             //   **JWT でない値を渡されても、例外にしない**（#241）。
-            JObject payload = JwtReader.TryReadPayload(requestObject);
+            //  **日付の形の文字列を、日付に変えずに読む**（#403。#337 と同じ読み方）。
+            //    **以前は Open棟梁 の `JwtReader.TryReadPayload`（既定の読み方）で、預ける中身の日付の形の値（state など）が書き換わっていた。**
+            JObject payload = JwtUtil.TryReadPayloadAsIs(requestObject);
 
             if (payload == null)
             {
@@ -640,9 +643,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     return false;
                 }
 
-                payload = (JObject)JsonConvert.DeserializeObject(
+                //  **日付の形の文字列を、日付に変えずに読む**（#403）。**以前は既定の読み方で、日付の形の state などが `Date` になり、
+                //    預けた中身と `/authorize` の応答で書式が変わっていた**（`2026-11-18T10:00:00Z` → `11/18/2026 10:00:00`）。
+                payload = JwtUtil.TryParseObjectAsIs(
                     CustomEncode.ByteToString(
                         CustomEncode.FromBase64UrlString(request.Split('.')[1]), CustomEncode.us_ascii));
+
+                if (payload == null)
+                {
+                    // **上の `RequestObject.Verify` が通ったので、通常は来ない**（JSON のオブジェクトでない）。
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
+                    err.Add(OAuth2AndOIDCConst.error_description, "The request object is not a JSON object.");
+                    return false;
+                }
 
                 //  **中の client_id も、認証したクライアントであること**（RFC 9126 §3 / RFC 9101 §6.3。C-41。#294）。
                 //    **以前は iss だけを照合し、検証と保存は中の client_id で行っていた**ので、

@@ -30,6 +30,7 @@
 //*  2026/11/11  玄人 幸道         Hybrid の応答を作る部品に response_type を渡す（at_hash を付けるかを決めるため。#360）
 //*  2026/11/13  玄人 幸道         認可要求の検証に code_challenge_method を渡す（Request Object の値も読む。fapi2 の S256。#366）
 //*  2026/11/17  玄人 幸道         認可要求の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
+//*  2026/11/18  玄人 幸道         預けた Request Object を、日付の形の文字列を日付に変えずに読む（#403）
 //**********************************************************************************
 
 /*
@@ -842,7 +843,9 @@ namespace MultiPurposeAuthSite.Controllers
             string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
                 request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
 
-            JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+            //  **日付の形の文字列を、日付に変えずに読む**（#403。#337 と同じ読み方）。
+            //    **以前は既定の読み方で、日付の形の state などが `Date` になり、応答で書式が変わっていた**（RFC 6749 §4.1.2 は受けた値のまま返す）。
+            JObject requestObjectPayload = JwtUtil.TryParseObjectAsIs(requestObjectPayloadString);
 
             if (requestObjectPayload == null)
             {

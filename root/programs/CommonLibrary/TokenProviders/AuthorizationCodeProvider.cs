@@ -39,6 +39,7 @@
 //*  2026/11/04  玄人 幸道         消せた 1 つだけが引き換える（同時に引き換えると、複数にトークンが出ていた。#332）
 //*  2026/11/12  玄人 幸道         見つからない request_uri のコメントを、Controller が先に断る形に合わせた（#362）
 //*  2026/11/18  玄人 幸道         預けた Request Object の値を、文字列でなければ無いのと同じに読む（例外にしない。#377）
+//*  2026/11/18  玄人 幸道         預けた Request Object を、日付の形の文字列を日付に変えずに読む（#403）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -262,7 +263,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return queryString;
             }
 
-            JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+            //  **日付の形の文字列を、日付に変えずに読む**（#403。以前は既定の読み方で、日付の形の値が書式の変わった文字列になっていた）。
+            JObject requestObjectPayload = MultiPurposeAuthSite.Util.Sts.JwtUtil.TryParseObjectAsIs(requestObjectPayloadString);
 
             if (requestObjectPayload == null)
             {
@@ -289,8 +291,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="name">名前</param>
         /// <returns>文字列か null</returns>
         /// <remarks>
-        /// **`Date` も文字列として読む**（既定の読み方は、日付の形の JSON の文字列を `Date` にする。OpenTouryo#662。
-        /// 以前の `(string)` の読み方と同じ値になる）。
+        /// **`Date` も文字列として読む**（念のため）。**預けた中身は、日付に変えない読み方で読む**（#403）ので、今は `Date` は来ない。
         /// </remarks>
         private static string StringOrNull(JObject payload, string name)
         {
