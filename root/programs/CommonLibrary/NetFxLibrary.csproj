@@ -215,6 +215,7 @@
     <Compile Include="Extensions\Sts\CmnLogoutEndpoint.cs" />
     <Compile Include="Extensions\Sts\CmnRequestObjectEndpoint.cs" />
     <Compile Include="Util\Sts\JwtUtil.cs" />
+    <Compile Include="Util\Sts\SigningJwkSet.cs" />
     <Compile Include="TokenProviders\CmnEndpoints.Authorize.cs">
       <DependentUpon>CmnEndpoints.cs</DependentUpon>
     </Compile>
