@@ -34,6 +34,7 @@
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を、検査の前に取りに行くようにした（WarmUpSectorIdentifierUriAsync。#364）
 //*  2026/11/12  玄人 幸道         取りに行くのは、呼び出し元の認可を確かめた後だけにした（MayWarmUpForRegister / MayWarmUpForUpdate。#364）
 //*  2026/11/13  玄人 幸道         PUT で authorization_signed_response_alg も全置換する（#370）
+//*  2026/11/18  玄人 幸道         jwks_uri を温める前に、行き先のアドレスを判定するようにした（#376）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -106,8 +107,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (string url in urls)
             {
+                //  **行き先のアドレスも見る**（内部のアドレスへは取りに行かない。#376）。**判定は `Validate` と同じ。**
                 if (!string.IsNullOrEmpty(url)
-                    && RemoteJwkSetStore.IsUsableKeySource(url))
+                    && RemoteJwkSetStore.IsUsableKeySource(url)
+                    && OutboundUrlPolicy.IsAllowed(url))
                 {
                     //  **取れなくても例外にしない**（`RemoteJwkSetStore` が飲む）。
                     //    **断るのは `Validate`** である。

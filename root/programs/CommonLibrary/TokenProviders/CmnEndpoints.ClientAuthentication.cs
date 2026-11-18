@@ -51,6 +51,7 @@
 //*  2026/11/15  玄人 幸道         FAPI の登録の判定を Helper.IsFapiProfileClient にまとめた（#384）
 //*  2026/11/17  玄人 幸道         配列の aud を断る根拠を RFC 10070 §4 に書き換えた。振る舞いは変えていない（#397）
 //*  2026/11/17  玄人 幸道         クライアント認証の assertion の aud を issuer だけにした（CIBA の口・CIBA のトークン要求を除く）。JWT Bearer グラントの aud は分けた（RFC 10070 §4・§5。#398）
+//*  2026/11/18  玄人 幸道         jwks_uri を取りに行く前に、行き先のアドレスを判定するようにした（#376）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -641,12 +642,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                             jwksUri, JwtReader.TryReadKid(assertion),
                             CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
 
-                        if (fromUri.Length == 0)
+                        //  **控えに無く、取りに行くときだけ、行き先のアドレスを判定する**（#376）。
+                        //    **登録の後で名前解決の結果が変わっていれば、取りに行かない**（鍵が無いのと同じ扱い）。
+                        bool fetchable = fromUri.Length != 0 || MultiPurposeAuthSite.Extensions.Sts.OutboundUrlPolicy.IsAllowed(jwksUri);
+
+                        if (fromUri.Length == 0 && fetchable)
                         {
                             fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, JwtReader.TryReadKid(assertion));
                         }
 
-                        if (fromUri.Length == 0)
+                        if (fromUri.Length == 0 && fetchable)
                         {
                             RemoteJwkSetStore.RefillInBackground(jwksUri);
 

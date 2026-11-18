@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 2）
+//*  2026/11/18  玄人 幸道         起動のときに温める jwks_uri も、行き先のアドレスを判定するようにした（#376）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -181,9 +182,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 //  **使える URL かの判定は `RemoteJwkSetStore` に 1 つだけ置いてある**
                 //    （**登録の検査と同じ規則で絞る** — **2 か所に書くと食い違う**）。
+                //    **行き先のアドレスも見る**（#376。登録の後で名前解決の結果が変わっていれば、取りに行かない）。
                 if (string.IsNullOrEmpty(url)
                     || urls.Contains(url)
-                    || !RemoteJwkSetStore.IsUsableKeySource(url))
+                    || !RemoteJwkSetStore.IsUsableKeySource(url)
+                    || !OutboundUrlPolicy.IsAllowed(url))
                 {
                     continue;
                 }

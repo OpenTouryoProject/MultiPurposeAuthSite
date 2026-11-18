@@ -171,6 +171,9 @@ services:
       - appSettings__EnableDynamicClientRegistration=true
       #   **トークンの期限を、プラン 1 つ分より長くする**（既定は 300 秒。1 つのトークンを、プランのすべてのモジュールで使い回すため）
       - appSettings__DcrAccessTokenExpireTimeSpanFromSeconds=3600
+      #   **クライアントが登録した jwks_uri・sector_identifier_uri（Conformance Suite の口）へ取りに行かせる**（#376）。
+      #   **Conformance Suite はコンテナ網の内部のアドレスに居る**（nginx の別名）ので、許可の一覧に足す。**手元の appsettings.json にキーが要る**（無いキーは環境変数で足せない）
+      - appSettings__OutboundUrlAllowedHosts=localhost.emobix.co.uk
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__client_secret=cts-client7-secret-for-conformance-test-only
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__scope=client_registration
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000007__client_name=CtsRegistrationAdmin

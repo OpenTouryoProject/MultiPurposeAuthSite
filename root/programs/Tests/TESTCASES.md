@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=560bfef1-beb1-47fc-af0a-a72afff3b7fa&code=bogus
+1. GET /Account/EmailConfirmation?userId=1fde06bc-c1a0-4840-b778-7a8fd1d7a73f&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=560bfef1-beb1-47fc-af0a-a72afff3b7fa&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=560bfef1-beb1-47fc-af0a-a72afff3b7fa&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=1fde06bc-c1a0-4840-b778-7a8fd1d7a73f&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=1fde06bc-c1a0-4840-b778-7a8fd1d7a73f&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12480,6 +12480,66 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-376.1 動的登録の `jwks_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **動的登録では、登録できる相手が OP に取りに行かせる URL を書ける。****以前はスキーム（https か、ループバックの http）しか見ておらず、OP の内側のアドレスへ要求を出させられた。****既定では内部のアドレスへ行かない**（配備が許可の一覧で開ける）。 |
+| 根拠 | RFC 7591 §2 / #376 |
+| テスト | `RT37601_内部のアドレスのjwks_uriは断る` |
+
+**手順**
+
+1. jwks_uri = https://10.0.0.1/e2e/rt376
+1. jwks_uri = https://192.168.0.1/e2e/rt376
+1. jwks_uri = https://169.254.169.254/latest/meta-data
+1. jwks_uri = https://[fd00::1]/e2e/rt376
+
+**検証（合否を判定する）**
+
+- https://10.0.0.1/e2e/rt376 : HTTP 400
+- https://10.0.0.1/e2e/rt376 : invalid_client_metadata
+- https://10.0.0.1/e2e/rt376 : 断る理由は行き先
+- https://192.168.0.1/e2e/rt376 : HTTP 400
+- https://192.168.0.1/e2e/rt376 : invalid_client_metadata
+- https://192.168.0.1/e2e/rt376 : 断る理由は行き先
+- https://169.254.169.254/latest/meta-data : HTTP 400
+- https://169.254.169.254/latest/meta-data : invalid_client_metadata
+- https://169.254.169.254/latest/meta-data : 断る理由は行き先
+- https://[fd00::1]/e2e/rt376 : HTTP 400
+- https://[fd00::1]/e2e/rt376 : invalid_client_metadata
+- https://[fd00::1]/e2e/rt376 : 断る理由は行き先
+
+## RT-376.2 動的登録の `sector_identifier_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **`jwks_uri` と同じく、OP が取りに行く URL である**（§5）。**以前はスキームしか見ておらず、OP の内側のアドレスへ要求を出させられた。** |
+| 根拠 | OIDC Registration 1.0 §5 / #376 |
+| テスト | `RT37602_内部のアドレスのsector_identifier_uriは断る` |
+
+**手順**
+
+1. sector_identifier_uri = https://10.0.0.1/e2e/rt376
+1. sector_identifier_uri = https://192.168.0.1/e2e/rt376
+1. sector_identifier_uri = https://169.254.169.254/latest/meta-data
+1. sector_identifier_uri = https://[fd00::1]/e2e/rt376
+
+**検証（合否を判定する）**
+
+- https://10.0.0.1/e2e/rt376 : HTTP 400
+- https://10.0.0.1/e2e/rt376 : invalid_client_metadata
+- https://10.0.0.1/e2e/rt376 : 断る理由は行き先
+- https://192.168.0.1/e2e/rt376 : HTTP 400
+- https://192.168.0.1/e2e/rt376 : invalid_client_metadata
+- https://192.168.0.1/e2e/rt376 : 断る理由は行き先
+- https://169.254.169.254/latest/meta-data : HTTP 400
+- https://169.254.169.254/latest/meta-data : invalid_client_metadata
+- https://169.254.169.254/latest/meta-data : 断る理由は行き先
+- https://[fd00::1]/e2e/rt376 : HTTP 400
+- https://[fd00::1]/e2e/rt376 : invalid_client_metadata
+- https://[fd00::1]/e2e/rt376 : 断る理由は行き先
 
 ## RT-377.1 PAR に預ける Request Object の中の認可要求の値（redirect_uri・code_challenge・code_challenge_method・dpop_jkt・nonce・prompt・response_mode・state・max_age）が文字列でなければ、400 ＋ invalid_request_object。文字列・整数の max_age なら 201
 

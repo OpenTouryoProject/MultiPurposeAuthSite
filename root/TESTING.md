@@ -1272,6 +1272,27 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### 動的登録で取りに行く URL の行き先を、アドレスでも絞る（`RT-376.*`。#376）
+
+| | 測ること |
+|---|---|
+| **`RT-376.1`** | **内部のアドレス**（`10.0.0.1`・`192.168.0.1`・`169.254.169.254`・`[fd00::1]`）**の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（`error_description` で、行き先で断ったことを確かめる） |
+| **`RT-376.2`** | **同じアドレスの `sector_identifier_uri` も、`400` ＋ `invalid_client_metadata`** |
+| 単体テスト `OutboundUrlPolicyTests` | アドレスの種類（IPv4・IPv6・IPv4 を写した・持つ IPv6（NAT64・6to4）・文書化用・範囲の境界）、ループバックの設定、許可の一覧、名前解決の失敗・複数の結果、設定の読み方 |
+
+- **以前はスキームしか見ておらず、OP が内部のアドレスへ取りに行っていた**（直しを外すと、`RT-376.*` は「読めない」で断られて落ちる。net10.0 版で確かめた）
+- **E2E の通しは、`test.ps1` が `OutboundUrlAllowLoopbackHttp=true` を渡す**（静的配信の足場は `http://localhost:44305`）。**既定（閉じている）でループバックを断ることは、単体テストで測る**
+- **`RT-307.16` の観測（`error_description`）が変わる**：`https://rp.example/jwks.json` は名前解決できないので、取りに行く前の判定で断るようになった（断ることは同じ）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`sector_identifier_uri` を接続の時点で判定すること（net10.0）・リダイレクトを追わないこと** | 名前解決の結果を切り替える仕掛けと、リダイレクトを返す足場が要る。接続の時点の判定は `IsAllowedAddress`（単体テストで測った判定）を使う |
+| **登録の後で `jwks_uri` が内部のアドレスに変わったとき、クライアント認証で取り直さないこと** | 名前解決の結果を切り替える仕掛けが要る。判定は `IsAllowed`（単体テストで測った） |
+| **判定の結果を 1 分控えること（上限 1000 件）** | 単体テストは、設定と名前解決を渡す版（控えを通らない）を測る。控えは時間に依るので、単体テストにすると待ちが要る |
+| **適合性テスト（`oidcc-dynamic`）** | 回していない。`container/CTS` に `OutboundUrlAllowedHosts=localhost.emobix.co.uk` を足した（手元の `appsettings.json` にもキーを足した） |
+
 ##### 生の UTF-8 で書いた Request Object の ASCII でない値を、PAR が書き換えない（`RT-404.*`。#404）
 
 | | 測ること |

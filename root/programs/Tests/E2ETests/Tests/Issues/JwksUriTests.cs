@@ -31,6 +31,7 @@
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
 //*  2026/11/12  玄人 幸道         RT-363.1（登録を直さずに鍵を入れ替えても、知らない kid の 1 回目から通る）を足した（#363）
 //*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
+//*  2026/11/18  玄人 幸道         RT-376.1（内部のアドレスの jwks_uri は、取りに行かずに断る）を足した（#376）
 //**********************************************************************************
 
 using System;
@@ -61,6 +62,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-309.3`** | **同じ URL の鍵を入れ替えると、`PUT` で読み直して新しい鍵で通る**（**読み直すまではキャッシュが効く**） |
     /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
     /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
+    /// | **`RT-376.1`** | **内部のアドレス（プライベート・リンクローカル・ユニーク ローカル）の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
     /// **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の全部から呼ばれる。
@@ -586,6 +588,64 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     finally
                     {
                         JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-376.1
+
+        /// <summary>RT-376.1 内部のアドレスの jwks_uri は、取りに行かずに断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37601_内部のアドレスのjwks_uriは断る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-376.1",
+                    "動的登録の `jwks_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る",
+                    "**動的登録では、登録できる相手が OP に取りに行かせる URL を書ける。**"
+                    + "**以前はスキーム（https か、ループバックの http）しか見ておらず、OP の内側のアドレスへ要求を出させられた。**"
+                    + "**既定では内部のアドレスへ行かない**（配備が許可の一覧で開ける）。",
+                    "RFC 7591 §2 / #376");
+
+                r.Target("POST registration_endpoint（jwks_uri が内部のアドレス）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    foreach (string url in new string[]
+                        {
+                            "https://10.0.0.1/e2e/rt376",
+                            "https://192.168.0.1/e2e/rt376",
+                            "https://169.254.169.254/latest/meta-data",
+                            "https://[fd00::1]/e2e/rt376"
+                        })
+                    {
+                        r.Step("jwks_uri = " + url);
+
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + url + "\"}");
+
+                        r.VerifyEqual(url + " : HTTP 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual(url + " : invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+
+                        //  **読めなかったのではなく、行き先で断ったこと**（取りに行っていない）。
+                        string description = rejected.String("error_description") ?? "";
+                        bool byAddress = description.Contains("internal address");
+
+                        r.Verify(url + " : 断る理由は行き先", byAddress,
+                            "internal address", byAddress ? "internal address" : "**" + description + "**");
                     }
                 });
 

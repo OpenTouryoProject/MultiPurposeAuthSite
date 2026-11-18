@@ -3621,6 +3621,15 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - **署名を確かめられない要求は、署名の検証に失敗した要求と同じく、登録済みの ACS URL へ `Requester` のエラー応答を返す**（`RT-400.1`）。設定で戻す分岐は作らない
 - **要求を直に組み立てる E2E の多くが、署名の無い要求を送っていた**ので、署名して送るようにした（`Saml2.SignedRequestQuery`）
 
+### C-68. 動的登録で OP が取りに行く URL（`jwks_uri`・`sector_identifier_uri`）の行き先を、スキームでしか絞っていなかった **[Lib]** — **✅ 一部修正（#376。残りは Open棟梁 の対応の後）**
+
+**`https` か、ループバックの `http` かしか見ていなかった**ので、登録できる相手が、OP の内側のアドレス（プライベート・リンクローカルなど）へ要求を出させられた。
+
+- **行き先のアドレスでも絞る**（`OutboundUrlPolicy`。**既定で内部のアドレスとループバックを断る**。開けるのは設定 `OutboundUrlAllowLoopbackHttp`・`OutboundUrlAllowedHosts`。`RT-376.1`・`.2`）
+- **登録の検査・温める前・クライアント認証で取り直す前**に掛ける
+- **`sector_identifier_uri` は専用の HttpClient**（リダイレクトを追わない。net10.0 版は接続の時点のアドレスでも判定する）
+- **残り（#376 の本文に挙げたもの）**：`jwks_uri` を取りに行く HttpClient は、まだ専用のものにできていない（Open棟梁 の `RemoteJwkSetStore` に HttpClient を渡す口が無い）。**Open棟梁 の対応の後に、MPAS の別の Issue で専用の HttpClient を渡す**
+
 ### C-67. PAR が、署名付き Request Object の payload を us-ascii で読み、ASCII でない文字が「?」に変わっていた **[Lib]** — **✅ 修正済み（#404）**
 
 **PAR だけが payload を us-ascii で文字列にしていた**ので、生の UTF-8 で書いた日本語の `state` などが「?」に変わり、応答の `state` が一致しなかった（`/ros` は UTF-8。JWT の Claims Set は UTF-8 で表す。RFC 7519 §7.1・§7.2）。

@@ -1344,6 +1344,29 @@ ALTER TABLE "Saml2OAuth2Data" ADD ("SectorIdentifierUri" NVARCHAR2(512) NULL);
 ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 ```
 
+### クライアントが登録した URL へ取りに行く先 — `OutboundUrlAllowLoopbackHttp`・`OutboundUrlAllowedHosts`（#376）
+
+**動的登録で OP が取りに行く URL（`jwks_uri`・`sector_identifier_uri`）は、行き先のアドレスでも絞る。**
+**以前はスキーム（`https` か、ループバックの `http`）しか見ておらず、登録できる相手が、OP の内側のアドレスへ要求を出させられた。**
+
+| キー | 既定 | |
+|---|---|---|
+| `OutboundUrlAllowLoopbackHttp` | **`false`** | **`true` で、ループバック（`http` を含む）へも取りに行く。** **開発と試験の配備だけで使う**（OIDC Registration 1.0 §2・§5 の `https` の MUST からの逸脱）。**E2E は `test.ps1` が環境変数で開ける**（静的配信の足場は `http://localhost:44305`） |
+| `OutboundUrlAllowedHosts` | **空** | **内部のアドレスに解決されても取りに行ってよいホスト名**（カンマ区切り。大文字小文字を問わない）。**スキームの判定（`https`）は外さない。** **適合性テストは `container/CTS` が `localhost.emobix.co.uk` を渡す**（Conformance Suite はコンテナ網の内部のアドレスに居る） |
+
+- **内部のアドレス**：ループバック・プライベート（`10/8`・`172.16/12`・`192.168/16`）・CGNAT（`100.64/10`）・リンクローカル（`169.254/16`。クラウドのメタデータの口）・文書化用・未指定・マルチキャストなど、IPv6 の同じ種類（`fc00::/7`・`fe80::/10` など）、IPv4 を写した・持つ IPv6（中の IPv4 で判定する NAT64・6to4 など）。一覧は `OutboundUrlPolicy.IsInternalAddress`
+- **名前解決の時間の上限は 5 秒**（過ぎたら、名前解決できないとして断る）
+- **判定の結果は、URL ごとに 1 分控える**（断った結果も。`RemoteJwkSetStore` の取り直しの下限と同じ）。**設定を変えても、控えが切れるまでは前の判定が効く**
+- **名前解決した結果が 1 つでも内部のアドレスなら断る。** **名前解決できなければ断る**
+- **掛ける所**：登録の検査（`invalid_client_metadata`）、登録のときに温める前、起動のときに温める前、クライアント認証で `jwks_uri` を取り直す前（**登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い**）
+- **`sector_identifier_uri` は専用の HttpClient で取りに行く**：**リダイレクトを追わない**。**net10.0 版は接続の時点のアドレスでも判定する**（判定の後に名前解決をやり直して、行き先を変えられないように）。**net48 版は名前解決した結果の判定に留まる**（`HttpClientHandler` に接続の時点の口が無い）。**プロキシ（`UseIntranetProxy`）を通すときも、取りに行く前の判定に留まる**
+- **`jwks_uri` の取得は Open棟梁 の `RemoteJwkSetStore`（共有の HttpClient）が行う**ので、**取りに行く前の判定だけ**（専用の HttpClient は、Open棟梁 で渡せるようになってから。#376 の残り）
+- **ID 連携の上流・Back-Channel Logout の URL は対象外**（運用者が設定・登録するもので、動的登録では変えられない。#310）
+
+> **既定が閉じたので、内部のアドレスの `jwks_uri`・`sector_identifier_uri` を使っている配備は、`OutboundUrlAllowedHosts` に足すこと。**
+> **ループバックの `jwks_uri` で試していた開発の手元は、`OutboundUrlAllowLoopbackHttp=true` にすること。**
+> **net10.0 版は、設定ファイルに無いキーを環境変数だけでは足せない**（2 節）。**キーをファイルに書いてから、環境変数で上書きする**（`container/CTS` は手元の `appsettings.json` をマウントする）
+
 ### `redirect_uri` の記号
 
 `test_self_code` / `test_self_token` は URL ではなく**記号**である。

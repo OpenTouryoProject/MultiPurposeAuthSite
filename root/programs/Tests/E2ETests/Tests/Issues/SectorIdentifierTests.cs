@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/12  玄人 幸道         新規（#364）
+//*  2026/11/18  玄人 幸道         RT-376.2（内部のアドレスの sector_identifier_uri は、取りに行かずに断る）を足した（#376）
 //**********************************************************************************
 
 using System;
@@ -59,6 +60,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-364.2`** | **1 つでも無ければ、`400` ＋ `invalid_client_metadata`** |
     /// | **`RT-364.3`** | **読めなければ（取れない・配列でない・文字列でない要素・`https` でない）、`400` ＋ `invalid_client_metadata`** |
     /// | **`RT-364.4`** | **同じ `sector_identifier_uri` で登録した pairwise のクライアント同士は、同じ `sub` になる**（付けないクライアントとは違う。OIDC Core 1.0 §8.1）。**管理画面で保存しても残る** |
+    /// | **`RT-376.2`** | **内部のアドレスの `sector_identifier_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
     ///
     /// **相手の `sector_identifier_uri` は、`jwks_uri` と同じ静的配信のコンテナで用意する**（`Infrastructure.JwksUri`。44305）。
     /// **上がっていなければ Skip する。**
@@ -130,6 +132,58 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     finally
                     {
                         JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-376.2
+
+        /// <summary>RT-376.2 内部のアドレスの sector_identifier_uri は、取りに行かずに断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37602_内部のアドレスのsector_identifier_uriは断る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-376.2",
+                    "動的登録の `sector_identifier_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る",
+                    "**`jwks_uri` と同じく、OP が取りに行く URL である**（§5）。"
+                    + "**以前はスキームしか見ておらず、OP の内側のアドレスへ要求を出させられた。**",
+                    "OIDC Registration 1.0 §5 / #376");
+
+                r.Target("POST registration_endpoint（sector_identifier_uri が内部のアドレス）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    foreach (string url in new string[]
+                        {
+                            "https://10.0.0.1/e2e/rt376",
+                            "https://192.168.0.1/e2e/rt376",
+                            "https://169.254.169.254/latest/meta-data",
+                            "https://[fd00::1]/e2e/rt376"
+                        })
+                    {
+                        r.Step("sector_identifier_uri = " + url);
+
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token, SectorIdentifierTests.Body(url, UriA));
+
+                        r.VerifyEqual(url + " : HTTP 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual(url + " : invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+
+                        string description = rejected.String("error_description") ?? "";
+                        bool byAddress = description.Contains("internal address");
+
+                        r.Verify(url + " : 断る理由は行き先", byAddress,
+                            "internal address", byAddress ? "internal address" : "**" + description + "**");
                     }
                 });
 

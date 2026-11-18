@@ -640,6 +640,13 @@
     //   **false にすると従来どおり** authorization_pending を返し続ける。
     "EnablePollingSlowDown": "true",
 
+    // クライアントが登録した URL（jwks_uri・sector_identifier_uri）へ取りに行く先（#376）。
+    //   **既定は https だけで、内部のアドレス（ループバック・プライベート・リンクローカルなど）へは行かない。**
+    //   OutboundUrlAllowLoopbackHttp : true でループバック（http を含む）を許す。**開発と試験の配備だけ**（E2E は test.ps1 が開ける）。
+    //   OutboundUrlAllowedHosts      : 内部のアドレスに解決されても許すホスト名（カンマ区切り。適合性テストは container/CTS が渡す）。
+    "OutboundUrlAllowLoopbackHttp": "false",
+    "OutboundUrlAllowedHosts": "",
+
     // ==== STS（口） : Config.Sts.Endpoints.cs ====
     // [基底]
     // AuthorizationServerエンドポイント

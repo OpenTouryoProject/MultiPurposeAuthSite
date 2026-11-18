@@ -35,6 +35,7 @@
 //*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを受けるようにした（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri の中身に redirect_uris がすべて在るかを確かめるようにした（OIDC Registration 1.0 §5。#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を受ける（JARM §3。#370）
+//*  2026/11/18  玄人 幸道         登録の検査で、jwks_uri・sector_identifier_uri の行き先のアドレスも見るようにした（#376）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -155,9 +156,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **平文の HTTP では受けない** — **鍵そのものを差し替えられる**
                 //    （**署名の検証鍵なので、差し替えられればクライアント認証が破れる**）。
                 //    **ループバックだけは許す**（RFC 8252 §7.3 と同じ扱い。開発と試験のため）。
-                if (!RemoteJwkSetStore.IsUsableKeySource(model.JwksUri))
+                //  **行き先のアドレスも見る**（内部のアドレスは断る。ループバックの `http` は設定で開けたときだけ。#376）。
+                //    **スキームと行き先は、同じ文言で断る**（どちらで断ったかを返すと、登録の口が内部の名前解決を確かめる道具になる）。
+                if (!RemoteJwkSetStore.IsUsableKeySource(model.JwksUri)
+                    || !OutboundUrlPolicy.IsAllowed(model.JwksUri))
                 {
-                    description = "The jwks_uri must use https. (loopback may use http)";
+                    description = "The jwks_uri must use https and must not point to an internal address.";
                     return false;
                 }
 
@@ -435,9 +439,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             if (!string.IsNullOrEmpty(sectorIdentifierUri))
             {
+                //  **行き先のアドレスも見る**（#376。`jwks_uri` と同じ）。
                 if (!SectorIdentifierProvider.IsUsable(sectorIdentifierUri))
                 {
-                    description = "The sector_identifier_uri must use https. (loopback may use http)";
+                    description = "The sector_identifier_uri must use https and must not point to an internal address.";
                     return false;
                 }
 
