@@ -40,6 +40,7 @@
 //*  2026/11/19  玄人 幸道         RT-408.1・.2（jwks_uri の鍵で Request Object・CIBA の署名した要求を検証する）を足した（#408）
 //*  2026/11/19  玄人 幸道         RT-408.1・.2 に、jwks_uri に無い鍵で署名したものを断ることを足した（#408。別モデルのレビューの指摘）
 //*  2026/11/19  玄人 幸道         RT-408.1・.2 に、同じ種類の鍵でも署名が合わないものを断ることを足した（#408。別モデルのレビューの指摘）
+//*  2026/11/19  玄人 幸道         RT-410.1・.2（JWT Bearer グラントの assertion を jwks_uri の鍵・PS256・ES256 で検証する）を足した（#410）
 //**********************************************************************************
 
 using System;
@@ -1204,6 +1205,150 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Done();
             }
+        }
+
+        #endregion
+
+        #region RT-410.1
+
+        /// <summary>RT-410.1 鍵を jwks_uri だけで登録したクライアントの、JWT Bearer グラントの assertion を、jwks_uri の鍵で検証する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT41001_jwks_uriの鍵でJWT_Bearerのassertionを検証する(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-410.1",
+                    "鍵を `jwks_uri` だけで登録したクライアントの、JWT Bearer グラントの `assertion`（RS256・PS256）を、`jwks_uri` の鍵で検証してトークンを出す。"
+                    + "`jwks_uri` に無い鍵（ES256）・署名が合わないものは `invalid_client`",
+                    "**`assertion` は、発行者（iss）の鍵で署名を検証する**（RFC 7523 §3 の 9）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。"
+                    + "**以前は列の RSA の鍵だけで RS256 だけを受け、`jwks_uri` の鍵を使わなかった**（`client_assertion`・Request Object・CIBA の要求は `jwks_uri` を見る。#408）。",
+                    "RFC 7523 §3 / OIDC Registration 1.0 §2 / #410");
+
+                r.Target("POST /token（grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer）");
+
+                string keyName = "rt410_1_key_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        r.Step("(1) 鍵（RSA）を jwks_uri だけで登録する");
+
+                        JwksUri.Write(keyName, JwsSigner.PublicRsaJwk(client));
+
+                        JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid profile email\","
+                            + "\"grant_types\":[\"authorization_code\",\"urn:ietf:params:oauth:grant-type:jwt-bearer\"],"
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + JwksUri.Url(keyName) + "\"}");
+
+                        string clientId = created.String("client_id");
+
+                        Assert.False(string.IsNullOrEmpty(clientId), "前提: 登録できること（" + created.ToString() + "）");
+
+                        r.Step("(2) RS256・PS256 の assertion（jwks_uri の RSA の鍵）でトークンが出る");
+
+                        foreach (string alg in new string[] { "RS256", "PS256" })
+                        {
+                            JsonResponse issued = await JwksUriTests.JwtBearerAsync(client, JwtBearerAssertion.Create(client, clientId, null, alg));
+
+                            r.Verify(alg + " : access_token が返る", !string.IsNullOrEmpty(issued.AccessToken),
+                                "access_token あり", string.IsNullOrEmpty(issued.AccessToken)
+                                    ? "**なし**（error=" + (issued.Error ?? "なし") + " / " + issued.ErrorDescription + "）" : "あり（値は伏せる）");
+                        }
+
+                        r.Step("(3) jwks_uri に無い鍵（EC の鍵）・署名が合わないものは invalid_client");
+
+                        JwksUriTests.VerifyJwtBearerRefused(r, "jwks_uri に無い鍵（ES256）",
+                            await JwksUriTests.JwtBearerAsync(client, JwtBearerAssertion.Create(client, clientId, null, "ES256")));
+
+                        JwksUriTests.VerifyJwtBearerRefused(r, "署名が合わない（RS256）",
+                            await JwksUriTests.JwtBearerAsync(client, JwksUriTests.TamperSignature(
+                                JwtBearerAssertion.Create(client, clientId, null, "RS256"))));
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(keyName);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-410.2
+
+        /// <summary>RT-410.2 JWT Bearer グラントの assertion は、client_assertion と同じく PS256・ES256 も受ける</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT41002_JWT_BearerのassertionはPS256とES256も受ける(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-410.2",
+                    "JWT Bearer グラントの `assertion` は、列の鍵（RSA・EC）で、PS256・ES256 も受けてトークンを出す。署名が合わないものは `invalid_client`",
+                    "**受ける JWT ごとに alg の扱いをそろえる**（`client_assertion` は RS256・PS256・ES256。#395）。"
+                    + "**ヘッダの alg と鍵の種類が食い違う鍵では検証しない**（RFC 8725 §3.1）。**以前は RS256 だけ**だった。",
+                    "RFC 7523 §3 / RFC 8725 §3.1 / #410");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + "（RSA と EC の公開鍵を登録）/ POST /token（jwt-bearer）");
+
+                r.Step("(1) PS256（RSA の鍵）・ES256（EC の鍵）の assertion でトークンが出る");
+
+                foreach (string alg in new string[] { "PS256", "ES256" })
+                {
+                    JsonResponse issued = await JwksUriTests.JwtBearerAsync(client, JwtBearerAssertion.Create(client, reg.ClientId, null, alg));
+
+                    r.Verify(alg + " : access_token が返る", !string.IsNullOrEmpty(issued.AccessToken),
+                        "access_token あり", string.IsNullOrEmpty(issued.AccessToken)
+                            ? "**なし**（error=" + (issued.Error ?? "なし") + " / " + issued.ErrorDescription + "）" : "あり（値は伏せる）");
+                }
+
+                r.Step("(2) 署名が合わないもの（ES256）は invalid_client");
+
+                JwksUriTests.VerifyJwtBearerRefused(r, "署名が合わない（ES256）",
+                    await JwksUriTests.JwtBearerAsync(client, JwksUriTests.TamperSignature(
+                        JwtBearerAssertion.Create(client, reg.ClientId, null, "ES256"))));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>JWT Bearer グラントでトークンを要求する（#410）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>JsonResponse</returns>
+        private static Task<JsonResponse> JwtBearerAsync(IdPClient client, string assertion)
+        {
+            return client.TokenAsync(new Dictionary<string, string>()
+            {
+                { "grant_type", JwtBearerAssertion.GrantType },
+                { "assertion", assertion }
+            });
+        }
+
+        /// <summary>JWT Bearer グラントを invalid_client で断り、トークンを出さないことを確かめる（#410）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">場合の名前</param>
+        /// <param name="res">JsonResponse</param>
+        private static void VerifyJwtBearerRefused(TestReport r, string label, JsonResponse res)
+        {
+            r.Verify(label + " : access_token を返さない", string.IsNullOrEmpty(res.AccessToken),
+                "access_token なし", string.IsNullOrEmpty(res.AccessToken) ? "なし" : "**あり**");
+            r.VerifyEqual(label + " : error", "invalid_client", res.Error ?? "（無い）");
         }
 
         #endregion

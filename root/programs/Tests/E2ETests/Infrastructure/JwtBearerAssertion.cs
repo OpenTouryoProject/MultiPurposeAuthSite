@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/11/19  玄人 幸道         assertion を PS256・ES256 でも作れるようにした（#410）
 //**********************************************************************************
 
 using System;
@@ -53,9 +54,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id（iss と sub に入れる）</param>
         /// <param name="overrides">上書きするクレーム（値が null なら、そのクレームを入れない）</param>
+        /// <param name="alg">`RS256`（既定）・`PS256`（RSA の鍵）・`ES256`（EC の鍵）（#410）</param>
         /// <returns>JWS</returns>
         public static string Create(
-            IdPClient client, string clientId, IDictionary<string, object> overrides = null)
+            IdPClient client, string clientId, IDictionary<string, object> overrides = null, string alg = "RS256")
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -91,7 +93,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
             }
 
-            return JwsSigner.SignRS256(client, payload);
+            //  **PS256・ES256 も作れる**（#410。グラントの assertion も client_assertion と同じ alg を受けるようになった）。
+            switch (alg)
+            {
+                case "PS256":
+                    return JwsSigner.SignPS256(client, payload);
+                case "ES256":
+                    return JwsSigner.SignES256(client, payload);
+                default:
+                    return JwsSigner.SignRS256(client, payload);
+            }
         }
     }
 }
