@@ -3621,6 +3621,14 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - **署名を確かめられない要求は、署名の検証に失敗した要求と同じく、登録済みの ACS URL へ `Requester` のエラー応答を返す**（`RT-400.1`）。設定で戻す分岐は作らない
 - **要求を直に組み立てる E2E の多くが、署名の無い要求を送っていた**ので、署名して送るようにした（`Saml2.SignedRequestQuery`）
 
+### C-65. PAR・`/ros` が、Request Object の中の `dpop_jkt`・`nonce`・`state` などの型を見ずに預かり、PAR か `/authorize` が 500 になっていた **[Lib]** — **✅ 修正済み（#377）**
+
+**PAR・`/authorize`・`AuthorizationCodeProvider` が、預けた中身から認可要求の値を `(string)` で読んでいた。** **配列・オブジェクトだと例外になり、`nonce`・`prompt`・`response_mode` は PAR そのものが、`state`・`max_age`・`dpop_jkt` などはその `request_uri` で行った `/authorize` が 500（net48 はエラー画面）だった**（数値の `dpop_jkt` は、引き換えられない code を出していた）。
+
+- **PAR・`/ros` で、これらが文字列でなければ預からない**（`max_age` は整数も受ける。`invalid_request_object`。RFC 9101 §7。`RT-377.1`・`.2`）
+- **読む側も、文字列でなければ無いのと同じに扱う**（例外にしない）
+- 例外を起こせるのは、その Request Object に署名できるクライアントだけで、影響はその要求の失敗に留まっていた（検証を飛ばす経路にはならない）
+
 ### C-63. SAML2 の IdP が、要求の `Destination` を、受けた口の URL と照合していなかった **[Lib][Core][NetFx]** — **✅ 修正済み（#392）**
 
 **SAML Core 3.2.1 は、要求に `Destination` が在れば、受けた場所と一致することを確かめ、違えば要求を捨てることを求める**（MUST。署名の有無によらない）。

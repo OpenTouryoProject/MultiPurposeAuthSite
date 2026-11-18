@@ -1272,6 +1272,32 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### Request Object の中の、認可要求の値が文字列でなければ、預からない（`RT-377.*`。#377）
+
+| | 測ること |
+|---|---|
+| **`RT-377.1`** | **PAR**：Request Object の中の `redirect_uri`・`code_challenge`・`code_challenge_method`・`dpop_jkt`・`nonce`・`prompt`・`response_mode`・`state`・`max_age` が配列・オブジェクト・数値なら、400 ＋ `invalid_request_object`（`error_description` にその名前）。文字列なら 201。**整数の `max_age` も 201**（OIDC Core 1.0 §3.1.2.1 の秒数）。**日付の形の `nonce`・`state` も 201** |
+| **`RT-377.2`** | **`/ros`**：`dpop_jkt` が配列なら `request_uri` を返さない。文字列（日付の形を含む）なら返す |
+
+- **以前は型を見ずに預かり、配列・オブジェクトだと 500 になっていた。** `nonce`・`prompt`・`response_mode` は **PAR そのもの**（`ValidateAuthZReqParam` に渡す `(string)` の変換）、`state`・`max_age`・`dpop_jkt` などは **その `request_uri` で行った `/authorize`**（`AccountController`・`AuthorizationCodeProvider.GetAuthorizationRequestParams` の `(string)` の変換。net48 はエラー画面）。**数値の `dpop_jkt` は、引き換えられない code を出していた**
+- **本文が挙げたのは `dpop_jkt` だけで、別モデルのレビューで、同じ形がほかの値にも残っていると分かった。** 動かして確かめ、人と決めて #377 に含めた
+- **確かめる値は `CmnRequestObjectEndpoint.StringParams` に並べた。** Request Object から文字列として読む値を足したら、ここにも足す
+- **日付の形の文字列（`"2026-11-18T10:00:00Z"` など）も文字列として受ける。** PAR・`/ros` の JSON の読み方は、それを `Date` にする（OpenTouryo#662）。
+  **型を `String` だけで見ると、正しい文字列を断ってしまう**（別モデルのレビューで見つかった）
+- **エラー コードは `invalid_request_object`**（RFC 9101 §7。同じ関数の `claims`・中の `request_uri` と揃えた。本文の案は `invalid_request`。人と決めた）
+- **`AuthorizationCodeProvider` の読み方も、文字列でなければ無いのと同じに扱う形にした**（念のための守り）
+- **直したのを外すと**（型を確かめないと）、net10.0 版で `RT-377.1`・`.2` が落ちることを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`/authorize` が 500 にならないこと** | 文字列でない値を、もう預けられない（PAR・`/ros` で断る）。`AuthorizationCodeProvider` の守りは、預かった後の値を書き換えないと通らない |
+| **`/ros` の `dpop_jkt` 以外の値** | 判定は PAR と同じ関数（`AreAuthZParamsWellTyped`）。`RT-377.1` が値ごとに測る |
+| **配列の `scope`・`response_type`** | **Open棟梁 の `RequestObject.Verify` が先に断る**（`The request object is not verified.`）。この判定には届かない（判定の一覧には入れてある） |
+| **日付の形の値が、`/authorize` の後も元のまま保たれること** | **保たれない**（以前から。`/authorize`・`AuthorizationCodeProvider` が読み直すときに `Date` になり、書式が変わる。日付の形の `state` は `11/18/2026 10:00:00` で返った）。**別の Issue で扱う**（#377 の範囲は 500 にしないこと） |
+| **`max_age` の小数・真偽値・`null`、CIBA の署名した要求（`/ros`）での型の誤り** | 断る・通す分岐は同じ関数で、`RT-377.1` が配列・整数で測る。CIBA の正しい要求が通ることは、通しの CIBA のテストが測る |
+
 ##### SAML2 の IdP は、署名を確かめられない要求を断る（`RT-400.*`。#400）
 
 | | 測ること |

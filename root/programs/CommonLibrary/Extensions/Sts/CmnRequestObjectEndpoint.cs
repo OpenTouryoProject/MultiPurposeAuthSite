@@ -47,6 +47,7 @@
 //*  2026/11/17  玄人 幸道         PAR の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
 //*  2026/11/17  玄人 幸道         PAR の Request Object の中の request_uri を断るようにした（RFC 9126 §2.1。#380）
 //*  2026/11/17  玄人 幸道         PAR のクライアント認証の aud を issuer だけにした（RFC 10070 §5。#398）
+//*  2026/11/18  玄人 幸道         Request Object の中の認可要求の値（redirect_uri・scope・state・nonce・dpop_jkt など）が文字列でなければ（max_age は数値も受ける）、PAR・/ros で断る（#377）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -88,6 +89,70 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             JToken claims = (payload == null) ? null : payload[OAuth2AndOIDCConst.claims];
 
             return claims == null || claims.Type == JTokenType.Object;
+        }
+
+        /// <summary>Request Object から文字列として読む値（#377）</summary>
+        /// <remarks>
+        /// **PAR（下の `ValidateAuthZReqParam` に渡す）・`/authorize`（`AccountController` の `request_uri` の読み込み）・
+        /// `AuthorizationCodeProvider.GetAuthorizationRequestParams` が、預けた中身からこれらを `(string)` で読む。**
+        /// **値を足したら、ここにも足す**（`client_id` は別に確かめている。`claims` は `IsClaimsObjectOrAbsent`）。
+        /// </remarks>
+        private static readonly string[] StringParams = new string[]
+        {
+            OAuth2AndOIDCConst.redirect_uri,
+            OAuth2AndOIDCConst.response_type,
+            OAuth2AndOIDCConst.response_mode,
+            OAuth2AndOIDCConst.scope,
+            OAuth2AndOIDCConst.state,
+            OAuth2AndOIDCConst.nonce,
+            OAuth2AndOIDCConst.prompt,
+            OAuth2AndOIDCConst.code_challenge,
+            OAuth2AndOIDCConst.code_challenge_method,
+            OAuth2AndOIDCConst.dpop_jkt
+        };
+
+        /// <summary>
+        /// Request Object から読む値が、無いか JSON の文字列か（`max_age` は数値も受ける。#377）
+        /// </summary>
+        /// <param name="payload">Request Object の payload</param>
+        /// <param name="name">形の合わなかった値の名前（無ければ空）</param>
+        /// <returns>どれも形が合えば（無い・null を含む）true</returns>
+        /// <remarks>
+        /// **以前は型を見ずに預かり、配列・オブジェクトだと、`nonce`・`prompt`・`response_mode` は PAR そのものが、
+        /// `state`・`max_age`・`dpop_jkt` などはその `request_uri` で `/authorize` が 500（net48 はエラー画面）になっていた**（#377）。
+        /// **数値・真偽値も断る**（`dpop_jkt` は鍵の指紋の文字列。RFC 9449 §10。以前は `"123"` として code に縛られ、引き換えられない code が出ていた）。
+        /// **`max_age` だけは、文字列に加えて整数を受ける**（OIDC Core 1.0 §3.1.2.1 の秒数。Request Object では数値で書くのが普通）。
+        /// **PAR・`/ros` の両方で、預かる前に確かめる**（`invalid_request_object`。RFC 9101 §7。claims の形と同じ扱い）。
+        /// **`Date` も文字列として受ける。** PAR（`JsonConvert.DeserializeObject`）・`/ros`（Open棟梁 の `JwtReader.TryReadPayload`）は既定の読み方で、
+        /// **日付の形の JSON の文字列を `Date` にする**（OpenTouryo#662。#337 と同じ落とし穴）。`Date` は JSON の文字列からしか生まれない。
+        /// </remarks>
+        private static bool AreAuthZParamsWellTyped(JObject payload, out string name)
+        {
+            name = "";
+
+            foreach (string key in CmnRequestObjectEndpoint.StringParams)
+            {
+                JToken value = (payload == null) ? null : payload[key];
+
+                if (value != null
+                    && value.Type != JTokenType.String && value.Type != JTokenType.Date && value.Type != JTokenType.Null)
+                {
+                    name = key;
+                    return false;
+                }
+            }
+
+            JToken maxAge = (payload == null) ? null : payload[OAuth2AndOIDCConst.max_age];
+
+            if (maxAge != null
+                && maxAge.Type != JTokenType.String && maxAge.Type != JTokenType.Date
+                && maxAge.Type != JTokenType.Integer && maxAge.Type != JTokenType.Null)
+            {
+                name = OAuth2AndOIDCConst.max_age;
+                return false;
+            }
+
+            return true;
         }
 
         #endregion
@@ -423,6 +488,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
+            //  **認可要求の値（redirect_uri・scope・state・nonce・dpop_jkt など）は文字列であること**（max_age は数値も。#377。PAR と同じ扱い）。
+            //    **以前は型を見ずに預かり、`/authorize` が 500 になっていた。**
+            if (!CmnRequestObjectEndpoint.AreAuthZParamsWellTyped(payload, out string _))
+            {
+                return false;
+            }
+
             //  **経路の印**（#346）。**/ros は、署名を確かめた Request Object だけを預かる**（PAR ではない）。
             CmnRequestObjectEndpoint.MarkOrigin(payload, false, true);
             requestObjectString = payload.ToString(Formatting.None);
@@ -605,6 +677,17 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
                     err.Add(OAuth2AndOIDCConst.error_description, "The claims in the request object must be a JSON object.");
+                    return false;
+                }
+
+                //  **認可要求の値（redirect_uri・scope・state・nonce・dpop_jkt など）は文字列であること**（max_age は数値も。#377）。
+                //    **以前は型を見ずに預かり、nonce などは下の `(string)` の読みで PAR そのものが、state などはその request_uri で `/authorize` が 500 になっていた。**
+                if (!CmnRequestObjectEndpoint.AreAuthZParamsWellTyped(payload, out string notString))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request_object); // RFC 9101 §7
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "The " + notString + " in the request object must be a string"
+                        + (notString == OAuth2AndOIDCConst.max_age ? " or an integer." : "."));
                     return false;
                 }
 

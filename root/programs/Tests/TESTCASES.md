@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus
+1. GET /Account/EmailConfirmation?userId=1a9b6d3f-62c4-4e47-846b-9ac692dd965d&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=1a9b6d3f-62c4-4e47-846b-9ac692dd965d&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=1a9b6d3f-62c4-4e47-846b-9ac692dd965d&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12480,6 +12480,78 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-377.1 PAR に預ける Request Object の中の認可要求の値（redirect_uri・code_challenge・code_challenge_method・dpop_jkt・nonce・prompt・response_mode・state・max_age）が文字列でなければ、400 ＋ invalid_request_object。文字列・整数の max_age なら 201
+
+| | |
+|---|---|
+| 観点 | **これらは、預けた中身から文字列として読まれる。****以前は型を見ずに預かり、配列・オブジェクトだと、PAR そのもの（nonce・prompt・response_mode）か /authorize（state・max_age・dpop_jkt など）が 500（net48 はエラー画面）になっていた。****数値の dpop_jkt は、引き換えられない code を出していた**（dpop_jkt は鍵の指紋の文字列。RFC 9449 §10）。**max_age は秒数なので、整数も受ける**（OIDC Core 1.0 §3.1.2.1）。 |
+| 根拠 | RFC 9101 §7 / RFC 9449 §10 / OIDC Core 1.0 §3.1.2.1 / #377 |
+| テスト | `RT37701_PARは認可コードに縛る値が文字列でないRequestObjectを預からない` |
+
+**手順**
+
+1. 対照：文字列の dpop_jkt は 201
+1. 文字列でない値を入れる
+
+**検証（合否を判定する）**
+
+- 文字列の dpop_jkt : HTTP 201
+- 整数の max_age : HTTP 201
+- 日付の形の nonce : HTTP 201
+- 日付の形の state : HTTP 201
+- 配列の dpop_jkt : HTTP 400
+- 配列の dpop_jkt : invalid_request_object
+- 配列の dpop_jkt : 断る理由は dpop_jkt の型
+- オブジェクトの dpop_jkt : HTTP 400
+- オブジェクトの dpop_jkt : invalid_request_object
+- オブジェクトの dpop_jkt : 断る理由は dpop_jkt の型
+- 数値の dpop_jkt : HTTP 400
+- 数値の dpop_jkt : invalid_request_object
+- 数値の dpop_jkt : 断る理由は dpop_jkt の型
+- 配列の redirect_uri : HTTP 400
+- 配列の redirect_uri : invalid_request_object
+- 配列の redirect_uri : 断る理由は redirect_uri の型
+- オブジェクトの code_challenge : HTTP 400
+- オブジェクトの code_challenge : invalid_request_object
+- オブジェクトの code_challenge : 断る理由は code_challenge の型
+- 数値の code_challenge_method : HTTP 400
+- 数値の code_challenge_method : invalid_request_object
+- 数値の code_challenge_method : 断る理由は code_challenge_method の型
+- オブジェクトの nonce : HTTP 400
+- オブジェクトの nonce : invalid_request_object
+- オブジェクトの nonce : 断る理由は nonce の型
+- 配列の prompt : HTTP 400
+- 配列の prompt : invalid_request_object
+- 配列の prompt : 断る理由は prompt の型
+- 配列の response_mode : HTTP 400
+- 配列の response_mode : invalid_request_object
+- 配列の response_mode : 断る理由は response_mode の型
+- 配列の state : HTTP 400
+- 配列の state : invalid_request_object
+- 配列の state : 断る理由は state の型
+- 配列の max_age : HTTP 400
+- 配列の max_age : invalid_request_object
+- 配列の max_age : 断る理由は max_age の型
+
+## RT-377.2 /ros : dpop_jkt が文字列でない Request Object を預からない（PAR と同じ扱い）。文字列なら預かる
+
+| | |
+|---|---|
+| 観点 | **/ros も、預けた request_uri を /authorize で使う**ので、PAR と同じく型を確かめる。**以前は型を見ずに預かっていた**（#377）。 |
+| 根拠 | RFC 9101 §7 / RFC 9449 §10 / #377 |
+| テスト | `RT37702_rosはdpop_jktが文字列でないRequestObjectを預からない` |
+
+**手順**
+
+1. dpop_jkt を配列にした Request Object を預ける
+1. 対照：文字列の dpop_jkt なら預かる（日付の形の文字列も）
+
+**検証（合否を判定する）**
+
+- request_uri を返さない
+- dpop_jkt=e2e-rt3772-thumbprint : request_uri を返す
+- dpop_jkt=2026-11-18T10:00:00Z : request_uri を返す
 
 ## RT-378.1 state を送らない認可要求の JARM（response の JWT）には、成功・エラーとも state の名前を入れない。state を送れば、その値が入る
 
