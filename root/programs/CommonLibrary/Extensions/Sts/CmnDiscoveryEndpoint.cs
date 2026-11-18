@@ -39,6 +39,7 @@
 //*  2026/11/13  玄人 幸道         authorization_signing_alg_values_supported を、登録で選べる alg（JwsFactory.SupportedAlgs）にした（#370）
 //*  2026/11/15  玄人 幸道         backchannel_authentication_request_signing_alg_values_supported を CibaRequestSigningAlgs から作る（PS256・ES256。#395）
 //*  2026/11/17  玄人 幸道         response_modes_supported に jwt を足した（JARM §2.3.4。#379）
+//*  2026/11/19  玄人 幸道         require_request_uri_registration（true）を広告するようにした（外部の request_uri は登録の request_uris だけ。#374）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -214,10 +215,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             OpenIDConfig.Add("request_object_signing_alg_values_supported",
                 new List<string>(CmnEndpoints.RequestObjectSigningAlgs));
             OpenIDConfig.Add("request_parameter_supported", false);
-            //   **request_uri は、この OP が払い出した `urn:`（PAR・/ros）だけを受ける**（#362）。
-            //   **外部の request_uri（OIDC Core 1.0 §6.2）は `request_uri_not_supported` で断る**（取りに行くのは #374）。
-            //   **false にすると、PAR の request_uri まで受けないと読まれる**ので、true のままにしている。
+            //   **request_uri は、この OP が払い出した `urn:`（PAR・/ros）と、登録の `request_uris` にある外部の URL を受ける**（#362・#374）。
+            //   **外部の URL は、取りに行って署名を検証し、預けた `urn:` に置き換える**（OIDC Core 1.0 §6.2。`ExternalRequestUri`）。
             OpenIDConfig.Add("request_uri_parameter_supported", true);
+            //   **外部の request_uri は、登録の `request_uris` にあるものだけを取りに行く**（OIDC Discovery 1.0 §3。#374）。
+            OpenIDConfig.Add("require_request_uri_registration", true);
             OpenIDConfig.Add("request_object_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.RequestObjectRegUri);
 

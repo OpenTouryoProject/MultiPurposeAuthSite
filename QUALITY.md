@@ -189,7 +189,8 @@
   **適合性テスト（Conformance Suite）も、改訂より古い規定で確かめていることがある**（#397・#398）
 - [ ] **クライアントが決めた URL へ OP が取りに行くとき、スキームだけでなく行き先のアドレスも見ているか**（内部のアドレス・リダイレクト・名前解決のやり直し）。
   **`jwks_uri`・`sector_identifier_uri` は、スキームしか見ていなかった**（#376。`RT-376.1`・`.2`、単体テスト `OutboundUrlPolicyTests`）。
-  **共有の HttpClient（`OAuth2AndOIDCClient.HttpClient`）で取りに行かない** — ID 連携・自己テスト（localhost）も同じ HttpClient を使うので、絞れない。**`OutboundUrlPolicy.HttpClient` を使う**
+  **共有の HttpClient（`OAuth2AndOIDCClient.HttpClient`）で取りに行かない** — ID 連携・自己テスト（localhost）も同じ HttpClient を使うので、絞れない。**`OutboundUrlPolicy.HttpClient` を使う。**
+  **取りに行く先は、登録した値に限る**（外部の `request_uri` は、登録の `request_uris` にあるものだけ。#374。`RT-374.2`）
 - [ ] **OP が外へ出す要求に、時間と大きさの上限があるか。** **Open棟梁 の部品は要求ごとの上限を持たず、共有の HttpClient の設定に任せる** — **何も設定しておらず、.NET の既定（100 秒・上限なし）だった**（#375。`RT-375.1`）。**新しく HttpClient を作るなら、`OutboundHttpLimits` を掛ける。** **どの分類の要求かを決め、プロキシの組（`CreateProxy.For*`）とクライアント証明書を、その分類に合わせる** — **1 つの共有の HttpClient が内と外の宛先を兼ね、RP の口にも OP のクライアント証明書を出しえた**（#406。`CONFIGURATION.md` のマトリックス）
 - [ ] **値が無いときに、検証を飛ばしていないか**（`nonce`・`aud`・署名など）
 - [ ] **引き換えの値（`code`・`auth_req_id`・`device_code`）を、出したクライアントと照合してから、状態を返したり、記録を書き換え・消したりしているか。**

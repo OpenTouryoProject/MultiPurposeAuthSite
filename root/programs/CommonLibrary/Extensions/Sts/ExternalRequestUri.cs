@@ -59,7 +59,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | 5 | **取りに行く**（専用の HttpClient。リダイレクトを追わない。`Timeout`・`MaxResponseBytes`） | `invalid_request_uri`（OIDC Core 1.0 §3.1.2.6） |
     /// | 6 | **署名した Request Object であること**（`/ros` と同じ検証。`alg=none` は受けない。CIBA の要求は受けない） | `invalid_request_object` |
     ///
-    /// **通れば `/ros` と同じく `urn:` に預け、以後はその `urn:` で続ける**（未サインイン・再認証で送り返しても、取りに行き直さない）。
+    /// **通れば `/ros` と同じく `urn:` に預け、以後はその `urn:` で続ける**（**呼び出し元の GET の `/authorize` は、その `urn:` の認可の URL へ送り直す**ので、未サインイン・再認証の往復で、取りに行き直さない）。
     /// **#346 の経路の印は「PAR ではない・署名を検証した」**（`/ros` と同じ）。
     /// **`client_id` と Request Object の中の `client_id` の一致は、`urn:` を読む側（`AccountController`）が確かめる**（#362）。
     /// </remarks>

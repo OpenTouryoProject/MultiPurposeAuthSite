@@ -1359,6 +1359,9 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 | **登録のときに確かめる** | **絶対 URI で、`https` と行き先のアドレス（`OutboundUrlPolicy`。#376）**。**5 件まで**（`Const.MaxCountOfRequestUris`）。**登録のときは取りに行かない** |
 | **`PUT`（RFC 7592）** | **全置換**（省いたら消える） |
 | **クライアント登録の画面** | **欄を出さない。保存しても、持ち越す**（`sector_identifier_uri` と同じ） |
+| **`/authorize` で取りに行く** | **登録した URL だけ**（`#` から後ろを除いて完全一致。無ければ `request_uri_not_supported`）。**`#` から後ろ（RP が中身の変わり目に付ける印。OIDC Registration 1.0 §2）は照合にも検証にも使わない**（取りに行くのは毎回で、控えないため）。**専用の HttpClient**（`sector_identifier_uri` と同じ。リダイレクトを追わない・**10 秒・64KB**）。**`/ros` と同じ検証**（署名したものだけ）をして `urn:` に預け、**その `urn:` の認可の URL へ送り直す**（サインイン・再認証の往復で取りに行き直さない） |
+| **行き先の判定** | 下の `OutboundUrlPolicy` と同じ。**net48 版は、名前解決した結果の判定（1 分控える）に留まる**（接続の時点の判定は net10.0 版だけ） |
+| **取りに行く回数** | **登録した URL を知っていれば、匿名の `/authorize` のたびに取りに行き、`urn:` を 1 件預ける**（`/ros` が匿名で預かるのと同じ。預かりは寿命で消える）。**絞るなら、送信元ごとのレート制限**（`RateLimitPerIpPermits`。#305） |
 
 **既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 外部の `request_uri` は使えない。以前どおり）。**
 

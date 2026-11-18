@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=0b47a5b3-8844-4fff-a96a-605d68e3e188&code=bogus
+1. GET /Account/EmailConfirmation?userId=85b6cfec-88fb-493d-bc54-8e3e3cf1a1d1&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=0b47a5b3-8844-4fff-a96a-605d68e3e188&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=0b47a5b3-8844-4fff-a96a-605d68e3e188&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=85b6cfec-88fb-493d-bc54-8e3e3cf1a1d1&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=85b6cfec-88fb-493d-bc54-8e3e3cf1a1d1&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12480,6 +12480,70 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-374.1 動的登録の `request_uris` を受けて応答と `GET` に返し、`PUT` で省けば消える。内部のアドレス・相対の値・6 件以上は `400` ＋ `invalid_client_metadata`
+
+| | |
+|---|---|
+| 観点 | **`request_uris` は、認可要求の `request_uri` に使ってよい外部の URL**（OIDC Core 1.0 §6.2）。**OP が取りに行く先なので、`https` と行き先のアドレスを確かめる**（#376）。**`#` を付けた値も受ける**（RP がキャッシュのために付けてよい）。**以前は受けておらず、外部の `request_uri` は使えなかった**（#362）。 |
+| 根拠 | OIDC Registration 1.0 §2 / RFC 7592 §2.2 / #374 |
+| テスト | `RT37401_動的登録のrequest_urisを受けて返す` |
+
+**手順**
+
+1. request_uris に 2 つを入れて登録する（片方は # 付き）
+1. GET でも返る（保存されている）
+1. PUT で request_uris を省くと消える（全置換）
+1. 断る値
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答に request_uris が返る（a）
+- 応答に request_uris が返る（# 付きの b）
+- GET の request_uris に a が在る
+- HTTP の状態は 200
+- GET の request_uris は無い
+- 内部のアドレス : HTTP の状態は 400
+- 内部のアドレス : invalid_client_metadata
+- 相対の値 : HTTP の状態は 400
+- 相対の値 : invalid_client_metadata
+- 6 件 : HTTP の状態は 400
+- 6 件 : invalid_client_metadata
+
+**観測（判定しない）**
+
+- 内部のアドレス : error_description
+- 相対の値 : error_description
+- 6 件 : error_description
+
+## RT-374.2 登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object（`state` など）で認可コードまで進む。登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri` のエラー画面
+
+| | |
+|---|---|
+| 観点 | **OP は、`request_uri` の URL から Request Object を取り、署名を検証して使う**（OIDC Core 1.0 §6.2。動的登録を提供する OP の MUST。§15.2）。**取りに行くのは、登録した `request_uris` だけ。** **署名を検証できないものは受けない**（`alg=none` を受けない方針）。**以前は、外部の `request_uri` を取りに行かずに断っていた**（#362）。 |
+| 根拠 | OIDC Core 1.0 §6.2 / OIDC Core 1.0 §3.1.2.6 / OIDC Registration 1.0 §2 / #374 |
+| テスト | `RT37402_登録した外部のrequest_uriを取りに行って使う` |
+
+**手順**
+
+1. 鍵（jwks）と request_uris を付けて登録する（Request Object の検証鍵は、登録の列の鍵から引く）
+1. 署名した Request Object を、登録した URL に置き、request_uri で認可する
+1. 登録していない URL は、取りに行かずに request_uri_not_supported
+1. 署名の無い Request Object（alg=none）は invalid_request_object
+1. 登録した URL でも、取れない（404）なら invalid_request_uri
+
+**検証（合否を判定する）**
+
+- 預けた urn: の認可の URL へ送り直す
+- 認可コードが返る
+- state は Request Object の値
+- 登録していない URL : code を返さない
+- 登録していない URL : エラー画面に request_uri_not_supported が出る
+- 署名の無いもの : code を返さない
+- 署名の無いもの : エラー画面に invalid_request_object が出る
+- 取れないもの : code を返さない
+- 取れないもの : エラー画面に invalid_request_uri が出る
 
 ## RT-375.1 `jwks_uri` の応答が**1MB を超える**と読まず、登録を `400` ＋ `invalid_client_metadata` で断る。**同じ鍵を小さく置けば登録できる**
 

@@ -1272,6 +1272,28 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### 外部の `request_uri` を取りに行き、Request Object として使う（`RT-374.*`。#374）
+
+| | 測ること |
+|---|---|
+| **`RT-374.1`** | 動的登録の `request_uris` を受けて応答と `GET` に返し、`PUT` で省けば消える。**内部のアドレス・相対の値・6 件以上は `400` ＋ `invalid_client_metadata`** |
+| **`RT-374.2`** | **登録した外部の `request_uri` は、取りに行って検証し、預けた `urn:` の認可の URL へ送り直して、その Request Object（`state` など）で認可コードまで進む。** 登録していない URL は `request_uri_not_supported`、署名の無いもの（`alg=none`）は `invalid_request_object`、取れないもの（404）は `invalid_request_uri`（どれもエラー画面） |
+
+- **足場は、`jwks_uri` と同じ静的配信のコンテナ**（`http://localhost:44305`。`test.ps1` がループバックを開ける。#376）。**Request Object をそこに置いて取りに行かせる**（コンテナが無ければ Skip）
+- **鍵は `jwks` で登録する**（Request Object の検証鍵は登録の列から引く。`jwks_uri` の鍵は使わない。#408）
+- **直したのを外すと**（保存しない・取りに行かない）、net10.0 版で `RT-374.1`・`.2` が落ちることを確かめた
+- **既存の `RT-362.1`**（外部の URL は `request_uri_not_supported`）は、**登録の無いクライアント**の話として、そのまま通る
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **リダイレクトを返す `request_uri`・遅い・大きい `request_uri`** | 足場がリダイレクトも遅延も返せない。HttpClient の設定（#376・#375）と、`ExternalRequestUri` の上限による |
+| **同意の POST（`/authorize` の同意の口）での外部の `request_uri`** | 画面は GET で受けた `urn:` を送り返すので、外部の URL が POST で来るのは、直に送ったときだけ。取りに行って検証するところは GET と同じ（送り直しはしない） |
+| **CIBA の要求・別のクライアントの鍵で署名したもの・`client_id` の食い違い** | 取ったものは `/ros` と同じ検証（`RegisterRequestObject`）に掛ける。その検証は `/ros`・PAR・#362 のテストで測っている |
+| **`client_id` の無い要求・`#` 付きの登録との照合** | 処理の分岐が小さい。`ExternalRequestUri` の照合による |
+| **サインインしていない利用者の往復** | 送り直しの 302 は `RT-374.2` で確かめている。その先は `urn:` の要求と同じ |
+
 ##### 署名鍵の表（`JwkSet.json`）の置き換えと重なっても 500 にしない（#407）
 
 | | 測ること |

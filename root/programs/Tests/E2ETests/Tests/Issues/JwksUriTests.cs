@@ -35,6 +35,8 @@
 //*  2026/11/18  玄人 幸道         RT-375.1（1MB を超える jwks_uri の応答は読まない）を足した（#375）
 //*  2026/11/19  玄人 幸道         RT-374.1（動的登録の request_uris）を足した（#374）
 //*  2026/11/19  玄人 幸道         RT-374.2（登録した外部の request_uri を取りに行って使う）を足した（#374）
+//*  2026/11/19  玄人 幸道         RT-374.2 で、預けた urn: の認可の URL への送り直しを確かめるようにした（#374）
+//*  2026/11/19  玄人 幸道         RT-374.2 で、預けた urn: の認可の URL への送り直しを確かめるようにした（#374）
 //**********************************************************************************
 
 using System;
@@ -823,7 +825,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                                 { "nonce", "nonce-rt3742" }
                             }));
 
-                        AuthZResponse used = await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName));
+                        Tuple<AuthZResponse, string> followed = await JwksUriTests.AuthorizeFollowingUrnAsync(client, clientId, JwksUri.Url(roName));
+                        AuthZResponse used = followed.Item1;
+
+                        //  **取りに行ったら、預けた `urn:` の認可の URL へ送り直す**（サインイン・再認証の往復で、取りに行き直さない）。
+                        r.Verify("預けた urn: の認可の URL へ送り直す", followed.Item2 != null,
+                            "urn: へ送り直す", followed.Item2 == null ? "**送り直さない**" : "送り直した");
 
                         r.Verify("認可コードが返る", !string.IsNullOrEmpty(used.Code),
                             "code あり", string.IsNullOrEmpty(used.Code) ? "**なし**（" + Html.Describe(used.Body) + "）" : "あり");
@@ -874,13 +881,37 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <returns>AuthZResponse</returns>
         private static async Task<AuthZResponse> AuthorizeWithRequestUriAsync(IdPClient client, string clientId, string requestUri)
         {
+            return (await JwksUriTests.AuthorizeFollowingUrnAsync(client, clientId, requestUri)).Item1;
+        }
+
+        /// <summary>client_id と request_uri だけで認可し、`urn:` の認可の URL への送り直し（302）を 1 回だけ追う</summary>
+        /// <param name="client">IdPClient（サインイン済み）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="requestUri">request_uri</param>
+        /// <returns>応答と、送り直された先の `urn:`（送り直しが無ければ null）</returns>
+        /// <remarks>**外部の `request_uri` は、預けた `urn:` の認可の URL へ送り直される**（#374。サインインの往復で取りに行き直さないため）。</remarks>
+        private static async Task<Tuple<AuthZResponse, string>> AuthorizeFollowingUrnAsync(IdPClient client, string clientId, string requestUri)
+        {
             AuthZResponse res = await client.AuthorizeAsync(new Dictionary<string, string>()
             {
                 { "client_id", clientId },
                 { "request_uri", requestUri }
             });
 
-            return res.NeedsConsent ? await client.GrantConsentAsync(res) : res;
+            string urn = null;
+            string redirected = (res.Location == null) ? null : Saml2.QueryValue(res.Location, "request_uri");
+
+            if (redirected != null && redirected.StartsWith("urn:", StringComparison.Ordinal))
+            {
+                urn = redirected;
+                res = await client.AuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", clientId },
+                    { "request_uri", urn }
+                });
+            }
+
+            return Tuple.Create(res.NeedsConsent ? await client.GrantConsentAsync(res) : res, urn);
         }
 
         /// <summary>エラー画面で断ったことを確かめる（RP へ返さない）</summary>

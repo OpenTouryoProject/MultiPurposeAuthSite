@@ -320,7 +320,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
 | `Tests/Issues/RefreshTokenRotationTests.cs` | `RT-367` | **FAPI 2.0 の登録では refresh_token を入れ替えない**（#367。FAPI 2.0 Security Profile §5.3.2.1）。**fapi2 の登録は、新しい refresh_token を返さず、同じものを（DPoP の鍵を作り直しても）何度でも使える**こと（`RT-367.1`）、**ほかの登録は従来どおり入れ替える**こと（`RT-367.2`） |
 | `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け。`RT-188.4`（使い切り）もここ |
-| `Tests/Issues/RequestUriTests.cs` | `RT-362` | **引けない `request_uri` を、黙って続けずに断る**（#362。OIDC Core 1.0 §3.1.2.6）。**外部の URL は `request_uri_not_supported`**（`RT-362.1`。取りに行くのは #374）、**存在しない・使用済みの `urn:` は `invalid_request_uri`**（`RT-362.2`・`.3`）。どちらもエラー画面で、RP へ返さない |
+| `Tests/Issues/RequestUriTests.cs` | `RT-362` | **引けない `request_uri` を、黙って続けずに断る**（#362。OIDC Core 1.0 §3.1.2.6）。**登録の `request_uris` に無い外部の URL は `request_uri_not_supported`**（`RT-362.1`。登録したものは #374 で取りに行く。`RT-374.2`）、**存在しない・使用済みの `urn:` は `invalid_request_uri`**（`RT-362.2`・`.3`）。どちらもエラー画面で、RP へ返さない |
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceS256Tests.cs` | `RT-366` | **FAPI 2.0 の登録では、S256 の PKCE を必須にする**（#366。FAPI 2.0 Security Profile §5.3.2.2）。**fapi2 の登録の PAR は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断り**、**S256 で預けた `request_uri` は認可の口でも通る**こと（`RT-366.1`）、**fapi2 でない登録は従来どおり**（`RT-366.2`）、**PAR を使わない `/authorize` でも同じ**（`RT-366.3`） |
@@ -469,6 +469,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/RequestDestinationTests.cs` | `RT-391` | **SP の役で作る SAML2 の要求に、送った先と同じ `Destination` を入れる**（#391。SAML Bindings §3.4.5.2・§3.5.5.2）。自己テストの 4 通り（`RT-391.1`）。**ID 連携の要求は `SA-6.1` が測る** |
 | `Tests/Saml/RequestDestinationCheckTests.cs` | `RT-392` | **SAML2 の IdP は、要求の `Destination` を受けた口の URL と照合し、合わなければ捨てる**（#392。SAML Core 3.2.1・SAML Bindings §3.4.5.2）。署名の無い要求の違う `Destination`（`RT-392.1`）、署名した要求の無い・違う `Destination`（`RT-392.2`。テストの側で SP の鍵で署名する） |
 | `Tests/Issues/Saml2AudienceEntityIdTests.cs` | `RT-389` | **SAML2 の応答の `Audience` は、SP の entityID（要求の `Issuer`）**（#389。SAML Profiles §4.1.4.2）。ACS URL ではない。`Recipient` は ACS URL（`RT-389.1`。Redirect Binding は `RT-389.2`） |
+| `Tests/Issues/JwksUriTests.cs` | `RT-374` | **動的登録の `request_uris`**（`RT-374.1`）と、**登録した外部の `request_uri` を取りに行って使う**（`RT-374.2`。登録していない・署名の無い・取れないものは断る）（#374。OIDC Core 1.0 §6.2） |
 | `Tests/Issues/JwksUriTests.cs` | `RT-375` | **1MB を超える `jwks_uri` の応答は読まない**（#375。共有の HttpClient の大きさの上限。`RT-375.1`。設定の読み方は単体テスト `Sts/OutboundHttpLimitsTests`） |
 | `Tests/Issues/JwksUriTests.cs`・`SectorIdentifierTests.cs` | `RT-376` | **内部のアドレスの `jwks_uri`・`sector_identifier_uri` は、取りに行かずに断る**（#376。`RT-376.1`・`.2`。組み合わせは単体テスト `Sts/OutboundUrlPolicyTests`） |
 | `Tests/Issues/RequestObjectRawUtf8Tests.cs` | `RT-404` | **生の UTF-8 で書いた Request Object の日本語の `state` を、PAR が書き換えない**（#404。以前は「?」に変わった。`RT-404.1`。生の UTF-8 で書く部品 `RequestObjectBuilder.CreateRawUtf8Async`） |
