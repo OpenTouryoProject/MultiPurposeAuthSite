@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=6fd11e34-9605-4837-85a5-0d54edccddcd&code=bogus
+1. GET /Account/EmailConfirmation?userId=560bfef1-beb1-47fc-af0a-a72afff3b7fa&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=6fd11e34-9605-4837-85a5-0d54edccddcd&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=6fd11e34-9605-4837-85a5-0d54edccddcd&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=560bfef1-beb1-47fc-af0a-a72afff3b7fa&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=560bfef1-beb1-47fc-af0a-a72afff3b7fa&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13248,6 +13248,25 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PAR（2026-11-18T10:00:00+05:30） : HTTP 201
 - PAR（2026-11-18T10:00:00+05:30） : 応答の state
 - /ros : request_uri を返す
+- /ros : 応答の state
+
+## RT-404.1 PAR・/ros に、生の UTF-8 で日本語の state を書いた Request Object を預け、/authorize の応答（prompt=none の login_required）で預けた値のまま返る
+
+| | |
+|---|---|
+| 観点 | **JWT の Claims Set は UTF-8 で表す。** state は受けた値をそのまま返す。**以前は PAR だけが us-ascii で読み、ASCII でない文字が「?」に変わっていた。** |
+| 根拠 | RFC 7519 §7.1 / RFC 7519 §7.2 / RFC 6749 §4.1.2.1 / #404 |
+| テスト | `RT40401_生のUTF8のRequestObjectの日本語のstateをPARが書き換えない` |
+
+**手順**
+
+1. PAR
+1. 対照：/ros
+
+**検証（合否を判定する）**
+
+- PAR : HTTP 201
+- PAR : 応答の state
 - /ros : 応答の state
 
 # FA. FAPI（クライアント登録ごとに通る経路）

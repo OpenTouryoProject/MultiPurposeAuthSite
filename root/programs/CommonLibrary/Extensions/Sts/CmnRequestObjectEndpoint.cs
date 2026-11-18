@@ -49,6 +49,7 @@
 //*  2026/11/17  玄人 幸道         PAR のクライアント認証の aud を issuer だけにした（RFC 10070 §5。#398）
 //*  2026/11/18  玄人 幸道         Request Object の中の認可要求の値（redirect_uri・scope・state・nonce・dpop_jkt など）が文字列でなければ（max_age は数値も受ける）、PAR・/ros で断る（#377）
 //*  2026/11/18  玄人 幸道         預ける Request Object を、日付の形の文字列を日付に変えずに読む（PAR・/ros。#403）
+//*  2026/11/18  玄人 幸道         PAR の署名付き Request Object の payload を、us-ascii ではなく UTF-8 で読む（#404）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -645,9 +646,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 //  **日付の形の文字列を、日付に変えずに読む**（#403）。**以前は既定の読み方で、日付の形の state などが `Date` になり、
                 //    預けた中身と `/authorize` の応答で書式が変わっていた**（`2026-11-18T10:00:00Z` → `11/18/2026 10:00:00`）。
-                payload = JwtUtil.TryParseObjectAsIs(
-                    CustomEncode.ByteToString(
-                        CustomEncode.FromBase64UrlString(request.Split('.')[1]), CustomEncode.us_ascii));
+                //  **payload は UTF-8 で読む**（JWT の Claims Set は UTF-8。RFC 7519 §7.1・§7.2。#404）。
+                //    **以前は us-ascii で文字列にしていた**ので、生の UTF-8 の ASCII でない文字（日本語の state など）が「?」に変わっていた（`/ros` は UTF-8）。
+                payload = JwtUtil.TryReadPayloadAsIs(request);
 
                 if (payload == null)
                 {

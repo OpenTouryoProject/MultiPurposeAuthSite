@@ -1272,6 +1272,19 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### 生の UTF-8 で書いた Request Object の ASCII でない値を、PAR が書き換えない（`RT-404.*`。#404）
+
+| | 測ること |
+|---|---|
+| **`RT-404.1`** | **PAR**・**`/ros`**（対照）に、生の UTF-8 で日本語の `state` を書いた Request Object を預け、`prompt=none`（サインインしていない）で `/authorize` に行く。応答の `state` が預けた値のまま |
+
+- **以前は PAR だけが、署名付き Request Object の payload を us-ascii で文字列にしていた**ので、`状態-rt4041` が `??????-rt4041` で返った（両版。`/ros` は UTF-8）。JWT の Claims Set は UTF-8 で表す（RFC 7519 §7.1・§7.2）
+- **E2E の既定の部品（`JwsSigner`）は、`System.Text.Json` の既定で ASCII でない文字を `\u72b6` のようにエスケープして書く**ので、見つからなかった。
+  **生の UTF-8 で書く `RequestObjectBuilder.CreateRawUtf8Async`（`JwsSigner.SignRS256` の `rawUtf8`）を足した。** ASCII でない値でサーバの文字コードの扱いを測るときは、こちらを使う
+- **直す前に、両版で `RT-404.1` が落ちることを確かめた**（テストを先に書いた）
+- **生の UTF-8 で書けるのは RS256 だけ**（PS256・ES256 の登録の PAR は測っていない）。直した読み方は alg に依存しない
+- **自分で出したアクセス トークンを us-ascii で読む箇所**（`CmnEndpoints.AuthorizeResponse.cs`・`CmnEndpoints.TokenIssuance.cs`）は直していない。読んだ値は `scopes`・`alg` にしか使わず（ASCII）、id_token はトークンの文字列から作る
+
 ##### 預けた Request Object の中の日付の形の文字列が、応答で書き換わらない（`RT-403.*`。#403）
 
 | | 測ること |
