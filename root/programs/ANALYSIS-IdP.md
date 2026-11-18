@@ -3621,6 +3621,13 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - **署名を確かめられない要求は、署名の検証に失敗した要求と同じく、登録済みの ACS URL へ `Requester` のエラー応答を返す**（`RT-400.1`）。設定で戻す分岐は作らない
 - **要求を直に組み立てる E2E の多くが、署名の無い要求を送っていた**ので、署名して送るようにした（`Saml2.SignedRequestQuery`）
 
+### C-69. OP が外へ出す要求（`jwks_uri`・ID 連携の上流）に、時間と大きさの上限を設定していなかった **[Lib]** — **✅ 修正済み（#375）**
+
+**共有の HttpClient に何も設定しておらず、.NET の既定（100 秒・大きさの上限なし）だった。** Open棟梁 の部品は要求ごとの上限を持たないので、応答の遅い・大きな `jwks_uri` を登録されると、登録の要求や起動のときの温めが長く待たされ、メモリも使われた。
+
+- **共有の HttpClient に、30 秒・1MB の上限を掛けた**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`。`OutboundHttpLimits`。`RT-375.1`）
+- Back-Channel Logout・`sector_identifier_uri` は、もともと要求ごとに 10 秒の上限があった
+
 ### C-68. 動的登録で OP が取りに行く URL（`jwks_uri`・`sector_identifier_uri`）の行き先を、スキームでしか絞っていなかった **[Lib]** — **✅ 一部修正（#376。残りは Open棟梁 の対応の後）**
 
 **`https` か、ループバックの `http` かしか見ていなかった**ので、登録できる相手が、OP の内側のアドレス（プライベート・リンクローカルなど）へ要求を出させられた。

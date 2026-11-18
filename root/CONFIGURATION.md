@@ -1367,6 +1367,23 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 > **ループバックの `jwks_uri` で試していた開発の手元は、`OutboundUrlAllowLoopbackHttp=true` にすること。**
 > **net10.0 版は、設定ファイルに無いキーを環境変数だけでは足せない**（2 節）。**キーをファイルに書いてから、環境変数で上書きする**（`container/CTS` は手元の `appsettings.json` をマウントする）
 
+### OP が外へ出す要求の上限 — `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`（#375）
+
+**共有の HttpClient（`OAuth2AndOIDCClient.HttpClient`）に、時間と応答の大きさの上限を掛ける。**
+**Open棟梁 の部品（`jwks_uri` の `RemoteJwkSetStore`・ID 連携の `OAuth2AndOIDCClient`・`SAML2Metadata`）は、要求ごとの上限を持たず、この HttpClient の設定に任せる。**
+**以前は何も設定しておらず、.NET の既定（100 秒・大きさの上限なし）だった**ので、応答の遅い・大きな `jwks_uri` を登録されると、登録の要求や起動のときの温めが長く待たされ、メモリも使われた。
+
+| キー | 既定 | |
+|---|---|---|
+| `OutboundHttpTimeoutSeconds` | **30** | 時間（秒）。**遅い上流（ID 連携の相手）を使う配備は延ばす** |
+| `OutboundHttpMaxResponseBytes` | **1048576**（1MB） | 応答の本文の大きさ（バイト）。**超えた応答は、取得の失敗になる。** 大きな SAML のメタデータを読む配備は広げる |
+
+- **掛ける所**：共有の HttpClient（`Helper` が作る。設定の値）、起動のときの HttpClient（`Program.Main`・`Global.asax`。**設定を読む前なので既定の値**。`Helper` が作り直すまで）、クライアントが登録した URL を取りに行く専用の HttpClient（#376）
+- **要求ごとに短い上限を持つ口は、そちらが先に効く**：Back-Channel Logout の POST（10 秒）、`sector_identifier_uri`（10 秒・64KB）
+- **Session Management・Front-Channel Logout は、ブラウザが出す要求**で、OP のサーバは要求を出さない
+- **メール・SMS・FCM は、それぞれの部品の上限による**（この設定は効かない）
+- **`WebAPIHelper`（外部ログインの WebAPI。いまは呼ばれていない）の HttpClient には掛けていない**
+
 ### `redirect_uri` の記号
 
 `test_self_code` / `test_self_token` は URL ではなく**記号**である。

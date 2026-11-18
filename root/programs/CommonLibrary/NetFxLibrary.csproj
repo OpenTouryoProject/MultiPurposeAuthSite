@@ -313,6 +313,7 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <Compile Include="Network\CreateProxy.cs" />
+    <Compile Include="Network\OutboundHttpLimits.cs" />
     <Compile Include="Data\DataAccess.cs" />
     <Compile Include="Util\IdP\GetContentOfLetter.cs" />
     <Compile Include="Network\WebAPIHelper.cs" />

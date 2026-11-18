@@ -32,6 +32,7 @@
 //*  2026/11/12  玄人 幸道         RT-363.1（登録を直さずに鍵を入れ替えても、知らない kid の 1 回目から通る）を足した（#363）
 //*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //*  2026/11/18  玄人 幸道         RT-376.1（内部のアドレスの jwks_uri は、取りに行かずに断る）を足した（#376）
+//*  2026/11/18  玄人 幸道         RT-375.1（1MB を超える jwks_uri の応答は読まない）を足した（#375）
 //**********************************************************************************
 
 using System;
@@ -62,6 +63,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-309.3`** | **同じ URL の鍵を入れ替えると、`PUT` で読み直して新しい鍵で通る**（**読み直すまではキャッシュが効く**） |
     /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
     /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
+    /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。共有の HttpClient の大きさの上限。#375） |
     /// | **`RT-376.1`** | **内部のアドレス（プライベート・リンクローカル・ユニーク ローカル）の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
@@ -584,6 +586,76 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.Note("**`jwks` を 1 本も登録していない** — "
                             + "**`private_key_jwt` の「材料」として `jwks_uri` を数えている**"
                             + "（#309 の段階 1）。");
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-375.1
+
+        /// <summary>RT-375.1 1MB を超える jwks_uri の応答は読まない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37501_1MBを超えるjwks_uriの応答は読まない(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-375.1",
+                    "`jwks_uri` の応答が**1MB を超える**と読まず、登録を `400` ＋ `invalid_client_metadata` で断る。**同じ鍵を小さく置けば登録できる**",
+                    "**OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。**"
+                    + "**以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。**"
+                    + "**既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。",
+                    "設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375");
+
+                r.Target("POST registration_endpoint（jwks_uri の応答が 1MB を超える）");
+
+                string name = "rt375_1_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        string body = "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + JwksUri.Url(name) + "\"}";
+
+                        r.Step("(1) 有効な JWK Set に、使わない項目を足して 1MB を超えさせる");
+
+                        JwksUri.WriteRaw(name, "{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + "],"
+                            + "\"e2e_padding\":\"" + new string('x', 1200 * 1024) + "\"}");
+
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(client, endpoint, token, body);
+
+                        r.VerifyEqual("HTTP の状態は 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual("error は invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+
+                        string description = rejected.String("error_description") ?? "";
+                        bool unread = description.Contains("could not be read");
+
+                        r.Verify("断る理由は「読めない」", unread,
+                            "could not be read", unread ? "could not be read" : "**" + description + "**");
+
+                        r.Step("(2) 対照：同じ鍵を、足した項目なしで置けば登録できる");
+
+                        JwksUri.Write(name, JwsSigner.PublicRsaJwk(client));
+
+                        JsonResponse accepted = await DynamicClientRegistration.RegisterAsync(client, endpoint, token, body);
+
+                        r.VerifyEqual("HTTP の状態は 201", "201", ((int)accepted.StatusCode).ToString());
                     }
                     finally
                     {

@@ -28,6 +28,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/18  玄人 幸道         新規（#376）
+//*  2026/11/18  玄人 幸道         専用の HttpClient にも、時間と大きさの上限を掛けるようにした（#375）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -348,7 +349,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 handler.ConnectCallback = OutboundUrlPolicy.ConnectAsync;
             }
 
-            return new HttpClient(handler);
+            //  **時間と大きさの上限**（#375。共有の HttpClient と同じ設定）。
+            return OutboundHttpLimits.ApplyConfigured(new HttpClient(handler));
 #else
             HttpClientHandler handler = new HttpClientHandler()
             {
@@ -357,7 +359,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 UseProxy = proxy != null
             };
 
-            return new HttpClient(handler);
+            //  **時間と大きさの上限**（#375。共有の HttpClient と同じ設定）。
+            return OutboundHttpLimits.ApplyConfigured(new HttpClient(handler));
 #endif
         }
 

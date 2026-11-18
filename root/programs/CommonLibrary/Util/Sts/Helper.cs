@@ -60,6 +60,7 @@
 //*  2026/10/31  玄人 幸道         partial に分割した（WebApi / ClientCredential / ClientUri / ClientMetadata / Scope。#294）
 //*  2026/10/31  玄人 幸道         コンテナ化の宛先の書き換えで、%xx を戻さず、先頭の scheme://authority だけを替える（#294）
 //*  2026/11/01  玄人 幸道         WebAPI の呼び出し（Helper.WebApi.cs）を Util/Test/SelfTestWebApi へ移し、HttpClient を渡す口を足した（#321）
+//*  2026/11/18  玄人 幸道         共有の HttpClient に、時間と大きさの上限を掛けるようにした（#375）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -258,7 +259,9 @@ namespace MultiPurposeAuthSite.Util.Sts
             //handler.ServerCertificateCustomValidationCallback
             //    = (message, cert, chain, errors) => { return true; };
 
-            return new HttpClient(handler);
+            //  **時間と大きさの上限を掛ける**（#375。以前は .NET の既定の 100 秒・上限なしだった）。
+            //    **Open棟梁 の部品（jwks_uri・ID 連携・SAML のメタデータ）は、要求ごとの上限を持たず、この HttpClient に任せる。**
+            return Network.OutboundHttpLimits.ApplyConfigured(new HttpClient(handler));
             //return new HttpClient();
         }
 

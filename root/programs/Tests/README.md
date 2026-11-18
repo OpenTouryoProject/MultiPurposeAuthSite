@@ -469,6 +469,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/RequestDestinationTests.cs` | `RT-391` | **SP の役で作る SAML2 の要求に、送った先と同じ `Destination` を入れる**（#391。SAML Bindings §3.4.5.2・§3.5.5.2）。自己テストの 4 通り（`RT-391.1`）。**ID 連携の要求は `SA-6.1` が測る** |
 | `Tests/Saml/RequestDestinationCheckTests.cs` | `RT-392` | **SAML2 の IdP は、要求の `Destination` を受けた口の URL と照合し、合わなければ捨てる**（#392。SAML Core 3.2.1・SAML Bindings §3.4.5.2）。署名の無い要求の違う `Destination`（`RT-392.1`）、署名した要求の無い・違う `Destination`（`RT-392.2`。テストの側で SP の鍵で署名する） |
 | `Tests/Issues/Saml2AudienceEntityIdTests.cs` | `RT-389` | **SAML2 の応答の `Audience` は、SP の entityID（要求の `Issuer`）**（#389。SAML Profiles §4.1.4.2）。ACS URL ではない。`Recipient` は ACS URL（`RT-389.1`。Redirect Binding は `RT-389.2`） |
+| `Tests/Issues/JwksUriTests.cs` | `RT-375` | **1MB を超える `jwks_uri` の応答は読まない**（#375。共有の HttpClient の大きさの上限。`RT-375.1`。設定の読み方は単体テスト `Sts/OutboundHttpLimitsTests`） |
 | `Tests/Issues/JwksUriTests.cs`・`SectorIdentifierTests.cs` | `RT-376` | **内部のアドレスの `jwks_uri`・`sector_identifier_uri` は、取りに行かずに断る**（#376。`RT-376.1`・`.2`。組み合わせは単体テスト `Sts/OutboundUrlPolicyTests`） |
 | `Tests/Issues/RequestObjectRawUtf8Tests.cs` | `RT-404` | **生の UTF-8 で書いた Request Object の日本語の `state` を、PAR が書き換えない**（#404。以前は「?」に変わった。`RT-404.1`。生の UTF-8 で書く部品 `RequestObjectBuilder.CreateRawUtf8Async`） |
 | `Tests/Issues/RequestObjectDateLikeValueTests.cs` | `RT-403` | **PAR・`/ros` に預けた Request Object の中の日付の形の `state` が、`/authorize` の応答で書き換わらない**（#403。以前は `11/18/2026 10:00:00` などに変わった。`RT-403.1`） |

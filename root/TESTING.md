@@ -1272,6 +1272,24 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### OP が外へ出す要求に、時間と大きさの上限を掛ける（`RT-375.*`。#375）
+
+| | 測ること |
+|---|---|
+| **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` ＋ `invalid_client_metadata`（「読めない」）で断る。** 同じ鍵を、足した項目なしで置けば `201` |
+| 単体テスト `OutboundHttpLimitsTests` | 既定（30 秒・1MB）、設定の値、設定が無い・読めない・1 未満なら既定 |
+
+- **以前は、共有の HttpClient に何も設定しておらず、.NET の既定（100 秒・大きさの上限なし）だった**（直しを外すと、`RT-375.1` は 1MB を超える `jwks_uri` を読んで `201` で登録し、落ちる。net10.0 版で確かめた）
+- **新しいテストは、静的配信のコンテナが無ければ Skip する**（`JwksUri.SkipIfNotAvailableAsync`。`RT-309.*`・`RT-364.*` と同じ）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **時間の上限（30 秒）** | 応答を遅らせる足場が要る（静的配信のコンテナは遅らせられない）。HttpClient の `Timeout` に入ることは単体テストで測った |
+| **ID 連携の上流・SAML のメタデータの上限** | 同じ HttpClient なので、`jwks_uri` で測った |
+| **起動のときの HttpClient（既定の値）** | `Helper` が作り直す前の短い間だけ使う。`ApplyDefaults` を単体テストで測った |
+
 ##### 動的登録で取りに行く URL の行き先を、アドレスでも絞る（`RT-376.*`。#376）
 
 | | 測ること |

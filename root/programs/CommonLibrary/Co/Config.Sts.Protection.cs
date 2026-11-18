@@ -31,6 +31,7 @@
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールの間隔を足した（#294）
 //*  2026/11/18  玄人 幸道         クライアントが登録した URL へ取りに行く先の設定（OutboundUrlAllowLoopbackHttp・OutboundUrlAllowedHosts）を足した（#376）
+//*  2026/11/18  玄人 幸道         OP が外へ出す要求の上限の設定（OutboundHttpTimeoutSeconds・OutboundHttpMaxResponseBytes）を足した（#375）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.IdP;
@@ -345,6 +346,44 @@ namespace MultiPurposeAuthSite.Co
                     .Select(h => h.Trim())
                     .Where(h => h.Length != 0)
                     .ToArray();
+            }
+        }
+
+        #endregion
+
+        #region OP が外へ出す要求の上限（#375）
+
+        /// <summary>**OP が外へ出す要求の時間の上限（秒）**（共有の HttpClient。#375）</summary>
+        /// <remarks>
+        /// **未設定・読めない・1 未満なら 30 秒**（`OutboundHttpLimits.DefaultTimeoutSeconds`）。
+        /// **以前は設定しておらず、.NET の既定の 100 秒だった。** `jwks_uri`・ID 連携の上流・SAML のメタデータの取得に効く。
+        /// </remarks>
+        public static int OutboundHttpTimeoutSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("OutboundHttpTimeoutSeconds");
+
+                int seconds = 0;
+                return (!string.IsNullOrEmpty(value) && int.TryParse(value, out seconds) && 0 < seconds)
+                    ? seconds : Network.OutboundHttpLimits.DefaultTimeoutSeconds;
+            }
+        }
+
+        /// <summary>**OP が外へ出す要求の、応答の大きさの上限（バイト）**（共有の HttpClient。#375）</summary>
+        /// <remarks>
+        /// **未設定・読めない・1 未満なら 1MB**（`OutboundHttpLimits.DefaultMaxResponseBytes`）。
+        /// **以前は設定しておらず、上限が無かった**（.NET の既定は 2GB 近く）。**超えた応答は、取得の失敗になる。**
+        /// </remarks>
+        public static long OutboundHttpMaxResponseBytes
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("OutboundHttpMaxResponseBytes");
+
+                long bytes = 0;
+                return (!string.IsNullOrEmpty(value) && long.TryParse(value, out bytes) && 0 < bytes)
+                    ? bytes : Network.OutboundHttpLimits.DefaultMaxResponseBytes;
             }
         }
 

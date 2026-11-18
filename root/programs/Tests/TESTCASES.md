@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=1fde06bc-c1a0-4840-b778-7a8fd1d7a73f&code=bogus
+1. GET /Account/EmailConfirmation?userId=4b213b96-f9b1-4d4f-8379-24715ba77d50&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=1fde06bc-c1a0-4840-b778-7a8fd1d7a73f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=1fde06bc-c1a0-4840-b778-7a8fd1d7a73f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=4b213b96-f9b1-4d4f-8379-24715ba77d50&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=4b213b96-f9b1-4d4f-8379-24715ba77d50&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12480,6 +12480,26 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 201
 - HTTP 401
 - invalid_client
+
+## RT-375.1 `jwks_uri` の応答が**1MB を超える**と読まず、登録を `400` ＋ `invalid_client_metadata` で断る。**同じ鍵を小さく置けば登録できる**
+
+| | |
+|---|---|
+| 観点 | **OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。****以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。****既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。 |
+| 根拠 | 設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375 |
+| テスト | `RT37501_1MBを超えるjwks_uriの応答は読まない` |
+
+**手順**
+
+1. 有効な JWK Set に、使わない項目を足して 1MB を超えさせる
+1. 対照：同じ鍵を、足した項目なしで置けば登録できる
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- 断る理由は「読めない」
+- HTTP の状態は 201
 
 ## RT-376.1 動的登録の `jwks_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る
 
