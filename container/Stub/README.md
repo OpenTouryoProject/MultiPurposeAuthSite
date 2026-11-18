@@ -19,6 +19,25 @@ copy .env.sample my-stub.env                           # パラメタを写し�
 .\3_DockerComposeDown.bat my-stub.env                  # 止めて消す（状態は残らない）
 ```
 
+**起動と停止の手順の本体は `2_DockerComposeUp.ps1`・`3_DockerComposeDown.ps1`**（#401）。**`.bat` は、それを呼ぶだけ**（使い方は変わらない）。
+**PowerShell から直に呼んでもよい**（`.\2_DockerComposeUp.ps1 my-stub.env`。Windows PowerShell 5.1・PowerShell 7 の両方で動く）。
+
+### Linux（GitHub Actions の `ubuntu-latest` など。#401）
+
+**`pwsh`（PowerShell 7）で `.ps1` を呼ぶ。** `.bat` は使わない。
+
+```bash
+cd container/Stub
+pwsh ./1_PublishStub.ps1                                # publish と証明書（dotnet dev-certs https の書き出しだけで足りる。--trust は要らない）
+cp .env.sample my-stub.env                              # パラメタを写して直す（下の 2 節。Linux では必ず直す値がある）
+pwsh ./2_DockerComposeUp.ps1 ./my-stub.env              # 起動
+pwsh ./3_DockerComposeDown.ps1 ./my-stub.env            # 止めて消す
+```
+
+- **既定値が Windows の手元向けのパラメタは、`.env` で差し替える**：`STUB_RESOURCE_DIR`（既定 `C:/root/files/resource`）と、`STUB_APPSETTINGS`（既定は開発者の手元の `appsettings.json`。**CI には無いので、使う側が用意した JSON を指す**。2 節・3 節）
+- **確かめた範囲**（#401）：.NET SDK のコンテナ（Linux。`pwsh` 7.6）で、`1_PublishStub.ps1`（publish・証明書の書き出し・MTLS のフック）と `..\Common\CheckPublishFreshness.ps1` を動かした。
+  起動・停止の `.ps1` は、`docker compose` に渡す引数と作業ディレクトリまでを確かめた（**Linux の Docker での実際の起動は確かめていない**。Windows では起動して Discovery が 200 を返すことを確かめた）
+
 **起動の確認** : `https://localhost:44310/.well-known/openid-configuration` が 200 を返せばよい。
 
 **このディレクトリに置く自分のファイルは `my-` で始める**（`my-stub.env`・`my-stub.json` など）。
@@ -37,7 +56,7 @@ copy .env.sample my-stub.env                           # パラメタを写し�
 | `STUB_APPSETTINGS` | `../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json` | **アプリの設定の土台**（3 節）。**無ければ起動しない** |
 | `STUB_SETTINGS` | `./appsettings.Stub.sample.json` | **アプリの追加の設定**（3 節）。土台に重ねて効く |
 | `STUB_CERT_DIR` / `STUB_CERT_ENV_FILE` | `./cert` / `./cert/cert.env` | HTTPS の証明書（4 節） |
-| `STUB_RESOURCE_DIR` | `C:/root/files/resource` | 署名鍵などのリソース |
+| `STUB_RESOURCE_DIR` | `C:/root/files/resource` | 署名鍵などのリソース（**Linux では必ず差し替える**。#401） |
 | `STUB_MTLS_HOOK` | 空（受け付けない） | **クライアント証明書（MTLS）を受け付けるか**（4 節。`/hooks/MtlsTestHook.dll` で受け付ける。**テスト専用**） |
 
 **管理者・テスト利用者・テスト用の口の開け閉めは、`.env` ではなく JSON の値を使う**（3 節）。
@@ -138,6 +157,12 @@ STUB_MTLS_HOOK=/hooks/MtlsTestHook.dll
 3. **`-Certificate` を外すと `invalid_client`**（認証の手段が無い）。**`STUB_MTLS_HOOK` を空にして起動し直すと、証明書を付けても `invalid_client`**（Kestrel が受け取らない）
 
 ## 5. 他のリポジトリから使う
+
+**起動・停止は `2_DockerComposeUp.ps1`・`3_DockerComposeDown.ps1` を呼ぶのがよい**（Windows・Linux とも。publish の新しさの確認も行う。#401）。**起動の手順を使う側に写さない**（#340）。
+
+```powershell
+pwsh C:\MultiPurposeAuthSite\container\Stub\2_DockerComposeUp.ps1 .\mpas-stub.env     # 相対パスは、呼んだ場所から見たもの
+```
 
 **`-f` で `docker-compose.yml` を指せば、どこからでも起動できる。** パラメタのファイルは、使う側のリポジトリに置いてよい。
 
