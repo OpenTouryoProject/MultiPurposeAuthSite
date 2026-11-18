@@ -1094,8 +1094,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (verifyingJws.Count != 0)
                 {
-
-                    //  **読めない形（配列の aud など）でも例外にしない**（#294。OpenTouryo#654 の版は false を返す。登録の鍵が壊れていても `TryVerifyAssertion` が拾う）。
+                    //  **読めない形（配列の aud など）でも例外にしない**（#294。OpenTouryo#654 の版は false を返す。登録の鍵が壊れていても `TryVerifyJwtBearerAssertion` が拾う）。
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
                     //    **iss・aud も Open棟梁 が照合する**（OpenTouryo#654。#336）。
                     //    **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。

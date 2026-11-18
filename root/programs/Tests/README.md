@@ -470,6 +470,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Saml/RequestDestinationCheckTests.cs` | `RT-392` | **SAML2 の IdP は、要求の `Destination` を受けた口の URL と照合し、合わなければ捨てる**（#392。SAML Core 3.2.1・SAML Bindings §3.4.5.2）。署名の無い要求の違う `Destination`（`RT-392.1`）、署名した要求の無い・違う `Destination`（`RT-392.2`。テストの側で SP の鍵で署名する） |
 | `Tests/Issues/Saml2AudienceEntityIdTests.cs` | `RT-389` | **SAML2 の応答の `Audience` は、SP の entityID（要求の `Issuer`）**（#389。SAML Profiles §4.1.4.2）。ACS URL ではない。`Recipient` は ACS URL（`RT-389.1`。Redirect Binding は `RT-389.2`） |
 | `Tests/Issues/JwksUriTests.cs` | `RT-374` | **動的登録の `request_uris`**（`RT-374.1`）と、**登録した外部の `request_uri` を取りに行って使う**（`RT-374.2`。登録していない・署名の無い・取れないものは断る）（#374。OIDC Core 1.0 §6.2） |
+| `Tests/Issues/JwksUriTests.cs` | `RT-410` | **JWT Bearer のグラントの `assertion` を、`jwks_uri` の鍵**（`RT-410.1`）**と、PS256・ES256**（`RT-410.2`）**でも検証する。** `jwks_uri` に無い鍵・署名の合わないものは `invalid_client`（#410。RFC 7523 §3） |
 | `Tests/Issues/JwksUriTests.cs` | `RT-408` | **鍵を `jwks_uri` だけで登録したクライアントの、Request Object**（外部の `request_uri`・PAR の `request`。`RT-408.1`）**と CIBA の署名した要求**（`RT-408.2`。種データの `TestClient4_6`）**を、`jwks_uri` の鍵で検証する**（#408。OIDC Registration 1.0 §2） |
 | `Tests/Issues/JwksUriTests.cs` | `RT-375` | **1MB を超える `jwks_uri` の応答は読まない**（#375。共有の HttpClient の大きさの上限。`RT-375.1`。設定の読み方は単体テスト `Sts/OutboundHttpLimitsTests`） |
 | `Tests/Issues/JwksUriTests.cs`・`SectorIdentifierTests.cs` | `RT-376` | **内部のアドレスの `jwks_uri`・`sector_identifier_uri` は、取りに行かずに断る**（#376。`RT-376.1`・`.2`。組み合わせは単体テスト `Sts/OutboundUrlPolicyTests`） |

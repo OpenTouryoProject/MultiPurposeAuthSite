@@ -3631,6 +3631,17 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - Discovery で **`require_request_uri_registration: true`** を広告する
 - **Request Object の検証鍵は、登録の列（`jwks`）と `jwks_uri` の鍵**（`jwks_uri` は #408 から。C-71）
 
+### C-72. JWT Bearer のグラントの `assertion` を、列の RSA の鍵だけ・RS256 だけで検証していた **[Lib]** — **✅ 修正済み（#410）**
+
+**JWT Bearer のグラント（`/token` の `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`。RFC 7523 §2.1）は、`assertion` を列の RSA の鍵 1 本で、RS256 だけを受けて検証していた。**
+**鍵の種類から alg を決める古い版の検証**を使い、`jwks_uri` の鍵も EC の鍵も使わなかった（`client_assertion`・Request Object・CIBA の要求とは、鍵の出どころも alg もそろっていなかった）。
+
+- **鍵**：列の RSA・EC の鍵と、`jwks_uri` の鍵（`CmnEndpoints.KeysFromJwksUri`。C-71 と同じ引き方）のうち、ヘッダの alg に合うもの（`JwtBearerVerifyingJws`）
+- **alg**：RS256・PS256・ES256（`JwtBearerSigningAlgs`。`client_assertion` と同じ）。**ヘッダの alg と鍵の種類が食い違う鍵では検証しない**（RFC 8725 §3.1。`JWS` を受ける版の検証。`TryVerifyJwtBearerAssertion`）
+- **FAPI の登録での alg の制限は置かない** — **このグラントを通せるのは normal の登録だけ**（`ClientModePolicy` の EX-7）。**登録の `token_endpoint_auth_signing_alg` でも絞らない**（クライアント認証の JWT の登録項目。グラントの `assertion` は別物）
+- **`aud`（トークン エンドポイントの URL か issuer。#398）・`iss`・`exp` などの確かめは変えていない**
+- **`jwks_uri` の取得（知らない `kid` で最大 3 秒待つ）は、流れ・`grant_types` の確かめより前に走る**（署名を確かめてから、どのクライアントかが決まるため）。C-71 と同じく、同じ `jwks_uri` を待つのは同時に 1 本まで
+
 ### C-71. Request Object・CIBA の署名した要求の検証で、`jwks_uri` の鍵を使っていなかった **[Lib]** — **✅ 修正済み（#408）**
 
 **`jwks_uri` は、クライアントが要求の署名に使う鍵の置き場所である**（OIDC Registration 1.0 §2）。**以前は、クライアント認証（`client_assertion`）だけが `jwks_uri` の鍵を見て**（#309・#363）、
@@ -3641,7 +3652,7 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - **知らない `kid` で最大 3 秒待つ口が、認証の前の口（`/ros`・PAR・`/ciba_authz`・`/authorize` の外部の `request_uri`）にも増えた。** クライアント認証と同じ仕組みで、**同じ `jwks_uri` を待つのは同時に 1 本まで**（ほかは待たずに断る）。取り直しの下限（1 分）は Open棟梁 が持つ
 - **列の鍵と `jwks_uri` の鍵を候補にし、順に試す。** alg と鍵の種類の突き合わせ（RFC 8725 §3.1）は、全部の候補に掛ける
 - `/ciba_authz` の「鍵を登録していなければ `invalid_client`」も、`jwks_uri` の登録を鍵の登録として数える
-- **JWT Bearer のグラント（`/token` の `jwt-bearer`）は、まだ列の RSA の鍵だけ**（#410）
+- **JWT Bearer のグラント（`/token` の `jwt-bearer`）も、#410 でそろえた**（C-72）
 
 ### C-69. OP が外へ出す要求（`jwks_uri`・ID 連携の上流）に、時間と大きさの上限を設定していなかった **[Lib]** — **✅ 修正済み（#375）**
 

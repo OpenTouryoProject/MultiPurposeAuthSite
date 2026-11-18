@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=1b71668d-18e6-47c1-a34d-6a2d6446ab30&code=bogus
+1. GET /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=1b71668d-18e6-47c1-a34d-6a2d6446ab30&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=1b71668d-18e6-47c1-a34d-6a2d6446ab30&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13463,6 +13463,49 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 署名を検証して先へ進む（居ない利用者なので unknown_user_id）
 - jwks_uri に無い鍵 : invalid_request で断る
 - 署名が合わない : invalid_request で断る
+
+## RT-410.1 鍵を `jwks_uri` だけで登録したクライアントの、JWT Bearer グラントの `assertion`（RS256・PS256）を、`jwks_uri` の鍵で検証してトークンを出す。`jwks_uri` に無い鍵（ES256）・署名が合わないものは `invalid_client`
+
+| | |
+|---|---|
+| 観点 | **`assertion` は、発行者（iss）の鍵で署名を検証する**（RFC 7523 §3 の 9）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。**以前は列の RSA の鍵だけで RS256 だけを受け、`jwks_uri` の鍵を使わなかった**（`client_assertion`・Request Object・CIBA の要求は `jwks_uri` を見る。#408）。 |
+| 根拠 | RFC 7523 §3 / OIDC Registration 1.0 §2 / #410 |
+| テスト | `RT41001_jwks_uriの鍵でJWT_Bearerのassertionを検証する` |
+
+**手順**
+
+1. 鍵（RSA）を jwks_uri だけで登録する
+1. RS256・PS256 の assertion（jwks_uri の RSA の鍵）でトークンが出る
+1. jwks_uri に無い鍵（EC の鍵）・署名が合わないものは invalid_client
+
+**検証（合否を判定する）**
+
+- RS256 : access_token が返る
+- PS256 : access_token が返る
+- jwks_uri に無い鍵（ES256） : access_token を返さない
+- jwks_uri に無い鍵（ES256） : error
+- 署名が合わない（RS256） : access_token を返さない
+- 署名が合わない（RS256） : error
+
+## RT-410.2 JWT Bearer グラントの `assertion` は、列の鍵（RSA・EC）で、PS256・ES256 も受けてトークンを出す。署名が合わないものは `invalid_client`
+
+| | |
+|---|---|
+| 観点 | **受ける JWT ごとに alg の扱いをそろえる**（`client_assertion` は RS256・PS256・ES256。#395）。**ヘッダの alg と鍵の種類が食い違う鍵では検証しない**（RFC 8725 §3.1）。**以前は RS256 だけ**だった。 |
+| 根拠 | RFC 7523 §3 / RFC 8725 §3.1 / #410 |
+| テスト | `RT41002_JWT_BearerのassertionはPS256とES256も受ける` |
+
+**手順**
+
+1. PS256（RSA の鍵）・ES256（EC の鍵）の assertion でトークンが出る
+1. 署名が合わないもの（ES256）は invalid_client
+
+**検証（合否を判定する）**
+
+- PS256 : access_token が返る
+- ES256 : access_token が返る
+- 署名が合わない（ES256） : access_token を返さない
+- 署名が合わない（ES256） : error
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

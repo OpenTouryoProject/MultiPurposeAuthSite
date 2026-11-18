@@ -163,7 +163,7 @@
   **受ける alg を変えたら、その alg で作っている既存のテスト（と自己テストのクライアント）が、測りたい理由より先に alg で断られていないか**も見る。
   **受ける JWT ごとに、alg の扱いがそろっているか**も見る — **Request Object は PS256 を受けて FAPI の RS256 を断るのに、`client_assertion` と CIBA の要求は PS256 を受けなかった**（#395。`RT-395.1`・`.2`）。
   **鍵の種類（`kty`）で alg を決める版の `Verify` は、PS256 を通せない**（RSA の鍵は RS256 に決まる）。**ヘッダの alg を受けてよいと決めてから、その alg と鍵から検証鍵を作る**（OpenTouryo#664 の `JWS` を受ける版）
-  **受ける JWT ごとに、鍵の出どころ（列の `jwks`・`jwks_uri`）がそろっているか**も見る — **`client_assertion` は `jwks_uri` の鍵も見るのに、Request Object と CIBA の要求は列の鍵しか見なかった**（#408。`RT-408.1`・`.2`。**JWT Bearer のグラントは #410**）。**引き方は `CmnEndpoints.KeysFromJwksUri` の 1 か所**
+  **受ける JWT ごとに、鍵の出どころ（列の `jwks`・`jwks_uri`）がそろっているか**も見る — **`client_assertion` は `jwks_uri` の鍵も見るのに、Request Object と CIBA の要求は列の鍵しか見なかった**（#408。`RT-408.1`・`.2`）。**JWT Bearer のグラントは、列の RSA の鍵だけで RS256 だけを受けていた**（#410。`RT-410.1`・`.2`）。**引き方は `CmnEndpoints.KeysFromJwksUri` の 1 か所**
 - [ ] **応答の数値（`expires_in`・`interval` など）を、JSON の文字列にしていないか**（RFC 6749 §5.1「Numerical values are included as JSON numbers」）。
   **`Dictionary<string, string>` で応答を作ると、数値が文字列になる**（#294・#353。`RT-294.75`・`RT-353`）。
   **E2E の `JsonResponse.String` は数値も文字列にして返す**ので、型は `KindOf` で見る

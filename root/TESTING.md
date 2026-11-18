@@ -1272,6 +1272,25 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### JWT Bearer のグラントの `assertion` を、`jwks_uri` の鍵・PS256・ES256 でも検証する（`RT-410.*`。#410）
+
+| | 測ること |
+|---|---|
+| **`RT-410.1`** | **鍵を `jwks_uri` だけで登録した（動的登録の）クライアントの `assertion`**（RS256・PS256）**でトークンが出る。** **`jwks_uri` に無い鍵（ES256）・署名の合わないもの**（署名の部分を書き換えた）**は `invalid_client`**。登録の `grant_types` に `jwt-bearer` を入れる（登録したグラントだけを通すため） |
+| **`RT-410.2`** | **列の鍵を持つクライアント（`TestClient`。RSA と EC）の、PS256・ES256 の `assertion` でトークンが出る。** 署名の合わないもの（ES256）は `invalid_client` |
+
+- **足場は、`RT-408` と同じ静的配信のコンテナ**（`RT-410.1` だけ。コンテナが無ければ Skip）
+- **直したのを外すと**（`jwks_uri` の鍵を使わない・RS256 だけを受ける）、**両版で `RT-410.1`・`.2` が落ちる**ことを確かめた
+- **FAPI の登録の alg の制限は測らない** — **このグラントは normal の登録しか通れない**（`ClientModePolicy` の EX-7。alg を見る前に断られる）
+- 既存の `EX-7.*`（RS256）は、そのまま通る
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **EC の鍵だけのクライアントへの RS256・PS256**（alg と鍵の種類の食い違いの逆向き） | 食い違う鍵を候補から外す分岐（`VerifyingJwsOf`）は、ES256 を RSA の鍵だけのクライアントへ送る `RT-410.1` で通る。逆向きは同じ分岐 |
+| **列の鍵と `jwks_uri` の鍵の両方を持つクライアント**（候補を順に試す） | 動的登録は `jwks` と `jwks_uri` を両方は受けない。順に試す部分は `RT-408` と同じ作り |
+
 ##### Request Object・CIBA の署名した要求を、`jwks_uri` の鍵で検証する（`RT-408.*`。#408）
 
 | | 測ること |
