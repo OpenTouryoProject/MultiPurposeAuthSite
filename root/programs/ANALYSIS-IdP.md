@@ -3628,7 +3628,7 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - **行き先のアドレスでも絞る**（`OutboundUrlPolicy`。**既定で内部のアドレスとループバックを断る**。開けるのは設定 `OutboundUrlAllowLoopbackHttp`・`OutboundUrlAllowedHosts`。`RT-376.1`・`.2`）
 - **登録の検査・温める前・クライアント認証で取り直す前**に掛ける
 - **`sector_identifier_uri` は専用の HttpClient**（リダイレクトを追わない。net10.0 版は接続の時点のアドレスでも判定する）
-- **残り（#376 の本文に挙げたもの）**：`jwks_uri` を取りに行く HttpClient は、まだ専用のものにできていない（Open棟梁 の `RemoteJwkSetStore` に HttpClient を渡す口が無い）。**Open棟梁 の対応の後に、MPAS の別の Issue で専用の HttpClient を渡す**
+- **残り（#376 の本文に挙げたもの）**：`jwks_uri` を取りに行く HttpClient は、まだ専用のものにできていない（Open棟梁 の `RemoteJwkSetStore` に HttpClient を渡す口が無い。OpenTouryo#707）。**Open棟梁 の対応の後に、MPAS の別の Issue で専用の HttpClient を渡す**
 
 ### C-67. PAR が、署名付き Request Object の payload を us-ascii で読み、ASCII でない文字が「?」に変わっていた **[Lib]** — **✅ 修正済み（#404）**
 

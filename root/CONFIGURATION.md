@@ -1360,7 +1360,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 - **名前解決した結果が 1 つでも内部のアドレスなら断る。** **名前解決できなければ断る**
 - **掛ける所**：登録の検査（`invalid_client_metadata`）、登録のときに温める前、起動のときに温める前、クライアント認証で `jwks_uri` を取り直す前（**登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い**）
 - **`sector_identifier_uri` は専用の HttpClient で取りに行く**：**リダイレクトを追わない**。**net10.0 版は接続の時点のアドレスでも判定する**（判定の後に名前解決をやり直して、行き先を変えられないように）。**net48 版は名前解決した結果の判定に留まる**（`HttpClientHandler` に接続の時点の口が無い）。**プロキシ（`UseIntranetProxy`）を通すときも、取りに行く前の判定に留まる**
-- **`jwks_uri` の取得は Open棟梁 の `RemoteJwkSetStore`（共有の HttpClient）が行う**ので、**取りに行く前の判定だけ**（専用の HttpClient は、Open棟梁 で渡せるようになってから。#376 の残り）
+- **`jwks_uri` の取得は Open棟梁 の `RemoteJwkSetStore`（共有の HttpClient）が行う**ので、**取りに行く前の判定だけ**（専用の HttpClient は、Open棟梁 で渡せるようになってから。#376 の残り。OpenTouryo#707）
 - **ID 連携の上流・Back-Channel Logout の URL は対象外**（運用者が設定・登録するもので、動的登録では変えられない。#310）
 
 > **既定が閉じたので、内部のアドレスの `jwks_uri`・`sector_identifier_uri` を使っている配備は、`OutboundUrlAllowedHosts` に足すこと。**
