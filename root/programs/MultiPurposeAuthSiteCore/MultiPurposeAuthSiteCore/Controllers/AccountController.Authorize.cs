@@ -31,6 +31,7 @@
 //*  2026/11/13  玄人 幸道         認可要求の検証に code_challenge_method を渡す（Request Object の値も読む。fapi2 の S256。#366）
 //*  2026/11/17  玄人 幸道         認可要求の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
 //*  2026/11/18  玄人 幸道         預けた Request Object を、日付の形の文字列を日付に変えずに読む（#403）
+//*  2026/11/19  玄人 幸道         外部の request_uri を取りに行って検証し、預けた urn: に置き換えるようにした（登録の request_uris にあるものだけ。#374）
 //**********************************************************************************
 
 /*
@@ -356,11 +357,23 @@ namespace MultiPurposeAuthSite.Controllers
             string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
+            //  **外部の request_uri は、取りに行って検証し、預けた `urn:` に置き換える**（#374。OIDC Core 1.0 §6.2）。
+            //    **以後はその `urn:` で続ける**（送り返しても、取りに行き直さない）。**登録の無い URL は、以前どおり断る**（#362）。
+            Sts.ExternalRequestUri.Result external = await Sts.ExternalRequestUri.ResolveAsync(client_id, request_uri);
+            request_uri = external.RequestUri;
+            bool pushed = false;
+            bool signedRequestObject = false;
+
+            if (external.Error != null)
+            {
+                err = external.Error;
+                errDescription = external.ErrorDescription;
+            }
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
-            if (!this.OverwriteByRequestObject(request_uri,
+            else if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
                 ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
-                out bool pushed, out bool signedRequestObject, out err, out errDescription))
+                out pushed, out signedRequestObject, out err, out errDescription))
             {
                 // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }
@@ -679,11 +692,23 @@ namespace MultiPurposeAuthSite.Controllers
             string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
+            //  **外部の request_uri は、取りに行って検証し、預けた `urn:` に置き換える**（#374。OIDC Core 1.0 §6.2）。
+            //    **以後はその `urn:` で続ける**（送り返しても、取りに行き直さない）。**登録の無い URL は、以前どおり断る**（#362）。
+            Sts.ExternalRequestUri.Result external = await Sts.ExternalRequestUri.ResolveAsync(client_id, request_uri);
+            request_uri = external.RequestUri;
+            bool pushed = false;
+            bool signedRequestObject = false;
+
+            if (external.Error != null)
+            {
+                err = external.Error;
+                errDescription = external.ErrorDescription;
+            }
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
-            if (!this.OverwriteByRequestObject(request_uri,
+            else if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
                 ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
-                out bool pushed, out bool signedRequestObject, out err, out errDescription))
+                out pushed, out signedRequestObject, out err, out errDescription))
             {
                 // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }

@@ -142,6 +142,7 @@
     <Compile Include="TokenProviders\IdFederationJwks.cs" />
     <Compile Include="Util\IdP\IdFederationUpstreamProvider.cs" />
     <Compile Include="Extensions\Sts\JwksUriWarmUp.cs" />
+    <Compile Include="Extensions\Sts\ExternalRequestUri.cs" />
     <Compile Include="Extensions\Sts\OutboundUrlPolicy.cs" />
     <Compile Include="Extensions\Sts\SectorIdentifierProvider.cs" />
     <Compile Include="Util\IdP\MailThrottle.cs" />

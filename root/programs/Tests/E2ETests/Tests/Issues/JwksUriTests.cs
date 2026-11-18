@@ -34,12 +34,14 @@
 //*  2026/11/18  玄人 幸道         RT-376.1（内部のアドレスの jwks_uri は、取りに行かずに断る）を足した（#376）
 //*  2026/11/18  玄人 幸道         RT-375.1（1MB を超える jwks_uri の応答は読まない）を足した（#375）
 //*  2026/11/19  玄人 幸道         RT-374.1（動的登録の request_uris）を足した（#374）
+//*  2026/11/19  玄人 幸道         RT-374.2（登録した外部の request_uri を取りに行って使う）を足した（#374）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -67,6 +69,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
     /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。共有の HttpClient の大きさの上限。#375） |
     /// | **`RT-374.1`** | **動的登録の `request_uris`**（外部の `request_uri` を取りに行ってよい先）を受けて返し、`PUT` で省けば消える。**内部のアドレス・相対の値・6 件以上は `400`**（#374） |
+    /// | **`RT-374.2`** | **登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object で認可コードまで進む。** 登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri`（どれもエラー画面。#374） |
     /// | **`RT-376.1`** | **内部のアドレス（プライベート・リンクローカル・ユニーク ローカル）の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
@@ -759,6 +762,140 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Done();
             }
+        }
+
+        #endregion
+
+        #region RT-374.2
+
+        /// <summary>RT-374.2 登録した外部の request_uri を取りに行って使う</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37402_登録した外部のrequest_uriを取りに行って使う(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-374.2",
+                    "登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object（`state` など）で認可コードまで進む。"
+                    + "登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri` のエラー画面",
+                    "**OP は、`request_uri` の URL から Request Object を取り、署名を検証して使う**（OIDC Core 1.0 §6.2。動的登録を提供する OP の MUST。§15.2）。"
+                    + "**取りに行くのは、登録した `request_uris` だけ。** **署名を検証できないものは受けない**（`alg=none` を受けない方針）。"
+                    + "**以前は、外部の `request_uri` を取りに行かずに断っていた**（#362）。",
+                    "OIDC Core 1.0 §6.2 / OIDC Core 1.0 §3.1.2.6 / OIDC Registration 1.0 §2 / #374");
+
+                r.Target("GET /authorize?client_id=…&request_uri=（静的配信の足場に置いた Request Object の URL）");
+
+                string roName = "rt374_2_ro_" + targetKey;
+                string missingName = "rt374_2_missing_" + targetKey;
+                string otherName = "rt374_2_other_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        r.Step("(1) 鍵（jwks）と request_uris を付けて登録する（Request Object の検証鍵は、登録の列の鍵から引く）");
+
+                        JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks\":{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + "]},"
+                            + "\"request_uris\":[\"" + JwksUri.Url(roName) + "\",\"" + JwksUri.Url(missingName) + "\"]}");
+
+                        string clientId = created.String("client_id");
+
+                        Assert.False(string.IsNullOrEmpty(clientId), "前提: 登録できること（" + created.ToString() + "）");
+
+                        r.Step("(2) 署名した Request Object を、登録した URL に置き、request_uri で認可する");
+
+                        JwksUri.WriteRaw(roName, await RequestObjectBuilder.CreateAsync(client, clientId,
+                            new Dictionary<string, object>()
+                            {
+                                { "response_type", "code" },
+                                { "redirect_uri", UriA },
+                                { "scope", "openid" },
+                                { "state", "state-rt3742" },
+                                { "nonce", "nonce-rt3742" }
+                            }));
+
+                        AuthZResponse used = await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName));
+
+                        r.Verify("認可コードが返る", !string.IsNullOrEmpty(used.Code),
+                            "code あり", string.IsNullOrEmpty(used.Code) ? "**なし**（" + Html.Describe(used.Body) + "）" : "あり");
+                        r.VerifyEqual("state は Request Object の値", "state-rt3742", used.State ?? "（無い）");
+
+                        r.Step("(3) 登録していない URL は、取りに行かずに request_uri_not_supported");
+
+                        JwksUri.WriteRaw(otherName, "unused");
+
+                        JwksUriTests.VerifyRefused(r, "登録していない URL",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(otherName)),
+                            "request_uri_not_supported");
+
+                        r.Step("(4) 署名の無い Request Object（alg=none）は invalid_request_object");
+
+                        JwksUri.WriteRaw(roName,
+                            Base64Url.Encode(Encoding.UTF8.GetBytes("{\"alg\":\"none\"}")) + "."
+                            + Base64Url.Encode(Encoding.UTF8.GetBytes(
+                                "{\"iss\":\"" + clientId + "\",\"aud\":\"" + await client.IssuerAsync() + "\","
+                                + "\"client_id\":\"" + clientId + "\",\"response_type\":\"code\","
+                                + "\"redirect_uri\":\"" + UriA + "\",\"scope\":\"openid\",\"state\":\"state-rt3742-none\"}")) + ".");
+
+                        JwksUriTests.VerifyRefused(r, "署名の無いもの",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName)),
+                            "invalid_request_object");
+
+                        r.Step("(5) 登録した URL でも、取れない（404）なら invalid_request_uri");
+
+                        JwksUriTests.VerifyRefused(r, "取れないもの",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(missingName)),
+                            "invalid_request_uri");
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(roName);
+                        JwksUri.Delete(otherName);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        /// <summary>client_id と request_uri だけで認可する（同意が要れば同意する）</summary>
+        /// <param name="client">IdPClient（サインイン済み）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="requestUri">request_uri</param>
+        /// <returns>AuthZResponse</returns>
+        private static async Task<AuthZResponse> AuthorizeWithRequestUriAsync(IdPClient client, string clientId, string requestUri)
+        {
+            AuthZResponse res = await client.AuthorizeAsync(new Dictionary<string, string>()
+            {
+                { "client_id", clientId },
+                { "request_uri", requestUri }
+            });
+
+            return res.NeedsConsent ? await client.GrantConsentAsync(res) : res;
+        }
+
+        /// <summary>エラー画面で断ったことを確かめる（RP へ返さない）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">場合の名前</param>
+        /// <param name="res">AuthZResponse</param>
+        /// <param name="error">期待する error</param>
+        private static void VerifyRefused(TestReport r, string label, AuthZResponse res, string error)
+        {
+            r.Verify(label + " : code を返さない", string.IsNullOrEmpty(res.Code),
+                "code なし", string.IsNullOrEmpty(res.Code) ? "なし" : "**あり**");
+
+            r.Verify(label + " : エラー画面に " + error + " が出る",
+                (res.Body ?? "").Contains("text-danger") && (res.Body ?? "").Contains(error),
+                "エラー画面（" + error + "）", Html.Describe(res.Body));
         }
 
         #endregion
