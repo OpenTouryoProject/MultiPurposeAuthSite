@@ -3629,7 +3629,19 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - `/authorize` で、**登録した URL だけを**、専用の HttpClient（#376。リダイレクトを追わない。10 秒・64KB）で取りに行き、**`/ros` と同じ検証**をして、預けた `urn:` に置き換え、**その `urn:` の認可の URL へ送り直す**（サインイン・再認証の往復で取りに行き直さない。`ExternalRequestUri`。`RT-374.2`）
 - **署名を検証できたものだけを受ける**（`alg=none` は `invalid_request_object`。人と決めた）。**登録に無い URL は、以前どおり `request_uri_not_supported`**
 - Discovery で **`require_request_uri_registration: true`** を広告する
-- **Request Object の検証鍵は、登録の列（`jwks`）から引く**（`jwks_uri` の鍵は使わない。#408）
+- **Request Object の検証鍵は、登録の列（`jwks`）と `jwks_uri` の鍵**（`jwks_uri` は #408 から。C-71）
+
+### C-71. Request Object・CIBA の署名した要求の検証で、`jwks_uri` の鍵を使っていなかった **[Lib]** — **✅ 修正済み（#408）**
+
+**`jwks_uri` は、クライアントが要求の署名に使う鍵の置き場所である**（OIDC Registration 1.0 §2）。**以前は、クライアント認証（`client_assertion`）だけが `jwks_uri` の鍵を見て**（#309・#363）、
+**Request Object（`/ros`・PAR・外部の `request_uri`）と CIBA の署名した要求は、登録の列（`jwks`）の鍵しか見なかった。** 鍵を `jwks_uri` だけで登録したクライアントは、署名した要求を使えなかった（CIBA は `invalid_client`）。
+
+- **鍵の引き方を 1 つの部品にした**（`CmnEndpoints.KeysFromJwksUri`）：控えから `kid` で引く。知らない `kid` なら取り直して短く待つ（#363）。取りに行く前に行き先を判定する（#376）。間に合わなければ背景で取り直して、その 1 本は断る
+- **`kid` の無い JWS は、控えにある鍵だけを試す**（待たずに背景で取り直し、その 1 本は断る。クライアント認証と同じ。#309 の決め）。**動的登録・起動のときに控えを温める**ので、ふだんは通る
+- **知らない `kid` で最大 3 秒待つ口が、認証の前の口（`/ros`・PAR・`/ciba_authz`・`/authorize` の外部の `request_uri`）にも増えた。** クライアント認証と同じ仕組みで、**同じ `jwks_uri` を待つのは同時に 1 本まで**（ほかは待たずに断る）。取り直しの下限（1 分）は Open棟梁 が持つ
+- **列の鍵と `jwks_uri` の鍵を候補にし、順に試す。** alg と鍵の種類の突き合わせ（RFC 8725 §3.1）は、全部の候補に掛ける
+- `/ciba_authz` の「鍵を登録していなければ `invalid_client`」も、`jwks_uri` の登録を鍵の登録として数える
+- **JWT Bearer のグラント（`/token` の `jwt-bearer`）は、まだ列の RSA の鍵だけ**（#410）
 
 ### C-69. OP が外へ出す要求（`jwks_uri`・ID 連携の上流）に、時間と大きさの上限を設定していなかった **[Lib]** — **✅ 修正済み（#375）**
 

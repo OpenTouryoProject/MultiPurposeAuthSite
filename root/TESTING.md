@@ -1272,6 +1272,25 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **クエリを持つ送り先と、実際に SAML2 をやり取りすること** | E2E の上流・SP の URL はクエリを持たない。**Redirect Binding の署名は `SAMLRequest`・`SAMLResponse`・`RelayState`・`SigAlg` だけに掛かる**（SAML Bindings §3.4.4.1）ので、送り先のクエリは署名に入らない。**受ける側がクエリ全体を署名の対象にしていれば通らない**（相手の実装の問題） |
 
+##### Request Object・CIBA の署名した要求を、`jwks_uri` の鍵で検証する（`RT-408.*`。#408）
+
+| | 測ること |
+|---|---|
+| **`RT-408.1`** | **鍵を `jwks_uri` だけで登録した（動的登録の）クライアントの Request Object を受ける** — 外部の `request_uri`（`/ros` と同じ検証）で認可コードまで進み、PAR の `request` は `201` で預かる（PAR のクライアント認証も `jwks_uri` の鍵）。Request Object は `kid` を付けない（登録のときに温めた控えの鍵を順に試す）。**`jwks_uri` に無い鍵（EC の鍵。`jwks_uri` には RSA の鍵だけ）で署名したもの、同じ種類の鍵（RS256）でも署名の合わないもの**（署名の部分を書き換えた。候補はあるが、どれでも検証できない）**は、外部の `request_uri` で `invalid_request_object`、PAR で `400`** |
+| **`RT-408.2`** | **鍵を `jwks_uri` だけで登録した fapi_ciba のクライアント（種データの `TestClient4_6`）の、CIBA の署名した要求を受ける** — `kid` 付きの ES256。控えに無い `kid` なので、OP が取りに行く（#363）。居ない利用者を指すので `unknown_user_id`（`invalid_client`・検証の失敗にならない）。**`jwks_uri` に無い鍵（写し元の列の RSA の鍵）で署名した PS256 の要求と、同じ kid の ES256 で署名の合わない要求は `invalid_request`** |
+
+- **足場は、`RT-374` と同じ静的配信のコンテナ**（コンテナが無ければ Skip）。**`TestClient4_6` の `jwks_uri` は `rt408_2_ciba.json` に固定**（種データのため）。鍵はテストが置き、終わったら消す
+- **`RT-408.2` は、検証の失敗（`invalid_request`）の間だけ、時間（75 秒）で打ち切って送り直す** — 起動のときに温めようとした取得（鍵はまだ無い）が、取り直しの下限（1 分）に当たることがあるため。**通しでは、送り直さずに通っている**
+- **直したのを外すと**（`jwks_uri` の鍵を候補に加えない・`/ciba_authz` の手前で列の鍵だけを見る）、**両版で `RT-408.1`・`.2` が落ちる**ことを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`kid` の無い JWS で、控えが空のとき** | 待たずに断る（背景で取り直す）。クライアント認証と同じ決め（#309）。動的登録で温めた控えがあれば通る（`RT-408.1` はこちら） |
+| **列の鍵が合わず、`jwks_uri` の鍵が合う組**（候補の順試し）・**同じ種類の別の鍵** | 動的登録は `jwks` と `jwks_uri` を両方は受けない。手元のテストの鍵は種類ごとに 1 本なので、署名の合わないものは、署名の部分を書き換えて作る |
+| **CIBA の PS256（RSA の鍵）と `jwks_uri` の組・alg と鍵の種類が食い違う `jwks_uri` の鍵** | 突き合わせは既存の部品（`IsSameKeyType`・`VerifyingJwsOf`）を全部の候補に掛けているだけ。alg ごとの受け方は `RT-395.2`・`RT-370.*` が測る |
+
 ##### 外部の `request_uri` を取りに行き、Request Object として使う（`RT-374.*`。#374）
 
 | | 測ること |
@@ -1280,7 +1299,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RT-374.2`** | **登録した外部の `request_uri` は、取りに行って検証し、預けた `urn:` の認可の URL へ送り直して、その Request Object（`state` など）で認可コードまで進む。** 登録していない URL は `request_uri_not_supported`、署名の無いもの（`alg=none`）は `invalid_request_object`、取れないもの（404）は `invalid_request_uri`（どれもエラー画面） |
 
 - **足場は、`jwks_uri` と同じ静的配信のコンテナ**（`http://localhost:44305`。`test.ps1` がループバックを開ける。#376）。**Request Object をそこに置いて取りに行かせる**（コンテナが無ければ Skip）
-- **鍵は `jwks` で登録する**（Request Object の検証鍵は登録の列から引く。`jwks_uri` の鍵は使わない。#408）
+- **鍵は `jwks` で登録する**（`jwks_uri` の鍵で Request Object を検証することは `RT-408.1` で測る。#408）
 - **直したのを外すと**（保存しない・取りに行かない）、net10.0 版で `RT-374.1`・`.2` が落ちることを確かめた
 - **既存の `RT-362.1`**（外部の URL は `request_uri_not_supported`）は、**登録の無いクライアント**の話として、そのまま通る
 

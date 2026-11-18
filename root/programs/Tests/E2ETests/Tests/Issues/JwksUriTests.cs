@@ -38,6 +38,8 @@
 //*  2026/11/19  玄人 幸道         RT-374.2 で、預けた urn: の認可の URL への送り直しを確かめるようにした（#374）
 //*  2026/11/19  玄人 幸道         RT-374.2 で、預けた urn: の認可の URL への送り直しを確かめるようにした（#374）
 //*  2026/11/19  玄人 幸道         RT-408.1・.2（jwks_uri の鍵で Request Object・CIBA の署名した要求を検証する）を足した（#408）
+//*  2026/11/19  玄人 幸道         RT-408.1・.2 に、jwks_uri に無い鍵で署名したものを断ることを足した（#408。別モデルのレビューの指摘）
+//*  2026/11/19  玄人 幸道         RT-408.1・.2 に、同じ種類の鍵でも署名が合わないものを断ることを足した（#408。別モデルのレビューの指摘）
 //**********************************************************************************
 
 using System;
@@ -915,6 +917,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             return Tuple.Create(res.NeedsConsent ? await client.GrantConsentAsync(res) : res, urn);
         }
 
+        /// <summary>JWS の署名の部分を書き換える（ヘッダと payload はそのまま。#408）</summary>
+        /// <param name="jws">JWS（コンパクト形式）</param>
+        /// <returns>署名の合わない JWS</returns>
+        /// <remarks>**署名の真ん中の 1 文字を変える**（末尾の文字は、使われないビットだけが変わることがある）。</remarks>
+        private static string TamperSignature(string jws)
+        {
+            int dot = jws.LastIndexOf('.');
+            char[] sig = jws.Substring(dot + 1).ToCharArray();
+            int mid = sig.Length / 2;
+
+            sig[mid] = (sig[mid] == 'A') ? 'B' : 'A';
+
+            return jws.Substring(0, dot + 1) + new string(sig);
+        }
+
         /// <summary>エラー画面で断ったことを確かめる（RP へ返さない）</summary>
         /// <param name="r">TestReport</param>
         /// <param name="label">場合の名前</param>
@@ -947,7 +964,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-408.1",
                     "鍵を `jwks_uri` だけで登録したクライアントの、署名した Request Object を、`jwks_uri` の鍵で検証して受ける"
-                    + "（外部の `request_uri`（`/ros` と同じ検証）と、PAR の `request`）",
+                    + "（外部の `request_uri`（`/ros` と同じ検証）と、PAR の `request`）。`jwks_uri` に無い鍵・署名が合わないものは断る",
                     "**`jwks_uri` は、クライアントが要求の署名に使う鍵の置き場所である**（OIDC Registration 1.0 §2）。"
                     + "**Request Object の署名は、クライアントの鍵で検証する**（RFC 9101 §6.2）。"
                     + "**以前は登録の列（`jwks`）の鍵しか見ず、`jwks_uri` のクライアントの Request Object を検証できなかった**（クライアント認証は `jwks_uri` を見ていた）。",
@@ -1018,6 +1035,65 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         r.VerifyEqual("PAR : HTTP 201 で預かる", "201", ((int)par.StatusCode).ToString());
                         r.Verify("PAR : request_uri が返る", !string.IsNullOrEmpty(par.String("request_uri")),
                             "request_uri あり", string.IsNullOrEmpty(par.String("request_uri")) ? "**なし**（" + par.ToString() + "）" : "あり");
+
+                        r.Step("(4) jwks_uri に無い鍵（EC の鍵。jwks_uri には RSA の鍵だけを置いた）で署名したものは断る");
+
+                        //  **候補を順に試しても、クライアントの鍵でないものは通さない**（RFC 9101 §6.2。別モデルのレビューの指摘）。
+                        Dictionary<string, object> notInJwks = new Dictionary<string, object>()
+                        {
+                            { "response_type", "code" },
+                            { "redirect_uri", UriA },
+                            { "scope", "openid" },
+                            { "state", "state-rt4081-ec" },
+                            { "nonce", "nonce-rt4081-ec" }
+                        };
+
+                        JwksUri.WriteRaw(roName, await RequestObjectBuilder.CreateAsync(client, clientId, notInJwks, "ES256"));
+
+                        JwksUriTests.VerifyRefused(r, "外部の request_uri : jwks_uri に無い鍵",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName)),
+                            "invalid_request_object");
+
+                        JsonResponse parEc = await client.PostJsonAsync("/par", JwksUriTests.WithAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "client_id", clientId },
+                                { "request", await RequestObjectBuilder.CreateAsync(client, clientId, notInJwks, "ES256") }
+                            }));
+
+                        r.VerifyEqual("PAR : jwks_uri に無い鍵 : HTTP 400 で断る", "400", ((int)parEc.StatusCode).ToString());
+                        r.Verify("PAR : jwks_uri に無い鍵 : request_uri を返さない", string.IsNullOrEmpty(parEc.String("request_uri")),
+                            "request_uri なし", string.IsNullOrEmpty(parEc.String("request_uri")) ? "なし" : "**あり**");
+
+                        r.Step("(5) jwks_uri の鍵と同じ種類（RS256）でも、署名が合わないものは断る（候補はあるが、どれでも検証できない）");
+
+                        //  **候補を順に試す部分（`VerifyWithAny`）が、署名の合わないものを通さない**ことを測る（別モデルのレビューの指摘）。
+                        //    **手元の鍵は種類ごとに 1 本**なので、正しく署名してから署名の部分を書き換える。
+                        Dictionary<string, object> tampered = new Dictionary<string, object>()
+                        {
+                            { "response_type", "code" },
+                            { "redirect_uri", UriA },
+                            { "scope", "openid" },
+                            { "state", "state-rt4081-tampered" },
+                            { "nonce", "nonce-rt4081-tampered" }
+                        };
+
+                        JwksUri.WriteRaw(roName, JwksUriTests.TamperSignature(
+                            await RequestObjectBuilder.CreateAsync(client, clientId, tampered)));
+
+                        JwksUriTests.VerifyRefused(r, "外部の request_uri : 署名が合わない",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName)),
+                            "invalid_request_object");
+
+                        JsonResponse parTampered = await client.PostJsonAsync("/par", JwksUriTests.WithAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "client_id", clientId },
+                                { "request", JwksUriTests.TamperSignature(await RequestObjectBuilder.CreateAsync(client, clientId, tampered)) }
+                            }));
+
+                        r.VerifyEqual("PAR : 署名が合わない : HTTP 400 で断る", "400", ((int)parTampered.StatusCode).ToString());
+                        r.VerifyEqual("PAR : 署名が合わない : error", "invalid_request_object", parTampered.Error ?? "（無い）");
                     }
                     finally
                     {
@@ -1047,7 +1123,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-408.2",
                     "鍵を `jwks_uri` だけで登録した fapi_ciba のクライアントの、CIBA の署名した要求（`/ciba_authz` の `request`）を、`jwks_uri` の鍵で検証して先へ進む"
-                    + "（居ない利用者を指すので `unknown_user_id`。`invalid_client`・検証の失敗にならない）",
+                    + "（居ない利用者を指すので `unknown_user_id`。`invalid_client`・検証の失敗にならない）。`jwks_uri` に無い鍵・署名が合わないものは `invalid_request`",
                     "**CIBA の署名した要求は、クライアントの鍵で検証する**（CIBA Core 1.0 §7.1.1）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。"
                     + "**以前は、列の鍵が無ければ `invalid_client` で断っていた。**",
                     "CIBA Core 1.0 §7.1.1 / OIDC Registration 1.0 §2 / #408");
@@ -1094,6 +1170,32 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     }
 
                     r.VerifyEqual("署名を検証して先へ進む（居ない利用者なので unknown_user_id）", "unknown_user_id", res.Error ?? "（無い）");
+
+                    r.Step("(2) jwks_uri に無い鍵（RSA の鍵。写し元の列の鍵で、この登録には無い）で署名した PS256 の要求は断る");
+
+                    //  **候補を順に試しても、クライアントの鍵でないものは通さない**（別モデルのレビューの指摘）。
+                    //    **写し元（TestClient）の列の RSA の鍵は、`jwks_uri` に置き換えたときに消している**（`TestClients` の jwks_uri の差し替え）。
+                    JsonResponse notInJwks = await client.CibaAuthorizeWithBasicAuthAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "request", await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
+                                new Dictionary<string, object>(), null, "PS256") }
+                        },
+                        reg.ClientId, reg.ClientSecret);
+
+                    r.VerifyEqual("jwks_uri に無い鍵 : invalid_request で断る", "invalid_request", notInJwks.Error ?? "（無い）");
+
+                    r.Step("(3) jwks_uri の鍵と同じ種類（ES256・同じ kid）でも、署名が合わないものは断る");
+
+                    JsonResponse tampered = await client.CibaAuthorizeWithBasicAuthAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "request", JwksUriTests.TamperSignature(await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
+                                new Dictionary<string, object>(), kid)) }
+                        },
+                        reg.ClientId, reg.ClientSecret);
+
+                    r.VerifyEqual("署名が合わない : invalid_request で断る", "invalid_request", tampered.Error ?? "（無い）");
                 }
                 finally
                 {

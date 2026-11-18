@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=85b6cfec-88fb-493d-bc54-8e3e3cf1a1d1&code=bogus
+1. GET /Account/EmailConfirmation?userId=1b71668d-18e6-47c1-a34d-6a2d6446ab30&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=85b6cfec-88fb-493d-bc54-8e3e3cf1a1d1&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=85b6cfec-88fb-493d-bc54-8e3e3cf1a1d1&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=1b71668d-18e6-47c1-a34d-6a2d6446ab30&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=1b71668d-18e6-47c1-a34d-6a2d6446ab30&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13412,6 +13412,57 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PAR : HTTP 201
 - PAR : 応答の state
 - /ros : 応答の state
+
+## RT-408.1 鍵を `jwks_uri` だけで登録したクライアントの、署名した Request Object を、`jwks_uri` の鍵で検証して受ける（外部の `request_uri`（`/ros` と同じ検証）と、PAR の `request`）。`jwks_uri` に無い鍵・署名が合わないものは断る
+
+| | |
+|---|---|
+| 観点 | **`jwks_uri` は、クライアントが要求の署名に使う鍵の置き場所である**（OIDC Registration 1.0 §2）。**Request Object の署名は、クライアントの鍵で検証する**（RFC 9101 §6.2）。**以前は登録の列（`jwks`）の鍵しか見ず、`jwks_uri` のクライアントの Request Object を検証できなかった**（クライアント認証は `jwks_uri` を見ていた）。 |
+| 根拠 | OIDC Registration 1.0 §2 / RFC 9101 §6.2 / #408 |
+| テスト | `RT40801_jwks_uriの鍵でRequest_Objectを検証する` |
+
+**手順**
+
+1. 鍵を jwks_uri だけで登録する（jwks は登録しない）
+1. 外部の request_uri（/ros と同じ検証）
+1. PAR の request（クライアント認証も jwks_uri の鍵）
+1. jwks_uri に無い鍵（EC の鍵。jwks_uri には RSA の鍵だけを置いた）で署名したものは断る
+1. jwks_uri の鍵と同じ種類（RS256）でも、署名が合わないものは断る（候補はあるが、どれでも検証できない）
+
+**検証（合否を判定する）**
+
+- 外部の request_uri : 認可コードが返る
+- 外部の request_uri : state は Request Object の値
+- PAR : HTTP 201 で預かる
+- PAR : request_uri が返る
+- 外部の request_uri : jwks_uri に無い鍵 : code を返さない
+- 外部の request_uri : jwks_uri に無い鍵 : エラー画面に invalid_request_object が出る
+- PAR : jwks_uri に無い鍵 : HTTP 400 で断る
+- PAR : jwks_uri に無い鍵 : request_uri を返さない
+- 外部の request_uri : 署名が合わない : code を返さない
+- 外部の request_uri : 署名が合わない : エラー画面に invalid_request_object が出る
+- PAR : 署名が合わない : HTTP 400 で断る
+- PAR : 署名が合わない : error
+
+## RT-408.2 鍵を `jwks_uri` だけで登録した fapi_ciba のクライアントの、CIBA の署名した要求（`/ciba_authz` の `request`）を、`jwks_uri` の鍵で検証して先へ進む（居ない利用者を指すので `unknown_user_id`。`invalid_client`・検証の失敗にならない）。`jwks_uri` に無い鍵・署名が合わないものは `invalid_request`
+
+| | |
+|---|---|
+| 観点 | **CIBA の署名した要求は、クライアントの鍵で検証する**（CIBA Core 1.0 §7.1.1）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。**以前は、列の鍵が無ければ `invalid_client` で断っていた。** |
+| 根拠 | CIBA Core 1.0 §7.1.1 / OIDC Registration 1.0 §2 / #408 |
+| テスト | `RT40802_jwks_uriの鍵でCIBAの署名した要求を検証する` |
+
+**手順**
+
+1. kid 付きの署名した要求を送る（控えに無い kid なので、OP は jwks_uri を取りに行く）
+1. jwks_uri に無い鍵（RSA の鍵。写し元の列の鍵で、この登録には無い）で署名した PS256 の要求は断る
+1. jwks_uri の鍵と同じ種類（ES256・同じ kid）でも、署名が合わないものは断る
+
+**検証（合否を判定する）**
+
+- 署名を検証して先へ進む（居ない利用者なので unknown_user_id）
+- jwks_uri に無い鍵 : invalid_request で断る
+- 署名が合わない : invalid_request で断る
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

@@ -53,6 +53,7 @@
 //*  2026/11/17  玄人 幸道         クライアント認証の assertion の aud を issuer だけにした（CIBA の口・CIBA のトークン要求を除く）。JWT Bearer グラントの aud は分けた（RFC 10070 §4・§5。#398）
 //*  2026/11/18  玄人 幸道         jwks_uri を取りに行く前に、行き先のアドレスを判定するようにした（#376）
 //*  2026/11/19  玄人 幸道         jwks_uri の鍵の引き方を KeysFromJwksUri に切り出し、Request Object・CIBA の要求の検証でも使うようにした（振る舞いは変えていない。#408）
+//*  2026/11/19  玄人 幸道         jwks_uri の取得の失敗のログに、何の JWS かを書くようにした（#408。別モデルのレビューの指摘）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -470,6 +471,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>`jwks_uri` から `kid` の鍵を、取り直してでも引き、上限まで待つ（#363）</summary>
         /// <param name="jwksUri">jwks_uri</param>
         /// <param name="kid">JWS のヘッダの kid（**空なら引かない**）</param>
+        /// <param name="purpose">ログに書く、何の JWS か（#408。鍵は出さない）</param>
         /// <returns>JWK（JSON の文字列。引けなければ 0 件）</returns>
         /// <remarks>
         /// **取り直すかどうか（下限）は `RemoteJwkSetStore.GetJwkAsync` が決める**（Open棟梁。取得時刻から 1 分。`MinRefetchInterval`）。
@@ -485,7 +487,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`GetJwkAsync` は、取得中の URL を重ねて取りに行きうる**（同時に来た要求のぶん。下限ごとに 1 回の束まで）。
         /// Open棟梁 の側で直す（OpenTouryoProject/OpenTouryo#686）。
         /// </remarks>
-        private static string[] WaitForJwkFromUri(string jwksUri, string kid)
+        private static string[] WaitForJwkFromUri(string jwksUri, string kid, string purpose)
         {
             if (string.IsNullOrEmpty(kid))
             {
@@ -514,8 +516,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (t.IsFaulted)
                     {
                         Logging.MyOperationTrace(string.Format(
-                            "Fetching the jwks_uri for the client assertion failed. ({0})",
-                            t.Exception?.GetBaseException().GetType().Name));
+                            "Fetching the jwks_uri for the {0} failed. ({1})",
+                            purpose, t.Exception?.GetBaseException().GetType().Name));
                     }
 
                     lock (CmnEndpoints._jwksUriWaitingLock)
@@ -576,7 +578,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (fromUri.Length == 0 && fetchable)
             {
-                fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, kid);
+                fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, kid, purpose);
             }
 
             if (fromUri.Length == 0 && fetchable)
