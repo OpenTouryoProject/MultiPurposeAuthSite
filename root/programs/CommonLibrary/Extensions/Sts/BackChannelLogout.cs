@@ -31,6 +31,7 @@
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 2）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/18  玄人 幸道         専用の HttpClient（プロキシの組は ProxyForBackChannelLogout。クライアント証明書を持たない。リダイレクトを追わない）で送るようにした（#406）
+//*  2026/11/18  玄人 幸道         専用の HttpClient を作るときの例外を覚えないようにした（LazyThreadSafetyMode.PublicationOnly。#406）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -291,7 +292,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region HttpClient（#406）
 
         /// <summary>Back-Channel Logout の POST を送る HttpClient（#406）</summary>
-        private static readonly Lazy<HttpClient> _httpClient = new Lazy<HttpClient>(BackChannelLogout.CreateHttpClient);
+        /// <remarks>**作るときの例外は覚えない**（`PublicationOnly`。#406 の別モデルのレビュー。覚えると、設定の誤りを直した後も失敗し続ける）。</remarks>
+        private static readonly Lazy<HttpClient> _httpClient = new Lazy<HttpClient>(
+            BackChannelLogout.CreateHttpClient, System.Threading.LazyThreadSafetyMode.PublicationOnly);
 
         /// <summary>Back-Channel Logout の POST を送る HttpClient（#406）</summary>
         /// <remarks>

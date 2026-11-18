@@ -1384,6 +1384,35 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 - **メール・SMS・FCM は、それぞれの部品の上限による**（この設定は効かない）
 - **`WebAPIHelper`（外部ログインの WebAPI。いまは呼ばれていない）の HttpClient には掛けていない**
 
+### OP が外へ出す要求の分類と、分類ごとのプロキシ — `ProxyFor*`（#406）
+
+**OP が外へ出す要求を分類し、分類ごとに、プロキシの組（`Internet`・`Intranet`・`Debug`）のどれを使うかを選べる。**
+**以前は、1 つの共有の HttpClient（`Intranet`）が、インターネットの宛先（RP が登録した URL・Back-Channel Logout）と、内部の宛先（ID 連携の上流・自己テスト）を兼ねていた。**
+
+#### 要求先の分類（マトリックス）
+
+| 分類 | 例 | HttpClient | プロキシの組（設定。既定） | クライアント証明書 | リダイレクト | 時間・大きさ（#375） | 行き先の制限（#376） |
+|---|---|---|---|---|---|---|---|
+| **ID 連携の上流・自己テスト** | 上流のトークン・UserInfo・Discovery・`jwks_uri`・SAML のメタデータ、自分自身（`localhost`）の口 | 共有（`Helper`） | `ProxyForIdFederation`（`Intranet`） | **持つ**（OP がクライアントとして使う） | 追う | 30 秒・1MB | なし（運用者が設定する宛先） |
+| **RP が登録した URL**（動的登録） | `sector_identifier_uri`。**`jwks_uri` は #405 の後**（今は上の共有の HttpClient で、組も `ProxyForIdFederation`） | 専用（`OutboundUrlPolicy`） | `ProxyForClientRegisteredUrls`（`Intranet`） | 持たない | **追わない** | 30 秒・1MB（`sector_identifier_uri` は 10 秒・64KB） | **あり**（内部のアドレスを断る） |
+| **Back-Channel Logout** | RP の `backchannel_logout_uri` への POST | 専用（`BackChannelLogout`） | `ProxyForBackChannelLogout`（`Intranet`） | **持たない**（RP は `logout_token` の署名で OP を確かめる。以前は持っていた） | **追わない**（以前は追った） | 10 秒・1MB | なし（運用者が登録する宛先。動的登録では変えられない。#310） |
+| **外部ログイン** | Google・Microsoft のトークン・ユーザー情報 | 認証の部品の handler | `ProxyForExternalLogin`（`Internet`） | 持たない | 部品の既定 | 部品の既定 | なし |
+| 通知 | FCM・SMS（Twilio） | 各 SDK | **設定は効かない**（OS の既定のプロキシ） | — | — | 部品の既定 | — |
+| メール | SMTP | `SmtpClient` | HTTP のプロキシは関係しない | — | — | — | — |
+| （使われていない） | `WebAPIHelper`（外部の WebAPI） | 専用 | `Internet` に固定 | — | — | 掛けていない | — |
+
+- **Session Management・Front-Channel Logout は、ブラウザが出す要求**で、OP のサーバは要求を出さない
+- **値**：`Internet`・`Intranet`・`Debug`・**`None`**（大文字小文字を問わない）。**空・読めない値は既定**（以前の振る舞い）
+- **組のプロキシが無いとき**（その組の `Use*Proxy` が `false`）は **OS の既定のプロキシ**を使う（net10.0 は環境変数 `HTTPS_PROXY` など、net48 は IE の設定）。**`None` は OS の既定のプロキシも使わない**（直接つなぐ）
+  - **例外**：RP が登録した URL の専用の HttpClient は、組のプロキシが無いとき、**OS の既定のプロキシも使わない**（接続の時点のアドレスを判定するため。#376）
+- **手元のテスト（E2E）では、何も書かなくてよい。** 手元の設定で `Use*Proxy` が `false` なら、以前と同じく OS の既定のプロキシになる。**`None` が要るのは、組のプロキシを使う配備で、ある分類だけプロキシを通したくないとき**（例：社内のプロキシの配備で、自己テストの `localhost` だけ直接つなぐ。`WebProxy` は既定ではローカルの宛先も迂回しない）
+- **起動の直後**：両版とも、設定を読み込んだ直後に共有の HttpClient を作る（`Helper` の初期化）。**以前は、起動のときに裏で `Helper` が初期化されるまで、ID 連携が OS の既定のプロキシ・クライアント証明書なしの HttpClient で送りえた**
+
+> **既定は以前の振る舞い**だが、次の 3 つは変わった。
+> - **Back-Channel Logout は、OP のクライアント証明書を出さず、リダイレクトを追わない**
+> - **外部ログイン（net48 版）は、`UseInternetProxy=false` のとき、直接ではなく OS の既定のプロキシを使う**（直接つなぐなら `ProxyForExternalLogin=None`）
+> - **外部ログイン（net10.0 版）は、`UseInternetProxy=true` のとき、設定のプロキシを使う**（以前は設定を見ず OS の既定）
+
 ### `redirect_uri` の記号
 
 `test_self_code` / `test_self_token` は URL ではなく**記号**である。

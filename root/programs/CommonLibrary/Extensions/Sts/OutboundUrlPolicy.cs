@@ -30,6 +30,7 @@
 //*  2026/11/18  玄人 幸道         新規（#376）
 //*  2026/11/18  玄人 幸道         専用の HttpClient にも、時間と大きさの上限を掛けるようにした（#375）
 //*  2026/11/18  玄人 幸道         プロキシの組を、設定（ProxyForClientRegisteredUrls）で選ぶようにした（#406）
+//*  2026/11/18  玄人 幸道         専用の HttpClient を作るときの例外を覚えないようにした（LazyThreadSafetyMode.PublicationOnly。#406）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -312,7 +313,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region 取りに行く HttpClient
 
         /// <summary>クライアントが登録した URL を取りに行く HttpClient（リダイレクトを追わない）</summary>
-        private static readonly Lazy<HttpClient> _httpClient = new Lazy<HttpClient>(OutboundUrlPolicy.CreateHttpClient);
+        /// <remarks>**作るときの例外は覚えない**（`PublicationOnly`。#406 の別モデルのレビュー。覚えると、設定の誤りを直した後も失敗し続ける）。</remarks>
+        private static readonly Lazy<HttpClient> _httpClient = new Lazy<HttpClient>(
+            OutboundUrlPolicy.CreateHttpClient, System.Threading.LazyThreadSafetyMode.PublicationOnly);
 
         /// <summary>クライアントが登録した URL を取りに行く HttpClient（#376）</summary>
         /// <remarks>
