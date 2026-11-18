@@ -687,6 +687,10 @@ function Set-IdFederationEnv
     #   **短くしてある**（鍵を入れ替える周期より短いこと。`CONFIGURATION.md`）。
     $env:JwkSetCacheMaxAgeSeconds = '300'
 
+    # **クライアントが登録した URL へ、ループバックにも取りに行かせる**（#376）。
+    #   **既定は閉じている**（https だけ・内部のアドレスへは行かない）。**E2E の静的配信の足場は http://localhost:44305**（jwks_uri・sector_identifier_uri）。
+    $env:OutboundUrlAllowLoopbackHttp = 'true'
+
     # **認証の失敗を数える**（#305 の段階 2）。
     #   **上限を高くしてある**（`RT-305.3` / `RT-305.4` は、この回数だけ失敗させて断りを測る）。
     #   **低くすると通しが壊れる**（実測）：**負の経路のケースが、共用のクライアントで

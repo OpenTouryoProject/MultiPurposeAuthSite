@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/12  玄人 幸道         新規（#364）
+//*  2026/11/18  玄人 幸道         sector_identifier_uri の判定に行き先のアドレスを足し、専用の HttpClient（リダイレクトを追わない）で取りに行くようにした（#376）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Log;
@@ -65,12 +66,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// | | |
     /// |---|---|
-    /// | **行き先** | **`https` だけ**（ループバックの `http` は許す。`jwks_uri` と同じ `UriOperator.IsHttpsOrLoopback`） |
-    /// | **HttpClient** | **`OAuth2AndOIDCClient.HttpClient`**（ID 連携・`jwks_uri`・Back-Channel Logout と同じ。TLS・プロキシの扱いが揃う） |
+    /// | **行き先** | **`https` だけで、内部のアドレスでないこと**（`OutboundUrlPolicy.IsAllowed`。#376。ループバックの `http` は設定 `OutboundUrlAllowLoopbackHttp` で開けたときだけ） |
+    /// | **HttpClient** | **`OutboundUrlPolicy.HttpClient`**（専用。リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する。#376。以前は共有の `OAuth2AndOIDCClient.HttpClient`） |
     /// | **上限** | **時間は `Timeout`、大きさは `MaxResponseBytes`**（超えたら「読めない」） |
-    /// | **リダイレクト** | **別の URL から返った中身は「読めない」**（その URL に置かれた中身だけを見る） |
+    /// | **リダイレクト** | **追わない**（3xx は「読めない」。#376）。**別の URL から返った中身も「読めない」**（念のための守り。#364） |
     /// | **控えの寿命** | **`Freshness`**（同じ要求の中で読む前提。古い控えでは通さない）。**件数は `MaxEntries` まで** |
-    /// | **仕様との差** | **ループバックの `http` を許すのは、§2・§5 の "https" の MUST からの逸脱**（`jwks_uri` と同じ扱い。開発と試験のため） |
+    /// | **仕様との差** | **既定ではない**（`https` だけ。#376）。**`OutboundUrlAllowLoopbackHttp=true` でループバックの `http` を許すのは、§2・§5 の "https" の MUST からの逸脱**（開発と試験の配備だけ） |
     /// </remarks>
     public static class SectorIdentifierProvider
     {
@@ -122,10 +123,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>取りに行ってよい URL か</summary>
         /// <param name="url">sector_identifier_uri</param>
-        /// <returns>`https`（ループバックは `http` も）なら true</returns>
+        /// <returns>`https` で、内部のアドレスでなければ true（`OutboundUrlPolicy`）</returns>
+        /// <remarks>
+        /// **以前はスキーム（`https` か、ループバックの `http`）しか見ていなかった**（#376）。
+        /// **行き先のアドレスも見る**（内部のアドレスを断る。ループバックの `http` は設定で開けたときだけ）。
+        /// </remarks>
         public static bool IsUsable(string url)
         {
-            return UriOperator.IsHttpsOrLoopback(url);
+            return OutboundUrlPolicy.IsAllowed(url);
         }
 
         /// <summary>**取りに行って控える**（判定はしない）</summary>
@@ -221,26 +226,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <remarks>**大きさの上限を超えたら `InvalidDataException`**（`WarmUpAsync` が「読めない」にする）。</remarks>
         private static async Task<string> GetStringAsync(string url)
         {
-            //  **`Helper` の初期化が `OAuth2AndOIDCClient.HttpClient` を設定する**ので、先に初期化させてから読む
-            //    （`BackChannelLogout` と同じ）。
-            Helper.GetInstance();
-            HttpClient client = OAuth2AndOIDCClient.HttpClient;
-
-            if (client == null)
-            {
-                return null;
-            }
+            //  **専用の HttpClient で取りに行く**（#376）。**リダイレクトを追わず、net10.0 版は接続の時点のアドレスでも判定する。**
+            //    **以前は共有の `OAuth2AndOIDCClient.HttpClient` で、追うかどうかはその設定によっていた。**
+            HttpClient client = OutboundUrlPolicy.HttpClient;
 
             using (CancellationTokenSource cts = new CancellationTokenSource(SectorIdentifierProvider.Timeout))
             using (HttpResponseMessage response = await client.GetAsync(
                 new Uri(url), HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false))
             {
+                //  **リダイレクトは追わない**ので、3xx は 2xx でないとして読めない（#376）。
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
                 }
 
-                //  **リダイレクトで別の URL に移っていたら、読めないとして扱う**（§5 が見るのは、その URL に置かれた中身）。
+                //  **リダイレクトで別の URL に移っていたら、読めないとして扱う**（専用の HttpClient は追わないので、念のための守り）（§5 が見るのは、その URL に置かれた中身）。
                 //    **共有の HttpClient が追うかどうかに頼らない** —
                 //    **追っていれば、そのホストの開いたリダイレクトから、別の場所の中身で Sector を名乗れてしまう。**
                 Uri finalUri = response.RequestMessage?.RequestUri;

@@ -30,10 +30,14 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/10/28  玄人 幸道         メアド検証・パスワード リセットのメールの間隔を足した（#294）
+//*  2026/11/18  玄人 幸道         クライアントが登録した URL へ取りに行く先の設定（OutboundUrlAllowLoopbackHttp・OutboundUrlAllowedHosts）を足した（#376）
+//*  2026/11/18  玄人 幸道         OP が外へ出す要求の上限の設定（OutboundHttpTimeoutSeconds・OutboundHttpMaxResponseBytes）を足した（#375）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
+
+using System.Linq;
 
 using Touryo.Infrastructure.Public.Util;
 
@@ -294,6 +298,92 @@ namespace MultiPurposeAuthSite.Co
 
                 bool enabled = true;
                 return bool.TryParse(value, out enabled) ? enabled : true;
+            }
+        }
+
+        #endregion
+
+        #region クライアントが登録した URL へ取りに行く先（#376）
+
+        /// <summary>
+        /// **ループバックへ取りに行くこと（`http` を含む）を許すか**（`jwks_uri`・`sector_identifier_uri`。#376）
+        /// </summary>
+        /// <remarks>
+        /// **未設定なら false**（**`https` だけ、ループバックへは行かない**。OIDC Registration 1.0 §2・§5 の `https` の MUST）。
+        /// **true は開発と試験の配備だけで使う**（E2E の静的配信の足場は `http://localhost:44305`。`test.ps1` が環境変数で開ける）。
+        /// </remarks>
+        public static bool OutboundUrlAllowLoopbackHttp
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("OutboundUrlAllowLoopbackHttp");
+
+                bool enabled = false;
+                return !string.IsNullOrEmpty(value) && bool.TryParse(value, out enabled) && enabled;
+            }
+        }
+
+        /// <summary>
+        /// **内部のアドレスに解決されても取りに行ってよいホスト名**（カンマ区切り。`jwks_uri`・`sector_identifier_uri`。#376）
+        /// </summary>
+        /// <remarks>
+        /// **未設定なら空**（**内部のアドレス（プライベート・リンクローカルなど）には行かない**）。
+        /// **配備によっては内部のアドレスが正しい行き先になる**（適合性テストの Conformance Suite は、コンテナ網の内部のアドレスで届く）。
+        /// **スキームの判定（`https`）は外さない。** 比べるのはホスト名だけ（大文字小文字を問わない）。
+        /// </remarks>
+        public static string[] OutboundUrlAllowedHosts
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("OutboundUrlAllowedHosts");
+
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return new string[0];
+                }
+
+                return value.Split(',')
+                    .Select(h => h.Trim())
+                    .Where(h => h.Length != 0)
+                    .ToArray();
+            }
+        }
+
+        #endregion
+
+        #region OP が外へ出す要求の上限（#375）
+
+        /// <summary>**OP が外へ出す要求の時間の上限（秒）**（共有の HttpClient。#375）</summary>
+        /// <remarks>
+        /// **未設定・読めない・1 未満なら 30 秒**（`OutboundHttpLimits.DefaultTimeoutSeconds`）。
+        /// **以前は設定しておらず、.NET の既定の 100 秒だった。** `jwks_uri`・ID 連携の上流・SAML のメタデータの取得に効く。
+        /// </remarks>
+        public static int OutboundHttpTimeoutSeconds
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("OutboundHttpTimeoutSeconds");
+
+                int seconds = 0;
+                return (!string.IsNullOrEmpty(value) && int.TryParse(value, out seconds) && 0 < seconds)
+                    ? seconds : Network.OutboundHttpLimits.DefaultTimeoutSeconds;
+            }
+        }
+
+        /// <summary>**OP が外へ出す要求の、応答の大きさの上限（バイト）**（共有の HttpClient。#375）</summary>
+        /// <remarks>
+        /// **未設定・読めない・1 未満なら 1MB**（`OutboundHttpLimits.DefaultMaxResponseBytes`）。
+        /// **以前は設定しておらず、上限が無かった**（.NET の既定は 2GB 近く）。**超えた応答は、取得の失敗になる。**
+        /// </remarks>
+        public static long OutboundHttpMaxResponseBytes
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("OutboundHttpMaxResponseBytes");
+
+                long bytes = 0;
+                return (!string.IsNullOrEmpty(value) && long.TryParse(value, out bytes) && 0 < bytes)
+                    ? bytes : Network.OutboundHttpLimits.DefaultMaxResponseBytes;
             }
         }
 

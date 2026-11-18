@@ -54,6 +54,7 @@
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を PS256 にした TestClient_46 を追加（#370）
 //*  2026/11/15  玄人 幸道         RSA の公開鍵を持つ fapi_ciba の TestClient4_5 を追加（#395）
 //*  2026/11/17  玄人 幸道         SAML2 のテストのクライアント（TestClient_21・_22）の写す元を、鍵を持つ TestClient にした（IdP が署名の無い要求を断るようになった。#400）
+//*  2026/11/19  玄人 幸道         鍵を jwks_uri だけで登録した fapi_ciba の TestClient4_6 を追加し、jwks_uri を差し替えられるようにした（#408）
 //**********************************************************************************
 
 using System;
@@ -170,6 +171,20 @@ namespace MultiPurposeAuthSite.Util.Test
                 //   **秘密で認証する**（`/ciba_authz` は Basic。写し元の秘密）。
                 ClientName = "TestClient4_5", ClientId = "e2e0tc45000000000000000000000000",
                 ClientMode = "fapi_ciba", SourceName = "TestClient"
+            },
+            new Entry()
+            {
+                // **鍵を `jwks_uri` だけで登録した fapi_ciba のクライアント**（#408）。
+                //   **CIBA の署名した要求を、`jwks_uri` の鍵で検証することを測る**（`RT-408.2`）。
+                //   **動的登録は normal の登録種別にしかならない**ので、種データにした。
+                //   **`jwks_uri` は E2E の静的配信のコンテナ**（鍵はテストが置く）。**列の鍵は持たない**（`jwks` とは排他）。
+                //   **`/ciba_authz` は秘密（Basic）で認証する**（写し元の秘密）。
+                ClientName = "TestClient4_6", ClientId = "e2e0tc46000000000000000000000000",
+                ClientMode = "fapi_ciba", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.jwks_uri, "http://localhost:44305/rt408_2_ciba.json" }
+                }
             },
             new Entry()
             {
@@ -922,6 +937,13 @@ namespace MultiPurposeAuthSite.Util.Test
 
                 case OAuth2AndOIDCConst.tls_client_auth_subject_dn:
                     model.TlsClientAuthSubjectDn = value;
+                    break;
+
+                case OAuth2AndOIDCConst.jwks_uri:
+                    // **`jwks`（列の鍵）とは排他**なので、写した列の鍵を消す（#408。動的登録も両方在る要求を断る）。
+                    model.JwksUri = value;
+                    model.JwkRsaPublickey = null;
+                    model.JwkECDsaPublickey = null;
                     break;
 
                 case Const.ClientIdTokenSignedResponseAlg:

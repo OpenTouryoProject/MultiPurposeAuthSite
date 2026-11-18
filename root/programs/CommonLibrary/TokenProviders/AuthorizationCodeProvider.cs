@@ -38,6 +38,8 @@
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //*  2026/11/04  玄人 幸道         消せた 1 つだけが引き換える（同時に引き換えると、複数にトークンが出ていた。#332）
 //*  2026/11/12  玄人 幸道         見つからない request_uri のコメントを、Controller が先に断る形に合わせた（#362）
+//*  2026/11/18  玄人 幸道         預けた Request Object の値を、文字列でなければ無いのと同じに読む（例外にしない。#377）
+//*  2026/11/18  玄人 幸道         預けた Request Object を、日付の形の文字列を日付に変えずに読む（#403）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -261,7 +263,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return queryString;
             }
 
-            JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+            //  **日付の形の文字列を、日付に変えずに読む**（#403。以前は既定の読み方で、日付の形の値が書式の変わった文字列になっていた）。
+            JObject requestObjectPayload = MultiPurposeAuthSite.Util.Sts.JwtUtil.TryParseObjectAsIs(requestObjectPayloadString);
 
             if (requestObjectPayload == null)
             {
@@ -269,16 +272,32 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // Request Object の値だけを使う（入っていなければ null のまま）。
+            //   **文字列でなければ、無いのと同じに扱う**（#377）。**以前は `(string)` で読み、配列・オブジェクトだと例外（500）になった。**
+            //   **PAR・`/ros` は、文字列でないものを預からない**（`CmnRequestObjectEndpoint.AreAuthZParamsWellTyped`）ので、ここは念のための守り。
             NameValueCollection ret = new NameValueCollection();
-            ret[OAuth2AndOIDCConst.redirect_uri] = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
-            ret[OAuth2AndOIDCConst.code_challenge] = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
-            ret[OAuth2AndOIDCConst.code_challenge_method] = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge_method];
+            ret[OAuth2AndOIDCConst.redirect_uri] = AuthorizationCodeProvider.StringOrNull(requestObjectPayload, OAuth2AndOIDCConst.redirect_uri);
+            ret[OAuth2AndOIDCConst.code_challenge] = AuthorizationCodeProvider.StringOrNull(requestObjectPayload, OAuth2AndOIDCConst.code_challenge);
+            ret[OAuth2AndOIDCConst.code_challenge_method] = AuthorizationCodeProvider.StringOrNull(requestObjectPayload, OAuth2AndOIDCConst.code_challenge_method);
 
             // **DPoP の鍵の申告も、Request Object の中から読む**（#311 の段階 4）。
             //   **ここに足し忘れると、JAR / PAR の経路だけ縛りが外れる**（#197 と同じ落ち方）。
-            ret[OAuth2AndOIDCConst.dpop_jkt] = (string)requestObjectPayload[OAuth2AndOIDCConst.dpop_jkt];
+            ret[OAuth2AndOIDCConst.dpop_jkt] = AuthorizationCodeProvider.StringOrNull(requestObjectPayload, OAuth2AndOIDCConst.dpop_jkt);
 
             return ret;
+        }
+
+        /// <summary>payload の値が JSON の文字列なら、その値（無い・文字列でなければ null。#377）</summary>
+        /// <param name="payload">預けた Request Object の payload</param>
+        /// <param name="name">名前</param>
+        /// <returns>文字列か null</returns>
+        /// <remarks>
+        /// **`Date` も文字列として読む**（念のため）。**預けた中身は、日付に変えない読み方で読む**（#403）ので、今は `Date` は来ない。
+        /// </remarks>
+        private static string StringOrNull(JObject payload, string name)
+        {
+            JToken value = payload[name];
+
+            return (value != null && (value.Type == JTokenType.String || value.Type == JTokenType.Date)) ? (string)value : null;
         }
 
         /// <summary>CreateAuthenticationCode</summary>

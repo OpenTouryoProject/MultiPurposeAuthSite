@@ -34,6 +34,7 @@
 //*  2026/11/08  玄人 幸道         プロファイルを強制する 4 つのメタデータを、立っていれば返すようにした（#346 の段階 1）
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を返すようにした（#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を応答に返す（#370）
+//*  2026/11/19  玄人 幸道         応答に request_uris を返すようにした（#374）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -281,6 +282,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **`sector_identifier_uri` も返す**（#364。登録したメタデータは返す。OIDC Registration 1.0 §3.2）。
             //    **`PUT` は返された全てを入れ直す**ので、返さないと次の `PUT` で消える。
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSectorIdentifierUri, model.SectorIdentifierUri);
+
+            //  **`request_uris` も返す**（#374。登録したメタデータは返す。`PUT` は返された全てを入れ直す）。
+            if (!string.IsNullOrEmpty(model.RequestUris))
+            {
+                ret.Add(Const.ClientRequestUris, OAuth2AndOIDCSpec.ToDistinctList(model.RequestUris));
+            }
 
             if (!string.IsNullOrEmpty(model.Contacts))
             {

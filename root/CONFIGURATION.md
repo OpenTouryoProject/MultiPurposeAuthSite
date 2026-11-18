@@ -460,6 +460,12 @@ CreateJwkSetJson.exe
 
 **`JwkSet.json` は、配備中に直接上書きしない。** 書いている間にサイトが読むと、`IOException` で HTTP 500 になることがある（#325）。別名で書いてから置き換える。
 
+**置き換えの瞬間に重なった要求も、500 にしない**（#407）。アクセス トークンの検証と `/jwkcerts` は、`SigningJwkSet` で読む。
+**ファイルが変わっていなければ控えた中身を使い、読めない・壊れている（直接上書きの書きかけ）ときは短く待ってやり直し（3 回まで）、それでもだめなら前に読めた中身で続ける**（OPERATION のログに残す）。**ただし、最後に読めてから 1 分まで**（過ぎたら以前どおり例外。権限の誤りや壊れたままの状態を、黙って通し続けない）。
+**ファイル・フォルダが無いときは、前の中身に落とさず、以前どおり例外**（意図して撤去したなら、古い表を出し続けない）。
+**以前は、検証が要求のたびにファイルを読んでいて、置き換えの瞬間に重なった要求が 500 になった。**
+**直接上書きは、書きかけの中身を読み続けると、前の中身のままになる**ので、置き換える手順は変わらない。
+
 > **広告（Discovery）と公開鍵（`jwkcerts`）が揃っていることは E2E で測っている**（`RT-129.6`）。
 > **表に alg を足したのに `CreateJwkSetJson` を回していない**という食い違いは、そこで落ちる。
 
@@ -1343,6 +1349,99 @@ ALTER TABLE "Saml2OAuth2Data" ADD ("SectorIdentifierUri" NVARCHAR2(512) NULL);
 -- PostgreSQL
 ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 ```
+
+### 外部の `request_uri` を取りに行ってよい先 — `request_uris`（#374）
+
+**動的登録（RFC 7591）と構成ファイル（`OAuth2ClientsInformation` の `request_uris`。空白区切り）で、認可要求の `request_uri` に使ってよい外部の URL を登録できる**（OIDC Registration 1.0 §2）。
+
+| | |
+|---|---|
+| **登録のときに確かめる** | **絶対 URI で、`https` と行き先のアドレス（`OutboundUrlPolicy`。#376）**。**5 件まで**（`Const.MaxCountOfRequestUris`）。**登録のときは取りに行かない** |
+| **`PUT`（RFC 7592）** | **全置換**（省いたら消える） |
+| **クライアント登録の画面** | **欄を出さない。保存しても、持ち越す**（`sector_identifier_uri` と同じ） |
+| **`/authorize` で取りに行く** | **登録した URL だけ**（`#` から後ろを除いて完全一致。無ければ `request_uri_not_supported`）。**`#` から後ろ（RP が中身の変わり目に付ける印。OIDC Registration 1.0 §2）は照合にも検証にも使わない**（取りに行くのは毎回で、控えないため）。**専用の HttpClient**（`sector_identifier_uri` と同じ。リダイレクトを追わない・**10 秒・64KB**）。**`/ros` と同じ検証**（署名したものだけ）をして `urn:` に預け、**その `urn:` の認可の URL へ送り直す**（サインイン・再認証の往復で取りに行き直さない） |
+| **行き先の判定** | 下の `OutboundUrlPolicy` と同じ。**net48 版は、名前解決した結果の判定（1 分控える）に留まる**（接続の時点の判定は net10.0 版だけ） |
+| **取りに行く回数** | **登録した URL を知っていれば、匿名の `/authorize` のたびに取りに行き、`urn:` を 1 件預ける**（`/ros` が匿名で預かるのと同じ。預かりは寿命で消える）。**絞るなら、送信元ごとのレート制限**（`RateLimitPerIpPermits`。#305） |
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 外部の `request_uri` は使えない。以前どおり）。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [RequestUris] [nvarchar](2000) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("RequestUris" NVARCHAR2(2000) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN RequestUris varchar(2000) NULL;
+```
+
+### クライアントが登録した URL へ取りに行く先 — `OutboundUrlAllowLoopbackHttp`・`OutboundUrlAllowedHosts`（#376）
+
+**動的登録で OP が取りに行く URL（`jwks_uri`・`sector_identifier_uri`）は、行き先のアドレスでも絞る。**
+**以前はスキーム（`https` か、ループバックの `http`）しか見ておらず、登録できる相手が、OP の内側のアドレスへ要求を出させられた。**
+
+| キー | 既定 | |
+|---|---|---|
+| `OutboundUrlAllowLoopbackHttp` | **`false`** | **`true` で、ループバック（`http` を含む）へも取りに行く。** **開発と試験の配備だけで使う**（OIDC Registration 1.0 §2・§5 の `https` の MUST からの逸脱）。**E2E は `test.ps1` が環境変数で開ける**（静的配信の足場は `http://localhost:44305`） |
+| `OutboundUrlAllowedHosts` | **空** | **内部のアドレスに解決されても取りに行ってよいホスト名**（カンマ区切り。大文字小文字を問わない）。**スキームの判定（`https`）は外さない。** **適合性テストは `container/CTS` が `localhost.emobix.co.uk` を渡す**（Conformance Suite はコンテナ網の内部のアドレスに居る） |
+
+- **内部のアドレス**：ループバック・プライベート（`10/8`・`172.16/12`・`192.168/16`）・CGNAT（`100.64/10`）・リンクローカル（`169.254/16`。クラウドのメタデータの口）・文書化用・未指定・マルチキャストなど、IPv6 の同じ種類（`fc00::/7`・`fe80::/10` など）、IPv4 を写した・持つ IPv6（中の IPv4 で判定する NAT64・6to4 など）。一覧は `OutboundUrlPolicy.IsInternalAddress`
+- **名前解決の時間の上限は 5 秒**（過ぎたら、名前解決できないとして断る）
+- **判定の結果は、URL ごとに 1 分控える**（断った結果も。`RemoteJwkSetStore` の取り直しの下限と同じ）。**設定を変えても、控えが切れるまでは前の判定が効く**
+- **名前解決した結果が 1 つでも内部のアドレスなら断る。** **名前解決できなければ断る**
+- **掛ける所**：登録の検査（`invalid_client_metadata`）、登録のときに温める前、起動のときに温める前、クライアント認証で `jwks_uri` を取り直す前（**登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い**）
+- **`sector_identifier_uri` は専用の HttpClient で取りに行く**：**リダイレクトを追わない**。**net10.0 版は接続の時点のアドレスでも判定する**（判定の後に名前解決をやり直して、行き先を変えられないように）。**net48 版は名前解決した結果の判定に留まる**（`HttpClientHandler` に接続の時点の口が無い）。**プロキシ（`UseIntranetProxy`）を通すときも、取りに行く前の判定に留まる**
+- **`jwks_uri` の取得は Open棟梁 の `RemoteJwkSetStore`（共有の HttpClient）が行う**ので、**取りに行く前の判定だけ**（専用の HttpClient は、Open棟梁 で渡せるようになってから。#376 の残り。OpenTouryo#707）
+- **ID 連携の上流・Back-Channel Logout の URL は対象外**（運用者が設定・登録するもので、動的登録では変えられない。#310）
+
+> **既定が閉じたので、内部のアドレスの `jwks_uri`・`sector_identifier_uri` を使っている配備は、`OutboundUrlAllowedHosts` に足すこと。**
+> **ループバックの `jwks_uri` で試していた開発の手元は、`OutboundUrlAllowLoopbackHttp=true` にすること。**
+> **net10.0 版は、設定ファイルに無いキーを環境変数だけでは足せない**（2 節）。**キーをファイルに書いてから、環境変数で上書きする**（`container/CTS` は手元の `appsettings.json` をマウントする）
+
+### OP が外へ出す要求の上限 — `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`（#375）
+
+**共有の HttpClient（`OAuth2AndOIDCClient.HttpClient`）に、時間と応答の大きさの上限を掛ける。**
+**Open棟梁 の部品（`jwks_uri` の `RemoteJwkSetStore`・ID 連携の `OAuth2AndOIDCClient`・`SAML2Metadata`）は、要求ごとの上限を持たず、この HttpClient の設定に任せる。**
+**以前は何も設定しておらず、.NET の既定（100 秒・大きさの上限なし）だった**ので、応答の遅い・大きな `jwks_uri` を登録されると、登録の要求や起動のときの温めが長く待たされ、メモリも使われた。
+
+| キー | 既定 | |
+|---|---|---|
+| `OutboundHttpTimeoutSeconds` | **30** | 時間（秒）。**遅い上流（ID 連携の相手）を使う配備は延ばす** |
+| `OutboundHttpMaxResponseBytes` | **1048576**（1MB） | 応答の本文の大きさ（バイト）。**超えた応答は、取得の失敗になる。** 大きな SAML のメタデータを読む配備は広げる |
+
+- **掛ける所**：共有の HttpClient（`Helper` が作る。設定の値）、起動のときの HttpClient（`Program.Main`・`Global.asax`。**設定を読む前なので既定の値**。`Helper` が作り直すまで）、クライアントが登録した URL を取りに行く専用の HttpClient（#376）
+- **要求ごとに短い上限を持つ口は、そちらが先に効く**：Back-Channel Logout の POST（10 秒）、`sector_identifier_uri`（10 秒・64KB）
+- **Session Management・Front-Channel Logout は、ブラウザが出す要求**で、OP のサーバは要求を出さない
+- **メール・SMS・FCM は、それぞれの部品の上限による**（この設定は効かない）
+- **`WebAPIHelper`（外部ログインの WebAPI。いまは呼ばれていない）の HttpClient には掛けていない**
+
+### OP が外へ出す要求の分類と、分類ごとのプロキシ — `ProxyFor*`（#406）
+
+**OP が外へ出す要求を分類し、分類ごとに、プロキシの組（`Internet`・`Intranet`・`Debug`）のどれを使うかを選べる。**
+**以前は、1 つの共有の HttpClient（`Intranet`）が、インターネットの宛先（RP が登録した URL・Back-Channel Logout）と、内部の宛先（ID 連携の上流・自己テスト）を兼ねていた。**
+
+#### 要求先の分類（マトリックス）
+
+| 分類 | 例 | HttpClient | プロキシの組（設定。既定） | クライアント証明書 | リダイレクト | 時間・大きさ（#375） | 行き先の制限（#376） |
+|---|---|---|---|---|---|---|---|
+| **ID 連携の上流・自己テスト** | 上流のトークン・UserInfo・Discovery・`jwks_uri`・SAML のメタデータ、自分自身（`localhost`）の口 | 共有（`Helper`） | `ProxyForIdFederation`（`Intranet`） | **持つ**（OP がクライアントとして使う） | 追う | 30 秒・1MB | なし（運用者が設定する宛先） |
+| **RP が登録した URL**（動的登録） | `sector_identifier_uri`。**`jwks_uri` は #405 の後**（今は上の共有の HttpClient で、組も `ProxyForIdFederation`） | 専用（`OutboundUrlPolicy`） | `ProxyForClientRegisteredUrls`（`Intranet`） | 持たない | **追わない** | 30 秒・1MB（`sector_identifier_uri` は 10 秒・64KB） | **あり**（内部のアドレスを断る） |
+| **Back-Channel Logout** | RP の `backchannel_logout_uri` への POST | 専用（`BackChannelLogout`） | `ProxyForBackChannelLogout`（`Intranet`） | **持たない**（RP は `logout_token` の署名で OP を確かめる。以前は持っていた） | **追わない**（以前は追った） | 10 秒・1MB | なし（運用者が登録する宛先。動的登録では変えられない。#310） |
+| **外部ログイン** | Google・Microsoft のトークン・ユーザー情報 | 認証の部品の handler | `ProxyForExternalLogin`（`Internet`） | 持たない | 部品の既定 | 部品の既定 | なし |
+| 通知 | FCM・SMS（Twilio） | 各 SDK | **設定は効かない**（OS の既定のプロキシ） | — | — | 部品の既定 | — |
+| メール | SMTP | `SmtpClient` | HTTP のプロキシは関係しない | — | — | — | — |
+| （使われていない） | `WebAPIHelper`（外部の WebAPI） | 専用 | `Internet` に固定 | — | — | 掛けていない | — |
+
+- **Session Management・Front-Channel Logout は、ブラウザが出す要求**で、OP のサーバは要求を出さない
+- **値**：`Internet`・`Intranet`・`Debug`・**`None`**（大文字小文字を問わない）。**空・読めない値は既定**（以前の振る舞い）
+- **組のプロキシが無いとき**（その組の `Use*Proxy` が `false`）は **OS の既定のプロキシ**を使う（net10.0 は環境変数 `HTTPS_PROXY` など、net48 は IE の設定）。**`None` は OS の既定のプロキシも使わない**（直接つなぐ）
+  - **例外**：RP が登録した URL の専用の HttpClient は、組のプロキシが無いとき、**OS の既定のプロキシも使わない**（接続の時点のアドレスを判定するため。#376）
+- **手元のテスト（E2E）では、何も書かなくてよい。** 手元の設定で `Use*Proxy` が `false` なら、以前と同じく OS の既定のプロキシになる。**`None` が要るのは、組のプロキシを使う配備で、ある分類だけプロキシを通したくないとき**（例：社内のプロキシの配備で、自己テストの `localhost` だけ直接つなぐ。`WebProxy` は既定ではローカルの宛先も迂回しない）
+- **起動の直後**：両版とも、設定を読み込んだ直後に共有の HttpClient を作る（`Helper` の初期化）。**以前は、起動のときに裏で `Helper` が初期化されるまで、ID 連携が OS の既定のプロキシ・クライアント証明書なしの HttpClient で送りえた**
+
+> **既定は以前の振る舞い**だが、次の 3 つは変わった。
+> - **Back-Channel Logout は、OP のクライアント証明書を出さず、リダイレクトを追わない**
+> - **外部ログイン（net48 版）は、`UseInternetProxy=false` のとき、直接ではなく OS の既定のプロキシを使う**（直接つなぐなら `ProxyForExternalLogin=None`）
+> - **外部ログイン（net10.0 版）は、`UseInternetProxy=true` のとき、設定のプロキシを使う**（以前は設定を見ず OS の既定）
 
 ### `redirect_uri` の記号
 

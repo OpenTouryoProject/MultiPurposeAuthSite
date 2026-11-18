@@ -25,6 +25,8 @@
 //*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
 //*  2026/10/16  玄人 幸道         口ごとのレート制限を入口に掛ける（#305 の段階 3）
 //*  2026/10/21  玄人 幸道         起動のときに jwks_uri を温める（#309 の段階 2）
+//*  2026/11/18  玄人 幸道         起動のときの HttpClient にも、時間と大きさの上限（既定の値）を掛けるようにした（#375）
+//*  2026/11/18  玄人 幸道         Helper を起動のときに初期化し、共有の HttpClient（ID 連携のプロキシの組）を最初の要求から使うようにした（#406）
 //**********************************************************************************
 
 // System
@@ -92,7 +94,23 @@ namespace MultiPurposeAuthSite
             //   **Helper に一度も触れていない状態で /token を叩くと、null 参照で落ちる。**
             //
             //   **Helper が後から自分のクライアントで上書きするのは、net10.0 版と同じ。**
-            OAuth2AndOIDCClient.HttpClient = new HttpClient();
+            //   **時間と大きさの上限を掛ける**（#375。既定の値。`Helper` が設定の値で作り直す）。
+            OAuth2AndOIDCClient.HttpClient = MultiPurposeAuthSite.Network.OutboundHttpLimits.ApplyDefaults(new HttpClient());
+
+            //  **共有の HttpClient を、ここで作っておく**（`Helper` の初期化。#406）。
+            //    **ID 連携は `Helper` を通らない**ので、以前は、起動のときに裏で動く `JwksUriWarmUp` が `Helper` に触れるまで、
+            //    **起動の直後の HttpClient（OS の既定のプロキシ・クライアント証明書なし）で上流へ送りえた。**
+            //    **ここで作れば、最初の要求から設定のプロキシの組（`ProxyForIdFederation`）・上限（#375）を使う。**
+            //    **作れなくても起動は止めない**（以前どおり、起動の直後の HttpClient で続く）。
+            try
+            {
+                MultiPurposeAuthSite.Util.Sts.Helper.GetInstance();
+            }
+            catch (Exception ex)
+            {
+                MultiPurposeAuthSite.Log.Logging.MyOperationTrace(string.Format(
+                    "The shared HttpClient could not be initialized at startup. ({0})", ex.GetType().Name));
+            }
 
             // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
             //   起動は止めない。警告を OPERATION ログに出すだけ。

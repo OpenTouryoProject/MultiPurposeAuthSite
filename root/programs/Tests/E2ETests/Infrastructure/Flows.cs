@@ -65,6 +65,7 @@
 //*  2026/11/17  玄人 幸道         fapi1 の認可要求に JARM（response_mode=jwt）を足す WithJarm を追加（#381）
 //*  2026/11/17  玄人 幸道         TestClient_21 の説明を、鍵を持つ形に直した（#400）
 //*  2026/11/17  玄人 幸道         鍵を登録していない SAML2 の SP（TestClient_23）を足した（#400）
+//*  2026/11/19  玄人 幸道         TestClient4_6（鍵を jwks_uri だけで登録した fapi_ciba）を追加（#408）
 //**********************************************************************************
 
 using System;
@@ -157,6 +158,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **`/ciba_authz` は秘密（Basic）で認証する**（写し元の秘密）。**構成ファイルには無い。** 種データ（`TestClients`）で登録される。
         /// </remarks>
         public const string TestClient4_5 = "TestClient4_5";
+
+        /// <summary>
+        /// TestClient を写し、**登録種別を fapi_ciba にし、鍵を `jwks_uri` だけで登録した**クライアント（#408）。
+        /// </summary>
+        /// <remarks>
+        /// **CIBA の署名した要求を、`jwks_uri` の鍵で検証することを測る**（`RT-408.2`）。
+        /// **`jwks_uri` は静的配信のコンテナの `rt408_2_ciba.json`**（鍵はテストが置く）。**列の鍵は持たない。**
+        /// **`/ciba_authz` は秘密（Basic）で認証する**（写し元の秘密）。**構成ファイルには無い。** 種データ（`TestClients`）で登録される。
+        /// </remarks>
+        public const string TestClient4_6 = "TestClient4_6";
 
         /// <summary>
         /// FAPI2_Client（fapi2）を写し、tls_client_auth_subject_dn をテスト専用の値（MtlsSubjectDn）にしたクライアント（#226）。
@@ -505,6 +516,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
                 { KnownClients.TestClient4_4, "e2e0tc44000000000000000000000000" },
                 { KnownClients.TestClient4_5, "e2e0tc45000000000000000000000000" },
+                { KnownClients.TestClient4_6, "e2e0tc46000000000000000000000000" },
                 { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
                 { KnownClients.TestClient2_3, "e2e0tc23000000000000000000000000" },
                 { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
@@ -1131,8 +1143,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 //   **client_secret は写す元のまま**だが、**秘密では認証できない。**
                 sourceName = KnownClients.TestClient;
             }
-            else if (clientName == KnownClients.TestClient4_5)
+            else if (clientName == KnownClients.TestClient4_5 || clientName == KnownClients.TestClient4_6)
             {
+                // **TestClient4_6 は、鍵を `jwks_uri` だけで登録した**（#408）。
                 // **TestClient を写して fapi_ciba にした**（#395）。client_secret は写す元のまま（Basic で認証する）。
                 sourceName = KnownClients.TestClient;
             }

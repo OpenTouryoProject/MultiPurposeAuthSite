@@ -33,6 +33,9 @@
 //*  2026/09/25  玄人 幸道         aud に Discovery の issuer を使うため CreateCibaAsync に改めた（#234 の段階 1）
 //*  2026/11/06  玄人 幸道         Create も aud に Discovery の issuer を使うため CreateAsync に改めた。RemoveClaim も受ける（/ros・PAR が aud を照合する。#336）
 //*  2026/11/13  玄人 幸道         署名の alg を選べるようにし（RS256・PS256・ES256）、FAPI の登録向けの CreateFapiAsync（PS256）を足した（#370）
+//*  2026/11/18  玄人 幸道         Request Object を生の UTF-8 で書く CreateRawUtf8Async を足した（#404）
+//*  2026/11/19  玄人 幸道         CIBA の署名した要求のヘッダに kid を入れられるようにした（jwks_uri の鍵を測る。#408）
+//*  2026/11/19  玄人 幸道         CIBA の署名した要求を PS256 でも作れるようにした（jwks_uri に無い鍵を断ることを測る。#408）
 //**********************************************************************************
 
 using System;
@@ -106,8 +109,38 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="parameters">認可リクエストのパラメタ</param>
         /// <param name="alg">`RS256`・`PS256`（RSA の鍵）・`ES256`（EC の鍵）</param>
         /// <returns>JWS</returns>
-        public static async Task<string> CreateAsync(
+        public static Task<string> CreateAsync(
             IdPClient client, string clientId, IDictionary<string, object> parameters, string alg)
+        {
+            return RequestObjectBuilder.CreateAsync(client, clientId, parameters, alg, false);
+        }
+
+        /// <summary>
+        /// Request Object（RS256）を、**ASCII でない文字をエスケープせず、生の UTF-8 で書いて**作る（#404）。
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id（iss にも入れる）</param>
+        /// <param name="parameters">認可リクエストのパラメタ</param>
+        /// <returns>JWS</returns>
+        /// <remarks>
+        /// **既定の書き方（`CreateAsync`）は `\u72b6` のようにエスケープする**ので、ペイロードは ASCII だけになり、
+        /// **サーバが UTF-8 で読むかを測れない**（#404。JOSE のライブラリの多くは生の UTF-8 で書く）。
+        /// </remarks>
+        public static Task<string> CreateRawUtf8Async(
+            IdPClient client, string clientId, IDictionary<string, object> parameters)
+        {
+            return RequestObjectBuilder.CreateAsync(client, clientId, parameters, "RS256", true);
+        }
+
+        /// <summary>Request Object を作る（本体。#370・#404）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id（iss にも入れる）</param>
+        /// <param name="parameters">認可リクエストのパラメタ</param>
+        /// <param name="alg">alg</param>
+        /// <param name="rawUtf8">生の UTF-8 で書くか（RS256 だけ）</param>
+        /// <returns>JWS</returns>
+        private static async Task<string> CreateAsync(
+            IdPClient client, string clientId, IDictionary<string, object> parameters, string alg, bool rawUtf8)
         {
             Dictionary<string, object> payload = new Dictionary<string, object>();
 
@@ -140,7 +173,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             switch (alg)
             {
                 case "RS256":
-                    return JwsSigner.SignRS256(client, payload);
+                    return JwsSigner.SignRS256(client, payload, rawUtf8);
                 case "PS256":
                     return JwsSigner.SignPS256(client, payload);
                 case "ES256":
@@ -161,13 +194,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="client">IdPClient</param>
         /// <param name="clientId">client_id（iss に入れる）</param>
         /// <param name="parameters">既定の値を上書きするクレーム</param>
+        /// <param name="kid">ヘッダに入れる kid（null なら入れない。#408）</param>
+        /// <param name="alg">`ES256`（既定。EC の鍵）・`PS256`（RSA の鍵。kid は入れない。#408）</param>
         /// <returns>JWS</returns>
         /// <remarks>
         /// **aud は Discovery の issuer を使う**（CIBA Core 7.1.1 : OP の Issuer Identifier。#234 の段階 1）。
         /// 待ち受けている URL とは別の値なので、**テストに書かずに引く**。
         /// </remarks>
         public static async Task<string> CreateCibaAsync(
-            IdPClient client, string clientId, IDictionary<string, object> parameters)
+            IdPClient client, string clientId, IDictionary<string, object> parameters, string kid = null, string alg = "ES256")
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -198,7 +233,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 payload[p.Key] = p.Value;
             }
 
-            return JwsSigner.SignES256(client, payload);
+            //  **kid は、`jwks_uri` から鍵を引かせるときに入れる**（#408。無ければ入れない）。
+            //  **PS256 は、`jwks_uri` に無い鍵（RSA）で署名したものを断ることを測るときに使う**（#408）。
+            return (alg == "PS256")
+                ? JwsSigner.SignPS256(client, payload)
+                : JwsSigner.SignES256(client, payload, kid);
         }
 
         /// <summary>

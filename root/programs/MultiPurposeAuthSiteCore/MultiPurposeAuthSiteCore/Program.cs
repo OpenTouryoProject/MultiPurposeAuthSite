@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/11/30  西野 大介         新規
+//*  2026/11/18  玄人 幸道         起動のときの HttpClient にも、時間と大きさの上限（既定の値）を掛けるようにした（#375）
 //**********************************************************************************
 
 using System.Net.Http;
@@ -37,7 +38,8 @@ namespace MultiPurposeAuthSite
         public static void Main(string[] args)
         {
             // OpenID用
-            OAuth2AndOIDCClient.HttpClient = new HttpClient();
+            //   **時間と大きさの上限を掛ける**（#375。**設定を読む前なので既定の値**。`Helper` が設定の値で作り直す）。
+            OAuth2AndOIDCClient.HttpClient = MultiPurposeAuthSite.Network.OutboundHttpLimits.ApplyDefaults(new HttpClient());
 
             // BuildWebHostが返すIWebHostをRunする。
             // 呼び出し元スレッドは終了までブロックされる。

@@ -39,6 +39,7 @@
 //*  2026/11/15  玄人 幸道         CIBA の署名した要求を PS256 でも受ける（JWS を受ける RequestObject.VerifyCiba。#395）
 //*  2026/11/17  玄人 幸道         CIBA の署名した要求の寿命を 60 分までにした（FAPI-CIBA ID1 §5.2.2 の 9。#388）
 //*  2026/11/17  玄人 幸道         CIBA の口の aud は CIBA Core 1.0 §7.1 に従うことを書いた（RFC 10070 は CIBA を更新していない。#398）
+//*  2026/11/19  玄人 幸道         CIBA の署名した要求の検証鍵に jwks_uri の鍵も加え、jwks_uri の登録を鍵の登録として数えるようにした（#408）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -46,6 +47,7 @@ using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -162,8 +164,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 // 署名の検証に使う公開鍵は、登録（iss ＝ client_id）から引く。
                 //   **登録の値が壊れていても例外にしない**（`DecodeRegisteredJwk` は空を返す。#294）。
+                //   **`jwks_uri` の登録も、鍵の登録として数える**（#408。以前は列の鍵だけを見て、`jwks_uri` のクライアントを invalid_client で断った）。
                 if (string.IsNullOrEmpty(JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkECDsaPublickey(unverifiedIss)))
-                    && string.IsNullOrEmpty(JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(unverifiedIss))))
+                    && string.IsNullOrEmpty(JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(unverifiedIss)))
+                    && string.IsNullOrEmpty(Helper.GetInstance().GetJwksUri(unverifiedIss)))
                 {
                     // 鍵を登録していないクライアント（CIBA Core 13 : invalid_client）
                     err = OAuth2AndOIDCConst.invalid_client;
@@ -173,11 +177,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 //  **検証鍵は、ヘッダの alg（PS256・ES256）と登録の鍵で決める**（#395。以前は EC の鍵による ES256 だけ）。
                 //    **alg が受ける一覧に無い・alg に合う鍵が無ければ、検証できない**（下の invalid_request）。
-                JWS jws = CmnRequestObjectEndpoint.SelectCibaVerifyingJws(unverifiedIss, request);
+                //    **`jwks_uri` の鍵も候補にし、順に試す**（#408）。
+                List<JWS> jws = CmnRequestObjectEndpoint.SelectCibaVerifyingJws(unverifiedIss, request);
 
                 //  **aud は issuer**（CIBA Core §7.1.1。#336）。`ValidateCibaAuthZReqParam` も同じ値を確かめている。
-                if (jws == null
-                    || !RequestObject.VerifyCiba(request, CmnServerParams.IssuerId, out string _, jws))
+                if (!CmnRequestObjectEndpoint.VerifyCibaWithAny(request, jws, out string _))
                 {
                     errDescription = "The request is not verified.";
                     return false;

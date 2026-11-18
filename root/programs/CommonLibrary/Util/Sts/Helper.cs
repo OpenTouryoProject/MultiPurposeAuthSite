@@ -60,6 +60,8 @@
 //*  2026/10/31  玄人 幸道         partial に分割した（WebApi / ClientCredential / ClientUri / ClientMetadata / Scope。#294）
 //*  2026/10/31  玄人 幸道         コンテナ化の宛先の書き換えで、%xx を戻さず、先頭の scheme://authority だけを替える（#294）
 //*  2026/11/01  玄人 幸道         WebAPI の呼び出し（Helper.WebApi.cs）を Util/Test/SelfTestWebApi へ移し、HttpClient を渡す口を足した（#321）
+//*  2026/11/18  玄人 幸道         共有の HttpClient に、時間と大きさの上限を掛けるようにした（#375）
+//*  2026/11/18  玄人 幸道         共有の HttpClient のプロキシの組を、設定（ProxyForIdFederation）で選ぶようにした（#406）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -144,7 +146,8 @@ namespace MultiPurposeAuthSite.Util.Sts
             this._oauth2ClientsInfo = Config.OAuth2ClientsInformation;
 
             // OAuth ServerにアクセスするためのHttpClient
-            this._oAuth2HttpClient = HttpClientBuilder(EnumProxyType.Intranet);
+            //   **プロキシの組は設定 `ProxyForIdFederation` で選ぶ**（既定 `Intranet`。以前は `Intranet` に固定。#406）。
+            this._oAuth2HttpClient = HttpClientBuilder(CreateProxy.ForIdFederation);
 
             // ライブラリを使用
             OAuth2AndOIDCClient.HttpClient = this._oAuth2HttpClient;
@@ -195,18 +198,7 @@ namespace MultiPurposeAuthSite.Util.Sts
         {
             IWebProxy proxy = null;
 
-            switch (proxyType)
-            {
-                case EnumProxyType.Internet:
-                    proxy = CreateProxy.GetInternetProxy();
-                    break;
-                case EnumProxyType.Intranet:
-                    proxy = CreateProxy.GetIntranetProxy();
-                    break;
-                case EnumProxyType.Debug:
-                    proxy = CreateProxy.GetDebugProxy();
-                    break;
-            }
+            proxy = CreateProxy.GetProxy(proxyType);
 
             // ASP.NET＋クライアント証明書 - マイクロソフト系技術情報 Wiki
             // https://techinfoofmicrosofttech.osscons.jp/index.php?ASP.NET%EF%BC%8B%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%83%88%E8%A8%BC%E6%98%8E%E6%9B%B8
@@ -226,6 +218,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             HttpClientHandler handler = new HttpClientHandler
             {
                 Proxy = proxy,
+                UseProxy = CreateProxy.UsesProxy(proxyType), // None は OS の既定のプロキシも使わない（#406）
                 //ClientCertificateOptions = ClientCertificateOption.Automatic
             };
 
@@ -242,6 +235,7 @@ namespace MultiPurposeAuthSite.Util.Sts
             WebRequestHandler handler = new WebRequestHandler
             {
                 Proxy = proxy,
+                UseProxy = CreateProxy.UsesProxy(proxyType), // None は OS の既定のプロキシも使わない（#406）
                 //ClientCertificateOptions = ClientCertificateOption.Automatic
             };
 
@@ -258,7 +252,9 @@ namespace MultiPurposeAuthSite.Util.Sts
             //handler.ServerCertificateCustomValidationCallback
             //    = (message, cert, chain, errors) => { return true; };
 
-            return new HttpClient(handler);
+            //  **時間と大きさの上限を掛ける**（#375。以前は .NET の既定の 100 秒・上限なしだった）。
+            //    **Open棟梁 の部品（jwks_uri・ID 連携・SAML のメタデータ）は、要求ごとの上限を持たず、この HttpClient に任せる。**
+            return Network.OutboundHttpLimits.ApplyConfigured(new HttpClient(handler));
             //return new HttpClient();
         }
 

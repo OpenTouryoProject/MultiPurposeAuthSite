@@ -35,6 +35,7 @@
 //*  2026/11/10  玄人 幸道         pfx を読む口を internal にした（JWE の復号で使う。#352）
 //*  2026/11/12  玄人 幸道         ES256 の署名で、ヘッダに kid を入れられるようにした（鍵の入れ替えを測る。#363）
 //*  2026/11/13  玄人 幸道         PS256 の署名を足した（FAPI の登録の Request Object。#370）
+//*  2026/11/18  玄人 幸道         RS256 の署名で、ペイロードを生の UTF-8 で書けるようにした（ASCII でない文字をエスケープしない。#404）
 //**********************************************************************************
 
 using System;
@@ -42,6 +43,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
@@ -72,7 +74,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             IdPClient client, IDictionary<string, object> payload,
             string pathKey = "SpRp_RsaPfxFilePath", string passwordKey = "SpRp_RsaPfxPassword")
         {
-            string signingInput = SigningInput("RS256", payload);
+            return JwsSigner.SignRS256(client, payload, false, pathKey, passwordKey);
+        }
+
+        /// <summary>ペイロードに RS256 で署名し、JWS（コンパクト形式）を返す（ASCII でない文字の書き方を選ぶ。#404）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="payload">ペイロード（クレーム）</param>
+        /// <param name="rawUtf8">
+        /// true なら、ASCII でない文字を **`\u` でエスケープせず、生の UTF-8 で書く**（JOSE のライブラリの多くと同じ）。
+        /// **既定（false）の `System.Text.Json` は `\u72b6` のようにエスケープする**ので、サーバの文字コードの扱いを測れない（#404）
+        /// </param>
+        /// <param name="pathKey">鍵の pfx の場所の構成キー</param>
+        /// <param name="passwordKey">鍵のパスワードの構成キー</param>
+        /// <returns>JWS</returns>
+        public static string SignRS256(
+            IdPClient client, IDictionary<string, object> payload, bool rawUtf8,
+            string pathKey = "SpRp_RsaPfxFilePath", string passwordKey = "SpRp_RsaPfxPassword")
+        {
+            string signingInput = SigningInput("RS256", payload, null, rawUtf8);
 
             using (X509Certificate2 cert = LoadCertificate(client, pathKey, passwordKey))
             using (RSA rsa = cert.GetRSAPrivateKey())
@@ -375,8 +394,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="alg">alg（RS256 / ES256）</param>
         /// <param name="payload">ペイロード</param>
         /// <param name="kid">ヘッダに入れる kid（null なら入れない。#363）</param>
+        /// <param name="rawUtf8">ASCII でない文字を、エスケープせずに生の UTF-8 で書くか（#404）</param>
         /// <returns>BASE64URL(ヘッダ) + "." + BASE64URL(ペイロード)</returns>
-        private static string SigningInput(string alg, IDictionary<string, object> payload, string kid = null)
+        private static string SigningInput(string alg, IDictionary<string, object> payload, string kid = null, bool rawUtf8 = false)
         {
             Dictionary<string, object> header = new Dictionary<string, object>()
             {
@@ -389,8 +409,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 header.Add("kid", kid);
             }
 
+            //  **生の UTF-8 で書く**ときは、エスケープしない書き方にする（#404）。
+            JsonSerializerOptions options = rawUtf8
+                ? new JsonSerializerOptions() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
+                : null;
+
             return Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(header))
-                + "." + Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(payload));
+                + "." + Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(payload, options));
         }
 
         /// <summary>署名鍵の証明書（クライアントの秘密鍵を含む pfx）を読む</summary>

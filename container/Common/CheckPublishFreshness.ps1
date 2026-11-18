@@ -28,6 +28,7 @@
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/11/07  玄人 幸道         新規（#340）
+     2026/11/18  玄人 幸道         パスの区切りを / にし、bin・obj の除外を Linux の区切りでも当たるようにした（#401）
 #>
 [CmdletBinding()]
 param(
@@ -37,9 +38,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
+# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）。
+# **区切りは / で書く**（Linux の pwsh は \ を区切りにしない。Windows は / も受ける。#401）
 $here = Split-Path -Parent $PSCommandPath
-$programs = Join-Path $here '..\..\root\programs'
+$programs = Join-Path $here '../../root/programs'
 
 $dll = Join-Path $PublishDir 'MultiPurposeAuthSite.dll'
 
@@ -56,8 +58,8 @@ $published = (Get-Item $dll).LastWriteTime
 
 $sourceDirs = @(
     (Join-Path $programs 'CommonLibrary'),
-    (Join-Path $programs 'MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore'),
-    (Join-Path $programs 'OpenTouryoAssemblies\Build_netcore100')
+    (Join-Path $programs 'MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore'),
+    (Join-Path $programs 'OpenTouryoAssemblies/Build_netcore100')
 )
 
 $newest = $null
@@ -71,7 +73,7 @@ foreach ($dir in $sourceDirs)
 
     $file = Get-ChildItem $dir -Recurse -File |
         Where-Object {
-            $_.FullName -notmatch '\\(bin|obj)\\' -and
+            $_.FullName -notmatch '[\\/](bin|obj)[\\/]' -and
             $_.Name -ne 'appsettings.json'
         } |
         Sort-Object LastWriteTime -Descending |

@@ -51,6 +51,10 @@
 //*  2026/11/15  玄人 幸道         FAPI の登録の判定を Helper.IsFapiProfileClient にまとめた（#384）
 //*  2026/11/17  玄人 幸道         配列の aud を断る根拠を RFC 10070 §4 に書き換えた。振る舞いは変えていない（#397）
 //*  2026/11/17  玄人 幸道         クライアント認証の assertion の aud を issuer だけにした（CIBA の口・CIBA のトークン要求を除く）。JWT Bearer グラントの aud は分けた（RFC 10070 §4・§5。#398）
+//*  2026/11/18  玄人 幸道         jwks_uri を取りに行く前に、行き先のアドレスを判定するようにした（#376）
+//*  2026/11/19  玄人 幸道         jwks_uri の鍵の引き方を KeysFromJwksUri に切り出し、Request Object・CIBA の要求の検証でも使うようにした（振る舞いは変えていない。#408）
+//*  2026/11/19  玄人 幸道         jwks_uri の取得の失敗のログに、何の JWS かを書くようにした（#408。別モデルのレビューの指摘）
+//*  2026/11/19  玄人 幸道         JWT Bearer グラントの検証鍵の候補（JwtBearerVerifyingJws）と、候補を順に試す検証（TryVerifyJwtBearerAssertion）を足し、受ける alg を client_assertion とそろえた（#410）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -468,6 +472,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>`jwks_uri` から `kid` の鍵を、取り直してでも引き、上限まで待つ（#363）</summary>
         /// <param name="jwksUri">jwks_uri</param>
         /// <param name="kid">JWS のヘッダの kid（**空なら引かない**）</param>
+        /// <param name="purpose">ログに書く、何の JWS か（#408。鍵は出さない）</param>
         /// <returns>JWK（JSON の文字列。引けなければ 0 件）</returns>
         /// <remarks>
         /// **取り直すかどうか（下限）は `RemoteJwkSetStore.GetJwkAsync` が決める**（Open棟梁。取得時刻から 1 分。`MinRefetchInterval`）。
@@ -483,7 +488,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`GetJwkAsync` は、取得中の URL を重ねて取りに行きうる**（同時に来た要求のぶん。下限ごとに 1 回の束まで）。
         /// Open棟梁 の側で直す（OpenTouryoProject/OpenTouryo#686）。
         /// </remarks>
-        private static string[] WaitForJwkFromUri(string jwksUri, string kid)
+        private static string[] WaitForJwkFromUri(string jwksUri, string kid, string purpose)
         {
             if (string.IsNullOrEmpty(kid))
             {
@@ -512,8 +517,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (t.IsFaulted)
                     {
                         Logging.MyOperationTrace(string.Format(
-                            "Fetching the jwks_uri for the client assertion failed. ({0})",
-                            t.Exception?.GetBaseException().GetType().Name));
+                            "Fetching the jwks_uri for the {0} failed. ({1})",
+                            purpose, t.Exception?.GetBaseException().GetType().Name));
                     }
 
                     lock (CmnEndpoints._jwksUriWaitingLock)
@@ -541,6 +546,51 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return new string[0];
+        }
+
+        /// <summary>登録の `jwks_uri` から、JWS のヘッダの `kid` の鍵を引く（#309・#363・#376・#408）</summary>
+        /// <param name="client_id">JWS を署名したクライアント</param>
+        /// <param name="jws">JWS（コンパクト形式。ヘッダの `kid` で引く）</param>
+        /// <param name="purpose">ログに書く、何の JWS か（鍵は出さない）</param>
+        /// <returns>JWK（JSON の文字列。**`jwks_uri` が登録されていない・引けなければ 0 件**）</returns>
+        /// <remarks>
+        /// **クライアント認証（`client_assertion`）・Request Object・CIBA の署名した要求で、同じ引き方にする**（#408。以前はクライアント認証だけが `jwks_uri` を見た）。
+        ///
+        /// - **同期の経路から呼ばれる**ので、**控えを読む**（`RemoteJwkSetStore.PickJwksFromCache`。取りに行って待つと net48 で止まる。#309）
+        /// - **知らない `kid` なら、その場で取り直して、上限まで待つ**（`WaitForJwkFromUri`。OIDC Core 1.0 §10.1.1 の準用。#363）
+        /// - **控えに無く、取りに行くときだけ、行き先のアドレスを判定する**（#376。登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い）
+        /// - **間に合わなければ、背景で取り直して、この 1 本は断る**（理由はログに残す。#253）
+        /// </remarks>
+        internal static string[] KeysFromJwksUri(string client_id, string jws, string purpose)
+        {
+            string jwksUri = string.IsNullOrEmpty(client_id) ? null : Helper.GetInstance().GetJwksUri(client_id);
+
+            if (string.IsNullOrEmpty(jwksUri))
+            {
+                return new string[0];
+            }
+
+            string kid = JwtReader.TryReadKid(jws);
+
+            string[] fromUri = RemoteJwkSetStore.PickJwksFromCache(
+                jwksUri, kid, CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
+
+            bool fetchable = fromUri.Length != 0 || MultiPurposeAuthSite.Extensions.Sts.OutboundUrlPolicy.IsAllowed(jwksUri);
+
+            if (fromUri.Length == 0 && fetchable)
+            {
+                fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, kid, purpose);
+            }
+
+            if (fromUri.Length == 0 && fetchable)
+            {
+                RemoteJwkSetStore.RefillInBackground(jwksUri);
+
+                Logging.MyOperationTrace(string.Format(
+                    "The key of the {0} was not in the jwks_uri cache. ({1})", purpose, client_id));
+            }
+
+            return fromUri;
         }
 
         /// <summary>ClientAuthentication</summary>
@@ -633,30 +683,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //    **理由はログに残す**（#253 の方針。**鍵は出さない**）。
                 if (!string.IsNullOrEmpty(assertionIss))
                 {
-                    string jwksUri = Helper.GetInstance().GetJwksUri(assertionIss);
-
-                    if (!string.IsNullOrEmpty(jwksUri))
-                    {
-                        string[] fromUri = RemoteJwkSetStore.PickJwksFromCache(
-                            jwksUri, JwtReader.TryReadKid(assertion),
-                            CmnEndpoints.MaxJwksFromUri).Select(jwk => jwk.ToString()).ToArray();
-
-                        if (fromUri.Length == 0)
-                        {
-                            fromUri = CmnEndpoints.WaitForJwkFromUri(jwksUri, JwtReader.TryReadKid(assertion));
-                        }
-
-                        if (fromUri.Length == 0)
-                        {
-                            RemoteJwkSetStore.RefillInBackground(jwksUri);
-
-                            Logging.MyOperationTrace(string.Format(
-                                "The key of the client assertion was not in the jwks_uri cache. ({0})",
-                                assertionIss));
-                        }
-
-                        pubKeys = pubKeys.Concat(fromUri).ToArray();
-                    }
+                    //  **引き方は、Request Object・CIBA の要求の検証と同じ部品**（`KeysFromJwksUri`。#408）。
+                    pubKeys = pubKeys.Concat(
+                        CmnEndpoints.KeysFromJwksUri(assertionIss, assertion, "client assertion")).ToArray();
                 }
 
                 // **登録 token_endpoint_auth_signing_alg で絞る**（#262）。
@@ -929,15 +958,57 @@ namespace MultiPurposeAuthSite.TokenProviders
                 ? JwsFactory.CreateFromJwk(alg, jwk) : null;
         }
 
-        /// <summary>JWT Bearer グラント（RFC 7523 §2.1）の `assertion` で受ける alg（#294）</summary>
+        /// <summary>JWT Bearer グラント（RFC 7523 §2.1）の `assertion` で受ける alg（#294・#410）</summary>
         /// <remarks>
-        /// **検証の鍵は登録の RSA 公開鍵だけ**（`GrantJwtBearerTokenCredentials`）なので、いまは `RS256` だけ。
-        /// **`JwtAssertion.Verify` はヘッダの alg を見ない**ので、**名乗りを、ここで揃える。**
+        /// **`client_assertion`（`TokenEndpointAuthSigningAlgs`）とそろえる**（#410）。**鍵は、列の RSA・EC の鍵と `jwks_uri` の鍵のうち、alg に合うもの**（`JwtBearerVerifyingJws`）。
+        /// **以前は列の RSA の鍵だけで `RS256` だけ**だった（#294）。
+        /// **FAPI の登録での制限は置かない** — **このグラントを通せるのは normal の登録だけ**（`ClientModePolicy` の EX-7）。
+        /// **登録の `token_endpoint_auth_signing_alg` でも絞らない**（クライアント認証の JWT の登録項目。OIDC Registration 1.0 §2。グラントの assertion は別物）。
         /// </remarks>
         public static readonly string[] JwtBearerSigningAlgs = new string[]
         {
-            JwtConst.RS256
+            JwtConst.RS256, JwtConst.PS256, JwtConst.ES256
         };
+
+        /// <summary>JWT Bearer グラントの `assertion` の検証鍵の候補を作る（#410）</summary>
+        /// <param name="iss">assertion の iss（client_id）</param>
+        /// <param name="assertion">assertion（JWS）</param>
+        /// <returns>検証鍵の候補（**0 件なら、alg が受ける一覧に無いか、alg に合う鍵が無い**）</returns>
+        /// <remarks>
+        /// **鍵は、列の RSA・EC の鍵と、`jwks_uri` から引いた鍵**（`KeysFromJwksUri`。控え・知らない kid の取り直し・行き先の判定は、クライアント認証と同じ）。
+        /// **ヘッダの alg と鍵の種類が食い違う鍵は、候補に入れない**（`VerifyingJwsOf`。RFC 8725 §3.1）。
+        /// </remarks>
+        internal static List<JWS> JwtBearerVerifyingJws(string iss, string assertion)
+        {
+            List<JWS> candidates = new List<JWS>();
+            string alg = JwtReader.TryReadAlg(assertion);
+
+            if (string.IsNullOrEmpty(iss) || string.IsNullOrEmpty(alg)
+                || Array.IndexOf(CmnEndpoints.JwtBearerSigningAlgs, alg) < 0)
+            {
+                return candidates;
+            }
+
+            List<string> keys = new List<string>()
+            {
+                JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(iss)),
+                JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkECDsaPublickey(iss))
+            };
+
+            keys.AddRange(CmnEndpoints.KeysFromJwksUri(iss, assertion, "JWT bearer assertion"));
+
+            foreach (string key in keys)
+            {
+                JWS jws = CmnEndpoints.VerifyingJwsOf(key, alg);
+
+                if (jws != null)
+                {
+                    candidates.Add(jws);
+                }
+            }
+
+            return candidates;
+        }
 
         /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262・#370）</summary>
         /// <remarks>
@@ -1219,45 +1290,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             //  **署名の alg は、渡した検証鍵で決まる**（検証鍵 `JWS` を受ける版。OpenTouryo#664。#395）。
             //    **ヘッダの alg が鍵の alg と違えば、Open棟梁 が false を返す**（RFC 8725 §3.1）。
-            //    確かめる中身（iss・aud・sub・exp・nbf）は、JWK を受ける版（下）と同じ。
+            //    確かめる中身（iss・aud・sub・exp・nbf）は、JWT Bearer グラントの版（`TryVerifyJwtBearerAssertion`）と同じ（aud の一覧だけが違う）。
             try
             {
                 return JwtAssertion.Verify(
                     assertion, iss,
                     CmnEndpoints.ClientAssertionAudiences(endpointUrl),
                     out sub, out string _, out JObject _, jws);
-            }
-            catch (Exception ex)
-            {
-                // 登録の鍵が壊れている（JWK を受ける版の remarks）。
-                Logging.MyOperationTrace(string.Format(
-                    "The assertion could not be verified. ({0})", ex.GetType().Name));
-
-                sub = "";
-                return false;
-            }
-        }
-
-        /// <summary>assertion の署名・iss・aud・期限を、JWK で検証する（JWT Bearer グラント。#294・#336）</summary>
-        /// <param name="assertion">assertion（JWT）</param>
-        /// <param name="pubKey">公開鍵（JWK。kty が RSA なら RS256、EC なら ES256）</param>
-        /// <param name="iss">期待する iss</param>
-        /// <param name="sub">sub</param>
-        /// <returns>検証できれば true</returns>
-        /// <remarks>
-        /// **aud はトークン エンドポイントの URL か issuer**（`JwtBearerAudiences`。RFC 10070 §4 の 1。#398）。
-        /// **クライアント認証（`client_assertion`）は、`JWS` を受ける版（上）を使う**（#395）。
-        /// **JWT Bearer グラント（RFC 7523 §2.1）は RS256 だけ**（`JwtBearerSigningAlgs`）なので、この版のまま。
-        /// </remarks>
-        private static bool TryVerifyAssertion(
-            string assertion, string pubKey, string iss, out string sub)
-        {
-            try
-            {
-                return JwtAssertion.Verify(
-                    assertion, iss,
-                    CmnEndpoints.JwtBearerAudiences(),
-                    out sub, out string _, out JObject _, pubKey);
             }
             catch (Exception ex)
             {
@@ -1268,6 +1307,42 @@ namespace MultiPurposeAuthSite.TokenProviders
                 sub = "";
                 return false;
             }
+        }
+
+        /// <summary>JWT Bearer グラントの assertion の署名・iss・aud・期限を、検証鍵の候補で検証する（#294・#336・#410）</summary>
+        /// <param name="assertion">assertion（JWT）</param>
+        /// <param name="candidates">検証鍵の候補（`JwtBearerVerifyingJws`）</param>
+        /// <param name="iss">期待する iss</param>
+        /// <returns>どれかの候補で検証できれば true</returns>
+        /// <remarks>
+        /// **aud はトークン エンドポイントの URL か issuer**（`JwtBearerAudiences`。RFC 10070 §4 の 1。#398）。
+        /// **検証鍵 `JWS` を受ける版**（OpenTouryo#664）。**ヘッダの alg が鍵の alg と違えば、Open棟梁 が false を返す**（RFC 8725 §3.1）。
+        /// **以前は JWK を受ける版で、鍵の種類から alg を決めていた**（RS256 だけ。#410 で `client_assertion` とそろえた）。
+        /// **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。
+        /// **登録の鍵が壊れているなど、例外のときは、その候補を失敗として次へ進む**（理由はログに残す。鍵は出さない）。
+        /// </remarks>
+        internal static bool TryVerifyJwtBearerAssertion(string assertion, List<JWS> candidates, string iss)
+        {
+            foreach (JWS jws in candidates)
+            {
+                try
+                {
+                    if (JwtAssertion.Verify(
+                        assertion, iss,
+                        CmnEndpoints.JwtBearerAudiences(),
+                        out string _, out string _, out JObject _, jws))
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "The assertion could not be verified. ({0})", ex.GetType().Name));
+                }
+            }
+
+            return false;
         }
 
         /// <summary>この証明で、このクライアントを通してよいか（#307 の段階 3）</summary>

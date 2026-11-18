@@ -30,6 +30,9 @@
 //*  2026/11/11  玄人 幸道         Hybrid の応答を作る部品に response_type を渡す（at_hash を付けるかを決めるため。#360）
 //*  2026/11/13  玄人 幸道         認可要求の検証に code_challenge_method を渡す（Request Object の値も読む。fapi2 の S256。#366）
 //*  2026/11/17  玄人 幸道         認可要求の検証に response_mode を渡す（fapi1 の登録の JARM。#381）
+//*  2026/11/18  玄人 幸道         預けた Request Object を、日付の形の文字列を日付に変えずに読む（#403）
+//*  2026/11/19  玄人 幸道         外部の request_uri を取りに行って検証し、預けた urn: に置き換えるようにした（登録の request_uris にあるものだけ。#374）
+//*  2026/11/19  玄人 幸道         外部の request_uri を urn: に置き換えたら、urn: の認可の URL へ送り直す（サインイン・再認証の往復で取りに行き直さない。#374）
 //**********************************************************************************
 
 /*
@@ -355,11 +358,31 @@ namespace MultiPurposeAuthSite.Controllers
             string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
+            //  **外部の request_uri は、取りに行って検証し、預けた `urn:` に置き換える**（#374。OIDC Core 1.0 §6.2）。
+            //    **以後はその `urn:` で続ける**（送り返しても、取りに行き直さない）。**登録の無い URL は、以前どおり断る**（#362）。
+            Sts.ExternalRequestUri.Result external = await Sts.ExternalRequestUri.ResolveAsync(client_id, request_uri);
+
+            //  **置き換えられたら、`request_uri` だけを `urn:` にした同じ認可の URL へ送り直す**（#374。別モデルのレビューの指摘）。
+            //    **サインイン・再認証は、いまの要求の URL へ戻ってくる**ので、外部の URL のままだと、**戻るたびに取りに行き直す。**
+            if (external.Error == null && external.RequestUri != request_uri)
+            {
+                return new RedirectResult(this.AuthorizeEndpointUrlWithRequestUri(external.RequestUri));
+            }
+
+            request_uri = external.RequestUri;
+            bool pushed = false;
+            bool signedRequestObject = false;
+
+            if (external.Error != null)
+            {
+                err = external.Error;
+                errDescription = external.ErrorDescription;
+            }
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
-            if (!this.OverwriteByRequestObject(request_uri,
+            else if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
                 ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
-                out bool pushed, out bool signedRequestObject, out err, out errDescription))
+                out pushed, out signedRequestObject, out err, out errDescription))
             {
                 // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }
@@ -678,11 +701,23 @@ namespace MultiPurposeAuthSite.Controllers
             string code_challenge_method = query[OAuth2AndOIDCConst.code_challenge_method];
             string request_uri = query[OAuth2AndOIDCConst.request_uri];
 
+            //  **外部の request_uri は、取りに行って検証し、預けた `urn:` に置き換える**（#374。OIDC Core 1.0 §6.2）。
+            //    **以後はその `urn:` で続ける**（送り返しても、取りに行き直さない）。**登録の無い URL は、以前どおり断る**（#362）。
+            Sts.ExternalRequestUri.Result external = await Sts.ExternalRequestUri.ResolveAsync(client_id, request_uri);
+            request_uri = external.RequestUri;
+            bool pushed = false;
+            bool signedRequestObject = false;
+
+            if (external.Error != null)
+            {
+                err = external.Error;
+                errDescription = external.ErrorDescription;
+            }
             // request_uri で Request Object が引ければ、各パラメタ（code_challenge を含む）をその値で上書きする。
-            if (!this.OverwriteByRequestObject(request_uri,
+            else if (!this.OverwriteByRequestObject(request_uri,
                 ref client_id, ref redirect_uri, ref response_type, ref response_mode,
                 ref scope, ref state, ref nonce, ref max_age, ref prompt, ref claims, ref code_challenge, ref code_challenge_method,
-                out bool pushed, out bool signedRequestObject, out err, out errDescription))
+                out pushed, out signedRequestObject, out err, out errDescription))
             {
                 // **err・errDescription は OverwriteByRequestObject が決める**（#362）
             }
@@ -842,7 +877,9 @@ namespace MultiPurposeAuthSite.Controllers
             string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
                 request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
 
-            JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+            //  **日付の形の文字列を、日付に変えずに読む**（#403。#337 と同じ読み方）。
+            //    **以前は既定の読み方で、日付の形の state などが `Date` になり、応答で書式が変わっていた**（RFC 6749 §4.1.2 は受けた値のまま返す）。
+            JObject requestObjectPayload = JwtUtil.TryParseObjectAsIs(requestObjectPayloadString);
 
             if (requestObjectPayload == null)
             {
@@ -1390,6 +1427,39 @@ namespace MultiPurposeAuthSite.Controllers
         private string CurrentRequestUrl()
         {
             return UriHelper.GetEncodedUrl(Request);
+        }
+
+        /// <summary>認可の口の URL（いまの要求のクエリの `request_uri` だけを置き換えたもの。#374）</summary>
+        /// <param name="requestUri">置き換える request_uri（預けた `urn:`）</param>
+        /// <returns>URL</returns>
+        private string AuthorizeEndpointUrlWithRequestUri(string requestUri)
+        {
+            return UriHelper.BuildAbsolute(
+                Request.Scheme, Request.Host, Request.PathBase,
+                new PathString(Config.OAuth2AuthorizeEndpoint),
+                new QueryString("?" + AccountController.QueryWithRequestUri(this.AuthZRequestQuery(), requestUri)));
+        }
+
+        /// <summary>クエリの `request_uri` だけを置き換えて、クエリ文字列にする（#374）</summary>
+        /// <param name="query">いまの要求のクエリ</param>
+        /// <param name="requestUri">置き換える request_uri</param>
+        /// <returns>クエリ文字列（`?` を含まない）</returns>
+        private static string QueryWithRequestUri(NameValueCollection query, string requestUri)
+        {
+            List<string> pairs = new List<string>();
+
+            foreach (string key in query.AllKeys)
+            {
+                if (key == null)
+                {
+                    continue;
+                }
+
+                string value = (key == OAuth2AndOIDCConst.request_uri) ? requestUri : query[key];
+                pairs.Add(Uri.EscapeDataString(key) + "=" + Uri.EscapeDataString(value ?? ""));
+            }
+
+            return string.Join("&", pairs);
         }
 
         /// <summary>認可の口の URL（いまの要求のクエリを付けたもの。#359）</summary>

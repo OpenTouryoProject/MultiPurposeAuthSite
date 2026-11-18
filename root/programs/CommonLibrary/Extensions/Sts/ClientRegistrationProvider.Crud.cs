@@ -34,6 +34,8 @@
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を、検査の前に取りに行くようにした（WarmUpSectorIdentifierUriAsync。#364）
 //*  2026/11/12  玄人 幸道         取りに行くのは、呼び出し元の認可を確かめた後だけにした（MayWarmUpForRegister / MayWarmUpForUpdate。#364）
 //*  2026/11/13  玄人 幸道         PUT で authorization_signed_response_alg も全置換する（#370）
+//*  2026/11/18  玄人 幸道         jwks_uri を温める前に、行き先のアドレスを判定するようにした（#376）
+//*  2026/11/19  玄人 幸道         PUT で request_uris を要求から作り直すようにした（#374）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -106,8 +108,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (string url in urls)
             {
+                //  **行き先のアドレスも見る**（内部のアドレスへは取りに行かない。#376）。**判定は `Validate` と同じ。**
                 if (!string.IsNullOrEmpty(url)
-                    && RemoteJwkSetStore.IsUsableKeySource(url))
+                    && RemoteJwkSetStore.IsUsableKeySource(url)
+                    && OutboundUrlPolicy.IsAllowed(url))
                 {
                     //  **取れなくても例外にしない**（`RemoteJwkSetStore` が飲む）。
                     //    **断るのは `Validate`** である。
@@ -481,7 +485,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | 順 | 列 | 扱い |
         /// |---|---|---|
-        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
+        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` / `RequestUris` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
         /// | 2 | `Jwk*` ↔ `JwksUri` | **要求が片方を入れたら、もう片方は消える**（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
         /// | 3 | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` | **要求に在れば置き換え、無ければ持ち越す** |
         /// | 4 | `ClientMode` | **持ち越す**（**空のときだけ `normal`**。管理画面で FAPI の登録にしたものを、`PUT` で下げない） |
@@ -621,6 +625,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //    **`sector_identifier_uri` も全置換**（#364）。**ホストを変えたり省いたりすると Sector が変わり、pairwise の `sub` が変わる**
             //    （**以前の `sub` は引けなくなる**。RP 自身の操作なので許す。`GET` の応答をそのまま戻せば残る）。
             model.SectorIdentifierUri = requested.SectorIdentifierUri;
+
+            //    **`request_uris` も全置換**（#374。省いたら消え、外部の `request_uri` は使えなくなる）。
+            model.RequestUris = requested.RequestUris;
 
             //    **省いたら、秘密ベース（`client_secret_basic` / `client_secret_post`）に戻る。**
             model.TokenEndpointAuthMethod = requested.TokenEndpointAuthMethod;

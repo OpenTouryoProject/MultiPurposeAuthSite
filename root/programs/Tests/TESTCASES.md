@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus
+1. GET /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=b16d39c2-6277-4926-accc-e3c39bb9ccfc&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12481,6 +12481,222 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 401
 - invalid_client
 
+## RT-374.1 動的登録の `request_uris` を受けて応答と `GET` に返し、`PUT` で省けば消える。内部のアドレス・相対の値・6 件以上は `400` ＋ `invalid_client_metadata`
+
+| | |
+|---|---|
+| 観点 | **`request_uris` は、認可要求の `request_uri` に使ってよい外部の URL**（OIDC Core 1.0 §6.2）。**OP が取りに行く先なので、`https` と行き先のアドレスを確かめる**（#376）。**`#` を付けた値も受ける**（RP がキャッシュのために付けてよい）。**以前は受けておらず、外部の `request_uri` は使えなかった**（#362）。 |
+| 根拠 | OIDC Registration 1.0 §2 / RFC 7592 §2.2 / #374 |
+| テスト | `RT37401_動的登録のrequest_urisを受けて返す` |
+
+**手順**
+
+1. request_uris に 2 つを入れて登録する（片方は # 付き）
+1. GET でも返る（保存されている）
+1. PUT で request_uris を省くと消える（全置換）
+1. 断る値
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答に request_uris が返る（a）
+- 応答に request_uris が返る（# 付きの b）
+- GET の request_uris に a が在る
+- HTTP の状態は 200
+- GET の request_uris は無い
+- 内部のアドレス : HTTP の状態は 400
+- 内部のアドレス : invalid_client_metadata
+- 相対の値 : HTTP の状態は 400
+- 相対の値 : invalid_client_metadata
+- 6 件 : HTTP の状態は 400
+- 6 件 : invalid_client_metadata
+
+**観測（判定しない）**
+
+- 内部のアドレス : error_description
+- 相対の値 : error_description
+- 6 件 : error_description
+
+## RT-374.2 登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object（`state` など）で認可コードまで進む。登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri` のエラー画面
+
+| | |
+|---|---|
+| 観点 | **OP は、`request_uri` の URL から Request Object を取り、署名を検証して使う**（OIDC Core 1.0 §6.2。動的登録を提供する OP の MUST。§15.2）。**取りに行くのは、登録した `request_uris` だけ。** **署名を検証できないものは受けない**（`alg=none` を受けない方針）。**以前は、外部の `request_uri` を取りに行かずに断っていた**（#362）。 |
+| 根拠 | OIDC Core 1.0 §6.2 / OIDC Core 1.0 §3.1.2.6 / OIDC Registration 1.0 §2 / #374 |
+| テスト | `RT37402_登録した外部のrequest_uriを取りに行って使う` |
+
+**手順**
+
+1. 鍵（jwks）と request_uris を付けて登録する（Request Object の検証鍵は、登録の列の鍵から引く）
+1. 署名した Request Object を、登録した URL に置き、request_uri で認可する
+1. 登録していない URL は、取りに行かずに request_uri_not_supported
+1. 署名の無い Request Object（alg=none）は invalid_request_object
+1. 登録した URL でも、取れない（404）なら invalid_request_uri
+
+**検証（合否を判定する）**
+
+- 預けた urn: の認可の URL へ送り直す
+- 認可コードが返る
+- state は Request Object の値
+- 登録していない URL : code を返さない
+- 登録していない URL : エラー画面に request_uri_not_supported が出る
+- 署名の無いもの : code を返さない
+- 署名の無いもの : エラー画面に invalid_request_object が出る
+- 取れないもの : code を返さない
+- 取れないもの : エラー画面に invalid_request_uri が出る
+
+## RT-375.1 `jwks_uri` の応答が**1MB を超える**と読まず、登録を `400` ＋ `invalid_client_metadata` で断る。**同じ鍵を小さく置けば登録できる**
+
+| | |
+|---|---|
+| 観点 | **OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。****以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。****既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。 |
+| 根拠 | 設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375 |
+| テスト | `RT37501_1MBを超えるjwks_uriの応答は読まない` |
+
+**手順**
+
+1. 有効な JWK Set に、使わない項目を足して 1MB を超えさせる
+1. 対照：同じ鍵を、足した項目なしで置けば登録できる
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- 断る理由は「読めない」
+- HTTP の状態は 201
+
+## RT-376.1 動的登録の `jwks_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **動的登録では、登録できる相手が OP に取りに行かせる URL を書ける。****以前はスキーム（https か、ループバックの http）しか見ておらず、OP の内側のアドレスへ要求を出させられた。****既定では内部のアドレスへ行かない**（配備が許可の一覧で開ける）。 |
+| 根拠 | RFC 7591 §2 / #376 |
+| テスト | `RT37601_内部のアドレスのjwks_uriは断る` |
+
+**手順**
+
+1. jwks_uri = https://10.0.0.1/e2e/rt376
+1. jwks_uri = https://192.168.0.1/e2e/rt376
+1. jwks_uri = https://169.254.169.254/latest/meta-data
+1. jwks_uri = https://[fd00::1]/e2e/rt376
+
+**検証（合否を判定する）**
+
+- https://10.0.0.1/e2e/rt376 : HTTP 400
+- https://10.0.0.1/e2e/rt376 : invalid_client_metadata
+- https://10.0.0.1/e2e/rt376 : 断る理由は行き先
+- https://192.168.0.1/e2e/rt376 : HTTP 400
+- https://192.168.0.1/e2e/rt376 : invalid_client_metadata
+- https://192.168.0.1/e2e/rt376 : 断る理由は行き先
+- https://169.254.169.254/latest/meta-data : HTTP 400
+- https://169.254.169.254/latest/meta-data : invalid_client_metadata
+- https://169.254.169.254/latest/meta-data : 断る理由は行き先
+- https://[fd00::1]/e2e/rt376 : HTTP 400
+- https://[fd00::1]/e2e/rt376 : invalid_client_metadata
+- https://[fd00::1]/e2e/rt376 : 断る理由は行き先
+
+## RT-376.2 動的登録の `sector_identifier_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る
+
+| | |
+|---|---|
+| 観点 | **`jwks_uri` と同じく、OP が取りに行く URL である**（§5）。**以前はスキームしか見ておらず、OP の内側のアドレスへ要求を出させられた。** |
+| 根拠 | OIDC Registration 1.0 §5 / #376 |
+| テスト | `RT37602_内部のアドレスのsector_identifier_uriは断る` |
+
+**手順**
+
+1. sector_identifier_uri = https://10.0.0.1/e2e/rt376
+1. sector_identifier_uri = https://192.168.0.1/e2e/rt376
+1. sector_identifier_uri = https://169.254.169.254/latest/meta-data
+1. sector_identifier_uri = https://[fd00::1]/e2e/rt376
+
+**検証（合否を判定する）**
+
+- https://10.0.0.1/e2e/rt376 : HTTP 400
+- https://10.0.0.1/e2e/rt376 : invalid_client_metadata
+- https://10.0.0.1/e2e/rt376 : 断る理由は行き先
+- https://192.168.0.1/e2e/rt376 : HTTP 400
+- https://192.168.0.1/e2e/rt376 : invalid_client_metadata
+- https://192.168.0.1/e2e/rt376 : 断る理由は行き先
+- https://169.254.169.254/latest/meta-data : HTTP 400
+- https://169.254.169.254/latest/meta-data : invalid_client_metadata
+- https://169.254.169.254/latest/meta-data : 断る理由は行き先
+- https://[fd00::1]/e2e/rt376 : HTTP 400
+- https://[fd00::1]/e2e/rt376 : invalid_client_metadata
+- https://[fd00::1]/e2e/rt376 : 断る理由は行き先
+
+## RT-377.1 PAR に預ける Request Object の中の認可要求の値（redirect_uri・code_challenge・code_challenge_method・dpop_jkt・nonce・prompt・response_mode・state・max_age）が文字列でなければ、400 ＋ invalid_request_object。文字列・整数の max_age なら 201
+
+| | |
+|---|---|
+| 観点 | **これらは、預けた中身から文字列として読まれる。****以前は型を見ずに預かり、配列・オブジェクトだと、PAR そのもの（nonce・prompt・response_mode）か /authorize（state・max_age・dpop_jkt など）が 500（net48 はエラー画面）になっていた。****数値の dpop_jkt は、引き換えられない code を出していた**（dpop_jkt は鍵の指紋の文字列。RFC 9449 §10）。**max_age は秒数なので、整数も受ける**（OIDC Core 1.0 §3.1.2.1）。 |
+| 根拠 | RFC 9101 §7 / RFC 9449 §10 / OIDC Core 1.0 §3.1.2.1 / #377 |
+| テスト | `RT37701_PARは認可コードに縛る値が文字列でないRequestObjectを預からない` |
+
+**手順**
+
+1. 対照：文字列の dpop_jkt は 201
+1. 文字列でない値を入れる
+
+**検証（合否を判定する）**
+
+- 文字列の dpop_jkt : HTTP 201
+- 整数の max_age : HTTP 201
+- 日付の形の nonce : HTTP 201
+- 日付の形の state : HTTP 201
+- 配列の dpop_jkt : HTTP 400
+- 配列の dpop_jkt : invalid_request_object
+- 配列の dpop_jkt : 断る理由は dpop_jkt の型
+- オブジェクトの dpop_jkt : HTTP 400
+- オブジェクトの dpop_jkt : invalid_request_object
+- オブジェクトの dpop_jkt : 断る理由は dpop_jkt の型
+- 数値の dpop_jkt : HTTP 400
+- 数値の dpop_jkt : invalid_request_object
+- 数値の dpop_jkt : 断る理由は dpop_jkt の型
+- 配列の redirect_uri : HTTP 400
+- 配列の redirect_uri : invalid_request_object
+- 配列の redirect_uri : 断る理由は redirect_uri の型
+- オブジェクトの code_challenge : HTTP 400
+- オブジェクトの code_challenge : invalid_request_object
+- オブジェクトの code_challenge : 断る理由は code_challenge の型
+- 数値の code_challenge_method : HTTP 400
+- 数値の code_challenge_method : invalid_request_object
+- 数値の code_challenge_method : 断る理由は code_challenge_method の型
+- オブジェクトの nonce : HTTP 400
+- オブジェクトの nonce : invalid_request_object
+- オブジェクトの nonce : 断る理由は nonce の型
+- 配列の prompt : HTTP 400
+- 配列の prompt : invalid_request_object
+- 配列の prompt : 断る理由は prompt の型
+- 配列の response_mode : HTTP 400
+- 配列の response_mode : invalid_request_object
+- 配列の response_mode : 断る理由は response_mode の型
+- 配列の state : HTTP 400
+- 配列の state : invalid_request_object
+- 配列の state : 断る理由は state の型
+- 配列の max_age : HTTP 400
+- 配列の max_age : invalid_request_object
+- 配列の max_age : 断る理由は max_age の型
+
+## RT-377.2 /ros : dpop_jkt が文字列でない Request Object を預からない（PAR と同じ扱い）。文字列なら預かる
+
+| | |
+|---|---|
+| 観点 | **/ros も、預けた request_uri を /authorize で使う**ので、PAR と同じく型を確かめる。**以前は型を見ずに預かっていた**（#377）。 |
+| 根拠 | RFC 9101 §7 / RFC 9449 §10 / #377 |
+| テスト | `RT37702_rosはdpop_jktが文字列でないRequestObjectを預からない` |
+
+**手順**
+
+1. dpop_jkt を配列にした Request Object を預ける
+1. 対照：文字列の dpop_jkt なら預かる（日付の形の文字列も）
+
+**検証（合否を判定する）**
+
+- request_uri を返さない
+- dpop_jkt=e2e-rt3772-thumbprint : request_uri を返す
+- dpop_jkt=2026-11-18T10:00:00Z : request_uri を返す
+
 ## RT-378.1 state を送らない認可要求の JARM（response の JWT）には、成功・エラーとも state の名前を入れない。state を送れば、その値が入る
 
 | | |
@@ -13154,6 +13370,142 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - StatusCode（署名を確かめられない要求は断る）
 - アサーション（NameID）を入れない
 - InResponseTo（送った要求の ID）
+
+## RT-403.1 PAR・/ros に預けた Request Object の中の日付の形の state（UTC・時差付き）が、/authorize の応答（prompt=none の login_required）で預けた値のまま返る
+
+| | |
+|---|---|
+| 観点 | **state は、受けた値をそのまま返す。****以前は、日付の形の文字列が JSON の読み方で Date になり、書式の変わった文字列（11/18/2026 10:00:00）で返っていた**（OpenTouryo#662）。 |
+| 根拠 | RFC 6749 §4.1.2.1 / #403 |
+| テスト | `RT40301_預けたRequestObjectの日付の形のstateが応答で書き換わらない` |
+
+**手順**
+
+1. PAR：state=2026-11-18T10:00:00Z
+1. PAR：state=2026-11-18T10:00:00+05:30
+1. /ros：state=2026-11-18T10:00:00-03:00
+
+**検証（合否を判定する）**
+
+- PAR（2026-11-18T10:00:00Z） : HTTP 201
+- PAR（2026-11-18T10:00:00Z） : 応答の state
+- PAR（2026-11-18T10:00:00+05:30） : HTTP 201
+- PAR（2026-11-18T10:00:00+05:30） : 応答の state
+- /ros : request_uri を返す
+- /ros : 応答の state
+
+## RT-404.1 PAR・/ros に、生の UTF-8 で日本語の state を書いた Request Object を預け、/authorize の応答（prompt=none の login_required）で預けた値のまま返る
+
+| | |
+|---|---|
+| 観点 | **JWT の Claims Set は UTF-8 で表す。** state は受けた値をそのまま返す。**以前は PAR だけが us-ascii で読み、ASCII でない文字が「?」に変わっていた。** |
+| 根拠 | RFC 7519 §7.1 / RFC 7519 §7.2 / RFC 6749 §4.1.2.1 / #404 |
+| テスト | `RT40401_生のUTF8のRequestObjectの日本語のstateをPARが書き換えない` |
+
+**手順**
+
+1. PAR
+1. 対照：/ros
+
+**検証（合否を判定する）**
+
+- PAR : HTTP 201
+- PAR : 応答の state
+- /ros : 応答の state
+
+## RT-408.1 鍵を `jwks_uri` だけで登録したクライアントの、署名した Request Object を、`jwks_uri` の鍵で検証して受ける（外部の `request_uri`（`/ros` と同じ検証）と、PAR の `request`）。`jwks_uri` に無い鍵・署名が合わないものは断る
+
+| | |
+|---|---|
+| 観点 | **`jwks_uri` は、クライアントが要求の署名に使う鍵の置き場所である**（OIDC Registration 1.0 §2）。**Request Object の署名は、クライアントの鍵で検証する**（RFC 9101 §6.2）。**以前は登録の列（`jwks`）の鍵しか見ず、`jwks_uri` のクライアントの Request Object を検証できなかった**（クライアント認証は `jwks_uri` を見ていた）。 |
+| 根拠 | OIDC Registration 1.0 §2 / RFC 9101 §6.2 / #408 |
+| テスト | `RT40801_jwks_uriの鍵でRequest_Objectを検証する` |
+
+**手順**
+
+1. 鍵を jwks_uri だけで登録する（jwks は登録しない）
+1. 外部の request_uri（/ros と同じ検証）
+1. PAR の request（クライアント認証も jwks_uri の鍵）
+1. jwks_uri に無い鍵（EC の鍵。jwks_uri には RSA の鍵だけを置いた）で署名したものは断る
+1. jwks_uri の鍵と同じ種類（RS256）でも、署名が合わないものは断る（候補はあるが、どれでも検証できない）
+
+**検証（合否を判定する）**
+
+- 外部の request_uri : 認可コードが返る
+- 外部の request_uri : state は Request Object の値
+- PAR : HTTP 201 で預かる
+- PAR : request_uri が返る
+- 外部の request_uri : jwks_uri に無い鍵 : code を返さない
+- 外部の request_uri : jwks_uri に無い鍵 : エラー画面に invalid_request_object が出る
+- PAR : jwks_uri に無い鍵 : HTTP 400 で断る
+- PAR : jwks_uri に無い鍵 : request_uri を返さない
+- 外部の request_uri : 署名が合わない : code を返さない
+- 外部の request_uri : 署名が合わない : エラー画面に invalid_request_object が出る
+- PAR : 署名が合わない : HTTP 400 で断る
+- PAR : 署名が合わない : error
+
+## RT-408.2 鍵を `jwks_uri` だけで登録した fapi_ciba のクライアントの、CIBA の署名した要求（`/ciba_authz` の `request`）を、`jwks_uri` の鍵で検証して先へ進む（居ない利用者を指すので `unknown_user_id`。`invalid_client`・検証の失敗にならない）。`jwks_uri` に無い鍵・署名が合わないものは `invalid_request`
+
+| | |
+|---|---|
+| 観点 | **CIBA の署名した要求は、クライアントの鍵で検証する**（CIBA Core 1.0 §7.1.1）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。**以前は、列の鍵が無ければ `invalid_client` で断っていた。** |
+| 根拠 | CIBA Core 1.0 §7.1.1 / OIDC Registration 1.0 §2 / #408 |
+| テスト | `RT40802_jwks_uriの鍵でCIBAの署名した要求を検証する` |
+
+**手順**
+
+1. kid 付きの署名した要求を送る（控えに無い kid なので、OP は jwks_uri を取りに行く）
+1. jwks_uri に無い鍵（RSA の鍵。写し元の列の鍵で、この登録には無い）で署名した PS256 の要求は断る
+1. jwks_uri の鍵と同じ種類（ES256・同じ kid）でも、署名が合わないものは断る
+
+**検証（合否を判定する）**
+
+- 署名を検証して先へ進む（居ない利用者なので unknown_user_id）
+- jwks_uri に無い鍵 : invalid_request で断る
+- 署名が合わない : invalid_request で断る
+
+## RT-410.1 鍵を `jwks_uri` だけで登録したクライアントの、JWT Bearer グラントの `assertion`（RS256・PS256）を、`jwks_uri` の鍵で検証してトークンを出す。`jwks_uri` に無い鍵（ES256）・署名が合わないものは `invalid_client`
+
+| | |
+|---|---|
+| 観点 | **`assertion` は、発行者（iss）の鍵で署名を検証する**（RFC 7523 §3 の 9）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。**以前は列の RSA の鍵だけで RS256 だけを受け、`jwks_uri` の鍵を使わなかった**（`client_assertion`・Request Object・CIBA の要求は `jwks_uri` を見る。#408）。 |
+| 根拠 | RFC 7523 §3 / OIDC Registration 1.0 §2 / #410 |
+| テスト | `RT41001_jwks_uriの鍵でJWT_Bearerのassertionを検証する` |
+
+**手順**
+
+1. 鍵（RSA）を jwks_uri だけで登録する
+1. RS256・PS256 の assertion（jwks_uri の RSA の鍵）でトークンが出る
+1. jwks_uri に無い鍵（EC の鍵）・署名が合わないものは invalid_client
+
+**検証（合否を判定する）**
+
+- RS256 : access_token が返る
+- PS256 : access_token が返る
+- jwks_uri に無い鍵（ES256） : access_token を返さない
+- jwks_uri に無い鍵（ES256） : error
+- 署名が合わない（RS256） : access_token を返さない
+- 署名が合わない（RS256） : error
+
+## RT-410.2 JWT Bearer グラントの `assertion` は、列の鍵（RSA・EC）で、PS256・ES256 も受けてトークンを出す。署名が合わないものは `invalid_client`
+
+| | |
+|---|---|
+| 観点 | **受ける JWT ごとに alg の扱いをそろえる**（`client_assertion` は RS256・PS256・ES256。#395）。**ヘッダの alg と鍵の種類が食い違う鍵では検証しない**（RFC 8725 §3.1）。**以前は RS256 だけ**だった。 |
+| 根拠 | RFC 7523 §3 / RFC 8725 §3.1 / #410 |
+| テスト | `RT41002_JWT_BearerのassertionはPS256とES256も受ける` |
+
+**手順**
+
+1. PS256（RSA の鍵）・ES256（EC の鍵）の assertion でトークンが出る
+1. 署名が合わないもの（ES256）は invalid_client
+
+**検証（合否を判定する）**
+
+- PS256 : access_token が返る
+- ES256 : access_token が返る
+- 署名が合わない（ES256） : access_token を返さない
+- 署名が合わない（ES256） : error
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

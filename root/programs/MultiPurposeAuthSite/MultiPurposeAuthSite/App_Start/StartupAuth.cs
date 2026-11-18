@@ -21,6 +21,7 @@
 //*  2026/09/30  玄人 幸道         Facebook / Twitter の外部ログインの登録を削除（#249）
 //*  2026/09/30  玄人 幸道         認証 Cookie の名前を設定できるようにした（#250 の段階 4）
 //*  2026/09/30  玄人 幸道         認証 Cookie の名前に接頭辞を付けられるようにした（#255）
+//*  2026/11/18  玄人 幸道         外部ログイン（Microsoft アカウント・Google）のプロキシの組を、設定（ProxyForExternalLogin）で選ぶようにした（#406）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -308,10 +309,12 @@ namespace MultiPurposeAuthSite
             {
                 MicrosoftAccountAuthenticationOptions options = new MicrosoftAccountAuthenticationOptions
                 {
+                    //  **プロキシの組は設定 `ProxyForExternalLogin` で選ぶ**（既定 `Internet`。#406）。
+                    //    **組のプロキシが無ければ OS の既定のプロキシ、`None` なら直接**（以前は `UseInternetProxy=false` で直接だった）。
                     BackchannelHttpHandler = new WebRequestHandler()
                     {
-                        Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = Config.UseInternetProxy
+                        Proxy = CreateProxy.GetProxy(CreateProxy.ForExternalLogin),
+                        UseProxy = CreateProxy.UsesProxy(CreateProxy.ForExternalLogin)
                     },
                     ClientId = Config.MicrosoftAccountAuthenticationClientId,
                     ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret
@@ -333,10 +336,11 @@ namespace MultiPurposeAuthSite
             {
                 GoogleOAuth2AuthenticationOptions options = new GoogleOAuth2AuthenticationOptions
                 {
+                    //  **プロキシの組は設定 `ProxyForExternalLogin` で選ぶ**（#406。Microsoft アカウントと同じ）。
                     BackchannelHttpHandler = new WebRequestHandler()
                     {
-                        Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = Config.UseInternetProxy
+                        Proxy = CreateProxy.GetProxy(CreateProxy.ForExternalLogin),
+                        UseProxy = CreateProxy.UsesProxy(CreateProxy.ForExternalLogin)
                     },
                     ClientId = Config.GoogleAuthenticationClientId,
                     ClientSecret = Config.GoogleAuthenticationClientSecret,

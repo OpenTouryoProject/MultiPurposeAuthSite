@@ -31,11 +31,23 @@
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 1）
 //*  2026/11/12  玄人 幸道         RT-363.1（登録を直さずに鍵を入れ替えても、知らない kid の 1 回目から通る）を足した（#363）
 //*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
+//*  2026/11/18  玄人 幸道         RT-376.1（内部のアドレスの jwks_uri は、取りに行かずに断る）を足した（#376）
+//*  2026/11/18  玄人 幸道         RT-375.1（1MB を超える jwks_uri の応答は読まない）を足した（#375）
+//*  2026/11/19  玄人 幸道         RT-374.1（動的登録の request_uris）を足した（#374）
+//*  2026/11/19  玄人 幸道         RT-374.2（登録した外部の request_uri を取りに行って使う）を足した（#374）
+//*  2026/11/19  玄人 幸道         RT-374.2 で、預けた urn: の認可の URL への送り直しを確かめるようにした（#374）
+//*  2026/11/19  玄人 幸道         RT-374.2 で、預けた urn: の認可の URL への送り直しを確かめるようにした（#374）
+//*  2026/11/19  玄人 幸道         RT-408.1・.2（jwks_uri の鍵で Request Object・CIBA の署名した要求を検証する）を足した（#408）
+//*  2026/11/19  玄人 幸道         RT-408.1・.2 に、jwks_uri に無い鍵で署名したものを断ることを足した（#408。別モデルのレビューの指摘）
+//*  2026/11/19  玄人 幸道         RT-408.1・.2 に、同じ種類の鍵でも署名が合わないものを断ることを足した（#408。別モデルのレビューの指摘）
+//*  2026/11/19  玄人 幸道         RT-410.1・.2（JWT Bearer グラントの assertion を jwks_uri の鍵・PS256・ES256 で検証する）を足した（#410）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -61,6 +73,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-309.3`** | **同じ URL の鍵を入れ替えると、`PUT` で読み直して新しい鍵で通る**（**読み直すまではキャッシュが効く**） |
     /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
     /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
+    /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。共有の HttpClient の大きさの上限。#375） |
+    /// | **`RT-374.1`** | **動的登録の `request_uris`**（外部の `request_uri` を取りに行ってよい先）を受けて返し、`PUT` で省けば消える。**内部のアドレス・相対の値・6 件以上は `400`**（#374） |
+    /// | **`RT-374.2`** | **登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object で認可コードまで進む。** 登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri`（どれもエラー画面。#374） |
+    /// | **`RT-376.1`** | **内部のアドレス（プライベート・リンクローカル・ユニーク ローカル）の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
     /// **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の全部から呼ばれる。
@@ -586,6 +602,806 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     finally
                     {
                         JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-375.1
+
+        /// <summary>RT-375.1 1MB を超える jwks_uri の応答は読まない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37501_1MBを超えるjwks_uriの応答は読まない(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-375.1",
+                    "`jwks_uri` の応答が**1MB を超える**と読まず、登録を `400` ＋ `invalid_client_metadata` で断る。**同じ鍵を小さく置けば登録できる**",
+                    "**OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。**"
+                    + "**以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。**"
+                    + "**既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。",
+                    "設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375");
+
+                r.Target("POST registration_endpoint（jwks_uri の応答が 1MB を超える）");
+
+                string name = "rt375_1_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        string body = "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + JwksUri.Url(name) + "\"}";
+
+                        r.Step("(1) 有効な JWK Set に、使わない項目を足して 1MB を超えさせる");
+
+                        JwksUri.WriteRaw(name, "{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + "],"
+                            + "\"e2e_padding\":\"" + new string('x', 1200 * 1024) + "\"}");
+
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(client, endpoint, token, body);
+
+                        r.VerifyEqual("HTTP の状態は 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual("error は invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+
+                        string description = rejected.String("error_description") ?? "";
+                        bool unread = description.Contains("could not be read");
+
+                        r.Verify("断る理由は「読めない」", unread,
+                            "could not be read", unread ? "could not be read" : "**" + description + "**");
+
+                        r.Step("(2) 対照：同じ鍵を、足した項目なしで置けば登録できる");
+
+                        JwksUri.Write(name, JwsSigner.PublicRsaJwk(client));
+
+                        JsonResponse accepted = await DynamicClientRegistration.RegisterAsync(client, endpoint, token, body);
+
+                        r.VerifyEqual("HTTP の状態は 201", "201", ((int)accepted.StatusCode).ToString());
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-374.1
+
+        /// <summary>RT-374.1 動的登録の request_uris を受けて返し、PUT で省けば消える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37401_動的登録のrequest_urisを受けて返す(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-374.1",
+                    "動的登録の `request_uris` を受けて応答と `GET` に返し、`PUT` で省けば消える。内部のアドレス・相対の値・6 件以上は `400` ＋ `invalid_client_metadata`",
+                    "**`request_uris` は、認可要求の `request_uri` に使ってよい外部の URL**（OIDC Core 1.0 §6.2）。**OP が取りに行く先なので、`https` と行き先のアドレスを確かめる**（#376）。"
+                    + "**`#` を付けた値も受ける**（RP がキャッシュのために付けてよい）。**以前は受けておらず、外部の `request_uri` は使えなかった**（#362）。",
+                    "OIDC Registration 1.0 §2 / RFC 7592 §2.2 / #374");
+
+                r.Target("POST・GET・PUT registration_endpoint（request_uris）");
+
+                string uriA = JwksUri.Url("rt374_1_a");
+                string uriB = JwksUri.Url("rt374_1_b") + "#v1";
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    r.Step("(1) request_uris に 2 つを入れて登録する（片方は # 付き）");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid\","
+                        + "\"request_uris\":[\"" + uriA + "\",\"" + uriB + "\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString());
+                    r.Verify("応答に request_uris が返る（a）", created.ArrayContains("request_uris", uriA),
+                        uriA, string.Join(" ", created.Strings("request_uris") ?? new string[0]));
+                    r.Verify("応答に request_uris が返る（# 付きの b）", created.ArrayContains("request_uris", uriB),
+                        uriB, string.Join(" ", created.Strings("request_uris") ?? new string[0]));
+
+                    string clientId = created.String("client_id");
+                    string clientUri = created.String("registration_client_uri");
+                    string clientToken = created.String("registration_access_token");
+
+                    r.Step("(2) GET でも返る（保存されている）");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(client, clientUri, clientToken);
+
+                    r.Verify("GET の request_uris に a が在る", read.ArrayContains("request_uris", uriA),
+                        uriA, string.Join(" ", read.Strings("request_uris") ?? new string[0]));
+
+                    r.Step("(3) PUT で request_uris を省くと消える（全置換）");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(client, clientUri, clientToken,
+                        "{\"client_id\":\"" + clientId + "\","
+                        + "\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid\"}");
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)updated.StatusCode).ToString());
+
+                    JsonResponse reread = await DynamicClientRegistration.ReadAsync(client, clientUri, clientToken);
+                    string[] left = reread.Strings("request_uris") ?? new string[0];
+
+                    r.VerifyEqual("GET の request_uris は無い", "0", left.Length.ToString());
+
+                    r.Step("(4) 断る値");
+
+                    foreach (KeyValuePair<string, string> c in new Dictionary<string, string>()
+                    {
+                        { "内部のアドレス", "[\"https://10.0.0.1/e2e/rt374\"]" },
+                        { "相対の値", "[\"/e2e/rt374\"]" },
+                        { "6 件", "[" + string.Join(",", Enumerable.Range(1, 6).Select(i => "\"" + JwksUri.Url("rt374_1_" + i) + "\"")) + "]" }
+                    })
+                    {
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"request_uris\":" + c.Value + "}");
+
+                        r.VerifyEqual(c.Key + " : HTTP の状態は 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual(c.Key + " : invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+                        r.Observe(c.Key + " : error_description", rejected.String("error_description") ?? "（無い）");
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-374.2
+
+        /// <summary>RT-374.2 登録した外部の request_uri を取りに行って使う</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37402_登録した外部のrequest_uriを取りに行って使う(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-374.2",
+                    "登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object（`state` など）で認可コードまで進む。"
+                    + "登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri` のエラー画面",
+                    "**OP は、`request_uri` の URL から Request Object を取り、署名を検証して使う**（OIDC Core 1.0 §6.2。動的登録を提供する OP の MUST。§15.2）。"
+                    + "**取りに行くのは、登録した `request_uris` だけ。** **署名を検証できないものは受けない**（`alg=none` を受けない方針）。"
+                    + "**以前は、外部の `request_uri` を取りに行かずに断っていた**（#362）。",
+                    "OIDC Core 1.0 §6.2 / OIDC Core 1.0 §3.1.2.6 / OIDC Registration 1.0 §2 / #374");
+
+                r.Target("GET /authorize?client_id=…&request_uri=（静的配信の足場に置いた Request Object の URL）");
+
+                string roName = "rt374_2_ro_" + targetKey;
+                string missingName = "rt374_2_missing_" + targetKey;
+                string otherName = "rt374_2_other_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        r.Step("(1) 鍵（jwks）と request_uris を付けて登録する（Request Object の検証鍵は、登録の列の鍵から引く）");
+
+                        JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks\":{\"keys\":[" + JwsSigner.PublicRsaJwk(client) + "]},"
+                            + "\"request_uris\":[\"" + JwksUri.Url(roName) + "\",\"" + JwksUri.Url(missingName) + "\"]}");
+
+                        string clientId = created.String("client_id");
+
+                        Assert.False(string.IsNullOrEmpty(clientId), "前提: 登録できること（" + created.ToString() + "）");
+
+                        r.Step("(2) 署名した Request Object を、登録した URL に置き、request_uri で認可する");
+
+                        JwksUri.WriteRaw(roName, await RequestObjectBuilder.CreateAsync(client, clientId,
+                            new Dictionary<string, object>()
+                            {
+                                { "response_type", "code" },
+                                { "redirect_uri", UriA },
+                                { "scope", "openid" },
+                                { "state", "state-rt3742" },
+                                { "nonce", "nonce-rt3742" }
+                            }));
+
+                        Tuple<AuthZResponse, string> followed = await JwksUriTests.AuthorizeFollowingUrnAsync(client, clientId, JwksUri.Url(roName));
+                        AuthZResponse used = followed.Item1;
+
+                        //  **取りに行ったら、預けた `urn:` の認可の URL へ送り直す**（サインイン・再認証の往復で、取りに行き直さない）。
+                        r.Verify("預けた urn: の認可の URL へ送り直す", followed.Item2 != null,
+                            "urn: へ送り直す", followed.Item2 == null ? "**送り直さない**" : "送り直した");
+
+                        r.Verify("認可コードが返る", !string.IsNullOrEmpty(used.Code),
+                            "code あり", string.IsNullOrEmpty(used.Code) ? "**なし**（" + Html.Describe(used.Body) + "）" : "あり");
+                        r.VerifyEqual("state は Request Object の値", "state-rt3742", used.State ?? "（無い）");
+
+                        r.Step("(3) 登録していない URL は、取りに行かずに request_uri_not_supported");
+
+                        JwksUri.WriteRaw(otherName, "unused");
+
+                        JwksUriTests.VerifyRefused(r, "登録していない URL",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(otherName)),
+                            "request_uri_not_supported");
+
+                        r.Step("(4) 署名の無い Request Object（alg=none）は invalid_request_object");
+
+                        JwksUri.WriteRaw(roName,
+                            Base64Url.Encode(Encoding.UTF8.GetBytes("{\"alg\":\"none\"}")) + "."
+                            + Base64Url.Encode(Encoding.UTF8.GetBytes(
+                                "{\"iss\":\"" + clientId + "\",\"aud\":\"" + await client.IssuerAsync() + "\","
+                                + "\"client_id\":\"" + clientId + "\",\"response_type\":\"code\","
+                                + "\"redirect_uri\":\"" + UriA + "\",\"scope\":\"openid\",\"state\":\"state-rt3742-none\"}")) + ".");
+
+                        JwksUriTests.VerifyRefused(r, "署名の無いもの",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName)),
+                            "invalid_request_object");
+
+                        r.Step("(5) 登録した URL でも、取れない（404）なら invalid_request_uri");
+
+                        JwksUriTests.VerifyRefused(r, "取れないもの",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(missingName)),
+                            "invalid_request_uri");
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(roName);
+                        JwksUri.Delete(otherName);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        /// <summary>client_id と request_uri だけで認可する（同意が要れば同意する）</summary>
+        /// <param name="client">IdPClient（サインイン済み）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="requestUri">request_uri</param>
+        /// <returns>AuthZResponse</returns>
+        private static async Task<AuthZResponse> AuthorizeWithRequestUriAsync(IdPClient client, string clientId, string requestUri)
+        {
+            return (await JwksUriTests.AuthorizeFollowingUrnAsync(client, clientId, requestUri)).Item1;
+        }
+
+        /// <summary>client_id と request_uri だけで認可し、`urn:` の認可の URL への送り直し（302）を 1 回だけ追う</summary>
+        /// <param name="client">IdPClient（サインイン済み）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="requestUri">request_uri</param>
+        /// <returns>応答と、送り直された先の `urn:`（送り直しが無ければ null）</returns>
+        /// <remarks>**外部の `request_uri` は、預けた `urn:` の認可の URL へ送り直される**（#374。サインインの往復で取りに行き直さないため）。</remarks>
+        private static async Task<Tuple<AuthZResponse, string>> AuthorizeFollowingUrnAsync(IdPClient client, string clientId, string requestUri)
+        {
+            AuthZResponse res = await client.AuthorizeAsync(new Dictionary<string, string>()
+            {
+                { "client_id", clientId },
+                { "request_uri", requestUri }
+            });
+
+            string urn = null;
+            string redirected = (res.Location == null) ? null : Saml2.QueryValue(res.Location, "request_uri");
+
+            if (redirected != null && redirected.StartsWith("urn:", StringComparison.Ordinal))
+            {
+                urn = redirected;
+                res = await client.AuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", clientId },
+                    { "request_uri", urn }
+                });
+            }
+
+            return Tuple.Create(res.NeedsConsent ? await client.GrantConsentAsync(res) : res, urn);
+        }
+
+        /// <summary>JWS の署名の部分を書き換える（ヘッダと payload はそのまま。#408）</summary>
+        /// <param name="jws">JWS（コンパクト形式）</param>
+        /// <returns>署名の合わない JWS</returns>
+        /// <remarks>**署名の真ん中の 1 文字を変える**（末尾の文字は、使われないビットだけが変わることがある）。</remarks>
+        private static string TamperSignature(string jws)
+        {
+            int dot = jws.LastIndexOf('.');
+            char[] sig = jws.Substring(dot + 1).ToCharArray();
+            int mid = sig.Length / 2;
+
+            sig[mid] = (sig[mid] == 'A') ? 'B' : 'A';
+
+            return jws.Substring(0, dot + 1) + new string(sig);
+        }
+
+        /// <summary>エラー画面で断ったことを確かめる（RP へ返さない）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">場合の名前</param>
+        /// <param name="res">AuthZResponse</param>
+        /// <param name="error">期待する error</param>
+        private static void VerifyRefused(TestReport r, string label, AuthZResponse res, string error)
+        {
+            r.Verify(label + " : code を返さない", string.IsNullOrEmpty(res.Code),
+                "code なし", string.IsNullOrEmpty(res.Code) ? "なし" : "**あり**");
+
+            r.Verify(label + " : エラー画面に " + error + " が出る",
+                (res.Body ?? "").Contains("text-danger") && (res.Body ?? "").Contains(error),
+                "エラー画面（" + error + "）", Html.Describe(res.Body));
+        }
+
+        #endregion
+
+        #region RT-408.1
+
+        /// <summary>RT-408.1 鍵を jwks_uri だけで登録したクライアントの Request Object を、jwks_uri の鍵で検証する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT40801_jwks_uriの鍵でRequest_Objectを検証する(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-408.1",
+                    "鍵を `jwks_uri` だけで登録したクライアントの、署名した Request Object を、`jwks_uri` の鍵で検証して受ける"
+                    + "（外部の `request_uri`（`/ros` と同じ検証）と、PAR の `request`）。`jwks_uri` に無い鍵・署名が合わないものは断る",
+                    "**`jwks_uri` は、クライアントが要求の署名に使う鍵の置き場所である**（OIDC Registration 1.0 §2）。"
+                    + "**Request Object の署名は、クライアントの鍵で検証する**（RFC 9101 §6.2）。"
+                    + "**以前は登録の列（`jwks`）の鍵しか見ず、`jwks_uri` のクライアントの Request Object を検証できなかった**（クライアント認証は `jwks_uri` を見ていた）。",
+                    "OIDC Registration 1.0 §2 / RFC 9101 §6.2 / #408");
+
+                r.Target("GET /authorize?request_uri=（外部の URL）・POST /par（request）");
+
+                string keyName = "rt408_1_key_" + targetKey;
+                string roName = "rt408_1_ro_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        r.Step("(1) 鍵を jwks_uri だけで登録する（jwks は登録しない）");
+
+                        JwksUri.Write(keyName, JwsSigner.PublicRsaJwk(client));
+
+                        JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + JwksUri.Url(keyName) + "\","
+                            + "\"request_uris\":[\"" + JwksUri.Url(roName) + "\"]}");
+
+                        string clientId = created.String("client_id");
+
+                        Assert.False(string.IsNullOrEmpty(clientId), "前提: 登録できること（" + created.ToString() + "）");
+
+                        r.Step("(2) 外部の request_uri（/ros と同じ検証）");
+
+                        JwksUri.WriteRaw(roName, await RequestObjectBuilder.CreateAsync(client, clientId,
+                            new Dictionary<string, object>()
+                            {
+                                { "response_type", "code" },
+                                { "redirect_uri", UriA },
+                                { "scope", "openid" },
+                                { "state", "state-rt4081" },
+                                { "nonce", "nonce-rt4081" }
+                            }));
+
+                        AuthZResponse used = await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName));
+
+                        r.Verify("外部の request_uri : 認可コードが返る", !string.IsNullOrEmpty(used.Code),
+                            "code あり", string.IsNullOrEmpty(used.Code) ? "**なし**（" + Html.Describe(used.Body) + "）" : "あり");
+                        r.VerifyEqual("外部の request_uri : state は Request Object の値", "state-rt4081", used.State ?? "（無い）");
+
+                        r.Step("(3) PAR の request（クライアント認証も jwks_uri の鍵）");
+
+                        JsonResponse par = await client.PostJsonAsync("/par", JwksUriTests.WithAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "client_id", clientId },
+                                {
+                                    "request", await RequestObjectBuilder.CreateAsync(client, clientId,
+                                        new Dictionary<string, object>()
+                                        {
+                                            { "response_type", "code" },
+                                            { "redirect_uri", UriA },
+                                            { "scope", "openid" },
+                                            { "state", "state-rt4081-par" },
+                                            { "nonce", "nonce-rt4081-par" }
+                                        })
+                                }
+                            }));
+
+                        r.VerifyEqual("PAR : HTTP 201 で預かる", "201", ((int)par.StatusCode).ToString());
+                        r.Verify("PAR : request_uri が返る", !string.IsNullOrEmpty(par.String("request_uri")),
+                            "request_uri あり", string.IsNullOrEmpty(par.String("request_uri")) ? "**なし**（" + par.ToString() + "）" : "あり");
+
+                        r.Step("(4) jwks_uri に無い鍵（EC の鍵。jwks_uri には RSA の鍵だけを置いた）で署名したものは断る");
+
+                        //  **候補を順に試しても、クライアントの鍵でないものは通さない**（RFC 9101 §6.2。別モデルのレビューの指摘）。
+                        Dictionary<string, object> notInJwks = new Dictionary<string, object>()
+                        {
+                            { "response_type", "code" },
+                            { "redirect_uri", UriA },
+                            { "scope", "openid" },
+                            { "state", "state-rt4081-ec" },
+                            { "nonce", "nonce-rt4081-ec" }
+                        };
+
+                        JwksUri.WriteRaw(roName, await RequestObjectBuilder.CreateAsync(client, clientId, notInJwks, "ES256"));
+
+                        JwksUriTests.VerifyRefused(r, "外部の request_uri : jwks_uri に無い鍵",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName)),
+                            "invalid_request_object");
+
+                        JsonResponse parEc = await client.PostJsonAsync("/par", JwksUriTests.WithAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "client_id", clientId },
+                                { "request", await RequestObjectBuilder.CreateAsync(client, clientId, notInJwks, "ES256") }
+                            }));
+
+                        r.VerifyEqual("PAR : jwks_uri に無い鍵 : HTTP 400 で断る", "400", ((int)parEc.StatusCode).ToString());
+                        r.Verify("PAR : jwks_uri に無い鍵 : request_uri を返さない", string.IsNullOrEmpty(parEc.String("request_uri")),
+                            "request_uri なし", string.IsNullOrEmpty(parEc.String("request_uri")) ? "なし" : "**あり**");
+
+                        r.Step("(5) jwks_uri の鍵と同じ種類（RS256）でも、署名が合わないものは断る（候補はあるが、どれでも検証できない）");
+
+                        //  **候補を順に試す部分（`VerifyWithAny`）が、署名の合わないものを通さない**ことを測る（別モデルのレビューの指摘）。
+                        //    **手元の鍵は種類ごとに 1 本**なので、正しく署名してから署名の部分を書き換える。
+                        Dictionary<string, object> tampered = new Dictionary<string, object>()
+                        {
+                            { "response_type", "code" },
+                            { "redirect_uri", UriA },
+                            { "scope", "openid" },
+                            { "state", "state-rt4081-tampered" },
+                            { "nonce", "nonce-rt4081-tampered" }
+                        };
+
+                        JwksUri.WriteRaw(roName, JwksUriTests.TamperSignature(
+                            await RequestObjectBuilder.CreateAsync(client, clientId, tampered)));
+
+                        JwksUriTests.VerifyRefused(r, "外部の request_uri : 署名が合わない",
+                            await JwksUriTests.AuthorizeWithRequestUriAsync(client, clientId, JwksUri.Url(roName)),
+                            "invalid_request_object");
+
+                        JsonResponse parTampered = await client.PostJsonAsync("/par", JwksUriTests.WithAssertion(client, clientId,
+                            new Dictionary<string, string>()
+                            {
+                                { "client_id", clientId },
+                                { "request", JwksUriTests.TamperSignature(await RequestObjectBuilder.CreateAsync(client, clientId, tampered)) }
+                            }));
+
+                        r.VerifyEqual("PAR : 署名が合わない : HTTP 400 で断る", "400", ((int)parTampered.StatusCode).ToString());
+                        r.VerifyEqual("PAR : 署名が合わない : error", "invalid_request_object", parTampered.Error ?? "（無い）");
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(keyName);
+                        JwksUri.Delete(roName);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-408.2
+
+        /// <summary>RT-408.2 鍵を jwks_uri だけで登録した fapi_ciba のクライアントの、CIBA の署名した要求を、jwks_uri の鍵で検証する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT40802_jwks_uriの鍵でCIBAの署名した要求を検証する(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-408.2",
+                    "鍵を `jwks_uri` だけで登録した fapi_ciba のクライアントの、CIBA の署名した要求（`/ciba_authz` の `request`）を、`jwks_uri` の鍵で検証して先へ進む"
+                    + "（居ない利用者を指すので `unknown_user_id`。`invalid_client`・検証の失敗にならない）。`jwks_uri` に無い鍵・署名が合わないものは `invalid_request`",
+                    "**CIBA の署名した要求は、クライアントの鍵で検証する**（CIBA Core 1.0 §7.1.1）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。"
+                    + "**以前は、列の鍵が無ければ `invalid_client` で断っていた。**",
+                    "CIBA Core 1.0 §7.1.1 / OIDC Registration 1.0 §2 / #408");
+
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient4_6);
+
+                r.Target("client_name=" + KnownClients.TestClient4_6 + "（fapi_ciba。鍵は jwks_uri だけ。要求は ES256・kid 付き）");
+
+                string jwk = JwsSigner.PublicEcJwk(client);
+                string kid;
+
+                using (JsonDocument doc = JsonDocument.Parse(jwk))
+                {
+                    kid = doc.RootElement.GetProperty("kid").GetString();
+                }
+
+                JwksUri.Write("rt408_2_ciba", jwk);
+
+                try
+                {
+                    r.Step("(1) kid 付きの署名した要求を送る（控えに無い kid なので、OP は jwks_uri を取りに行く）");
+
+                    //  **取り直しには下限（1 分）がある**（起動のときに温めようとした分。鍵はまだ置かれていない）。
+                    //    **検証の失敗（invalid_request）の間だけ、時間で打ち切って送り直す**（回数ではなく時間で決める。RT-305.5）。
+                    JsonResponse res = null;
+                    Stopwatch sw = Stopwatch.StartNew();
+
+                    while (true)
+                    {
+                        res = await client.CibaAuthorizeWithBasicAuthAsync(
+                            new Dictionary<string, string>()
+                            {
+                                { "request", await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
+                                    new Dictionary<string, object>(), kid) }
+                            },
+                            reg.ClientId, reg.ClientSecret);
+
+                        if (res.Error != "invalid_request" || sw.Elapsed > TimeSpan.FromSeconds(75))
+                        {
+                            break;
+                        }
+
+                        await Task.Delay(5000);
+                    }
+
+                    r.VerifyEqual("署名を検証して先へ進む（居ない利用者なので unknown_user_id）", "unknown_user_id", res.Error ?? "（無い）");
+
+                    r.Step("(2) jwks_uri に無い鍵（RSA の鍵。写し元の列の鍵で、この登録には無い）で署名した PS256 の要求は断る");
+
+                    //  **候補を順に試しても、クライアントの鍵でないものは通さない**（別モデルのレビューの指摘）。
+                    //    **写し元（TestClient）の列の RSA の鍵は、`jwks_uri` に置き換えたときに消している**（`TestClients` の jwks_uri の差し替え）。
+                    JsonResponse notInJwks = await client.CibaAuthorizeWithBasicAuthAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "request", await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
+                                new Dictionary<string, object>(), null, "PS256") }
+                        },
+                        reg.ClientId, reg.ClientSecret);
+
+                    r.VerifyEqual("jwks_uri に無い鍵 : invalid_request で断る", "invalid_request", notInJwks.Error ?? "（無い）");
+
+                    r.Step("(3) jwks_uri の鍵と同じ種類（ES256・同じ kid）でも、署名が合わないものは断る");
+
+                    JsonResponse tampered = await client.CibaAuthorizeWithBasicAuthAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "request", JwksUriTests.TamperSignature(await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId,
+                                new Dictionary<string, object>(), kid)) }
+                        },
+                        reg.ClientId, reg.ClientSecret);
+
+                    r.VerifyEqual("署名が合わない : invalid_request で断る", "invalid_request", tampered.Error ?? "（無い）");
+                }
+                finally
+                {
+                    JwksUri.Delete("rt408_2_ciba");
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-410.1
+
+        /// <summary>RT-410.1 鍵を jwks_uri だけで登録したクライアントの、JWT Bearer グラントの assertion を、jwks_uri の鍵で検証する</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT41001_jwks_uriの鍵でJWT_Bearerのassertionを検証する(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-410.1",
+                    "鍵を `jwks_uri` だけで登録したクライアントの、JWT Bearer グラントの `assertion`（RS256・PS256）を、`jwks_uri` の鍵で検証してトークンを出す。"
+                    + "`jwks_uri` に無い鍵（ES256）・署名が合わないものは `invalid_client`",
+                    "**`assertion` は、発行者（iss）の鍵で署名を検証する**（RFC 7523 §3 の 9）。**`jwks_uri` はクライアントの鍵の置き場所である**（OIDC Registration 1.0 §2）。"
+                    + "**以前は列の RSA の鍵だけで RS256 だけを受け、`jwks_uri` の鍵を使わなかった**（`client_assertion`・Request Object・CIBA の要求は `jwks_uri` を見る。#408）。",
+                    "RFC 7523 §3 / OIDC Registration 1.0 §2 / #410");
+
+                r.Target("POST /token（grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer）");
+
+                string keyName = "rt410_1_key_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        r.Step("(1) 鍵（RSA）を jwks_uri だけで登録する");
+
+                        JwksUri.Write(keyName, JwsSigner.PublicRsaJwk(client));
+
+                        JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid profile email\","
+                            + "\"grant_types\":[\"authorization_code\",\"urn:ietf:params:oauth:grant-type:jwt-bearer\"],"
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + JwksUri.Url(keyName) + "\"}");
+
+                        string clientId = created.String("client_id");
+
+                        Assert.False(string.IsNullOrEmpty(clientId), "前提: 登録できること（" + created.ToString() + "）");
+
+                        r.Step("(2) RS256・PS256 の assertion（jwks_uri の RSA の鍵）でトークンが出る");
+
+                        foreach (string alg in new string[] { "RS256", "PS256" })
+                        {
+                            JsonResponse issued = await JwksUriTests.JwtBearerAsync(client, JwtBearerAssertion.Create(client, clientId, null, alg));
+
+                            r.Verify(alg + " : access_token が返る", !string.IsNullOrEmpty(issued.AccessToken),
+                                "access_token あり", string.IsNullOrEmpty(issued.AccessToken)
+                                    ? "**なし**（error=" + (issued.Error ?? "なし") + " / " + issued.ErrorDescription + "）" : "あり（値は伏せる）");
+                        }
+
+                        r.Step("(3) jwks_uri に無い鍵（EC の鍵）・署名が合わないものは invalid_client");
+
+                        JwksUriTests.VerifyJwtBearerRefused(r, "jwks_uri に無い鍵（ES256）",
+                            await JwksUriTests.JwtBearerAsync(client, JwtBearerAssertion.Create(client, clientId, null, "ES256")));
+
+                        JwksUriTests.VerifyJwtBearerRefused(r, "署名が合わない（RS256）",
+                            await JwksUriTests.JwtBearerAsync(client, JwksUriTests.TamperSignature(
+                                JwtBearerAssertion.Create(client, clientId, null, "RS256"))));
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(keyName);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-410.2
+
+        /// <summary>RT-410.2 JWT Bearer グラントの assertion は、client_assertion と同じく PS256・ES256 も受ける</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT41002_JWT_BearerのassertionはPS256とES256も受ける(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-410.2",
+                    "JWT Bearer グラントの `assertion` は、列の鍵（RSA・EC）で、PS256・ES256 も受けてトークンを出す。署名が合わないものは `invalid_client`",
+                    "**受ける JWT ごとに alg の扱いをそろえる**（`client_assertion` は RS256・PS256・ES256。#395）。"
+                    + "**ヘッダの alg と鍵の種類が食い違う鍵では検証しない**（RFC 8725 §3.1）。**以前は RS256 だけ**だった。",
+                    "RFC 7523 §3 / RFC 8725 §3.1 / #410");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + "（RSA と EC の公開鍵を登録）/ POST /token（jwt-bearer）");
+
+                r.Step("(1) PS256（RSA の鍵）・ES256（EC の鍵）の assertion でトークンが出る");
+
+                foreach (string alg in new string[] { "PS256", "ES256" })
+                {
+                    JsonResponse issued = await JwksUriTests.JwtBearerAsync(client, JwtBearerAssertion.Create(client, reg.ClientId, null, alg));
+
+                    r.Verify(alg + " : access_token が返る", !string.IsNullOrEmpty(issued.AccessToken),
+                        "access_token あり", string.IsNullOrEmpty(issued.AccessToken)
+                            ? "**なし**（error=" + (issued.Error ?? "なし") + " / " + issued.ErrorDescription + "）" : "あり（値は伏せる）");
+                }
+
+                r.Step("(2) 署名が合わないもの（ES256）は invalid_client");
+
+                JwksUriTests.VerifyJwtBearerRefused(r, "署名が合わない（ES256）",
+                    await JwksUriTests.JwtBearerAsync(client, JwksUriTests.TamperSignature(
+                        JwtBearerAssertion.Create(client, reg.ClientId, null, "ES256"))));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>JWT Bearer グラントでトークンを要求する（#410）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>JsonResponse</returns>
+        private static Task<JsonResponse> JwtBearerAsync(IdPClient client, string assertion)
+        {
+            return client.TokenAsync(new Dictionary<string, string>()
+            {
+                { "grant_type", JwtBearerAssertion.GrantType },
+                { "assertion", assertion }
+            });
+        }
+
+        /// <summary>JWT Bearer グラントを invalid_client で断り、トークンを出さないことを確かめる（#410）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">場合の名前</param>
+        /// <param name="res">JsonResponse</param>
+        private static void VerifyJwtBearerRefused(TestReport r, string label, JsonResponse res)
+        {
+            r.Verify(label + " : access_token を返さない", string.IsNullOrEmpty(res.AccessToken),
+                "access_token なし", string.IsNullOrEmpty(res.AccessToken) ? "なし" : "**あり**");
+            r.VerifyEqual(label + " : error", "invalid_client", res.Error ?? "（無い）");
+        }
+
+        #endregion
+
+        #region RT-376.1
+
+        /// <summary>RT-376.1 内部のアドレスの jwks_uri は、取りに行かずに断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37601_内部のアドレスのjwks_uriは断る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-376.1",
+                    "動的登録の `jwks_uri` が**内部のアドレス**（プライベート・リンクローカル・ユニーク ローカル）なら、`400` ＋ `invalid_client_metadata` で断る",
+                    "**動的登録では、登録できる相手が OP に取りに行かせる URL を書ける。**"
+                    + "**以前はスキーム（https か、ループバックの http）しか見ておらず、OP の内側のアドレスへ要求を出させられた。**"
+                    + "**既定では内部のアドレスへ行かない**（配備が許可の一覧で開ける）。",
+                    "RFC 7591 §2 / #376");
+
+                r.Target("POST registration_endpoint（jwks_uri が内部のアドレス）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    foreach (string url in new string[]
+                        {
+                            "https://10.0.0.1/e2e/rt376",
+                            "https://192.168.0.1/e2e/rt376",
+                            "https://169.254.169.254/latest/meta-data",
+                            "https://[fd00::1]/e2e/rt376"
+                        })
+                    {
+                        r.Step("jwks_uri = " + url);
+
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                            + "\"jwks_uri\":\"" + url + "\"}");
+
+                        r.VerifyEqual(url + " : HTTP 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual(url + " : invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+
+                        //  **読めなかったのではなく、行き先で断ったこと**（取りに行っていない）。
+                        string description = rejected.String("error_description") ?? "";
+                        bool byAddress = description.Contains("internal address");
+
+                        r.Verify(url + " : 断る理由は行き先", byAddress,
+                            "internal address", byAddress ? "internal address" : "**" + description + "**");
                     }
                 });
 

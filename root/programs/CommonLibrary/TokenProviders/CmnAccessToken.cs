@@ -48,6 +48,7 @@
 //*  2026/10/30  玄人 幸道         預ける refresh_token の payload に、利用者の SecurityStamp のハッシュを書く口を追加（#294）
 //*  2026/10/31  玄人 幸道         partial に分割した（Create / Verify / Binding / SecurityStamp。#294）
 //*  2026/10/31  玄人 幸道         S256 / S512 を readonly に（#294）
+//*  2026/11/18  玄人 幸道         検証の鍵を、控えた鍵の表（SigningJwkSet）から引くようにした（ファイルの置き換えと重なっても 500 にしない。#407）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -216,8 +217,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     if (ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))
                     {
-                        JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
-                        jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
+                        //  **控えた鍵の表から引く**（#407）。**以前は要求のたびにファイルを読み、解析していた**ので、
+                        //    **鍵の入れ替えでファイルを置き換える瞬間に重なった要求が `IOException` で 500 になった。**
+                        jwkObject = MultiPurposeAuthSite.Util.Sts.SigningJwkSet.GetJwkObject(header[JwtConst.kid]);
                     }
 
                     if (jwkObject == null)

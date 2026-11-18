@@ -44,6 +44,7 @@
 //*  2026/11/13  玄人 幸道         秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（RFC 9449 §5）。fapi2 の登録は refresh_token を入れ替えない（FAPI 2.0 Security Profile §5.3.2.1。#367）
 //*  2026/11/14  玄人 幸道         CIBA・Device のトークン要求で、auth_req_id・device_code を出したクライアントと照合する（#387）
 //*  2026/11/17  玄人 幸道         JWT Bearer グラントの aud の判定を、クライアント認証と分けた（JwtBearerAudiences）。CIBA のトークン要求は、トークン エンドポイントの URL も受ける（#398）
+//*  2026/11/19  玄人 幸道         JWT Bearer グラントの assertion を、列の RSA・EC の鍵と jwks_uri の鍵で、RS256・PS256・ES256 を受けて検証するようにした（#410）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1086,22 +1087,19 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 string assertionIss = JwtUtil.StringClaimOf(assertionPayload, OAuth2AndOIDCConst.iss);
 
-                string pubKey = string.IsNullOrEmpty(assertionIss)
-                    ? "" : JwtUtil.DecodeRegisteredJwk(Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
+                //  **検証鍵の候補は、列の RSA・EC の鍵と `jwks_uri` の鍵のうち、ヘッダの alg に合うもの**（#410）。
+                //    **alg は `JwtBearerSigningAlgs`（RS256・PS256・ES256。`client_assertion` と同じ）。**
+                //    **以前は列の RSA の鍵だけで RS256 だけを受け、`jwks_uri` の鍵を使わなかった**（#294 で alg の名乗りだけを揃えていた）。
+                List<JWS> verifyingJws = CmnEndpoints.JwtBearerVerifyingJws(assertionIss, assertion);
 
-                if (!string.IsNullOrEmpty(pubKey))
+                if (verifyingJws.Count != 0)
                 {
-                    //  **ヘッダの alg も、受ける集合に入っていること**（#294）。
-                    //    `JwtAssertion.Verify` は **JWK の `kty` で検証器を選び、ヘッダの alg を見ない。**
-                    //    **鍵は RSA だけ**なので、**RS256 以外を名乗る JWT は通さない**（名乗りと検証を揃える）。
-                    bool algOk = Array.IndexOf(
-                        CmnEndpoints.JwtBearerSigningAlgs, JwtReader.TryReadAlg(assertion)) >= 0;
-
-                    //  **読めない形（配列の aud など）でも例外にしない**（#294。OpenTouryo#654 の版は false を返す。登録の鍵が壊れていても `TryVerifyAssertion` が拾う）。
+                    //  **読めない形（配列の aud など）でも例外にしない**（#294。OpenTouryo#654 の版は false を返す。登録の鍵が壊れていても `TryVerifyJwtBearerAssertion` が拾う）。
                     //    scope は、要求に無ければ assertion の値を使う（下）ので、ここで読んでおく。
                     //    **iss・aud も Open棟梁 が照合する**（OpenTouryo#654。#336）。
                     //    **sub は照合しない**（認可グラントの sub は利用者を指す。RFC 7523 §3 の 2 の A。在ることは Open棟梁 が見る）。
-                    if (algOk && CmnEndpoints.TryVerifyAssertion(assertion, pubKey, assertionIss, out string _))
+                    //    **候補を順に試し、どれかで検証できれば通す**（#410。ヘッダの alg と鍵の種類が食い違う鍵は、候補に入らない。RFC 8725 §3.1）。
+                    if (CmnEndpoints.TryVerifyJwtBearerAssertion(assertion, verifyingJws, assertionIss))
                     {
                         string iss = assertionIss;
 

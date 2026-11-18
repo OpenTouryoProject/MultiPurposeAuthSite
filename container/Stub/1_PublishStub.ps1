@@ -38,6 +38,7 @@
      2026/10/31  玄人 幸道         stub\ から Container\Stub\ へ移した（#318）
      2026/11/07  玄人 幸道         起動の案内を 2_DockerComposeUp.bat にした。..\E2E\ の改名に合わせた（#340）
      2026/11/10  玄人 幸道         MTLS のテスト専用のフックを hooks\ に作るようにした（#351）
+     2026/11/18  玄人 幸道         パスの区切りを / にした（Linux の pwsh で動かす。#401）
 #>
 [CmdletBinding()]
 param(
@@ -46,14 +47,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
+# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）。
+# **区切りは / で書く**（Linux の pwsh は \ を区切りにしない。Windows は / も受ける。#401）
 $here = Split-Path -Parent $PSCommandPath
-$coreDir = Join-Path $here '..\..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore'
+$coreDir = Join-Path $here '../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore'
 $proj = Join-Path $coreDir 'MultiPurposeAuthSiteCore.csproj'
 $template = Join-Path $coreDir '_appsettings.json'
-$logConf = Join-Path $here '..\Common\LogConf.xml'
-$pub = Join-Path $here 'app\publish'
-$art = Join-Path $here 'app\artifacts'
+$logConf = Join-Path $here '../Common/LogConf.xml'
+$pub = Join-Path $here 'app/publish'
+$art = Join-Path $here 'app/artifacts'
 $certDir = Join-Path $here 'cert'
 $pfx = Join-Path $certDir 'aspnetapp.pfx'
 $certEnv = Join-Path $certDir 'cert.env'
@@ -75,7 +77,7 @@ if ($NewCertificate -or -not (Test-Path $pfx) -or -not (Test-Path $certEnv))
 
     if (-not (Test-Path $pfx))
     {
-        throw "開発用証明書を書き出せませんでした。`dotnet dev-certs https --trust` を先に実行してください。"
+        throw "開発用証明書を書き出せませんでした（Windows なら `dotnet dev-certs https --trust` を先に実行してください。Linux では信頼の設定は要らず、書き出すだけで足りる）。"
     }
 
     # **compose が env_file として読む**（コンテナの環境変数になる）
@@ -108,7 +110,7 @@ Copy-Item $template (Join-Path $pub 'appsettings.json') -Force
 Remove-Item (Join-Path $pub 'appsettings.Development.json') -Force -ErrorAction SilentlyContinue
 
 # **log4net の構成**（Dockerfile が写す）
-Copy-Item $logConf (Join-Path $here 'app\LogConf.xml') -Force
+Copy-Item $logConf (Join-Path $here 'app/LogConf.xml') -Force
 
 # **鍵とログの置き場**（compose がマウントする）
 New-Item -ItemType Directory -Force (Join-Path $here 'keys'), (Join-Path $here 'logs') | Out-Null
@@ -116,11 +118,11 @@ New-Item -ItemType Directory -Force (Join-Path $here 'keys'), (Join-Path $here '
 # **MTLS のテスト専用のフック**（#351。.env の STUB_MTLS_HOOK で選んだときだけ読む。既定は読まない）。
 #   **イメージには入れない**（hooks を compose がマウントする）。作れなくても、スタブ自体は起動できる。
 $hookDir = Join-Path $here 'hooks'
-$hookArt = Join-Path $here 'app\artifacts-hook'
+$hookArt = Join-Path $here 'app/artifacts-hook'
 New-Item -ItemType Directory -Force $hookDir | Out-Null
 Remove-Item (Join-Path $hookDir '*') -Force -ErrorAction SilentlyContinue
 
-dotnet build (Join-Path $here '..\..\root\programs\Tests\MtlsTestHook\MtlsTestHook.csproj') `
+dotnet build (Join-Path $here '../../root/programs/Tests/MtlsTestHook/MtlsTestHook.csproj') `
     -c Debug -o $hookDir --artifacts-path $hookArt --nologo -v quiet | Out-Null
 
 if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $hookDir 'MtlsTestHook.dll')))
@@ -134,5 +136,5 @@ else
 
 Write-Output "  publish しました : app\publish（appsettings.json は雛形）"
 Write-Output ""
-Write-Output "  起動 : .\2_DockerComposeUp.bat <パラメタのファイル>"
+Write-Output "  起動 : .\2_DockerComposeUp.bat <パラメタのファイル>（Linux は pwsh ./2_DockerComposeUp.ps1 <パラメタのファイル>）"
 Write-Output "         （docker compose --env-file <パラメタのファイル> up -d --build。パラメタのファイルは .env.sample を写して作る）"

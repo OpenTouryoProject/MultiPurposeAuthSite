@@ -20,6 +20,7 @@
 //*  2026/10/31  玄人 幸道         client_id の重なりは HasClient で見る（client_name の無い構成ファイルのクライアントも。#294）
 //*  2026/11/03  玄人 幸道         自己テストの受け口を閉じた配備では、折り返し先の既定値を入れない（#294）
 //*  2026/11/12  玄人 幸道         画面の保存で SectorIdentifierUri を持ち越す。Sector の接頭辞（host:）で始まる client_id を作らない（#364）
+//*  2026/11/19  玄人 幸道         画面の保存で RequestUris をフォームから受けず、持ち越すようにした（#374）
 //**********************************************************************************
 
 /*
@@ -227,6 +228,9 @@ namespace MultiPurposeAuthSite.Controllers
                             //    **確かめていない値が Sector になると、別の RP と同じ `sub` を得られる。** **更新の分岐は、下で現行の行から持ち越す。**
                             model.SectorIdentifierUri = null;
 
+                            //  **`request_uris` も、フォームから受けない**（#374）。**取りに行く先なので、入るのは動的登録で行き先を確かめた値だけ。** 更新の分岐で持ち越す。
+                            model.RequestUris = null;
+
                             ManageAddSaml2OAuth2DataViewModel owned
                                 = Sts.Saml2OAuth2DataProvider.GetByOwnerAndClientID(user.Id, model.ClientID);
 
@@ -253,6 +257,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 //    **`sector_identifier_uri`** は、動的登録で取りに行って確かめた値だけが入る（#364）。
                                 //    **画面には欄が無い**（画面の保存では確かめられない）ので、**持ち越さないと消え、pairwise の `sub` が変わる。**
                                 model.SectorIdentifierUri = owned.SectorIdentifierUri;
+
+                                //    **`request_uris`** も、画面には欄が無いので持ち越す（#374）。
+                                model.RequestUris = owned.RequestUris;
 
                                 //  **動的登録で作られた行を、画面から書き替えた**（#307 の段階 6）。
                                 //    **記録に残す** —

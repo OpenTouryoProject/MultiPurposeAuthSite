@@ -31,6 +31,7 @@
 //*  2026/10/30  玄人 幸道         新規（OAuth2EndpointController.cs から partial に分割。#294）
 //*  2026/10/30  玄人 幸道         /jwkcerts の If-None-Match で、弱い ETag と * も一致とみなす（#294）
 //*  2026/11/01  玄人 幸道         Extensions/Sts へ移したエンドポイントの部品（CmnDiscoveryEndpoint）を呼ぶ（#321）
+//*  2026/11/18  玄人 幸道         /jwkcerts を SigningJwkSet で読むようにした（ファイルの置き換えと重なっても 500 にしない。#407）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -79,7 +80,8 @@ namespace MultiPurposeAuthSite.Controllers
         [MpasPublicDocsCors]   // jwkcerts（公開情報）
         public HttpResponseMessage JwksUri()
         {
-            string body = JwkSetDocument.Get(out string etag);
+            //  **読めなければやり直し、前に読めた中身で続ける**（#407。鍵の入れ替えでファイルを置き換える瞬間に重なっても 500 にしない）。
+            string body = MultiPurposeAuthSite.Util.Sts.SigningJwkSet.GetDocument(out string etag);
             int maxAge = Config.JwkSetCacheMaxAgeSeconds;
 
             EntityTagHeaderValue tag = new EntityTagHeaderValue(etag);

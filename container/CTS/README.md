@@ -163,6 +163,7 @@ cd ..\CTS
   - **FAPI 1.0 Advanced の大半**：Conformance Suite のクライアントは、**トークン エンドポイントへの要求で client_assertion の `aud` をトークン エンドポイントの URL にする**（PAR では issuer）。
     **RFC 10070 §4 はトークン エンドポイントの URL を audience にすることを禁じた**ので、MPAS は `invalid_client` で断る（#398。設定で以前の受け方に戻す分岐は作っていない）。
     `par-test-pushed-authorization-url-as-audience-for-client-JWT-assertion`・`par-token-endpoint-url-as-audience-for-client-JWT-assertion` も同じ理由で落ちる（RFC 10070 §5）
+  - **`oidcc-dynamic` の、トークン エンドポイントまで進むモジュール**（`oidcc-server`・`oidcc-idtoken-rs256`・`oidcc-refresh-token`・`oidcc-refresh-token-rp-key-rotation`・`oidcc-registration-jwks-uri`・`oidcc-redirect-uri-query-OK`・`oidcc-request-uri-signed-rs256`）：動的登録したクライアントも `private_key_jwt` で、**トークン エンドポイントへの要求の `aud` をトークン エンドポイントの URL にする**ので、同じ理由（#398）で `invalid_client` になる。**`oidcc-ensure-client-assertion-with-iss-aud-succeeds`**（`aud` を issuer にする）**は通る。****`oidcc-request-uri-signed-rs256` は、外部の `request_uri` の認可要求は通り（#374）、トークン エンドポイントで止まる**
   - **FAPI-CIBA は落ちない**：CIBA の流れ（`/ciba_authz` と、`/token` の CIBA のグラント）は以前のまま、トークン エンドポイントの URL も受ける（RFC 10070 は CIBA を直接の対象にしていない。#398）
   - FAPI 1.0 Advanced の `test-array-as-audience-for-client-JWT-assertion`：client_assertion の `aud` を `[issuer, ダミー]` にして、受けることを求める。**RFC 10070 §4（RFC 7523 §3 の 3 を置き換えた）は、issuer を唯一の値としない JWT を断ることを求める**ので、MPAS は `invalid_client` で断る（モジュールの求める受け方は、置き換えられた RFC 7523 §3 の 3（「含む」）に沿う。#397）
 
