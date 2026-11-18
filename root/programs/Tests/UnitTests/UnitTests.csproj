@@ -14,6 +14,11 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- **Fido2（NetCoreLibrary 経由）が System.Formats.Cbor 9.0.0 を連れてくる**が、公開済みの勧告がある
+         （GHSA-vmv3-wvjp-wqpj（中）。CVE-2026-118747。DoS）。**直っている版を明示して、推移的依存を上書きする**（NU1902 が消える）。
+         **サイトと NetCoreLibrary には要らない**（ASP.NET Core の共有フレームワークが持つ版を使う。ランタイムの更新で直す）。
+         **Fido2 が patched 版を指すようになったら、この 1 行は外せる。** -->
+    <PackageReference Include="System.Formats.Cbor" Version="9.0.24" />
   </ItemGroup>
 
   <ItemGroup>
