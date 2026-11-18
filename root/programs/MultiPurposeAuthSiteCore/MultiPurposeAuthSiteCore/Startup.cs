@@ -45,6 +45,7 @@
 //*  2026/11/03  玄人 幸道         読めないフォームを 400 で断る（#331）
 //*  2026/11/06  玄人 幸道         /jwkcerts・/par・/ros のルートを、Config のパスで張る（OpenTouryo#666。#339）
 //*  2026/11/11  玄人 幸道         同意画面の送信の口（<認可の口>/consent）のルートを追加（#359）
+//*  2026/11/18  玄人 幸道         外部ログイン（Microsoft アカウント・Google）のプロキシの組を、設定（ProxyForExternalLogin）で選ぶようにした（#406。以前は設定を見ず OS の既定）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -986,6 +987,7 @@ namespace MultiPurposeAuthSite
                     options.ClientId = Config.MicrosoftAccountAuthenticationClientId;
                     options.ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret;
                     options.Events.OnRemoteFailure = Startup.LogExternalLoginRemoteFailure;
+                    options.BackchannelHttpHandler = Startup.ExternalLoginBackchannelHandler();
                 });
             }
             if (Config.GoogleAuthentication)
@@ -995,6 +997,7 @@ namespace MultiPurposeAuthSite
                     options.ClientId = Config.GoogleAuthenticationClientId;
                     options.ClientSecret = Config.GoogleAuthenticationClientSecret;
                     options.Events.OnRemoteFailure = Startup.LogExternalLoginRemoteFailure;
+                    options.BackchannelHttpHandler = Startup.ExternalLoginBackchannelHandler();
 
                     // **email_verified をクレームに写す**（#140 の段階 1）。
                     //   Google は userinfo で email_verified を返すが、
@@ -1080,6 +1083,24 @@ namespace MultiPurposeAuthSite
         }
 
         #endregion
+
+        /// <summary>外部ログインの、プロバイダへの要求（トークン・ユーザー情報）の handler（#406）</summary>
+        /// <returns>HttpMessageHandler</returns>
+        /// <remarks>
+        /// **プロキシの組は設定 `ProxyForExternalLogin` で選ぶ**（既定 `Internet`。net48 版と同じ）。
+        /// **組のプロキシが無ければ OS の既定のプロキシ、`None` なら直接。**
+        /// **以前は handler を指定せず、設定を見ずに常に OS の既定のプロキシだった**（`UseInternetProxy=true` でも効かなかった）。
+        /// </remarks>
+        private static System.Net.Http.HttpMessageHandler ExternalLoginBackchannelHandler()
+        {
+            MultiPurposeAuthSite.Network.EnumProxyType proxyType = MultiPurposeAuthSite.Network.CreateProxy.ForExternalLogin;
+
+            return new System.Net.Http.HttpClientHandler()
+            {
+                Proxy = MultiPurposeAuthSite.Network.CreateProxy.GetProxy(proxyType),
+                UseProxy = MultiPurposeAuthSite.Network.CreateProxy.UsesProxy(proxyType)
+            };
+        }
 
         /// <summary>外部ログインの戻り（/signin-*）での失敗を記録する（#294）</summary>
         /// <param name="context">RemoteFailureContext</param>
