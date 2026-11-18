@@ -29,6 +29,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/18  玄人 幸道         新規（#376）
 //*  2026/11/18  玄人 幸道         専用の HttpClient にも、時間と大きさの上限を掛けるようにした（#375）
+//*  2026/11/18  玄人 幸道         プロキシの組を、設定（ProxyForClientRegisteredUrls）で選ぶようにした（#406）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -333,7 +334,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>HttpClient</returns>
         private static HttpClient CreateHttpClient()
         {
-            IWebProxy proxy = CreateProxy.GetIntranetProxy();
+            //  **プロキシの組は設定 `ProxyForClientRegisteredUrls` で選ぶ**（既定 `Intranet`。#406）。
+            IWebProxy proxy = CreateProxy.GetProxy(CreateProxy.ForClientRegisteredUrls);
 
 #if NETCORE
             SocketsHttpHandler handler = new SocketsHttpHandler()

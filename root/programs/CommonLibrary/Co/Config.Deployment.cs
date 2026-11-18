@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
+//*  2026/11/18  玄人 幸道         要求先の分類ごとのプロキシの組の設定（ProxyFor*）を足した（#406）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -174,6 +175,44 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("DebugProxyPWD");
+            }
+        }
+
+        /// <summary>**ID 連携の上流・自己テスト（共有の HttpClient）が使うプロキシの組**（`Internet`・`Intranet`・`Debug`・`None`。未設定は `Intranet`。#406）</summary>
+        /// <remarks>**#405 までは、動的登録の `jwks_uri` もこの組を使う**（Open棟梁 の `RemoteJwkSetStore` が共有の HttpClient で取りに行くため）。</remarks>
+        public static string ProxyForIdFederation
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ProxyForIdFederation");
+            }
+        }
+
+        /// <summary>**RP が登録した URL（`sector_identifier_uri`）が使うプロキシの組**（未設定は `Intranet`。#406）</summary>
+        /// <remarks>**#405 の後は `jwks_uri` もこの組を使う。** 設定のプロキシが無いときも、OS の既定のプロキシは使わない（`OutboundUrlPolicy` が接続の時点のアドレスを判定するため。#376）。</remarks>
+        public static string ProxyForClientRegisteredUrls
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ProxyForClientRegisteredUrls");
+            }
+        }
+
+        /// <summary>**Back-Channel Logout の POST が使うプロキシの組**（未設定は `Intranet`。#406）</summary>
+        public static string ProxyForBackChannelLogout
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ProxyForBackChannelLogout");
+            }
+        }
+
+        /// <summary>**外部ログイン（Google・Microsoft）が使うプロキシの組**（未設定は `Internet`。#406）</summary>
+        public static string ProxyForExternalLogin
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ProxyForExternalLogin");
             }
         }
 

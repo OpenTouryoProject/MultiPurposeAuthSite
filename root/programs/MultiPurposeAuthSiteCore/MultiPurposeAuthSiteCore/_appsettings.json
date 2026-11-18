@@ -61,6 +61,13 @@
     "DebugProxyUID": "",
     "DebugProxyPWD": "",
 
+    // 要求先の分類ごとに、上の 3 組（Internet・Intranet・Debug）のどれを使うか（#406）。None はプロキシを使わない（OS の既定のプロキシも）。
+    //   空なら既定（外部ログインは Internet、ほかは Intranet。以前の振る舞い）。表は CONFIGURATION.md。
+    "ProxyForIdFederation": "",
+    "ProxyForClientRegisteredUrls": "",
+    "ProxyForBackChannelLogout": "",
+    "ProxyForExternalLogin": "",
+
     // [CORS]
     // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
     //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
