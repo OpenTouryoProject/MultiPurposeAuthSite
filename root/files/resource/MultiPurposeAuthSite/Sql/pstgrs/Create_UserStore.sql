@@ -191,6 +191,7 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     SectorIdentifierUri varchar(512) NULL,           -- sector_identifier_uri（OIDC Registration 1.0 §2）。Const.MaxLengthOfUri
     -- JARM の署名 alg（#370）。末尾に足してある（ALTER … ADD で揃う）
     AuthorizationSignedResponseAlg varchar(16) NULL, -- authorization_signed_response_alg（JARM §3）
+    RequestUris varchar(2000) NULL,                  -- request_uris（OIDC Registration 1.0 §2。#374）。Const.MaxLengthOfRequestUris（空白区切りの列挙）
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

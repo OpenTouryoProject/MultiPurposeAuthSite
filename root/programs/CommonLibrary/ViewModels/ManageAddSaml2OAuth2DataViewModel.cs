@@ -37,6 +37,7 @@
 //*  2026/11/13  玄人 幸道         RequestObjectSigningAlg の選択肢の説明を、PS256・ES256 を足したことに合わせた（#370）
 //*  2026/11/13  玄人 幸道         AuthorizationSignedResponseAlg を追加した（#370）
 //*  2026/11/14  玄人 幸道         署名の alg の既定のコメントを、FAPI の登録は ES256 に合わせた（#394）
+//*  2026/11/19  玄人 幸道         RequestUris（request_uris）を追加した（#374）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -933,6 +934,23 @@ namespace MultiPurposeAuthSite.ViewModels
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = Const.ClientSectorIdentifierUri)]
         public string SectorIdentifierUri { get; set; }
+
+        #endregion
+
+        #region request_uris（OIDC DCR 1.0 §2。#374）
+
+        /// <summary>RequestUris（OIDC Registration 1.0 §2 の request_uris。空白区切り）</summary>
+        /// <remarks>
+        /// **認可要求の `request_uri` に、外部の URL（RP が置いた Request Object）を使ってよい先**（OIDC Core 1.0 §6.2）。**ここに無い URL は取りに行かない。**
+        /// **入るのは動的登録からだけ**（`https` で、行き先の判定（`OutboundUrlPolicy`。#376）を通ったもの）。
+        /// **画面には欄を出さない。画面の保存では持ち越す。** **構成ファイルでは書ける**（`request_uris`。空白区切り）。
+        /// </remarks>
+        [StringLength(
+            Const.MaxLengthOfRequestUris,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientRequestUris)]
+        public string RequestUris { get; set; }
 
         #endregion
         #region 編集中の印（#307 の段階 5-a-2）

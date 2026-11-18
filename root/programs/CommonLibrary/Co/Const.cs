@@ -56,6 +56,7 @@
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を追加（#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg（JARM の署名の alg の登録）を足した（#370）
 //*  2026/11/14  玄人 幸道         PollingClientId を追加（#387）
+//*  2026/11/19  玄人 幸道         request_uris の名前と上限を足した（#374）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -140,6 +141,12 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>contacts（連絡先）の列挙の MaxLength（#307 の段階 1）</summary>
         /// <remarks>RFC 7591 §2 の `contacts`（空白区切りのメール アドレスの列挙）。</remarks>
         public const int MaxLengthOfContacts = 2000;
+
+        /// <summary>request_uris（空白区切り）の長さの上限（列の幅。#374）</summary>
+        public const int MaxLengthOfRequestUris = 2000;
+
+        /// <summary>request_uris の数の上限（#374）</summary>
+        public const int MaxCountOfRequestUris = 5;
 
         #endregion
 
@@ -559,6 +566,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>sector_identifier_uri（OIDC DCR 1.0 §2・§5。#364）</summary>
         public const string ClientSectorIdentifierUri = "sector_identifier_uri";
+
+        /// <summary>request_uris（OIDC DCR 1.0 §2。取りに行ってよい外部の request_uri。#374）</summary>
+        public const string ClientRequestUris = "request_uris";
 
         /// <summary>ホスト名の Sector に付ける接頭辞（#364）</summary>
         /// <remarks>

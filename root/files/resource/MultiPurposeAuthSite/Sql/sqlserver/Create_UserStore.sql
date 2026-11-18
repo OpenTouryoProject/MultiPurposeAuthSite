@@ -219,6 +219,7 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [SectorIdentifierUri] [nvarchar](512) NULL,      -- sector_identifier_uri（OIDC Registration 1.0 §2）。Const.MaxLengthOfUri
     -- JARM の署名 alg（#370）。末尾に足してある（ALTER … ADD で揃う）
     [AuthorizationSignedResponseAlg] [nvarchar](16) NULL, -- authorization_signed_response_alg（JARM §3）
+    [RequestUris] [nvarchar](2000) NULL,             -- request_uris（OIDC Registration 1.0 §2。#374）。Const.MaxLengthOfRequestUris（空白区切りの列挙）
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

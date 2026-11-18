@@ -1350,6 +1350,27 @@ ALTER TABLE "Saml2OAuth2Data" ADD ("SectorIdentifierUri" NVARCHAR2(512) NULL);
 ALTER TABLE Saml2OAuth2Data ADD COLUMN SectorIdentifierUri varchar(512) NULL;
 ```
 
+### 外部の `request_uri` を取りに行ってよい先 — `request_uris`（#374）
+
+**動的登録（RFC 7591）と構成ファイル（`OAuth2ClientsInformation` の `request_uris`。空白区切り）で、認可要求の `request_uri` に使ってよい外部の URL を登録できる**（OIDC Registration 1.0 §2）。
+
+| | |
+|---|---|
+| **登録のときに確かめる** | **絶対 URI で、`https` と行き先のアドレス（`OutboundUrlPolicy`。#376）**。**5 件まで**（`Const.MaxCountOfRequestUris`）。**登録のときは取りに行かない** |
+| **`PUT`（RFC 7592）** | **全置換**（省いたら消える） |
+| **クライアント登録の画面** | **欄を出さない。保存しても、持ち越す**（`sector_identifier_uri` と同じ） |
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 外部の `request_uri` は使えない。以前どおり）。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [RequestUris] [nvarchar](2000) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("RequestUris" NVARCHAR2(2000) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN RequestUris varchar(2000) NULL;
+```
+
 ### クライアントが登録した URL へ取りに行く先 — `OutboundUrlAllowLoopbackHttp`・`OutboundUrlAllowedHosts`（#376）
 
 **動的登録で OP が取りに行く URL（`jwks_uri`・`sector_identifier_uri`）は、行き先のアドレスでも絞る。**

@@ -42,6 +42,7 @@
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を引く口と、FAPI の登録かを見る IsFapiClient を足した（#370）
 //*  2026/11/14  玄人 幸道         FAPI の登録は、署名の alg を登録していなければ ES256 にした（DefaultSigningAlg。FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1。#394）
 //*  2026/11/15  玄人 幸道         fapi_ciba を含めた FAPI の登録かを返す IsFapiProfileClient を足した（#384・#395）
+//*  2026/11/19  玄人 幸道         登録された request_uris を引く GetClientRequestUris を足した（#374）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -417,6 +418,19 @@ namespace MultiPurposeAuthSite.Util.Sts
         {
             return this.GetRegisteredValue(client_id,
                 Const.ClientSectorIdentifierUri, model => model.SectorIdentifierUri);
+        }
+
+        /// <summary>登録された request_uris を引く（OIDC Registration 1.0 §2。#374）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>request_uris（**登録が無ければ空**）</returns>
+        /// <remarks>
+        /// **外部の `request_uri` を取りに行ってよいかの判定に使う**（OIDC Core 1.0 §6.2）。
+        /// **構成ファイルの値は空白区切り**（saml2OAuth2Data の列と同じ）。
+        /// </remarks>
+        public List<string> GetClientRequestUris(string client_id)
+        {
+            return OAuth2AndOIDCSpec.ToDistinctList(this.GetRegisteredValue(client_id,
+                Const.ClientRequestUris, model => model.RequestUris) ?? "");
         }
 
         /// <summary>登録された真偽値を引く（構成ファイル → saml2OAuth2Data。#346）</summary>

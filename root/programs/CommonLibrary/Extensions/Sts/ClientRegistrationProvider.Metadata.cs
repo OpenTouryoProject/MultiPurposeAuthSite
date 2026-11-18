@@ -36,6 +36,7 @@
 //*  2026/11/12  玄人 幸道         sector_identifier_uri の中身に redirect_uris がすべて在るかを確かめるようにした（OIDC Registration 1.0 §5。#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を受ける（JARM §3。#370）
 //*  2026/11/18  玄人 幸道         登録の検査で、jwks_uri・sector_identifier_uri の行き先のアドレスも見るようにした（#376）
+//*  2026/11/19  玄人 幸道         動的登録で request_uris を受けるようにした（https と行き先のアドレスを確かめる。#374）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -476,6 +477,47 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 //  **確かめた値だけを保存する**（pairwise の Sector に使う。`PPIDExtension.GetSector`。OIDC Core 1.0 §8.1）。
                 model.SectorIdentifierUri = sectorIdentifierUri;
+            }
+
+            #endregion
+
+            #region request_uris（OIDC Registration 1.0 §2。#374）
+
+            //  **認可要求の `request_uri` に使ってよい外部の URL**（OIDC Core 1.0 §6.2）。**ここに無い URL は取りに行かない。**
+            //    **OP が取りに行く URL なので、`jwks_uri`・`sector_identifier_uri` と同じく、`https` と行き先のアドレスを確かめる**（#376）。
+            //    **登録のときは取りに行かない**（中身は、認可要求のたびに変わってよい）。
+            //  **`#` から後ろは、比べるときに除く**（§2 は、RP がキャッシュのために付けてよいとする）。**登録の値は、そのまま保存する。**
+            List<string> requestUris = ClientRegistrationProvider.GetStrings(metadata, Const.ClientRequestUris);
+
+            if (Const.MaxCountOfRequestUris < requestUris.Count)
+            {
+                description = string.Format("The request_uris must not have more than {0} entries.", Const.MaxCountOfRequestUris);
+                return false;
+            }
+
+            foreach (string requestUri in requestUris)
+            {
+                if (Const.MaxLengthOfUri < requestUri.Length
+                    || !Uri.IsWellFormedUriString(requestUri, UriKind.Absolute))
+                {
+                    description = "Each request_uri must be an absolute URI.";
+                    return false;
+                }
+
+                //  **スキームと行き先は、同じ文言で断る**（`jwks_uri` と同じ理由）。
+                if (!OutboundUrlPolicy.IsAllowed(requestUri))
+                {
+                    description = "Each request_uri must use https and must not point to an internal address.";
+                    return false;
+                }
+            }
+
+            model.RequestUris = (requestUris.Count == 0) ? null : string.Join(" ", requestUris);
+
+            if (Const.MaxLengthOfRequestUris < (model.RequestUris ?? "").Length)
+            {
+                description = "The request_uris are too long.";
+                return false;
             }
 
             #endregion

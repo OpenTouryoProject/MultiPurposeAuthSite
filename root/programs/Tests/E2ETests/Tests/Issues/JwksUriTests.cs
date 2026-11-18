@@ -33,10 +33,12 @@
 //*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //*  2026/11/18  玄人 幸道         RT-376.1（内部のアドレスの jwks_uri は、取りに行かずに断る）を足した（#376）
 //*  2026/11/18  玄人 幸道         RT-375.1（1MB を超える jwks_uri の応答は読まない）を足した（#375）
+//*  2026/11/19  玄人 幸道         RT-374.1（動的登録の request_uris）を足した（#374）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -64,6 +66,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
     /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
     /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。共有の HttpClient の大きさの上限。#375） |
+    /// | **`RT-374.1`** | **動的登録の `request_uris`**（外部の `request_uri` を取りに行ってよい先）を受けて返し、`PUT` で省けば消える。**内部のアドレス・相対の値・6 件以上は `400`**（#374） |
     /// | **`RT-376.1`** | **内部のアドレス（プライベート・リンクローカル・ユニーク ローカル）の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
@@ -660,6 +663,97 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     finally
                     {
                         JwksUri.Delete(name);
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-374.1
+
+        /// <summary>RT-374.1 動的登録の request_uris を受けて返し、PUT で省けば消える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT37401_動的登録のrequest_urisを受けて返す(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-374.1",
+                    "動的登録の `request_uris` を受けて応答と `GET` に返し、`PUT` で省けば消える。内部のアドレス・相対の値・6 件以上は `400` ＋ `invalid_client_metadata`",
+                    "**`request_uris` は、認可要求の `request_uri` に使ってよい外部の URL**（OIDC Core 1.0 §6.2）。**OP が取りに行く先なので、`https` と行き先のアドレスを確かめる**（#376）。"
+                    + "**`#` を付けた値も受ける**（RP がキャッシュのために付けてよい）。**以前は受けておらず、外部の `request_uri` は使えなかった**（#362）。",
+                    "OIDC Registration 1.0 §2 / RFC 7592 §2.2 / #374");
+
+                r.Target("POST・GET・PUT registration_endpoint（request_uris）");
+
+                string uriA = JwksUri.Url("rt374_1_a");
+                string uriB = JwksUri.Url("rt374_1_b") + "#v1";
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    r.Step("(1) request_uris に 2 つを入れて登録する（片方は # 付き）");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid\","
+                        + "\"request_uris\":[\"" + uriA + "\",\"" + uriB + "\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString());
+                    r.Verify("応答に request_uris が返る（a）", created.ArrayContains("request_uris", uriA),
+                        uriA, string.Join(" ", created.Strings("request_uris") ?? new string[0]));
+                    r.Verify("応答に request_uris が返る（# 付きの b）", created.ArrayContains("request_uris", uriB),
+                        uriB, string.Join(" ", created.Strings("request_uris") ?? new string[0]));
+
+                    string clientId = created.String("client_id");
+                    string clientUri = created.String("registration_client_uri");
+                    string clientToken = created.String("registration_access_token");
+
+                    r.Step("(2) GET でも返る（保存されている）");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(client, clientUri, clientToken);
+
+                    r.Verify("GET の request_uris に a が在る", read.ArrayContains("request_uris", uriA),
+                        uriA, string.Join(" ", read.Strings("request_uris") ?? new string[0]));
+
+                    r.Step("(3) PUT で request_uris を省くと消える（全置換）");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(client, clientUri, clientToken,
+                        "{\"client_id\":\"" + clientId + "\","
+                        + "\"redirect_uris\":[\"" + UriA + "\"],"
+                        + "\"scope\":\"openid\"}");
+
+                    r.VerifyEqual("HTTP の状態は 200", "200", ((int)updated.StatusCode).ToString());
+
+                    JsonResponse reread = await DynamicClientRegistration.ReadAsync(client, clientUri, clientToken);
+                    string[] left = reread.Strings("request_uris") ?? new string[0];
+
+                    r.VerifyEqual("GET の request_uris は無い", "0", left.Length.ToString());
+
+                    r.Step("(4) 断る値");
+
+                    foreach (KeyValuePair<string, string> c in new Dictionary<string, string>()
+                    {
+                        { "内部のアドレス", "[\"https://10.0.0.1/e2e/rt374\"]" },
+                        { "相対の値", "[\"/e2e/rt374\"]" },
+                        { "6 件", "[" + string.Join(",", Enumerable.Range(1, 6).Select(i => "\"" + JwksUri.Url("rt374_1_" + i) + "\"")) + "]" }
+                    })
+                    {
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":[\"" + UriA + "\"],"
+                            + "\"scope\":\"openid\","
+                            + "\"request_uris\":" + c.Value + "}");
+
+                        r.VerifyEqual(c.Key + " : HTTP の状態は 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual(c.Key + " : invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+                        r.Observe(c.Key + " : error_description", rejected.String("error_description") ?? "（無い）");
                     }
                 });
 
