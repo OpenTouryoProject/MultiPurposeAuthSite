@@ -499,7 +499,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // **寿命は 60 分まで**（FAPI-CIBA ID1 §5.2.2 の 9「limit the lifetime of the request to no more than 60 minutes」。#388）。
             //   **nbf が 60 分より前でなく、exp が nbf から 60 分以内**（PAR・/ros の FAPI の登録の確かめ `VerifyFapiTimeClaims` と同じ形。#336）。
             //   **CIBA のすべての要求に掛ける**（CIBA は fapi_ciba の登録にしか許していないので、上の ClientModePolicy と同じ範囲になる）。
-            //   **過ぎていないか・始まっているかは、上の VerifyExp・VerifyNbf が見る。**
+            //   **過ぎていないか・始まっているかは、上の VerifyExp・VerifyNbfClaimWithClockSkew が見る。**
             if (!CmnCibaEndpoint.IsWithinCibaRequestLifetime(json))
             {
                 // CIBA Core 13 : invalid_request

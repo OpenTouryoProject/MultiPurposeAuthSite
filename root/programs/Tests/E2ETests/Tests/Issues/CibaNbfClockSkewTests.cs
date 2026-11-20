@@ -53,9 +53,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// | | 測ること |
     /// |---|---|
-    /// | **`RT-412.1`** | **`nbf` が 5 秒先の要求は、`nbf` では断らない**。**30 秒先（許容幅の外）の要求は、`400` ＋ `invalid_request` で断り、`auth_req_id` を返さない** |
+    /// | **`RT-412.1`** | **`nbf` が 5 秒先の要求は、要求の確かめを通る**（`auth_req_id` か、その先の端末への通知の段の `access_denied`）。**90 秒先（仕様が断ることを求める 60 秒より先）の要求は、`400` ＋ `invalid_request` で断り、`auth_req_id` を返さない** |
     ///
-    /// **サイトとテストは同じ機械で動く**ので、時計はずれていない。5 秒先・30 秒先は、どちらも送ってから着くまでの時間より十分に大きい。
+    /// **10〜60 秒先は測らない**（仕様は受けても断ってもよいとする。FAPI 2.0 Security Profile §5.3.2.1 の Note 3。既定の 10 秒は Open棟梁 の選択）。
+    /// **サイトとテストは同じ機械で動く**ので、時計はずれていない。5 秒先・90 秒先は、どちらも送ってから着くまでの時間より十分に大きい。
     /// **`CibaTests` のコレクションに入れる。** 5 秒先の要求は `nbf` では断られず、その先（端末への通知）へ進みうるので、
     /// 端末を登録するテストと並行して動かさない（`RT-388.2` と同じ）。
     /// </remarks>
@@ -65,8 +66,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <summary>許容幅の中の nbf（秒。既定の許容幅は 10 秒）</summary>
         private const long WithinSkewSeconds = 5;
 
-        /// <summary>許容幅の外の nbf（秒）</summary>
-        private const long BeyondSkewSeconds = 30;
+        /// <summary>
+        /// 断らなければならない nbf（秒）。**仕様が断ることを求めるのは 60 秒より先**（FAPI 2.0 Security Profile §5.3.2.1 の 13）。
+        /// 10〜60 秒は受けてもよい（同 Note 3）ので、許容幅の既定（10 秒）の外でも、その間の値は測らない。
+        /// </summary>
+        private const long BeyondSkewSeconds = 90;
 
         /// <summary>コンストラクタ</summary>
         /// <param name="output">ITestOutputHelper</param>
@@ -84,7 +88,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("RT-412.1",
-                    "CIBA の署名した要求の nbf が 5 秒先なら nbf では断らず、30 秒先なら invalid_request で断る",
+                    "CIBA の署名した要求の nbf が 5 秒先なら要求の確かめを通り、90 秒先なら invalid_request で断る",
                     "**認可サーバは、時計のずれを見込んで、nbf が 0〜10 秒先の JWT を受け、60 秒より先のものを断る。**"
                     + "**以前は、部品（VerifyCiba）が受けた要求を、MPAS の自前の確かめが許容幅なしで断っていた**（OpenTouryo#689 の取り込み）。",
                     "FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.5 / #412");
@@ -100,14 +104,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     client, reg, now + CibaNbfClockSkewTests.WithinSkewSeconds, now + 5 * 60);
                 string withinDescription = within.String("error_description") ?? "";
 
-                // **nbf で断ると、部品は「not verified」、MPAS は「not yet valid」を返す。** どちらでもないこと。
-                //   **その先（端末の登録など）で止まるのはよい**（RT-388.2 と同じ）。
-                bool rejectedByNbf = withinDescription.Contains("not yet valid") || withinDescription.Contains("not verified");
+                // **要求の確かめを通り、その先まで進んだことを、肯定的に見る**：
+                //   auth_req_id が返る（端末が登録されている）か、端末への通知の段の access_denied（端末が無い）。
+                //   **要求の確かめで断ると invalid_request**（部品は「not verified」、MPAS は「not yet valid」）なので、どちらにも当たらない。
+                bool passedRequestChecks = !string.IsNullOrEmpty(within.String("auth_req_id"))
+                    || within.Error == "access_denied";
 
-                r.Verify(CibaNbfClockSkewTests.WithinSkewSeconds + " 秒先 : nbf では断らない", !rejectedByNbf,
-                    "nbf では断らない",
-                    rejectedByNbf ? "**nbf で断った**（" + withinDescription + "）"
-                        : "HTTP " + (int)within.StatusCode + " / " + (within.Error ?? "error 無し"));
+                r.Verify(CibaNbfClockSkewTests.WithinSkewSeconds + " 秒先 : 要求の確かめを通る（auth_req_id か、その先の access_denied）",
+                    passedRequestChecks,
+                    "auth_req_id か access_denied",
+                    "HTTP " + (int)within.StatusCode + " / " + (within.Error ?? "error 無し")
+                        + (string.IsNullOrEmpty(withinDescription) ? "" : "（" + withinDescription + "）"));
 
                 r.Step("(2) nbf が " + CibaNbfClockSkewTests.BeyondSkewSeconds + " 秒先（exp は 5 分先）は、断る");
 

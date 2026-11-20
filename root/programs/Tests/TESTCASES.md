@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus
+1. GET /Account/EmailConfirmation?userId=805a664f-ac06-4aef-bd29-2b92360c36d1&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=805a664f-ac06-4aef-bd29-2b92360c36d1&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=805a664f-ac06-4aef-bd29-2b92360c36d1&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13506,6 +13506,26 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - ES256 : access_token が返る
 - 署名が合わない（ES256） : access_token を返さない
 - 署名が合わない（ES256） : error
+
+## RT-412.1 CIBA の署名した要求の nbf が 5 秒先なら要求の確かめを通り、90 秒先なら invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **認可サーバは、時計のずれを見込んで、nbf が 0〜10 秒先の JWT を受け、60 秒より先のものを断る。****以前は、部品（VerifyCiba）が受けた要求を、MPAS の自前の確かめが許容幅なしで断っていた**（OpenTouryo#689 の取り込み）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.5 / #412 |
+| テスト | `RT41201_CIBAの要求のnbfが許容幅の中なら受ける` |
+
+**手順**
+
+1. nbf が 5 秒先（exp は 5 分先）は、nbf では断らない
+1. nbf が 90 秒先（exp は 5 分先）は、断る
+
+**検証（合否を判定する）**
+
+- 5 秒先 : 要求の確かめを通る（auth_req_id か、その先の access_denied）
+- 90 秒先 : auth_req_id を返さない（利用者へ通知しない）
+- 90 秒先 : HTTP 400
+- 90 秒先 : invalid_request
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
