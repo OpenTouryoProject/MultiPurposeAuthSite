@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/11/18  玄人 幸道         要求先の分類ごとのプロキシの組の設定（ProxyFor*）を足した（#406）
+//*  2026/11/20  玄人 幸道         jwks_uri が ProxyForClientRegisteredUrls の組を使うようになったことを書いた（#405）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -179,7 +180,7 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>**ID 連携の上流・自己テスト（共有の HttpClient）が使うプロキシの組**（`Internet`・`Intranet`・`Debug`・`None`。未設定は `Intranet`。#406）</summary>
-        /// <remarks>**#405 までは、動的登録の `jwks_uri` もこの組を使う**（Open棟梁 の `RemoteJwkSetStore` が共有の HttpClient で取りに行くため）。</remarks>
+        /// <remarks>**ID 連携の上流の `jwks_uri`（`IdFederationJwks`）もこの組を使う。** クライアントが登録した `jwks_uri` は `ProxyForClientRegisteredUrls`（#405。以前はこの組）。</remarks>
         public static string ProxyForIdFederation
         {
             get
@@ -188,8 +189,8 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        /// <summary>**RP が登録した URL（`sector_identifier_uri`）が使うプロキシの組**（未設定は `Intranet`。#406）</summary>
-        /// <remarks>**#405 の後は `jwks_uri` もこの組を使う。** 設定のプロキシが無いときも、OS の既定のプロキシは使わない（`OutboundUrlPolicy` が接続の時点のアドレスを判定するため。#376）。</remarks>
+        /// <summary>**RP が登録した URL（`sector_identifier_uri`・`jwks_uri`・外部の `request_uri`）が使うプロキシの組**（未設定は `Intranet`。#406・#405）</summary>
+        /// <remarks>**`jwks_uri` もこの組を使う**（#405。以前は `ProxyForIdFederation`）。設定のプロキシが無いときも、OS の既定のプロキシは使わない（`OutboundUrlPolicy` が接続の時点のアドレスを判定するため。#376）。</remarks>
         public static string ProxyForClientRegisteredUrls
         {
             get

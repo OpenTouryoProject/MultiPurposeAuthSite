@@ -35,6 +35,7 @@
 //*  2026/11/02  玄人 幸道         client_notification_token を CibaProvider.Create に渡さない（#328）
 //*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
 //*  2026/11/14  玄人 幸道         auth_req_id を出したクライアントを記録する（#387）
+//*  2026/11/20  玄人 幸道         client_assertion を Open棟梁 の OAuth2AndOIDCSpec.GetClientAssertion で取り出す（型の必須は上流で直った。OpenTouryo#688。#412）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -112,7 +113,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 // private_key_jwt / mTLS
-                string assertion = Token.CmnEndpoints.GetClientAssertion(
+                string assertion = OAuth2AndOIDCSpec.GetClientAssertion(
                     formData[OAuth2AndOIDCConst.client_assertion],
                     formData[OAuth2AndOIDCConst.client_assertion_type],
                     formData[OAuth2AndOIDCConst.assertion]);

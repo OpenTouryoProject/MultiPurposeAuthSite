@@ -32,6 +32,7 @@
 //*  2026/10/31  玄人 幸道         store\ から Container\E2E\ へ移したのに合わせた（#318）
 //*  2026/11/07  玄人 幸道         コメントと Skip の文言のスクリプト名を、#340 の後のものにした（#340）
 //*  2026/11/12  玄人 幸道         中身をそのまま置く WriteRaw を足した（sector_identifier_uri。#364）
+//*  2026/11/20  玄人 幸道         リダイレクト（302）する URL を返す RedirectUrl を足した（#405）
 //**********************************************************************************
 
 using System;
@@ -90,6 +91,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static string Url(string name)
         {
             return JwksUri.BaseUrl + name + ".json";
+        }
+
+        /// <summary>その名前の JWK Set へ、リダイレクト（302）する URL（#405）</summary>
+        /// <param name="name">名前（拡張子は付けない）</param>
+        /// <returns>URL（**先は `Url(name)`**）</returns>
+        /// <remarks>
+        /// **`/redirect/` の下を、同じ名前のファイルへ 302 で送る**（`container/E2E/jwks-nginx.conf`）。
+        /// **リダイレクトを追わない OP は、読めない**（`RT-405.1`）。
+        /// </remarks>
+        public static string RedirectUrl(string name)
+        {
+            return JwksUri.BaseUrl + "redirect/" + name + ".json";
         }
 
         /// <summary>JWK Set を置く（既に在れば書き替える）</summary>

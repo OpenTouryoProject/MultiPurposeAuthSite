@@ -33,6 +33,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/10  玄人 幸道         トークン応答を Dictionary<string, object> で受ける（expires_in を数値で返す。#353）
 //*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
+//*  2026/11/20  玄人 幸道         client_assertion を Open棟梁 の OAuth2AndOIDCSpec.GetClientAssertion で取り出す（型の必須は上流で直った。OpenTouryo#688。#412）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -105,7 +106,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //   client_assertion を優先しつつ、無ければ assertion も読む（後方互換）。
 
                 // クライアント認証のアサーション
-                string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
                     formData[OAuth2AndOIDCConst.client_assertion],
                     formData[OAuth2AndOIDCConst.client_assertion_type],
                     formData[OAuth2AndOIDCConst.assertion]);

@@ -1326,7 +1326,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 | | なぜ |
 |---|---|
-| **リダイレクトを返す `request_uri`・遅い・大きい `request_uri`** | 足場がリダイレクトも遅延も返せない。HttpClient の設定（#376・#375）と、`ExternalRequestUri` の上限による |
+| **リダイレクトを返す `request_uri`・遅い・大きい `request_uri`** | 足場は遅延を返せない。リダイレクトは返せる（`/redirect/`。#405）が、`request_uri` では測っていない（同じ専用の HttpClient で、`jwks_uri` を `RT-405.1` で測った）。HttpClient の設定（#376・#375）と、`ExternalRequestUri` の上限による |
 | **同意の POST（`/authorize` の同意の口）での外部の `request_uri`** | 画面は GET で受けた `urn:` を送り返すので、外部の URL が POST で来るのは、直に送ったときだけ。取りに行って検証するところは GET と同じ（送り直しはしない） |
 | **CIBA の要求・別のクライアントの鍵で署名したもの・`client_id` の食い違い** | 取ったものは `/ros` と同じ検証（`RegisterRequestObject`）に掛ける。その検証は `/ros`・PAR・#362 のテストで測っている |
 | **`client_id` の無い要求・`#` 付きの登録との照合** | 処理の分岐が小さい。`ExternalRequestUri` の照合による |
@@ -1399,10 +1399,28 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 | | なぜ |
 |---|---|
-| **`sector_identifier_uri` を接続の時点で判定すること（net10.0）・リダイレクトを追わないこと** | 名前解決の結果を切り替える仕掛けと、リダイレクトを返す足場が要る。接続の時点の判定は `IsAllowedAddress`（単体テストで測った判定）を使う |
+| **`sector_identifier_uri` を接続の時点で判定すること（net10.0）・リダイレクトを追わないこと** | 接続の時点の判定は、名前解決の結果を切り替える仕掛けが要る（`IsAllowedAddress`。単体テストで測った判定を使う）。リダイレクトは、同じ専用の HttpClient で、`jwks_uri` を `RT-405.1` で測った |
 | **登録の後で `jwks_uri` が内部のアドレスに変わったとき、クライアント認証で取り直さないこと** | 名前解決の結果を切り替える仕掛けが要る。判定は `IsAllowed`（単体テストで測った） |
 | **判定の結果を 1 分控えること（上限 1000 件）** | 単体テストは、設定と名前解決を渡す版（控えを通らない）を測る。控えは時間に依るので、単体テストにすると待ちが要る |
 | **適合性テスト（`oidcc-dynamic`）** | 回していない。`container/CTS` に `OutboundUrlAllowedHosts=localhost.emobix.co.uk` を足した（手元の `appsettings.json` にもキーを足した） |
+
+##### クライアントが登録した `jwks_uri` を、専用の HttpClient で取りに行く（`RT-405.*`。#405）
+
+| | 測ること |
+|---|---|
+| **`RT-405.1`** | **リダイレクト（302）を返す `jwks_uri` で登録すると、追わずに読めないとして `400` ＋ `invalid_client_metadata`**（`error_description` で「読めない」を確かめる）。**同じ JWK Set を、リダイレクトの先の URL で登録すれば `201`**。足場が 302 を返し、先が同じ URL であることも、テストの側で先に確かめる |
+
+- **足場は、静的配信のコンテナの `/redirect/<名前>`**（`container/E2E/jwks-nginx.conf`。`/<名前>` へ 302。`Location` は相対。URL は `JwksUri.RedirectUrl`）。**設定を変えたら、コンテナを起こし直す**
+- **#376 では、`jwks_uri` は取りに行く前の判定だけで、取得は共有の HttpClient（リダイレクトを追う）だった。** Open棟梁 の `RemoteJwkSetStore` に、呼び出しごとに HttpClient を渡せるようになった（OpenTouryo#718）ので、専用の HttpClient（`OutboundUrlPolicy.HttpClient`）を渡す
+- **直す前の振る舞い（登録のときに共有の HttpClient で温める）に戻すと、net10.0 版で `RT-405.1` が落ちる**（追って `201`）ことを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **クライアント認証などの取り直し（`GetJwkAsync`）・背景の補充・起動のときの温めが、リダイレクトを追わないこと** | 登録の後で、登録した URL をリダイレクトに変える足場が要る（今の足場は、URL ごとに 200 か 302 に決まる）。渡す HttpClient は登録のときと同じ（`OutboundUrlPolicy.HttpClient`）。差分で見る |
+| **ID 連携の上流の `jwks_uri` が、共有の HttpClient のままであること** | `RT-140.*`・`IdFederationUpstreamKeyTests` が、上流（コンテナ網の中）の鍵で通ることで測る |
+| **接続の時点の判定（net10.0）** | `RT-376` の「測っていないこと」と同じ（名前解決の結果を切り替える仕掛けが要る） |
 
 ##### 生の UTF-8 で書いた Request Object の ASCII でない値を、PAR が書き換えない（`RT-404.*`。#404）
 
@@ -1554,16 +1572,18 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RT-390.2`** | **鍵を登録した SP の署名の無い要求**（エラー応答の経路）でも、同じく構造が変わらない |
 | **`RT-390.3`** | **NameID（EmailAddress の形式の利用者のメアド）に `<`・`&` を含むなら、アサーションを作らず `Responder`。** 使い捨ての利用者を管理画面から作る（**net48 版は要求の検証がフォームの `<` を断るので、`&` で測る**） |
 
-- **Open棟梁 の部品は、値を文字列の置換で応答に埋め込む。** 直す前は、`RT-390.1`・`.2` で `Response` の根の要素に属性が、`RT-390.3` でアサーションに要素が増えていた（net10.0 版で確かめた）
+- **Open棟梁 の部品は、値を文字列の置換で応答に埋め込んでいた。** 直す前は、`RT-390.1`・`.2` で `Response` の根の要素に属性が、`RT-390.3` でアサーションに要素が増えていた（net10.0 版で確かめた）
+- **部品は、値を DOM の API で入れるようになった**（OpenTouryo#700。#412 で取り込んだ）。**MPAS の確かめは、多重の防御として残す**（xs:ID の形でない値を `InResponseTo` に返さない。構造を変える NameID を SP に渡さない）。
+  **`InResponseTo` が空なら、部品は属性を付けない**（以前は空の属性）。テストは「空か無い」で見るので、どちらでも通る
 - **要求の XML は、テストの側でエスケープして組み立てる**（`Saml2.BuildAuthnRequest`）。要求そのものは正しい XML で、IdP が取り出す値が上の文字を含む
-- **エスケープはしない**（部品が値を DOM の API で入れるようになったとき、二重になるため）
+- **エスケープはしない**（部品が値を DOM の API で入れるので、二重になる）
 
 ###### 測っていないこと
 
 | | なぜ |
 |---|---|
 | **ID 連携で上流から来たメアド** | 同じ `CreateSamlResponse` の確認を通る（利用者の値として入る） |
-| **`Issuer`・`Destination`・`Recipient`** | 設定と登録の値。部品の側で DOM の API で入れる直しを Open棟梁 で行う（OpenTouryo#700） |
+| **`Issuer`・`Destination`・`Recipient`** | 設定と登録の値。部品が DOM の API で入れる（OpenTouryo#700。#412 で取り込んだ） |
 | **NameID の `{`・XML で使えない文字** | 同じ確認（`HasXmlMarkup`）で断る。`{` は、部品が置換を順に行うので、後の置換の印（`{Recipient}` など）が書き換わるため |
 | **Redirect Binding で返る応答** | 確認は応答を作る前（`VerifySamlRequest`・`CreateSamlResponse`）で、Binding によらない |
 | **鍵を登録した SP の、署名した要求の NCName でない `ID`** | 署名の有無によらず同じ確認で断る（ログは署名の失敗と別の行に残す） |
@@ -1635,14 +1655,14 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **`RT-368.1`** | **型の無い `client_assertion` は、PAR でも `/revoke` でも `invalid_client`**（RFC 7521 §4.2 の REQUIRED）。**型を付ければ通る** |
 
-- **判定は `CmnEndpoints.GetClientAssertion`**（両版の 6 つの口が使う）。**Open棟梁 の `OAuth2AndOIDCSpec.GetClientAssertion` の回避**（型が来ていなければ、そのまま返していた）。**Open棟梁 で直したら外す**
+- **判定は Open棟梁 の `OAuth2AndOIDCSpec.GetClientAssertion`**（両版の 6 つの口が使う）。**#368 では、MPAS の `CmnEndpoints.GetClientAssertion` で回避していた**（部品が、型が来ていなければそのまま返していた）。**部品が型を必須にした（OpenTouryo#688）ので、#412 で回避を外した**（振る舞いは同じ）
 - **型が違えば断る**ことは `RT-238.3`、**従来の名前 `assertion` だけのクライアントを通す**ことは `RT-238.2` が測る
 
 ###### 測っていないこと
 
 | | なぜ |
 |---|---|
-| **`/token`・Device AuthZ・CIBA・`/introspect` での型の無い `client_assertion`** | どの口も同じ `GetClientAssertion` を通る（呼び出しの書き換えだけ）。PAR と `/revoke` で代表させた |
+| **`/token`・Device AuthZ・CIBA・`/introspect` での型の無い `client_assertion`** | どの口も同じ `OAuth2AndOIDCSpec.GetClientAssertion` を通る（呼び出しの書き換えだけ）。PAR と `/revoke` で代表させた |
 | **型の無い `client_assertion` と、正しい `client_secret` を併せて送る要求** | **アサーションを無いものとして扱うので、`client_secret` を持つ登録は秘密で認証される。** 複数の認証の方法を併せた要求を断るか（RFC 6749 §2.3）は、型の有無と別の、従来からの扱い |
 
 ##### FAPI 2.0 の登録では refresh_token を入れ替えず、秘密を持つクライアントの refresh_token は DPoP の鍵に縛らない（`RT-367.*`・`RT-311.11`。#367）
@@ -1741,6 +1761,24 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 - **CIBA のすべての要求に掛ける**（CIBA は `fapi_ciba` の登録にしか許していないので、`fapi_ciba` だけに掛けるのと同じ範囲。本文の「決めること」）
 - **寿命の短い要求（既定の 10 分）が通ることは `RT-233.1`・`EX-8` が測る**
 - 直す前は、(1) の要求が寿命では断られず、その先の `access_denied`（端末の登録が無い）になった（net10.0 版で確かめた）
+
+##### CIBA の署名した要求の `nbf` は、時計のずれの許容幅まで未来でも受ける（`RT-412.*`。#412）
+
+| | 測ること |
+|---|---|
+| **`RT-412.1`** | **`nbf` が 5 秒先の要求は、要求の確かめを通る**（`auth_req_id`、またはその先の端末への通知の段の `access_denied`）。**90 秒先（仕様が断ることを求める 60 秒より先）の要求は `400` ＋ `invalid_request` で、`auth_req_id` を返さない**（FAPI 2.0 Security Profile §5.3.2.1 の 13、RFC 7519 §4.1.5） |
+
+- **許容幅は Open棟梁 の `CmnJwtToken.ClockSkewSeconds`（既定 10 秒）**（OpenTouryo#689）。**部品の `RequestObject.VerifyCiba` が受けた要求を、MPAS の自前の確かめ（`CmnCibaEndpoint.ValidateCibaAuthZReqParam`）が許容幅なしで断っていた**ので、同じ幅で確かめるようにした。**`exp` には許容幅を取らない**
+- **(1) は、要求の確かめを通ったことを肯定的に見る**（要求の確かめで断ると `invalid_request` になる。端末の登録が無ければ `access_denied` で止まる）
+- **サイトとテストは同じ機械で動く**ので、時計はずれていない。5 秒・90 秒は、送ってから着くまでの時間より十分に大きい
+- 直す前は、(1) の要求が `The request is not yet valid.` で断られた（net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **`client_assertion`・`/ros`・PAR・JWT Bearer のグラントの、未来の `nbf`・`iat`** | 判定は部品（`JwtAssertion.Verify`・`RequestObject.Verify`）で、MPAS の側に自前の確かめは無い。OpenTouryo#689 のテストが測る |
+| **許容幅の境界（10 秒・11 秒）と、10〜60 秒先** | 境界は、送ってから着くまでの時間で揺れる（OpenTouryo#689 のテストが測る）。**10〜60 秒先は、仕様が受けても断ってもよいとする**（FAPI 2.0 Security Profile §5.3.2.1 の Note 3）ので、既定の 10 秒という選択を E2E で固めない |
 
 ##### fapi1 の登録は、JARM の認可要求だけを受ける（`RT-381.*`。#381）
 

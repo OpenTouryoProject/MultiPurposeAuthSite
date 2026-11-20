@@ -55,6 +55,8 @@
 //*  2026/11/19  玄人 幸道         jwks_uri の鍵の引き方を KeysFromJwksUri に切り出し、Request Object・CIBA の要求の検証でも使うようにした（振る舞いは変えていない。#408）
 //*  2026/11/19  玄人 幸道         jwks_uri の取得の失敗のログに、何の JWS かを書くようにした（#408。別モデルのレビューの指摘）
 //*  2026/11/19  玄人 幸道         JWT Bearer グラントの検証鍵の候補（JwtBearerVerifyingJws）と、候補を順に試す検証（TryVerifyJwtBearerAssertion）を足し、受ける alg を client_assertion とそろえた（#410）
+//*  2026/11/20  玄人 幸道         GetClientAssertion（#368 の回避）を外した。Open棟梁 の OAuth2AndOIDCSpec.GetClientAssertion が型を必須にした（OpenTouryo#688。#412）
+//*  2026/11/20  玄人 幸道         jwks_uri の取り直し（GetJwkAsync・RefillInBackground）を、専用の HttpClient（OutboundUrlPolicy.HttpClient）で行うようにした（OpenTouryo#718。#405）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -485,8 +487,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`kid` の無い JWS では呼ばない**（`GetJwkAsync` は `kid` で引く。§10.1.1 も「unfamiliar kid」を見たときの取り直し）。
         /// その場合は、以前どおりキャッシュの鍵を順に試し、無ければ背景で補充して断る。
         ///
-        /// **`GetJwkAsync` は、取得中の URL を重ねて取りに行きうる**（同時に来た要求のぶん。下限ごとに 1 回の束まで）。
-        /// Open棟梁 の側で直す（OpenTouryoProject/OpenTouryo#686）。
+        /// **取得は専用の HttpClient（`OutboundUrlPolicy.HttpClient`）で行う**（#405。OpenTouryo#718 の、呼び出しごとに渡す版）。
+        /// **ID 連携の上流の `jwks_uri`（`IdFederationJwks`）は、共有の HttpClient のまま**である。
         /// </remarks>
         private static string[] WaitForJwkFromUri(string jwksUri, string kid, string purpose)
         {
@@ -508,7 +510,10 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             try
             {
-                fetch = Task.Run(() => RemoteJwkSetStore.GetJwkAsync(jwksUri, kid));
+                //  **専用の HttpClient で取りに行く**（#405。リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する）。
+                //    **作れなければ、Task の失敗として扱う**（共有の HttpClient には倒さない）。
+                fetch = Task.Run(() => RemoteJwkSetStore.GetJwkAsync(
+                    jwksUri, kid, MultiPurposeAuthSite.Extensions.Sts.OutboundUrlPolicy.HttpClient));
 
                 //  **印は、取得が終わったときに消す**（待つ側が上限で諦めても、取得中は残す）。
                 //    **失敗で終わったら、理由を残す**（上限を過ぎた後の失敗は、待つ側からは見えないため。鍵は出さない）。
@@ -559,6 +564,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// - **同期の経路から呼ばれる**ので、**控えを読む**（`RemoteJwkSetStore.PickJwksFromCache`。取りに行って待つと net48 で止まる。#309）
         /// - **知らない `kid` なら、その場で取り直して、上限まで待つ**（`WaitForJwkFromUri`。OIDC Core 1.0 §10.1.1 の準用。#363）
         /// - **控えに無く、取りに行くときだけ、行き先のアドレスを判定する**（#376。登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い）
+        /// - **取りに行くのは専用の HttpClient**（`OutboundUrlPolicy.HttpClient`。#405）。リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する
         /// - **間に合わなければ、背景で取り直して、この 1 本は断る**（理由はログに残す。#253）
         /// </remarks>
         internal static string[] KeysFromJwksUri(string client_id, string jws, string purpose)
@@ -584,7 +590,18 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (fromUri.Length == 0 && fetchable)
             {
-                RemoteJwkSetStore.RefillInBackground(jwksUri);
+                //  **背景の取り直しも、専用の HttpClient で行う**（#405）。
+                //    **作れなければ取りに行かない**（共有の HttpClient には倒さない。要求は、鍵が無いとして断る）。
+                try
+                {
+                    RemoteJwkSetStore.RefillInBackground(
+                        jwksUri, MultiPurposeAuthSite.Extensions.Sts.OutboundUrlPolicy.HttpClient);
+                }
+                catch (Exception ex)
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "Refilling the jwks_uri for the {0} could not start. ({1})", purpose, ex.GetType().Name));
+                }
 
                 Logging.MyOperationTrace(string.Format(
                     "The key of the {0} was not in the jwks_uri cache. ({1})", purpose, client_id));
@@ -1082,32 +1099,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return CmnEndpoints.TokenEndpointAuthMethods
                     .Where(x => x != CmnEndpoints.TokenEndpointAuthMethodNone).ToArray();
             }
-        }
-
-        /// <summary>クライアント認証のアサーションを取り出す（`client_assertion_type` を必須にする。#368）</summary>
-        /// <param name="client_assertion">client_assertion（RFC 7523 §2.2）</param>
-        /// <param name="client_assertion_type">client_assertion_type</param>
-        /// <param name="assertion">assertion（Open棟梁 の古いクライアントが送る名前）</param>
-        /// <returns>アサーション（無い・受け付けられないなら空）</returns>
-        /// <remarks>
-        /// **`client_assertion` があるのに `client_assertion_type` が無ければ、アサーションは無いものとして扱う**
-        /// （RFC 7521 §4.2 : `client_assertion_type` は REQUIRED）。**private_key_jwt だけの登録は、それで `invalid_client` になる。**
-        /// **値が違うときと、従来の名前 `assertion` だけのとき**（OpenTouryo#592 より前のクライアント。`RT-238.2`）は、
-        /// **Open棟梁 の `OAuth2AndOIDCSpec.GetClientAssertion` に任せる**（従来どおり）。
-        ///
-        /// **回避である。** 原因は Open棟梁 の `GetClientAssertion`（**型が来ていなければ、`client_assertion` をそのまま返す**）。
-        /// **Open棟梁 で直したら、この関数を外して、呼び出し元を元に戻す。**
-        /// </remarks>
-        public static string GetClientAssertion(
-            string client_assertion, string client_assertion_type, string assertion)
-        {
-            if (!string.IsNullOrEmpty(client_assertion)
-                && string.IsNullOrEmpty(client_assertion_type))
-            {
-                return "";
-            }
-
-            return OAuth2AndOIDCSpec.GetClientAssertion(client_assertion, client_assertion_type, assertion);
         }
 
         /// <summary>資格情報で認証した証明か（秘密を持つクライアントか。#367）</summary>

@@ -32,6 +32,7 @@
 //*  2026/10/30  玄人 幸道         クライアント認証を、token の有無より先に行う（認証していない要求に 400 を返していた。#294）
 //*  2026/10/30  玄人 幸道         認証を先に行うようにした所の、if の無いブロックを外した（動作は同じ。#294）
 //*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
+//*  2026/11/20  玄人 幸道         client_assertion を Open棟梁 の OAuth2AndOIDCSpec.GetClientAssertion で取り出す（型の必須は上流で直った。OpenTouryo#688。#412）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -99,7 +100,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
                 //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
                 //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
-                string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
                     formData[OAuth2AndOIDCConst.client_assertion],
                     formData[OAuth2AndOIDCConst.client_assertion_type],
                     formData[OAuth2AndOIDCConst.assertion]);
@@ -200,7 +201,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
                 //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
                 //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
-                string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                string clientAssertion = OAuth2AndOIDCSpec.GetClientAssertion(
                     formData[OAuth2AndOIDCConst.client_assertion],
                     formData[OAuth2AndOIDCConst.client_assertion_type],
                     formData[OAuth2AndOIDCConst.assertion]);

@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus
+1. GET /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=b72480da-8613-4c1b-820a-69a2bb3622ee&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12549,7 +12549,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。****以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。****既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。 |
+| 観点 | **OP が外へ出す要求（共有の HttpClient。#405 からは、`jwks_uri` を取りに行く専用の HttpClient も同じ設定）に、時間と大きさの上限を掛けた。****以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。****既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。 |
 | 根拠 | 設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375 |
 | テスト | `RT37501_1MBを超えるjwks_uriの応答は読まない` |
 
@@ -13413,6 +13413,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PAR : 応答の state
 - /ros : 応答の state
 
+## RT-405.1 動的登録の `jwks_uri` が**リダイレクト（302）を返す**と、追わずに読めないとして `400` ＋ `invalid_client_metadata` で断る。**同じ JWK Set を、リダイレクトの先の URL で登録すれば通る**
+
+| | |
+|---|---|
+| 観点 | **クライアントが登録した `jwks_uri` は、専用の HttpClient（リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する）で取りに行く。****以前は共有の HttpClient で取りに行き、リダイレクトを追っていた**（取りに行く前に判定した後で、別の行き先に移れた）。 |
+| 根拠 | 設計：OutboundUrlPolicy の remarks / #376 / #405 |
+| テスト | `RT40501_リダイレクトするjwks_uriは追わずに断る` |
+
+**手順**
+
+1. 足場の確かめ：リダイレクトの URL は 302 を返し、先は同じ JWK Set の URL
+1. リダイレクトを返す jwks_uri で登録する
+1. 対照：同じ JWK Set を、リダイレクトの先の URL で登録すれば通る
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 302
+- 先は JWK Set の URL
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- 断る理由は「読めない」
+- HTTP の状態は 201
+
 ## RT-408.1 鍵を `jwks_uri` だけで登録したクライアントの、署名した Request Object を、`jwks_uri` の鍵で検証して受ける（外部の `request_uri`（`/ros` と同じ検証）と、PAR の `request`）。`jwks_uri` に無い鍵・署名が合わないものは断る
 
 | | |
@@ -13506,6 +13529,26 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - ES256 : access_token が返る
 - 署名が合わない（ES256） : access_token を返さない
 - 署名が合わない（ES256） : error
+
+## RT-412.1 CIBA の署名した要求の nbf が 5 秒先なら要求の確かめを通り、90 秒先なら invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **認可サーバは、時計のずれを見込んで、nbf が 0〜10 秒先の JWT を受け、60 秒より先のものを断る。****以前は、部品（VerifyCiba）が受けた要求を、MPAS の自前の確かめが許容幅なしで断っていた**（OpenTouryo#689 の取り込み）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 7519 §4.1.5 / #412 |
+| テスト | `RT41201_CIBAの要求のnbfが許容幅の中なら受ける` |
+
+**手順**
+
+1. nbf が 5 秒先（exp は 5 分先）は、nbf では断らない
+1. nbf が 90 秒先（exp は 5 分先）は、断る
+
+**検証（合否を判定する）**
+
+- 5 秒先 : 要求の確かめを通る（auth_req_id か、その先の access_denied）
+- 90 秒先 : auth_req_id を返さない（利用者へ通知しない）
+- 90 秒先 : HTTP 400
+- 90 秒先 : invalid_request
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

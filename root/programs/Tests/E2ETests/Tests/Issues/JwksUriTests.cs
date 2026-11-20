@@ -41,12 +41,15 @@
 //*  2026/11/19  玄人 幸道         RT-408.1・.2 に、jwks_uri に無い鍵で署名したものを断ることを足した（#408。別モデルのレビューの指摘）
 //*  2026/11/19  玄人 幸道         RT-408.1・.2 に、同じ種類の鍵でも署名が合わないものを断ることを足した（#408。別モデルのレビューの指摘）
 //*  2026/11/19  玄人 幸道         RT-410.1・.2（JWT Bearer グラントの assertion を jwks_uri の鍵・PS256・ES256 で検証する）を足した（#410）
+//*  2026/11/20  玄人 幸道         RT-405.1（リダイレクトを返す jwks_uri は、追わずに断る）を足した（#405）
+//*  2026/11/20  玄人 幸道         RT-375.1 の観点の文面に、jwks_uri が専用の HttpClient（同じ上限）で取りに行くようになったことを書いた（#405）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -73,10 +76,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-309.3`** | **同じ URL の鍵を入れ替えると、`PUT` で読み直して新しい鍵で通る**（**読み直すまではキャッシュが効く**） |
     /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
     /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
-    /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。共有の HttpClient の大きさの上限。#375） |
+    /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。HttpClient の大きさの上限。#375。#405 からは専用の HttpClient の上限） |
     /// | **`RT-374.1`** | **動的登録の `request_uris`**（外部の `request_uri` を取りに行ってよい先）を受けて返し、`PUT` で省けば消える。**内部のアドレス・相対の値・6 件以上は `400`**（#374） |
     /// | **`RT-374.2`** | **登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object で認可コードまで進む。** 登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri`（どれもエラー画面。#374） |
     /// | **`RT-376.1`** | **内部のアドレス（プライベート・リンクローカル・ユニーク ローカル）の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
+    /// | **`RT-405.1`** | **リダイレクト（302）を返す `jwks_uri` は、追わずに読めないとして `400`**（専用の HttpClient で取りに行く。先の URL で登録すれば通る。#405） |
     ///
     /// **要求の経路は同期である** — **クライアント認証は `static bool` の鎖**で、
     /// **`/token` / `/par` / `/ciba_authz` / `/revoke` / `/introspect` の全部から呼ばれる。
@@ -626,7 +630,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-375.1",
                     "`jwks_uri` の応答が**1MB を超える**と読まず、登録を `400` ＋ `invalid_client_metadata` で断る。**同じ鍵を小さく置けば登録できる**",
-                    "**OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。**"
+                    "**OP が外へ出す要求（共有の HttpClient。#405 からは、`jwks_uri` を取りに行く専用の HttpClient も同じ設定）に、時間と大きさの上限を掛けた。**"
                     + "**以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。**"
                     + "**既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。",
                     "設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375");
@@ -1402,6 +1406,92 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                         r.Verify(url + " : 断る理由は行き先", byAddress,
                             "internal address", byAddress ? "internal address" : "**" + description + "**");
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-405.1
+
+        /// <summary>RT-405.1 リダイレクトを返す jwks_uri は、追わずに読めないとして断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT40501_リダイレクトするjwks_uriは追わずに断る(string targetKey)
+        {
+            await JwksUri.SkipIfNotAvailableAsync();
+
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-405.1",
+                    "動的登録の `jwks_uri` が**リダイレクト（302）を返す**と、追わずに読めないとして `400` ＋ `invalid_client_metadata` で断る。**同じ JWK Set を、リダイレクトの先の URL で登録すれば通る**",
+                    "**クライアントが登録した `jwks_uri` は、専用の HttpClient（リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する）で取りに行く。**"
+                    + "**以前は共有の HttpClient で取りに行き、リダイレクトを追っていた**（取りに行く前に判定した後で、別の行き先に移れた）。",
+                    "設計：OutboundUrlPolicy の remarks / #376 / #405");
+
+                r.Target("POST registration_endpoint（jwks_uri がリダイレクトを返す）");
+
+                string name = "rt405_1_" + targetKey;
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token) =>
+                {
+                    try
+                    {
+                        JwksUri.Write(name, JwsSigner.PublicRsaJwk(client));
+
+                        r.Step("(0) 足場の確かめ：リダイレクトの URL は 302 を返し、先は同じ JWK Set の URL");
+
+                        using (HttpClientHandler handler = new HttpClientHandler() { AllowAutoRedirect = false })
+                        using (HttpClient probe = new HttpClient(handler))
+                        using (HttpResponseMessage res = await probe.GetAsync(JwksUri.RedirectUrl(name)))
+                        {
+                            r.VerifyEqual("HTTP の状態は 302", "302", ((int)res.StatusCode).ToString());
+
+                            Uri location = res.Headers.Location == null
+                                ? null : new Uri(new Uri(JwksUri.RedirectUrl(name)), res.Headers.Location);
+
+                            r.VerifyEqual("先は JWK Set の URL", JwksUri.Url(name),
+                                location == null ? "（無い）" : location.AbsoluteUri);
+                        }
+
+                        string Body(string jwksUri)
+                        {
+                            return "{\"redirect_uris\":[\"" + UriA + "\"],"
+                                + "\"scope\":\"openid\","
+                                + "\"token_endpoint_auth_method\":\"private_key_jwt\","
+                                + "\"jwks_uri\":\"" + jwksUri + "\"}";
+                        }
+
+                        r.Step("(1) リダイレクトを返す jwks_uri で登録する");
+
+                        JsonResponse rejected = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token, Body(JwksUri.RedirectUrl(name)));
+
+                        r.VerifyEqual("HTTP の状態は 400", "400", ((int)rejected.StatusCode).ToString());
+                        r.VerifyEqual("error は invalid_client_metadata", "invalid_client_metadata",
+                            rejected.String("error") ?? "（無い）");
+
+                        string description = rejected.String("error_description") ?? "";
+                        bool unread = description.Contains("could not be read");
+
+                        r.Verify("断る理由は「読めない」", unread,
+                            "could not be read", unread ? "could not be read" : "**" + description + "**");
+
+                        r.Step("(2) 対照：同じ JWK Set を、リダイレクトの先の URL で登録すれば通る");
+
+                        JsonResponse accepted = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token, Body(JwksUri.Url(name)));
+
+                        r.VerifyEqual("HTTP の状態は 201", "201", ((int)accepted.StatusCode).ToString());
+                    }
+                    finally
+                    {
+                        JwksUri.Delete(name);
                     }
                 });
 
