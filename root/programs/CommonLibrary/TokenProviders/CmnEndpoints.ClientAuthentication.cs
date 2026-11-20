@@ -55,6 +55,7 @@
 //*  2026/11/19  玄人 幸道         jwks_uri の鍵の引き方を KeysFromJwksUri に切り出し、Request Object・CIBA の要求の検証でも使うようにした（振る舞いは変えていない。#408）
 //*  2026/11/19  玄人 幸道         jwks_uri の取得の失敗のログに、何の JWS かを書くようにした（#408。別モデルのレビューの指摘）
 //*  2026/11/19  玄人 幸道         JWT Bearer グラントの検証鍵の候補（JwtBearerVerifyingJws）と、候補を順に試す検証（TryVerifyJwtBearerAssertion）を足し、受ける alg を client_assertion とそろえた（#410）
+//*  2026/11/20  玄人 幸道         GetClientAssertion（#368 の回避）を外した。Open棟梁 の OAuth2AndOIDCSpec.GetClientAssertion が型を必須にした（OpenTouryo#688。#412）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1082,32 +1083,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return CmnEndpoints.TokenEndpointAuthMethods
                     .Where(x => x != CmnEndpoints.TokenEndpointAuthMethodNone).ToArray();
             }
-        }
-
-        /// <summary>クライアント認証のアサーションを取り出す（`client_assertion_type` を必須にする。#368）</summary>
-        /// <param name="client_assertion">client_assertion（RFC 7523 §2.2）</param>
-        /// <param name="client_assertion_type">client_assertion_type</param>
-        /// <param name="assertion">assertion（Open棟梁 の古いクライアントが送る名前）</param>
-        /// <returns>アサーション（無い・受け付けられないなら空）</returns>
-        /// <remarks>
-        /// **`client_assertion` があるのに `client_assertion_type` が無ければ、アサーションは無いものとして扱う**
-        /// （RFC 7521 §4.2 : `client_assertion_type` は REQUIRED）。**private_key_jwt だけの登録は、それで `invalid_client` になる。**
-        /// **値が違うときと、従来の名前 `assertion` だけのとき**（OpenTouryo#592 より前のクライアント。`RT-238.2`）は、
-        /// **Open棟梁 の `OAuth2AndOIDCSpec.GetClientAssertion` に任せる**（従来どおり）。
-        ///
-        /// **回避である。** 原因は Open棟梁 の `GetClientAssertion`（**型が来ていなければ、`client_assertion` をそのまま返す**）。
-        /// **Open棟梁 で直したら、この関数を外して、呼び出し元を元に戻す。**
-        /// </remarks>
-        public static string GetClientAssertion(
-            string client_assertion, string client_assertion_type, string assertion)
-        {
-            if (!string.IsNullOrEmpty(client_assertion)
-                && string.IsNullOrEmpty(client_assertion_type))
-            {
-                return "";
-            }
-
-            return OAuth2AndOIDCSpec.GetClientAssertion(client_assertion, client_assertion_type, assertion);
         }
 
         /// <summary>資格情報で認証した証明か（秘密を持つクライアントか。#367）</summary>

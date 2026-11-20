@@ -40,6 +40,7 @@
 //*  2026/11/17  玄人 幸道         CIBA の署名した要求の寿命を 60 分までにした（FAPI-CIBA ID1 §5.2.2 の 9。#388）
 //*  2026/11/17  玄人 幸道         CIBA の口の aud は CIBA Core 1.0 §7.1 に従うことを書いた（RFC 10070 は CIBA を更新していない。#398）
 //*  2026/11/19  玄人 幸道         CIBA の署名した要求の検証鍵に jwks_uri の鍵も加え、jwks_uri の登録を鍵の登録として数えるようにした（#408）
+//*  2026/11/20  玄人 幸道         nbf を、Open棟梁 と同じ時計のずれの許容幅（ClockSkewSeconds）で確かめる（OpenTouryo#689。#412）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -482,7 +483,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
             else
             {
-                if (!CmnJwtToken.VerifyNbf(nbf))
+                // **時計のずれの許容幅（CmnJwtToken.ClockSkewSeconds。既定 10 秒）までは、未来の nbf を受ける**
+                //   （FAPI 2.0 Security Profile §5.3.2.1 の 13。Open棟梁 の VerifyCiba・RequestObject.Verify と同じ幅。OpenTouryo#689。#412）。
+                //   **以前は許容幅なしの VerifyNbf だった**ので、部品が受けた要求を、ここで断っていた。
+                //   **exp には許容幅を取らない**（上の VerifyExp。過ぎた exp は、ずれで救わない）。
+                if (!CmnJwtToken.VerifyNbfClaimWithClockSkew(
+                    json[OAuth2AndOIDCConst.nbf], DateTimeOffset.Now.ToUnixTimeSeconds()))
                 {
                     // CIBA Core 13 : invalid_request。以前はコードが空だった（#196）。
                     err = OAuth2AndOIDCConst.invalid_request;

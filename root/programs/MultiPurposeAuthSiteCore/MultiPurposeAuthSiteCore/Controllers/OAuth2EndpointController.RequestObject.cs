@@ -36,6 +36,7 @@
 //*  2026/11/10  玄人 幸道         PAR の応答を Dictionary<string, object> で受ける（expires_in を数値で返す。#353）
 //*  2026/11/13  玄人 幸道         PAR の DPoP ヘッダを渡す（RFC 9449 §10.1。#365）
 //*  2026/11/13  玄人 幸道         client_assertion を CmnEndpoints.GetClientAssertion で取り出す（client_assertion_type を必須にする。#368）
+//*  2026/11/20  玄人 幸道         client_assertion を Open棟梁 の OAuth2AndOIDCSpec.GetClientAssertion で取り出す（型の必須は上流で直った。OpenTouryo#688。#412）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -114,7 +115,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // private_key_jwt / mTLS
-            string assertion = Token.CmnEndpoints.GetClientAssertion(
+            string assertion = OAuth2AndOIDCSpec.GetClientAssertion(
                 formData[OAuth2AndOIDCConst.client_assertion],
                 formData[OAuth2AndOIDCConst.client_assertion_type],
                 formData[OAuth2AndOIDCConst.assertion]);
