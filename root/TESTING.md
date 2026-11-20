@@ -1326,7 +1326,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 | | なぜ |
 |---|---|
-| **リダイレクトを返す `request_uri`・遅い・大きい `request_uri`** | 足場がリダイレクトも遅延も返せない。HttpClient の設定（#376・#375）と、`ExternalRequestUri` の上限による |
+| **リダイレクトを返す `request_uri`・遅い・大きい `request_uri`** | 足場は遅延を返せない。リダイレクトは返せる（`/redirect/`。#405）が、`request_uri` では測っていない（同じ専用の HttpClient で、`jwks_uri` を `RT-405.1` で測った）。HttpClient の設定（#376・#375）と、`ExternalRequestUri` の上限による |
 | **同意の POST（`/authorize` の同意の口）での外部の `request_uri`** | 画面は GET で受けた `urn:` を送り返すので、外部の URL が POST で来るのは、直に送ったときだけ。取りに行って検証するところは GET と同じ（送り直しはしない） |
 | **CIBA の要求・別のクライアントの鍵で署名したもの・`client_id` の食い違い** | 取ったものは `/ros` と同じ検証（`RegisterRequestObject`）に掛ける。その検証は `/ros`・PAR・#362 のテストで測っている |
 | **`client_id` の無い要求・`#` 付きの登録との照合** | 処理の分岐が小さい。`ExternalRequestUri` の照合による |
@@ -1399,10 +1399,28 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 | | なぜ |
 |---|---|
-| **`sector_identifier_uri` を接続の時点で判定すること（net10.0）・リダイレクトを追わないこと** | 名前解決の結果を切り替える仕掛けと、リダイレクトを返す足場が要る。接続の時点の判定は `IsAllowedAddress`（単体テストで測った判定）を使う |
+| **`sector_identifier_uri` を接続の時点で判定すること（net10.0）・リダイレクトを追わないこと** | 接続の時点の判定は、名前解決の結果を切り替える仕掛けが要る（`IsAllowedAddress`。単体テストで測った判定を使う）。リダイレクトは、同じ専用の HttpClient で、`jwks_uri` を `RT-405.1` で測った |
 | **登録の後で `jwks_uri` が内部のアドレスに変わったとき、クライアント認証で取り直さないこと** | 名前解決の結果を切り替える仕掛けが要る。判定は `IsAllowed`（単体テストで測った） |
 | **判定の結果を 1 分控えること（上限 1000 件）** | 単体テストは、設定と名前解決を渡す版（控えを通らない）を測る。控えは時間に依るので、単体テストにすると待ちが要る |
 | **適合性テスト（`oidcc-dynamic`）** | 回していない。`container/CTS` に `OutboundUrlAllowedHosts=localhost.emobix.co.uk` を足した（手元の `appsettings.json` にもキーを足した） |
+
+##### クライアントが登録した `jwks_uri` を、専用の HttpClient で取りに行く（`RT-405.*`。#405）
+
+| | 測ること |
+|---|---|
+| **`RT-405.1`** | **リダイレクト（302）を返す `jwks_uri` で登録すると、追わずに読めないとして `400` ＋ `invalid_client_metadata`**（`error_description` で「読めない」を確かめる）。**同じ JWK Set を、リダイレクトの先の URL で登録すれば `201`**。足場が 302 を返し、先が同じ URL であることも、テストの側で先に確かめる |
+
+- **足場は、静的配信のコンテナの `/redirect/<名前>`**（`container/E2E/jwks-nginx.conf`。`/<名前>` へ 302。`Location` は相対。URL は `JwksUri.RedirectUrl`）。**設定を変えたら、コンテナを起こし直す**
+- **#376 では、`jwks_uri` は取りに行く前の判定だけで、取得は共有の HttpClient（リダイレクトを追う）だった。** Open棟梁 の `RemoteJwkSetStore` に、呼び出しごとに HttpClient を渡せるようになった（OpenTouryo#718）ので、専用の HttpClient（`OutboundUrlPolicy.HttpClient`）を渡す
+- **直す前の振る舞い（登録のときに共有の HttpClient で温める）に戻すと、net10.0 版で `RT-405.1` が落ちる**（追って `201`）ことを確かめた
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **クライアント認証などの取り直し（`GetJwkAsync`）・背景の補充・起動のときの温めが、リダイレクトを追わないこと** | 登録の後で、登録した URL をリダイレクトに変える足場が要る（今の足場は、URL ごとに 200 か 302 に決まる）。渡す HttpClient は登録のときと同じ（`OutboundUrlPolicy.HttpClient`）。差分で見る |
+| **ID 連携の上流の `jwks_uri` が、共有の HttpClient のままであること** | `RT-140.*`・`IdFederationUpstreamKeyTests` が、上流（コンテナ網の中）の鍵で通ることで測る |
+| **接続の時点の判定（net10.0）** | `RT-376` の「測っていないこと」と同じ（名前解決の結果を切り替える仕掛けが要る） |
 
 ##### 生の UTF-8 で書いた Request Object の ASCII でない値を、PAR が書き換えない（`RT-404.*`。#404）
 

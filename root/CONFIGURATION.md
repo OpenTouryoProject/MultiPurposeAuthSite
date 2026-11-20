@@ -1390,10 +1390,11 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN RequestUris varchar(2000) NULL;
 - **名前解決した結果が 1 つでも内部のアドレスなら断る。** **名前解決できなければ断る**
 - **掛ける所**：登録の検査（`invalid_client_metadata`）、登録のときに温める前、起動のときに温める前、クライアント認証で `jwks_uri` を取り直す前（**登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い**）
 - **`sector_identifier_uri` は専用の HttpClient で取りに行く**：**リダイレクトを追わない**。**net10.0 版は接続の時点のアドレスでも判定する**（判定の後に名前解決をやり直して、行き先を変えられないように）。**net48 版は名前解決した結果の判定に留まる**（`HttpClientHandler` に接続の時点の口が無い）。**プロキシ（`UseIntranetProxy`）を通すときも、取りに行く前の判定に留まる**
-- **`jwks_uri` の取得は Open棟梁 の `RemoteJwkSetStore`（共有の HttpClient）が行う**ので、**取りに行く前の判定だけ**（専用の HttpClient は #376 の残り。Open棟梁 に渡す口が入った（OpenTouryo#707）ので、#405 で渡す）
+- **`jwks_uri` も専用の HttpClient で取りに行く**（#405。Open棟梁 の `RemoteJwkSetStore` に、呼び出しごとに渡す。OpenTouryo#718）。**`sector_identifier_uri` と同じく、リダイレクトを追わず、net10.0 版は接続の時点のアドレスでも判定する**。**取りに行く所**：登録のときに温める、起動のときに温める、クライアント認証などで知らない `kid` の鍵を取り直す・背景で補充する。**ID 連携の上流の `jwks_uri`（運用者が設定する）は、共有の HttpClient のまま**（下の表）
 - **ID 連携の上流・Back-Channel Logout の URL は対象外**（運用者が設定・登録するもので、動的登録では変えられない。#310）
 
 > **既定が閉じたので、内部のアドレスの `jwks_uri`・`sector_identifier_uri` を使っている配備は、`OutboundUrlAllowedHosts` に足すこと。**
+> **`jwks_uri` は、リダイレクトを追わなくなった**（#405）。**リダイレクトを返す `jwks_uri` を登録している RP は、最終の URL を登録し直すこと**（登録・`PUT` は `invalid_client_metadata` で断られ、登録済みのものは鍵を読めなくなる）。**プロキシは `ProxyForClientRegisteredUrls` の組になり、組のプロキシが無ければ OS の既定のプロキシも使わない**（以前は `ProxyForIdFederation`。既定はどちらも `Intranet`）
 > **ループバックの `jwks_uri` で試していた開発の手元は、`OutboundUrlAllowLoopbackHttp=true` にすること。**
 > **net10.0 版は、設定ファイルに無いキーを環境変数だけでは足せない**（2 節）。**キーをファイルに書いてから、環境変数で上書きする**（`container/CTS` は手元の `appsettings.json` をマウントする）
 
@@ -1424,7 +1425,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN RequestUris varchar(2000) NULL;
 | 分類 | 例 | HttpClient | プロキシの組（設定。既定） | クライアント証明書 | リダイレクト | 時間・大きさ（#375） | 行き先の制限（#376） |
 |---|---|---|---|---|---|---|---|
 | **ID 連携の上流・自己テスト** | 上流のトークン・UserInfo・Discovery・`jwks_uri`・SAML のメタデータ、自分自身（`localhost`）の口 | 共有（`Helper`） | `ProxyForIdFederation`（`Intranet`） | **持つ**（OP がクライアントとして使う） | 追う | 30 秒・1MB | なし（運用者が設定する宛先） |
-| **RP が登録した URL**（動的登録） | `sector_identifier_uri`。**`jwks_uri` は #405 の後**（今は上の共有の HttpClient で、組も `ProxyForIdFederation`） | 専用（`OutboundUrlPolicy`） | `ProxyForClientRegisteredUrls`（`Intranet`） | 持たない | **追わない** | 30 秒・1MB（`sector_identifier_uri` は 10 秒・64KB） | **あり**（内部のアドレスを断る） |
+| **RP が登録した URL**（動的登録） | `sector_identifier_uri`・`jwks_uri`（#405。以前は上の共有の HttpClient で、組も `ProxyForIdFederation`）・外部の `request_uri` | 専用（`OutboundUrlPolicy`） | `ProxyForClientRegisteredUrls`（`Intranet`） | 持たない | **追わない** | 30 秒・1MB（`sector_identifier_uri` は 10 秒・64KB） | **あり**（内部のアドレスを断る） |
 | **Back-Channel Logout** | RP の `backchannel_logout_uri` への POST | 専用（`BackChannelLogout`） | `ProxyForBackChannelLogout`（`Intranet`） | **持たない**（RP は `logout_token` の署名で OP を確かめる。以前は持っていた） | **追わない**（以前は追った） | 10 秒・1MB | なし（運用者が登録する宛先。動的登録では変えられない。#310） |
 | **外部ログイン** | Google・Microsoft のトークン・ユーザー情報 | 認証の部品の handler | `ProxyForExternalLogin`（`Internet`） | 持たない | 部品の既定 | 部品の既定 | なし |
 | 通知 | FCM・SMS（Twilio） | 各 SDK | **設定は効かない**（OS の既定のプロキシ） | — | — | 部品の既定 | — |

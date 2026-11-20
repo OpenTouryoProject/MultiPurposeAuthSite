@@ -473,7 +473,8 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/JwksUriTests.cs` | `RT-374` | **動的登録の `request_uris`**（`RT-374.1`）と、**登録した外部の `request_uri` を取りに行って使う**（`RT-374.2`。登録していない・署名の無い・取れないものは断る）（#374。OIDC Core 1.0 §6.2） |
 | `Tests/Issues/JwksUriTests.cs` | `RT-410` | **JWT Bearer のグラントの `assertion` を、`jwks_uri` の鍵**（`RT-410.1`）**と、PS256・ES256**（`RT-410.2`）**でも検証する。** `jwks_uri` に無い鍵・署名の合わないものは `invalid_client`（#410。RFC 7523 §3） |
 | `Tests/Issues/JwksUriTests.cs` | `RT-408` | **鍵を `jwks_uri` だけで登録したクライアントの、Request Object**（外部の `request_uri`・PAR の `request`。`RT-408.1`）**と CIBA の署名した要求**（`RT-408.2`。種データの `TestClient4_6`）**を、`jwks_uri` の鍵で検証する**（#408。OIDC Registration 1.0 §2） |
-| `Tests/Issues/JwksUriTests.cs` | `RT-375` | **1MB を超える `jwks_uri` の応答は読まない**（#375。共有の HttpClient の大きさの上限。`RT-375.1`。設定の読み方は単体テスト `Sts/OutboundHttpLimitsTests`） |
+| `Tests/Issues/JwksUriTests.cs` | `RT-375` | **1MB を超える `jwks_uri` の応答は読まない**（#375。HttpClient の大きさの上限。#405 からは、クライアントが登録した URL の専用の HttpClient の上限。`RT-375.1`。設定の読み方は単体テスト `Sts/OutboundHttpLimitsTests`） |
+| `Tests/Issues/JwksUriTests.cs` | `RT-405` | **リダイレクト（302）を返す `jwks_uri` は、追わずに読めないとして登録を断る**（#405。専用の HttpClient で取りに行く。先の URL で登録すれば通る。`RT-405.1`。足場は jwks のコンテナの `/redirect/`） |
 | `Tests/Issues/JwksUriTests.cs`・`SectorIdentifierTests.cs` | `RT-376` | **内部のアドレスの `jwks_uri`・`sector_identifier_uri` は、取りに行かずに断る**（#376。`RT-376.1`・`.2`。組み合わせは単体テスト `Sts/OutboundUrlPolicyTests`） |
 | `Tests/Issues/RequestObjectRawUtf8Tests.cs` | `RT-404` | **生の UTF-8 で書いた Request Object の日本語の `state` を、PAR が書き換えない**（#404。以前は「?」に変わった。`RT-404.1`。生の UTF-8 で書く部品 `RequestObjectBuilder.CreateRawUtf8Async`） |
 | `Tests/Issues/RequestObjectDateLikeValueTests.cs` | `RT-403` | **PAR・`/ros` に預けた Request Object の中の日付の形の `state` が、`/authorize` の応答で書き換わらない**（#403。以前は `11/18/2026 10:00:00` などに変わった。`RT-403.1`） |

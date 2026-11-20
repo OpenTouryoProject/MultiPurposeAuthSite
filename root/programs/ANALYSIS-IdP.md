@@ -3671,14 +3671,17 @@ MPAS は、この部品で応答を作り、IdP の鍵で署名して返す。�
 - **共有の HttpClient に、30 秒・1MB の上限を掛けた**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`。`OutboundHttpLimits`。`RT-375.1`）
 - Back-Channel Logout・`sector_identifier_uri` は、もともと要求ごとに 10 秒の上限があった
 
-### C-68. 動的登録で OP が取りに行く URL（`jwks_uri`・`sector_identifier_uri`）の行き先を、スキームでしか絞っていなかった **[Lib]** — **✅ 一部修正（#376。残りは Open棟梁 の対応の後）**
+### C-68. 動的登録で OP が取りに行く URL（`jwks_uri`・`sector_identifier_uri`）の行き先を、スキームでしか絞っていなかった **[Lib]** — **✅ 修正済み（#376・#405）**
 
 **`https` か、ループバックの `http` かしか見ていなかった**ので、登録できる相手が、OP の内側のアドレス（プライベート・リンクローカルなど）へ要求を出させられた。
 
 - **行き先のアドレスでも絞る**（`OutboundUrlPolicy`。**既定で内部のアドレスとループバックを断る**。開けるのは設定 `OutboundUrlAllowLoopbackHttp`・`OutboundUrlAllowedHosts`。`RT-376.1`・`.2`）
 - **登録の検査・温める前・クライアント認証で取り直す前**に掛ける
 - **`sector_identifier_uri` は専用の HttpClient**（リダイレクトを追わない。net10.0 版は接続の時点のアドレスでも判定する）
-- **残り（#376 の本文に挙げたもの）**：`jwks_uri` を取りに行く HttpClient は、まだ専用のものにできていない。**Open棟梁 の `RemoteJwkSetStore` に HttpClient を渡す口が入った**（OpenTouryo#707。#412 で取り込んだ）ので、**#405 で専用の HttpClient を渡す**（口は静的プロパティで、ID 連携の上流の `jwks_uri` にも掛かるので、渡し方を #405 で決める）
+- **`jwks_uri` も専用の HttpClient で取りに行く**（#405。`RT-405.1`）。#376 では、取りに行く前の判定だけで、取得は共有の HttpClient（リダイレクトを追う）だった
+  - **Open棟梁 の `RemoteJwkSetStore` に、呼び出しごとに HttpClient を渡す**（OpenTouryo#718。OpenTouryo#720 で入った版を取り込んだ）。**静的プロパティ（OpenTouryo#707）は使わない** — プロセス全体に効き、**ID 連携の上流の `jwks_uri`（`IdFederationJwks`。運用者が設定し、内部のアドレスに居る配備がある）まで絞ってしまう**
+  - **渡す所**：登録のときに温める（`WarmUpJwksUriAsync`）、起動のときに温める（`JwksUriWarmUp`）、知らない `kid` の取り直しと背景の補充（`CmnEndpoints.KeysFromJwksUri`）。**専用の HttpClient を作れなければ取りに行かない**（共有の HttpClient に倒さない）
+  - **取れた鍵の控えは、Open棟梁 が URL ごとに共有する**（取得中のまとめは URL と HttpClient の組ごと）。**登録の確かめ（`HasKeysInCache`）は、どの HttpClient で取れた鍵かを見ない**ので、**同じ URL を共有の HttpClient（ID 連携の上流の `jwks_uri`）が先に控えに入れていれば、その URL の登録は取り直さずに通る**（行き先の判定 `IsAllowed` は掛かる。控えはプロセスの中に在るので、更新の前の版で取れた鍵は残らない）。上流と同じ URL を登録するクライアントに限られ、その鍵は運用者が信頼した上流の鍵なので、残す（#405 の別モデルのレビュー）
 
 ### C-67. PAR が、署名付き Request Object の payload を us-ascii で読み、ASCII でない文字が「?」に変わっていた **[Lib]** — **✅ 修正済み（#404）**
 

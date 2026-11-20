@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=805a664f-ac06-4aef-bd29-2b92360c36d1&code=bogus
+1. GET /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=805a664f-ac06-4aef-bd29-2b92360c36d1&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=805a664f-ac06-4aef-bd29-2b92360c36d1&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -12549,7 +12549,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。****以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。****既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。 |
+| 観点 | **OP が外へ出す要求（共有の HttpClient。#405 からは、`jwks_uri` を取りに行く専用の HttpClient も同じ設定）に、時間と大きさの上限を掛けた。****以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。****既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。 |
 | 根拠 | 設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375 |
 | テスト | `RT37501_1MBを超えるjwks_uriの応答は読まない` |
 
@@ -13412,6 +13412,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - PAR : HTTP 201
 - PAR : 応答の state
 - /ros : 応答の state
+
+## RT-405.1 動的登録の `jwks_uri` が**リダイレクト（302）を返す**と、追わずに読めないとして `400` ＋ `invalid_client_metadata` で断る。**同じ JWK Set を、リダイレクトの先の URL で登録すれば通る**
+
+| | |
+|---|---|
+| 観点 | **クライアントが登録した `jwks_uri` は、専用の HttpClient（リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する）で取りに行く。****以前は共有の HttpClient で取りに行き、リダイレクトを追っていた**（取りに行く前に判定した後で、別の行き先に移れた）。 |
+| 根拠 | 設計：OutboundUrlPolicy の remarks / #376 / #405 |
+| テスト | `RT40501_リダイレクトするjwks_uriは追わずに断る` |
+
+**手順**
+
+1. 足場の確かめ：リダイレクトの URL は 302 を返し、先は同じ JWK Set の URL
+1. リダイレクトを返す jwks_uri で登録する
+1. 対照：同じ JWK Set を、リダイレクトの先の URL で登録すれば通る
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 302
+- 先は JWK Set の URL
+- HTTP の状態は 400
+- error は invalid_client_metadata
+- 断る理由は「読めない」
+- HTTP の状態は 201
 
 ## RT-408.1 鍵を `jwks_uri` だけで登録したクライアントの、署名した Request Object を、`jwks_uri` の鍵で検証して受ける（外部の `request_uri`（`/ros` と同じ検証）と、PAR の `request`）。`jwks_uri` に無い鍵・署名が合わないものは断る
 

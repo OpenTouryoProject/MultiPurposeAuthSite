@@ -42,6 +42,7 @@
 //*  2026/11/19  玄人 幸道         RT-408.1・.2 に、同じ種類の鍵でも署名が合わないものを断ることを足した（#408。別モデルのレビューの指摘）
 //*  2026/11/19  玄人 幸道         RT-410.1・.2（JWT Bearer グラントの assertion を jwks_uri の鍵・PS256・ES256 で検証する）を足した（#410）
 //*  2026/11/20  玄人 幸道         RT-405.1（リダイレクトを返す jwks_uri は、追わずに断る）を足した（#405）
+//*  2026/11/20  玄人 幸道         RT-375.1 の観点の文面に、jwks_uri が専用の HttpClient（同じ上限）で取りに行くようになったことを書いた（#405）
 //**********************************************************************************
 
 using System;
@@ -75,7 +76,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-309.3`** | **同じ URL の鍵を入れ替えると、`PUT` で読み直して新しい鍵で通る**（**読み直すまではキャッシュが効く**） |
     /// | **`RT-309.4`** | **`software_statement` の中だけで主張された `jwks_uri`** でも登録でき、**1 回目のクライアント認証から通る**（**段階 2**。段階 1 では `400` だった） |
     /// | **`RT-363.1`** | **登録を直さずに `jwks_uri` の鍵を入れ替えても、新しい鍵（ヘッダに知らない `kid`）が 1 回目から通る**（OIDC Core 1.0 §10.1.1 の準用。#363） |
-    /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。共有の HttpClient の大きさの上限。#375） |
+    /// | **`RT-375.1`** | **1MB を超える `jwks_uri` の応答は読まず、登録を `400` で断る**（同じ鍵を小さく置けば登録できる。HttpClient の大きさの上限。#375。#405 からは専用の HttpClient の上限） |
     /// | **`RT-374.1`** | **動的登録の `request_uris`**（外部の `request_uri` を取りに行ってよい先）を受けて返し、`PUT` で省けば消える。**内部のアドレス・相対の値・6 件以上は `400`**（#374） |
     /// | **`RT-374.2`** | **登録した `request_uris` の外部の `request_uri` は、取りに行って検証し、その Request Object で認可コードまで進む。** 登録していない URL は `request_uri_not_supported`、署名の無いものは `invalid_request_object`、取れないものは `invalid_request_uri`（どれもエラー画面。#374） |
     /// | **`RT-376.1`** | **内部のアドレス（プライベート・リンクローカル・ユニーク ローカル）の `jwks_uri` は、`400` ＋ `invalid_client_metadata`**（取りに行かない。#376） |
@@ -629,7 +630,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-375.1",
                     "`jwks_uri` の応答が**1MB を超える**と読まず、登録を `400` ＋ `invalid_client_metadata` で断る。**同じ鍵を小さく置けば登録できる**",
-                    "**OP が外へ出す要求（共有の HttpClient）に、時間と大きさの上限を掛けた。**"
+                    "**OP が外へ出す要求（共有の HttpClient。#405 からは、`jwks_uri` を取りに行く専用の HttpClient も同じ設定）に、時間と大きさの上限を掛けた。**"
                     + "**以前は何も設定しておらず（.NET の既定の 100 秒・大きさの上限なし）、大きな応答を返されるとメモリを使われた。**"
                     + "**既定は 30 秒・1MB**（設定 `OutboundHttpTimeoutSeconds`・`OutboundHttpMaxResponseBytes`）。",
                     "設計：OutboundHttpLimits の remarks / RFC 7591 §3.2.2 / #375");
