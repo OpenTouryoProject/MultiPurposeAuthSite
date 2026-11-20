@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2026/11/18  玄人 幸道         要求先の分類ごとにプロキシの組を選ぶ口（ParseProxyType・GetProxy・UsesProxy・For*）と None を足した（#406）
+//*  2026/11/20  玄人 幸道         jwks_uri が ForClientRegisteredUrls の組を使うようになったことを書いた（#405）
 //**********************************************************************************
 
 using System;
@@ -183,13 +184,13 @@ namespace MultiPurposeAuthSite.Network
             return type != EnumProxyType.None;
         }
 
-        /// <summary>ID 連携の上流・自己テスト（共有の HttpClient。#405 までは `jwks_uri` も）の組（既定 `Intranet`）</summary>
+        /// <summary>ID 連携の上流（その `jwks_uri` も）・自己テスト（共有の HttpClient）の組（既定 `Intranet`）</summary>
         public static EnumProxyType ForIdFederation
         {
             get { return CreateProxy.ParseProxyType(Config.ProxyForIdFederation, EnumProxyType.Intranet); }
         }
 
-        /// <summary>RP が登録した URL（`sector_identifier_uri`。#405 の後は `jwks_uri` も）の組（既定 `Intranet`）</summary>
+        /// <summary>RP が登録した URL（`sector_identifier_uri`・`jwks_uri`・外部の `request_uri`。`jwks_uri` は #405 から）の組（既定 `Intranet`）</summary>
         public static EnumProxyType ForClientRegisteredUrls
         {
             get { return CreateProxy.ParseProxyType(Config.ProxyForClientRegisteredUrls, EnumProxyType.Intranet); }

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#309 の段階 2）
 //*  2026/11/18  玄人 幸道         起動のときに温める jwks_uri も、行き先のアドレスを判定するようにした（#376）
+//*  2026/11/20  玄人 幸道         起動のときに温める jwks_uri も、専用の HttpClient（OutboundUrlPolicy.HttpClient）で取りに行くようにした（OpenTouryo#718。#405）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -38,6 +39,7 @@ using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -113,9 +115,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             List<string> urls = JwksUriWarmUp.Collect();
             int warmed = 0;
 
+            //  **専用の HttpClient で取りに行く**（#405。リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する）。
+            //    **作れなければ例外になり、温めをやめる**（共有の HttpClient には倒さない。`StartInBackground` がログに残す）。
+            HttpClient client = urls.Count == 0 ? null : OutboundUrlPolicy.HttpClient;
+
             foreach (string url in urls)
             {
-                if (await RemoteJwkSetStore.WarmUpAsync(url))
+                if (await RemoteJwkSetStore.WarmUpAsync(url, client))
                 {
                     warmed++;
                 }

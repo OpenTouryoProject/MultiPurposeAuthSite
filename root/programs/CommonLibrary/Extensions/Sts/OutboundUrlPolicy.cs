@@ -31,6 +31,7 @@
 //*  2026/11/18  玄人 幸道         専用の HttpClient にも、時間と大きさの上限を掛けるようにした（#375）
 //*  2026/11/18  玄人 幸道         プロキシの組を、設定（ProxyForClientRegisteredUrls）で選ぶようにした（#406）
 //*  2026/11/18  玄人 幸道         専用の HttpClient を作るときの例外を覚えないようにした（LazyThreadSafetyMode.PublicationOnly。#406）
+//*  2026/11/20  玄人 幸道         jwks_uri の取得にも、この HttpClient を渡すようになったことを書いた。振る舞いは変えていない（#405）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -64,8 +65,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// - **名前解決できなければ断る**
     /// - **取りに行くときは `HttpClient`（このクラスの）を使う。** リダイレクトを追わず、**net10.0 版は接続の時点のアドレスでも判定する**
     ///   （判定の後に名前解決をやり直して、行き先を変えられないように）。**net48 版の `HttpClientHandler` には接続の時点の口が無い**ので、名前解決した結果の判定に留まる
-    /// - **`jwks_uri` の取得は Open棟梁 の `RemoteJwkSetStore`（共有の HttpClient）が行う**ので、取りに行く前の判定だけを掛ける
-    ///   （接続の時点の判定・リダイレクトは、Open棟梁 で HttpClient を渡せるようにしてから）
+    /// - **`jwks_uri` の取得は Open棟梁 の `RemoteJwkSetStore` が行い、この `HttpClient` を呼び出しごとに渡す**（#405。OpenTouryo#718）。
+    ///   **ID 連携の上流の `jwks_uri`（`IdFederationJwks`。運用者が設定する）には渡さない**（共有の HttpClient のまま。上流が内部のアドレスに居る配備がある）。
+    ///   **取れた鍵の控えは、Open棟梁 が URL ごとに共有する**（取得中のまとめは、URL と HttpClient の組ごと）
     /// </remarks>
     public static class OutboundUrlPolicy
     {

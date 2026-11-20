@@ -36,6 +36,7 @@
 //*  2026/11/13  玄人 幸道         PUT で authorization_signed_response_alg も全置換する（#370）
 //*  2026/11/18  玄人 幸道         jwks_uri を温める前に、行き先のアドレスを判定するようにした（#376）
 //*  2026/11/19  玄人 幸道         PUT で request_uris を要求から作り直すようにした（#374）
+//*  2026/11/20  玄人 幸道         jwks_uri を温めるとき、専用の HttpClient（OutboundUrlPolicy.HttpClient）で取りに行くようにした（OpenTouryo#718。#405）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -53,6 +54,7 @@ using MultiPurposeAuthSite.Util.Sts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -115,7 +117,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     //  **取れなくても例外にしない**（`RemoteJwkSetStore` が飲む）。
                     //    **断るのは `Validate`** である。
-                    await RemoteJwkSetStore.WarmUpAsync(url);
+                    //  **専用の HttpClient で取りに行く**（#405。リダイレクトを追わず、net10.0 版は接続の時点のアドレスも判定する）。
+                    //    **作れなければ取りに行かない**（共有の HttpClient には倒さない。`Validate` が「読めない」で断る）。
+                    HttpClient client;
+
+                    try
+                    {
+                        client = OutboundUrlPolicy.HttpClient;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logging.MyOperationTrace(string.Format(
+                            "The HttpClient for the client-registered URLs could not be created. ({0})", ex.GetType().Name));
+                        return;
+                    }
+
+                    await RemoteJwkSetStore.WarmUpAsync(url, client);
                 }
             }
         }
