@@ -170,8 +170,17 @@ cd ..\CTS
   - **`oidcc-dynamic` の、トークン エンドポイントまで進むモジュール**（`oidcc-server`・`oidcc-idtoken-rs256`・`oidcc-refresh-token`・`oidcc-refresh-token-rp-key-rotation`・`oidcc-registration-jwks-uri`・`oidcc-redirect-uri-query-OK`・`oidcc-request-uri-signed-rs256`）：動的登録したクライアントも `private_key_jwt` で、**トークン エンドポイントへの要求の `aud` をトークン エンドポイントの URL にする**ので、同じ理由（#398）で `invalid_client` になる。**`oidcc-ensure-client-assertion-with-iss-aud-succeeds`**（`aud` を issuer にする）**は通る。****`oidcc-request-uri-signed-rs256` は、外部の `request_uri` の認可要求は通り（#374）、トークン エンドポイントで止まる**
   - **FAPI-CIBA は落ちない**：CIBA の流れ（`/ciba_authz` と、`/token` の CIBA のグラント）は以前のまま、トークン エンドポイントの URL も受ける（RFC 10070 は CIBA を直接の対象にしていない。#398）
   - FAPI 1.0 Advanced の `test-array-as-audience-for-client-JWT-assertion`：client_assertion の `aud` を `[issuer, ダミー]` にして、受けることを求める。**RFC 10070 §4（RFC 7523 §3 の 3 を置き換えた）は、issuer を唯一の値としない JWT を断ることを求める**ので、MPAS は `invalid_client` で断る（モジュールの求める受け方は、置き換えられた RFC 7523 §3 の 3（「含む」）に沿う。#397）
+  - **#398 で止まるモジュールの、トークン エンドポイントより後ろの判定は、確かめてある**（2026-11-21。#415）。
+    上の FAPI 1.0 Advanced の 17 件（`aud` の受け方そのものを確かめる 3 件を除く）と `oidcc-dynamic` の 7 件を、**`aud` を一時的に緩めた手元の版**で回した：**PASSED 22・REVIEW 1・WARNING 1**（REVIEW は `par-attempt-reuse-request_uri` のエラー画面の写し、WARNING は下の「WARNING の理由」）。
+    Conformance Suite は、release-v5.3.4 が最新で、master でも `aud` の既定はトークン エンドポイントの URL のまま（2026-11-21）。**版を上げても回せない**ので、リリースの前に確かめ直すなら、同じ手順で回す：
+    1. `root\programs\CommonLibrary\TokenProviders\CmnEndpoints.ClientAuthentication.cs` の `ClientAssertionAudiences` の最後の `return` に、トークン エンドポイントの URL（`tokenUrl`）を足す（**コミットしない**。fapi2 の登録は別の分岐で issuer だけのまま）
+    2. `..\E2E\1_PublishIdP.ps1` で発行し、`fapi1-adv-private-key-jwt-par`・`oidcc-dynamic` を回す
+    3. **戻して発行し直す**（発行物は E2E と共用。戻さないと、E2E のコンテナに緩い版が残る）。ワーキング ツリーがクリーンなことを確かめる
+- **WARNING の理由**
+  - `attempt-reuse-authorisation-code-after-one-second`（FAPI 1.0 Advanced）・`attempt-reuse-authorization-code-after-one-second`（FAPI 2.0 の 3 プラン）：
+    認可コードの 2 回目の引き換えは断るが、**1 回目で出したアクセス トークンが失効しない**（`EnsureHttpStatusCodeIs4xx`。RFC 6749 §4.1.2 の SHOULD）。#421（[`ANALYSIS-IdP.md`](../../root/programs/ANALYSIS-IdP.md) の E-13 と同じ欠け）
 - **対応を見送った機能のモジュール**
-  - `oidcc-userinfo-rs256`（`oidcc-dynamic`）：**署名した UserInfo の応答**（OIDC Core 1.0 §5.3.2）を求める。**MPAS は対応を見送った**（任意の機能で、FAPI は求めない。`ANALYSIS-IdP.md` の D-17。#414）ので、
+  - `oidcc-userinfo-rs256`（`oidcc-dynamic`）：**署名した UserInfo の応答**（OIDC Core 1.0 §5.3.2）を求める。**MPAS は対応を見送った**（任意の機能で、FAPI は求めない。[`ANALYSIS-IdP.md`](../../root/programs/ANALYSIS-IdP.md) の D-17。#414）ので、
     Discovery に `userinfo_signing_alg_values_supported` が無く、`CheckDiscEndpointUserinfoSigningAlgValuesSupportedContainsRS256` で FAILED になる。
     **`oidcc-dynamic` の FAILED は、これと、上の #398 で止まる 7 つで全部**（2026-11-20）
 - **飛ばされるのが正しいモジュール**（SKIPPED。`oidcc-dynamic`）
