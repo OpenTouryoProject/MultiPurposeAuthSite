@@ -1,4 +1,4 @@
-﻿# BUILDING.md — ビルドの実行と判定
+﻿# 12_BUILDING.md — ビルドの実行と判定
 
 対象: `root/programs`（net48 版 / net10.0 版）
 配置: `root`
@@ -12,10 +12,10 @@
 > | 内容 | 一次情報 |
 > |---|---|
 > | 各プロジェクトの構成 | 各フォルダの `ANALYSIS.md` |
-> | 設定ファイルの扱い | [`CONFIGURATION.md`](CONFIGURATION.md) |
-> | テストの実行と判定 | [`TESTING.md`](TESTING.md) |
-> | bat / ps1 の書き方 | [`CODING.md`](CODING.md) |
-> | 手順だけ知りたい | [`CHEATSHEET.md`](CHEATSHEET.md) |
+> | 設定ファイルの扱い | [`13_CONFIGURATION.md`](13_CONFIGURATION.md) |
+> | テストの実行と判定 | [`14_TESTING.md`](14_TESTING.md) |
+> | bat / ps1 の書き方 | [`11_CODING.md`](11_CODING.md) |
+> | 手順だけ知りたい | [`10_CHEATSHEET.md`](10_CHEATSHEET.md) |
 
 ---
 
@@ -146,7 +146,7 @@ OpenTouryo の `root/programs/CS/z_Common.bat` の移植。**足並みを揃え�
 > `DefineConstants` に `NETFX` が無く、net48 が通らなかった。修正済み）。
 > **構成を変えたら、両方で建てて確かめること。**
 
-> **このファイルは純 ASCII にすること。** 理由は [`CODING.md`](CODING.md) 4 節。
+> **このファイルは純 ASCII にすること。** 理由は [`11_CODING.md`](11_CODING.md) 4 節。
 
 ## 6. nuget.exe と packages.config
 
@@ -343,7 +343,7 @@ dotnet build <sln> -c Debug -v:detailed | Select-String "解決されたファ�
 
 > **サイトを動かしたままビルドすると、この残骸ができる。**
 > E2E は起動と停止を行うが、**落ちたサイトが残ると `bin` を掴み続ける**。
-> 詳細 → [`TESTING.md`](TESTING.md) 5 節
+> 詳細 → [`14_TESTING.md`](14_TESTING.md) 5 節
 
 ### カレント ディレクトリ探索を切る環境では、取得が空振りする
 
@@ -377,7 +377,7 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 
 ビルドは通るが、起動には `appsettings.json` / `app.config` が要る。
 どちらも `.gitignore` 済み。雛形（`_appsettings.json` / `_app.config`）から作る。
-詳細は [`CONFIGURATION.md`](CONFIGURATION.md)。
+詳細は [`13_CONFIGURATION.md`](13_CONFIGURATION.md)。
 
 ### `*.bak` と `*.log` は消える
 

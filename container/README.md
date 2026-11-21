@@ -22,11 +22,11 @@
 **プロジェクト名は、各 `docker-compose.yml` の `name:` で決めてある**（フォルダ名に依らない）。
 **E2E のテストは、この名前（ラベル）でコンテナを探す**（`ContainerTargets`）。
 
-**手順は `root\TESTING.md` 1 節**、コマンドだけなら `root\CHEATSHEET.md` 0 節を見ること。
+**手順は `root\14_TESTING.md` 1 節**、コマンドだけなら `root\10_CHEATSHEET.md` 0 節を見ること。
 
 ## バッチ（`*.bat`）は純 ASCII（#342）
 
-**バッチの `echo` とコメントは英語で書く**（`root\CODING.md` 4 節）。
+**バッチの `echo` とコメントは英語で書く**（`root\11_CODING.md` 4 節）。
 cmd は、バッチをコンソールのコード ページで読む。**日本語の Windows の既定（932）では、UTF-8 の日本語が化け、
 `rem` の途中から先がコマンドとして実行されることもある**（`cmd /c` では再現しない）。
 **日本語の説明は、ここ（と各 `README.md`）に書く。**

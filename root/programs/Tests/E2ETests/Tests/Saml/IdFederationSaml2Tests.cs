@@ -659,7 +659,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 r.Note("**鍵の順が入れ替わっても通る**ことは、歯抜けで測った"
                     + "（上流の 1 本目を「署名に使っていない証明書」にすると、"
-                    + "**2 本目で検証して通る**。`TESTING.md`）。");
+                    + "**2 本目で検証して通る**。`14_TESTING.md`）。");
 
                 r.Done();
             }

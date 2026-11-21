@@ -112,7 +112,7 @@ namespace MultiPurposeAuthSite
                     "The shared HttpClient could not be initialized at startup. ({0})", ex.GetType().Name));
             }
 
-            // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
+            // **開発向けの設定が残っていないかを確かめる**（#219。13_CONFIGURATION.md 11 節）。
             //   起動は止めない。警告を OPERATION ログに出すだけ。
             ProductionCheck.WarnIfRisky();
 

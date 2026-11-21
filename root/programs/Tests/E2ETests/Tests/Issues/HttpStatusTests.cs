@@ -1170,7 +1170,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Target(client.Target.DisplayName + " / ユーザのトークンは認可コード フローで得る");
                 r.Note("成功（200 と OK）は E2E では測れない。"
                     + "2FA を有効にした利用者のコードが要るが、共用のテスト ユーザで 2FA を有効にすると"
-                    + "他の全テストのサインインが変わるため。成功経路は手で確かめる（CHEATSHEET.md）。");
+                    + "他の全テストのサインインが変わるため。成功経路は手で確かめる（10_CHEATSHEET.md）。");
 
                 r.Step("(1) Authorization ヘッダを付けずに送る");
 

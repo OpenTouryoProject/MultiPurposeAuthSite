@@ -41,7 +41,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
+# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。11_CODING.md 5 節）
 $here = Split-Path -Parent $PSCommandPath
 $sqlRoot = Join-Path $here '..\..\root\files\resource\MultiPurposeAuthSite\Sql'
 
@@ -71,7 +71,7 @@ foreach ($t in $targets)
 
     New-Item -ItemType Directory -Force $dstDir | Out-Null
 
-    # 既定のエンコードは 5.1 が ANSI、7 が UTF-8 なので明示する（CODING.md 5 節）
+    # 既定のエンコードは 5.1 が ANSI、7 が UTF-8 なので明示する（11_CODING.md 5 節）
     $text = Get-Content -Path $src -Raw -Encoding UTF8
 
     if ($t.Prefix)

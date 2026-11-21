@@ -6,7 +6,7 @@
 - 原本：https://gitlab.com/openid/conformance-suite（ビルド済みのイメージ。`docker-compose-prebuilt.yml` を元にした）
 - **版は固定する**（`release-v5.3.4`）。上げるときは、`docker-compose.yml` の server と nginx のタグを、同じ版に手で上げる
 - **認定（certification）を取るためのものではない。** 手元で回して、不適合を見つけて直すためのもの
-- **いつ回すか・結果の仕分け**は `QUALITY.md` 2 節と `root/TESTING.md` 5 節「適合性テスト」（リリースの前に全プラン、適合性テストで見つかった不適合を直すときにそのプラン）
+- **いつ回すか・結果の仕分け**は `QUALITY.md` 2 節と `root/14_TESTING.md` 5 節「適合性テスト」（リリースの前に全プラン、適合性テストで見つかった不適合を直すときにそのプラン）
 
 ## 手順
 
@@ -77,7 +77,7 @@ cd ..\CTS
 
 - **絞らないと、FAPI 2.0 の `happy-flow`・`ensure-holder-of-key-required` が FAILED になる**（`RequireOnlyBCP195RecommendedCiphersForTLS12`。CBC のスイートで繋がる）
 - **ほかのプランは変わらない**（Conformance Suite は GCM を話す）。OP が外へ出す TLS（Back-Channel Logout の POST）にも効く
-- 配備で絞る方法（Linux・Windows・リバース プロキシ）は [`CONFIGURATION.md`](../../root/CONFIGURATION.md)「TLS の暗号スイートを絞る」
+- 配備で絞る方法（Linux・Windows・リバース プロキシ）は [`13_CONFIGURATION.md`](../../root/13_CONFIGURATION.md)「TLS の暗号スイートを絞る」
 
 ### FAPI の鍵・クライアント証明書と、MTLS（`Prepare.ps1`）
 
@@ -185,7 +185,7 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 
 - 終了コード：0（FAILED・INTERRUPTED・時間切れが無い）／1（どれかがある）／2（前提の誤り）
 - **WARNING・REVIEW は失敗に数えない**（Conformance Suite の判定のまま、結果に出す）
-- PowerShell 5.1・7 の両方で動く（自己署名の証明書の扱いを分けている。`root\CODING.md` 5 節）
+- PowerShell 5.1・7 の両方で動く（自己署名の証明書の扱いを分けている。`root\11_CODING.md` 5 節）
 
 ## 生成物（Git の管理外）
 

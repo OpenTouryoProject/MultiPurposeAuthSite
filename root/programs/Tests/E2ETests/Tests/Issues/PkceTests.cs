@@ -202,7 +202,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         ? "**返らなかった**（error=" + (token.Error ?? "なし") + "）" : "あり（値は伏せる）");
 
                 r.Note("**RequirePkceS256=true のときに拒否すること**は、E2E では測っていない"
-                    + "（設定ファイルを変えて起動し直す必要があるため）。設定は CONFIGURATION.md を参照。");
+                    + "（設定ファイルを変えて起動し直す必要があるため）。設定は 13_CONFIGURATION.md を参照。");
 
                 r.Done();
             }
@@ -240,7 +240,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         ? "**返らなかった**（error=" + (authz.Error ?? "なし") + "）" : "あり（値は伏せる）");
 
                 r.Note("**RequirePkce=true のときに invalid_request で拒否すること**は、E2E では測っていない"
-                    + "（設定ファイルを変えて起動し直す必要があるため）。設定は CONFIGURATION.md を参照。");
+                    + "（設定ファイルを変えて起動し直す必要があるため）。設定は 13_CONFIGURATION.md を参照。");
 
                 r.Note("**Device AuthZ / CIBA は、この判定の対象外**"
                     + "（認可エンドポイントを通らないため）。EX-7 / EX-8 は影響を受けない。");

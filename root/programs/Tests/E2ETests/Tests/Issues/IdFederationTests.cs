@@ -52,7 +52,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// RT-140. ID フェデレーション（他の IdP へ委譲するサインイン）。
     /// </summary>
     /// <remarks>
-    /// **この経路は、長いあいだ E2E で駆動していなかった**（`TESTING.md` 5 節）。
+    /// **この経路は、長いあいだ E2E で駆動していなかった**（`14_TESTING.md` 5 節）。
     /// **上流の IdP が要る**ためで、#250 の段階 2〜4 でコンテナとして建てられるようにした。
     ///
     /// **上流は `container/E2E/` のコンテナ**（既定 `https://localhost:44301`）で、

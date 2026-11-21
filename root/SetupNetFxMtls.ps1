@@ -84,7 +84,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）
+# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。11_CODING.md 5 節）
 if (-not $CerPath)
 {
     $CerPath = Join-Path $env:TEMP 'mpas-e2e-ca.cer'
@@ -132,7 +132,7 @@ function Assert-SubjectsMatchSource
             continue
         }
 
-        # 既定のエンコードは 5.1 が ANSI、7 が UTF-8 なので明示する（CODING.md 5 節）
+        # 既定のエンコードは 5.1 が ANSI、7 が UTF-8 なので明示する（11_CODING.md 5 節）
         $text = Get-Content -Path $full -Raw -Encoding UTF8
         $m = [regex]::Match($text, ($t.Name + '\s*=\s*"(?<dn>[^"]+)"'))
 
@@ -179,7 +179,7 @@ function Show-State
         {
             foreach ($c in $found | Sort-Object Subject)
             {
-                # Format-Table は 5.1 が全角の幅を誤るので使わない（CODING.md 5 節）
+                # Format-Table は 5.1 が全角の幅を誤るので使わない（11_CODING.md 5 節）
                 Write-Output ("      " + $c.Subject +
                     "  秘密鍵 : " + $c.HasPrivateKey +
                     "  期限 : " + $c.NotAfter.ToString('yyyy-MM-dd') +

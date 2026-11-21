@@ -165,7 +165,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string email = name + "@example.com";
                 string password1 = admin.Config.Get("TestUserPWD");
 
-                // **新しいパスワードは、構成ファイルの値から作る**（`TESTING.md` 9 節）。
+                // **新しいパスワードは、構成ファイルの値から作る**（`14_TESTING.md` 9 節）。
                 string password2 = password1 + "Zz9";
 
                 TestReport r = this.Report("RT-294.72",
@@ -248,7 +248,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     await UsersAdmin.DeleteByUserNameAsync(admin, name);
                 }
 
-                r.Note("**値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`TESTING.md` 9 節）。");
+                r.Note("**値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`14_TESTING.md` 9 節）。");
 
                 r.Done();
             }

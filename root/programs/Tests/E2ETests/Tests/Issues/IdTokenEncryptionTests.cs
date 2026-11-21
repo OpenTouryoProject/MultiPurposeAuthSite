@@ -277,7 +277,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <summary>JWK Set の RSA の鍵の kid を引く（#355）</summary>
         /// <param name="jwkSet">JWK Set</param>
         /// <returns>kid（無ければ null）</returns>
-        /// <remarks>**RSA の鍵は 1 本で、RS* と PS* の 6 つが共有する**（kid も同じ。`CONFIGURATION.md`）。</remarks>
+        /// <remarks>**RSA の鍵は 1 本で、RS* と PS* の 6 つが共有する**（kid も同じ。`13_CONFIGURATION.md`）。</remarks>
         private static string RsaKid(JsonElement jwkSet)
         {
             JsonElement keys;

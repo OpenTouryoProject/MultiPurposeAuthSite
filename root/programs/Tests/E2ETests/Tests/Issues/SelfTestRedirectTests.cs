@@ -61,7 +61,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **消した分岐が通していたのは、こちらの形**だった。
     ///
     /// **識別子が `RT-C10` なのは、公開の Issue を持たない項目のため**である
-    /// （`TESTING.md` 5 節。`ANALYSIS-IdP.md` の番号で辿る）。
+    /// （`14_TESTING.md` 5 節。`ANALYSIS-IdP.md` の番号で辿る）。
     /// </remarks>
     public class SelfTestRedirectTests : TargetTestBase
     {

@@ -285,7 +285,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <returns>秒数</returns>
         /// <remarks>
-        /// **環境変数が構成ファイルより強い**（`FxContainerization`。`CONFIGURATION.md` 2 節）。
+        /// **環境変数が構成ファイルより強い**（`FxContainerization`。`13_CONFIGURATION.md` 2 節）。
         /// **`test.ps1` は環境変数で渡す**ので、**そちらを先に見る** —
         /// **構成ファイルだけを見ると、通しの実際の設定と食い違う**（実測で踏んだ）。
         /// </remarks>

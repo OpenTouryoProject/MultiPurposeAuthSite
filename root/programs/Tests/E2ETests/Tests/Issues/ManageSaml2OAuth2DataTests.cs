@@ -719,7 +719,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         ///
         /// **E2E は鍵を設定した状態で回している**（`test.ps1` の `UserStoreSecretPassword`）。
         /// **DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して確かめる
-        /// （手順は `TESTING.md`）。
+        /// （手順は `14_TESTING.md`）。
         /// </remarks>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]

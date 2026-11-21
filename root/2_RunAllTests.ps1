@@ -55,7 +55,7 @@
 
 .PARAMETER NetFxMtls
     net48 版でも mTLS のテスト（FA-6）を回す（test.ps1 に渡す。#226）。
-    **準備が要る**（TESTING.md「net48 版の mTLS」）。付けなければ、FA-6 は net10.0 版だけを測る。
+    **準備が要る**（14_TESTING.md「net48 版の mTLS」）。付けなければ、FA-6 は net10.0 版だけを測る。
 
 .PARAMETER DPoPNonce
     **DPoP の nonce のテスト（RT-311.13 / RT-311.14）専用。**
@@ -244,7 +244,7 @@ function Get-TrxResults([string]$path)
         #   TC-n.n        基本テストケース（input.md 由来）
         #   EX-n.n        拡張仕様（Revocation / Introspection / Device / Hybrid など）
         #   RT-<Issue>.n  個別 Issue の回帰
-        #   RT-C<n>.n     **公開の Issue を持たない項目**の回帰（ANALYSIS-IdP.md の番号。TESTING.md 5 節）
+        #   RT-C<n>.n     **公開の Issue を持たない項目**の回帰（ANALYSIS-IdP.md の番号。14_TESTING.md 5 節）
         #   FA-n.n        FAPI（クライアント登録ごとに通る経路）
         #   21-n.n        OAuth 2.1（許されない経路の抑止）
         #   SA-n.n        SAML2（Web Browser SSO。#275）

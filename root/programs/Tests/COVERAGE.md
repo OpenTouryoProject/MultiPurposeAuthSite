@@ -3,7 +3,7 @@
 対象：E2E が叩く 2 つのサイト（net10.0 版・net48 版）と共通ライブラリ。
 
 **`COVERAGE:BEGIN` から `COVERAGE:END` の間は手で直さない。** [`CoverageReport.ps1`](../../CoverageReport.ps1) が書く。
-測り方は [`TESTING.md`](../../TESTING.md) 1 節「カバレッジを測る」。
+測り方は [`14_TESTING.md`](../../14_TESTING.md) 1 節「カバレッジを測る」。
 
 > **カバレッジは判定に使わない。** どこを書き足すかを選ぶための指針である（[`QUALITY.md`](../../../QUALITY.md) 6 節）。
 > **通ったことは、確かめたことを意味しない。** 行を通っても、結果を検証しているとは限らない。

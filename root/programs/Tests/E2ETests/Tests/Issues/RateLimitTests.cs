@@ -65,7 +65,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **`RT-305.6` は、既定の通しでは Skip する。**
     /// **送信元ごとの上限は、通しの全ケースが `127.0.0.1` を共有する**ため、
     /// **`test.ps1` が 0（制限しない）を渡している。**
-    /// **単独で回して測る**（`TESTING.md`）。
+    /// **単独で回して測る**（`14_TESTING.md`）。
     /// </remarks>
     public class RateLimitTests : TargetTestBase
     {
@@ -235,7 +235,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// **既定の通しでは Skip する**（`test.ps1` が `RateLimitPerIpPermits=0` を渡す）。
         /// **通しの全ケースが `127.0.0.1` を共有する**ので、
         /// **有効にすると、無関係なケースが 429 を受ける。**
-        /// **単独で回して測る**（`TESTING.md`）。
+        /// **単独で回して測る**（`14_TESTING.md`）。
         /// </remarks>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
@@ -308,7 +308,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**この上限は、送信元アドレスで数える。** "
                     + "**リバース プロキシの後ろでは、見えるアドレスがプロキシのものになる**"
-                    + "（`CONFIGURATION.md`）。");
+                    + "（`13_CONFIGURATION.md`）。");
 
                 r.Done();
             }

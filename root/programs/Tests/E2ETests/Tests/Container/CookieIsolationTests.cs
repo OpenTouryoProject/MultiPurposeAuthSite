@@ -102,7 +102,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
                 //  **分けられないと分かっているものを、あらかじめ除く。**
                 //    `SessionTimeOut` は **Open棟梁 の定数**で、設定で分けられない
-                //    （`CONFIGURATION.md` 11 節の `CookieNamePrefix`）。
+                //    （`13_CONFIGURATION.md` 11 節の `CookieNamePrefix`）。
                 //    **雛形は `FxSessionTimeOutCheck` を `off` にしているので読まれない。**
                 //    **ここを増やすと、測らない範囲が広がるので注意する。**
                 string[] allowed = new string[] { "SessionTimeOut" };
@@ -116,11 +116,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                     (shared.Count == 0) ? "0 件"
                         : "**" + shared.Count + " 件 : " + string.Join(", ", shared) + "**");
 
-                r.Note("**値は出さない。** 名前だけを見る（`TESTING.md` 9 節）。"
+                r.Note("**値は出さない。** 名前だけを見る（`14_TESTING.md` 9 節）。"
                     + "**`SessionTimeOut` だけは除いている** — "
                     + "**Open棟梁 の定数で、設定で分けられない**が、"
                     + "**雛形は `FxSessionTimeOutCheck` を `off` にしているので読まれない**"
-                    + "（`CONFIGURATION.md` 11 節）。");
+                    + "（`13_CONFIGURATION.md` 11 節）。");
 
                 r.Done();
             }

@@ -34,8 +34,8 @@
 
 | 内容 | 一次情報 |
 |---|---|
-| 検証の手順・回す範囲 | [`root/CHEATSHEET.md`](root/CHEATSHEET.md) 1 節、[`root/TESTING.md`](root/TESTING.md) |
-| コーディング規約 | [`root/CODING.md`](root/CODING.md) |
+| 検証の手順・回す範囲 | [`root/10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節、[`root/14_TESTING.md`](root/14_TESTING.md) |
+| コーディング規約 | [`root/11_CODING.md`](root/11_CODING.md) |
 | テストケース | [`Tests/TESTCASES.md`](root/programs/Tests/TESTCASES.md)（生成物。一次情報はテスト コード） |
 | カバレッジの値と、届いていない箇所 | [`Tests/COVERAGE.md`](root/programs/Tests/COVERAGE.md) |
 | セキュリティの指摘の扱い | [`AGENTS.md`](AGENTS.md)「セキュリティの指摘は、公開される前に確認を取る」、[`Security.ja.md`](Security.ja.md) |
@@ -64,7 +64,7 @@
 - **OpenTouryo のアセンブリ（`OpenTouryoAssemblies`）を更新するときは、E2E を通す。**
   検証の中身（DPoP の `htu`、大文字小文字の比べ方、SAML2 の `SigAlg`、JARM の `error` の応答など）がそちらにあるため、
   ソースの差分に現れないまま振る舞いが変わる（OpenTouryo#642〜#644 が実例）
-- 検証の手段の具体（どのスクリプトを、どの引数で回すか）は [`AGENTS.md`](AGENTS.md)「検証は、変更の届く範囲で決める」と [`root/CHEATSHEET.md`](root/CHEATSHEET.md) 1 節による
+- 検証の手段の具体（どのスクリプトを、どの引数で回すか）は [`AGENTS.md`](AGENTS.md)「検証は、変更の届く範囲で決める」と [`root/10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節による
 
 ---
 
@@ -79,7 +79,7 @@
     **判定はせず、合否にも関わらない。** 変わってよいかは人が判断する
   - **前回の値はコミットしない**（`Result` に置く）。配備ごとの値や、サインイン中の利用者の名前を含む画面の文面が入るため
 - **外部の基準を、最終的な正とする。** 適合性テスト（OpenID Foundation の Conformance Suite。`ANALYSIS-IdP.md` の D-14。**#350 で入れた**）。
-  回し方・プラン・結果の読み方は [`TESTING.md`](root/TESTING.md) 5 節「適合性テスト」と [`container/CTS/README.md`](container/CTS/README.md)
+  回し方・プラン・結果の読み方は [`14_TESTING.md`](root/14_TESTING.md) 5 節「適合性テスト」と [`container/CTS/README.md`](container/CTS/README.md)
   - **いつ回すか**：**(1) リリースの前に、全プランを回す。(2) 適合性テストで見つかった不適合を直す Issue では、`fixed` の前に、そのプランを回す。**
     **普段の作業（`fixing`・ほかの `fixed`）では回さなくてよい**（Conformance Suite のコンテナがメモリを使い、全プランで 2〜3 時間かかる。E2E の通しには入れない）
   - **結果の扱い**：落ちたものは、**環境（Conformance Suite の設定・自動操作）の不足か、OP の不適合かを仕分け**、不適合は原因ごとに Issue にする（セキュリティの弱点の疑いなら、公開する前に人に聞く。[`AGENTS.md`](AGENTS.md)）。
@@ -193,7 +193,7 @@
   **共有の HttpClient（`OAuth2AndOIDCClient.HttpClient`）で取りに行かない** — ID 連携・自己テスト（localhost）も同じ HttpClient を使うので、絞れない。**`OutboundUrlPolicy.HttpClient` を使う。**
   **部品（Open棟梁）に HttpClient を渡すときは、静的プロパティではなく、呼び出しごとの引数で渡す** — **`jwks_uri` は、部品が共有の HttpClient で取りに行き、リダイレクトを追っていた。部品の静的プロパティ（OpenTouryo#707）はプロセス全体に効き、ID 連携の上流の `jwks_uri` まで絞ってしまう**（#405。OpenTouryo#718 の引数で渡す。`RT-405.1`）
   **取りに行く先は、登録した値に限る**（外部の `request_uri` は、登録の `request_uris` にあるものだけ。#374。`RT-374.2`）
-- [ ] **OP が外へ出す要求に、時間と大きさの上限があるか。** **Open棟梁 の部品は要求ごとの上限を持たず、共有の HttpClient の設定に任せる** — **何も設定しておらず、.NET の既定（100 秒・上限なし）だった**（#375。`RT-375.1`）。**新しく HttpClient を作るなら、`OutboundHttpLimits` を掛ける。** **どの分類の要求かを決め、プロキシの組（`CreateProxy.For*`）とクライアント証明書を、その分類に合わせる** — **1 つの共有の HttpClient が内と外の宛先を兼ね、RP の口にも OP のクライアント証明書を出しえた**（#406。`CONFIGURATION.md` のマトリックス）
+- [ ] **OP が外へ出す要求に、時間と大きさの上限があるか。** **Open棟梁 の部品は要求ごとの上限を持たず、共有の HttpClient の設定に任せる** — **何も設定しておらず、.NET の既定（100 秒・上限なし）だった**（#375。`RT-375.1`）。**新しく HttpClient を作るなら、`OutboundHttpLimits` を掛ける。** **どの分類の要求かを決め、プロキシの組（`CreateProxy.For*`）とクライアント証明書を、その分類に合わせる** — **1 つの共有の HttpClient が内と外の宛先を兼ね、RP の口にも OP のクライアント証明書を出しえた**（#406。`13_CONFIGURATION.md` のマトリックス）
 - [ ] **部品（Open棟梁）の検証の後に、同じクレームを自前でも確かめていないか。** **部品の規則が変わったら、自前の確かめも揃える** — **部品が `nbf` に時計のずれの許容幅（10 秒）を持った（OpenTouryo#689）のに、CIBA の自前の確かめは許容幅なしのままで、部品が受けた要求を断っていた**（#412。`RT-412.1`）。**OpenTouryo のアセンブリを更新するときは、PR の振る舞いの変化ごとに、MPAS の自前の確かめを grep する**
 - [ ] **値が無いときに、検証を飛ばしていないか**（`nonce`・`aud`・署名など）
 - [ ] **引き換えの値（`code`・`auth_req_id`・`device_code`）を、出したクライアントと照合してから、状態を返したり、記録を書き換え・消したりしているか。**

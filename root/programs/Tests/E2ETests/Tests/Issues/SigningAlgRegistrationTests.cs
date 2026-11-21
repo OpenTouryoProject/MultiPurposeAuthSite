@@ -336,7 +336,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**鍵を入れ替えるとき（D-9）も、この関係は変わらない。**"
                     + "**新しい鍵を `jwkcerts` に先に載せ、RP のキャッシュが切れてから署名に使う**"
-                    + "（手順は `CONFIGURATION.md`）。**`JwkSet.json` は追記式**なので、"
+                    + "（手順は `13_CONFIGURATION.md`）。**`JwkSet.json` は追記式**なので、"
                     + "**退役した鍵も、消すまで載り続ける。**");
 
                 r.Done();

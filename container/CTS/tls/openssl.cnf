@@ -8,7 +8,7 @@
 #
 #   **アプリ（MPAS）のコードは変えていない。** .NET は Linux で、CipherSuitesPolicy を指定しなければ
 #   OpenSSL の設定（system_default）の CipherString に従う。docker-compose.yml の OPENSSL_CONF で、この設定を読ませる。
-#   配備で絞る方法は root/CONFIGURATION.md「TLS の暗号スイートを絞る」（Linux の OpenSSL・Windows の Schannel・リバース プロキシ）。
+#   配備で絞る方法は root/13_CONFIGURATION.md「TLS の暗号スイートを絞る」（Linux の OpenSSL・Windows の Schannel・リバース プロキシ）。
 #
 #   - CipherString は TLS 1.2 以前にだけ効く。TLS 1.3 のスイート（Ciphersuites）は、OpenSSL の既定のまま（どれも AEAD）
 #   - MinProtocol で、TLS 1.1 以前も断る

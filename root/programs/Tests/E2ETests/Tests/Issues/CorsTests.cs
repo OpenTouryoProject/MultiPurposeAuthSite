@@ -325,7 +325,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**効くのは `sql` / `ora` / `npg`** で、"
                     + "**直す前は Oracle / PostgreSQL で種データの作成そのものが失敗していた**"
                     + "（`GET /Account/Login` が HTTP 500 になり、その対象のテストが大量に落ちる）。"
-                    + "**4 ストアの実測は `TESTING.md` 1 節。**");
+                    + "**4 ストアの実測は `14_TESTING.md` 1 節。**");
 
                 r.Note("**切れていないことを、先頭と末尾の両方で見ている。**"
                     + "**幅が足りないと、黙って切り捨てる方言もある**ため"

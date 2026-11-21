@@ -31,7 +31,7 @@
     2_RunAllTests.ps1 → test.ps1 に渡す。
 
     **mem 以外では、接続文字列と、作成済みのデータベースが要る。**
-    詳細は Tests\test.ps1 の説明、または TESTING.md を参照。
+    詳細は Tests\test.ps1 の説明、または 14_TESTING.md を参照。
 
 .PARAMETER ConnectionString
     mem 以外のときに使う接続文字列。省略時は環境変数から読む（test.ps1 が解決する）。

@@ -126,13 +126,13 @@ if ($p.ModuleTimeoutSec -and -not $PSBoundParameters.ContainsKey('ModuleTimeoutS
     $ModuleTimeoutSec = $p.ModuleTimeoutSec
 }
 
-#region HTTP（自己署名の証明書。5.1 と 7 で API を分ける。root\CODING.md 5 節）
+#region HTTP（自己署名の証明書。5.1 と 7 で API を分ける。root\11_CODING.md 5 節）
 
 if ($PSVersionTable.PSVersion.Major -lt 6)
 {
     if (-not ('MpasCtsTls' -as [type]))
     {
-        # **スクリプト ブロックではなく、コンパイルしたデリゲートを使う**（root\CODING.md 5 節）
+        # **スクリプト ブロックではなく、コンパイルしたデリゲートを使う**（root\11_CODING.md 5 節）
         Add-Type -TypeDefinition @"
 using System.Net;
 using System.Net.Security;
@@ -471,7 +471,7 @@ foreach ($m in @($created.modules))
     $run = (Invoke-Cts 'POST' $runQuery $null $null) | ConvertFrom-Json
     $testId = $run.id
 
-    # **待ち時間は回数ではなく実時間で測る**（root\CODING.md 5 節）
+    # **待ち時間は回数ではなく実時間で測る**（root\11_CODING.md 5 節）
     $deadline = (Get-Date).AddSeconds($ModuleTimeoutSec)
     $info = $null
     do

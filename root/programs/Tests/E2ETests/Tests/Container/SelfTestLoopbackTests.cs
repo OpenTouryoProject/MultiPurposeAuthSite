@@ -59,7 +59,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
     /// **自己テストの主体としては下流が正しい。** 上流は「相手役」に専念させる。
     ///
     /// **画面遷移を伴うフロー**（認可エンドポイントへブラウザが飛ぶもの）と
-    /// **mTLS を使う FAPI2** は、ここでは測らない（`TESTING.md` 1 節）。
+    /// **mTLS を使う FAPI2** は、ここでは測らない（`14_TESTING.md` 1 節）。
     /// </remarks>
     public class SelfTestLoopbackTests : TargetTestBase
     {
@@ -99,7 +99,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
                 //  **この画面には NORMAL_END の印が無い**（Device AuthZ / CIBA の結果画面とは別）。
                 //    **生のトークン応答をそのまま表示する**ので、**キーの有無で見る。**
-                //    `TESTING.md` 1 節の目視も「`access_token` が返る」で判ている。
+                //    `14_TESTING.md` 1 節の目視も「`access_token` が返る」で判ている。
                 bool hasKey = html.Contains("access_token");
 
                 r.Verify("応答に access_token がある", hasKey,
@@ -107,7 +107,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
 
                 r.Step("(3) トークンが空でない");
 
-                //  **値は出さない。** 長さだけを見る（`TESTING.md` 9 節）。
+                //  **値は出さない。** 長さだけを見る（`14_TESTING.md` 9 節）。
                 //    画面は `token = '<値>';` として埋め込むので、
                 //    **失敗しているとここが空になる。**
                 Match m = Regex.Match(html, @"token\s*=\s*'([^']*)'");
@@ -117,7 +117,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                 r.Verify("トークンが空でない", 0 < length,
                     "1 文字以上", (0 < length) ? (length + " 文字（値は伏せる）") : "**空**");
 
-                r.Note("**値は出さない。** 有無と長さだけを見る（`TESTING.md` 9 節）。"
+                r.Note("**値は出さない。** 有無と長さだけを見る（`14_TESTING.md` 9 節）。"
                     + "**折り返しが届いていなければ、ここが空になる。**");
 
                 r.Done();

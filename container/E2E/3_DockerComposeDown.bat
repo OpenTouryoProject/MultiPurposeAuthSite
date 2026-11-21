@@ -1,6 +1,6 @@
 @echo off
 rem NOTE: keep this file pure ASCII. cmd.exe reads a batch file by byte offset, so non-ASCII text
-rem       can break lines depending on the console code page (root/CODING.md section 4. #342).
+rem       can break lines depending on the console code page (root/11_CODING.md section 4. #342).
 rem
 rem Stop and remove the IdP and jwks containers. No state remains (every IdP uses UserStoreType=mem).
 rem The DataProtection keys (keys*\) and logs (logs*\) remain on the host.

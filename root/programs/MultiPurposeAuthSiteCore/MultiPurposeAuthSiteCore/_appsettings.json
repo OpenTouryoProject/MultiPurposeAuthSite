@@ -62,7 +62,7 @@
     "DebugProxyPWD": "",
 
     // 要求先の分類ごとに、上の 3 組（Internet・Intranet・Debug）のどれを使うか（#406）。None はプロキシを使わない（OS の既定のプロキシも）。
-    //   空なら既定（外部ログインは Internet、ほかは Intranet。以前の振る舞い）。表は CONFIGURATION.md。
+    //   空なら既定（外部ログインは Internet、ほかは Intranet。以前の振る舞い）。表は 13_CONFIGURATION.md。
     "ProxyForIdFederation": "",
     "ProxyForClientRegisteredUrls": "",
     "ProxyForBackChannelLogout": "",
@@ -387,7 +387,7 @@
     // **redirect_uri_code / redirect_uri_token は、空白区切りで n 件書ける**（#306）。
     //   例 : "redirect_uri_code": "https://rp.example.com/cb https://localhost:5001/cb"
     //   **2 件以上登録すると、要求で redirect_uri を省略できなくなる**
-    //   （どれを使うか決められないため。RFC 6749 §3.1.2.3。CONFIGURATION.md 4 節）。
+    //   （どれを使うか決められないため。RFC 6749 §3.1.2.3。13_CONFIGURATION.md 4 節）。
     //
     // **"scope" : そのクライアントに許す scope**（空白区切り。#198）。
     //   **書かなければ絞らない**（従来どおり）。**ただし client_registration と auth だけは逆**で、

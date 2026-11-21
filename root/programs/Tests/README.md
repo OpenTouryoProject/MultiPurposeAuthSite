@@ -107,7 +107,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 
 > **以前は `test.ps1 -Launch` が環境変数で差し込んでいた**（#224）。
 > **net48 版だけ `OAuth2ClientsInformation` を一覧ごと差し替える**ため、
-> **件数に上限があった**（#262 で踏んだ。`TESTING.md` 1 節）。**#264 で寄せた。**
+> **件数に上限があった**（#262 で踏んだ。`14_TESTING.md` 1 節）。**#264 で寄せた。**
 
 
 **クレームの対応付け（`UserClaimsMapping`）も、同じやり方で差し込む**（#230）。
@@ -190,7 +190,7 @@ OAuth2ClientEndpointsRootURI
 テストは、確認・リセットのリンクや 2FA のコードをここから読む（`RT-294.26`〜`.29`・`.34`）。
 
 `-Coverage` を付けると、2 つのサイトを `dotnet-coverage` の下で起動し、
-終わったら ReportGenerator で報告を作る（`Result/coverage/report`。[`TESTING.md`](../../TESTING.md) 1 節）。
+終わったら ReportGenerator で報告を作る（`Result/coverage/report`。[`14_TESTING.md`](../../14_TESTING.md) 1 節）。
 
 `appSettings` の `FxContainerization` が `ON` のとき、Open棟梁 は
 **設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。
@@ -257,7 +257,7 @@ using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.Secon
 設定ファイルは書き換えず、環境変数で上書きする（`FxContainerization=ON` のため、
 `GetConfigValue` と `GetConnectionString` のどちらも環境変数が優先される）。
 切り替えると**状態が残る**ので、作り直したいときはデータベースを作り直す。
-手順と前提は [`../../TESTING.md`](../../TESTING.md) 1 節「ストアを切り替える」。
+手順と前提は [`../../14_TESTING.md`](../../14_TESTING.md) 1 節「ストアを切り替える」。
 
 ## テストの構成
 
@@ -327,7 +327,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/DiscoveryJarmModeTests.cs` | `RT-379` | **Discovery の `response_modes_supported` に `jwt` を広告する**（#379。JARM §2.3.4）。広告した `jwt` で要求すると JARM で返る（`RT-379.1`） |
 | `Tests/Issues/JarmNoStateTests.cs` | `RT-378` | **`state` を送らない要求の JARM には、`state` を入れない**（#378。RFC 6749 §4.1.2・JARM §2.1.1）。成功・エラーの応答とも `"state": null` を出さない。`state` を送ればその値が入る（`RT-378.1`） |
 | `Tests/Issues/ParRequestObjectRequestUriTests.cs` | `RT-380` | **PAR の Request Object の中の `request_uri` を断る**（#380。RFC 9126 §2.1）。中に在れば `invalid_request_object`、無ければ `201`、フォームの `request_uri` は従来どおり `invalid_request`（`RT-380.1`） |
-| `Tests/Issues/CibaRequestExpiryTests.cs` | `RT-388` | **CIBA の署名した要求の寿命は 60 分まで**（#388。FAPI-CIBA ID1 §5.2.2 の 9）。`exp` が 70 分先・`nbf` が 70 分前は `invalid_request`（`RT-388.1`）、60 分ちょうどは寿命では断らず 60 分 1 秒は断る（`RT-388.2`）。**クラス名に `LifetimeTests` を含めない**（既定の通しの除外に当たる。`TESTING.md`） |
+| `Tests/Issues/CibaRequestExpiryTests.cs` | `RT-388` | **CIBA の署名した要求の寿命は 60 分まで**（#388。FAPI-CIBA ID1 §5.2.2 の 9）。`exp` が 70 分先・`nbf` が 70 分前は `invalid_request`（`RT-388.1`）、60 分ちょうどは寿命では断らず 60 分 1 秒は断る（`RT-388.2`）。**クラス名に `LifetimeTests` を含めない**（既定の通しの除外に当たる。`14_TESTING.md`） |
 | `Tests/Issues/CibaNbfClockSkewTests.cs` | `RT-412` | **CIBA の署名した要求の `nbf` は、時計のずれの許容幅（既定 10 秒）まで未来でも受ける**（#412。OpenTouryo#689 の取り込み。FAPI 2.0 Security Profile §5.3.2.1 の 13）。5 秒先は要求の確かめを通り、90 秒先（仕様が断ることを求める 60 秒より先）は `invalid_request`（`RT-412.1`） |
 | `Tests/Issues/Fapi1JarmTests.cs` | `RT-381` | **fapi1 の登録は、JARM の認可要求だけを受ける**（#381。FAPI 1.0 Advanced §5.2.2 の 2）。`response_mode` 無し・`query` は `invalid_request`（クエリ・PAR とも）、JARM（`jwt`・`query.jwt`）は `response` の中で code を返す。fapi1 でない登録は従来どおり（`RT-381.1`）。**fapi1 を使うほかのテストは `Flows.WithJarm` と `AuthZResponse.Unwrap()` を使う** |
 | `Tests/Issues/Fapi1NonceTests.cs` | `RT-382` | **fapi1 の登録の `openid` の認可要求では、`nonce` を必須にする**（#382。FAPI 1.0 Baseline §5.2.2.2 の 1）。クエリ・PAR とも `invalid_request`。`openid` を含まない要求・fapi1 でない登録は従来どおり（`RT-382.1`） |
@@ -362,7 +362,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` だけを含む秘密は符号化してもしなくても通ること（最初の `:` で分ける。OpenTouryo#643）、`:` と `+` を含む秘密は符号化しなくても復号前の値の照合で通ること（Open棟梁 4.0 でやめる。OpenTouryo#645） |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
-| `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `container/E2E/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`TESTING.md`](../../TESTING.md) 5 節） |
+| `Tests/Issues/IdFederationTests.cs` | `RT-140` | **ID フェデレーション**（上流の IdP へ委譲するサインイン。#250 の段階 5）。**上流は `container/E2E/` のコンテナ**で、**建っていなければ Skip する。** **上流には「同意の記録」という前提があり、作り直すと消える**ので、**テスト側で整える**（#280。[`14_TESTING.md`](../../14_TESTING.md) 5 節） |
 | `Tests/Issues/ManageGdprTests.cs` | `RT-277` | **GDPR 対応**（`/Manage/ManageGdprData`）。**参照**は自分のデータを `user.json`（`application/json`）で返し、**パスワードの控えは入っていない**こと。**消去**は、**利用者の行ごと消える**こと（#299。子の行は外部キーの cascade が落とす）と、**その利用者ではサインインできなくなる**こと。**属性データ・クライアント登録・ロールを持たせてから消す**（**登録が在ると、以前の実装では消去が外部キーで弾かれた**）。**使い捨ての利用者を使う**（消去は元に戻せない）。**4 ストアで測る** |
 | `Tests/Issues/TokenHeaderTests.cs` | `RT-302` | **発行するトークンの JWS ヘッダ**（#302 の段階 1。D-10 / RFC 9068）。**`jku` を入れず、`kid` で引けること**を access_token / id_token / JARM の 3 つで見る。**`typ` は種類どおりであること**（access_token は `at+jwt`、id_token と JARM は `JWT`。#302 の段階 2）。**`jku` は、検証が `kid` で引くので他のケースでは代わりにならない。****`typ` は逆で、噛み合っていないと通し全体が落ちる**（歯抜けで 75 件） |
 | `Tests/Issues/JwkSetCacheTests.cs` | `RT-303` | **`/jwkcerts` のキャッシュ**（#303。E-7）。**`ETag` / `Cache-Control` / `If-None-Match` の `304`**（`RT-303.1`）と、**鍵の入れ替えに追随すること**（`RT-303.2`。`JwkSet.json` の末尾に空白を足して戻す。**鍵は変えない**ので他のテストを壊さない） |
@@ -370,7 +370,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/RedirectUriTests.cs` | `RT-306` | **クライアントあたり複数 `redirect_uri`**（#306）。**2 件登録してどちらでも通ること**（`RT-306.1`）、**登録に無い値と接頭辞を断ること**（`RT-306.2`）、**2 件登録のとき省略を断ること**（`RT-306.3`）。**使い捨ての利用者で登録する**（**管理画面が扱うのは所有者の 1 件**なので、**共用だとどれを引くか決まらない**） |
 | `Tests/Issues/ClientRegistrationTests.cs` | `RT-307` | **動的クライアント登録**（RFC 7591 / 7592。#307 の段階 1〜5-a）。**登録でき、返った資格情報で認可コードが取れること**（`RT-307.1`）、**トークンと scope の守り**（`RT-307.2`。`401` / `insufficient_scope`）、**2 件目以降も登録でき、別々に使え、別々に消せる**（`RT-307.3`。**1 利用者 n クライアント**。#307 の段階 5-a）、**メタデータの誤りは `400`**（`RT-307.4`。`jwks_uri` / `software_statement` / 専用 scope の自己付与も断る）、**専用トークンは scope も期限も絞られること**（`RT-307.5`）、**登録した `response_types` / `grant_types` / `scope` が実際に効くこと**（`RT-307.6` / `.7` / `.8`）。**使い捨ての利用者を 2 人使う** — **段階 5-a で分ける必要は無くなった**が、**「管理 API を叩く権限」と「登録の所有者」は別物**なので、その形で測り続ける。**動的登録が無効な配備では Skip**（Discovery の `registration_endpoint` で判定）。**管理 API**（RFC 7592。段階 2）: **`GET` で読める**（`RT-307.9`。`client_secret` は返さない）、**`PUT` の全置換が実際に効く**（`RT-307.10`。古い `redirect_uri` が通らなくなる）、**`DELETE` で消え、既存のアクセス トークンも通らなくなり、登録し直せる**（`RT-307.11`）、**`registration_access_token` 以外では叩けない**（`RT-307.12`。専用 scope の AT も `401`）、**`PUT` の誤りは `400` で登録は変わらない**（`RT-307.13`）。**クライアント認証の方法**（段階 3）: **`private_key_jwt` ＋ `jwks` で登録でき、その鍵で認証でき、秘密では通らない**（`RT-307.14`）、**`tls_client_auth` ＋ DN で登録でき、その証明書で認証できる**（`RT-307.15`。**既定は core だけ**。`-NetFxMtls` のときだけ netfx も）、**材料の無い登録・知らない方法・`jwks` に同じ種類 2 本・`jwks_uri`・`device_code` × `private_key_jwt` は `400`**（`RT-307.16`）、**`PUT` で方法を省くと秘密ベースに戻るが鍵は残る**（`RT-307.17`）。**`software_statement`**（段階 4）: **署名付きの主張で登録でき、主張した値が本文（plain JSON）に勝つ**（`RT-307.18`。**主張された折り返し先で実際に認可コードが取れ、本文に書いた方では取れない**）、**壊れた statement は `400` ＋ `invalid_software_statement`**（`RT-307.19`。JWT でない / 署名が合わない / `iss` 無し / `exp` 切れ / `aud` が別の AS）、**知らない発行者は `400` ＋ `unapproved_software_statement`**（`RT-307.20`）、**`PUT` でも効き、省くと本文が通る**（`RT-307.21`）。**署名鍵は配備の `SpRp_RsaPfxFilePath`** で、**サイトにはその対の `.cer` を発行者の鍵として `test.ps1` が渡す** — **渡っていない配備では Skip**（しるしは `MPAS_SOFTWARE_STATEMENT_ISS`）。**`client_credentials` 経路**（段階 5-b）: **利用者のパスワードを使わずに登録でき、所有者は認証したクライアントの所有者になる**（`RT-307.22`。**所有者の利用者名を変えても切れないことまで見る** — **`ClientName` は古い名前のまま残るので、`sub` では引けなくなる**）、**構成ファイルの `owner`（利用者名）から所有者が決まる**（`RT-307.23`）、**所有者の決まらないクライアントは `403` ＋ `access_denied`**（`RT-307.24`）。**`.23` / `.24` は net48 では Skip** — **net48 の設定は 1 本の JSON 文字列**で、**クライアントを 1 件だけ足せない**（しるしは `MPAS_CORE_DCR_CC_*`）。**発行者ごとの上限と鍵の入れ替え**（段階 6）: **発行者に許した範囲の外を主張すると `unapproved_software_statement`**（`RT-307.25`。**本文（plain JSON）に書いても同じ**／**`PUT` でも効く**）、**発行者の鍵を入れ替える間、新旧のどちらで署名した statement でも通る**（`RT-307.26`。**どちらでもない鍵は `invalid_software_statement`**）。**`test.ps1` が上限と 2 本目の証明書を渡す** — **渡っていない配備では Skip**（しるしは `MPAS_SOFTWARE_STATEMENT_ALLOWED_SCOPE` / `MPAS_SOFTWARE_STATEMENT_ROLLOVER`） |
 | `Tests/Issues/AuthFailureLockoutTests.cs` | `RT-305` | **認証の失敗を数えて断る**（#305 の段階 2・段階 4）。**`user_code` の投入**（`RT-305.3`）と**クライアント認証**（`RT-305.4`）、**断りが送信元ごとに分かれること**（`RT-305.7`。**`X-Forwarded-For` で測るので core のみ・通しでは Skip**）、**`/token` の `grant_type=password`**（`RT-305.8`）。**使い捨ての利用者で測る**（共用のものを断ると、並行する他のテストが落ちる）。**数えない配備（0）では Skip** |
-| `Tests/Issues/RateLimitTests.cs` | `RT-305` | **口ごとのレート制限**（#305 の段階 3）。**`client_id` ごと**（`RT-305.5`。使い捨ての利用者のクライアント登録で、窓の中で叩き切る）と**送信元ごと**（`RT-305.6`）。**`RT-305.6` は既定の通しでは Skip** — **通しの全ケースが同じ送信元**なので、`test.ps1` が 0（制限しない）を渡している（**単独で回して測る**。`TESTING.md`） |
+| `Tests/Issues/RateLimitTests.cs` | `RT-305` | **口ごとのレート制限**（#305 の段階 3）。**`client_id` ごと**（`RT-305.5`。使い捨ての利用者のクライアント登録で、窓の中で叩き切る）と**送信元ごと**（`RT-305.6`）。**`RT-305.6` は既定の通しでは Skip** — **通しの全ケースが同じ送信元**なので、`test.ps1` が 0（制限しない）を渡している（**単独で回して測る**。`14_TESTING.md`） |
 | `Tests/Issues/ManageUserAttributeTests.cs` | `RT-277` | **管理画面での属性変更**（利用者名・パスワード・メアド）。**変えたら、その値で使えること**まで見る（**新しい値で入れて、古い値では入れない**／**元に戻せる**）。**メアドは確認メールを挟む**ので、**押しただけでは変わらない**ことを押さえる。**使い捨ての利用者を `/UsersAdmin` で作り、後片付けで消す**（テスト利用者は使わない） |
 | `Tests/Issues/ManageWebAuthnTests.cs` | `RT-277` | **WebAuthn の資格情報の削除**（`/Manage/RemoveWebAuthnData`。#277 の段階 6）。**選んだものだけが、選んだ数だけ消える**こと。**種データの資格情報を使う**（上記）。**描画は `UI-1.1` で測る**（`class="form-control"` でチェックの印が消えていた件は、**ブラウザでなければ見えない**）。**net48 版は Skip**（口が無い） |
 | `Tests/WebUI/RemoveWebAuthnRenderingTests.cs` | `UI-1` | **ブラウザでしか測れないもの**（#277 の段階 7）。WebAuthn の削除画面で、**チェックを入れたか外したかが見て分かる**こと（入れる前と後の見た目を比べる）。**ブラウザが無ければ Skip する**（下記）。**net48 版は対象外**（口が無い） |
@@ -504,7 +504,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 **有効期限（`RT-188`）は、`-ShortLifetimes` で起動したときだけ回る**（#188）。
 既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待てないため、
 寿命をごく短くして起動する。**既定の通しでは除外している**ので、`TESTCASES.md`（原本）にも載らない
-（[`../../TESTING.md`](../../TESTING.md) 5 節）。
+（[`../../14_TESTING.md`](../../14_TESTING.md) 5 節）。
 
 ```powershell
 .\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
@@ -519,7 +519,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 **サーバが証明書を要求する。** **HttpClient は空で答えて先に進むが、
 ブラウザは「どれを出すか」を人に選ばせる**ため、**画面の無い Chromium はそこで止まる**
 （**実測** : `goto` が 30 秒で時間切れ。**失敗した要求は 0 件**。
-[`../../TESTING.md`](../../TESTING.md) 5 節）。
+[`../../14_TESTING.md`](../../14_TESTING.md) 5 節）。
 
 **mTLS（`FA-6`）は、net10.0 版だけを測る**（#226）。
 Kestrel は既定でクライアント証明書を要求せず、要求させても自己署名の証明書はチェーンの検証で落ちる。
@@ -528,7 +528,7 @@ net10.0 版にだけ読ませ、発行元を問わずに受け付けさせる（
 証明書は、テストがその場で作る自己署名のもので、**証明書ストアには入れない**（`Infrastructure/TestCertificate.cs`）。
 net48 版（IIS Express）は、IIS が自己署名の証明書をアプリより前で 403.16 として断るため、既定では測らない。
 **準備（テスト用 CA をコンピューターの信頼されたルートに入れる。管理者権限）だけを手動で行い、
-`-NetFxMtls` を付けて回す**（[`../../TESTING.md`](../../TESTING.md) 5 節）。付けなければ net48 版のケースは作らない。
+`-NetFxMtls` を付けて回す**（[`../../14_TESTING.md`](../../14_TESTING.md) 5 節）。付けなければ net48 版のケースは作らない。
 **実測済み**（2026/09/23。net48 版でも `FA-6` の 4 件が通る）。
 
 **`Tests/OAuth21/` は、OAuth 2.1 が許さない経路の抑止**（#222）。
@@ -544,7 +544,7 @@ net48 版（IIS Express）は、IIS が自己署名の証明書をアプリよ�
 **「サーバは開いているのに、このクライアントでは塞がる」**という対照が効く。
 
 > **サーバ全体の `RequirePkce` / `RequirePkceS256` を `true` にしたときの挙動は測れない。**
-> 設定ファイルを変えて起動し直す必要があるため（`CONFIGURATION.md` 11 節）。
+> 設定ファイルを変えて起動し直す必要があるため（`13_CONFIGURATION.md` 11 節）。
 
 **フォルダは、識別子の群に合わせている**（`Basic` = TC、`Extended` = EX、`Issues` = RT、
 `Fapi` = FA、`OAuth21` = 21、`Obsolete` = 廃止されたフロー）。
@@ -553,7 +553,7 @@ net48 版（IIS Express）は、IIS が自己署名の証明書をアプリよ�
 RT が混ざっている。**対照は近くに置いたほうが読めるので、そこは揃えていない。**
 
 **すべてのテストが `TestReport` で記録を残す。**
-識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。
+識別子の体系は [`../../14_TESTING.md`](../../14_TESTING.md) を参照。
 
 `Infrastructure/` は、テストから使う道具。
 
@@ -715,4 +715,4 @@ cd root
   手で立てるときは片方を別の URL にすること。
 - CIBA のテスト（`RT-196.16` 〜 `196.18`、`EX-8`）は、構成ファイルの `SpRp_EcdsaPfxFilePath`（ES256 の秘密鍵）で要求に署名する。
   CIBA のクライアント（`FAPI_CIBA_Client`）が登録している `jwk_ecdsa_publickey` と対になっていること。
-  取り違えは検出して Skip する（[`../../TESTING.md`](../../TESTING.md) 5 節）。
+  取り違えは検出して Skip する（[`../../14_TESTING.md`](../../14_TESTING.md) 5 節）。

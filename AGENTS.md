@@ -37,7 +37,7 @@ https://github.com/OpenTouryoProject/MultiPurposeAuthSite
 ### Issue に対応する流れ（#343）
 
 **人が「#NNN に着手して」と投入してから、Issue を閉じるまでの型。** Open棟梁 と同じ構成にしてある（OpenTouryo の `AGENTS.md`）。
-各段の詳細は、下の各節が一次情報である。コマンドは [`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節。
+各段の詳細は、下の各節が一次情報である。コマンドは [`10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節。
 
 | 段 | エージェント | 人 |
 |---|---|---|
@@ -227,7 +227,7 @@ gh issue create --repo OpenTouryoProject/MultiPurposeAuthSite --title <title> --
 #### 依存パッケージの脆弱性を見つけたら（#343）
 
 **ビルドの警告（`NU1901`〜`NU1904`）を、件数として流さない。** ビルドは成功扱いなので、誰かが拾わない限り直らない。
-**監査は、復元のときにしか出ない**（`-SkipClean` では出ない。[`BUILDING.md`](root/BUILDING.md) 8 節）。
+**監査は、復元のときにしか出ない**（`-SkipClean` では出ない。[`12_BUILDING.md`](root/12_BUILDING.md) 8 節）。
 CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一覧するだけで、判定しない。
 
 **見つけたら、Issue を起こさずに、その場で直す**（Open棟梁 と同じ方針）。
@@ -257,24 +257,24 @@ CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一�
   `@v7` のようなタグは**作者側で別のコミットへ付け替えられる**ため、こちらが何も変えていなくても動くコードが変わる
 - **`pull_request_target` を使うなら、PR のコードを `checkout` しない。** ベース側の定義を書き込み権限付きで動かすトリガであり、
   PR に任意のコードを書ける相手へ権限を渡すことになる（pwn request）。**`expectation-change.yml` は `pull_request` にしてある**
-- **`run:` の中は ASCII だけにする**（Windows PowerShell 5.1 は、BOM 無しの一時ファイルを ANSI として読む。[`CODING.md`](root/CODING.md) 5 節）
+- **`run:` の中は ASCII だけにする**（Windows PowerShell 5.1 は、BOM 無しの一時ファイルを ANSI として読む。[`11_CODING.md`](root/11_CODING.md) 5 節）
 - 新しいアクションを増やすときは、**本当に必要かを先に検討する**
 
-### コーディング規約は CODING.md、領域ごとの事情は ANALYSIS.md に従う（#343）
+### コーディング規約は 11_CODING.md、領域ごとの事情は ANALYSIS.md に従う（#343）
 
-**規約は全領域に共通、分析は領域ごと**に分かれている。**コードを変更する前に、[`CODING.md`](root/CODING.md) と、作業対象を所管する `ANALYSIS.md` の両方を読むこと。**
+**規約は全領域に共通、分析は領域ごと**に分かれている。**コードを変更する前に、[`11_CODING.md`](root/11_CODING.md) と、作業対象を所管する `ANALYSIS.md` の両方を読むこと。**
 
 | 内容 | 読む文書 |
 |---|---|
-| **コーディング規約（全領域共通）** | [`root/CODING.md`](root/CODING.md)（ファイル ヘッダと**更新者名**、改行コード、bat を純 ASCII にする、ps1 の 5.1 / 7 の両対応、秘密を書かない） |
-| **設定ファイルの扱い（全領域共通）** | [`root/CONFIGURATION.md`](root/CONFIGURATION.md) |
+| **コーディング規約（全領域共通）** | [`root/11_CODING.md`](root/11_CODING.md)（ファイル ヘッダと**更新者名**、改行コード、bat を純 ASCII にする、ps1 の 5.1 / 7 の両対応、秘密を書かない） |
+| **設定ファイルの扱い（全領域共通）** | [`root/13_CONFIGURATION.md`](root/13_CONFIGURATION.md) |
 | **IdP（OAuth2 / OIDC・SAML2）としての分析・対応状況の一覧** | [`root/programs/ANALYSIS-IdP.md`](root/programs/ANALYSIS-IdP.md)（**公開ファイル**。上の「セキュリティの指摘」） |
 | `CommonLibrary` の分析 | [`root/programs/CommonLibrary/ANALYSIS.md`](root/programs/CommonLibrary/ANALYSIS.md) |
 | net48 版のサイト | [`root/programs/MultiPurposeAuthSite/ANALYSIS.md`](root/programs/MultiPurposeAuthSite/ANALYSIS.md) |
 | net10.0 版のサイト | [`root/programs/MultiPurposeAuthSiteCore/ANALYSIS.md`](root/programs/MultiPurposeAuthSiteCore/ANALYSIS.md) |
 | `CommandLineTools` | [`root/programs/CommandLineTools/ANALYSIS.md`](root/programs/CommandLineTools/ANALYSIS.md) |
 | 認証デバイス（`authentication_device`） | [`root/programs/authentication_device/ANALYSIS.md`](root/programs/authentication_device/ANALYSIS.md) |
-| テスト（E2E・単体・テストケースの原本） | [`root/TESTING.md`](root/TESTING.md)・[`root/programs/Tests/README.md`](root/programs/Tests/README.md)・[`TESTCASES.md`](root/programs/Tests/TESTCASES.md)（生成物） |
+| テスト（E2E・単体・テストケースの原本） | [`root/14_TESTING.md`](root/14_TESTING.md)・[`root/programs/Tests/README.md`](root/programs/Tests/README.md)・[`TESTCASES.md`](root/programs/Tests/TESTCASES.md)（生成物） |
 
 **規約の実体は本書には書かない。** 二重管理になり、どちらが正なのか分からなくなる。
 
@@ -286,8 +286,8 @@ CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一�
 
 **入口は [`root/Readme.ja.md`](root/Readme.ja.md) である。**
 前提の準備とスクリプト（`root\*.ps1`）は、そこから辿れる。
-手順だけを引くなら [`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節、合否の読み方は
-[`BUILDING.md`](root/BUILDING.md) 3 節・[`TESTING.md`](root/TESTING.md) 5 節が一次情報である。
+手順だけを引くなら [`10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節、合否の読み方は
+[`12_BUILDING.md`](root/12_BUILDING.md) 3 節・[`14_TESTING.md`](root/14_TESTING.md) 5 節が一次情報である。
 **本書にコマンドは書かない。** 転記すると、両方を直さないかぎりズレる。
 
 | 変更 | 目安 |
@@ -295,14 +295,14 @@ CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一�
 | 文書（`.md`）のみ | **回さなくてよい** |
 | `CommonLibrary/` | **net48 / net10.0 の両方をビルド**（両アプリが使う）＋ E2E の通し |
 | どちらかのアプリだけ | そのアプリのビルド ＋ E2E の通し |
-| E2E テストのコード | E2E の通し。**テストを足したり変えたりしたら、原本も作り直す**（[`TESTING.md`](root/TESTING.md) 10 節） |
-| `.ps1` | **変更したら実行する。** 構文エラーは読んでも分からず、5.1 と 7 で振る舞いが違う（[`CODING.md`](root/CODING.md) 5 節） |
+| E2E テストのコード | E2E の通し。**テストを足したり変えたりしたら、原本も作り直す**（[`14_TESTING.md`](root/14_TESTING.md) 10 節） |
+| `.ps1` | **変更したら実行する。** 構文エラーは読んでも分からず、5.1 と 7 で振る舞いが違う（[`11_CODING.md`](root/11_CODING.md) 5 節） |
 
 **E2E は、net48 版と net10.0 版の両方に同じテストを流す。**
 片方を起動せずに通しても、**その分は Skip として数えられる**ので「通った」ことにはならない。
 両方を測るには、サイトを起動する指定（`-Launch`）で回す。
 
-**エラー 0 だけでなく、警告が増えていないことも見る**（[`BUILDING.md`](root/BUILDING.md) 3 節）。
+**エラー 0 だけでなく、警告が増えていないことも見る**（[`12_BUILDING.md`](root/12_BUILDING.md) 3 節）。
 
 **迷ったら通しでよい。** ただし**迷っていないのに通すのは、ただの浪費である。**
 
@@ -313,7 +313,7 @@ CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一�
 
 | 段階 | いつ | 回すもの |
 |---|---|---|
-| 編集中 | 直しては確かめる反復 | ビルドと、**変えたところに届くテスト**だけ（`-Filter`。[`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節） |
+| 編集中 | 直しては確かめる反復 | ビルドと、**変えたところに届くテスト**だけ（`-Filter`。[`10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節） |
 | fixing | 途中のコミットの前 | 上の表の目安。**E2E の通しは後回しにしてよい**（後回しにしたことを報告に書く） |
 | fixed | 完了のコミットの前 | **両版の E2E の通し**（`-Launch`）。テストを足した・変えたなら `-UpdateTestCases`。**後回しの分も含めて回す** |
 
@@ -323,7 +323,7 @@ CI の `vulnerable-packages.yml`（`dotnet list package --vulnerable`）は一�
 |---|---|
 | 3 方言の DB（`container/Store`。`-UserStoreType sql`・`ora`・`npg`） | **DDL・SQL の組み立て（`Data`）に触れたとき。** 1 つずつ起動して測り、終わったら止める（同時に複数を起動するとメモリが尽きる） |
 | ID 連携の IdP のコンテナ（`container/E2E`） | 通しの前に起動しておく（止まっていると、`RT-140.*` などが Skip になり、`TESTCASES.md` から落ちる）。コンテナの中のサイトを変えたなら、発行し直す |
-| net48 版の mTLS（`-NetFxMtls`） | 証明書の準備が要る（[`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節）。準備が無ければ、回せていないと報告する |
+| net48 版の mTLS（`-NetFxMtls`） | 証明書の準備が要る（[`10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節）。準備が無ければ、回せていないと報告する |
 | 適合性テスト（`container/CTS`。#350） | **リリースの前と、適合性テストで見つかった不適合を直す `fixed` の前**（[`QUALITY.md`](QUALITY.md) 2 節）。メモリを使うので、ほかのコンテナを止めてから回す |
 
 **次のコミットがどちらの段階か分からなければ、人に確かめるか、fixed として回す。**

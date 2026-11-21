@@ -63,7 +63,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
     /// | `publish/appsettings.json` | `TestUserPWD`、自己テスト用のクライアント（`TestClient`〜） |
     /// | `docker inspect` の `Env` | 自分の URL、`IssuerId`、ID 連携の宛先、ID 連携のクライアント |
     ///
-    /// **テストにも、テスト設定にも秘密を書かない**（`TESTING.md` 9 節）。
+    /// **テストにも、テスト設定にも秘密を書かない**（`14_TESTING.md` 9 節）。
     ///
     /// **ストアは両方とも `mem` 固定**（compose。切り替えない）。
     /// **測るのは配備の差であり、どれもストアに依存しない。**
