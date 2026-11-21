@@ -39,7 +39,25 @@ cd ..\CTS
 | `fapi-ciba-private-key-jwt-poll` | `fapi-ciba-id1-test-plan`（`plain_fapi`・poll・`private_key_jwt`・静的な登録） | `fapi-ciba.json`（**利用者の承認は、`RunTestPlan.ps1` が認証デバイスの代わりに送る**。下の「CIBA の承認」） |
 | `fapi-ciba-mtls-poll` | 同上の MTLS のクライアント認証（#416） | `fapi-ciba.json`（クライアントは 27・28。端末役は同じ） |
 
-- **FAPI のバリアントは、代表の組み合わせだけ**にしてある（軸を全部掛け合わせると数十通り。#350 の段階 4 で決めた）
+- **FAPI のバリアントは、MPAS が対応する方式を確かめる組だけ**にしてある（軸を全部掛け合わせると数十通り）。#350 の段階 4 で代表の組を決め、**#416 で、認証と縛りの交差・mTLS のクライアント認証・`plain_oauth`・client_credentials・Message Signing の要求と応答の残りの組を足した**
+- **リリースの前には、上の表のすべてのプランを回す**（#416 で足したものも含める。`QUALITY.md` 2 節）。認証と縛りの組み合わせのような回帰（#423）は、代表の組だけでは拾えないため
+- **足さないもの**（MPAS が持たない方式・対象にしていないもの。#416）
+
+  | プラン・バリアント | 理由 |
+  |---|---|
+  | FAPI-CIBA `ciba_mode=ping` | **MPAS が ping を持たない**（poll だけを広告。FAPI-CIBA は ping を任意とする）。push は Conformance Suite に無い |
+  | `client_auth_type=client_secret_jwt`（`oidcc-test-plan`） | MPAS が持たない |
+  | FAPI 1.0 Advanced `fapi_auth_request_method=by_value` | `request_parameter_supported=false`（`request` で値を直に渡す形を持たない） |
+  | FAPI 1.0 Advanced `fapi_response_mode=plain_response` | fapi1 の登録に Hybrid を許さない（FA-1.4。JARM の側で回している） |
+  | `authorization_request_type=rar`・`grant_management=enabled` | RAR・Grant Management を持たない |
+  | `oidcc-session-management-certification-test-plan` | Session Management は見送りと決めた |
+  | `oidcc-3rdparty-init-login-certification-test-plan` | 3rd party initiated login を持たない |
+  | `fapi_profile` の地域のプロファイル（`openbanking_*`・`consumerdataright_au`・`connectid_au`・`cbuae`・`ksa` など）、`*-brazil-dcr-*` | 地域のエコシステムの追加の規定で、MPAS は対象にしていない |
+  | `fapi2-*-id1`・`-id2`（旧版） | final の版で回している |
+  | eKYC・OID4VP・OID4VCI・SSF・AuthZEN・OpenID Federation | MPAS が持たない機能 |
+  | RP を相手にするプラン（`oidcc-client-*`・`fapi*-client-test-plan`） | MPAS の ID 連携（RP の役）を確かめられるが、Conformance Suite を OP にして MPAS からサインインさせる仕掛けが要る（別に検討する） |
+
+  **まだ足していないもの**：動的登録したクライアントでの各フロー、パブリック クライアント・OIDC の mTLS（`oidcc-test-plan`）、動的登録とログアウトの Implicit・Hybrid（#426）
 
 | | URL |
 |---|---|
@@ -212,6 +230,9 @@ cd ..\CTS
   - **WARNING は、どれも #421**（下の「WARNING の理由」）
   - **FAPI 1.0 Advanced の MTLS は、#398 で止まらない**（`client_assertion` を使わない）。`private_key_jwt` のプランで #398 の先にある判定を、版を緩めずに確かめられる
   - `fapi2-ms-signed-plain-response` の FAILED の 1 つは、上の「サインインのボタンを押しても画面が変わらない」事象（1 回目は `par-without-duplicate-parameters`、回し直すとそれは通り、`ensure-authorization-request-without-nonce-success` が同じ形で落ちた。**同じモジュールが続けて落ちてはいない**）
+  - `fapi-ciba-mtls-poll` には、ほかに TIMEOUT が 1 つある（`ensure-authorization-request-with-potentially-bad-binding-message`。`fapi-ciba-private-key-jwt-poll` と同じ）
+  - **2026-11-22 に、全 25 プランを Windows PowerShell 5.1 で通した**（それまでは PowerShell 7）。**どのプランも、上の表とこれまでの基準と同じ数**で、`fapi2-ms-signed-plain-response` も FAILED 2（自動では回せない 2）だった。
+    サインインのボタンの事象は出なかった。所要は 2 時間 10 分（OIDC の 11 プランで 23 分。機械のメモリ不足で 19 番目のプランの途中で止まり、そのプランから回し直したので、2 回の分を足した）
 - **対応を見送った機能のモジュール**
   - `oidcc-userinfo-rs256`（`oidcc-dynamic`）：**署名した UserInfo の応答**（OIDC Core 1.0 §5.3.2）を求める。**MPAS は対応を見送った**（任意の機能で、FAPI は求めない。[`ANALYSIS-IdP.md`](../../root/programs/ANALYSIS-IdP.md) の D-17。#414）ので、
     Discovery に `userinfo_signing_alg_values_supported` が無く、`CheckDiscEndpointUserinfoSigningAlgValuesSupportedContainsRS256` で FAILED になる。
