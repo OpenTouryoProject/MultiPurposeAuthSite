@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=627527fa-17d3-4334-a30d-82205f083111&code=bogus
+1. GET /Account/EmailConfirmation?userId=143b1f63-8214-409e-876b-440389f60e8f&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=627527fa-17d3-4334-a30d-82205f083111&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=627527fa-17d3-4334-a30d-82205f083111&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=143b1f63-8214-409e-876b-440389f60e8f&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=143b1f63-8214-409e-876b-440389f60e8f&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13586,19 +13586,19 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 認可を終えた後の返り方
   - 消した後は「存在しない request_uri」と同じ扱いになる（RT-362.3）。返し方は記録するだけで、判定しない。
 
-## RT-413.2 PAR に預けた要求を同意の画面で拒否すると、redirect_uri へ access_denied を返す。その後に同じ request_uri を送ったときの返り方を残す
+## RT-413.2 PAR に預けた要求を同意の画面で拒否すると、redirect_uri へ access_denied を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる
 
 | | |
 |---|---|
-| 観点 | **PAR で預けた要求でも、拒否は access_denied で返す**（RT-272.6 は、預けない要求で測っている）。**拒否した後の request_uri は、今は消していない**（消すのは、成功の応答を作ったときだけ。消すのは #420）。**使えるかどうかは、仕様が幅を持つ**（RFC 9126 §4 は使い切りを SHOULD とし、再読み込みの重複を MAY とする）ので、観測にする。 |
-| 根拠 | RFC 6749 §4.1.2.1（access_denied）/ RFC 9126 §4 / #413 |
+| 観点 | **PAR で預けた要求でも、拒否は access_denied で返す**（RT-272.6 は、預けない要求で測っている）。**拒否も認可の結果なので、RP へ返した時点で request_uri を使い切る**（#420）。**以前は成功の応答を作ったときだけ消しており、拒否の後も、期限まで同じ request_uri でやり直せた**（#413 で観測した）。 |
+| 根拠 | RFC 6749 §4.1.2.1（access_denied）/ RFC 9126 §4・§7.3 / #413 / #420 |
 | テスト | `RT41302_PARの要求を拒否するとaccess_denied` |
 
 **手順**
 
 1. PAR に認可要求を預け、request_uri を受け取る
 1. その request_uri で認可要求を送り、同意の画面で「拒否」を押す
-1. 拒否した後に、同じ request_uri をもう一度送る（同意の画面が出ても、押さない）
+1. 拒否した後に、同じ request_uri をもう一度送る
 
 **検証（合否を判定する）**
 
@@ -13607,11 +13607,72 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーは access_denied
 - 預けた state が返る
 - 認可コードは発行されない
+- 拒否した後 : 認可コードを返さない
+- 拒否した後 : 同意の画面を出さない（request_uri を使い切っている）
+- 拒否した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
 
-**観測（判定しない）**
+## RT-420.1 PAR に prompt=none を預け、サインインしていない状態で認可要求を送ると、redirect_uri へ login_required を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる
 
-- 拒否した後の同じ request_uri の返り方
-  - **今は、同意の画面がもう一度出る（まだ使える）。拒否・エラーの後にも消すのは #420**（RFC 9126 §4・§7.3 の SHOULD）。**#420 で直したら、検証に上げる。** 今は記録するだけで、判定しない。
+| | |
+|---|---|
+| 観点 | **拒否に限らず、redirect_uri へエラーを返した時点で、その認可は終わっている**ので、request_uri を使い切る。**RP がやり直すなら、預け直す**（クライアントは request_uri を 1 回だけ使う。RFC 9126 §4 の MUST）。 |
+| 根拠 | RFC 9126 §4・§7.3 / FAPI 2.0 Security Profile §5.3.2.2 NOTE 3 / OIDC Core 1.0 §3.1.2.6（login_required）/ #420 |
+| テスト | `RT42001_エラーを返した後のrequest_uriは使えない` |
+
+**手順**
+
+1. PAR に prompt=none の認可要求を預け、request_uri を受け取る
+1. サインインしないまま、その request_uri で認可要求を送る
+1. 同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- redirect_uri へ返る
+- エラーは login_required
+- エラーを返した後 : 認可コードを返さない
+- エラーを返した後 : 同意の画面を出さない（request_uri を使い切っている）
+- エラーを返した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
+
+## RT-420.2 PAR に預けた要求の request_uri を、別のクライアントの client_id で送るとエラー画面になるが、request_uri は消えず、正しい client_id で送り直すと認可を続けられる
+
+| | |
+|---|---|
+| 観点 | **エラー画面で止めるときは、RP へ何も返していない**（どちらの redirect_uri も信じない。RT-294.21）。**ここで消すと、要求を取り違えただけで、正しいクライアントの認可まで終わってしまう。****消すのは、redirect_uri へ結果を返したときだけ**（#420）。 |
+| 根拠 | RFC 9126 §4 / #420 |
+| テスト | `RT42002_エラー画面で止めたときはrequest_uriを消さない` |
+
+**手順**
+
+1. PAR に認可要求を預け、request_uri を受け取る
+1. 別のクライアントの client_id と、その request_uri で認可要求を送る
+1. 正しい client_id で、同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- エラー画面になる（RP へ返さない）
+- 同意の画面が出る（request_uri は消えていない）
+
+## RT-420.3 /ros に prompt=none の Request Object を預け、サインインしていない状態で認可要求を送ると、redirect_uri へ login_required を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **`/ros`（この OP の独自の口）で預けた request_uri も、PAR と同じ預け先・同じ消し方**なので、エラーを返した時点で使い切る（#420）。 |
+| 根拠 | RFC 9126 §4・§7.3 / RFC 9101 §5.2 / #420 |
+| テスト | `RT42003_rosで預けたrequest_uriもエラーの後は使えない` |
+
+**手順**
+
+1. /ros に prompt=none の Request Object を預け、request_uri を受け取る
+1. サインインしないまま、その request_uri で認可要求を送る
+1. 同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- redirect_uri へ返る
+- エラーは login_required
+- エラーを返した後 : 認可コードを返さない
+- エラーを返した後 : 同意の画面を出さない（request_uri を使い切っている）
+- エラーを返した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

@@ -34,6 +34,7 @@
 //*  2026/11/10  玄人 幸道         id_token の生成に pfx を渡さないようにした（鍵は SigningKeys から引く。#352）
 //*  2026/11/10  玄人 幸道         暗号化した id_token の中の JWS の alg を、/token と同じ決め方にした（#355）
 //*  2026/11/11  玄人 幸道         at_hash は access token を返すときだけ付け、response_type=id_token ではクレームを id_token に入れるようにした（#360）
+//*  2026/11/21  玄人 幸道         ConsumeRequestObject を、redirect_uri へエラーを返すコントローラから呼べるようにした（#420）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -76,8 +77,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **2 回目の認可要求には使えない**ようにする。
         ///
         /// 消し忘れても期限で無効になる（#188 の段階 1）。ここは**使い回しを断つ**ためのもの。
+        ///
+        /// **`redirect_uri` へエラーを返すとき（拒否の `access_denied`、`prompt=none` の `login_required` など）も消す**
+        /// （コントローラの `AuthorizeErrorResponse` から呼ぶ。#420）。**RP へ結果を返した時点で、その認可は終わっている**
+        /// （RFC 9126 §4・§7.3 の使い切り、FAPI 2.0 Security Profile §5.3.2.2 NOTE 3 の「認可の時点で効かせる」）。
+        /// **エラー画面で止めるとき（RP へ何も返さないとき）と、サインインの画面へ送るときは消さない**（利用者が開き直せるように）。
         /// </remarks>
-        private static void ConsumeRequestObject(NameValueCollection queryString)
+        public static void ConsumeRequestObject(NameValueCollection queryString)
         {
             if (queryString == null)
             {

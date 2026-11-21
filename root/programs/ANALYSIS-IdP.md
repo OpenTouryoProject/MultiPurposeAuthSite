@@ -2199,6 +2199,17 @@ if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
 > 読む回数を 1 回にまとめるのではなく、**応答を作り終えた時点で消す**ことで、
 > 「2 回目の認可要求には使えない」を実現した。
 
+**✅ #420 で、`redirect_uri` へエラーを返すときも消すようにした。**
+**以前は成功の応答を作ったときだけ消していた**ので、同意の画面で拒否（`access_denied`）した後や、`prompt=none` のエラー（`login_required` など）を返した後も、**期限までは同じ `request_uri` で認可をやり直せた**（#413 の `RT-413.2` で観測した）。
+RFC 9126 §4・§7.3 は使い切りを SHOULD とし、FAPI 2.0 Security Profile §5.3.2.2 NOTE 3 は「認可の時点で効かせる」ことを勧める。**RP へ結果を返した時点で、その認可は終わっている**と扱う。
+
+| 返し方 | `request_uri` | E2E |
+|---|---|---|
+| 成功の応答（code・token） | 消す（#188） | `RT-188.4`・`RT-413.1` |
+| `redirect_uri` へのエラー（拒否・`prompt=none` のエラーなど） | **消す**（#420。`AccountController.AuthorizeErrorResponse` から `ConsumeRequestObject`） | `RT-413.2`・`RT-420.1`・`RT-420.3`（`/ros`） |
+| エラー画面（`client_id` の食い違いなど、RP へ返さない） | 消さない（利用者が開き直せる） | `RT-420.2` |
+| サインインの画面へ送る | 消さない（FAPI 2.0 Security Profile §5.3.2.2 NOTE 3） | `RT-413.1` |
+
 ### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]** — **✅ 修正済み（#223）**
 
 **直す前。** net10.0 版は 2 分固定だった。

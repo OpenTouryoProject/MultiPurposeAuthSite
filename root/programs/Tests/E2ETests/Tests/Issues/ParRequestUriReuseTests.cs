@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/21  玄人 幸道         新規（#413）
+//*  2026/11/21  玄人 幸道         RT-413.2 の拒否の後の返り方を検証に上げ、RT-420.1〜.3 を足した（#420）
 //**********************************************************************************
 
 using System;
@@ -45,10 +46,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
     /// RT-413 PAR の request_uri を、認可を終える前に使い回す（#413）。
+    /// RT-420 redirect_uri へエラーを返した後の request_uri（#420）。
     /// </summary>
     /// <remarks>
     /// **預けた要求は、認可の応答を作り終えた時点で消す**（`CmnEndpoints.AuthorizeResponse`。#188 の段階 2）。
-    /// **それまでは、何度読んでも消えない。**
+    /// **#420 から、`redirect_uri` へエラーを返した時点（拒否・`prompt=none` のエラーなど）でも消す。**
+    /// **それまで（サインインの画面へ送る・RP へ返さないエラー画面）は、何度読んでも消えない。**
     /// **E2E は、認可要求の前にサインインしておく**ので、**サインインの前に始まる PAR の認可**は、ほかのテストでは通っていない。
     /// 適合性テストの `par-ensure-reused-request-uri-prior-to-auth-completion-succeeds` は同じ観点だが、
     /// **ブラウザの操作が 1 回目と 2 回目の訪問を区別できず、自動では回せない**（`container/CTS/README.md`）。ここで補う。
@@ -167,11 +170,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
                 TestReport r = this.Report("RT-413.2",
-                    "PAR に預けた要求を同意の画面で拒否すると、redirect_uri へ access_denied を返す。その後に同じ request_uri を送ったときの返り方を残す",
+                    "PAR に預けた要求を同意の画面で拒否すると、redirect_uri へ access_denied を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる",
                     "**PAR で預けた要求でも、拒否は access_denied で返す**（RT-272.6 は、預けない要求で測っている）。"
-                    + "**拒否した後の request_uri は、今は消していない**（消すのは、成功の応答を作ったときだけ。消すのは #420）。"
-                    + "**使えるかどうかは、仕様が幅を持つ**（RFC 9126 §4 は使い切りを SHOULD とし、再読み込みの重複を MAY とする）ので、観測にする。",
-                    "RFC 6749 §4.1.2.1（access_denied）/ RFC 9126 §4 / #413");
+                    + "**拒否も認可の結果なので、RP へ返した時点で request_uri を使い切る**（#420）。"
+                    + "**以前は成功の応答を作ったときだけ消しており、拒否の後も、期限まで同じ request_uri でやり直せた**（#413 で観測した）。",
+                    "RFC 6749 §4.1.2.1（access_denied）/ RFC 9126 §4・§7.3 / #413 / #420");
 
                 r.Target(client.Target.DisplayName + " / client_name=" + KnownClients.TestClient + " / prompt=consent を預けて同意の画面を出す");
 
@@ -201,14 +204,154 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("認可コードは発行されない", string.IsNullOrEmpty(denied.Code),
                     "code なし", string.IsNullOrEmpty(denied.Code) ? "なし" : "**発行された**");
 
-                r.Step("(3) 拒否した後に、同じ request_uri をもう一度送る（同意の画面が出ても、押さない）");
+                r.Step("(3) 拒否した後に、同じ request_uri をもう一度送る");
 
                 AuthZResponse again = await ParRequestUriReuseTests.AuthorizeAsync(client, reg, requestUri);
 
-                r.Observe("拒否した後の同じ request_uri の返り方",
-                    ParRequestUriReuseTests.Describe(again),
-                    "**今は、同意の画面がもう一度出る（まだ使える）。拒否・エラーの後にも消すのは #420**（RFC 9126 §4・§7.3 の SHOULD）。"
-                    + "**#420 で直したら、検証に上げる。** 今は記録するだけで、判定しない。");
+                ParRequestUriReuseTests.VerifyRefused(r, "拒否した後", again);
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-420.1 redirect_uri へエラー（login_required）を返した後は、同じ request_uri を使えない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42001_エラーを返した後のrequest_uriは使えない(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-420.1",
+                    "PAR に prompt=none を預け、サインインしていない状態で認可要求を送ると、redirect_uri へ login_required を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる",
+                    "**拒否に限らず、redirect_uri へエラーを返した時点で、その認可は終わっている**ので、request_uri を使い切る。"
+                    + "**RP がやり直すなら、預け直す**（クライアントは request_uri を 1 回だけ使う。RFC 9126 §4 の MUST）。",
+                    "RFC 9126 §4・§7.3 / FAPI 2.0 Security Profile §5.3.2.2 NOTE 3 / OIDC Core 1.0 §3.1.2.6（login_required）/ #420");
+
+                r.Target(client.Target.DisplayName + " / client_name=" + KnownClients.TestClient + " / **サインインしていない**クライアント / prompt=none を預ける");
+
+                r.Step("(1) PAR に prompt=none の認可要求を預け、request_uri を受け取る");
+
+                string requestUri = await ParRequestUriReuseTests.PushAsync(client, reg, "state-rt4201", "none");
+
+                r.Step("(2) サインインしないまま、その request_uri で認可要求を送る");
+
+                AuthZResponse first = await ParRequestUriReuseTests.AuthorizeAsync(client, reg, requestUri);
+
+                r.Verify("redirect_uri へ返る", first.Redirected && (first.Location ?? "").StartsWith(reg.RedirectUri, StringComparison.Ordinal),
+                    "redirect_uri へのリダイレクト", ParRequestUriReuseTests.Describe(first));
+
+                r.VerifyEqual("エラーは login_required", "login_required", first.Error ?? "（無し）");
+
+                r.Step("(3) 同じ request_uri をもう一度送る");
+
+                AuthZResponse again = await ParRequestUriReuseTests.AuthorizeAsync(client, reg, requestUri);
+
+                ParRequestUriReuseTests.VerifyRefused(r, "エラーを返した後", again);
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-420.3 /ros で預けた request_uri も、redirect_uri へエラーを返した後は使えない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42003_rosで預けたrequest_uriもエラーの後は使えない(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-420.3",
+                    "/ros に prompt=none の Request Object を預け、サインインしていない状態で認可要求を送ると、redirect_uri へ login_required を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる",
+                    "**`/ros`（この OP の独自の口）で預けた request_uri も、PAR と同じ預け先・同じ消し方**なので、エラーを返した時点で使い切る（#420）。",
+                    "RFC 9126 §4・§7.3 / RFC 9101 §5.2 / #420");
+
+                r.Target(client.Target.DisplayName + " / client_name=" + KnownClients.TestClient + " / **サインインしていない**クライアント / /ros に prompt=none を預ける");
+
+                r.Step("(1) /ros に prompt=none の Request Object を預け、request_uri を受け取る");
+
+                string requestUri = await RequestObjectBuilder.RegisterAsync(client,
+                    await RequestObjectBuilder.CreateAsync(client, reg.ClientId,
+                        new Dictionary<string, object>()
+                        {
+                            { "response_type", "code" },
+                            { "redirect_uri", reg.RedirectUri },
+                            { "scope", "openid" },
+                            { "state", "state-rt4203" },
+                            { "nonce", "nonce-rt4203" },
+                            { "prompt", "none" }
+                        })) ?? "";
+
+                Assert.False(string.IsNullOrEmpty(requestUri), "前提: request_uri が払い出されること");
+
+                r.Step("(2) サインインしないまま、その request_uri で認可要求を送る");
+
+                AuthZResponse first = await ParRequestUriReuseTests.AuthorizeAsync(client, reg, requestUri);
+
+                r.Verify("redirect_uri へ返る", first.Redirected && (first.Location ?? "").StartsWith(reg.RedirectUri, StringComparison.Ordinal),
+                    "redirect_uri へのリダイレクト", ParRequestUriReuseTests.Describe(first));
+
+                r.VerifyEqual("エラーは login_required", "login_required", first.Error ?? "（無し）");
+
+                r.Step("(3) 同じ request_uri をもう一度送る");
+
+                AuthZResponse again = await ParRequestUriReuseTests.AuthorizeAsync(client, reg, requestUri);
+
+                ParRequestUriReuseTests.VerifyRefused(r, "エラーを返した後", again);
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-420.2 エラー画面で止めたときは、request_uri を消さない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42002_エラー画面で止めたときはrequest_uriを消さない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                ClientRegistration other = Flows.Registration(client, KnownClients.Fapi1Client);
+
+                TestReport r = this.Report("RT-420.2",
+                    "PAR に預けた要求の request_uri を、別のクライアントの client_id で送るとエラー画面になるが、request_uri は消えず、正しい client_id で送り直すと認可を続けられる",
+                    "**エラー画面で止めるときは、RP へ何も返していない**（どちらの redirect_uri も信じない。RT-294.21）。"
+                    + "**ここで消すと、要求を取り違えただけで、正しいクライアントの認可まで終わってしまう。**"
+                    + "**消すのは、redirect_uri へ結果を返したときだけ**（#420）。",
+                    "RFC 9126 §4 / #420");
+
+                r.Target("PAR は " + KnownClients.TestClient + " / 1 回目の client_id は " + KnownClients.Fapi1Client);
+
+                r.Step("(1) PAR に認可要求を預け、request_uri を受け取る");
+
+                string requestUri = await ParRequestUriReuseTests.PushAsync(client, reg, "state-rt4202");
+
+                r.Step("(2) 別のクライアントの client_id と、その request_uri で認可要求を送る");
+
+                AuthZResponse mismatch = await client.AuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", other.ClientId },
+                    { "request_uri", requestUri }
+                });
+
+                r.Verify("エラー画面になる（RP へ返さない）",
+                    !mismatch.Redirected && (mismatch.Body ?? "").Contains("text-danger"),
+                    "エラー画面", ParRequestUriReuseTests.Describe(mismatch));
+
+                r.Step("(3) 正しい client_id で、同じ request_uri をもう一度送る");
+
+                AuthZResponse again = await ParRequestUriReuseTests.AuthorizeAsync(client, reg, requestUri);
+
+                r.Verify("同意の画面が出る（request_uri は消えていない）", again.NeedsConsent,
+                    "同意の画面", ParRequestUriReuseTests.Describe(again));
 
                 r.Done();
             }
@@ -216,12 +359,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #region 補助
 
-        /// <summary>PAR に認可要求を預け、request_uri を返す（prompt=consent で同意の画面を出させる）</summary>
+        /// <summary>PAR に認可要求を預け、request_uri を返す（既定は prompt=consent で同意の画面を出させる）</summary>
         /// <param name="client">IdPClient</param>
         /// <param name="reg">クライアント</param>
         /// <param name="state">state</param>
+        /// <param name="prompt">prompt</param>
         /// <returns>request_uri</returns>
-        private static async Task<string> PushAsync(IdPClient client, ClientRegistration reg, string state)
+        private static async Task<string> PushAsync(IdPClient client, ClientRegistration reg, string state, string prompt = "consent")
         {
             JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
             string endpoint = discovery.String("pushed_authorization_request_endpoint");
@@ -237,8 +381,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     { "scope", "openid email" },
                     { "state", state },
                     { "nonce", "nonce-" + state },
-                    //  **同意の記録があっても、同意の画面を出させる**（許可・拒否を自分で押すため）。
-                    { "prompt", "consent" }
+                    //  **既定は、同意の記録があっても同意の画面を出させる**（許可・拒否を自分で押すため）。
+                    { "prompt", prompt }
                 },
                 reg.ClientId, reg.ClientSecret);
 
@@ -280,6 +424,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             r.Verify(label + " : 認可コードもエラーも返さない", string.IsNullOrEmpty(res.Code) && string.IsNullOrEmpty(res.Error),
                 "code・error 無し",
                 "code=" + (string.IsNullOrEmpty(res.Code) ? "無し" : "あり") + " / error=" + (res.Error ?? "無し"));
+        }
+
+        /// <summary>使い切った request_uri を、invalid_request_uri のエラー画面で断ったことを確かめる（RT-362.3 と同じ判定）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">いつの要求か</param>
+        /// <param name="res">AuthZResponse</param>
+        private static void VerifyRefused(TestReport r, string label, AuthZResponse res)
+        {
+            r.Verify(label + " : 認可コードを返さない", string.IsNullOrEmpty(res.Code),
+                "code 無し", string.IsNullOrEmpty(res.Code) ? "無し" : "**返してしまった**");
+
+            r.Verify(label + " : 同意の画面を出さない（request_uri を使い切っている）", !res.NeedsConsent,
+                "同意の画面を出さない", ParRequestUriReuseTests.Describe(res));
+
+            r.Verify(label + " : invalid_request_uri のエラー画面になる（RP へ返さない）",
+                !res.Redirected && (res.Body ?? "").Contains("text-danger") && (res.Body ?? "").Contains("invalid_request_uri"),
+                "エラー画面（invalid_request_uri）", ParRequestUriReuseTests.Describe(res));
         }
 
         /// <summary>返り方を 1 行にする（値は伏せる）</summary>
