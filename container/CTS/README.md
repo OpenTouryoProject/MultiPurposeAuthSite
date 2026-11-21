@@ -32,8 +32,12 @@ cd ..\CTS
 | `fapi2-sp-plain-oauth` | 同上の `private_key_jwt`＋DPoP を、`openid=plain_oauth`（OIDC を使わない OAuth）で。#416 | `fapi2.json`（クライアントは 8・9。**`scope` を `email` に置き換える**：Conformance Suite は、`scope` に `openid` があると始める前に落とす） |
 | `fapi2-sp-client-credentials` | 同上の `fapi_profile=fapi_client_credentials_grant`（`openid=plain_oauth`・`private_key_jwt`＋DPoP。ブラウザを使わない）。#416 | `fapi2.json`（クライアントは 23・24。**`client_mode=normal`**。下の「登録と、テスト利用者」。`scope` は `email`。**`openid=openid_connect` にすると、出ていない id_token の `acr` を確かめに行って止まる**） |
 | `fapi2-ms-private-key-jwt-dpop` | `fapi2-message-signing-final-test-plan`（上の `private_key_jwt`＋DPoP に、署名した Request Object・JARM） | `fapi2.json`（**クライアントは SP と分ける**：17・18。署名した Request Object を必須にした登録。#385） |
+| `fapi2-ms-mtls` | 同上の MTLS＋MTLS（#416） | `fapi2.json`（クライアントは 29・30） |
+| `fapi2-ms-signed-plain-response`・`fapi2-ms-unsigned-jarm` | 同上の `private_key_jwt`＋DPoP で、**署名と JARM を片方だけ使う**組（前者は署名した Request Object＋通常の応答、後者は署名の無い要求＋JARM。#416） | `fapi2.json`（前者は 17・18、**後者は 8・9**：17・18 は署名した Request Object を必須にしている） |
 | `fapi1-adv-private-key-jwt-par` | `fapi1-advanced-final-test-plan`（`plain_fapi`・`private_key_jwt`・`pushed`・`jarm`。**`plain_response`（Hybrid）ではない**：MPAS は fapi1 の登録に Hybrid を許さない（FA-1.4）。#370） | `fapi2.json`（クライアントは `client_mode=fapi1`） |
+| `fapi1-adv-mtls-par` | 同上の MTLS のクライアント認証（#416） | `fapi2.json`（クライアントは 25・26） |
 | `fapi-ciba-private-key-jwt-poll` | `fapi-ciba-id1-test-plan`（`plain_fapi`・poll・`private_key_jwt`・静的な登録） | `fapi-ciba.json`（**利用者の承認は、`RunTestPlan.ps1` が認証デバイスの代わりに送る**。下の「CIBA の承認」） |
+| `fapi-ciba-mtls-poll` | 同上の MTLS のクライアント認証（#416） | `fapi-ciba.json`（クライアントは 27・28。端末役は同じ） |
 
 - **FAPI のバリアントは、代表の組み合わせだけ**にしてある（軸を全部掛け合わせると数十通り。#350 の段階 4 で決めた）
 
@@ -119,7 +123,8 @@ cd ..\CTS
 | FAPI 2.0 のクライアント（8〜11 つ目。`client_mode=fapi2`） | 同上。8・9 は `private_key_jwt`（＋ DPoP）、10・11 は `tls_client_auth`（＋ 証明書に縛ったトークン）。**次を登録する**：`id_token_signed_response_alg=ES256`（**登録が無いと RS256 になり、FAPI 2.0 の検査で全部止まる**。#355）、**FAPI の要件の強制**（`require_pushed_authorization_requests`・`require_pkce`・`dpop_bound_access_tokens` か `tls_client_certificate_bound_access_tokens`。#346。**どれも既定は false で、立てないと PAR・PKCE の無い要求が通る**） |
 | FAPI 2.0 Message Signing のクライアント（17・18 番目。`client_mode=fapi2`） | 同上。8・9 と同じ形に、**署名した Request Object の必須（`require_signed_request_object`）を足したもの**（#385）。**8・9 は Security Profile のプランと共用なので立てられない**（Security Profile は署名の無い PAR を送る） |
 | FAPI 2.0 の、認証と縛りの交差のクライアント（19〜22 番目。`client_mode=fapi2`） | 同上（#416）。19・20 は `private_key_jwt`＋証明書に縛ったトークン（`tls_client_certificate_bound_access_tokens`。証明書は設定の `mtls`・`mtls2`）、21・22 は `tls_client_auth`＋DPoP に縛ったトークン（`dpop_bound_access_tokens`）。**ほかの項目は 8〜11 と同じ** |
-| FAPI 2.0 の client_credentials のクライアント（23・24 番目。**`client_mode=normal`**） | 同上（#416）。`private_key_jwt`＋DPoP の必須（`dpop_bound_access_tokens`）。**MPAS は client_credentials を normal の登録にしか許さない**（`ClientModePolicy`）ので、fapi2 の登録では回せない。**#346 の項目は `client_mode` によらず効く**ので、FAPI 2.0 の認証と縛りは登録の項目で強制する（fapi2 × client_credentials を開けるかは、別に決める） |
+| FAPI 2.0 の client_credentials のクライアント（23・24 番目。**`client_mode=normal`**） | 同上（#416）。`private_key_jwt`＋DPoP の必須（`dpop_bound_access_tokens`）。**MPAS は client_credentials を normal の登録にしか許さない**（`ClientModePolicy`）ので、fapi2 の登録では回せない。**#346 の項目は `client_mode` によらず効く**ので、FAPI 2.0 の認証と縛りは登録の項目で強制する（fapi2 × client_credentials を開けるかは #424） |
+| mTLS のクライアント認証のクライアント（25〜30 番目） | 同上（#416）。**同じプランの `private_key_jwt` の登録から、認証だけを `tls_client_auth`（Subject は `CN=CTS FAPI Client 1`・`2`）に入れ替えたもの**：25・26 は FAPI 1.0 Advanced（12・13 の形）、27・28 は FAPI-CIBA（15・16 の形）、29・30 は FAPI 2.0 Message Signing（17・18 の形で、縛りも証明書）。**公開鍵（`jwk_ecdsa_publickey`）は残す**（Request Object・CIBA の認証要求の署名に使う） |
 | FAPI 1.0 Advanced のクライアント（12・13 番目。`client_mode=fapi1`） | 同上。`private_key_jwt`・`id_token_signed_response_alg=ES256`。鍵は FAPI 2.0 と同じ。**FAPI 1.0 Advanced の要件の強制**（`require_signed_request_object`・`require_pkce`・`tls_client_certificate_bound_access_tokens`。§5.2.2 の 1・18・5。#385）。**証明書に縛ったトークンには、設定の `mtls`・`mtls2` のクライアント証明書を使う** |
 | CIBA のクライアント（15・16 番目。`client_mode=fapi_ciba`）と端末役（14 番目） | 同上。CIBA の認証要求の署名は ES256 固定なので、公開鍵は `jwk_ecdsa_publickey`。**証明書に縛ったトークンを必須にする**（`tls_client_certificate_bound_access_tokens`。FAPI-CIBA ID1 §5.2.2 が求める FAPI 1.0 Advanced §5.2.2 の 5。#385）。端末役は秘密だけを持ち、`AuthenticationDeviceClientIds` に挙げる |
 | 認可コードの期限 | **60 秒にしてある**（`OAuth2AuthorizationCodeExpireTimeSpanFromSeconds`。FAPI 2.0 は 60 秒以下。雛形の既定は 600 秒。**サーバ全体に効く**） |
@@ -141,7 +146,7 @@ cd ..\CTS
   `RunTestPlan.ps1` が手元の `appsettings.json` から埋めて、**`out\<プラン>.json` に書く**（`out\` は Git の管理外）
 - 画面から回すときは、`out\<プラン>.json` を貼る
 - **Conformance Suite のログ（`mongo\`）と報告書の zip（`out\`）には、ブラウザの自動操作で入力したテスト利用者のパスワードが平文で残る**（`Entering text` の記録）。どちらも Git の管理外だが、**ログや報告書を、そのまま Issue などに貼らない**
-- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
+- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回、#416 で 3 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
 
 **画面の写し（REVIEW）を求めるモジュールは、モジュールごとの `"override"` で、そのときの画面を写しの代わりにする**（原本の CI の設定 `.gitlab-ci/local-provider-oidcc-conformance-config.json` と同じ書き方）。
 `wait` のコマンドの末尾に `update-image-placeholder`（無くてもよいなら `-optional`）を付けると、待った画面で写しの欄が埋まる。
@@ -186,7 +191,7 @@ cd ..\CTS
     認可コードの 2 回目の引き換えは断るが、**1 回目で出したアクセス トークンが失効しない**（`EnsureHttpStatusCodeIs4xx`。RFC 6749 §4.1.2 の SHOULD）。#421（[`ANALYSIS-IdP.md`](../../root/programs/ANALYSIS-IdP.md) の E-13 と同じ欠け）
 - **環境の不足で落ちるモジュール**（#416。`fapi2-sp-plain-oauth`・`fapi2-sp-client-credentials`）
   - **資源の段**（`resource.resourceUrl` への要求に 200・201 を求める）で 403 になる。資源には `/userinfo` を使うが、**MPAS の `/userinfo` は `openid` の無いトークンを `insufficient_scope` で断る**（OIDC Core 1.0 §5.3・RFC 6750 §3.1。`RT-294.80`）。**MPAS には、ほかに保護された資源が無い**
-  - **その前の段（PAR・認可・トークン エンドポイント、クライアント認証・DPoP）の判定は通っている。** 適合性テストの環境に資源サーバを足すかは、別に決める
+  - **その前の段（PAR・認可・トークン エンドポイント、クライアント認証・DPoP）の判定は通っている。** 適合性テストの環境に資源を足すかは #425
 - **OP の不適合で落ちるモジュール（未修正。起票済み）**
   - `fapi2-sp-plain-oauth` の `ensure-request-object-without-redirect-uri-fails`：fapi2 の登録で、`openid` の無い PAR の要求を `redirect_uri` 無しで受ける（FAPI 2.0 Security Profile §5.3.2.2 の 6）。#422
   - `fapi2-sp-mtls-dpop` の、資源まで進むモジュール（21 件）：`tls_client_auth` で認証したクライアントのトークンが、DPoP だけでなくクライアント証明書にも縛られ、資源の段で 401 になる（RFC 8705 §4・§3.4）。#423
@@ -198,6 +203,15 @@ cd ..\CTS
   | `fapi2-sp-mtls-dpop` | 20 | 23 | 2 | 1 | 0 | 自動では回せない 2・#423 で 21 |
   | `fapi2-sp-plain-oauth` | 23 | 20 | 2 | 1 | 0 | 自動では回せない 2・#422 で 1・資源の段で 17 |
   | `fapi2-sp-client-credentials` | 8 | 6 | 0 | 1 | 0 | 資源の段で 6 |
+  | `fapi2-ms-mtls` | 43 | 2 | 3 | 2 | 1 | 自動では回せない 2 |
+  | `fapi2-ms-signed-plain-response` | 56 | 3 | 3 | 3 | 1 | 自動では回せない 2・サインインのボタンの事象 1（下） |
+  | `fapi2-ms-unsigned-jarm` | 44 | 2 | 3 | 2 | 1 | 自動では回せない 2 |
+  | `fapi1-adv-mtls-par` | 42 | 2 | 3 | 1 | 1 | 自動では回せない 2 |
+  | `fapi-ciba-mtls-poll` | 29 | 1 | 0 | 2 | 0 | 自動では回せない 1（`user-rejects-authentication`） |
+
+  - **WARNING は、どれも #421**（下の「WARNING の理由」）
+  - **FAPI 1.0 Advanced の MTLS は、#398 で止まらない**（`client_assertion` を使わない）。`private_key_jwt` のプランで #398 の先にある判定を、版を緩めずに確かめられる
+  - `fapi2-ms-signed-plain-response` の FAILED の 1 つは、上の「サインインのボタンを押しても画面が変わらない」事象（1 回目は `par-without-duplicate-parameters`、回し直すとそれは通り、`ensure-authorization-request-without-nonce-success` が同じ形で落ちた。**同じモジュールが続けて落ちてはいない**）
 - **対応を見送った機能のモジュール**
   - `oidcc-userinfo-rs256`（`oidcc-dynamic`）：**署名した UserInfo の応答**（OIDC Core 1.0 §5.3.2）を求める。**MPAS は対応を見送った**（任意の機能で、FAPI は求めない。[`ANALYSIS-IdP.md`](../../root/programs/ANALYSIS-IdP.md) の D-17。#414）ので、
     Discovery に `userinfo_signing_alg_values_supported` が無く、`CheckDiscEndpointUserinfoSigningAlgValuesSupportedContainsRS256` で FAILED になる。

@@ -40,6 +40,7 @@
      2026/11/11  玄人 幸道         段階 4 のプラン（FAPI 2.0 Message Signing・FAPI 1.0 Advanced・FAPI-CIBA）と、CIBA の端末役（承認の自動化）を足した（#350）
      2026/11/17  玄人 幸道         FAPI 2.0 Message Signing のクライアントを、署名した Request Object を必須にした登録（17・18）に分けた（#385）
      2026/11/21  玄人 幸道         FAPI 2.0 SP の、認証と縛りの交差・plain_oauth・client_credentials のプランと、scope の置き換えを足した（#416）
+     2026/11/21  玄人 幸道         FAPI 1.0 Advanced・FAPI-CIBA・FAPI 2.0 MS の mTLS と、MS の要求と応答の残りの組のプランを足した（#416）
 #>
 [CmdletBinding()]
 param(
@@ -52,8 +53,9 @@ param(
         'fapi2-sp-private-key-jwt-mtls', 'fapi2-sp-mtls-dpop',
         'fapi2-sp-plain-oauth', 'fapi2-sp-client-credentials',
         'fapi2-ms-private-key-jwt-dpop',
-        'fapi1-adv-private-key-jwt-par',
-        'fapi-ciba-private-key-jwt-poll')]
+        'fapi2-ms-mtls', 'fapi2-ms-signed-plain-response', 'fapi2-ms-unsigned-jarm',
+        'fapi1-adv-private-key-jwt-par', 'fapi1-adv-mtls-par',
+        'fapi-ciba-private-key-jwt-poll', 'fapi-ciba-mtls-poll')]
     [string]$Plan = 'oidcc-basic',
 
     [int]$ModuleTimeoutSec = 180
@@ -124,16 +126,38 @@ $plans = @{
     'fapi2-ms-private-key-jwt-dpop' = @{ Name = 'fapi2-message-signing-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
         Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop","fapi_request_method":"signed_non_repudiation","fapi_response_mode":"jarm"}'
         ClientId = 'c75c11e0000000000000000000000011'; Client2Id = 'c75c11e0000000000000000000000012' }
+    #   **Message Signing の、上で回していない組**（#416 の段 2）
+    #   mTLS ＋ mTLS（29・30）
+    'fapi2-ms-mtls' = @{ Name = 'fapi2-message-signing-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"mtls","sender_constrain":"mtls","fapi_request_method":"signed_non_repudiation","fapi_response_mode":"jarm"}'
+        ClientId = 'c75c11e000000000000000000000001d'; Client2Id = 'c75c11e000000000000000000000001e' }
+    #   署名した要求 ＋ 通常の応答（JARM 無し）：17・18（署名した Request Object の必須はそのままでよい）
+    'fapi2-ms-signed-plain-response' = @{ Name = 'fapi2-message-signing-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop","fapi_request_method":"signed_non_repudiation","fapi_response_mode":"plain_response"}'
+        ClientId = 'c75c11e0000000000000000000000011'; Client2Id = 'c75c11e0000000000000000000000012' }
+    #   署名の無い要求 ＋ JARM：8・9（**17・18 は署名した Request Object を必須にしているので使えない**。8・9 は JARM の alg も登録してある）
+    'fapi2-ms-unsigned-jarm' = @{ Name = 'fapi2-message-signing-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop","fapi_request_method":"unsigned","fapi_response_mode":"jarm"}'
+        ClientId = 'c75c11e0000000000000000000000008'; Client2Id = 'c75c11e0000000000000000000000009' }
     # **FAPI 1.0 Advanced**：private_key_jwt・PAR（pushed）・JARM（#370）
     #   **plain_response（Hybrid の code id_token）にしない。** MPAS は fapi1 の登録に Hybrid を許さない（FA-1.4）ので、
     #   FAPI 1.0 Advanced §5.2.2 の 2 の「code ＋ JARM」の側で回す（#350 で plain_response にしていたのは誤り。#370 で見つけた）
     'fapi1-adv-private-key-jwt-par' = @{ Name = 'fapi1-advanced-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
         Variant = '{"fapi_profile":"plain_fapi","client_auth_type":"private_key_jwt","fapi_auth_request_method":"pushed","fapi_response_mode":"jarm"}'
         ClientId = 'c75c11e000000000000000000000000c'; Client2Id = 'c75c11e000000000000000000000000d' }
+    #   mTLS のクライアント認証（25・26。#416 の段 2）
+    'fapi1-adv-mtls-par' = @{ Name = 'fapi1-advanced-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420
+        Variant = '{"fapi_profile":"plain_fapi","client_auth_type":"mtls","fapi_auth_request_method":"pushed","fapi_response_mode":"jarm"}'
+        ClientId = 'c75c11e0000000000000000000000019'; Client2Id = 'c75c11e000000000000000000000001a' }
     # **FAPI-CIBA**：poll・private_key_jwt・静的な登録。**利用者の承認は、このスクリプトが認証デバイスの代わりに送る**（Ciba = $true。下の「CIBA の端末役」）
     'fapi-ciba-private-key-jwt-poll' = @{ Name = 'fapi-ciba-id1-test-plan'; Config = 'fapi-ciba'; Fapi = $true; ModuleTimeoutSec = 420; Ciba = $true
         Variant = '{"client_registration":"static_client","ciba_mode":"poll","client_auth_type":"private_key_jwt","fapi_ciba_profile":"plain_fapi"}'
         ClientId = 'c75c11e000000000000000000000000f'; Client2Id = 'c75c11e0000000000000000000000010'
+        DeviceClientId = 'c75c11e000000000000000000000000e'; DeviceClientSecret = 'cts-client14-secret-for-conformance-test-only' }
+    #   mTLS のクライアント認証（27・28。#416 の段 2）。端末役は上と同じ
+    'fapi-ciba-mtls-poll' = @{ Name = 'fapi-ciba-id1-test-plan'; Config = 'fapi-ciba'; Fapi = $true; ModuleTimeoutSec = 420; Ciba = $true
+        Variant = '{"client_registration":"static_client","ciba_mode":"poll","client_auth_type":"mtls","fapi_ciba_profile":"plain_fapi"}'
+        ClientId = 'c75c11e000000000000000000000001b'; Client2Id = 'c75c11e000000000000000000000001c'
         DeviceClientId = 'c75c11e000000000000000000000000e'; DeviceClientSecret = 'cts-client14-secret-for-conformance-test-only' }
 }
 
