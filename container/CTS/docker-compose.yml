@@ -300,6 +300,58 @@ services:
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__tls_client_auth_subject_dn=CN=CTS FAPI Client 2
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
       - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000000b__client_name=CtsFapi2Mtls2
+      # **FAPI 2.0 の、認証と縛りの交差**（#416。8〜11 は同じ系統の組だけ）。8・9 と 10・11 の形で、送信者の拘束の必須だけを入れ替えたもの
+      #   19・20 : private_key_jwt ＋ 証明書に縛ったトークン（証明書は設定の mtls・mtls2）
+      #   21・22 : tls_client_auth ＋ DPoP に縛ったトークン
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__tls_client_certificate_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000013__client_name=CtsFapi2PrivateKeyJwtMtls1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback?dummy1=lorem&dummy2=ipsum
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__tls_client_certificate_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000014__client_name=CtsFapi2PrivateKeyJwtMtls2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__dpop_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__token_endpoint_auth_method=tls_client_auth
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__tls_client_auth_subject_dn=CN=CTS FAPI Client 1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000015__client_name=CtsFapi2MtlsDpop1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback?dummy1=lorem&dummy2=ipsum
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__client_mode=fapi2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__id_token_signed_response_alg=ES256
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__require_pushed_authorization_requests=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__require_pkce=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__dpop_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__token_endpoint_auth_method=tls_client_auth
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__tls_client_auth_subject_dn=CN=CTS FAPI Client 2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__client_name=CtsFapi2MtlsDpop2
+      # **FAPI 2.0 の client_credentials**（#416。fapi_profile=fapi_client_credentials_grant。23・24）。
+      #   **client_mode は normal のまま**（ClientModePolicy は client_credentials を normal にしか許さない。fapi2 × client_credentials を開けるかは別に決める）。
+      #   **FAPI 2.0 の認証と縛りは、登録の項目で強制する**（private_key_jwt・DPoP の必須。#346 の項目は client_mode によらず効く）
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__dpop_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__client_name=CtsFapi2ClientCredentials1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__dpop_bound_access_tokens=true
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__token_endpoint_auth_method=private_key_jwt
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__client_name=CtsFapi2ClientCredentials2
     volumes:
       - type: bind
         source: ../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
