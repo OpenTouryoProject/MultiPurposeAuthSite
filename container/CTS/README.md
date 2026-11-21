@@ -156,7 +156,9 @@ cd ..\CTS
 - **FAPI 1.0 Advanced の上書きは、FAPI 2.0 と同じ中身**（#385。以前は FAPI 2.0 のモジュール名だけにあり、FAPI 1.0 Advanced は既定の自動操作のまま `Unable to locate element` で落ちていた）
 - **REVIEW は、写しを人が見て合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない
 - **ログアウトの確認の画面**：MPAS は、`id_token_hint` が無い・一致しない・要求に誤りがあるとき、確認の画面を出す（RP-Initiated Logout 1.0 §2 の MUST）。雛形では「Yes」を任意の手順で押す
-- **自動では回せないモジュール**（FAPI 2.0。FAILED になるが、OP の不適合ではない）
+- **自動では回せないモジュール**（FAPI 2.0・`oidcc-dynamic`。FAILED・TIMEOUT になるが、OP の不適合ではない）
+  - `oidcc-server-rotate-keys`（`oidcc-dynamic`）：**OP の署名の鍵を、人が入れ替える操作が要る**（`TellUserToRotateOpKeys`。入れ替えてから「Start」を押すのを待つ）。
+    自動の実行では待つ間に時間切れになり、TIMEOUT（INTERRUPTED）になる（#414。手で回すかは決めていない）
   - `…-user-rejects-authentication`：利用者が同意を断る操作が要る。**MPAS は同意を記録した後は同意の画面を出さず、サインインの画面には取り消しのボタンが無い**。
     **E2E の `RT-413.2` で補う**（PAR で預けた要求を同意の画面で拒否すると `access_denied`。#413。クライアントは `TestClient`）
   - `…-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds`：**1 回目のサインインの画面では何もせず、2 回目で入る**操作が要る。自動操作は、同じ画面への訪問を区別できない。
@@ -168,6 +170,13 @@ cd ..\CTS
   - **`oidcc-dynamic` の、トークン エンドポイントまで進むモジュール**（`oidcc-server`・`oidcc-idtoken-rs256`・`oidcc-refresh-token`・`oidcc-refresh-token-rp-key-rotation`・`oidcc-registration-jwks-uri`・`oidcc-redirect-uri-query-OK`・`oidcc-request-uri-signed-rs256`）：動的登録したクライアントも `private_key_jwt` で、**トークン エンドポイントへの要求の `aud` をトークン エンドポイントの URL にする**ので、同じ理由（#398）で `invalid_client` になる。**`oidcc-ensure-client-assertion-with-iss-aud-succeeds`**（`aud` を issuer にする）**は通る。****`oidcc-request-uri-signed-rs256` は、外部の `request_uri` の認可要求は通り（#374）、トークン エンドポイントで止まる**
   - **FAPI-CIBA は落ちない**：CIBA の流れ（`/ciba_authz` と、`/token` の CIBA のグラント）は以前のまま、トークン エンドポイントの URL も受ける（RFC 10070 は CIBA を直接の対象にしていない。#398）
   - FAPI 1.0 Advanced の `test-array-as-audience-for-client-JWT-assertion`：client_assertion の `aud` を `[issuer, ダミー]` にして、受けることを求める。**RFC 10070 §4（RFC 7523 §3 の 3 を置き換えた）は、issuer を唯一の値としない JWT を断ることを求める**ので、MPAS は `invalid_client` で断る（モジュールの求める受け方は、置き換えられた RFC 7523 §3 の 3（「含む」）に沿う。#397）
+- **対応を見送った機能のモジュール**
+  - `oidcc-userinfo-rs256`（`oidcc-dynamic`）：**署名した UserInfo の応答**（OIDC Core 1.0 §5.3.2）を求める。**MPAS は対応を見送った**（任意の機能で、FAPI は求めない。`ANALYSIS-IdP.md` の D-17。#414）ので、
+    Discovery に `userinfo_signing_alg_values_supported` が無く、`CheckDiscEndpointUserinfoSigningAlgValuesSupportedContainsRS256` で FAILED になる。
+    **`oidcc-dynamic` の FAILED は、これと、上の #398 で止まる 7 つで全部**（2026-11-20）
+- **飛ばされるのが正しいモジュール**（SKIPPED。`oidcc-dynamic`）
+  - `oidcc-idtoken-unsigned`：Discovery の `id_token_signing_alg_values_supported` に `none` が無い（署名の無い id_token は出さない。Conformance Suite も、認定では `none` を求めないと書く）
+  - `oidcc-request-uri-unsigned`・`oidcc-ensure-request-object-with-redirect-uri`：Discovery の `request_object_signing_alg_values_supported` に `none` が無い（署名の無い Request Object は受けない）
 
 **Discovery の検査の WARNING を、1 つだけ許す**（#385。`fapi2.json`・`fapi-ciba.json`・`oidcc-config.json` の `server.allow_unexpected_metadata_fields`）。
 `CheckForUnexpectedParametersInServerMetadata`（RFC 8414 §2）は、Conformance Suite の知らないメタデータを警告にする。
