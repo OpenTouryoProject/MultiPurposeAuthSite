@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=1c946a29-11c2-4744-8315-454f2ea2c999&code=bogus
+1. GET /Account/EmailConfirmation?userId=627527fa-17d3-4334-a30d-82205f083111&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=1c946a29-11c2-4744-8315-454f2ea2c999&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=1c946a29-11c2-4744-8315-454f2ea2c999&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=627527fa-17d3-4334-a30d-82205f083111&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=627527fa-17d3-4334-a30d-82205f083111&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13549,6 +13549,69 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 90 秒先 : auth_req_id を返さない（利用者へ通知しない）
 - 90 秒先 : HTTP 400
 - 90 秒先 : invalid_request
+
+## RT-413.1 PAR の request_uri の認可要求を、サインインしないまま 2 回送り、2 回目でサインインすると、認可コードが返ってトークンに引き換えられる。その後は同じ request_uri を使えない
+
+| | |
+|---|---|
+| 観点 | **request_uri の使い切りは、認可を終えた時点で効かせる。** サインインの画面を出しただけで使い切りにすると、**利用者がサインインの画面を開き直したり、ブラウザが URL を先読みしたりしただけで、認可できなくなる。****一方で、認可を終えた後は使えない**（RT-188.4 と同じ）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 NOTE 3 / RFC 9126 §4 / #413 |
+| テスト | `RT41301_サインインの前に使い回したrequest_uriで認可できる` |
+
+**手順**
+
+1. PAR に認可要求を預け、request_uri を受け取る
+1. サインインしないまま、その request_uri で認可要求を送り、サインインの画面を開く（サインインはしない）
+1. 同じ request_uri で認可要求をもう一度送り、今度はサインインの画面からサインインする（ReturnUrl で認可要求へ戻る）
+1. 認可コードをトークンに引き換える
+1. 認可を終えた後に、同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- 1 回目 : サインインの画面へ送られる（request_uri を断らない）
+- 1 回目 : 認可コードもエラーも返さない
+- 1 回目 : サインインの画面が開く
+- 2 回目 : サインインの画面へ送られる（request_uri を断らない）
+- 2 回目 : 認可コードもエラーも返さない
+- サインインの後、預けた要求の認可要求へ戻る
+- 同意の画面が出る（prompt=consent を預けた）
+- 認可コードが返る
+- 預けた state が返る
+- トークンの応答 : HTTP 200
+- access_token が返る
+- 認可を終えた後は、認可コードを返さない
+
+**観測（判定しない）**
+
+- 認可を終えた後の返り方
+  - 消した後は「存在しない request_uri」と同じ扱いになる（RT-362.3）。返し方は記録するだけで、判定しない。
+
+## RT-413.2 PAR に預けた要求を同意の画面で拒否すると、redirect_uri へ access_denied を返す。その後に同じ request_uri を送ったときの返り方を残す
+
+| | |
+|---|---|
+| 観点 | **PAR で預けた要求でも、拒否は access_denied で返す**（RT-272.6 は、預けない要求で測っている）。**拒否した後の request_uri は、今は消していない**（消すのは、成功の応答を作ったときだけ。消すのは #420）。**使えるかどうかは、仕様が幅を持つ**（RFC 9126 §4 は使い切りを SHOULD とし、再読み込みの重複を MAY とする）ので、観測にする。 |
+| 根拠 | RFC 6749 §4.1.2.1（access_denied）/ RFC 9126 §4 / #413 |
+| テスト | `RT41302_PARの要求を拒否するとaccess_denied` |
+
+**手順**
+
+1. PAR に認可要求を預け、request_uri を受け取る
+1. その request_uri で認可要求を送り、同意の画面で「拒否」を押す
+1. 拒否した後に、同じ request_uri をもう一度送る（同意の画面が出ても、押さない）
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- リダイレクトで返る
+- エラーは access_denied
+- 預けた state が返る
+- 認可コードは発行されない
+
+**観測（判定しない）**
+
+- 拒否した後の同じ request_uri の返り方
+  - **今は、同意の画面がもう一度出る（まだ使える）。拒否・エラーの後にも消すのは #420**（RFC 9126 §4・§7.3 の SHOULD）。**#420 で直したら、検証に上げる。** 今は記録するだけで、判定しない。
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

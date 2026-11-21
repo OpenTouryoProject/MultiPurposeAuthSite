@@ -157,8 +157,10 @@ cd ..\CTS
 - **REVIEW は、写しを人が見て合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない
 - **ログアウトの確認の画面**：MPAS は、`id_token_hint` が無い・一致しない・要求に誤りがあるとき、確認の画面を出す（RP-Initiated Logout 1.0 §2 の MUST）。雛形では「Yes」を任意の手順で押す
 - **自動では回せないモジュール**（FAPI 2.0。FAILED になるが、OP の不適合ではない）
-  - `…-user-rejects-authentication`：利用者が同意を断る操作が要る。**MPAS は同意を記録した後は同意の画面を出さず、サインインの画面には取り消しのボタンが無い**
-  - `…-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds`：**1 回目のサインインの画面では何もせず、2 回目で入る**操作が要る。自動操作は、同じ画面への訪問を区別できない
+  - `…-user-rejects-authentication`：利用者が同意を断る操作が要る。**MPAS は同意を記録した後は同意の画面を出さず、サインインの画面には取り消しのボタンが無い**。
+    **E2E の `RT-413.2` で補う**（PAR で預けた要求を同意の画面で拒否すると `access_denied`。#413。クライアントは `TestClient`）
+  - `…-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds`：**1 回目のサインインの画面では何もせず、2 回目で入る**操作が要る。自動操作は、同じ画面への訪問を区別できない。
+    **E2E の `RT-413.1` で補う**（サインインの前に同じ `request_uri` を 2 回送り、2 回目でサインインすると認可でき、その後は使えない。#413。クライアントは `TestClient`）
 - **落ちるのが正しいモジュール**（Conformance Suite 5.3.4 の求める受け方が、今の仕様と食い違う）
   - **FAPI 1.0 Advanced の大半**：Conformance Suite のクライアントは、**トークン エンドポイントへの要求で client_assertion の `aud` をトークン エンドポイントの URL にする**（PAR では issuer）。
     **RFC 10070 §4 はトークン エンドポイントの URL を audience にすることを禁じた**ので、MPAS は `invalid_client` で断る（#398。設定で以前の受け方に戻す分岐は作っていない）。
