@@ -1835,6 +1835,29 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **fapi1 の登録の、`request`（JAR）・`private_key_jwt` での PAR** | 判定は認証の方法や `request` の有無によらない（同じ `ValidateAuthZReqParam`）。適合性テストの FAPI 1.0 Advanced（`private_key_jwt`・PAR・`jarm`）が測る |
 
+##### FAPI の登録では、`redirect_uri` を省けない（`RT-422.*`。#422）
+
+| | 測ること |
+|---|---|
+| **`RT-422.1`** | **fapi2 の登録の `/par` は、`openid` の有無によらず、`redirect_uri` の無い要求を `400` ＋ `invalid_request` で断る**（FAPI 2.0 Security Profile §5.3.2.2 の 6）。**付ければ `201`** |
+| **`RT-422.2`** | **fapi1 の登録は、経路（クエリ・PAR）によらず、`openid` の無い要求でも `redirect_uri` を求める**（FAPI 1.0 Baseline §5.2.2 の 9。Advanced §5.2.2 が引き継ぐ）。**クエリは、登録の 1 件へ `invalid_request` を返す**（JARM） |
+| **`RT-422.3`** | **fapi2 の PAR を使わない要求（クエリ）と、normal の登録は、従来どおり省ける**（原典が PAR の要求に限るため。#422 の決め。normal は RFC 6749 §3.1.2.3） |
+
+- **判定は `CmnEndpoints.ValidateAuthZReqParam`**（`CheckRedirectUri` が登録の 1 件で補った後に、**要求の `redirect_uri` が空か**を見る）。**断った理由が `redirect_uri` であることも確かめる**（`error_description`。PKCE・JARM で先に断られて「通った」ことにしない）
+- **`openid` の要求は、以前から OIDC Core 1.0 §3.1.2.1 で断っていた**。変わったのは `openid` の無い要求だけ
+- 測るクライアントは、どれも `redirect_uri` の登録が 1 件（2 件以上なら、以前から省けない。`RT-306.3`）
+- 直す前は、`RT-422.1` の `openid` の無い PAR が `201`、`RT-422.2` のクエリが `code` を返した（判定を止めた手元の版で、net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi1 の登録の、`request`（JAR）・`private_key_jwt` での要求** | 判定は認証の方法や `request` の有無によらない（同じ `ValidateAuthZReqParam`）。適合性テストの FAPI 1.0 Advanced が測る |
+| **fapi1 の登録の `/ros` に `redirect_uri` 無しで預けた要求** | `/authorize` で預けた中身を読み直し（`OverwriteByRequestObject`）、同じ `ValidateAuthZReqParam` で断る（クエリと同じ分岐） |
+| **fapi1 の `openid` の無い Implicit・Hybrid** | fapi1 の登録は JARM の `code` だけを受け（#381）、Hybrid を許さない（FA-1.4） |
+
+- **`RT-422.3` の (1) は、PAR を必須にしていない fapi2 の登録の振る舞いを変えていないことを確かめるもの**。FAPI 2.0 Security Profile §5.3.2.2 の 3（PAR を使わない要求を断る）は、登録の `require_pushed_authorization_requests`（サーバ全体なら `RequirePushedAuthorizationRequests`）で強制する（#346）
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |

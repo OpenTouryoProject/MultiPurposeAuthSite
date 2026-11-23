@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=143b1f63-8214-409e-876b-440389f60e8f&code=bogus
+1. GET /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=143b1f63-8214-409e-876b-440389f60e8f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=143b1f63-8214-409e-876b-440389f60e8f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13673,6 +13673,75 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーを返した後 : 認可コードを返さない
 - エラーを返した後 : 同意の画面を出さない（request_uri を使い切っている）
 - エラーを返した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
+
+## RT-422.1 fapi2 の登録の /par は、openid の有無によらず、redirect_uri の無い要求を invalid_request で断る（付ければ受ける）
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、認可サーバに「PAR の要求には redirect_uri を求める」ことを求める**（openid の有無を問わない）。**以前は openid の無い要求を、登録の 1 件で補って受け、認可コードまで出していた**（適合性テストの fapi2-sp-plain-oauth）。openid の要求は、以前から OIDC Core で断っていた。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / OIDC Core 1.0 §3.1.2.1 / #422 |
+| テスト | `RT42201_fapi2の登録のPARはredirect_uriの無い要求を断る` |
+
+**手順**
+
+1. openid の無い要求に、redirect_uri を付けて預ける（受ける）
+1. openid の無い要求から、redirect_uri を省く
+1. openid の要求から、redirect_uri を省く（以前から断る）
+
+**検証（合否を判定する）**
+
+- redirect_uri あり : HTTP 201
+- openid 無し・redirect_uri 無し : HTTP 400
+- openid 無し・redirect_uri 無し : invalid_request
+- openid 無し・redirect_uri 無し : 理由が redirect_uri（error_description）
+- openid 無し・redirect_uri 無し : request_uri を返さない
+- openid・redirect_uri 無し : HTTP 400
+- openid・redirect_uri 無し : invalid_request
+- openid・redirect_uri 無し : 理由が redirect_uri（error_description）
+- openid・redirect_uri 無し : request_uri を返さない
+
+## RT-422.2 fapi1 の登録は、openid の無い要求でも、クエリ・PAR のどちらでも redirect_uri を求める（省くと invalid_request）
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Baseline は、認可サーバに「認可要求に redirect_uri を求める」ことを求め、経路を限らない**（Advanced §5.2.2 が引き継ぐ）。**クエリでは、エラーを登録の redirect_uri へ返す**（登録が 1 件なので、返し先は決まる。RFC 6749 §4.1.2.1）。**PAR では、400 で断り、request_uri を返さない。** |
+| 根拠 | FAPI 1.0 Baseline §5.2.2 / FAPI 1.0 Advanced §5.2.2 / RFC 6749 §4.1.2.1 / #422 |
+| テスト | `RT42202_fapi1の登録は経路によらずredirect_uriを求める` |
+
+**手順**
+
+1. クエリ：openid の無い要求に、redirect_uri を付ける（断らない）
+1. クエリ：openid の無い要求から、redirect_uri を省く
+1. PAR：openid の無い要求から、redirect_uri を省く（S256 の PKCE と JARM は付ける。#383・#381）
+
+**検証（合否を判定する）**
+
+- redirect_uri あり : code が返る
+- redirect_uri 無し : code を出さない
+- redirect_uri 無し : RP へ invalid_request を返す
+- redirect_uri 無し : 理由が redirect_uri（error_description）
+- PAR・redirect_uri 無し : HTTP 400
+- PAR・redirect_uri 無し : invalid_request
+- PAR・redirect_uri 無し : 理由が redirect_uri（error_description）
+- PAR・redirect_uri 無し : request_uri を返さない
+
+## RT-422.3 openid の無い要求で redirect_uri を省いても、fapi2 の PAR を使わない要求（クエリ）と normal の登録は、従来どおり断らない
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 Security Profile §5.3.2.2 の 6 が redirect_uri を求めるのは、PAR の要求だけ**（原典が経路を限るなら、その経路だけにする。#383 と同じ決め）。**normal の登録は、RFC 6749 §3.1.2.3 のとおり、登録が 1 件なら省ける。** |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / RFC 6749 §3.1.2.3 / #422 |
+| テスト | `RT42203_fapi2のPARを使わない要求とnormalは従来どおり省ける` |
+
+**手順**
+
+1. fapi2 の登録（FAPI2_Client。PAR を必須にしていない）。S256 の PKCE を付ける（#366）
+1. normal の登録（TestClient）
+
+**検証（合否を判定する）**
+
+- fapi2・クエリ : code が返る（断らない）
+- normal : code が返る（断らない）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
