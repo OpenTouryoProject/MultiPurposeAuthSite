@@ -33,6 +33,7 @@
 //*  2026/11/18  玄人 幸道         預けた Request Object を、日付の形の文字列を日付に変えずに読む（#403）
 //*  2026/11/19  玄人 幸道         外部の request_uri を取りに行って検証し、預けた urn: に置き換えるようにした（登録の request_uris にあるものだけ。#374）
 //*  2026/11/19  玄人 幸道         外部の request_uri を urn: に置き換えたら、urn: の認可の URL へ送り直す（サインイン・再認証の往復で取りに行き直さない。#374）
+//*  2026/11/21  玄人 幸道         redirect_uri へエラーを返すときも、預けた request_uri を消すようにした（拒否の後に使い回せた。#420）
 //**********************************************************************************
 
 /*
@@ -1018,6 +1019,11 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (!string.IsNullOrEmpty(valid_redirect_uri))
             {
+                // **RP へエラーを返すなら、預けた request_uri を消す**（#420。RFC 9126 §4・§7.3）。
+                //   **RP へ結果を返した時点で、その認可は終わっている**（拒否の後も、同じ request_uri でやり直せていた）。
+                //   **エラー画面（下）では消さない**（RP へ何も返していないので、利用者が開き直せるように）。
+                Token.CmnEndpoints.ConsumeRequestObject(this.AuthZRequestQuery());
+
                 // エラーのRedirect（valid_redirect_uriを使用する）
                 // RFC 6749 4.1.2.1 : error / error_description、stateは要求にあれば返す（#187）
                 Dictionary<string, string> parameters = new Dictionary<string, string>()

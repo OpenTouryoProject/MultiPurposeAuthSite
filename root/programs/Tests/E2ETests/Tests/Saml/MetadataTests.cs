@@ -196,7 +196,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Saml
 
                 // **設定ファイルの値と突き合わせる**（取り違えていれば落ちる）。
                 //   **`ToLocalUrl` を通す。** `test.ps1 -Launch` は
-                //   **RootURI を環境変数で上書きする**ので（TESTING.md 4 節）、
+                //   **RootURI を環境変数で上書きする**ので（14_TESTING.md 4 節）、
                 //   **設定ファイルの値をそのまま期待値にすると落ちる。**
                 string expectedLocation = client.ToLocalUrl(
                     client.Config.Get("OAuth2AuthorizationServerEndpointsRootURI")

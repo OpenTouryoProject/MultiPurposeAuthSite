@@ -190,7 +190,7 @@
     <value>（error なし）</value>
   </data>
   <data name="CheckFormat" xml:space="preserve">
-    <value>[設定の確認] {0}（CONFIGURATION.md 11 節）</value>
+    <value>[設定の確認] {0}（13_CONFIGURATION.md 11 節）</value>
   </data>
   <data name="CheckAdministratorNotFilledIn" xml:space="preserve">
     <value>AdministratorUID / AdministratorPWD が雛形の値のままです。</value>

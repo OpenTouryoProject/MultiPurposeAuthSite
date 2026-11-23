@@ -84,7 +84,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     ///
     /// **挿入が別の理由で失敗したときも、通さない**（**記録できない ＝ 使い回しを止められない**）。
     /// **表が無い配備では、DPoP が使えなくなる** — **`Create_UserStore.sql` の表を足すこと**
-    /// （`CONFIGURATION.md`）。
+    /// （`13_CONFIGURATION.md`）。
     ///
     /// ### 行は短命である
     ///

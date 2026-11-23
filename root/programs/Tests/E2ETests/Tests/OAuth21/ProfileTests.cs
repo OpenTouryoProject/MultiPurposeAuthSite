@@ -56,7 +56,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.OAuth21
     /// 対照の効いた形で測れる。
     ///
     /// **サーバ全体の設定（`RequirePkce` など）を true にしたときの挙動は測れない。**
-    /// 設定ファイルを変えて起動し直す必要があるため（CONFIGURATION.md 11 節）。
+    /// 設定ファイルを変えて起動し直す必要があるため（13_CONFIGURATION.md 11 節）。
     /// </remarks>
     public class ProfileTests : TargetTestBase
     {

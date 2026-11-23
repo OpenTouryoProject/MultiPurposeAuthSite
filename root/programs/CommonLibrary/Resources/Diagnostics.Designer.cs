@@ -277,7 +277,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
-        ///   [Configuration check] {0} (CONFIGURATION.md section 11) に類似しているローカライズされた文字列を検索します。
+        ///   [Configuration check] {0} (13_CONFIGURATION.md section 11) に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string CheckFormat {
             get {

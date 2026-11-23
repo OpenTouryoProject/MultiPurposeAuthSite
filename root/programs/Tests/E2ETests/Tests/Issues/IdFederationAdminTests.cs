@@ -454,8 +454,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("消せる", deleted, "消える", deleted ? "消えた" : "**残った**");
 
                 r.Note("**DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して"
-                    + "確かめる（手順は `TESTING.md`）。**E2E からは DB を見ない**"
-                    + "（テストに接続文字列を持たせない。`TESTING.md` 9 節）。");
+                    + "確かめる（手順は `14_TESTING.md`）。**E2E からは DB を見ない**"
+                    + "（テストに接続文字列を持たせない。`14_TESTING.md` 9 節）。");
 
                 r.Done();
             }
@@ -509,7 +509,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(1) 署名鍵付きで足す");
 
                 //  **パスワードはテストの中だけの値**
-                //    （**配備の `.pfx` のパスワードをテストに持たせない**。`TESTING.md` 9 節）。
+                //    （**配備の `.pfx` のパスワードをテストに持たせない**。`14_TESTING.md` 9 節）。
                 string pfxPassword = "E2E_rt292b_" + Saml2.NewId().Replace("_", "");
                 const string pfxPath = "C:/root/files/resource/X509/SHA256RSA_Client.pfx";
 
@@ -570,7 +570,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Note("**このケースが測るのは、入れ物（表・辞書）と画面である。**"
                     + "**DB の行の鍵で実際に署名するところまでは測っていない** — "
                     + "**配備の `.pfx` のパスワードをテストに持たせない**ためである"
-                    + "（`TESTING.md` 9 節）。**指定した鍵で署名していることは、"
+                    + "（`14_TESTING.md` 9 節）。**指定した鍵で署名していることは、"
                     + "`CN-5.5`（コンテナ。設定の行）とその歯抜けで測っている。**");
 
                 r.Done();

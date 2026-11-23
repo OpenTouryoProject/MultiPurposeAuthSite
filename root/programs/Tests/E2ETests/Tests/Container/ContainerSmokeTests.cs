@@ -188,7 +188,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Container
                 TestReport r = this.Report("CN-1.4",
                     "`/Ping` が応答する（死活監視の口）",
                     "**`IsLockedDownTestEndpoints` でも閉じない口である**"
-                    + "（`CONFIGURATION.md` 11 節の注意 3）。"
+                    + "（`13_CONFIGURATION.md` 11 節の注意 3）。"
                     + "**コンテナを監視するなら、ここを見ることになる。**",
                     "#219 / #284");
 

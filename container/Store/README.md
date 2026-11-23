@@ -6,7 +6,7 @@ E2E テスト用の UserStore（SQL Server / Oracle / PostgreSQL）を Docker �
 
 ## 接続文字列
 
-**E2E へは、設定ファイルではなく環境変数で渡す**（[`root/TESTING.md`](../../root/TESTING.md) 1 節「ストアを切り替える」）。
+**E2E へは、設定ファイルではなく環境変数で渡す**（[`root/14_TESTING.md`](../../root/14_TESTING.md) 1 節「ストアを切り替える」）。
 値は `docker-compose.yml` の環境変数と一致する（**E2E 用の使い捨ての資格情報**）。
 
 | `-UserStoreType` | サービス | ポート（ホスト → コンテナ） | 環境変数 | 設定のキー |

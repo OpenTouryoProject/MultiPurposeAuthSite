@@ -231,7 +231,7 @@ public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 | DataProtection のアプリケーション名 | **コンテンツ ルートのパスから導かれていた** | `SetApplicationName`（固定。`Const.DataProtectionApplicationName`） |
 | セッション Cookie の `Expiration` | `TimeSpan.FromDays(1)`（**効かない**） | **書かない**。寿命は `IdleTimeout` で決まる |
 
-**設定キーの意味は [`CONFIGURATION.md`](../../CONFIGURATION.md) 5 節・11 節。**
+**設定キーの意味は [`13_CONFIGURATION.md`](../../13_CONFIGURATION.md) 5 節・11 節。**
 
 > **`app.UseCookiePolicy()` に引数を渡す overload は、DI の設定を読まない。**
 > 両方に書いてあったので、**DI 側は読まれていなかった。**
@@ -337,7 +337,7 @@ switch (Config.SessionStoreType)
 > 要求が別のインスタンスへ回ると、**セッションに置いた値が読めない**
 > — ID 連携の `state` / `nonce` / `code_verifier`、自己テスト画面の値、
 > 管理画面の `access_token`、FIDO2 の challenge。
-> **詳細は [`CONFIGURATION.md`](../../CONFIGURATION.md) 7 節「セッションの置き場」。**
+> **詳細は [`13_CONFIGURATION.md`](../../13_CONFIGURATION.md) 7 節「セッションの置き場」。**
 
 ---
 
@@ -427,7 +427,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 >
 > **この経路は、#140 の段階 3 で直したが、まだ動かしていない。**
 > **E2E で駆動できず**（上流の IdP が要る）、**目視は上流をコンテナで建ててから行う予定**（別 Issue）。
-> 詳細は [`TESTING.md`](../../TESTING.md) 5 節「ID フェデレーション」。
+> 詳細は [`14_TESTING.md`](../../14_TESTING.md) 5 節「ID フェデレーション」。
 > Helper はホストをコンテナの認可サーバへ書き換えるので、**他の IdP を叩く呼び出しは壊れる。**
 > 呼び出し側にその理由を書いてある。
 
@@ -546,7 +546,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 | 得意なもの | 認証デバイスとプッシュ通知／ブラウザの遷移と同意画面／アサーションと JWT の**実値の目視**／**Open棟梁 のクライアント ライブラリとの相互接続** | パラメタの異常系、境界値、エラー コード、応答の形（JSON の型・HTTP ステータス）、両系統の差 |
 | 使うクライアント実装 | **Open棟梁 のクライアント**（`OAuth2AndOIDCClient` など） | **使わない。** 自前に再実装して**ブラックボックス**に保つ |
 | 判定 | **人の目**（画面に判定と理由を出す） | `TestReport` の検証（`OK` / `NG`） |
-| 秘密情報 | 画面に出す（自己テストの目的そのもの） | **出さない**（`TESTING.md` 9 節） |
+| 秘密情報 | 画面に出す（自己テストの目的そのもの） | **出さない**（`14_TESTING.md` 9 節） |
 
 **この線引きから出てくる決まり。**
 
@@ -562,7 +562,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 - **自己テストの画面と口は、`IsLockedDownTestEndpoints` を `true` にすれば塞がる**
   （`/Home/Saml2OAuth2Starters`、テスト用のリダイレクト先、`/TestHybridFlow`、
-  `api/Values`。詳細は [`CONFIGURATION.md`](../../CONFIGURATION.md) 11 節「本番へ切り替えるときに見るもの」）
+  `api/Values`。詳細は [`13_CONFIGURATION.md`](../../13_CONFIGURATION.md) 11 節「本番へ切り替えるときに見るもの」）
 - **認可画面（同意）のように、利用者にも見せる画面へ自己テスト用の表示を足すときは、
   同じ設定で隠す**（`OAuth2Authorize.cshtml` の「この画面で確かめること」。#246 の項目 3）
 - **`IsDebug` / `TestUserPWD` / `FcmOutboxDirectory` を本番で有効にしない**
@@ -673,7 +673,7 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
    **`AllowCredentials` はどのポリシーにも付けていない**
    （Cookie で通る口をこの範囲に入れない）。
    **1 件も許さないときは、どのオリジンも通らない**（安全側の既定）。
-   詳細は [`CONFIGURATION.md`](../../CONFIGURATION.md) 4 節「CORS」。
+   詳細は [`13_CONFIGURATION.md`](../../13_CONFIGURATION.md) 4 節「CORS」。
 8. ~~**Session が `AddDistributedMemoryCache`（開発用）のまま。**~~
    **✅ `SessionStoreType`（`mem` / `sql` / `redis`）で選べる（#256。4.3 節）。**
    **既定は `mem`** なので、**複数インスタンスにするなら設定が要る**ことは変わらない。

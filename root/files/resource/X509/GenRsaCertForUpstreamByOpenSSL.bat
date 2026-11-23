@@ -1,6 +1,6 @@
 @echo off
 rem NOTE: keep this file pure ASCII. cmd.exe reads a batch file by byte offset, so non-ASCII text
-rem       can break lines depending on the console code page (root/CODING.md section 4. #342).
+rem       can break lines depending on the console code page (root/11_CODING.md section 4. #342).
 rem
 rem Create the RSA key for an upstream IdP (#293 step 1 / #292 step 1), so that it differs from
 rem this deployment (downstream). In the hybrid IdP E2E, only the upstream containers use it

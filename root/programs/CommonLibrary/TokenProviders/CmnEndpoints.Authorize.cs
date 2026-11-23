@@ -40,6 +40,7 @@
 //*  2026/11/16  玄人 幸道         fapi1 の登録の PAR の要求でも、S256 の PKCE を必須にした（FAPI 1.0 Advanced §5.2.2 の 18。#383）
 //*  2026/11/16  玄人 幸道         fapi1 の登録の openid の要求では、nonce を必須にした（FAPI 1.0 Baseline §5.2.2.2 の 1。#382）
 //*  2026/11/17  玄人 幸道         fapi1 の登録は、JARM の認可要求だけを受けるようにした（FAPI 1.0 Advanced §5.2.2 の 2。#381）
+//*  2026/11/23  玄人 幸道         FAPI の登録では redirect_uri を省けなくした。fapi2 は PAR の要求、fapi1 はすべての要求（FAPI 2.0 Security Profile §5.3.2.2 の 6・FAPI 1.0 Baseline §5.2.2 の 9。#422）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -427,6 +428,38 @@ namespace MultiPurposeAuthSite.TokenProviders
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "This client must send the authorization request as a signed request object.";
                     return false;
+                }
+
+                #endregion
+
+                #region FAPI の登録の redirect_uri（#422）
+
+                // **FAPI の登録では、redirect_uri を省けない**（登録が 1 件でも、上の CheckRedirectUri の補い（RFC 6749 §3.1.2.3）を使わせない）。
+                //   | 登録 | 範囲 | 原典 |
+                //   |---|---|---|
+                //   | fapi2 | **PAR の要求だけ**（pushed。/par と、/authorize で預けた要求を読むときの両方） | FAPI 2.0 Security Profile §5.3.2.2 の 6「shall require the redirect_uri parameter in pushed authorization requests」 |
+                //   | fapi1 | **経路によらず、すべての認可要求** | FAPI 1.0 Baseline §5.2.2 の 9「shall require the redirect_uri in the authorization request」（Advanced §5.2.2 が引き継ぐ） |
+                //   **openid の要求は、下の「OIDCチェック２」で以前から必須**（OIDC Core 1.0 §3.1.2.1）。**変わるのは openid の無い要求だけ**である。
+                //   **以前は、openid の無い fapi2 の PAR の要求を、redirect_uri 無しで受け、認可コードまで出していた**（適合性テストの fapi2-sp-plain-oauth）。
+                //   **原典が経路を限るなら、その経路だけにする**（#383 と同じ決め。fapi2 の PAR を使わない要求は従来どおり）。
+                //   ※ redirect_uri を確かめた後に置く（valid_redirect_uri は登録の 1 件に決まっているので、エラーを RP へ返せる。#187）。
+                if (string.IsNullOrEmpty(redirect_uri))
+                {
+                    string modeForRedirectUri = Helper.GetInstance().GetClientMode(client_id);
+
+                    if (pushed && modeForRedirectUri == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
+                    {
+                        err = OAuth2AndOIDCConst.invalid_request;
+                        errDescription = "redirect_uri is required in the pushed authorization request for this client (FAPI 2.0).";
+                        return false;
+                    }
+
+                    if (modeForRedirectUri == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
+                    {
+                        err = OAuth2AndOIDCConst.invalid_request;
+                        errDescription = "redirect_uri is required for this client (FAPI 1.0).";
+                        return false;
+                    }
                 }
 
                 #endregion

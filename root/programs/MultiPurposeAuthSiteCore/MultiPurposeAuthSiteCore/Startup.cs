@@ -144,7 +144,7 @@ namespace MultiPurposeAuthSite
         /// </summary>
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {            
-            // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
+            // **開発向けの設定が残っていないかを確かめる**（#219。13_CONFIGURATION.md 11 節）。
             //   起動は止めない。警告を OPERATION ログに出すだけ。
             ProductionCheck.WarnIfRisky();
 

@@ -38,7 +38,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。CODING.md 5 節）。
+# パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。11_CODING.md 5 節）。
 # **区切りは / で書く**（Linux の pwsh は \ を区切りにしない。Windows は / も受ける。#401）
 $here = Split-Path -Parent $PSCommandPath
 $programs = Join-Path $here '../../root/programs'

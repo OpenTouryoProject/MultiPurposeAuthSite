@@ -51,7 +51,7 @@ jobs:
           persist-credentials: false
 
       # **run: の中は ASCII だけにする。** Windows PowerShell 5.1 は、Actions が書き出す BOM 無しの一時ファイルを
-      # ANSI（Shift_JIS）として読み、日本語の文字列で構文エラーになる（CODING.md 5 節）。
+      # ANSI（Shift_JIS）として読み、日本語の文字列で構文エラーになる（11_CODING.md 5 節）。
       - name: Check expectation changes
         shell: powershell
         env:

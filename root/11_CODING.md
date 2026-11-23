@@ -1,4 +1,4 @@
-﻿# CODING.md — コーディング規約
+﻿# 11_CODING.md — コーディング規約
 
 対象: `root/programs` 配下（C# / bat / ps1 / Markdown）
 配置: `root`
@@ -539,7 +539,7 @@ finally {
 **コード・コメント・コミット メッセージ・Issue 本文・報告に転記しない。**
 
 設定の変更は雛形（`_app.config` / `_appsettings.json`）側に書く。
-詳細は [`CONFIGURATION.md`](CONFIGURATION.md) 6 節。
+詳細は [`13_CONFIGURATION.md`](13_CONFIGURATION.md) 6 節。
 
 テストの出力にトークンを出さない。キー名とエラーだけを出す
-（[`TESTING.md`](TESTING.md) 9 節）。
+（[`14_TESTING.md`](14_TESTING.md) 9 節）。

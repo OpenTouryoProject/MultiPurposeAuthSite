@@ -69,14 +69,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// **既定の通しは、`test.ps1` が `AuthFailureMaxAttempts=20` /
     /// `AuthFailureLockoutSeconds=5` を渡して回る**
-    /// （**上限を低くすると、負の経路のケースが共用のクライアントを断ってしまう**。`TESTING.md`）。
+    /// （**上限を低くすると、負の経路のケースが共用のクライアントを断ってしまう**。`14_TESTING.md`）。
     /// **数えない配備（0）では Skip する。**
     ///
     /// **段階 4 の 2 件。**
     ///
     /// | | |
     /// |---|---|
-    /// | **`RT-305.7`** | **断りが送信元ごとに分かれている**こと。**`X-Forwarded-For` で送信元を変えて測る**ので、**`UseForwardedHeaders` を有効にした net10.0 版でだけ測れる**（他は Skip）。**単独で回す**（`TESTING.md`） |
+    /// | **`RT-305.7`** | **断りが送信元ごとに分かれている**こと。**`X-Forwarded-For` で送信元を変えて測る**ので、**`UseForwardedHeaders` を有効にした net10.0 版でだけ測れる**（他は Skip）。**単独で回す**（`14_TESTING.md`） |
     /// | **`RT-305.8`** | **`/token` の `grant_type=password` が、画面のサインインと同じロックアウトに乗っている**こと。**ROPC が無効な配備では Skip** |
     /// </remarks>
     public class AuthFailureLockoutTests : TargetTestBase
@@ -357,7 +357,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             + "**使い捨ての利用者で登録している** — "
                             + "**当時はクライアント登録が 1 人 1 件**で、"
                             + "**共用の利用者で登録すると、`RT-277.1` と登録を奪い合った**"
-                            + "（実測で踏んだ。`TESTING.md`）。 "
+                            + "（実測で踏んだ。`14_TESTING.md`）。 "
                             + "**#307 の段階 5-a-1 で 1 人 n 件になったが、使い捨てのままにしている** — "
                             + "**管理画面が扱うのは、その利用者の 1 件**だからである。");
                     }
@@ -412,7 +412,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //  **取り込みが有効でなければ、送信元は 127.0.0.1 のままで、鍵が分かれない。**
                 Skip.If(!AuthFailureLockoutTests.IsOn(admin, "UseForwardedHeaders"),
                     "UseForwardedHeaders が on ではありません"
-                    + "（単独で回す手順は TESTING.md）。");
+                    + "（単独で回す手順は 14_TESTING.md）。");
 
                 TestReport r = this.Report("RT-305.7",
                     "クライアント認証の断りは、失敗を重ねた送信元だけに効く",

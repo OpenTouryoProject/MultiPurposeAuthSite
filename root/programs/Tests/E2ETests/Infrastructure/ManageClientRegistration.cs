@@ -317,7 +317,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **3 回押しの順に送る**（`submit.ClientID` → `submit.ClientSecret` → `submit.Add`）。
         /// **`client_id` と `client_secret` は画面が発行する。**
-        /// **秘密は報告に出さない**（`TESTING.md` 9 節）。
+        /// **秘密は報告に出さない**（`14_TESTING.md` 9 節）。
         /// **`async` に `out` は付けられない**ので、組で返す（`RegisterDeviceAsync` と同じ形）。
         /// </remarks>
         public static Task<(string ClientId, string ClientSecret)> RegisterWithSecretAsync(

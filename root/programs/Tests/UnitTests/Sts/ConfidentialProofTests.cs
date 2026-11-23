@@ -39,7 +39,7 @@ namespace MultiPurposeAuthSite.Tests.Unit.Sts
     /// <summary>
     /// **秘密を持つクライアントの証明か**（`CmnEndpoints.IsConfidentialProof`）。
     /// **公開クライアントは `refresh_token` の経路で認証できない**ので、
-    /// **「公開クライアントの refresh_token は縛る」側は E2E では通らない**（`TESTING.md`）。その前提を、ここで固定する。
+    /// **「公開クライアントの refresh_token は縛る」側は E2E では通らない**（`14_TESTING.md`）。その前提を、ここで固定する。
     /// </summary>
     public class ConfidentialProofTests
     {

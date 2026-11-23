@@ -14,20 +14,20 @@ duplicated here (duplicated text goes stale unless both copies are fixed).
 **The documents linked below are written in Japanese only.**
 
 - If you develop with a coding agent, read [AGENTS.md](../AGENTS.md) first.
-- If you only want the commands, [CHEATSHEET.md](CHEATSHEET.md) is quicker.
+- If you only want the commands, [10_CHEATSHEET.md](10_CHEATSHEET.md) is quicker.
 
 ## Prerequisites
 
 - **Visual Studio** (or MSBuild and the .NET SDK).
   MSBuild is located with `vswhere`, so **any edition works** (Professional / Enterprise / Build Tools,
-  not just Community) → [BUILDING.md](BUILDING.md) section 5
+  not just Community) → [12_BUILDING.md](12_BUILDING.md) section 5
 - **.NET 10.0 SDK**, required for the net10.0 build.
 - **IIS Express**, required only to run the net48 build (without it, those tests are skipped).
 
-**`dotnet build` alone cannot build net48** → [BUILDING.md](BUILDING.md) section 10
+**`dotnet build` alone cannot build net48** → [12_BUILDING.md](12_BUILDING.md) section 10
 
 A DBMS is **not** required to build. Setting `UserStoreType` to `mem` runs the site against an
-in-memory store → [CONFIGURATION.md](CONFIGURATION.md) section 7
+in-memory store → [13_CONFIGURATION.md](13_CONFIGURATION.md) section 7
 
 ## First-time setup
 
@@ -51,7 +51,7 @@ is kept, for diagnosis).
 You can also do it by hand: run `root\programs\3_BuildLibsAtOtherRepos.bat` (the `03-20` tag),
 or clone and build OpenTouryo separately and copy the output with `mpas_dev.bat`.
 `mpas_dev.bat` reads the locations of the two repositories from the environment variables `OT_OTR_PATH` and `OT_MPAS_PATH`
-(if either is missing, the paths are relative to the current folder. [`BUILDING.md`](BUILDING.md) section 10).
+(if either is missing, the paths are relative to the current folder. [`12_BUILDING.md`](12_BUILDING.md) section 10).
 
 ### 2. Create the configuration files
 
@@ -62,14 +62,14 @@ Copy them from the templates. **Both are in `.gitignore`** and hold real credent
 | `programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\_appsettings.json` | `appsettings.json` |
 | `programs\MultiPurposeAuthSite\MultiPurposeAuthSite\_app.config` | `app.config` |
 
-For what the settings mean, see [CONFIGURATION.md](CONFIGURATION.md).
+For what the settings mean, see [13_CONFIGURATION.md](13_CONFIGURATION.md).
 **Without them the site cannot run** (the build still passes)
-→ [BUILDING.md](BUILDING.md) section 10
+→ [12_BUILDING.md](12_BUILDING.md) section 10
 
 ### 3. Place the certificates
 
 Put the pfx / cer files in `root\files\resource\X509` at the paths the configuration files point to
-→ [CONFIGURATION.md](CONFIGURATION.md) section 8
+→ [13_CONFIGURATION.md](13_CONFIGURATION.md) section 8
 
 ## Building
 
@@ -81,20 +81,20 @@ cd root
 `1_BuildAll.ps1` is a wrapper: it calls the build batch files (`root\programs\*.bat`) and
 **parses their output to decide pass or fail.** The batch files themselves do not propagate
 MSBuild's exit code and wait for input at the end, so on their own they yield no verdict
-→ [BUILDING.md](BUILDING.md) section 2
+→ [12_BUILDING.md](12_BUILDING.md) section 2
 
 | What you want | Primary source |
 |---|---|
-| Arguments (`-Only`, `-List`, `-Configuration`, `-SkipClean`, `-WarnDetail`, …) | [BUILDING.md](BUILDING.md) section 1 |
-| Pass criteria (how errors and warnings are treated) | [BUILDING.md](BUILDING.md) section 3 |
-| Which batch file builds what | [BUILDING.md](BUILDING.md) section 4 |
-| Known warnings | [BUILDING.md](BUILDING.md) section 8 |
+| Arguments (`-Only`, `-List`, `-Configuration`, `-SkipClean`, `-WarnDetail`, …) | [12_BUILDING.md](12_BUILDING.md) section 1 |
+| Pass criteria (how errors and warnings are treated) | [12_BUILDING.md](12_BUILDING.md) section 3 |
+| Which batch file builds what | [12_BUILDING.md](12_BUILDING.md) section 4 |
+| Known warnings | [12_BUILDING.md](12_BUILDING.md) section 8 |
 
 **You can also run the batch files directly.** `root\programs\0_ExecAllBat.bat` for the whole set
 (clean → net48 → net10.0), or `10_MultiPurposeAuthSite*.bat` for one of them.
 
 **Build `Release` as well.** After changing the project configuration, it is easy to end up in a
-state that only builds in `Debug` → [BUILDING.md](BUILDING.md) section 5
+state that only builds in `Debug` → [12_BUILDING.md](12_BUILDING.md) section 5
 
 ## Verifying after the build
 
@@ -117,22 +117,22 @@ build comes first). **If the build fails, the tests are not run.**
 turns the run into "all skipped", which cannot be read as a verdict. Pass `-Launch:$false` to use
 sites that are already running, or `-NoNetFx` to leave net48 out.
 
-For the procedure and the pass criteria see [TESTING.md](TESTING.md)
+For the procedure and the pass criteria see [14_TESTING.md](14_TESTING.md)
 (section 1 usage / section 5 pass criteria / section 8 prerequisites); for how the tests are
 organized and how to add one, see [programs/Tests/README.md](programs/Tests/README.md).
 
 **All logs go to one place:** `root\programs\Tests\E2ETests\Result` (in `.gitignore`)
-→ [CHEATSHEET.md](CHEATSHEET.md) section 2
+→ [10_CHEATSHEET.md](10_CHEATSHEET.md) section 2
 
 ## Documents
 
 | Document | Contents |
 |---|---|
-| [BUILDING.md](BUILDING.md) | Running the build, and how it is judged |
-| [TESTING.md](TESTING.md) | Running the E2E tests, and how they are judged |
-| [CONFIGURATION.md](CONFIGURATION.md) | Handling of the configuration files |
-| [CODING.md](CODING.md) | Per-format conventions (line endings, file headers, bat / ps1) |
-| [CHEATSHEET.md](CHEATSHEET.md) | The commands alone |
+| [12_BUILDING.md](12_BUILDING.md) | Running the build, and how it is judged |
+| [14_TESTING.md](14_TESTING.md) | Running the E2E tests, and how they are judged |
+| [13_CONFIGURATION.md](13_CONFIGURATION.md) | Handling of the configuration files |
+| [11_CODING.md](11_CODING.md) | Per-format conventions (line endings, file headers, bat / ps1) |
+| [10_CHEATSHEET.md](10_CHEATSHEET.md) | The commands alone |
 | [../AGENTS.md](../AGENTS.md) | What development agents must follow |
 | [../Contributing.ja.md](../Contributing.ja.md) | Contribution rules (comments, git-flow, PR granularity) |
 | [programs/ANALYSIS-IdP.md](programs/ANALYSIS-IdP.md) | Conformance as an IdP, and what has been addressed |

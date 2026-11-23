@@ -1,4 +1,4 @@
-﻿# CONFIGURATION.md — 設定ファイルの扱い
+﻿# 13_CONFIGURATION.md — 設定ファイルの扱い
 
 対象: `root/programs`（net48 版 / net10.0 版）
 配置: `root`
@@ -12,8 +12,8 @@
 > |---|---|
 > | 各キーの意味 | `_appsettings.json` / `_app.config` のコメント |
 > | 秘密の報告方法 | [`../SECURITY.md`](../SECURITY.md) |
-> | ビルド | [`BUILDING.md`](BUILDING.md) |
-> | テストからの参照 | [`TESTING.md`](TESTING.md) |
+> | ビルド | [`12_BUILDING.md`](12_BUILDING.md) |
+> | テストからの参照 | [`14_TESTING.md`](14_TESTING.md) |
 
 ---
 
@@ -92,7 +92,7 @@ set appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:443
 > **E2E は、これを使っていない**（#264）。テスト専用のクライアントは
 > **利用者の登録（`saml2OAuth2Data`）として種データで作る**ので、
 > **net48 の「一覧ごと差し替える」が要らない**（`Tests/README.md`）。
-> **一覧ごと差し替えると、環境ブロックの 32,767 文字に当たる**（`TESTING.md` 1 節）。
+> **一覧ごと差し替えると、環境ブロックの 32,767 文字に当たる**（`14_TESTING.md` 1 節）。
 
 ### `FxContainerization` — 環境変数を優先する（net48 / net10.0 の両方）
 
@@ -112,7 +112,7 @@ set OAuth2ClientEndpointsRootURI=https://localhost:44302
 ```
 
 `root/programs/Tests/test.ps1 -Launch` は、これを使って
-**2 つのサイトを別々の URL で同時に立てている**（[`TESTING.md`](TESTING.md) 4 節）。
+**2 つのサイトを別々の URL で同時に立てている**（[`14_TESTING.md`](14_TESTING.md) 4 節）。
 net48 版を `app.config` の URL に置く必要がないのは、この仕組みによる。
 
 > **`ON` にしただけでは、動きは変わらない。**
@@ -551,7 +551,7 @@ CreateJwkSetJson.exe
 > **テスト利用者の登録（`saml2OAuth2Data`）として種データが作る**
 > （`CommonLibrary/Util/Test/TestClients.cs`。`IsDebug` ＋ `TestUserPWD` のときだけ）。
 > **一覧を環境変数で差し替えると、環境ブロックの 32,767 文字に当たる**ため
-> （`TESTING.md` 1 節）。
+> （`14_TESTING.md` 1 節）。
 
 ### `scope` — 要求してよいスコープ（任意）
 
@@ -2701,7 +2701,7 @@ http で動かすと認可エンドポイントがエラー画面になる。
 雛形の値はプレースホルダ（`[password of TestUser]` など）である。
 
 E2E テストは、**実行時にアプリ自身の構成ファイルから読み出す。**
-テスト コードにもテスト設定にも、秘密は書かない（[`TESTING.md`](TESTING.md) 9 節）。
+テスト コードにもテスト設定にも、秘密は書かない（[`14_TESTING.md`](14_TESTING.md) 9 節）。
 
 ### user store に入る秘密を暗号化する — `UserStoreSecretPassword`（#297）
 
@@ -2783,7 +2783,7 @@ E2E テストは、**実行時にアプリ自身の構成ファイルから読�
 | `npg` | PostgreSQL |
 
 E2E テストは既定で `mem` を使う。**前後で状態を掃除する必要が無い**のが理由。
-`sql` / `ora` / `npg` に切り替えても回せる（[`TESTING.md`](TESTING.md) 1 節「ストアを切り替える」、#207）。
+`sql` / `ora` / `npg` に切り替えても回せる（[`14_TESTING.md`](14_TESTING.md) 1 節「ストアを切り替える」、#207）。
 
 > **`sql` / `npg` を使っている既存環境は、`CibaData` に `UserId` 列の追加が要る。**
 > CIBA の返答（`/ciba_result`）は、**要求が誰宛てだったか**を照合してから結果を書き込む。
@@ -2898,7 +2898,7 @@ cd root
 `Create_UserStore.sql`（テーブルと列）と `Select_UserStore.sql`（SELECT 対象）の**両方**を見る。
 **型は比べない**（`nvarchar(max)` と `NVARCHAR2(2000)` のように、対応はするが同一ではない）。
 **SQL が実行できるかは分からない。** それは、ストアを切り替えて E2E を回して確かめる
-（[`TESTING.md`](TESTING.md) 1 節「ストアを切り替える」、#207）。
+（[`14_TESTING.md`](14_TESTING.md) 1 節「ストアを切り替える」、#207）。
 
 ### 外部キーの子の列のインデックス（#329）
 
@@ -2974,7 +2974,7 @@ ALTER TABLE Users ADD COLUMN ConcurrencyStamp varchar(38) NULL;
 **net10.0 版だけが読む。** net48 版は `Web.config` の `sessionState` で選ぶ
 （`InProc` / `StateServer` / `SQLServer` / Oracle は `Custom`）。雛形は `StateServer` で、
 **ASP.NET 状態サービス（`aspnet_state`）が止まっていると画面が 500 になる**
-（[`TESTING.md`](TESTING.md) 8 節）。
+（[`14_TESTING.md`](14_TESTING.md) 8 節）。
 
 #### `mem` のままスケールアウトすると、途中で失敗する
 
@@ -3090,7 +3090,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 > | 下流（44303） | `W8YPrSZDTP6XB0VT…`（`SHA256RSA_Server.cer`） |
 >
 > **以前は同じ鍵だった**ので、**(3) の検証鍵を (4) の鍵と取り違えても通ってしまっていた。**
-> **分けたので、取り違えると落ちる**（`TESTING.md` の歯抜け）。
+> **分けたので、取り違えると落ちる**（`14_TESTING.md` の歯抜け）。
 > **EC の 3 本は共有のまま**（RSA だけを分けた）。
 
 > **(2) の署名も、上流が検証する**（#293 の段階 2）。
@@ -3210,7 +3210,7 @@ SPRP←(4)←下流IdP←(3)←上流IdP
 
 > **`SigningPfxFilePath` / `SigningPfxPassword` は、段階 4-b で足した列**である
 > （**設定の行の `signing_pfx_file_path` / `signing_pfx_password` と同じもの**）。
-> **列を足したので、古い DB では落ちる** — **作り直すこと**（`TESTING.md`）。
+> **列を足したので、古い DB では落ちる** — **作り直すこと**（`14_TESTING.md`）。
 
 **上流が n 件になると、「2 つの IdP から来た同じ人」が現れる。**
 **この製品は、検証済みのメアドで既存アカウントに結ぶ**（アカウント リンク）。
@@ -4201,7 +4201,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `UseForwardedHeaders` | `""`（空＝取り込まない） | **リバース プロキシの背後なら `on`** | **`X-Forwarded-Proto` / `X-Forwarded-For` を取り込む**（#279。上流 Open棟梁 #549）。**取り込まないと、プロキシが https で受けていてもアプリは http だと思う** → `issuer`・リダイレクト先の URI・`Secure` の判定がずれる。**パイプラインの先頭で呼んでいる。** **net10.0 版だけ** |
 | `ForwardedHeadersKnownProxies` | `""`（空） | **プロキシの IP を列挙する** | **転送ヘッダを信じるプロキシの IP**（#279。カンマ区切り）。**`UseForwardedHeaders` が `on` のときだけ読む。** 空なら、**送った相手を問わない**（`KnownProxies` / `KnownIPNetworks` を空にしてあるため）。**プロキシを経由せずアプリに直接届く経路があるなら、必ず列挙する。** **net10.0 版だけ** |
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`container/E2E/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
-| `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at` / `op_session`（#310 の段階 1）、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**`AuthCookieName` が空でも、枠組みの既定名に接頭辞が付く**（`.probe_AspNetCore.Identity.Application` など。#283。**以前はこの組み合わせだけで 500 になっていた**）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。**AntiForgery にも掛かる**（#282）。名前は net10.0 版では **DataProtection の識別子から導かれ**、**#279 でそれを固定したので、`DataProtectionKeyPath` を設定した配備同士はパスが違っても同名になる**（**実測 2026/10/08**。[`TESTING.md`](TESTING.md) 1 節）。net48 版は `AntiForgeryConfig.CookieName`。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
+| `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at` / `op_session`（#310 の段階 1）、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**`AuthCookieName` が空でも、枠組みの既定名に接頭辞が付く**（`.probe_AspNetCore.Identity.Application` など。#283。**以前はこの組み合わせだけで 500 になっていた**）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。**AntiForgery にも掛かる**（#282）。名前は net10.0 版では **DataProtection の識別子から導かれ**、**#279 でそれを固定したので、`DataProtectionKeyPath` を設定した配備同士はパスが違っても同名になる**（**実測 2026/10/08**。[`14_TESTING.md`](14_TESTING.md) 1 節）。net48 版は `AntiForgeryConfig.CookieName`。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
 | `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4）。**サンプルは下の「標準クレームを返す」**（#261） |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
@@ -4267,8 +4267,8 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 
 **このチェックリストの読み落としを拾うため、起動時にも確かめている**（`Co/ProductionCheck`。両アプリ）。
 
-- 該当すると、`OPERATION` ログに `[設定の確認] …（CONFIGURATION.md 11 節）` が出る
-  （**文言は resx**（`Resources/Diagnostics`）。**日本語以外のカルチャでは** `[Configuration check] … (CONFIGURATION.md section 11)`）
+- 該当すると、`OPERATION` ログに `[設定の確認] …（13_CONFIGURATION.md 11 節）` が出る
+  （**文言は resx**（`Resources/Diagnostics`）。**日本語以外のカルチャでは** `[Configuration check] … (13_CONFIGURATION.md section 11)`）
 - **起動は止めない。** 設定を直せない状況で復旧できなくなるため
 - **`UserStoreType` が `mem` のときは何も言わない**（開発・テスト専用の構成なので、雑音にしかならない）。
   ただし `AdministratorUID` / `AdministratorPWD` が雛形の値のままのときだけは、ストアによらず言う

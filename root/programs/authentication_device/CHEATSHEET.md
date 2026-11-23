@@ -4,7 +4,7 @@
 
 - 設定すべきファイルの案内 → [`README.md`](README.md)
 - 構成と落とし穴の背景 → [`ANALYSIS.md`](ANALYSIS.md)
-- 認証サイト（MPAS）の起動 → [`../../CHEATSHEET.md`](../../CHEATSHEET.md) 4 節
+- 認証サイト（MPAS）の起動 → [`../../10_CHEATSHEET.md`](../../10_CHEATSHEET.md) 4 節
 
 > ここは**意図的に二重管理**している。手順は「思い出すため」に転記し、
 > **判断が要ることは書かない。** 迷ったらリンク先を読むこと。
@@ -155,7 +155,7 @@ $exe = Get-ChildItem -Recurse bin\Debug -Filter MultiPurposeAuthSite.exe | Selec
 & $exe.FullName --urls https://localhost:44300
 ```
 
-**構成のルート URI と待ち受け URL を揃えること。** 理由 → [`../../CONFIGURATION.md`](../../CONFIGURATION.md) 5 節
+**構成のルート URI と待ち受け URL を揃えること。** 理由 → [`../../13_CONFIGURATION.md`](../../13_CONFIGURATION.md) 5 節
 
 ### 認証サイト（net48 版、IIS Express、PowerShell）
 

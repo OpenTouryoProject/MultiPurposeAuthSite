@@ -1,6 +1,6 @@
 @echo off
 rem NOTE: keep this file pure ASCII. cmd.exe reads a batch file by byte offset, so non-ASCII text
-rem       can break lines depending on the console code page (root/CODING.md section 4. #342).
+rem       can break lines depending on the console code page (root/11_CODING.md section 4. #342).
 rem
 rem Rebuild and start the IdPs (upstream, upstream2, downstream) and jwks (#250 / #281 / #284 / #292).
 rem

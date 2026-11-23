@@ -293,7 +293,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         ///
         /// **専用のクライアントを足していないのは、net48 の制約のため。**
         /// net48 は一覧ごと 1 本の環境変数で受けるので、**件数に上限がある**
-        /// （test.ps1 の差し込み一覧のコメント / TESTING.md 1 節）。
+        /// （test.ps1 の差し込み一覧のコメント / 14_TESTING.md 1 節）。
         /// </remarks>
         public const string TestClient_8 = "TestClient_8";
 

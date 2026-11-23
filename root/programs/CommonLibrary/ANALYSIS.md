@@ -156,7 +156,7 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
 - **ロール名は「正規化した名前」で突き合わせる**（#257 で判明）。
   **Identity Core はストアに大文字化した名前を渡す**ので、`Roles.Name` と比べると
   **大文字小文字を区別するストア（`ora` / `npg`）で一致しない**
-  （`CmnUserStore` の `RoleNameCol_*`。`root/TESTING.md`「4 つのストアの実測」）。
+  （`CmnUserStore` の `RoleNameCol_*`。`root/14_TESTING.md`「4 つのストアの実測」）。
   **返す側（`GetRoles`）は生の名前**である。アプリは `Const.Role_*` と比べるため。
   **`RoleStoreCore` は `IRoleStore` と `IQueryableRoleStore`**（後者は #258 で追加）。
   **`RoleManager.Roles` は `IQueryableRoleStore` が無いと例外になる**ので、
@@ -541,7 +541,7 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 12. ~~**`ViewModels/ErrorViewModel.cs` だけ Shift_JIS。**~~
     **✅ 直した（#304）。** **UTF-8 ＋ BOM にした**（中身は 1 文字も変えていない）。
     **`../MultiPurposeAuthSiteCore` 側の 2 件も同時に直した。**
-    **新規ファイルは BOM 付き UTF-8 で作ること**（**走査で確かめられる** — `TESTING.md`）。
+    **新規ファイルは BOM 付き UTF-8 で作ること**（**走査で確かめられる** — `14_TESTING.md`）。
 13. **`bin/` `obj/` が作業ツリーに残る。** `.gitignore` 済みだが、
     `bin\netfx\` と `bin\netcore\` の 2 系統が並ぶ点に注意。
 14. **`Util/Sts/Helper.HttpClientBuilder` はクライアント証明書を `X509KeyStorageFlags.MachineKeySet` で読む**（両版。#294 のレビューで記録だけした）。

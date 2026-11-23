@@ -19,15 +19,15 @@
 | ビルドだけ（両版） | `.\1_BuildAll.ps1` | 1 |
 | 片方だけビルドする（クリーンを省いて速く） | `.\1_BuildAll.ps1 -Only net10.0 -SkipClean` | 1 |
 | 指定できるステップ名を見る | `.\1_BuildAll.ps1 -List` | 1 |
-| 警告の内訳を出す（**警告が増えていないかを見る**） | `.\1_BuildAll.ps1 -Only net -SkipClean -WarnDetail` | [`BUILDING.md`](BUILDING.md) 3 節 |
+| 警告の内訳を出す（**警告が増えていないかを見る**） | `.\1_BuildAll.ps1 -Only net -SkipClean -WarnDetail` | [`12_BUILDING.md`](12_BUILDING.md) 3 節 |
 | OpenTouryo のアセンブリを取り直す | `.\1_BuildAll.ps1 -Libs Force` | 5 |
 | E2E を両版で通す（サイトを起動 → テスト → 停止） | `.\2_RunAllTests.ps1 -Launch` | 1 |
 | 起動済みのサイトを叩く | `.\2_RunAllTests.ps1` | 1 |
 | 一部だけ回す | `.\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RequestObjectTests"` | 1 |
-| net10.0 版だけ起動して回す（net48 版の分は Skip） | `.\2_RunAllTests.ps1 -Launch -NoNetFx` | [`TESTING.md`](TESTING.md) 1 節 |
+| net10.0 版だけ起動して回す（net48 版の分は Skip） | `.\2_RunAllTests.ps1 -Launch -NoNetFx` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
 | ブラウザで測るもの（`UI-n.n`）を外す | `cd programs\Tests; .\test.ps1 -Launch -NoWebUI` | 1 |
-| **テストを足した・変えた**ので、テストケースの原本を作り直す | `.\2_RunAllTests.ps1 -Launch -UpdateTestCases` | [`TESTING.md`](TESTING.md) 10 節 |
-| サイトのコード カバレッジを測る | `.\2_RunAllTests.ps1 -Launch -Coverage` | [`TESTING.md`](TESTING.md) 1 節 |
+| **テストを足した・変えた**ので、テストケースの原本を作り直す | `.\2_RunAllTests.ps1 -Launch -UpdateTestCases` | [`14_TESTING.md`](14_TESTING.md) 10 節 |
+| サイトのコード カバレッジを測る | `.\2_RunAllTests.ps1 -Launch -Coverage` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
 | カバレッジを品質マップの単位で集計する（`-Update` で `COVERAGE.md` を更新） | `.\CoverageReport.ps1` | [`COVERAGE.md`](programs/Tests/COVERAGE.md) |
 | 期待値の変更にトレーラーがあるかを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD` | [`QUALITY.common.md`](../QUALITY.common.md) 3 節 |
 | TESTCASES.md の作り直しの漏れを見る | `.\CheckExpectationChange.ps1 -Range develop..HEAD -CheckGenerated` | [`QUALITY.md`](../QUALITY.md) 3 節 |
@@ -41,12 +41,12 @@
 | やりたいこと | コマンド | 節 |
 |---|---|---|
 | 有効期限（`RT-188`）を、寿命を短くして回す | `.\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"` | 1 |
-| DPoP の nonce（`RT-311.13` / `.14`）を回す | `.\2_RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"` | [`TESTING.md`](TESTING.md) 5 節 |
-| Implicit を閉じた配備（`RT-314`）を回す | `.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"` | [`TESTING.md`](TESTING.md) 5 節 |
+| DPoP の nonce（`RT-311.13` / `.14`）を回す | `.\2_RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"` | [`14_TESTING.md`](14_TESTING.md) 5 節 |
+| Implicit を閉じた配備（`RT-314`）を回す | `.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"` | [`14_TESTING.md`](14_TESTING.md) 5 節 |
 | net48 版でも mTLS（`FA-6`）を回す（証明書の準備・後片付けが要る） | `.\SetupNetFxMtls.ps1 -Action Prepare` → （管理者）`-Action Trust` → `.\2_RunAllTests.ps1 -Launch -NetFxMtls` → （管理者）`-Action Cleanup` | 1 |
 | 証明書の準備ができているかを見る | `.\SetupNetFxMtls.ps1 -Action Check` | 1 |
-| DB のストアで回す（`sql` / `ora` / `npg`。`container\Store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`TESTING.md`](TESTING.md) 1 節 |
-| 別ホストの DB を指す（`container\Store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`TESTING.md`](TESTING.md) 1 節 |
+| DB のストアで回す（`sql` / `ora` / `npg`。`container\Store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
+| 別ホストの DB を指す（`container\Store\` のコンテナを起動しない） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql -NoStoreContainer -ConnectionString <接続文字列>` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
 
 ### テストのスタブ（MPAS を IdP として起動する。`container\Stub\` で実行する）
 
@@ -70,11 +70,11 @@
 
 | やりたいこと | コマンド | 節 |
 |---|---|---|
-| ID 連携の IdP 群の**用意**（publish と証明書。**MPAS を直したら、先にこれ**。#340） | `..\container\E2E\1_PublishIdP.ps1` | [`TESTING.md`](TESTING.md) 1 節 |
-| ID 連携の IdP 群（上流・上流 2・下流）と jwks を作り直して起動する（`up -d --build`。成果物が古ければ警告する） | `..\container\E2E\2_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| ID 連携の IdP 群の**用意**（publish と証明書。**MPAS を直したら、先にこれ**。#340） | `..\container\E2E\1_PublishIdP.ps1` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
+| ID 連携の IdP 群（上流・上流 2・下流）と jwks を作り直して起動する（`up -d --build`。成果物が古ければ警告する） | `..\container\E2E\2_DockerComposeUp.bat` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
 | IdP 群を**一旦止める**（`start` で戻せる） | `cd ..\container\E2E; docker compose stop` | — |
 | IdP 群を**消す** | `..\container\E2E\3_DockerComposeDown.bat` | — |
-| E2E 用の DB に DDL を流し込む（DB は起動しない。通しでは `test.ps1` が起動・停止する） | `..\container\Store\1_DockerComposeUp.bat` | [`TESTING.md`](TESTING.md) 1 節 |
+| E2E 用の DB に DDL を流し込む（DB は起動しない。通しでは `test.ps1` が起動・停止する） | `..\container\Store\1_DockerComposeUp.bat` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
 | DB を**一旦止める**（コンテナもボリュームも残す。`start` で戻せる） | `cd ..\container\Store; docker compose --profile postgres --profile sqlserver --profile oracle stop` | — |
 | DB を**消す**（**`down -v` でボリュームも消える**。E2E 用なので作り直せる） | `..\container\Store\2_DockerComposeDown.bat` | — |
 | 動いているコンテナを見る | `docker ps --filter "label=com.docker.compose.project=mpas-e2e"`（DB は `mpas-store`） | — |
@@ -83,7 +83,7 @@
 
 | やりたいこと | コマンド | 節 |
 |---|---|---|
-| 3 つの RDB の DDL を突き合わせる（差があれば終了コード 1） | `.\CompareDdl.ps1` / `.\CompareDdl.ps1 -Detail` | [`CONFIGURATION.md`](CONFIGURATION.md) 7 節 |
+| 3 つの RDB の DDL を突き合わせる（差があれば終了コード 1） | `.\CompareDdl.ps1` / `.\CompareDdl.ps1 -Detail` | [`13_CONFIGURATION.md`](13_CONFIGURATION.md) 7 節 |
 | 失敗したビルド・テストのログを読む | `programs\Tests\E2ETests\Result` の `net48.log` / `net10_0.log` / `E2ETests.log` / `MpasSite.out.log` | 2 |
 | net10.0 版を Kestrel で起動する（**先に 4 節の環境変数を設定する**。ルート URI と待ち受け URL を揃えるため） | `cd programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore; dotnet run --urls https://localhost:44300` | 4 |
 | 未コミットの変更を見る（**報告の直前に取り直す**） | `git status --porcelain` | [`../AGENTS.md`](../AGENTS.md) |
@@ -117,7 +117,7 @@ cd root\programs\Tests
 .\test.ps1 -Launch -Filter "FullyQualifiedName~RequestObjectTests"
 ```
 
-合否の読み方 → [`BUILDING.md`](BUILDING.md) 3 節 / [`TESTING.md`](TESTING.md) 5 節
+合否の読み方 → [`12_BUILDING.md`](12_BUILDING.md) 3 節 / [`14_TESTING.md`](14_TESTING.md) 5 節
 
 **リスク「高」なら、`fixed` の前に別モデルのレビューを回す**（[`QUALITY.md`](../QUALITY.md) 4 節）。
 
@@ -144,7 +144,7 @@ cd root\programs\Tests
 
 **既定の通しにも入っている**（**ブラウザが無ければ Skip** する。動かしたくなければ `-NoWebUI`）。
 **ブラウザの入れ方** : `bin\Debug\net10.0\playwright.ps1 install chromium`、または Chrome / Edge。
-詳細 → [`TESTING.md`](TESTING.md) 5 節「`UI-n.n`（ブラウザで測るもの）」
+詳細 → [`14_TESTING.md`](14_TESTING.md) 5 節「`UI-n.n`（ブラウザで測るもの）」
 
 ### mTLS（`FA-6`）を net48 版でも回す
 
@@ -157,8 +157,8 @@ cd root
 ```
 
 **`Prepare` は管理者で実行しない**（証明書が別の利用者のストアに入り、テストから見えない）。
-詳細 → [`TESTING.md`](TESTING.md) 5 節「mTLS（`FA-6`）と、net48 版の `-NetFxMtls`」
-背景 → [`TESTING.md`](TESTING.md) 5 節
+詳細 → [`14_TESTING.md`](14_TESTING.md) 5 節「mTLS（`FA-6`）と、net48 版の `-NetFxMtls`」
+背景 → [`14_TESTING.md`](14_TESTING.md) 5 節
 
 ### net48 版の mTLS（`FA-6`）だけ、準備が要る
 
@@ -200,7 +200,7 @@ Get-ChildItem Cert:\LocalMachine\Root, Cert:\CurrentUser\My |
     Where-Object { $subjects -contains $_.Subject } | Remove-Item
 ```
 
-**5.1 / 7 のどちらでも回る**（実測済み。2026/09/23）。背景 → [`TESTING.md`](TESTING.md) 5 節
+**5.1 / 7 のどちらでも回る**（実測済み。2026/09/23）。背景 → [`14_TESTING.md`](14_TESTING.md) 5 節
 
 ## 2. ログの置き場所
 
@@ -232,7 +232,7 @@ root\programs\1_DeleteDir.bat              packages / obj / bin ... を消す
 root\programs\2_DeleteFile.bat             *.suo / *.user / *.bak ... を消す
 ```
 
-構成 → [`BUILDING.md`](BUILDING.md) 4 節
+構成 → [`12_BUILDING.md`](12_BUILDING.md) 4 節
 
 ## 4. サイトを起動する
 
@@ -255,7 +255,7 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
 ```
 
 **構成のルート URI と待ち受け URL を揃えること。https で動かすこと。**
-理由 → [`CONFIGURATION.md`](CONFIGURATION.md) 5 節
+理由 → [`13_CONFIGURATION.md`](13_CONFIGURATION.md) 5 節
 
 ## 5. 初回の準備
 
@@ -278,7 +278,7 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
    cd root && .\1_BuildAll.ps1
 ```
 
-詳細 → [`CONFIGURATION.md`](CONFIGURATION.md)
+詳細 → [`13_CONFIGURATION.md`](13_CONFIGURATION.md)
 
 ## 6. コードを書く前に
 
@@ -286,10 +286,10 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
 |---|---|
 | 投稿規約（コメント量、git-flow、PR の粒度） | [`../Contributing.ja.md`](../Contributing.ja.md) |
 | エージェント固有の制約 | [`../AGENTS.md`](../AGENTS.md) |
-| ファイル形式ごとの約束 | [`CODING.md`](CODING.md) |
+| ファイル形式ごとの約束 | [`11_CODING.md`](11_CODING.md) |
 | 領域ごとの構成 | 各フォルダの `ANALYSIS.md` |
 | 適合上の穴の一覧 | [`programs/ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) |
-| 本番へ切り替えるときに見るもの | [`CONFIGURATION.md`](CONFIGURATION.md) 11 節 |
+| 本番へ切り替えるときに見るもの | [`13_CONFIGURATION.md`](13_CONFIGURATION.md) 11 節 |
 
 **ファイル ヘッダの更新者名は、Claude Code なら「玄人 幸道」。**
 
@@ -310,19 +310,19 @@ gh issue comment <番号> --repo OpenTouryoProject/MultiPurposeAuthSite --body-f
 
 | 症状 | 原因 | 見るもの |
 |---|---|---|
-| net48 が「パッケージがありません」 | `packages` を消した。`packages.config` は `nuget.exe restore` が要る | [`BUILDING.md`](BUILDING.md) 6 節 |
-| net48 だけ「型が無い」 | `NetFxLibrary.csproj` に `<Compile Include>` を足し忘れた | [`CODING.md`](CODING.md) 2 節 |
-| 片方の構成だけコンパイルが通らない | `DefineConstants` に条件シンボルを書き落とした | [`CODING.md`](CODING.md) 2 節 |
-| `-Only` で片方だけ建てると復元がおかしい | `CommonLibrary` の `obj` は 2 つの csproj で共有 | [`BUILDING.md`](BUILDING.md) 7 節 |
-| 自己テスト（FAPI2 / CIBA）が HTTP 500 | 待ち受け URL と構成のルート URI が違う | [`CONFIGURATION.md`](CONFIGURATION.md) 5 節 |
-| http だと認可でエラー画面 | Cookie が `SameSite=None`。http では保持されない | [`CONFIGURATION.md`](CONFIGURATION.md) 5 節 |
-| テストが全件 Skip なのに緑に見える | サイトが起動していない。**成功 0 件は NG にしてある** | [`TESTING.md`](TESTING.md) 5 節 |
+| net48 が「パッケージがありません」 | `packages` を消した。`packages.config` は `nuget.exe restore` が要る | [`12_BUILDING.md`](12_BUILDING.md) 6 節 |
+| net48 だけ「型が無い」 | `NetFxLibrary.csproj` に `<Compile Include>` を足し忘れた | [`11_CODING.md`](11_CODING.md) 2 節 |
+| 片方の構成だけコンパイルが通らない | `DefineConstants` に条件シンボルを書き落とした | [`11_CODING.md`](11_CODING.md) 2 節 |
+| `-Only` で片方だけ建てると復元がおかしい | `CommonLibrary` の `obj` は 2 つの csproj で共有 | [`12_BUILDING.md`](12_BUILDING.md) 7 節 |
+| 自己テスト（FAPI2 / CIBA）が HTTP 500 | 待ち受け URL と構成のルート URI が違う | [`13_CONFIGURATION.md`](13_CONFIGURATION.md) 5 節 |
+| http だと認可でエラー画面 | Cookie が `SameSite=None`。http では保持されない | [`13_CONFIGURATION.md`](13_CONFIGURATION.md) 5 節 |
+| テストが全件 Skip なのに緑に見える | サイトが起動していない。**成功 0 件は NG にしてある** | [`14_TESTING.md`](14_TESTING.md) 5 節 |
 | **net10.0 でログインはできるのに保護された画面へ進めない** | **前の起動の認証クッキーが残っている**（下の注記） | この節の下 |
-| **画面が例外になる（`[Display]` を付けた項目）** | `.resx` に足して **`.Designer.cs` を直していない**。実行時に反射で探すので、**ビルドでは分からない** | [`CODING.md`](CODING.md) 2 節 |
-| 差分がファイル全体になった | 改行コードを変えた（CRLF / LF が混在している） | [`CODING.md`](CODING.md) 3 節 |
-| bat で `'xxx' は…認識されていません` | 非 ASCII による解析ずれ | [`CODING.md`](CODING.md) 4 節 |
-| ps1 が 5.1 で落ちる / 表がずれる | BOM 無し、または 7 専用の引数、`Format-Table` | [`CODING.md`](CODING.md) 5 節 |
-| `*.bak` の控えが消えた | `2_DeleteFile.bat` の削除対象 | [`BUILDING.md`](BUILDING.md) 10 節 |
+| **画面が例外になる（`[Display]` を付けた項目）** | `.resx` に足して **`.Designer.cs` を直していない**。実行時に反射で探すので、**ビルドでは分からない** | [`11_CODING.md`](11_CODING.md) 2 節 |
+| 差分がファイル全体になった | 改行コードを変えた（CRLF / LF が混在している） | [`11_CODING.md`](11_CODING.md) 3 節 |
+| bat で `'xxx' は…認識されていません` | 非 ASCII による解析ずれ | [`11_CODING.md`](11_CODING.md) 4 節 |
+| ps1 が 5.1 で落ちる / 表がずれる | BOM 無し、または 7 専用の引数、`Format-Table` | [`11_CODING.md`](11_CODING.md) 5 節 |
+| `*.bak` の控えが消えた | `2_DeleteFile.bat` の削除対象 | [`12_BUILDING.md`](12_BUILDING.md) 10 節 |
 
 ### 古い認証クッキーが残っていると、ログインできなくなる（net10.0）
 

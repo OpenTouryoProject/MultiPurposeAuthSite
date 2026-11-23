@@ -190,7 +190,7 @@
     <value>(no error)</value>
   </data>
   <data name="CheckFormat" xml:space="preserve">
-    <value>[Configuration check] {0} (CONFIGURATION.md section 11)</value>
+    <value>[Configuration check] {0} (13_CONFIGURATION.md section 11)</value>
   </data>
   <data name="CheckAdministratorNotFilledIn" xml:space="preserve">
     <value>AdministratorUID / AdministratorPWD are still the template values.</value>

@@ -309,7 +309,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     DiscoveryTests.KindOf(json, "code_challenge_methods_supported"));
 
                 // **テストは既定（RequirePkceS256 = false）で回る。**
-                //   true 側は設定ファイルを変えて起動し直す必要があるため、ここでは測れない（TESTING.md 5 節）。
+                //   true 側は設定ファイルを変えて起動し直す必要があるため、ここでは測れない（14_TESTING.md 5 節）。
                 r.Verify("既定では plain も広告する（実装が受け付けるため）",
                     DiscoveryTests.ArrayContains(json, "code_challenge_methods_supported", "plain"),
                     "plain を含む",

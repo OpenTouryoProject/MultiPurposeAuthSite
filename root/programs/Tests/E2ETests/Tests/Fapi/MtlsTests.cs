@@ -58,7 +58,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
     /// test.ps1 -Launch が、テスト専用のフック（Tests/MtlsTestHook）を net10.0 版にだけ読ませる
     /// （アプリのコードは変えない）。証明書はその場で作る自己署名のもので、ストアには入れない。
     ///
-    /// **net48 版（IIS Express）は、準備だけを手動で行い、-NetFxMtls を付けて回す**（TESTING.md）。
+    /// **net48 版（IIS Express）は、準備だけを手動で行い、-NetFxMtls を付けて回す**（14_TESTING.md）。
     /// IIS は自己署名の証明書をアプリより前で 403.16 として断るため、テスト用 CA を
     /// コンピューターの信頼されたルートに入れ（管理者権限）、その CA が発行した証明書を CurrentUser\My に置く。
     /// -NetFxMtls を付けなければ、net48 版のケースは作らない（Skip にもしない）。
@@ -82,7 +82,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
         /// </summary>
         /// <remarks>
         /// net48 版は準備（テスト用 CA）が要るので、既定ではケースを作らない。
-        /// **作ってから Skip にすると、毎回の通しに Skip が並び、他の Skip が見えにくくなる**（TESTING.md 5 節）。
+        /// **作ってから Skip にすると、毎回の通しに Skip が並び、他の Skip が見えにくくなる**（14_TESTING.md 5 節）。
         /// </remarks>
         public static IEnumerable<object[]> MtlsTargets
         {
@@ -190,7 +190,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     "**fapi2 を通すのは、ClientModePolicy の表の「認可コード × mTLS」の行だけ。**"
                     + "FA-2.1 は client_secret / PKCE では通らないことを測っており、"
                     + "本テストは**その対照（通る側）**。"
-                    + "net48 版は -NetFxMtls のときだけ（TESTING.md）。",
+                    + "net48 版は -NetFxMtls のときだけ（14_TESTING.md）。",
                     "RFC 8705 §2.1（tls_client_auth）/ FAPI 2.0 / #226");
 
                 r.Target("client_name=" + KnownClients.TestClient2_2

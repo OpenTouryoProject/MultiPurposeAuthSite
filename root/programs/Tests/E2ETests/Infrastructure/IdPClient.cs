@@ -58,6 +58,7 @@
 //*  2026/11/11  玄人 幸道         同意画面の許可・拒否を、フォームの action（同意画面の送信の口）へ送るようにした（ConsentFormUrl。#359）
 //*  2026/11/15  玄人 幸道         /userinfo に要求ヘッダを足して呼ぶ UserInfoWithHeadersAsync を足した（#384）
 //*  2026/11/17  玄人 幸道         IssuerAsync の同期版 Issuer を足した（client_assertion の aud に使う。#398）
+//*  2026/11/21  玄人 幸道         サインインの画面から ReturnUrl で戻る SignInViaSignInPageAsync を足した（#413）
 //**********************************************************************************
 
 using System;
@@ -805,6 +806,60 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             this.IsSignedIn = true;
+        }
+
+        /// <summary>
+        /// サインインの画面へのリダイレクトから、ブラウザと同じ形でサインインし、戻り先を返す（#413）。
+        /// </summary>
+        /// <param name="toSignIn">サインインの画面へリダイレクトした応答（認可要求など）</param>
+        /// <returns>サインインの後のリダイレクト先（戻り先。入れなければ例外）</returns>
+        /// <remarks>
+        /// **サインインの画面を開き、画面が持つ `ReturnUrl` をそのまま送り返す**（利用者がブラウザでサインインするのと同じ）。
+        /// **`SignInAsync` は `ReturnUrl` を持たずにサインインする**ので、**サインインの前に始めた認可要求の続き**を測れない。
+        /// **戻り先へは進まない**（何が返るかを、呼び出し側で測るため）。
+        /// </remarks>
+        public async Task<string> SignInViaSignInPageAsync(AuthZResponse toSignIn)
+        {
+            if (toSignIn == null || !toSignIn.Redirected)
+            {
+                throw new InvalidOperationException(
+                    "サインインの画面へのリダイレクトではありません: " + (toSignIn == null ? "null" : toSignIn.ToString()));
+            }
+
+            HttpResponseMessage get = await this.GetAsync(toSignIn.Location);
+            string html = await get.Content.ReadAsStringAsync();
+
+            Match m = AntiforgeryRegex.Match(html);
+            if (!m.Success)
+            {
+                throw new InvalidOperationException(
+                    "サインインの画面から __RequestVerificationToken を取得できませんでした（HTTP "
+                    + (int)get.StatusCode + "）。");
+            }
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "__RequestVerificationToken", m.Groups["value"].Value },
+                { "Email", TestEnv.TestUserName(this.Target.Key) },
+                { "Password", this.Config.Get("TestUserPWD") },
+                { "RememberMe", "false" },
+                { "ReturnUrl", Html.FieldValue(html, "ReturnUrl") },
+                { "submitButtonName", "normal_signin" }
+            };
+
+            HttpResponseMessage post = await this.PostFormAsync("/Account/Login", form);
+
+            // 成功時はリダイレクト。失敗時はログイン画面を再表示（HTTP 200）。
+            if (post.Headers.Location == null)
+            {
+                throw new InvalidOperationException(
+                    "サインインに失敗しました（HTTP " + (int)post.StatusCode
+                    + "）。構成ファイルの利用者名とパスワードを確認してください。");
+            }
+
+            this.IsSignedIn = true;
+
+            return post.Headers.Location.OriginalString;
         }
 
         #endregion

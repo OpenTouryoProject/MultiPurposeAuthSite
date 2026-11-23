@@ -178,7 +178,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// **#367 で期待値を変えた。** **以前は、秘密を持つクライアントの refresh_token も、同じ鍵に縛っていた**
         /// （証明なし・別の鍵は `invalid_grant`）。**RFC 9449 §5 は、秘密を持つクライアントの refresh_token は縛らない**としている
         /// （クライアント認証で既に縛られている）。**公開クライアントの refresh_token は縛る**が、
-        /// **いまは公開クライアントが refresh_token の経路で認証できない**ので、E2E では測れない（`TESTING.md`）。
+        /// **いまは公開クライアントが refresh_token の経路で認証できない**ので、E2E では測れない（`14_TESTING.md`）。
         /// </remarks>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]

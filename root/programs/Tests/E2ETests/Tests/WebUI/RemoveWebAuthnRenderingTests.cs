@@ -64,7 +64,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.WebUI
     /// **値は正しく往復していた**（選んだ分だけ送られ、選んだ分だけ消えていた）。
     /// **見えなかったのは「選べたかどうか」だけ**である。
     ///
-    /// **だから、ここはブラウザで測る**（`Tests/WebUI`。`TESTING.md` 5 節）。
+    /// **だから、ここはブラウザで測る**（`Tests/WebUI`。`14_TESTING.md` 5 節）。
     ///
     /// **資格情報は種データが用意する**（`FIDO.TestCredentials`。`webauthn_tanaka` に 3 件）。
     /// **net10.0 版だけ**である（net48 版には WebAuthn の口が無い。#137）。

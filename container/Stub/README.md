@@ -85,7 +85,7 @@ pwsh ./3_DockerComposeDown.ps1 ./my-stub.env            # 止めて消す
 | `redirect_uri_saml` | SAML2 の ACS（使わなければ省く）。**応答の `Audience` は ACS ではなく SP の entityID（要求の `Issuer`）**（#389）。**Open棟梁 の SP は `SpRp_Saml2SpEntityId` に、要求の `Issuer` と同じ値を設定する**（無いと `Audience` を ACS の URL と照合し、`AudienceMismatch` で断る。**Sample4SpRp のサンプルは、既定で設定済み**。OpenTouryo#708） |
 | `client_name` | 名前 |
 
-ほかの項目と、機能の切り替え（`EnableDynamicClientRegistration` など）は `root\CONFIGURATION.md` を参照。
+ほかの項目と、機能の切り替え（`EnableDynamicClientRegistration` など）は `root\13_CONFIGURATION.md` を参照。
 
 **別の `appsettings.json` を土台にする**なら、`STUB_APPSETTINGS` にそのパスを書く。
 ただし、**次の値は環境変数が勝つので、JSON に書いても変わらない。**

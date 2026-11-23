@@ -1,6 +1,6 @@
 @echo off
 rem NOTE: keep this file pure ASCII. cmd.exe reads a batch file by byte offset, so non-ASCII text
-rem       can break lines depending on the console code page (root/CODING.md section 4. #342).
+rem       can break lines depending on the console code page (root/11_CODING.md section 4. #342).
 rem
 rem Copy the DDL first, so that a stale schema is never started (#250 step 1).
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp00_CopyInitSql.ps1"
@@ -25,7 +25,7 @@ echo.
 echo  The first start of Oracle takes a few minutes.
 echo  Wait until "docker compose ps" shows healthy.
 echo.
-echo  How to pass the connection string: root\TESTING.md section 1.
+echo  How to pass the connection string: root\14_TESTING.md section 1.
 goto :eof
 
 :error

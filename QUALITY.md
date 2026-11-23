@@ -34,8 +34,8 @@
 
 | 内容 | 一次情報 |
 |---|---|
-| 検証の手順・回す範囲 | [`root/CHEATSHEET.md`](root/CHEATSHEET.md) 1 節、[`root/TESTING.md`](root/TESTING.md) |
-| コーディング規約 | [`root/CODING.md`](root/CODING.md) |
+| 検証の手順・回す範囲 | [`root/10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節、[`root/14_TESTING.md`](root/14_TESTING.md) |
+| コーディング規約 | [`root/11_CODING.md`](root/11_CODING.md) |
 | テストケース | [`Tests/TESTCASES.md`](root/programs/Tests/TESTCASES.md)（生成物。一次情報はテスト コード） |
 | カバレッジの値と、届いていない箇所 | [`Tests/COVERAGE.md`](root/programs/Tests/COVERAGE.md) |
 | セキュリティの指摘の扱い | [`AGENTS.md`](AGENTS.md)「セキュリティの指摘は、公開される前に確認を取る」、[`Security.ja.md`](Security.ja.md) |
@@ -64,7 +64,7 @@
 - **OpenTouryo のアセンブリ（`OpenTouryoAssemblies`）を更新するときは、E2E を通す。**
   検証の中身（DPoP の `htu`、大文字小文字の比べ方、SAML2 の `SigAlg`、JARM の `error` の応答など）がそちらにあるため、
   ソースの差分に現れないまま振る舞いが変わる（OpenTouryo#642〜#644 が実例）
-- 検証の手段の具体（どのスクリプトを、どの引数で回すか）は [`AGENTS.md`](AGENTS.md)「検証は、変更の届く範囲で決める」と [`root/CHEATSHEET.md`](root/CHEATSHEET.md) 1 節による
+- 検証の手段の具体（どのスクリプトを、どの引数で回すか）は [`AGENTS.md`](AGENTS.md)「検証は、変更の届く範囲で決める」と [`root/10_CHEATSHEET.md`](root/10_CHEATSHEET.md) 1 節による
 
 ---
 
@@ -79,12 +79,12 @@
     **判定はせず、合否にも関わらない。** 変わってよいかは人が判断する
   - **前回の値はコミットしない**（`Result` に置く）。配備ごとの値や、サインイン中の利用者の名前を含む画面の文面が入るため
 - **外部の基準を、最終的な正とする。** 適合性テスト（OpenID Foundation の Conformance Suite。`ANALYSIS-IdP.md` の D-14。**#350 で入れた**）。
-  回し方・プラン・結果の読み方は [`TESTING.md`](root/TESTING.md) 5 節「適合性テスト」と [`container/CTS/README.md`](container/CTS/README.md)
+  回し方・プラン・結果の読み方は [`14_TESTING.md`](root/14_TESTING.md) 5 節「適合性テスト」と [`container/CTS/README.md`](container/CTS/README.md)
   - **いつ回すか**：**(1) リリースの前に、全プランを回す。(2) 適合性テストで見つかった不適合を直す Issue では、`fixed` の前に、そのプランを回す。**
-    **普段の作業（`fixing`・ほかの `fixed`）では回さなくてよい**（Conformance Suite のコンテナがメモリを使い、全プランで 2〜3 時間かかる。E2E の通しには入れない）
+    **普段の作業（`fixing`・ほかの `fixed`）では回さなくてよい**（Conformance Suite のコンテナがメモリを使い、全プランで 2 時間ほどかかる。E2E の通しには入れない）
   - **結果の扱い**：落ちたものは、**環境（Conformance Suite の設定・自動操作）の不足か、OP の不適合かを仕分け**、不適合は原因ごとに Issue にする（セキュリティの弱点の疑いなら、公開する前に人に聞く。[`AGENTS.md`](AGENTS.md)）。
     **結果（`container/CTS/out/`）はコミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む）
-  - **自動では回せないモジュールがある**（利用者が拒否する操作など。`container/CTS/README.md`）。**REVIEW（画面の写し）は、人が見て合否を付ける**
+  - **自動では回せないモジュールがある**（利用者が拒否する操作など。`container/CTS/README.md`）。**REVIEW（画面の写しで合否を付ける判定）は、エージェントが報告書のログに残った OP の応答から合否を付け、人がその表を承認する**（`container/CTS/ExtractReview.ps1`。全プランの実行のたびに、基準 `ReviewBaseline.csv` と比べ、変わったものだけ付け直す。#417）
   - **相手は net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る）
 
 ---
@@ -178,6 +178,7 @@
 - [ ] **仕様の「だけ」を「も」と読んでいないか**（FAPI 2.0 の `aud` は issuer だけ。#323）。登録の種別で規定が変わらないか。
   **プロファイルの強制を 1 つの登録種別に入れたら、ほかの種別の同じ規定も見る** — **S256 の PKCE を fapi2 には必須にした（#366）が、fapi1 の PAR（FAPI 1.0 Advanced §5.2.2 の 18）には入れていなかった**（#383。`RT-383.1`）。**原典が経路を限るなら、その経路だけにする**（fapi1 は PAR の要求だけ）。
   **逆に、プロファイルが一般の仕様より強く求めるものを、一般の規則のまま通していないか** — **OIDC Core では任意の `nonce` を、FAPI 1.0 Baseline は `openid` の要求に必須とする。fapi1 の `response_type=code` を `nonce` 無しで通していた**（#382。`RT-382.1`）。
+  **`openid` の有無で、一般の規則が変わるところも見る** — **`redirect_uri` は `openid` の要求だけが必須（OIDC Core）で、`openid` の無い要求は登録が 1 件なら省けた（RFC 6749 §3.1.2.3）。FAPI はどちらも求めるのに、`openid` の無い fapi2 の PAR を `redirect_uri` 無しで受けていた**（#422。`RT-422.1`・`.2`。fapi1 は経路によらず）。
   **強制を足したら、同じ登録で別の理由の拒否を測っているテストが、新しい強制で先に断られて「通って」いないか**（**断る理由まで確かめる**）— **fapi1 に JARM を必須にすると、`RT-382.1` の `nonce` 無しの要求は JARM の確かめで先に断られ、理由を見ないテストは通ったままだった**（#381。`error_description` で理由を確かめるようにした）。
   **同じパラメタを、外（フォーム）と中（Request Object）の両方で見ているか** — **PAR はフォームの `request_uri` を断っていたが、Request Object の中の `request_uri` は見ていなかった**（RFC 9126 §2.1。#380。`RT-380.1`）。
   **同じ規定を、受ける口ごとに入れたか** — **Request Object の寿命の上限（60 分）を PAR・`/ros` の FAPI の登録には入れた（#336）が、CIBA の署名した要求には入れていなかった**（#388。`RT-388.1`）
@@ -193,12 +194,15 @@
   **共有の HttpClient（`OAuth2AndOIDCClient.HttpClient`）で取りに行かない** — ID 連携・自己テスト（localhost）も同じ HttpClient を使うので、絞れない。**`OutboundUrlPolicy.HttpClient` を使う。**
   **部品（Open棟梁）に HttpClient を渡すときは、静的プロパティではなく、呼び出しごとの引数で渡す** — **`jwks_uri` は、部品が共有の HttpClient で取りに行き、リダイレクトを追っていた。部品の静的プロパティ（OpenTouryo#707）はプロセス全体に効き、ID 連携の上流の `jwks_uri` まで絞ってしまう**（#405。OpenTouryo#718 の引数で渡す。`RT-405.1`）
   **取りに行く先は、登録した値に限る**（外部の `request_uri` は、登録の `request_uris` にあるものだけ。#374。`RT-374.2`）
-- [ ] **OP が外へ出す要求に、時間と大きさの上限があるか。** **Open棟梁 の部品は要求ごとの上限を持たず、共有の HttpClient の設定に任せる** — **何も設定しておらず、.NET の既定（100 秒・上限なし）だった**（#375。`RT-375.1`）。**新しく HttpClient を作るなら、`OutboundHttpLimits` を掛ける。** **どの分類の要求かを決め、プロキシの組（`CreateProxy.For*`）とクライアント証明書を、その分類に合わせる** — **1 つの共有の HttpClient が内と外の宛先を兼ね、RP の口にも OP のクライアント証明書を出しえた**（#406。`CONFIGURATION.md` のマトリックス）
+- [ ] **OP が外へ出す要求に、時間と大きさの上限があるか。** **Open棟梁 の部品は要求ごとの上限を持たず、共有の HttpClient の設定に任せる** — **何も設定しておらず、.NET の既定（100 秒・上限なし）だった**（#375。`RT-375.1`）。**新しく HttpClient を作るなら、`OutboundHttpLimits` を掛ける。** **どの分類の要求かを決め、プロキシの組（`CreateProxy.For*`）とクライアント証明書を、その分類に合わせる** — **1 つの共有の HttpClient が内と外の宛先を兼ね、RP の口にも OP のクライアント証明書を出しえた**（#406。`13_CONFIGURATION.md` のマトリックス）
 - [ ] **部品（Open棟梁）の検証の後に、同じクレームを自前でも確かめていないか。** **部品の規則が変わったら、自前の確かめも揃える** — **部品が `nbf` に時計のずれの許容幅（10 秒）を持った（OpenTouryo#689）のに、CIBA の自前の確かめは許容幅なしのままで、部品が受けた要求を断っていた**（#412。`RT-412.1`）。**OpenTouryo のアセンブリを更新するときは、PR の振る舞いの変化ごとに、MPAS の自前の確かめを grep する**
 - [ ] **値が無いときに、検証を飛ばしていないか**（`nonce`・`aud`・署名など）
 - [ ] **引き換えの値（`code`・`auth_req_id`・`device_code`）を、出したクライアントと照合してから、状態を返したり、記録を書き換え・消したりしているか。**
   **CIBA・Device は、照合の前に状態を返し、承認済みの記録と認可コードを消していた**ので、値を知る別のクライアントが先に引くと、正規のクライアントが結果を受け取れなかった（#387。`RT-387.1`・`.2`）。
   **トークンが出ないことだけでなく、正規のクライアントの続きが壊れないこと**まで見る
+- [ ] **使い切りの値（預けた `request_uri` など）を、成功の応答だけでなく、`redirect_uri` へエラーを返す経路でも使い切りにしているか。**
+  **成功の応答を作ったときだけ消しており、拒否（`access_denied`）や `prompt=none` のエラーの後も、期限まで同じ `request_uri` で認可をやり直せた**（RFC 9126 §4・§7.3。#420。`RT-413.2`・`RT-420.1`）。
+  **逆に、RP へ何も返さないエラー画面とサインインの画面では消さない**（FAPI 2.0 Security Profile §5.3.2.2 NOTE 3。`RT-420.2`・`RT-413.1`）
 - [ ] 失効したトークン・使用済みのコードを、受けていないか。
   **同時に来た要求で、2 回使えないか**（読んでから使用済みにするのではなく、**使用済みにできた 1 つだけが引き換える**。#332）
 

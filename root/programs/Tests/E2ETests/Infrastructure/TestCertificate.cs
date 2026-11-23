@@ -63,7 +63,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// ・net10.0 版 : その場で自己署名の証明書を作る（テスト専用のフックが、発行元を問わず受け付ける）
         /// ・net48 版   : **CurrentUser\My に用意した証明書を使う**（-NetFxMtls のとき）。
         ///   IIS は信頼できない証明書をアプリより前で 403.16 として断るので、
-        ///   テスト用 CA が発行し、その CA をコンピューターの信頼されたルートに入れたものが要る（TESTING.md）
+        ///   テスト用 CA が発行し、その CA をコンピューターの信頼されたルートに入れたものが要る（14_TESTING.md）
         /// </remarks>
         public static X509Certificate2 ForTarget(TargetInfo target, string subjectDn)
         {
@@ -88,7 +88,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 {
                     throw new InvalidOperationException(
                         "CurrentUser\\My に " + subjectDn + " の証明書（秘密鍵つき・有効期間内）がありません。"
-                        + "-NetFxMtls の準備（TESTING.md「net48 版の mTLS」）を行ってください。");
+                        + "-NetFxMtls の準備（14_TESTING.md「net48 版の mTLS」）を行ってください。");
                 }
 
                 return found;

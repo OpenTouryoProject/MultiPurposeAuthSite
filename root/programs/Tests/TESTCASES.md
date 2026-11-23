@@ -1704,7 +1704,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **補足**
 
 - **鍵の本数は alg の数と一致しない。****`RS256` / `RS384` / `RS512` は 1 本の鍵を共有する**ので、**6 つの alg に対して鍵は 4 本**（RSA 1 本 ＋ EC 3 本）である。
-- **鍵を入れ替えるとき（D-9）も、この関係は変わらない。****新しい鍵を `jwkcerts` に先に載せ、RP のキャッシュが切れてから署名に使う**（手順は `CONFIGURATION.md`）。**`JwkSet.json` は追記式**なので、**退役した鍵も、消すまで載り続ける。**
+- **鍵を入れ替えるとき（D-9）も、この関係は変わらない。****新しい鍵を `jwkcerts` に先に載せ、RP のキャッシュが切れてから署名に使う**（手順は `13_CONFIGURATION.md`）。**`JwkSet.json` は追記式**なので、**退役した鍵も、消すまで載り続ける。**
 
 ## RT-129.7 PS256 / PS384 / PS512 で署名され、jwkcerts の同じ RSA 鍵で検証できる
 
@@ -3240,7 +3240,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- 成功（200 と OK）は E2E では測れない。2FA を有効にした利用者のコードが要るが、共用のテスト ユーザで 2FA を有効にすると他の全テストのサインインが変わるため。成功経路は手で確かめる（CHEATSHEET.md）。
+- 成功（200 と OK）は E2E では測れない。2FA を有効にした利用者のコードが要るが、共用のテスト ユーザで 2FA を有効にすると他の全テストのサインインが変わるため。成功経路は手で確かめる（10_CHEATSHEET.md）。
 
 ## RT-218.1 /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御が付く
 
@@ -3315,7 +3315,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **RequirePkceS256=true のときに拒否すること**は、E2E では測っていない（設定ファイルを変えて起動し直す必要があるため）。設定は CONFIGURATION.md を参照。
+- **RequirePkceS256=true のときに拒否すること**は、E2E では測っていない（設定ファイルを変えて起動し直す必要があるため）。設定は 13_CONFIGURATION.md を参照。
 
 ## RT-220.3 code_challenge を送らない認可リクエストは、既定では通る（設定で必須にできる）
 
@@ -3335,7 +3335,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **RequirePkce=true のときに invalid_request で拒否すること**は、E2E では測っていない（設定ファイルを変えて起動し直す必要があるため）。設定は CONFIGURATION.md を参照。
+- **RequirePkce=true のときに invalid_request で拒否すること**は、E2E では測っていない（設定ファイルを変えて起動し直す必要があるため）。設定は 13_CONFIGURATION.md を参照。
 - **Device AuthZ / CIBA は、この判定の対象外**（認可エンドポイントを通らないため）。EX-7 / EX-8 は影響を受けない。
 
 ## RT-220.4 normal 登録のクライアントが S256 の PKCE を使っても、トークンは fapi を名乗らない
@@ -5246,7 +5246,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **この画面も、一度も叩いていなかった。****ビューの文字列は実行時に反射で探される**ので、**足し忘れはビルドでも E2E でも分からなかった**（`CODING.md`）。**#258 で net10.0 版へ移植したばかり**でもあり、**退行に気付く手段が無い**状態だった。 |
+| 観点 | **この画面も、一度も叩いていなかった。****ビューの文字列は実行時に反射で探される**ので、**足し忘れはビルドでも E2E でも分からなかった**（`11_CODING.md`）。**#258 で net10.0 版へ移植したばかり**でもあり、**退行に気付く手段が無い**状態だった。 |
 | 根拠 | #257 / #258 |
 | テスト | `RT25710_一覧に種データのロールが出る` |
 
@@ -5521,7 +5521,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **`mem` では、このテストは幅の問題を測れない**（辞書なので上限が無い）。**効くのは `sql` / `ora` / `npg`** で、**直す前は Oracle / PostgreSQL で種データの作成そのものが失敗していた**（`GET /Account/Login` が HTTP 500 になり、その対象のテストが大量に落ちる）。**4 ストアの実測は `TESTING.md` 1 節。**
+- **`mem` では、このテストは幅の問題を測れない**（辞書なので上限が無い）。**効くのは `sql` / `ora` / `npg`** で、**直す前は Oracle / PostgreSQL で種データの作成そのものが失敗していた**（`GET /Account/Login` が HTTP 500 になり、その対象のテストが大量に落ちる）。**4 ストアの実測は `14_TESTING.md` 1 節。**
 - **切れていないことを、先頭と末尾の両方で見ている。****幅が足りないと、黙って切り捨てる方言もある**ため（今回の Oracle / PostgreSQL は例外にしたが、設定で変わりうる）。
 
 ## RT-270.1 画面登録（user store）に書いた require_pkce も、構成ファイルと同じように効く
@@ -5912,7 +5912,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`TESTING.md` 9 節）。
+- **値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`14_TESTING.md` 9 節）。
 
 ## RT-277.6 メアドの変更は、確認メールを挟む（押しただけでは変わらない）
 
@@ -6220,7 +6220,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **このケースが測るのは、入れ物（表・辞書）と画面である。****DB の行の鍵で実際に署名するところまでは測っていない** — **配備の `.pfx` のパスワードをテストに持たせない**ためである（`TESTING.md` 9 節）。**指定した鍵で署名していることは、`CN-5.5`（コンテナ。設定の行）とその歯抜けで測っている。**
+- **このケースが測るのは、入れ物（表・辞書）と画面である。****DB の行の鍵で実際に署名するところまでは測っていない** — **配備の `.pfx` のパスワードをテストに持たせない**ためである（`14_TESTING.md` 9 節）。**指定した鍵で署名していることは、`CN-5.5`（コンテナ。設定の行）とその歯抜けで測っている。**
 
 ## RT-294.1 登録に auth を明記していないクライアントは、scope=auth を付けても同意画面を飛ばせない
 
@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus
+1. GET /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=f356a2c0-4347-400f-96ad-1e9d8f144411&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7701,7 +7701,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`TESTING.md` 9 節）。
+- **値は出していない。** 新しいパスワードは構成ファイルの値から作っている（`14_TESTING.md` 9 節）。
 
 ## RT-294.73 /SetDeviceToken・/ciba_result・/2fa_result は、認証デバイスのクライアントに発行したトークンだけを受ける
 
@@ -8191,7 +8191,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して確かめる（手順は `TESTING.md`）。**E2E からは DB を見ない**（テストに接続文字列を持たせない。`TESTING.md` 9 節）。
+- **DB に平文が残っていないこと**は、`-UserStoreType sql` で SELECT して確かめる（手順は `14_TESTING.md`）。**E2E からは DB を見ない**（テストに接続文字列を持たせない。`14_TESTING.md` 9 節）。
 
 ## RT-302.1 発行するトークンのヘッダに `jku` を入れず、`kid` で鍵を引けるようにする
 
@@ -8220,7 +8220,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **`typ` は、出す側と受ける側の両方で効いている。****受ける側**（`CmnAccessToken.VerifyAccessToken`）**は `at+jwt` を期待する**ので、**access_token に `JWT` が付いていると、トークンを使う経路が全部落ちる** — **このケースだけでなく、通し全体が落ちる**のが歯抜けの形である（`TESTING.md`）。
+- **`typ` は、出す側と受ける側の両方で効いている。****受ける側**（`CmnAccessToken.VerifyAccessToken`）**は `at+jwt` を期待する**ので、**access_token に `JWT` が付いていると、トークンを使う経路が全部落ちる** — **このケースだけでなく、通し全体が落ちる**のが歯抜けの形である（`14_TESTING.md`）。
 - **配備のとき、発行済みの access_token は検証に通らなくなる**（`typ` が `JWT` のため）。**有効期限が切れるまでの間だけ**で、**`refresh_token` で取り直せば新しい `typ` になる**（`RefreshTokenProvider` は JWS ではない）。
 
 ## RT-303.1 `/jwkcerts` が `ETag` と `Cache-Control` を返し、`304` を使える
@@ -8417,7 +8417,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **断りは「`client_id` ＋ 送信元」ごと**である（段階 4）。**他のクライアントも、他の送信元も、影響を受けない**（**このケースは 1 つの送信元から測っている**ので、**送信元ごとに分かれていること自体は `RT-305.7`**）。 **使い捨ての利用者で登録している** — **当時はクライアント登録が 1 人 1 件**で、**共用の利用者で登録すると、`RT-277.1` と登録を奪い合った**（実測で踏んだ。`TESTING.md`）。 **#307 の段階 5-a-1 で 1 人 n 件になったが、使い捨てのままにしている** — **管理画面が扱うのは、その利用者の 1 件**だからである。
+- **断りは「`client_id` ＋ 送信元」ごと**である（段階 4）。**他のクライアントも、他の送信元も、影響を受けない**（**このケースは 1 つの送信元から測っている**ので、**送信元ごとに分かれていること自体は `RT-305.7`**）。 **使い捨ての利用者で登録している** — **当時はクライアント登録が 1 人 1 件**で、**共用の利用者で登録すると、`RT-277.1` と登録を奪い合った**（実測で踏んだ。`14_TESTING.md`）。 **#307 の段階 5-a-1 で 1 人 n 件になったが、使い捨てのままにしている** — **管理画面が扱うのは、その利用者の 1 件**だからである。
 
 ## RT-305.5 クライアントごとの上限を超えた要求は 429（Retry-After）になる
 
@@ -13550,6 +13550,199 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 90 秒先 : HTTP 400
 - 90 秒先 : invalid_request
 
+## RT-413.1 PAR の request_uri の認可要求を、サインインしないまま 2 回送り、2 回目でサインインすると、認可コードが返ってトークンに引き換えられる。その後は同じ request_uri を使えない
+
+| | |
+|---|---|
+| 観点 | **request_uri の使い切りは、認可を終えた時点で効かせる。** サインインの画面を出しただけで使い切りにすると、**利用者がサインインの画面を開き直したり、ブラウザが URL を先読みしたりしただけで、認可できなくなる。****一方で、認可を終えた後は使えない**（RT-188.4 と同じ）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 NOTE 3 / RFC 9126 §4 / #413 |
+| テスト | `RT41301_サインインの前に使い回したrequest_uriで認可できる` |
+
+**手順**
+
+1. PAR に認可要求を預け、request_uri を受け取る
+1. サインインしないまま、その request_uri で認可要求を送り、サインインの画面を開く（サインインはしない）
+1. 同じ request_uri で認可要求をもう一度送り、今度はサインインの画面からサインインする（ReturnUrl で認可要求へ戻る）
+1. 認可コードをトークンに引き換える
+1. 認可を終えた後に、同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- 1 回目 : サインインの画面へ送られる（request_uri を断らない）
+- 1 回目 : 認可コードもエラーも返さない
+- 1 回目 : サインインの画面が開く
+- 2 回目 : サインインの画面へ送られる（request_uri を断らない）
+- 2 回目 : 認可コードもエラーも返さない
+- サインインの後、預けた要求の認可要求へ戻る
+- 同意の画面が出る（prompt=consent を預けた）
+- 認可コードが返る
+- 預けた state が返る
+- トークンの応答 : HTTP 200
+- access_token が返る
+- 認可を終えた後は、認可コードを返さない
+
+**観測（判定しない）**
+
+- 認可を終えた後の返り方
+  - 消した後は「存在しない request_uri」と同じ扱いになる（RT-362.3）。返し方は記録するだけで、判定しない。
+
+## RT-413.2 PAR に預けた要求を同意の画面で拒否すると、redirect_uri へ access_denied を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **PAR で預けた要求でも、拒否は access_denied で返す**（RT-272.6 は、預けない要求で測っている）。**拒否も認可の結果なので、RP へ返した時点で request_uri を使い切る**（#420）。**以前は成功の応答を作ったときだけ消しており、拒否の後も、期限まで同じ request_uri でやり直せた**（#413 で観測した）。 |
+| 根拠 | RFC 6749 §4.1.2.1（access_denied）/ RFC 9126 §4・§7.3 / #413 / #420 |
+| テスト | `RT41302_PARの要求を拒否するとaccess_denied` |
+
+**手順**
+
+1. PAR に認可要求を預け、request_uri を受け取る
+1. その request_uri で認可要求を送り、同意の画面で「拒否」を押す
+1. 拒否した後に、同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- リダイレクトで返る
+- エラーは access_denied
+- 預けた state が返る
+- 認可コードは発行されない
+- 拒否した後 : 認可コードを返さない
+- 拒否した後 : 同意の画面を出さない（request_uri を使い切っている）
+- 拒否した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
+
+## RT-420.1 PAR に prompt=none を預け、サインインしていない状態で認可要求を送ると、redirect_uri へ login_required を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **拒否に限らず、redirect_uri へエラーを返した時点で、その認可は終わっている**ので、request_uri を使い切る。**RP がやり直すなら、預け直す**（クライアントは request_uri を 1 回だけ使う。RFC 9126 §4 の MUST）。 |
+| 根拠 | RFC 9126 §4・§7.3 / FAPI 2.0 Security Profile §5.3.2.2 NOTE 3 / OIDC Core 1.0 §3.1.2.6（login_required）/ #420 |
+| テスト | `RT42001_エラーを返した後のrequest_uriは使えない` |
+
+**手順**
+
+1. PAR に prompt=none の認可要求を預け、request_uri を受け取る
+1. サインインしないまま、その request_uri で認可要求を送る
+1. 同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- redirect_uri へ返る
+- エラーは login_required
+- エラーを返した後 : 認可コードを返さない
+- エラーを返した後 : 同意の画面を出さない（request_uri を使い切っている）
+- エラーを返した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
+
+## RT-420.2 PAR に預けた要求の request_uri を、別のクライアントの client_id で送るとエラー画面になるが、request_uri は消えず、正しい client_id で送り直すと認可を続けられる
+
+| | |
+|---|---|
+| 観点 | **エラー画面で止めるときは、RP へ何も返していない**（どちらの redirect_uri も信じない。RT-294.21）。**ここで消すと、要求を取り違えただけで、正しいクライアントの認可まで終わってしまう。****消すのは、redirect_uri へ結果を返したときだけ**（#420）。 |
+| 根拠 | RFC 9126 §4 / #420 |
+| テスト | `RT42002_エラー画面で止めたときはrequest_uriを消さない` |
+
+**手順**
+
+1. PAR に認可要求を預け、request_uri を受け取る
+1. 別のクライアントの client_id と、その request_uri で認可要求を送る
+1. 正しい client_id で、同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- エラー画面になる（RP へ返さない）
+- 同意の画面が出る（request_uri は消えていない）
+
+## RT-420.3 /ros に prompt=none の Request Object を預け、サインインしていない状態で認可要求を送ると、redirect_uri へ login_required を返す。その後に同じ request_uri を送ると、invalid_request_uri のエラー画面になる
+
+| | |
+|---|---|
+| 観点 | **`/ros`（この OP の独自の口）で預けた request_uri も、PAR と同じ預け先・同じ消し方**なので、エラーを返した時点で使い切る（#420）。 |
+| 根拠 | RFC 9126 §4・§7.3 / RFC 9101 §5.2 / #420 |
+| テスト | `RT42003_rosで預けたrequest_uriもエラーの後は使えない` |
+
+**手順**
+
+1. /ros に prompt=none の Request Object を預け、request_uri を受け取る
+1. サインインしないまま、その request_uri で認可要求を送る
+1. 同じ request_uri をもう一度送る
+
+**検証（合否を判定する）**
+
+- redirect_uri へ返る
+- エラーは login_required
+- エラーを返した後 : 認可コードを返さない
+- エラーを返した後 : 同意の画面を出さない（request_uri を使い切っている）
+- エラーを返した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
+
+## RT-422.1 fapi2 の登録の /par は、openid の有無によらず、redirect_uri の無い要求を invalid_request で断る（付ければ受ける）
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、認可サーバに「PAR の要求には redirect_uri を求める」ことを求める**（openid の有無を問わない）。**以前は openid の無い要求を、登録の 1 件で補って受け、認可コードまで出していた**（適合性テストの fapi2-sp-plain-oauth）。openid の要求は、以前から OIDC Core で断っていた。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / OIDC Core 1.0 §3.1.2.1 / #422 |
+| テスト | `RT42201_fapi2の登録のPARはredirect_uriの無い要求を断る` |
+
+**手順**
+
+1. openid の無い要求に、redirect_uri を付けて預ける（受ける）
+1. openid の無い要求から、redirect_uri を省く
+1. openid の要求から、redirect_uri を省く（以前から断る）
+
+**検証（合否を判定する）**
+
+- redirect_uri あり : HTTP 201
+- openid 無し・redirect_uri 無し : HTTP 400
+- openid 無し・redirect_uri 無し : invalid_request
+- openid 無し・redirect_uri 無し : 理由が redirect_uri（error_description）
+- openid 無し・redirect_uri 無し : request_uri を返さない
+- openid・redirect_uri 無し : HTTP 400
+- openid・redirect_uri 無し : invalid_request
+- openid・redirect_uri 無し : 理由が redirect_uri（error_description）
+- openid・redirect_uri 無し : request_uri を返さない
+
+## RT-422.2 fapi1 の登録は、openid の無い要求でも、クエリ・PAR のどちらでも redirect_uri を求める（省くと invalid_request）
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Baseline は、認可サーバに「認可要求に redirect_uri を求める」ことを求め、経路を限らない**（Advanced §5.2.2 が引き継ぐ）。**クエリでは、エラーを登録の redirect_uri へ返す**（登録が 1 件なので、返し先は決まる。RFC 6749 §4.1.2.1）。**PAR では、400 で断り、request_uri を返さない。** |
+| 根拠 | FAPI 1.0 Baseline §5.2.2 / FAPI 1.0 Advanced §5.2.2 / RFC 6749 §4.1.2.1 / #422 |
+| テスト | `RT42202_fapi1の登録は経路によらずredirect_uriを求める` |
+
+**手順**
+
+1. クエリ：openid の無い要求に、redirect_uri を付ける（断らない）
+1. クエリ：openid の無い要求から、redirect_uri を省く
+1. PAR：openid の無い要求から、redirect_uri を省く（S256 の PKCE と JARM は付ける。#383・#381）
+
+**検証（合否を判定する）**
+
+- redirect_uri あり : code が返る
+- redirect_uri 無し : code を出さない
+- redirect_uri 無し : RP へ invalid_request を返す
+- redirect_uri 無し : 理由が redirect_uri（error_description）
+- PAR・redirect_uri 無し : HTTP 400
+- PAR・redirect_uri 無し : invalid_request
+- PAR・redirect_uri 無し : 理由が redirect_uri（error_description）
+- PAR・redirect_uri 無し : request_uri を返さない
+
+## RT-422.3 openid の無い要求で redirect_uri を省いても、fapi2 の PAR を使わない要求（クエリ）と normal の登録は、従来どおり断らない
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 Security Profile §5.3.2.2 の 6 が redirect_uri を求めるのは、PAR の要求だけ**（原典が経路を限るなら、その経路だけにする。#383 と同じ決め）。**normal の登録は、RFC 6749 §3.1.2.3 のとおり、登録が 1 件なら省ける。** |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.2 / RFC 6749 §3.1.2.3 / #422 |
+| テスト | `RT42203_fapi2のPARを使わない要求とnormalは従来どおり省ける` |
+
+**手順**
+
+1. fapi2 の登録（FAPI2_Client。PAR を必須にしていない）。S256 の PKCE を付ける（#366）
+1. normal の登録（TestClient）
+
+**検証（合否を判定する）**
+
+- fapi2・クエリ : code が返る（断らない）
+- normal : code が返る（断らない）
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 client_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -13793,7 +13986,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **fapi2 を通すのは、ClientModePolicy の表の「認可コード × mTLS」の行だけ。**FA-2.1 は client_secret / PKCE では通らないことを測っており、本テストは**その対照（通る側）**。net48 版は -NetFxMtls のときだけ（TESTING.md）。 |
+| 観点 | **fapi2 を通すのは、ClientModePolicy の表の「認可コード × mTLS」の行だけ。**FA-2.1 は client_secret / PKCE では通らないことを測っており、本テストは**その対照（通る側）**。net48 版は -NetFxMtls のときだけ（14_TESTING.md）。 |
 | 根拠 | RFC 8705 §2.1（tls_client_auth）/ FAPI 2.0 / #226 |
 | テスト | `FA0601_fapi2はmTLSの認可コードで通る` |
 
@@ -14608,7 +14801,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **鍵の順が入れ替わっても通る**ことは、歯抜けで測った（上流の 1 本目を「署名に使っていない証明書」にすると、**2 本目で検証して通る**。`TESTING.md`）。
+- **鍵の順が入れ替わっても通る**ことは、歯抜けで測った（上流の 1 本目を「署名に使っていない証明書」にすると、**2 本目で検証して通る**。`14_TESTING.md`）。
 
 ## SA-7.1 アサーションが、メアド・利用者名・email_verified を属性で返す
 
@@ -14728,7 +14921,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **`IsLockedDownTestEndpoints` でも閉じない口である**（`CONFIGURATION.md` 11 節の注意 3）。**コンテナを監視するなら、ここを見ることになる。** |
+| 観点 | **`IsLockedDownTestEndpoints` でも閉じない口である**（`13_CONFIGURATION.md` 11 節の注意 3）。**コンテナを監視するなら、ここを見ることになる。** |
 | 根拠 | #219 / #284 |
 | テスト | `CN0104_Pingが応答する(containerKey: "downstream")` |
 
@@ -14811,7 +15004,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **値は出さない。** 有無と長さだけを見る（`TESTING.md` 9 節）。**折り返しが届いていなければ、ここが空になる。**
+- **値は出さない。** 有無と長さだけを見る（`14_TESTING.md` 9 節）。**折り返しが届いていなければ、ここが空になる。**
 
 ## CN-4.1 上流コンテナと下流コンテナが、同じ名前の Cookie を発行しない
 
@@ -14834,7 +15027,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **値は出さない。** 名前だけを見る（`TESTING.md` 9 節）。**`SessionTimeOut` だけは除いている** — **Open棟梁 の定数で、設定で分けられない**が、**雛形は `FxSessionTimeOutCheck` を `off` にしているので読まれない**（`CONFIGURATION.md` 11 節）。
+- **値は出さない。** 名前だけを見る（`14_TESTING.md` 9 節）。**`SessionTimeOut` だけは除いている** — **Open棟梁 の定数で、設定で分けられない**が、**雛形は `FxSessionTimeOutCheck` を `off` にしているので読まれない**（`13_CONFIGURATION.md` 11 節）。
 
 ## CN-5.1 下流コンテナから上流コンテナへ委譲して、下流にサインインできる
 

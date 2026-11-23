@@ -307,7 +307,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// **登録が無いときに、暗号化しない側の既定（`RS256`）に倒さない。**
         /// **FAPI 2.0 Security Profile §5.4.1 は PS256・ES256・EdDSA を求め、RS256 は入らない。**
-        /// **そのため、登録の無い fapi2 のクライアントでは、access_token（RS256）と食い違ったまま**である（`CONFIGURATION.md`）。
+        /// **そのため、登録の無い fapi2 のクライアントでは、access_token（RS256）と食い違ったまま**である（`13_CONFIGURATION.md`）。
         /// </remarks>
         public static string SigningAlgForEncrypted(string client_id)
         {

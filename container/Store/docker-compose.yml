@@ -14,7 +14,7 @@
 #   コミット済みの ConnectionString_* はポートを書いていないので**既定ポート**を指し、
 #   そのまま LocalServicesOnDocker（手動確認）を向く。
 #
-#   使い方は root/TESTING.md 1 節「ストアを切り替える」を見ること。
+#   使い方は root/14_TESTING.md 1 節「ストアを切り替える」を見ること。
 #
 #   **DDL は 0_CopyInitSql.ps1 が repo から流し込む。** 起動時に各コンテナが実行する。
 #   （1_DockerComposeUp.bat が、先に 0_CopyInitSql.ps1 を呼ぶ）
@@ -23,7 +23,7 @@
 # メモリの節約
 #
 #   **DB を 3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある。**
-#   方針は LocalServicesOnDocker の CHEATSHEET.md に倣う（別リポジトリ）。
+#   方針は LocalServicesOnDocker の 10_CHEATSHEET.md に倣う（別リポジトリ）。
 #
 #     1. **3 つの DB には profiles を付けてある。**
 #        **`docker compose up -d` では何も起動しない。**

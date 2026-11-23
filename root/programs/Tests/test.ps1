@@ -97,7 +97,7 @@
     net48 版を起動しない。その分のテストは Skip される。
 
 .PARAMETER NetFxMtls
-    net48 版でも mTLS のテスト（FA-6）を回す（#226）。**準備が要る**（TESTING.md「net48 版の mTLS」）。
+    net48 版でも mTLS のテスト（FA-6）を回す（#226）。**準備が要る**（14_TESTING.md「net48 版の mTLS」）。
     IIS Express にクライアント証明書を要求させ（sslFlags="Ssl, SslNegotiateCert"）、
     テストは CurrentUser\My に用意した証明書を使う。
     IIS は信頼できない証明書をアプリより前で 403.16 として断るので、
@@ -679,12 +679,12 @@ function Set-IdFederationEnv
 
     # **user store の秘密を暗号化する鍵**（#297）。
     #   **既定の通しを「暗号化した状態」で回す**（`RT-297.*` が、その往復を測る）。
-    #   **値はテスト用**で、**出力しない**（他の秘密と同じ扱い。`TESTING.md` 9 節）。
+    #   **値はテスト用**で、**出力しない**（他の秘密と同じ扱い。`14_TESTING.md` 9 節）。
     $env:UserStoreSecretPassword = 'E2E_SecretBox_8rJ2vQ5mZ1xK'
 
     # **/jwkcerts のキャッシュ**（#303。E-7）。
     #   **既定の通しを「キャッシュ有効」で回す**（`RT-303.1` が Cache-Control / ETag / 304 を測る）。
-    #   **短くしてある**（鍵を入れ替える周期より短いこと。`CONFIGURATION.md`）。
+    #   **短くしてある**（鍵を入れ替える周期より短いこと。`13_CONFIGURATION.md`）。
     $env:JwkSetCacheMaxAgeSeconds = '300'
 
     # **クライアントが登録した URL へ、ループバックにも取りに行かせる**（#376）。
@@ -720,12 +720,12 @@ function Set-IdFederationEnv
     #   **窓は短く**（テストは次の窓まで待つ）。
     #   **送信元ごとの上限は切ってある（0）** — **通しの全ケースが 127.0.0.1 を共有する**ので、
     #   有効にすると無関係なケースが 429 を受ける。**こちらは `RT-305.6` を単独で回して測る**
-    #   （`TESTING.md`）。
+    #   （`14_TESTING.md`）。
     $env:RateLimitPerClientPermits = '300'
     $env:RateLimitWindowSeconds = '20'
 
     # **送信元ごとの上限だけは、呼ぶ側が先に入れていたら尊重する。**
-    #   **`RT-305.6` を単独で回して測るため**である（`TESTING.md`）。
+    #   **`RT-305.6` を単独で回して測るため**である（`14_TESTING.md`）。
     #
     #     $env:RateLimitPerIpPermits = '50'
     #     .\2_RunAllTests.ps1 -Launch -Filter RateLimitTests

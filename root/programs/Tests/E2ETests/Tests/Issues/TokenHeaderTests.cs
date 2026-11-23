@@ -136,7 +136,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Note("**`typ` は、出す側と受ける側の両方で効いている。**"
                     + "**受ける側**（`CmnAccessToken.VerifyAccessToken`）**は `at+jwt` を期待する**ので、"
                     + "**access_token に `JWT` が付いていると、トークンを使う経路が全部落ちる** — "
-                    + "**このケースだけでなく、通し全体が落ちる**のが歯抜けの形である（`TESTING.md`）。");
+                    + "**このケースだけでなく、通し全体が落ちる**のが歯抜けの形である（`14_TESTING.md`）。");
 
                 r.Note("**配備のとき、発行済みの access_token は検証に通らなくなる**"
                     + "（`typ` が `JWT` のため）。**有効期限が切れるまでの間だけ**で、"

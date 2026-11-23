@@ -1,4 +1,4 @@
-﻿# TESTING.md — E2E テストの実行と判定
+﻿# 14_TESTING.md — E2E テストの実行と判定
 
 対象: `root/programs/Tests`
 配置: `root`
@@ -14,8 +14,8 @@
 > | **各テストが何を確かめるのか** | [`programs/Tests/TESTCASES.md`](programs/Tests/TESTCASES.md) |
 > | テストの方針・構成・未修正項目 | [`programs/Tests/README.md`](programs/Tests/README.md) |
 > | 適合上の穴の一覧 | [`programs/ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) |
-> | ビルド | [`BUILDING.md`](BUILDING.md) |
-> | 設定と起動 URL | [`CONFIGURATION.md`](CONFIGURATION.md) |
+> | ビルド | [`12_BUILDING.md`](12_BUILDING.md) |
+> | 設定と起動 URL | [`13_CONFIGURATION.md`](13_CONFIGURATION.md) |
 
 ---
 
@@ -179,7 +179,7 @@ docker compose stop sqlserver      # 使い終わったら止める
 
 > **同時に 2 つ以上を起動しないこと。** **E2E は 1 回に 1 つのストアしか使わない。**
 > **3 つ同時に起動すると、Docker の VM がメモリを使い切って Windows ごと固まることがある**
-> （方針は LocalServicesOnDocker の `CHEATSHEET.md` に倣った）。
+> （方針は LocalServicesOnDocker の `10_CHEATSHEET.md` に倣った）。
 
 **メモリの抑え方**（`container/Store/docker-compose.yml` の頭に同じ表が在る）。
 
@@ -790,7 +790,7 @@ docker exec mpas-store-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U
 
 > **`RT-307.15` は、既定では net10.0 版だけを測る**（`MtlsTests` と同じ前提）。
 > **net48 版（IIS Express）はテスト用 CA の手当てが要る**ので、
-> **`-NetFxMtls` を付けたときだけケースを作る**（**Skip にもしない**。TESTING.md 5 節）。
+> **`-NetFxMtls` を付けたときだけケースを作る**（**Skip にもしない**。14_TESTING.md 5 節）。
 > **前提の判定は `MtlsTests.SkipIfNoMtls` を共用する**（同じことを 2 か所に書かないため）。
 
 ###### 既存のテストに及んだ影響（**同じ事情が、配備にも及ぶ**）
@@ -940,7 +940,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 | | |
 |---|---|
 | **`ES256` で署名した statement** | **`alg` の照合は実装しているが、測っているのは `RS256` だけ**（`SigningKeys.CreateJwsFromCer` が alg → class を 1 か所で持つので、**鍵の種類が変わるだけ**） |
-| **発行者の鍵の入れ替え**（新旧を並べて試す） | **出来ない**（**`Find` は一致する最初の行だけを返す**）。**段階 5 以降**（CONFIGURATION.md の「気をつける所」） |
+| **発行者の鍵の入れ替え**（新旧を並べて試す） | **出来ない**（**`Find` は一致する最初の行だけを返す**）。**段階 5 以降**（13_CONFIGURATION.md の「気をつける所」） |
 | **`.cer` が読めないときの振る舞い** | **`unapproved_software_statement` に倒す**ことは実装しているが、**E2E では測っていない**（**設定を壊して回す形になる**） |
 | **発行者ごとに許す範囲を絞ること** | **実装していない**（**いまは「信じるか、信じないか」の 2 択**）。段階 5 以降 |
 
@@ -1029,7 +1029,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 | | |
 |---|---|
-| **既存データの移行**（`ALTER` ＋ `UPDATE` ＋ FK の張り替え ＋ 列の削除） | **E2E は毎回作り直す**（`Create_UserStore.sql`）ので、**移行の手順は測っていない。** **文書に 3 方言ぶん書いた**（`CONFIGURATION.md`） |
+| **既存データの移行**（`ALTER` ＋ `UPDATE` ＋ FK の張り替え ＋ 列の削除） | **E2E は毎回作り直す**（`Create_UserStore.sql`）ので、**移行の手順は測っていない。** **文書に 3 方言ぶん書いた**（`13_CONFIGURATION.md`） |
 | **n 件を持つ利用者が、管理画面で保存したとき** | **画面が扱う 1 件に寄る**（**段階 5-a-1 の割り切り**）。**段階 5-a-2 で一覧にする** |
 | **所有者の居ない登録**（`OwnerUserId` が空）**を、管理画面から触ること** | **出来ない**（**所有者で引くので、画面には出ない**）。**種データと構成ファイルのクライアントが、その立場** |
 | **何件まで作れるか** | **上限を設けていない**ので、**件数の限界は測っていない**（**レート制限は #305 の `RT-305.*` が測る**） |
@@ -1596,7 +1596,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RT-387.2`** | **Device**：同じことを `device_code` で（RFC 8628 §3.5・RFC 6749 §5.2） |
 
 - **照合は `CibaProvider.ReceiveTokenReq`・`DeviceAuthZProvider.ReceiveTokenReq` が、状態を見る前に行う。** 違えば `not_found` を返し、**記録（状態・ポーリングの時刻）に触れない**（呼び出し側が `invalid_grant` にする）
-- **CIBA は、記録に `ClientID` 列を足した**（DDL。`CONFIGURATION.md`）。**Device は、記録の `TempData` の `client_id` と比べる**
+- **CIBA は、記録に `ClientID` 列を足した**（DDL。`13_CONFIGURATION.md`）。**Device は、記録の `TempData` の `client_id` と比べる**
 - **正規のクライアントが `slow_down` を受けないこと**で、**別のクライアントの要求がポーリングの時刻を書き換えていない**ことを確かめる
 - **以前は、承認済みの記録と認可コードを、照合の前に消していた**ので、別のクライアントが先に引くと、正規のクライアントが結果を受け取れなかった
 
@@ -1835,6 +1835,29 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 |---|---|
 | **fapi1 の登録の、`request`（JAR）・`private_key_jwt` での PAR** | 判定は認証の方法や `request` の有無によらない（同じ `ValidateAuthZReqParam`）。適合性テストの FAPI 1.0 Advanced（`private_key_jwt`・PAR・`jarm`）が測る |
 
+##### FAPI の登録では、`redirect_uri` を省けない（`RT-422.*`。#422）
+
+| | 測ること |
+|---|---|
+| **`RT-422.1`** | **fapi2 の登録の `/par` は、`openid` の有無によらず、`redirect_uri` の無い要求を `400` ＋ `invalid_request` で断る**（FAPI 2.0 Security Profile §5.3.2.2 の 6）。**付ければ `201`** |
+| **`RT-422.2`** | **fapi1 の登録は、経路（クエリ・PAR）によらず、`openid` の無い要求でも `redirect_uri` を求める**（FAPI 1.0 Baseline §5.2.2 の 9。Advanced §5.2.2 が引き継ぐ）。**クエリは、登録の 1 件へ `invalid_request` を返す**（JARM） |
+| **`RT-422.3`** | **fapi2 の PAR を使わない要求（クエリ）と、normal の登録は、従来どおり省ける**（原典が PAR の要求に限るため。#422 の決め。normal は RFC 6749 §3.1.2.3） |
+
+- **判定は `CmnEndpoints.ValidateAuthZReqParam`**（`CheckRedirectUri` が登録の 1 件で補った後に、**要求の `redirect_uri` が空か**を見る）。**断った理由が `redirect_uri` であることも確かめる**（`error_description`。PKCE・JARM で先に断られて「通った」ことにしない）
+- **`openid` の要求は、以前から OIDC Core 1.0 §3.1.2.1 で断っていた**。変わったのは `openid` の無い要求だけ
+- 測るクライアントは、どれも `redirect_uri` の登録が 1 件（2 件以上なら、以前から省けない。`RT-306.3`）
+- 直す前は、`RT-422.1` の `openid` の無い PAR が `201`、`RT-422.2` のクエリが `code` を返した（判定を止めた手元の版で、net10.0 版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi1 の登録の、`request`（JAR）・`private_key_jwt` での要求** | 判定は認証の方法や `request` の有無によらない（同じ `ValidateAuthZReqParam`）。適合性テストの FAPI 1.0 Advanced が測る |
+| **fapi1 の登録の `/ros` に `redirect_uri` 無しで預けた要求** | `/authorize` で預けた中身を読み直し（`OverwriteByRequestObject`）、同じ `ValidateAuthZReqParam` で断る（クエリと同じ分岐） |
+| **fapi1 の `openid` の無い Implicit・Hybrid** | fapi1 の登録は JARM の `code` だけを受け（#381）、Hybrid を許さない（FA-1.4） |
+
+- **`RT-422.3` の (1) は、PAR を必須にしていない fapi2 の登録の振る舞いを変えていないことを確かめるもの**。FAPI 2.0 Security Profile §5.3.2.2 の 3（PAR を使わない要求を断る）は、登録の `require_pushed_authorization_requests`（サーバ全体なら `RequirePushedAuthorizationRequests`）で強制する（#346）
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |
@@ -1873,7 +1896,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **取りに行く上限（10 秒・64KB）** | 静的配信のコンテナは応答を遅らせられない。大きい中身は置けるが、通しの時間に見合わない |
 | **リダイレクトで別の URL から返った中身を「読めない」にすること** | 静的配信のコンテナはリダイレクトを返さない（`SectorIdentifierProvider.GetStringAsync` の最終の URL の比べ。**net48 で最終の URL が取れるかも未確認**） |
 | **`redirect_uris` の無い登録で断ること** | 登録の口から届かない見込み（`response_types` の既定が `code` で、先に `redirect_uris` が必須になる）。守りとして入れた |
-| **`PUT` で `sector_identifier_uri` を変える・省く** | 全置換の扱いは `RT-307.9`〜`.13` と同じ経路（`Update` の 1. の群）。**変えると以降の `sub` が変わる**ことは `CONFIGURATION.md` に書いた |
+| **`PUT` で `sector_identifier_uri` を変える・省く** | 全置換の扱いは `RT-307.9`〜`.13` と同じ経路（`Update` の 1. の群）。**変えると以降の `sub` が変わる**ことは `13_CONFIGURATION.md` に書いた |
 | **認可の無い登録の要求では、取りに行かないこと**（`jwks_uri` も） | 取りに行ったかどうかは、応答からは分からない（どちらも `401` / `403`）。**コードで確かめた**（`MayWarmUpForRegister` / `MayWarmUpForUpdate`） |
 | **設定ファイルの `sector_identifier_uri`** | 設定ファイルのクライアントを足すと、他のテストの前提が変わる（`Helper.GetRegisteredValue` は動的登録と同じ口） |
 
@@ -2324,7 +2347,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 
 | | |
 |---|---|
-| **掃除** | **10 分間隔で、`AuthCookieExpiresFromHours` ＋ 1 日より古い行を消す**（`CONFIGURATION.md`）。**E2E で 1 日待たない** |
+| **掃除** | **10 分間隔で、`AuthCookieExpiresFromHours` ＋ 1 日より古い行を消す**（`13_CONFIGURATION.md`）。**E2E で 1 日待たない** |
 | **Front-Channel / Back-Channel Logout** | **Back-Channel は段階 2**（`RT-310.4`〜`.6`）、**Front-Channel は段階 3**（`RT-310.7`〜`.9`）**で入った**。**`RT-232.1` の「広告しない」を見ていた検証は、広告するようになったことに合わせて直した** |
 | **`sid` が入らない経路** | `grant_type=password` / `client_credentials` / CIBA / Device（**ブラウザのセッションを経ていない**）。**クレームを付けないことは、実装では決めてあるが測っていない** |
 
@@ -2447,7 +2470,7 @@ IIS Express が配る net48 の出力は、前のビルドのまま**である�
 **行末が文字列のまま、次の行を `+` で始めると、PowerShell は構文エラーになる**
 （**テストの起動ごと失敗する**）。**行末に `+` かバッククォートを置くこと。**
 
-> **`.ps1` は、変更したら実行すること**（`CODING.md` 5 節）。**読んでも分からない。**
+> **`.ps1` は、変更したら実行すること**（`11_CODING.md` 5 節）。**読んでも分からない。**
 
 ###### 歯抜け（実測 2026/10/20）
 
@@ -2723,7 +2746,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 > **`RT-305.7` は `TESTCASES.md`（原本）に載らない** — **通しでは Skip される**ため。
 
 > **値は `on` である。** **`true` では効かない**
-> （`Config.UseForwardedHeaders` が `on` と比べている。`CONFIGURATION.md` 7 節）。
+> （`Config.UseForwardedHeaders` が `on` と比べている。`13_CONFIGURATION.md` 7 節）。
 > **実測で踏んだ** : **`true` を渡して、ミドルウェアがそもそも入らず、
 > 転送ヘッダが無視されて `RT-305.7` の (4) が 401 になった**。
 > **「黙って何も起きない」形で落ちる**ので、気付きにくい。
@@ -2735,7 +2758,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 
 > **`ForwardedHeadersKnownProxies` を省くと、この測定自体は通ってしまう**が、
 > **それは「クライアントが送信元を詐称できる」状態**である。
-> **本番では必ず指定すること**（`CONFIGURATION.md`）。
+> **本番では必ず指定すること**（`13_CONFIGURATION.md`）。
 
 **`RT-305.8` は、使い捨ての利用者で測る**（`UsersAdmin` で作って消す）。
 **クライアント認証は、どの回も正しい秘密で通す** —
@@ -2969,7 +2992,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 ##### 発行するトークンのヘッダ（`RT-302.1`。#302 の段階 1）
 
 **`jku` は出さない**（`ANALYSIS-IdP.md` の D-10。経緯は
-[`CONFIGURATION.md`](CONFIGURATION.md) 「署名鍵」の節）。
+[`13_CONFIGURATION.md`](13_CONFIGURATION.md) 「署名鍵」の節）。
 
 | 見るもの | |
 |---|---|
@@ -3120,7 +3143,7 @@ Remove-Item Env:ForwardedHeadersKnownProxies
 ##### 連携キーの幅（`UserLogins`。#292）
 
 **上流が n 件になったので、`LoginProvider` / `ProviderKey` を 512 / 256 に広げた**
-（経緯と `ALTER` は [`CONFIGURATION.md`](CONFIGURATION.md) 7 節）。
+（経緯と `ALTER` は [`13_CONFIGURATION.md`](13_CONFIGURATION.md) 7 節）。
 
 **E2E では測れない。** **長い `iss` / entityID を名乗る上流が、この仕掛けに無い**ためである
 （コンテナの上流は `mem` ストアなので、表の幅を通らない）。
@@ -4052,7 +4075,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 > 2 つのサイトへ別々の URL を渡せるのは、この性質による。
 > 起動の直前に書き換えること。後から変えても、動いている側には効かない。
 
-詳細は [`CONFIGURATION.md`](CONFIGURATION.md)。
+詳細は [`13_CONFIGURATION.md`](13_CONFIGURATION.md)。
 
 ## 5. 判定基準
 
@@ -4298,7 +4321,7 @@ IIS は信頼できない証明書を、アプリより前で **HTTP 403.16** �
 > なお、**5.1 で起動待ちが 90 秒で失敗する不具合**が、この手順で見つかって直っている（#226）。
 > 証明書のネゴシエーションが入ると、サーバ証明書の検証がランスペースの無いスレッドで呼ばれるため、
 > `ServerCertificateValidationCallback` が**スクリプト ブロックでは実行できない**。
-> `test.ps1` は、コンパイルしたデリゲートを使う（`CODING.md` 5 節）。
+> `test.ps1` は、コンパイルしたデリゲートを使う（`11_CODING.md` 5 節）。
 
 **手順は [`SetupNetFxMtls.ps1`](SetupNetFxMtls.ps1) にある**（#245 の段階 3 でファイルにした）。
 **シークレットは含まない。** 私有鍵は証明書ストアの中で生成され、スクリプトには現れない
@@ -4493,7 +4516,7 @@ docker compose up -d upstream
 **上流は `preferred_username` も返す**（`docker-compose.yml` の `UserClaimsMapping`。#151 の段階 4）。
 **`subject_types` の既定が `public` になり、`sub` は利用者 ID になった**ので、
 **下流が新規に作る利用者名は、`preferred_username` から取る**
-（無ければメアドの `@` より前。`CONFIGURATION.md`「ID 連携・外部ログインで作られる利用者名」）。
+（無ければメアドの `@` より前。`13_CONFIGURATION.md`「ID 連携・外部ログインで作られる利用者名」）。
 
 > **入れ忘れても連携は成立する**（鍵はメアドなので）。
 > **変わるのは、新規に作られる利用者の名前だけ**である。
@@ -5163,8 +5186,8 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 | | |
 |---|---|
 | 置き場所 | **`container/CTS/`**（Conformance Suite（版を固定）と、相手の OP（net10.0 版・`mem`）。手順と仕組みは `container/CTS/README.md`） |
-| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan <プラン>`** → `3_DockerComposeDown.bat`。プランの一覧は `container/CTS/README.md`（OIDC の 11・FAPI の 5。FAPI は代表の組み合わせだけ） |
-| いつ回すか | **リリースの前に全プラン**、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（`QUALITY.md` 2 節）。全プランで 2〜3 時間、OIDC だけなら 1 時間ほど |
+| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan <プラン>`** → `3_DockerComposeDown.bat`。プランの一覧は `container/CTS/README.md`（OIDC の 11・FAPI の 14。FAPI の組は、MPAS が対応する認証・縛り・要求と応答の形を確かめるもの。足さないものと理由も同じ README。#416） |
+| いつ回すか | **リリースの前に全プラン**、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（`QUALITY.md` 2 節）。全プランで 2 時間ほど、OIDC だけなら 30 分ほど（25 プランで 2 時間 10 分。うち OIDC の 11 プランで 23 分。#416 の実測） |
 | 相手 | **net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る） |
 | 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む） |
 | 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。`RunTestPlan.ps1` の終了コードは、FAILED・時間切れが 1 つでもあれば 1（WARNING・REVIEW は数えない） |
@@ -5181,7 +5204,8 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 - **1 つの不適合で、プランの大半が止まることがある**（#370・#371）。そのときは、直した後に回し直し、その先の結果を改めて仕分ける
 - **自動操作の `match` の `*` は、クエリの中にも当たる。** **認可の URL は `redirect_uri` に Conformance Suite の callback の URL を（符号化せずに）載せる**ので、
   **`*/test/*/callback*` は認可のエラー画面にも当たる**（#368。callback を待つ手順は `https://localhost.emobix.co.uk:8443/test/*/callback*` と、先頭から書く）
-- **REVIEW（画面の写し）は、人が見て合否を付ける。** 自動では、待った画面が出たことまでしか確かめていない
+- **REVIEW（画面の写しで合否を付ける判定）は、エージェントが合否を付け、人がその表を承認する。** 自動では、待った画面が出たことまでしか確かめていないので、
+  `container\CTS\ExtractReview.ps1` で報告書から OP の応答を取り出し、基準（`ReviewBaseline.csv`）と比べる（全プランの実行のたび。#417。`container/CTS/README.md` の「REVIEW の見方」）
 - **CI には載せていない**（#348（ビルドの CI）の後に決める）
 
 ## 6. 未修正の項目の扱い
@@ -5319,7 +5343,7 @@ HTTP 200 / keys=[access_token, expires_in, id_token, refresh_token, token_type] 
 
 ## 10. テストを足すとき
 
-1. `programs/Tests/E2ETests/Tests/` に置く。ファイル ヘッダは既存に合わせる（[`CODING.md`](CODING.md)）
+1. `programs/Tests/E2ETests/Tests/` に置く。ファイル ヘッダは既存に合わせる（[`11_CODING.md`](11_CODING.md)）
 2. `TargetTestBase` を継承し、`[SkippableTheory]` ＋ `[MemberData(nameof(AllTargets))]` にする
    - net10.0 版でしか成立しないものだけ `CoreOnly` を使う
 3. `client_id` は `Flows.Registration(client, KnownClients.XXX)` で引く
