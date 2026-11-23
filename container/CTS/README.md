@@ -17,6 +17,7 @@ cd container\E2E
 cd ..\CTS
 .\2_DockerComposeUp.bat     # Conformance Suite と OP を起動する（Conformance Suite の起動には 1〜2 分かかる。先に Prepare.ps1 を呼ぶ）
 .\RunTestPlan.ps1 -Plan oidcc-basic    # プランを回す（下の表）
+.\ExtractReview.ps1         # REVIEW の判定と材料を、報告書から取り出す（下の「REVIEW の見方」。コンテナは要らない）
 .\3_DockerComposeDown.bat   # 止める
 ```
 
@@ -260,6 +261,26 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 - 終了コード：0（FAILED・INTERRUPTED・時間切れが無い）／1（どれかがある）／2（前提の誤り）
 - **WARNING・REVIEW は失敗に数えない**（Conformance Suite の判定のまま、結果に出す）
 - PowerShell 5.1・7 の両方で動く（自己署名の証明書の扱いを分けている。`root\11_CODING.md` 5 節）
+
+### REVIEW の見方（`ExtractReview.ps1`。#417）
+
+**REVIEW は、Conformance Suite が「画面の写しを上げて、人が合否を付ける」とする判定である。** 自動の実行では写しを上げないので、
+**報告書のログに残った、自動操作のブラウザが受けた OP の応答**（WebRunner の `Scripted browser HTTP response`）と、**クライアント（Conformance Suite）へ返った応答**から合否を付ける。
+`ExtractReview.ps1` は、`out\<プラン>-report.zip` を読んで、REVIEW の判定ごとに次を取り出す（Conformance Suite のコンテナは要らない）。
+
+| 取り出すもの | 中身 |
+|---|---|
+| 判定 | 名前（`src`。`ExpectSecondLoginPage` など）・求められていること（`msg`）・原典（`requirements`） |
+| OP の画面 | ブラウザが受けた応答の URL（ホストとパス）・状態コード・タイトル・本文の文字・リンクと画像 |
+| 操作した画面 | 雛形の自動操作（`Login`・`Expect … error page` など）と、その画面のパス |
+| クライアントへの応答 | `error`・`error_description`。無ければパラメタの名前だけ（`code` などの値は出さない）。**JARM は、署名だけの JWT の中身を読む** |
+| モジュールの結果 | `testmodule_result` と、SUCCESS・INFO 以外の判定 |
+
+- **区間**：ブラウザを OP へ送るたび（`Redirecting to …`）に区切り、REVIEW はその判定のある区間の材料で見る（**ログアウトの口では、REVIEW が送る直前に書かれる**ので、次の区間に入れる）
+- **材料の形**（`Evidence`）：操作した画面・最後の OP の画面・クライアントへの応答を 1 行にしたもの。**実行ごとに変わる値**（クエリ・コード・`state`）は入れない
+- 出力：画面に表、`out\review\<プラン>.json` に詳細（**Git の管理外。Issue やコメントに貼らない**。合否と理由、要る文言だけを書く）
+- **秘密を読まない**：ログの WebRunner の `commands`（テスト利用者のパスワード）と `config`（クライアントの秘密鍵）は、読む前に落とす
+- `-Plan` で読むプランを絞れる（省くと、`out\` の `oidcc-*`・`fapi*` の報告書をすべて読む）。PowerShell 5.1・7 の両方で動く
 
 ## 生成物（Git の管理外）
 
