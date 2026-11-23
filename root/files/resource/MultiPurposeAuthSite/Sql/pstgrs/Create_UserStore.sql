@@ -82,6 +82,7 @@ CREATE TABLE AuthenticationCodeDictionary(
     Key varchar(64) NOT NULL,                -- PK
     Value varchar(2000) NOT NULL,            -- AuthenticationCode
     CreatedDate timestamp NOT NULL,
+    UsedDate timestamp,                      -- 引き換えた時刻（NULL なら未使用）。再利用に気付くため、期限まで残す（#421）
     CONSTRAINT PK_AuthenticationCodeDictionary PRIMARY KEY (Key)
 );
 

@@ -40,11 +40,13 @@
 //*  2026/11/12  玄人 幸道         見つからない request_uri のコメントを、Controller が先に断る形に合わせた（#362）
 //*  2026/11/18  玄人 幸道         預けた Request Object の値を、文字列でなければ無いのと同じに読む（例外にしない。#377）
 //*  2026/11/18  玄人 幸道         預けた Request Object を、日付の形の文字列を日付に変えずに読む（#403）
+//*  2026/11/23  玄人 幸道         引き換えたコードを消さずに使用済みの印を立て、再利用されたら、そのコードから出したトークンを失効させる。コードに認可の ID を持たせる（RFC 6749 §4.1.2。#421）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.Log;
 
 using System;
 using System.Data;
@@ -79,6 +81,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             public string Value = "";
             /// <summary>作成時刻</summary>
             public DateTime CreatedDate = DateTime.MinValue;
+            /// <summary>引き換えた時刻（null なら未使用）（#421）</summary>
+            public DateTime? UsedDate = null;
         }
 
         /// <summary>
@@ -97,25 +101,45 @@ namespace MultiPurposeAuthSite.TokenProviders
             get { return DateTime.Now - Config.OAuth2AuthorizationCodeExpireTimeSpanFromSeconds; }
         }
 
-        /// <summary>メモリ ストアから、期限内の値を取り出す（期限切れは消す）（#188）</summary>
+        /// <summary>メモリ ストアの期限内の行に、使用済みの印を立てる（#421）</summary>
         /// <param name="code">認可コード</param>
-        /// <param name="remove">取り出せたら消すか（使用による消費）</param>
-        /// <returns>値（無い・期限切れなら空）</returns>
-        private static string GetFromMemory(string code, bool remove)
+        /// <param name="reused">既に使用済みだったか（再利用）</param>
+        /// <returns>値（無い・期限切れなら空。**再利用でも値を返す**：失効させる認可の ID を読むため）</returns>
+        /// <remarks>
+        /// **印を立てられた 1 つだけが引き換える**（#332）。**以前は行を消していた**ので、再利用に気付けなかった。
+        /// **行は期限まで残す**（`SweepIfNeeded` が、作成時刻で消す）。
+        /// </remarks>
+        private static string MarkAsUsedInMemory(string code, out bool reused)
+        {
+            reused = false;
+
+            if (!AuthorizationCodeProvider.AuthenticationCodes.TryGetValue(code, out CodeEntry entry)
+                || entry.CreatedDate < AuthorizationCodeProvider.ExpireLimit)
+            {
+                return "";
+            }
+
+            lock (entry)
+            {
+                if (entry.UsedDate == null)
+                {
+                    entry.UsedDate = DateTime.Now;
+                }
+                else
+                {
+                    reused = true;
+                }
+            }
+
+            return entry.Value;
+        }
+
+        /// <summary>メモリ ストアから、期限内の値を読む（期限切れは消す）（#188）</summary>
+        /// <param name="code">認可コード</param>
+        /// <returns>値（無い・期限切れなら空。**使用済みでも返す**：引き換えの前の確かめ（PKCE・DPoP）を通し、`Receive` で再利用に気付くため。#421）</returns>
+        private static string GetFromMemory(string code)
         {
             CodeEntry entry = null;
-
-            if (remove)
-            {
-                //  **取り出せた 1 つだけが引き換える**（#332）。
-                //    **以前は読んでから消し、消せたかを見ていなかった**ので、同時に来た要求の両方が読めた。
-                if (!AuthorizationCodeProvider.AuthenticationCodes.TryRemove(code, out entry))
-                {
-                    return "";
-                }
-
-                return (entry.CreatedDate < AuthorizationCodeProvider.ExpireLimit) ? "" : entry.Value;
-            }
 
             if (!AuthorizationCodeProvider.AuthenticationCodes.TryGetValue(code, out entry))
             {
@@ -310,7 +334,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             Dictionary<string, string> temp = new Dictionary<string, string>();
 
             // 有効期限が無効なtokenのペイロードだけ作成
-            string access_token_payload = CmnAccessToken.CreatePayloadForCode(identity, DateTimeOffset.Now);
+            //  **認可の ID を決めて、payload に書く**（#421）。
+            //    **payload は access_token と refresh_token に引き継がれる**ので、
+            //    **このコードから出したトークンは、更新したものも含めて、同じ値を持つ。**
+            //    **コードが再利用されたら、この値を失効させる**（RFC 6749 §4.1.2。`Receive`）。
+            string access_token_payload = CmnAccessToken.CreatePayloadForCode(
+                identity, DateTimeOffset.Now, Guid.NewGuid().ToString("N"));
             temp.Add(Const.AuthZCodeAccessTokenPayload, access_token_payload);
 
             // redirect_uri 対応
@@ -396,14 +425,26 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Receive
 
-        /// <summary>Receive</summary>
+        /// <summary>Receive（引き換える。**1 回だけ**）</summary>
         /// <param name="code">string</param>
         /// <param name="client_id">string</param>
         /// <param name="redirect_uri">string</param>
-        /// <returns>PayloadForCode</returns>
+        /// <returns>PayloadForCode（存在しない・期限切れ・使用済み・別のクライアントのものなら空）</returns>
+        /// <remarks>
+        /// **使用済みの印（`UsedDate`）を、条件付きで立てられた 1 つだけが引き換える**（#332）。
+        /// **以前は行を消していた**ので、**2 回目は存在しないコードと見分けられなかった**（#421）。
+        /// **行は、コードの期限まで残す**（`SweepIfNeeded` が作成時刻で消す）。
+        ///
+        /// **使用済みのコードが、同じクライアントから再び出されたら、そのコードから出したトークンを失効させる**
+        /// （RFC 6749 §4.1.2 の SHOULD。`RevocationProvider.RevokeAuthorization`）。**応答は、これまでどおり空**（呼び出し元が `invalid_grant` にする）。
+        /// - **同時に来た 2 つの引き換えも、負けた側は再利用と同じに扱う**（refresh_token と同じ。#332）
+        /// - **別のクライアントが出したら、失効させない**（そのクライアントに出したコードではない）
+        /// - **PKCE・DPoP の確かめは、この前に済んでいる**（`code_verifier` の誤った要求は、ここまで来ずに断られ、失効させない）
+        /// </remarks>
         public static string Receive(string code, string client_id, string redirect_uri)
         {
             string value = "";
+            bool reused = false;
 
             //  **列の幅（64）を超える値は、引くまでもなく「無い」**（#331。Oracle は例外にする）。
             if (!MultiPurposeAuthSite.Data.CmnStore.IsSearchable(code, 64))
@@ -414,7 +455,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    value = AuthorizationCodeProvider.GetFromMemory(code, remove: true);
+                    value = AuthorizationCodeProvider.MarkAsUsedInMemory(code, out reused);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -425,65 +466,104 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         cnn.Open();
 
-                        int deleted = 0;
+                        int updated = 0;
+                        DateTime now = DateTime.Now;
+                        DateTime limit = AuthorizationCodeProvider.ExpireLimit;
 
                         switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
+                                //  **同じ行の更新が重なると、SQL Server はデッドロックの犠牲を選ぶ**（#332）。やり直す。
+                                updated = DataAccess.RetryWriteOnDeadlock(() => cnn.Execute(
+                                    "UPDATE [AuthenticationCodeDictionary] SET [UsedDate] = @Now"
+                                    + " WHERE [Key] = @Key AND [UsedDate] IS NULL AND [CreatedDate] > @Limit",
+                                    new { Key = code, Now = now, Limit = limit }));
+
                                 value = cnn.ExecuteScalar<string>(
                                     "SELECT [Value] FROM [AuthenticationCodeDictionary]"
                                     + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
-                                    new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
-
-                                //  **同じ行の削除が重なると、SQL Server はデッドロックの犠牲を選ぶ**（#332）。やり直す。
-                                deleted = DataAccess.RetryWriteOnDeadlock(() => cnn.Execute(
-                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code }));
+                                    new { Key = code, Limit = limit });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
+                                updated = cnn.Execute(
+                                    "UPDATE \"AuthenticationCodeDictionary\" SET \"UsedDate\" = :Now"
+                                    + " WHERE \"Key\" = :Key AND \"UsedDate\" IS NULL AND \"CreatedDate\" > :Limit",
+                                    new { Key = code, Now = now, Limit = limit });
+
                                 value = cnn.ExecuteScalar<string>(
                                     "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\""
                                     + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
-                                    new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
-
-                                deleted = cnn.Execute(
-                                    "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
+                                    new { Key = code, Limit = limit });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
+                                updated = cnn.Execute(
+                                    "UPDATE \"authenticationcodedictionary\" SET \"useddate\" = @Now"
+                                    + " WHERE \"key\" = @Key AND \"useddate\" IS NULL AND \"createddate\" > @Limit",
+                                    new { Key = code, Now = now, Limit = limit });
+
                                 value = cnn.ExecuteScalar<string>(
                                     "SELECT \"value\" FROM \"authenticationcodedictionary\""
                                     + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
-                                    new { Key = code, Limit = AuthorizationCodeProvider.ExpireLimit });
-
-                                deleted = cnn.Execute(
-                                    "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
+                                    new { Key = code, Limit = limit });
 
                                 break;
                         }
 
-                        //  **消せた 1 つだけが引き換える**（#332）。
-                        //    **以前は消せたかを見ていなかった**ので、同時に来た要求の両方が読めて、両方にトークンが出た。
+                        //  **印を立てられた 1 つだけが引き換える**（#332）。
                         //    **device_code・auth_req_id も、最後はここで内部の認可コードを引き換える**ので、同じく 1 回になる。
-                        if (deleted != 1)
+                        //    **立てられず、行が在れば、使用済み**（#421）。
+                        if (updated != 1)
                         {
-                            value = "";
+                            reused = !string.IsNullOrEmpty(value);
                         }
                     }
 
                     break;
             }
 
-            // 存在しない、または使用済みのcodeでは空になる（#185）。
+            // 存在しない、または期限切れのcodeでは空になる（#185）。
             if (string.IsNullOrEmpty(value)) return "";
 
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
+
+            if (reused)
+            {
+                AuthorizationCodeProvider.RevokeIfSameClient(client_id, jobj);
+                return "";
+            }
+
             return AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, jobj);
+        }
+
+        /// <summary>使用済みのコードが、そのコードを出したクライアントから再び出されたら、そのコードから出したトークンを失効させる（#421）</summary>
+        /// <param name="client_id">認証したクライアント</param>
+        /// <param name="jobj">コードの行の値</param>
+        /// <remarks>
+        /// **RFC 6749 §4.1.2**：「If an authorization code is used more than once, the authorization server MUST deny the request
+        /// and SHOULD revoke (when possible) all tokens previously issued based on that authorization code.」
+        /// **認可の ID を持たないコード**（この変更の前に作ったもの）**は、失効させられない**（従来どおり）。
+        /// </remarks>
+        private static void RevokeIfSameClient(string client_id, JObject jobj)
+        {
+            JObject payload = (JObject)JsonConvert.DeserializeObject((string)jobj[Const.AuthZCodeAccessTokenPayload]);
+
+            if (payload == null || client_id != (string)payload[OAuth2AndOIDCConst.aud])
+            {
+                return;
+            }
+
+            RevocationProvider.RevokeAuthorization((string)payload[Const.AuthorizationIdClaim]);
+
+            Logging.MyOperationTrace(string.Format(
+                "The authorization code issued to {0} was used more than once. The tokens issued from it were revoked.",
+                client_id));
         }
 
         #endregion
@@ -513,7 +593,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    value = AuthorizationCodeProvider.GetFromMemory(code, remove: false);
+                    value = AuthorizationCodeProvider.GetFromMemory(code);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -635,7 +715,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    value = AuthorizationCodeProvider.GetFromMemory(code, remove: false);
+                    value = AuthorizationCodeProvider.GetFromMemory(code);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -712,7 +792,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    value = AuthorizationCodeProvider.GetFromMemory(code, remove: false);
+                    value = AuthorizationCodeProvider.GetFromMemory(code);
                     break;
 
                 case EnumUserStoreType.SqlServer:

@@ -32,6 +32,8 @@
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
 //*  2026/11/03  玄人 幸道         列の幅を超える値は、引かずに「無い」とする（Oracle で 500 になっていた。#331）
 //*  2026/11/04  玄人 幸道         使用済みにできた 1 つだけが使う（同時に使うと、複数にトークンが出ていた。#332）
+//*  2026/11/23  玄人 幸道         RevokeFamily を internal にした（認可の ID の失効から呼ぶ。#421）
+//*  2026/11/23  玄人 幸道         新しい一族は、payload に認可の ID が在れば、それを識別子にする（#421）
 //**********************************************************************************
 
 using System;
@@ -41,8 +43,10 @@ using System.Collections.Concurrent;
 
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util.Sts;
 
 using Dapper;
+using Newtonsoft.Json.Linq;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
@@ -201,9 +205,34 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>新しい一族として発行する（認可コードなどからの初回）</summary>
         /// <param name="payload">payload</param>
         /// <returns>refresh_token</returns>
+        /// <remarks>
+        /// **payload に認可の ID（`Const.AuthorizationIdClaim`）が在れば、それを一族の識別子にする**（#421）。
+        /// **認可コードが再利用されたら、同じ値で access_token と refresh_token をまとめて失効させる**（`RevocationProvider.RevokeAuthorization`）。
+        /// **無ければ（認可コードを通らない経路）、新しい GUID**（従来どおり）。
+        /// </remarks>
         public static string Create(string payload)
         {
-            return RefreshTokenProvider.Create(payload, Guid.NewGuid().ToString("N"));
+            string familyId = RefreshTokenProvider.AuthorizationIdOf(payload);
+
+            return RefreshTokenProvider.Create(payload,
+                string.IsNullOrEmpty(familyId) ? Guid.NewGuid().ToString("N") : familyId);
+        }
+
+        /// <summary>payload の認可の ID（無ければ空）（#421）</summary>
+        /// <param name="payload">payload</param>
+        /// <returns>認可の ID</returns>
+        private static string AuthorizationIdOf(string payload)
+        {
+            if (string.IsNullOrEmpty(payload))
+            {
+                return "";
+            }
+
+            JObject jobj = JwtUtil.TryParseObjectAsIs(payload);
+
+            JToken value = (jobj == null) ? null : jobj[Const.AuthorizationIdClaim];
+
+            return (value != null && value.Type == JTokenType.String) ? (string)value : "";
         }
 
         /// <summary>一族を引き継いで発行する（ローテーション）</summary>
@@ -549,7 +578,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>一族ごと失効させる（消す）</summary>
         /// <param name="familyId">一族の識別子</param>
-        private static void RevokeFamily(string familyId)
+        /// <remarks>**認可の ID の失効（`RevocationProvider.RevokeAuthorization`）からも呼ぶ**ので internal にした（#421）。</remarks>
+        internal static void RevokeFamily(string familyId)
         {
             if (string.IsNullOrEmpty(familyId))
             {

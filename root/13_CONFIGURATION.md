@@ -4224,6 +4224,18 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > **#188 で `RefreshTokenDictionary` に 2 列を足した**（`FamilyId` / `UsedDate`。3 方言とも）。
 > **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
 > 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
+>
+> **#421 で `AuthenticationCodeDictionary` に 1 列を足した**（`UsedDate`。3 方言とも）。**引き換えた認可コードを消さずに使用済みの印を立て、再利用されたら、そのコードから出したトークンを失効させる**（RFC 6749 §4.1.2）。
+> **既存のデータベースには `ALTER` が要る**（無いと、認可コードの引き換えが列の無いエラーで失敗する）。残っている行は未使用として扱われる。
+>
+> ```sql
+> -- SQL Server
+> ALTER TABLE [AuthenticationCodeDictionary] ADD [UsedDate] [smalldatetime] NULL
+> -- Oracle
+> ALTER TABLE "AuthenticationCodeDictionary" ADD ("UsedDate" DATE NULL);
+> -- PostgreSQL
+> ALTER TABLE AuthenticationCodeDictionary ADD COLUMN UsedDate timestamp NULL;
+> ```
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
 | `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |

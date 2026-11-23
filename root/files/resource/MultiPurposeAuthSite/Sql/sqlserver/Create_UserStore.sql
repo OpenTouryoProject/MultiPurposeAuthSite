@@ -103,6 +103,7 @@ CREATE TABLE [AuthenticationCodeDictionary](
     [Key] [nvarchar](64) NOT NULL,           -- PK
     [Value] [nvarchar](max) NOT NULL,        -- AuthenticationCode
     [CreatedDate] [smalldatetime] NOT NULL,
+    [UsedDate] [smalldatetime] NULL,         -- 引き換えた時刻（NULL なら未使用）。再利用に気付くため、期限まで残す（#421）
     CONSTRAINT [PK.AuthenticationCodeDictionary] PRIMARY KEY NONCLUSTERED ([Key] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

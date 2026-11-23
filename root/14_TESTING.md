@@ -1878,6 +1878,28 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **refresh_token・ROPC・JWT Bearer・CIBA・device_code の経路** | どれも同じ `CheckSenderConstraint` を通り、縛るものは `x509` と `jkt` で決まる（経路ごとの分岐は無い）。E2E は、作る関数の違う 2 つ（`ProtectFromPayload`・`CreateFromClaims`）で測る |
 | **net48 版の mTLS** | 証明書の準備が要る（`-NetFxMtls`）。判定は `CommonLibrary` で共通 |
 
+##### 認可コードが再利用されたら、そのコードから出したトークンを失効させる（`RT-421.*`。#421）
+
+| | 測ること |
+|---|---|
+| **`RT-421.1`** | **2 回目の引き換えは `400` ＋ `invalid_grant` で断り、1 回目の access_token（`/userinfo` が `401`）と refresh_token（`invalid_grant`）が使えなくなる**（RFC 6749 §4.1.2 の SHOULD）。access_token に認可の ID（`urn:mpas:authorization_id`）が在ることも見る |
+| **`RT-421.2`** | **1 回目の refresh_token で更新して出した access_token・refresh_token も使えなくなる**（「そのコードに基づいて出したトークン」） |
+| **`RT-421.3`** | **別のクライアントが自分の資格情報で使用済みのコードを出しても、`invalid_grant` で断るだけで、コードを出したクライアントのトークンは失効させない** |
+
+- **引き換えたコードの行は消さず、使用済みの印（`UsedDate`）を条件付きの UPDATE で立てる**（立てられた 1 つだけが引き換える。#332 の形のまま）。**行はコードの期限まで残る**ので、**再利用に気付けるのはコードの期限（既定 600 秒）まで**
+- **認可の ID は、コードを作るときに決めて access_token の payload に書く**（`CmnAccessToken.CreatePayloadForCode`）。**payload は refresh_token にも引き継がれ、refresh_token の一族（`FamilyId`）も同じ値**にする。**失効は `RevocationProvider.RevokeAuthorization`**（失効の記録に `g:` ＋ ID を入れ、一族を消す）。**資源の側の検証（`CmnAccessToken.Verify`）は、`jti` に加えて認可の ID も引く**
+- **PKCE・DPoP の確かめは、引き換えの前に済む**ので、**誤った `code_verifier` で出された使用済みのコードは、失効させずに断る**（コードを知るだけの相手に、正規のトークンを止めさせない）
+- **同時に来た 2 つの引き換えは、負けた側を再利用として扱う**（勝った側のトークンも失効する。refresh_token の同時の使用と同じ。`RT-332.1` は 1 回しか出ないことだけを見る）
+- 直す前は、`RT-421.1`・`.2` のトークンが 2 回目の引き換えの後も使えた（失効の呼び出しを止めた手元の版で、net10.0 版で確かめた）
+- **3 方言（`sql`・`ora`・`npg`）でも回した**（列 `UsedDate` を足したため。`13_CONFIGURATION.md` に `ALTER` を書いた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **device_code・CIBA の内部の認可コードの再利用** | どちらも最後は同じ `AuthorizationCodeProvider.Receive` で引き換える。device_code・`auth_req_id` そのものの 2 回目は、それぞれの記録で先に断られる（`RT-332.3`・`.4`） |
+| **コードの期限を過ぎた後の再利用** | 行が掃除で消えるので、存在しないコードと同じに断る（失効はさせない） |
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |

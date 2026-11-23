@@ -83,6 +83,7 @@ CREATE TABLE "AuthenticationCodeDictionary"(
     "Key" NVARCHAR2(64) NOT NULL,            -- PK
     "Value" NVARCHAR2(2000) NOT NULL,        -- AuthenticationCode
     "CreatedDate" DATE NOT NULL,
+    "UsedDate" DATE,                         -- 引き換えた時刻（NULL なら未使用）。再利用に気付くため、期限まで残す（#421）
     CONSTRAINT "PK.AuthCodeDictionary" PRIMARY KEY ("Key")
 );
 

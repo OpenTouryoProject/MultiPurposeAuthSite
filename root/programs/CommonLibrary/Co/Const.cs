@@ -57,6 +57,7 @@
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg（JARM の署名の alg の登録）を足した（#370）
 //*  2026/11/14  玄人 幸道         PollingClientId を追加（#387）
 //*  2026/11/19  玄人 幸道         request_uris の名前と上限を足した（#374）
+//*  2026/11/23  玄人 幸道         認可の ID のクレーム名と、その失効の記録のキーの接頭辞を足した（#421）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -706,6 +707,24 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>access_token の payload（`AuthorizationCodeProvider`）</summary>
         public const string AuthZCodeAccessTokenPayload = "access_token_payload";
+
+        /// <summary>認可の ID（1 回の認可から出したトークンをまとめる GUID）のクレーム名（#421）</summary>
+        /// <remarks>
+        /// **認可コードを作るときに決め、access_token の payload に書く**（`AuthorizationCodeProvider.Create`）。
+        /// **payload は access_token と refresh_token に引き継がれる**ので、**更新で出した access_token も同じ値を持つ。**
+        /// **refresh_token の一族（`FamilyId`）にも同じ値を使う。**
+        /// **認可コードが再利用されたら、この値を失効させる**（RFC 6749 §4.1.2）。
+        ///
+        /// **名前は衝突しにくい URI にする**（RFC 7519 §4.2）。**`grant_id` は使わない** —
+        /// FAPI の Grant Management が、別の意味（利用者が管理する同意）で使っている。
+        /// </remarks>
+        public const string AuthorizationIdClaim = "urn:mpas:authorization_id";
+
+        /// <summary>失効させた認可の ID を、access_token の失効の記録（`OAuth2Revocation` の `Jti`）に入れるときの接頭辞（#421）</summary>
+        /// <remarks>
+        /// **`jti`（GUID の 32 文字）と区別する。** 列は 38 文字で、接頭辞 ＋ GUID の 34 文字が収まる。
+        /// </remarks>
+        public const string RevokedAuthorizationKeyPrefix = "g:";
 
         #endregion
 
