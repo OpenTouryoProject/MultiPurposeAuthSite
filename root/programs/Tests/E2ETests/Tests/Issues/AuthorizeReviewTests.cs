@@ -258,7 +258,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     {
                         reAuth = false;
                         reAuthActual = MaxAgeWindow.Unjudged(watch.Elapsed, maxAge);
-                        r.Note(attempt + " 回目：窓を過ぎてから確かめたので、数え直す（" + timing + "）");
                         continue;
                     }
 

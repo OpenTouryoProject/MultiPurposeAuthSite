@@ -58,6 +58,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     ///   **再認証の印の Cookie を残す**（印が新しいうちは、`max_age` を越えても通す。`CmnEndpoints.CheckAuthTime`）
     /// - **窓は 1 秒短く見る。** OP は `auth_time` を秒で切り捨てて残し、秒で比べるので、窓が最大 1 秒短くなる
     ///   （`LockoutWindow` と同じ）
+    /// - **数え直したことは、実測の文面（`Timing` の「何回目」）に書く。** 回ごとに `Note` を書かない
+    ///   （`Note` は `TESTCASES.md` に載るので、通しのたびに原本が揺れる）
     /// </remarks>
     public static class MaxAgeWindow
     {

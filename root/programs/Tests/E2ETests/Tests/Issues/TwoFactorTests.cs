@@ -752,7 +752,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                                 step2Actual = MaxAgeWindow.Unjudged(afterPasswordWatch.Elapsed, maxAge);
                                 step3Ok = false;
                                 step3Actual = "（手順 2 を判定できず、確かめていない）";
-                                r.Note(attempt + " 回目：手順 2 を窓を過ぎてから確かめたので、数え直す（" + timing2 + "）");
                                 continue;
                             }
 
@@ -792,7 +791,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                             {
                                 step3Ok = false;
                                 step3Actual = MaxAgeWindow.Unjudged(afterReSignInWatch.Elapsed, maxAge);
-                                r.Note(attempt + " 回目：手順 3 を窓を過ぎてから確かめたので、数え直す（" + timing3 + "）");
                                 continue;
                             }
 

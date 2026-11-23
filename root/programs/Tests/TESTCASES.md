@@ -6585,13 +6585,17 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. サインインから 2 秒待ち、auth_time の Cookie を「いま」の平文に書き換える
-1. max_age=1 で要求する
+1. サインインから 5 秒待ち（本当の auth_time は max_age を越える）、auth_time の Cookie を「いま」の平文に書き換える
+1. max_age=3 で要求する
 
 **検証（合否を判定する）**
 
 - **認可コードは発行されない**（書き換えた時刻を信じない）
 - **再認証の経路へ送られる**（同じ URL へ戻される）
+
+**補足**
+
+- **窓を過ぎてから再認証になった結果は、合否に使わない。** サインインし直したクライアントで、手順 1 から数え直す（`MaxAgeWindow`。#409）。
 
 ## RT-294.18 再認証の印の Cookie を書き換えても、prompt=login の再認証は飛ばせない
 
@@ -6880,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=0583da16-876e-4bdc-96a5-93fa6ef17269&code=bogus
+1. GET /Account/EmailConfirmation?userId=9ad6aa94-4b08-4d70-a704-36c3fc731918&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=0583da16-876e-4bdc-96a5-93fa6ef17269&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=0583da16-876e-4bdc-96a5-93fa6ef17269&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=9ad6aa94-4b08-4d70-a704-36c3fc731918&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=9ad6aa94-4b08-4d70-a704-36c3fc731918&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7505,6 +7509,10 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - パスワードを確かめた直後は、再認証を求めない（先へ進む）
 - 再認証を求める（同意画面にも、認可コードにも進まない）
+
+**補足**
+
+- **窓を過ぎてから確かめた結果は、合否に使わない**（通しの負荷で応答が遅れると、窓を越える。#409）。**利用者とクライアントを作り直して、手順 1 から数え直す**（再認証を求めると、OP は再認証の印を残すため。`MaxAgeWindow`）。
 
 ## RT-294.64 2FA の無効化は、パスワードを確かめる（無い・間違いなら無効にしない）
 
