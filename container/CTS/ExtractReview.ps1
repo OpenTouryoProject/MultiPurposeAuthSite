@@ -17,7 +17,7 @@
          - クライアントへ返った応答（error・error_description、または code などのパラメタの名前）
          - モジュールの結果と、SUCCESS・INFO 以外の判定
       3. 判定の材料を 1 行にまとめた「材料の形」（Evidence）を作る。**次の実行で、基準と比べるため**（-Baseline）。
-      4. out\review\<プラン>.json に詳細を書き、画面に表を出す。
+      4. out\review\<プラン>.json に詳細を書き、画面に、プランごとの数の表と、1 件ずつの中身（基準と比べたなら、違うものだけ）を出す。
 
     ＜秘密を出さない＞
       **ログには、テスト利用者のパスワード（WebRunner の commands）とクライアントの秘密鍵（config）が入っている。**
@@ -33,6 +33,8 @@
     基準のファイル（既定は ReviewBaseline.csv）。在れば、材料の形を比べ、合否を引き継ぐ。-NoBaseline で比べない。
 .PARAMETER NoBaseline
     基準と比べない。
+.PARAMETER All
+    基準と同じ REVIEW も、画面に 1 件ずつ出す（既定は、基準と比べたなら、違うものだけを出す）。
 .PARAMETER TextLength
     out\review\*.json に残す、画面の本文の文字数の上限。
 .EXAMPLE
@@ -46,12 +48,14 @@
      ----------  ----------------  -------------------------------------------------
      2026/11/23  玄人 幸道         新規（#417）
      2026/11/23  玄人 幸道         材料の形に、エラー画面・確認の画面の文言を入れた。基準だけに在る行と、同じキーの重なりを見るようにした（#417）
+     2026/11/23  玄人 幸道         画面の表が長いバリアントで折り返して読めないので、プランごとの数の表と、1 件ずつ縦に並べる形にし、基準と同じものは出さないようにした（-All で出す。#417）
 #>
 [CmdletBinding()]
 param(
     [string[]]$Plan,
     [string]$Baseline = '',
     [switch]$NoBaseline,
+    [switch]$All,
     [int]$TextLength = 2000
 )
 
@@ -300,7 +304,7 @@ else
 
 New-Item -ItemType Directory -Force $reviewDir | Out-Null
 
-$all = @()
+$allReviews = @()
 foreach ($zf in $zips)
 {
     $planName = $zf.Name -replace '-report\.zip$', ''
@@ -323,7 +327,7 @@ foreach ($zf in $zips)
     $file = Join-Path $reviewDir ('{0}.json' -f $planName)
     $body = ConvertTo-Json -InputObject @($rows) -Depth 8
     [IO.File]::WriteAllText($file, $body, (New-Object Text.UTF8Encoding($false)))
-    $all += $rows
+    $allReviews += $rows
 }
 
 # 基準と比べる（Plan・Module・Variant・Src で引き、材料の形が同じなら合否を引き継ぐ）。
@@ -345,7 +349,7 @@ if ($useBaseline)
 
 $used = @{}
 $seen = @{}
-$table = @(foreach ($r in $all)
+$table = @(foreach ($r in $allReviews)
 {
     $verdict = ''
     $state = ''
@@ -377,11 +381,46 @@ if ($useBaseline)
     }
 }
 
-$table | Sort-Object Plan, Module, Variant, Src | Format-Table -AutoSize -Wrap | Out-String -Width 400 | Write-Host
-Write-Host ('REVIEW の判定 : {0}（モジュール {1}・名前 {2} 種類・判定 {3} 種類）' -f @($all).Count,
-    @($all | ForEach-Object { '{0}|{1}' -f $_.Plan, $_.TestId } | Sort-Object -Unique).Count,
-    @($all | ForEach-Object { $_.Module } | Sort-Object -Unique).Count,
-    @($all | ForEach-Object { $_.Src } | Sort-Object -Unique).Count)
+# 画面への出し方。**バリアントと材料の形は長く、表にすると 1 文字ずつ折り返して読めない**（#417 の追加の修正）。
+# プランごとの数を表にし、1 件ずつの中身は縦に並べる（材料の形は「 | 」で区切って 1 行に 1 つ）。
+# 基準と比べたなら、**同じものは出さない**（-All で出す）。
+# 数の表の列名は英語にする（Windows PowerShell 5.1 の Format-Table は全角の幅を数えず、日本語の列名だと桁がずれる）
+$sorted = @($table | Sort-Object Plan, Module, Variant, Src)
+$stateColumns = [ordered]@{ Same = '同じ'; Changed = '形が変わった'; New = '基準に無い'; Gone = '基準だけに在る' }
+@($sorted | Group-Object Plan | ForEach-Object {
+    $g = @($_.Group)
+    $o = [ordered]@{ Plan = $_.Name; REVIEW = @($g | Where-Object { $_.State -ne '基準だけに在る' }).Count }
+    if ($useBaseline)
+    {
+        foreach ($c in $stateColumns.Keys) { $s = $stateColumns[$c]; $o[$c] = @($g | Where-Object { $_.State -eq $s }).Count }
+    }
+    [pscustomobject]$o
+}) | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+if ($useBaseline) { Write-Host ('列 : ' + (@($stateColumns.Keys | ForEach-Object { '{0}={1}' -f $_, $stateColumns[$_] }) -join '・')) }
+Write-Host ''
+
+$detail = if ($useBaseline -and -not $All) { @($sorted | Where-Object { $_.State -ne '同じ' }) } else { $sorted }
+$i = 0
+foreach ($t in $detail)
+{
+    $i++
+    $color = if ($t.State -and $t.State -ne '同じ') { 'Yellow' } else { 'Gray' }
+    Write-Host ('[{0}/{1}] {2}{3}' -f $i, $detail.Count, $t.Plan, $(if ($t.State) { '  ― ' + $t.State } else { '' })) -ForegroundColor $color
+    Write-Host ('  Module   : {0}' -f $t.Module)
+    Write-Host ('  Variant  : {0}' -f $t.Variant)
+    Write-Host ('  Src      : {0}' -f $t.Src)
+    if ($t.Result) { Write-Host ('  Result   : {0}' -f $t.Result) }
+    if ($t.Verdict) { Write-Host ('  Verdict  : {0}' -f $t.Verdict) }
+    Write-Host '  Evidence :'
+    foreach ($part in ([string]$t.Evidence -split ' \| ')) { Write-Host ('    {0}' -f $part) }
+    Write-Host ''
+}
+if ($useBaseline -and -not $All -and $detail.Count -eq 0) { Write-Host '基準と違うものは無い（すべて出すなら -All）' }
+
+Write-Host ('REVIEW の判定 : {0}（モジュール {1}・名前 {2} 種類・判定 {3} 種類）' -f @($allReviews).Count,
+    @($allReviews | ForEach-Object { '{0}|{1}' -f $_.Plan, $_.TestId } | Sort-Object -Unique).Count,
+    @($allReviews | ForEach-Object { $_.Module } | Sort-Object -Unique).Count,
+    @($allReviews | ForEach-Object { $_.Src } | Sort-Object -Unique).Count)
 if ($useBaseline)
 {
     $changed = @($table | Where-Object { $_.State -ne '同じ' })
