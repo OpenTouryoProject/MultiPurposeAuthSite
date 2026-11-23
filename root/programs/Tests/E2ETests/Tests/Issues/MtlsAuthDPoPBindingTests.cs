@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/23  玄人 幸道         新規（#423）
+//*  2026/11/24  玄人 幸道         部品（EndpointAsync・DPoPHeader・VerifyCnf）を RT-424 からも使えるようにし、VerifyCnf に jkt が無いことを見る形を足した（#424）
 //**********************************************************************************
 
 using System;
@@ -266,7 +267,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="name">項目の名前</param>
         /// <returns>URL</returns>
-        private static async Task<string> EndpointAsync(IdPClient client, string name)
+        internal static async Task<string> EndpointAsync(IdPClient client, string name)
         {
             JsonResponse res = await client.GetJsonAsync("/.well-known/openid-configuration");
 
@@ -284,7 +285,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="htu">宛先</param>
         /// <param name="accessToken">`ath` の材料（null なら入れない）</param>
         /// <returns>ヘッダ</returns>
-        private static Dictionary<string, string> DPoPHeader(
+        internal static Dictionary<string, string> DPoPHeader(
             IdPClient client, string htm, string htu, string accessToken)
         {
             return new Dictionary<string, string>()
@@ -322,13 +323,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="accessToken">access_token</param>
         /// <param name="expectX5t">`x5t#S256` が在るべきか</param>
         /// <param name="cert">`x5t#S256` が在るべきときの証明書</param>
-        private static void VerifyCnf(TestReport r, string accessToken, bool expectX5t, X509Certificate2 cert = null)
+        /// <param name="expectJkt">`jkt` が在るべきか（DPoP の証明を添えない要求なら false。#424）</param>
+        internal static void VerifyCnf(TestReport r, string accessToken, bool expectX5t, X509Certificate2 cert = null, bool expectJkt = true)
         {
             string jkt = MtlsAuthDPoPBindingTests.CnfOf(accessToken, "jkt");
             string x5t = MtlsAuthDPoPBindingTests.CnfOf(accessToken, "x5t#S256");
 
-            r.Verify("access_token の cnf に jkt が在る（DPoP の鍵に縛られている）", !string.IsNullOrEmpty(jkt),
-                "在る", string.IsNullOrEmpty(jkt) ? "**無い**" : "在る");
+            if (expectJkt)
+            {
+                r.Verify("access_token の cnf に jkt が在る（DPoP の鍵に縛られている）", !string.IsNullOrEmpty(jkt),
+                    "在る", string.IsNullOrEmpty(jkt) ? "**無い**" : "在る");
+            }
+            else
+            {
+                //  **DPoP の証明を添えない要求**（RT-424.2。#424）。
+                r.Verify("access_token の cnf に jkt が無い（DPoP の証明を添えていない）", string.IsNullOrEmpty(jkt),
+                    "無い", string.IsNullOrEmpty(jkt) ? "無い" : "**在る**");
+            }
 
             if (expectX5t)
             {

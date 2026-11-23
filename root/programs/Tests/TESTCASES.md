@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=9ad6aa94-4b08-4d70-a704-36c3fc731918&code=bogus
+1. GET /Account/EmailConfirmation?userId=ac59dbfa-a987-420c-82d8-df0761183712&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=9ad6aa94-4b08-4d70-a704-36c3fc731918&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=9ad6aa94-4b08-4d70-a704-36c3fc731918&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=ac59dbfa-a987-420c-82d8-df0761183712&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=ac59dbfa-a987-420c-82d8-df0761183712&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13942,6 +13942,82 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 200
 - access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
 - access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-424.1 **fapi2 の登録は、`private_key_jwt` で認証すれば client_credentials を使える。`aud` は issuer だけを受ける**
+
+| | |
+|---|---|
+| 観点 | **以前は、client_credentials を normal の登録にしか許していなかった**（`unauthorized_client`）。**FAPI 2.0 Security Profile は、要件が client credentials grant のような他の grant にも使えるように組み立ててあるとする**（§5.3.2.1 の NOTE 2）。**`aud` を issuer だけにすることは、fapi2 に固有の分岐ではない**（normal の登録も同じ。RFC 10070 §4。`RT-398.1`）。**fapi2 の登録が開けた後も、この規則で断られることを対照として見る**（§5.3.2.1 の 8）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 6749 §4.4 / #424 |
+| テスト | `RT42401_fapi2の登録はprivate_key_jwtでclient_credentialsを使える` |
+
+**手順**
+
+1. aud = issuer の client_assertion と DPoP の証明で、client_credentials を要求する
+1. 対照：aud = トークン エンドポイントの URL（同じクライアント・同じ鍵）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- トークンが返る
+- token_type が DPoP
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf に x5t#S256 が無い（証明書には縛られていない）
+- invalid_client
+- トークンを出さない
+
+## RT-424.2 **fapi2 の登録は、mTLS（`tls_client_auth`）で認証すれば client_credentials を使える**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 が認めるクライアント認証は、MTLS と `private_key_jwt`**（§5.3.2.1 の 6）。**`private_key_jwt`（RT-424.1）と同じく開けた。****`tls_client_auth` で認証し、DPoP の証明を添えなければ、認証した証明書に縛る**（RFC 8705 §3。#346・#423）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 8705 §2・§3 / #424 |
+| テスト | `RT42402_fapi2の登録はmTLSでclient_credentialsを使える` |
+
+**手順**
+
+1. 証明書で認証して、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- トークンが返る
+- access_token の cnf に jkt が無い（DPoP の証明を添えていない）
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-424.3 **fapi2 の登録は、client_secret で認証できても、client_credentials のトークンを出さない**（`unauthorized_client`）
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 が認めるクライアント認証は、MTLS と `private_key_jwt` だけ**（§5.3.2.1 の 6）。**#424 で開けたのは、非対称の証明の行だけ**である（`ClientModePolicy`。認可コード・refresh_token の行と同じ形）。**`invalid_client` ではない** ＝ 秘密による認証は通り、その後の登録種別の判定で断られた（RFC 6749 §5.2）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 6749 §5.2 / #424 |
+| テスト | `RT42403_fapi2の登録はclient_secretではclient_credentialsを使えない` |
+
+**手順**
+
+1. client_secret で、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- トークンを出さない
+- エラーは unauthorized_client（認証は通っている）
+
+## RT-424.4 **fapi1 の登録は、`private_key_jwt` で認証しても、client_credentials のトークンを出さない**（`unauthorized_client`）
+
+| | |
+|---|---|
+| 観点 | **#424 で開けたのは fapi2 だけ**（`ClientModePolicy` の `private_key_jwt`・mTLS の行は normal と fapi2）。**FAPI 1.0 Advanced は認可コードの流れを前提にする**ので、fapi1 には開けていない。**`FA-1.1` は fapi1 × `client_secret` を見る**（`Proof.Any` の行）ので、**非対称の証明の行の除外は、ここで見る**（別モデルのレビューの指摘）。 |
+| 根拠 | RFC 6749 §5.2 / #424 |
+| テスト | `RT42404_fapi1の登録にはclient_credentialsを開けていない` |
+
+**手順**
+
+1. aud = issuer の client_assertion で、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- トークンを出さない
+- エラーは unauthorized_client（認証は通っている）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

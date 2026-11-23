@@ -1907,6 +1907,27 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **device_code・CIBA の内部の認可コードの再利用** | どちらも最後は同じ `AuthorizationCodeProvider.Receive` で引き換える。device_code・`auth_req_id` そのものの 2 回目は、それぞれの記録で先に断られる（`RT-332.3`・`.4`） |
 | **コードの期限を過ぎた後の再利用** | 行が掃除で消えるので、存在しないコードと同じに断る（失効はさせない） |
 
+##### fapi2 の登録の client_credentials（`RT-424.*`。#424）
+
+| | 測ること |
+|---|---|
+| **`RT-424.1`** | **fapi2 の `private_key_jwt` の登録（`TestClient_32`）は、DPoP の証明を添えて client_credentials を使え、`token_type` は `DPoP`、`cnf.jkt` を持つ**（FAPI 2.0 Security Profile §5.3.2.1 の NOTE 2。**NOTE 2 は、詳しい安全性の分析を経たのは認可コードと CIBA の流れだけ、とも添えている**）。対照として、**同じ要求で `client_assertion` の `aud` をトークン エンドポイントの URL にすると `invalid_client`**（**fapi2 に固有の分岐ではない**。normal の登録も同じ。RFC 10070 §4。`RT-398.1`） |
+| **`RT-424.2`** | **fapi2 の `tls_client_auth` の登録（`TestClient2_2`）も、証明書で認証して client_credentials を使え、その証明書に縛られる**（`cnf.x5t#S256`。§5.3.2.1 の 6。RFC 8705 §3） |
+| **`RT-424.3`** | **fapi2 の `client_secret_post` の登録（`TestClient_47`）は、秘密で認証できても `unauthorized_client`**（§5.3.2.1 の 6。開けたのは非対称の証明の行だけ） |
+| **`RT-424.4`** | **fapi1 の `private_key_jwt` の登録（`FAPI1_PrivateKeyJwt_Client`）は、client_credentials を `unauthorized_client`**（開けたのは fapi2 だけ） |
+
+- **判定は `ClientModePolicy` の表**（client_credentials を、`private_key_jwt`・mTLS・それ以外の 3 行に分けた。refresh_token の行と同じ形）
+- **送信者の拘束（§5.3.2.1 の 4・5）は、認可コードと同じく登録の項目で強制する**（`dpop_bound_access_tokens` など。#346。`RT-346.4`・`.7`）。**fapi2 の登録だからといって、項目の無い登録に拘束を強いることはしていない**
+- 直す前は、`RT-424.1`・`.2` が `unauthorized_client` で落ちた（表の行を戻した手元の版で、両版（`.2` は net10.0 版）で確かめた）
+- **fapi1 には開けていない**（FAPI 1.0 Advanced は認可コードの流れを前提にする。#424 の範囲は fapi2）。**`FA-1.1` は fapi1 × `client_secret` を見る**（`Proof.Any` の行）ので、**非対称の証明の行の除外は `RT-424.4` で見る**
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi2 の client_credentials で、受ける `client_assertion` の alg を絞ること**（§5.4.1） | クライアント認証の段の判定で、グラントによらない（#395）。このテストは PS256 で送る |
+| **net48 版の mTLS** | 証明書の準備が要る（`-NetFxMtls`）。判定は `CommonLibrary` で共通 |
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |

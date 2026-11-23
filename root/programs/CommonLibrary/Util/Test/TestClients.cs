@@ -55,6 +55,7 @@
 //*  2026/11/15  玄人 幸道         RSA の公開鍵を持つ fapi_ciba の TestClient4_5 を追加（#395）
 //*  2026/11/17  玄人 幸道         SAML2 のテストのクライアント（TestClient_21・_22）の写す元を、鍵を持つ TestClient にした（IdP が署名の無い要求を断るようになった。#400）
 //*  2026/11/19  玄人 幸道         鍵を jwks_uri だけで登録した fapi_ciba の TestClient4_6 を追加し、jwks_uri を差し替えられるようにした（#408）
+//*  2026/11/24  玄人 幸道         client_secret で認証する fapi2 の TestClient_47 を追加（#424）
 //**********************************************************************************
 
 using System;
@@ -636,6 +637,19 @@ namespace MultiPurposeAuthSite.Util.Test
                 Overrides = new Dictionary<string, string>()
                 {
                     { Const.ClientAuthorizationSignedResponseAlg, JwtConst.PS256 }
+                }
+            },
+            new Entry()
+            {
+                // **client_secret で認証する fapi2 のクライアント**（#424）。
+                //   **fapi2 の client_credentials は、非対称の証明（private_key_jwt・mTLS）でしか通さない**
+                //   （FAPI 2.0 Security Profile §5.3.2.1 の 6）ことを測る（`RT-424.3`）。
+                //   **写し元は `FAPI2_Client`**（秘密を持つ）。認証の方法だけ client_secret_post にした。
+                ClientName = "TestClient_47", ClientId = "e2e0tc47700000000000000000000000",
+                ClientMode = "fapi2", SourceName = "FAPI2_Client",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "client_secret_post" }
                 }
             },
             new Entry()

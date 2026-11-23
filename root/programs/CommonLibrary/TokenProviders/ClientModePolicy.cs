@@ -33,6 +33,7 @@
 //*  2026/09/26  玄人 幸道         refresh_token を、非対称の証明なら fapi1 / fapi2 にも開いた（#239 の段階 3）
 //*  2026/11/08  玄人 幸道         mTLS の行のコメント「net10.0 のみ」を、E2E の測り方の話だと分かる書き方にした（行は両版で効く。#345）
 //*  2026/11/09  玄人 幸道         認可コード × private_key_jwt の行から device を外した（#346。#224 で水準の比較から移しただけの行で、意図が無かった）
+//*  2026/11/24  玄人 幸道         client_credentials を、非対称の証明（private_key_jwt・mTLS）なら fapi2 にも開いた（#424）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -190,9 +191,26 @@ namespace MultiPurposeAuthSite.TokenProviders
             new Rule(Flow.RefreshToken,          Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.5
             new Rule(Flow.RefreshToken,          Proof.Any,                 Normal),                  // FA-1.2
 
+            // **client_credentials : 非対称の証明なら fapi2 にも開く（#424）。**
+            //   **FAPI 2.0 Security Profile §5.3.2.1 の NOTE 2 は、この文書の要件（§5.3.2.1）が
+            //   client credentials grant のような他の grant にも使えるように組み立ててあるとする。**
+            //   **ただし、詳しい安全性の分析を経たのは認可コードと CIBA の流れだけ**、という注意も添えている
+            //   （他の grant を使う配備は、そのことを踏まえる）。
+            //   **一般の要件のうち、認証の方法（6：MTLS か private_key_jwt）は、この表で証明を限って守る**
+            //   （client_secret の fapi2 は、従来どおり unauthorized_client）。
+            //   **`aud` を issuer だけにする（8）・受ける alg（§5.4.1）は、クライアント認証の段で fapi2 に掛かる。**
+            //   **送信者の拘束（4・5）は、認可コードと同じく登録の項目（`dpop_bound_access_tokens` など。#346）で強制する。**
+            //   **認可エンドポイントの規定（§5.3.2.2：PAR・PKCE・redirect_uri）は、このグラントには掛からない。**
+            //   **以前は normal だけだった**ので、FAPI 2.0 の RP として登録したクライアントが使えず、
+            //   **適合性テストの fapi_client_credentials_grant は normal の登録で回していた**（#416）。
+            //   **fapi1 には開けない**（FAPI 1.0 Advanced は認可コードの流れを前提にする。#424 の範囲は fapi2）。
+            //   **並び順が意味を持つ**（refresh_token の行と同じ。証明を限る行を、Proof.Any の行より前に置く）。
+            new Rule(Flow.ClientCredentials,     Proof.PrivateKeyJwt,       Normal, Fapi2),           // RT-424.1
+            new Rule(Flow.ClientCredentials,     Proof.Mtls,                Normal, Fapi2),           // RT-424.2（E2E の既定は net10.0 だけ）
+            new Rule(Flow.ClientCredentials,     Proof.Any,                 Normal),                  // FA-1.1 / RT-424.3
+
             // 上記以外のグラント : 証明によらず normal だけ
             new Rule(Flow.ResourceOwnerPassword, Proof.Any,                 Normal),                  // FA-1.1 / 21-1.1
-            new Rule(Flow.ClientCredentials,     Proof.Any,                 Normal),                  // FA-1.1
             new Rule(Flow.JwtBearer,             Proof.Any,                 Normal),                  // EX-7
 
             // バックチャネル

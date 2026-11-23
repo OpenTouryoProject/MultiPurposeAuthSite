@@ -66,6 +66,7 @@
 //*  2026/11/17  玄人 幸道         TestClient_21 の説明を、鍵を持つ形に直した（#400）
 //*  2026/11/17  玄人 幸道         鍵を登録していない SAML2 の SP（TestClient_23）を足した（#400）
 //*  2026/11/19  玄人 幸道         TestClient4_6（鍵を jwks_uri だけで登録した fapi_ciba）を追加（#408）
+//*  2026/11/24  玄人 幸道         TestClient_47（fapi2。client_secret_post）を追加（#424）
 //**********************************************************************************
 
 using System;
@@ -464,6 +465,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>TestClient を写し、**authorization_signed_response_alg を PS256** にしたクライアント（RT-370.5。#370）</summary>
         public const string TestClient_46 = "TestClient_46";
 
+        /// <summary>FAPI2_Client（fapi2）を写し、**client_secret_post で認証する**クライアント（RT-424.3。#424）</summary>
+        public const string TestClient_47 = "TestClient_47";
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -546,7 +550,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_43, "e2e0tc43300000000000000000000000" },
                 { KnownClients.TestClient_44, "e2e0tc44400000000000000000000000" },
                 { KnownClients.TestClient_45, "e2e0tc45500000000000000000000000" },
-                { KnownClients.TestClient_46, "e2e0tc46600000000000000000000000" }
+                { KnownClients.TestClient_46, "e2e0tc46600000000000000000000000" },
+                { KnownClients.TestClient_47, "e2e0tc47700000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -1176,9 +1181,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_32
-                || clientName == KnownClients.TestClient_45)
+                || clientName == KnownClients.TestClient_45
+                || clientName == KnownClients.TestClient_47)
             {
                 // TestClient_45 は、**さらに id_token_signed_response_alg を PS256 にした**（#355）。
+                // TestClient_47 は、**認証の方法を client_secret_post にした**（秘密は写し元のもの。#424）。
                 // **fapi2 ＋ private_key_jwt**（#294）。鍵は写し元（FAPI2_Client）のもの。
                 sourceName = KnownClients.Fapi2Client;
             }

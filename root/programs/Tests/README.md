@@ -334,6 +334,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/Fapi1ParPkceTests.cs` | `RT-383` | **fapi1 の登録の PAR では、S256 の PKCE を必須にする**（#383。FAPI 1.0 Advanced §5.2.2 の 18）。**fapi1 の登録の `/par` は、plain・`code_challenge_method` の省略・PKCE 無しを `invalid_request` で断る**（`RT-383.1`）、**PAR を使わない fapi1 の要求は従来どおり**（`RT-383.2`） |
 | `Tests/Issues/FapiRedirectUriRequiredTests.cs` | `RT-422` | **FAPI の登録では、`redirect_uri` を省けない**（#422）。**fapi2 の `/par` は `openid` の有無によらず `invalid_request`**（FAPI 2.0 Security Profile §5.3.2.2 の 6。`RT-422.1`）、**fapi1 はクエリ・PAR とも**（FAPI 1.0 Baseline §5.2.2 の 9。`RT-422.2`）、**fapi2 の PAR を使わない要求・normal は従来どおり**（`RT-422.3`） |
 | `Tests/Issues/MtlsAuthDPoPBindingTests.cs` | `RT-423` | **mTLS（`tls_client_auth`）で認証して DPoP で縛るトークンは、証明書に縛らない**（#423。RFC 8705 §4・§3.4・RFC 9449 §1）。**認可コードは DPoP だけで `/userinfo` を使える**（`RT-423.1`）、**client_credentials も同じ**（`RT-423.2`）、**証明書を必須にした登録は従来どおり両方に縛る**（`RT-423.3`）。net10.0 版だけ（`-NetFxMtls` で net48 版も） |
+| `Tests/Issues/Fapi2ClientCredentialsTests.cs` | `RT-424` | **fapi2 の登録も、非対称の証明なら client_credentials を使える**（#424。FAPI 2.0 Security Profile §5.3.2.1 の NOTE 2）。**`private_key_jwt` と DPoP で通り、DPoP の鍵に縛られる**（`RT-424.1`。対照の `aud` の確かめは `RT-398.1` と同じ規則）、**mTLS でも通り、証明書に縛られる**（`RT-424.2`。net10.0 版だけ。`-NetFxMtls` で net48 版も）、**`client_secret` では `unauthorized_client`**（`RT-424.3`。§5.3.2.1 の 6）、**fapi1 には開けていない**（`RT-424.4`） |
 | `Tests/Issues/AuthorizationCodeReuseTests.cs` | `RT-421` | **認可コードが再利用されたら、そのコードから出したトークンを失効させる**（#421。RFC 6749 §4.1.2 の SHOULD）。**1 回目の access_token・refresh_token**（`RT-421.1`）、**更新で出したもの**（`RT-421.2`）が使えなくなる。**別のクライアントが出しても失効させない**（`RT-421.3`）。**refresh_token を `/revoke` で失効させたとき**（`RT-421.4`）、**使用済みの refresh_token が出されたとき**（`RT-421.5`）も、同じ認可の access_token が使えなくなる（RFC 7009 §2.1。`ANALYSIS-IdP.md` の E-13）。**誤った `code_verifier` での再利用では失効させない**（`RT-421.6`） |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
@@ -454,7 +455,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
 **登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
-**全 16 行に、通ることを測るケースを当てた**（#245 の段階 1。下の「経路 × 証明の網羅」）。
+**全 18 行に、通ることを測るケースを当てた**（#245 の段階 1。#424 で client_credentials を 3 行に分けた。下の「経路 × 証明の網羅」）。
 **mTLS の 2 行は net10.0 版だけ**で、net48 版は `-NetFxMtls` のときだけ測る（`FA-6`）。
 
 > 以前ここには「**E2E で守られていない行がある** : 認可コードの private_key_jwt」と書いてあった。
@@ -626,7 +627,7 @@ cd root
 
 **`CommonLibrary/TokenProviders/ClientModePolicy.cs` の表がそのまま仕様である**
 （経路 × 何を証明したか → 通す登録種別。表に無い組み合わせは拒否）。
-**その 16 行すべてに、通ることを測るケースを当てた。**
+**その 18 行すべてに、通ることを測るケースを当てた**（#424 で client_credentials を 3 行に分けた）。
 
 | 経路 | 証明 | 通す登録種別 | 測っているケース |
 |---|---|---|---|
@@ -642,7 +643,9 @@ cd root
 | `refresh_token` | mTLS | normal / fapi1 / fapi2 | **`FA-6.5`**（#245 で追加） |
 | `refresh_token` | 問わない | normal | `FA-1.2` |
 | ROPC | 問わない | normal | `FA-1.1` / `21-1.1` |
-| `client_credentials` | 問わない | normal | `FA-1.1` |
+| `client_credentials` | `private_key_jwt` | normal / **fapi2**（#424） | `RT-424.1`（fapi2） |
+| `client_credentials` | mTLS | normal / **fapi2**（#424） | `RT-424.2`（fapi2。net10.0。net48 は `-NetFxMtls`） |
+| `client_credentials` | 問わない | normal | `FA-1.1`（fapi2 × `client_secret` は `RT-424.3`、fapi1 × `private_key_jwt` は `RT-424.4` で断られる） |
 | JWT Bearer | 問わない | normal | `EX-7` |
 | CIBA | 問わない | fapi_ciba | `EX-8` / `FA-5.1` |
 | Device AuthZ | 問わない | normal / device | `FA-4.1` |

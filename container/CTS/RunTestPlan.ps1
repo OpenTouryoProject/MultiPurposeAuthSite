@@ -41,6 +41,7 @@
      2026/11/17  玄人 幸道         FAPI 2.0 Message Signing のクライアントを、署名した Request Object を必須にした登録（17・18）に分けた（#385）
      2026/11/21  玄人 幸道         FAPI 2.0 SP の、認証と縛りの交差・plain_oauth・client_credentials のプランと、scope の置き換えを足した（#416）
      2026/11/21  玄人 幸道         FAPI 1.0 Advanced・FAPI-CIBA・FAPI 2.0 MS の mTLS と、MS の要求と応答の残りの組のプランを足した（#416）
+     2026/11/24  玄人 幸道         client_credentials のプランのクライアント（23・24）を fapi2 の登録にした説明に直した（#424）
 #>
 [CmdletBinding()]
 param(
@@ -115,7 +116,7 @@ $plans = @{
     'fapi2-sp-plain-oauth' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420; Scope = 'email'
         Variant = '{"fapi_profile":"plain_fapi","openid":"plain_oauth","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop"}'
         ClientId = 'c75c11e0000000000000000000000008'; Client2Id = 'c75c11e0000000000000000000000009' }
-    #   client_credentials（fapi_profile=fapi_client_credentials_grant）：23・24（**client_mode は normal**。docker-compose.yml の説明）。
+    #   client_credentials（fapi_profile=fapi_client_credentials_grant）：23・24（**client_mode は fapi2**。#416 では normal だった。#424。docker-compose.yml の説明）。
     #   **openid は、このプロファイルには当たらない**（Conformance Suite が画面で隠す）が、**API では値が要る**（無いと「requires a value for variant 'openid'」）。
     #   **plain_oauth にする**（openid_connect にすると、出ない id_token の acr を確かめに行き、環境の誤りとして止まる。2026-11-21）。scope は openid を外す
     'fapi2-sp-client-credentials' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420; Scope = 'email'
