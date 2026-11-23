@@ -183,7 +183,7 @@ cd ..\CTS
 | FAPI 2.0・FAPI 1.0 Advanced の `par-attempt-reuse-request_uri`・`par-attempt-to-use-expired-request_uri` | 使用済み・期限切れの `request_uri` のエラー画面（`The request_uri is unknown, expired, or already used.`。#368）。**reuse は 1 回目を通常どおり進め、2 回目でこの画面を待つ**（callback を待つ手順の `match` は、Conformance Suite のホストから書く。認可の URL が `redirect_uri` に callback の URL を載せるため） |
 
 - **FAPI 1.0 Advanced の上書きは、FAPI 2.0 と同じ中身**（#385。以前は FAPI 2.0 のモジュール名だけにあり、FAPI 1.0 Advanced は既定の自動操作のまま `Unable to locate element` で落ちていた）
-- **REVIEW は、写しを人が見て合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない
+- **REVIEW は、写しで合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない。**合否は、エージェントが `ExtractReview.ps1` の材料から付け、人がその表を承認する**（下の「REVIEW の見方」。#417）
 - **ログアウトの確認の画面**：MPAS は、`id_token_hint` が無い・一致しない・要求に誤りがあるとき、確認の画面を出す（RP-Initiated Logout 1.0 §2 の MUST）。雛形では「Yes」を任意の手順で押す
 - **自動では回せないモジュール**（FAPI 2.0・`oidcc-dynamic`。FAILED・TIMEOUT になるが、OP の不適合ではない）
   - `oidcc-server-rotate-keys`（`oidcc-dynamic`）：**OP の署名の鍵を、人が入れ替える操作が要る**（`TellUserToRotateOpKeys`。入れ替えてから「Start」を押すのを待つ）。
@@ -212,7 +212,8 @@ cd ..\CTS
   - **資源の段**（`resource.resourceUrl` への要求に 200・201 を求める）で 403 になる。資源には `/userinfo` を使うが、**MPAS の `/userinfo` は `openid` の無いトークンを `insufficient_scope` で断る**（OIDC Core 1.0 §5.3・RFC 6750 §3.1。`RT-294.80`）。**MPAS には、ほかに保護された資源が無い**
   - **その前の段（PAR・認可・トークン エンドポイント、クライアント認証・DPoP）の判定は通っている。** 適合性テストの環境に資源を足すかは #425
 - **OP の不適合で落ちるモジュール（未修正。起票済み）**
-  - `fapi2-sp-plain-oauth` の `ensure-request-object-without-redirect-uri-fails`：fapi2 の登録で、`openid` の無い PAR の要求を `redirect_uri` 無しで受ける（FAPI 2.0 Security Profile §5.3.2.2 の 6）。#422
+  - `fapi2-sp-plain-oauth` の `ensure-request-object-without-redirect-uri-fails`・`ensure-redirect-uri-in-authorization-request`：fapi2 の登録で、`openid` の無い PAR の要求を `redirect_uri` 無しで受ける（FAPI 2.0 Security Profile §5.3.2.2 の 6）。#422。
+    **後者は、Conformance Suite の自動の判定では資源の段まで進んで落ちる**（受け付けたかを REVIEW で見る）。#417 で REVIEW の材料を見て、#422 に数え直した
   - `fapi2-sp-mtls-dpop` の、資源まで進むモジュール（21 件）：`tls_client_auth` で認証したクライアントのトークンが、DPoP だけでなくクライアント証明書にも縛られ、資源の段で 401 になる（RFC 8705 §4・§3.4）。#423
 - **#416 で足したプランの結果**（2026-11-21。FAILED の内訳は上の仕分け）
 
@@ -220,7 +221,7 @@ cd ..\CTS
   |---|---:|---:|---:|---:|---:|---|
   | `fapi2-sp-private-key-jwt-mtls` | 35 | 2 | 3 | 2 | 1 | 自動では回せない 2 |
   | `fapi2-sp-mtls-dpop` | 20 | 23 | 2 | 1 | 0 | 自動では回せない 2・#423 で 21 |
-  | `fapi2-sp-plain-oauth` | 23 | 20 | 2 | 1 | 0 | 自動では回せない 2・#422 で 1・資源の段で 17 |
+  | `fapi2-sp-plain-oauth` | 23 | 20 | 2 | 1 | 0 | 自動では回せない 2・#422 で 2・資源の段で 16 |
   | `fapi2-sp-client-credentials` | 8 | 6 | 0 | 1 | 0 | 資源の段で 6 |
   | `fapi2-ms-mtls` | 43 | 2 | 3 | 2 | 1 | 自動では回せない 2 |
   | `fapi2-ms-signed-plain-response` | 56 | 3 | 3 | 3 | 1 | 自動では回せない 2・サインインのボタンの事象 1（下） |
@@ -277,10 +278,41 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 | モジュールの結果 | `testmodule_result` と、SUCCESS・INFO 以外の判定 |
 
 - **区間**：ブラウザを OP へ送るたび（`Redirecting to …`）に区切り、REVIEW はその判定のある区間の材料で見る（**ログアウトの口では、REVIEW が送る直前に書かれる**ので、次の区間に入れる）
-- **材料の形**（`Evidence`）：操作した画面・最後の OP の画面・クライアントへの応答を 1 行にしたもの。**実行ごとに変わる値**（クエリ・コード・`state`）は入れない
+- **材料の形**（`Evidence`）：操作した画面・最後の OP の画面（状態コード・パス・タイトル）・クライアントへの応答を 1 行にしたもの。
+  **エラー画面とサインアウトの確認の画面は、本文の文言**（`invalid_request Invalid redirect_uri.` などのエラーの種類と説明、確認の画面の理由）**も入れる**（タイトルだけでは、文言が変わっても「同じ」になる）。
+  **実行ごとに変わる値**（クエリ・コード・`state`）と、配備ごとに変わる文字（画面の上の利用者名）は入れない。**サインインの画面などは、タイトルまで**（本文の変化は拾わない）
 - 出力：画面に表、`out\review\<プラン>.json` に詳細（**Git の管理外。Issue やコメントに貼らない**。合否と理由、要る文言だけを書く）
 - **秘密を読まない**：ログの WebRunner の `commands`（テスト利用者のパスワード）と `config`（クライアントの秘密鍵）は、読む前に落とす
 - `-Plan` で読むプランを絞れる（省くと、`out\` の `oidcc-*`・`fapi*` の報告書をすべて読む）。PowerShell 5.1・7 の両方で動く
+
+**合否は、エージェントが材料を原典の節に照らして付け、人がその表を承認する**（[`QUALITY.md`](../../QUALITY.md) 2 節。#417）。付け方は次の 5 つ。
+
+| 判定 | 意味 |
+|---|---|
+| 合（エラーを返した） | クライアントへ仕様どおりのエラーを返しており、エラー画面は要らない |
+| 合（画面で確かめた） | OP の画面（本文の文字・操作した画面）が、求められていることを満たす |
+| 合（受け付けた） | REVIEW が「断るなら、エラー画面を出す」と求めるもので、OP は受け付けた（受け付けたときの振る舞いは、自動の判定で見る） |
+| 否 | 満たしていない → 原因ごとに起票する |
+| 判断できない | ログに材料が無い（認証デバイスの画面など）→ 理由を書き、人に上げる |
+
+**全プランの実行のたびに回し、基準 [`ReviewBaseline.csv`](ReviewBaseline.csv) と比べる**（#417 で決めた）。
+基準は、プラン・モジュール・バリアント・判定の名前ごとに、材料の形（`Evidence`）・判定（`Verdict`）・理由・照らした節を持つ。
+**材料の形が同じなら、合否を引き継ぐ。** 形が変わった・基準に無いもの・読んだプランで基準だけに在るもの（REVIEW が出なくなった）だけ、`out\review\<プラン>.json` を読んで合否を付け直し、基準を直す（終了コード 1）。
+
+**今の基準**（2026-11-22 の全 25 プランの実行。REVIEW の判定は延べ 164・モジュールの名前 40・判定の種類 21）
+
+| 判定 | 延べ | 中身 |
+|---|---:|---|
+| 合（画面で確かめた） | 79 | 2 回目のサインインの画面（`oidcc-max-age-1`・`oidcc-prompt-login`）、`redirect_uri` の誤り・欠落のエラー画面、`request_uri` の使用済み・期限切れ・別のクライアントのエラー画面、ログアウトの誤りの理由を出した確認の画面と、サインアウトした後の画面 |
+| 合（エラーを返した） | 25 | `response_type`・`nonce`（Implicit・Hybrid）の欠落、PAR を使わない要求・Request Object の無い要求に `invalid_request` |
+| 合（受け付けた） | 53 | 長い `nonce`・`state`、Request Object の内と外の `nonce`・`state` の違い、外だけの `state` を、Request Object の値で受け付けた |
+| 否 | 5 | `oidcc-registration-logo-uri`・`-policy-uri`・`-tos-uri`（登録した値をサインインの画面に出していない。#427。**OIDC Registration 1.0 §2 は SHOULD** で、出す画面は「承認の間」。Conformance Suite がサインインの画面で求めるのに従った否で、MUST の違反ではない）、`fapi2-sp-plain-oauth` の `ensure-redirect-uri-in-authorization-request`・`ensure-request-object-without-redirect-uri-fails`（#422） |
+| 判断できない | 2 | FAPI-CIBA の `ensure-authorization-request-with-potentially-bad-binding-message`（認証デバイスの画面がログに無い。OP は `binding_message` を受け付けて端末へ送り、端末のアプリが出す。実物の端末で見るのは #417 の範囲の外） |
+
+- **ログアウトの誤り**（`id_token_hint` の誤り・欠落、登録の無い `post_logout_redirect_uri`）は、Conformance Suite は「エラー画面」を求めるが、MPAS は**理由を出した確認の画面**を出し、RP へ戻さない。
+  RP-Initiated Logout 1.0 §4 は、戻さないことを MUST とし、エラーの表示は MAY とする（§2 は、`id_token_hint` が無い・合わないとき、利用者に問うことを MUST とする）ので、合とした
+- **`par-attempt-to-use-request_uri-for-different-client`** のエラー画面の文言は「`The client_id does not match the request object.`」で、`request_uri` の誤りとは書かないが、別のクライアントが預けた `request_uri` を断っている（RFC 9126 §2.2）ので、合とした
+- 基準を直したら（不適合を直した・画面を変えた）、そのコミットで `ReviewBaseline.csv` も直す
 
 ## 生成物（Git の管理外）
 

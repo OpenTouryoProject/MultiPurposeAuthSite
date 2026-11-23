@@ -25,7 +25,7 @@
 
     ＜終了コード＞
       0 : 取り出せた（-Baseline なら、すべて基準と同じ形）
-      1 : -Baseline と比べて、形が変わった・基準に無い REVIEW がある（合否を付け直す）
+      1 : -Baseline と比べて、形が変わった・基準に無い REVIEW、または読んだプランで基準だけに在る REVIEW がある（合否を付け直す）
       2 : 前提の誤り（報告書が無い など）
 .PARAMETER Plan
     読むプラン。省略すると、out\ にある報告書（名前が oidcc- か fapi で始まるもの）をすべて読む。
@@ -45,6 +45,7 @@
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/11/23  玄人 幸道         新規（#417）
+     2026/11/23  玄人 幸道         材料の形に、エラー画面・確認の画面の文言を入れた。基準だけに在る行と、同じキーの重なりを見るようにした（#417）
 #>
 [CmdletBinding()]
 param(
@@ -94,6 +95,26 @@ function ConvertTo-PageSummary([string]$html, [int]$max)
     if ($t.Length -gt $max) { $t = $t.Substring(0, $max) + '…' }
 
     return [pscustomobject]@{ Title = $title; Text = $t; Links = $links; Images = $images }
+}
+
+function Get-PageMessage($page)
+{
+    # MPAS のエラー画面と、サインアウトの確認の画面の、本文の文言（見出しの後から、決まった文の前まで）。
+    # ほかの画面は $null（画面の上の「Hello <利用者> !」のような、配備ごとに変わる文字は入れない）
+    $text = [string]$page.Text
+    if ($page.Title -like 'Error*')
+    {
+        $m = [regex]::Match($text, 'An error occurred while processing your request\.\s*(.*?)\s*Powered by')
+        if ($m.Success) { return $m.Groups[1].Value }
+        return ''
+    }
+    if ($page.Title -like 'Sign out*')
+    {
+        $m = [regex]::Match($text, 'Sign out\s+(.*?)\s*Do you want')
+        if ($m.Success) { return $m.Groups[1].Value }
+        return ''
+    }
+    return $null
 }
 
 function Get-ClientResponse($entry)
@@ -234,7 +255,14 @@ function Read-ModuleLog($json, [string]$planName, [int]$max)
             $last = $opPages | Select-Object -Last 1
             $parts = @()
             if ($tasks.Count -gt 0) { $parts += ('tasks=' + ($tasks -join '>')) }
-            if ($last) { $parts += ('op-page={0} {1} [{2}]' -f $last.Status, $last.Url, $last.Title) }
+            if ($last)
+            {
+                $parts += ('op-page={0} {1} [{2}]' -f $last.Status, $last.Url, $last.Title)
+                # エラー画面・サインアウトの確認の画面は、本文の文言（エラーの種類・理由）も形に入れる。
+                # タイトルだけでは、文言が変わっても基準と「同じ」になるため（#417 の別モデルのレビュー）
+                $message = Get-PageMessage $last
+                if ($null -ne $message) { $parts += ('op-text=' + $message) }
+            }
             if ($client)
             {
                 if ($client.Kind -eq 'error') { $parts += ('client=error:' + $client.Error) }
@@ -298,30 +326,55 @@ foreach ($zf in $zips)
     $all += $rows
 }
 
-# 基準と比べる（Plan・Module・Variant・Src で引き、材料の形が同じなら合否を引き継ぐ）
+# 基準と比べる（Plan・Module・Variant・Src で引き、材料の形が同じなら合否を引き継ぐ）。
+# **同じキーが複数あっても上書きしない**よう、キーごとに出てきた順の番号を付けて引く。
+# **基準だけに在る行**（読んだプランで、REVIEW が出なくなったもの）も、変わったものとして出す（#417 の別モデルのレビュー）
 $exit = 0
 $base = @{}
 $useBaseline = (-not $NoBaseline) -and (Test-Path $Baseline)
 if ($useBaseline)
 {
+    $seen = @{}
     foreach ($b in Import-Csv $Baseline -Encoding UTF8)
     {
-        $base[('{0}|{1}|{2}|{3}' -f $b.Plan, $b.Module, $b.Variant, $b.Src)] = $b
+        $k = '{0}|{1}|{2}|{3}' -f $b.Plan, $b.Module, $b.Variant, $b.Src
+        $seen[$k] = 1 + [int]$seen[$k]
+        $base[('{0}#{1}' -f $k, $seen[$k])] = $b
     }
 }
 
-$table = foreach ($r in $all)
+$used = @{}
+$seen = @{}
+$table = @(foreach ($r in $all)
 {
     $verdict = ''
     $state = ''
     if ($useBaseline)
     {
-        $b = $base[('{0}|{1}|{2}|{3}' -f $r.Plan, $r.Module, $r.Variant, $r.Src)]
+        $k = '{0}|{1}|{2}|{3}' -f $r.Plan, $r.Module, $r.Variant, $r.Src
+        $seen[$k] = 1 + [int]$seen[$k]
+        $key = '{0}#{1}' -f $k, $seen[$k]
+        $b = $base[$key]
         if (-not $b) { $state = '基準に無い'; $exit = 1 }
-        elseif ($b.Evidence -ne $r.Evidence) { $state = '形が変わった'; $verdict = $b.Verdict; $exit = 1 }
-        else { $state = '同じ'; $verdict = $b.Verdict }
+        else
+        {
+            $used[$key] = $true
+            if ($b.Evidence -ne $r.Evidence) { $state = '形が変わった'; $verdict = $b.Verdict; $exit = 1 }
+            else { $state = '同じ'; $verdict = $b.Verdict }
+        }
     }
     [pscustomobject]@{ Plan = $r.Plan; Module = $r.Module; Variant = $r.Variant; Src = $r.Src; Result = $r.ModuleResult; Evidence = $r.Evidence; Verdict = $verdict; State = $state }
+})
+if ($useBaseline)
+{
+    $readPlans = @($zips | ForEach-Object { $_.Name -replace '-report\.zip$', '' })
+    foreach ($key in $base.Keys)
+    {
+        $b = $base[$key]
+        if ($used[$key] -or $readPlans -notcontains $b.Plan) { continue }
+        $exit = 1
+        $table += [pscustomobject]@{ Plan = $b.Plan; Module = $b.Module; Variant = $b.Variant; Src = $b.Src; Result = ''; Evidence = $b.Evidence; Verdict = $b.Verdict; State = '基準だけに在る' }
+    }
 }
 
 $table | Sort-Object Plan, Module, Variant, Src | Format-Table -AutoSize -Wrap | Out-String -Width 400 | Write-Host

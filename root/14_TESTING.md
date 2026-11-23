@@ -5181,7 +5181,8 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 - **1 つの不適合で、プランの大半が止まることがある**（#370・#371）。そのときは、直した後に回し直し、その先の結果を改めて仕分ける
 - **自動操作の `match` の `*` は、クエリの中にも当たる。** **認可の URL は `redirect_uri` に Conformance Suite の callback の URL を（符号化せずに）載せる**ので、
   **`*/test/*/callback*` は認可のエラー画面にも当たる**（#368。callback を待つ手順は `https://localhost.emobix.co.uk:8443/test/*/callback*` と、先頭から書く）
-- **REVIEW（画面の写し）は、人が見て合否を付ける。** 自動では、待った画面が出たことまでしか確かめていない
+- **REVIEW（画面の写しで合否を付ける判定）は、エージェントが合否を付け、人がその表を承認する。** 自動では、待った画面が出たことまでしか確かめていないので、
+  `container\CTS\ExtractReview.ps1` で報告書から OP の応答を取り出し、基準（`ReviewBaseline.csv`）と比べる（全プランの実行のたび。#417。`container/CTS/README.md` の「REVIEW の見方」）
 - **CI には載せていない**（#348（ビルドの CI）の後に決める）
 
 ## 6. 未修正の項目の扱い
