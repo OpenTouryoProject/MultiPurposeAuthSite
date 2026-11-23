@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/23  玄人 幸道         新規（#421）
+//*  2026/11/23  玄人 幸道         refresh_token を失効させたとき、同じ認可の access_token も失効することを足した（RT-421.4・.5。E-13）
 //**********************************************************************************
 
 using System.Text.Json;
@@ -57,6 +58,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-421.1`** | **2 回目の引き換えは `invalid_grant` で断り、1 回目の access_token（`/userinfo`）と refresh_token が使えなくなる** |
     /// | **`RT-421.2`** | **更新で出した access_token・refresh_token も使えなくなる**（「そのコードに基づいて出したトークン」） |
     /// | **`RT-421.3`** | **別のクライアントがそのコードを出しても、失効させない**（そのクライアントに出したコードではない） |
+    /// | **`RT-421.4`** | **refresh_token を `/revoke` で失効させると、同じ認可の access_token も使えなくなる**（RFC 7009 §2.1。`ANALYSIS-IdP.md` の E-13） |
+    /// | **`RT-421.5`** | **使用済みの refresh_token が出されたら、同じ認可の access_token（更新の前と後）も使えなくなる**（E-13。一族の失効は #188） |
+    ///
+    /// **E-13 も、同じ仕組み（refresh_token の一族の識別子 ＝ 認可の ID）で直した**（#421 で決めた）。
     /// </remarks>
     public class AuthorizationCodeReuseTests : TargetTestBase
     {
@@ -256,7 +261,132 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-421.4 E-13（/revoke）
+
+        /// <summary>RT-421.4 refresh_token を /revoke で失効させると、同じ認可の access_token も使えなくなる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42104_refresh_tokenを失効させると同じ認可のaccess_tokenも使えなくなる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-421.4",
+                    "refresh_token を /revoke で失効させると、同じ認可から出した access_token も使えなくなる",
+                    "**RFC 7009 §2.1**：refresh_token を失効させるなら、**同じ認可グラントに基づく access_token も無効にすべき（SHOULD）。**"
+                    + "**以前は refresh_token の一族だけを消し、access_token は期限まで使えた**（`ANALYSIS-IdP.md` の E-13）。"
+                    + "**一族の識別子を認可の ID にしたので、同じ仕組みで止められる**（#421）。",
+                    "RFC 7009 §2.1 / #421");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+
+                r.Step("(1) 認可コードを引き換える");
+
+                JsonResponse token = await AuthorizationCodeReuseTests.ExchangeAsync(client, reg, "rt4214");
+
+                JsonResponse before = await client.UserInfoAsync(token.AccessToken);
+
+                r.VerifyEqual("失効させる前は /userinfo が HTTP 200", "200", ((int)before.StatusCode).ToString());
+
+                r.Step("(2) refresh_token を /revoke で失効させる");
+
+                JsonResponse revoked = await Flows.RevokeAsync(client, reg, token.RefreshToken, "refresh_token");
+
+                r.VerifyEqual("HTTP 200", "200", ((int)revoked.StatusCode).ToString());
+
+                r.Step("(3) 同じ認可の access_token で /userinfo を呼ぶ");
+
+                JsonResponse after = await client.UserInfoAsync(token.AccessToken);
+
+                r.VerifyEqual("HTTP 401（失効した）", "401", ((int)after.StatusCode).ToString());
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-421.5 E-13（refresh_token の再利用）
+
+        /// <summary>RT-421.5 使用済みの refresh_token が出されたら、同じ認可の access_token も使えなくなる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42105_使用済みのrefresh_tokenが出されたら同じ認可のaccess_tokenも使えなくなる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-421.5",
+                    "使用済みの refresh_token が再び出されたら、一族に加えて、同じ認可から出した access_token（更新の前と後の両方）も使えなくなる",
+                    "**使用済みの refresh_token が出されたら、一族ごと失効させる**（漏れたトークンと正規のトークンを見分けられないため。#188 の段階 3）。"
+                    + "**以前は一族だけで、access_token は期限まで使えた**（E-13）。**漏れた refresh_token で攻撃者が取った access_token も止める。**",
+                    "RFC 7009 §2.1 / #188 / #421");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample + "（refresh_token を入れ替える登録）");
+
+                r.Step("(1) 認可コードを引き換え、refresh_token で 1 回更新する");
+
+                JsonResponse first = await AuthorizationCodeReuseTests.ExchangeAsync(client, reg, "rt4215");
+
+                JsonResponse renewed = await Flows.RefreshAsync(client, reg, first.RefreshToken);
+
+                Assert.False(string.IsNullOrEmpty(renewed.AccessToken), "前提: 更新で access_token が返ること（" + renewed.ToString() + "）");
+
+                r.Step("(2) 使用済みの（1 回目の）refresh_token で、もう一度更新する");
+
+                JsonResponse reused = await Flows.RefreshAsync(client, reg, first.RefreshToken);
+
+                r.VerifyEqual("HTTP 400 ＋ invalid_grant", "400 invalid_grant",
+                    ((int)reused.StatusCode).ToString() + " " + (reused.Error ?? "（無し）"));
+
+                r.Step("(3) 更新の前と後の access_token で /userinfo を呼ぶ");
+
+                JsonResponse afterFirst = await client.UserInfoAsync(first.AccessToken);
+                JsonResponse afterRenewed = await client.UserInfoAsync(renewed.AccessToken);
+
+                r.VerifyEqual("最初の access_token は HTTP 401（失効した）", "401", ((int)afterFirst.StatusCode).ToString());
+                r.VerifyEqual("更新で出した access_token も HTTP 401（失効した）", "401", ((int)afterRenewed.StatusCode).ToString());
+
+                r.Step("(4) 更新で出した refresh_token で更新する");
+
+                JsonResponse refreshed = await Flows.RefreshAsync(client, reg, renewed.RefreshToken);
+
+                r.VerifyEqual("HTTP 400 ＋ invalid_grant（一族ごと失効した。#188 から）", "400 invalid_grant",
+                    ((int)refreshed.StatusCode).ToString() + " " + (refreshed.Error ?? "（無し）"));
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 部品
+
+        /// <summary>認可コードを得て、引き換える（access_token と refresh_token が返ることを前提にする）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">クライアント</param>
+        /// <param name="suffix">state・nonce の接尾辞</param>
+        /// <returns>トークン応答</returns>
+        private static async Task<JsonResponse> ExchangeAsync(IdPClient client, ClientRegistration reg, string suffix)
+        {
+            AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                client, reg, "openid email", "state-" + suffix, "nonce-" + suffix, reg.RedirectUri);
+
+            Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが返ること（" + authz.ToString() + "）");
+
+            JsonResponse token = await Flows.ExchangeCodeAsync(client, reg, authz.Code, reg.RedirectUri);
+
+            Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること（" + token.ToString() + "）");
+            Assert.False(string.IsNullOrEmpty(token.RefreshToken), "前提: refresh_token が返ること（" + token.ToString() + "）");
+
+            return token;
+        }
 
         /// <summary>access_token に認可の ID が在るか</summary>
         /// <param name="accessToken">access_token</param>

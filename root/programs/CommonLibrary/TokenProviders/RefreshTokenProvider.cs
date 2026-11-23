@@ -34,6 +34,7 @@
 //*  2026/11/04  玄人 幸道         使用済みにできた 1 つだけが使う（同時に使うと、複数にトークンが出ていた。#332）
 //*  2026/11/23  玄人 幸道         RevokeFamily を internal にした（認可の ID の失効から呼ぶ。#421）
 //*  2026/11/23  玄人 幸道         新しい一族は、payload に認可の ID が在れば、それを識別子にする（#421）
+//*  2026/11/23  玄人 幸道         一族を失効させるとき、同じ認可から出した access_token も失効させる（RFC 7009 §2.1。E-13。#421）
 //**********************************************************************************
 
 using System;
@@ -353,7 +354,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (row.UsedDate != null)
             {
                 // **再利用。** 一族ごと失効させる。
-                RefreshTokenProvider.RevokeFamily(row.FamilyId);
+                //   **同じ認可から出した access_token も失効させる**（一族の識別子は認可の ID。E-13。#421）。
+                RevocationProvider.RevokeAuthorization(row.FamilyId);
                 return "";
             }
 
@@ -361,7 +363,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //    **できなければ、同時に来た別の要求が先に使った** — **再利用と同じく、一族ごと失効させる。**
             if (!RefreshTokenProvider.MarkAsUsed(tokenId))
             {
-                RefreshTokenProvider.RevokeFamily(row.FamilyId);
+                RevocationProvider.RevokeAuthorization(row.FamilyId);
                 return "";
             }
 
@@ -403,6 +405,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// RFC 7009 §2.1 は、refresh_token を失効させるとき、
         /// **同じ認可グラントに基づくトークンも無効にすべき**としている。
         /// 漏れたトークンを失効させたのに、そこから派生した新しいトークンが生き残るのは、利用者の意図と違う。
+        ///
+        /// **同じ認可から出した access_token も失効させる**（E-13。#421）。
+        /// **一族の識別子は認可の ID**（`Create`）なので、**`RevocationProvider.RevokeAuthorization` で、一族と access_token をまとめて止める。**
+        /// **以前は一族だけを消していた**ので、**access_token は期限まで使えた。**
+        /// **認可の ID を持たない access_token**（この変更の前に出したもの）**は、従来どおり期限まで使える。**
         /// </remarks>
         public static bool Delete(string tokenId)
         {
@@ -414,7 +421,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false;
             }
 
-            RefreshTokenProvider.RevokeFamily(row.FamilyId);
+            RevocationProvider.RevokeAuthorization(row.FamilyId);
 
             return true;
         }
