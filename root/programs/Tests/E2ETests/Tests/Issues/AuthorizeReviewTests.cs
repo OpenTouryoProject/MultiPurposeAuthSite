@@ -32,10 +32,12 @@
 //*  2026/11/01  玄人 幸道         根拠の節を原典で確かめて直した（#315）
 //*  2026/11/04  玄人 幸道         クライアント名を改めた（TestClient1〜4・6。TestClient5 は種データの TestClient_36 へ移した）
 //*  2026/11/11  玄人 幸道         RT-294.22 の送り先を、同意画面のフォームの action にした（同意画面の送信の口。#359）
+//*  2026/11/24  玄人 幸道         RT-294.17 を max_age=3 にし、窓を過ぎてから再認証になった結果を合否に使わず、数え直すようにした（#409）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
@@ -199,44 +201,80 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         [MemberData(nameof(AllTargets))]
         public async Task RT29417_auth_timeのCookieを書き換えても再認証は飛ばせない(string targetKey)
         {
-            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            TestReport r = this.Report("RT-294.17",
+                "auth_time の Cookie を書き換えても、max_age の再認証は飛ばせない",
+                "**`max_age` の判定と id_token の `auth_time` は、平文の Cookie を読んでいた。**"
+                + "**ブラウザ側で書き換えると、再認証を飛ばし、偽の時刻を RP に保証した。**"
+                + "**値を改ざんできない形で包む**ようにした（DataProtection / MachineKey）。",
+                "#294（AccountController.Authorize.cs のレビュー S3）/ OIDC Core §3.1.2.1");
+
+            //  **書き換えた時刻から応答までが、窓（max_age − 1 秒）に収まらないと、
+            //  直す前の振る舞い（書き換えた時刻を信じる）でも再認証になり、空振りの合格になる**（#409）。
+            //  max_age=1 では窓が 0 秒になるので、3 にして 2 秒の窓を取る。
+            const int maxAge = 3;
+
+            r.Target("client_name=" + KnownClients.TestClient + " / max_age=" + maxAge);
+
+            r.Step("(1) サインインから " + (maxAge + 2) + " 秒待ち（本当の auth_time は max_age を越える）、"
+                + "auth_time の Cookie を「いま」の平文に書き換える");
+            r.Step("(2) max_age=" + maxAge + " で要求する");
+            r.Note("**窓を過ぎてから再認証になった結果は、合否に使わない。** "
+                + "サインインし直したクライアントで、手順 1 から数え直す（`MaxAgeWindow`。#409）。");
+
+            bool noCode = false;
+            string codeActual = "";
+            bool reAuth = false;
+            string reAuthActual = "";
+
+            for (int attempt = 1; attempt <= MaxAgeWindow.MaxAttempts; attempt++)
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                using (IdPClient client = await this.SignedInClientAsync(targetKey))
+                {
+                    ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
-                TestReport r = this.Report("RT-294.17",
-                    "auth_time の Cookie を書き換えても、max_age の再認証は飛ばせない",
-                    "**`max_age` の判定と id_token の `auth_time` は、平文の Cookie を読んでいた。**"
-                    + "**ブラウザ側で書き換えると、再認証を飛ばし、偽の時刻を RP に保証した。**"
-                    + "**値を改ざんできない形で包む**ようにした（DataProtection / MachineKey）。",
-                    "#294（AccountController.Authorize.cs のレビュー S3）/ OIDC Core §3.1.2.1");
+                    await Flows.EnsureConsentAsync(client, reg);
 
-                r.Target("client_name=" + KnownClients.TestClient + " / max_age=1");
+                    await Task.Delay(TimeSpan.FromSeconds(maxAge + 2));
 
-                await Flows.EnsureConsentAsync(client, reg);
+                    //  **時間は、書き換える直前から、認可要求の応答まで**（実際より長く測る側）。
+                    Stopwatch watch = Stopwatch.StartNew();
 
-                r.Step("(1) サインインから 2 秒待ち、auth_time の Cookie を「いま」の平文に書き換える");
+                    client.OverwriteCookie("auth_time", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"));
 
-                await Task.Delay(TimeSpan.FromSeconds(2));
+                    Dictionary<string, string> q = AuthorizeReviewTests.CodeParameters(reg, "state-rt29417");
+                    q["max_age"] = maxAge.ToString();
 
-                client.OverwriteCookie("auth_time", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+                    AuthZResponse authz = await client.AuthorizeAsync(q);
 
-                r.Step("(2) max_age=1 で要求する");
+                    watch.Stop();
 
-                Dictionary<string, string> q = AuthorizeReviewTests.CodeParameters(reg, "state-rt29417");
-                q["max_age"] = "1";
+                    noCode = string.IsNullOrEmpty(authz.Code);
+                    codeActual = noCode ? "なし" : "**発行された**";
 
-                AuthZResponse authz = await client.AuthorizeAsync(q);
+                    bool back = !string.IsNullOrEmpty(authz.Location) && authz.Location.Contains("/authorize");
+                    string timing = MaxAgeWindow.Timing(watch.Elapsed, maxAge, attempt);
 
-                r.Verify("**認可コードは発行されない**（書き換えた時刻を信じない）",
-                    string.IsNullOrEmpty(authz.Code),
-                    "code なし", string.IsNullOrEmpty(authz.Code) ? "なし" : "**発行された**");
+                    if (noCode && back && !MaxAgeWindow.CanJudge(watch.Elapsed, maxAge))
+                    {
+                        reAuth = false;
+                        reAuthActual = MaxAgeWindow.Unjudged(watch.Elapsed, maxAge);
+                        r.Note(attempt + " 回目：窓を過ぎてから確かめたので、数え直す（" + timing + "）");
+                        continue;
+                    }
 
-                r.Verify("**再認証の経路へ送られる**（同じ URL へ戻される）",
-                    !string.IsNullOrEmpty(authz.Location) && authz.Location.Contains("/authorize"),
-                    "/authorize へ戻る", authz.Location ?? authz.ToString());
-
-                r.Done();
+                    reAuth = back;
+                    reAuthActual = (authz.Location ?? authz.ToString()) + "（" + timing + "）";
+                    break;
+                }
             }
+
+            r.Verify("**認可コードは発行されない**（書き換えた時刻を信じない）",
+                noCode, "code なし", codeActual);
+
+            r.Verify("**再認証の経路へ送られる**（同じ URL へ戻される）",
+                reAuth, "/authorize へ戻る（窓の中で）", reAuthActual);
+
+            r.Done();
         }
 
         /// <summary>RT-294.18 再認証の印の Cookie を書き換えても、prompt=login の再認証は飛ばせない</summary>
