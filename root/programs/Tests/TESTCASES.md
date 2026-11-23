@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus
+1. GET /Account/EmailConfirmation?userId=936e276e-8269-4c6b-818e-848dd5129981&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=936e276e-8269-4c6b-818e-848dd5129981&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=936e276e-8269-4c6b-818e-848dd5129981&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13742,6 +13742,71 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - fapi2・クエリ : code が返る（断らない）
 - normal : code が返る（断らない）
+
+## RT-423.1 `tls_client_auth` で認証し、DPoP の証明を添えて認可コードを交換したトークンは、DPoP の鍵だけに縛られ（`cnf.x5t#S256` が無い）、証明書を提示せずに DPoP だけで `/userinfo` を使える
+
+| | |
+|---|---|
+| 観点 | **mTLS の認証と、証明書に縛ることは、別々に選べる**（RFC 8705 §4）。**証明書に縛るかは登録で決まり、既定は縛らない**（§3.4）。**DPoP は、認証の方法によらず縛れる**（RFC 9449 §1）。**以前は両方に縛り、DPoP だけで呼ぶと 401（「The access token is bound to a client certificate.」）だった。** |
+| 根拠 | RFC 8705 §4・§3.4 / RFC 9449 §1・§7.1 / #423 |
+| テスト | `RT42301_mTLSで認証しDPoPで縛るトークンはDPoPだけで資源を使える` |
+
+**手順**
+
+1. 証明書で認証し、DPoP の証明を添えて、認可コードを交換する
+1. 証明書を提示せずに、DPoP の証明だけで /userinfo を呼ぶ
+1. DPoP の証明を添えずに、/userinfo を呼ぶ（縛りが外れていないこと）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- token_type が DPoP
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf に x5t#S256 が無い（証明書には縛られていない）
+- HTTP 200
+- sub が返る（利用者の情報が取れている）
+- HTTP 401
+
+**補足**
+
+- **DPoP の証明を添えなければ、従来どおり認証した証明書に縛る**（`FA-6.4`・`RT-346.7`・`.12`）。
+
+## RT-423.2 `tls_client_auth` で認証し、DPoP の証明を添えた client_credentials のトークンは、DPoP の鍵だけに縛られる（`cnf.x5t#S256` が無い）
+
+| | |
+|---|---|
+| 観点 | **client_credentials のトークンは、認可コードとは別の関数（`CreateFromClaims`）で作る**ので、別に測る。**どちらも、縛るものを決めるのは `CheckSenderConstraint` の 1 か所**である。 |
+| 根拠 | RFC 8705 §4・§3.4 / RFC 9449 §1・§5 / #423 |
+| テスト | `RT42302_mTLSで認証しDPoPで縛るclient_credentialsは証明書に縛られない` |
+
+**手順**
+
+1. 証明書で認証し、DPoP の証明を添えて、client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- token_type が DPoP
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf に x5t#S256 が無い（証明書には縛られていない）
+
+## RT-423.3 `tls_client_certificate_bound_access_tokens` の登録は、DPoP の証明を添えても、従来どおり提示した証明書にも縛る（`cnf.x5t#S256` と `cnf.jkt` の両方）
+
+| | |
+|---|---|
+| 観点 | **証明書に縛るかは、登録で決まる**（RFC 8705 §3.4）。**登録が求めたなら、DPoP の証明が在っても外さない**（#423 で外すのは、登録が求めていないときだけ）。 |
+| 根拠 | RFC 8705 §3.4 / RFC 9449 §6 / #346 / #423 |
+| テスト | `RT42303_証明書を必須にした登録はDPoPが在っても証明書にも縛る` |
+
+**手順**
+
+1. 証明書と DPoP の証明を添えて、client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

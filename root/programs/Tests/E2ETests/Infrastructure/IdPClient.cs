@@ -59,6 +59,7 @@
 //*  2026/11/15  玄人 幸道         /userinfo に要求ヘッダを足して呼ぶ UserInfoWithHeadersAsync を足した（#384）
 //*  2026/11/17  玄人 幸道         IssuerAsync の同期版 Issuer を足した（client_assertion の aud に使う。#398）
 //*  2026/11/21  玄人 幸道         サインインの画面から ReturnUrl で戻る SignInViaSignInPageAsync を足した（#413）
+//*  2026/11/23  玄人 幸道         PostWithCertificateAsync に、要求ヘッダ（DPoP など）を足せるようにした（#423）
 //**********************************************************************************
 
 using System;
@@ -1155,10 +1156,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="path">パス（`/token`・`/device_authz` など）</param>
         /// <param name="form">フォーム（値が null の項目は送らない）</param>
         /// <param name="certificate">クライアント証明書（null なら添えない）</param>
+        /// <param name="headers">足す要求ヘッダ（`DPoP` など。null なら足さない。#423）</param>
         /// <returns>JsonResponse</returns>
         /// <remarks>**`tls_client_auth` の device 登録は、`/device_authz` でも証明書で認証する**ので、トークンの口以外にも要る。</remarks>
         public async Task<JsonResponse> PostWithCertificateAsync(
-            string path, IDictionary<string, string> form, X509Certificate2 certificate)
+            string path, IDictionary<string, string> form, X509Certificate2 certificate,
+            IDictionary<string, string> headers = null)
         {
             using (HttpClientHandler handler = new HttpClientHandler())
             {
@@ -1185,10 +1188,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                         }
                     }
 
-                    HttpResponseMessage res = await http.PostAsync(
-                        this.Absolute(path), new FormUrlEncodedContent(body));
+                    using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, this.Absolute(path)))
+                    {
+                        req.Content = new FormUrlEncodedContent(body);
 
-                    return await ToJsonResponseAsync(res);
+                        if (headers != null)
+                        {
+                            foreach (KeyValuePair<string, string> h in headers)
+                            {
+                                req.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                            }
+                        }
+
+                        HttpResponseMessage res = await http.SendAsync(req);
+
+                        return await ToJsonResponseAsync(res);
+                    }
                 }
             }
         }

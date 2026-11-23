@@ -1858,6 +1858,26 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 - **`RT-422.3` の (1) は、PAR を必須にしていない fapi2 の登録の振る舞いを変えていないことを確かめるもの**。FAPI 2.0 Security Profile §5.3.2.2 の 3（PAR を使わない要求を断る）は、登録の `require_pushed_authorization_requests`（サーバ全体なら `RequirePushedAuthorizationRequests`）で強制する（#346）
 
+##### mTLS で認証して DPoP で縛るトークンは、証明書に縛らない（`RT-423.*`。#423）
+
+| | 測ること |
+|---|---|
+| **`RT-423.1`** | **`tls_client_auth` の fapi2 の登録で、DPoP の証明を添えて認可コードを交換したトークンは、`cnf.jkt` だけを持ち（`x5t#S256` が無い）、証明書なしで DPoP だけで `/userinfo` を使える**（RFC 8705 §4・§3.4・RFC 9449 §1）。**証明を添えずに `Bearer` で呼ぶと `401`**（縛りが外れていない） |
+| **`RT-423.2`** | **`tls_client_auth` の normal の登録の client_credentials も同じ**（トークンを作る関数が別：`CreateFromClaims`） |
+| **`RT-423.3`** | **`tls_client_certificate_bound_access_tokens` の登録は、DPoP の証明が在っても、従来どおり証明書にも縛る**（`x5t#S256` と `jkt` の両方。RFC 8705 §3.4） |
+
+- **縛るものを決めるのは `CmnEndpoints.CheckSenderConstraint` の 1 か所**（トークンを出す 7 つの経路が通る）。**証明書を必須にしていない登録で DPoP の証明が在れば、証明書には縛らない**
+- **DPoP の証明が無ければ、従来どおり認証した証明書に縛る**（`FA-6.4`・`RT-346.7`・`.12`。期待値は変えていない）
+- 直す前は、`RT-423.1`・`.2` のトークンが `x5t#S256` も持ち、`RT-423.1` の DPoP だけの `/userinfo` が `401` だった（判定を止めた手元の版で、net10.0 版で確かめた）
+- **mTLS を測れるのは net10.0 版だけ**（net48 版は `-NetFxMtls` のとき。`MtlsTests.MtlsTargets`）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **refresh_token・ROPC・JWT Bearer・CIBA・device_code の経路** | どれも同じ `CheckSenderConstraint` を通り、縛るものは `x509` と `jkt` で決まる（経路ごとの分岐は無い）。E2E は、作る関数の違う 2 つ（`ProtectFromPayload`・`CreateFromClaims`）で測る |
+| **net48 版の mTLS** | 証明書の準備が要る（`-NetFxMtls`）。判定は `CommonLibrary` で共通 |
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |

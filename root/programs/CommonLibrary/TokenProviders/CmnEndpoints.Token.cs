@@ -45,6 +45,7 @@
 //*  2026/11/14  玄人 幸道         CIBA・Device のトークン要求で、auth_req_id・device_code を出したクライアントと照合する（#387）
 //*  2026/11/17  玄人 幸道         JWT Bearer グラントの aud の判定を、クライアント認証と分けた（JwtBearerAudiences）。CIBA のトークン要求は、トークン エンドポイントの URL も受ける（#398）
 //*  2026/11/19  玄人 幸道         JWT Bearer グラントの assertion を、列の RSA・EC の鍵と jwks_uri の鍵で、RS256・PS256・ES256 を受けて検証するようにした（#410）
+//*  2026/11/23  玄人 幸道         証明書に縛る箇所のコメントに、DPoP の証明が在れば縛らないことを書いた（#423）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -773,7 +774,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                                 // **DPoP の鍵に縛る**（#311 の段階 1）
                                 jkt,
-                                // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る）
+                                // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                                 x509);
 
                             // オペレーション・トレース・ログ出力
@@ -1008,7 +1009,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                         // **DPoP の鍵に縛る**（#311 の段階 1）
                         jkt,
-                        // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る）
+                        // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                         x509);
 
                     // オペレーション・トレース・ログ出力
@@ -1156,7 +1157,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     Helper.GetInstance().GetIdTokenSignedResponseAlg(iss),
                                     // **DPoP の鍵に縛る**（#311 の段階 1）
                                     jkt,
-                                    // **証明書に縛る**（#346。証明書を必須にした登録のときだけ x509 が在る）
+                                    // **証明書に縛る**（#346。証明書を必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                                     x509);
 
                                 // オペレーション・トレース・ログ出力
@@ -1325,7 +1326,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        // **証明書に縛る**（#346。`tls_client_auth` の登録か、証明書を必須にした登録のときだけ x509 が在る）
+                        // **証明書に縛る**（#346。`tls_client_auth` の登録か、証明書を必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                         x509, deviceClientMode, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),

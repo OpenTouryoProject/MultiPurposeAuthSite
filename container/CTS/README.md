@@ -214,14 +214,14 @@ cd ..\CTS
 - **OP の不適合で落ちていたモジュール（直した）**
   - `fapi2-sp-plain-oauth` の `ensure-request-object-without-redirect-uri-fails`・`ensure-redirect-uri-in-authorization-request`：fapi2 の登録で、`openid` の無い PAR の要求を `redirect_uri` 無しで受けていた（FAPI 2.0 Security Profile §5.3.2.2 の 6）。
     **#422 で直し、どちらも PASSED**（2026-11-23。PAR が `400` で断るので、REVIEW も出なくなった）。後者は、直す前は Conformance Suite の自動の判定では資源の段まで進んで落ちていた（#417 で REVIEW の材料を見て、#422 に数え直した）
-- **OP の不適合で落ちるモジュール（未修正。起票済み）**
-  - `fapi2-sp-mtls-dpop` の、資源まで進むモジュール（21 件）：`tls_client_auth` で認証したクライアントのトークンが、DPoP だけでなくクライアント証明書にも縛られ、資源の段で 401 になる（RFC 8705 §4・§3.4）。#423
+  - `fapi2-sp-mtls-dpop` の、資源まで進むモジュール（21 件）：`tls_client_auth` で認証したクライアントのトークンが、DPoP だけでなくクライアント証明書にも縛られ、資源の段で 401 になっていた（RFC 8705 §4・§3.4）。
+    **#423 で直し、21 件とも PASSED**（2026-11-23。証明書を必須にしていない登録で DPoP の証明が在れば、DPoP の鍵だけに縛る）。縛り方の違う `fapi2-sp-mtls`・`fapi2-sp-private-key-jwt-dpop`・`fapi2-sp-private-key-jwt-mtls` も回し、前と同じ数だった
 - **#416 で足したプランの結果**（2026-11-21。FAILED の内訳は上の仕分け）
 
   | `-Plan` | PASSED | FAILED | REVIEW | SKIPPED | WARNING | FAILED の内訳 |
   |---|---:|---:|---:|---:|---:|---|
   | `fapi2-sp-private-key-jwt-mtls` | 35 | 2 | 3 | 2 | 1 | 自動では回せない 2 |
-  | `fapi2-sp-mtls-dpop` | 20 | 23 | 2 | 1 | 0 | 自動では回せない 2・#423 で 21 |
+  | `fapi2-sp-mtls-dpop` | 39 | 2 | 3 | 1 | 1 | 自動では回せない 2（#423 を直した後。2026-11-23。直す前は PASSED 20・FAILED 23・REVIEW 2・WARNING 0 で、#423 で 21） |
   | `fapi2-sp-plain-oauth` | 25 | 18 | 2 | 1 | 0 | 自動では回せない 2・資源の段で 16（#422 を直した後。2026-11-23。直す前は PASSED 23・FAILED 20 で、#422 で 2） |
   | `fapi2-sp-client-credentials` | 8 | 6 | 0 | 1 | 0 | 資源の段で 6 |
   | `fapi2-ms-mtls` | 43 | 2 | 3 | 2 | 1 | 自動では回せない 2 |
