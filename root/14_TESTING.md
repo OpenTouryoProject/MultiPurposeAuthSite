@@ -1887,14 +1887,17 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **`RT-421.3`** | **別のクライアントが自分の資格情報で使用済みのコードを出しても、`invalid_grant` で断るだけで、コードを出したクライアントのトークンは失効させない** |
 | **`RT-421.4`** | **refresh_token を `/revoke` で失効させると、同じ認可の access_token も `/userinfo` が `401` になる**（RFC 7009 §2.1 の SHOULD。`ANALYSIS-IdP.md` の E-13） |
 | **`RT-421.5`** | **使用済みの refresh_token が出されたら、同じ認可の access_token（更新の前と後の両方）も `401`、更新で出した refresh_token も `invalid_grant`**（E-13。一族の失効は #188） |
+| **`RT-421.6`** | **PKCE のコードの 2 回目を、誤った `code_verifier` で出したら `invalid_grant` で断るだけで失効させず（1 回目の `/userinfo` は `200`）、正しい `code_verifier` で出したら失効させる**（RFC 7636 §4.6 の確かめが、引き換えより前に済むため） |
 
 - **引き換えたコードの行は消さず、使用済みの印（`UsedDate`）を条件付きの UPDATE で立てる**（立てられた 1 つだけが引き換える。#332 の形のまま）。**行はコードの期限まで残る**ので、**再利用に気付けるのはコードの期限（既定 600 秒）まで**
 - **認可の ID は、コードを作るときに決めて access_token の payload に書く**（`CmnAccessToken.CreatePayloadForCode`）。**payload は refresh_token にも引き継がれ、refresh_token の一族（`FamilyId`）も同じ値**にする。**失効は `RevocationProvider.RevokeAuthorization`**（失効の記録に `g:` ＋ ID を入れ、一族を消す）。**資源の側の検証（`CmnAccessToken.Verify`）は、`jti` に加えて認可の ID も引く**
-- **PKCE・DPoP の確かめは、引き換えの前に済む**ので、**誤った `code_verifier` で出された使用済みのコードは、失効させずに断る**（コードを知るだけの相手に、正規のトークンを止めさせない）
+- **PKCE・DPoP の確かめは、引き換えの前に済む**ので、**誤った `code_verifier` で出された使用済みのコードは、失効させずに断る**（コードを知るだけの相手に、正規のトークンを止めさせない。`RT-421.6`）
 - **同時に来た 2 つの引き換えは、負けた側を再利用として扱う**（勝った側のトークンも失効する。refresh_token の同時の使用と同じ。`RT-332.1` は 1 回しか出ないことだけを見る）
 - **E-13 も同じ仕組みで直した**：**refresh_token の一族の識別子は認可の ID**なので、**一族を失効させる箇所（`RefreshTokenProvider.Delete`・`Receive`）で、同じ ID を失効させる**（`RevocationProvider.RevokeAuthorization`）
 - 直す前は、`RT-421.1`・`.2` のトークンが 2 回目の引き換えの後も、`RT-421.4`・`.5` の access_token が refresh_token の失効の後も使えた（失効の呼び出しを止めた手元の版で、net10.0 版で確かめた）
 - **この変更の前に出したトークンは、認可の ID を持たない**ので、従来どおり（jti だけで判定する）
+- **資源の側の検証は、認可の ID を持つ access_token で、失効の記録を引く回数が 1 回増える**（`jti` と認可の ID。DB ストアなら往復が 1 回増える）
+- **device_code・CIBA は、承認済みの記録を 1 回目の引き換えで消す**ので、順に来た 2 回目は従来どおり `invalid_grant`（失効させない）。**2 つが同時に記録を読んだときだけ、内部の認可コードの再利用として 1 回目のトークンも失効する**（認可コードの同時の引き換えと同じ扱い）
 - **3 方言（`sql`・`ora`・`npg`）でも回した**（列 `UsedDate` を足したため。`13_CONFIGURATION.md` に `ALTER` を書いた）
 
 ###### 測っていないこと

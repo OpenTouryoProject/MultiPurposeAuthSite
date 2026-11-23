@@ -30,8 +30,10 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/23  玄人 幸道         新規（#421）
 //*  2026/11/23  玄人 幸道         refresh_token を失効させたとき、同じ認可の access_token も失効することを足した（RT-421.4・.5。E-13）
+//*  2026/11/23  玄人 幸道         誤った code_verifier での再利用では失効させないことを足した（RT-421.6。#421 の別モデルのレビュー）
 //**********************************************************************************
 
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -60,6 +62,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-421.3`** | **別のクライアントがそのコードを出しても、失効させない**（そのクライアントに出したコードではない） |
     /// | **`RT-421.4`** | **refresh_token を `/revoke` で失効させると、同じ認可の access_token も使えなくなる**（RFC 7009 §2.1。`ANALYSIS-IdP.md` の E-13） |
     /// | **`RT-421.5`** | **使用済みの refresh_token が出されたら、同じ認可の access_token（更新の前と後）も使えなくなる**（E-13。一族の失効は #188） |
+    /// | **`RT-421.6`** | **PKCE のコードの 2 回目を、誤った `code_verifier` で出しても、失効させない**（正しい `code_verifier` なら失効させる） |
     ///
     /// **E-13 も、同じ仕組み（refresh_token の一族の識別子 ＝ 認可の ID）で直した**（#421 で決めた）。
     /// </remarks>
@@ -359,6 +362,80 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.VerifyEqual("HTTP 400 ＋ invalid_grant（一族ごと失効した。#188 から）", "400 invalid_grant",
                     ((int)refreshed.StatusCode).ToString() + " " + (refreshed.Error ?? "（無し）"));
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-421.6 誤った code_verifier
+
+        /// <summary>RT-421.6 PKCE のコードの 2 回目を、誤った code_verifier で出しても失効させない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42106_誤ったcode_verifierでの再利用では失効させない(string targetKey)
+        {
+            // RFC 7636 Appendix B の値
+            const string Verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+            const string Challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-421.6",
+                    "PKCE を使ったコードの 2 回目の引き換えを、誤った code_verifier で出したら invalid_grant で断るだけで失効させず、"
+                    + "正しい code_verifier で出したら失効させる",
+                    "**PKCE の確かめは、引き換え（使用済みの印）より前に済む**（RFC 7636 §4.6）。"
+                    + "**誤った code_verifier の要求は、コードを使えていない**ので再利用に当たらず、"
+                    + "**コードを知るだけの相手に、正規のクライアントのトークンを止めさせない。**",
+                    "RFC 6749 §4.1.2 / RFC 7636 §4.6 / #421");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample + "（S256 の PKCE）");
+
+                r.Step("(1) S256 の code_challenge で認可コードを得て、正しい code_verifier で引き換える");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, "openid email", "state-rt4216", "nonce-rt4216", reg.RedirectUri,
+                    new Dictionary<string, string>()
+                    {
+                        { "code_challenge", Challenge },
+                        { "code_challenge_method", "S256" }
+                    });
+
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが返ること（" + authz.ToString() + "）");
+
+                JsonResponse first = await Flows.ExchangeCodeAsync(client, reg, authz.Code, reg.RedirectUri,
+                    new Dictionary<string, string>() { { "code_verifier", Verifier } });
+
+                Assert.False(string.IsNullOrEmpty(first.AccessToken), "前提: access_token が返ること（" + first.ToString() + "）");
+
+                r.Step("(2) 同じコードを、誤った code_verifier で引き換える");
+
+                JsonResponse wrong = await Flows.ExchangeCodeAsync(client, reg, authz.Code, reg.RedirectUri,
+                    new Dictionary<string, string>() { { "code_verifier", Verifier.Substring(1) + "A" } });
+
+                r.VerifyEqual("HTTP 400 ＋ invalid_grant", "400 invalid_grant",
+                    ((int)wrong.StatusCode).ToString() + " " + (wrong.Error ?? "（無し）"));
+
+                JsonResponse stillValid = await client.UserInfoAsync(first.AccessToken);
+
+                r.VerifyEqual("1 回目の access_token の /userinfo は HTTP 200（失効していない）", "200", ((int)stillValid.StatusCode).ToString());
+
+                r.Step("(3) 同じコードを、正しい code_verifier で引き換える（再利用）");
+
+                JsonResponse reused = await Flows.ExchangeCodeAsync(client, reg, authz.Code, reg.RedirectUri,
+                    new Dictionary<string, string>() { { "code_verifier", Verifier } });
+
+                r.VerifyEqual("HTTP 400 ＋ invalid_grant", "400 invalid_grant",
+                    ((int)reused.StatusCode).ToString() + " " + (reused.Error ?? "（無し）"));
+
+                JsonResponse revoked = await client.UserInfoAsync(first.AccessToken);
+
+                r.VerifyEqual("1 回目の access_token の /userinfo は HTTP 401（失効した）", "401", ((int)revoked.StatusCode).ToString());
 
                 r.Done();
             }

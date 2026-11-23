@@ -4220,6 +4220,10 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `OAuth2AuthorizationCodeExpireTimeSpanFromSeconds` | `600` | 既定のまま（または短く） | 認可コードの寿命（#188）。RFC 6749 §4.1.2 は 10 分以内を推奨 |
 | `RequestObjectExpireTimeSpanFromSeconds` | `300` | 既定のまま（または短く） | `/ros` に預けた Request Object の寿命（#188）。応答の `exp` にも出る |
 | `OAuth2RefreshTokenExpireTimeSpanFromDays` | `14` | 運用に合わせる | **#188 で、実際に検証するようになった**（以前は事実上の無期限）。短くすると、既存のトークンが失効する |
+| `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
+| `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
+| `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
+| `OAuth2ClientsInformation` | **テスト用が 15 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI1_PrivateKeyJwt_Client` `FAPI2_Client` `FAPI2_MTLS_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 > **#188 で `RefreshTokenDictionary` に 2 列を足した**（`FamilyId` / `UsedDate`。3 方言とも）。
 > **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
@@ -4236,10 +4240,6 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > -- PostgreSQL
 > ALTER TABLE AuthenticationCodeDictionary ADD COLUMN UsedDate timestamp NULL;
 > ```
-| `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
-| `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
-| `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
-| `OAuth2ClientsInformation` | **テスト用が 15 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI1_PrivateKeyJwt_Client` `FAPI2_Client` `FAPI2_MTLS_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
 

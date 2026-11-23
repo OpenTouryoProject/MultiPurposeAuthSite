@@ -6880,7 +6880,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=936e276e-8269-4c6b-818e-848dd5129981&code=bogus
+1. GET /Account/EmailConfirmation?userId=0583da16-876e-4bdc-96a5-93fa6ef17269&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6889,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=936e276e-8269-4c6b-818e-848dd5129981&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=936e276e-8269-4c6b-818e-848dd5129981&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=0583da16-876e-4bdc-96a5-93fa6ef17269&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=0583da16-876e-4bdc-96a5-93fa6ef17269&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -13673,6 +13673,133 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーを返した後 : 認可コードを返さない
 - エラーを返した後 : 同意の画面を出さない（request_uri を使い切っている）
 - エラーを返した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
+
+## RT-421.1 認可コードの 2 回目の引き換えは invalid_grant で断り、1 回目で出した access_token（/userinfo）と refresh_token が使えなくなる
+
+| | |
+|---|---|
+| 観点 | **RFC 6749 §4.1.2**：コードが 2 回以上使われたら、要求を断らなければならず（MUST）、**そのコードに基づいて出したトークンを、できれば失効させるべき（SHOULD）。****コードが漏れて攻撃者が先に引き換えても、正規のクライアントが引き換えを試みた時点で、攻撃者のトークンを止められる。****以前は 2 回目を断るだけで、1 回目のトークンは期限まで使えた。** |
+| 根拠 | RFC 6749 §4.1.2 / #421 |
+| テスト | `RT42101_認可コードを再利用すると1回目のトークンが使えなくなる` |
+
+**手順**
+
+1. 認可コードを得て、引き換える
+1. 同じ認可コードを、もう一度引き換える
+1. 1 回目の access_token で /userinfo を呼ぶ
+1. 1 回目の refresh_token で更新する
+
+**検証（合否を判定する）**
+
+- access_token に認可の ID（urn:mpas:authorization_id）が在る
+- 引き換えた直後は /userinfo が HTTP 200
+- HTTP 400 ＋ invalid_grant
+- トークンは出ない
+- HTTP 401（失効した）
+- HTTP 400 ＋ invalid_grant（失効した）
+
+## RT-421.2 認可コードから出した refresh_token で更新した access_token・refresh_token も、そのコードの再利用で使えなくなる
+
+| | |
+|---|---|
+| 観点 | **更新で出したトークンも「そのコードに基づいて出したトークン」である**（RFC 6749 §4.1.2）。**認可の ID は payload に入り、更新しても引き継がれる**ので、まとめて失効させられる。**refresh_token の一族（FamilyId）も同じ値**で、一族ごと消す（#188 の段階 3 と同じ失効）。 |
+| 根拠 | RFC 6749 §4.1.2 / #421 |
+| テスト | `RT42102_更新で出したトークンも認可コードの再利用で使えなくなる` |
+
+**手順**
+
+1. 認可コードを引き換え、refresh_token で 1 回更新する
+1. 同じ認可コードを、もう一度引き換える
+1. 更新で出した access_token と refresh_token を使う
+
+**検証（合否を判定する）**
+
+- 更新した直後は /userinfo が HTTP 200
+- HTTP 400 ＋ invalid_grant
+- 更新で出した access_token の /userinfo は HTTP 401（失効した）
+- 更新で出した refresh_token は HTTP 400 ＋ invalid_grant（失効した）
+
+## RT-421.3 使用済みの認可コードを、別のクライアントが自分の資格情報で出しても invalid_grant で断るだけで、コードを出したクライアントのトークンは失効させない
+
+| | |
+|---|---|
+| 観点 | **そのクライアントに出したコードではない**ので、再利用（同じコードの 2 回目の引き換え）に当たらない。**別のクライアントの要求で、正規のクライアントのトークンを止められない**ようにする（コードを出したクライアントの照合は、以前から `aud` で行っている）。 |
+| 根拠 | RFC 6749 §4.1.2・§4.1.3 / #421 |
+| テスト | `RT42103_別のクライアントが使用済みのコードを出しても失効させない` |
+
+**手順**
+
+1. MVC_Sample で認可コードを得て、引き換える
+1. 同じ認可コードを、TestClient の資格情報で引き換える
+1. MVC_Sample の access_token で /userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_grant
+- HTTP 200（失効していない）
+
+## RT-421.4 refresh_token を /revoke で失効させると、同じ認可から出した access_token も使えなくなる
+
+| | |
+|---|---|
+| 観点 | **RFC 7009 §2.1**：refresh_token を失効させるなら、**同じ認可グラントに基づく access_token も無効にすべき（SHOULD）。****以前は refresh_token の一族だけを消し、access_token は期限まで使えた**（`ANALYSIS-IdP.md` の E-13）。**一族の識別子を認可の ID にしたので、同じ仕組みで止められる**（#421）。 |
+| 根拠 | RFC 7009 §2.1 / #421 |
+| テスト | `RT42104_refresh_tokenを失効させると同じ認可のaccess_tokenも使えなくなる` |
+
+**手順**
+
+1. 認可コードを引き換える
+1. refresh_token を /revoke で失効させる
+1. 同じ認可の access_token で /userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- 失効させる前は /userinfo が HTTP 200
+- HTTP 200
+- HTTP 401（失効した）
+
+## RT-421.5 使用済みの refresh_token が再び出されたら、一族に加えて、同じ認可から出した access_token（更新の前と後の両方）も使えなくなる
+
+| | |
+|---|---|
+| 観点 | **使用済みの refresh_token が出されたら、一族ごと失効させる**（漏れたトークンと正規のトークンを見分けられないため。#188 の段階 3）。**以前は一族だけで、access_token は期限まで使えた**（E-13）。**漏れた refresh_token で攻撃者が取った access_token も止める。** |
+| 根拠 | RFC 7009 §2.1 / #188 / #421 |
+| テスト | `RT42105_使用済みのrefresh_tokenが出されたら同じ認可のaccess_tokenも使えなくなる` |
+
+**手順**
+
+1. 認可コードを引き換え、refresh_token で 1 回更新する
+1. 使用済みの（1 回目の）refresh_token で、もう一度更新する
+1. 更新の前と後の access_token で /userinfo を呼ぶ
+1. 更新で出した refresh_token で更新する
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_grant
+- 最初の access_token は HTTP 401（失効した）
+- 更新で出した access_token も HTTP 401（失効した）
+- HTTP 400 ＋ invalid_grant（一族ごと失効した。#188 から）
+
+## RT-421.6 PKCE を使ったコードの 2 回目の引き換えを、誤った code_verifier で出したら invalid_grant で断るだけで失効させず、正しい code_verifier で出したら失効させる
+
+| | |
+|---|---|
+| 観点 | **PKCE の確かめは、引き換え（使用済みの印）より前に済む**（RFC 7636 §4.6）。**誤った code_verifier の要求は、コードを使えていない**ので再利用に当たらず、**コードを知るだけの相手に、正規のクライアントのトークンを止めさせない。** |
+| 根拠 | RFC 6749 §4.1.2 / RFC 7636 §4.6 / #421 |
+| テスト | `RT42106_誤ったcode_verifierでの再利用では失効させない` |
+
+**手順**
+
+1. S256 の code_challenge で認可コードを得て、正しい code_verifier で引き換える
+1. 同じコードを、誤った code_verifier で引き換える
+1. 同じコードを、正しい code_verifier で引き換える（再利用）
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_grant
+- 1 回目の access_token の /userinfo は HTTP 200（失効していない）
+- HTTP 400 ＋ invalid_grant
+- 1 回目の access_token の /userinfo は HTTP 401（失効した）
 
 ## RT-422.1 fapi2 の登録の /par は、openid の有無によらず、redirect_uri の無い要求を invalid_request で断る（付ければ受ける）
 
