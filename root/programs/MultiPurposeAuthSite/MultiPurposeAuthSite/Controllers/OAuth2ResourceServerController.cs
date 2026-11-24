@@ -41,6 +41,7 @@
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //*  2026/11/12  玄人 幸道         動的登録で sector_identifier_uri を検査の前に取りに行くようにした（#364）
 //*  2026/11/12  玄人 幸道         jwks_uri・sector_identifier_uri を取りに行くのは、認可を確かめた後だけにした（#364）
+//*  2026/11/24  玄人 幸道         テスト用の資源（/TestResource。openid を求めない）を足した（#425）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -417,6 +418,115 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region テスト用
+
+        #region 資源
+
+        /// <summary>
+        /// テスト用の資源（openid を求めない。#425）
+        /// GET・POST: /TestResource
+        /// </summary>
+        /// <returns>200（client_id・scope）か、401・403（RFC 6750 §3）</returns>
+        /// <remarks>
+        /// **トークンの照合は `/userinfo` と同じ**（検証・証明書の縛り・DPoP の縛り）で、**`openid` を求めないところだけが違う**。
+        /// **`IsLockedDownTestEndpoints` が true なら 404**（経路も張らない。**既定の経路から来ても開かない**）。
+        /// </remarks>
+        [HttpGet]
+        [HttpPost]
+        public IHttpActionResult TestResource()
+        {
+            if (!MultiPurposeAuthSite.Util.Test.TestResource.IsOpen)
+            {
+                return this.NotFound();
+            }
+
+            this.SetNoStore();
+
+            Dictionary<string, string> err = new Dictionary<string, string>();
+
+            if (!AuthenticationHeader.GetAccessToken(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out string authScheme))
+            {
+                // **トークンが無い**（RFC 6750 §3.1 : エラー コードを付けない）。
+                return this.ResourceError(err, null);
+            }
+
+            if (!Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject _, out ClaimsIdentity identity))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description, "The access token is invalid.");
+                return this.ResourceError(err, null);
+            }
+
+            string interactionId = MultiPurposeAuthSite.Util.Test.TestResource.FapiInteractionIdOf(identity,
+                HttpContext.Current.Request.Headers[Token.CmnEndpoints.HttpHeader_FapiInteractionId]);
+
+            //  **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 §3）。
+            if (!Token.CmnAccessToken.VerifyCertificateBinding(identity, this.Request.GetClientCertificate()))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description, "The access token is bound to a client certificate.");
+                return this.ResourceError(err, interactionId);
+            }
+
+            //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**（RFC 9449 §7.1）。
+            if (!this.VerifyDPoP(identity, bearerToken, authScheme == OAuth2AndOIDCConst.DPoP, out string dpopError))
+            {
+                err.Add(OAuth2AndOIDCConst.error, dpopError ?? OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    (dpopError == OAuth2AndOIDCConst.use_dpop_nonce)
+                        ? "A DPoP proof with a new nonce is required."
+                        : "The access token is bound to a DPoP key.");
+                return this.ResourceError(err, interactionId);
+            }
+
+            HttpResponseMessage res = this.Request.CreateResponse(
+                HttpStatusCode.OK, MultiPurposeAuthSite.Util.Test.TestResource.ResponseOf(identity));
+
+            if (interactionId != null)
+            {
+                res.Headers.Add(Token.CmnEndpoints.HttpHeader_FapiInteractionId, interactionId);
+            }
+
+            return this.ResponseMessage(res);
+        }
+
+        /// <summary>テスト用の資源のエラー応答を作る（RFC 6750 §3。`/userinfo` と同じ形）</summary>
+        /// <param name="err">error / error_description を持つ辞書（トークンが無ければ空）</param>
+        /// <param name="interactionId">応答に付ける x-fapi-interaction-id（無ければ null）</param>
+        /// <returns>IHttpActionResult</returns>
+        private IHttpActionResult ResourceError(Dictionary<string, string> err, string interactionId)
+        {
+            int status = (err.Count == 0) ? 401 : Token.CmnEndpoints.GetResourceErrorStatusCode(err);
+
+            Log.Logging.MyOperationTraceForErrorResponse(HttpContext.Current.Request.Path, status, err, "");
+
+            HttpResponseMessage res = (err.Count == 0)
+                ? this.Request.CreateResponse((HttpStatusCode)status)
+                : this.Request.CreateResponse((HttpStatusCode)status, err);
+
+            string scheme = AuthenticationHeader.GetChallengeScheme(HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
+
+            res.Headers.WwwAuthenticate.Add(
+                new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    scheme, Token.CmnEndpoints.GetChallengeParameter(scheme, Const.EndpointTestResource, err)));
+
+            string nonce = CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
+
+            if (nonce != null)
+            {
+                res.Headers.Add(OAuth2AndOIDCConst.HttpHeader_DPoPNonce, nonce);
+            }
+
+            if (interactionId != null)
+            {
+                res.Headers.Add(Token.CmnEndpoints.HttpHeader_FapiInteractionId, interactionId);
+            }
+
+            return this.ResponseMessage(res);
+        }
+
+        #endregion
 
         #region Hybrid Flow
 

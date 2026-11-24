@@ -58,7 +58,7 @@
 | `Data` | **中〜高** | 各 DBMS の文法 | E2E（`mem`・`sql`・`ora`・`npg`）、`CompareDdl.ps1` | DDL の変更（配備済みの DB）、SQL の組み立て、3 方言の一致 |
 | `Manager`・`Co` | 中 | [`CommonLibrary/ANALYSIS.md`](root/programs/CommonLibrary/ANALYSIS.md) | E2E（両版） | 設定の既定値（`Co`）の変更 |
 | `Network`・`Notifications`・`Entity`・`ViewModels`・`Log` | 中〜低 | — | E2E（両版） | 外への送信先、例外の扱い |
-| `Util.Test` | 低（**製品の経路に無い**） | — | E2E が使う | **製品の経路から呼ばれるようにならないか**（例外は、`IsDebug` か `SeedsTestData` で閉じた 1 行のフック。`TestOutbox`・`TestClients.RegisterInStore`） |
+| `Util.Test` | 低（**製品の経路に無い**） | — | E2E が使う | **製品の経路から呼ばれるようにならないか**（例外は、`IsDebug` か `SeedsTestData` で閉じた 1 行のフック。`TestOutbox`・`TestClients.RegisterInStore`。**テスト用の口 `TestResource` は、`IsDebug` と `IsLockedDownTestEndpoints` の両方で閉じる**。#425） |
 | ツール（`CommandLineTools`）・`DesignNotes` | 低 | — | ビルド | 原則として見ない |
 
 - **OpenTouryo のアセンブリ（`OpenTouryoAssemblies`）を更新するときは、E2E を通す。**

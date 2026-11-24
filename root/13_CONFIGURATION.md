@@ -4234,7 +4234,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@example.com` / `tanaka@example.com`）を**作らない** |
 | `TestUserSuffix` | `""`（空） | **E2E が渡す。手で設定しない** | **テスト利用者の名前に付ける接尾辞**（#260）。空なら `super_tanaka` / `tanaka`。**E2E は 2 つのサイトを同時に立てる**ので、**DB ストアでは同じ利用者の行を書き換え合う。**`test.ps1` がサイトごとに `_core` / `_netfx` を渡して分ける。**初期化済みの DB でも、居なければ作る**ので、接尾辞を変えても DB を作り直さなくてよい |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
-| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
+| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、**テスト用の資源 `/TestResource`**（**`IsDebug` でなければ、このキーによらず閉じる**。キー `TestResourceWebAPI`。`openid` を求めない、アクセス トークンで守った口。適合性テストの FAPI 2.0 の `openid` の無いプランが呼ぶ。#425）、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる。**`EnableImplicitGrantType` が `false` なら、access_token をフロント チャネルで返す Hybrid / OIDC の Implicit（`code token` / `code id_token token` / `id_token token`）も断り、広告しない**（#314。`code id_token` は通る） |
 | `RequirePushedAuthorizationRequests` / `RequireSignedRequestObject` | `false` | **任意**（FAPI の配備なら `true`） | **FAPI の要件を、全クライアントに強制する**（#346）。登録の同名の項目とは OR。**`true` にすると、PAR・署名付きの Request Object を使わない既存のクライアントが止まる** |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
@@ -4288,6 +4288,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownTestEndpoints`） |
 | `/Account/BackChannelLogoutBox` | **404 が返る**（`IsLockedDownTestEndpoints`。#310 の段階 2。**開いていれば、他人のログアウトの通知を読まれる**） |
 | `/Account/FrontChannelLogoutBox` | **404 が返る**（同上。#310 の段階 3） |
+| `/TestResource` | **404 が返る**（同上。#425。**開いていれば、`openid` の無いトークンで呼べる口が残る**） |
 | 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
 | `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnableDebugTraceLog`） |
@@ -4325,7 +4326,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    テスト利用者だけが `IsDebug` と `TestUserPWD` で閉じられる。
 3. **`/Ping` は閉じない。** セッションのタイムアウト防止に使われているため（#219）。
    本番で塞ぐなら、前段（リバース プロキシなど）で行う。
-   `/TestHybridFlow` と `api/Values`（net10.0 のみ）は、`IsLockedDownTestEndpoints` で閉じる。
+   `/TestHybridFlow`・`/TestResource`（#425）と `api/Values`（net10.0 のみ）は、`IsLockedDownTestEndpoints` で閉じる。
 4. **STS 専用モード**（`EnableSignupProcess` / `EnableEditingOfUserAttribute` /
    `EnableAdministrationOfUsersAndRoles` を**全部 false**）にすると、サインアップ・属性の編集・
    ユーザ管理が無効になる。**利用者ストアへの書き込みも止まる**ので、切替の影響が大きい。

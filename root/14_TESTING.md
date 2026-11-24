@@ -1907,6 +1907,24 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **device_code・CIBA の内部の認可コードの再利用** | どちらも最後は同じ `AuthorizationCodeProvider.Receive` で引き換える。device_code・`auth_req_id` そのものの 2 回目は、それぞれの記録で先に断られる（`RT-332.3`・`.4`） |
 | **コードの期限を過ぎた後の再利用** | 行が掃除で消えるので、存在しないコードと同じに断る（失効はさせない） |
 
+##### テスト用の資源（`/TestResource`。`RT-425.*`。#425）
+
+| | 測ること |
+|---|---|
+| **`RT-425.1`** | **`openid` の無い client_credentials のトークンで、`/TestResource` は 200（`client_id`・`scope`）。同じトークンの `/userinfo` は今までどおり 403。トークンが無ければ 401（`WWW-Authenticate` 付き）、壊れたトークンは 401 ＋ `invalid_token`**（RFC 6750 §3） |
+| **`RT-425.2`** | **DPoP に縛ったトークンは、正しい証明でだけ使える**（`Bearer` で出す・証明なし・別の鍵・`ath` が別のトークン・`htu` が別の口は 401。RFC 9449 §4.3・§7.1。`Bearer` で出したものを断るのは §7.2）。**`htu` はこの口の URL** |
+
+- **適合性テストの FAPI 2.0 の `fapi2-sp-plain-oauth`・`fapi2-sp-client-credentials` が、資源として呼ぶ口**（`container/CTS/RunTestPlan.ps1` の `ResourcePath`）。**照合は `/userinfo` と同じ製品の部品**で、**`openid` を求めないところだけが違う**
+- **口は `IsDebug` で、`IsLockedDownTestEndpoints` が false のときだけ開く**（それ以外は経路を張らず、動作も 404）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **閉じた配備（`IsLockedDownTestEndpoints=true`、または `IsDebug=false`）で 404 になること** | 通しは口を開けた構成で回す（`/TestHybridFlow` と同じ） |
+| **POST・DPoP の nonce を求める構成・FAPI の登録のトークンの `x-fapi-interaction-id`** | 照合と応答の作り方は `/userinfo` と同じ部品（`DPoPNonceTests`・`FapiInteractionIdTests` が `/userinfo` で測る）。**開くかの判定（`IsDebug`・`IsLockedDownTestEndpoints`）は単体テスト `Sts/TestResourceTests`** |
+| **証明書に縛ったトークン** | 照合は `/userinfo` と同じ部品（`Fapi/MtlsTests` が `/userinfo` で測る）。**適合性テストの 2 プランは DPoP**（`sender_constrain=dpop`） |
+
 ##### 画面に出す名前（`client_name`）を、識別の名前とは別に持って出す（`RT-430.*`。#430）
 
 | | 測ること |

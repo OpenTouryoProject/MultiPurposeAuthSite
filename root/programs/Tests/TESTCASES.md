@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=38cb4df8-4466-47a1-8c18-ee81f83dec5f&code=bogus
+1. GET /Account/EmailConfirmation?userId=e0e20682-ffae-437b-91d1-116ee3f16d93&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=38cb4df8-4466-47a1-8c18-ee81f83dec5f&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=38cb4df8-4466-47a1-8c18-ee81f83dec5f&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=e0e20682-ffae-437b-91d1-116ee3f16d93&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=e0e20682-ffae-437b-91d1-116ee3f16d93&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -14018,6 +14018,61 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - トークンを出さない
 - エラーは unauthorized_client（認証は通っている）
+
+## RT-425.1 **`openid` の無い client_credentials のトークンで、`/TestResource` は 200（`client_id`・`scope`）。`/userinfo` は今までどおり 403。トークンが無い・壊れたトークンは 401**
+
+| | |
+|---|---|
+| 観点 | **適合性テストの FAPI 2.0 の `openid=plain_oauth`・client_credentials のプランが呼ぶ資源**（#425）。**`openid` を求めないところだけが `/userinfo` と違う**（OIDC Core 1.0 §5.3 は UserInfo に `openid` を求める）。**断り方は RFC 6750 §3**（トークンが無ければエラー コード無しの 401、壊れていれば `invalid_token`）。 |
+| 根拠 | RFC 6750 §3・§3.1 / #425 |
+| テスト | `RT42501_openidの無いトークンで資源は200でuserinfoは403` |
+
+**手順**
+
+1. client_credentials（scope=profile）でトークンを取る
+1. /TestResource を Bearer で呼ぶ
+1. 同じトークンで /userinfo を呼ぶ（今までどおり断る）
+1. トークンを付けずに呼ぶ
+1. 壊れたトークンで呼ぶ
+
+**検証（合否を判定する）**
+
+- 200
+- client_id は、トークンを取ったクライアント
+- scope に profile がある
+- scope に openid が無い（openid を求めない）
+- /userinfo は 403（insufficient_scope）
+- 401
+- WWW-Authenticate が付く（RFC 6750 §3）
+- 401
+- invalid_token
+
+## RT-425.2 **DPoP に縛ったトークンは、`/TestResource` で、正しい証明でだけ使える**（`Bearer` で出す・証明なし・別の鍵・`ath` が別のトークン・`htu` が別の口は 401）
+
+| | |
+|---|---|
+| 観点 | **資源の側の送信者の拘束**（RFC 9449 §7.1）。**照合は `/userinfo` と同じ製品の部品**（`CmnAccessToken.VerifyDPoPBinding`）で、**`htu` は、この口の URL**（`CmnDPoP.EndpointUriOf` に足した。#425）。 |
+| 根拠 | RFC 9449 §4.3・§7.1・§7.2 / #425 |
+| テスト | `RT42502_DPoPに縛ったトークンは正しい証明でだけ使える` |
+
+**手順**
+
+1. client_credentials で、DPoP の証明を添えてトークンを取る
+1. Bearer で出す（証明なし）
+1. DPoP スキームだが、証明が無い
+1. 別の鍵（RSA）で署名した証明
+1. ath が別のトークンの指紋
+1. htu が別の口（/userinfo への証明）
+1. 正しい証明なら使える
+
+**検証（合否を判定する）**
+
+- 401
+- 401
+- 401
+- 401
+- 401
+- 200
 
 ## RT-427.1 **同意の画面に、クライアントのロゴ（`logo_uri`）・ポリシー（`policy_uri`）・利用規約（`tos_uri`）が出る**
 

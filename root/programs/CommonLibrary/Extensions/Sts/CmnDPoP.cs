@@ -31,6 +31,7 @@
 //*  2026/10/21  玄人 幸道         新規（#311 の段階 1）
 //*  2026/10/31  玄人 幸道         TokenProviders から Extensions/Sts へ移した（配置の見直し。#294）
 //*  2026/11/13  玄人 幸道         PAR の口の宛先（ParEndpointUri）を足した（RFC 9449 §10.1。#365）
+//*  2026/11/24  玄人 幸道         テスト用の資源の口も、DPoP の htu を照合する口にした（#425）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -150,7 +151,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 Config.DcrRegistrationEndpoint,
                 Config.CibaPushResultEndpoint,
                 Config.SetDeviceTokenWebAPI,
-                Config.TwoFactorPushResultEndpoint
+                Config.TwoFactorPushResultEndpoint,
+                Config.TestResourceWebAPI   // テスト用の資源（#425）
             };
 
             foreach (string path in paths)

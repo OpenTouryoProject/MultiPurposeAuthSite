@@ -166,6 +166,7 @@
     <Compile Include="Extensions\Sts\DPoPProofProvider.cs" />
     <Compile Include="Util\Test\TestClients.cs" />
     <Compile Include="Util\Test\TestOutbox.cs" />
+    <Compile Include="Util\Test\TestResource.cs" />
     <Compile Include="Util\Sts\UserClaims.cs" />
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />

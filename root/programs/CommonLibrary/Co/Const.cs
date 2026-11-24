@@ -59,6 +59,7 @@
 //*  2026/11/19  玄人 幸道         request_uris の名前と上限を足した（#374）
 //*  2026/11/23  玄人 幸道         認可の ID のクレーム名と、その失効の記録のキーの接頭辞を足した（#421）
 //*  2026/11/24  玄人 幸道         画面に出す名前のキー（client_display_name）と上限を足した（#430）
+//*  2026/11/24  玄人 幸道         テスト用の資源の口の名前を足した（#425）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -414,6 +415,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>/register（動的クライアント登録）</summary>
         public const string EndpointRegister = "register";
+
+        /// <summary>/TestResource（テスト用の資源。#425）</summary>
+        public const string EndpointTestResource = "test_resource";
 
         /// <summary>/ciba_result（認証デバイスからの結果）</summary>
         public const string EndpointCibaResult = "ciba_result";

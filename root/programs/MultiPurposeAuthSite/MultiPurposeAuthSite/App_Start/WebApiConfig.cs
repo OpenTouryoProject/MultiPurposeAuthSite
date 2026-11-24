@@ -22,6 +22,7 @@
 //*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
 //*  2026/10/18  玄人 幸道         動的クライアント登録の経路を追加（#307 の段階 1）
 //*  2026/11/06  玄人 幸道         /jwkcerts・/par・/ros のルートを、Config のパスで張る（OpenTouryo#666。#339）
+//*  2026/11/24  玄人 幸道         テスト用の資源の経路を足した（#425）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -176,6 +177,13 @@ namespace MultiPurposeAuthSite
                     name: "TestHybridFlow",
                     routeTemplate: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除
                     defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" }
+                );
+
+                // **テスト用の資源**（openid を求めない。適合性テスト・E2E 用。#425）。
+                config.Routes.MapHttpRoute(
+                    name: "TestResource",
+                    routeTemplate: Config.TestResourceWebAPI.Substring(1), // 先頭の[/]を削除
+                    defaults: new { controller = "OAuth2ResourceServer", action = "TestResource" }
                 );
             }
 

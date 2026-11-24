@@ -30,8 +30,8 @@ cd ..\CTS
 | `oidcc-dynamic` | `oidcc-dynamic-certification-test-plan`（`response_type=code`） | `oidcc-dynamic.json` |
 | `fapi2-sp-private-key-jwt-dpop`・`fapi2-sp-mtls` | `fapi2-security-profile-final-test-plan`（`plain_fapi`・`openid_connect`・`simple`・`grant_management=disabled`。前者は `private_key_jwt`＋DPoP、後者は MTLS＋MTLS） | `fapi2.json`（**クライアントは 2 つずつ**。鍵とクライアント証明書を埋める） |
 | `fapi2-sp-private-key-jwt-mtls`・`fapi2-sp-mtls-dpop` | 同上（**認証と縛りの交差**。前者は `private_key_jwt`＋MTLS、後者は MTLS＋DPoP。#416） | `fapi2.json`（クライアントは 19・20、21・22） |
-| `fapi2-sp-plain-oauth` | 同上の `private_key_jwt`＋DPoP を、`openid=plain_oauth`（OIDC を使わない OAuth）で。#416 | `fapi2.json`（クライアントは 8・9。**`scope` を `email` に置き換える**：Conformance Suite は、`scope` に `openid` があると始める前に落とす） |
-| `fapi2-sp-client-credentials` | 同上の `fapi_profile=fapi_client_credentials_grant`（`openid=plain_oauth`・`private_key_jwt`＋DPoP。ブラウザを使わない）。#416 | `fapi2.json`（クライアントは 23・24。**`client_mode=fapi2`**（#424。#416 では normal）。下の「登録と、テスト利用者」。`scope` は `email`。**`openid=openid_connect` にすると、出ていない id_token の `acr` を確かめに行って止まる**） |
+| `fapi2-sp-plain-oauth` | 同上の `private_key_jwt`＋DPoP を、`openid=plain_oauth`（OIDC を使わない OAuth）で。#416 | `fapi2.json`（クライアントは 8・9。**`scope` を `email` に置き換える**：Conformance Suite は、`scope` に `openid` があると始める前に落とす。**資源は `/TestResource` に置き換える**（`ResourcePath`。#425）） |
+| `fapi2-sp-client-credentials` | 同上の `fapi_profile=fapi_client_credentials_grant`（`openid=plain_oauth`・`private_key_jwt`＋DPoP。ブラウザを使わない）。#416 | `fapi2.json`（クライアントは 23・24。**`client_mode=fapi2`**（#424。#416 では normal）。下の「登録と、テスト利用者」。`scope` は `email`、**資源は `/TestResource`**（#425）。**`openid=openid_connect` にすると、出ていない id_token の `acr` を確かめに行って止まる**） |
 | `fapi2-ms-private-key-jwt-dpop` | `fapi2-message-signing-final-test-plan`（上の `private_key_jwt`＋DPoP に、署名した Request Object・JARM） | `fapi2.json`（**クライアントは SP と分ける**：17・18。署名した Request Object を必須にした登録。#385） |
 | `fapi2-ms-mtls` | 同上の MTLS＋MTLS（#416） | `fapi2.json`（クライアントは 29・30） |
 | `fapi2-ms-signed-plain-response`・`fapi2-ms-unsigned-jarm` | 同上の `private_key_jwt`＋DPoP で、**署名と JARM を片方だけ使う**組（前者は署名した Request Object＋通常の応答、後者は署名の無い要求＋JARM。#416） | `fapi2.json`（前者は 17・18、**後者は 8・9**：17・18 は署名した Request Object を必須にしている） |
@@ -205,9 +205,9 @@ cd ..\CTS
     1. `root\programs\CommonLibrary\TokenProviders\CmnEndpoints.ClientAuthentication.cs` の `ClientAssertionAudiences` の最後の `return` に、トークン エンドポイントの URL（`tokenUrl`）を足す（**コミットしない**。fapi2 の登録は別の分岐で issuer だけのまま）
     2. `..\E2E\1_PublishIdP.ps1` で発行し、`fapi1-adv-private-key-jwt-par`・`oidcc-dynamic` を回す
     3. **戻して発行し直す**（発行物は E2E と共用。戻さないと、E2E のコンテナに緩い版が残る）。ワーキング ツリーがクリーンなことを確かめる
-- **環境の不足で落ちるモジュール**（#416。`fapi2-sp-plain-oauth`・`fapi2-sp-client-credentials`）
-  - **資源の段**（`resource.resourceUrl` への要求に 200・201 を求める）で 403 になる。資源には `/userinfo` を使うが、**MPAS の `/userinfo` は `openid` の無いトークンを `insufficient_scope` で断る**（OIDC Core 1.0 §5.3・RFC 6750 §3.1。`RT-294.80`）。**MPAS には、ほかに保護された資源が無い**
-  - **その前の段（PAR・認可・トークン エンドポイント、クライアント認証・DPoP）の判定は通っている。** 適合性テストの環境に資源を足すかは #425
+- **環境の不足で落ちていたモジュール（#425 で足した資源で、どれも PASSED）**（#416。`fapi2-sp-plain-oauth`・`fapi2-sp-client-credentials`）
+  - **資源の段**（`resource.resourceUrl` への要求に 200・201 を求める）で 403 になっていた。資源に `/userinfo` を使っていたが、**MPAS の `/userinfo` は `openid` の無いトークンを `insufficient_scope` で断る**（OIDC Core 1.0 §5.3・RFC 6750 §3.1。`RT-294.80`）
+  - **#425 で、`openid` を求めないテスト用の資源 `/TestResource` を足し**（`IsDebug` で、`IsLockedDownTestEndpoints` が false のときだけ開く。照合は `/userinfo` と同じ部品。`RT-425.*`）、**この 2 プランだけ `resourceUrl` を置き換える**（`RunTestPlan.ps1` の `ResourcePath`）。**ほかの FAPI のプランは `/userinfo` のまま**（2026-11-24）
 - **OP の不適合で落ちていたモジュール（直した）**
   - `fapi2-sp-plain-oauth` の `ensure-request-object-without-redirect-uri-fails`・`ensure-redirect-uri-in-authorization-request`：fapi2 の登録で、`openid` の無い PAR の要求を `redirect_uri` 無しで受けていた（FAPI 2.0 Security Profile §5.3.2.2 の 6）。
     **#422 で直し、どちらも PASSED**（2026-11-23。PAR が `400` で断るので、REVIEW も出なくなった）。後者は、直す前は Conformance Suite の自動の判定では資源の段まで進んで落ちていた（#417 で REVIEW の材料を見て、#422 に数え直した）
@@ -222,8 +222,8 @@ cd ..\CTS
   |---|---:|---:|---:|---:|---:|---|
   | `fapi2-sp-private-key-jwt-mtls` | 36 | 2 | 3 | 2 | 0 | 自動では回せない 2 |
   | `fapi2-sp-mtls-dpop` | 40 | 2 | 3 | 1 | 0 | 自動では回せない 2（#423 を直した後。2026-11-23。直す前は PASSED 20・FAILED 23・REVIEW 2・WARNING 0 で、#423 で 21） |
-  | `fapi2-sp-plain-oauth` | 25 | 18 | 2 | 1 | 0 | 自動では回せない 2・資源の段で 16（#422 を直した後。2026-11-23。直す前は PASSED 23・FAILED 20 で、#422 で 2） |
-  | `fapi2-sp-client-credentials` | 8 | 6 | 0 | 1 | 0 | 資源の段で 6 |
+  | `fapi2-sp-plain-oauth` | 40 | 2 | 3 | 1 | 0 | 自動では回せない 2（#425 で資源を足した後。2026-11-24。足す前は PASSED 25・FAILED 18・REVIEW 2 で、資源の段で 16。#422 を直す前は PASSED 23・FAILED 20 で、#422 で 2）。**REVIEW の判定は基準と同じ**（7 件） |
+  | `fapi2-sp-client-credentials` | 14 | 0 | 0 | 1 | 0 | 無し（#425 で資源を足した後。2026-11-24。足す前は PASSED 8・FAILED 6 で、資源の段で 6） |
   | `fapi2-ms-mtls` | 44 | 2 | 3 | 2 | 0 | 自動では回せない 2 |
   | `fapi2-ms-signed-plain-response` | 58 | 2 | 3 | 3 | 0 | 自動では回せない 2 |
   | `fapi2-ms-unsigned-jarm` | 45 | 2 | 3 | 2 | 0 | 自動では回せない 2 |
