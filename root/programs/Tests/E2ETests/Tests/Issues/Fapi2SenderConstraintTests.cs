@@ -118,6 +118,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 JsonResponse bare = await client.TokenAsync(form);
 
                 r.VerifyEqual("invalid_request", "invalid_request", bare.Error ?? "（無い）");
+                r.Verify("断る理由は、送信者の拘束が無いこと（error_description）",
+                    (bare.ErrorDescription ?? "").Contains("sender-constrained"),
+                    "sender-constrained …", bare.ErrorDescription ?? "（無い）");
                 r.Verify("トークンを出さない", string.IsNullOrEmpty(bare.AccessToken),
                     "出さない", string.IsNullOrEmpty(bare.AccessToken) ? "出さない" : "**出した**");
 
@@ -181,6 +184,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     Fapi2SenderConstraintTests.RefreshForm(client, reg, issuer, token.RefreshToken));
 
                 r.VerifyEqual("invalid_request", "invalid_request", bare.Error ?? "（無い）");
+                r.Verify("断る理由は、送信者の拘束が無いこと（error_description）",
+                    (bare.ErrorDescription ?? "").Contains("sender-constrained"),
+                    "sender-constrained …", bare.ErrorDescription ?? "（無い）");
                 r.Verify("トークンを出さない", string.IsNullOrEmpty(bare.AccessToken),
                     "出さない", string.IsNullOrEmpty(bare.AccessToken) ? "出さない" : "**出した**");
 
@@ -232,6 +238,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 });
 
                 r.VerifyEqual("invalid_request", "invalid_request", bare.Error ?? "（無い）");
+                r.Verify("断る理由は、送信者の拘束が無いこと（error_description）",
+                    (bare.ErrorDescription ?? "").Contains("sender-constrained"),
+                    "sender-constrained …", bare.ErrorDescription ?? "（無い）");
                 r.Verify("トークンを出さない", string.IsNullOrEmpty(bare.AccessToken),
                     "出さない", string.IsNullOrEmpty(bare.AccessToken) ? "出さない" : "**出した**");
 

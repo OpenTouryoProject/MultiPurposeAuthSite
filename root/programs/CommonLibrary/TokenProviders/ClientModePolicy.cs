@@ -34,6 +34,7 @@
 //*  2026/11/08  玄人 幸道         mTLS の行のコメント「net10.0 のみ」を、E2E の測り方の話だと分かる書き方にした（行は両版で効く。#345）
 //*  2026/11/09  玄人 幸道         認可コード × private_key_jwt の行から device を外した（#346。#224 で水準の比較から移しただけの行で、意図が無かった）
 //*  2026/11/24  玄人 幸道         client_credentials を、非対称の証明（private_key_jwt・mTLS）なら fapi2 にも開いた（#424）
+//*  2026/11/24  玄人 幸道         client_credentials の行のコメントを、fapi2 は送信者の拘束を項目によらず強制する形に直した（#429）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -199,7 +200,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   **一般の要件のうち、認証の方法（6：MTLS か private_key_jwt）は、この表で証明を限って守る**
             //   （client_secret の fapi2 は、従来どおり unauthorized_client）。
             //   **`aud` を issuer だけにする（8）・受ける alg（§5.4.1）は、クライアント認証の段で fapi2 に掛かる。**
-            //   **送信者の拘束（4・5）は、認可コードと同じく登録の項目（`dpop_bound_access_tokens` など。#346）で強制する。**
+            //   **送信者の拘束（4・5）は、fapi2 の登録では項目によらず強制する**（#429。`CmnEndpoints.CheckSenderConstraint`。
+            //   #424 の時点では、認可コードと同じく登録の項目（`dpop_bound_access_tokens` など。#346）に任せていた）。
             //   **認可エンドポイントの規定（§5.3.2.2：PAR・PKCE・redirect_uri）は、このグラントには掛からない。**
             //   **以前は normal だけだった**ので、FAPI 2.0 の RP として登録したクライアントが使えず、
             //   **適合性テストの fapi_client_credentials_grant は normal の登録で回していた**（#416）。

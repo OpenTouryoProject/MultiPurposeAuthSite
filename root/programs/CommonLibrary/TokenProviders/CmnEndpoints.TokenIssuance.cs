@@ -390,6 +390,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// |---|---|---|
         /// | `dpop_bound_access_tokens` | **`invalid_request` で断る** | RFC 9449 §5.2（断る MUST。コードは決めていない） |
         /// | `tls_client_certificate_bound_access_tokens` | **`invalid_request` で断る** | RFC 8705 §3.4（エラーか、縛らないトークンかはサーバが決める。**ここでは断る**） |
+        /// | **`client_mode=fapi2`**（項目によらない） | **DPoP の鍵にも証明書にも縛れなければ `invalid_request` で断る**（**その経路と証明が fapi2 に許されているときだけ**。許されない組み合わせは、後の `CheckClientMode` が `unauthorized_client`） | FAPI 2.0 Security Profile §5.3.2.1 の 4・5（#429） |
         ///
         /// **`invalid_dpop_proof` にしない** — それは「証明が在って、通らなかった」ときのコード（RFC 9449 §5）。
         /// **`invalid_client` にしない** — クライアントの認証は通っている。

@@ -137,20 +137,88 @@ namespace MultiPurposeAuthSite.Util.Test
                     == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
         }
 
-        /// <summary>DPoP の証明を添えて、トークン エンドポイントへ要求する</summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri（コンテナ化の対応をしたもの）</param>
-        /// <param name="credential">送るクライアント認証</param>
+        /// <summary>DPoP の証明を添えて、トークン エンドポイントへ要求する（private_key_jwt で認証する）</summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri（**コンテナ化の対応をする前のもの**。`htu` に入れる）</param>
+        /// <param name="credential">送るクライアント認証（`UsesDPoP` が true のもの。fapi2 の private_key_jwt）</param>
         /// <param name="body">grant_type などの本文</param>
         /// <returns>結果のJSON文字列</returns>
         private static async Task<string> TokenRequestWithDPoPAsync(
             Uri tokenEndpointUri, SelfTestClient.ClientCredential credential, Dictionary<string, string> body)
         {
-            Tuple<JWS, JObject> key = SelfTestWebApi.DPoPKey.Value;
+            //  **fapi2 で DPoP を添えるのは private_key_jwt のときだけ**（`UsesDPoP`。fapi2 は client_secret を許さない）。
+            Dictionary<string, string> form = new Dictionary<string, string>(body)
+            {
+                { "client_id", credential.ClientId },
+                { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" },
+                { "client_assertion", credential.ClientAssertion }
+            };
 
-            return await OAuth2AndOIDCClient.TokenRequestWithDPoPAsync(
-                tokenEndpointUri, body,
-                credential.ClientId, credential.ClientSecret, credential.ClientAssertion, credential.AuthMethod,
-                key.Item1, key.Item2);
+            return await SelfTestWebApi.SendWithDPoPAsync(
+                HttpMethod.Post, tokenEndpointUri, () => new FormUrlEncodedContent(form), null);
+        }
+
+        /// <summary>DPoP の証明を添えて送る</summary>
+        /// <param name="method">HTTP メソッド</param>
+        /// <param name="uri">宛先（**コンテナ化の対応をする前のもの**。`htu` に入れる）</param>
+        /// <param name="createContent">本文を作る（送り直すときに作り直すため。無ければ null）</param>
+        /// <param name="accessToken">資源への要求なら access_token（`Authorization: DPoP` と `ath`。トークン要求なら null）</param>
+        /// <returns>応答の本文</returns>
+        /// <remarks>
+        /// **`htu` は、設定から作った宛先（コンテナ化の対応をする前）にする。** **要求は、コンテナ化の対応をした宛先へ送る。**
+        /// **サーバは `htu` の期待値を設定から作る**（`CmnDPoP.TokenEndpointUri`。要求の `Host` を信じない）ので、
+        /// **書き換えた宛先を `htu` に入れると、コンテナの配備（`OAuth2ContainerizatedAuthSvr*`）で断られる**（#429 の別モデルのレビューの指摘）。
+        /// **Open棟梁 の `TokenRequestWithDPoPAsync`・`SendWithDPoPAsync` は、`htu` を送る宛先から取る**ので、ここでは使わない。
+        /// **`use_dpop_nonce` で断られたら、受け取った nonce を入れて 1 回だけ送り直す**（RFC 9449 §8・§9。Open棟梁 の口と同じ振る舞い）。
+        /// </remarks>
+        private static async Task<string> SendWithDPoPAsync(
+            HttpMethod method, Uri uri, Func<HttpContent> createContent, string accessToken)
+        {
+            Tuple<JWS, JObject> key = SelfTestWebApi.DPoPKey.Value;
+            Uri sendUri = SelfTestWebApi.ToContainerUri(uri);
+            string htu = uri.GetLeftPart(UriPartial.Path);
+            string nonce = null;
+
+            for (int attempt = 0; ; attempt++)
+            {
+                using (HttpRequestMessage req = new HttpRequestMessage(method, sendUri))
+                {
+                    if (createContent != null)
+                    {
+                        req.Content = createContent();
+                    }
+
+                    req.Headers.Add(OAuth2AndOIDCConst.HttpHeader_DPoP,
+                        DPoPProof.Create(key.Item1, key.Item2, method.Method, htu, accessToken, nonce));
+
+                    if (accessToken != null)
+                    {
+                        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                            OAuth2AndOIDCConst.DPoP, accessToken);
+                    }
+
+                    using (HttpResponseMessage res = await OAuth2AndOIDCClient.HttpClient.SendAsync(req))
+                    {
+                        string responseBody = await res.Content.ReadAsStringAsync();
+
+                        //  **`use_dpop_nonce`**：Token エンドポイントは本文（400）で、資源は `WWW-Authenticate`（401）で返す（RFC 9449 §8・§9）。
+                        //    **新しい nonce は `DPoP-Nonce` ヘッダ**で来る。
+                        if (attempt == 0
+                            && (responseBody.Contains("use_dpop_nonce")
+                                || res.Headers.WwwAuthenticate.ToString().Contains("use_dpop_nonce"))
+                            && res.Headers.TryGetValues(OAuth2AndOIDCConst.HttpHeader_DPoPNonce, out IEnumerable<string> nonces))
+                        {
+                            nonce = System.Linq.Enumerable.FirstOrDefault(nonces);
+
+                            if (!string.IsNullOrEmpty(nonce))
+                            {
+                                continue;
+                            }
+                        }
+
+                        return responseBody;
+                    }
+                }
+            }
         }
 
         /// <summary>access_token が DPoP の鍵に縛られているか（payload の `cnf.jkt`）</summary>
@@ -259,10 +327,8 @@ namespace MultiPurposeAuthSite.Util.Test
         public static async Task<string> UpdateAccessTokenByRefreshTokenAsync(
             Uri tokenEndpointUri, SelfTestClient.ClientCredential credential, string refreshToken)
         {
-            // コンテナ化サポート
-            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
-
             //  **fapi2 の登録（tls_client_auth 以外）は、DPoP の証明を添える**（#429）。
+            //    **コンテナ化の対応は、送る側で行う**（`htu` は対応する前の宛先。`SendWithDPoPAsync`）。
             if (SelfTestWebApi.UsesDPoP(credential))
             {
                 return await SelfTestWebApi.TokenRequestWithDPoPAsync(tokenEndpointUri, credential,
@@ -272,6 +338,9 @@ namespace MultiPurposeAuthSite.Util.Test
                         { OAuth2AndOIDCConst.RefreshToken, refreshToken }
                     });
             }
+
+            // コンテナ化サポート
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.UpdateAccessTokenByRefreshTokenAsync(
@@ -298,21 +367,16 @@ namespace MultiPurposeAuthSite.Util.Test
             Uri userInfoUri = new Uri(
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
 
-            // コンテナ化サポート
-            userInfoUri = SelfTestWebApi.ToContainerUri(userInfoUri);
-
             //  **DPoP の鍵に縛られた access_token は、DPoP の証明（ath 付き）で送る**（RFC 9449 §7。#429）。
             //    **Bearer で送ると断られる。** 縛ったのは、自己テストの鍵（`DPoPKey`）である。
+            //    **コンテナ化の対応は、送る側で行う**（`htu` は対応する前の宛先。`SendWithDPoPAsync`）。
             if (SelfTestWebApi.IsDPoPBound(accessToken))
             {
-                Tuple<JWS, JObject> key = SelfTestWebApi.DPoPKey.Value;
-
-                using (HttpResponseMessage res = await OAuth2AndOIDCClient.SendWithDPoPAsync(
-                    () => new HttpRequestMessage(HttpMethod.Get, userInfoUri), key.Item1, key.Item2, accessToken))
-                {
-                    return await res.Content.ReadAsStringAsync();
-                }
+                return await SelfTestWebApi.SendWithDPoPAsync(HttpMethod.Get, userInfoUri, null, accessToken);
             }
+
+            // コンテナ化サポート
+            userInfoUri = SelfTestWebApi.ToContainerUri(userInfoUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
@@ -519,10 +583,8 @@ namespace MultiPurposeAuthSite.Util.Test
             Uri tokenEndpointUri, SelfTestClient.ClientCredential credential,
             string redirect_uri, string code, string code_verifier)
         {
-            // コンテナ化サポート
-            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
-
             //  **fapi2 の登録（tls_client_auth 以外）は、DPoP の証明を添える**（FAPI 2.0 Security Profile §5.3.2.1 の 4。#429）。
+            //    **コンテナ化の対応は、送る側で行う**（`htu` は対応する前の宛先。`SendWithDPoPAsync`）。
             if (SelfTestWebApi.UsesDPoP(credential))
             {
                 Dictionary<string, string> body = new Dictionary<string, string>()
@@ -539,6 +601,9 @@ namespace MultiPurposeAuthSite.Util.Test
 
                 return await SelfTestWebApi.TokenRequestWithDPoPAsync(tokenEndpointUri, credential, body);
             }
+
+            // コンテナ化サポート
+            tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(

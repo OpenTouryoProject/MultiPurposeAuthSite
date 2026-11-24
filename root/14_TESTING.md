@@ -1907,6 +1907,27 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **device_code・CIBA の内部の認可コードの再利用** | どちらも最後は同じ `AuthorizationCodeProvider.Receive` で引き換える。device_code・`auth_req_id` そのものの 2 回目は、それぞれの記録で先に断られる（`RT-332.3`・`.4`） |
 | **コードの期限を過ぎた後の再利用** | 行が掃除で消えるので、存在しないコードと同じに断る（失効はさせない） |
 
+##### fapi2 の登録は、送信者に縛れないトークン要求を断る（`RT-429.*`。#429）
+
+| | 測ること |
+|---|---|
+| **`RT-429.1`** | **認可コード**：`private_key_jwt` の fapi2 の登録（`TestClient_32`。縛りの項目は立てていない）が DPoP の証明を添えずに引き換えると `invalid_request`。**断られた code は使っておらず、DPoP の証明を添えれば引き換えられ、`token_type` は `DPoP`** |
+| **`RT-429.2`** | **refresh_token**：DPoP の証明が無ければ `invalid_request`、添えれば更新できる |
+| **`RT-429.3`** | **client_credentials**：DPoP の証明が無ければ `invalid_request`（添えれば通ることは `RT-424.1`） |
+
+- **FAPI 2.0 Security Profile §5.3.2.1 の 4**（送信者に縛ったトークンだけを出す）。**以前は、縛りの登録の項目（#346）を立てた登録だけを強制していた**（`ANALYSIS-IdP.md` の D-16。#429 で fapi2 についてだけ改めた）
+- **判定は `CmnEndpoints.CheckSenderConstraint`**（経路と証明を受け、**その組み合わせが fapi2 に許されているときだけ**断る）。**client_secret の fapi2 は従来どおり `unauthorized_client`**（`RT-424.3`）、**`tls_client_auth` の fapi2 は証明書に縛られて通る**（`RT-424.2`・`FA-6.1`）、**normal の登録は変わらない**（`RT-398.1`）
+- **fapi2 の登録でトークンを取る既存のテスト**（`RT-238.4`・`RT-239.5`・`RT-294.51`・`RT-352.1`・`RT-355.1`・`RT-367.1`）は、**DPoP の証明を添える**（`IdPClient.TokenWithDPoPAsync`。確かめる値は変えていない）
+- **同梱の自己テストの FAPI2 のボタン**（`tls_client_auth` 以外）は、**DPoP で引き換え・更新し、`/userinfo` も DPoP で呼ぶ**（`SelfTestWebApi`。鍵はプロセスごとに作る）。`RT-345.1`・`.2`・`RT-246.1` が通ることで測る。**証明の `htu` は、コンテナ化の対応（`OAuth2ContainerizatedAuthSvr*`）をする前の宛先にする**（サーバは `htu` の期待値を設定から作るため。別モデルのレビューの指摘）。**コンテナの中の自己テストの FAPI2 のボタンは、E2E では測っていない**（`CN-*` は FAPI2 のボタンを押さない）
+- 直す前は、`RT-429.1`〜`.3` が両版で落ちた（強制を外した手元の版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ROPC** | fapi2 には許していない（`ClientModePolicy`）ので、この強制は掛からない |
+| **net48 版の mTLS** | 証明書の準備が要る（`-NetFxMtls`）。判定は `CommonLibrary` で共通 |
+
 ##### 承認の画面に、クライアントのロゴ・ポリシー・利用規約を出す（`RT-427.*`。#427）
 
 | | 測ること |

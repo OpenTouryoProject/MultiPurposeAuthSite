@@ -1210,6 +1210,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN FrontChannelLogoutUri varchar(512) NULL;
 | DPoP・クライアント証明書 | **トークン エンドポイントの全グラント**（`refresh_token` を含む。**code などを消費する前**） | `invalid_request`（**`invalid_dpop_proof` は「証明が在って通らない」ときのコード**なので使わない） |
 | DPoP・クライアント証明書（`token` を含む `response_type`。Implicit・Hybrid） | **認可エンドポイント**（エラーは RP へ返る。PAR の口でも同じ） | `unauthorized_client`（RFC 6749 §4.2.2.1。**そこで出す access_token は縛れない**ので、この経路を許さない） |
 
+- **fapi2 の登録（`client_mode=fapi2`）は、この 2 つの項目によらず、送信者の拘束を必須にする**（#429。FAPI 2.0 Security Profile §5.3.2.1 の 4）。**DPoP の証明も、証明書（`tls_client_auth` で認証したもの）も無いトークン要求を、`invalid_request` で断る**（全グラント。**code などを消費する前**）。**client_secret の fapi2 のように、そもそも許されない組み合わせは、従来どおり `unauthorized_client`**。**ほかの登録種別は、従来どおり項目を立てたときだけ** — **#424 までは fapi2 も項目しだいで、項目を立てていない `private_key_jwt` の fapi2 に、縛りの無い Bearer のトークンを出していた**
 - **PAR を必須にすると、`/ros`（独自の口）で預けた `request_uri` も断られる**（PAR ではないため）。
   経路は、預けた中身にサーバが付ける印で見分ける（クライアントが同じ名前を入れても上書きする）
 - **この実装は `request` パラメタを受けない**（`request_parameter_supported` は false）。

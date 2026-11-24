@@ -165,7 +165,7 @@ cd ..\CTS
   `RunTestPlan.ps1` が手元の `appsettings.json` から埋めて、**`out\<プラン>.json` に書く**（`out\` は Git の管理外）
 - 画面から回すときは、`out\<プラン>.json` を貼る
 - **Conformance Suite のログ（`mongo\`）と報告書の zip（`out\`）には、ブラウザの自動操作で入力したテスト利用者のパスワードが平文で残る**（`Entering text` の記録）。どちらも Git の管理外だが、**ログや報告書を、そのまま Issue などに貼らない**
-- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回、#416 で 3 回、#422 で 1 回、#421 の全プランで 4 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
+- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回、#416 で 3 回、#422 で 1 回、#421 の全プランで 4 回、#429 の FAPI 2.0 の 10 プランで 1 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
 
 **画面の写し（REVIEW）を求めるモジュールは、モジュールごとの `"override"` で、そのときの画面を写しの代わりにする**（原本の CI の設定 `.gitlab-ci/local-provider-oidcc-conformance-config.json` と同じ書き方）。
 `wait` のコマンドの末尾に `update-image-placeholder`（無くてもよいなら `-optional`）を付けると、待った画面で写しの欄が埋まる。
@@ -232,6 +232,7 @@ cd ..\CTS
 
   - **WARNING は、#421 を直した後の数**（2026-11-23。直す前は、`fapi2-sp-plain-oauth`・`fapi2-sp-client-credentials`・`fapi-ciba-mtls-poll` を除いて WARNING 1 で、PASSED が 1 少なかった。どれも #421。上の「OP の不適合で落ちていたモジュール（直した）」）。
     **#421 の全プランの実行では、`fapi2-ms-mtls`・`fapi2-sp-plain-oauth` で、上の「サインインのボタンを押しても画面が変わらない」事象が 1 件ずつ出た**（表の数は、それを除いた数。`fapi2-sp-plain-oauth` は `ensure-pkce-code-verifier-required`、`fapi2-ms-mtls` は `ensure-request-object-with-nbf-8-seconds-in-the-future-is-accepted`。どれもサインインの画面で止まり、認可コードを出す前）
+  - **#429 で、fapi2 の登録は送信者の拘束（DPoP か MTLS）を、登録の項目によらず必須にした**（FAPI 2.0 Security Profile §5.3.2.1 の 4）。**FAPI 2.0 の 10 プラン（SP 6・MS 4）を回し、#421 の全プランの実行から落ちたモジュールは無かった**（2026-11-24。Conformance Suite のクライアントは、どのプランでも DPoP か MTLS で縛るため）。違ったのは、サインインのボタンの事象だけ（#421 で事象に当たった 2 件は今回は通り、別の 1 件が当たった。`fapi2-ms-unsigned-jarm` の `ensure-dpopproof-with-iat-10seconds-after-succeeds` で、PAR は通り、サインインの画面で止まった）
   - **FAPI 1.0 Advanced の MTLS は、#398 で止まらない**（`client_assertion` を使わない）。`private_key_jwt` のプランで #398 の先にある判定を、版を緩めずに確かめられる
   - `fapi2-ms-signed-plain-response` は、#416 のときは FAILED 3 で、その 1 つは上の「サインインのボタンを押しても画面が変わらない」事象だった（1 回目は `par-without-duplicate-parameters`、回し直すとそれは通り、`ensure-authorization-request-without-nonce-success` が同じ形で落ちた。**同じモジュールが続けて落ちてはいない**）
   - `fapi-ciba-mtls-poll` には、ほかに TIMEOUT が 1 つある（`ensure-authorization-request-with-potentially-bad-binding-message`。`fapi-ciba-private-key-jwt-poll` と同じ）

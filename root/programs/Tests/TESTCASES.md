@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=eda81c8f-bdff-4aac-86b4-03e6b4b995c9&code=bogus
+1. GET /Account/EmailConfirmation?userId=5668fdaa-1007-40d8-bd0e-58e0dec3995a&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=eda81c8f-bdff-4aac-86b4-03e6b4b995c9&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=eda81c8f-bdff-4aac-86b4-03e6b4b995c9&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=5668fdaa-1007-40d8-bd0e-58e0dec3995a&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=5668fdaa-1007-40d8-bd0e-58e0dec3995a&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -14091,6 +14091,68 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - javascript: の値を出さない
 - data: の値を出さない
 - http: の値を出さない
+
+## RT-429.1 **fapi2 の登録の認可コードの引き換えは、DPoP の証明も証明書も無ければ `invalid_request` で断る。断られた code は使っておらず、DPoP の証明を添えれば引き換えられる**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、送信者に縛ったトークンだけを出すことを求める**（§5.3.2.1 の 4）。**以前は、縛りの登録の項目を立てていない fapi2 の登録に、Bearer のトークンを出していた**（#346 の D-16。#424 の別モデルのレビューの指摘）。**断るのは code を使う前**（断られた後に、同じ code でやり直せる。#346 と同じ）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / #429 |
+| テスト | `RT42901_fapi2の認可コードはDPoPが無ければ断る` |
+
+**手順**
+
+1. PKCE（S256）で認可コードを得る
+1. DPoP の証明を添えずに引き換える
+1. 同じ code を、DPoP の証明を添えて引き換える（client_assertion は作り直す）
+
+**検証（合否を判定する）**
+
+- invalid_request
+- 断る理由は、送信者の拘束が無いこと（error_description）
+- トークンを出さない
+- HTTP 200（断られた code は使っていない）
+- token_type が DPoP
+
+## RT-429.2 **fapi2 の登録の refresh_token の更新は、DPoP の証明も証明書も無ければ `invalid_request` で断る。添えれば更新できる**
+
+| | |
+|---|---|
+| 観点 | **更新で出す access_token も、送信者に縛る**（§5.3.2.1 の 4 はグラントを限らない）。**秘密を持つクライアントの refresh_token そのものは鍵に縛らない**（RFC 9449 §5。#367）ので、更新のたびに今の鍵の証明を添える。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 9449 §5 / #429 |
+| テスト | `RT42902_fapi2のrefresh_tokenはDPoPが無ければ断る` |
+
+**手順**
+
+1. DPoP の証明を添えて認可コードを引き換え、refresh_token を得る
+1. DPoP の証明を添えずに更新する
+1. DPoP の証明を添えて更新する
+
+**検証（合否を判定する）**
+
+- invalid_request
+- 断る理由は、送信者の拘束が無いこと（error_description）
+- トークンを出さない
+- HTTP 200
+- token_type が DPoP
+
+## RT-429.3 **fapi2 の登録の client_credentials は、DPoP の証明も証明書も無ければ `invalid_request` で断る**
+
+| | |
+|---|---|
+| 観点 | **#424 で fapi2 に開けた client_credentials も、送信者に縛る**（§5.3.2.1 の 4）。**DPoP の証明を添えれば通ることは `RT-424.1`** が測る。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / #429 |
+| テスト | `RT42903_fapi2のclient_credentialsはDPoPが無ければ断る` |
+
+**手順**
+
+1. DPoP の証明を添えずに、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- invalid_request
+- 断る理由は、送信者の拘束が無いこと（error_description）
+- トークンを出さない
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
