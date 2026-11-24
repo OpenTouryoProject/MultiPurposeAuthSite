@@ -42,6 +42,7 @@
 //*  2026/11/12  玄人 幸道         動的登録で sector_identifier_uri を検査の前に取りに行くようにした（#364）
 //*  2026/11/12  玄人 幸道         jwks_uri・sector_identifier_uri を取りに行くのは、認可を確かめた後だけにした（#364）
 //*  2026/11/24  玄人 幸道         テスト用の資源（/TestResource。openid を求めない）を足した（#425）
+//*  2026/11/24  玄人 幸道         TestHybridFlow を、既定の経路から来ても IsLockedDownTestEndpoints で閉じるようにした（#431）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -541,12 +542,18 @@ namespace MultiPurposeAuthSite.Controllers
         //   **既定では同一オリジン**（OAuth2AuthorizationServerEndpointsRootURI と
         //   OAuth2ClientEndpointsRootURI が同じ値）なので、本来 CORS は要らない。
         //   **2 つを別ホストにした配備では、クロス オリジンになる**ので開けておく。
-        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じる**（WebApiConfig）ため、
+        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じ、動作の中でも閉じる**（#431）（WebApiConfig）ため、
         //   **本番では、このポリシーも届かない。**
         //   **資格情報は許さない**（SupportsCredentials を付けない）。
         [EnableCors(origins: "*", headers: "*", methods: "*")]
         public async Task<Dictionary<string, object>> TestHybridFlow(FormDataCollection formData)
         {
+            //  **経路だけでなく、ここでも閉じる**（#431）。**既定の経路（`/api/OAuth2ResourceServer/TestHybridFlow`）からも届くため。**
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                throw new HttpResponseException(HttpStatusCode.NotFound);
+            }
+
             // 変数
             string code = formData[OAuth2AndOIDCConst.code];
 

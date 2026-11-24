@@ -71,6 +71,11 @@
     **-Filter と併せて使うこと**（Implicit / Hybrid（token を含むもの）のテストは落ちる）。
       .\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"
 
+.PARAMETER LockedDown
+    テスト用の口を閉じた配備のテスト（RT-431）専用。IsLockedDownTestEndpoints を true にしてサイトを起動する（test.ps1 に渡す。#431）。
+    **-Filter と併せて使うこと**（自己テスト・Logout の受信箱などを使うテストは落ちる）。
+      .\2_RunAllTests.ps1 -Launch -LockedDown -Filter "FullyQualifiedName~LockedDownTests"
+
 .PARAMETER ShortLifetimes
     有効期限のテスト（RT-188）専用。寿命をごく短くしてサイトを起動する（test.ps1 に渡す。#188）。
     **-Filter と併せて使うこと**（寿命が短いので、他のテストは落ちる）。
@@ -116,6 +121,7 @@
      2026/10/22  玄人 幸道         -DPoPNonce を追加（nonce のテストを回す。#311 の段階 4）
      2026/10/24  玄人 幸道         -NoImplicit を追加（Implicit を閉じた配備のテストを回す。#314）
      2026/10/31  玄人 幸道         store\ を Container\Store\ に読み替えた（#318）
+     2026/11/24  玄人 幸道         -LockedDown を追加（テスト用の口を閉じた配備のテストを回す。#431）
 #>
 [CmdletBinding()]
 param(
@@ -132,6 +138,7 @@ param(
     [switch]$ShortLifetimes,
     [switch]$DPoPNonce,
     [switch]$NoImplicit,
+    [switch]$LockedDown,
     [switch]$NoWebUI,
     [switch]$Coverage,
     [string]$Filter,
@@ -193,6 +200,7 @@ if ($NetFxMtls) { $splat.NetFxMtls = $true }
 if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
 if ($DPoPNonce) { $splat.DPoPNonce = $true }
 if ($NoImplicit) { $splat.NoImplicit = $true }
+if ($LockedDown) { $splat.LockedDown = $true }
 if ($NoWebUI) { $splat.NoWebUI = $true }
 if ($Coverage) { $splat.Coverage = $true }
 if ($Url)      { $splat.Url      = $Url }
