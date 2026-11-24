@@ -60,6 +60,7 @@
 //*  2026/11/17  玄人 幸道         IssuerAsync の同期版 Issuer を足した（client_assertion の aud に使う。#398）
 //*  2026/11/21  玄人 幸道         サインインの画面から ReturnUrl で戻る SignInViaSignInPageAsync を足した（#413）
 //*  2026/11/23  玄人 幸道         PostWithCertificateAsync に、要求ヘッダ（DPoP など）を足せるようにした（#423）
+//*  2026/11/24  玄人 幸道         DPoP の証明を添えてトークン エンドポイントを呼ぶ TokenWithDPoPAsync を足した（#429）
 //**********************************************************************************
 
 using System;
@@ -1115,6 +1116,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> TokenAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/token", form);
+        }
+
+        /// <summary>トークン エンドポイントを、DPoP の証明（EC の鍵）を添えて呼ぶ（#429）</summary>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **fapi2 の登録は、DPoP の鍵か証明書に縛れないトークン要求を断る**（FAPI 2.0 Security Profile §5.3.2.1 の 4。#429）。
+        /// **縛ること自体を測るのではないテスト**が、fapi2 の登録でトークンを取るときに使う。
+        /// **`htu` は Discovery が広告する `token_endpoint`**（ほかの DPoP のテストと同じ。RFC 9449 §4.2）。
+        /// </remarks>
+        public async Task<JsonResponse> TokenWithDPoPAsync(IDictionary<string, string> form)
+        {
+            JsonResponse discovery = await this.GetJsonAsync("/.well-known/openid-configuration");
+            string tokenEndpoint = discovery.String("token_endpoint");
+
+            string proof = JwsSigner.SignDPoP(this, new Dictionary<string, object>()
+            {
+                { "jti", Guid.NewGuid().ToString("N") },
+                { "htm", "POST" },
+                { "htu", tokenEndpoint },
+                { "iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }
+            });
+
+            return await this.PostJsonAsync(this.ToLocalUrl(tokenEndpoint), form,
+                new Dictionary<string, string>() { { "DPoP", proof } });
         }
 
         /// <summary>

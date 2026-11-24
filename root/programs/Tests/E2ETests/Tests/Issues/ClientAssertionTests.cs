@@ -34,6 +34,7 @@
 //*  2026/11/08  玄人 幸道         RT-238.4 : 自己テストの FAPI2 のボタンが PKCE を使うので、code_verifier も送る（#345）
 //*  2026/11/13  玄人 幸道         RT-238.1〜.3 の PAR に S256 の PKCE を足した（fapi2 は PKCE 無しを断るようになった。#366）
 //*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
+//*  2026/11/24  玄人 幸道         RT-238.4 は、fapi2 の登録でトークンを取るときに DPoP の証明を添える（fapi2 は送信者の拘束が必須になった。#429）
 //**********************************************************************************
 
 using System;
@@ -286,7 +287,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) client_assertion を添えて、code をトークンに交換する（code_verifier も送る。#345）");
 
-                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                JsonResponse token = await client.TokenWithDPoPAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "authorization_code" },
                     { "code", authz.Code },

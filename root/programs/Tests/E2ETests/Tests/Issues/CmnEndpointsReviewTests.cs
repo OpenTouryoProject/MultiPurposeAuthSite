@@ -40,6 +40,7 @@
 //*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
 //*  2026/11/17  玄人 幸道         RT-294.54 に、issuer を含む要素 2 つ以上の配列の aud を断ることを足し、根拠に RFC 10070 §4 を足した（#397）
 //*  2026/11/17  玄人 幸道         RT-294.54 を、トークン エンドポイントの URL を断る形に改めた。client_assertion の既定の aud を issuer にした（RFC 10070 §4。#398）
+//*  2026/11/24  玄人 幸道         RT-294.51 は、fapi2 の登録でトークンを取るときに DPoP の証明を添える（fapi2 は送信者の拘束が必須になった。#429）
 //**********************************************************************************
 
 using System;
@@ -773,7 +774,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) code_verifier と client_assertion を送って交換する");
 
-                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                JsonResponse token = await client.TokenWithDPoPAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "authorization_code" },
                     { "code", authz.Code },
@@ -793,7 +794,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 Assert.False(string.IsNullOrEmpty(authz2.Code), "前提: 認可コードが取得できること");
 
-                JsonResponse wrong = await client.TokenAsync(new Dictionary<string, string>()
+                JsonResponse wrong = await client.TokenWithDPoPAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "authorization_code" },
                     { "code", authz2.Code },
