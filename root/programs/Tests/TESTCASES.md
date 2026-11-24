@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=5668fdaa-1007-40d8-bd0e-58e0dec3995a&code=bogus
+1. GET /Account/EmailConfirmation?userId=38cb4df8-4466-47a1-8c18-ee81f83dec5f&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=5668fdaa-1007-40d8-bd0e-58e0dec3995a&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=5668fdaa-1007-40d8-bd0e-58e0dec3995a&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=38cb4df8-4466-47a1-8c18-ee81f83dec5f&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=38cb4df8-4466-47a1-8c18-ee81f83dec5f&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -8597,7 +8597,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **`client_name` は登録しても無視する**（RFC 7591 §3.2.1 が認めている）— **`ClientName` の列は利用者名であり、`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない**（利用者名を漏らさないため）。
+- **`client_name` は、画面に出す名前の列（`ClientDisplayName`）に入り、応答で返る**（#430。`RT-430.3`）。**`ClientName` の列（識別の名前）は利用者名のまま**で、`Helper.GetClientName` が「登録が在るか」の判定に使っている。**応答にも入れない**（利用者名を漏らさないため）。
 
 ## RT-307.2 トークンが無ければ `401`、scope が足りなければ `403` ＋ `insufficient_scope`
 
@@ -14153,6 +14153,120 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - invalid_request
 - 断る理由は、送信者の拘束が無いこと（error_description）
 - トークンを出さない
+
+## RT-430.1 **画面に出す名前（`client_display_name`・`ClientDisplayName`）を登録したクライアントは、同意の画面と、認可の要求から来たサインインの画面に、その名前が出る。値はエスケープして出す**
+
+| | |
+|---|---|
+| 観点 | **OIDC Registration 1.0 §2 の `client_name` は、利用者に示すクライアントの名前。****識別の名前（`ClientName`。利用者名・内部の名前）とは別に持つ**（#430）。**登録者が決めた値なので、`<`・`&` などを生で出さない**（Razor のエスケープ）。 |
+| 根拠 | OIDC Registration 1.0 §2 / #430 |
+| テスト | `RT43001_画面に出す名前を登録したクライアントは名前が出る` |
+
+**手順**
+
+1. 同意の画面（prompt=consent）
+1. 認可の要求から来たサインインの画面（サインインしていない別のクライアントで）
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 名前の欄に、画面に出す名前が出る
+- `<` を生で出さない（エスケープしている）
+- 名前の欄に、画面に出す名前が出る
+- `<` を生で出さない（エスケープしている）
+
+## RT-430.2 **画面に出す名前を登録していないクライアントは、同意の画面に名前を出さない**（識別の名前 `client_name`・`ClientName` には倒さない）
+
+| | |
+|---|---|
+| 観点 | **構成ファイルの `client_name` は内部の名前**（自己テスト・E2E が引く名前）、**DB の `ClientName` は所有者の利用者名**なので、利用者に見せない（#430）。 |
+| 根拠 | #430 |
+| テスト | `RT43002_画面に出す名前が無ければ名前を出さない` |
+
+**手順**
+
+1. 同意の画面（prompt=consent）
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 名前の欄を出さない
+- 識別の名前（client_name）を、名前として出さない
+
+## RT-430.3 **動的登録で送った `client_name` は、応答の `client_name` で返り、同意の画面に名前として出る。登録者の利用者名は名前として出ない**
+
+| | |
+|---|---|
+| 観点 | **以前は `client_name` を受け取っても無視し、応答にも入れなかった**（`ClientName` の列は所有者の利用者名のため）。**画面に出す名前の列（`ClientDisplayName`）を別に持ち、そこに入れる**（#430）。**OIDC Registration 1.0 §2 の `client_name` は、利用者に示すクライアントの名前。** |
+| 根拠 | OIDC Registration 1.0 §2 / RFC 7591 §3.2.1 / #430 |
+| テスト | `RT43003_動的登録のclient_nameは応答で返り同意の画面に出る` |
+
+**手順**
+
+1. client_name を付けて登録する
+1. 返った資格情報で、同意の画面を開く（prompt=consent）
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答の client_name は、送った値
+- 同意の画面が出る
+- 名前の欄に、送った client_name が出る
+- 名前の欄に、登録者の利用者名は出ない
+
+## RT-430.4 **動的登録の `client_name` は、`GET` で返り、`PUT` で省けば消える。文字列でない値・制御文字（双方向の制御文字を含む）・256 文字を超える名前は `invalid_client_metadata`**
+
+| | |
+|---|---|
+| 観点 | **`PUT` は全置換**（RFC 7592 §2.2。ほかの登録したメタデータと同じ）。**画面に出す名前なので、人が読む文字列だけを受ける**（RFC 7591 §2。**改行や RLO で表示を偽らせない**。#430 の別モデルのレビューの指摘）。 |
+| 根拠 | RFC 7592 §2.1・§2.2 / RFC 7591 §2・§3.2.2 / #430 |
+| テスト | `RT43004_client_nameはGETで返りPUTで省けば消え人が読めない値は断る` |
+
+**手順**
+
+1. client_name を付けて登録し、GET で読む
+1. client_name を省いて PUT する
+1. 文字列でない client_name（オブジェクト）
+1. 双方向の制御文字（RLO）を含む client_name
+1. 改行を含む client_name
+1. 257 文字の client_name
+1. 対照：256 文字の client_name は登録できる
+
+**検証（合否を判定する）**
+
+- GET の client_name は、登録した値
+- PUT は 200
+- PUT の応答に client_name が無い（消えた）
+- GET でも client_name が無い
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 201
+
+## RT-430.5 **管理画面の「表示名」の欄で保存した名前は、同意の画面に出る。見えない文字（双方向の制御文字など）を含む名前は出さない**
+
+| | |
+|---|---|
+| 観点 | **動的登録は見えない文字を含む `client_name` を断る**（`RT-430.4`）が、**管理画面と構成ファイルは確かめない**。**入口によらず、出す側で絞る**（`ClientDisplay`。#430 の別モデルのレビューの指摘）。 |
+| 根拠 | #430（設計：ClientDisplay の remarks） |
+| テスト | `RT43005_管理画面の表示名は出て見えない文字を含む名前は出さない` |
+
+**手順**
+
+1. 表示名「E2E 管理画面の表示名 430」で登録し、同意の画面を開く
+1. 表示名「abc<RLO>def」で登録し、同意の画面を開く
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 名前の欄に、保存した表示名が出る
+- 同意の画面が出る
+- 見えない文字を含む表示名は、名前の欄に出さない
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

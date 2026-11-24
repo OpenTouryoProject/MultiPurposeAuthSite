@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/24  玄人 幸道         新規作成（#427）
+//*  2026/11/24  玄人 幸道         見えない文字の判定を足した（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -73,6 +74,25 @@ namespace MultiPurposeAuthSite.Tests.Unit.Sts
         public void httpsの絶対URIでなければ通さない(string value)
         {
             Assert.Null(ClientDisplay.HttpsOnly(value));
+        }
+
+        /// <summary>見えない文字（Cc・Cf・Zl・Zp）を含む名前を見分ける</summary>
+        /// <param name="value">名前</param>
+        /// <param name="expected">含むか</param>
+        [Theory]
+        [Basis("#430（設計：ClientDisplay.HasInvisibleCharacter の remarks。別モデルのレビューの指摘）")]
+        [InlineData("E2E RP <430> & 表示名", false)]
+        [InlineData("abc\u202Edef", true)]
+        [InlineData("abc\u2066def", true)]
+        [InlineData("abc\u200Bdef", true)]
+        [InlineData("abc\uFEFFdef", true)]
+        [InlineData("abc\u00ADdef", true)]
+        [InlineData("abc\u2028def", true)]
+        [InlineData("abc\ndef", true)]
+        [InlineData("abc\tdef", true)]
+        public void 見えない文字を含む名前を見分ける(string value, bool expected)
+        {
+            Assert.Equal(expected, ClientDisplay.HasInvisibleCharacter(value));
         }
 
         /// <summary>ReturnUrl が同じサイトの相対パスでなければ、クライアントを引かない</summary>

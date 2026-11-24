@@ -1854,7 +1854,7 @@ Content-Type: application/json
 | **`response_types`** | **既定は `code`**。**`code` を使うなら `authorization_code`、`token` / `id_token` を使うなら `implicit` が要る**（§2 の対応） |
 | `scope` | **`scopes_supported` の範囲内**。**`client_registration` と `auth` は断る** |
 | `client_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
-| `logo_uri` / `tos_uri` / `policy_uri` | **保存して返し、承認の画面（同意・認可の要求から来たサインイン）に出す**（OIDC Registration 1.0 §2。#427。**`client_name` は出さない** — 画面・動的登録の登録の `ClientName` は登録した利用者の利用者名で、RP が送った `client_name` は保存していない）。**登録では絶対 URI であることしか見ない**が、**画面には https の絶対 URI だけを出す**（それ以外は出さない） |
+| `logo_uri` / `tos_uri` / `policy_uri` | **保存して返し、承認の画面（同意・認可の要求から来たサインイン）に出す**（OIDC Registration 1.0 §2。#427。**`client_name` は、識別の名前 `ClientName` ではなく、画面に出す名前の列に入れて出す**。下の「画面に出す名前」。#430）。**登録では絶対 URI であることしか見ない**が、**画面には https の絶対 URI だけを出す**（それ以外は出さない） |
 | `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
 | **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`none`（パブリック）も登録できる**（#294）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
 | **`jwks`** | **受け付ける**（段階 3）。**RSA 1 本 ＋ EC 1 本まで**（列が 1 本ずつ）。**同じ種類が 2 本来たら断る** |
@@ -1888,6 +1888,9 @@ Content-Type: application/json
 | 構成ファイル | クライアントごとのキー `client_display_name`（任意） |
 | 管理画面 | 「表示名（client_name）」の欄 |
 | 動的登録 | 要求の `client_name`（応答の `client_name` で返る） |
+
+- **動的登録の `client_name` は、人が読む文字列だけを受ける**：文字列でない値、制御文字・双方向の制御文字（改行・RLO など）を含む名前、256 文字を超える名前は `invalid_client_metadata`。空白だけは「無い」にする。**管理画面・構成ファイルの値は確かめないが、見えない文字（制御文字・書式文字・行と段落の区切り）を含む名前は、画面に出さない**（`ClientDisplay`）
+- **登録者が決めた名前を、そのまま出す**（確かめず、「未確認」とも添えない。#430 で決めた）。**動的登録を開けた配備では、他社の名前を名乗る登録で、利用者を信用させる画面を作れる**（#427 のロゴと同じ事情）。**動的登録を開けるなら、登録を管理すること**。**見えない文字の判定は Unicode の分類（Cc・Cf・Zl・Zp）だけで、何も描かない文字（U+3164 など）や似た字形の文字（ホモグリフ）は通る**
 
 **既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 名前を出さない。以前どおり）。**
 

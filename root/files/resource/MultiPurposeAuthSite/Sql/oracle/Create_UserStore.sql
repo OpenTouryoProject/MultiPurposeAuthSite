@@ -191,7 +191,7 @@ CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "AuthorizationSignedResponseAlg" NVARCHAR2(16) NULL, -- authorization_signed_response_alg（JARM §3）
     "RequestUris" NVARCHAR2(2000) NULL,              -- request_uris（OIDC Registration 1.0 §2。#374）。Const.MaxLengthOfRequestUris（空白区切りの列挙）
     -- 画面に出す名前（#430）。末尾に足してある（ALTER … ADD で揃う）。**ClientName（識別の名前・利用者名）とは別**
-    "ClientDisplayName" NVARCHAR2(256) NULL,        -- client_name（OIDC Registration 1.0 §2）。Const.MaxLengthOfClientName
+    "ClientDisplayName" NVARCHAR2(256) NULL,        -- client_name（OIDC Registration 1.0 §2）。Const.MaxLengthOfClientDisplayName
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 

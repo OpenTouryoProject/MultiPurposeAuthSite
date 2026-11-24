@@ -589,13 +589,32 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **`client_name` は、画面に出す名前の列に入れる**（#430。OIDC Registration 1.0 §2）。
             //    **`ClientName`（識別の名前）には入れない** — **そちらは所有者の利用者名**（`Create`）。
-            model.ClientDisplayName = ClientRegistrationProvider.GetString(metadata, Const.ClientName);
+            //    **人が読む文字列だけを受ける**（RFC 7591 §2）。**画面に出すので、次は断る**（#430 の別モデルのレビューの指摘）：
+            //    **文字列でない値**（オブジェクト・配列・数値を JSON のまま名前にしない）、
+            //    **制御文字・書式文字・行と段落の区切り**（改行・RLO・幅ゼロの文字などで、画面の表示を偽る。`ClientDisplay.HasInvisibleCharacter`）。**空白だけは「無い」にする。**
+            if (ClientRegistrationProvider.Has(metadata, Const.ClientName)
+                && metadata[Const.ClientName].Type != JTokenType.String
+                && metadata[Const.ClientName].Type != JTokenType.Null)
+            {
+                description = "The client_name must be a string.";
+                return false;
+            }
 
-            if (Const.MaxLengthOfClientDisplayName < (model.ClientDisplayName ?? "").Length)
+            string clientName = ClientRegistrationProvider.GetString(metadata, Const.ClientName).Trim();
+
+            if (Const.MaxLengthOfClientDisplayName < clientName.Length)
             {
                 description = "The client_name is too long.";
                 return false;
             }
+
+            if (MultiPurposeAuthSite.Util.Sts.ClientDisplay.HasInvisibleCharacter(clientName))
+            {
+                description = "The client_name must not contain control characters.";
+                return false;
+            }
+
+            model.ClientDisplayName = (clientName.Length == 0) ? null : clientName;
 
             model.SoftwareId = ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareId);
             model.SoftwareVersion = ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareVersion);

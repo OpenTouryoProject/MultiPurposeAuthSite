@@ -30,6 +30,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2026/11/24  玄人 幸道         新規（logo_uri・policy_uri・tos_uri。OIDC Registration 1.0 §2。#427）
+    //*  2026/11/24  玄人 幸道         画面に出す名前（client_name）を出すようにした（#430）
     //**********************************************************************************
 *@
 
@@ -41,12 +42,16 @@
     **値は Razor がエスケープする。** 外へのリンクは、開いた先から元の画面を触らせない（`noopener`）・参照元を渡さない（`noreferrer`）。
     **ロゴの画像も、参照元を渡さない**（`referrerpolicy="no-referrer"`。サインインの画面の URL は、認可の要求の `state` などを含む `ReturnUrl` を持つ）。
     **呼ぶ側は、Model が null のときは呼ばない**（null を渡すと、親のモデルが渡る）。
-    **`client_name` は出さない**（画面・動的登録の登録の名前は、登録した利用者の利用者名のため。`ClientDisplay` の remarks。#427）。
+    **名前は、画面に出す名前（`client_display_name`・`ClientDisplayName`。#430）だけ。** 識別の名前（`ClientName`。利用者名・内部の名前）は出さない（`ClientDisplay` の remarks）。
 *@
 <div id="client-display" class="client-display">
     @if (!string.IsNullOrEmpty(Model.LogoUri))
     {
-        <img id="client-logo" src="@Model.LogoUri" alt="@AccountViews.ClientDisplayLogo" referrerpolicy="no-referrer" style="max-height: 64px; max-width: 256px;" />
+        <img id="client-logo" src="@Model.LogoUri" alt="@(Model.Name ?? AccountViews.ClientDisplayLogo)" referrerpolicy="no-referrer" style="max-height: 64px; max-width: 256px;" />
+    }
+    @if (!string.IsNullOrEmpty(Model.Name))
+    {
+        <p id="client-name">@string.Format(AccountViews.ClientDisplayRequest, Model.Name)</p>
     }
     @if (!string.IsNullOrEmpty(Model.PolicyUri) || !string.IsNullOrEmpty(Model.TosUri))
     {

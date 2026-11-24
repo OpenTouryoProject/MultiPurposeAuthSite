@@ -303,4 +303,7 @@
   <data name="ClientDisplayTos" xml:space="preserve">
     <value>Terms of service</value>
   </data>
+  <data name="ClientDisplayRequest" xml:space="preserve">
+    <value>{0} is requesting your sign-in and authorization.</value>
+  </data>
 </root>

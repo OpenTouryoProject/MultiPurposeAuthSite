@@ -303,4 +303,7 @@
   <data name="ClientDisplayTos" xml:space="preserve">
     <value>利用規約</value>
   </data>
+  <data name="ClientDisplayRequest" xml:space="preserve">
+    <value>{0} が、サインインと認可を求めています。</value>
+  </data>
 </root>

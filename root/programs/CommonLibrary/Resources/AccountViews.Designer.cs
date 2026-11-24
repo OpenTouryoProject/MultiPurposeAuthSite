@@ -115,6 +115,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   {0} is requesting your sign-in and authorization. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientDisplayRequest {
+            get {
+                return ResourceManager.GetString("ClientDisplayRequest", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Terms of service に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientDisplayTos {

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/24  玄人 幸道         新規（#427）
+//*  2026/11/24  玄人 幸道         RT-430.1・.2・.5（画面に出す名前）を足した（#430）
 //**********************************************************************************
 
 using System;
@@ -243,7 +244,217 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
         #endregion
 
+        #region RT-430.1
+
+        /// <summary>RT-430.1 画面に出す名前を登録したクライアントは、同意とサインインの画面に名前が出る（エスケープして）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT43001_画面に出す名前を登録したクライアントは名前が出る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-430.1",
+                    "**画面に出す名前（`client_display_name`・`ClientDisplayName`）を登録したクライアントは、同意の画面と、認可の要求から来たサインインの画面に、その名前が出る。値はエスケープして出す**",
+                    "**OIDC Registration 1.0 §2 の `client_name` は、利用者に示すクライアントの名前。**"
+                    + "**識別の名前（`ClientName`。利用者名・内部の名前）とは別に持つ**（#430）。"
+                    + "**登録者が決めた値なので、`<`・`&` などを生で出さない**（Razor のエスケープ）。",
+                    "OIDC Registration 1.0 §2 / #430");
+
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_48);
+
+                r.Target("client_name=" + KnownClients.TestClient_48 + "（画面に出す名前 = " + ClientDisplayTests.DisplayName + "）");
+
+                r.Step("(1) 同意の画面（prompt=consent）");
+
+                AuthZResponse authz = await client.AuthorizeAsync(
+                    ClientDisplayTests.Parameters(reg, "state-rt43001", "consent"));
+
+                r.Verify("同意の画面が出る", authz.NeedsConsent,
+                    "同意の画面", authz.NeedsConsent ? "同意の画面" : "**" + authz.ToString() + "**");
+
+                ClientDisplayTests.VerifyName(r, authz.Body ?? "");
+
+                r.Step("(2) 認可の要求から来たサインインの画面（サインインしていない別のクライアントで）");
+
+                using (IdPClient anonymous = this.Client(targetKey))
+                {
+                    AuthZResponse toLogin = await anonymous.AuthorizeAsync(
+                        ClientDisplayTests.Parameters(reg, "state-rt43001-2", null));
+
+                    Assert.True(toLogin.Redirected && (toLogin.Location ?? "").Contains("/Account/Login"),
+                        "前提: サインインの画面へ送られること（" + toLogin.ToString() + "）");
+
+                    HttpResponseMessage login = await anonymous.GetAsync(anonymous.ToLocalUrl(toLogin.Location));
+
+                    ClientDisplayTests.VerifyName(r, await login.Content.ReadAsStringAsync());
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-430.2
+
+        /// <summary>RT-430.2 画面に出す名前を登録していないクライアントは、名前を出さない（識別の名前に倒さない）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT43002_画面に出す名前が無ければ名前を出さない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-430.2",
+                    "**画面に出す名前を登録していないクライアントは、同意の画面に名前を出さない**（識別の名前 `client_name`・`ClientName` には倒さない）",
+                    "**構成ファイルの `client_name` は内部の名前**（自己テスト・E2E が引く名前）、**DB の `ClientName` は所有者の利用者名**なので、利用者に見せない（#430）。",
+                    "#430");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient + "（構成ファイルの登録。client_display_name・ロゴ・リンクを書いていない）");
+
+                r.Step("(1) 同意の画面（prompt=consent）");
+
+                AuthZResponse authz = await client.AuthorizeAsync(
+                    ClientDisplayTests.Parameters(reg, "state-rt43002", "consent"));
+                string html = ClientDisplayTests.Decode(authz.Body);
+
+                r.Verify("同意の画面が出る", authz.NeedsConsent,
+                    "同意の画面", authz.NeedsConsent ? "同意の画面" : "**" + authz.ToString() + "**");
+                r.Verify("名前の欄を出さない", !html.Contains("id=\"client-name\""),
+                    "出さない", html.Contains("id=\"client-name\"") ? "**出した**" : "出さない");
+
+                bool internalName = html.Contains(KnownClients.TestClient + " が、")
+                    || html.Contains(KnownClients.TestClient + " is requesting");
+
+                r.Verify("識別の名前（client_name）を、名前として出さない", !internalName,
+                    "出さない", internalName ? "**出した**" : "出さない");
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-430.5
+
+        /// <summary>RT-430.5 管理画面で保存した表示名は出る。見えない文字を含む表示名は出さない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT43005_管理画面の表示名は出て見えない文字を含む名前は出さない(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-430.5",
+                    "**管理画面の「表示名」の欄で保存した名前は、同意の画面に出る。見えない文字（双方向の制御文字など）を含む名前は出さない**",
+                    "**動的登録は見えない文字を含む `client_name` を断る**（`RT-430.4`）が、**管理画面と構成ファイルは確かめない**。"
+                    + "**入口によらず、出す側で絞る**（`ClientDisplay`。#430 の別モデルのレビューの指摘）。",
+                    "#430（設計：ClientDisplay の remarks）");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                string name = "e2e_rt4305_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                string password = admin.Config.Get("TestUserPWD");
+
+                //  **クライアント登録の画面は Admin 以上でなければ開かない。**
+                HttpResponseMessage created = await UsersAdmin.CreateAsync(admin, name, name + "@example.com", "Admin");
+
+                Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                    "前提: 利用者を作れること");
+
+                r.Target("管理画面（/Manage/AddSaml2OAuth2Data）で登録したクライアント（利用者 = " + name + "）");
+
+                try
+                {
+                    using (IdPClient client = this.Client(targetKey))
+                    {
+                        Assert.True(await client.TrySignInAsync(name, password), "前提: サインインできること");
+
+                        foreach (KeyValuePair<string, bool> item in new Dictionary<string, bool>()
+                        {
+                            { "E2E 管理画面の表示名 430", true },
+                            { "abc\u202Edef", false }
+                        })
+                        {
+                            r.Step("表示名「" + (item.Value ? item.Key : "abc<RLO>def") + "」で登録し、同意の画面を開く");
+
+                            (string ClientId, string ClientSecret) registered =
+                                await ManageClientRegistration.RegisterWithSecretAsync(client, new Dictionary<string, string>()
+                                {
+                                    { "RedirectUriCode", ClientDisplayTests.AdminRedirectUri },
+                                    { "ClientDisplayName", item.Key }
+                                });
+
+                            Assert.False(string.IsNullOrEmpty(registered.ClientId), "前提: 管理画面でクライアントを登録できること");
+
+                            ClientRegistration reg = new ClientRegistration()
+                            {
+                                ClientId = registered.ClientId,
+                                ClientSecret = registered.ClientSecret,
+                                RedirectUri = ClientDisplayTests.AdminRedirectUri
+                            };
+
+                            AuthZResponse authz = await client.AuthorizeAsync(
+                                ClientDisplayTests.Parameters(reg, "state-rt43005", "consent"));
+                            string html = ClientDisplayTests.Decode(authz.Body);
+
+                            r.Verify("同意の画面が出る", authz.NeedsConsent,
+                                "同意の画面", authz.NeedsConsent ? "同意の画面" : "**" + authz.ToString() + "**");
+
+                            if (item.Value)
+                            {
+                                r.Verify("名前の欄に、保存した表示名が出る",
+                                    html.Contains("id=\"client-name\"") && html.Contains(item.Key),
+                                    item.Key, html.Contains(item.Key) ? "出る" : "**出ない**");
+                            }
+                            else
+                            {
+                                r.Verify("見えない文字を含む表示名は、名前の欄に出さない", !html.Contains("id=\"client-name\""),
+                                    "出さない", html.Contains("id=\"client-name\"") ? "**出した**" : "出さない");
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    await UsersAdmin.DeleteByUserNameAsync(admin, name);
+                }
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
         #region 部品
+
+        /// <summary>管理画面で登録するクライアントの折り返し先（RT-430.5。取りに行かない）</summary>
+        private const string AdminRedirectUri = "https://rp.e2e.example/rt4305/callback";
+
+        /// <summary>登録した画面に出す名前（`TestClient_48`。#430）</summary>
+        private const string DisplayName = "E2E RP <430> & 表示名";
+
+        /// <summary>名前の欄に、画面に出す名前がエスケープして出ていることを確かめる</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="rawHtml">画面の HTML（戻す前）</param>
+        private static void VerifyName(TestReport r, string rawHtml)
+        {
+            string html = ClientDisplayTests.Decode(rawHtml);
+
+            r.Verify("名前の欄に、画面に出す名前が出る",
+                html.Contains("id=\"client-name\"") && html.Contains(ClientDisplayTests.DisplayName),
+                ClientDisplayTests.DisplayName, html.Contains(ClientDisplayTests.DisplayName) ? "出る" : "**出ない**");
+
+            r.Verify("`<` を生で出さない（エスケープしている）", !rawHtml.Contains("<430>"),
+                "生で出さない", rawHtml.Contains("<430>") ? "**生で出した**" : "エスケープしている");
+        }
 
         /// <summary>認可コードの要求のパラメタ</summary>
         /// <param name="reg">クライアント</param>

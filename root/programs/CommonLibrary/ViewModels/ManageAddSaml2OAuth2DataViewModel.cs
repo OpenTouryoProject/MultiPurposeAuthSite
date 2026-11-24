@@ -739,7 +739,7 @@ namespace MultiPurposeAuthSite.ViewModels
         public string ClientUri { get; set; }
 
         /// <summary>LogoUri（RFC 7591 §2 の logo_uri）</summary>
-        /// <remarks>**保存して返すだけ。**</remarks>
+        /// <remarks>**保存して返し、承認の画面（同意・サインイン）に出す**（https の絶対 URI だけ。ClientDisplay。#427）。</remarks>
         [Display(Name = "LogoUri", Description = "LogoUriDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
@@ -750,7 +750,7 @@ namespace MultiPurposeAuthSite.ViewModels
         public string LogoUri { get; set; }
 
         /// <summary>TosUri（RFC 7591 §2 の tos_uri）</summary>
-        /// <remarks>**保存して返すだけ。**</remarks>
+        /// <remarks>**保存して返し、承認の画面（同意・サインイン）に出す**（https の絶対 URI だけ。ClientDisplay。#427）。</remarks>
         [Display(Name = "TosUri", Description = "TosUriDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
@@ -761,7 +761,7 @@ namespace MultiPurposeAuthSite.ViewModels
         public string TosUri { get; set; }
 
         /// <summary>PolicyUri（RFC 7591 §2 の policy_uri）</summary>
-        /// <remarks>**保存して返すだけ。**</remarks>
+        /// <remarks>**保存して返し、承認の画面（同意・サインイン）に出す**（https の絶対 URI だけ。ClientDisplay。#427）。</remarks>
         [Display(Name = "PolicyUri", Description = "PolicyUriDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(

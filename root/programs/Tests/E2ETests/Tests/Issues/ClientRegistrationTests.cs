@@ -38,6 +38,7 @@
 //*  2026/10/30  玄人 幸道         RT-307.16 の (6)（device_code × private_key_jwt を断る）を外した（受けるようにした。#294）
 //*  2026/11/08  玄人 幸道         RT-346.1（プロファイルを強制する 4 つのメタデータを、動的登録で立てて読み戻す）を追加（#346 の段階 1）
 //*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
+//*  2026/11/24  玄人 幸道         RT-430.3（動的登録の client_name は応答で返り、同意の画面に出る）・.4（GET・PUT・断る値）を足し、RT-307.1 の補足を直した（#430）
 //**********************************************************************************
 
 using System;
@@ -45,6 +46,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -220,10 +222,167 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         "返る", string.IsNullOrEmpty(authz.Code)
                             ? "**返らない（error=" + (authz.Error ?? "なし") + "）**" : "返った");
 
-                    r.Note("**`client_name` は登録しても無視する**（RFC 7591 §3.2.1 が認めている）— "
-                        + "**`ClientName` の列は利用者名であり、"
-                        + "`Helper.GetClientName` が「登録が在るか」の判定に使っている。** "
-                        + "**応答にも入れない**（利用者名を漏らさないため）。");
+                    r.Note("**`client_name` は、画面に出す名前の列（`ClientDisplayName`）に入り、応答で返る**（#430。`RT-430.3`）。"
+                        + "**`ClientName` の列（識別の名前）は利用者名のまま**で、"
+                        + "`Helper.GetClientName` が「登録が在るか」の判定に使っている。**応答にも入れない**（利用者名を漏らさないため）。");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-430.3
+
+        /// <summary>RT-430.3 動的登録の client_name は、応答で返り、同意の画面に出る（登録者の利用者名は出ない）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT43003_動的登録のclient_nameは応答で返り同意の画面に出る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-430.3",
+                    "**動的登録で送った `client_name` は、応答の `client_name` で返り、同意の画面に名前として出る。登録者の利用者名は名前として出ない**",
+                    "**以前は `client_name` を受け取っても無視し、応答にも入れなかった**（`ClientName` の列は所有者の利用者名のため）。"
+                    + "**画面に出す名前の列（`ClientDisplayName`）を別に持ち、そこに入れる**（#430）。"
+                    + "**OIDC Registration 1.0 §2 の `client_name` は、利用者に示すクライアントの名前。**",
+                    "OIDC Registration 1.0 §2 / RFC 7591 §3.2.1 / #430");
+
+                r.Target("POST registration_endpoint（client_name を付ける）→ GET /authorize（prompt=consent）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    const string displayName = "E2E 表示名 430";
+
+                    r.Step("(1) client_name を付けて登録する");
+
+                    JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { UriA })
+                        + ",\"client_name\":" + JsonSerializer.Serialize(displayName) + "}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)res.StatusCode).ToString());
+                    r.VerifyEqual("応答の client_name は、送った値", displayName, res.String("client_name") ?? "（無い）");
+
+                    r.Step("(2) 返った資格情報で、同意の画面を開く（prompt=consent）");
+
+                    AuthZResponse authz = await client.AuthorizeAsync(new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", res.String("client_id") },
+                        { "redirect_uri", UriA },
+                        { "scope", "openid" },
+                        { "state", "state-rt43003" },
+                        { "nonce", "nonce-rt43003" },
+                        { "prompt", "consent" }
+                    });
+
+                    r.Verify("同意の画面が出る", authz.NeedsConsent,
+                        "同意の画面", authz.NeedsConsent ? "同意の画面" : "**" + authz.ToString() + "**");
+
+                    //  **同意の画面には「こんにちわ、<利用者名>」も出る**ので、名前の欄（`client-name`）だけを見る。
+                    Match nameLine = Regex.Match(WebUtility.HtmlDecode(authz.Body ?? ""),
+                        "<p id=\"client-name\">(?<text>[^<]*)</p>");
+
+                    r.Verify("名前の欄に、送った client_name が出る",
+                        nameLine.Success && nameLine.Groups["text"].Value.Contains(displayName),
+                        displayName, nameLine.Success ? nameLine.Groups["text"].Value : "**名前の欄が無い**");
+
+                    r.Verify("名前の欄に、登録者の利用者名は出ない",
+                        !nameLine.Success || !nameLine.Groups["text"].Value.Contains(ctx.OwnerName),
+                        "出ない", (nameLine.Success && nameLine.Groups["text"].Value.Contains(ctx.OwnerName)) ? "**出た**" : "出ない");
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-430.4
+
+        /// <summary>RT-430.4 動的登録の client_name は、GET で返り、PUT で省けば消える。人が読む文字列でなければ断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT43004_client_nameはGETで返りPUTで省けば消え人が読めない値は断る(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-430.4",
+                    "**動的登録の `client_name` は、`GET` で返り、`PUT` で省けば消える。文字列でない値・制御文字（双方向の制御文字を含む）・256 文字を超える名前は `invalid_client_metadata`**",
+                    "**`PUT` は全置換**（RFC 7592 §2.2。ほかの登録したメタデータと同じ）。"
+                    + "**画面に出す名前なので、人が読む文字列だけを受ける**（RFC 7591 §2。**改行や RLO で表示を偽らせない**。#430 の別モデルのレビューの指摘）。",
+                    "RFC 7592 §2.1・§2.2 / RFC 7591 §2・§3.2.2 / #430");
+
+                r.Target("POST・GET・PUT registration_endpoint（client_name）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    const string displayName = "E2E 表示名 430-4";
+
+                    r.Step("(1) client_name を付けて登録し、GET で読む");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { UriA })
+                        + ",\"client_name\":" + JsonSerializer.Serialize(displayName) + "}");
+
+                    Assert.Equal(201, (int)created.StatusCode);
+
+                    string clientId = created.String("client_id");
+                    string uri = created.String("registration_client_uri");
+                    string rat = created.String("registration_access_token");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(client, uri, rat);
+
+                    r.VerifyEqual("GET の client_name は、登録した値", displayName, read.String("client_name") ?? "（無い）");
+
+                    r.Step("(2) client_name を省いて PUT する");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(client, uri, rat,
+                        DynamicClientRegistration.UpdateMetadata(clientId, null, UriA));
+
+                    r.VerifyEqual("PUT は 200", "200", ((int)updated.StatusCode).ToString());
+                    r.Verify("PUT の応答に client_name が無い（消えた）", string.IsNullOrEmpty(updated.String("client_name")),
+                        "無い", updated.String("client_name") ?? "無い");
+
+                    JsonResponse reread = await DynamicClientRegistration.ReadAsync(client, uri, rat);
+
+                    r.Verify("GET でも client_name が無い", string.IsNullOrEmpty(reread.String("client_name")),
+                        "無い", reread.String("client_name") ?? "無い");
+
+                    foreach (KeyValuePair<string, string> bad in new Dictionary<string, string>()
+                    {
+                        { "(3) 文字列でない client_name（オブジェクト）", "{\"x\":1}" },
+                        { "(4) 双方向の制御文字（RLO）を含む client_name", JsonSerializer.Serialize("abc\u202Edef") },
+                        { "(5) 改行を含む client_name", JsonSerializer.Serialize("abc\ndef") },
+                        { "(6) 257 文字の client_name", JsonSerializer.Serialize(new string('a', 257)) }
+                    })
+                    {
+                        r.Step(bad.Key);
+
+                        JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token,
+                            "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { UriA })
+                            + ",\"client_name\":" + bad.Value + "}");
+
+                        r.VerifyEqual("HTTP 400", "400", ((int)res.StatusCode).ToString());
+                        r.VerifyEqual("invalid_client_metadata", "invalid_client_metadata", res.Error ?? "（無い）");
+                    }
+
+                    r.Step("(7) 対照：256 文字の client_name は登録できる");
+
+                    JsonResponse max = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { UriA })
+                        + ",\"client_name\":" + JsonSerializer.Serialize(new string('a', 256)) + "}");
+
+                    r.VerifyEqual("HTTP 201", "201", ((int)max.StatusCode).ToString());
                 });
 
                 r.Done();

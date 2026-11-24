@@ -665,7 +665,9 @@ namespace MultiPurposeAuthSite.Util.Test
                 {
                     { Const.ClientLogoUri, "https://rp.e2e.example/logo.png" },
                     { Const.ClientPolicyUri, "https://rp.e2e.example/policy" },
-                    { Const.ClientTosUri, "https://rp.e2e.example/tos" }
+                    { Const.ClientTosUri, "https://rp.e2e.example/tos" },
+                    // **画面に出す名前**（#430。`RT-430.1`）。**エスケープが要る文字を含める**（画面に生で出さないことを見る）。
+                    { Const.ClientDisplayName, "E2E RP <430> & 表示名" }
                 }
             },
             new Entry()
