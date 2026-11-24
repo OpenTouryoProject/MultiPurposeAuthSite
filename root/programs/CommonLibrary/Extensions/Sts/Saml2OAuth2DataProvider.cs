@@ -42,6 +42,7 @@
 //*  2026/11/12  玄人 幸道         SectorIdentifierUri の列を追加（#364）
 //*  2026/11/13  玄人 幸道         AuthorizationSignedResponseAlg の列を追加（#370）
 //*  2026/11/19  玄人 幸道         RequestUris の列を追加した（#374）
+//*  2026/11/24  玄人 幸道         ClientDisplayName の列を足した（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -157,7 +158,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **JARM の署名 alg**（#370）。**末尾に足す**（同上）。
             "AuthorizationSignedResponseAlg",
             //  **取りに行ってよい外部の request_uri**（#374）。**末尾に足す**（同上）。
-            "RequestUris"
+            "RequestUris",
+            //  **画面に出す名前**（#430）。**末尾に足す**（`ALTER … ADD` で揃う）。**`ClientName`（識別の名前）とは別。**
+            "ClientDisplayName"
         };
 
         /// <summary>CORS の許可オリジンを作るのに要る列だけ（#270）</summary>
@@ -377,6 +380,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **取りに行ってよい外部の request_uri**（#374）。
             prm.Add("RequestUris", model.RequestUris);
+            prm.Add("ClientDisplayName", model.ClientDisplayName);
 
             return prm;
         }
@@ -501,7 +505,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 //  **JARM の署名 alg**（#370）。
                 AuthorizationSignedResponseAlg = model.AuthorizationSignedResponseAlg,
                 //  **取りに行ってよい外部の request_uri**（#374）。
-                RequestUris = model.RequestUris
+                RequestUris = model.RequestUris,
+                ClientDisplayName = model.ClientDisplayName
             };
         }
 

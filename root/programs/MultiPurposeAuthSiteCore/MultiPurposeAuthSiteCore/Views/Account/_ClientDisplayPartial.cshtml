@@ -1,0 +1,69 @@
+﻿@*
+    //**********************************************************************************
+    //* Copyright (C) 2026 Hitachi Solutions,Ltd.
+    //**********************************************************************************
+
+    #region Apache License
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    // http://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
+    //
+    #endregion
+
+    //**********************************************************************************
+    //* クラス名        ：_ClientDisplayPartial
+    //* クラス日本語名  ：承認の画面（同意・サインイン）に出す、クライアントの情報
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/11/24  玄人 幸道         新規（logo_uri・policy_uri・tos_uri。OIDC Registration 1.0 §2。#427）
+    //*  2026/11/24  玄人 幸道         画面に出す名前（client_name）を出すようにした（#430）
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Resources
+@model MultiPurposeAuthSite.Util.Sts.ClientDisplay
+
+@*
+    **URL は `ClientDisplay` が https の絶対 URI だけに絞ってある**（それ以外は null。登録では絶対 URI であることしか見ていない）。
+    **値は Razor がエスケープする。** 外へのリンクは、開いた先から元の画面を触らせない（`noopener`）・参照元を渡さない（`noreferrer`）。
+    **ロゴの画像も、参照元を渡さない**（`referrerpolicy="no-referrer"`。サインインの画面の URL は、認可の要求の `state` などを含む `ReturnUrl` を持つ）。
+    **呼ぶ側は、Model が null のときは呼ばない**（null を渡すと、親のモデルが渡る）。
+    **名前は、画面に出す名前（`client_display_name`・`ClientDisplayName`。#430）だけ。** 識別の名前（`ClientName`。利用者名・内部の名前）は出さない（`ClientDisplay` の remarks）。
+*@
+<div id="client-display" class="client-display">
+    @if (!string.IsNullOrEmpty(Model.LogoUri))
+    {
+        <img id="client-logo" src="@Model.LogoUri" alt="@(Model.Name ?? AccountViews.ClientDisplayLogo)" referrerpolicy="no-referrer" style="max-height: 64px; max-width: 256px;" />
+    }
+    @if (!string.IsNullOrEmpty(Model.Name))
+    {
+        <p id="client-name">@string.Format(AccountViews.ClientDisplayRequest, Model.Name)</p>
+    }
+    @if (!string.IsNullOrEmpty(Model.PolicyUri) || !string.IsNullOrEmpty(Model.TosUri))
+    {
+        <p>
+            @if (!string.IsNullOrEmpty(Model.PolicyUri))
+            {
+                <a id="client-policy" href="@Model.PolicyUri" target="_blank" rel="noopener noreferrer">@AccountViews.ClientDisplayPolicy</a>
+            }
+            @if (!string.IsNullOrEmpty(Model.TosUri))
+            {
+                <a id="client-tos" href="@Model.TosUri" target="_blank" rel="noopener noreferrer">@AccountViews.ClientDisplayTos</a>
+            }
+        </p>
+    }
+</div>

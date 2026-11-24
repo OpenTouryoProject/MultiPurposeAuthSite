@@ -36,10 +36,12 @@
 //*  2026/11/02  玄人 幸道         同じ回復コードを同時に送っても、1 回しか使えない（RT-316.3）
 //*                                パスワードを確かめる）を足した（#294）
 //*  2026/11/03  玄人 幸道         RT-331.5（認証アプリの登録を同時に送っても 500 にならない）を足した（#331）
+//*  2026/11/24  玄人 幸道         RT-294.63 で、max_age の窓を過ぎてから確かめた結果を合否に使わず、数え直すようにした（#409）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -672,8 +674,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient admin = this.Client(targetKey))
             {
-                string userName = TwoFactorTests.UniqueName();
-
                 TestReport r = this.Report("RT-294.63",
                     "管理画面でサインインし直しただけでは、auth_time は新しくならない（max_age の再認証が効く）",
                     "**以前は、管理画面の操作のたびにサインインし直し、auth_time を「いま」にしていた。**"
@@ -682,77 +682,137 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**auth_time を書くのは、資格情報を確かめた所だけ**にした（パスワードの再確認など）。",
                     "OIDC Core §2 auth_time / §3.1.2.1 / #294（ManageController.*.cs の 2 回目のレビュー S1）");
 
-                r.Target("利用者名 = " + userName + " / client_name=" + KnownClients.TestClient + " / max_age=2");
+                const int maxAge = 2;
 
-                try
+                r.Target("client_name=" + KnownClients.TestClient + " / max_age=" + maxAge
+                    + "（回ごとに、使い捨ての利用者を作る）");
+
+                r.Step("(1) サインインし、2FA を有効にしておく（手順 2 で、パスワードを確かめて無効にするため）");
+                r.Step("(2) パスワードを確かめて 2FA を無効にし、すぐに max_age=2 で認可リクエストを送る");
+                r.Step("(3) 2FA を有効にし（サインインし直すだけで、資格情報は確かめない）、すぐに max_age=2 で送る");
+                r.Note("**窓を過ぎてから確かめた結果は、合否に使わない**（通しの負荷で応答が遅れると、窓を越える。#409）。"
+                    + "**利用者とクライアントを作り直して、手順 1 から数え直す**（再認証を求めると、OP は再認証の印を残すため。`MaxAgeWindow`）。");
+
+                await admin.SignInAsAdministratorAsync();
+                await UsersAdmin.SkipIfLockedDownAsync(admin);
+
+                bool step2Ok = false;
+                string step2Actual = "";
+                bool step3Ok = false;
+                string step3Actual = "";
+                bool judged = false;
+
+                for (int attempt = 1; attempt <= MaxAgeWindow.MaxAttempts && !judged; attempt++)
                 {
-                    await admin.SignInAsAdministratorAsync();
-                    await UsersAdmin.SkipIfLockedDownAsync(admin);
+                    string userName = TwoFactorTests.UniqueName();
 
-                    HttpResponseMessage created = await UsersAdmin.CreateAsync(
-                        admin, userName, userName + "@example.com", "User");
-
-                    Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
-                        "前提: 利用者を作れること");
-
-                    using (IdPClient user = this.Client(targetKey))
+                    try
                     {
-                        string password = user.Config.Get("TestUserPWD");
-                        ClientRegistration reg = Flows.Registration(user, KnownClients.TestClient);
+                        HttpResponseMessage created = await UsersAdmin.CreateAsync(
+                            admin, userName, userName + "@example.com", "User");
 
-                        r.Step("(1) サインインし、2FA を有効にしておく（手順 2 で、パスワードを確かめて無効にするため）");
+                        Assert.True(created.StatusCode == HttpStatusCode.Found || created.StatusCode == HttpStatusCode.Redirect,
+                            "前提: 利用者を作れること");
 
-                        Assert.True(await user.TrySignInAsync(userName, password),
-                            "前提: 作った利用者でサインインできること");
+                        using (IdPClient user = this.Client(targetKey))
+                        {
+                            string password = user.Config.Get("TestUserPWD");
+                            ClientRegistration reg = Flows.Registration(user, KnownClients.TestClient);
 
-                        await TwoFactorTests.EnableTwoFactorAsync(user);
+                            // (1)
+                            Assert.True(await user.TrySignInAsync(userName, password),
+                                "前提: 作った利用者でサインインできること");
 
-                        //  **秒単位で判定する**ので、max_age を超えるまで待つ（RT-247.1 と同じ）。
-                        await Task.Delay(3000);
+                            await TwoFactorTests.EnableTwoFactorAsync(user);
 
-                        r.Step("(2) パスワードを確かめて 2FA を無効にし、すぐに max_age=2 で認可リクエストを送る");
+                            //  **秒単位で判定する**ので、max_age を超えるまで待つ（RT-247.1 と同じ）。
+                            await Task.Delay(3000);
 
-                        HttpResponseMessage disabled = await TwoFactorTests.PostIndexFormAsync(
-                            user, "/Manage/DisableTwoFactorAuthentication", password);
+                            // (2) **時間は、パスワードを送る直前から、認可要求の応答まで**（実際より長く測る側）。
+                            Stopwatch afterPasswordWatch = Stopwatch.StartNew();
 
-                        Assert.True(disabled.Headers.Location != null,
-                            "前提: 2FA を無効にできること（" + TwoFactorTests.Describe(disabled) + "）");
+                            HttpResponseMessage disabled = await TwoFactorTests.PostIndexFormAsync(
+                                user, "/Manage/DisableTwoFactorAuthentication", password);
 
-                        AuthZResponse afterPassword = await user.AuthorizeAsync(
-                            TwoFactorTests.AuthZParameters(reg, "state-rt29463-1", "2"));
+                            Assert.True(disabled.Headers.Location != null,
+                                "前提: 2FA を無効にできること（" + TwoFactorTests.Describe(disabled) + "）");
 
-                        bool wentOn = afterPassword.NeedsConsent || !string.IsNullOrEmpty(afterPassword.Code);
+                            AuthZResponse afterPassword = await user.AuthorizeAsync(
+                                TwoFactorTests.AuthZParameters(reg, "state-rt29463-1", maxAge.ToString()));
 
-                        r.Verify("パスワードを確かめた直後は、再認証を求めない（先へ進む）", wentOn,
-                            "同意画面 または 認可コード",
-                            afterPassword.NeedsConsent ? "同意画面"
+                            afterPasswordWatch.Stop();
+
+                            bool wentOn = afterPassword.NeedsConsent || !string.IsNullOrEmpty(afterPassword.Code);
+                            string timing2 = MaxAgeWindow.Timing(afterPasswordWatch.Elapsed, maxAge, attempt);
+
+                            if (!wentOn && !MaxAgeWindow.CanJudge(afterPasswordWatch.Elapsed, maxAge))
+                            {
+                                //  **窓を過ぎてから再認証を求められた。** OP は正しいので、判定できない。
+                                step2Ok = false;
+                                step2Actual = MaxAgeWindow.Unjudged(afterPasswordWatch.Elapsed, maxAge);
+                                step3Ok = false;
+                                step3Actual = "（手順 2 を判定できず、確かめていない）";
+                                continue;
+                            }
+
+                            step2Ok = wentOn;
+                            step2Actual = (afterPassword.NeedsConsent ? "同意画面"
                                 : (!string.IsNullOrEmpty(afterPassword.Code) ? "認可コード"
-                                    : "**進まない**（" + afterPassword.ToString() + "）"));
+                                    : "**進まない**（" + afterPassword.ToString() + "）")) + "（" + timing2 + "）";
 
-                        await Task.Delay(3000);
+                            if (!wentOn)
+                            {
+                                //  **窓の中で再認証を求められた**（不合格）。サインアウトしているので、手順 3 は確かめられない。
+                                step3Ok = false;
+                                step3Actual = "（手順 2 で再認証を求められ、サインアウトしたので、確かめていない）";
+                                judged = true;
+                                continue;
+                            }
 
-                        r.Step("(3) 2FA を有効にし（サインインし直すだけで、資格情報は確かめない）、すぐに max_age=2 で送る");
+                            await Task.Delay(3000);
 
-                        await TwoFactorTests.EnableTwoFactorAsync(user);
+                            // (3) **時間は、サインインし直す操作の直前から、認可要求の応答まで**。
+                            //   **窓を過ぎてから再認証になったなら、直す前の振る舞い（auth_time を新しくする）でも
+                            //   再認証になる**ので、合格にしない（空振りの合格。#409）。
+                            Stopwatch afterReSignInWatch = Stopwatch.StartNew();
 
-                        AuthZResponse afterReSignIn = await user.AuthorizeAsync(
-                            TwoFactorTests.AuthZParameters(reg, "state-rt29463-2", "2"));
+                            await TwoFactorTests.EnableTwoFactorAsync(user);
 
-                        bool reAuth = afterReSignIn.Redirected
-                            && !afterReSignIn.NeedsConsent && string.IsNullOrEmpty(afterReSignIn.Code);
+                            AuthZResponse afterReSignIn = await user.AuthorizeAsync(
+                                TwoFactorTests.AuthZParameters(reg, "state-rt29463-2", maxAge.ToString()));
 
-                        r.Verify("再認証を求める（同意画面にも、認可コードにも進まない）", reAuth,
-                            "再認証へのリダイレクト",
-                            reAuth ? afterReSignIn.RedirectTo
+                            afterReSignInWatch.Stop();
+
+                            bool reAuth = afterReSignIn.Redirected
+                                && !afterReSignIn.NeedsConsent && string.IsNullOrEmpty(afterReSignIn.Code);
+                            string timing3 = MaxAgeWindow.Timing(afterReSignInWatch.Elapsed, maxAge, attempt);
+
+                            if (reAuth && !MaxAgeWindow.CanJudge(afterReSignInWatch.Elapsed, maxAge))
+                            {
+                                step3Ok = false;
+                                step3Actual = MaxAgeWindow.Unjudged(afterReSignInWatch.Elapsed, maxAge);
+                                continue;
+                            }
+
+                            step3Ok = reAuth;
+                            step3Actual = (reAuth ? afterReSignIn.RedirectTo
                                 : (afterReSignIn.NeedsConsent ? "**同意画面へ進んだ**"
                                     : (!string.IsNullOrEmpty(afterReSignIn.Code) ? "**認可コードが出た**"
-                                        : "**" + afterReSignIn.ToString() + "**")));
+                                        : "**" + afterReSignIn.ToString() + "**"))) + "（" + timing3 + "）";
+                            judged = true;
+                        }
+                    }
+                    finally
+                    {
+                        await TwoFactorTests.CleanUpAsync(admin, userName);
                     }
                 }
-                finally
-                {
-                    await TwoFactorTests.CleanUpAsync(admin, userName);
-                }
+
+                r.Verify("パスワードを確かめた直後は、再認証を求めない（先へ進む）", step2Ok,
+                    "同意画面 または 認可コード", step2Actual);
+
+                r.Verify("再認証を求める（同意画面にも、認可コードにも進まない）", step3Ok,
+                    "再認証へのリダイレクト（窓の中で）", step3Actual);
 
                 r.Done();
             }

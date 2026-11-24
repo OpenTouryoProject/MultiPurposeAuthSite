@@ -43,6 +43,7 @@
 | 有効期限（`RT-188`）を、寿命を短くして回す | `.\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"` | 1 |
 | DPoP の nonce（`RT-311.13` / `.14`）を回す | `.\2_RunAllTests.ps1 -Launch -DPoPNonce -Filter "FullyQualifiedName~DPoPNonceTests"` | [`14_TESTING.md`](14_TESTING.md) 5 節 |
 | Implicit を閉じた配備（`RT-314`）を回す | `.\2_RunAllTests.ps1 -Launch -NoImplicit -Filter "FullyQualifiedName~ImplicitDisabledTests"` | [`14_TESTING.md`](14_TESTING.md) 5 節 |
+| テスト用の口を閉じた配備（`RT-431`）を回す | `.\2_RunAllTests.ps1 -Launch -LockedDown -Filter "FullyQualifiedName~LockedDownTests"` | [`14_TESTING.md`](14_TESTING.md) 5 節 |
 | net48 版でも mTLS（`FA-6`）を回す（証明書の準備・後片付けが要る） | `.\SetupNetFxMtls.ps1 -Action Prepare` → （管理者）`-Action Trust` → `.\2_RunAllTests.ps1 -Launch -NetFxMtls` → （管理者）`-Action Cleanup` | 1 |
 | 証明書の準備ができているかを見る | `.\SetupNetFxMtls.ps1 -Action Check` | 1 |
 | DB のストアで回す（`sql` / `ora` / `npg`。`container\Store\` の DB コンテナを起動・停止する） | `.\2_RunAllTests.ps1 -Launch -UserStoreType sql` | [`14_TESTING.md`](14_TESTING.md) 1 節 |

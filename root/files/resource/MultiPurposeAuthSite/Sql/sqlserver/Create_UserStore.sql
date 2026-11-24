@@ -103,6 +103,7 @@ CREATE TABLE [AuthenticationCodeDictionary](
     [Key] [nvarchar](64) NOT NULL,           -- PK
     [Value] [nvarchar](max) NOT NULL,        -- AuthenticationCode
     [CreatedDate] [smalldatetime] NOT NULL,
+    [UsedDate] [smalldatetime] NULL,         -- 引き換えた時刻（NULL なら未使用）。再利用に気付くため、期限まで残す（#421）
     CONSTRAINT [PK.AuthenticationCodeDictionary] PRIMARY KEY NONCLUSTERED ([Key] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
@@ -220,6 +221,8 @@ CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     -- JARM の署名 alg（#370）。末尾に足してある（ALTER … ADD で揃う）
     [AuthorizationSignedResponseAlg] [nvarchar](16) NULL, -- authorization_signed_response_alg（JARM §3）
     [RequestUris] [nvarchar](2000) NULL,             -- request_uris（OIDC Registration 1.0 §2。#374）。Const.MaxLengthOfRequestUris（空白区切りの列挙）
+    -- 画面に出す名前（#430）。末尾に足してある（ALTER … ADD で揃う）。**ClientName（識別の名前・利用者名）とは別**
+    [ClientDisplayName] [nvarchar](256) NULL,        -- client_name（OIDC Registration 1.0 §2）。Const.MaxLengthOfClientDisplayName
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

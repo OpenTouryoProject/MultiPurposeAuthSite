@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/10  玄人 幸道         新規（#352）
 //*  2026/11/10  玄人 幸道         中の JWS の alg も確かめ、登録の alg で署名されることの RT-355.1 を追加（#355）
+//*  2026/11/24  玄人 幸道         RT-352.1・RT-355.1 は、fapi2 の登録でトークンを取るときに DPoP の証明を添える（fapi2 は送信者の拘束が必須になった。#429）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -109,7 +110,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 string issuer = await client.IssuerAsync();
 
-                JsonResponse token = await client.TokenAsync(
+                JsonResponse token = await client.TokenWithDPoPAsync(
                     AsymmetricAuthTests.WithClientAssertion(client, reg.ClientId,
                         new Dictionary<string, string>()
                         {
@@ -132,7 +133,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 Assert.False(string.IsNullOrEmpty(refreshToken), "前提: refresh_token が返ること（RT-239.5）");
 
-                JsonResponse refreshed = await client.TokenAsync(
+                JsonResponse refreshed = await client.TokenWithDPoPAsync(
                     AsymmetricAuthTests.WithClientAssertion(client, reg.ClientId,
                         new Dictionary<string, string>()
                         {
@@ -187,7 +188,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が発行されること（" + authz.ToString() + "）");
 
-                JsonResponse token = await client.TokenAsync(
+                JsonResponse token = await client.TokenWithDPoPAsync(
                     AsymmetricAuthTests.WithClientAssertion(client, reg.ClientId,
                         new Dictionary<string, string>()
                         {
@@ -212,7 +213,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 Assert.False(string.IsNullOrEmpty(refreshToken), "前提: refresh_token が返ること（" + token.ToString() + "）");
 
-                JsonResponse refreshed = await client.TokenAsync(
+                JsonResponse refreshed = await client.TokenWithDPoPAsync(
                     AsymmetricAuthTests.WithClientAssertion(client, reg.ClientId,
                         new Dictionary<string, string>()
                         {

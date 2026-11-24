@@ -37,6 +37,7 @@
 //*  2026/11/18  玄人 幸道         jwks_uri を温める前に、行き先のアドレスを判定するようにした（#376）
 //*  2026/11/19  玄人 幸道         PUT で request_uris を要求から作り直すようにした（#374）
 //*  2026/11/20  玄人 幸道         jwks_uri を温めるとき、専用の HttpClient（OutboundUrlPolicy.HttpClient）で取りに行くようにした（OpenTouryo#718。#405）
+//*  2026/11/24  玄人 幸道         PUT で、画面に出す名前（client_name）も全置換にした（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -502,7 +503,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | 順 | 列 | 扱い |
         /// |---|---|---|
-        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` / `RequestUris` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
+        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `ClientDisplayName`（`client_name`。#430） / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` / `RequestUris` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
         /// | 2 | `Jwk*` ↔ `JwksUri` | **要求が片方を入れたら、もう片方は消える**（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
         /// | 3 | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` | **要求に在れば置き換え、無ければ持ち越す** |
         /// | 4 | `ClientMode` | **持ち越す**（**空のときだけ `normal`**。管理画面で FAPI の登録にしたものを、`PUT` で下げない） |
@@ -645,6 +646,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //    **`request_uris` も全置換**（#374。省いたら消え、外部の `request_uri` は使えなくなる）。
             model.RequestUris = requested.RequestUris;
+
+            //    **`client_name`（画面に出す名前）も全置換**（#430。省いたら消え、画面に名前が出なくなる）。
+            model.ClientDisplayName = requested.ClientDisplayName;
 
             //    **省いたら、秘密ベース（`client_secret_basic` / `client_secret_post`）に戻る。**
             model.TokenEndpointAuthMethod = requested.TokenEndpointAuthMethod;

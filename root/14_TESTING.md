@@ -1858,6 +1858,160 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 - **`RT-422.3` の (1) は、PAR を必須にしていない fapi2 の登録の振る舞いを変えていないことを確かめるもの**。FAPI 2.0 Security Profile §5.3.2.2 の 3（PAR を使わない要求を断る）は、登録の `require_pushed_authorization_requests`（サーバ全体なら `RequirePushedAuthorizationRequests`）で強制する（#346）
 
+##### mTLS で認証して DPoP で縛るトークンは、証明書に縛らない（`RT-423.*`。#423）
+
+| | 測ること |
+|---|---|
+| **`RT-423.1`** | **`tls_client_auth` の fapi2 の登録で、DPoP の証明を添えて認可コードを交換したトークンは、`cnf.jkt` だけを持ち（`x5t#S256` が無い）、証明書なしで DPoP だけで `/userinfo` を使える**（RFC 8705 §4・§3.4・RFC 9449 §1）。**証明を添えずに `Bearer` で呼ぶと `401`**（縛りが外れていない） |
+| **`RT-423.2`** | **`tls_client_auth` の normal の登録の client_credentials も同じ**（トークンを作る関数が別：`CreateFromClaims`） |
+| **`RT-423.3`** | **`tls_client_certificate_bound_access_tokens` の登録は、DPoP の証明が在っても、従来どおり証明書にも縛る**（`x5t#S256` と `jkt` の両方。RFC 8705 §3.4） |
+
+- **縛るものを決めるのは `CmnEndpoints.CheckSenderConstraint` の 1 か所**（トークンを出す 7 つの経路が通る）。**証明書を必須にしていない登録で DPoP の証明が在れば、証明書には縛らない**
+- **DPoP の証明が無ければ、従来どおり認証した証明書に縛る**（`FA-6.4`・`RT-346.7`・`.12`。期待値は変えていない）
+- 直す前は、`RT-423.1`・`.2` のトークンが `x5t#S256` も持ち、`RT-423.1` の DPoP だけの `/userinfo` が `401` だった（判定を止めた手元の版で、net10.0 版で確かめた）
+- **mTLS を測れるのは net10.0 版だけ**（net48 版は `-NetFxMtls` のとき。`MtlsTests.MtlsTargets`）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **refresh_token・ROPC・JWT Bearer・CIBA・device_code の経路** | どれも同じ `CheckSenderConstraint` を通り、縛るものは `x509` と `jkt` で決まる（経路ごとの分岐は無い）。E2E は、作る関数の違う 2 つ（`ProtectFromPayload`・`CreateFromClaims`）で測る |
+| **net48 版の mTLS** | 証明書の準備が要る（`-NetFxMtls`）。判定は `CommonLibrary` で共通 |
+
+##### 認可コードが再利用されたら、そのコードから出したトークンを失効させる（`RT-421.*`。#421）
+
+| | 測ること |
+|---|---|
+| **`RT-421.1`** | **2 回目の引き換えは `400` ＋ `invalid_grant` で断り、1 回目の access_token（`/userinfo` が `401`）と refresh_token（`invalid_grant`）が使えなくなる**（RFC 6749 §4.1.2 の SHOULD）。access_token に認可の ID（`urn:mpas:authorization_id`）が在ることも見る |
+| **`RT-421.2`** | **1 回目の refresh_token で更新して出した access_token・refresh_token も使えなくなる**（「そのコードに基づいて出したトークン」） |
+| **`RT-421.3`** | **別のクライアントが自分の資格情報で使用済みのコードを出しても、`invalid_grant` で断るだけで、コードを出したクライアントのトークンは失効させない** |
+| **`RT-421.4`** | **refresh_token を `/revoke` で失効させると、同じ認可の access_token も `/userinfo` が `401` になる**（RFC 7009 §2.1 の SHOULD。`ANALYSIS-IdP.md` の E-13） |
+| **`RT-421.5`** | **使用済みの refresh_token が出されたら、同じ認可の access_token（更新の前と後の両方）も `401`、更新で出した refresh_token も `invalid_grant`**（E-13。一族の失効は #188） |
+| **`RT-421.6`** | **PKCE のコードの 2 回目を、誤った `code_verifier` で出したら `invalid_grant` で断るだけで失効させず（1 回目の `/userinfo` は `200`）、正しい `code_verifier` で出したら失効させる**（RFC 7636 §4.6 の確かめが、引き換えより前に済むため） |
+
+- **引き換えたコードの行は消さず、使用済みの印（`UsedDate`）を条件付きの UPDATE で立てる**（立てられた 1 つだけが引き換える。#332 の形のまま）。**行はコードの期限まで残る**ので、**再利用に気付けるのはコードの期限（既定 600 秒）まで**
+- **認可の ID は、コードを作るときに決めて access_token の payload に書く**（`CmnAccessToken.CreatePayloadForCode`）。**payload は refresh_token にも引き継がれ、refresh_token の一族（`FamilyId`）も同じ値**にする。**失効は `RevocationProvider.RevokeAuthorization`**（失効の記録に `g:` ＋ ID を入れ、一族を消す）。**資源の側の検証（`CmnAccessToken.Verify`）は、`jti` に加えて認可の ID も引く**
+- **PKCE・DPoP の確かめは、引き換えの前に済む**ので、**誤った `code_verifier` で出された使用済みのコードは、失効させずに断る**（コードを知るだけの相手に、正規のトークンを止めさせない。`RT-421.6`）
+- **同時に来た 2 つの引き換えは、負けた側を再利用として扱う**（勝った側のトークンも失効する。refresh_token の同時の使用と同じ。`RT-332.1` は 1 回しか出ないことだけを見る）
+- **E-13 も同じ仕組みで直した**：**refresh_token の一族の識別子は認可の ID**なので、**一族を失効させる箇所（`RefreshTokenProvider.Delete`・`Receive`）で、同じ ID を失効させる**（`RevocationProvider.RevokeAuthorization`）
+- 直す前は、`RT-421.1`・`.2` のトークンが 2 回目の引き換えの後も、`RT-421.4`・`.5` の access_token が refresh_token の失効の後も使えた（失効の呼び出しを止めた手元の版で、net10.0 版で確かめた）
+- **この変更の前に出したトークンは、認可の ID を持たない**ので、従来どおり（jti だけで判定する）
+- **資源の側の検証は、認可の ID を持つ access_token で、失効の記録を引く回数が 1 回増える**（`jti` と認可の ID。DB ストアなら往復が 1 回増える）
+- **device_code・CIBA は、承認済みの記録を 1 回目の引き換えで消す**ので、順に来た 2 回目は従来どおり `invalid_grant`（失効させない）。**2 つが同時に記録を読んだときだけ、内部の認可コードの再利用として 1 回目のトークンも失効する**（認可コードの同時の引き換えと同じ扱い）
+- **3 方言（`sql`・`ora`・`npg`）でも回した**（列 `UsedDate` を足したため。`13_CONFIGURATION.md` に `ALTER` を書いた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **device_code・CIBA の内部の認可コードの再利用** | どちらも最後は同じ `AuthorizationCodeProvider.Receive` で引き換える。device_code・`auth_req_id` そのものの 2 回目は、それぞれの記録で先に断られる（`RT-332.3`・`.4`） |
+| **コードの期限を過ぎた後の再利用** | 行が掃除で消えるので、存在しないコードと同じに断る（失効はさせない） |
+
+##### テスト用の資源（`/TestResource`。`RT-425.*`。#425）
+
+| | 測ること |
+|---|---|
+| **`RT-425.1`** | **`openid` の無い client_credentials のトークンで、`/TestResource` は 200（`client_id`・`scope`）。同じトークンの `/userinfo` は今までどおり 403。トークンが無ければ 401（`WWW-Authenticate` 付き）、壊れたトークンは 401 ＋ `invalid_token`**（RFC 6750 §3） |
+| **`RT-425.2`** | **DPoP に縛ったトークンは、正しい証明でだけ使える**（`Bearer` で出す・証明なし・別の鍵・`ath` が別のトークン・`htu` が別の口は 401。RFC 9449 §4.3・§7.1。`Bearer` で出したものを断るのは §7.2）。**`htu` はこの口の URL** |
+
+- **適合性テストの FAPI 2.0 の `fapi2-sp-plain-oauth`・`fapi2-sp-client-credentials` が、資源として呼ぶ口**（`container/CTS/RunTestPlan.ps1` の `ResourcePath`）。**照合は `/userinfo` と同じ製品の部品**で、**`openid` を求めないところだけが違う**
+- **口は `IsDebug` で、`IsLockedDownTestEndpoints` が false のときだけ開く**（それ以外は経路を張らず、動作も 404）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **閉じた配備で 404 になること** | 通しは口を開けた構成で回す（`/TestHybridFlow` と同じ）。**`IsLockedDownTestEndpoints=true` は `RT-431.2`（`-LockedDown` で回す。#431）**。**`IsDebug=false` は E2E では測らない**（`mem` は常に `IsDebug`。判定は単体テスト `Sts/TestResourceTests`） |
+| **POST・DPoP の nonce を求める構成・FAPI の登録のトークンの `x-fapi-interaction-id`** | 照合と応答の作り方は `/userinfo` と同じ部品（`DPoPNonceTests`・`FapiInteractionIdTests` が `/userinfo` で測る）。**開くかの判定（`IsDebug`・`IsLockedDownTestEndpoints`）は単体テスト `Sts/TestResourceTests`** |
+| **証明書に縛ったトークン** | 照合は `/userinfo` と同じ部品（`Fapi/MtlsTests` が `/userinfo` で測る）。**適合性テストの 2 プランは DPoP**（`sender_constrain=dpop`） |
+
+##### 画面に出す名前（`client_name`）を、識別の名前とは別に持って出す（`RT-430.*`。#430）
+
+| | 測ること |
+|---|---|
+| **`RT-430.1`** | **画面に出す名前を登録したクライアント（`TestClient_48`）は、同意の画面と、認可の要求から来たサインインの画面に、その名前が出る**（OIDC Registration 1.0 §2）。**`<`・`&` を含む名前を、生で出さない**（Razor のエスケープ） |
+| **`RT-430.2`** | **画面に出す名前を書いていない構成ファイルの登録（`TestClient`）は、名前を出さない**。**識別の名前（`client_name` の `TestClient`）を名前として出さない** |
+| **`RT-430.3`** | **動的登録で送った `client_name` は、応答の `client_name` で返り（RFC 7591 §3.2.1）、同意の画面に名前として出る**。**登録者の利用者名は、名前の欄に出ない** |
+| **`RT-430.4`** | **`GET` で `client_name` が返り、`PUT` で省けば消える**（RFC 7592 §2.2 の全置換）。**文字列でない値・双方向の制御文字（RLO）・改行・257 文字の `client_name` は `400` ＋ `invalid_client_metadata`**、**256 文字は登録できる**（人が読む文字列だけを受ける。別モデルのレビューの指摘） |
+| **`RT-430.5`** | **管理画面の「表示名」の欄で保存した名前は、同意の画面に出る。双方向の制御文字（RLO）を含む名前は出さない**（**管理画面・構成ファイルは確かめないので、出す側 `ClientDisplay` で絞る**。別モデルのレビューの指摘）。**見えない文字の分類（Cc・Cf・Zl・Zp）は単体テスト `ClientDisplayTests`** |
+
+- **画面に出す名前**は、構成ファイルの `client_display_name`、DB の列 `ClientDisplayName`（動的登録の `client_name`・管理画面の「表示名」の欄）。**識別の名前（構成ファイルの `client_name`・DB の `ClientName` ＝ 所有者の利用者名）とは別**で、**無ければ名前を出さない**
+- **出すのは `ClientDisplay`・`_ClientDisplayPartial.cshtml`**（#427 のロゴ・リンクと同じ所）
+- **`RT-307.1` の補足**（以前は「`client_name` は登録しても無視する」）を直した
+- 直す前は、名前の欄そのものが無く、動的登録の応答に `client_name` も無かった（`RT-430.1`・`.3` は落ちる組み立て。直す前の版で回してはいない。`.2` は直す前も通る、出さない側の確かめ）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **構成ファイルの `client_display_name`** | 構成ファイルの登録に、このキーを書いたクライアントが無い（E2E のクライアントは DB に登録する）。読み出しは `Helper.GetRegisteredValue` で、ほかの項目と同じ経路 |
+| **`client_name` が JSON の `null`・空白だけ、`software_statement` に載った `client_name`** | 「無い」にする分岐と、ほかの登録したメタデータと同じ `software_statement` の経路。動的登録の確かめは `RT-430.4` の 6 種と境界まで（別モデルのレビューの指摘。低） |
+| **ロゴ・リンクが無く、名前だけのクライアントの表示** | `ClientDisplay` の判定は 4 つの値の有無を並べただけ。`RT-430.3` の動的登録のクライアントが名前だけで、同意の画面に名前が出ることを測っている |
+
+##### fapi2 の登録は、送信者に縛れないトークン要求を断る（`RT-429.*`。#429）
+
+| | 測ること |
+|---|---|
+| **`RT-429.1`** | **認可コード**：`private_key_jwt` の fapi2 の登録（`TestClient_32`。縛りの項目は立てていない）が DPoP の証明を添えずに引き換えると `invalid_request`。**断られた code は使っておらず、DPoP の証明を添えれば引き換えられ、`token_type` は `DPoP`** |
+| **`RT-429.2`** | **refresh_token**：DPoP の証明が無ければ `invalid_request`、添えれば更新できる |
+| **`RT-429.3`** | **client_credentials**：DPoP の証明が無ければ `invalid_request`（添えれば通ることは `RT-424.1`） |
+
+- **FAPI 2.0 Security Profile §5.3.2.1 の 4**（送信者に縛ったトークンだけを出す）。**以前は、縛りの登録の項目（#346）を立てた登録だけを強制していた**（`ANALYSIS-IdP.md` の D-16。#429 で fapi2 についてだけ改めた）
+- **判定は `CmnEndpoints.CheckSenderConstraint`**（経路と証明を受け、**その組み合わせが fapi2 に許されているときだけ**断る）。**client_secret の fapi2 は従来どおり `unauthorized_client`**（`RT-424.3`）、**`tls_client_auth` の fapi2 は証明書に縛られて通る**（`RT-424.2`・`FA-6.1`）、**normal の登録は変わらない**（`RT-398.1`）
+- **fapi2 の登録でトークンを取る既存のテスト**（`RT-238.4`・`RT-239.5`・`RT-294.51`・`RT-352.1`・`RT-355.1`・`RT-367.1`）は、**DPoP の証明を添える**（`IdPClient.TokenWithDPoPAsync`。確かめる値は変えていない）
+- **同梱の自己テストの FAPI2 のボタン**（`tls_client_auth` 以外）は、**DPoP で引き換え・更新し、`/userinfo` も DPoP で呼ぶ**（`SelfTestWebApi`。鍵はプロセスごとに作る）。`RT-345.1`・`.2`・`RT-246.1` が通ることで測る。**証明の `htu` は、コンテナ化の対応（`OAuth2ContainerizatedAuthSvr*`）をする前の宛先にする**（サーバは `htu` の期待値を設定から作るため。別モデルのレビューの指摘）。**コンテナの中の自己テストの FAPI2 のボタンは、E2E では測っていない**（`CN-*` は FAPI2 のボタンを押さない）
+- 直す前は、`RT-429.1`〜`.3` が両版で落ちた（強制を外した手元の版で確かめた）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ROPC** | fapi2 には許していない（`ClientModePolicy`）ので、この強制は掛からない |
+| **net48 版の mTLS** | 証明書の準備が要る（`-NetFxMtls`）。判定は `CommonLibrary` で共通 |
+
+##### 承認の画面に、クライアントのロゴ・ポリシー・利用規約を出す（`RT-427.*`。#427）
+
+| | 測ること |
+|---|---|
+| **`RT-427.1`** | **同意の画面に、ロゴ（`img` の `src` が `logo_uri`）・ポリシー（`policy_uri`）・利用規約（`tos_uri`）へのリンクが出る**（OIDC Registration 1.0 §2）。リンクは `target="_blank" rel="noopener noreferrer"` |
+| **`RT-427.2`** | **認可の要求から来たサインインの画面にも出る**（同意を記録した後は同意の画面が出ないため）。対照として、**`ReturnUrl` が無い・認可の口でない・登録の無い `client_id` のサインインの画面には出ない** |
+| **`RT-427.3`** | **https でない値（`http:`・`javascript:`・`data:`）は出さない**（出すものが無いので、枠ごと出ない） |
+
+- **出す情報は `Util.Sts.ClientDisplay` が作り、両版の部分ビュー `_ClientDisplayPartial.cshtml` が出す**（同意の画面は `ViewBag.ClientId`、サインインの画面は `ReturnUrl` の `client_id`。`ReturnUrl` が認可の口を指すときだけ）
+- **登録は絶対 URI であることしか見ない**（動的登録・管理画面・構成ファイル）ので、**画面に出す側で https の絶対 URI だけに絞る**（#427 で決めた。登録の振る舞いは変えていない）
+- **テスト用のクライアント**は `TestClient_48`（https の 3 つ）・`TestClient_49`（`http:`・`javascript:`・`data:`）。**E2E は HTML だけを見る**（URL は取りに行かない）
+- **URL の境界は単体テスト `ClientDisplayTests`**（大文字の `HTTPS`・前後の空白は通す。スキーム相対・相対・利用者情報（`user:pw@`）を持つ URI は通さない。`ReturnUrl` が同じサイトの相対パスでなければ引かない）
+- **出すものが何も無いクライアントでは、枠ごと出さない**
+- 直す前の画面には、測る要素（`client-display` など）が無い（`RT-427.1`〜`.3` は落ちる）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ロゴの画像が実際に表示されること** | 画像は利用者のブラウザが取りに行く。E2E は HTML の `img` の `src` まで |
+| **画面の見た目（大きさ・並び）** | 判定できない。ロゴは高さ 64px・幅 256px までに抑えた |
+
+##### fapi2 の登録の client_credentials（`RT-424.*`。#424）
+
+| | 測ること |
+|---|---|
+| **`RT-424.1`** | **fapi2 の `private_key_jwt` の登録（`TestClient_32`）は、DPoP の証明を添えて client_credentials を使え、`token_type` は `DPoP`、`cnf.jkt` を持つ**（FAPI 2.0 Security Profile §5.3.2.1 の NOTE 2。**NOTE 2 は、詳しい安全性の分析を経たのは認可コードと CIBA の流れだけ、とも添えている**）。対照として、**同じ要求で `client_assertion` の `aud` をトークン エンドポイントの URL にすると `invalid_client`**（**fapi2 に固有の分岐ではない**。normal の登録も同じ。RFC 10070 §4。`RT-398.1`） |
+| **`RT-424.2`** | **fapi2 の `tls_client_auth` の登録（`TestClient2_2`）も、証明書で認証して client_credentials を使え、その証明書に縛られる**（`cnf.x5t#S256`。§5.3.2.1 の 6。RFC 8705 §3） |
+| **`RT-424.3`** | **fapi2 の `client_secret_post` の登録（`TestClient_47`）は、秘密で認証できても `unauthorized_client`**（§5.3.2.1 の 6。開けたのは非対称の証明の行だけ） |
+| **`RT-424.4`** | **fapi1 の `private_key_jwt` の登録（`FAPI1_PrivateKeyJwt_Client`）は、client_credentials を `unauthorized_client`**（開けたのは fapi2 だけ） |
+
+- **判定は `ClientModePolicy` の表**（client_credentials を、`private_key_jwt`・mTLS・それ以外の 3 行に分けた。refresh_token の行と同じ形）
+- **送信者の拘束（§5.3.2.1 の 4・5）は、認可コードと同じく登録の項目で強制する**（`dpop_bound_access_tokens` など。#346。`RT-346.4`・`.7`）。**fapi2 の登録だからといって、項目の無い登録に拘束を強いることはしていない**
+- 直す前は、`RT-424.1`・`.2` が `unauthorized_client` で落ちた（表の行を戻した手元の版で、両版（`.2` は net10.0 版）で確かめた）
+- **fapi1 には開けていない**（FAPI 1.0 Advanced は認可コードの流れを前提にする。#424 の範囲は fapi2）。**`FA-1.1` は fapi1 × `client_secret` を見る**（`Proof.Any` の行）ので、**非対称の証明の行の除外は `RT-424.4` で見る**
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **fapi2 の client_credentials で、受ける `client_assertion` の alg を絞ること**（§5.4.1） | クライアント認証の段の判定で、グラントによらない（#395）。このテストは PS256 で送る |
+| **net48 版の mTLS** | 証明書の準備が要る（`-NetFxMtls`）。判定は `CommonLibrary` で共通 |
+
 ##### PAR の `DPoP` ヘッダの鍵に、認可コードを縛る（`RT-365.*`。#365）
 
 | | 測ること |
@@ -5075,6 +5229,31 @@ E2E で 2 件測っている。
 > **直す前のコードでは測っていない**（`RT-314.2` の `code token` / `code id_token token` は、
 > 直す前は access_token を返していた — コードを読んで確かめた）。
 
+### テスト用の口を閉じた配備（`RT-431`）と `-LockedDown`
+
+**通しはテスト用の口を開けて起動する**（自己テスト・Logout の受信箱・`/TestResource` を使うテストがあるため）。
+そのため、**本番の構成（`IsLockedDownTestEndpoints=true`）で口が閉じていることは、通しでは測れない。**
+`-LockedDown` が、**`IsLockedDownTestEndpoints` を true にして両版のサイトを起動する**（#431）。
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -LockedDown -Filter "FullyQualifiedName~LockedDownTests"
+```
+
+| | 測ること |
+|---|---|
+| **`RT-431.1`** | **`TestHybridFlow` は、決めた経路（net10.0 `/TestHybridFlowWebAPI`・net48 `/TestHybridFlow`）からも、既定の経路（net10.0 `/OAuth2ResourceServer/TestHybridFlow`・net48 `/api/OAuth2ResourceServer/TestHybridFlow`）からも 404** |
+| **`RT-431.2`** | **`TestResource`（#425）も、両方の経路から 404** |
+| **`RT-431.3`** | **Logout の受け口と受信箱（`/Account/BackChannelLogoutClient`・`BackChannelLogoutBox`・`FrontChannelLogoutClient`・`FrontChannelLogoutBox`）、`api/Values`（net10.0）も 404** |
+
+- **以前は、`TestHybridFlow` を経路を張らないことでだけ閉じていた。** **既定の経路（`{controller}/{action}`）から動作に届いた**（#431。動作は `code=dummy` で 500 になった）。
+  **ほかの口は、動作の中でも閉じていた**（`RT-431.2`・`.3` は、それを固定する）
+- **`-Filter` と併せて使う。** **自己テスト・受信箱を使うテストは落ちる**
+- **既定の通しでは除外している**（`test.ps1` が `FullyQualifiedName!~LockedDownTests` を足す。`-NoImplicit` と同じ事情）
+- そのため **この 3 件は `TESTCASES.md`（原本）に載らない。** **`-LockedDown` の実行で `-UpdateTestCases` を付けないこと**
+
+> **実測 2026/11/24（#431）** : **6 成功 / 失敗 0 / Skip 0**（`mem`。net10.0 版・net48 版の両方）。
+> **直す前のコードでは、両版とも `RT-431.1` の既定の経路が 500 で落ちた**（ほかは 404 で通った）。
+
 ### 有効期限（`RT-188`）と `-ShortLifetimes`
 
 **既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待つのは現実的でない。**
@@ -5087,7 +5266,7 @@ E2E で 2 件測っている。
 - **`-Filter` と併せて使う。** 寿命が短いので、他のテストは落ちる
 - **既定の通しでは、`RT-188` を除外している**（`test.ps1` が `FullyQualifiedName!~LifetimeTests` を足す）。
   既定の寿命では測れず、**xUnit は「ケースが 0 件の Theory」を失敗として数える**ため
-- **除外は名前の部分一致である。** **クラス名に `LifetimeTests`・`DPoPNonceTests`・`ImplicitDisabledTests` を含めると、既定の通しから黙って外れる**
+- **除外は名前の部分一致である。** **クラス名に `LifetimeTests`・`DPoPNonceTests`・`ImplicitDisabledTests`・`LockedDownTests` を含めると、既定の通しから黙って外れる**
   （#388 で `CibaRequestLifetimeTests` と名付け、`-Filter` で回しても 0 件になった。`CibaRequestExpiryTests` に改めた）
 - そのため **`RT-188` は `TESTCASES.md`（原本）に載らない。**
   原本は通しの結果から作るので、`-ShortLifetimes` の実行で `-UpdateTestCases` を付けないこと

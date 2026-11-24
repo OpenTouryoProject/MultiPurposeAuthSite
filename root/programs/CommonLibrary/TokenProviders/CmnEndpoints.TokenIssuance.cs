@@ -38,6 +38,8 @@
 //*  2026/11/10  玄人 幸道         expires_in を JSON の数値で返すよう、応答の型を Dictionary<string, object> にした（#353）
 //*  2026/11/10  玄人 幸道         暗号化した id_token の中の JWS を、登録の alg で署名するよう、client_id を受けるようにした（#355）
 //*  2026/11/13  玄人 幸道         登録された authorization_signed_response_alg も、扱える値かを確かめる（#370）
+//*  2026/11/23  玄人 幸道         証明書を必須にしていない登録で DPoP の証明が在れば、トークンを証明書に縛らず、DPoP の鍵だけに縛る（RFC 8705 §4・RFC 9449 §1。#423）
+//*  2026/11/24  玄人 幸道         fapi2 の登録は、登録の項目によらず、送信者に縛れないトークン要求を断る（FAPI 2.0 Security Profile §5.3.2.1 の 4。#429）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -380,12 +382,15 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="x509">トークンを縛る証明書（**必須の登録では、提示されたものにする**）</param>
         /// <param name="jkt">DPoP の証明の鍵の指紋（証明が無ければ空）</param>
         /// <param name="err">エラーを入れる辞書</param>
+        /// <param name="flow">経路（fapi2 の強制を掛けるかを、`ClientModePolicy` で決めるため。#429）</param>
+        /// <param name="proof">その要求で証明したこと（同上）</param>
         /// <returns>続けてよければ true</returns>
         /// <remarks>
         /// | 登録 | 証明が無いとき | 根拠 |
         /// |---|---|---|
         /// | `dpop_bound_access_tokens` | **`invalid_request` で断る** | RFC 9449 §5.2（断る MUST。コードは決めていない） |
         /// | `tls_client_certificate_bound_access_tokens` | **`invalid_request` で断る** | RFC 8705 §3.4（エラーか、縛らないトークンかはサーバが決める。**ここでは断る**） |
+        /// | **`client_mode=fapi2`**（項目によらない） | **DPoP の鍵にも証明書にも縛れなければ `invalid_request` で断る**（**その経路と証明が fapi2 に許されているときだけ**。許されない組み合わせは、後の `CheckClientMode` が `unauthorized_client`） | FAPI 2.0 Security Profile §5.3.2.1 の 4・5（#429） |
         ///
         /// **`invalid_dpop_proof` にしない** — それは「証明が在って、通らなかった」ときのコード（RFC 9449 §5）。
         /// **`invalid_client` にしない** — クライアントの認証は通っている。
@@ -393,11 +398,19 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **証明書は、提示されたものでトークンを縛る。** クライアント認証は、**秘密・`client_assertion` で認証したとき
         /// x509 を null にする**（証明書で縛るのは `tls_client_auth` のときだけ）。**必須にした登録では、
         /// 認証の方法によらず縛る**（RFC 8705 §3 は、縛ることを認証の方法と切り離している）。
-        /// **必須にしていない登録は、従来どおり**（x509 に触らない）。
+        ///
+        /// **トークンを縛る証明書（x509）**は、登録と DPoP の証明の有無で次のとおり決める。
+        ///
+        /// | 証明書を必須にした登録か | DPoP の証明 | x509（証明書に縛るか） | 根拠 |
+        /// |---|---|---|---|
+        /// | 必須 | 有無によらず | **提示された証明書**（認証の方法によらず縛る） | RFC 8705 §3・§3.4 |
+        /// | 必須にしていない | 無い | **触らない**（`tls_client_auth` なら認証した証明書に縛る。ほかは null） | RFC 8705 §3（#346） |
+        /// | 必須にしていない | 在る | **null**（DPoP の鍵だけに縛る） | RFC 8705 §4・§3.4・RFC 9449 §1（#423） |
         /// </remarks>
         private static bool CheckSenderConstraint(string client_id,
             X509Certificate2 presentedX509, ref X509Certificate2 x509,
-            string jkt, Dictionary<string, string> err)
+            string jkt, Dictionary<string, string> err,
+            ClientModePolicy.Flow flow, ClientModePolicy.Proof proof)
         {
             if (string.IsNullOrEmpty(jkt)
                 && Helper.GetInstance().GetClientDPoPBoundAccessTokens(client_id))
@@ -417,6 +430,32 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 x509 = presentedX509;
+            }
+            else if (!string.IsNullOrEmpty(jkt))
+            {
+                //  **DPoP で縛るなら、証明書には縛らない**（#423）。
+                //    **`tls_client_auth` で認証すると x509 が残り、DPoP の鍵と証明書の両方に縛っていた**ので、
+                //    **DPoP だけで資源を呼ぶ RP が 401 になった**（資源は `x5t#S256` があれば証明書を求める）。
+                //    **mTLS の認証と、証明書に縛ることは別々に選べる**（RFC 8705 §4。§3.4 の既定は縛らない）。
+                //    **DPoP は、認証の方法によらず縛れる**（RFC 9449 §1）。**縛りは DPoP の鍵で足りる**ので、
+                //    **送信者に縛らないトークンが出ることは無い**（FAPI 2.0 Security Profile §5.3.2.1 の 4）。
+                x509 = null;
+            }
+
+            //  **fapi2 の登録は、登録の項目によらず、送信者に縛ったトークンだけを出す**（FAPI 2.0 Security Profile §5.3.2.1 の 4・5。#429）。
+            //    **DPoP の鍵（jkt）にも、証明書（`tls_client_auth` で認証したもの・必須にした登録で提示したもの）にも縛れなければ断る。**
+            //    **以前は、登録の項目（上の 2 つ）を立てた登録だけを強制していた**（#346。D-16）ので、
+            //    **`private_key_jwt` の fapi2 の登録が DPoP を添えずに要求すると、縛りの無い Bearer のトークンが出た**（#424 の別モデルのレビューの指摘）。
+            //    **その経路と証明が fapi2 に許されているときだけ見る**（許されない組み合わせ、たとえば client_secret の fapi2 は、
+            //    従来どおり後の `CheckClientMode` が `unauthorized_client` で断る。`RT-424.3`）。**normal などの登録は変えない。**
+            if (string.IsNullOrEmpty(jkt) && x509 == null
+                && Helper.GetInstance().GetClientMode(client_id) == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit()
+                && ClientModePolicy.IsAllowed(OAuth2AndOIDCEnum.ClientMode.fapi2, flow, proof))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "A sender-constrained access token (DPoP or a client certificate) is required for this client.");
+                return false;
             }
 
             return true;

@@ -37,6 +37,7 @@
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を受ける（JARM §3。#370）
 //*  2026/11/18  玄人 幸道         登録の検査で、jwks_uri・sector_identifier_uri の行き先のアドレスも見るようにした（#376）
 //*  2026/11/19  玄人 幸道         動的登録で request_uris を受けるようにした（https と行き先のアドレスを確かめる。#374）
+//*  2026/11/24  玄人 幸道         client_name を、画面に出す名前の列に入れるようにした（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -585,6 +586,35 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             model.Contacts = string.Join(" ",
                 ClientRegistrationProvider.GetStrings(metadata, Const.ClientContacts));
+
+            //  **`client_name` は、画面に出す名前の列に入れる**（#430。OIDC Registration 1.0 §2）。
+            //    **`ClientName`（識別の名前）には入れない** — **そちらは所有者の利用者名**（`Create`）。
+            //    **人が読む文字列だけを受ける**（RFC 7591 §2）。**画面に出すので、次は断る**（#430 の別モデルのレビューの指摘）：
+            //    **文字列でない値**（オブジェクト・配列・数値を JSON のまま名前にしない）、
+            //    **制御文字・書式文字・行と段落の区切り**（改行・RLO・幅ゼロの文字などで、画面の表示を偽る。`ClientDisplay.HasInvisibleCharacter`）。**空白だけは「無い」にする。**
+            if (ClientRegistrationProvider.Has(metadata, Const.ClientName)
+                && metadata[Const.ClientName].Type != JTokenType.String
+                && metadata[Const.ClientName].Type != JTokenType.Null)
+            {
+                description = "The client_name must be a string.";
+                return false;
+            }
+
+            string clientName = ClientRegistrationProvider.GetString(metadata, Const.ClientName).Trim();
+
+            if (Const.MaxLengthOfClientDisplayName < clientName.Length)
+            {
+                description = "The client_name is too long.";
+                return false;
+            }
+
+            if (MultiPurposeAuthSite.Util.Sts.ClientDisplay.HasInvisibleCharacter(clientName))
+            {
+                description = "The client_name must not contain control characters.";
+                return false;
+            }
+
+            model.ClientDisplayName = (clientName.Length == 0) ? null : clientName;
 
             model.SoftwareId = ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareId);
             model.SoftwareVersion = ClientRegistrationProvider.GetString(metadata, Const.ClientSoftwareVersion);

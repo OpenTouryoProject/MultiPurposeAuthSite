@@ -388,19 +388,19 @@
     <value>ロゴ（logo_uri）</value>
   </data>
   <data name="LogoUriDescription" xml:space="preserve">
-    <value>このクライアントのロゴ。**保存して、登録のとおり返すだけ。**</value>
+    <value>このクライアントのロゴ。**サインインと同意の画面に出す**（https のものだけ）。</value>
   </data>
   <data name="TosUri" xml:space="preserve">
     <value>利用規約（tos_uri）</value>
   </data>
   <data name="TosUriDescription" xml:space="preserve">
-    <value>このクライアントの利用規約。**保存して、登録のとおり返すだけ。**</value>
+    <value>このクライアントの利用規約。**サインインと同意の画面にリンクを出す**（https のものだけ）。</value>
   </data>
   <data name="PolicyUri" xml:space="preserve">
     <value>プライバシー ポリシー（policy_uri）</value>
   </data>
   <data name="PolicyUriDescription" xml:space="preserve">
-    <value>このクライアントのプライバシー ポリシー。**保存して、登録のとおり返すだけ。**</value>
+    <value>このクライアントのプライバシー ポリシー。**サインインと同意の画面にリンクを出す**（https のものだけ）。</value>
   </data>
   <data name="Contacts" xml:space="preserve">
     <value>連絡先（contacts）</value>
@@ -497,5 +497,11 @@
   </data>
   <data name="DdlTokenEndpointAuthMethodNone" xml:space="preserve">
     <value>（明示しない ＝ client_secret_basic / client_secret_post）</value>
+  </data>
+  <data name="ClientDisplayName" xml:space="preserve">
+    <value>表示名（client_name）</value>
+  </data>
+  <data name="ClientDisplayNameDescription" xml:space="preserve">
+    <value>サインインと同意の画面で、利用者に見せるこのクライアントの名前。**内部の名前とは別。** 空なら名前を出さない。</value>
   </data>
 </root>

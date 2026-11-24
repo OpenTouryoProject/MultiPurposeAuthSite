@@ -55,6 +55,9 @@
 //*  2026/11/15  玄人 幸道         RSA の公開鍵を持つ fapi_ciba の TestClient4_5 を追加（#395）
 //*  2026/11/17  玄人 幸道         SAML2 のテストのクライアント（TestClient_21・_22）の写す元を、鍵を持つ TestClient にした（IdP が署名の無い要求を断るようになった。#400）
 //*  2026/11/19  玄人 幸道         鍵を jwks_uri だけで登録した fapi_ciba の TestClient4_6 を追加し、jwks_uri を差し替えられるようにした（#408）
+//*  2026/11/24  玄人 幸道         client_secret で認証する fapi2 の TestClient_47 を追加（#424）
+//*  2026/11/24  玄人 幸道         logo_uri・policy_uri・tos_uri を書けるようにし、それを登録した TestClient_48・_49 を追加（#427）
+//*  2026/11/24  玄人 幸道         client_display_name を書けるようにした（#430）
 //**********************************************************************************
 
 using System;
@@ -640,6 +643,48 @@ namespace MultiPurposeAuthSite.Util.Test
             },
             new Entry()
             {
+                // **client_secret で認証する fapi2 のクライアント**（#424）。
+                //   **fapi2 の client_credentials は、非対称の証明（private_key_jwt・mTLS）でしか通さない**
+                //   （FAPI 2.0 Security Profile §5.3.2.1 の 6）ことを測る（`RT-424.3`）。
+                //   **写し元は `FAPI2_Client`**（秘密を持つ）。認証の方法だけ client_secret_post にした。
+                ClientName = "TestClient_47", ClientId = "e2e0tc47700000000000000000000000",
+                ClientMode = "fapi2", SourceName = "FAPI2_Client",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.token_endpoint_auth_method, "client_secret_post" }
+                }
+            },
+            new Entry()
+            {
+                // **logo_uri・policy_uri・tos_uri を https で登録したクライアント**（#427）。
+                //   **承認の画面（同意・サインイン）に、ロゴ・リンクが出る**ことを測る（`RT-427.1`・`.2`）。
+                //   **URL は取りに行かない**（画像は利用者のブラウザが取りに行く。E2E は HTML だけを見る）。写し元は `TestClient`（normal）。
+                ClientName = "TestClient_48", ClientId = "e2e0tc48800000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientLogoUri, "https://rp.e2e.example/logo.png" },
+                    { Const.ClientPolicyUri, "https://rp.e2e.example/policy" },
+                    { Const.ClientTosUri, "https://rp.e2e.example/tos" },
+                    // **画面に出す名前**（#430。`RT-430.1`）。**エスケープが要る文字を含める**（画面に生で出さないことを見る）。
+                    { Const.ClientDisplayName, "E2E RP <430> & 表示名" }
+                }
+            },
+            new Entry()
+            {
+                // **https でない logo_uri・policy_uri・tos_uri を登録したクライアント**（#427）。
+                //   **出さない**ことを測る（`RT-427.3`）。**登録は絶対 URI であることしか見ない**ので、`javascript:` も入る。
+                ClientName = "TestClient_49", ClientId = "e2e0tc49900000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { Const.ClientLogoUri, "http://rp.e2e.example/logo.png" },
+                    { Const.ClientPolicyUri, "javascript:alert(427)" },
+                    { Const.ClientTosUri, "data:text/html,tos" }
+                }
+            },
+            new Entry()
+            {
                 // **client_credentials の sub を測るクライアント**（S3。#294）。
                 //   **テストが同じ名前の利用者を作り、トークンがその利用者に結び付かないことを見る**（`RT-294.50`）。
                 ClientName = "TestClient_33", ClientId = "e2e0tc33000000000000000000000000",
@@ -998,6 +1043,24 @@ namespace MultiPurposeAuthSite.Util.Test
 
                 case Const.ClientTlsClientCertificateBoundAccessTokens:
                     model.TlsCertBoundAccessTokens = bool.Parse(value);
+                    break;
+
+                // **承認の画面に出す項目**（#427）
+                case Const.ClientLogoUri:
+                    model.LogoUri = value;
+                    break;
+
+                case Const.ClientPolicyUri:
+                    model.PolicyUri = value;
+                    break;
+
+                case Const.ClientTosUri:
+                    model.TosUri = value;
+                    break;
+
+                // **画面に出す名前**（#430）
+                case Const.ClientDisplayName:
+                    model.ClientDisplayName = value;
                     break;
 
                 default:

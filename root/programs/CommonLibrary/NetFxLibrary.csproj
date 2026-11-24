@@ -149,6 +149,7 @@
     <Compile Include="Extensions\Sts\PollingThrottle.cs" />
     <Compile Include="Util\Sts\RateLimitProvider.cs" />
     <Compile Include="Util\Sts\IdTokenAudience.cs" />
+    <Compile Include="Util\Sts\ClientDisplay.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
     <Compile Include="Util\Sts\SecretProtector.cs" />
     <Compile Include="Extensions\Sts\SoftwareStatementProvider.cs" />
@@ -165,6 +166,7 @@
     <Compile Include="Extensions\Sts\DPoPProofProvider.cs" />
     <Compile Include="Util\Test\TestClients.cs" />
     <Compile Include="Util\Test\TestOutbox.cs" />
+    <Compile Include="Util\Test\TestResource.cs" />
     <Compile Include="Util\Sts\UserClaims.cs" />
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />

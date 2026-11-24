@@ -57,6 +57,9 @@
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg（JARM の署名の alg の登録）を足した（#370）
 //*  2026/11/14  玄人 幸道         PollingClientId を追加（#387）
 //*  2026/11/19  玄人 幸道         request_uris の名前と上限を足した（#374）
+//*  2026/11/23  玄人 幸道         認可の ID のクレーム名と、その失効の記録のキーの接頭辞を足した（#421）
+//*  2026/11/24  玄人 幸道         画面に出す名前のキー（client_display_name）と上限を足した（#430）
+//*  2026/11/24  玄人 幸道         テスト用の資源の口の名前を足した（#425）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -93,6 +96,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>ClientNameのMaxLength</summary>
         public const int MaxLengthOfClientName = 64;
+
+        /// <summary>画面に出す名前（client_name。#430）の上限（列の幅）</summary>
+        public const int MaxLengthOfClientDisplayName = 256;
 
         /// <summary>token_endpoint_auth_method の MaxLength</summary>
         /// <remarks>
@@ -410,6 +416,9 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>/register（動的クライアント登録）</summary>
         public const string EndpointRegister = "register";
 
+        /// <summary>/TestResource（テスト用の資源。#425）</summary>
+        public const string EndpointTestResource = "test_resource";
+
         /// <summary>/ciba_result（認証デバイスからの結果）</summary>
         public const string EndpointCibaResult = "ciba_result";
 
@@ -570,6 +579,9 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>request_uris（OIDC DCR 1.0 §2。取りに行ってよい外部の request_uri。#374）</summary>
         public const string ClientRequestUris = "request_uris";
 
+        /// <summary>画面に出す名前の、構成ファイルのキー（#430。**動的登録の client_name を入れる先**。**client_name（識別の名前）とは別**）</summary>
+        public const string ClientDisplayName = "client_display_name";
+
         /// <summary>ホスト名の Sector に付ける接頭辞（#364）</summary>
         /// <remarks>
         /// **Sector には `client_id` と、`sector_identifier_uri` のホスト名の 2 種類が入る**（`PPIDExtension.GetSector`）。
@@ -706,6 +718,24 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>access_token の payload（`AuthorizationCodeProvider`）</summary>
         public const string AuthZCodeAccessTokenPayload = "access_token_payload";
+
+        /// <summary>認可の ID（1 回の認可から出したトークンをまとめる GUID）のクレーム名（#421）</summary>
+        /// <remarks>
+        /// **認可コードを作るときに決め、access_token の payload に書く**（`AuthorizationCodeProvider.Create`）。
+        /// **payload は access_token と refresh_token に引き継がれる**ので、**更新で出した access_token も同じ値を持つ。**
+        /// **refresh_token の一族（`FamilyId`）にも同じ値を使う。**
+        /// **認可コードが再利用されたら、この値を失効させる**（RFC 6749 §4.1.2）。
+        ///
+        /// **名前は衝突しにくい URI にする**（RFC 7519 §4.2）。**`grant_id` は使わない** —
+        /// FAPI の Grant Management が、別の意味（利用者が管理する同意）で使っている。
+        /// </remarks>
+        public const string AuthorizationIdClaim = "urn:mpas:authorization_id";
+
+        /// <summary>失効させた認可の ID を、access_token の失効の記録（`OAuth2Revocation` の `Jti`）に入れるときの接頭辞（#421）</summary>
+        /// <remarks>
+        /// **`jti`（GUID の 32 文字）と区別する。** 列は 38 文字で、接頭辞 ＋ GUID の 34 文字が収まる。
+        /// </remarks>
+        public const string RevokedAuthorizationKeyPrefix = "g:";
 
         #endregion
 

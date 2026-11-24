@@ -1210,6 +1210,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN FrontChannelLogoutUri varchar(512) NULL;
 | DPoP・クライアント証明書 | **トークン エンドポイントの全グラント**（`refresh_token` を含む。**code などを消費する前**） | `invalid_request`（**`invalid_dpop_proof` は「証明が在って通らない」ときのコード**なので使わない） |
 | DPoP・クライアント証明書（`token` を含む `response_type`。Implicit・Hybrid） | **認可エンドポイント**（エラーは RP へ返る。PAR の口でも同じ） | `unauthorized_client`（RFC 6749 §4.2.2.1。**そこで出す access_token は縛れない**ので、この経路を許さない） |
 
+- **fapi2 の登録（`client_mode=fapi2`）は、この 2 つの項目によらず、送信者の拘束を必須にする**（#429。FAPI 2.0 Security Profile §5.3.2.1 の 4）。**DPoP の証明も、証明書（`tls_client_auth` で認証したもの）も無いトークン要求を、`invalid_request` で断る**（全グラント。**code などを消費する前**）。**client_secret の fapi2 のように、そもそも許されない組み合わせは、従来どおり `unauthorized_client`**。**ほかの登録種別は、従来どおり項目を立てたときだけ** — **#424 までは fapi2 も項目しだいで、項目を立てていない `private_key_jwt` の fapi2 に、縛りの無い Bearer のトークンを出していた**
 - **PAR を必須にすると、`/ros`（独自の口）で預けた `request_uri` も断られる**（PAR ではないため）。
   経路は、預けた中身にサーバが付ける印で見分ける（クライアントが同じ名前を入れても上書きする）
 - **この実装は `request` パラメタを受けない**（`request_parameter_supported` は false）。
@@ -1852,7 +1853,8 @@ Content-Type: application/json
 | **`grant_types`** | **既定は `authorization_code`**（§2）。**この配備が広告しているものだけ** |
 | **`response_types`** | **既定は `code`**。**`code` を使うなら `authorization_code`、`token` / `id_token` を使うなら `implicit` が要る**（§2 の対応） |
 | `scope` | **`scopes_supported` の範囲内**。**`client_registration` と `auth` は断る** |
-| `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
+| `client_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
+| `logo_uri` / `tos_uri` / `policy_uri` | **保存して返し、承認の画面（同意・認可の要求から来たサインイン）に出す**（OIDC Registration 1.0 §2。#427。**`client_name` は、識別の名前 `ClientName` ではなく、画面に出す名前の列に入れて出す**。下の「画面に出す名前」。#430）。**登録では絶対 URI であることしか見ない**が、**画面には https の絶対 URI だけを出す**（それ以外は出さない） |
 | `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
 | **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`none`（パブリック）も登録できる**（#294）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
 | **`jwks`** | **受け付ける**（段階 3）。**RSA 1 本 ＋ EC 1 本まで**（列が 1 本ずつ）。**同じ種類が 2 本来たら断る** |
@@ -1860,7 +1862,7 @@ Content-Type: application/json
 | **`token_endpoint_auth_signing_alg`** | **受け付ける**（段階 3）。**`RS256` / `ES256`**。**空なら絞らない**（#262） |
 | **`jwks_uri`** | **断る**（`invalid_client_metadata`）。**鍵を URL から引く実装が無い** — **クライアント認証の経路が同期**で、取得を差し込めない（**別 Issue**）。**受け取って無視すると、`private_key_jwt` が黙って通らなくなる** |
 | **`software_statement`** | **受け付ける**（段階 4）。**信頼する発行者が署名した JWT**で、**主張した値は本文（plain JSON）に勝つ**。**信頼する発行者を 1 件も設定していなければ断る**（`unapproved_software_statement`。従来どおり）。**下の「`software_statement`」** |
-| **`client_name`** | **受け取っても無視する**（§3.2.1 が認めている）。**`ClientName` の列は利用者名**であり、**`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない** |
+| **`client_name`** | **画面に出す名前の列（`ClientDisplayName`）に入れ、応答の `client_name` で返す**（#430。OIDC Registration 1.0 §2。**256 文字まで**）。**承認の画面（同意・認可の要求から来たサインイン）に出す**（#427 のロゴ・リンクと並べて）。**`ClientName` の列（識別の名前）には入れない** — **そちらは利用者名**で、**`Helper.GetClientName` が「登録が在るか」の判定に使っている**（#430 までは、`client_name` を受け取っても無視していた）。**`PUT` で省けば消える** |
 | 上記以外 | **無視する**（§3.2.1） |
 
 **応答は `201 Created`**（§3.2.1）。`client_id` / `client_secret` /
@@ -1876,6 +1878,30 @@ Content-Type: application/json
 
 **レート制限の対象**である（#305 の段階 3。口の名前は `register`）。
 **誰がいつ登録したかはオペレーション ログに残る**（`client_secret` は書かない）。
+
+#### 画面に出す名前（`client_name`。#430）
+
+**クライアントの識別の名前（構成ファイルの `client_name`、DB の `ClientName` ＝ 所有者の利用者名）とは別に、画面に出す名前を持つ。** **空なら名前を出さない**（識別の名前には倒さない。内部の名前や利用者名を利用者に見せないため）。
+
+| 登録の経路 | 書く場所 |
+|---|---|
+| 構成ファイル | クライアントごとのキー `client_display_name`（任意） |
+| 管理画面 | 「表示名（client_name）」の欄 |
+| 動的登録 | 要求の `client_name`（応答の `client_name` で返る） |
+
+- **動的登録の `client_name` は、人が読む文字列だけを受ける**：文字列でない値、制御文字・双方向の制御文字（改行・RLO など）を含む名前、256 文字を超える名前は `invalid_client_metadata`。空白だけは「無い」にする。**管理画面・構成ファイルの値は確かめないが、見えない文字（制御文字・書式文字・行と段落の区切り）を含む名前は、画面に出さない**（`ClientDisplay`）
+- **登録者が決めた名前を、そのまま出す**（確かめず、「未確認」とも添えない。#430 で決めた）。**動的登録を開けた配備では、他社の名前を名乗る登録で、利用者を信用させる画面を作れる**（#427 のロゴと同じ事情）。**動的登録を開けるなら、登録を管理すること**。**見えない文字の判定は Unicode の分類（Cc・Cf・Zl・Zp）だけで、何も描かない文字（U+3164 など）や似た字形の文字（ホモグリフ）は通る**
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 名前を出さない。以前どおり）。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [ClientDisplayName] [nvarchar](256) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("ClientDisplayName" NVARCHAR2(256) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN ClientDisplayName varchar(256) NULL;
+```
 
 #### 登録した `scope` / `grant_types` / `response_types` は、実際に効く（#307 の段階 1）
 
@@ -4208,7 +4234,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@example.com` / `tanaka@example.com`）を**作らない** |
 | `TestUserSuffix` | `""`（空） | **E2E が渡す。手で設定しない** | **テスト利用者の名前に付ける接尾辞**（#260）。空なら `super_tanaka` / `tanaka`。**E2E は 2 つのサイトを同時に立てる**ので、**DB ストアでは同じ利用者の行を書き換え合う。**`test.ps1` がサイトごとに `_core` / `_netfx` を渡して分ける。**初期化済みの DB でも、居なければ作る**ので、接尾辞を変えても DB を作り直さなくてよい |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
-| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
+| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、**テスト用の資源 `/TestResource`**（**`IsDebug` でなければ、このキーによらず閉じる**。キー `TestResourceWebAPI`。`openid` を求めない、アクセス トークンで守った口。適合性テストの FAPI 2.0 の `openid` の無いプランが呼ぶ。#425）、`api/Values`（net10.0）、**Back-Channel Logout の受け口と受信箱**（`/Account/BackChannelLogoutClient` / `/Account/BackChannelLogoutBox`。#310 の段階 2）、**Front-Channel Logout の受け口と受信箱**（`/Account/FrontChannelLogoutClient` / `/Account/FrontChannelLogoutBox`。#310 の段階 3）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる。**`EnableImplicitGrantType` が `false` なら、access_token をフロント チャネルで返す Hybrid / OIDC の Implicit（`code token` / `code id_token token` / `id_token token`）も断り、広告しない**（#314。`code id_token` は通る） |
 | `RequirePushedAuthorizationRequests` / `RequireSignedRequestObject` | `false` | **任意**（FAPI の配備なら `true`） | **FAPI の要件を、全クライアントに強制する**（#346）。登録の同名の項目とは OR。**`true` にすると、PAR・署名付きの Request Object を使わない既存のクライアントが止まる** |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
@@ -4220,14 +4246,26 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `OAuth2AuthorizationCodeExpireTimeSpanFromSeconds` | `600` | 既定のまま（または短く） | 認可コードの寿命（#188）。RFC 6749 §4.1.2 は 10 分以内を推奨 |
 | `RequestObjectExpireTimeSpanFromSeconds` | `300` | 既定のまま（または短く） | `/ros` に預けた Request Object の寿命（#188）。応答の `exp` にも出る |
 | `OAuth2RefreshTokenExpireTimeSpanFromDays` | `14` | 運用に合わせる | **#188 で、実際に検証するようになった**（以前は事実上の無期限）。短くすると、既存のトークンが失効する |
-
-> **#188 で `RefreshTokenDictionary` に 2 列を足した**（`FamilyId` / `UsedDate`。3 方言とも）。
-> **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
-> 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `AuthenticationDeviceClientIds` | 同梱の `AuthenticationDevice` / `AuthenticationDevice_Web` | **実運用の認証デバイスの client_id** | 認証デバイス用の口は、ここに挙げたクライアントのトークンだけを受ける（#294。4 節） |
 | `MailOutboxDirectory` | `""`（空） | **空のまま** | `IsDebug` のとき設定すると、メールをファイルに書く（テスト用。2 節） |
 | `OAuth2ClientsInformation` | **テスト用が 15 件** | 実運用のものだけ残す | `TestClient` `FAPI1_Client` `FAPI1_PrivateKeyJwt_Client` `FAPI2_Client` `FAPI2_MTLS_Client` `Device_Client` `FAPI_CIBA_Client` `RequirePKCE_Client` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
+
+> **#188 で `RefreshTokenDictionary` に 2 列を足した**（`FamilyId` / `UsedDate`。3 方言とも）。
+> **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
+> 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
+>
+> **#421 で `AuthenticationCodeDictionary` に 1 列を足した**（`UsedDate`。3 方言とも）。**引き換えた認可コードを消さずに使用済みの印を立て、再利用されたら、そのコードから出したトークンを失効させる**（RFC 6749 §4.1.2）。
+> **既存のデータベースには `ALTER` が要る**（無いと、認可コードの引き換えが列の無いエラーで失敗する）。残っている行は未使用として扱われる。
+>
+> ```sql
+> -- SQL Server
+> ALTER TABLE [AuthenticationCodeDictionary] ADD [UsedDate] [smalldatetime] NULL
+> -- Oracle
+> ALTER TABLE "AuthenticationCodeDictionary" ADD ("UsedDate" DATE NULL);
+> -- PostgreSQL
+> ALTER TABLE AuthenticationCodeDictionary ADD COLUMN UsedDate timestamp NULL;
+> ```
 
 **net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
 
@@ -4250,6 +4288,8 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownTestEndpoints`） |
 | `/Account/BackChannelLogoutBox` | **404 が返る**（`IsLockedDownTestEndpoints`。#310 の段階 2。**開いていれば、他人のログアウトの通知を読まれる**） |
 | `/Account/FrontChannelLogoutBox` | **404 が返る**（同上。#310 の段階 3） |
+| `/TestResource` | **404 が返る**（同上。#425。**開いていれば、`openid` の無いトークンで呼べる口が残る**） |
+| `/OAuth2ResourceServer/TestHybridFlow`（net10.0）・`/api/OAuth2ResourceServer/TestHybridFlow`（net48） | **404 が返る**（同上。#431。**既定の経路（`{controller}/{action}`）からも届くので、決めた経路（`/TestHybridFlowWebAPI`・`/TestHybridFlow`）と併せて見る**） |
 | 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
 | `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnableDebugTraceLog`） |
@@ -4287,7 +4327,8 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    テスト利用者だけが `IsDebug` と `TestUserPWD` で閉じられる。
 3. **`/Ping` は閉じない。** セッションのタイムアウト防止に使われているため（#219）。
    本番で塞ぐなら、前段（リバース プロキシなど）で行う。
-   `/TestHybridFlow` と `api/Values`（net10.0 のみ）は、`IsLockedDownTestEndpoints` で閉じる。
+   `/TestHybridFlow`・`/TestResource`（#425）と `api/Values`（net10.0 のみ）は、`IsLockedDownTestEndpoints` で閉じる。
+   **既定の経路（`{controller}/{action}`）から来ても、動作の中で閉じる**（#431。`RT-431`）。
 4. **STS 専用モード**（`EnableSignupProcess` / `EnableEditingOfUserAttribute` /
    `EnableAdministrationOfUsersAndRoles` を**全部 false**）にすると、サインアップ・属性の編集・
    ユーザ管理が無効になる。**利用者ストアへの書き込みも止まる**ので、切替の影響が大きい。

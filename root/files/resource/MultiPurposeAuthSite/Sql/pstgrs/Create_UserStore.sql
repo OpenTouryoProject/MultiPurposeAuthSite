@@ -82,6 +82,7 @@ CREATE TABLE AuthenticationCodeDictionary(
     Key varchar(64) NOT NULL,                -- PK
     Value varchar(2000) NOT NULL,            -- AuthenticationCode
     CreatedDate timestamp NOT NULL,
+    UsedDate timestamp,                      -- 引き換えた時刻（NULL なら未使用）。再利用に気付くため、期限まで残す（#421）
     CONSTRAINT PK_AuthenticationCodeDictionary PRIMARY KEY (Key)
 );
 
@@ -192,6 +193,8 @@ CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     -- JARM の署名 alg（#370）。末尾に足してある（ALTER … ADD で揃う）
     AuthorizationSignedResponseAlg varchar(16) NULL, -- authorization_signed_response_alg（JARM §3）
     RequestUris varchar(2000) NULL,                  -- request_uris（OIDC Registration 1.0 §2。#374）。Const.MaxLengthOfRequestUris（空白区切りの列挙）
+    -- 画面に出す名前（#430）。末尾に足してある（ALTER … ADD で揃う）。**ClientName（識別の名前・利用者名）とは別**
+    ClientDisplayName varchar(256) NULL,             -- client_name（OIDC Registration 1.0 §2）。Const.MaxLengthOfClientDisplayName
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

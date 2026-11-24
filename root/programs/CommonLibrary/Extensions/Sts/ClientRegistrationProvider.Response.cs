@@ -35,6 +35,7 @@
 //*  2026/11/12  玄人 幸道         sector_identifier_uri を返すようにした（#364）
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を応答に返す（#370）
 //*  2026/11/19  玄人 幸道         応答に request_uris を返すようにした（#374）
+//*  2026/11/24  玄人 幸道         応答の client_name に、画面に出す名前を返すようにした（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -210,7 +211,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | | |
         /// |---|---|
         /// | **必ず入れる** | `client_id` / `redirect_uris` / `grant_types` / `response_types` / `token_endpoint_auth_method` / **`registration_access_token`** / **`registration_client_uri`**（**後の 2 つは §3 で REQUIRED**） |
-        /// | **入れない** | **`client_secret`**（**`POST` だけが、呼ぶ側で足す**）／**`client_name`**（**保存しているのは利用者名**で、要求された値でもない。**返すと利用者名を漏らす**）／**`client_id_issued_at`**（**保管していない**。§3.2.1 で任意） |
+        /// | **入れない** | **`client_secret`**（**`POST` だけが、呼ぶ側で足す**）／**識別の名前（`ClientName`）**（**保存しているのは利用者名**。**返すと利用者名を漏らす**。**`client_name` には、画面に出す名前（`ClientDisplayName`）を返す**。#430）／**`client_id_issued_at`**（**保管していない**。§3.2.1 で任意） |
         ///
         /// **`registration_access_token` は、提示されたものをそのまま返す** —
         /// **こちらはハッシュしか持たない**ので、**これで §3 の REQUIRED を満たす。**
@@ -282,6 +283,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             //  **`sector_identifier_uri` も返す**（#364。登録したメタデータは返す。OIDC Registration 1.0 §3.2）。
             //    **`PUT` は返された全てを入れ直す**ので、返さないと次の `PUT` で消える。
             ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientSectorIdentifierUri, model.SectorIdentifierUri);
+
+            //  **`client_name` を返す**（#430。**画面に出す名前として保存した値**（`ClientDisplayName`）。RFC 7591 §3.2.1）。
+            //    **識別の名前（`ClientName`。所有者の利用者名）は、今までどおり返さない。**
+            ClientRegistrationProvider.AddIfNotEmpty(ret, Const.ClientName, model.ClientDisplayName);
 
             //  **`request_uris` も返す**（#374。登録したメタデータは返す。`PUT` は返された全てを入れ直す）。
             if (!string.IsNullOrEmpty(model.RequestUris))

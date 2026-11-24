@@ -47,6 +47,7 @@
 //*  2026/11/11  玄人 幸道         同意画面の送信の口（<認可の口>/consent）のルートを追加（#359）
 //*  2026/11/18  玄人 幸道         外部ログイン（Microsoft アカウント・Google）のプロキシの組を、設定（ProxyForExternalLogin）で選ぶようにした（#406。以前は設定を見ず OS の既定）
 //*  2026/11/18  玄人 幸道         設定を読み込んだ直後に Helper を初期化し、共有の HttpClient（ID 連携のプロキシの組）を最初の要求から使うようにした（#406）
+//*  2026/11/24  玄人 幸道         テスト用の資源の経路を足した（#425）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -509,6 +510,12 @@ namespace MultiPurposeAuthSite
                         name: "TestHybridFlow",
                         pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
                         defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
+
+                    // **テスト用の資源**（openid を求めない。適合性テスト・E2E 用。#425）。
+                    endpoints.MapControllerRoute(
+                        name: "TestResource",
+                        pattern: Config.TestResourceWebAPI.Substring(1), // 先頭の[/]を削除,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "TestResource" });
                 }
 
                 // **動的クライアント登録**（RFC 7591。#307 の段階 1）。

@@ -388,19 +388,19 @@
     <value>Logo (logo_uri)</value>
   </data>
   <data name="LogoUriDescription" xml:space="preserve">
-    <value>Logo of this client. Stored and returned as registered.</value>
+    <value>Logo of this client. Shown on the sign-in and consent screens (https only).</value>
   </data>
   <data name="TosUri" xml:space="preserve">
     <value>Terms of service (tos_uri)</value>
   </data>
   <data name="TosUriDescription" xml:space="preserve">
-    <value>Terms of service of this client. Stored and returned as registered.</value>
+    <value>Terms of service of this client. Linked from the sign-in and consent screens (https only).</value>
   </data>
   <data name="PolicyUri" xml:space="preserve">
     <value>Privacy policy (policy_uri)</value>
   </data>
   <data name="PolicyUriDescription" xml:space="preserve">
-    <value>Privacy policy of this client. Stored and returned as registered.</value>
+    <value>Privacy policy of this client. Linked from the sign-in and consent screens (https only).</value>
   </data>
   <data name="Contacts" xml:space="preserve">
     <value>Contacts (contacts)</value>
@@ -497,5 +497,11 @@
   </data>
   <data name="DdlTokenEndpointAuthMethodNone" xml:space="preserve">
     <value>(not specified = client_secret_basic / client_secret_post)</value>
+  </data>
+  <data name="ClientDisplayName" xml:space="preserve">
+    <value>Display name (client_name)</value>
+  </data>
+  <data name="ClientDisplayNameDescription" xml:space="preserve">
+    <value>Name of this client shown to the end-user on the sign-in and consent screens. Separate from the internal name. If empty, no name is shown.</value>
   </data>
 </root>

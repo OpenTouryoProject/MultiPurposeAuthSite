@@ -70,6 +70,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Display name (client_name) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientDisplayName {
+            get {
+                return ResourceManager.GetString("ClientDisplayName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Name of this client shown to the end-user on the sign-in and consent screens. Separate from the internal name. If empty, no name is shown. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientDisplayNameDescription {
+            get {
+                return ResourceManager.GetString("ClientDisplayNameDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   client_id に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientID {

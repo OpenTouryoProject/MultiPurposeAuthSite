@@ -34,6 +34,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/09  玄人 幸道         CreateFromClaims（client_credentials・ROPC・JWT Bearer）でも、提示された証明書でトークンを縛る（#346）
 //*  2026/11/10  玄人 幸道         access_token の email / phone のクレームも、値が無ければ出さない（userinfo とそろえた。#354）
+//*  2026/11/23  玄人 幸道         CreatePayloadForCode に認可の ID を書けるようにした（#421）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -239,8 +240,9 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>CreatePayloadForCode</summary>
         /// <param name="identity">ClaimsIdentity</param>
         /// <param name="issuedUtc">DateTimeOffset</param>
+        /// <param name="authorizationId">認可の ID（`Const.AuthorizationIdClaim` に書く。空なら書かない。#421）</param>
         /// <returns>Jwt AccessTokenのPayload部</returns>
-        public static string CreatePayloadForCode(ClaimsIdentity identity, DateTimeOffset issuedUtc)
+        public static string CreatePayloadForCode(ClaimsIdentity identity, DateTimeOffset issuedUtc, string authorizationId = null)
         {
             // チェック
             if (identity == null)// || issuedUtc == null)
@@ -314,6 +316,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             // claims
             if (!string.IsNullOrEmpty(claims)) tokenClaimSet.Add(
                 OAuth2AndOIDCConst.claims, JObject.Parse(claims));
+
+            // 認可の ID（#421。**認可コードが再利用されたら、この値でまとめて失効させる**）
+            if (!string.IsNullOrEmpty(authorizationId))
+                tokenClaimSet.Add(Const.AuthorizationIdClaim, authorizationId);
 
             // この時点では空にしておく。
             tokenClaimSet.Add(OAuth2AndOIDCConst.exp, "");

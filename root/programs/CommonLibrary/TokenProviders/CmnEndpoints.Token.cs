@@ -45,6 +45,8 @@
 //*  2026/11/14  玄人 幸道         CIBA・Device のトークン要求で、auth_req_id・device_code を出したクライアントと照合する（#387）
 //*  2026/11/17  玄人 幸道         JWT Bearer グラントの aud の判定を、クライアント認証と分けた（JwtBearerAudiences）。CIBA のトークン要求は、トークン エンドポイントの URL も受ける（#398）
 //*  2026/11/19  玄人 幸道         JWT Bearer グラントの assertion を、列の RSA・EC の鍵と jwks_uri の鍵で、RS256・PS256・ES256 を受けて検証するようにした（#410）
+//*  2026/11/23  玄人 幸道         証明書に縛る箇所のコメントに、DPoP の証明が在れば縛らないことを書いた（#423）
+//*  2026/11/24  玄人 幸道         送信者の拘束の確かめに、経路と証明を渡す（fapi2 の登録の強制を、許された組み合わせだけに掛ける。#429）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -249,7 +251,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
                 //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
-                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err,
+                    ClientModePolicy.Flow.AuthorizationCode, proof))
                 {
                     return false;
                 }
@@ -428,7 +431,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
                 //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
-                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err,
+                    ClientModePolicy.Flow.RefreshToken, proof))
                 {
                     return false;
                 }
@@ -678,7 +682,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
                 //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
-                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err,
+                    ClientModePolicy.Flow.ResourceOwnerPassword, proof))
                 {
                     return false;
                 }
@@ -773,7 +778,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                                 // **DPoP の鍵に縛る**（#311 の段階 1）
                                 jkt,
-                                // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る）
+                                // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                                 x509);
 
                             // オペレーション・トレース・ログ出力
@@ -925,7 +930,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
                 //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
-                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err,
+                    ClientModePolicy.Flow.ClientCredentials, proof))
                 {
                     return false;
                 }
@@ -1008,7 +1014,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
                         // **DPoP の鍵に縛る**（#311 の段階 1）
                         jkt,
-                        // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る）
+                        // **証明書に縛る**（#346。`tls_client_auth` で認証したか、必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                         x509);
 
                     // オペレーション・トレース・ログ出力
@@ -1117,7 +1123,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             x509 = null;
 
                             //  **送信者の拘束を必須にした登録なら、証明の無い要求を断る**（#346）。
-                            if (!CmnEndpoints.CheckSenderConstraint(iss, presentedX509, ref x509, jkt, err))
+                            if (!CmnEndpoints.CheckSenderConstraint(iss, presentedX509, ref x509, jkt, err,
+                                ClientModePolicy.Flow.JwtBearer, ClientModePolicy.Proof.None))
                             {
                                 return false;
                             }
@@ -1156,7 +1163,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     Helper.GetInstance().GetIdTokenSignedResponseAlg(iss),
                                     // **DPoP の鍵に縛る**（#311 の段階 1）
                                     jkt,
-                                    // **証明書に縛る**（#346。証明書を必須にした登録のときだけ x509 が在る）
+                                    // **証明書に縛る**（#346。証明書を必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                                     x509);
 
                                 // オペレーション・トレース・ログ出力
@@ -1275,7 +1282,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 //  **送信者の拘束を必須にした登録なら、証明の無い要求を断る**（#346）。
                 //    **device_code を消費する前に断る。**
-                if (!CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                if (!CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err,
+                    ClientModePolicy.Flow.DeviceAuthZ, ClientModePolicy.Proof.None))
                 {
                     return false;
                 }
@@ -1325,7 +1333,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        // **証明書に縛る**（#346。`tls_client_auth` の登録か、証明書を必須にした登録のときだけ x509 が在る）
+                        // **証明書に縛る**（#346。`tls_client_auth` の登録か、証明書を必須にした登録のときだけ x509 が在る。必須にしていない登録で DPoP の証明が在れば無い。#423）
                         x509, deviceClientMode, out string aud, out string sub,
                         // **登録された署名 alg で署名する**（#129 の段階 2）
                         Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id),
@@ -1488,7 +1496,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 //  **送信者の拘束を必須にした登録なら、DPoP の証明・クライアント証明書の無い要求を断る**（#346）。
                 //    **消費する前に断る**（断られた後に、同じ値でやり直せるように）。
-                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err))
+                if (authned && !CmnEndpoints.CheckSenderConstraint(client_id, presentedX509, ref x509, jkt, err,
+                    ClientModePolicy.Flow.Ciba, proof))
                 {
                     return false;
                 }

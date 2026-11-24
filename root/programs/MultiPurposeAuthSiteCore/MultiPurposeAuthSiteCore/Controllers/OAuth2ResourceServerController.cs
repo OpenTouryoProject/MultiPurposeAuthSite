@@ -41,6 +41,8 @@
 //*  2026/11/01  玄人 幸道         自己テストの WebAPI の呼び出しを SelfTestWebApi に付け替えた（#321）
 //*  2026/11/12  玄人 幸道         動的登録で sector_identifier_uri を検査の前に取りに行くようにした（#364）
 //*  2026/11/12  玄人 幸道         jwks_uri・sector_identifier_uri を取りに行くのは、認可を確かめた後だけにした（#364）
+//*  2026/11/24  玄人 幸道         テスト用の資源（/TestResource。openid を求めない）を足した（#425）
+//*  2026/11/24  玄人 幸道         TestHybridFlow を、既定の経路から来ても IsLockedDownTestEndpoints で閉じるようにした（#431）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -450,6 +452,107 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region テスト用
 
+        #region 資源
+
+        /// <summary>
+        /// テスト用の資源（openid を求めない。#425）
+        /// GET・POST: /TestResource
+        /// </summary>
+        /// <returns>200（client_id・scope）か、401・403（RFC 6750 §3）</returns>
+        /// <remarks>
+        /// **トークンの照合は `/userinfo` と同じ**（検証・証明書の縛り・DPoP の縛り）で、**`openid` を求めないところだけが違う**。
+        /// **`IsLockedDownTestEndpoints` が true なら 404**（経路も張らない。**既定の経路から来ても開かない**）。
+        /// </remarks>
+        [HttpGet]
+        [HttpPost]
+        [DisableCors]
+        public IActionResult TestResource()
+        {
+            if (!MultiPurposeAuthSite.Util.Test.TestResource.IsOpen)
+            {
+                return this.NotFound();
+            }
+
+            this.SetNoStore();
+
+            Dictionary<string, string> err = new Dictionary<string, string>();
+
+            if (!AuthenticationHeader.GetAccessToken(
+                MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string bearerToken, out string authScheme))
+            {
+                // **トークンが無い**（RFC 6750 §3.1 : エラー コードを付けない）。
+                return this.ResourceError(err);
+            }
+
+            if (!Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject _, out ClaimsIdentity identity))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description, "The access token is invalid.");
+                return this.ResourceError(err);
+            }
+
+            string interactionId = MultiPurposeAuthSite.Util.Test.TestResource.FapiInteractionIdOf(identity,
+                MyHttpContext.Current.Request.Headers[Token.CmnEndpoints.HttpHeader_FapiInteractionId]);
+
+            if (interactionId != null)
+            {
+                this.Response.Headers[Token.CmnEndpoints.HttpHeader_FapiInteractionId] = interactionId;
+            }
+
+            //  **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 §3）。
+            if (!Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.HttpContext.Connection.ClientCertificate))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description, "The access token is bound to a client certificate.");
+                return this.ResourceError(err);
+            }
+
+            //  **DPoP に縛られたトークンは、その鍵の証明と一緒でしか使えない**（RFC 9449 §7.1）。
+            if (!this.VerifyDPoP(identity, bearerToken, authScheme == OAuth2AndOIDCConst.DPoP, out string dpopError))
+            {
+                err.Add(OAuth2AndOIDCConst.error, dpopError ?? OAuth2AndOIDCConst.invalid_token);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    (dpopError == OAuth2AndOIDCConst.use_dpop_nonce)
+                        ? "A DPoP proof with a new nonce is required."
+                        : "The access token is bound to a DPoP key.");
+                return this.ResourceError(err);
+            }
+
+            return new ObjectResult(MultiPurposeAuthSite.Util.Test.TestResource.ResponseOf(identity)) { StatusCode = 200 };
+        }
+
+        /// <summary>テスト用の資源のエラー応答を作る（RFC 6750 §3。`/userinfo` と同じ形）</summary>
+        /// <param name="err">error / error_description を持つ辞書（トークンが無ければ空）</param>
+        /// <returns>IActionResult</returns>
+        private IActionResult ResourceError(Dictionary<string, string> err)
+        {
+            int status = (err.Count == 0) ? 401 : Token.CmnEndpoints.GetResourceErrorStatusCode(err);
+
+            Log.Logging.MyOperationTraceForErrorResponse(this.Request.Path.Value, status, err, "");
+
+            string scheme = AuthenticationHeader.GetChallengeScheme(MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization]);
+
+            this.Response.Headers[Const.HeaderWwwAuthenticate] =
+                scheme + " " + Token.CmnEndpoints.GetChallengeParameter(scheme, Const.EndpointTestResource, err);
+
+            string nonce = CmnDPoP.NonceForChallenge(scheme == OAuth2AndOIDCConst.DPoP);
+
+            if (nonce != null)
+            {
+                this.Response.Headers[OAuth2AndOIDCConst.HttpHeader_DPoPNonce] = nonce;
+            }
+
+            if (err.Count == 0)
+            {
+                return new StatusCodeResult(401);
+            }
+
+            return new ObjectResult(err) { StatusCode = status };
+        }
+
+        #endregion
+
         #region Hybrid Flow
 
         /// <summary>
@@ -463,11 +566,18 @@ namespace MultiPurposeAuthSite.Controllers
         //   **既定では同一オリジン**（OAuth2AuthorizationServerEndpointsRootURI と
         //   OAuth2ClientEndpointsRootURI が同じ値）なので、本来 CORS は要らない。
         //   **2 つを別ホストにした配備では、クロス オリジンになる**ので開けておく。
-        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じる**ため、
+        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じ、動作の中でも閉じる**（#431）ため、
         //   **本番では、このポリシーも届かない**（ValuesController と同じ扱い）。
         [EnableCors("AllowAllOrigins")]
-        public async Task<Dictionary<string, object>> TestHybridFlow(IFormCollection formData)
+        public async Task<ActionResult<Dictionary<string, object>>> TestHybridFlow(IFormCollection formData)
         {
+            //  **経路だけでなく、ここでも閉じる**（#431）。**既定の経路（`/OAuth2ResourceServer/TestHybridFlow`）からも届くため。**
+            //    **`ActionResult<T>` にしたのは 404 を返すため**（開いているときの本文は、以前と同じ辞書）。
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return this.NotFound();
+            }
+
             // 変数
             string code = formData[OAuth2AndOIDCConst.code];
 

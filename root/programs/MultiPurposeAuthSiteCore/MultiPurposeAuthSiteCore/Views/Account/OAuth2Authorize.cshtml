@@ -33,6 +33,7 @@
     //*  2026/09/28  玄人 幸道         何を確かめる画面なのかを出す（#246 の項目 3。自己テストが開いている配置だけ）
     //*  2026/10/06  玄人 幸道         Deny ボタンと、同意の記録の解説（#272 の段階 2）
     //*  2026/11/11  玄人 幸道         送信先を、同意画面の送信の口（<認可の口>/consent。認可要求のクエリを付ける）にした（#359）
+    //*  2026/11/24  玄人 幸道         承認の画面に、クライアントのロゴ・ポリシー・利用規約を出す（#427）
     //**********************************************************************************
 *@
 
@@ -50,6 +51,12 @@
     <div class="col-md-8">
         <h4>@ViewBag.Message</h4>
         <hr />
+        @* **クライアントのロゴ・ポリシー・利用規約**（OIDC Registration 1.0 §2。#427） *@
+        @{ MultiPurposeAuthSite.Util.Sts.ClientDisplay clientDisplay = MultiPurposeAuthSite.Util.Sts.ClientDisplay.For((string)ViewBag.ClientId); }
+        @if (clientDisplay != null)
+        {
+            @await Html.PartialAsync("_ClientDisplayPartial", clientDisplay)
+        }
         @*
             **送信先は、同意画面の送信の口**（`<認可の口>/consent`。#359）。**認可要求のクエリをそのまま付ける**（口は、それを読んで検証し直す）。
             **以前は action を書かず、認可の口へ POST していた**ので、RP からの POST の認可要求（OIDC Core 1.0 §3.1.2.1）を受ける口が無かった。

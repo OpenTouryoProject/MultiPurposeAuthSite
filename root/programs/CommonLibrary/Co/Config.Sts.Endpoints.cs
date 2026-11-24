@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/23  玄人 幸道         新規（Config.cs から partial に分割。#294）
 //*  2026/11/06  玄人 幸道         JwkSetUri・RequestObjectRegUri・AuthRequestPushUri を足した
+//*  2026/11/24  玄人 幸道         テスト用の資源の口（TestResourceWebAPI）を足した（#425）
 //*                                （Open棟梁 の OAuth2AndOIDCParams はクライアント役の値になった。OpenTouryo#666。#339）
 //**********************************************************************************
 
@@ -392,6 +393,21 @@ namespace MultiPurposeAuthSite.Co
 #else
                 return Config.EndpointPathOrDefault("TestHybridFlowWebAPI", "/TestHybridFlowWebAPI");
 #endif
+            }
+        }
+
+        /// <summary>
+        /// テスト用の資源（openid を求めない、アクセス トークンで守った口。#425）
+        /// </summary>
+        /// <remarks>
+        /// **適合性テストの FAPI 2.0 の openid=plain_oauth・client_credentials のプランが、最後に呼ぶ資源**（Util.Test.TestResource）。
+        /// **IsLockedDownTestEndpoints が true なら、ルートを張らない。**
+        /// </remarks>
+        public static string TestResourceWebAPI
+        {
+            get
+            {
+                return Config.EndpointPathOrDefault("TestResourceWebAPI", "/TestResource");
             }
         }
 

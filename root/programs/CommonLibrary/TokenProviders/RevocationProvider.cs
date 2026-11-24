@@ -31,6 +31,7 @@
 //*  2017/06/07  西野 大介         新規
 //*  2026/11/01  玄人 幸道         Extensions/Sts から TokenProviders へ移した（RFC 7009 の失効の状態。失効・照会は OAuth 2.0 として本体に置く。#321）
 //*  2026/11/01  玄人 幸道         access_token の exp を記録し、exp を過ぎた記録を消す（#322）
+//*  2026/11/23  玄人 幸道         認可の ID を失効させる RevokeAuthorization・IsAuthorizationRevoked を足した（#421）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -38,6 +39,7 @@ using MultiPurposeAuthSite.Data;
 
 using System;
 using System.Data;
+using System.Data.Common;
 using System.Collections.Concurrent;
 
 using Dapper;
@@ -206,6 +208,65 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 //  **掃除は、落ちても構わない。**
             }
+        }
+
+        #endregion
+
+        #region 認可の ID（#421）
+
+        /// <summary>1 回の認可から出したトークンを、まとめて失効させる（#421）</summary>
+        /// <param name="authorizationId">認可の ID（`Const.AuthorizationIdClaim`。空なら何もしない）</param>
+        /// <remarks>
+        /// **access_token**：認可の ID を、失効の記録に接頭辞（`Const.RevokedAuthorizationKeyPrefix`）付きで入れる。
+        /// **資源の側の検証が、`jti` に加えて、この記録も引く**（`IsAuthorizationRevoked`）。
+        /// **refresh_token**：同じ値の一族（`FamilyId`）を消す（#188 の段階 3 と同じ失効）。**以後、更新で access_token は出ない。**
+        ///
+        /// **記録を消してよいのは、その認可から出した最後の access_token の exp の後**である。
+        /// **一族を同時に消すので、以後は出ない** → **今から access_token の寿命の後**（`PruneExpired` が余裕を足して消す）。
+        ///
+        /// **2 回目以降の失効は、記録を足さない**（`Jti` は主キー）。**同時に入れた要求に負けても、記録は在るので失敗にしない。**
+        /// </remarks>
+        public static void RevokeAuthorization(string authorizationId)
+        {
+            if (string.IsNullOrEmpty(authorizationId))
+            {
+                return;
+            }
+
+            string key = Const.RevokedAuthorizationKeyPrefix + authorizationId;
+
+            if (RevocationProvider.Get(key) == null)
+            {
+                long exp = DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes).ToUnixTimeSeconds();
+
+                try
+                {
+                    RevocationProvider.Create(key, exp);
+                }
+                catch (DbException)
+                {
+                    //  **同時に失効させた要求が、先に入れた**（主キーの重なり）。記録は在る。
+                    if (RevocationProvider.Get(key) == null)
+                    {
+                        throw;
+                    }
+                }
+            }
+
+            RefreshTokenProvider.RevokeFamily(authorizationId);
+        }
+
+        /// <summary>認可の ID が失効しているか（#421）</summary>
+        /// <param name="authorizationId">認可の ID（空なら false。**以前に出した access_token は持たない**）</param>
+        /// <returns>失効していれば true</returns>
+        public static bool IsAuthorizationRevoked(string authorizationId)
+        {
+            if (string.IsNullOrEmpty(authorizationId))
+            {
+                return false;
+            }
+
+            return RevocationProvider.Get(Const.RevokedAuthorizationKeyPrefix + authorizationId) != null;
         }
 
         #endregion

@@ -701,6 +701,7 @@
     // [その他の WebAPI]
     // HybridFlowのテスト用
     "TestHybridFlowWebAPI": "/TestHybridFlowWebAPI",
+    "TestResourceWebAPI": "/TestResource",
 
     // プッシュ通知
     "SetDeviceTokenWebAPI": "/SetDeviceToken",

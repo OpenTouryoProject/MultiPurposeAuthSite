@@ -6585,13 +6585,17 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **手順**
 
-1. サインインから 2 秒待ち、auth_time の Cookie を「いま」の平文に書き換える
-1. max_age=1 で要求する
+1. サインインから 5 秒待ち（本当の auth_time は max_age を越える）、auth_time の Cookie を「いま」の平文に書き換える
+1. max_age=3 で要求する
 
 **検証（合否を判定する）**
 
 - **認可コードは発行されない**（書き換えた時刻を信じない）
 - **再認証の経路へ送られる**（同じ URL へ戻される）
+
+**補足**
+
+- **窓を過ぎてから再認証になった結果は、合否に使わない。** サインインし直したクライアントで、手順 1 から数え直す（`MaxAgeWindow`。#409）。
 
 ## RT-294.18 再認証の印の Cookie を書き換えても、prompt=login の再認証は飛ばせない
 
@@ -6880,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus
+1. GET /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6889,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=5ce0dc2a-fd4a-4c26-a3bf-a7086a6f63ee&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -7505,6 +7509,10 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - パスワードを確かめた直後は、再認証を求めない（先へ進む）
 - 再認証を求める（同意画面にも、認可コードにも進まない）
+
+**補足**
+
+- **窓を過ぎてから確かめた結果は、合否に使わない**（通しの負荷で応答が遅れると、窓を越える。#409）。**利用者とクライアントを作り直して、手順 1 から数え直す**（再認証を求めると、OP は再認証の印を残すため。`MaxAgeWindow`）。
 
 ## RT-294.64 2FA の無効化は、パスワードを確かめる（無い・間違いなら無効にしない）
 
@@ -8589,7 +8597,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **`client_name` は登録しても無視する**（RFC 7591 §3.2.1 が認めている）— **`ClientName` の列は利用者名であり、`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない**（利用者名を漏らさないため）。
+- **`client_name` は、画面に出す名前の列（`ClientDisplayName`）に入り、応答で返る**（#430。`RT-430.3`）。**`ClientName` の列（識別の名前）は利用者名のまま**で、`Helper.GetClientName` が「登録が在るか」の判定に使っている。**応答にも入れない**（利用者名を漏らさないため）。
 
 ## RT-307.2 トークンが無ければ `401`、scope が足りなければ `403` ＋ `insufficient_scope`
 
@@ -13674,6 +13682,133 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーを返した後 : 同意の画面を出さない（request_uri を使い切っている）
 - エラーを返した後 : invalid_request_uri のエラー画面になる（RP へ返さない）
 
+## RT-421.1 認可コードの 2 回目の引き換えは invalid_grant で断り、1 回目で出した access_token（/userinfo）と refresh_token が使えなくなる
+
+| | |
+|---|---|
+| 観点 | **RFC 6749 §4.1.2**：コードが 2 回以上使われたら、要求を断らなければならず（MUST）、**そのコードに基づいて出したトークンを、できれば失効させるべき（SHOULD）。****コードが漏れて攻撃者が先に引き換えても、正規のクライアントが引き換えを試みた時点で、攻撃者のトークンを止められる。****以前は 2 回目を断るだけで、1 回目のトークンは期限まで使えた。** |
+| 根拠 | RFC 6749 §4.1.2 / #421 |
+| テスト | `RT42101_認可コードを再利用すると1回目のトークンが使えなくなる` |
+
+**手順**
+
+1. 認可コードを得て、引き換える
+1. 同じ認可コードを、もう一度引き換える
+1. 1 回目の access_token で /userinfo を呼ぶ
+1. 1 回目の refresh_token で更新する
+
+**検証（合否を判定する）**
+
+- access_token に認可の ID（urn:mpas:authorization_id）が在る
+- 引き換えた直後は /userinfo が HTTP 200
+- HTTP 400 ＋ invalid_grant
+- トークンは出ない
+- HTTP 401（失効した）
+- HTTP 400 ＋ invalid_grant（失効した）
+
+## RT-421.2 認可コードから出した refresh_token で更新した access_token・refresh_token も、そのコードの再利用で使えなくなる
+
+| | |
+|---|---|
+| 観点 | **更新で出したトークンも「そのコードに基づいて出したトークン」である**（RFC 6749 §4.1.2）。**認可の ID は payload に入り、更新しても引き継がれる**ので、まとめて失効させられる。**refresh_token の一族（FamilyId）も同じ値**で、一族ごと消す（#188 の段階 3 と同じ失効）。 |
+| 根拠 | RFC 6749 §4.1.2 / #421 |
+| テスト | `RT42102_更新で出したトークンも認可コードの再利用で使えなくなる` |
+
+**手順**
+
+1. 認可コードを引き換え、refresh_token で 1 回更新する
+1. 同じ認可コードを、もう一度引き換える
+1. 更新で出した access_token と refresh_token を使う
+
+**検証（合否を判定する）**
+
+- 更新した直後は /userinfo が HTTP 200
+- HTTP 400 ＋ invalid_grant
+- 更新で出した access_token の /userinfo は HTTP 401（失効した）
+- 更新で出した refresh_token は HTTP 400 ＋ invalid_grant（失効した）
+
+## RT-421.3 使用済みの認可コードを、別のクライアントが自分の資格情報で出しても invalid_grant で断るだけで、コードを出したクライアントのトークンは失効させない
+
+| | |
+|---|---|
+| 観点 | **そのクライアントに出したコードではない**ので、再利用（同じコードの 2 回目の引き換え）に当たらない。**別のクライアントの要求で、正規のクライアントのトークンを止められない**ようにする（コードを出したクライアントの照合は、以前から `aud` で行っている）。 |
+| 根拠 | RFC 6749 §4.1.2・§4.1.3 / #421 |
+| テスト | `RT42103_別のクライアントが使用済みのコードを出しても失効させない` |
+
+**手順**
+
+1. MVC_Sample で認可コードを得て、引き換える
+1. 同じ認可コードを、TestClient の資格情報で引き換える
+1. MVC_Sample の access_token で /userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_grant
+- HTTP 200（失効していない）
+
+## RT-421.4 refresh_token を /revoke で失効させると、同じ認可から出した access_token も使えなくなる
+
+| | |
+|---|---|
+| 観点 | **RFC 7009 §2.1**：refresh_token を失効させるなら、**同じ認可グラントに基づく access_token も無効にすべき（SHOULD）。****以前は refresh_token の一族だけを消し、access_token は期限まで使えた**（`ANALYSIS-IdP.md` の E-13）。**一族の識別子を認可の ID にしたので、同じ仕組みで止められる**（#421）。 |
+| 根拠 | RFC 7009 §2.1 / #421 |
+| テスト | `RT42104_refresh_tokenを失効させると同じ認可のaccess_tokenも使えなくなる` |
+
+**手順**
+
+1. 認可コードを引き換える
+1. refresh_token を /revoke で失効させる
+1. 同じ認可の access_token で /userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- 失効させる前は /userinfo が HTTP 200
+- HTTP 200
+- HTTP 401（失効した）
+
+## RT-421.5 使用済みの refresh_token が再び出されたら、一族に加えて、同じ認可から出した access_token（更新の前と後の両方）も使えなくなる
+
+| | |
+|---|---|
+| 観点 | **使用済みの refresh_token が出されたら、一族ごと失効させる**（漏れたトークンと正規のトークンを見分けられないため。#188 の段階 3）。**以前は一族だけで、access_token は期限まで使えた**（E-13）。**漏れた refresh_token で攻撃者が取った access_token も止める。** |
+| 根拠 | RFC 7009 §2.1 / #188 / #421 |
+| テスト | `RT42105_使用済みのrefresh_tokenが出されたら同じ認可のaccess_tokenも使えなくなる` |
+
+**手順**
+
+1. 認可コードを引き換え、refresh_token で 1 回更新する
+1. 使用済みの（1 回目の）refresh_token で、もう一度更新する
+1. 更新の前と後の access_token で /userinfo を呼ぶ
+1. 更新で出した refresh_token で更新する
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_grant
+- 最初の access_token は HTTP 401（失効した）
+- 更新で出した access_token も HTTP 401（失効した）
+- HTTP 400 ＋ invalid_grant（一族ごと失効した。#188 から）
+
+## RT-421.6 PKCE を使ったコードの 2 回目の引き換えを、誤った code_verifier で出したら invalid_grant で断るだけで失効させず、正しい code_verifier で出したら失効させる
+
+| | |
+|---|---|
+| 観点 | **PKCE の確かめは、引き換え（使用済みの印）より前に済む**（RFC 7636 §4.6）。**誤った code_verifier の要求は、コードを使えていない**ので再利用に当たらず、**コードを知るだけの相手に、正規のクライアントのトークンを止めさせない。** |
+| 根拠 | RFC 6749 §4.1.2 / RFC 7636 §4.6 / #421 |
+| テスト | `RT42106_誤ったcode_verifierでの再利用では失効させない` |
+
+**手順**
+
+1. S256 の code_challenge で認可コードを得て、正しい code_verifier で引き換える
+1. 同じコードを、誤った code_verifier で引き換える
+1. 同じコードを、正しい code_verifier で引き換える（再利用）
+
+**検証（合否を判定する）**
+
+- HTTP 400 ＋ invalid_grant
+- 1 回目の access_token の /userinfo は HTTP 200（失効していない）
+- HTTP 400 ＋ invalid_grant
+- 1 回目の access_token の /userinfo は HTTP 401（失効した）
+
 ## RT-422.1 fapi2 の登録の /par は、openid の有無によらず、redirect_uri の無い要求を invalid_request で断る（付ければ受ける）
 
 | | |
@@ -13742,6 +13877,451 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - fapi2・クエリ : code が返る（断らない）
 - normal : code が返る（断らない）
+
+## RT-423.1 `tls_client_auth` で認証し、DPoP の証明を添えて認可コードを交換したトークンは、DPoP の鍵だけに縛られ（`cnf.x5t#S256` が無い）、証明書を提示せずに DPoP だけで `/userinfo` を使える
+
+| | |
+|---|---|
+| 観点 | **mTLS の認証と、証明書に縛ることは、別々に選べる**（RFC 8705 §4）。**証明書に縛るかは登録で決まり、既定は縛らない**（§3.4）。**DPoP は、認証の方法によらず縛れる**（RFC 9449 §1）。**以前は両方に縛り、DPoP だけで呼ぶと 401（「The access token is bound to a client certificate.」）だった。** |
+| 根拠 | RFC 8705 §4・§3.4 / RFC 9449 §1・§7.1 / #423 |
+| テスト | `RT42301_mTLSで認証しDPoPで縛るトークンはDPoPだけで資源を使える` |
+
+**手順**
+
+1. 証明書で認証し、DPoP の証明を添えて、認可コードを交換する
+1. 証明書を提示せずに、DPoP の証明だけで /userinfo を呼ぶ
+1. DPoP の証明を添えずに、/userinfo を呼ぶ（縛りが外れていないこと）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- token_type が DPoP
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf に x5t#S256 が無い（証明書には縛られていない）
+- HTTP 200
+- sub が返る（利用者の情報が取れている）
+- HTTP 401
+
+**補足**
+
+- **DPoP の証明を添えなければ、従来どおり認証した証明書に縛る**（`FA-6.4`・`RT-346.7`・`.12`）。
+
+## RT-423.2 `tls_client_auth` で認証し、DPoP の証明を添えた client_credentials のトークンは、DPoP の鍵だけに縛られる（`cnf.x5t#S256` が無い）
+
+| | |
+|---|---|
+| 観点 | **client_credentials のトークンは、認可コードとは別の関数（`CreateFromClaims`）で作る**ので、別に測る。**どちらも、縛るものを決めるのは `CheckSenderConstraint` の 1 か所**である。 |
+| 根拠 | RFC 8705 §4・§3.4 / RFC 9449 §1・§5 / #423 |
+| テスト | `RT42302_mTLSで認証しDPoPで縛るclient_credentialsは証明書に縛られない` |
+
+**手順**
+
+1. 証明書で認証し、DPoP の証明を添えて、client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- token_type が DPoP
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf に x5t#S256 が無い（証明書には縛られていない）
+
+## RT-423.3 `tls_client_certificate_bound_access_tokens` の登録は、DPoP の証明を添えても、従来どおり提示した証明書にも縛る（`cnf.x5t#S256` と `cnf.jkt` の両方）
+
+| | |
+|---|---|
+| 観点 | **証明書に縛るかは、登録で決まる**（RFC 8705 §3.4）。**登録が求めたなら、DPoP の証明が在っても外さない**（#423 で外すのは、登録が求めていないときだけ）。 |
+| 根拠 | RFC 8705 §3.4 / RFC 9449 §6 / #346 / #423 |
+| テスト | `RT42303_証明書を必須にした登録はDPoPが在っても証明書にも縛る` |
+
+**手順**
+
+1. 証明書と DPoP の証明を添えて、client_credentials でトークンを取る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-424.1 **fapi2 の登録は、`private_key_jwt` で認証すれば client_credentials を使える。`aud` は issuer だけを受ける**
+
+| | |
+|---|---|
+| 観点 | **以前は、client_credentials を normal の登録にしか許していなかった**（`unauthorized_client`）。**FAPI 2.0 Security Profile は、要件が client credentials grant のような他の grant にも使えるように組み立ててあるとする**（§5.3.2.1 の NOTE 2）。**`aud` を issuer だけにすることは、fapi2 に固有の分岐ではない**（normal の登録も同じ。RFC 10070 §4。`RT-398.1`）。**fapi2 の登録が開けた後も、この規則で断られることを対照として見る**（§5.3.2.1 の 8）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 6749 §4.4 / #424 |
+| テスト | `RT42401_fapi2の登録はprivate_key_jwtでclient_credentialsを使える` |
+
+**手順**
+
+1. aud = issuer の client_assertion と DPoP の証明で、client_credentials を要求する
+1. 対照：aud = トークン エンドポイントの URL（同じクライアント・同じ鍵）
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- トークンが返る
+- token_type が DPoP
+- access_token の cnf に jkt が在る（DPoP の鍵に縛られている）
+- access_token の cnf に x5t#S256 が無い（証明書には縛られていない）
+- invalid_client
+- トークンを出さない
+
+## RT-424.2 **fapi2 の登録は、mTLS（`tls_client_auth`）で認証すれば client_credentials を使える**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 が認めるクライアント認証は、MTLS と `private_key_jwt`**（§5.3.2.1 の 6）。**`private_key_jwt`（RT-424.1）と同じく開けた。****`tls_client_auth` で認証し、DPoP の証明を添えなければ、認証した証明書に縛る**（RFC 8705 §3。#346・#423）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 8705 §2・§3 / #424 |
+| テスト | `RT42402_fapi2の登録はmTLSでclient_credentialsを使える` |
+
+**手順**
+
+1. 証明書で認証して、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- トークンが返る
+- access_token の cnf に jkt が無い（DPoP の証明を添えていない）
+- access_token の cnf の x5t#S256 は、提示した証明書の SHA-256（BASE64URL）
+
+## RT-424.3 **fapi2 の登録は、client_secret で認証できても、client_credentials のトークンを出さない**（`unauthorized_client`）
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 が認めるクライアント認証は、MTLS と `private_key_jwt` だけ**（§5.3.2.1 の 6）。**#424 で開けたのは、非対称の証明の行だけ**である（`ClientModePolicy`。認可コード・refresh_token の行と同じ形）。**`invalid_client` ではない** ＝ 秘密による認証は通り、その後の登録種別の判定で断られた（RFC 6749 §5.2）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 6749 §5.2 / #424 |
+| テスト | `RT42403_fapi2の登録はclient_secretではclient_credentialsを使えない` |
+
+**手順**
+
+1. client_secret で、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- トークンを出さない
+- エラーは unauthorized_client（認証は通っている）
+
+## RT-424.4 **fapi1 の登録は、`private_key_jwt` で認証しても、client_credentials のトークンを出さない**（`unauthorized_client`）
+
+| | |
+|---|---|
+| 観点 | **#424 で開けたのは fapi2 だけ**（`ClientModePolicy` の `private_key_jwt`・mTLS の行は normal と fapi2）。**FAPI 1.0 Advanced は認可コードの流れを前提にする**ので、fapi1 には開けていない。**`FA-1.1` は fapi1 × `client_secret` を見る**（`Proof.Any` の行）ので、**非対称の証明の行の除外は、ここで見る**（別モデルのレビューの指摘）。 |
+| 根拠 | RFC 6749 §5.2 / #424 |
+| テスト | `RT42404_fapi1の登録にはclient_credentialsを開けていない` |
+
+**手順**
+
+1. aud = issuer の client_assertion で、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- トークンを出さない
+- エラーは unauthorized_client（認証は通っている）
+
+## RT-425.1 **`openid` の無い client_credentials のトークンで、`/TestResource` は 200（`client_id`・`scope`）。`/userinfo` は今までどおり 403。トークンが無い・壊れたトークンは 401**
+
+| | |
+|---|---|
+| 観点 | **適合性テストの FAPI 2.0 の `openid=plain_oauth`・client_credentials のプランが呼ぶ資源**（#425）。**`openid` を求めないところだけが `/userinfo` と違う**（OIDC Core 1.0 §5.3 は UserInfo に `openid` を求める）。**断り方は RFC 6750 §3**（トークンが無ければエラー コード無しの 401、壊れていれば `invalid_token`）。 |
+| 根拠 | RFC 6750 §3・§3.1 / #425 |
+| テスト | `RT42501_openidの無いトークンで資源は200でuserinfoは403` |
+
+**手順**
+
+1. client_credentials（scope=profile）でトークンを取る
+1. /TestResource を Bearer で呼ぶ
+1. 同じトークンで /userinfo を呼ぶ（今までどおり断る）
+1. トークンを付けずに呼ぶ
+1. 壊れたトークンで呼ぶ
+
+**検証（合否を判定する）**
+
+- 200
+- client_id は、トークンを取ったクライアント
+- scope に profile がある
+- scope に openid が無い（openid を求めない）
+- /userinfo は 403（insufficient_scope）
+- 401
+- WWW-Authenticate が付く（RFC 6750 §3）
+- 401
+- invalid_token
+
+## RT-425.2 **DPoP に縛ったトークンは、`/TestResource` で、正しい証明でだけ使える**（`Bearer` で出す・証明なし・別の鍵・`ath` が別のトークン・`htu` が別の口は 401）
+
+| | |
+|---|---|
+| 観点 | **資源の側の送信者の拘束**（RFC 9449 §7.1）。**照合は `/userinfo` と同じ製品の部品**（`CmnAccessToken.VerifyDPoPBinding`）で、**`htu` は、この口の URL**（`CmnDPoP.EndpointUriOf` に足した。#425）。 |
+| 根拠 | RFC 9449 §4.3・§7.1・§7.2 / #425 |
+| テスト | `RT42502_DPoPに縛ったトークンは正しい証明でだけ使える` |
+
+**手順**
+
+1. client_credentials で、DPoP の証明を添えてトークンを取る
+1. Bearer で出す（証明なし）
+1. DPoP スキームだが、証明が無い
+1. 別の鍵（RSA）で署名した証明
+1. ath が別のトークンの指紋
+1. htu が別の口（/userinfo への証明）
+1. 正しい証明なら使える
+
+**検証（合否を判定する）**
+
+- 401
+- 401
+- 401
+- 401
+- 401
+- 200
+
+## RT-427.1 **同意の画面に、クライアントのロゴ（`logo_uri`）・ポリシー（`policy_uri`）・利用規約（`tos_uri`）が出る**
+
+| | |
+|---|---|
+| 観点 | **以前は、3 つとも登録で受けて保存するだけで、どの画面にも出していなかった。****OIDC Registration 1.0 §2 は、承認の間に利用者へ出すことを求める（SHOULD）。****外へのリンクは、開いた先から元の画面を触らせない（`noopener`）・参照元を渡さない（`noreferrer`）。** |
+| 根拠 | OIDC Registration 1.0 §2 / #427 |
+| テスト | `RT42701_同意の画面にクライアントのロゴとリンクが出る` |
+
+**手順**
+
+1. prompt=consent で認可を要求し、同意の画面を開く
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- ロゴが出る（img の src が登録した logo_uri）
+- ロゴの画像は参照元を渡さない（referrerpolicy="no-referrer"）
+- ポリシーへのリンクが出る（noopener noreferrer）
+- 利用規約へのリンクが出る（noopener noreferrer）
+
+## RT-427.2 **認可の要求から来たサインインの画面にも、クライアントのロゴ・ポリシー・利用規約が出る。認可の要求から来ていないサインインの画面には出ない**
+
+| | |
+|---|---|
+| 観点 | **MPAS は同意を記録した後は同意の画面を出さない**ので、同意の画面だけでは 2 回目以降の認可で出ない。**サインインの画面は、戻り先（`ReturnUrl`）が認可の口で、登録のある `client_id` を持つときだけ出す**（適合性テストの `oidcc-registration-logo-uri` などもサインインの画面で写す）。 |
+| 根拠 | OIDC Registration 1.0 §2 / #427 |
+| テスト | `RT42702_認可の要求から来たサインインの画面にも出る` |
+
+**手順**
+
+1. サインインしていない状態で認可を要求し、サインインの画面へ送られる
+1. サインインの画面を開く
+1. 対照：認可の要求から来ていないサインインの画面（ReturnUrl 無し）
+1. 対照：ReturnUrl が認可の口でない（client_id は登録のあるもの）
+1. 対照：ReturnUrl の client_id に登録が無い
+
+**検証（合否を判定する）**
+
+- サインインの画面へ送られる
+- HTTP 200（サインインの画面）
+- ロゴが出る（img の src が登録した logo_uri）
+- ロゴの画像は参照元を渡さない（referrerpolicy="no-referrer"）
+- ポリシーへのリンクが出る（noopener noreferrer）
+- 利用規約へのリンクが出る（noopener noreferrer）
+- クライアントの情報を出さない
+- HTTP 200（サインインの画面）
+- クライアントの情報を出さない
+- HTTP 200（サインインの画面）
+- クライアントの情報を出さない
+
+## RT-427.3 **https でない `logo_uri`・`policy_uri`・`tos_uri`（`http:`・`javascript:`・`data:`）は、同意の画面に出さない**
+
+| | |
+|---|---|
+| 観点 | **登録（動的登録・管理画面・構成ファイル）は、絶対 URI であることしか確かめていない**ので、`javascript:` なども入る。**画面に出す側で、https の絶対 URI だけに絞る**（#427 で決めた。登録の振る舞いは変えない）。 |
+| 根拠 | OIDC Registration 1.0 §2 / #427 |
+| テスト | `RT42703_httpsでない値は出さない` |
+
+**手順**
+
+1. prompt=consent で認可を要求し、同意の画面を開く
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 出すものが無いので、枠ごと出さない
+- ロゴ（http:）を出さない
+- ポリシー（javascript:）を出さない
+- 利用規約（data:）を出さない
+- javascript: の値を出さない
+- data: の値を出さない
+- http: の値を出さない
+
+## RT-429.1 **fapi2 の登録の認可コードの引き換えは、DPoP の証明も証明書も無ければ `invalid_request` で断る。断られた code は使っておらず、DPoP の証明を添えれば引き換えられる**
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、送信者に縛ったトークンだけを出すことを求める**（§5.3.2.1 の 4）。**以前は、縛りの登録の項目を立てていない fapi2 の登録に、Bearer のトークンを出していた**（#346 の D-16。#424 の別モデルのレビューの指摘）。**断るのは code を使う前**（断られた後に、同じ code でやり直せる。#346 と同じ）。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / #429 |
+| テスト | `RT42901_fapi2の認可コードはDPoPが無ければ断る` |
+
+**手順**
+
+1. PKCE（S256）で認可コードを得る
+1. DPoP の証明を添えずに引き換える
+1. 同じ code を、DPoP の証明を添えて引き換える（client_assertion は作り直す）
+
+**検証（合否を判定する）**
+
+- invalid_request
+- 断る理由は、送信者の拘束が無いこと（error_description）
+- トークンを出さない
+- HTTP 200（断られた code は使っていない）
+- token_type が DPoP
+
+## RT-429.2 **fapi2 の登録の refresh_token の更新は、DPoP の証明も証明書も無ければ `invalid_request` で断る。添えれば更新できる**
+
+| | |
+|---|---|
+| 観点 | **更新で出す access_token も、送信者に縛る**（§5.3.2.1 の 4 はグラントを限らない）。**秘密を持つクライアントの refresh_token そのものは鍵に縛らない**（RFC 9449 §5。#367）ので、更新のたびに今の鍵の証明を添える。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / RFC 9449 §5 / #429 |
+| テスト | `RT42902_fapi2のrefresh_tokenはDPoPが無ければ断る` |
+
+**手順**
+
+1. DPoP の証明を添えて認可コードを引き換え、refresh_token を得る
+1. DPoP の証明を添えずに更新する
+1. DPoP の証明を添えて更新する
+
+**検証（合否を判定する）**
+
+- invalid_request
+- 断る理由は、送信者の拘束が無いこと（error_description）
+- トークンを出さない
+- HTTP 200
+- token_type が DPoP
+
+## RT-429.3 **fapi2 の登録の client_credentials は、DPoP の証明も証明書も無ければ `invalid_request` で断る**
+
+| | |
+|---|---|
+| 観点 | **#424 で fapi2 に開けた client_credentials も、送信者に縛る**（§5.3.2.1 の 4）。**DPoP の証明を添えれば通ることは `RT-424.1`** が測る。 |
+| 根拠 | FAPI 2.0 Security Profile §5.3.2.1 / #429 |
+| テスト | `RT42903_fapi2のclient_credentialsはDPoPが無ければ断る` |
+
+**手順**
+
+1. DPoP の証明を添えずに、client_credentials を要求する
+
+**検証（合否を判定する）**
+
+- invalid_request
+- 断る理由は、送信者の拘束が無いこと（error_description）
+- トークンを出さない
+
+## RT-430.1 **画面に出す名前（`client_display_name`・`ClientDisplayName`）を登録したクライアントは、同意の画面と、認可の要求から来たサインインの画面に、その名前が出る。値はエスケープして出す**
+
+| | |
+|---|---|
+| 観点 | **OIDC Registration 1.0 §2 の `client_name` は、利用者に示すクライアントの名前。****識別の名前（`ClientName`。利用者名・内部の名前）とは別に持つ**（#430）。**登録者が決めた値なので、`<`・`&` などを生で出さない**（Razor のエスケープ）。 |
+| 根拠 | OIDC Registration 1.0 §2 / #430 |
+| テスト | `RT43001_画面に出す名前を登録したクライアントは名前が出る` |
+
+**手順**
+
+1. 同意の画面（prompt=consent）
+1. 認可の要求から来たサインインの画面（サインインしていない別のクライアントで）
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 名前の欄に、画面に出す名前が出る
+- `<` を生で出さない（エスケープしている）
+- 名前の欄に、画面に出す名前が出る
+- `<` を生で出さない（エスケープしている）
+
+## RT-430.2 **画面に出す名前を登録していないクライアントは、同意の画面に名前を出さない**（識別の名前 `client_name`・`ClientName` には倒さない）
+
+| | |
+|---|---|
+| 観点 | **構成ファイルの `client_name` は内部の名前**（自己テスト・E2E が引く名前）、**DB の `ClientName` は所有者の利用者名**なので、利用者に見せない（#430）。 |
+| 根拠 | #430 |
+| テスト | `RT43002_画面に出す名前が無ければ名前を出さない` |
+
+**手順**
+
+1. 同意の画面（prompt=consent）
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 名前の欄を出さない
+- 識別の名前（client_name）を、名前として出さない
+
+## RT-430.3 **動的登録で送った `client_name` は、応答の `client_name` で返り、同意の画面に名前として出る。登録者の利用者名は名前として出ない**
+
+| | |
+|---|---|
+| 観点 | **以前は `client_name` を受け取っても無視し、応答にも入れなかった**（`ClientName` の列は所有者の利用者名のため）。**画面に出す名前の列（`ClientDisplayName`）を別に持ち、そこに入れる**（#430）。**OIDC Registration 1.0 §2 の `client_name` は、利用者に示すクライアントの名前。** |
+| 根拠 | OIDC Registration 1.0 §2 / RFC 7591 §3.2.1 / #430 |
+| テスト | `RT43003_動的登録のclient_nameは応答で返り同意の画面に出る` |
+
+**手順**
+
+1. client_name を付けて登録する
+1. 返った資格情報で、同意の画面を開く（prompt=consent）
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答の client_name は、送った値
+- 同意の画面が出る
+- 名前の欄に、送った client_name が出る
+- 名前の欄に、登録者の利用者名は出ない
+
+## RT-430.4 **動的登録の `client_name` は、`GET` で返り、`PUT` で省けば消える。文字列でない値・制御文字（双方向の制御文字を含む）・256 文字を超える名前は `invalid_client_metadata`**
+
+| | |
+|---|---|
+| 観点 | **`PUT` は全置換**（RFC 7592 §2.2。ほかの登録したメタデータと同じ）。**画面に出す名前なので、人が読む文字列だけを受ける**（RFC 7591 §2。**改行や RLO で表示を偽らせない**。#430 の別モデルのレビューの指摘）。 |
+| 根拠 | RFC 7592 §2.1・§2.2 / RFC 7591 §2・§3.2.2 / #430 |
+| テスト | `RT43004_client_nameはGETで返りPUTで省けば消え人が読めない値は断る` |
+
+**手順**
+
+1. client_name を付けて登録し、GET で読む
+1. client_name を省いて PUT する
+1. 文字列でない client_name（オブジェクト）
+1. 双方向の制御文字（RLO）を含む client_name
+1. 改行を含む client_name
+1. 257 文字の client_name
+1. 対照：256 文字の client_name は登録できる
+
+**検証（合否を判定する）**
+
+- GET の client_name は、登録した値
+- PUT は 200
+- PUT の応答に client_name が無い（消えた）
+- GET でも client_name が無い
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 201
+
+## RT-430.5 **管理画面の「表示名」の欄で保存した名前は、同意の画面に出る。見えない文字（双方向の制御文字など）を含む名前は出さない**
+
+| | |
+|---|---|
+| 観点 | **動的登録は見えない文字を含む `client_name` を断る**（`RT-430.4`）が、**管理画面と構成ファイルは確かめない**。**入口によらず、出す側で絞る**（`ClientDisplay`。#430 の別モデルのレビューの指摘）。 |
+| 根拠 | #430（設計：ClientDisplay の remarks） |
+| テスト | `RT43005_管理画面の表示名は出て見えない文字を含む名前は出さない` |
+
+**手順**
+
+1. 表示名「E2E 管理画面の表示名 430」で登録し、同意の画面を開く
+1. 表示名「abc<RLO>def」で登録し、同意の画面を開く
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 名前の欄に、保存した表示名が出る
+- 同意の画面が出る
+- 見えない文字を含む表示名は、名前の欄に出さない
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

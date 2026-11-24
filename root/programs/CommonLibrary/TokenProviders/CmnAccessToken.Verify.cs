@@ -33,6 +33,7 @@
 //*  2026/11/01  玄人 幸道         RevocationProvider を TokenProviders へ移したので、using を整理した（#321）
 //*  2026/11/06  玄人 幸道         exp を、カルチャに依らない文字列で渡す。無ければ例外にせず検証の失敗にする（#336）
 //*  2026/11/06  玄人 幸道         exp・nbf を Open棟梁 の VerifyExpClaim・VerifyNbfClaim で確かめる。読めない nbf は断る（#337）
+//*  2026/11/23  玄人 幸道         認可の ID がまとめて失効していれば受けない（認可コードの再利用。#421）
 //**********************************************************************************
 
 #if NETFX
@@ -40,6 +41,7 @@ using MultiPurposeAuthSite.Entity;
 #else
 using MultiPurposeAuthSite;
 #endif
+using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
@@ -140,7 +142,14 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     DateTime? datetime = RevocationProvider.Get((string)tokenClaimSet[OAuth2AndOIDCConst.jti]);
 
-                    if (datetime == null)
+                    //  **認可の ID がまとめて失効していないか**（#421）。
+                    //    **認可コードが再利用されたら、そのコードから出したトークン（更新で出したものも含む）を失効させる**（RFC 6749 §4.1.2）。
+                    //    **認可の ID を持たないトークン**（認可コードを通らない経路・この変更の前に出したもの）**は、jti だけを見る。**
+                    bool authorizationRevoked =
+                        tokenClaimSet.TryGetValue(Const.AuthorizationIdClaim, out object authorizationId)
+                        && RevocationProvider.IsAuthorizationRevoked(authorizationId as string);
+
+                    if (datetime == null && !authorizationRevoked)
                     {
                         // iss, expの検証
                         //  **クライアントの登録が、まだ在ること**（#307 の段階 2）。

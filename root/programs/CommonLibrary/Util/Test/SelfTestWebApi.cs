@@ -35,15 +35,25 @@
 //*  2026/11/06  玄人 幸道         CIBA の要求を Open棟梁 の CibaAuthZRequestAsync（資格情報を受ける版。OpenTouryo#592）で送る（#337）
 //*  2026/11/07  玄人 幸道         FAPI1 で PKCE も送る GetAccessTokenByCodeWithPkceAsync を足した（OpenTouryo#670。#341）
 //*  2026/11/08  玄人 幸道         FAPI2 の引き換え・PAR・更新・取り消し・照会を、登録の方法で送る版にした（OpenTouryo#676。#345）
+//*  2026/11/24  玄人 幸道         fapi2 の登録（tls_client_auth 以外）の引き換え・更新に DPoP の証明を添え、縛られた access_token の /userinfo を DPoP で呼ぶ（#429）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util.Sts;
 
 using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json.Linq;
+
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security.Jwt;
+using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Util.Test
 {
@@ -75,6 +85,167 @@ namespace MultiPurposeAuthSite.Util.Test
         {
             Helper.GetInstance();
             return Helper.GetContainerizatedAuthZServerUri(uri);
+        }
+
+        #endregion
+
+        #region DPoP（#429）
+
+        /// <summary>自己テストの DPoP の鍵（プロセスごとに 1 つ。EC の P-256）</summary>
+        /// <remarks>
+        /// **DPoP の鍵は、登録が要らない**（その場で作り、トークンはその鍵の指紋に縛られる。RFC 9449 §1）。
+        /// **プロセスが続く間は同じ鍵**なので、結果の画面のボタン（`/userinfo`・更新）も同じ鍵で証明できる。
+        /// </remarks>
+        private static readonly Lazy<Tuple<JWS, JObject>> DPoPKey =
+            new Lazy<Tuple<JWS, JObject>>(SelfTestWebApi.CreateDPoPKey);
+
+        /// <summary>DPoP の鍵を作る</summary>
+        /// <returns>署名する JWS と、公開鍵の JWK</returns>
+        private static Tuple<JWS, JObject> CreateDPoPKey()
+        {
+            using (ECDsa ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+            {
+                JObject privateJwk = JObject.Parse(
+                    new EccPrivateKeyConverter().ParamToJwk(ecdsa.ExportParameters(true)));
+
+                JWS signer = JwsFactory.CreateFromPrivateJwk("ES256", privateJwk);
+
+                //  **公開鍵は必須の項目だけ**（RFC 7638 の指紋の材料。秘密の `d` を出さない）。
+                JObject publicJwk = new JObject()
+                {
+                    { "kty", privateJwk["kty"] },
+                    { "crv", privateJwk["crv"] },
+                    { "x", privateJwk["x"] },
+                    { "y", privateJwk["y"] }
+                };
+
+                return Tuple.Create(signer, publicJwk);
+            }
+        }
+
+        /// <summary>このクライアントの要求に、DPoP の証明を添えるか</summary>
+        /// <param name="credential">送るクライアント認証</param>
+        /// <returns>添えるなら true</returns>
+        /// <remarks>
+        /// **fapi2 の登録は、送信者に縛れないトークン要求を断る**（FAPI 2.0 Security Profile §5.3.2.1 の 4。#429）。
+        /// **`tls_client_auth` の登録（MTLS のボタン）は、証明書に縛られる**ので、添えない（今までどおり）。
+        /// </remarks>
+        private static bool UsesDPoP(SelfTestClient.ClientCredential credential)
+        {
+            return credential.AuthMethod != OAuth2AndOIDCEnum.AuthMethods.tls_client_auth
+                && Helper.GetInstance().GetClientMode(credential.ClientId)
+                    == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit();
+        }
+
+        /// <summary>DPoP の証明を添えて、トークン エンドポイントへ要求する（private_key_jwt で認証する）</summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri（**コンテナ化の対応をする前のもの**。`htu` に入れる）</param>
+        /// <param name="credential">送るクライアント認証（`UsesDPoP` が true のもの。fapi2 の private_key_jwt）</param>
+        /// <param name="body">grant_type などの本文</param>
+        /// <returns>結果のJSON文字列</returns>
+        private static async Task<string> TokenRequestWithDPoPAsync(
+            Uri tokenEndpointUri, SelfTestClient.ClientCredential credential, Dictionary<string, string> body)
+        {
+            //  **fapi2 で DPoP を添えるのは private_key_jwt のときだけ**（`UsesDPoP`。fapi2 は client_secret を許さない）。
+            Dictionary<string, string> form = new Dictionary<string, string>(body)
+            {
+                { "client_id", credential.ClientId },
+                { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" },
+                { "client_assertion", credential.ClientAssertion }
+            };
+
+            return await SelfTestWebApi.SendWithDPoPAsync(
+                HttpMethod.Post, tokenEndpointUri, () => new FormUrlEncodedContent(form), null);
+        }
+
+        /// <summary>DPoP の証明を添えて送る</summary>
+        /// <param name="method">HTTP メソッド</param>
+        /// <param name="uri">宛先（**コンテナ化の対応をする前のもの**。`htu` に入れる）</param>
+        /// <param name="createContent">本文を作る（送り直すときに作り直すため。無ければ null）</param>
+        /// <param name="accessToken">資源への要求なら access_token（`Authorization: DPoP` と `ath`。トークン要求なら null）</param>
+        /// <returns>応答の本文</returns>
+        /// <remarks>
+        /// **`htu` は、設定から作った宛先（コンテナ化の対応をする前）にする。** **要求は、コンテナ化の対応をした宛先へ送る。**
+        /// **サーバは `htu` の期待値を設定から作る**（`CmnDPoP.TokenEndpointUri`。要求の `Host` を信じない）ので、
+        /// **書き換えた宛先を `htu` に入れると、コンテナの配備（`OAuth2ContainerizatedAuthSvr*`）で断られる**（#429 の別モデルのレビューの指摘）。
+        /// **Open棟梁 の `TokenRequestWithDPoPAsync`・`SendWithDPoPAsync` は、`htu` を送る宛先から取る**ので、ここでは使わない。
+        /// **`use_dpop_nonce` で断られたら、受け取った nonce を入れて 1 回だけ送り直す**（RFC 9449 §8・§9。Open棟梁 の口と同じ振る舞い）。
+        /// </remarks>
+        private static async Task<string> SendWithDPoPAsync(
+            HttpMethod method, Uri uri, Func<HttpContent> createContent, string accessToken)
+        {
+            Tuple<JWS, JObject> key = SelfTestWebApi.DPoPKey.Value;
+            Uri sendUri = SelfTestWebApi.ToContainerUri(uri);
+            string htu = uri.GetLeftPart(UriPartial.Path);
+            string nonce = null;
+
+            for (int attempt = 0; ; attempt++)
+            {
+                using (HttpRequestMessage req = new HttpRequestMessage(method, sendUri))
+                {
+                    if (createContent != null)
+                    {
+                        req.Content = createContent();
+                    }
+
+                    req.Headers.Add(OAuth2AndOIDCConst.HttpHeader_DPoP,
+                        DPoPProof.Create(key.Item1, key.Item2, method.Method, htu, accessToken, nonce));
+
+                    if (accessToken != null)
+                    {
+                        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                            OAuth2AndOIDCConst.DPoP, accessToken);
+                    }
+
+                    using (HttpResponseMessage res = await OAuth2AndOIDCClient.HttpClient.SendAsync(req))
+                    {
+                        string responseBody = await res.Content.ReadAsStringAsync();
+
+                        //  **`use_dpop_nonce`**：Token エンドポイントは本文（400）で、資源は `WWW-Authenticate`（401）で返す（RFC 9449 §8・§9）。
+                        //    **新しい nonce は `DPoP-Nonce` ヘッダ**で来る。
+                        if (attempt == 0
+                            && (responseBody.Contains("use_dpop_nonce")
+                                || res.Headers.WwwAuthenticate.ToString().Contains("use_dpop_nonce"))
+                            && res.Headers.TryGetValues(OAuth2AndOIDCConst.HttpHeader_DPoPNonce, out IEnumerable<string> nonces))
+                        {
+                            nonce = System.Linq.Enumerable.FirstOrDefault(nonces);
+
+                            if (!string.IsNullOrEmpty(nonce))
+                            {
+                                continue;
+                            }
+                        }
+
+                        return responseBody;
+                    }
+                }
+            }
+        }
+
+        /// <summary>access_token が DPoP の鍵に縛られているか（payload の `cnf.jkt`）</summary>
+        /// <param name="accessToken">access_token</param>
+        /// <returns>縛られていれば true（読めなければ false）</returns>
+        private static bool IsDPoPBound(string accessToken)
+        {
+            try
+            {
+                string[] parts = (accessToken ?? "").Split('.');
+
+                if (parts.Length < 2)
+                {
+                    return false;
+                }
+
+                JObject payload = JObject.Parse(
+                    Encoding.UTF8.GetString(CustomEncode.FromBase64UrlString(parts[1])));
+
+                return payload[OAuth2AndOIDCConst.cnf] is JObject cnf
+                    && cnf["jkt"] != null;
+            }
+            catch (Exception)
+            {
+                //  **自己テストの表示のための判定**（読めなければ、従来どおり Bearer で送る）。
+                return false;
+            }
         }
 
         #endregion
@@ -156,6 +327,18 @@ namespace MultiPurposeAuthSite.Util.Test
         public static async Task<string> UpdateAccessTokenByRefreshTokenAsync(
             Uri tokenEndpointUri, SelfTestClient.ClientCredential credential, string refreshToken)
         {
+            //  **fapi2 の登録（tls_client_auth 以外）は、DPoP の証明を添える**（#429）。
+            //    **コンテナ化の対応は、送る側で行う**（`htu` は対応する前の宛先。`SendWithDPoPAsync`）。
+            if (SelfTestWebApi.UsesDPoP(credential))
+            {
+                return await SelfTestWebApi.TokenRequestWithDPoPAsync(tokenEndpointUri, credential,
+                    new Dictionary<string, string>()
+                    {
+                        { "grant_type", OAuth2AndOIDCConst.RefreshTokenGrantType },
+                        { OAuth2AndOIDCConst.RefreshToken, refreshToken }
+                    });
+            }
+
             // コンテナ化サポート
             tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 
@@ -183,6 +366,14 @@ namespace MultiPurposeAuthSite.Util.Test
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri userInfoUri = new Uri(
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
+
+            //  **DPoP の鍵に縛られた access_token は、DPoP の証明（ath 付き）で送る**（RFC 9449 §7。#429）。
+            //    **Bearer で送ると断られる。** 縛ったのは、自己テストの鍵（`DPoPKey`）である。
+            //    **コンテナ化の対応は、送る側で行う**（`htu` は対応する前の宛先。`SendWithDPoPAsync`）。
+            if (SelfTestWebApi.IsDPoPBound(accessToken))
+            {
+                return await SelfTestWebApi.SendWithDPoPAsync(HttpMethod.Get, userInfoUri, null, accessToken);
+            }
 
             // コンテナ化サポート
             userInfoUri = SelfTestWebApi.ToContainerUri(userInfoUri);
@@ -392,6 +583,25 @@ namespace MultiPurposeAuthSite.Util.Test
             Uri tokenEndpointUri, SelfTestClient.ClientCredential credential,
             string redirect_uri, string code, string code_verifier)
         {
+            //  **fapi2 の登録（tls_client_auth 以外）は、DPoP の証明を添える**（FAPI 2.0 Security Profile §5.3.2.1 の 4。#429）。
+            //    **コンテナ化の対応は、送る側で行う**（`htu` は対応する前の宛先。`SendWithDPoPAsync`）。
+            if (SelfTestWebApi.UsesDPoP(credential))
+            {
+                Dictionary<string, string> body = new Dictionary<string, string>()
+                {
+                    { "grant_type", OAuth2AndOIDCConst.AuthorizationCodeGrantType },
+                    { "code", code },
+                    { "redirect_uri", redirect_uri }
+                };
+
+                if (!string.IsNullOrEmpty(code_verifier))
+                {
+                    body.Add("code_verifier", code_verifier);
+                }
+
+                return await SelfTestWebApi.TokenRequestWithDPoPAsync(tokenEndpointUri, credential, body);
+            }
+
             // コンテナ化サポート
             tokenEndpointUri = SelfTestWebApi.ToContainerUri(tokenEndpointUri);
 

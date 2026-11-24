@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/13  玄人 幸道         新規（#367）
 //*  2026/11/15  玄人 幸道         client_assertion を PS256 で署名する（FAPI の登録は RS256 を断るようになった。#395）
+//*  2026/11/24  玄人 幸道         RT-367.1 の認可コードの引き換え は、fapi2 の登録でトークンを取るときに DPoP の証明を添える（fapi2 は送信者の拘束が必須になった。#429）
 //**********************************************************************************
 
 using System;
@@ -208,7 +209,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 Assert.False(string.IsNullOrEmpty(authz.Code),
                     "前提: 認可コードが取得できること（" + authz.ToString() + "）");
 
-                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                JsonResponse token = await client.TokenWithDPoPAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "authorization_code" },
                     { "code", authz.Code },

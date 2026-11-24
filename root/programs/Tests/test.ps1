@@ -132,6 +132,15 @@
 
     付けなければ、このテストはケースを作らない（Skip にもならない）。
 
+.PARAMETER LockedDown
+    **テスト用の口を閉じた配備のテスト（RT-431）専用。**
+    **`IsLockedDownTestEndpoints` を true にしてサイトを起動する**（#431）。
+
+    **-Filter と併せて使うこと。** 自己テスト・Logout の受信箱などを使うテストは落ちる。
+      .\test.ps1 -Launch -LockedDown -Filter "FullyQualifiedName~LockedDownTests"
+
+    付けなければ、このテストはケースを作らない（Skip にもならない）。
+
 .PARAMETER NoWebUI
     ブラウザで測るもの（`Tests/WebUI`。識別子 UI-n.n）を走らせない。
     既定では走らせる（ブラウザが無ければ Skip する）。
@@ -188,6 +197,7 @@ param(
     [switch] $ShortLifetimes,
     [switch] $DPoPNonce,
     [switch] $NoImplicit,
+    [switch] $LockedDown,
     [switch] $NoWebUI,
     [switch] $Coverage,
     [string] $Filter,
@@ -1083,6 +1093,14 @@ try {
             $env:MPAS_NO_IMPLICIT = 'true'
         }
 
+        # **テスト用の口を閉じた配備のテスト（#431）は、閉じた設定で起動して測る。**
+        #   **通しは口を開けて起動する**（自己テスト・受信箱を使うテストがあるため）。
+        #   **値は下の 2 か所（net10.0 / net48 の起動）で入れる。**
+        if ($LockedDown) {
+            Write-Warning '-LockedDown : テスト用の口を閉じて起動します。-Filter と併せて使ってください（#431）。'
+            $env:MPAS_LOCKED_DOWN = 'true'
+        }
+
         if ($PSVersionTable.PSVersion.Major -lt 6) {
             # **コールバックは、スクリプト ブロックではなくコンパイルしたデリゲートにする。**
             #   クライアント証明書のネゴシエーション（-NetFxMtls）が入ると、
@@ -1136,6 +1154,8 @@ public static class MpasTestTls
         #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
         #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
         $env:EnableImplicitGrantType = $(if ($NoImplicit) { 'false' } else { 'true' })
+        # **テスト用の口を閉じるか（#431）。** 付けなければ、手元の設定のまま。
+        if ($LockedDown) { $env:IsLockedDownTestEndpoints = 'true' }
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
         # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1）。**
         #   雛形の既定は無効（口そのものを張らない）だが、**テストでは有効にして起動する。**
@@ -1327,6 +1347,7 @@ public static class MpasTestTls
             #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
             #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
             $env:EnableImplicitGrantType = $(if ($NoImplicit) { 'false' } else { 'true' })
+            if ($LockedDown) { $env:IsLockedDownTestEndpoints = 'true' }   # #431
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
             # **動的クライアント登録（RFC 7591）も測る（#307 の段階 1。上の net10.0 側と同じ理由）**
             $env:EnableDynamicClientRegistration = 'true'
@@ -1469,6 +1490,12 @@ public static class MpasTestTls
     #   **閉じた設定で起動したときにだけ意味がある**（上の DPoPNonceTests と同じ事情）。
     if (-not $NoImplicit) {
         $exclude = 'FullyQualifiedName!~ImplicitDisabledTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    # **テスト用の口を閉じた配備のテスト（RT-431）も、既定では走らせない**（#431。上と同じ事情）。
+    if (-not $LockedDown) {
+        $exclude = 'FullyQualifiedName!~LockedDownTests'
         if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
     }
 

@@ -41,6 +41,7 @@
      2026/11/17  玄人 幸道         FAPI 2.0 Message Signing のクライアントを、署名した Request Object を必須にした登録（17・18）に分けた（#385）
      2026/11/21  玄人 幸道         FAPI 2.0 SP の、認証と縛りの交差・plain_oauth・client_credentials のプランと、scope の置き換えを足した（#416）
      2026/11/21  玄人 幸道         FAPI 1.0 Advanced・FAPI-CIBA・FAPI 2.0 MS の mTLS と、MS の要求と応答の残りの組のプランを足した（#416）
+     2026/11/24  玄人 幸道         client_credentials のプランのクライアント（23・24）を fapi2 の登録にした説明に直した（#424）
 #>
 [CmdletBinding()]
 param(
@@ -112,13 +113,14 @@ $plans = @{
         Variant = '{"fapi_profile":"plain_fapi","openid":"openid_connect","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"mtls","sender_constrain":"dpop"}'
         ClientId = 'c75c11e0000000000000000000000015'; Client2Id = 'c75c11e0000000000000000000000016' }
     #   OIDC を使わない FAPI 2.0（openid=plain_oauth）：8・9 を使う。**scope に openid を入れると、Conformance Suite が始める前に落とす**ので、Scope で置き換える
-    'fapi2-sp-plain-oauth' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420; Scope = 'email'
+    #   **資源は /TestResource**（openid を求めない。/userinfo は openid の無いトークンを 403 で断る。#425）
+    'fapi2-sp-plain-oauth' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420; Scope = 'email'; ResourcePath = '/TestResource'
         Variant = '{"fapi_profile":"plain_fapi","openid":"plain_oauth","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop"}'
         ClientId = 'c75c11e0000000000000000000000008'; Client2Id = 'c75c11e0000000000000000000000009' }
-    #   client_credentials（fapi_profile=fapi_client_credentials_grant）：23・24（**client_mode は normal**。docker-compose.yml の説明）。
+    #   client_credentials（fapi_profile=fapi_client_credentials_grant）：23・24（**client_mode は fapi2**。#416 では normal だった。#424。docker-compose.yml の説明）。
     #   **openid は、このプロファイルには当たらない**（Conformance Suite が画面で隠す）が、**API では値が要る**（無いと「requires a value for variant 'openid'」）。
     #   **plain_oauth にする**（openid_connect にすると、出ない id_token の acr を確かめに行き、環境の誤りとして止まる。2026-11-21）。scope は openid を外す
-    'fapi2-sp-client-credentials' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420; Scope = 'email'
+    'fapi2-sp-client-credentials' = @{ Name = 'fapi2-security-profile-final-test-plan'; Config = 'fapi2'; Fapi = $true; ModuleTimeoutSec = 420; Scope = 'email'; ResourcePath = '/TestResource'
         Variant = '{"fapi_profile":"fapi_client_credentials_grant","openid":"plain_oauth","authorization_request_type":"simple","grant_management":"disabled","client_auth_type":"private_key_jwt","sender_constrain":"dpop"}'
         ClientId = 'c75c11e0000000000000000000000017'; Client2Id = 'c75c11e0000000000000000000000018' }
     # **FAPI 2.0 Message Signing**：SP の private_key_jwt＋DPoP に、署名した Request Object（signed_non_repudiation）と JARM を足したもの
@@ -382,6 +384,15 @@ if ($p.Scope)
 {
     # **雛形の scope を置き換える**（openid=plain_oauth は、scope に openid があると Conformance Suite が始める前に落とす。#416）
     $config = $config.Replace('"scope": "openid email"', ('"scope": "{0}"' -f (ConvertTo-JsonString $p.Scope)))
+}
+if ($p.ResourcePath)
+{
+    # **雛形の資源（/userinfo）を置き換える**（openid の無いトークンで呼ぶプランは /TestResource。#425）
+    if (-not $config.Contains('"resourceUrl": "https://mpas-cts.localhost:44311/userinfo"'))
+    {
+        throw ('The template has no resourceUrl to replace: ' + $template)
+    }
+    $config = $config.Replace('"resourceUrl": "https://mpas-cts.localhost:44311/userinfo"', ('"resourceUrl": "https://mpas-cts.localhost:44311{0}"' -f (ConvertTo-JsonString $p.ResourcePath)))
 }
 if ($p.ClientId)
 {

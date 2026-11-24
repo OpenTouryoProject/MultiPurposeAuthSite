@@ -59,6 +59,8 @@
 //*  2026/11/15  玄人 幸道         /userinfo に要求ヘッダを足して呼ぶ UserInfoWithHeadersAsync を足した（#384）
 //*  2026/11/17  玄人 幸道         IssuerAsync の同期版 Issuer を足した（client_assertion の aud に使う。#398）
 //*  2026/11/21  玄人 幸道         サインインの画面から ReturnUrl で戻る SignInViaSignInPageAsync を足した（#413）
+//*  2026/11/23  玄人 幸道         PostWithCertificateAsync に、要求ヘッダ（DPoP など）を足せるようにした（#423）
+//*  2026/11/24  玄人 幸道         DPoP の証明を添えてトークン エンドポイントを呼ぶ TokenWithDPoPAsync を足した（#429）
 //**********************************************************************************
 
 using System;
@@ -1116,6 +1118,31 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this.PostJsonAsync("/token", form);
         }
 
+        /// <summary>トークン エンドポイントを、DPoP の証明（EC の鍵）を添えて呼ぶ（#429）</summary>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **fapi2 の登録は、DPoP の鍵か証明書に縛れないトークン要求を断る**（FAPI 2.0 Security Profile §5.3.2.1 の 4。#429）。
+        /// **縛ること自体を測るのではないテスト**が、fapi2 の登録でトークンを取るときに使う。
+        /// **`htu` は Discovery が広告する `token_endpoint`**（ほかの DPoP のテストと同じ。RFC 9449 §4.2）。
+        /// </remarks>
+        public async Task<JsonResponse> TokenWithDPoPAsync(IDictionary<string, string> form)
+        {
+            JsonResponse discovery = await this.GetJsonAsync("/.well-known/openid-configuration");
+            string tokenEndpoint = discovery.String("token_endpoint");
+
+            string proof = JwsSigner.SignDPoP(this, new Dictionary<string, object>()
+            {
+                { "jti", Guid.NewGuid().ToString("N") },
+                { "htm", "POST" },
+                { "htu", tokenEndpoint },
+                { "iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds() }
+            });
+
+            return await this.PostJsonAsync(this.ToLocalUrl(tokenEndpoint), form,
+                new Dictionary<string, string>() { { "DPoP", proof } });
+        }
+
         /// <summary>
         /// トークン エンドポイントを、client_secret_basic（Authorization ヘッダ）で呼ぶ。
         /// client_id / client_secret はフォームに入れない。
@@ -1155,10 +1182,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="path">パス（`/token`・`/device_authz` など）</param>
         /// <param name="form">フォーム（値が null の項目は送らない）</param>
         /// <param name="certificate">クライアント証明書（null なら添えない）</param>
+        /// <param name="headers">足す要求ヘッダ（`DPoP` など。null なら足さない。#423）</param>
         /// <returns>JsonResponse</returns>
         /// <remarks>**`tls_client_auth` の device 登録は、`/device_authz` でも証明書で認証する**ので、トークンの口以外にも要る。</remarks>
         public async Task<JsonResponse> PostWithCertificateAsync(
-            string path, IDictionary<string, string> form, X509Certificate2 certificate)
+            string path, IDictionary<string, string> form, X509Certificate2 certificate,
+            IDictionary<string, string> headers = null)
         {
             using (HttpClientHandler handler = new HttpClientHandler())
             {
@@ -1185,10 +1214,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                         }
                     }
 
-                    HttpResponseMessage res = await http.PostAsync(
-                        this.Absolute(path), new FormUrlEncodedContent(body));
+                    using (HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, this.Absolute(path)))
+                    {
+                        req.Content = new FormUrlEncodedContent(body);
 
-                    return await ToJsonResponseAsync(res);
+                        if (headers != null)
+                        {
+                            foreach (KeyValuePair<string, string> h in headers)
+                            {
+                                req.Headers.TryAddWithoutValidation(h.Key, h.Value);
+                            }
+                        }
+
+                        HttpResponseMessage res = await http.SendAsync(req);
+
+                        return await ToJsonResponseAsync(res);
+                    }
                 }
             }
         }

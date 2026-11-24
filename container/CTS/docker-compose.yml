@@ -342,12 +342,14 @@ services:
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000016__client_name=CtsFapi2MtlsDpop2
       # **FAPI 2.0 の client_credentials**（#416。fapi_profile=fapi_client_credentials_grant。23・24）。
-      #   **client_mode は normal のまま**（ClientModePolicy は client_credentials を normal にしか許さない。fapi2 × client_credentials を開けるかは #424）。
-      #   **FAPI 2.0 の認証と縛りは、登録の項目で強制する**（private_key_jwt・DPoP の必須。#346 の項目は client_mode によらず効く）
+      #   **client_mode は fapi2**（#424 で、fapi2 の登録にも private_key_jwt・mTLS の client_credentials を開けた。#416 では normal で回していた）。
+      #   **縛りは、登録の項目で強制する**（DPoP の必須。#346 の項目。fapi2 の認可コードの登録と同じ）
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__client_mode=fapi2
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__dpop_bound_access_tokens=true
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__token_endpoint_auth_method=private_key_jwt
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT1_JWK}
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000017__client_name=CtsFapi2ClientCredentials1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__client_mode=fapi2
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__dpop_bound_access_tokens=true
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__token_endpoint_auth_method=private_key_jwt
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000018__jwk_ecdsa_publickey=${CTS_FAPI_CLIENT2_JWK}
