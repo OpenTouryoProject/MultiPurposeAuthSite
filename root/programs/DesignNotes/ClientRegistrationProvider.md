@@ -21,6 +21,7 @@
 | #310 の段階 2 / 3 | `backchannel_logout_uri` / `frontchannel_logout_uri` を動的登録で変えさせない |
 | #314 | 受け付ける `response_types` を `CmnEndpoints.SupportedResponseTypes` に寄せた |
 | #294 | 汎用部品を Open棟梁 の実装へ置き換え、文字列リテラルを定数にした。`auth` も動的登録で付けさせない |
+| #426 | `post_logout_redirect_uris` / `frontchannel_logout_uri` / `backchannel_logout_uri` を動的登録で受ける（#310 の決めを改めた） |
 
 ## #307 の段階 1（登録）
 
@@ -92,6 +93,21 @@
 
 - **`backchannel_logout_uri` / `frontchannel_logout_uri` は、動的登録では変えさせない。**
   RFC 7591 のメタデータではないので、画面と設定ファイルからだけ入れる（`PUT` では現行を持ち越す）
+  **#426 で改めた**（下の「#426」。**理由が原典と合わなかった**）
+
+## #426（ログアウトの登録項目を動的登録で受ける）
+
+- **#310 の理由（「RFC 7591 のメタデータではない」）は、原典と合わなかった。**
+  3 つとも OIDC の動的登録のメタデータとして定められ、IANA の登録簿にも載る
+  （RP-Initiated Logout 1.0 §3.1・Front-Channel Logout 1.0 §2・Back-Channel Logout 1.0 §2.2。どれも OPTIONAL なので、受けないことは不適合ではなかった）。
+  **適合性テストの、動的登録したクライアントでのログアウトのプランを回すために受ける**と決めた
+- **`post_logout_redirect_uris` は配列**なので、**列を `redirect_uris` と同じ形（空白区切りの n 件・2000 文字）にした**（管理画面・設定ファイルも同じ）
+- **確かめ方は、使う側と同じ**：`post_logout_redirect_uris` は `redirect_uris` と同じ（絶対 URI・フラグメントなし）、`frontchannel_logout_uri` は https（ループバックの http だけ許す）、
+  **`backchannel_logout_uri` は `OutboundUrlPolicy`**（https と行き先のアドレス。**OP が POST する先を、登録する側が決められる**ため。`jwks_uri`・`request_uris` と同じ）
+- **送るときも、動的登録したクライアント（`registration_access_token` を持つ登録）へは、`OutboundUrlPolicy` の判定と HttpClient で送る**（名前解決の結果は後から変えられる）。
+  **管理画面・設定ファイルだけで登録したクライアントは、今までどおりイントラネットの RP へも送る**（配備の管理者が決めた値）
+- **`PUT` で省いたら消す**（RFC 7592 §2.2 の MUST）。**管理画面から入れた値も消える**（以前は持ち越していた）
+- **`*_session_required` は受けるが、持たない。** この実装は必ず `iss` と `sid` を付けるので、応答では URL が在るときだけ true を返す
 
 ## #294（整理）
 

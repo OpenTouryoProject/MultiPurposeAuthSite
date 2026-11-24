@@ -59,6 +59,7 @@
 //*  2026/11/19  玄人 幸道         request_uris の名前と上限を足した（#374）
 //*  2026/11/23  玄人 幸道         認可の ID のクレーム名と、その失効の記録のキーの接頭辞を足した（#421）
 //*  2026/11/24  玄人 幸道         画面に出す名前のキー（client_display_name）と上限を足した（#430）
+//*  2026/11/25  玄人 幸道         動的登録のログアウトのメタデータの名前（post_logout_redirect_uris・*_logout_session_required）を足した（#426）
 //*  2026/11/24  玄人 幸道         テスト用の資源の口の名前を足した（#425）
 //**********************************************************************************
 
@@ -618,6 +619,16 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>backchannel_logout_uri（Back-Channel Logout 1.0）</summary>
         public const string ClientBackChannelLogoutUri = "backchannel_logout_uri";
+
+        /// <summary>post_logout_redirect_uris（RP-Initiated Logout 1.0 §3.1。動的登録のメタデータ。#426）</summary>
+        /// <remarks>**構成ファイルのキーは単数の `post_logout_redirect_uri`**（空白区切りの n 件）。**こちらは動的登録の配列の名前。**</remarks>
+        public const string ClientPostLogoutRedirectUris = "post_logout_redirect_uris";
+
+        /// <summary>frontchannel_logout_session_required（Front-Channel Logout 1.0 §2。動的登録で受けるが持たない。#426）</summary>
+        public const string ClientFrontChannelLogoutSessionRequired = "frontchannel_logout_session_required";
+
+        /// <summary>backchannel_logout_session_required（Back-Channel Logout 1.0 §2.2。動的登録で受けるが持たない。#426）</summary>
+        public const string ClientBackChannelLogoutSessionRequired = "backchannel_logout_session_required";
 
         #endregion
 

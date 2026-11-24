@@ -32,6 +32,7 @@
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
 //*  2026/11/18  玄人 幸道         専用の HttpClient（プロキシの組は ProxyForBackChannelLogout。クライアント証明書を持たない。リダイレクトを追わない）で送るようにした（#406）
 //*  2026/11/18  玄人 幸道         専用の HttpClient を作るときの例外を覚えないようにした（LazyThreadSafetyMode.PublicationOnly。#406）
+//*  2026/11/25  玄人 幸道         動的登録したクライアントへは、行き先のアドレスを確かめて送るようにした（OutboundUrlPolicy。#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -159,7 +160,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             foreach (SessionClientProvider.Target target in targets)
             {
-                string uri = BackChannelLogout.GetUri(target.ClientId);
+                string uri = BackChannelLogout.GetUri(target.ClientId, out bool dynamicallyRegistered);
 
                 if (string.IsNullOrEmpty(uri))
                 {
@@ -177,7 +178,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 tried++;
 
-                if (await BackChannelLogout.PostAsync(uri, token))
+                if (await BackChannelLogout.PostAsync(uri, token, dynamicallyRegistered))
                 {
                     sent++;
                 }
@@ -195,15 +196,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>その相手の backchannel_logout_uri（送れない相手は空）</summary>
         /// <param name="clientId">ClientID</param>
+        /// <param name="dynamicallyRegistered">動的登録したクライアントか（`registration_access_token` を持つ。#426）</param>
         /// <returns>URL（登録が無い・使えない URL なら空）</returns>
         /// <remarks>
         /// **`https` を求め、ループバックの `http` だけ許す**
         /// （**鍵の出どころと同じ規則**。`RemoteJwkSetStore.IsUsableKeySource`）。
         /// **`logout_token` は署名してあるが、平文で運べば「誰がいつ抜けたか」が漏れる。**
         /// **開発と試験では証明書を用意できないことが在る**ので、ループバックだけ許す。
+        ///
+        /// **動的登録したクライアントは、行き先のアドレスも見る**（`OutboundUrlPolicy`。#426）。
+        /// **登録する側が、OP に要求を出させる先を決められる**ためである（`jwks_uri`・`request_uris` と同じ。#376）。
+        /// **管理画面・設定ファイルから入れた宛先は、今までどおりイントラネットの RP へも送る**（配備の管理者が決めた値）。
         /// </remarks>
-        private static string GetUri(string clientId)
+        private static string GetUri(string clientId, out bool dynamicallyRegistered)
         {
+            dynamicallyRegistered = BackChannelLogout.IsDynamicallyRegistered(clientId);
+
             string registered = Helper.GetInstance().GetClientsBackChannelLogoutUri(clientId) ?? "";
 
             if (string.IsNullOrEmpty(registered))
@@ -214,7 +222,34 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // **記号を実 URL に直す**（`test_self_bclogout`。#232 の戻り先と同じ扱い）。
             string uri = CmnEndpoints.GetRedirectUriFromConstr(registered);
 
+            if (dynamicallyRegistered)
+            {
+                //  **登録のときにも確かめている**（`ClientRegistrationProvider.Validate`）が、**名前解決の結果は後から変えられる**ので、送る前にも見る。
+                return OutboundUrlPolicy.IsAllowed(uri) ? uri : "";
+            }
+
             return RemoteJwkSetStore.IsUsableKeySource(uri) ? uri : "";
+        }
+
+        /// <summary>動的登録したクライアントか（#426）</summary>
+        /// <param name="clientId">ClientID</param>
+        /// <returns>**`registration_access_token` を持つ登録なら true**（読めなければ true に倒す）</returns>
+        /// <remarks>
+        /// **`registration_access_token`（のハッシュ）は、動的登録だけが入れる**（管理画面は持ち越すだけ。`ManageAddSaml2OAuth2DataViewModel`）。
+        /// **読めないときは、厳しい方（動的登録の扱い）に倒す。**
+        /// </remarks>
+        private static bool IsDynamicallyRegistered(string clientId)
+        {
+            try
+            {
+                ViewModels.ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(clientId);
+
+                return model != null && !string.IsNullOrEmpty(model.RegistrationAccessToken);
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         /// <summary>その相手に名乗った sub（引けなければ空）</summary>
@@ -250,19 +285,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <summary>1 件送る</summary>
         /// <param name="uri">backchannel_logout_uri</param>
         /// <param name="logoutToken">logout_token</param>
+        /// <param name="dynamicallyRegistered">動的登録したクライアントか（#426）</param>
         /// <returns>**2xx が返れば true**</returns>
         /// <remarks>
         /// **本文は `logout_token=…` の 1 項目**（§2.5）。
         /// **応答の中身は見ない**（§2.6 : **RP は 200 を返す。誤りなら 400 ＋ JSON**）。
         /// **2xx でなければ「届かなかった」として数える。**
         /// </remarks>
-        private static async Task<bool> PostAsync(string uri, string logoutToken)
+        private static async Task<bool> PostAsync(string uri, string logoutToken, bool dynamicallyRegistered)
         {
             try
             {
                 //  **専用の HttpClient で送る**（#406）。**以前は ID 連携や /token と同じ共有の HttpClient**で、
                 //    **プロキシの組を分けられず、OP のクライアント証明書を RP に提示しえた。**
-                HttpClient client = BackChannelLogout.HttpClient;
+                //  **動的登録したクライアントへは、クライアントが決めた URL を取りに行く HttpClient で送る**（#426）。
+                //    **net10.0 版は、接続の時点のアドレスでも判定する**（`OutboundUrlPolicy.HttpClient`。プロキシの組は `ProxyForClientRegisteredUrls`）。
+                HttpClient client = dynamicallyRegistered
+                    ? OutboundUrlPolicy.HttpClient : BackChannelLogout.HttpClient;
 
                 FormUrlEncodedContent content = new FormUrlEncodedContent(
                     new Dictionary<string, string>()
