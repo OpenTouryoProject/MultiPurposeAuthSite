@@ -1921,7 +1921,7 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 
 | | なぜ |
 |---|---|
-| **閉じた配備（`IsLockedDownTestEndpoints=true`、または `IsDebug=false`）で 404 になること** | 通しは口を開けた構成で回す（`/TestHybridFlow` と同じ） |
+| **閉じた配備で 404 になること** | 通しは口を開けた構成で回す（`/TestHybridFlow` と同じ）。**`IsLockedDownTestEndpoints=true` は `RT-431.2`（`-LockedDown` で回す。#431）**。**`IsDebug=false` は E2E では測らない**（`mem` は常に `IsDebug`。判定は単体テスト `Sts/TestResourceTests`） |
 | **POST・DPoP の nonce を求める構成・FAPI の登録のトークンの `x-fapi-interaction-id`** | 照合と応答の作り方は `/userinfo` と同じ部品（`DPoPNonceTests`・`FapiInteractionIdTests` が `/userinfo` で測る）。**開くかの判定（`IsDebug`・`IsLockedDownTestEndpoints`）は単体テスト `Sts/TestResourceTests`** |
 | **証明書に縛ったトークン** | 照合は `/userinfo` と同じ部品（`Fapi/MtlsTests` が `/userinfo` で測る）。**適合性テストの 2 プランは DPoP**（`sender_constrain=dpop`） |
 
@@ -5229,6 +5229,31 @@ E2E で 2 件測っている。
 > **直す前のコードでは測っていない**（`RT-314.2` の `code token` / `code id_token token` は、
 > 直す前は access_token を返していた — コードを読んで確かめた）。
 
+### テスト用の口を閉じた配備（`RT-431`）と `-LockedDown`
+
+**通しはテスト用の口を開けて起動する**（自己テスト・Logout の受信箱・`/TestResource` を使うテストがあるため）。
+そのため、**本番の構成（`IsLockedDownTestEndpoints=true`）で口が閉じていることは、通しでは測れない。**
+`-LockedDown` が、**`IsLockedDownTestEndpoints` を true にして両版のサイトを起動する**（#431）。
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -LockedDown -Filter "FullyQualifiedName~LockedDownTests"
+```
+
+| | 測ること |
+|---|---|
+| **`RT-431.1`** | **`TestHybridFlow` は、決めた経路（net10.0 `/TestHybridFlowWebAPI`・net48 `/TestHybridFlow`）からも、既定の経路（net10.0 `/OAuth2ResourceServer/TestHybridFlow`・net48 `/api/OAuth2ResourceServer/TestHybridFlow`）からも 404** |
+| **`RT-431.2`** | **`TestResource`（#425）も、両方の経路から 404** |
+| **`RT-431.3`** | **Logout の受け口と受信箱（`/Account/BackChannelLogoutClient`・`BackChannelLogoutBox`・`FrontChannelLogoutClient`・`FrontChannelLogoutBox`）、`api/Values`（net10.0）も 404** |
+
+- **以前は、`TestHybridFlow` を経路を張らないことでだけ閉じていた。** **既定の経路（`{controller}/{action}`）から動作に届いた**（#431。動作は `code=dummy` で 500 になった）。
+  **ほかの口は、動作の中でも閉じていた**（`RT-431.2`・`.3` は、それを固定する）
+- **`-Filter` と併せて使う。** **自己テスト・受信箱を使うテストは落ちる**
+- **既定の通しでは除外している**（`test.ps1` が `FullyQualifiedName!~LockedDownTests` を足す。`-NoImplicit` と同じ事情）
+- そのため **この 3 件は `TESTCASES.md`（原本）に載らない。** **`-LockedDown` の実行で `-UpdateTestCases` を付けないこと**
+
+> **実測 2026/11/24（#431）** : **6 成功 / 失敗 0 / Skip 0**（`mem`。net10.0 版・net48 版の両方）。
+> **直す前のコードでは、両版とも `RT-431.1` の既定の経路が 500 で落ちた**（ほかは 404 で通った）。
+
 ### 有効期限（`RT-188`）と `-ShortLifetimes`
 
 **既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待つのは現実的でない。**
@@ -5241,7 +5266,7 @@ E2E で 2 件測っている。
 - **`-Filter` と併せて使う。** 寿命が短いので、他のテストは落ちる
 - **既定の通しでは、`RT-188` を除外している**（`test.ps1` が `FullyQualifiedName!~LifetimeTests` を足す）。
   既定の寿命では測れず、**xUnit は「ケースが 0 件の Theory」を失敗として数える**ため
-- **除外は名前の部分一致である。** **クラス名に `LifetimeTests`・`DPoPNonceTests`・`ImplicitDisabledTests` を含めると、既定の通しから黙って外れる**
+- **除外は名前の部分一致である。** **クラス名に `LifetimeTests`・`DPoPNonceTests`・`ImplicitDisabledTests`・`LockedDownTests` を含めると、既定の通しから黙って外れる**
   （#388 で `CibaRequestLifetimeTests` と名付け、`-Filter` で回しても 0 件になった。`CibaRequestExpiryTests` に改めた）
 - そのため **`RT-188` は `TESTCASES.md`（原本）に載らない。**
   原本は通しの結果から作るので、`-ShortLifetimes` の実行で `-UpdateTestCases` を付けないこと

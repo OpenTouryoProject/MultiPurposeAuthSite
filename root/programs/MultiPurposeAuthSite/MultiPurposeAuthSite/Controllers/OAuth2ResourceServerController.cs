@@ -542,7 +542,7 @@ namespace MultiPurposeAuthSite.Controllers
         //   **既定では同一オリジン**（OAuth2AuthorizationServerEndpointsRootURI と
         //   OAuth2ClientEndpointsRootURI が同じ値）なので、本来 CORS は要らない。
         //   **2 つを別ホストにした配備では、クロス オリジンになる**ので開けておく。
-        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じ、動作の中でも閉じる**（#431）（WebApiConfig）ため、
+        //   **この口は IsLockedDownTestEndpoints で、経路ごと（WebApiConfig）と動作の中の両方で閉じる**（#431）ため、
         //   **本番では、このポリシーも届かない。**
         //   **資格情報は許さない**（SupportsCredentials を付けない）。
         [EnableCors(origins: "*", headers: "*", methods: "*")]

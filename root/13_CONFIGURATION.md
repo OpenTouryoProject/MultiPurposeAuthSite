@@ -4289,6 +4289,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `/Account/BackChannelLogoutBox` | **404 が返る**（`IsLockedDownTestEndpoints`。#310 の段階 2。**開いていれば、他人のログアウトの通知を読まれる**） |
 | `/Account/FrontChannelLogoutBox` | **404 が返る**（同上。#310 の段階 3） |
 | `/TestResource` | **404 が返る**（同上。#425。**開いていれば、`openid` の無いトークンで呼べる口が残る**） |
+| `/OAuth2ResourceServer/TestHybridFlow`（net10.0）・`/api/OAuth2ResourceServer/TestHybridFlow`（net48） | **404 が返る**（同上。#431。**既定の経路（`{controller}/{action}`）からも届くので、決めた経路（`/TestHybridFlowWebAPI`・`/TestHybridFlow`）と併せて見る**） |
 | 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
 | `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnableDebugTraceLog`） |
@@ -4327,6 +4328,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 3. **`/Ping` は閉じない。** セッションのタイムアウト防止に使われているため（#219）。
    本番で塞ぐなら、前段（リバース プロキシなど）で行う。
    `/TestHybridFlow`・`/TestResource`（#425）と `api/Values`（net10.0 のみ）は、`IsLockedDownTestEndpoints` で閉じる。
+   **既定の経路（`{controller}/{action}`）から来ても、動作の中で閉じる**（#431。`RT-431`）。
 4. **STS 専用モード**（`EnableSignupProcess` / `EnableEditingOfUserAttribute` /
    `EnableAdministrationOfUsersAndRoles` を**全部 false**）にすると、サインアップ・属性の編集・
    ユーザ管理が無効になる。**利用者ストアへの書き込みも止まる**ので、切替の影響が大きい。

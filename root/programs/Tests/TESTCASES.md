@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=e0e20682-ffae-437b-91d1-116ee3f16d93&code=bogus
+1. GET /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=e0e20682-ffae-437b-91d1-116ee3f16d93&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=e0e20682-ffae-437b-91d1-116ee3f16d93&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
