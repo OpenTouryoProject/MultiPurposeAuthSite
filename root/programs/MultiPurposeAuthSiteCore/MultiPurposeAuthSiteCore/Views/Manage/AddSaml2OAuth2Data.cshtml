@@ -29,6 +29,7 @@
     //*  2026/10/20  玄人 幸道         編集では client_id を作り直せないようにした（#307 の段階 5-a-2）
     //*  2026/10/21  玄人 幸道         backchannel / frontchannel_logout_uri の欄を追加（#310 の段階 2・3）
     //*  2026/11/08  玄人 幸道         プロファイルを強制する登録の項目（4 つ）の欄を追加（#346 の段階 1）
+    //*  2026/11/24  玄人 幸道         表示名（client_name）の欄を足した（#430）
     //**********************************************************************************
 *@
 
@@ -346,6 +347,13 @@
         <div class="col-md-3">
             @Html.TextBoxFor(m => m.ClientUri, new { @class = "form-control" })
             <p class="help-block">@Html.DescriptionFor(m => m.ClientUri)</p>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ClientDisplayName, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.ClientDisplayName, new { @class = "form-control" })
+            <p class="help-block">@Html.DescriptionFor(m => m.ClientDisplayName)</p>
         </div>
     </div>
     <div class="form-group">

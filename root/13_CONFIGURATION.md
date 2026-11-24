@@ -1862,7 +1862,7 @@ Content-Type: application/json
 | **`token_endpoint_auth_signing_alg`** | **受け付ける**（段階 3）。**`RS256` / `ES256`**。**空なら絞らない**（#262） |
 | **`jwks_uri`** | **断る**（`invalid_client_metadata`）。**鍵を URL から引く実装が無い** — **クライアント認証の経路が同期**で、取得を差し込めない（**別 Issue**）。**受け取って無視すると、`private_key_jwt` が黙って通らなくなる** |
 | **`software_statement`** | **受け付ける**（段階 4）。**信頼する発行者が署名した JWT**で、**主張した値は本文（plain JSON）に勝つ**。**信頼する発行者を 1 件も設定していなければ断る**（`unapproved_software_statement`。従来どおり）。**下の「`software_statement`」** |
-| **`client_name`** | **受け取っても無視する**（§3.2.1 が認めている）。**`ClientName` の列は利用者名**であり、**`Helper.GetClientName` が「登録が在るか」の判定に使っている。** **応答にも入れない** |
+| **`client_name`** | **画面に出す名前の列（`ClientDisplayName`）に入れ、応答の `client_name` で返す**（#430。OIDC Registration 1.0 §2。**256 文字まで**）。**承認の画面（同意・認可の要求から来たサインイン）に出す**（#427 のロゴ・リンクと並べて）。**`ClientName` の列（識別の名前）には入れない** — **そちらは利用者名**で、**`Helper.GetClientName` が「登録が在るか」の判定に使っている**（#430 までは、`client_name` を受け取っても無視していた）。**`PUT` で省けば消える** |
 | 上記以外 | **無視する**（§3.2.1） |
 
 **応答は `201 Created`**（§3.2.1）。`client_id` / `client_secret` /
@@ -1878,6 +1878,27 @@ Content-Type: application/json
 
 **レート制限の対象**である（#305 の段階 3。口の名前は `register`）。
 **誰がいつ登録したかはオペレーション ログに残る**（`client_secret` は書かない）。
+
+#### 画面に出す名前（`client_name`。#430）
+
+**クライアントの識別の名前（構成ファイルの `client_name`、DB の `ClientName` ＝ 所有者の利用者名）とは別に、画面に出す名前を持つ。** **空なら名前を出さない**（識別の名前には倒さない。内部の名前や利用者名を利用者に見せないため）。
+
+| 登録の経路 | 書く場所 |
+|---|---|
+| 構成ファイル | クライアントごとのキー `client_display_name`（任意） |
+| 管理画面 | 「表示名（client_name）」の欄 |
+| 動的登録 | 要求の `client_name`（応答の `client_name` で返る） |
+
+**既に配備された DB には、列を足すこと**（`Create_UserStore.sql` には入っている）。**既存の行は NULL（＝ 名前を出さない。以前どおり）。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ADD [ClientDisplayName] [nvarchar](256) NULL
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" ADD ("ClientDisplayName" NVARCHAR2(256) NULL);
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ADD COLUMN ClientDisplayName varchar(256) NULL;
+```
 
 #### 登録した `scope` / `grant_types` / `response_types` は、実際に効く（#307 の段階 1）
 

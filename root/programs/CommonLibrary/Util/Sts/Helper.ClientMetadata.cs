@@ -44,6 +44,7 @@
 //*  2026/11/15  玄人 幸道         fapi_ciba を含めた FAPI の登録かを返す IsFapiProfileClient を足した（#384・#395）
 //*  2026/11/19  玄人 幸道         登録された request_uris を引く GetClientRequestUris を足した（#374）
 //*  2026/11/24  玄人 幸道         登録された logo_uri・policy_uri・tos_uri を引く口を足した（承認の画面に出す。#427）
+//*  2026/11/24  玄人 幸道         画面に出す名前を引く GetClientDisplayName を足した（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -446,6 +447,18 @@ namespace MultiPurposeAuthSite.Util.Sts
         public string GetClientTosUri(string client_id)
         {
             return this.GetRegisteredValue(client_id, Const.ClientTosUri, model => model.TosUri);
+        }
+
+        /// <summary>画面に出す名前を引く（OIDC Registration 1.0 §2 の client_name。#430）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>画面に出す名前（**登録が無ければ null**）</returns>
+        /// <remarks>
+        /// **`GetClientName`（識別の名前）とは別。** 構成ファイルでは `client_display_name`、DB では `ClientDisplayName` の列。
+        /// **無ければ名前を出さない**（`client_name` には倒さない。構成ファイルの `client_name` は内部の名前、DB の `ClientName` は所有者の利用者名）。
+        /// </remarks>
+        public string GetClientDisplayName(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, Const.ClientDisplayName, model => model.ClientDisplayName);
         }
 
         /// <summary>登録された request_uris を引く（OIDC Registration 1.0 §2。#374）</summary>

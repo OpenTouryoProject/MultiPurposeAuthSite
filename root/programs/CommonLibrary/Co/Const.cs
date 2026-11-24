@@ -58,6 +58,7 @@
 //*  2026/11/14  玄人 幸道         PollingClientId を追加（#387）
 //*  2026/11/19  玄人 幸道         request_uris の名前と上限を足した（#374）
 //*  2026/11/23  玄人 幸道         認可の ID のクレーム名と、その失効の記録のキーの接頭辞を足した（#421）
+//*  2026/11/24  玄人 幸道         画面に出す名前のキー（client_display_name）と上限を足した（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Util.Sts;
@@ -94,6 +95,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>ClientNameのMaxLength</summary>
         public const int MaxLengthOfClientName = 64;
+
+        /// <summary>画面に出す名前（client_name。#430）の上限（列の幅）</summary>
+        public const int MaxLengthOfClientDisplayName = 256;
 
         /// <summary>token_endpoint_auth_method の MaxLength</summary>
         /// <remarks>
@@ -570,6 +574,9 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>request_uris（OIDC DCR 1.0 §2。取りに行ってよい外部の request_uri。#374）</summary>
         public const string ClientRequestUris = "request_uris";
+
+        /// <summary>画面に出す名前の、構成ファイルのキー（#430。**動的登録の client_name を入れる先**。**client_name（識別の名前）とは別**）</summary>
+        public const string ClientDisplayName = "client_display_name";
 
         /// <summary>ホスト名の Sector に付ける接頭辞（#364）</summary>
         /// <remarks>

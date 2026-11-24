@@ -38,6 +38,7 @@
 //*  2026/11/13  玄人 幸道         AuthorizationSignedResponseAlg を追加した（#370）
 //*  2026/11/14  玄人 幸道         署名の alg の既定のコメントを、FAPI の登録は ES256 に合わせた（#394）
 //*  2026/11/19  玄人 幸道         RequestUris（request_uris）を追加した（#374）
+//*  2026/11/24  玄人 幸道         ClientDisplayName（画面に出す名前）を足した（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -951,6 +952,21 @@ namespace MultiPurposeAuthSite.ViewModels
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = Const.ClientRequestUris)]
         public string RequestUris { get; set; }
+
+        /// <summary>ClientDisplayName（画面に出す名前。OIDC Registration 1.0 §2 の client_name。#430）</summary>
+        /// <remarks>
+        /// **ClientName（識別の名前。画面・動的登録の登録では所有者の利用者名）とは別に持つ。**
+        /// **承認の画面（同意・サインイン）に出す**（ClientDisplay）。**空なら名前を出さない**（ClientName には倒さない）。
+        /// **動的登録では、要求の client_name が入り、応答の client_name で返る。**
+        /// </remarks>
+        [Display(Name = "ClientDisplayName", Description = "ClientDisplayNameDescription",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfClientDisplayName,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = Const.ClientDisplayName)]
+        public string ClientDisplayName { get; set; }
 
         #endregion
         #region 編集中の印（#307 の段階 5-a-2）

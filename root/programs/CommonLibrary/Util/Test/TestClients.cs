@@ -57,6 +57,7 @@
 //*  2026/11/19  玄人 幸道         鍵を jwks_uri だけで登録した fapi_ciba の TestClient4_6 を追加し、jwks_uri を差し替えられるようにした（#408）
 //*  2026/11/24  玄人 幸道         client_secret で認証する fapi2 の TestClient_47 を追加（#424）
 //*  2026/11/24  玄人 幸道         logo_uri・policy_uri・tos_uri を書けるようにし、それを登録した TestClient_48・_49 を追加（#427）
+//*  2026/11/24  玄人 幸道         client_display_name を書けるようにした（#430）
 //**********************************************************************************
 
 using System;
@@ -1053,6 +1054,11 @@ namespace MultiPurposeAuthSite.Util.Test
 
                 case Const.ClientTosUri:
                     model.TosUri = value;
+                    break;
+
+                // **画面に出す名前**（#430）
+                case Const.ClientDisplayName:
+                    model.ClientDisplayName = value;
                     break;
 
                 default:

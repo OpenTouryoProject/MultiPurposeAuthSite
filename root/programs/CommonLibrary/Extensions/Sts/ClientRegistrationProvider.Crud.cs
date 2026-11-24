@@ -37,6 +37,7 @@
 //*  2026/11/18  玄人 幸道         jwks_uri を温める前に、行き先のアドレスを判定するようにした（#376）
 //*  2026/11/19  玄人 幸道         PUT で request_uris を要求から作り直すようにした（#374）
 //*  2026/11/20  玄人 幸道         jwks_uri を温めるとき、専用の HttpClient（OutboundUrlPolicy.HttpClient）で取りに行くようにした（OpenTouryo#718。#405）
+//*  2026/11/24  玄人 幸道         PUT で、画面に出す名前（client_name）も全置換にした（#430）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -645,6 +646,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //    **`request_uris` も全置換**（#374。省いたら消え、外部の `request_uri` は使えなくなる）。
             model.RequestUris = requested.RequestUris;
+
+            //    **`client_name`（画面に出す名前）も全置換**（#430。省いたら消え、画面に名前が出なくなる）。
+            model.ClientDisplayName = requested.ClientDisplayName;
 
             //    **省いたら、秘密ベース（`client_secret_basic` / `client_secret_post`）に戻る。**
             model.TokenEndpointAuthMethod = requested.TokenEndpointAuthMethod;

@@ -498,4 +498,10 @@
   <data name="DdlTokenEndpointAuthMethodNone" xml:space="preserve">
     <value>（明示しない ＝ client_secret_basic / client_secret_post）</value>
   </data>
+  <data name="ClientDisplayName" xml:space="preserve">
+    <value>表示名（client_name）</value>
+  </data>
+  <data name="ClientDisplayNameDescription" xml:space="preserve">
+    <value>サインインと同意の画面で、利用者に見せるこのクライアントの名前。**内部の名前とは別。** 空なら名前を出さない。</value>
+  </data>
 </root>
