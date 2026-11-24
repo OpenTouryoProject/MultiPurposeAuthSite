@@ -31,6 +31,7 @@
 //*  2026/10/29  玄人 幸道         新規（CmnEndpoints.cs から partial に分割。#294）
 //*  2026/10/29  玄人 幸道         using を整理した（#294）
 //*  2026/11/01  玄人 幸道         TokenProviders/CmnEndpoints.Logout.cs（partial）から、Extensions/Sts の別のクラスとして移した（#321）
+//*  2026/11/25  玄人 幸道         post_logout_redirect_uri を、登録の n 件のどれかと照合するようにした（#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.TokenProviders;
@@ -79,7 +80,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | `id_token_hint` は**自分が発行したもの**か（署名と `iss`） | §2 |
         /// | **`exp` が切れていても受ける** | §2（SHOULD） |
         /// | `client_id` も来ていれば、`id_token` の `aud` と一致すること | §2 |
-        /// | `post_logout_redirect_uri` は**登録値と完全一致** | §3 |
+        /// | `post_logout_redirect_uri` は**登録値（n 件。#426）のどれかと完全一致** | §3 |
         /// | **`id_token_hint` が無ければ、RP へ戻さない** | §3 |
         /// | 検証できなければ**利用者に確認する**（`verified` が false） | §2 / §6 |
         ///
@@ -147,14 +148,25 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return;
             }
 
-            // **登録値と完全一致**（§3）。
+            // **登録値のどれかと完全一致**（§3）。
             //   **redirect_uri の照合（CheckRedirectUri）も、同じ単純文字列比較である**（#263）。
             //   以前はあちらだけ大文字小文字を無視していた（C-10）。
-            string registered = CmnEndpoints.GetRedirectUriFromConstr(
-                Helper.GetInstance().GetClientsPostLogoutRedirectUri(aud) ?? "");
+            //   **登録は n 件**（#426。§3.1 の post_logout_redirect_uris は配列）。定数値は要素ごとに変換する。
+            bool matched = false;
 
-            if (string.IsNullOrEmpty(registered)
-                || !string.Equals(postLogoutRedirectUri, registered, StringComparison.Ordinal))
+            foreach (string uri in Helper.GetInstance().GetClientsPostLogoutRedirectUris(aud))
+            {
+                string registered = CmnEndpoints.GetRedirectUriFromConstr(uri) ?? "";
+
+                if (!string.IsNullOrEmpty(registered)
+                    && string.Equals(postLogoutRedirectUri, registered, StringComparison.Ordinal))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
             {
                 err = OAuth2AndOIDCConst.invalid_request;
                 errDescription = "post_logout_redirect_uri is not registered.";

@@ -39,6 +39,7 @@
 //*  2026/11/14  玄人 幸道         署名の alg の既定のコメントを、FAPI の登録は ES256 に合わせた（#394）
 //*  2026/11/19  玄人 幸道         RequestUris（request_uris）を追加した（#374）
 //*  2026/11/24  玄人 幸道         ClientDisplayName（画面に出す名前）を足した（#430）
+//*  2026/11/25  玄人 幸道         PostLogoutRedirectUri を n 件（空白区切り）持てるようにした（#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -117,14 +118,16 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>PostLogoutRedirectUri（#232）</summary>
         /// <remarks>
         /// **ログアウト後に戻ってよい URL**（RP-Initiated Logout 1.0 §3.1 の post_logout_redirect_uris）。
-        /// 仕様は配列だが、既存の redirect_uri_* と同じく **1 本**で持つ。
+        /// **n 件を空白区切りで持つ**（redirect_uri_* と同じ形。#306）。**以前は 1 本だった**（#426 で n 件にした）。
+        /// **照合は、どれかとの完全一致**（`CmnLogoutEndpoint`）。
         /// **登録が無ければ、ログアウト後に RP へは戻さない。**
         /// </remarks>
         [Display(Name = "PostLogoutRedirectUri", Description = "PostLogoutRedirectUriDescription",
             ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
+        //  **n 件を空白区切りで入れられる**（#426）。**上限は列挙用のもの。**
         [StringLength(
-            Const.MaxLengthOfUri,
+            Const.MaxLengthOfUriList,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = OAuth2AndOIDCConst.post_logout_redirect_uri)]

@@ -238,9 +238,10 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 >
 > **広げないままでも、1 本だけの登録は従来どおり入る**（512 文字まで）。
 
-> **`post_logout_redirect_uri` と `redirect_uri_saml`（ACS）は 1 本のまま**である。
+> **`redirect_uri_saml`（ACS）は 1 本のまま**である。
 > **同じ形の課題だが、別の論点を持つ**（ACS は「返す先は常に登録値」。#276）ので、
 > **#306 では触っていない。**
+> **`post_logout_redirect_uri` は、#426 で同じ形（n 件・空白区切り）にした**（下の「`post_logout_redirect_uri`」）。
 
 > **`web_origins`（#265）は、元から空白・カンマ区切りの列挙**である。
 > **入力の上限だけが 1 本ぶんのままだった**ので、#306 で列挙用に揃えた（列は元から無制限）。
@@ -596,17 +597,31 @@ CreateJwkSetJson.exe
 ### `post_logout_redirect_uri` — ログアウト後の戻り先（任意。#232）
 
 **RP からのログアウト（`/end_session`）の後に、RP へ戻してよい URL。**
-OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に当たる
-（仕様は配列だが、既存の `redirect_uri_*` と同じく**1 本**で持つ）。
+OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に当たる。
+**n 件を空白で区切って書ける**（`redirect_uri_*` と同じ形。#306。**以前は 1 本だった**ので、#426 で揃えた）。
 
 ```json
-"post_logout_redirect_uri": "https://rp.example.com/logged_out"
+"post_logout_redirect_uri": "https://rp.example.com/logged_out https://localhost:5001/logged_out"
 ```
 
 | 登録 | 扱い |
 |---|---|
 | **項目が無い** | **ログアウトはできるが、RP へは戻さない**（自サイトの画面に戻る） |
-| 有る | **完全一致**したときだけ戻す（**大文字小文字も区別する**。§3 は exactly match） |
+| 有る | **どれかと完全一致**したときだけ戻す（**大文字小文字も区別する**。§3 は exactly match）。**記号（`test_self_logout`）は要素ごとに解決される** |
+
+**既存のデータベースには列幅の変更が要る**（#426。**1 本だけの登録は、広げなくても従来どおり入る**（512 文字まで））。
+**`Create_UserStore.sql` を流し直す**か、**`ALTER` で広げる。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ALTER COLUMN [PostLogoutRedirectUri] [nvarchar](2000) NULL
+
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" MODIFY ("PostLogoutRedirectUri" NVARCHAR2(2000));
+
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ALTER COLUMN PostLogoutRedirectUri TYPE varchar(2000);
+```
 
 **口（エンドポイント）の URL は、設定キー `OAuth2EndSessionEndpoint`**（既定 `/end_session`）。
 **既に配備された設定ファイルに無くても動く**（無ければ既定値を使う）。Discovery の
