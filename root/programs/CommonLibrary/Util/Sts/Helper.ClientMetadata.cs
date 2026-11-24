@@ -43,6 +43,7 @@
 //*  2026/11/14  玄人 幸道         FAPI の登録は、署名の alg を登録していなければ ES256 にした（DefaultSigningAlg。FAPI 1.0 Advanced §8.6・FAPI 2.0 Security Profile §5.4.1。#394）
 //*  2026/11/15  玄人 幸道         fapi_ciba を含めた FAPI の登録かを返す IsFapiProfileClient を足した（#384・#395）
 //*  2026/11/19  玄人 幸道         登録された request_uris を引く GetClientRequestUris を足した（#374）
+//*  2026/11/24  玄人 幸道         登録された logo_uri・policy_uri・tos_uri を引く口を足した（承認の画面に出す。#427）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -418,6 +419,33 @@ namespace MultiPurposeAuthSite.Util.Sts
         {
             return this.GetRegisteredValue(client_id,
                 Const.ClientSectorIdentifierUri, model => model.SectorIdentifierUri);
+        }
+
+        /// <summary>登録された logo_uri を引く（OIDC Registration 1.0 §2。#427）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>logo_uri（**登録が無ければ null**）</returns>
+        /// <remarks>**画面に出す前に、スキームを確かめること**（`ClientDisplay`。登録では絶対 URI であることしか見ていない）。</remarks>
+        public string GetClientLogoUri(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, Const.ClientLogoUri, model => model.LogoUri);
+        }
+
+        /// <summary>登録された policy_uri を引く（OIDC Registration 1.0 §2。#427）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>policy_uri（**登録が無ければ null**）</returns>
+        /// <remarks>**画面に出す前に、スキームを確かめること**（`ClientDisplay`）。</remarks>
+        public string GetClientPolicyUri(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, Const.ClientPolicyUri, model => model.PolicyUri);
+        }
+
+        /// <summary>登録された tos_uri を引く（OIDC Registration 1.0 §2。#427）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>tos_uri（**登録が無ければ null**）</returns>
+        /// <remarks>**画面に出す前に、スキームを確かめること**（`ClientDisplay`）。</remarks>
+        public string GetClientTosUri(string client_id)
+        {
+            return this.GetRegisteredValue(client_id, Const.ClientTosUri, model => model.TosUri);
         }
 
         /// <summary>登録された request_uris を引く（OIDC Registration 1.0 §2。#374）</summary>

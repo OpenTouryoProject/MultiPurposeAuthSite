@@ -21,6 +21,7 @@
     //*  2026/10/07  玄人 幸道         WebAuthnの導線を復活、MsPassを削除（#137）
     //*  2026/10/11  玄人 幸道         ID 連携の導線を、設定が揃っているときだけ出す（#286 の段階 2）
     //*  2026/10/13  玄人 幸道         ID 連携の導線を上流の登録ごとに出した（#292 の段階 1）
+    //*  2026/11/24  玄人 幸道         認可の要求から来たときは、クライアントのロゴ・ポリシー・利用規約を出す（#427）
     //**********************************************************************************
 *@
 
@@ -45,6 +46,12 @@
     <div class="col-md-8">
         <h4>@AccountViews.LoginH4</h4>
         <hr />
+        @* **認可の要求から来たときは、クライアントのロゴ・ポリシー・利用規約を出す**（OIDC Registration 1.0 §2。#427） *@
+        @{ MultiPurposeAuthSite.Util.Sts.ClientDisplay clientDisplay = MultiPurposeAuthSite.Util.Sts.ClientDisplay.FromReturnUrl(Model.ReturnUrl); }
+        @if (clientDisplay != null)
+        {
+            @await Html.PartialAsync("_ClientDisplayPartial", clientDisplay)
+        }
         <section id="loginForm">
             @using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
             {

@@ -294,4 +294,13 @@
   <data name="WebAuthnLoginSubmit" xml:space="preserve">
     <value>Login with WebAuthn authenticator</value>
   </data>
+  <data name="ClientDisplayLogo" xml:space="preserve">
+    <value>Logo of the client</value>
+  </data>
+  <data name="ClientDisplayPolicy" xml:space="preserve">
+    <value>Privacy policy</value>
+  </data>
+  <data name="ClientDisplayTos" xml:space="preserve">
+    <value>Terms of service</value>
+  </data>
 </root>

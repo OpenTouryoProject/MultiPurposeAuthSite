@@ -97,6 +97,33 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Privacy policy に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientDisplayPolicy {
+            get {
+                return ResourceManager.GetString("ClientDisplayPolicy", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Logo of the client に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientDisplayLogo {
+            get {
+                return ResourceManager.GetString("ClientDisplayLogo", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Terms of service に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientDisplayTos {
+            get {
+                return ResourceManager.GetString("ClientDisplayTos", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Please click here to Log in に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string EmailConfirmationActionLink {

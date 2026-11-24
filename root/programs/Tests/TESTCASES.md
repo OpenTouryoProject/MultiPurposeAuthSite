@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=ac59dbfa-a987-420c-82d8-df0761183712&code=bogus
+1. GET /Account/EmailConfirmation?userId=eda81c8f-bdff-4aac-86b4-03e6b4b995c9&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=ac59dbfa-a987-420c-82d8-df0761183712&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=ac59dbfa-a987-420c-82d8-df0761183712&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=eda81c8f-bdff-4aac-86b4-03e6b4b995c9&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=eda81c8f-bdff-4aac-86b4-03e6b4b995c9&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -14018,6 +14018,79 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - トークンを出さない
 - エラーは unauthorized_client（認証は通っている）
+
+## RT-427.1 **同意の画面に、クライアントのロゴ（`logo_uri`）・ポリシー（`policy_uri`）・利用規約（`tos_uri`）が出る**
+
+| | |
+|---|---|
+| 観点 | **以前は、3 つとも登録で受けて保存するだけで、どの画面にも出していなかった。****OIDC Registration 1.0 §2 は、承認の間に利用者へ出すことを求める（SHOULD）。****外へのリンクは、開いた先から元の画面を触らせない（`noopener`）・参照元を渡さない（`noreferrer`）。** |
+| 根拠 | OIDC Registration 1.0 §2 / #427 |
+| テスト | `RT42701_同意の画面にクライアントのロゴとリンクが出る` |
+
+**手順**
+
+1. prompt=consent で認可を要求し、同意の画面を開く
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- ロゴが出る（img の src が登録した logo_uri）
+- ロゴの画像は参照元を渡さない（referrerpolicy="no-referrer"）
+- ポリシーへのリンクが出る（noopener noreferrer）
+- 利用規約へのリンクが出る（noopener noreferrer）
+
+## RT-427.2 **認可の要求から来たサインインの画面にも、クライアントのロゴ・ポリシー・利用規約が出る。認可の要求から来ていないサインインの画面には出ない**
+
+| | |
+|---|---|
+| 観点 | **MPAS は同意を記録した後は同意の画面を出さない**ので、同意の画面だけでは 2 回目以降の認可で出ない。**サインインの画面は、戻り先（`ReturnUrl`）が認可の口で、登録のある `client_id` を持つときだけ出す**（適合性テストの `oidcc-registration-logo-uri` などもサインインの画面で写す）。 |
+| 根拠 | OIDC Registration 1.0 §2 / #427 |
+| テスト | `RT42702_認可の要求から来たサインインの画面にも出る` |
+
+**手順**
+
+1. サインインしていない状態で認可を要求し、サインインの画面へ送られる
+1. サインインの画面を開く
+1. 対照：認可の要求から来ていないサインインの画面（ReturnUrl 無し）
+1. 対照：ReturnUrl が認可の口でない（client_id は登録のあるもの）
+1. 対照：ReturnUrl の client_id に登録が無い
+
+**検証（合否を判定する）**
+
+- サインインの画面へ送られる
+- HTTP 200（サインインの画面）
+- ロゴが出る（img の src が登録した logo_uri）
+- ロゴの画像は参照元を渡さない（referrerpolicy="no-referrer"）
+- ポリシーへのリンクが出る（noopener noreferrer）
+- 利用規約へのリンクが出る（noopener noreferrer）
+- クライアントの情報を出さない
+- HTTP 200（サインインの画面）
+- クライアントの情報を出さない
+- HTTP 200（サインインの画面）
+- クライアントの情報を出さない
+
+## RT-427.3 **https でない `logo_uri`・`policy_uri`・`tos_uri`（`http:`・`javascript:`・`data:`）は、同意の画面に出さない**
+
+| | |
+|---|---|
+| 観点 | **登録（動的登録・管理画面・構成ファイル）は、絶対 URI であることしか確かめていない**ので、`javascript:` なども入る。**画面に出す側で、https の絶対 URI だけに絞る**（#427 で決めた。登録の振る舞いは変えない）。 |
+| 根拠 | OIDC Registration 1.0 §2 / #427 |
+| テスト | `RT42703_httpsでない値は出さない` |
+
+**手順**
+
+1. prompt=consent で認可を要求し、同意の画面を開く
+
+**検証（合否を判定する）**
+
+- 同意の画面が出る
+- 出すものが無いので、枠ごと出さない
+- ロゴ（http:）を出さない
+- ポリシー（javascript:）を出さない
+- 利用規約（data:）を出さない
+- javascript: の値を出さない
+- data: の値を出さない
+- http: の値を出さない
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

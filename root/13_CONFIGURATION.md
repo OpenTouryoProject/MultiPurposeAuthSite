@@ -1852,7 +1852,8 @@ Content-Type: application/json
 | **`grant_types`** | **既定は `authorization_code`**（§2）。**この配備が広告しているものだけ** |
 | **`response_types`** | **既定は `code`**。**`code` を使うなら `authorization_code`、`token` / `id_token` を使うなら `implicit` が要る**（§2 の対応） |
 | `scope` | **`scopes_supported` の範囲内**。**`client_registration` と `auth` は断る** |
-| `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
+| `client_uri` / `contacts` / `software_id` / `software_version` | **保存して返すだけ** |
+| `logo_uri` / `tos_uri` / `policy_uri` | **保存して返し、承認の画面（同意・認可の要求から来たサインイン）に出す**（OIDC Registration 1.0 §2。#427。**`client_name` は出さない** — 画面・動的登録の登録の `ClientName` は登録した利用者の利用者名で、RP が送った `client_name` は保存していない）。**登録では絶対 URI であることしか見ない**が、**画面には https の絶対 URI だけを出す**（それ以外は出さない） |
 | `subject_type` / `id_token_signed_response_alg` | 既にある列に入る（扱えない値は断る） |
 | **`token_endpoint_auth_method`** | **4 つとも登録できる**（段階 3）。**`none`（パブリック）も登録できる**（#294）。**`private_key_jwt` は `jwks`、`tls_client_auth` は `tls_client_auth_subject_dn` が要る**（無ければ断る）。**下の「クライアント認証の方法」** |
 | **`jwks`** | **受け付ける**（段階 3）。**RSA 1 本 ＋ EC 1 本まで**（列が 1 本ずつ）。**同じ種類が 2 本来たら断る** |

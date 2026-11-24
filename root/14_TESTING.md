@@ -1907,6 +1907,28 @@ Remove-Item Env:\appSettings__OAuth2ClientsInformation__e2e309warm__jwks_uri
 | **device_code・CIBA の内部の認可コードの再利用** | どちらも最後は同じ `AuthorizationCodeProvider.Receive` で引き換える。device_code・`auth_req_id` そのものの 2 回目は、それぞれの記録で先に断られる（`RT-332.3`・`.4`） |
 | **コードの期限を過ぎた後の再利用** | 行が掃除で消えるので、存在しないコードと同じに断る（失効はさせない） |
 
+##### 承認の画面に、クライアントのロゴ・ポリシー・利用規約を出す（`RT-427.*`。#427）
+
+| | 測ること |
+|---|---|
+| **`RT-427.1`** | **同意の画面に、ロゴ（`img` の `src` が `logo_uri`）・ポリシー（`policy_uri`）・利用規約（`tos_uri`）へのリンクが出る**（OIDC Registration 1.0 §2）。リンクは `target="_blank" rel="noopener noreferrer"` |
+| **`RT-427.2`** | **認可の要求から来たサインインの画面にも出る**（同意を記録した後は同意の画面が出ないため）。対照として、**`ReturnUrl` が無い・認可の口でない・登録の無い `client_id` のサインインの画面には出ない** |
+| **`RT-427.3`** | **https でない値（`http:`・`javascript:`・`data:`）は出さない**（出すものが無いので、枠ごと出ない） |
+
+- **出す情報は `Util.Sts.ClientDisplay` が作り、両版の部分ビュー `_ClientDisplayPartial.cshtml` が出す**（同意の画面は `ViewBag.ClientId`、サインインの画面は `ReturnUrl` の `client_id`。`ReturnUrl` が認可の口を指すときだけ）
+- **登録は絶対 URI であることしか見ない**（動的登録・管理画面・構成ファイル）ので、**画面に出す側で https の絶対 URI だけに絞る**（#427 で決めた。登録の振る舞いは変えていない）
+- **テスト用のクライアント**は `TestClient_48`（https の 3 つ）・`TestClient_49`（`http:`・`javascript:`・`data:`）。**E2E は HTML だけを見る**（URL は取りに行かない）
+- **URL の境界は単体テスト `ClientDisplayTests`**（大文字の `HTTPS`・前後の空白は通す。スキーム相対・相対・利用者情報（`user:pw@`）を持つ URI は通さない。`ReturnUrl` が同じサイトの相対パスでなければ引かない）
+- **出すものが何も無いクライアントでは、枠ごと出さない**
+- 直す前の画面には、測る要素（`client-display` など）が無い（`RT-427.1`〜`.3` は落ちる）
+
+###### 測っていないこと
+
+| | なぜ |
+|---|---|
+| **ロゴの画像が実際に表示されること** | 画像は利用者のブラウザが取りに行く。E2E は HTML の `img` の `src` まで |
+| **画面の見た目（大きさ・並び）** | 判定できない。ロゴは高さ 64px・幅 256px までに抑えた |
+
 ##### fapi2 の登録の client_credentials（`RT-424.*`。#424）
 
 | | 測ること |
