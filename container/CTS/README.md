@@ -27,6 +27,8 @@ cd ..\CTS
 | `oidcc-implicit`・`oidcc-hybrid` | `oidcc-implicit-…`・`oidcc-hybrid-…`（**response_type ごとにモジュールが並ぶ**） | `oidcc-basic.json` |
 | `oidcc-formpost-basic`・`-implicit`・`-hybrid` | `oidcc-formpost-*-certification-test-plan`（`response_mode=form_post`） | `oidcc-basic.json` |
 | `oidcc-rp-initiated-logout`・`oidcc-frontchannel-rp-initiated-logout`・`oidcc-backchannel-rp-initiated-logout` | 同じ名前の `…-certification-test-plan`（`response_type=code`） | `oidcc-logout.json`（**クライアントはプランごとに別**） |
+| 上の 9 つの名前に `-dynamic` を付けたもの（`oidcc-basic-dynamic` など） | 同じプランを `client_registration=dynamic_client` で（**Conformance Suite がモジュールごとにクライアントを動的登録する**。ログアウトの口も登録の要求に載る。#426） | 静的な版と同じ雛形（**`client`・`client2`・`client_secret_post` の中身を、`RunTestPlan.ps1` が initial access token に置き換える**） |
+| `oidcc-mtls`・`oidcc-mtls-formpost` | `oidcc-test-plan`（`client_auth_type=mtls`（`tls_client_auth`）・`response_type=code`。後者は `response_mode=form_post`。#426） | `oidcc-basic.json`（**クライアントは 31・32**に置き換え、クライアント証明書（FAPI と同じ）を `mtls`・`mtls2` に埋める） |
 | `oidcc-dynamic` | `oidcc-dynamic-certification-test-plan`（`response_type=code`） | `oidcc-dynamic.json` |
 | `fapi2-sp-private-key-jwt-dpop`・`fapi2-sp-mtls` | `fapi2-security-profile-final-test-plan`（`plain_fapi`・`openid_connect`・`simple`・`grant_management=disabled`。前者は `private_key_jwt`＋DPoP、後者は MTLS＋MTLS） | `fapi2.json`（**クライアントは 2 つずつ**。鍵とクライアント証明書を埋める） |
 | `fapi2-sp-private-key-jwt-mtls`・`fapi2-sp-mtls-dpop` | 同上（**認証と縛りの交差**。前者は `private_key_jwt`＋MTLS、後者は MTLS＋DPoP。#416） | `fapi2.json`（クライアントは 19・20、21・22） |
@@ -48,6 +50,7 @@ cd ..\CTS
   |---|---|
   | FAPI-CIBA `ciba_mode=ping` | **MPAS が ping を持たない**（poll だけを広告。FAPI-CIBA は ping を任意とする）。push は Conformance Suite に無い |
   | `client_auth_type=client_secret_jwt`（`oidcc-test-plan`） | MPAS が持たない |
+  | `client_auth_type=none`（`oidcc-test-plan`。公開クライアント） | **Conformance Suite は PKCE を送らず**（PKCE を確かめる 1 モジュールだけが送る）、**MPAS は公開クライアントの認可コードを PKCE が無ければ引き換えない**（RFC 9700 §2.1.1 は公開クライアントに PKCE を求める。#294 の C-40。`13_CONFIGURATION.md`「PKCE だけで認可コードを引き換えられる登録」）。#426 で回すと、トークン エンドポイントへ進むモジュールが `invalid_client` で FAILED 27・PASSED 4 だった（PKCE を送る `oidcc-ensure-request-with-valid-pkce-succeeds` は通る） |
   | FAPI 1.0 Advanced `fapi_auth_request_method=by_value` | `request_parameter_supported=false`（`request` で値を直に渡す形を持たない） |
   | FAPI 1.0 Advanced `fapi_response_mode=plain_response` | fapi1 の登録に Hybrid を許さない（FA-1.4。JARM の側で回している） |
   | `authorization_request_type=rar`・`grant_management=enabled` | RAR・Grant Management を持たない |
@@ -58,7 +61,7 @@ cd ..\CTS
   | eKYC・OID4VP・OID4VCI・SSF・AuthZEN・OpenID Federation | MPAS が持たない機能 |
   | RP を相手にするプラン（`oidcc-client-*`・`fapi*-client-test-plan`） | MPAS の ID 連携（RP の役）を確かめられるが、Conformance Suite を OP にして MPAS からサインインさせる仕掛けが要る（別に検討する） |
 
-  **まだ足していないもの**：動的登録したクライアントでの各フロー、パブリック クライアント・OIDC の mTLS（`oidcc-test-plan`）、動的登録とログアウトの Implicit・Hybrid（#426）
+  **まだ足していないもの**：動的登録とログアウトの Implicit・Hybrid（#426）
 
 | | URL |
 |---|---|
@@ -138,7 +141,7 @@ cd ..\CTS
 | クライアント（`client_secret_post`。`oidcc-server-client-secret-post` が使う） | 同上（3 つ目。設定の `"client_secret_post"`。静的な登録では、認証の方式ごとにクライアントを分けて渡す作り） |
 | クライアント（ログアウト。4〜6 つ目） | 同上。**プランごとに分ける**（RP-Initiated・Front-Channel・Back-Channel。登録したログアウトの口が、別のプランの検査に混ざらないように）。`RunTestPlan.ps1` が雛形の `@CLIENT_ID@`・`@CLIENT_SECRET@` を埋める |
 | 動的登録（DCR）の管理クライアント（7 つ目） | 同上。**`scope=client_registration` と `owner`（作った登録の所有者。利用者名）を登録する**（#307）。`owner` が無いと、登録は 403（`access_denied`）で断られる。**名前は `Prepare.ps1` が `.env.cts` に書く**（テスト利用者の名前は手元の `appsettings.json` で変わる） |
-| initial access token | **MPAS は、それの無い登録を受けない。** `RunTestPlan.ps1 -Plan oidcc-dynamic` が、回す直前に管理クライアントで `client_credentials` のトークンを取り、雛形の `@INITIAL_ACCESS_TOKEN@`（設定の `client.initial_access_token`）を埋める。期限はプラン 1 つ分より長くしてある（`DcrAccessTokenExpireTimeSpanFromSeconds=3600`。既定は 300 秒） |
+| initial access token | **MPAS は、それの無い登録を受けない。** `RunTestPlan.ps1 -Plan oidcc-dynamic`（と `-dynamic` の付くプラン。#426）が、回す直前に管理クライアントで `client_credentials` のトークンを取り、雛形の `@INITIAL_ACCESS_TOKEN@`（設定の `client.initial_access_token`）を埋める。期限はプラン 1 つ分より長くしてある（`DcrAccessTokenExpireTimeSpanFromSeconds=3600`。既定は 300 秒） |
 | FAPI 2.0 のクライアント（8〜11 つ目。`client_mode=fapi2`） | 同上。8・9 は `private_key_jwt`（＋ DPoP）、10・11 は `tls_client_auth`（＋ 証明書に縛ったトークン）。**次を登録する**：`id_token_signed_response_alg=ES256`（**登録が無いと RS256 になり、FAPI 2.0 の検査で全部止まる**。#355）、**FAPI の要件の強制**（`require_pushed_authorization_requests`・`require_pkce`・`dpop_bound_access_tokens` か `tls_client_certificate_bound_access_tokens`。#346。**どれも既定は false で、立てないと PAR・PKCE の無い要求が通る**） |
 | FAPI 2.0 Message Signing のクライアント（17・18 番目。`client_mode=fapi2`） | 同上。8・9 と同じ形に、**署名した Request Object の必須（`require_signed_request_object`）を足したもの**（#385）。**8・9 は Security Profile のプランと共用なので立てられない**（Security Profile は署名の無い PAR を送る） |
 | FAPI 2.0 の、認証と縛りの交差のクライアント（19〜22 番目。`client_mode=fapi2`） | 同上（#416）。19・20 は `private_key_jwt`＋証明書に縛ったトークン（`tls_client_certificate_bound_access_tokens`。証明書は設定の `mtls`・`mtls2`）、21・22 は `tls_client_auth`＋DPoP に縛ったトークン（`dpop_bound_access_tokens`）。**ほかの項目は 8〜11 と同じ** |

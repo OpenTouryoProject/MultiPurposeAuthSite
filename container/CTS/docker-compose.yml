@@ -147,6 +147,17 @@ services:
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__redirect_uri_token=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000003__client_name=CtsClient3
+      # **oidcc-test-plan の、certification のプランに無いクライアント認証**（#426。RunTestPlan.ps1 の oidcc-mtls・oidcc-mtls-formpost。client と client2）。
+      #   31・32 : tls_client_auth（Subject は Prepare.ps1 が作るクライアント証明書と同じ。FAPI の 10・11 と同じ証明書）。
+      #   **none（公開クライアント）は登録しない**（Conformance Suite は none で PKCE を送らず、MPAS は公開クライアントに PKCE を求める。README の「足さないもの」）
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000001f__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000001f__token_endpoint_auth_method=tls_client_auth
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000001f__tls_client_auth_subject_dn=CN=CTS FAPI Client 1
+      - appSettings__OAuth2ClientsInformation__c75c11e000000000000000000000001f__client_name=CtsOidcMtls1
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000020__redirect_uri_code=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/callback
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000020__token_endpoint_auth_method=tls_client_auth
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000020__tls_client_auth_subject_dn=CN=CTS FAPI Client 2
+      - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000020__client_name=CtsOidcMtls2
       # **ログアウトのプランのクライアント**（#350 ph3。プランごとに分ける。RunTestPlan.ps1 の $plans と同じ値）。
       #   **post_logout_redirect_uri・frontchannel_logout_uri・backchannel_logout_uri は、Conformance Suite が決めた口**
       #   （折り返し先の /callback を、/post_logout_redirect・/frontchannel_logout・/backchannel_logout に替えたもの）。
@@ -164,7 +175,7 @@ services:
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__post_logout_redirect_uri=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/post_logout_redirect
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__backchannel_logout_uri=https://localhost.emobix.co.uk:8443/test/a/mpas-cts/backchannel_logout
       - appSettings__OAuth2ClientsInformation__c75c11e0000000000000000000000006__client_name=CtsLogoutBackChannel
-      # **動的登録（DCR）を開ける**（#350 ph3。oidcc-dynamic。#307）。
+      # **動的登録（DCR）を開ける**（#350 ph3。oidcc-dynamic と、-dynamic の付くプラン（#426）。#307）。
       #   **MPAS は、登録の要求に initial access token（scope が client_registration のアクセス トークン）を求める。**
       #   RunTestPlan.ps1 が、下の管理クライアントで client_credentials のトークンを取り、設定の client.initial_access_token に埋める。
       #   **client_registration は、登録に明記したクライアントにしか出ない**（Helper.FilterSupportedScopes）。
