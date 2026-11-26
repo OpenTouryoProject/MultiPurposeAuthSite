@@ -35,6 +35,7 @@
 //*  2026/11/19  玄人 幸道         外部の request_uri を urn: に置き換えたら、urn: の認可の URL へ送り直す（サインイン・再認証の往復で取りに行き直さない。#374）
 //*  2026/11/21  玄人 幸道         redirect_uri へエラーを返すときも、預けた request_uri を消すようにした（拒否の後に使い回せた。#420）
 //*  2026/11/25  玄人 幸道         Front-Channel Logout の画面が進む先を、http・https の絶対 URI か同じサイトの相対パスに絞った（#426）
+//*  2026/11/26  玄人 幸道         form_post の応答は redirect_uri が http・https のときだけ出す（javascript: などを <form action> に出さない。#433）
 //**********************************************************************************
 
 /*
@@ -1149,6 +1150,17 @@ namespace MultiPurposeAuthSite.Controllers
             bool isFragment = baseMode == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit();
             bool isFormPost = baseMode == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit();
 
+            //  **form_post は、応答を `<form action>` に出して onload で自動 submit する**（FormPost.cshtml）。
+            //    **http / https 以外（`javascript:` など）は、submit で OP のオリジンのスクリプトとして動く**ので、出さない（#433）。
+            //    **redirect_uri のスキームは登録側で絞っていない**（ネイティブ アプリのカスタム スキーム。RFC 8252）ため、**出す側で絞る。**
+            //    **成功・エラーの両方の応答がここを通る**ので、1 か所で塞げる（query / fragment の 302 は、ブラウザが javascript: を実行しないので対象外）。
+            if (isFormPost && !AccountController.IsHttpOrHttps(redirect_uri))
+            {
+                ViewData["Err"] = OAuth2AndOIDCConst.invalid_request;
+                ViewData["ErrDescription"] = "form_post requires an http or https redirect_uri.";
+                return View("Error");
+            }
+
             if (isJwt)
             {
                 // JARM
@@ -1262,6 +1274,19 @@ namespace MultiPurposeAuthSite.Controllers
 
             // **トークンを含む応答に query は使わない**
             return baseMode != query || allowsQuery;
+        }
+
+        /// <summary>絶対 URI で、スキームが http か https か（#433）</summary>
+        /// <param name="uri">redirect_uri（照合済み）</param>
+        /// <returns>http / https の絶対 URI なら true（読めなければ false）</returns>
+        /// <remarks>
+        /// **form_post の `<form action>` に出してよいか**を決める。
+        /// **`javascript:` / `data:` などの擬似スキームは、自動 submit でスクリプトとして動く**ので弾く。
+        /// </remarks>
+        private static bool IsHttpOrHttps(string uri)
+        {
+            return Uri.TryCreate(uri, UriKind.Absolute, out Uri u)
+                && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
         }
 
         /// <summary>form_post の画面（FormPost.cshtml）の ViewData のキー</summary>

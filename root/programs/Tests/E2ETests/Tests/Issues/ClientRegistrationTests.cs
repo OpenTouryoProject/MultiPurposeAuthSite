@@ -41,6 +41,7 @@
 //*  2026/11/24  玄人 幸道         RT-430.3（動的登録の client_name は応答で返り、同意の画面に出る）・.4（GET・PUT・断る値）を足し、RT-307.1 の補足を直した（#430）
 //*  2026/11/25  玄人 幸道         RT-426.2（動的登録でログアウトの URL を登録でき、効き、PUT で省けば消える）・.3（断る値）を足した（#426）
 //*  2026/11/25  玄人 幸道         RT-426.3 に、post_logout_redirect_uris のスキーム、ログアウトの URL のフラグメント、frontchannel_logout_uri の同一オリジンを足した（#426）
+//*  2026/11/26  玄人 幸道         RT-433（form_post の応答は http/https の redirect_uri のときだけ出す。javascript: は <form action> に出さない）を足した（#433）
 //**********************************************************************************
 
 using System;
@@ -4129,6 +4130,126 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     return "false";
                 default:
                     return value.GetRawText();
+            }
+        }
+
+        #endregion
+
+        #region RT-433
+
+        /// <summary>RT-433 form_post の応答は、redirect_uri が http / https のときだけ出す（javascript: などを form の action に出さない）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT433_formpostの応答はhttpかhttpsのredirect_uriのときだけ出す(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-433",
+                    "**`response_mode=form_post` の応答は、`redirect_uri` が `http` / `https` のときだけ返す。"
+                    + "`javascript:` スキームの `redirect_uri` は、自動 submit の form の action に出さず、エラー画面にする**",
+                    "**form_post の画面は form の action を `onload` で自動 submit する**ので、"
+                    + "**`http` / `https` 以外（`javascript:` など）は、OP のオリジンのスクリプトとして動く**（登録経由の XSS）。"
+                    + "**`redirect_uris` はネイティブ アプリのカスタム スキームを正当に含む**ので登録側では絞らず、**出す側（form_post のシンク）で絞る**（#426 の post_logout とは違い、登録は通す）。",
+                    "OAuth 2.0 Form Post Response Mode / 設計：CreateAuthorizationResponse（form_post のシンクを http・https に限る。#433）");
+
+                r.Target("POST registration_endpoint（javascript: の redirect_uri）→ GET /authorize（response_mode=form_post・prompt=none）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    const string jsUri = "javascript:alert(document.domain)//";
+
+                    r.Step("(1) javascript: の redirect_uri を動的登録する（登録側はスキームを絞らないので通る）");
+
+                    JsonResponse js = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { jsUri })
+                        + ",\"response_types\":[\"code\"],\"grant_types\":[\"authorization_code\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 201（登録は通る）", "201", ((int)js.StatusCode).ToString());
+
+                    r.Step("(2) その client で、response_mode=form_post・prompt=none の認可要求を送る（consent_required が form_post のシンクを通る）");
+
+                    AuthZResponse jsAuthz = await client.AuthorizeAsync(new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", js.String("client_id") },
+                        { "redirect_uri", jsUri },
+                        { "scope", "openid" },
+                        { "state", "state-rt433" },
+                        { "nonce", "nonce-rt433" },
+                        { "response_mode", "form_post" },
+                        { "prompt", "none" }
+                    });
+
+                    string jsBody = jsAuthz.Body ?? "";
+
+                    r.Verify("自動 submit の form を出さない",
+                        !jsBody.Contains("document.forms[0].submit"),
+                        "出さない", jsBody.Contains("document.forms[0].submit") ? "**自動 submit の form が出た**" : "出さない");
+
+                    r.Verify("http/https を求める理由つきのエラー画面",
+                        jsBody.Contains("form_post requires an http or https redirect_uri"),
+                        "理由つきのエラー画面", jsBody.Contains("form_post requires an http or https redirect_uri") ? "理由つきのエラー画面" : "**別の応答**");
+
+                    r.Step("(2b) form_post.jwt（JARM）でも同じ（ガードは JARM の分岐より前にある）");
+
+                    AuthZResponse jsJarm = await client.AuthorizeAsync(new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", js.String("client_id") },
+                        { "redirect_uri", jsUri },
+                        { "scope", "openid" },
+                        { "state", "state-rt433jarm" },
+                        { "nonce", "nonce-rt433jarm" },
+                        { "response_mode", "form_post.jwt" },
+                        { "prompt", "none" }
+                    });
+
+                    string jsJarmBody = jsJarm.Body ?? "";
+
+                    r.Verify("form_post.jwt でも、自動 submit の form を出さずエラー画面にする",
+                        !jsJarmBody.Contains("document.forms[0].submit")
+                        && jsJarmBody.Contains("form_post requires an http or https redirect_uri"),
+                        "理由つきのエラー画面",
+                        (!jsJarmBody.Contains("document.forms[0].submit")
+                        && jsJarmBody.Contains("form_post requires an http or https redirect_uri"))
+                        ? "理由つきのエラー画面" : "**別の応答**");
+
+                    r.Step("(3) 対照：https の redirect_uri なら、form_post は従来どおり出る");
+
+                    JsonResponse ok = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { UriA })
+                        + ",\"response_types\":[\"code\"],\"grant_types\":[\"authorization_code\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)ok.StatusCode).ToString());
+
+                    AuthZResponse okAuthz = await client.AuthorizeAsync(new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", ok.String("client_id") },
+                        { "redirect_uri", UriA },
+                        { "scope", "openid" },
+                        { "state", "state-rt433b" },
+                        { "nonce", "nonce-rt433b" },
+                        { "response_mode", "form_post" },
+                        { "prompt", "none" }
+                    });
+
+                    string okBody = okAuthz.Body ?? "";
+
+                    r.Verify("http/https の form_post は、自動 submit の form を出す",
+                        okBody.Contains("document.forms[0].submit"),
+                        "出す", okBody.Contains("document.forms[0].submit") ? "出す" : "**出ない**");
+
+                    r.Verify("その action は、登録した https の redirect_uri",
+                        okBody.Contains("action=\"" + UriA + "\""),
+                        UriA, okBody.Contains("action=\"" + UriA + "\"") ? UriA : "**別の action**");
+                });
+
+                r.Done();
             }
         }
 

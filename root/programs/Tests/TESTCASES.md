@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=e5ed2da3-f3c7-4bae-96a3-c0a0d7ee41ab&code=bogus
+1. GET /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=e5ed2da3-f3c7-4bae-96a3-c0a0d7ee41ab&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=e5ed2da3-f3c7-4bae-96a3-c0a0d7ee41ab&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -14428,6 +14428,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 名前の欄に、保存した表示名が出る
 - 同意の画面が出る
 - 見えない文字を含む表示名は、名前の欄に出さない
+
+## RT-433 **`response_mode=form_post` の応答は、`redirect_uri` が `http` / `https` のときだけ返す。`javascript:` スキームの `redirect_uri` は、自動 submit の form の action に出さず、エラー画面にする**
+
+| | |
+|---|---|
+| 観点 | **form_post の画面は form の action を `onload` で自動 submit する**ので、**`http` / `https` 以外（`javascript:` など）は、OP のオリジンのスクリプトとして動く**（登録経由の XSS）。**`redirect_uris` はネイティブ アプリのカスタム スキームを正当に含む**ので登録側では絞らず、**出す側（form_post のシンク）で絞る**（#426 の post_logout とは違い、登録は通す）。 |
+| 根拠 | OAuth 2.0 Form Post Response Mode / 設計：CreateAuthorizationResponse（form_post のシンクを http・https に限る。#433） |
+| テスト | `RT433_formpostの応答はhttpかhttpsのredirect_uriのときだけ出す` |
+
+**手順**
+
+1. javascript: の redirect_uri を動的登録する（登録側はスキームを絞らないので通る）
+1. その client で、response_mode=form_post・prompt=none の認可要求を送る（consent_required が form_post のシンクを通る）
+1. (2b) form_post.jwt（JARM）でも同じ（ガードは JARM の分岐より前にある）
+1. 対照：https の redirect_uri なら、form_post は従来どおり出る
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201（登録は通る）
+- 自動 submit の form を出さない
+- http/https を求める理由つきのエラー画面
+- form_post.jwt でも、自動 submit の form を出さずエラー画面にする
+- HTTP の状態は 201
+- http/https の form_post は、自動 submit の form を出す
+- その action は、登録した https の redirect_uri
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 
