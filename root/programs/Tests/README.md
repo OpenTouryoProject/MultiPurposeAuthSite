@@ -574,6 +574,7 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 | `AppConfig.cs` | `appsettings.json` / `app.config` の読み取り |
 | `IdPClient.cs` | サインイン、認可、トークン、UserInfo、失効・問い合わせ、デバイス認可、CIBA、認証デバイスの代わりの要求、自己テストの起動 |
 | `FcmOutbox.cs` | プッシュ通知の送信箱（テスト用）の読み取り。認証デバイスの代わりに受け取る |
+| `MailOutbox.cs` | メールの送信箱（テスト用）の読み取り（#294）。**ほかのプロセスが開いていて読めないファイルは、待つ口では次の周回で読み直し、数える口（`Count`）では読み直してから落とす**（#373。`FcmOutbox` の待つ口も同じ） |
 | `Flows.cs` | 認可コード フローの組み立て、トークンの更新・失効・問い合わせ、クライアントの解決 |
 | `TestCertificate.cs` | mTLS 用のクライアント証明書。net10.0 版は自己署名をその場で作る（ストアに入れない）、net48 版は `CurrentUser\My` に用意したもの（#226） |
 | `RequestObject.cs` | Request Object（CIBA の認証リクエストを含む）の組み立てと PAR への登録 |

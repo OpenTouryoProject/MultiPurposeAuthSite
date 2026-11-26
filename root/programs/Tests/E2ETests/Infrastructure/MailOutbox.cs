@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/29  玄人 幸道         新規（#294）
+//*  2026/11/26  玄人 幸道         ほかのプロセスが開いていて読めないファイルは、待ちでは次の周回で読み直し、数えるときは読み直してから落とす（#373）
 //**********************************************************************************
 
 using System;
@@ -36,6 +37,7 @@ using System.IO;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xunit;
@@ -52,9 +54,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     ///
     /// **test.ps1 -Launch が、サイトごとに送信箱を作って渡す**（MPAS_CORE_MAIL_OUTBOX / MPAS_NETFX_MAIL_OUTBOX）。
     /// **渡されていなければ Skip する**（起動済みのサイトを叩くときは、読めない）。
+    ///
+    /// **ほかのプロセスがファイルを開いていると、読めないことがある**（#373。書く側は `.tmp` に書き終えてから名前を付け替えるので、
+    /// 書きかけではない。付け替えた直後に、ウイルス対策・インデクサが開いたとみている）。
+    /// **待つ口は、その周回では飛ばして次の周回で読み直す。** **数える口（`Count`）は、読み直してから落とす**（飛ばすと数え漏らし、「送らない」を誤って通す）。
     /// </remarks>
     public static class MailOutbox
     {
+        /// <summary>数えるときに読み直す回数（#373）</summary>
+        private const int CountReadAttempts = 10;
+
+        /// <summary>数えるときに読み直す間隔（ミリ秒。#373）</summary>
+        private const int CountReadIntervalMs = 100;
+
         /// <summary>送信箱のメール</summary>
         public sealed class Message
         {
@@ -94,7 +106,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 {
                     foreach (string path in Directory.GetFiles(target.MailOutbox, "*.json"))
                     {
-                        Message message = MailOutbox.Read(path);
+                        //  **読めなければ、この周回では飛ばす**（次の周回で読み直す。#373）。
+                        if (!MailOutbox.TryRead(path, out Message message))
+                        {
+                            continue;
+                        }
 
                         if (string.Equals(message.Destination, destination, StringComparison.OrdinalIgnoreCase)
                             && (contains == null || (message.Body ?? "").Contains(contains)))
@@ -130,7 +146,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             foreach (string path in Directory.GetFiles(target.MailOutbox, "*.json"))
             {
-                Message message = MailOutbox.Read(path);
+                //  **飛ばさない**（数え漏らすと、「送らない」を誤って通す。#373）。
+                Message message = MailOutbox.ReadWithRetry(path);
 
                 if (string.Equals(message.Destination, destination, StringComparison.OrdinalIgnoreCase)
                     && (contains == null || (message.Body ?? "").Contains(contains)))
@@ -168,6 +185,42 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             Match m = Regex.Match(message.Body ?? "", "(?<![0-9])[0-9]{6}(?![0-9])");
             return m.Success ? m.Value : null;
+        }
+
+        /// <summary>ファイルを読む（ほかのプロセスが開いていて読めなければ false。#373）</summary>
+        /// <param name="path">パス</param>
+        /// <param name="message">メール（読めなければ null）</param>
+        /// <returns>読めたら true</returns>
+        private static bool TryRead(string path, out Message message)
+        {
+            try
+            {
+                message = MailOutbox.Read(path);
+                return true;
+            }
+            catch (IOException)
+            {
+                message = null;
+                return false;
+            }
+        }
+
+        /// <summary>ファイルを読む（読めなければ、少し待って読み直す。それでも読めなければ例外。#373）</summary>
+        /// <param name="path">パス</param>
+        /// <returns>メール</returns>
+        private static Message ReadWithRetry(string path)
+        {
+            for (int i = 1; ; i++)
+            {
+                try
+                {
+                    return MailOutbox.Read(path);
+                }
+                catch (IOException) when (i < MailOutbox.CountReadAttempts)
+                {
+                    Thread.Sleep(MailOutbox.CountReadIntervalMs);
+                }
+            }
         }
 
         /// <summary>ファイルを読む</summary>
