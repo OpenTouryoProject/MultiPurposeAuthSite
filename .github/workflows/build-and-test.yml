@@ -1,0 +1,123 @@
+# MPAS のビルド（net48・net10.0）と単体テストを windows-latest で回す（#348）。
+#
+# ＜位置づけ＞
+#   手元の root\1_BuildAll.ps1（全ビルド）と、単体テスト（root/programs/Tests/UnitTests）を、そのまま回す。
+#   「何をビルドするか」の正はバッチ側、「合否の判定」の正は 1_BuildAll.ps1 にある。
+#   ここには判定を書かない（書くと二重管理になる。OpenTouryo の build-and-test.yml と同じ線引き）。
+#
+#   **E2E は、まだ載せていない**（#348 の段 2：Windows ランナー＋WSL2 の Docker で両版、
+#   段 3：Linux ランナーで net10.0 を 3 方言の DB で）。
+#
+# ＜OpenTouryo のアセンブリ＞
+#   MPAS は OpenTouryo のアセンブリを HintPath で参照する（root/programs/OpenTouryoAssemblies。.gitignore 済み）。
+#   **OpenTouryo をコミットに固定して取り（OTR_REF）、1_BuildAll.ps1 -OpenTouryoDir で基盤を建てて写す。**
+#   向こうの変更が、こちらの CI に黙って届かないようにする（OpenTouryo が MPAS_REF で MPAS を固定しているのと対）。
+#   **上げるときは、手元で建ててから OTR_REF を変える。**（タグ 03-20 は OpenTouryo#718 より前で、MPAS が建たない）
+#
+# ＜警告＞
+#   1_BuildAll.ps1 -FailOnWarnings：警告が 1 つでもあれば NG（今は両版とも 0）。
+#   **依存パッケージの監査（NU1901〜NU1904）だけなら終了コード 3**。CVE の公表で、MPAS を変えなくても増えるため、
+#   PR では警告（注釈とジョブのまとめ）に留め、週 1 回・手動では最後に落とす（OpenTouryo と同じ扱い）。
+#   **見つけたら、その場で直す**（AGENTS.md「依存パッケージの脆弱性を見つけたら」）。
+#
+# ＜run: の中は ASCII だけ＞（AGENTS.md「GitHub Actions を書き足すとき」）
+
+name: Build and test
+
+on:
+  # **master 宛ての PR で、リリースの関所として回す。** develop 宛ての PR では回さない（#348 で決めた）。
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+  # PR が無い間も、ランナーの変化（windows-latest の更新）と依存パッケージの公表に気付くため。
+  # 毎週月曜 09:00 JST（00:00 UTC）。schedule は既定のブランチ（develop）の版で動く。
+  schedule:
+    - cron: '0 0 * * 1'
+  # **一時的な契機（#348 の実験用のブランチ）。fixed #348 の前に外す。**
+  push:
+    branches: ['ci/348']
+
+permissions:
+  contents: read
+
+# 同じブランチ・PR で回し直したら、前の実行は止める。
+concurrency:
+  group: build-and-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      OTR_REPO: OpenTouryoProject/OpenTouryo
+      OTR_REF: 081aadfc9c5c93025595ca377564a54377539d4c
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout OpenTouryo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.OTR_REPO }}
+          ref: ${{ env.OTR_REF }}
+          path: OpenTouryo
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # 終了コード 3 は「OK だが監査の警告がある」（1_BuildAll.ps1）。ここでは止めず、最後の手順で扱う。
+      - name: Build all
+        id: build
+        shell: pwsh
+        working-directory: root
+        run: |
+          .\1_BuildAll.ps1 -OpenTouryoDir "$env:GITHUB_WORKSPACE\OpenTouryo" -FailOnWarnings -WarnDetail -OutputDir "$env:RUNNER_TEMP\BuildLogs"
+          $code = $LASTEXITCODE
+          "## Build (1_BuildAll.ps1 -FailOnWarnings, exit $code)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($code -eq 3)
+          {
+            Write-Host "::warning::Vulnerable packages were found (NU1901-NU1904). See the build log. Fix them on the spot (AGENTS.md)."
+            "Vulnerable packages were found (NU1901-NU1904)." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "audit=1" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+            exit 0
+          }
+          exit $code
+
+      # ビルドが警告で NG でも回す（単体テストの結果も見るため）。
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        working-directory: root/programs/Tests/UnitTests
+        run: dotnet test UnitTests.csproj -c Debug --logger "trx;LogFileName=UnitTests.trx" --results-directory "$env:RUNNER_TEMP\TestResults"
+
+      # 失敗したときこそ中身を見たいので、常に採取する。
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-logs
+          path: ${{ runner.temp }}\BuildLogs
+          if-no-files-found: warn
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unit-test-results
+          path: ${{ runner.temp }}\TestResults
+          if-no-files-found: warn
+
+      # 週 1 回・手動の実行だけ、監査の警告で落とす（採取の後に置く。落としても、ログと結果は残す）。
+      - name: Fail on vulnerable packages (schedule / manual)
+        if: always() && steps.build.outputs.audit == '1' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        shell: pwsh
+        run: |
+          Write-Host "::error::Vulnerable packages were found (NU1901-NU1904). See the 'Build all' step."
+          exit 1

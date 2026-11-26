@@ -21,6 +21,7 @@
 | 指定できるステップ名を見る | `.\1_BuildAll.ps1 -List` | 1 |
 | 警告の内訳を出す（**警告が増えていないかを見る**） | `.\1_BuildAll.ps1 -Only net -SkipClean -WarnDetail` | [`12_BUILDING.md`](12_BUILDING.md) 3 節 |
 | OpenTouryo のアセンブリを取り直す | `.\1_BuildAll.ps1 -Libs Force` | 5 |
+| CI と同じ形で建てる（手元の OpenTouryo から建て、警告でも落とす。**手元の部品を上書きする**） | `.\1_BuildAll.ps1 -OpenTouryoDir C:\OpenTouryo -FailOnWarnings` | [`12_BUILDING.md`](12_BUILDING.md) 1 節・11 節 |
 | E2E を両版で通す（サイトを起動 → テスト → 停止） | `.\2_RunAllTests.ps1 -Launch` | 1 |
 | 起動済みのサイトを叩く | `.\2_RunAllTests.ps1` | 1 |
 | 一部だけ回す | `.\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RequestObjectTests"` | 1 |
