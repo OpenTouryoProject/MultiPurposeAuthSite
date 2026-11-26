@@ -34,6 +34,7 @@
 //*  2026/11/19  玄人 幸道         外部の request_uri を取りに行って検証し、預けた urn: に置き換えるようにした（登録の request_uris にあるものだけ。#374）
 //*  2026/11/19  玄人 幸道         外部の request_uri を urn: に置き換えたら、urn: の認可の URL へ送り直す（サインイン・再認証の往復で取りに行き直さない。#374）
 //*  2026/11/21  玄人 幸道         redirect_uri へエラーを返すときも、預けた request_uri を消すようにした（拒否の後に使い回せた。#420）
+//*  2026/11/25  玄人 幸道         Front-Channel Logout の画面が進む先を、http・https の絶対 URI か同じサイトの相対パスに絞った（#426）
 //**********************************************************************************
 
 /*
@@ -281,6 +282,7 @@ namespace MultiPurposeAuthSite.Controllers
         ///
         /// **外から渡された URL は、ここへ来ない（オープン リダイレクタにしない）。**
         /// **`post_logout_redirect_uri` は登録と完全一致を確かめた後の値**で、**他は自分の URL** である。
+        /// **それでも、進む先のスキームは、ここで絞る**（`Sts.FrontChannelLogout.ToContinueUrl`。管理画面・構成ファイルの登録はスキームを確かめていない。#426）。
         /// </remarks>
         private ActionResult FrontChannelLogoutView(List<string> iframeUrls, string continueUrl)
         {
@@ -293,8 +295,9 @@ namespace MultiPurposeAuthSite.Controllers
             // ブラウザが RP の Cookie を付けて送るので、RP は自分のセッションを閉じられる。
             ViewBag.IframeUrls = iframeUrls;
 
-            // iframe を並べた画面（親）が、その後に進む先（進む先は呼び出し側が決める。remarks の表）
-            ViewBag.ContinueUrl = continueUrl;
+            // iframe を並べた画面（親）が、その後に進む先（進む先は呼び出し側が決める。remarks の表）。
+            //   **http・https の絶対 URI か、同じサイトの相対パスでなければ、Home へ進む**（リンクと meta refresh に出すため。#426）
+            ViewBag.ContinueUrl = Sts.FrontChannelLogout.ToContinueUrl(continueUrl) ?? Url.Action("Index", "Home");
 
             return View("FrontChannelLogout");
         }

@@ -39,6 +39,7 @@
 //*  2026/11/19  玄人 幸道         動的登録で request_uris を受けるようにした（https と行き先のアドレスを確かめる。#374）
 //*  2026/11/24  玄人 幸道         client_name を、画面に出す名前の列に入れるようにした（#430）
 //*  2026/11/25  玄人 幸道         ログアウトの登録項目（post_logout_redirect_uris・frontchannel_logout_uri・backchannel_logout_uri・*_session_required）を受けるようにした（#426）
+//*  2026/11/25  玄人 幸道         post_logout_redirect_uris を https（ループバックは http）に限り、ログアウトの URL のフラグメントと、frontchannel_logout_uri の redirect_uris との同一オリジンを確かめるようにした（#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -532,15 +533,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **`post_logout_redirect_uris`**（§3.1。配列）。**n 件を空白区切りで持つ**（`redirect_uris` と同じ形。#426）。
             //    **照合は完全一致**（`CmnLogoutEndpoint`）なので、**`redirect_uris` と同じく、絶対 URI でフラグメントを持たない値だけ受ける。**
+            //    **さらに `https` か、ループバックの `http` に限る**（#426。**Front-Channel Logout の画面が、リンクと `meta refresh` に出す**ので、
+            //    `javascript:` などを登録させない。画面の側でも絞る：`FrontChannelLogout.ToContinueUrl`）。
+            //    **空白も断る**（空白区切りで持つので、読むときに別の要素に割れる）。
             List<string> postLogoutRedirectUris = ClientRegistrationProvider.GetStrings(
                 metadata, Const.ClientPostLogoutRedirectUris);
 
             foreach (string postLogoutRedirectUri in postLogoutRedirectUris)
             {
-                if (!ClientRegistrationProvider.IsValidRedirectUri(postLogoutRedirectUri))
+                if (!ClientRegistrationProvider.IsValidRedirectUri(postLogoutRedirectUri)
+                    || !RemoteJwkSetStore.IsUsableKeySource(postLogoutRedirectUri)
+                    || postLogoutRedirectUri.Any(char.IsWhiteSpace))
                 {
                     description = string.Format(
-                        "The post_logout_redirect_uri ({0}) must be an absolute URI without a fragment.",
+                        "The post_logout_redirect_uri ({0}) must be an absolute https URI without a fragment.",
                         postLogoutRedirectUri);
                     return false;
                 }
@@ -572,6 +578,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
+            //    **フラグメントを持たない**（§2 の MUST NOT。`iss`・`sid` をクエリに足すので、フラグメントの後ろに付いて RP に届かない）。
+            //    **スキーム・ホスト・ポートが、登録した `redirect_uris` のどれかと同じ**（§2 の MUST。#426）。
+            //    **RP が、関係の無いサイトを OP の画面の `iframe` に開かせない。** **管理画面・構成ファイルの値は確かめない**（配備の管理者が決める値）。
+            if (!string.IsNullOrEmpty(frontChannelLogoutUri)
+                && ClientRegistrationProvider.HasFragment(frontChannelLogoutUri))
+            {
+                description = "The frontchannel_logout_uri must not have a fragment.";
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(frontChannelLogoutUri)
+                && !redirectUris.Any(r => ClientRegistrationProvider.IsSameOrigin(r, frontChannelLogoutUri)))
+            {
+                description = "The scheme, host and port of the frontchannel_logout_uri must be the same as one of the redirect_uris.";
+                return false;
+            }
+
             model.FrontChannelLogoutUri = string.IsNullOrEmpty(frontChannelLogoutUri) ? null : frontChannelLogoutUri;
 
             //  **`backchannel_logout_uri`**（Back-Channel Logout 1.0 §2.2）。**OP が `logout_token` を POST する先。**
@@ -590,6 +613,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 //  **スキームと行き先は、同じ文言で断る**（`jwks_uri` と同じ理由）。
                 description = "The backchannel_logout_uri must use https and must not point to an internal address.";
+                return false;
+            }
+
+            //    **フラグメントを持たない**（§2.2 の MUST NOT。#426）。
+            if (!string.IsNullOrEmpty(backChannelLogoutUri)
+                && ClientRegistrationProvider.HasFragment(backChannelLogoutUri))
+            {
+                description = "The backchannel_logout_uri must not have a fragment.";
                 return false;
             }
 
@@ -1057,6 +1088,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **フラグメントは禁止**（RFC 6749 §3.1.2）。
             return string.IsNullOrEmpty(uri.Fragment);
+        }
+
+        /// <summary>フラグメント（`#…`）を持つか（#426）</summary>
+        /// <param name="value">絶対 URI（`SetUri` で確かめた値）</param>
+        /// <returns>持てば true（**空の `#` も持つと数える**。読めなければ true）</returns>
+        private static bool HasFragment(string value)
+        {
+            return value.IndexOf('#') >= 0
+                || !Uri.TryCreate(value, UriKind.Absolute, out Uri uri)
+                || !string.IsNullOrEmpty(uri.Fragment);
+        }
+
+        /// <summary>スキーム・ホスト・ポートが同じか（Front-Channel Logout 1.0 §2。#426）</summary>
+        /// <param name="a">URI</param>
+        /// <param name="b">URI</param>
+        /// <returns>どちらも絶対 URI で、スキーム・ホスト・ポートが同じなら true（**ホストは大文字小文字を区別しない**）</returns>
+        private static bool IsSameOrigin(string a, string b)
+        {
+            return Uri.TryCreate(a, UriKind.Absolute, out Uri x)
+                && Uri.TryCreate(b, UriKind.Absolute, out Uri y)
+                && string.Equals(x.Scheme, y.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Host, y.Host, StringComparison.OrdinalIgnoreCase)
+                && x.Port == y.Port;
         }
 
         #endregion

@@ -40,6 +40,7 @@
 //*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //*  2026/11/24  玄人 幸道         RT-430.3（動的登録の client_name は応答で返り、同意の画面に出る）・.4（GET・PUT・断る値）を足し、RT-307.1 の補足を直した（#430）
 //*  2026/11/25  玄人 幸道         RT-426.2（動的登録でログアウトの URL を登録でき、効き、PUT で省けば消える）・.3（断る値）を足した（#426）
+//*  2026/11/25  玄人 幸道         RT-426.3 に、post_logout_redirect_uris のスキーム、ログアウトの URL のフラグメント、frontchannel_logout_uri の同一オリジンを足した（#426）
 //**********************************************************************************
 
 using System;
@@ -566,11 +567,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-426.3",
                     "**動的登録で、フラグメントを持つ `post_logout_redirect_uris`・https でない `frontchannel_logout_uri`・"
-                    + "https でない／内部のアドレスを指す `backchannel_logout_uri`・真偽値でない `*_session_required` は `invalid_client_metadata`**",
+                    + "https でない／内部のアドレスを指す `backchannel_logout_uri`・真偽値でない `*_session_required` は `invalid_client_metadata`。"
+                    + "https（ループバックは http）でない `post_logout_redirect_uris`、フラグメントを持つ `frontchannel_logout_uri`・`backchannel_logout_uri`、"
+                    + "`redirect_uris` とスキーム・ホスト・ポートの違う `frontchannel_logout_uri` も**",
                     "**`post_logout_redirect_uri` は完全一致で照合する戻り先**なので、`redirect_uris` と同じ形だけを受ける。"
+                    + "**さらに https に限る**（**Front-Channel Logout の画面が、リンクと meta refresh に出す**ので、`javascript:` などを登録させない。#426）。"
                     + "**`backchannel_logout_uri` は OP が POST する先**で、**登録する側が決められる**ので、"
-                    + "**`jwks_uri`・`request_uris` と同じく、行き先のアドレスも確かめる**（`OutboundUrlPolicy`。#376）。",
-                    "RFC 7591 §3.2.2 / Back-Channel Logout 1.0 §2.2 / #376 / #426");
+                    + "**`jwks_uri`・`request_uris` と同じく、行き先のアドレスも確かめる**（`OutboundUrlPolicy`。#376）。"
+                    + "**ログアウトの URL はフラグメントを持たない**（Front-Channel §2・Back-Channel §2.2 の MUST NOT）。"
+                    + "**`frontchannel_logout_uri` のスキーム・ホスト・ポートは、登録した `redirect_uris` のどれかと同じ**（Front-Channel §2 の MUST）。",
+                    "RFC 7591 §3.2.2 / Front-Channel Logout 1.0 §2 / Back-Channel Logout 1.0 §2.2 / #376 / #426");
 
                 r.Target("POST registration_endpoint（受けてはならないログアウトの URL）");
 
@@ -601,6 +607,42 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                         r.VerifyEqual("HTTP 400", "400", ((int)res.StatusCode).ToString());
                         r.VerifyEqual("invalid_client_metadata", "invalid_client_metadata", res.Error ?? "（無い）");
+                    }
+
+                    //  **スキーム・フラグメント・同一オリジン**（#426 の別モデルのレビューの指摘）。**ほかの理由で先に断られていないかを、`error_description` で確かめる。**
+                    //    **値はループバック（E2E は許して起動する）か、`redirect_uris`（`UriA`）と同じオリジンにして、確かめたい理由だけで断られるようにする。**
+                    foreach (KeyValuePair<string, KeyValuePair<KeyValuePair<string, object>, string>> bad in new Dictionary<string, KeyValuePair<KeyValuePair<string, object>, string>>()
+                    {
+                        { "(6) javascript: の post_logout_redirect_uris（ログアウトの画面がリンクに出す）",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("post_logout_redirect_uris", new string[] { "javascript:void(426)" }), "absolute https URI") },
+                        { "(7) http（ループバックでない）の post_logout_redirect_uris",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("post_logout_redirect_uris", new string[] { "http://rp.e2e.example/out" }), "absolute https URI") },
+                        { "(8) フラグメントを持つ frontchannel_logout_uri（redirect_uris と同じオリジン）",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("frontchannel_logout_uri", "https://localhost:44300/e2e/rt426/fc#f"), "fragment") },
+                        { "(9) redirect_uris とホストの違う frontchannel_logout_uri",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("frontchannel_logout_uri", "https://rp.e2e.example/fc"), "same as one of the redirect_uris") },
+                        { "(10) フラグメントを持つ backchannel_logout_uri（ループバック）",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("backchannel_logout_uri", "https://localhost:44300/e2e/rt426/bc#f"), "fragment") }
+                    })
+                    {
+                        r.Step(bad.Key);
+
+                        JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token, JsonSerializer.Serialize(new Dictionary<string, object>()
+                            {
+                                { "redirect_uris", new string[] { UriA } },
+                                { bad.Value.Key.Key, bad.Value.Key.Value }
+                            }));
+
+                        r.VerifyEqual("HTTP 400", "400", ((int)res.StatusCode).ToString());
+                        r.VerifyEqual("invalid_client_metadata", "invalid_client_metadata", res.Error ?? "（無い）");
+                        r.Verify("断る理由（error_description）", (res.ErrorDescription ?? "").Contains(bad.Value.Value),
+                            "「" + bad.Value.Value + "」を含む", res.ErrorDescription ?? "（無い）");
                     }
                 });
 

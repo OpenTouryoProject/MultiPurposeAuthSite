@@ -173,7 +173,8 @@ function Read-ModuleLog($json, [string]$planName, [int]$max)
     $notable = @($results | Where-Object { $_.result -in 'FAILURE', 'WARNING' } | ForEach-Object { '{0}:{1}' -f $_.result, $_.src })
 
     # ブラウザを OP へ送るたび（http=redirect）に区間を分ける。
-    # **REVIEW は、送る直前に書かれることがある**（ログアウトの口）ので、前の区間の最後のブラウザの項目より後の REVIEW は、次の区間へ移す
+    # **REVIEW は、送る直前に書かれることがある**（ログアウトの口）ので、前の区間の最後のブラウザの項目より後の REVIEW は、次の区間へ移す。
+    # **Conformance Suite 自身の画面（/test/ の下の callback など）の項目は数えない**：ブラウザの処理の終わりが、REVIEW より後に書かれることがある（#426）
     $segments = New-Object System.Collections.ArrayList
     $current = New-Object System.Collections.ArrayList
     foreach ($e in $results)
@@ -181,7 +182,12 @@ function Read-ModuleLog($json, [string]$planName, [int]$max)
         if ($e.PSObject.Properties['http'] -and $e.http -eq 'redirect' -and $current.Count -gt 0)
         {
             $lastBrowser = -1
-            for ($k = 0; $k -lt $current.Count; $k++) { if ($current[$k].src -eq 'WebRunner') { $lastBrowser = $k } }
+            for ($k = 0; $k -lt $current.Count; $k++)
+            {
+                if ($current[$k].src -ne 'WebRunner') { continue }
+                if ($current[$k].PSObject.Properties['url'] -and ([string]$current[$k].url) -match '^https?://[^/]+/test/') { continue }
+                $lastBrowser = $k
+            }
             $carry = @()
             for ($k = $current.Count - 1; $k -gt $lastBrowser; $k--)
             {

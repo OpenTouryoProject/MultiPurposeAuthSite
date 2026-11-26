@@ -102,10 +102,13 @@
   （RP-Initiated Logout 1.0 §3.1・Front-Channel Logout 1.0 §2・Back-Channel Logout 1.0 §2.2。どれも OPTIONAL なので、受けないことは不適合ではなかった）。
   **適合性テストの、動的登録したクライアントでのログアウトのプランを回すために受ける**と決めた
 - **`post_logout_redirect_uris` は配列**なので、**列を `redirect_uris` と同じ形（空白区切りの n 件・2000 文字）にした**（管理画面・設定ファイルも同じ）
-- **確かめ方は、使う側と同じ**：`post_logout_redirect_uris` は `redirect_uris` と同じ（絶対 URI・フラグメントなし）、`frontchannel_logout_uri` は https（ループバックの http だけ許す）、
+- **確かめ方は、使う側と同じ**：`post_logout_redirect_uris` は `redirect_uris` と同じ（絶対 URI・フラグメントなし）に加えて **https（ループバックの http だけ許す）**、`frontchannel_logout_uri` は https（ループバックの http だけ許す）、
   **`backchannel_logout_uri` は `OutboundUrlPolicy`**（https と行き先のアドレス。**OP が POST する先を、登録する側が決められる**ため。`jwks_uri`・`request_uris` と同じ）
 - **送るときも、動的登録したクライアント（`registration_access_token` を持つ登録）へは、`OutboundUrlPolicy` の判定と HttpClient で送る**（名前解決の結果は後から変えられる）。
   **管理画面・設定ファイルだけで登録したクライアントは、今までどおりイントラネットの RP へも送る**（配備の管理者が決めた値）
+- **`post_logout_redirect_uris` を https に限るのは、Front-Channel Logout の画面が、進む先をリンクと `meta refresh` に出すため**（`javascript:` などを登録させない。#426 の別モデルのレビューの指摘）。
+  **画面の側でも、進む先を http・https の絶対 URI か同じサイトの相対パスに絞る**（`FrontChannelLogout.ToContinueUrl`。管理画面・設定ファイルの値はスキームを確かめていないため。#427 と同じ考え方）
+- **ログアウトの URL はフラグメントを持たない**（Front-Channel §2・Back-Channel §2.2 の MUST NOT）。**`frontchannel_logout_uri` のスキーム・ホスト・ポートは、登録した `redirect_uris` のどれかと同じ**（Front-Channel §2 の MUST）。**動的登録だけで確かめる**（管理画面・設定ファイルの値は、配備の管理者が決める）
 - **`PUT` で省いたら消す**（RFC 7592 §2.2 の MUST）。**管理画面から入れた値も消える**（以前は持ち越していた）
 - **`*_session_required` は受けるが、持たない。** この実装は必ず `iss` と `sid` を付けるので、応答では URL が在るときだけ true を返す
 

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#310 の段階 3）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/25  玄人 幸道         画面が進む先を、http・https の絶対 URI か同じサイトの相対パスに絞る ToContinueUrl を足した（#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -39,6 +40,7 @@ using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
@@ -159,6 +161,40 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string uri = CmnEndpoints.GetRedirectUriFromConstr(registered);
 
             return RemoteJwkSetStore.IsUsableKeySource(uri) ? uri : "";
+        }
+
+        /// <summary>Front-Channel Logout の画面が、その後に進んでよい先か（#426）</summary>
+        /// <param name="continueUrl">進む先（`post_logout_redirect_uri`・Home・認可の URL）</param>
+        /// <returns>**`http`・`https` の絶対 URI か、同じサイトの相対パスなら、その値**。でなければ null</returns>
+        /// <remarks>
+        /// **画面はリンク（`href`）と `meta refresh` に出す**ので、**`javascript:` などのスキームを通さない**（#427 と同じく、出す側で絞る）。
+        /// **`post_logout_redirect_uri` は、登録（動的登録・管理画面・構成ファイル）の値と完全一致した値**だが、
+        /// **管理画面と構成ファイルではスキームを確かめていない**（動的登録は https かループバックの http に限る。#426）。
+        /// **相対パスは `/` で始まり、`//`・`/\` で始まらないものだけ**（ほかのホストへ進ませない。`ClientDisplay.FromReturnUrl` と同じ）。
+        /// **制御文字・空白を含む値は、どの形でも通さない**（ブラウザが除いた後に `//host` になりうる）。
+        /// </remarks>
+        public static string ToContinueUrl(string continueUrl)
+        {
+            //  **制御文字・空白を含む値は通さない**（ブラウザは URL からタブ・改行を除くので、`/\t/host` が `//host` と読まれうる。#426 の別モデルのレビューの指摘）。
+            if (string.IsNullOrEmpty(continueUrl)
+                || continueUrl.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)))
+            {
+                return null;
+            }
+
+            if (continueUrl.StartsWith("/", StringComparison.Ordinal))
+            {
+                return (continueUrl.StartsWith("//", StringComparison.Ordinal)
+                    || continueUrl.StartsWith("/\\", StringComparison.Ordinal)) ? null : continueUrl;
+            }
+
+            if (Uri.TryCreate(continueUrl, UriKind.Absolute, out Uri uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+            {
+                return continueUrl;
+            }
+
+            return null;
         }
     }
 }

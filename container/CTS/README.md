@@ -170,7 +170,7 @@ cd ..\CTS
   `RunTestPlan.ps1` が手元の `appsettings.json` から埋めて、**`out\<プラン>.json` に書く**（`out\` は Git の管理外）
 - 画面から回すときは、`out\<プラン>.json` を貼る
 - **Conformance Suite のログ（`mongo\`）と報告書の zip（`out\`）には、ブラウザの自動操作で入力したテスト利用者のパスワードが平文で残る**（`Entering text` の記録）。どちらも Git の管理外だが、**ログや報告書を、そのまま Issue などに貼らない**
-- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回、#416 で 3 回、#422 で 1 回、#421 の全プランで 4 回、#429 の FAPI 2.0 の 10 プランで 1 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
+- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回、#416 で 3 回、#422 で 1 回、#421 の全プランで 4 回、#429 の FAPI 2.0 の 10 プランで 1 回、#426 の全 56 の組で 4 回と、OIDC の 42 の組の回し直しで 7 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
 
 **画面の写し（REVIEW）を求めるモジュールは、モジュールごとの `"override"` で、そのときの画面を写しの代わりにする**（原本の CI の設定 `.gitlab-ci/local-provider-oidcc-conformance-config.json` と同じ書き方）。
 `wait` のコマンドの末尾に `update-image-placeholder`（無くてもよいなら `-optional`）を付けると、待った画面で写しの欄が埋まる。
@@ -190,8 +190,8 @@ cd ..\CTS
 - **FAPI 1.0 Advanced の上書きは、FAPI 2.0 と同じ中身**（#385。以前は FAPI 2.0 のモジュール名だけにあり、FAPI 1.0 Advanced は既定の自動操作のまま `Unable to locate element` で落ちていた）
 - **REVIEW は、写しで合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない。**合否は、エージェントが `ExtractReview.ps1` の材料から付け、人がその表を承認する**（下の「REVIEW の見方」。#417）
 - **ログアウトの確認の画面**：MPAS は、`id_token_hint` が無い・一致しない・要求に誤りがあるとき、確認の画面を出す（RP-Initiated Logout 1.0 §2 の MUST）。雛形では「Yes」を任意の手順で押す
-- **自動では回せないモジュール**（FAPI 2.0・`oidcc-dynamic`。FAILED・TIMEOUT になるが、OP の不適合ではない）
-  - `oidcc-server-rotate-keys`（`oidcc-dynamic`）：**OP の署名の鍵を、人が入れ替える操作が要る**（`TellUserToRotateOpKeys`。入れ替えてから「Start」を押すのを待つ）。
+- **自動では回せないモジュール**（FAPI 2.0・`oidcc-dynamic`・`oidcc-mtls`。FAILED・TIMEOUT になるが、OP の不適合ではない）
+  - `oidcc-server-rotate-keys`（`oidcc-dynamic`（どの `response_type` も）・`oidcc-mtls`・`oidcc-mtls-formpost`。#426）：**OP の署名の鍵を、人が入れ替える操作が要る**（`TellUserToRotateOpKeys`。入れ替えてから「Start」を押すのを待つ）。
     自動の実行では待つ間に時間切れになり、TIMEOUT（INTERRUPTED）になる（#414。手で回すかは決めていない）
   - `…-user-rejects-authentication`：利用者が同意を断る操作が要る。**MPAS は同意を記録した後は同意の画面を出さず、サインインの画面には取り消しのボタンが無い**。
     **E2E の `RT-413.2` で補う**（PAR で預けた要求を同意の画面で拒否すると `access_denied`。#413。クライアントは `TestClient`）
@@ -243,6 +243,24 @@ cd ..\CTS
   - `fapi-ciba-mtls-poll` には、ほかに TIMEOUT が 1 つある（`ensure-authorization-request-with-potentially-bad-binding-message`。`fapi-ciba-private-key-jwt-poll` と同じ）
   - **2026-11-22 に、全 25 プランを Windows PowerShell 5.1 で通した**（それまでは PowerShell 7）。**どのプランも、上の表とこれまでの基準と同じ数**で、`fapi2-ms-signed-plain-response` も FAILED 2（自動では回せない 2）だった。
     サインインのボタンの事象は出なかった。所要は 2 時間 10 分（OIDC の 11 プランで 23 分。機械のメモリ不足で 19 番目のプランの途中で止まり、そのプランから回し直したので、2 回の分を足した）
+- **#426 で足したプランの結果**（2026-11-25〜26。直した版で回した OIDC の 42 の組から。サインインのボタンの事象は除いた数で、事象に当たったモジュールは、次の実行か回し直しで通った）
+
+  | `-Plan`（`-ResponseType`） | PASSED | FAILED | REVIEW | SKIPPED | WARNING | FAILED・TIMEOUT の内訳 |
+  |---|---:|---:|---:|---:|---:|---|
+  | `oidcc-basic-dynamic`・`oidcc-formpost-basic-dynamic` | 24 | 0 | 3 | 4 | 7 | 無し（静的な版より PASSED が 1・SKIPPED が 2 多いのは、動的登録の版だけのモジュール） |
+  | `oidcc-implicit-dynamic`・`oidcc-formpost-implicit-dynamic` | 33 | 0 | 6 | 6 | 13 | 無し |
+  | `oidcc-hybrid-dynamic`・`oidcc-formpost-hybrid-dynamic` | 63 | 0 | 9 | 9 | 21 | 無し |
+  | `oidcc-rp-initiated-logout-dynamic`（6 つの `response_type`） | 3 | 0 | 8 | 0 | 0 | 無し（静的な版と同じ） |
+  | `oidcc-frontchannel-rp-initiated-logout-dynamic`・`oidcc-backchannel-rp-initiated-logout-dynamic`（6 つずつ） | 2 | 0 | 0 | 0 | 0 | 無し（静的な版と同じ） |
+  | `oidcc-mtls`・`oidcc-mtls-formpost` | 22 | 0 | 4 | 2 | 7 | TIMEOUT 1（`oidcc-server-rotate-keys`。自動では回せない） |
+  | `oidcc-dynamic`（`code`・`code id_token`・`code token`・`code id_token token`） | 4 | 8 | 6 | 2〜3 | 1 | #398 で止まる 7 と `oidcc-userinfo-rs256`（見送った機能）。TIMEOUT 1（`oidcc-server-rotate-keys`）。SKIPPED は `code`・`code token` が 3（`oidcc-idtoken-unsigned`） |
+  | `oidcc-dynamic`（`id_token token`） | 8 | 1 | 6 | 2 | 1 | `oidcc-userinfo-rs256`。TIMEOUT 1 |
+  | `oidcc-dynamic`（`id_token`） | 8 | 0 | 6 | 2 | 1 | TIMEOUT 1 |
+
+  - **REVIEW の判定は、どれも静的な版・`code` の組と同じ材料の形で、同じ合否**（下の「REVIEW の見方」）
+  - 所要は、全 56 の組で 3 時間（OIDC の 42 の組で 75 分、うち #426 で足した 31 の組で 52 分。FAPI の 14 プランで 105 分）
+  - **直す前の版（fixing 4 の時点）でも全 56 の組を回し、FAPI の 14 プランはこれまでの基準と同じ数**だった（違いはサインインのボタンの事象だけ）。**FAPI は、#426 の最後の段で変えたところ（動的登録の確かめ・Front-Channel Logout の画面）を通らない**ので、直した版では回し直していない
+  - 直した版の回し直しは、機械のメモリ不足で 2 回止まり、止まったところから回し直した（止まる前に済んだ組の結果を使った）
 - **対応を見送った機能のモジュール**
   - `oidcc-userinfo-rs256`（`oidcc-dynamic`）：**署名した UserInfo の応答**（OIDC Core 1.0 §5.3.2）を求める。**MPAS は対応を見送った**（任意の機能で、FAPI は求めない。[`ANALYSIS-IdP.md`](../../root/programs/ANALYSIS-IdP.md) の D-17。#414）ので、
     Discovery に `userinfo_signing_alg_values_supported` が無く、`CheckDiscEndpointUserinfoSigningAlgValuesSupportedContainsRS256` で FAILED になる。
@@ -288,7 +306,7 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 | クライアントへの応答 | `error`・`error_description`。無ければパラメタの名前だけ（`code` などの値は出さない）。**JARM は、署名だけの JWT の中身を読む** |
 | モジュールの結果 | `testmodule_result` と、SUCCESS・INFO 以外の判定 |
 
-- **区間**：ブラウザを OP へ送るたび（`Redirecting to …`）に区切り、REVIEW はその判定のある区間の材料で見る（**ログアウトの口では、REVIEW が送る直前に書かれる**ので、次の区間に入れる）
+- **区間**：ブラウザを OP へ送るたび（`Redirecting to …`）に区切り、REVIEW はその判定のある区間の材料で見る（**ログアウトの口では、REVIEW が送る直前に書かれる**ので、次の区間に入れる。**Conformance Suite 自身の画面（`/test/` の下の callback）でのブラウザの処理の終わりが REVIEW より後に書かれることがある**ので、それは区間の最後のブラウザの項目に数えない。#426 の `oidcc-rp-initiated-logout-only-state` で、REVIEW がサインインの区間に入った）
 - **材料の形**（`Evidence`）：操作した画面・最後の OP の画面（状態コード・パス・タイトル）・クライアントへの応答を 1 行にしたもの。
   **エラー画面とサインアウトの確認の画面は、本文の文言**（`invalid_request Invalid redirect_uri.` などのエラーの種類と説明、確認の画面の理由）**も入れる**（タイトルだけでは、文言が変わっても「同じ」になる）。
   **実行ごとに変わる値**（クエリ・コード・`state`）と、配備ごとに変わる文字（画面の上の利用者名）は入れない。**サインインの画面などは、タイトルまで**（本文の変化は拾わない）
@@ -312,12 +330,13 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 基準は、プラン・モジュール・バリアント・判定の名前ごとに、材料の形（`Evidence`）・判定（`Verdict`）・理由・照らした節を持つ。
 **材料の形が同じなら、合否を引き継ぐ。** 形が変わった・基準に無いもの・読んだプランで基準だけに在るもの（REVIEW が出なくなった）だけ、`out\review\<プラン>.json` を読んで合否を付け直し、基準を直す（終了コード 1）。
 
-**今の基準**（2026-11-22 の全 25 プランの実行。REVIEW の判定は延べ 164・モジュールの名前 40・判定の種類 21。**#422 を直した後は延べ 162**（2026-11-23 に `fapi2-sp-plain-oauth` を回し直した））
+**今の基準**（2026-11-25 の全 56 の組の実行。REVIEW の判定は延べ 300・モジュールの名前 38・判定の種類 20。
+それまでは 2026-11-22 の全 25 プランの実行で延べ 164（**#422 を直した後は 162**）。**#426 で足した 31 の組の 138 件は、どれも静的な版・`code` の組の同じ判定と材料の形が同じ**で、その合否を引き継いだ（`oidcc-mtls`・`-formpost` の `oidcc-redirect-uri-query-added` は、静的な `oidcc-basic` に無いので、`oidcc-dynamic` の同じ判定から））
 
 | 判定 | 延べ | 中身 |
 |---|---:|---|
-| 合（画面で確かめた） | 82 | 2 回目のサインインの画面（`oidcc-max-age-1`・`oidcc-prompt-login`）、**登録した `logo_uri`・`policy_uri`・`tos_uri` を出したサインインの画面**（`oidcc-registration-logo-uri`・`-policy-uri`・`-tos-uri`。#427 で直した。2026-11-24）、`redirect_uri` の誤り・欠落のエラー画面、`request_uri` の使用済み・期限切れ・別のクライアントのエラー画面、ログアウトの誤りの理由を出した確認の画面と、サインアウトした後の画面 |
-| 合（エラーを返した） | 25 | `response_type`・`nonce`（Implicit・Hybrid）の欠落、PAR を使わない要求・Request Object の無い要求に `invalid_request` |
+| 合（画面で確かめた） | 204 | 2 回目のサインインの画面（`oidcc-max-age-1`・`oidcc-prompt-login`）、**登録した `logo_uri`・`policy_uri`・`tos_uri` を出したサインインの画面**（`oidcc-registration-logo-uri`・`-policy-uri`・`-tos-uri`。#427 で直した。2026-11-24）、`redirect_uri` の誤り・欠落のエラー画面、`request_uri` の使用済み・期限切れ・別のクライアントのエラー画面、ログアウトの誤りの理由を出した確認の画面と、サインアウトした後の画面 |
+| 合（エラーを返した） | 41 | `response_type`・`nonce`（Implicit・Hybrid）の欠落、PAR を使わない要求・Request Object の無い要求に `invalid_request` |
 | 合（受け付けた） | 53 | 長い `nonce`・`state`、Request Object の内と外の `nonce`・`state` の違い、外だけの `state` を、Request Object の値で受け付けた |
 | 否 | 0 | **#427 を直す前は 3**：`oidcc-registration-logo-uri`・`-policy-uri`・`-tos-uri`（登録した値をサインインの画面に出していなかった。**OIDC Registration 1.0 §2 は SHOULD**）。**#427 で、認可の要求から来たサインインの画面と同意の画面に出すようにし、合にした**（2026-11-24）。**`fapi2-sp-plain-oauth` の 2 件（#422）は、直して REVIEW が出なくなったので、基準から消した**（2026-11-23。延べ 164 → 162） |
 | 判断できない | 2 | FAPI-CIBA の `ensure-authorization-request-with-potentially-bad-binding-message`（認証デバイスの画面がログに無い。OP は `binding_message` を受け付けて端末へ送り、端末のアプリが出す。実物の端末で見るのは #417 の範囲の外） |
