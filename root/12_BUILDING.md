@@ -421,7 +421,16 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | 設定ファイル | ビルドには要らない（雛形が無くても通る。10 節「設定ファイルが無いと実行できない」）。E2E は下の表 |
 
 **E2E（ジョブ `e2e-windows`）は、`build` とは別のランナーで、自分で建ててから `2_RunAllTests.ps1 -Launch` を回す**（IIS Express が動かすサイトのフォルダは大きいので、成果物では渡さない）。
-手元と同じ結果（成功・失敗・Skip の数）になることを確かめた（#348）。
+**ストアの種類ごとに、並べて回す**（matrix）。手元と同じ結果（成功・失敗・Skip の数）になることを確かめた（#348）。
+
+| ストア | 回し方 | #348 の結果（成功 / 失敗 / Skip） |
+|---|---|---|
+| `mem` | ID 連携の IdP のコンテナ（`container/E2E`）を起動して回す（手元の通しと同じ） | 1287 / 0 / 10 |
+| `sql`・`ora` | その DB（`container/Store`）だけを起動し、`-UserStoreType <種類> -NoStoreContainer` で回す。ID 連携のコンテナは起動しない（その分は Skip） | 1208 / 0 / 89 |
+| `npg` | 同上。**net48 版は PostgreSQL を使えないので、net10.0 版だけ**（手元と同じ） | 621 / 0 / 676 |
+
+- **DB の準備の待ち方は、`test.ps1` の `Wait-Store` と同じ**（SQL Server は初期化の `done.`、Oracle は healthcheck、PostgreSQL はポート）。接続文字列は `container/Store/README.md` から読む（手元と同じ E2E 専用の値）
+- **.NET Framework の SqlClient は `localhost` を NIC のアドレスにつなぐ**ので、NIC のアドレスの DB のポートをループバックへ転送する（`netsh portproxy`。WSL2 の公開ポートはループバックにしか転送されない。OpenTouryo#712）
 
 | 項目 | 内容 |
 |---|---|
@@ -430,9 +439,9 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | 証明書 | Kestrel は開発用証明書、IIS Express は自己署名の証明書を 44302 に登録し直す（ランナーの既存の証明書はハンドシェイクで切られる。OpenTouryo#712）。どちらも `LocalMachine\Root` に入れる |
 | サービス | `aspnet_state` を起動する（net48 版のセッション） |
 | 画面の言語 | **ランナーの表示言語は英語で、変えられない。** テストの足場が日本語にそろえる（[`14_TESTING.md`](14_TESTING.md) 5 節「画面の言語」） |
-| ID 連携のコンテナ | **WSL2 の Ubuntu に Docker を入れて動かす**（`container/E2E`。リソースの場所は `E2E_RESOURCE_DIR`）。**Windows の `docker` から、WSL2 の Docker に TCP（`127.0.0.1:2375`）でつなぐ**（コンテナのテストが `docker inspect` で読むため。手元の Rancher Desktop と同じ形） |
-| 残すもの | E2E の結果（`Result` の下）・ビルドのログ・コンテナのログ（`e2e-windows-results`） |
+| ID 連携のコンテナ | **WSL2 の Ubuntu に Docker を入れて動かす**（`container/E2E`。リソースの場所は `E2E_RESOURCE_DIR`）。**Windows の `docker` から、WSL2 の Docker に TCP（`127.0.0.1:2375`。`localhost` は `::1` に解決されることがあり、届かない）でつなぐ**（コンテナのテストが `docker inspect` で読むため。手元の Rancher Desktop と同じ形） |
+| 残すもの | E2E の結果（`Result` の下）・ビルドのログ・コンテナのログ（`e2e-windows-results-<ストア>`） |
 
-- **Linux ランナーで net10.0 を 3 方言の DB で回すのは、まだ載せていない**（#348 の段 3）
+- **Linux ランナーで net10.0 を回すのは、まだ載せていない**（`test.ps1` が Windows 前提のため。別の Issue）
 - **アクションは SHA で固定し、`run:` の中は ASCII だけにする**（`AGENTS.md`「GitHub Actions を書き足すとき」）
 - 必須のチェックにするかは、人が決める（[`QUALITY.md`](../QUALITY.md) の「このリポジトリの値」）

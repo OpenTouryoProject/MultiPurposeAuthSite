@@ -2,11 +2,12 @@
 #
 # ＜位置づけ＞
 #   build       … 手元の root\1_BuildAll.ps1（全ビルド）と、単体テスト（root/programs/Tests/UnitTests）を、windows-latest でそのまま回す
-#   e2e-windows … 手元の root\2_RunAllTests.ps1 -Launch（両版の E2E）を、windows-latest で回す。ID 連携の IdP のコンテナ（container/E2E）は WSL2 の Docker
+#   e2e-windows … 手元の root\2_RunAllTests.ps1 -Launch（両版の E2E）を、windows-latest で、ストアの種類ごと（mem・sql・ora・npg）に回す。
+#                 ID 連携の IdP のコンテナ（container/E2E）と DB（container/Store）は WSL2 の Docker
 #   「何をビルドするか」の正はバッチ側、「合否の判定」の正は 1_BuildAll.ps1・2_RunAllTests.ps1 にある。
 #   ここには判定を書かない（書くと二重管理になる。OpenTouryo の build-and-test.yml と同じ線引き）。
 #
-#   **Linux ランナーで net10.0 を 3 方言の DB で回すのは、まだ載せていない**（#348 の段 3）。
+#   **Linux ランナーで net10.0 を回すのは、まだ載せていない**（テストの足場が Windows 前提のため。別の Issue）。
 #
 # ＜OpenTouryo のアセンブリ＞
 #   MPAS は OpenTouryo のアセンブリを HintPath で参照する（root/programs/OpenTouryoAssemblies。.gitignore 済み）。
@@ -138,9 +139,19 @@ jobs:
   #   Kestrel は開発用証明書（dotnet dev-certs https）で待ち受ける。IIS Express は、ランナーの既存の証明書がハンドシェイクで切られるので
   #   （OpenTouryo#712 の実験）、自己署名の証明書（localhost）を 44302 に登録し直す。どちらも Windows の信頼（LocalMachine\Root）に入れる
   #   （E2E のクライアントは検証を飛ばすが、サイトが自分や別のサイトを呼ぶ口は検証する）。
+  #
+  # ＜ストアの種類ごとに回す（matrix。#348 の段 3）＞
+  #   mem … ID 連携の IdP のコンテナ（container/E2E）を WSL2 の Docker で起動して回す（手元の通しと同じ）
+  #   sql・ora・npg … その DB（container/Store）だけを WSL2 の Docker で起動し、-UserStoreType <種類> -NoStoreContainer で回す
+  #     （npg は net48 版が PostgreSQL を使えないので、net10.0 版だけ。手元と同じ）。ID 連携のコンテナは起動しない（その分は Skip）
   e2e-windows:
+    name: e2e-windows (${{ matrix.store }})
     runs-on: windows-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        store: [mem, sql, ora, npg]
     env:
       OTR_REPO: OpenTouryoProject/OpenTouryo
       OTR_REF: 081aadfc9c5c93025595ca377564a54377539d4c
@@ -307,12 +318,20 @@ jobs:
           wsl -d Ubuntu-24.04 -u root -- docker version --format '{{.Server.Version}}'
           # The E2E container tests read the running containers with the Windows docker CLI (docker ps / docker inspect),
           # so let it reach the docker in WSL2 over the loopback TCP (like Rancher Desktop on the local machines).
-          $env:DOCKER_HOST = 'tcp://localhost:2375'
-          docker version --format 'Windows CLI {{.Client.Version}} -> server {{.Server.Version}} ({{.Server.Os}})'
-          if ($LASTEXITCODE -ne 0) { throw 'The Windows docker CLI cannot reach the docker in WSL2 (tcp://localhost:2375)' }
+          # Use 127.0.0.1, not localhost: localhost may resolve to ::1, and dockerd listens only on the IPv4 loopback (run 45880487698).
+          $env:DOCKER_HOST = 'tcp://127.0.0.1:2375'
+          $reached = $false
+          for ($i = 0; $i -lt 12; $i++)
+          {
+              docker version --format 'Windows CLI {{.Client.Version}} -> server {{.Server.Version}} ({{.Server.Os}})'
+              if ($LASTEXITCODE -eq 0) { $reached = $true; break }
+              Start-Sleep -Seconds 5
+          }
+          if (-not $reached) { throw 'The Windows docker CLI cannot reach the docker in WSL2 (tcp://127.0.0.1:2375)' }
 
       # Publish MPAS (net10.0) for the IdP images and export the dev cert made in "Certificates" (trusted in LocalMachine\Root).
       - name: Publish the IdP (container/E2E)
+        if: matrix.store == 'mem'
         shell: pwsh
         working-directory: container/E2E
         run: .\1_PublishIdP.ps1
@@ -321,6 +340,7 @@ jobs:
       # Keep a process in WSL so that the VM does not stop when idle (the containers would get SIGTERM. Same as OpenTouryo KckCompose.ps1 -Wsl2).
       - name: Start the IdP containers (WSL2)
         id: idp
+        if: matrix.store == 'mem'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -346,13 +366,76 @@ jobs:
               "ready : $url"
           }
 
+      # ----------------------------------------------------------------
+      # The DB for sql / ora / npg (container/Store): WSL2 docker
+      # ----------------------------------------------------------------
+      # The connection strings are read from container/Store/README.md (the E2E-only values; the same as on the local machines).
+      # The .NET Framework SqlClient connects "localhost" to the NIC address, not the loopback, and WSL2 forwards the published
+      # ports only on the loopback, so forward the NIC address to the loopback (OpenTouryo win-crossdb found it. OpenTouryo#712).
+      - name: Prepare the DB (container/Store)
+        if: matrix.store != 'mem'
+        shell: pwsh
+        working-directory: container/Store
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\0_CopyInitSql.ps1
+          foreach ($l in Get-Content 'README.md')
+          {
+              if ($l -match "^\s*\`$env:(MPAS_CONNSTR_(SQL|ODP|NPS))\s*=\s*'([^']*)'") { "$($Matches[1])=$($Matches[3])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
+          }
+          $ip = ([Net.Dns]::GetHostAddresses($env:COMPUTERNAME) | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | Select-Object -First 1).IPAddressToString
+          "NIC address : $ip"
+          foreach ($port in 1434, 1522, 5433)
+          {
+              netsh interface portproxy add v4tov4 listenaddress=$ip listenport=$port connectaddress=127.0.0.1 connectport=$port
+              if ($LASTEXITCODE -ne 0) { throw "netsh portproxy failed for $port ($LASTEXITCODE)" }
+          }
+          New-NetFirewallRule -DisplayName 'store-wsl2' -Direction Inbound -Protocol TCP -LocalPort 1434, 1522, 5433 -Action Allow | Out-Null
+          netsh interface portproxy show all
+
+      # Start only the DB of this matrix entry, and wait in the same way as test.ps1 (Wait-Store):
+      #   sqlserver ... the init script logs "done." (the DDL drops and recreates UserStore), oracle ... healthy, postgres ... the port is open.
+      # Do not use $( ) in the command for wsl: wsl runs it with the default shell, which expands $( ) before "cd" (run 45881645278).
+      - name: Start the DB (WSL2)
+        id: store
+        if: matrix.store != 'mem'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $service = @{ sql = 'sqlserver'; ora = 'oracle'; npg = 'postgres' }['${{ matrix.store }}']
+          $port    = @{ sql = 1434; ora = 1522; npg = 5433 }['${{ matrix.store }}']
+          Start-Process -FilePath wsl -ArgumentList @('-d','Ubuntu-24.04','-u','root','--','sleep','infinity') -WindowStyle Hidden | Out-Null
+          Start-Sleep -Seconds 3
+          $dir = (wsl -d Ubuntu-24.04 -u root -- wslpath -a ((Join-Path $env:GITHUB_WORKSPACE 'container/Store') -replace '\\','/')).Trim()
+          wsl -d Ubuntu-24.04 -u root -- bash -c "cd '$dir' && docker compose up -d $service"
+          if ($LASTEXITCODE -ne 0) { throw "docker compose up failed ($LASTEXITCODE)" }
+          $deadline = (Get-Date).AddMinutes(15)
+          $ready = $false
+          while ((Get-Date) -lt $deadline -and -not $ready)
+          {
+              $open = $false
+              try { $c = [Net.Sockets.TcpClient]::new(); $c.Connect('127.0.0.1', $port); $open = $c.Connected; $c.Dispose() } catch { }
+              switch ($service)
+              {
+                  'oracle'    { $h = ([string](wsl -d Ubuntu-24.04 -u root -- bash -c "cd '$dir' && docker compose ps --format '{{.Health}}' oracle")).Trim(); if ($h -eq 'healthy') { $ready = $true }; if ($h -eq 'unhealthy') { throw 'oracle became unhealthy' } }
+                  'sqlserver' { if ($open) { $log = (wsl -d Ubuntu-24.04 -u root -- bash -c "cd '$dir' && docker compose logs sqlserver" | Out-String); if ($log -match 'done\.') { $ready = $true }; if ($log -match 'did not accept logins') { throw 'sqlserver did not accept logins' } } }
+                  default     { if ($open) { $ready = $true } }
+              }
+              if (-not $ready) { Start-Sleep -Seconds 5 }
+          }
+          if (-not $ready) { throw "$service did not become ready in 15 minutes" }
+          "ready : $service (localhost:$port)"
+
       # DOCKER_HOST : the container tests (CN-*) read the IdP containers with the Windows docker CLI (see "Install Docker in WSL2").
       - name: E2E (both versions)
         shell: pwsh
         working-directory: root
         env:
-          DOCKER_HOST: tcp://localhost:2375
-        run: .\2_RunAllTests.ps1 -Launch
+          DOCKER_HOST: tcp://127.0.0.1:2375
+        run: |
+          $p = @{ Launch = $true }
+          if ('${{ matrix.store }}' -ne 'mem') { $p.UserStoreType = '${{ matrix.store }}'; $p.NoStoreContainer = $true }
+          .\2_RunAllTests.ps1 @p
 
       - name: Collect the IdP container logs
         if: always() && steps.idp.outcome != 'skipped'
@@ -363,13 +446,23 @@ jobs:
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\IdP" | Out-Null
           wsl -d Ubuntu-24.04 -u root -- bash -c "cd '$dir' && E2E_RESOURCE_DIR=/mnt/c/root/files/resource docker compose ps -a; E2E_RESOURCE_DIR=/mnt/c/root/files/resource docker compose logs --no-color" | Out-File "$env:RUNNER_TEMP\IdP\compose.log" -Encoding utf8
 
+      - name: Collect the DB container log
+        if: always() && steps.store.outcome != 'skipped'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $dir = (wsl -d Ubuntu-24.04 -u root -- wslpath -a ((Join-Path $env:GITHUB_WORKSPACE 'container/Store') -replace '\\','/')).Trim()
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\Store" | Out-Null
+          wsl -d Ubuntu-24.04 -u root -- bash -c "cd '$dir' && docker compose ps -a; docker compose logs --no-color" | Out-File "$env:RUNNER_TEMP\Store\compose.log" -Encoding utf8
+
       - name: Upload E2E results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-windows-results
+          name: e2e-windows-results-${{ matrix.store }}
           path: |
             root/programs/Tests/E2ETests/Result
             ${{ runner.temp }}\BuildLogs
             ${{ runner.temp }}\IdP
+            ${{ runner.temp }}\Store
           if-no-files-found: warn
