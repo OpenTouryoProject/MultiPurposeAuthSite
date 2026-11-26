@@ -4834,6 +4834,20 @@ The ID federation did not complete. (the error view was returned)
 > **Cookie は 1 つの入れ物で扱う**（`IdPClient` の `CookieContainer`。ブラウザと同じ）。
 > **上流と下流が同じホストでも成り立つのは、Cookie 名を分けたからである**（#250 の段階 4）。
 
+### 画面の言語（#348）
+
+**テストは、画面の文言を日本語で見分ける**（「エラーが発生しました」など。SAML・CIBA の自己テストの画面）。
+**リソースの既定（ニュートラル）は英語で、日本語は `.ja.resx`** なので、**OS の表示言語が英語の機械では、そのままだと英語の画面になって落ちる**
+（GitHub Actions のランナーで 18 件が落ちた）。**テストの足場が日本語にそろえる**（製品は変えていない）。
+
+| 版 | 画面の言語の決まり方 | そろえ方 |
+|---|---|---|
+| net48 | `Web.config` の `uiCulture="auto"`（**要求の `Accept-Language`**） | **E2E のクライアントが `Accept-Language: ja-JP` を送る**（`IdPClient.UseJapanese`。ブラウザは Playwright の `Locale = "ja-JP"`） |
+| net10.0 | **要求の言語を見ず、OS の表示言語** | **`-Launch` が起動のフック（`MtlsTestHook`）に `MPAS_TEST_UI_CULTURE=ja-JP` を渡し、既定の表示言語と書式を ja-JP にする**（渡さなければ何もしない。スタブは渡さない） |
+
+- **日本語の OS の手元では、結果は変わらない。** 日本語でない OS の開発機でも、E2E が通るようになる
+- **既に動いているサイトへ向けたとき（`-Launch` 無し）の net10.0 版は、そのサイトの OS の言語のまま**である
+
 ### 画面を駆動するテスト（#257）
 
 **サインアップ（`/Account/Register`）と管理画面（`/UsersAdmin` / `/RolesAdmin`）を、HTTP で叩いている。**

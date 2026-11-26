@@ -1,12 +1,12 @@
-# MPAS のビルド（net48・net10.0）と単体テストを windows-latest で回す（#348）。
+# MPAS のビルド（net48・net10.0）・単体テスト・E2E（両版）を、GitHub Actions で回す（#348）。
 #
 # ＜位置づけ＞
-#   手元の root\1_BuildAll.ps1（全ビルド）と、単体テスト（root/programs/Tests/UnitTests）を、そのまま回す。
-#   「何をビルドするか」の正はバッチ側、「合否の判定」の正は 1_BuildAll.ps1 にある。
+#   build       … 手元の root\1_BuildAll.ps1（全ビルド）と、単体テスト（root/programs/Tests/UnitTests）を、windows-latest でそのまま回す
+#   e2e-windows … 手元の root\2_RunAllTests.ps1 -Launch（両版の E2E）を、windows-latest で回す。ID 連携の IdP のコンテナ（container/E2E）は WSL2 の Docker
+#   「何をビルドするか」の正はバッチ側、「合否の判定」の正は 1_BuildAll.ps1・2_RunAllTests.ps1 にある。
 #   ここには判定を書かない（書くと二重管理になる。OpenTouryo の build-and-test.yml と同じ線引き）。
 #
-#   **E2E は、まだ載せていない**（#348 の段 2：Windows ランナー＋WSL2 の Docker で両版、
-#   段 3：Linux ランナーで net10.0 を 3 方言の DB で）。
+#   **Linux ランナーで net10.0 を 3 方言の DB で回すのは、まだ載せていない**（#348 の段 3）。
 #
 # ＜OpenTouryo のアセンブリ＞
 #   MPAS は OpenTouryo のアセンブリを HintPath で参照する（root/programs/OpenTouryoAssemblies。.gitignore 済み）。
@@ -121,3 +121,255 @@ jobs:
         run: |
           Write-Host "::error::Vulnerable packages were found (NU1901-NU1904). See the 'Build all' step."
           exit 1
+
+  # --------------------------------------------------------------------
+  # E2E の両版（#348 の段 2）：Windows ランナー
+  # --------------------------------------------------------------------
+  # 手元の 2_RunAllTests.ps1 -Launch と同じ。net10.0 版は Kestrel（44300）、net48 版は IIS Express（44302）で起動する。
+  # 判定は 2_RunAllTests.ps1 が行う（ここには書かない）。
+  # **build とは別の Windows ランナーで、自分で建てる**（IIS Express が動かすサイトのフォルダは大きいので、成果物では渡さない。OpenTouryo の win-* と同じ）。
+  #
+  # ＜設定ファイル＞
+  #   雛形（_appsettings.json・_app.config）から作り、E2E に要る 4 つ（管理者の UID・パスワード、テスト利用者のパスワード、SaltParameter）だけを、
+  #   CI 用の値に替える。**値はテスト専用で、秘密ではない**（ランナーは使い捨て）。E2E のテストも、同じ設定ファイルを読む。
+  #   証明書などは C:\root\files\resource\... を指すので、そこに OpenTouryo と MPAS のリソースを重ねて置く（手順「Set up C:\root」）。
+  #
+  # ＜証明書＞
+  #   Kestrel は開発用証明書（dotnet dev-certs https）で待ち受ける。IIS Express は、ランナーの既存の証明書がハンドシェイクで切られるので
+  #   （OpenTouryo#712 の実験）、自己署名の証明書（localhost）を 44302 に登録し直す。どちらも Windows の信頼（LocalMachine\Root）に入れる
+  #   （E2E のクライアントは検証を飛ばすが、サイトが自分や別のサイトを呼ぶ口は検証する）。
+  e2e-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      OTR_REPO: OpenTouryoProject/OpenTouryo
+      OTR_REF: 081aadfc9c5c93025595ca377564a54377539d4c
+      CI_ADMIN_UID: 'administrator@example.com'
+      CI_ADMIN_PWD: 'Ci-Admin-Pwd-1!'
+      CI_TEST_USER_PWD: 'Ci-Test-User-Pwd-1!'
+      CI_SALT: 'ci-salt-for-e2e-only-0123456789'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout OpenTouryo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.OTR_REPO }}
+          ref: ${{ env.OTR_REF }}
+          path: OpenTouryo
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # **C:\root\files\resource は、OpenTouryo のリソースに MPAS のリソースを重ねたフォルダにする**（手元の構成を写す）。
+      #   net10.0 版の雛形（_appsettings.json）の FxLog4NetConfFile・FxXMLSPDefinition・FxXMLMSGDefinition が、
+      #   MPAS に無い OpenTouryo のリソース（resource/Log・resource/XML）を指しているため（回避。雛形を直したら外す。#434）。
+      #   ジャンクションではなく写しにする（OpenTouryo のリソースと合わせるため）。
+      - name: Set up C:\root
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dst = 'C:\root\files\resource'
+          New-Item -ItemType Directory -Force $dst | Out-Null
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'OpenTouryo\root\files\resource\*') $dst -Recurse -Force
+          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'root\files\resource\*') $dst -Recurse -Force
+          foreach ($p in 'X509\SHA256RSA_Server.pfx', 'MultiPurposeAuthSite\JwkSet.json', 'Log\SampleLogConf.xml', 'Xml\MSGDefinition.xml', 'Xml\SPDefinition.xml')
+          {
+              if (-not (Test-Path (Join-Path $dst $p))) { throw "$p is not found under $dst." }
+          }
+          Get-ChildItem $dst -Directory | Select-Object -ExpandProperty Name
+
+      # Replace only the 4 values that the E2E needs; the others stay as the templates (proxy / SMTP / Twilio / external logins are not used).
+      - name: Prepare the configuration files from the templates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vals = [ordered]@{
+              AdministratorUID = $env:CI_ADMIN_UID
+              AdministratorPWD = $env:CI_ADMIN_PWD
+              TestUserPWD      = $env:CI_TEST_USER_PWD
+              SaltParameter    = $env:CI_SALT
+          }
+          $core = Join-Path $env:GITHUB_WORKSPACE 'root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore'
+          $fx   = Join-Path $env:GITHUB_WORKSPACE 'root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite'
+          $json = [IO.File]::ReadAllText((Join-Path $core '_appsettings.json'))
+          $xml  = [IO.File]::ReadAllText((Join-Path $fx '_app.config'))
+          foreach ($k in $vals.Keys)
+          {
+              $v = $vals[$k]
+              $re1 = '("' + $k + '"\s*:\s*")\[[^\]"]*\](")'
+              $re2 = '(key="' + $k + '"\s+value=")\[[^\]"]*\](")'
+              if (-not ([regex]::IsMatch($json, $re1))) { throw "$k (placeholder) is not found in _appsettings.json" }
+              if (-not ([regex]::IsMatch($xml, $re2)))  { throw "$k (placeholder) is not found in _app.config" }
+              $json = [regex]::Replace($json, $re1, { param($m) $m.Groups[1].Value + $v + $m.Groups[2].Value })
+              $xml  = [regex]::Replace($xml,  $re2, { param($m) $m.Groups[1].Value + $v + $m.Groups[2].Value })
+          }
+          [IO.File]::WriteAllText((Join-Path $core 'appsettings.json'), $json, [Text.UTF8Encoding]::new($false))
+          [IO.File]::WriteAllText((Join-Path $fx 'app.config'), $xml, [Text.UTF8Encoding]::new($true))
+          Write-Host "appsettings.json and app.config were created from the templates."
+
+      - name: Build all
+        shell: pwsh
+        working-directory: root
+        run: .\1_BuildAll.ps1 -OpenTouryoDir "$env:GITHUB_WORKSPACE\OpenTouryo" -OutputDir "$env:RUNNER_TEMP\BuildLogs"
+
+      # net48 uses the ASP.NET state service (Web.config: sessionState mode="StateServer"). It is Stopped (Manual) on the runner.
+      - name: Start ASP.NET state service
+        shell: pwsh
+        run: |
+          Start-Service aspnet_state
+          Get-Service aspnet_state | Format-Table Name, Status, StartType -AutoSize
+
+      # dotnet dev-certs https --trust shows a dialog on Windows, so trust the certificates by adding them to LocalMachine\Root.
+      - name: Certificates (Kestrel dev cert and IIS Express 44302)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet dev-certs https
+          $pfx = Join-Path $env:RUNNER_TEMP 'devcert.pfx'
+          dotnet dev-certs https --export-path $pfx --password 'ci-test' --format Pfx
+          $dev = [Security.Cryptography.X509Certificates.X509Certificate2]::new($pfx, 'ci-test')
+          "dev cert : $($dev.Subject) $($dev.Thumbprint)"
+          $root = [Security.Cryptography.X509Certificates.X509Store]::new('Root', 'LocalMachine')
+          $root.Open('ReadWrite')
+          $root.Add([Security.Cryptography.X509Certificates.X509Certificate2]::new($dev.RawData))
+          $iisCert = New-SelfSignedCertificate -DnsName 'localhost' -CertStoreLocation 'Cert:\LocalMachine\My' -NotAfter (Get-Date).AddYears(1) -FriendlyName 'ci-iisexpress-localhost'
+          $root.Add([Security.Cryptography.X509Certificates.X509Certificate2]::new($iisCert.RawData))
+          $root.Close()
+          "IIS Express cert : $($iisCert.Thumbprint)"
+          netsh http delete sslcert ipport=0.0.0.0:44302 | Out-Null
+          netsh http add sslcert ipport=0.0.0.0:44302 certhash=$($iisCert.Thumbprint) appid='{214124cd-d05b-4309-9af9-9caa44b2b74a}'
+          if ($LASTEXITCODE -ne 0) { throw "netsh http add sslcert failed for 44302 ($LASTEXITCODE)" }
+
+      # ----------------------------------------------------------------
+      # ID 連携の IdP のコンテナ（container/E2E）：WSL2 の Docker（OpenTouryo の win-* と同じ作り。OpenTouryo#712）
+      # ----------------------------------------------------------------
+      - name: Install WSL2 and Ubuntu
+        shell: pwsh
+        run: |
+          wsl --update --web-download
+          wsl --set-default-version 2
+          wsl --install -d Ubuntu-24.04 --no-launch --web-download
+          wsl --set-default Ubuntu-24.04
+          wsl -d Ubuntu-24.04 -u root -- bash -c "uname -r; nproc; free -m"
+
+      # Same as OpenTouryo win-crossdb (systemd + docker.io; the Azure Ubuntu mirror; IPv4 and retries for apt; retry once when wsl hangs).
+      - name: Install Docker in WSL2
+        timeout-minutes: 25
+        shell: pwsh
+        run: |
+          $script = @'
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
+          printf '[boot]\nsystemd=true\n' > /etc/wsl.conf
+          sed -i 's|http://archive.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
+          APT='-o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30'
+          echo "== apt-get update : $(date)"
+          apt-get $APT update
+          echo "== apt-get install : $(date)"
+          apt-get $APT install -y docker.io docker-compose-v2
+          echo "== done : $(date)"
+          systemctl enable docker || true
+          mkdir -p /etc/systemd/system/docker.service.d
+          printf '[Service]\nExecStart=\nExecStart=/usr/bin/dockerd -H fd:// -H tcp://127.0.0.1:2375 --containerd=/run/containerd/containerd.sock\n' > /etc/systemd/system/docker.service.d/tcp.conf
+          '@
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP/docker-install.sh", $script.Replace("`r`n", "`n"))
+          $unix = (wsl -d Ubuntu-24.04 -u root -- wslpath -a ($env:RUNNER_TEMP -replace '\\','/')).Trim()
+          $done = $false
+          foreach ($attempt in 1, 2)
+          {
+              $p = Start-Process -FilePath wsl -ArgumentList @('-d','Ubuntu-24.04','-u','root','--','bash',"$unix/docker-install.sh") -PassThru -NoNewWindow
+              if ($p.WaitForExit(420000) -and $p.ExitCode -eq 0) { $done = $true; break }
+              "attempt $attempt failed (exited: $($p.HasExited))"
+              if (-not $p.HasExited) { try { $p.Kill($true) } catch { } }
+              wsl --shutdown
+              Start-Sleep -Seconds 5
+          }
+          if (-not $done) { throw 'docker could not be installed (twice)' }
+          wsl --terminate Ubuntu-24.04
+          Start-Sleep -Seconds 5
+          $active = $false
+          for ($i = 0; $i -lt 20; $i++)
+          {
+              $s = (wsl -d Ubuntu-24.04 -u root -- bash -c "systemctl is-active docker" 2>$null)
+              "docker : $s"
+              if ($s -eq 'active') { $active = $true; break }
+              Start-Sleep -Seconds 3
+          }
+          if (-not $active) { throw 'docker in WSL2 did not start' }
+          wsl -d Ubuntu-24.04 -u root -- docker version --format '{{.Server.Version}}'
+          # The E2E container tests read the running containers with the Windows docker CLI (docker ps / docker inspect),
+          # so let it reach the docker in WSL2 over the loopback TCP (like Rancher Desktop on the local machines).
+          $env:DOCKER_HOST = 'tcp://localhost:2375'
+          docker version --format 'Windows CLI {{.Client.Version}} -> server {{.Server.Version}} ({{.Server.Os}})'
+          if ($LASTEXITCODE -ne 0) { throw 'The Windows docker CLI cannot reach the docker in WSL2 (tcp://localhost:2375)' }
+
+      # Publish MPAS (net10.0) for the IdP images and export the dev cert made in "Certificates" (trusted in LocalMachine\Root).
+      - name: Publish the IdP (container/E2E)
+        shell: pwsh
+        working-directory: container/E2E
+        run: .\1_PublishIdP.ps1
+
+      # docker compose in WSL2. The resources are mounted from /mnt/c/root/files/resource (E2E_RESOURCE_DIR in docker-compose.yml).
+      # Keep a process in WSL so that the VM does not stop when idle (the containers would get SIGTERM. Same as OpenTouryo KckCompose.ps1 -Wsl2).
+      - name: Start the IdP containers (WSL2)
+        id: idp
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Start-Process -FilePath wsl -ArgumentList @('-d','Ubuntu-24.04','-u','root','--','sleep','infinity') -WindowStyle Hidden | Out-Null
+          Start-Sleep -Seconds 3
+          $dir = (wsl -d Ubuntu-24.04 -u root -- wslpath -a ((Join-Path $env:GITHUB_WORKSPACE 'container/E2E') -replace '\\','/')).Trim()
+          wsl -d Ubuntu-24.04 -u root -- bash -c "cd '$dir' && E2E_RESOURCE_DIR=/mnt/c/root/files/resource docker compose up -d --build"
+          if ($LASTEXITCODE -ne 0) { throw "docker compose up failed ($LASTEXITCODE)" }
+          foreach ($url in 'https://localhost:44301/.well-known/openid-configuration', 'https://localhost:44303/.well-known/openid-configuration', 'https://localhost:44304/.well-known/openid-configuration')
+          {
+              $ok = $false
+              for ($i = 0; $i -lt 36; $i++)
+              {
+                  try
+                  {
+                      $r = Invoke-WebRequest -Uri $url -SkipCertificateCheck -TimeoutSec 5
+                      if ($r.StatusCode -eq 200) { $ok = $true; break }
+                  }
+                  catch { }
+                  Start-Sleep -Seconds 5
+              }
+              if (-not $ok) { throw "The IdP did not start: $url" }
+              "ready : $url"
+          }
+
+      # DOCKER_HOST : the container tests (CN-*) read the IdP containers with the Windows docker CLI (see "Install Docker in WSL2").
+      - name: E2E (both versions)
+        shell: pwsh
+        working-directory: root
+        env:
+          DOCKER_HOST: tcp://localhost:2375
+        run: .\2_RunAllTests.ps1 -Launch
+
+      - name: Collect the IdP container logs
+        if: always() && steps.idp.outcome != 'skipped'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $dir = (wsl -d Ubuntu-24.04 -u root -- wslpath -a ((Join-Path $env:GITHUB_WORKSPACE 'container/E2E') -replace '\\','/')).Trim()
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\IdP" | Out-Null
+          wsl -d Ubuntu-24.04 -u root -- bash -c "cd '$dir' && E2E_RESOURCE_DIR=/mnt/c/root/files/resource docker compose ps -a; E2E_RESOURCE_DIR=/mnt/c/root/files/resource docker compose logs --no-color" | Out-File "$env:RUNNER_TEMP\IdP\compose.log" -Encoding utf8
+
+      - name: Upload E2E results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-windows-results
+          path: |
+            root/programs/Tests/E2ETests/Result
+            ${{ runner.temp }}\BuildLogs
+            ${{ runner.temp }}\IdP
+          if-no-files-found: warn

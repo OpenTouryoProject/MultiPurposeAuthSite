@@ -1267,6 +1267,12 @@ public static class MpasTestTls
             $env:DOTNET_STARTUP_HOOKS = $mtlsHook.FullName
         }
 
+        # **表示の言語を ja-JP にする（#348）。** 同じフック（MtlsTestHook）が読む。
+        #   net10.0 版は要求の言語を見ず、OS の表示言語で画面を出す。**E2E は画面の文言を日本語で見分ける**ので、
+        #   英語の OS（GitHub Actions のランナー）でも日本語にそろえる（net48 版は、テストが Accept-Language: ja-JP を送る）。
+        #   手元が日本語の OS なら、結果は変わらない。
+        $env:MPAS_TEST_UI_CULTURE = 'ja-JP'
+
         if ($Coverage) {
             # **カバレッジを取る**（#294）。前回の分は消し、ツールを揃えてから包んで起動する。
             $coverageDir = Join-Path $LogDir 'coverage'
@@ -1308,6 +1314,7 @@ public static class MpasTestTls
         }
 
         Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_TEST_UI_CULTURE -ErrorAction SilentlyContinue
 
         Wait-Site -Name 'net10.0 版' -SiteUrl $Url -Process $core `
             -OutLog $coreOut -ErrLog $coreErr
@@ -1608,6 +1615,7 @@ finally {
         Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
         Remove-Item Env:\OAuth2RefreshTokenExpireTimeSpanFromDays -ErrorAction SilentlyContinue
         Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_TEST_UI_CULTURE -ErrorAction SilentlyContinue
     }
 
     # コンソールの文字コードを戻す（この実行の間だけ UTF-8 にしている）

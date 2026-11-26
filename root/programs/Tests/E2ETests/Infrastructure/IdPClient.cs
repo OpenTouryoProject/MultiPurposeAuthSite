@@ -61,6 +61,7 @@
 //*  2026/11/21  玄人 幸道         サインインの画面から ReturnUrl で戻る SignInViaSignInPageAsync を足した（#413）
 //*  2026/11/23  玄人 幸道         PostWithCertificateAsync に、要求ヘッダ（DPoP など）を足せるようにした（#423）
 //*  2026/11/24  玄人 幸道         DPoP の証明を添えてトークン エンドポイントを呼ぶ TokenWithDPoPAsync を足した（#429）
+//*  2026/11/27  玄人 幸道         画面の言語を日本語にする（Accept-Language: ja-JP。英語の OS の GitHub Actions のランナーでも、画面の文言で見分けるテストが通るように。#348）
 //**********************************************************************************
 
 using System;
@@ -205,6 +206,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             this._http = new HttpClient(this._handler);
             this._http.Timeout = TimeSpan.FromSeconds(60);
+            IdPClient.UseJapanese(this._http);
+        }
+
+        /// <summary>画面の言語を日本語にする（Accept-Language: ja-JP。#348）</summary>
+        /// <param name="http">HttpClient</param>
+        /// <remarks>
+        /// **テストは画面の文言を日本語で見分ける**（「エラーが発生しました」など）。リソースの既定（ニュートラル）は英語。
+        /// **net48 版は `uiCulture="auto"` で、要求の Accept-Language に従う**ので、OS の表示言語が英語の機械
+        /// （GitHub Actions のランナー）でも日本語にそろえる。**net10.0 版は要求の言語を見ない**ので、
+        /// test.ps1 が起動のフック（MtlsTestHook。環境変数 MPAS_TEST_UI_CULTURE）で表示の言語を ja-JP にする。
+        /// </remarks>
+        private static void UseJapanese(HttpClient http)
+        {
+            http.DefaultRequestHeaders.AcceptLanguage.ParseAdd("ja-JP");
         }
 
         /// <summary>Dispose</summary>
@@ -326,6 +341,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             using (HttpClient http = new HttpClient(this._handler, false))
             {
                 http.Timeout = timeout;
+                IdPClient.UseJapanese(http);
                 return await http.PostAsync(this.Absolute(pathOrUrl), new FormUrlEncodedContent(form));
             }
         }

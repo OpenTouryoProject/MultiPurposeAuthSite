@@ -407,8 +407,8 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 
 ## 11. CI（GitHub Actions。#348）
 
-**`.github/workflows/build-and-test.yml` が、`windows-latest` で、本書の全ビルドと単体テストを回す。**
-判定はここに書かず、`1_BuildAll.ps1` と `dotnet test` の終了コードで決める（OpenTouryo の `build-and-test.yml` と同じ線引き）。
+**`.github/workflows/build-and-test.yml` が、`windows-latest` で、本書の全ビルドと単体テスト（ジョブ `build`）、両版の E2E（ジョブ `e2e-windows`）を回す。**
+判定はここに書かず、`1_BuildAll.ps1`・`dotnet test`・`2_RunAllTests.ps1` の終了コードで決める（OpenTouryo の `build-and-test.yml` と同じ線引き）。
 
 | 項目 | 内容 |
 |---|---|
@@ -418,8 +418,21 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | 監査の警告 | 終了コード `3`。**PR では注釈とジョブのまとめに留め、週 1 回・手動では最後に落とす**。見つけたら、その場で直す（`AGENTS.md`「依存パッケージの脆弱性を見つけたら」） |
 | 単体テスト | `Tests/UnitTests` を `dotnet test` で回す（**`2_RunAllTests.ps1` には入っていない**）。ビルドが警告で落ちても回す |
 | 残すもの | ビルドのログ（`build-logs`）と単体テストの TRX（`unit-test-results`）。成果物として、失敗したときも残す |
-| 設定ファイル | 要らない（ビルドは雛形が無くても通る。10 節「設定ファイルが無いと実行できない」） |
+| 設定ファイル | ビルドには要らない（雛形が無くても通る。10 節「設定ファイルが無いと実行できない」）。E2E は下の表 |
 
-- **E2E はまだ載せていない**（#348 の段 2・段 3）
+**E2E（ジョブ `e2e-windows`）は、`build` とは別のランナーで、自分で建ててから `2_RunAllTests.ps1 -Launch` を回す**（IIS Express が動かすサイトのフォルダは大きいので、成果物では渡さない）。
+手元と同じ結果（成功・失敗・Skip の数）になることを確かめた（#348）。
+
+| 項目 | 内容 |
+|---|---|
+| 設定ファイル | **雛形から作り、E2E に要る 4 つだけを CI 用の値に替える**（`AdministratorUID`・`AdministratorPWD`・`TestUserPWD`・`SaltParameter`。テスト専用で秘密ではない）。E2E のテストも同じ設定ファイルを読む |
+| `C:\root\files\resource` | **OpenTouryo のリソースに MPAS のリソースを重ねて置く**（手元の構成を写す）。net10.0 版の雛形が OpenTouryo のリソースを指しているための回避（#434） |
+| 証明書 | Kestrel は開発用証明書、IIS Express は自己署名の証明書を 44302 に登録し直す（ランナーの既存の証明書はハンドシェイクで切られる。OpenTouryo#712）。どちらも `LocalMachine\Root` に入れる |
+| サービス | `aspnet_state` を起動する（net48 版のセッション） |
+| 画面の言語 | **ランナーの表示言語は英語で、変えられない。** テストの足場が日本語にそろえる（[`14_TESTING.md`](14_TESTING.md) 5 節「画面の言語」） |
+| ID 連携のコンテナ | **WSL2 の Ubuntu に Docker を入れて動かす**（`container/E2E`。リソースの場所は `E2E_RESOURCE_DIR`）。**Windows の `docker` から、WSL2 の Docker に TCP（`127.0.0.1:2375`）でつなぐ**（コンテナのテストが `docker inspect` で読むため。手元の Rancher Desktop と同じ形） |
+| 残すもの | E2E の結果（`Result` の下）・ビルドのログ・コンテナのログ（`e2e-windows-results`） |
+
+- **Linux ランナーで net10.0 を 3 方言の DB で回すのは、まだ載せていない**（#348 の段 3）
 - **アクションは SHA で固定し、`run:` の中は ASCII だけにする**（`AGENTS.md`「GitHub Actions を書き足すとき」）
 - 必須のチェックにするかは、人が決める（[`QUALITY.md`](../QUALITY.md) の「このリポジトリの値」）
