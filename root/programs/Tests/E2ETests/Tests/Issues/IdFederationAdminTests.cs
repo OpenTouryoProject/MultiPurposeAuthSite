@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/14  玄人 幸道         新規（#292 の段階 2）
 //*  2026/10/14  玄人 幸道         RT-297.2（秘密の往復）を足した（#297）
+//*  2026/11/27  玄人 幸道         登録する証明書・.pfx のパスを直書きせず、構成ファイルから作る（AppConfig.X509Path。#435）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -132,7 +133,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         { "ClientID", "e2e0rt292000000000000000000000z1" },
                         { "MetadataUrl", "https://rt292.e2e.example/samlmetadata" },
                         { "SsoEndpoint", "https://rt292.e2e.example/saml2request" },
-                        { "CerFilePath", "C:/root/files/resource/X509/SHA256RSA_Server.cer" }
+                        { "CerFilePath", client.Config.X509Path("SHA256RSA_Server.cer") }
                     });
 
                 bool created = create.StatusCode == HttpStatusCode.Found
@@ -257,7 +258,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         { "ClientID", "e2e0rt292000000000000000000000z1" },
                         { "MetadataUrl", "https://rt292.e2e.example/samlmetadata" },
                         { "SsoEndpoint", "https://rt292.e2e.example/saml2request" },
-                        { "CerFilePath", "C:/root/files/resource/X509/SHA256RSA_Server.cer" }
+                        { "CerFilePath", client.Config.X509Path("SHA256RSA_Server.cer") }
                     });
 
                 Assert.True(
@@ -511,7 +512,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 //  **パスワードはテストの中だけの値**
                 //    （**配備の `.pfx` のパスワードをテストに持たせない**。`14_TESTING.md` 9 節）。
                 string pfxPassword = "E2E_rt292b_" + Saml2.NewId().Replace("_", "");
-                const string pfxPath = "C:/root/files/resource/X509/SHA256RSA_Client.pfx";
+                string pfxPath = client.Config.X509Path("SHA256RSA_Client.pfx");
 
                 HttpResponseMessage create = await IdFederationAdmin.CreateAsync(
                     client, IdFederationAdminTests.SigningKey, "saml2",
@@ -521,7 +522,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         { "ClientID", "e2e0rt292b00000000000000000000z3" },
                         { "MetadataUrl", "https://rt292b.e2e.example/samlmetadata" },
                         { "SsoEndpoint", "https://rt292b.e2e.example/saml2request" },
-                        { "CerFilePath", "C:/root/files/resource/X509/SHA256RSA_Server.cer" },
+                        { "CerFilePath", client.Config.X509Path("SHA256RSA_Server.cer") },
                         { "SigningPfxFilePath", pfxPath },
                         { "SigningPfxPassword", pfxPassword }
                     });

@@ -95,6 +95,7 @@
 
 .PARAMETER NoNetFx
     net48 版を起動しない。その分のテストは Skip される。
+    **Linux（PowerShell 7 の $IsLinux）では、付けなくても立つ**（net48 版・IIS Express は Windows だけ。#435）。
 
 .PARAMETER NetFxMtls
     net48 版でも mTLS のテスト（FA-6）を回す（#226）。**準備が要る**（14_TESTING.md「net48 版の mTLS」）。
@@ -155,6 +156,7 @@
     出力は LogDir\coverage（report\index.html と report\Summary.txt）。
     **XPlat Code Coverage（coverlet.collector）では、サイトは測れない**
     （dotnet test の中で読み込まれたコードしか数えない。サイトは別のプロセスである）。
+    **Linux では使えない**（起動に cmd.exe、子のプロセスを辿るのに Win32_Process を使う。#435）。
 
 .PARAMETER LogDir
     サイトの起動ログ（MpasSite.*.log / IisExpress.*.log）の出力先。
@@ -224,6 +226,24 @@ $ErrorActionPreference = 'Stop'
 
 if (-not $LogDir) {
     $LogDir = Join-Path $PSScriptRoot 'E2ETests\Result'
+}
+
+# ------------------------------------------------------------------
+# Linux で回す（#435）
+# ------------------------------------------------------------------
+# **net10.0 版だけを起動する。** net48 版（IIS Express）は Windows だけなので、その分は Skip になる。
+#   **$IsLinux は PowerShell 7 だけの変数**で、5.1 では $null（＝ Windows として振る舞う）。
+#   **パスは Join-Path で作る**（Linux の pwsh は、子の `\` を `/` に直す。SDK のコンテナの pwsh で確かめた）。
+$script:OnLinux = [bool] $IsLinux
+
+if ($script:OnLinux) {
+    if ($Coverage) {
+        throw '-Coverage は Linux では使えません（起動に cmd.exe、子のプロセスを辿るのに Win32_Process を使う）。'
+    }
+    if ($Launch -and -not $NoNetFx) {
+        Write-Host 'Linux なので、net48 版は起動しません（その分は Skip）。' -ForegroundColor Yellow
+        $NoNetFx = $true
+    }
 }
 
 # ------------------------------------------------------------------
@@ -485,8 +505,13 @@ $programs = Split-Path -Parent $PSScriptRoot
 $csproj   = Join-Path $PSScriptRoot 'E2ETests\E2ETests.csproj'
 $coreDir  = Join-Path $programs 'MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore'
 $netFxDir = Join-Path $programs 'MultiPurposeAuthSite\MultiPurposeAuthSite'
-$iisExe   = Join-Path $env:ProgramFiles 'IIS Express\iisexpress.exe'
-$iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWebServer\applicationhost.config'
+#  **Linux では $env:ProgramFiles が無い**（Join-Path が null で落ちる）。net48 版は起動しないので、空にしておく（#435）
+$iisExe   = $null
+$iisTmpl  = $null
+if ($env:ProgramFiles) {
+    $iisExe   = Join-Path $env:ProgramFiles 'IIS Express\iisexpress.exe'
+    $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWebServer\applicationhost.config'
+}
 
 # ------------------------------------------------------------------
 # 起動を待つ
@@ -518,6 +543,28 @@ $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWe
 #   **雛形の既定は空**（＝ software_statement を受け付けない）なので、
 #   **テストでは、ここで渡して有効にする。**
 #   **渡さないと RT-307.18 〜 .21 は Skip になる**（-Launch でないときも同じ）。
+#
+#   **証明書のフォルダは、net10.0 版の構成ファイルの RsaCerFilePath（空なら SpRp_RsaCerFilePath）が在るフォルダ**（#435）。
+#   **Linux では C:/root/files/resource/X509 ではない**（New-E2ESettings.ps1 -ResourceDir で置き換える）ので、直書きしない。
+#   **テストの AppConfig.X509Path と同じ決め方**（区切りは `/`）。構成ファイルが読めなければ、以前の直書きの値に倒す。
+function Get-X509Dir
+{
+    $cfg = Join-Path $coreDir 'appsettings.json'
+    if (Test-Path $cfg) {
+        foreach ($key in 'RsaCerFilePath', 'SpRp_RsaCerFilePath') {
+            foreach ($line in [IO.File]::ReadAllLines($cfg)) {
+                if ($line -match '^\s*//') { continue }
+                if ($line -match ('"' + $key + '"\s*:\s*"([^"]+)"')) {
+                    $p = $Matches[1].Replace('\', '/')
+                    return $p.Substring(0, $p.LastIndexOf('/'))
+                }
+            }
+        }
+    }
+    return 'C:/root/files/resource/X509'
+}
+$script:X509Dir = Get-X509Dir
+
 $script:SoftwareStatementIssuerKey = 'e2e_vendor'
 $script:SoftwareStatementIssuer    = 'https://vendor.opentouryo.com'
 # **証明書は 2 本渡す**（#307 の段階 6 の (D)）。
@@ -529,8 +576,8 @@ $script:SoftwareStatementIssuer    = 'https://vendor.opentouryo.com'
 #   **`SHA256RSAClientCert.cer` は使えない** — **リポジトリには在るが、
 #   配備側（C:/root/files/resource/X509）に配られていない**（実測で踏んだ）。
 #   **サイトが読むのは配備側**なので、**配られているものから選ぶこと。**
-$script:SoftwareStatementCer       = 'C:/root/files/resource/X509/SHA256RSA_Client.cer ' `
-    + 'C:/root/files/resource/X509/SHA256RSA_Server.cer'
+$script:SoftwareStatementCer       = ($script:X509Dir + '/SHA256RSA_Client.cer ') `
+    + ($script:X509Dir + '/SHA256RSA_Server.cer')
 $script:SoftwareStatementAlg       = 'RS256'
 
 # **発行者に許す範囲**（#307 の段階 6 の (A)）。
@@ -674,7 +721,7 @@ function Set-IdFederationEnv
     #   **上流は別の鍵を使う**（#293 の段階 1）ので、**上流の .cer を指す。**
     #   **通常は discovery から引く**ので、これは引けなかったときの倒れ先である。
     $env:IdFederationOidcDiscoveryUrl = 'https://localhost:44301/.well-known/openid-configuration'
-    $env:IdFederationOidcCerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
+    $env:IdFederationOidcCerFilePath = $script:X509Dir + '/SHA256RSA_Upstream.cer'
 
     # **SAML2 の ID 連携**（#286 の段階 2）。
     #   **上流の SSO の口**と、**自分の ACS**（上流の redirect_uri_saml に登録した値）と、
@@ -685,7 +732,7 @@ function Set-IdFederationEnv
     $env:IdFederationSaml2RequestEndpoint = 'https://localhost:44301/saml2request'
     $env:IdFederationSaml2ResponseEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationAssertionConsumerService'
     $env:IdFederationSaml2IssuerId = 'https://ssoauth.opentouryo.com'
-    $env:IdFederationSaml2CerFilePath = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
+    $env:IdFederationSaml2CerFilePath = $script:X509Dir + '/SHA256RSA_Upstream.cer'
 
     # **user store の秘密を暗号化する鍵**（#297）。
     #   **既定の通しを「暗号化した状態」で回す**（`RT-297.*` が、その往復を測る）。
@@ -768,7 +815,7 @@ function Set-IdFederationEnv
     # **退役させる途中の署名証明書**（#292 の段階 3）。
     #   **/samlmetadata が 2 本広告する状態を作る**（`SA-2.2` が、それを測る）。
     #   **値は「いま署名に使っていない証明書」**でよい（広告するだけなので）。
-    $env:PreviousSigningCerFilePaths = 'C:/root/files/resource/X509/SHA256RSA_Upstream.cer'
+    $env:PreviousSigningCerFilePaths = $script:X509Dir + '/SHA256RSA_Upstream.cer'
 }
 
 # ------------------------------------------------------------------
@@ -1240,9 +1287,11 @@ public static class MpasTestTls
         # **dotnet run ではなく、ビルド済みの exe を直接起動する。**
         # dotnet run はアプリを子プロセスとして起動するため、
         # 親（dotnet）を止めてもアプリが残り、次回の起動がポートを奪われる。
-        $coreExe = Get-ChildItem -Recurse -ErrorAction SilentlyContinue `
+        #   **Linux では拡張子が無い**（apphost。#435）。
+        $coreExeName = if ($script:OnLinux) { 'MultiPurposeAuthSite' } else { 'MultiPurposeAuthSite.exe' }
+        $coreExe = Get-ChildItem -Recurse -File -ErrorAction SilentlyContinue `
             -Path (Join-Path $coreDir "bin\$Configuration") `
-            -Filter 'MultiPurposeAuthSite.exe' | Select-Object -First 1
+            -Filter $coreExeName | Select-Object -First 1
 
         if ($null -eq $coreExe) {
             throw "net10.0 版の実行ファイルが見つかりません : $coreDir\bin\$Configuration"
@@ -1307,9 +1356,12 @@ public static class MpasTestTls
                 -WorkingDirectory $coreDir -OutLog $coreOut -ErrLog $coreErr
         }
         else {
+            #  **-WindowStyle は Linux の pwsh では使えない**（パラメタが無いと例外になる。#435）
+            $hidden = @{}
+            if (-not $script:OnLinux) { $hidden['WindowStyle'] = 'Hidden' }
             $core = Start-Process -FilePath $coreExe.FullName `
                 -ArgumentList @('--urls', $Url) `
-                -WorkingDirectory $coreDir -PassThru -WindowStyle Hidden `
+                -WorkingDirectory $coreDir -PassThru @hidden `
                 -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr
         }
 
