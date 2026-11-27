@@ -49,6 +49,7 @@
      2026/11/23  玄人 幸道         新規（#417）
      2026/11/23  玄人 幸道         材料の形に、エラー画面・確認の画面の文言を入れた。基準だけに在る行と、同じキーの重なりを見るようにした（#417）
      2026/11/23  玄人 幸道         画面の表が長いバリアントで折り返して読めないので、プランごとの数の表と、1 件ずつ縦に並べる形にし、基準と同じものは出さないようにした（-All で出す。#417）
+     2026/11/27  玄人 幸道         回し直しの報告書（<プラン>-retry<N>.zip）を重ね、同じモジュールのログを置き換えて読むようにした（#439）
 #>
 [CmdletBinding()]
 param(
@@ -310,25 +311,47 @@ else
 
 New-Item -ItemType Directory -Force $reviewDir | Out-Null
 
+function Get-LogKey($json)
+{
+    # モジュールのログの「モジュール＋バリアント」（Read-ModuleLog と同じ作り方）。回し直しの報告書で置き換えるときのキー
+    $v = @($json.results) | Where-Object { $_.PSObject.Properties['variant'] -and $_.variant } | Select-Object -First 1
+    $variant = if ($v) { (@($v.variant.PSObject.Properties | ForEach-Object { '{0}={1}' -f $_.Name, $_.Value }) -join ',') } else { '' }
+    return ([string]$json.testInfo.testName + '|' + $variant)
+}
+
 $allReviews = @()
 foreach ($zf in $zips)
 {
     $planName = $zf.Name -replace '-report\.zip$', ''
-    $rows = @()
-    $z = [IO.Compression.ZipFile]::OpenRead($zf.FullName)
-    try
+
+    # **回し直しの報告書（<プラン>-retry<N>.zip。RunTestPlan.ps1 -Module）が在れば、番号の順に重ね、同じモジュール・同じバリアントのログを置き換える**（#439）。
+    #   自動操作のぶれで落ちた 1 回目のログ（サインインの画面で止まったもの）で、REVIEW を比べないため
+    $sources = @($zf) + @(Get-ChildItem $outDir -Filter ('{0}-retry*.zip' -f $planName) -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match ('^' + [regex]::Escape($planName) + '-retry(\d+)\.zip$') } |
+        Sort-Object { [int](($_.Name -replace '^.*-retry', '') -replace '\.zip$', '') })
+    $byModule = [ordered]@{}
+    foreach ($src in $sources)
     {
-        foreach ($entry in $z.Entries | Where-Object { $_.FullName -like 'test-log-*.json' })
+        $occur = @{}
+        $z = [IO.Compression.ZipFile]::OpenRead($src.FullName)
+        try
         {
-            $reader = New-Object IO.StreamReader($entry.Open(), [Text.Encoding]::UTF8)
-            try { $text = $reader.ReadToEnd() } finally { $reader.Close() }
-            $json = $text | ConvertFrom-Json
-            # 秘密を含む項目を、読む前に落とす
-            foreach ($e in @($json.results)) { foreach ($s in $secretFields) { if ($e.PSObject.Properties[$s]) { $e.PSObject.Properties.Remove($s) } } }
-            $rows += @(Read-ModuleLog $json $planName $TextLength)
+            foreach ($entry in $z.Entries | Where-Object { $_.FullName -like 'test-log-*.json' })
+            {
+                $reader = New-Object IO.StreamReader($entry.Open(), [Text.Encoding]::UTF8)
+                try { $text = $reader.ReadToEnd() } finally { $reader.Close() }
+                $json = $text | ConvertFrom-Json
+                # 秘密を含む項目を、読む前に落とす
+                foreach ($e in @($json.results)) { foreach ($s in $secretFields) { if ($e.PSObject.Properties[$s]) { $e.PSObject.Properties.Remove($s) } } }
+                # 同じモジュール・同じバリアントが 2 つ以上あっても上書きしないよう、出てきた順の番号を添える
+                $k = Get-LogKey $json
+                $occur[$k] = 1 + [int]$occur[$k]
+                $byModule[('{0}#{1}' -f $k, $occur[$k])] = @(Read-ModuleLog $json $planName $TextLength)
+            }
         }
+        finally { $z.Dispose() }
     }
-    finally { $z.Dispose() }
+    $rows = @($byModule.Values | ForEach-Object { $_ })
 
     $file = Join-Path $reviewDir ('{0}.json' -f $planName)
     $body = ConvertTo-Json -InputObject @($rows) -Depth 8

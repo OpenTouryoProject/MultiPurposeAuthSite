@@ -3,7 +3,8 @@
     適合性テスト（Conformance Suite）のプランを、REST の API で回す（#350）。
 .DESCRIPTION
     ＜前提＞
-      2_DockerComposeUp.bat で、Conformance Suite と相手の OP を起動しておくこと。
+      2_DockerComposeUp.ps1（Windows なら 2_DockerComposeUp.bat でもよい）で、Conformance Suite と相手の OP を起動しておくこと。
+      **Linux（GitHub Actions の ubuntu-latest）の pwsh でも動く**（#439）。
       Conformance Suite は dev の構成（SPRING_PROFILES_ACTIVE=dev）なので、API は認証なしで呼べる。
 
     ＜何をするか＞
@@ -31,6 +32,12 @@
     code 以外なら、out\ のファイルの名前に response_type を添える（例：out\oidcc-dynamic-code-id_token-report.zip）。
 .PARAMETER ModuleTimeoutSec
     1 つのモジュールを待つ上限（秒）。ブラウザの自動操作が合わないと WAITING のまま止まるので、上限で打ち切る。
+.PARAMETER Module
+    **このモジュールだけを回し直す**（モジュールの名前。バリアントごとに並ぶものは、その名前のすべて。#439）。
+    自動操作のぶれ（サインインの要求が OP に届かず INTERRUPTED になる。#350）で基準と違ったモジュールを、回し直すのに使う。
+    **結果は、前の out\<プラン>-result.json の同じモジュール・同じバリアントの行を置き換えて書く**（無ければ足す）。
+    **報告書は out\<プラン>-retry<N>.zip に書く**（N は 1 からの番号。プラン全体の報告書 out\<プラン>-report.zip は残し、ExtractReview.ps1 が重ねて読む）。
+    プラン全体を回すと、前の回し直しの報告書は消す。
 .EXAMPLE
     .\RunTestPlan.ps1 -Plan oidcc-basic
 .EXAMPLE
@@ -50,6 +57,8 @@
      2026/11/24  玄人 幸道         client_credentials のプランのクライアント（23・24）を fapi2 の登録にした説明に直した（#424）
      2026/11/25  玄人 幸道         OIDC の 9 プランを動的登録したクライアントで回す版（-dynamic）と、oidcc-test-plan の mtls（code と form_post）を足した（#426）
      2026/11/25  玄人 幸道         oidcc-dynamic とログアウトの 3 プランの動的登録版を、code 以外の response_type で回す指定（-ResponseType）を足した（#426）
+     2026/11/27  玄人 幸道         Linux の pwsh でも動くようにした（パスの区切りを / にした。#439）
+     2026/11/27  玄人 幸道         モジュールを選んで回し直す指定（-Module）を足した（#439）
 #>
 [CmdletBinding()]
 param(
@@ -74,14 +83,17 @@ param(
     [ValidateSet('code', 'id_token', 'id_token token', 'code id_token', 'code token', 'code id_token token')]
     [string]$ResponseType = 'code',
 
-    [int]$ModuleTimeoutSec = 180
+    [int]$ModuleTimeoutSec = 180,
+
+    [string[]]$Module
 )
 
 $ErrorActionPreference = 'Stop'
 
 $here = $PSScriptRoot
 $base = 'https://localhost.emobix.co.uk:8443/'
-$appsettings = Join-Path $here '..\..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\appsettings.json'
+# **パスの区切りは / で書く**（Linux の pwsh は \ を区切りにしない。Windows は / も受ける。#439）
+$appsettings = Join-Path $here '../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json'
 $outDir = Join-Path $here 'out'
 
 # プランの名前・バリアント・設定の雛形（Conformance Suite の api/plan/available で確かめた値）
@@ -403,7 +415,7 @@ try
 }
 catch
 {
-    Write-Host ('Conformance Suite（{0}）に届きません。2_DockerComposeUp.bat で起動してください（起動には 1〜2 分かかる）。' -f $base) -ForegroundColor Red
+    Write-Host ('Conformance Suite（{0}）に届きません。2_DockerComposeUp.ps1（.bat）で起動してください（起動には 1〜2 分かかる）。' -f $base) -ForegroundColor Red
     Write-Host ('  理由 : {0}' -f $_.Exception.Message)
     exit 2
 }
@@ -438,7 +450,7 @@ $user = 'tanaka' + [string]$suffix
 
 #region 設定を作る
 
-$template = Join-Path $here ('config\{0}.json' -f $p.Config)
+$template = Join-Path $here ('config/{0}.json' -f $p.Config)
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $configPath = Join-Path $outDir ('{0}.json' -f $outName)
 
@@ -481,13 +493,13 @@ function Set-ConfigBlock([string]$Text, [string]$Name, [string]$Json, [string]$A
 function Get-MtlsBlock([int]$N)
 {
     # **クライアント証明書と秘密鍵（PEM）を、設定の mtls・mtls2 の形にする**（Prepare.ps1 が certs\ に作る。Git の管理外）
-    $crtPath = Join-Path $here ('certs\mtls-client{0}.crt' -f $N)
-    $keyPath = Join-Path $here ('certs\mtls-client{0}.key' -f $N)
+    $crtPath = Join-Path $here ('certs/mtls-client{0}.crt' -f $N)
+    $keyPath = Join-Path $here ('certs/mtls-client{0}.key' -f $N)
     foreach ($f in $crtPath, $keyPath)
     {
         if (-not (Test-Path -LiteralPath $f))
         {
-            Write-Host ('クライアント証明書がありません（2_DockerComposeUp.bat が呼ぶ Prepare.ps1 で作る） : {0}' -f $f) -ForegroundColor Red
+            Write-Host ('クライアント証明書がありません（2_DockerComposeUp.ps1 が呼ぶ Prepare.ps1 で作る） : {0}' -f $f) -ForegroundColor Red
             exit 2
         }
     }
@@ -543,7 +555,7 @@ if ($p.Fapi)
         {
             if (-not (Test-Path -LiteralPath $f))
             {
-                Write-Host ('FAPI の鍵・証明書がありません（2_DockerComposeUp.bat が呼ぶ Prepare.ps1 で作る） : {0}' -f $f) -ForegroundColor Red
+                Write-Host ('FAPI の鍵・証明書がありません（2_DockerComposeUp.ps1 が呼ぶ Prepare.ps1 で作る） : {0}' -f $f) -ForegroundColor Red
                 exit 2
             }
         }
@@ -649,7 +661,24 @@ Write-Host ('  {0}plan-detail.html?plan={1}' -f $base, $planId)
 
 $results = New-Object Collections.ArrayList
 
-foreach ($m in @($created.modules))
+$toRun = @($created.modules)
+if ($Module)
+{
+    # **回し直すモジュールだけにする**（#439）。プランに無い名前は、誤りとして止める。
+    #   **カンマ区切りの 1 つの文字列も受ける**（powershell -File は、a,b を配列にせず 1 つの文字列で渡す）
+    $Module = @($Module | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $known = @($toRun | ForEach-Object { [string]$_.testModule } | Sort-Object -Unique)
+    $unknown = @($Module | Where-Object { $known -notcontains $_ })
+    if ($unknown.Count -gt 0)
+    {
+        Write-Host ('プランに無いモジュールです : {0}' -f ($unknown -join ', ')) -ForegroundColor Red
+        exit 2
+    }
+    $toRun = @($toRun | Where-Object { $Module -contains [string]$_.testModule })
+    Write-Host ('  回し直すモジュール : {0} 件' -f $toRun.Count)
+}
+
+foreach ($m in $toRun)
 {
     $runQuery = 'api/runner?test=' + [Uri]::EscapeDataString($m.testModule) + '&plan=' + [Uri]::EscapeDataString($planId)
     if ($m.variant)
@@ -684,8 +713,23 @@ foreach ($m in @($created.modules))
     $rm = [string]$info.variant.response_mode
     if ($rt) { $label += ' [' + $rt + $(if ($rm -and ($rm -ne 'default')) { ' / ' + $rm } else { '' }) + ']' }
 
-    [void]$results.Add([pscustomobject]@{ Module = $m.testModule; Variant = $info.variant; Status = $status; Result = $result; Id = $testId })
+    # **落ちたモジュールは、失敗した判定の名前（src）を、画面と結果の JSON（Failures）に残す**（#439。CI は報告書を残さないので、ログで分類できるように。
+    #   RunPlans.ps1 は、回し直しても残った差が WebRunner（自動操作のぶれ）だけかを、これで見分ける）。
+    #   **値（msg）は残さない**（トークンなどが入りうる。CI のログは公開される）
+    $srcs = @()
+    if (($result -eq 'FAILED') -or ($status -eq 'INTERRUPTED'))
+    {
+        try
+        {
+            $log = (Invoke-Cts 'GET' ('api/log/' + $testId) $null $null) | ConvertFrom-Json
+            $srcs = @($log | Where-Object { $_.result -eq 'FAILURE' } | ForEach-Object { [string]$_.src } | Select-Object -Unique -First 5)
+        }
+        catch { }
+    }
+
+    [void]$results.Add([pscustomobject]@{ Module = $m.testModule; Variant = $info.variant; Status = $status; Result = $result; Id = $testId; Failures = $srcs })
     Write-Host ('  {0,-12} {1}' -f $result, $label)
+    if ($srcs.Count -gt 0) { Write-Host ('               FAILURE : {0}' -f ($srcs -join ', ')) -ForegroundColor DarkGray }
 }
 
 #endregion
@@ -693,9 +737,44 @@ foreach ($m in @($created.modules))
 #region 結果
 
 $resultPath = Join-Path $outDir ('{0}-result.json' -f $outName)
-[IO.File]::WriteAllText($resultPath, (@{ plan = $p.Name; planId = $planId; modules = $results } | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
+$written = $results
+if ($Module -and (Test-Path -LiteralPath $resultPath))
+{
+    # **前の結果の、同じモジュール・同じバリアントの行を置き換える**（無ければ足す。#439）。並びは前の結果のまま
+    #   バリアントは、項目を名前順に並べて比べる（CompareResults.ps1 と同じ）
+    function Get-RowKey($Row)
+    {
+        $v = if ($null -eq $Row.Variant) { '' } else { (@($Row.Variant.PSObject.Properties | Sort-Object Name | ForEach-Object { '{0}={1}' -f $_.Name, $_.Value }) -join ';') }
+        return [string]$Row.Module + '|' + $v
+    }
+    $fresh = @{}
+    foreach ($r in $results) { $fresh[(Get-RowKey $r)] = $r }
+    $merged = New-Object Collections.ArrayList
+    foreach ($r in @(([IO.File]::ReadAllText($resultPath) | ConvertFrom-Json).modules))
+    {
+        $k = Get-RowKey $r
+        if ($fresh.ContainsKey($k)) { [void]$merged.Add($fresh[$k]); $fresh.Remove($k) } else { [void]$merged.Add($r) }
+    }
+    foreach ($r in $results) { if ($fresh.ContainsKey((Get-RowKey $r))) { [void]$merged.Add($r) } }
+    $written = $merged
+}
+[IO.File]::WriteAllText($resultPath, (@{ plan = $p.Name; planId = $planId; modules = $written } | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
 
-$zip = Join-Path $outDir ('{0}-report.zip' -f $outName)
+# **回し直したときは、プラン全体の報告書を残し、番号を付けた別の名前に書く**（<プラン>-retry<N>.zip。
+#   ExtractReview.ps1 は、*-report.zip をプラン全体として読み、その上に -retry<N>.zip を番号の順に重ねる）。
+#   **プラン全体を回したときは、前の回し直しの報告書を消す**（前の実行のものを重ねないため）
+$retryZips = @(Get-ChildItem -LiteralPath $outDir -Filter ('{0}-retry*.zip' -f $outName) -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match ('^' + [regex]::Escape($outName) + '-retry(\d+)\.zip$') })
+if ($Module)
+{
+    $next = 1 + (@($retryZips | ForEach-Object { [int](($_.Name -replace '^.*-retry', '') -replace '\.zip$', '') }) + 0 | Measure-Object -Maximum).Maximum
+    $zip = Join-Path $outDir ('{0}-retry{1}.zip' -f $outName, $next)
+}
+else
+{
+    $retryZips | Remove-Item -Force
+    $zip = Join-Path $outDir ('{0}-report.zip' -f $outName)
+}
 try
 {
     # **URL は api/plan/exporthtml/{id}**（release-v5.3.4 で確かめた。api/plan/{id}/exporthtml は 404）
