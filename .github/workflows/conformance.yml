@@ -41,9 +41,6 @@ on:
   # 毎週月曜 12:00 JST（03:00 UTC）。build-and-test.yml（09:00 JST）とずらす。schedule は既定のブランチ（develop）の版で動く。
   schedule:
     - cron: '0 3 * * 1'
-  # **#439 の試行の間だけ**（ci/439 への push）。fixed の前に外す。
-  push:
-    branches: [ci/439]
 
 permissions:
   contents: read
@@ -68,8 +65,6 @@ jobs:
         shell: pwsh
         env:
           INPUT_PLANS: ${{ github.event.inputs.plans }}
-          # #439 trial only (push to ci/439; empty = all groups). Removed before fixed.
-          TRIAL_PLANS: ''
         run: |
           $groups = [ordered]@{
               'oidcc-static'  = 'oidcc-basic,oidcc-config,oidcc-formpost-basic,oidcc-rp-initiated-logout,oidcc-frontchannel-rp-initiated-logout,oidcc-backchannel-rp-initiated-logout'
@@ -90,7 +85,6 @@ jobs:
 
           $list = @($groups.Keys | ForEach-Object { [ordered]@{ name = $_; plans = $groups[$_] } })
           if ($env:INPUT_PLANS) { $list = @([ordered]@{ name = 'selected'; plans = $env:INPUT_PLANS }) }
-          elseif (($env:GITHUB_EVENT_NAME -eq 'push') -and $env:TRIAL_PLANS) { $list = @([ordered]@{ name = 'trial'; plans = $env:TRIAL_PLANS }) }
 
           $json = ConvertTo-Json -InputObject $list -Compress
           "groups=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
