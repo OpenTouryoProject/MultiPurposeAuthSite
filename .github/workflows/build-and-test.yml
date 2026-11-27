@@ -7,7 +7,7 @@
 #   「何をビルドするか」の正はバッチ側、「合否の判定」の正は 1_BuildAll.ps1・2_RunAllTests.ps1 にある。
 #   ここには判定を書かない（書くと二重管理になる。OpenTouryo の build-and-test.yml と同じ線引き）。
 #
-#   **Linux ランナーで net10.0 を回すのは、まだ載せていない**（テストの足場が Windows 前提のため。別の Issue）。
+#   **Linux ランナーで net10.0 を回すのは、まだ載せていない**（テストの足場が Windows 前提のため。#435）。
 #
 # ＜OpenTouryo のアセンブリ＞
 #   MPAS は OpenTouryo のアセンブリを HintPath で参照する（root/programs/OpenTouryoAssemblies。.gitignore 済み）。
@@ -34,9 +34,6 @@ on:
   # 毎週月曜 09:00 JST（00:00 UTC）。schedule は既定のブランチ（develop）の版で動く。
   schedule:
     - cron: '0 0 * * 1'
-  # **一時的な契機（#348 の実験用のブランチ）。fixed #348 の前に外す。**
-  push:
-    branches: ['ci/348']
 
 permissions:
   contents: read

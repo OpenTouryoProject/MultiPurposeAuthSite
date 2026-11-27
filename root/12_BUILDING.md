@@ -442,6 +442,6 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | ID 連携のコンテナ | **WSL2 の Ubuntu に Docker を入れて動かす**（`container/E2E`。リソースの場所は `E2E_RESOURCE_DIR`）。**Windows の `docker` から、WSL2 の Docker に TCP（`127.0.0.1:2375`。`localhost` は `::1` に解決されることがあり、届かない）でつなぐ**（コンテナのテストが `docker inspect` で読むため。手元の Rancher Desktop と同じ形） |
 | 残すもの | E2E の結果（`Result` の下）・ビルドのログ・コンテナのログ（`e2e-windows-results-<ストア>`） |
 
-- **Linux ランナーで net10.0 を回すのは、まだ載せていない**（`test.ps1` が Windows 前提のため。別の Issue）
+- **Linux ランナーで net10.0 を回すのは、まだ載せていない**（`test.ps1` が Windows 前提のため。#435）
 - **アクションは SHA で固定し、`run:` の中は ASCII だけにする**（`AGENTS.md`「GitHub Actions を書き足すとき」）
 - 必須のチェックにするかは、人が決める（[`QUALITY.md`](../QUALITY.md) の「このリポジトリの値」）
