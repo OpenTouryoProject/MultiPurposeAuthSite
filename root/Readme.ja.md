@@ -67,10 +67,11 @@ cd root
 > — `mem` は共有されないので、要求が別のインスタンスへ回ると画面の往復で失敗します
 > → [13_CONFIGURATION.md](13_CONFIGURATION.md) 7 節「セッションの置き場」
 
-### 3. 証明書を配置する
+### 3. リソース（証明書・定義・ログの構成）を配置する
 
-`root\files\resource\X509` の pfx / cer を、設定ファイルが指すパスへ置きます
-→ [13_CONFIGURATION.md](13_CONFIGURATION.md) 8 節
+`root\files\resource` の中身（`MultiPurposeAuthSite`・`X509`）を、設定ファイルが指す `C:\root\files\resource` へ置きます。
+**Open棟梁 のリソースは要りません**（雛形は両版とも、このリポジトリの写しを指す。#434）。
+ログは、net10.0 版が `C:\root\files\resource\Log`、net48 版が `C:\root\files\resource\MultiPurposeAuthSite\Log` に出ます。証明書 → [13_CONFIGURATION.md](13_CONFIGURATION.md) 8 節
 
 ## プログラムのビルド
 

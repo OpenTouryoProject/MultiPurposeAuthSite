@@ -273,8 +273,8 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
    programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\_appsettings.json → appsettings.json
    programs\MultiPurposeAuthSite\MultiPurposeAuthSite\_app.config              → app.config
 
-3. 証明書を配置する
-   root\files\resource\X509 → 設定ファイルのパスへ
+3. リソースを配置する（Open棟梁 のリソースは要らない。#434）
+   root\files\resource（MultiPurposeAuthSite・X509） → C:\root\files\resource
 
 4. 建てる
    cd root && .\1_BuildAll.ps1

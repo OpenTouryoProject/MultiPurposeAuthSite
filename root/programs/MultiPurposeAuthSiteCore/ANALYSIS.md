@@ -55,8 +55,8 @@ mpas_dev.bat（リポジトリ ルート）               隣に clone 済みの
 `appsettings.json` は `C:/root/files/resource/...` を直書きしている。
 
 ```json
-"FxXMLSPDefinition": "C:/root/files/resource/XML/SPDefinition.xml",
-"FxLog4NetConfFile": "C:/root/files/resource/Log/SampleLogConf.xml",
+"FxXMLSPDefinition": "C:/root/files/resource/MultiPurposeAuthSite/Xml/SPDefinition.xml",
+"FxLog4NetConfFile": "C:/root/files/resource/MultiPurposeAuthSite/Log/SampleLogConf.Core.xml",
 "RsaPfxFilePath":    "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
 "ContentOfLetterFilePath": "C:/root/files/resource/MultiPurposeAuthSite/Txt"
 ```
@@ -64,9 +64,9 @@ mpas_dev.bat（リポジトリ ルート）               隣に clone 済みの
 **チェックアウト先が `C:\MultiPurposeAuthSite` 以外だと、ビルドは通るが実行時に落ちる。**
 区切りは `/`（JSON のエスケープ回避）。
 
-> **注意:** `FxXMLSPDefinition` などが指す `C:/root/files/resource/XML/` は
-> **Open棟梁側のリソース**（`OpenTouryo/root/files/resource/Xml/`）であり、本リポジトリの
-> `root/files/resource/MultiPurposeAuthSite/Xml/` とは別物。ケースも `XML` / `Xml` で揺れている。
+> **`FxXMLSPDefinition`・`FxXMLMSGDefinition`・`FxLog4NetConfFile` は、本リポジトリの写し（`root/files/resource/MultiPurposeAuthSite/`）を指す**（net48 版と同じ）。
+> 以前は Open棟梁 のリソース（`resource/XML/`・`resource/Log/`）を指していて、Open棟梁 のリソースを置かないと net10.0 版が起動しなかった（#434）。
+> **log4net の構成だけは net10.0 版用（`SampleLogConf.Core.xml`）**で、ログは今までどおり `resource/Log` に出る（net48 版と同じファイルに書かないため）。
 
 ### 2.3 設定ファイル
 

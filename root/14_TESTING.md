@@ -1105,7 +1105,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 | | |
 |---|---|
-| **出る場所** | **net10.0 版は `C:\root\files\resource\Log\OPERATION.<日付>.log`**、**net48 版は `C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION.<日付>.log`**（**2 つのアプリで置き場が違う**） |
+| **出る場所** | **net10.0 版は `C:\root\files\resource\Log\OPERATION.<日付>.log`**、**net48 版は `C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION.<日付>.log`**（**2 つのアプリで置き場が違う**。同じファイルに書かないよう分けている。#434） |
 | **出る文字列** | `The jwks_uri warm-up read <n> of <m> JWK Sets.`（**0 件でも出る** ＝ **仕掛けが動いていることの印**） |
 
 **設定ファイル側の経路は、環境変数 1 本で確かめられる**（**net10.0 版のみ**。
