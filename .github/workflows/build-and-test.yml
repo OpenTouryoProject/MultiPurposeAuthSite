@@ -645,7 +645,14 @@ jobs:
               foreach ($d in 'container/E2E', 'container/Store')
               {
                   Push-Location $d
-                  try { docker compose ps -a 2>&1; docker compose logs --no-color 2>&1 } finally { Pop-Location }
+                  try
+                  {
+                      docker compose ps -a 2>&1
+                      # The services behind a profile (Store) are not in "docker compose logs" unless named.
+                      $services = @(docker compose ps -a --format '{{.Service}}' 2>$null)
+                      if ($services.Count -gt 0) { docker compose logs --no-color @services 2>&1 }
+                  }
+                  finally { Pop-Location }
               }
           } | Out-File (Join-Path $out 'compose.log') -Encoding utf8
 
