@@ -1,0 +1,75 @@
+# OpenTouryo の部品（root/programs/OpenTouryoAssemblies）を建てて、成果物 otr-assemblies にする（再利用のワークフロー。#439）。
+#
+# ＜なぜ切り出したか＞
+#   MPAS は OpenTouryo のアセンブリを HintPath で参照する（.gitignore 済み）。OpenTouryo のビルドは bat なので、Windows でしか作れない。
+#   build-and-test.yml（ビルド・E2E）と conformance.yml（適合性テスト）の両方が要るので、ここで 1 回だけ建てる。
+#   **OpenTouryo の版（OTR_REF）は、ここ 1 か所に書く**（2 か所に書くと、上げるときに片方を忘れ、E2E と適合性テストが別の版で回る）。
+#
+# ＜OpenTouryo の版＞
+#   **OpenTouryo をコミットに固定して取り（OTR_REF）、1_BuildAll.ps1 -OpenTouryoDir -Only Libs で基盤だけを建てて写す。**
+#   向こうの変更が、こちらの CI に黙って届かないようにする（OpenTouryo が MPAS_REF で MPAS を固定しているのと対）。
+#   **上げるときは、手元で建ててから OTR_REF を変える。**（タグ 03-20 は OpenTouryo#718 より前で、MPAS が建たない）
+#
+# ＜成果物＞
+#   otr-assemblies：root/programs/OpenTouryoAssemblies の全体（Build_net48・Build_netcore100）。呼ぶ側は同じ場所に落とす。
+#
+# ＜run: の中は ASCII だけ＞（AGENTS.md「GitHub Actions を書き足すとき」）
+
+name: OpenTouryo assemblies
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  otr:
+    name: OpenTouryo assemblies
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      OTR_REPO: OpenTouryoProject/OpenTouryo
+      OTR_REF: 081aadfc9c5c93025595ca377564a54377539d4c
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout OpenTouryo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.OTR_REPO }}
+          ref: ${{ env.OTR_REF }}
+          path: OpenTouryo
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the OpenTouryo assemblies
+        shell: pwsh
+        working-directory: root
+        run: |
+          .\1_BuildAll.ps1 -OpenTouryoDir "$env:GITHUB_WORKSPACE\OpenTouryo" -Only Libs -OutputDir "$env:RUNNER_TEMP\BuildLogs"
+          exit $LASTEXITCODE
+
+      - name: Upload OpenTouryo assemblies
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: otr-assemblies
+          path: root/programs/OpenTouryoAssemblies
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: otr-build-logs
+          path: ${{ runner.temp }}\BuildLogs
+          if-no-files-found: warn

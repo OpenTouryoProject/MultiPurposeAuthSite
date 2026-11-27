@@ -81,7 +81,11 @@
 - **外部の基準を、最終的な正とする。** 適合性テスト（OpenID Foundation の Conformance Suite。`ANALYSIS-IdP.md` の D-14。**#350 で入れた**）。
   回し方・プラン・結果の読み方は [`14_TESTING.md`](root/14_TESTING.md) 5 節「適合性テスト」と [`container/CTS/README.md`](container/CTS/README.md)
   - **いつ回すか**：**(1) リリースの前に、全プランを回す。(2) 適合性テストで見つかった不適合を直す Issue では、`fixed` の前に、そのプランを回す。**
-    **普段の作業（`fixing`・ほかの `fixed`）では回さなくてよい**（Conformance Suite のコンテナがメモリを使い、全プランで 3 時間ほどかかる。E2E の通しには入れない）
+    **(1) は CI（`.github/workflows/conformance.yml`）が master 宛ての PR で回す**（週 1 回も回す。#439）。**(2) は手元で回す**（報告書で理由を読むため。CI は報告書を残さない）。
+    **普段の作業（`fixing`・ほかの `fixed`）では回さなくてよい**（Conformance Suite のコンテナがメモリを使い、手元で全プランを回すと 3 時間ほどかかる。E2E の通しには入れない）
+  - **合否**：**今の正しい形でも FAILED・時間切れが残る**ので、**モジュールごとの基準（`container/CTS/ResultBaseline.csv`）と比べ、違えば落とす**（良くなった方向も。基準の更新を促す。`CompareResults.ps1`。#439）。
+    **自動操作のぶれ（WebRunner）は回し直しで拾い、回し直しても少数だけ残ったなら、落とさずに警告に留める**（CI のランナーでは手元よりぶれが多い。警告を読み、同じモジュールが続けて残るなら回帰を疑う）。
+    **不適合を直したら、そのコミットで基準も直す**（`ReviewBaseline.csv` と同じ）
   - **結果の扱い**：落ちたものは、**環境（Conformance Suite の設定・自動操作）の不足か、OP の不適合かを仕分け**、不適合は原因ごとに Issue にする（セキュリティの弱点の疑いなら、公開する前に人に聞く。[`AGENTS.md`](AGENTS.md)）。
     **結果（`container/CTS/out/`）はコミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む）
   - **自動では回せないモジュールがある**（利用者が拒否する操作など。`container/CTS/README.md`）。**REVIEW（画面の写しで合否を付ける判定）は、エージェントが報告書のログに残った OP の応答から合否を付け、人がその表を承認する**（`container/CTS/ExtractReview.ps1`。全プランの実行のたびに、基準 `ReviewBaseline.csv` と比べ、変わったものだけ付け直す。#417）

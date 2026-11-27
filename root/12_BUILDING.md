@@ -413,8 +413,8 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | 項目 | 内容 |
 |---|---|
 | 契機 | **master 宛ての PR**・手動（`workflow_dispatch`）・**週 1 回**（月曜 09:00 JST。既定のブランチの版で動く）。**develop 宛ての PR では回さない** |
-| OpenTouryo | **コミットに固定して取る**（`OTR_REF`）。`1_BuildAll.ps1 -OpenTouryoDir` で基盤を建てて写す。**上げるときは、手元で建ててから `OTR_REF` を変える**（タグ `03-20` は OpenTouryo#718 より前で、MPAS が建たない） |
-| ビルド | `1_BuildAll.ps1 -FailOnWarnings`。**警告が 1 つでもあれば落ちる**（3 節） |
+| OpenTouryo | **コミットに固定して取る**（`OTR_REF`）。**ジョブ `otr`（再利用のワークフロー `otr-assemblies.yml`）が `1_BuildAll.ps1 -OpenTouryoDir -Only Libs` で基盤だけを 1 回建て、成果物 `otr-assemblies` で `build`・`e2e-windows`・`e2e-linux` に渡す**（#439。`conformance.yml` も同じものを使う。**`OTR_REF` は `otr-assemblies.yml` の 1 か所**）。**上げるときは、手元で建ててから `OTR_REF` を変える**（タグ `03-20` は OpenTouryo#718 より前で、MPAS が建たない） |
+| ビルド | `1_BuildAll.ps1 -Libs None -FailOnWarnings`（部品は `otr` から受け取る）。**警告が 1 つでもあれば落ちる**（3 節） |
 | 監査の警告 | 終了コード `3`。**PR では注釈とジョブのまとめに留め、週 1 回・手動では最後に落とす**。見つけたら、その場で直す（`AGENTS.md`「依存パッケージの脆弱性を見つけたら」） |
 | 単体テスト | `Tests/UnitTests` を `dotnet test` で回す（**`2_RunAllTests.ps1` には入っていない**）。ビルドが警告で落ちても回す |
 | 残すもの | ビルドのログ（`build-logs`）と単体テストの TRX（`unit-test-results`）。成果物として、失敗したときも残す |
@@ -446,7 +446,7 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 
 | 項目 | 内容 |
 |---|---|
-| ビルド | **Open棟梁 の部品（`OpenTouryoAssemblies/Build_netcore100`）は `build` から受け取る**（成果物 `otr-assemblies-net10`。Open棟梁 のビルドは bat で、Windows でしか作れない。Open棟梁 の `linux-stub` と同じ）。**MPAS の net10.0 版とテストは Linux で建てる**（`test.ps1` が建てる） |
+| ビルド | **Open棟梁 の部品（`OpenTouryoAssemblies`）は `otr` から受け取る**（成果物 `otr-assemblies`。Open棟梁 のビルドは bat で、Windows でしか作れない。Open棟梁 の `linux-stub` と同じ）。**MPAS の net10.0 版とテストは Linux で建てる**（`test.ps1` が建てる） |
 | 設定ファイル | **`root/programs/Tests/New-E2ESettings.ps1 -ResourceDir <場所>` で雛形から作る**（`e2e-windows` と同じ 4 つを替える）。雛形のパスの `C:/root/files/resource` はその場所に置き換え、リソースはそこへ写す（log4net の構成の書き出し先は、写しの方だけ置き換える）。ID 連携のコンテナにも、同じ場所を `E2E_RESOURCE_DIR` で渡す |
 | 証明書 | `dotnet dev-certs https --trust` と `SSL_CERT_DIR`（OpenSSL に信頼させる。Open棟梁 の `linux-*` と同じ） |
 | ブラウザ | Playwright の Chromium（`playwright.ps1 install --with-deps chromium`） |
@@ -456,3 +456,6 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 
 - **アクションは SHA で固定し、`run:` の中は ASCII だけにする**（`AGENTS.md`「GitHub Actions を書き足すとき」）
 - 必須のチェックにするかは、人が決める（[`QUALITY.md`](../QUALITY.md) の「このリポジトリの値」）
+
+**適合性テスト（Conformance Suite）は、別のワークフロー `.github/workflows/conformance.yml` が、同じ契機（master 宛ての PR・手動・週 1 回。週 1 回は月曜 12:00 JST）で回す**（#439）。
+回し方・合否（モジュールごとの基準との比較）・残すものは [`container/CTS/README.md`](../container/CTS/README.md)「基準との比較と、CI」と [`14_TESTING.md`](14_TESTING.md) 5 節「適合性テスト」。
