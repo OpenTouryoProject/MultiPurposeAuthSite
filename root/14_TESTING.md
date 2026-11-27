@@ -4848,6 +4848,28 @@ The ID federation did not complete. (the error view was returned)
 - **日本語の OS の手元では、結果は変わらない。** 日本語でない OS の開発機でも、E2E が通るようになる
 - **既に動いているサイトへ向けたとき（`-Launch` 無し）の net10.0 版は、そのサイトの OS の言語のまま**である
 
+### Linux で回す（#435）
+
+**net10.0 版の E2E は、Linux でも回せる**（PowerShell 7 の `test.ps1`）。CI のジョブ `e2e-linux`（[`12_BUILDING.md`](12_BUILDING.md) 11 節）と同じことを、手元では **.NET 10 の SDK のコンテナ**（`mcr.microsoft.com/dotnet/sdk:10.0`。pwsh が入っている）で行える。
+
+| Linux での違い | 内容 |
+|---|---|
+| net48 版 | **起動しない**（`-NoNetFx` が立つ）。その分は Skip になる |
+| `-Coverage` | **使えない**（起動に `cmd.exe`、子のプロセスを辿るのに `Win32_Process` を使う） |
+| 設定ファイル | **`New-E2ESettings.ps1 -ResourceDir <場所>` で雛形から作る**。雛形のパスの `C:/root/files/resource` をその場所に置き換え、`root/files/resource` をそこへ写す（log4net の構成の書き出し先も、写しの方だけ置き換える）。**既にある設定ファイルは上書きしない**（`-Force`） |
+| 証明書のパス | テストと `test.ps1` は、**net10.0 版の構成ファイルの `RsaCerFilePath`（空なら `SpRp_RsaCerFilePath`）のフォルダ**から作る（直書きしない。`AppConfig.X509Path`） |
+| 開発用証明書 | `dotnet dev-certs https --trust` の後、`SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"`（サイトが自分を呼ぶ口が検証するため） |
+| ブラウザ | `E2ETests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium` |
+| 画面の言語 | 上の「画面の言語」の足場で日本語になる（SDK のコンテナで確かめた） |
+
+**SDK のコンテナで試すときの注意**（#435 で踏んだ）。
+
+- **リポジトリは読み取り専用でマウントし、コンテナの中に写してから建てる**（手元の `bin`・`obj` は Windows のビルドのもの）。**手元の `appsettings.json` は写さない**（秘密を含む。`New-E2ESettings.ps1` で作り直す）
+- **ID 連携のコンテナ（`container/E2E`）は、手元のものを共有する**（`--network host`）。**上流のパスワードは手元の実ファイルのもの**なので、テスト専用の値で作った下流からは**上流にサインインできない**。**繰り返すと、上流のテスト利用者がロックアウトされ、手元の Windows の通しの ID 連携も落ちる**（作り直す：`docker compose up -d --force-recreate`）。ID 連携は CI（上流も同じ設定ファイルから作る）で測る
+- **静的配信のコンテナ（44305。`jwks_uri` など）は、ホストの `container/E2E/jwks` を配る。** テストはそこに書くので、**写しの同じ場所に、ホストのフォルダをマウントする**
+- **コンテナのテスト（CN-*）は `docker` で様子を読む**ので、docker の CLI とソケット（`/var/run/docker.sock`）が要る（無ければ Skip）
+- **`RT-307.4` の手順 (3) は Linux でだけ落ちる**（#437。.NET の `Uri.TryCreate` が、Unix では `/` で始まる値を `file` の絶対 URI にする）
+
 ### 画面を駆動するテスト（#257）
 
 **サインアップ（`/Account/Register`）と管理画面（`/UsersAdmin` / `/RolesAdmin`）を、HTTP で叩いている。**
