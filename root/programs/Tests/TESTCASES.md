@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus
+1. GET /Account/EmailConfirmation?userId=4bbbf393-6319-473f-82e8-0d6722804622&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=4bbbf393-6319-473f-82e8-0d6722804622&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=4bbbf393-6319-473f-82e8-0d6722804622&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -14453,6 +14453,35 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP の状態は 201
 - http/https の form_post は、自動 submit の form を出す
 - その action は、登録した https の redirect_uri
+
+## RT-437.1 `//host`・`C:/x`・`file:///`・符号化していない非 ASCII の `redirect_uri` は `400`（`invalid_redirect_uri`）
+
+| | |
+|---|---|
+| 観点 | **.NET の `Uri.TryCreate` は、`//host`・`C:/x` を `file` の絶対 URI として読む**（Windows でも。Linux では `/` で始まる相対パスも。`RT-307.4` の (3)）。**書かれたとおりの絶対 URI でなければ断り、`file` のスキームも断る**（OS によらない）。**非 ASCII は、`IsWellFormedUriString` が .NET Framework と .NET で分かれるので、文字で断る**（両版で揃える） |
+| 根拠 | RFC 6749 §3.1.2 / RFC 3986 §2 / #437 |
+| テスト | `RT43701_fileの形のredirect_uriはOSによらず断る` |
+
+**手順**
+
+1. // で始まる値（ホストだけの相対参照）
+1. ドライブ文字で始まる値
+1. file のスキーム
+1. カスタム スキーム（ネイティブ アプリ。RFC 8252 §7.1）は通す
+1. 符号化していない非 ASCII の文字は、両版とも断る（符号化した形は通す）
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 400
+- error は invalid_redirect_uri
+- HTTP の状態は 400
+- error は invalid_redirect_uri
+- HTTP の状態は 400
+- error は invalid_redirect_uri
+- HTTP の状態は 201
+- 符号化していない値は 400
+- error は invalid_redirect_uri
+- 符号化した値は 201
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

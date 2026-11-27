@@ -43,6 +43,7 @@
 //*  2026/11/25  玄人 幸道         RT-426.3 に、post_logout_redirect_uris のスキーム、ログアウトの URL のフラグメント、frontchannel_logout_uri の同一オリジンを足した（#426）
 //*  2026/11/26  玄人 幸道         RT-433（form_post の応答は http/https の redirect_uri のときだけ出す。javascript: は <form action> に出さない）を足した（#433）
 //*  2026/11/27  玄人 幸道         RT-437.1（//host・C:/x・file:/// の redirect_uri は OS によらず 400。カスタム スキームは通す）を足した（#437）
+//*  2026/11/27  玄人 幸道         RT-437.1 に (5)（符号化していない非 ASCII は両版とも 400、符号化した形は 201）を足した（#437）
 //**********************************************************************************
 
 using System;
@@ -83,7 +84,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// | **`RT-307.2`** | **トークンが無ければ 401／scope が足りなければ 403** |
     /// | **`RT-307.3`** | **2 件目以降も登録できる**（**1 利用者 n クライアント**。#307 の段階 5-a） |
     /// | **`RT-307.4`** | **メタデータの誤りは `400`**（`jwks_uri` / `redirect_uris` 無し / 対応しない組み合わせ） |
-    /// | **`RT-437.1`** | **`//host`・`C:/x`・`file:///` の `redirect_uri` も `400`**（OS によらない。#437） |
+    /// | **`RT-437.1`** | **`//host`・`C:/x`・`file:///`・符号化していない非 ASCII の `redirect_uri` も `400`**（OS・版によらない。#437） |
     /// | **`RT-307.5`** | **専用トークンは scope も有効期限も絞られている**（**応答の `expires_in` も**。#294） |
     /// | **`RT-307.6`** | **登録した `response_types` が効く** |
     /// | **`RT-307.7`** | **登録した `grant_types` が効く** |
@@ -1059,11 +1060,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient admin = this.Client(targetKey))
             {
                 TestReport r = this.Report("RT-437.1",
-                    "`//host`・`C:/x`・`file:///` の `redirect_uri` は `400`（`invalid_redirect_uri`）",
+                    "`//host`・`C:/x`・`file:///`・符号化していない非 ASCII の `redirect_uri` は `400`（`invalid_redirect_uri`）",
                     "**.NET の `Uri.TryCreate` は、`//host`・`C:/x` を `file` の絶対 URI として読む**（Windows でも。"
                     + "Linux では `/` で始まる相対パスも。`RT-307.4` の (3)）。"
-                    + "**書かれたとおりの絶対 URI でなければ断り、`file` のスキームも断る**（OS によらない）",
-                    "RFC 6749 §3.1.2 / #437");
+                    + "**書かれたとおりの絶対 URI でなければ断り、`file` のスキームも断る**（OS によらない）。"
+                    + "**非 ASCII は、`IsWellFormedUriString` が .NET Framework と .NET で分かれるので、文字で断る**（両版で揃える）",
+                    "RFC 6749 §3.1.2 / RFC 3986 §2 / #437");
 
                 r.Target("POST registration_endpoint（file の形の redirect_uri）");
 
@@ -1093,6 +1095,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         client, endpoint, token, DynamicClientRegistration.Metadata("com.example.rt437:/cb"));
 
                     r.VerifyEqual("HTTP の状態は 201", "201", ((int)custom.StatusCode).ToString());
+
+                    r.Step("(5) 符号化していない非 ASCII の文字は、両版とも断る（符号化した形は通す）");
+
+                    JsonResponse raw = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, DynamicClientRegistration.Metadata("https://localhost:44300/e2e/rt437/日本"));
+
+                    r.VerifyEqual("符号化していない値は 400", "400", ((int)raw.StatusCode).ToString());
+
+                    r.VerifyEqual("error は invalid_redirect_uri",
+                        "invalid_redirect_uri", raw.String("error") ?? "（無い）");
+
+                    JsonResponse encoded = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, DynamicClientRegistration.Metadata("https://localhost:44300/e2e/rt437/%E6%97%A5%E6%9C%AC"));
+
+                    r.VerifyEqual("符号化した値は 201", "201", ((int)encoded.StatusCode).ToString());
                 });
 
                 r.Done();

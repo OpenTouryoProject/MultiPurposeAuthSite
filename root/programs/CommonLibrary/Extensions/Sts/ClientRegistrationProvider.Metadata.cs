@@ -41,6 +41,7 @@
 //*  2026/11/25  玄人 幸道         ログアウトの登録項目（post_logout_redirect_uris・frontchannel_logout_uri・backchannel_logout_uri・*_session_required）を受けるようにした（#426）
 //*  2026/11/25  玄人 幸道         post_logout_redirect_uris を https（ループバックは http）に限り、ログアウトの URL のフラグメントと、frontchannel_logout_uri の redirect_uris との同一オリジンを確かめるようにした（#426）
 //*  2026/11/27  玄人 幸道         redirect_uris を、整形された絶対 URI に限り、file のスキームを断るようにした（Linux で相対パスが通っていた。#437）
+//*  2026/11/27  玄人 幸道         redirect_uris は ASCII の印字できる文字だけを受ける（符号化していない非 ASCII で、net48 と net10.0 の結果が分かれたため。#437）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1079,12 +1080,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **`IsWellFormedUriString` で、書かれたとおりの絶対 URI かを見て**（ほかの URI の項目の `SetUri` と同じ）、
         /// **`file` のスキームは断る**（ブラウザが折り返せない行き先）。どちらも OS によらない。
         /// **ネイティブ アプリのカスタム スキーム（RFC 8252）は通す。**
+        ///
+        /// **ASCII の印字できる文字（`!`〜`~`）だけを受ける**（RFC 3986 の URI の文字。#437）。
+        /// **`IsWellFormedUriString` は、符号化していない非 ASCII を、.NET Framework では断り .NET では受ける**ので、
+        /// そのままでは net48 と net10.0 で結果が分かれる。**日本語などは `%E6%97%A5` のように符号化して登録する**
+        /// （照合は完全一致なので、符号化した形に揃っている方が確実）。
         /// </remarks>
         private static bool IsValidRedirectUri(string redirectUri)
         {
             if (string.IsNullOrEmpty(redirectUri)
                 || Const.MaxLengthOfUri < redirectUri.Length
-                || redirectUri.Contains("*"))
+                || redirectUri.Contains("*")
+                || redirectUri.Any(c => c < '!' || '~' < c))
             {
                 return false;
             }
