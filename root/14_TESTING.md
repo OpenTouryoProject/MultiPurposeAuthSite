@@ -1105,7 +1105,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 | | |
 |---|---|
-| **出る場所** | **net10.0 版は `C:\root\files\resource\Log\OPERATION.<日付>.log`**、**net48 版は `C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION.<日付>.log`**（**2 つのアプリで置き場が違う**） |
+| **出る場所** | **`C:\root\files\resource\MultiPurposeAuthSite\Log` の、net10.0 版は `OPERATION_Core.<日付>.log`**、**net48 版は `OPERATION.<日付>.log`**（**2 つのアプリで名前が違う**。同じファイルに書かないよう分けている。#434 より前の net10.0 版の設定ファイルでは `C:\root\files\resource\Log\OPERATION.<日付>.log`） |
 | **出る文字列** | `The jwks_uri warm-up read <n> of <m> JWK Sets.`（**0 件でも出る** ＝ **仕掛けが動いていることの印**） |
 
 **設定ファイル側の経路は、環境変数 1 本で確かめられる**（**net10.0 版のみ**。
@@ -3987,7 +3987,7 @@ ORA-01400: ("SCOTT"."UserRoles"."RoleId")にはNULLは挿入できません。
   **最初に失敗すると、作り直すまで直らない**
 - **net48 版（Identity 2.x）は正規化しない**ので、同じ DB でも**そちらの経路では付いていた**
 - **`SystemAdmin` を要求する画面が無かった**（#257 の管理画面のテストが、初めてそこを踏んだ）
-- **記録は `root/files/resource/Log/SQLTRACE.*.log`**（`MySQLLogForEx` の出力）
+- **記録は `root/files/resource/MultiPurposeAuthSite/Log/SQLTRACE_Core.*.log`**（`MySQLLogForEx` の出力。#434 より前は `resource/Log/SQLTRACE.*.log`）
 
 **実測（直した後）** : `npg` の `UserRoles` に **6 行**（管理者 3 ＋ `super_tanaka` 2 ＋ `tanaka` 1）が入り、
 **管理画面の 9 ケースが Skip されなくなった**（`ora` も同じ）。
@@ -4783,7 +4783,7 @@ docker compose up -d upstream
 
 #### 失敗したら、下流の OPERATION ログを見る（#253）
 
-**`Error` 画面が出たときの理由は、すべて OPERATION ログに出る**（`C:\root\files\resource\Log\OPERATION.<日付>.log`）。
+**`Error` 画面が出たときの理由は、すべて OPERATION ログに出る**（`C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION_Core.<日付>.log`。net48 版は `OPERATION.<日付>.log`）。
 
 ```
 The state of the authorization response did not match the session. (response: len=32, session: (empty))
@@ -4847,6 +4847,28 @@ The ID federation did not complete. (the error view was returned)
 
 - **日本語の OS の手元では、結果は変わらない。** 日本語でない OS の開発機でも、E2E が通るようになる
 - **既に動いているサイトへ向けたとき（`-Launch` 無し）の net10.0 版は、そのサイトの OS の言語のまま**である
+
+### Linux で回す（#435）
+
+**net10.0 版の E2E は、Linux でも回せる**（PowerShell 7 の `test.ps1`）。CI のジョブ `e2e-linux`（[`12_BUILDING.md`](12_BUILDING.md) 11 節）と同じことを、手元では **.NET 10 の SDK のコンテナ**（`mcr.microsoft.com/dotnet/sdk:10.0`。pwsh が入っている）で行える。
+
+| Linux での違い | 内容 |
+|---|---|
+| net48 版 | **起動しない**（`-NoNetFx` が立つ）。その分は Skip になる |
+| `-Coverage` | **使えない**（起動に `cmd.exe`、子のプロセスを辿るのに `Win32_Process` を使う） |
+| 設定ファイル | **`New-E2ESettings.ps1 -ResourceDir <場所>` で雛形から作る**。雛形のパスの `C:/root/files/resource` をその場所に置き換え、`root/files/resource` をそこへ写す（log4net の構成の書き出し先も、写しの方だけ置き換える）。**既にある設定ファイルは上書きしない**（`-Force`） |
+| 証明書のパス | テストと `test.ps1` は、**net10.0 版の構成ファイルの `RsaCerFilePath`（空なら `SpRp_RsaCerFilePath`）のフォルダ**から作る（直書きしない。`AppConfig.X509Path`） |
+| 開発用証明書 | `dotnet dev-certs https --trust` の後、`SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"`（サイトが自分を呼ぶ口が検証するため） |
+| ブラウザ | `E2ETests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium` |
+| 画面の言語 | 上の「画面の言語」の足場で日本語になる（SDK のコンテナで確かめた） |
+
+**SDK のコンテナで試すときの注意**（#435 で踏んだ）。
+
+- **リポジトリは読み取り専用でマウントし、コンテナの中に写してから建てる**（手元の `bin`・`obj` は Windows のビルドのもの）。**手元の `appsettings.json` は写さない**（秘密を含む。`New-E2ESettings.ps1` で作り直す）
+- **ID 連携のコンテナ（`container/E2E`）は、手元のものを共有する**（`--network host`）。**上流のパスワードは手元の実ファイルのもの**なので、テスト専用の値で作った下流からは**上流にサインインできない**。**繰り返すと、上流のテスト利用者がロックアウトされ、手元の Windows の通しの ID 連携も落ちる**（作り直す：`docker compose up -d --force-recreate`）。ID 連携は CI（上流も同じ設定ファイルから作る）で測る
+- **静的配信のコンテナ（44305。`jwks_uri` など）は、ホストの `container/E2E/jwks` を配る。** テストはそこに書くので、**写しの同じ場所に、ホストのフォルダをマウントする**
+- **コンテナのテスト（CN-*）は `docker` で様子を読む**ので、docker の CLI とソケット（`/var/run/docker.sock`）が要る（無ければ Skip）
+- **Linux でだけ落ちるテストは、.NET の OS ごとの違いを疑う** — **`Uri.TryCreate` は、Unix では `/` で始まる値を `file` の絶対 URI にする**ので、動的登録で相対パスの `redirect_uris` が通っていた（`RT-307.4` の (3)。#437 で直した）
 
 ### 画面を駆動するテスト（#257）
 
@@ -5500,7 +5522,7 @@ Get-Service aspnet_state | Select-Object Name, Status, StartType
 **見分け方。** **`/.well-known/openid-configuration` は 200 を返すのに、`/Account/Login` が 500** になる。
 **Web API の口はセッションを使わないが、画面は使う**ためである。
 **応答の本文に理由が出る**（「セッション状態要求をセッション状態サーバーに対して作成できませんでした」）。
-**アプリのログ（`root/files/resource/Log`）には出ない。** ASP.NET が先に落としている。
+**アプリのログ（`root/files/resource/MultiPurposeAuthSite/Log`）には出ない。** ASP.NET が先に落としている。
 
 > **全部の口が 500 になるときは、別の原因**である（`OAuth2ClientsInformation` を
 > 環境変数で渡していた頃の、環境ブロックの上限。1 節）。

@@ -34,7 +34,7 @@
 > |---|---|
 > | **値** | **ターゲットごとに違う**（net48 はパスが Windows 形式、URL に仮想パスが付く）ので、**写さない** |
 > | **net48 だけの設定** | `webpages:*` / `PreserveLoginUrl` / `ClientValidationEnabled` / `UnobtrusiveJavaScriptEnabled`。**先頭にまとめてある** |
-> | **net10.0 だけの設定** | `SessionStoreType` / `SessionStoreConnectionString` / `FIDOServerMode` / `DataProtectionKeyPath` / `UseHttpsRedirection` / `CookieSecurePolicy` / `UseForwardedHeaders` / `ForwardedHeadersKnownProxies` / `FxXMLTCDefinition` / `FxXMLTMInProcessDefinition`。**説明ごと `_app.config` には写さない** |
+> | **net10.0 だけの設定** | `SessionStoreType` / `SessionStoreConnectionString` / `FIDOServerMode` / `DataProtectionKeyPath` / `UseHttpsRedirection` / `CookieSecurePolicy` / `UseForwardedHeaders` / `ForwardedHeadersKnownProxies`。**説明ごと `_app.config` には写さない** |
 >
 > **片方だけ直すとズレる。** **並べ替えや説明の加筆は、4 つとも同じ形にすること。**
 

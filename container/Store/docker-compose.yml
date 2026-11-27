@@ -96,7 +96,9 @@ services:
     restart: "no"
     profiles:
       - sqlserver
-    command: "sh -c '/init/0_start-up.sh & /opt/mssql/bin/sqlservr;'"
+    # **bash で呼ぶ**（#435）。0_start-up.sh は git で実行の属性を持たない（100644）。
+    #   Windows（WSL のドライブ）では実行できるが、Linux で clone すると実行できず、DDL が流れない。
+    command: "sh -c 'bash /init/0_start-up.sh & /opt/mssql/bin/sqlservr;'"
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=seigi@123

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/10/08  玄人 幸道         環境変数での重ね書きを追加（#284）
+//*  2026/11/27  玄人 幸道         X509 のフォルダのファイルのパスを、構成ファイルから作る X509Path を追加（Linux で回すため。#435）
 //**********************************************************************************
 
 using System;
@@ -336,6 +337,42 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             string value;
             return this._appSettings.TryGetValue(key, out value) ? value : null;
+        }
+
+        /// <summary>
+        /// 配備の X509 のフォルダ（`RsaCerFilePath` が在るフォルダ）の、ファイルのパスを返す。
+        /// </summary>
+        /// <param name="fileName">ファイル名（`SHA256RSA_Server.cer` など）</param>
+        /// <returns>パス（区切りは `/`）</returns>
+        /// <remarks>
+        /// **テストが管理画面に登録するパス**（上流・発行者の証明書）を、**直書きせずに構成ファイルから作る**（#435）。
+        /// **Linux では、構成ファイルのパスが `C:/root/...` ではない**ため。
+        /// **サイトと同じく、`RsaCerFilePath` が空なら `SpRp_RsaCerFilePath` を読む**（#339）。
+        ///
+        /// **区切りは `/` にそろえる**（net48 版の `app.config` は `\`）。
+        /// **以前の直書き（`C:/root/files/resource/X509/...`）と同じ文字列にする**ため
+        /// （登録した値が往復するかを、文字列で比べるテストがある。`RT-292.4`）。
+        /// `Path.GetDirectoryName` は使わない（Linux では `\` を区切りと見ない）。
+        /// </remarks>
+        public string X509Path(string fileName)
+        {
+            string cer = this.Get("RsaCerFilePath");
+
+            if (string.IsNullOrEmpty(cer))
+            {
+                cer = this.Get("SpRp_RsaCerFilePath");
+            }
+
+            if (string.IsNullOrEmpty(cer))
+            {
+                throw new InvalidOperationException(
+                    "構成ファイルに RsaCerFilePath（SpRp_RsaCerFilePath）がありません : " + this.Path);
+            }
+
+            string normalized = cer.Replace('\\', '/');
+            int slash = normalized.LastIndexOf('/');
+
+            return (slash < 0) ? fileName : normalized.Substring(0, slash + 1) + fileName;
         }
 
         /// <summary>登録済み client_id の一覧</summary>

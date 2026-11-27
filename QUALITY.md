@@ -260,6 +260,10 @@
 ### 全般（汎用認証サイトの補足）
 
 - [ ] **net48 と net10.0 で、同じ振る舞いになるか**（片方だけ直していないか）
+- [ ] **OS（Windows・Linux）で、同じ振る舞いになるか。** **絶対 URI かを `Uri.TryCreate(…, UriKind.Absolute, …)` だけで決めていないか** —
+  **Unix では `/` で始まる値を `file` の絶対 URI にする**ので、**Linux では動的登録の `redirect_uris` に相対パスが通っていた**（`//host`・`C:/x` は Windows でも `file` として通っていた）。
+  **`IsWellFormedUriString` を併せて見るか、スキームを絞る**（#437。`RT-307.4`・`RT-437.1`）。**Linux の E2E（CI の `e2e-linux`）で見つかった**。
+  **ただし `IsWellFormedUriString` は、符号化していない非 ASCII を、.NET Framework では断り .NET では受ける**（net48 と net10.0 で分かれる。別モデルのレビューで見つかった）。**揃えるなら、文字で先に断る**
 - [ ] **要求のたびに、設定・鍵のファイルを読んでいないか。** 運用で置き換えるファイルは、置き換えの瞬間に重なった要求が読めずに 500 になる — **アクセス トークンの検証が、要求のたびに `JwkSet.json` を読んでいた**（#407。単体テスト `SigningJwkSetTests`）。**控えて、読めなければ前の中身で続ける**
 - [ ] テストが変更した分岐を通っているかは、[`COVERAGE.md`](root/programs/Tests/COVERAGE.md) の手順で測り、HTML で行を見る
 - [ ] 見つかった型の横展開は、別のエンドポイントに残っていないかで見る

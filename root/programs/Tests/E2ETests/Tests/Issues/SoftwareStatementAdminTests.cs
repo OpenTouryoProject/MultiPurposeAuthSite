@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/21  玄人 幸道         新規（#308 の段階 3）
 //*  2026/11/06  玄人 幸道         自分の証明書を、サーバ側のキー（RsaCerFilePath。空なら SpRp_RsaCerFilePath）で読む（#339）
+//*  2026/11/27  玄人 幸道         登録する証明書のパスを直書きせず、構成ファイルから作る（AppConfig.X509Path。#435）
 //**********************************************************************************
 
 using System;
@@ -110,7 +111,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         admin, key, "https://e2e-rt308.example.com/" + targetKey,
                         new Dictionary<string, string>()
                         {
-                            { "CerFilePath", "C:/root/files/resource/X509/SHA256RSA_Server.cer" },
+                            { "CerFilePath", admin.Config.X509Path("SHA256RSA_Server.cer") },
                             { "AllowedScope", "openid email" }
                         });
 
@@ -132,7 +133,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         {
                             { "Issuer", "https://e2e-rt308.example.com/" + targetKey },
                             { "Alg", "RS256" },
-                            { "CerFilePath", "C:/root/files/resource/X509/SHA256RSA_Server.cer" },
+                            { "CerFilePath", admin.Config.X509Path("SHA256RSA_Server.cer") },
                             { "AllowedScope", "openid" }
                         });
 
@@ -356,7 +357,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         admin, settingKey, "https://e2e-rt308-dup.example.com",
                         new Dictionary<string, string>()
                         {
-                            { "CerFilePath", "C:/root/files/resource/X509/SHA256RSA_Server.cer" }
+                            { "CerFilePath", admin.Config.X509Path("SHA256RSA_Server.cer") }
                         });
 
                     r.VerifyEqual("一覧へ戻らない（再表示）", "200",

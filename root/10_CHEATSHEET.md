@@ -27,6 +27,7 @@
 | 一部だけ回す | `.\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RequestObjectTests"` | 1 |
 | net10.0 版だけ起動して回す（net48 版の分は Skip） | `.\2_RunAllTests.ps1 -Launch -NoNetFx` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
 | ブラウザで測るもの（`UI-n.n`）を外す | `cd programs\Tests; .\test.ps1 -Launch -NoWebUI` | 1 |
+| net10.0 版を Linux（.NET 10 の SDK のコンテナの pwsh）で回す（設定は雛形から作る） | `./New-E2ESettings.ps1 … -ResourceDir /tmp/mpas/resource` → `./test.ps1 -Launch`（`programs/Tests`） | [`14_TESTING.md`](14_TESTING.md) 5 節「Linux で回す」 |
 | **テストを足した・変えた**ので、テストケースの原本を作り直す | `.\2_RunAllTests.ps1 -Launch -UpdateTestCases` | [`14_TESTING.md`](14_TESTING.md) 10 節 |
 | サイトのコード カバレッジを測る | `.\2_RunAllTests.ps1 -Launch -Coverage` | [`14_TESTING.md`](14_TESTING.md) 1 節 |
 | カバレッジを品質マップの単位で集計する（`-Update` で `COVERAGE.md` を更新） | `.\CoverageReport.ps1` | [`COVERAGE.md`](programs/Tests/COVERAGE.md) |
@@ -273,8 +274,8 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
    programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\_appsettings.json → appsettings.json
    programs\MultiPurposeAuthSite\MultiPurposeAuthSite\_app.config              → app.config
 
-3. 証明書を配置する
-   root\files\resource\X509 → 設定ファイルのパスへ
+3. リソースを配置する（Open棟梁 のリソースは要らない。#434）
+   root\files\resource（MultiPurposeAuthSite・X509） → C:\root\files\resource
 
 4. 建てる
    cd root && .\1_BuildAll.ps1

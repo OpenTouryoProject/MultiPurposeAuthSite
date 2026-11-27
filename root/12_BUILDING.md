@@ -407,8 +407,8 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 
 ## 11. CI（GitHub Actions。#348）
 
-**`.github/workflows/build-and-test.yml` が、`windows-latest` で、本書の全ビルドと単体テスト（ジョブ `build`）、両版の E2E（ジョブ `e2e-windows`）を回す。**
-判定はここに書かず、`1_BuildAll.ps1`・`dotnet test`・`2_RunAllTests.ps1` の終了コードで決める（OpenTouryo の `build-and-test.yml` と同じ線引き）。
+**`.github/workflows/build-and-test.yml` が、`windows-latest` で、本書の全ビルドと単体テスト（ジョブ `build`）、両版の E2E（ジョブ `e2e-windows`）を回し、`ubuntu-latest` で net10.0 版の E2E（ジョブ `e2e-linux`。#435）を回す。**
+判定はここに書かず、`1_BuildAll.ps1`・`dotnet test`・`2_RunAllTests.ps1`・`test.ps1` の終了コードで決める（OpenTouryo の `build-and-test.yml` と同じ線引き）。
 
 | 項目 | 内容 |
 |---|---|
@@ -435,13 +435,24 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | 項目 | 内容 |
 |---|---|
 | 設定ファイル | **雛形から作り、E2E に要る 4 つだけを CI 用の値に替える**（`AdministratorUID`・`AdministratorPWD`・`TestUserPWD`・`SaltParameter`。テスト専用で秘密ではない）。E2E のテストも同じ設定ファイルを読む |
-| `C:\root\files\resource` | **OpenTouryo のリソースに MPAS のリソースを重ねて置く**（手元の構成を写す）。net10.0 版の雛形が OpenTouryo のリソースを指しているための回避（#434） |
+| `C:\root\files\resource` | **MPAS の `root/files/resource` だけを置く**（[`Readme.ja.md`](Readme.ja.md) の初回の準備と同じ。Open棟梁 のリソースは要らない。#434 の前は、net10.0 版の雛形が Open棟梁 のリソースを指していたので重ねていた） |
 | 証明書 | Kestrel は開発用証明書、IIS Express は自己署名の証明書を 44302 に登録し直す（ランナーの既存の証明書はハンドシェイクで切られる。OpenTouryo#712）。どちらも `LocalMachine\Root` に入れる |
 | サービス | `aspnet_state` を起動する（net48 版のセッション） |
 | 画面の言語 | **ランナーの表示言語は英語で、変えられない。** テストの足場が日本語にそろえる（[`14_TESTING.md`](14_TESTING.md) 5 節「画面の言語」） |
 | ID 連携のコンテナ | **WSL2 の Ubuntu に Docker を入れて動かす**（`container/E2E`。リソースの場所は `E2E_RESOURCE_DIR`）。**Windows の `docker` から、WSL2 の Docker に TCP（`127.0.0.1:2375`。`localhost` は `::1` に解決されることがあり、届かない）でつなぐ**（コンテナのテストが `docker inspect` で読むため。手元の Rancher Desktop と同じ形） |
 | 残すもの | E2E の結果（`Result` の下）・ビルドのログ・コンテナのログ（`e2e-windows-results-<ストア>`） |
 
-- **Linux ランナーで net10.0 を回すのは、まだ載せていない**（`test.ps1` が Windows 前提のため。#435）
+**net10.0 版の E2E（ジョブ `e2e-linux`。#435）は、`ubuntu-latest` で、同じくストアの種類ごとに回す。** net48 版の分は Skip になる（両版は `e2e-windows` が測る）。
+
+| 項目 | 内容 |
+|---|---|
+| ビルド | **Open棟梁 の部品（`OpenTouryoAssemblies/Build_netcore100`）は `build` から受け取る**（成果物 `otr-assemblies-net10`。Open棟梁 のビルドは bat で、Windows でしか作れない。Open棟梁 の `linux-stub` と同じ）。**MPAS の net10.0 版とテストは Linux で建てる**（`test.ps1` が建てる） |
+| 設定ファイル | **`root/programs/Tests/New-E2ESettings.ps1 -ResourceDir <場所>` で雛形から作る**（`e2e-windows` と同じ 4 つを替える）。雛形のパスの `C:/root/files/resource` はその場所に置き換え、リソースはそこへ写す（log4net の構成の書き出し先は、写しの方だけ置き換える）。ID 連携のコンテナにも、同じ場所を `E2E_RESOURCE_DIR` で渡す |
+| 証明書 | `dotnet dev-certs https --trust` と `SSL_CERT_DIR`（OpenSSL に信頼させる。Open棟梁 の `linux-*` と同じ） |
+| ブラウザ | Playwright の Chromium（`playwright.ps1 install --with-deps chromium`） |
+| DB・ID 連携のコンテナ | **ランナーの Docker で動かす**（WSL2・`portproxy`・TCP の手当ては要らない）。待ち方は `e2e-windows` と同じ |
+| E2E | **`test.ps1 -Launch` を直に呼ぶ**（Linux では `-NoNetFx` が立ち、`-Coverage` は使えない）。合否は終了コード |
+| 残すもの | E2E の結果・TRX・コンテナのログ（`e2e-linux-results-<ストア>`） |
+
 - **アクションは SHA で固定し、`run:` の中は ASCII だけにする**（`AGENTS.md`「GitHub Actions を書き足すとき」）
 - 必須のチェックにするかは、人が決める（[`QUALITY.md`](../QUALITY.md) の「このリポジトリの値」）
