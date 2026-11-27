@@ -40,6 +40,7 @@
 //*  2026/11/24  玄人 幸道         client_name を、画面に出す名前の列に入れるようにした（#430）
 //*  2026/11/25  玄人 幸道         ログアウトの登録項目（post_logout_redirect_uris・frontchannel_logout_uri・backchannel_logout_uri・*_session_required）を受けるようにした（#426）
 //*  2026/11/25  玄人 幸道         post_logout_redirect_uris を https（ループバックは http）に限り、ログアウトの URL のフラグメントと、frontchannel_logout_uri の redirect_uris との同一オリジンを確かめるようにした（#426）
+//*  2026/11/27  玄人 幸道         redirect_uris を、整形された絶対 URI に限り、file のスキームを断るようにした（Linux で相対パスが通っていた。#437）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1071,6 +1072,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// **絶対 URI で、フラグメントを持たないこと**（RFC 6749 §3.1.2）。
         /// **ワイルドカードは受けない**（#263 / #306 と同じ方針。照合は完全一致）。
         /// **長さは 1 本ぶんの上限まで**（`Const.MaxLengthOfUri`）。
+        ///
+        /// **`Uri.TryCreate` だけでは、絶対 URI かを決められない**（#437）。
+        /// **Unix では `/` で始まる値（相対パス）を、ファイルのパスとして `file` の絶対 URI にする**ので、
+        /// **Linux で動かすと相対パスが通っていた。** `//host`・`C:/x` は、Windows でも `file` として通っていた。
+        /// **`IsWellFormedUriString` で、書かれたとおりの絶対 URI かを見て**（ほかの URI の項目の `SetUri` と同じ）、
+        /// **`file` のスキームは断る**（ブラウザが折り返せない行き先）。どちらも OS によらない。
+        /// **ネイティブ アプリのカスタム スキーム（RFC 8252）は通す。**
         /// </remarks>
         private static bool IsValidRedirectUri(string redirectUri)
         {
@@ -1081,7 +1089,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return false;
             }
 
-            if (!Uri.TryCreate(redirectUri, UriKind.Absolute, out Uri uri))
+            if (!Uri.IsWellFormedUriString(redirectUri, UriKind.Absolute)
+                || !Uri.TryCreate(redirectUri, UriKind.Absolute, out Uri uri)
+                || uri.IsFile
+                || string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }

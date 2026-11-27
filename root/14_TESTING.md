@@ -4868,7 +4868,7 @@ The ID federation did not complete. (the error view was returned)
 - **ID 連携のコンテナ（`container/E2E`）は、手元のものを共有する**（`--network host`）。**上流のパスワードは手元の実ファイルのもの**なので、テスト専用の値で作った下流からは**上流にサインインできない**。**繰り返すと、上流のテスト利用者がロックアウトされ、手元の Windows の通しの ID 連携も落ちる**（作り直す：`docker compose up -d --force-recreate`）。ID 連携は CI（上流も同じ設定ファイルから作る）で測る
 - **静的配信のコンテナ（44305。`jwks_uri` など）は、ホストの `container/E2E/jwks` を配る。** テストはそこに書くので、**写しの同じ場所に、ホストのフォルダをマウントする**
 - **コンテナのテスト（CN-*）は `docker` で様子を読む**ので、docker の CLI とソケット（`/var/run/docker.sock`）が要る（無ければ Skip）
-- **`RT-307.4` の手順 (3) は Linux でだけ落ちる**（#437。.NET の `Uri.TryCreate` が、Unix では `/` で始まる値を `file` の絶対 URI にする）
+- **Linux でだけ落ちるテストは、.NET の OS ごとの違いを疑う** — **`Uri.TryCreate` は、Unix では `/` で始まる値を `file` の絶対 URI にする**ので、動的登録で相対パスの `redirect_uris` が通っていた（`RT-307.4` の (3)。#437 で直した）
 
 ### 画面を駆動するテスト（#257）
 

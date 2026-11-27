@@ -454,6 +454,5 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | E2E | **`test.ps1 -Launch` を直に呼ぶ**（Linux では `-NoNetFx` が立ち、`-Coverage` は使えない）。合否は終了コード |
 | 残すもの | E2E の結果・TRX・コンテナのログ（`e2e-linux-results-<ストア>`） |
 
-- **Linux でだけ落ちるテストがある**：`RT-307.4` の手順 (3)（動的登録の `redirect_uris` の相対パス）。.NET の `Uri.TryCreate` が、Unix では `/` で始まる値を `file` の絶対 URI にするため（#437 で直す）
 - **アクションは SHA で固定し、`run:` の中は ASCII だけにする**（`AGENTS.md`「GitHub Actions を書き足すとき」）
 - 必須のチェックにするかは、人が決める（[`QUALITY.md`](../QUALITY.md) の「このリポジトリの値」）
