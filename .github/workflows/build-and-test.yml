@@ -130,7 +130,7 @@ jobs:
   # ＜設定ファイル＞
   #   雛形（_appsettings.json・_app.config）から作り、E2E に要る 4 つ（管理者の UID・パスワード、テスト利用者のパスワード、SaltParameter）だけを、
   #   CI 用の値に替える。**値はテスト専用で、秘密ではない**（ランナーは使い捨て）。E2E のテストも、同じ設定ファイルを読む。
-  #   証明書などは C:\root\files\resource\... を指すので、そこに OpenTouryo と MPAS のリソースを重ねて置く（手順「Set up C:\root」）。
+  #   証明書などは C:\root\files\resource\... を指すので、そこに MPAS のリソースを置く（手順「Set up C:\root」。#434）。
   #
   # ＜証明書＞
   #   Kestrel は開発用証明書（dotnet dev-certs https）で待ち受ける。IIS Express は、ランナーの既存の証明書がハンドシェイクで切られるので
@@ -176,19 +176,16 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # **C:\root\files\resource は、OpenTouryo のリソースに MPAS のリソースを重ねたフォルダにする**（手元の構成を写す）。
-      #   net10.0 版の雛形（_appsettings.json）の FxLog4NetConfFile・FxXMLSPDefinition・FxXMLMSGDefinition が、
-      #   MPAS に無い OpenTouryo のリソース（resource/Log・resource/XML）を指しているため（回避。雛形を直したら外す。#434）。
-      #   ジャンクションではなく写しにする（OpenTouryo のリソースと合わせるため）。
+      # **C:\root\files\resource には、このリポジトリの root/files/resource だけを置く**（Readme.ja.md の初回の準備と同じ。Open棟梁 のリソースは要らない。#434）。
+      #   以前は、net10.0 版の雛形が Open棟梁 のリソース（resource/Log・resource/XML）を指していたので、Open棟梁 のリソースを重ねていた。
       - name: Set up C:\root
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $dst = 'C:\root\files\resource'
           New-Item -ItemType Directory -Force $dst | Out-Null
-          Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'OpenTouryo\root\files\resource\*') $dst -Recurse -Force
           Copy-Item (Join-Path $env:GITHUB_WORKSPACE 'root\files\resource\*') $dst -Recurse -Force
-          foreach ($p in 'X509\SHA256RSA_Server.pfx', 'MultiPurposeAuthSite\JwkSet.json', 'Log\SampleLogConf.xml', 'Xml\MSGDefinition.xml', 'Xml\SPDefinition.xml')
+          foreach ($p in 'X509\SHA256RSA_Server.pfx', 'MultiPurposeAuthSite\JwkSet.json', 'MultiPurposeAuthSite\Log\SampleLogConf.xml', 'MultiPurposeAuthSite\Log\SampleLogConf.Core.xml', 'MultiPurposeAuthSite\Xml\MSGDefinition.xml', 'MultiPurposeAuthSite\Xml\SPDefinition.xml')
           {
               if (-not (Test-Path (Join-Path $dst $p))) { throw "$p is not found under $dst." }
           }

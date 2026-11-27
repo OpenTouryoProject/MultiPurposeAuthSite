@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <!-- log4net構成設定のセクション -->
-<!-- net10.0 版（MultiPurposeAuthSiteCore）用。SampleLogConf.xml（net48 版用）と、書き出し先（C:\root\files\resource\Log）だけが違う。
-     両版が同じファイルに書くと、後に開いた方が <名前>.<日付>.log.<日付>.log に書くので分けている（#434）。形を変えるときは 2 つとも直す。 -->
+<!-- net10.0 版（MultiPurposeAuthSiteCore）用。SampleLogConf.xml（net48 版用）と、ファイル名（後ろに _Core。ACCESS_Core など）だけが違う。
+     両版が同じファイルに書くと、後に開いた方が <名前>.<日付>.log.<日付>.log に書くので分けている（#434。Open棟梁 の _WS と同じ流儀）。形を変えるときは 2 つとも直す。 -->
 
 <log4net debug="true"><!-- ← debug="true"の場合、デバッグ用のコンソール出力が有効になる。 -->
 
@@ -39,7 +39,7 @@
     
     <!-- ローリング・ログファイル出力用アペンダ -->
     <appender name="ACCESS" type="log4net.Appender.RollingFileAppender">
-        <param name="File" value="C:\root\files\resource\Log\ACCESS" />
+        <param name="File" value="C:\root\files\resource\MultiPurposeAuthSite\Log\ACCESS_Core" />
         <!-- ローリングの設定 -->
         <param name="StaticLogFileName" value="false" />
         <param name="RollingStyle" value="date " />
@@ -60,7 +60,7 @@
         
     <!-- ローリング・ログファイル出力用アペンダ -->
     <appender name="SQLTRACE" type="log4net.Appender.RollingFileAppender">
-        <param name="File" value="C:\root\files\resource\Log\SQLTRACE" />
+        <param name="File" value="C:\root\files\resource\MultiPurposeAuthSite\Log\SQLTRACE_Core" />
         <!-- ローリングの設定 -->
         <param name="StaticLogFileName" value="false" />
         <param name="RollingStyle" value="date " />
@@ -81,7 +81,7 @@
     
     <!-- ローリング・ログファイル出力用アペンダ -->
     <appender name="OPERATION" type="log4net.Appender.RollingFileAppender">
-        <param name="File" value="C:\root\files\resource\Log\OPERATION" />
+        <param name="File" value="C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION_Core" />
         <!-- ローリングの設定 -->
         <param name="StaticLogFileName" value="false" />
         <param name="RollingStyle" value="date " />

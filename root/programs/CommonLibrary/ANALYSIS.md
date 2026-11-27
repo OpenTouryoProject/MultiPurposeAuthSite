@@ -412,7 +412,7 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 
 - log4net の構成は `appSettings:FxLog4NetConfFile`
   （既定は、net48 版が `C:/root/files/resource/MultiPurposeAuthSite/Log/SampleLogConf.xml`、net10.0 版が同じフォルダの `SampleLogConf.Core.xml`。
-  **書き出し先だけが違い**、ログは net48 版が `resource/MultiPurposeAuthSite/Log`、net10.0 版が `resource/Log` に出る。
+  **ファイル名だけが違い**、ログはどちらも `resource/MultiPurposeAuthSite/Log` に、net48 版は `ACCESS` など、net10.0 版は後ろに `_Core` を付けた `ACCESS_Core` などで出る（Open棟梁 の `_WS` と同じ流儀）。
   **同じファイルに書くと、後に開いた方が `<名前>.<日付>.log.<日付>.log` に書くので分けている**。#434）。
 - **設定キー名は `EnableDebugTraceLog` に改名した**（以前は `Enabe` という綴りだった。#236）。
   **旧いキー名も読む**（`Config.RenamedKeys`）ので、配備済みの設定ファイルはそのままでも動く。

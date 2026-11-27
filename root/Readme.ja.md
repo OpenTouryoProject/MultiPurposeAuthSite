@@ -71,7 +71,7 @@ cd root
 
 `root\files\resource` の中身（`MultiPurposeAuthSite`・`X509`）を、設定ファイルが指す `C:\root\files\resource` へ置きます。
 **Open棟梁 のリソースは要りません**（雛形は両版とも、このリポジトリの写しを指す。#434）。
-ログは、net10.0 版が `C:\root\files\resource\Log`、net48 版が `C:\root\files\resource\MultiPurposeAuthSite\Log` に出ます。証明書 → [13_CONFIGURATION.md](13_CONFIGURATION.md) 8 節
+ログは `C:\root\files\resource\MultiPurposeAuthSite\Log` に出ます（net10.0 版は `ACCESS_Core` のように名前の後ろに `_Core` が付く）。証明書 → [13_CONFIGURATION.md](13_CONFIGURATION.md) 8 節
 
 ## プログラムのビルド
 

@@ -1105,7 +1105,7 @@ net48   : SoftwareStatementIssuers（1 本の JSON 文字列）
 
 | | |
 |---|---|
-| **出る場所** | **net10.0 版は `C:\root\files\resource\Log\OPERATION.<日付>.log`**、**net48 版は `C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION.<日付>.log`**（**2 つのアプリで置き場が違う**。同じファイルに書かないよう分けている。#434） |
+| **出る場所** | **`C:\root\files\resource\MultiPurposeAuthSite\Log` の、net10.0 版は `OPERATION_Core.<日付>.log`**、**net48 版は `OPERATION.<日付>.log`**（**2 つのアプリで名前が違う**。同じファイルに書かないよう分けている。#434 より前の net10.0 版の設定ファイルでは `C:\root\files\resource\Log\OPERATION.<日付>.log`） |
 | **出る文字列** | `The jwks_uri warm-up read <n> of <m> JWK Sets.`（**0 件でも出る** ＝ **仕掛けが動いていることの印**） |
 
 **設定ファイル側の経路は、環境変数 1 本で確かめられる**（**net10.0 版のみ**。
@@ -3987,7 +3987,7 @@ ORA-01400: ("SCOTT"."UserRoles"."RoleId")にはNULLは挿入できません。
   **最初に失敗すると、作り直すまで直らない**
 - **net48 版（Identity 2.x）は正規化しない**ので、同じ DB でも**そちらの経路では付いていた**
 - **`SystemAdmin` を要求する画面が無かった**（#257 の管理画面のテストが、初めてそこを踏んだ）
-- **記録は `root/files/resource/Log/SQLTRACE.*.log`**（`MySQLLogForEx` の出力）
+- **記録は `root/files/resource/MultiPurposeAuthSite/Log/SQLTRACE_Core.*.log`**（`MySQLLogForEx` の出力。#434 より前は `resource/Log/SQLTRACE.*.log`）
 
 **実測（直した後）** : `npg` の `UserRoles` に **6 行**（管理者 3 ＋ `super_tanaka` 2 ＋ `tanaka` 1）が入り、
 **管理画面の 9 ケースが Skip されなくなった**（`ora` も同じ）。
@@ -4783,7 +4783,7 @@ docker compose up -d upstream
 
 #### 失敗したら、下流の OPERATION ログを見る（#253）
 
-**`Error` 画面が出たときの理由は、すべて OPERATION ログに出る**（`C:\root\files\resource\Log\OPERATION.<日付>.log`）。
+**`Error` 画面が出たときの理由は、すべて OPERATION ログに出る**（`C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION_Core.<日付>.log`。net48 版は `OPERATION.<日付>.log`）。
 
 ```
 The state of the authorization response did not match the session. (response: len=32, session: (empty))
@@ -5500,7 +5500,7 @@ Get-Service aspnet_state | Select-Object Name, Status, StartType
 **見分け方。** **`/.well-known/openid-configuration` は 200 を返すのに、`/Account/Login` が 500** になる。
 **Web API の口はセッションを使わないが、画面は使う**ためである。
 **応答の本文に理由が出る**（「セッション状態要求をセッション状態サーバーに対して作成できませんでした」）。
-**アプリのログ（`root/files/resource/Log`）には出ない。** ASP.NET が先に落としている。
+**アプリのログ（`root/files/resource/MultiPurposeAuthSite/Log`）には出ない。** ASP.NET が先に落としている。
 
 > **全部の口が 500 になるときは、別の原因**である（`OAuth2ClientsInformation` を
 > 環境変数で渡していた頃の、環境ブロックの上限。1 節）。

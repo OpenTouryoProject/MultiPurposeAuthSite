@@ -23,7 +23,7 @@
     "FxXMLSPDefinition": "C:/root/files/resource/MultiPurposeAuthSite/Xml/SPDefinition.xml",
     // メッセージ定義へのパス
     "FxXMLMSGDefinition": "C:/root/files/resource/MultiPurposeAuthSite/Xml/MSGDefinition.xml",
-    // Log4Netのコンフィグファイルへのパス（net10.0 版用。ログは C:/root/files/resource/Log に出る。net48 版と同じファイルに書かないよう分けている。#434）
+    // Log4Netのコンフィグファイルへのパス（net10.0 版用。ログは C:/root/files/resource/MultiPurposeAuthSite/Log の ACCESS_Core などに出る。net48 版と同じファイルに書かないよう、名前を分けている。#434）
     "FxLog4NetConfFile": "C:/root/files/resource/MultiPurposeAuthSite/Log/SampleLogConf.Core.xml",
     // セッションタイムアウト検出機能のon・off
     "FxSessionTimeOutCheck": "off", // 外部ログイン不具合対応

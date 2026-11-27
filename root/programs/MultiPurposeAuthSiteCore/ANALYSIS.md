@@ -66,7 +66,7 @@ mpas_dev.bat（リポジトリ ルート）               隣に clone 済みの
 
 > **`FxXMLSPDefinition`・`FxXMLMSGDefinition`・`FxLog4NetConfFile` は、本リポジトリの写し（`root/files/resource/MultiPurposeAuthSite/`）を指す**（net48 版と同じ）。
 > 以前は Open棟梁 のリソース（`resource/XML/`・`resource/Log/`）を指していて、Open棟梁 のリソースを置かないと net10.0 版が起動しなかった（#434）。
-> **log4net の構成だけは net10.0 版用（`SampleLogConf.Core.xml`）**で、ログは今までどおり `resource/Log` に出る（net48 版と同じファイルに書かないため）。
+> **log4net の構成だけは net10.0 版用（`SampleLogConf.Core.xml`）**で、ログは `resource/MultiPurposeAuthSite/Log` の `ACCESS_Core` などに出る（net48 版と同じファイルに書かないため、名前に `_Core` を付ける）。
 
 ### 2.3 設定ファイル
 

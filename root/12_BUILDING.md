@@ -435,7 +435,7 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 | 項目 | 内容 |
 |---|---|
 | 設定ファイル | **雛形から作り、E2E に要る 4 つだけを CI 用の値に替える**（`AdministratorUID`・`AdministratorPWD`・`TestUserPWD`・`SaltParameter`。テスト専用で秘密ではない）。E2E のテストも同じ設定ファイルを読む |
-| `C:\root\files\resource` | **OpenTouryo のリソースに MPAS のリソースを重ねて置く**（手元の構成を写す）。net10.0 版の雛形が OpenTouryo のリソースを指しているための回避（#434） |
+| `C:\root\files\resource` | **MPAS の `root/files/resource` だけを置く**（[`Readme.ja.md`](Readme.ja.md) の初回の準備と同じ。Open棟梁 のリソースは要らない。#434 の前は、net10.0 版の雛形が Open棟梁 のリソースを指していたので重ねていた） |
 | 証明書 | Kestrel は開発用証明書、IIS Express は自己署名の証明書を 44302 に登録し直す（ランナーの既存の証明書はハンドシェイクで切られる。OpenTouryo#712）。どちらも `LocalMachine\Root` に入れる |
 | サービス | `aspnet_state` を起動する（net48 版のセッション） |
 | 画面の言語 | **ランナーの表示言語は英語で、変えられない。** テストの足場が日本語にそろえる（[`14_TESTING.md`](14_TESTING.md) 5 節「画面の言語」） |
