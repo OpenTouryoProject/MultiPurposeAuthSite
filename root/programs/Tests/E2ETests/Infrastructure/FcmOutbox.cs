@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/12  玄人 幸道         新規（認証デバイスの代わりに、プッシュ通知を受け取る）（#196）
 //*  2026/10/29  玄人 幸道         宛先（デバイス・トークン）で待つ WaitForTokenAsync を追加（#294）
+//*  2026/11/26  玄人 幸道         ほかのプロセスが開いていて読めないファイルは、その周回では飛ばし、次の周回で読み直す（#373）
 //**********************************************************************************
 
 using System;
@@ -51,6 +52,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// test.ps1 -Launch が、サイトごとに別のディレクトリを設定する（MPAS_CORE_FCM_OUTBOX / MPAS_NETFX_FCM_OUTBOX）。
     ///
     /// **中身には device_token や 2FA のコードが入るので、テストの出力に出さないこと。**
+    ///
+    /// **ほかのプロセスがファイルを開いていると、読めないことがある**（#373。`MailOutbox` と同じ）。
+    /// **その周回では飛ばし、次の周回で読み直す。**
     /// </summary>
     public static class FcmOutbox
     {
@@ -99,7 +103,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 {
                     foreach (string path in Directory.GetFiles(target.FcmOutbox, "*.json"))
                     {
-                        Message message = Read(path);
+                        //  **読めなければ、この周回では飛ばす**（次の周回で読み直す。#373）。
+                        if (!TryRead(path, out Message message))
+                        {
+                            continue;
+                        }
+
                         string value;
 
                         if (message.Data.TryGetValue(dataKey, out value) && value == dataValue)
@@ -135,7 +144,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 {
                     foreach (string path in Directory.GetFiles(target.FcmOutbox, "*.json"))
                     {
-                        Message message = Read(path);
+                        //  **読めなければ、この周回では飛ばす**（次の周回で読み直す。#373）。
+                        if (!TryRead(path, out Message message))
+                        {
+                            continue;
+                        }
 
                         if (message.Token == token)
                         {
@@ -150,6 +163,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
 
                 await Task.Delay(200);
+            }
+        }
+
+        /// <summary>送信箱のファイルを読む（ほかのプロセスが開いていて読めなければ false。#373）</summary>
+        /// <param name="path">ファイルのパス</param>
+        /// <param name="message">Message（読めなければ null）</param>
+        /// <returns>読めたら true</returns>
+        private static bool TryRead(string path, out Message message)
+        {
+            try
+            {
+                message = Read(path);
+                return true;
+            }
+            catch (IOException)
+            {
+                message = null;
+                return false;
             }
         }
 

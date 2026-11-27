@@ -68,6 +68,7 @@
 //*  2026/11/19  玄人 幸道         TestClient4_6（鍵を jwks_uri だけで登録した fapi_ciba）を追加（#408）
 //*  2026/11/24  玄人 幸道         TestClient_47（fapi2。client_secret_post）を追加（#424）
 //*  2026/11/24  玄人 幸道         TestClient_48・_49（logo_uri・policy_uri・tos_uri）を追加（#427）
+//*  2026/11/25  玄人 幸道         TestClient_50（post_logout_redirect_uri を 2 件）を追加（#426）
 //**********************************************************************************
 
 using System;
@@ -475,6 +476,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>TestClient を写し、**https でない logo_uri・policy_uri・tos_uri を登録した**クライアント（RT-427.3。#427）</summary>
         public const string TestClient_49 = "TestClient_49";
 
+        /// <summary>TestClient を写し、**post_logout_redirect_uri を 2 件登録した**クライアント（RT-426.1。#426）</summary>
+        /// <remarks>
+        /// **1 件目は 512 文字を超える URL**（`TestClient50FirstPostLogoutRedirectUri`）、**2 件目は記号（test_self_logout）**。
+        /// </remarks>
+        public const string TestClient_50 = "TestClient_50";
+
+        /// <summary>TestClient_50 の 1 件目の post_logout_redirect_uri（512 文字を超える。#426）</summary>
+        public static readonly string TestClient50FirstPostLogoutRedirectUri =
+            "https://rp.e2e.example/logged_out?p=" + new string('x', 520);
+
         /// <summary>TestClient_21 に登録した ACS URL（#275。存在しない URL）</summary>
         public const string Saml2AcsUrl = "https://saml.e2e.example/acs";
 
@@ -560,7 +571,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_46, "e2e0tc46600000000000000000000000" },
                 { KnownClients.TestClient_47, "e2e0tc47700000000000000000000000" },
                 { KnownClients.TestClient_48, "e2e0tc48800000000000000000000000" },
-                { KnownClients.TestClient_49, "e2e0tc49900000000000000000000000" }
+                { KnownClients.TestClient_49, "e2e0tc49900000000000000000000000" },
+                { KnownClients.TestClient_50, "e2e0tc50500000000000000000000000" }
             };
 
         /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
@@ -1213,7 +1225,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 || clientName == KnownClients.TestClient_44
                 || clientName == KnownClients.TestClient_46
                 || clientName == KnownClients.TestClient_48
-                || clientName == KnownClients.TestClient_49)
+                || clientName == KnownClients.TestClient_49
+                || clientName == KnownClients.TestClient_50)
             {
                 // TestClient_46 は、**JARM の署名 alg を PS256 にした**（#370）。
                 // **プロファイルを強制する登録**（#346）。client_secret・折り返し先・鍵は写す元のまま。

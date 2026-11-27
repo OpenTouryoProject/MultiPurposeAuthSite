@@ -38,6 +38,8 @@
 //*  2026/11/18  玄人 幸道         登録の検査で、jwks_uri・sector_identifier_uri の行き先のアドレスも見るようにした（#376）
 //*  2026/11/19  玄人 幸道         動的登録で request_uris を受けるようにした（https と行き先のアドレスを確かめる。#374）
 //*  2026/11/24  玄人 幸道         client_name を、画面に出す名前の列に入れるようにした（#430）
+//*  2026/11/25  玄人 幸道         ログアウトの登録項目（post_logout_redirect_uris・frontchannel_logout_uri・backchannel_logout_uri・*_session_required）を受けるようにした（#426）
+//*  2026/11/25  玄人 幸道         post_logout_redirect_uris を https（ループバックは http）に限り、ログアウトの URL のフラグメントと、frontchannel_logout_uri の redirect_uris との同一オリジンを確かめるようにした（#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -523,6 +525,120 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #endregion
 
+            #region ログアウトの登録項目（RP-Initiated・Front-Channel・Back-Channel Logout 1.0。#426）
+
+            //  **3 つとも、OIDC の動的登録のメタデータ**である（RP-Initiated Logout 1.0 §3.1・Front-Channel Logout 1.0 §2・Back-Channel Logout 1.0 §2.2）。
+            //    **以前は「RFC 7591 のメタデータではない」として受けなかった**（#310）が、**原典と合わなかった**ので受ける（#426）。
+            //    **確かめ方は、管理画面・設定ファイルから入れた値を使う側と同じにする。**
+
+            //  **`post_logout_redirect_uris`**（§3.1。配列）。**n 件を空白区切りで持つ**（`redirect_uris` と同じ形。#426）。
+            //    **照合は完全一致**（`CmnLogoutEndpoint`）なので、**`redirect_uris` と同じく、絶対 URI でフラグメントを持たない値だけ受ける。**
+            //    **さらに `https` か、ループバックの `http` に限る**（#426。**Front-Channel Logout の画面が、リンクと `meta refresh` に出す**ので、
+            //    `javascript:` などを登録させない。画面の側でも絞る：`FrontChannelLogout.ToContinueUrl`）。
+            //    **空白も断る**（空白区切りで持つので、読むときに別の要素に割れる）。
+            List<string> postLogoutRedirectUris = ClientRegistrationProvider.GetStrings(
+                metadata, Const.ClientPostLogoutRedirectUris);
+
+            foreach (string postLogoutRedirectUri in postLogoutRedirectUris)
+            {
+                if (!ClientRegistrationProvider.IsValidRedirectUri(postLogoutRedirectUri)
+                    || !RemoteJwkSetStore.IsUsableKeySource(postLogoutRedirectUri)
+                    || postLogoutRedirectUri.Any(char.IsWhiteSpace))
+                {
+                    description = string.Format(
+                        "The post_logout_redirect_uri ({0}) must be an absolute https URI without a fragment.",
+                        postLogoutRedirectUri);
+                    return false;
+                }
+            }
+
+            model.PostLogoutRedirectUri = (postLogoutRedirectUris.Count == 0)
+                ? null : string.Join(" ", postLogoutRedirectUris);
+
+            if (Const.MaxLengthOfUriList < (model.PostLogoutRedirectUri ?? "").Length)
+            {
+                description = "The post_logout_redirect_uris are too long.";
+                return false;
+            }
+
+            //  **`frontchannel_logout_uri`**（Front-Channel Logout 1.0 §2）。**利用者のブラウザが `iframe` で開く URL。**
+            //    **`https` を求め、ループバックの `http` だけ許す**（開く側の `FrontChannelLogout` と同じ規則）。
+            string frontChannelLogoutUri = "";
+
+            if (!ClientRegistrationProvider.SetUri(metadata, Const.ClientFrontChannelLogoutUri,
+                Const.MaxLengthOfUri, v => frontChannelLogoutUri = v, ref description))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(frontChannelLogoutUri)
+                && !RemoteJwkSetStore.IsUsableKeySource(frontChannelLogoutUri))
+            {
+                description = "The frontchannel_logout_uri must use https.";
+                return false;
+            }
+
+            //    **フラグメントを持たない**（§2 の MUST NOT。`iss`・`sid` をクエリに足すので、フラグメントの後ろに付いて RP に届かない）。
+            //    **スキーム・ホスト・ポートが、登録した `redirect_uris` のどれかと同じ**（§2 の MUST。#426）。
+            //    **RP が、関係の無いサイトを OP の画面の `iframe` に開かせない。** **管理画面・構成ファイルの値は確かめない**（配備の管理者が決める値）。
+            if (!string.IsNullOrEmpty(frontChannelLogoutUri)
+                && ClientRegistrationProvider.HasFragment(frontChannelLogoutUri))
+            {
+                description = "The frontchannel_logout_uri must not have a fragment.";
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(frontChannelLogoutUri)
+                && !redirectUris.Any(r => ClientRegistrationProvider.IsSameOrigin(r, frontChannelLogoutUri)))
+            {
+                description = "The scheme, host and port of the frontchannel_logout_uri must be the same as one of the redirect_uris.";
+                return false;
+            }
+
+            model.FrontChannelLogoutUri = string.IsNullOrEmpty(frontChannelLogoutUri) ? null : frontChannelLogoutUri;
+
+            //  **`backchannel_logout_uri`**（Back-Channel Logout 1.0 §2.2）。**OP が `logout_token` を POST する先。**
+            //    **登録する側が、OP に要求を出させる先を決められる**ので、**`jwks_uri`・`request_uris` と同じく、`https` と行き先のアドレスを確かめる**（`OutboundUrlPolicy`。#376）。
+            //    **送るときも、動的登録したクライアントへは、接続の時点のアドレスを確かめる HttpClient で送る**（`BackChannelLogout`。#426）。
+            string backChannelLogoutUri = "";
+
+            if (!ClientRegistrationProvider.SetUri(metadata, Const.ClientBackChannelLogoutUri,
+                Const.MaxLengthOfUri, v => backChannelLogoutUri = v, ref description))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(backChannelLogoutUri)
+                && !OutboundUrlPolicy.IsAllowed(backChannelLogoutUri))
+            {
+                //  **スキームと行き先は、同じ文言で断る**（`jwks_uri` と同じ理由）。
+                description = "The backchannel_logout_uri must use https and must not point to an internal address.";
+                return false;
+            }
+
+            //    **フラグメントを持たない**（§2.2 の MUST NOT。#426）。
+            if (!string.IsNullOrEmpty(backChannelLogoutUri)
+                && ClientRegistrationProvider.HasFragment(backChannelLogoutUri))
+            {
+                description = "The backchannel_logout_uri must not have a fragment.";
+                return false;
+            }
+
+            model.BackChannelLogoutUri = string.IsNullOrEmpty(backChannelLogoutUri) ? null : backChannelLogoutUri;
+
+            //  **`frontchannel_logout_session_required`・`backchannel_logout_session_required`**（真偽値）。**受けるが、持たない** —
+            //    **この実装は、どちらの通知にも必ず `iss` と `sid` を付ける**ので、true でも false でも仕様を満たす（Discovery は `*_session_supported` を true で広告している）。
+            //    **真偽値でなければ断る**（#346 の 4 つと同じ）。
+            if (!ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientFrontChannelLogoutSessionRequired, out _, ref description)
+                || !ClientRegistrationProvider.GetFlag(metadata,
+                    Const.ClientBackChannelLogoutSessionRequired, out _, ref description))
+            {
+                return false;
+            }
+
+            #endregion
+
             #region scope
 
             List<string> scopes = OAuth2AndOIDCSpec.ToDistinctList(
@@ -972,6 +1088,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //  **フラグメントは禁止**（RFC 6749 §3.1.2）。
             return string.IsNullOrEmpty(uri.Fragment);
+        }
+
+        /// <summary>フラグメント（`#…`）を持つか（#426）</summary>
+        /// <param name="value">絶対 URI（`SetUri` で確かめた値）</param>
+        /// <returns>持てば true（**空の `#` も持つと数える**。読めなければ true）</returns>
+        private static bool HasFragment(string value)
+        {
+            return value.IndexOf('#') >= 0
+                || !Uri.TryCreate(value, UriKind.Absolute, out Uri uri)
+                || !string.IsNullOrEmpty(uri.Fragment);
+        }
+
+        /// <summary>スキーム・ホスト・ポートが同じか（Front-Channel Logout 1.0 §2。#426）</summary>
+        /// <param name="a">URI</param>
+        /// <param name="b">URI</param>
+        /// <returns>どちらも絶対 URI で、スキーム・ホスト・ポートが同じなら true（**ホストは大文字小文字を区別しない**）</returns>
+        private static bool IsSameOrigin(string a, string b)
+        {
+            return Uri.TryCreate(a, UriKind.Absolute, out Uri x)
+                && Uri.TryCreate(b, UriKind.Absolute, out Uri y)
+                && string.Equals(x.Scheme, y.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Host, y.Host, StringComparison.OrdinalIgnoreCase)
+                && x.Port == y.Port;
         }
 
         #endregion

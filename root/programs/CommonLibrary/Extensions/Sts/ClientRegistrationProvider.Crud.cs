@@ -38,6 +38,7 @@
 //*  2026/11/19  玄人 幸道         PUT で request_uris を要求から作り直すようにした（#374）
 //*  2026/11/20  玄人 幸道         jwks_uri を温めるとき、専用の HttpClient（OutboundUrlPolicy.HttpClient）で取りに行くようにした（OpenTouryo#718。#405）
 //*  2026/11/24  玄人 幸道         PUT で、画面に出す名前（client_name）も全置換にした（#430）
+//*  2026/11/25  玄人 幸道         PUT で、ログアウトの 3 つ（post_logout_redirect_uris・frontchannel_logout_uri・backchannel_logout_uri）も全置換にした（RFC 7592 §2.2。#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -503,12 +504,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         ///
         /// | 順 | 列 | 扱い |
         /// |---|---|---|
-        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `ClientDisplayName`（`client_name`。#430） / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` / `RequestUris` | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
+        /// | 1 | `RedirectUriCode` / `RedirectUriToken` / `Scopes` / `GrantTypes` / `ResponseTypes` / `ClientUri` / `LogoUri` / `TosUri` / `PolicyUri` / `Contacts` / `SoftwareId` / `SoftwareVersion` / `ClientDisplayName`（`client_name`。#430） / `SubjectTypes` / `IdTokenSignedResponseAlg` / `TokenEndpointAuthMethod` / `SectorIdentifierUri` / `RequestUris` / `PostLogoutRedirectUri` / `FrontChannelLogoutUri` / `BackChannelLogoutUri`（#426） | **要求から作り直す**（**省いたら消える**。`TokenEndpointAuthMethod` は、**省いたら秘密ベースに戻る**。`SectorIdentifierUri` は、**変えたり省いたりすると、以降の pairwise の `sub` が変わる**。#364） |
         /// | 2 | `Jwk*` ↔ `JwksUri` | **要求が片方を入れたら、もう片方は消える**（**`jwks` と `jwks_uri` は排他**。**どちらも無い要求では、両方を持ち越す**） |
         /// | 3 | `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` | **要求に在れば置き換え、無ければ持ち越す** |
         /// | 4 | `ClientMode` | **持ち越す**（**空のときだけ `normal`**。管理画面で FAPI の登録にしたものを、`PUT` で下げない） |
         /// | 5 | `RequirePar` / `RequireSignedRequestObject` / `DPoPBoundAccessTokens` / `TlsCertBoundAccessTokens` | **現行と要求の OR**（**立てられるが、下げられない**。#346） |
-        /// | — | **上の外の全て** : `ClientID` / `ClientSecret` / `ClientName` / `RequirePkce` / `OwnerUserId` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `BackChannelLogoutUri` / `FrontChannelLogoutUri` / `WebOrigins` / `RequestObjectSigningAlg`） | **持ち越す**（**要求では変えられない**。**土台が現行なので、コードには出てこない**） |
+        /// | — | **上の外の全て** : `ClientID` / `ClientSecret` / `ClientName` / `RequirePkce` / `OwnerUserId` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `WebOrigins` / `RequestObjectSigningAlg`。**ログアウトの 3 列は #426 で上の 1 に移した**） | **持ち越す**（**要求では変えられない**。**土台が現行なので、コードには出てこない**） |
         ///
         /// > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
         /// > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**
@@ -649,6 +650,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             //    **`client_name`（画面に出す名前）も全置換**（#430。省いたら消え、画面に名前が出なくなる）。
             model.ClientDisplayName = requested.ClientDisplayName;
+
+            //    **ログアウトの 3 つも全置換**（#426。RFC 7592 §2.2 の MUST。**省いたら消え、ログアウトの後に戻せず・伝えられなくなる**）。
+            //    **以前は動的登録で入れられなかったので持ち越していた**（#310）。**管理画面から入れた値も、省いた `PUT` で消える。**
+            model.PostLogoutRedirectUri = requested.PostLogoutRedirectUri;
+            model.FrontChannelLogoutUri = requested.FrontChannelLogoutUri;
+            model.BackChannelLogoutUri = requested.BackChannelLogoutUri;
 
             //    **省いたら、秘密ベース（`client_secret_basic` / `client_secret_post`）に戻る。**
             model.TokenEndpointAuthMethod = requested.TokenEndpointAuthMethod;

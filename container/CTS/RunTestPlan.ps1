@@ -25,10 +25,16 @@
 .PARAMETER Plan
     回すプラン（下の ValidateSet。表は $plans）。
     **設定の雛形は、プランごとに持たない**こともある（$plans の Config。Implicit・Hybrid・form_post は oidcc-basic の雛形を使う）。
+.PARAMETER ResponseType
+    response_type をプランのバリアントで指定するプランの、response_type（既定は code）。
+    **code 以外を選べるのは、$plans で ResponseTypeAxis = $true のプランだけ**（oidcc-dynamic と、ログアウトの 3 プランの動的登録版。#426）。
+    code 以外なら、out\ のファイルの名前に response_type を添える（例：out\oidcc-dynamic-code-id_token-report.zip）。
 .PARAMETER ModuleTimeoutSec
     1 つのモジュールを待つ上限（秒）。ブラウザの自動操作が合わないと WAITING のまま止まるので、上限で打ち切る。
 .EXAMPLE
     .\RunTestPlan.ps1 -Plan oidcc-basic
+.EXAMPLE
+    .\RunTestPlan.ps1 -Plan oidcc-dynamic -ResponseType 'code id_token'
 .NOTES
     作成者          ：玄人 幸道
     更新履歴        ：
@@ -42,6 +48,8 @@
      2026/11/21  玄人 幸道         FAPI 2.0 SP の、認証と縛りの交差・plain_oauth・client_credentials のプランと、scope の置き換えを足した（#416）
      2026/11/21  玄人 幸道         FAPI 1.0 Advanced・FAPI-CIBA・FAPI 2.0 MS の mTLS と、MS の要求と応答の残りの組のプランを足した（#416）
      2026/11/24  玄人 幸道         client_credentials のプランのクライアント（23・24）を fapi2 の登録にした説明に直した（#424）
+     2026/11/25  玄人 幸道         OIDC の 9 プランを動的登録したクライアントで回す版（-dynamic）と、oidcc-test-plan の mtls（code と form_post）を足した（#426）
+     2026/11/25  玄人 幸道         oidcc-dynamic とログアウトの 3 プランの動的登録版を、code 以外の response_type で回す指定（-ResponseType）を足した（#426）
 #>
 [CmdletBinding()]
 param(
@@ -49,6 +57,10 @@ param(
         'oidcc-implicit', 'oidcc-hybrid',
         'oidcc-formpost-basic', 'oidcc-formpost-implicit', 'oidcc-formpost-hybrid',
         'oidcc-rp-initiated-logout', 'oidcc-frontchannel-rp-initiated-logout', 'oidcc-backchannel-rp-initiated-logout',
+        'oidcc-basic-dynamic', 'oidcc-implicit-dynamic', 'oidcc-hybrid-dynamic',
+        'oidcc-formpost-basic-dynamic', 'oidcc-formpost-implicit-dynamic', 'oidcc-formpost-hybrid-dynamic',
+        'oidcc-rp-initiated-logout-dynamic', 'oidcc-frontchannel-rp-initiated-logout-dynamic', 'oidcc-backchannel-rp-initiated-logout-dynamic',
+        'oidcc-mtls', 'oidcc-mtls-formpost',
         'oidcc-dynamic',
         'fapi2-sp-private-key-jwt-dpop', 'fapi2-sp-mtls',
         'fapi2-sp-private-key-jwt-mtls', 'fapi2-sp-mtls-dpop',
@@ -58,6 +70,9 @@ param(
         'fapi1-adv-private-key-jwt-par', 'fapi1-adv-mtls-par',
         'fapi-ciba-private-key-jwt-poll', 'fapi-ciba-mtls-poll')]
     [string]$Plan = 'oidcc-basic',
+
+    [ValidateSet('code', 'id_token', 'id_token token', 'code id_token', 'code token', 'code id_token token')]
+    [string]$ResponseType = 'code',
 
     [int]$ModuleTimeoutSec = 180
 )
@@ -72,9 +87,21 @@ $outDir = Join-Path $here 'out'
 # プランの名前・バリアント・設定の雛形（Conformance Suite の api/plan/available で確かめた値）
 #   **Implicit・Hybrid は、プランの中で response_type ごとにモジュールを作る**（バリアントで指定しない）。
 #   **form_post は、プランの名前で決まる**（各モジュールのバリアントが response_mode=form_post）。
-#   **ログアウトのプランは、response_type をプランのバリアントで指定する**（code にする）。
+#   **ログアウトと oidcc-dynamic のプランは、response_type をプランのバリアントで指定する**（既定は code。
+#   ResponseTypeAxis = $true のプランだけ、-ResponseType で code 以外にできる。#426）。
 $static = '{"server_metadata":"discovery","client_registration":"static_client"}'
 $staticCode = '{"client_registration":"static_client","response_type":"code"}'
+$dynamic = '{"server_metadata":"discovery","client_registration":"dynamic_client"}'
+$dynamicCode = '{"client_registration":"dynamic_client","response_type":"code"}'
+# 動的登録の管理クライアント（initial access token を取る。docker-compose.yml と同じ。**適合性テスト専用の値**）
+$registrationClientId = 'c75c11e0000000000000000000000007'
+$registrationClientSecret = 'cts-client7-secret-for-conformance-test-only'
+function Get-OidccTestVariant([string]$ClientAuthType, [string]$ResponseMode)
+{
+    # **oidcc-test-plan は、軸をすべてバリアントで指定する**（certification のプランは、プランの名前で軸が決まる）。
+    #   **server_metadata の軸は無い**（Discovery を使う。api/plan/available で確かめた）
+    return ('{{"client_registration":"static_client","client_auth_type":"{0}","response_type":"code","response_mode":"{1}"}}' -f $ClientAuthType, $ResponseMode)
+}
 $plans = @{
     'oidcc-basic'             = @{ Name = 'oidcc-basic-certification-test-plan';             Variant = $static; Config = 'oidcc-basic' }
     'oidcc-config'            = @{ Name = 'oidcc-config-certification-test-plan';            Variant = $null;   Config = 'oidcc-config' }
@@ -91,10 +118,38 @@ $plans = @{
                                                   ClientId = 'c75c11e0000000000000000000000005'; ClientSecret = 'cts-client5-secret-for-conformance-test-only' }
     'oidcc-backchannel-rp-initiated-logout'  = @{ Name = 'oidcc-backchannel-rp-initiated-logout-certification-test-plan';  Variant = $staticCode; Config = 'oidcc-logout'
                                                   ClientId = 'c75c11e0000000000000000000000006'; ClientSecret = 'cts-client6-secret-for-conformance-test-only' }
+    # **上の 9 プランを、動的登録したクライアントで回す版**（#426。Dynamic = $true）。
+    #   **雛形は静的な版と同じ**で、client・client2・client_secret_post の中身を initial access token に置き換える（下の「設定を作る」）。
+    #   Conformance Suite がモジュールごとにクライアントを登録する（ログアウトの口も登録の要求に載る。#426 で MPAS が受けるようにした）
+    'oidcc-basic-dynamic'             = @{ Name = 'oidcc-basic-certification-test-plan';             Variant = $dynamic; Config = 'oidcc-basic'; Dynamic = $true
+                                           RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-implicit-dynamic'          = @{ Name = 'oidcc-implicit-certification-test-plan';          Variant = $dynamic; Config = 'oidcc-basic'; Dynamic = $true
+                                           RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-hybrid-dynamic'            = @{ Name = 'oidcc-hybrid-certification-test-plan';            Variant = $dynamic; Config = 'oidcc-basic'; Dynamic = $true
+                                           RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-formpost-basic-dynamic'    = @{ Name = 'oidcc-formpost-basic-certification-test-plan';    Variant = $dynamic; Config = 'oidcc-basic'; Dynamic = $true
+                                           RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-formpost-implicit-dynamic' = @{ Name = 'oidcc-formpost-implicit-certification-test-plan'; Variant = $dynamic; Config = 'oidcc-basic'; Dynamic = $true
+                                           RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-formpost-hybrid-dynamic'   = @{ Name = 'oidcc-formpost-hybrid-certification-test-plan';   Variant = $dynamic; Config = 'oidcc-basic'; Dynamic = $true
+                                           RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-rp-initiated-logout-dynamic'              = @{ Name = 'oidcc-rp-initiated-logout-certification-test-plan';              Variant = $dynamicCode; Config = 'oidcc-logout'; Dynamic = $true; ResponseTypeAxis = $true
+                                                          RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-frontchannel-rp-initiated-logout-dynamic' = @{ Name = 'oidcc-frontchannel-rp-initiated-logout-certification-test-plan'; Variant = $dynamicCode; Config = 'oidcc-logout'; Dynamic = $true; ResponseTypeAxis = $true
+                                                          RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    'oidcc-backchannel-rp-initiated-logout-dynamic'  = @{ Name = 'oidcc-backchannel-rp-initiated-logout-certification-test-plan';  Variant = $dynamicCode; Config = 'oidcc-logout'; Dynamic = $true; ResponseTypeAxis = $true
+                                                          RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
+    # **oidcc-test-plan の、certification のプランに無いクライアント認証**（#426。静的な登録。雛形は oidcc-basic で、client・client2 を置き換える）。
+    #   mtls（tls_client_auth）：31・32（**クライアント証明書は FAPI と同じ**。Prepare.ps1 が certs\ に作る。設定の mtls・mtls2 に埋める）
+    #   **none（公開クライアント）は足さない**：Conformance Suite は none で PKCE を送らず、MPAS は公開クライアントに PKCE を求める（RFC 9700 §2.1.1。README の「足さないもの」）
+    'oidcc-mtls'         = @{ Name = 'oidcc-test-plan'; Variant = (Get-OidccTestVariant 'mtls' 'default');   Config = 'oidcc-basic'; ClientAuth = 'mtls'
+                               ClientId = 'c75c11e000000000000000000000001f'; Client2Id = 'c75c11e0000000000000000000000020' }
+    'oidcc-mtls-formpost' = @{ Name = 'oidcc-test-plan'; Variant = (Get-OidccTestVariant 'mtls' 'form_post'); Config = 'oidcc-basic'; ClientAuth = 'mtls'
+                               ClientId = 'c75c11e000000000000000000000001f'; Client2Id = 'c75c11e0000000000000000000000020' }
     # **動的登録は、initial access token を回す直前に取って埋める**（MPAS は、それの無い登録を受けない。#307）。
     #   管理クライアントの値は docker-compose.yml と同じ（**適合性テスト専用の値**）。雛形の @INITIAL_ACCESS_TOKEN@ を埋める
-    'oidcc-dynamic' = @{ Name = 'oidcc-dynamic-certification-test-plan'; Variant = '{"response_type":"code"}'; Config = 'oidcc-dynamic'
-                         RegistrationClientId = 'c75c11e0000000000000000000000007'; RegistrationClientSecret = 'cts-client7-secret-for-conformance-test-only' }
+    'oidcc-dynamic' = @{ Name = 'oidcc-dynamic-certification-test-plan'; Variant = '{"response_type":"code"}'; Config = 'oidcc-dynamic'; ResponseTypeAxis = $true
+                         RegistrationClientId = $registrationClientId; RegistrationClientSecret = $registrationClientSecret }
     # **FAPI は、クライアントを 2 つ使う**（client・client2）。**鍵とクライアント証明書は Prepare.ps1 が certs\ に作り、ここで埋める**（Fapi = $true）。
     #   バリアントは代表の組み合わせだけ（plain_fapi・openid_connect・simple・grant_management=disabled）
     #   **モジュールを待つ上限を長くする**（ModuleTimeoutSec。PAR の request_uri の期限（OP は 300 秒）が切れるのを待つモジュールがある）
@@ -166,6 +221,22 @@ $plans = @{
 # **OP のトークン エンドポイント（手元の PC から）**。issuer の mpas-cts.localhost は、PowerShell の名前解決では引けないことがあるので、localhost で叩く
 $opTokenEndpoint = 'https://localhost:44311/token'
 $p = $plans[$Plan]
+
+# **response_type を code 以外にする**（#426。ResponseTypeAxis = $true のプランだけ）。
+#   プランのバリアントの "response_type":"code" を置き換え、out\ のファイルの名前に添える（code の版と並べて残す）
+$outName = $Plan
+if ($ResponseType -ne 'code')
+{
+    if (-not $p.ResponseTypeAxis)
+    {
+        Write-Host ('-ResponseType で code 以外を選べるのは、次のプランだけです : {0}' -f ((@($plans.Keys | Where-Object { $plans[$_].ResponseTypeAxis }) | Sort-Object) -join ', ')) -ForegroundColor Red
+        exit 2
+    }
+    if (-not $p.Variant.Contains('"response_type":"code"')) { throw ('The variant has no response_type to replace: ' + $Plan) }
+    $p = $p.Clone()
+    $p.Variant = $p.Variant.Replace('"response_type":"code"', ('"response_type":"{0}"' -f $ResponseType))
+    $outName = $Plan + '-' + $ResponseType.Replace(' ', '-')
+}
 
 # **プランが長い上限を求めるなら、それに従う**（-ModuleTimeoutSec を明示したときは、それを使う）
 if ($p.ModuleTimeoutSec -and -not $PSBoundParameters.ContainsKey('ModuleTimeoutSec'))
@@ -369,7 +440,7 @@ $user = 'tanaka' + [string]$suffix
 
 $template = Join-Path $here ('config\{0}.json' -f $p.Config)
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-$configPath = Join-Path $outDir ('{0}.json' -f $Plan)
+$configPath = Join-Path $outDir ('{0}.json' -f $outName)
 
 function ConvertTo-JsonString([string]$Value)
 {
@@ -394,7 +465,64 @@ if ($p.ResourcePath)
     }
     $config = $config.Replace('"resourceUrl": "https://mpas-cts.localhost:44311/userinfo"', ('"resourceUrl": "https://mpas-cts.localhost:44311{0}"' -f (ConvertTo-JsonString $p.ResourcePath)))
 }
-if ($p.ClientId)
+function Set-ConfigBlock([string]$Text, [string]$Name, [string]$Json, [string]$After)
+{
+    # **雛形の "Name": { ... }（入れ子の無いオブジェクト）を、Json に置き換える**（After があれば、その後ろに並べる）。
+    #   "client" は "client2"・"client_secret_post" に当たらない（名前の後ろの引用符まで照合する）。
+    #   **見つからなければ $null を返す**（ログアウトの雛形には client2 が無い）。2 つ以上あれば、雛形の誤りとして止める
+    $ms = [regex]::Matches($Text, '"' + [regex]::Escape($Name) + '"\s*:\s*\{[^{}]*\}')
+    if ($ms.Count -eq 0) { return $null }
+    if ($ms.Count -gt 1) { throw ('The template has more than one "{0}" block: {1}' -f $Name, $template) }
+    $replacement = '"{0}": {1}' -f $Name, $Json
+    if ($After) { $replacement += ',' + $After }
+    return $Text.Substring(0, $ms[0].Index) + $replacement + $Text.Substring($ms[0].Index + $ms[0].Length)
+}
+
+function Get-MtlsBlock([int]$N)
+{
+    # **クライアント証明書と秘密鍵（PEM）を、設定の mtls・mtls2 の形にする**（Prepare.ps1 が certs\ に作る。Git の管理外）
+    $crtPath = Join-Path $here ('certs\mtls-client{0}.crt' -f $N)
+    $keyPath = Join-Path $here ('certs\mtls-client{0}.key' -f $N)
+    foreach ($f in $crtPath, $keyPath)
+    {
+        if (-not (Test-Path -LiteralPath $f))
+        {
+            Write-Host ('クライアント証明書がありません（2_DockerComposeUp.bat が呼ぶ Prepare.ps1 で作る） : {0}' -f $f) -ForegroundColor Red
+            exit 2
+        }
+    }
+    return ('{{"cert": "{0}", "key": "{1}"}}' -f (ConvertTo-JsonString ([IO.File]::ReadAllText($crtPath))), (ConvertTo-JsonString ([IO.File]::ReadAllText($keyPath))))
+}
+
+if ($p.Dynamic)
+{
+    # **動的登録の版**（#426）：静的なクライアントの中身を、initial access token に置き換える（下の RegistrationClientId で埋める）
+    $iatBlock = '{"initial_access_token": "@INITIAL_ACCESS_TOKEN@"}'
+    $replaced = Set-ConfigBlock $config 'client' $iatBlock
+    if (-not $replaced) { throw ('The template has no "client" block: ' + $template) }
+    $config = $replaced
+    foreach ($name in 'client2', 'client_secret_post')
+    {
+        $replaced = Set-ConfigBlock $config $name $iatBlock
+        if ($replaced) { $config = $replaced }
+    }
+}
+if ($p.ClientAuth)
+{
+    # **oidcc-test-plan の mtls**（#426）：client・client2 を、秘密の無いクライアントに置き換え、証明書（mtls・mtls2）を並べる
+    $after = $null
+    if ($p.ClientAuth -eq 'mtls')
+    {
+        $after = ' "mtls": ' + (Get-MtlsBlock 1) + ', "mtls2": ' + (Get-MtlsBlock 2)
+    }
+    foreach ($pair in @(@('client', $p.ClientId, $null), @('client2', $p.Client2Id, $after)))
+    {
+        $replaced = Set-ConfigBlock $config $pair[0] ('{{"client_id": "{0}"}}' -f (ConvertTo-JsonString $pair[1])) $pair[2]
+        if (-not $replaced) { throw ('The template has no "{0}" block: {1}' -f $pair[0], $template) }
+        $config = $replaced
+    }
+}
+elseif ($p.ClientId)
 {
     $config = $config.Replace('@CLIENT_ID@', (ConvertTo-JsonString $p.ClientId))
     $config = $config.Replace('@CLIENT_SECRET@', (ConvertTo-JsonString $p.ClientSecret))
@@ -564,10 +692,10 @@ foreach ($m in @($created.modules))
 
 #region 結果
 
-$resultPath = Join-Path $outDir ('{0}-result.json' -f $Plan)
+$resultPath = Join-Path $outDir ('{0}-result.json' -f $outName)
 [IO.File]::WriteAllText($resultPath, (@{ plan = $p.Name; planId = $planId; modules = $results } | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
 
-$zip = Join-Path $outDir ('{0}-report.zip' -f $Plan)
+$zip = Join-Path $outDir ('{0}-report.zip' -f $outName)
 try
 {
     # **URL は api/plan/exporthtml/{id}**（release-v5.3.4 で確かめた。api/plan/{id}/exporthtml は 404）

@@ -58,6 +58,7 @@
 //*  2026/11/24  玄人 幸道         client_secret で認証する fapi2 の TestClient_47 を追加（#424）
 //*  2026/11/24  玄人 幸道         logo_uri・policy_uri・tos_uri を書けるようにし、それを登録した TestClient_48・_49 を追加（#427）
 //*  2026/11/24  玄人 幸道         client_display_name を書けるようにした（#430）
+//*  2026/11/25  玄人 幸道         post_logout_redirect_uri を 2 件登録した TestClient_50 を追加（#426）
 //**********************************************************************************
 
 using System;
@@ -681,6 +682,19 @@ namespace MultiPurposeAuthSite.Util.Test
                     { Const.ClientLogoUri, "http://rp.e2e.example/logo.png" },
                     { Const.ClientPolicyUri, "javascript:alert(427)" },
                     { Const.ClientTosUri, "data:text/html,tos" }
+                }
+            },
+            new Entry()
+            {
+                // **post_logout_redirect_uri を 2 件登録したクライアント**（#426）。
+                //   **1 件目は 512 文字を超える URL**（列を 2000 文字に広げたことを、3 方言で測る）、**2 件目は記号**（要素ごとに解決されることを測る）。
+                //   **2 件目へ戻れれば、列挙が切れずに保存され、どれかとの完全一致で照合している**（`RT-426.1`）。写し元は `TestClient`（normal）。
+                ClientName = "TestClient_50", ClientId = "e2e0tc50500000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.post_logout_redirect_uri,
+                        "https://rp.e2e.example/logged_out?p=" + new string('x', 520) + " " + Const.TestSelfLogout }
                 }
             },
             new Entry()

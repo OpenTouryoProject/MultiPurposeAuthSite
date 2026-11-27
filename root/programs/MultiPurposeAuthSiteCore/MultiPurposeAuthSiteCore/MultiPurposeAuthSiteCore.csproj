@@ -34,11 +34,9 @@
     <PackageReference Include="log4net" Version="3.3.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <DotNetCliToolReference Include="Microsoft.EntityFrameworkCore.Tools.DotNet" Version="2.0.3" />
-    <DotNetCliToolReference Include="Microsoft.Extensions.SecretManager.Tools" Version="2.0.2" />
-    <DotNetCliToolReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Tools" Version="2.0.4" />
-  </ItemGroup>
+  <!-- **DotNetCliToolReference（.NET Core 2.0 の頃の EF・SecretManager・CodeGeneration のツール）は外した**（#348）。
+       プロジェクトごとの CLI ツールの仕組みは .NET Core 3.0 で外れており、何もしていなかった。
+       SDK 11 が NETSDK1059（SecretManager は SDK に含まれる）を出し、CI（-FailOnWarnings）が落ちていた。 -->
 
   <ItemGroup>
     <ProjectReference Include="..\..\CommonLibrary\NetCoreLibrary.csproj" />

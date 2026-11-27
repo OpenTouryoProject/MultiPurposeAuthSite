@@ -27,7 +27,9 @@ cd ..\CTS
 | `oidcc-implicit`・`oidcc-hybrid` | `oidcc-implicit-…`・`oidcc-hybrid-…`（**response_type ごとにモジュールが並ぶ**） | `oidcc-basic.json` |
 | `oidcc-formpost-basic`・`-implicit`・`-hybrid` | `oidcc-formpost-*-certification-test-plan`（`response_mode=form_post`） | `oidcc-basic.json` |
 | `oidcc-rp-initiated-logout`・`oidcc-frontchannel-rp-initiated-logout`・`oidcc-backchannel-rp-initiated-logout` | 同じ名前の `…-certification-test-plan`（`response_type=code`） | `oidcc-logout.json`（**クライアントはプランごとに別**） |
-| `oidcc-dynamic` | `oidcc-dynamic-certification-test-plan`（`response_type=code`） | `oidcc-dynamic.json` |
+| 上の 9 つの名前に `-dynamic` を付けたもの（`oidcc-basic-dynamic` など） | 同じプランを `client_registration=dynamic_client` で（**Conformance Suite がモジュールごとにクライアントを動的登録する**。ログアウトの口も登録の要求に載る。#426）。**ログアウトの 3 つの動的登録版は、`-ResponseType` で `code` 以外の 5 つも**（下の注） | 静的な版と同じ雛形（**`client`・`client2`・`client_secret_post` の中身を、`RunTestPlan.ps1` が initial access token に置き換える**） |
+| `oidcc-mtls`・`oidcc-mtls-formpost` | `oidcc-test-plan`（`client_auth_type=mtls`（`tls_client_auth`）・`response_type=code`。後者は `response_mode=form_post`。#426） | `oidcc-basic.json`（**クライアントは 31・32**に置き換え、クライアント証明書（FAPI と同じ）を `mtls`・`mtls2` に埋める） |
+| `oidcc-dynamic` | `oidcc-dynamic-certification-test-plan`（`response_type=code`。**`-ResponseType` で `code` 以外の 5 つも**。下の注） | `oidcc-dynamic.json` |
 | `fapi2-sp-private-key-jwt-dpop`・`fapi2-sp-mtls` | `fapi2-security-profile-final-test-plan`（`plain_fapi`・`openid_connect`・`simple`・`grant_management=disabled`。前者は `private_key_jwt`＋DPoP、後者は MTLS＋MTLS） | `fapi2.json`（**クライアントは 2 つずつ**。鍵とクライアント証明書を埋める） |
 | `fapi2-sp-private-key-jwt-mtls`・`fapi2-sp-mtls-dpop` | 同上（**認証と縛りの交差**。前者は `private_key_jwt`＋MTLS、後者は MTLS＋DPoP。#416） | `fapi2.json`（クライアントは 19・20、21・22） |
 | `fapi2-sp-plain-oauth` | 同上の `private_key_jwt`＋DPoP を、`openid=plain_oauth`（OIDC を使わない OAuth）で。#416 | `fapi2.json`（クライアントは 8・9。**`scope` を `email` に置き換える**：Conformance Suite は、`scope` に `openid` があると始める前に落とす。**資源は `/TestResource` に置き換える**（`ResourcePath`。#425）） |
@@ -41,13 +43,18 @@ cd ..\CTS
 | `fapi-ciba-mtls-poll` | 同上の MTLS のクライアント認証（#416） | `fapi-ciba.json`（クライアントは 27・28。端末役は同じ） |
 
 - **FAPI のバリアントは、MPAS が対応する方式を確かめる組だけ**にしてある（軸を全部掛け合わせると数十通り）。#350 の段階 4 で代表の組を決め、**#416 で、認証と縛りの交差・mTLS のクライアント認証・`plain_oauth`・client_credentials・Message Signing の要求と応答の残りの組を足した**
-- **リリースの前には、上の表のすべてのプランを回す**（#416 で足したものも含める。`QUALITY.md` 2 節）。認証と縛りの組み合わせのような回帰（#423）は、代表の組だけでは拾えないため
+- **`-ResponseType`**（#426）：`response_type` をプランのバリアントで指定するプランのうち、**`oidcc-dynamic` と、ログアウトの 3 つの動的登録版**だけ、`code` 以外（`id_token`・`id_token token`・`code id_token`・`code token`・`code id_token token`）でも回す。
+  例：`.\RunTestPlan.ps1 -Plan oidcc-dynamic -ResponseType 'code id_token'`。`out\` のファイルの名前に添える（`oidcc-dynamic-code-id_token-report.zip`。`ExtractReview.ps1 -Plan` にもこの名前を渡す）。
+  **ほかのプランには付けない**（Implicit・Hybrid のプランは、プランの中で `response_type` ごとにモジュールが並ぶ。ログアウトの静的な版は、下の「足さないもの」）
+- **リリースの前には、上の表のすべてのプランを回す**（#416 で足したものも含める。`QUALITY.md` 2 節）。認証と縛りの組み合わせのような回帰（#423）は、代表の組だけでは拾えないため。**`-ResponseType` の付くプランは、6 つの `response_type` をすべて回す**（#426）
 - **足さないもの**（MPAS が持たない方式・対象にしていないもの。#416）
 
   | プラン・バリアント | 理由 |
   |---|---|
   | FAPI-CIBA `ciba_mode=ping` | **MPAS が ping を持たない**（poll だけを広告。FAPI-CIBA は ping を任意とする）。push は Conformance Suite に無い |
   | `client_auth_type=client_secret_jwt`（`oidcc-test-plan`） | MPAS が持たない |
+  | `client_auth_type=none`（`oidcc-test-plan`。公開クライアント） | **Conformance Suite は PKCE を送らず**（PKCE を確かめる 1 モジュールだけが送る）、**MPAS は公開クライアントの認可コードを PKCE が無ければ引き換えない**（RFC 9700 §2.1.1 は公開クライアントに PKCE を求める。#294 の C-40。`13_CONFIGURATION.md`「PKCE だけで認可コードを引き換えられる登録」）。#426 で回すと、トークン エンドポイントへ進むモジュールが `invalid_client` で FAILED 27・PASSED 4 だった（PKCE を送る `oidcc-ensure-request-with-valid-pkce-succeeds` は通る） |
+  | ログアウトの 3 プランの静的な版の、`code` 以外の `response_type` | **動的登録版で回す**（#426 で決めた）。ログアウトの振る舞いは登録の種類で変わらず、静的と動的の差は `code` の組で見ている（どちらも同じ結果）。静的な版で回すには、ログアウトのクライアント（4・5・6）に `redirect_uri_token` を足す必要がある |
   | FAPI 1.0 Advanced `fapi_auth_request_method=by_value` | `request_parameter_supported=false`（`request` で値を直に渡す形を持たない） |
   | FAPI 1.0 Advanced `fapi_response_mode=plain_response` | fapi1 の登録に Hybrid を許さない（FA-1.4。JARM の側で回している） |
   | `authorization_request_type=rar`・`grant_management=enabled` | RAR・Grant Management を持たない |
@@ -57,8 +64,6 @@ cd ..\CTS
   | `fapi2-*-id1`・`-id2`（旧版） | final の版で回している |
   | eKYC・OID4VP・OID4VCI・SSF・AuthZEN・OpenID Federation | MPAS が持たない機能 |
   | RP を相手にするプラン（`oidcc-client-*`・`fapi*-client-test-plan`） | MPAS の ID 連携（RP の役）を確かめられるが、Conformance Suite を OP にして MPAS からサインインさせる仕掛けが要る（別に検討する） |
-
-  **まだ足していないもの**：動的登録したクライアントでの各フロー、パブリック クライアント・OIDC の mTLS（`oidcc-test-plan`）、動的登録とログアウトの Implicit・Hybrid（#426）
 
 | | URL |
 |---|---|
@@ -138,7 +143,7 @@ cd ..\CTS
 | クライアント（`client_secret_post`。`oidcc-server-client-secret-post` が使う） | 同上（3 つ目。設定の `"client_secret_post"`。静的な登録では、認証の方式ごとにクライアントを分けて渡す作り） |
 | クライアント（ログアウト。4〜6 つ目） | 同上。**プランごとに分ける**（RP-Initiated・Front-Channel・Back-Channel。登録したログアウトの口が、別のプランの検査に混ざらないように）。`RunTestPlan.ps1` が雛形の `@CLIENT_ID@`・`@CLIENT_SECRET@` を埋める |
 | 動的登録（DCR）の管理クライアント（7 つ目） | 同上。**`scope=client_registration` と `owner`（作った登録の所有者。利用者名）を登録する**（#307）。`owner` が無いと、登録は 403（`access_denied`）で断られる。**名前は `Prepare.ps1` が `.env.cts` に書く**（テスト利用者の名前は手元の `appsettings.json` で変わる） |
-| initial access token | **MPAS は、それの無い登録を受けない。** `RunTestPlan.ps1 -Plan oidcc-dynamic` が、回す直前に管理クライアントで `client_credentials` のトークンを取り、雛形の `@INITIAL_ACCESS_TOKEN@`（設定の `client.initial_access_token`）を埋める。期限はプラン 1 つ分より長くしてある（`DcrAccessTokenExpireTimeSpanFromSeconds=3600`。既定は 300 秒） |
+| initial access token | **MPAS は、それの無い登録を受けない。** `RunTestPlan.ps1 -Plan oidcc-dynamic`（と `-dynamic` の付くプラン。#426）が、回す直前に管理クライアントで `client_credentials` のトークンを取り、雛形の `@INITIAL_ACCESS_TOKEN@`（設定の `client.initial_access_token`）を埋める。期限はプラン 1 つ分より長くしてある（`DcrAccessTokenExpireTimeSpanFromSeconds=3600`。既定は 300 秒） |
 | FAPI 2.0 のクライアント（8〜11 つ目。`client_mode=fapi2`） | 同上。8・9 は `private_key_jwt`（＋ DPoP）、10・11 は `tls_client_auth`（＋ 証明書に縛ったトークン）。**次を登録する**：`id_token_signed_response_alg=ES256`（**登録が無いと RS256 になり、FAPI 2.0 の検査で全部止まる**。#355）、**FAPI の要件の強制**（`require_pushed_authorization_requests`・`require_pkce`・`dpop_bound_access_tokens` か `tls_client_certificate_bound_access_tokens`。#346。**どれも既定は false で、立てないと PAR・PKCE の無い要求が通る**） |
 | FAPI 2.0 Message Signing のクライアント（17・18 番目。`client_mode=fapi2`） | 同上。8・9 と同じ形に、**署名した Request Object の必須（`require_signed_request_object`）を足したもの**（#385）。**8・9 は Security Profile のプランと共用なので立てられない**（Security Profile は署名の無い PAR を送る） |
 | FAPI 2.0 の、認証と縛りの交差のクライアント（19〜22 番目。`client_mode=fapi2`） | 同上（#416）。19・20 は `private_key_jwt`＋証明書に縛ったトークン（`tls_client_certificate_bound_access_tokens`。証明書は設定の `mtls`・`mtls2`）、21・22 は `tls_client_auth`＋DPoP に縛ったトークン（`dpop_bound_access_tokens`）。**ほかの項目は 8〜11 と同じ** |
@@ -165,7 +170,7 @@ cd ..\CTS
   `RunTestPlan.ps1` が手元の `appsettings.json` から埋めて、**`out\<プラン>.json` に書く**（`out\` は Git の管理外）
 - 画面から回すときは、`out\<プラン>.json` を貼る
 - **Conformance Suite のログ（`mongo\`）と報告書の zip（`out\`）には、ブラウザの自動操作で入力したテスト利用者のパスワードが平文で残る**（`Entering text` の記録）。どちらも Git の管理外だが、**ログや報告書を、そのまま Issue などに貼らない**
-- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回、#416 で 3 回、#422 で 1 回、#421 の全プランで 4 回、#429 の FAPI 2.0 の 10 プランで 1 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
+- **まれに、サインインのボタンを押しても画面が変わらず、そのモジュールが FAILED になる**（`Unexpected URL for non-optional task`。段階 3 の通しで 3 回、#416 で 3 回、#422 で 1 回、#421 の全プランで 4 回、#429 の FAPI 2.0 の 10 プランで 1 回、#426 の全 56 の組で 4 回と、OIDC の 42 の組の回し直しで 7 回）。**どれも、サインインの要求（`POST /Account/Login`）が OP に届いていない**（OP の ACCESS ログで確かめた。Conformance Suite のブラウザ（HtmlUnit）の側で、ボタンのスクリプトが動かなかった）。回し直すと通るので、**同じモジュールだけで続けて落ちるかを見てから**、不適合として扱う
 
 **画面の写し（REVIEW）を求めるモジュールは、モジュールごとの `"override"` で、そのときの画面を写しの代わりにする**（原本の CI の設定 `.gitlab-ci/local-provider-oidcc-conformance-config.json` と同じ書き方）。
 `wait` のコマンドの末尾に `update-image-placeholder`（無くてもよいなら `-optional`）を付けると、待った画面で写しの欄が埋まる。
@@ -185,8 +190,8 @@ cd ..\CTS
 - **FAPI 1.0 Advanced の上書きは、FAPI 2.0 と同じ中身**（#385。以前は FAPI 2.0 のモジュール名だけにあり、FAPI 1.0 Advanced は既定の自動操作のまま `Unable to locate element` で落ちていた）
 - **REVIEW は、写しで合否を付ける項目である。** 自動では、待った画面が出たことまでしか確かめていない。**合否は、エージェントが `ExtractReview.ps1` の材料から付け、人がその表を承認する**（下の「REVIEW の見方」。#417）
 - **ログアウトの確認の画面**：MPAS は、`id_token_hint` が無い・一致しない・要求に誤りがあるとき、確認の画面を出す（RP-Initiated Logout 1.0 §2 の MUST）。雛形では「Yes」を任意の手順で押す
-- **自動では回せないモジュール**（FAPI 2.0・`oidcc-dynamic`。FAILED・TIMEOUT になるが、OP の不適合ではない）
-  - `oidcc-server-rotate-keys`（`oidcc-dynamic`）：**OP の署名の鍵を、人が入れ替える操作が要る**（`TellUserToRotateOpKeys`。入れ替えてから「Start」を押すのを待つ）。
+- **自動では回せないモジュール**（FAPI 2.0・`oidcc-dynamic`・`oidcc-mtls`。FAILED・TIMEOUT になるが、OP の不適合ではない）
+  - `oidcc-server-rotate-keys`（`oidcc-dynamic`（どの `response_type` も）・`oidcc-mtls`・`oidcc-mtls-formpost`。#426）：**OP の署名の鍵を、人が入れ替える操作が要る**（`TellUserToRotateOpKeys`。入れ替えてから「Start」を押すのを待つ）。
     自動の実行では待つ間に時間切れになり、TIMEOUT（INTERRUPTED）になる（#414。手で回すかは決めていない）
   - `…-user-rejects-authentication`：利用者が同意を断る操作が要る。**MPAS は同意を記録した後は同意の画面を出さず、サインインの画面には取り消しのボタンが無い**。
     **E2E の `RT-413.2` で補う**（PAR で預けた要求を同意の画面で拒否すると `access_denied`。#413。クライアントは `TestClient`）
@@ -238,12 +243,33 @@ cd ..\CTS
   - `fapi-ciba-mtls-poll` には、ほかに TIMEOUT が 1 つある（`ensure-authorization-request-with-potentially-bad-binding-message`。`fapi-ciba-private-key-jwt-poll` と同じ）
   - **2026-11-22 に、全 25 プランを Windows PowerShell 5.1 で通した**（それまでは PowerShell 7）。**どのプランも、上の表とこれまでの基準と同じ数**で、`fapi2-ms-signed-plain-response` も FAILED 2（自動では回せない 2）だった。
     サインインのボタンの事象は出なかった。所要は 2 時間 10 分（OIDC の 11 プランで 23 分。機械のメモリ不足で 19 番目のプランの途中で止まり、そのプランから回し直したので、2 回の分を足した）
+- **#426 で足したプランの結果**（2026-11-25〜26。直した版で回した OIDC の 42 の組から。サインインのボタンの事象は除いた数で、事象に当たったモジュールは、次の実行か回し直しで通った）
+
+  | `-Plan`（`-ResponseType`） | PASSED | FAILED | REVIEW | SKIPPED | WARNING | FAILED・TIMEOUT の内訳 |
+  |---|---:|---:|---:|---:|---:|---|
+  | `oidcc-basic-dynamic`・`oidcc-formpost-basic-dynamic` | 24 | 0 | 3 | 4 | 7 | 無し（静的な版より PASSED が 1・SKIPPED が 2 多いのは、動的登録の版だけのモジュール） |
+  | `oidcc-implicit-dynamic`・`oidcc-formpost-implicit-dynamic` | 33 | 0 | 6 | 6 | 13 | 無し |
+  | `oidcc-hybrid-dynamic`・`oidcc-formpost-hybrid-dynamic` | 63 | 0 | 9 | 9 | 21 | 無し |
+  | `oidcc-rp-initiated-logout-dynamic`（6 つの `response_type`） | 3 | 0 | 8 | 0 | 0 | 無し（静的な版と同じ） |
+  | `oidcc-frontchannel-rp-initiated-logout-dynamic`・`oidcc-backchannel-rp-initiated-logout-dynamic`（6 つずつ） | 2 | 0 | 0 | 0 | 0 | 無し（静的な版と同じ） |
+  | `oidcc-mtls`・`oidcc-mtls-formpost` | 22 | 0 | 4 | 2 | 7 | TIMEOUT 1（`oidcc-server-rotate-keys`。自動では回せない） |
+  | `oidcc-dynamic`（`code`・`code id_token`・`code token`・`code id_token token`） | 4 | 8 | 6 | 2〜3 | 1 | #398 で止まる 7 と `oidcc-userinfo-rs256`（見送った機能）。TIMEOUT 1（`oidcc-server-rotate-keys`）。SKIPPED は `code`・`code token` が 3（`oidcc-idtoken-unsigned`） |
+  | `oidcc-dynamic`（`id_token token`） | 8 | 1 | 6 | 2 | 1 | `oidcc-userinfo-rs256`。TIMEOUT 1 |
+  | `oidcc-dynamic`（`id_token`） | 8 | 0 | 6 | 2 | 1 | TIMEOUT 1 |
+
+  - **REVIEW の判定は、どれも静的な版・`code` の組と同じ材料の形で、同じ合否**（下の「REVIEW の見方」）
+  - 所要は、全 56 の組で 3 時間（OIDC の 42 の組で 75 分、うち #426 で足した 31 の組で 52 分。FAPI の 14 プランで 105 分）
+  - **直す前の版（fixing 4 の時点）でも全 56 の組を回し、FAPI の 14 プランはこれまでの基準と同じ数**だった（違いはサインインのボタンの事象だけ）。**FAPI は、#426 の最後の段で変えたところ（動的登録の確かめ・Front-Channel Logout の画面）を通らない**ので、直した版では回し直していない
+  - 直した版の回し直しは、機械のメモリ不足で 2 回止まり、止まったところから回し直した（止まる前に済んだ組の結果を使った）
 - **対応を見送った機能のモジュール**
   - `oidcc-userinfo-rs256`（`oidcc-dynamic`）：**署名した UserInfo の応答**（OIDC Core 1.0 §5.3.2）を求める。**MPAS は対応を見送った**（任意の機能で、FAPI は求めない。[`ANALYSIS-IdP.md`](../../root/programs/ANALYSIS-IdP.md) の D-17。#414）ので、
     Discovery に `userinfo_signing_alg_values_supported` が無く、`CheckDiscEndpointUserinfoSigningAlgValuesSupportedContainsRS256` で FAILED になる。
-    **`oidcc-dynamic` の FAILED は、これと、上の #398 で止まる 7 つで全部**（2026-11-20）
+    **`oidcc-dynamic` の FAILED は、これと、上の #398 で止まる 7 つで全部**（2026-11-20）。
+    **`code` 以外の `response_type`**（#426。2026-11-25）：`code id_token`・`code token`・`code id_token token` は `code` と同じ 8 つ（#398 の 7 つは、どれも `client_assertion` の `aud` がトークン エンドポイントの URL で `invalid_client`）。
+    **`id_token`・`id_token token` はトークン エンドポイントへ進まないので、#398 で止まらない**（`oidcc-server`・`oidcc-idtoken-rs256`・`oidcc-redirect-uri-query-OK`・`oidcc-request-uri-signed-rs256` が PASSED。`oidcc-refresh-token`・`-rp-key-rotation`・`oidcc-registration-jwks-uri` はプランに出ない）。
+    FAILED は、`id_token token` の `oidcc-userinfo-rs256` だけ（`id_token` はアクセス トークンが出ないので、プランに出ない）
 - **飛ばされるのが正しいモジュール**（SKIPPED。`oidcc-dynamic`）
-  - `oidcc-idtoken-unsigned`：Discovery の `id_token_signing_alg_values_supported` に `none` が無い（署名の無い id_token は出さない。Conformance Suite も、認定では `none` を求めないと書く）
+  - `oidcc-idtoken-unsigned`（`code`・`code token`。id_token を認可エンドポイントから受けない `response_type` だけに出る）：Discovery の `id_token_signing_alg_values_supported` に `none` が無い（署名の無い id_token は出さない。Conformance Suite も、認定では `none` を求めないと書く）
   - `oidcc-request-uri-unsigned`・`oidcc-ensure-request-object-with-redirect-uri`：Discovery の `request_object_signing_alg_values_supported` に `none` が無い（署名の無い Request Object は受けない）
 
 **Discovery の検査の WARNING を、1 つだけ許す**（#385。`fapi2.json`・`fapi-ciba.json`・`oidcc-config.json` の `server.allow_unexpected_metadata_fields`）。
@@ -280,7 +306,7 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 | クライアントへの応答 | `error`・`error_description`。無ければパラメタの名前だけ（`code` などの値は出さない）。**JARM は、署名だけの JWT の中身を読む** |
 | モジュールの結果 | `testmodule_result` と、SUCCESS・INFO 以外の判定 |
 
-- **区間**：ブラウザを OP へ送るたび（`Redirecting to …`）に区切り、REVIEW はその判定のある区間の材料で見る（**ログアウトの口では、REVIEW が送る直前に書かれる**ので、次の区間に入れる）
+- **区間**：ブラウザを OP へ送るたび（`Redirecting to …`）に区切り、REVIEW はその判定のある区間の材料で見る（**ログアウトの口では、REVIEW が送る直前に書かれる**ので、次の区間に入れる。**Conformance Suite 自身の画面（`/test/` の下の callback）でのブラウザの処理の終わりが REVIEW より後に書かれることがある**ので、それは区間の最後のブラウザの項目に数えない。#426 の `oidcc-rp-initiated-logout-only-state` で、REVIEW がサインインの区間に入った）
 - **材料の形**（`Evidence`）：操作した画面・最後の OP の画面（状態コード・パス・タイトル）・クライアントへの応答を 1 行にしたもの。
   **エラー画面とサインアウトの確認の画面は、本文の文言**（`invalid_request Invalid redirect_uri.` などのエラーの種類と説明、確認の画面の理由）**も入れる**（タイトルだけでは、文言が変わっても「同じ」になる）。
   **実行ごとに変わる値**（クエリ・コード・`state`）と、配備ごとに変わる文字（画面の上の利用者名）は入れない。**サインインの画面などは、タイトルまで**（本文の変化は拾わない）
@@ -304,12 +330,13 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 基準は、プラン・モジュール・バリアント・判定の名前ごとに、材料の形（`Evidence`）・判定（`Verdict`）・理由・照らした節を持つ。
 **材料の形が同じなら、合否を引き継ぐ。** 形が変わった・基準に無いもの・読んだプランで基準だけに在るもの（REVIEW が出なくなった）だけ、`out\review\<プラン>.json` を読んで合否を付け直し、基準を直す（終了コード 1）。
 
-**今の基準**（2026-11-22 の全 25 プランの実行。REVIEW の判定は延べ 164・モジュールの名前 40・判定の種類 21。**#422 を直した後は延べ 162**（2026-11-23 に `fapi2-sp-plain-oauth` を回し直した））
+**今の基準**（2026-11-25 の全 56 の組の実行。REVIEW の判定は延べ 300・モジュールの名前 38・判定の種類 20。
+それまでは 2026-11-22 の全 25 プランの実行で延べ 164（**#422 を直した後は 162**）。**#426 で足した 31 の組の 138 件は、どれも静的な版・`code` の組の同じ判定と材料の形が同じ**で、その合否を引き継いだ（`oidcc-mtls`・`-formpost` の `oidcc-redirect-uri-query-added` は、静的な `oidcc-basic` に無いので、`oidcc-dynamic` の同じ判定から））
 
 | 判定 | 延べ | 中身 |
 |---|---:|---|
-| 合（画面で確かめた） | 82 | 2 回目のサインインの画面（`oidcc-max-age-1`・`oidcc-prompt-login`）、**登録した `logo_uri`・`policy_uri`・`tos_uri` を出したサインインの画面**（`oidcc-registration-logo-uri`・`-policy-uri`・`-tos-uri`。#427 で直した。2026-11-24）、`redirect_uri` の誤り・欠落のエラー画面、`request_uri` の使用済み・期限切れ・別のクライアントのエラー画面、ログアウトの誤りの理由を出した確認の画面と、サインアウトした後の画面 |
-| 合（エラーを返した） | 25 | `response_type`・`nonce`（Implicit・Hybrid）の欠落、PAR を使わない要求・Request Object の無い要求に `invalid_request` |
+| 合（画面で確かめた） | 204 | 2 回目のサインインの画面（`oidcc-max-age-1`・`oidcc-prompt-login`）、**登録した `logo_uri`・`policy_uri`・`tos_uri` を出したサインインの画面**（`oidcc-registration-logo-uri`・`-policy-uri`・`-tos-uri`。#427 で直した。2026-11-24）、`redirect_uri` の誤り・欠落のエラー画面、`request_uri` の使用済み・期限切れ・別のクライアントのエラー画面、ログアウトの誤りの理由を出した確認の画面と、サインアウトした後の画面 |
+| 合（エラーを返した） | 41 | `response_type`・`nonce`（Implicit・Hybrid）の欠落、PAR を使わない要求・Request Object の無い要求に `invalid_request` |
 | 合（受け付けた） | 53 | 長い `nonce`・`state`、Request Object の内と外の `nonce`・`state` の違い、外だけの `state` を、Request Object の値で受け付けた |
 | 否 | 0 | **#427 を直す前は 3**：`oidcc-registration-logo-uri`・`-policy-uri`・`-tos-uri`（登録した値をサインインの画面に出していなかった。**OIDC Registration 1.0 §2 は SHOULD**）。**#427 で、認可の要求から来たサインインの画面と同意の画面に出すようにし、合にした**（2026-11-24）。**`fapi2-sp-plain-oauth` の 2 件（#422）は、直して REVIEW が出なくなったので、基準から消した**（2026-11-23。延べ 164 → 162） |
 | 判断できない | 2 | FAPI-CIBA の `ensure-authorization-request-with-potentially-bad-binding-message`（認証デバイスの画面がログに無い。OP は `binding_message` を受け付けて端末へ送り、端末のアプリが出す。実物の端末で見るのは #417 の範囲の外） |

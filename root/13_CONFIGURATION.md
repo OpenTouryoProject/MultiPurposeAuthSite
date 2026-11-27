@@ -238,9 +238,10 @@ E2E テストが、**メールでしか届かない値**（メアドの確認・
 >
 > **広げないままでも、1 本だけの登録は従来どおり入る**（512 文字まで）。
 
-> **`post_logout_redirect_uri` と `redirect_uri_saml`（ACS）は 1 本のまま**である。
+> **`redirect_uri_saml`（ACS）は 1 本のまま**である。
 > **同じ形の課題だが、別の論点を持つ**（ACS は「返す先は常に登録値」。#276）ので、
 > **#306 では触っていない。**
+> **`post_logout_redirect_uri` は、#426 で同じ形（n 件・空白区切り）にした**（下の「`post_logout_redirect_uri`」）。
 
 > **`web_origins`（#265）は、元から空白・カンマ区切りの列挙**である。
 > **入力の上限だけが 1 本ぶんのままだった**ので、#306 で列挙用に揃えた（列は元から無制限）。
@@ -596,17 +597,31 @@ CreateJwkSetJson.exe
 ### `post_logout_redirect_uri` — ログアウト後の戻り先（任意。#232）
 
 **RP からのログアウト（`/end_session`）の後に、RP へ戻してよい URL。**
-OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に当たる
-（仕様は配列だが、既存の `redirect_uri_*` と同じく**1 本**で持つ）。
+OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に当たる。
+**n 件を空白で区切って書ける**（`redirect_uri_*` と同じ形。#306。**以前は 1 本だった**ので、#426 で揃えた）。
 
 ```json
-"post_logout_redirect_uri": "https://rp.example.com/logged_out"
+"post_logout_redirect_uri": "https://rp.example.com/logged_out https://localhost:5001/logged_out"
 ```
 
 | 登録 | 扱い |
 |---|---|
 | **項目が無い** | **ログアウトはできるが、RP へは戻さない**（自サイトの画面に戻る） |
-| 有る | **完全一致**したときだけ戻す（**大文字小文字も区別する**。§3 は exactly match） |
+| 有る | **どれかと完全一致**したときだけ戻す（**大文字小文字も区別する**。§3 は exactly match）。**記号（`test_self_logout`）は要素ごとに解決される** |
+
+**既存のデータベースには列幅の変更が要る**（#426。**1 本だけの登録は、広げなくても従来どおり入る**（512 文字まで））。
+**`Create_UserStore.sql` を流し直す**か、**`ALTER` で広げる。**
+
+```sql
+-- SQL Server
+ALTER TABLE [Saml2OAuth2Data] ALTER COLUMN [PostLogoutRedirectUri] [nvarchar](2000) NULL
+
+-- Oracle
+ALTER TABLE "Saml2OAuth2Data" MODIFY ("PostLogoutRedirectUri" NVARCHAR2(2000));
+
+-- PostgreSQL
+ALTER TABLE Saml2OAuth2Data ALTER COLUMN PostLogoutRedirectUri TYPE varchar(2000);
+```
 
 **口（エンドポイント）の URL は、設定キー `OAuth2EndSessionEndpoint`**（既定 `/end_session`）。
 **既に配備された設定ファイルに無くても動く**（無ければ既定値を使う）。Discovery の
@@ -1021,7 +1036,7 @@ ALTER TABLE [SessionClient] WITH CHECK ADD CONSTRAINT [FK.SessionClient.Users_Us
 | | |
 |---|---|
 | **どこで登録するか** | **クライアント登録の画面**（`Saml2OAuth2Data`）**と、設定ファイル**（`OAuth2ClientsInformation` の `backchannel_logout_uri`） |
-| **動的登録（RFC 7591）では設定できない** | **RFC 7591 のメタデータではない**ため（`post_logout_redirect_uri` と同じ扱い。**更新のときは持ち越す**） |
+| **動的登録でも設定できる**（#426） | **OIDC の動的登録のメタデータ**（Back-Channel Logout 1.0 §2.2）。**行き先のアドレスも確かめ**（`OutboundUrlPolicy`）、**動的登録したクライアントへは、送るときにも確かめる**（プロキシの組は `ProxyForClientRegisteredUrls`）。**`PUT` で省けば消える**。**#310 では「RFC 7591 のメタデータではない」として受けなかったが、原典と合わなかった** |
 | **URL の規則** | **`https` のみ。** **ループバックの `http` だけ許す**（**鍵の出どころと同じ規則**。#309） |
 | **候補** | **`test_self_bclogout`**（**自己テスト用**。下の「受け口」） |
 
@@ -1121,7 +1136,7 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN BackChannelLogoutUri varchar(512) NULL;
 | | |
 |---|---|
 | **どこで登録するか** | **クライアント登録の画面と、設定ファイル**（`OAuth2ClientsInformation` の `frontchannel_logout_uri`） |
-| **動的登録（RFC 7591）では設定できない** | **`backchannel_logout_uri` と同じ扱い**（更新のときは持ち越す） |
+| **動的登録でも設定できる**（#426） | **OIDC の動的登録のメタデータ**（Front-Channel Logout 1.0 §2）。**URL の規則は下と同じ**。**`PUT` で省けば消える** |
 | **URL の規則** | **`https` のみ。** **ループバックの `http` だけ許す**（**ブラウザが開くので、平文だと混在コンテンツで止められることも在る**） |
 | **候補** | **`test_self_fclogout`**（**自己テスト用**） |
 
@@ -1392,7 +1407,8 @@ ALTER TABLE Saml2OAuth2Data ADD COLUMN RequestUris varchar(2000) NULL;
 - **掛ける所**：登録の検査（`invalid_client_metadata`）、登録のときに温める前、起動のときに温める前、クライアント認証で `jwks_uri` を取り直す前（**登録の後で名前解決の結果が変わっていれば、鍵が無いのと同じ扱い**）
 - **`sector_identifier_uri` は専用の HttpClient で取りに行く**：**リダイレクトを追わない**。**net10.0 版は接続の時点のアドレスでも判定する**（判定の後に名前解決をやり直して、行き先を変えられないように）。**net48 版は名前解決した結果の判定に留まる**（`HttpClientHandler` に接続の時点の口が無い）。**プロキシ（`UseIntranetProxy`）を通すときも、取りに行く前の判定に留まる**
 - **`jwks_uri` も専用の HttpClient で取りに行く**（#405。Open棟梁 の `RemoteJwkSetStore` に、呼び出しごとに渡す。OpenTouryo#718）。**`sector_identifier_uri` と同じく、リダイレクトを追わず、net10.0 版は接続の時点のアドレスでも判定する**。**取りに行く所**：登録のときに温める、起動のときに温める、クライアント認証などで知らない `kid` の鍵を取り直す・背景で補充する。**ID 連携の上流の `jwks_uri`（運用者が設定する）は、共有の HttpClient のまま**（下の表）
-- **ID 連携の上流・Back-Channel Logout の URL は対象外**（運用者が設定・登録するもので、動的登録では変えられない。#310）
+- **ID 連携の上流の URL は対象外**（運用者が設定するもの）
+- **Back-Channel Logout の URL は、動的登録したクライアント（`registration_access_token` を持つ登録）のものだけが対象**（#426。登録の検査と、送る前。**送るときは、この判定の HttpClient**（プロキシの組は `ProxyForClientRegisteredUrls`）。**管理画面・設定ファイルだけで登録したクライアントは対象外**で、今までどおりイントラネットの RP へも送る）
 
 > **既定が閉じたので、内部のアドレスの `jwks_uri`・`sector_identifier_uri` を使っている配備は、`OutboundUrlAllowedHosts` に足すこと。**
 > **`jwks_uri` は、リダイレクトを追わなくなった**（#405）。**リダイレクトを返す `jwks_uri` を登録している RP は、最終の URL を登録し直すこと**（登録・`PUT` は `invalid_client_metadata` で断られ、登録済みのものは鍵を読めなくなる）。**プロキシは `ProxyForClientRegisteredUrls` の組になり、組のプロキシが無ければ OS の既定のプロキシも使わない**（以前は `ProxyForIdFederation`。既定はどちらも `Intranet`）
@@ -1862,6 +1878,10 @@ Content-Type: application/json
 | **`token_endpoint_auth_signing_alg`** | **受け付ける**（段階 3）。**`RS256` / `ES256`**。**空なら絞らない**（#262） |
 | **`jwks_uri`** | **断る**（`invalid_client_metadata`）。**鍵を URL から引く実装が無い** — **クライアント認証の経路が同期**で、取得を差し込めない（**別 Issue**）。**受け取って無視すると、`private_key_jwt` が黙って通らなくなる** |
 | **`software_statement`** | **受け付ける**（段階 4）。**信頼する発行者が署名した JWT**で、**主張した値は本文（plain JSON）に勝つ**。**信頼する発行者を 1 件も設定していなければ断る**（`unapproved_software_statement`。従来どおり）。**下の「`software_statement`」** |
+| **`post_logout_redirect_uris`** | **ログアウト後の戻り先**（RP-Initiated Logout 1.0 §3.1。配列）。**`redirect_uris` と同じく、絶対 URI でフラグメント禁止**。**さらに `https` に限る（ループバックの `http` だけ許す。空白も断る）**（#426。**Front-Channel Logout の画面が、リンクと `meta refresh` に出す**ため）。**ネイティブ アプリの独自スキーム（`com.example.app:/…`）も断る**（`redirect_uris` は受ける。ネイティブ アプリをログアウトの後に戻したいなら、管理画面で登録する。画面は http・https か同じサイトの相対パスにしか進まないので、独自スキームへは戻らず Home へ進む）。**列 `PostLogoutRedirectUri` に空白区切りで入る**（#426。下の「`post_logout_redirect_uri`」）。**`PUT` で省けば消える** |
+| **`frontchannel_logout_uri`** | **ブラウザ経由でログアウトを伝える先**（Front-Channel Logout 1.0 §2）。**`https` のみ（ループバックの `http` だけ許す）**（#426。#310 では受けなかった）。**フラグメント禁止**（§2 の MUST NOT）。**スキーム・ホスト・ポートは、登録した `redirect_uris` のどれかと同じ**（§2 の MUST。**関係の無いサイトを、OP の画面の `iframe` に開かせない**）。**`PUT` で省けば消える** |
+| **`backchannel_logout_uri`** | **OP が `logout_token` を POST する先**（Back-Channel Logout 1.0 §2.2）。**`https` で、行き先が内部のアドレスでないこと**（`OutboundUrlPolicy`。`jwks_uri` と同じ判定）。**フラグメント禁止**（§2.2 の MUST NOT）。**送るときも、動的登録したクライアントへは行き先のアドレスを確かめる**（#426。#310 では受けなかった）。**`PUT` で省けば消える** |
+| `frontchannel_logout_session_required` / `backchannel_logout_session_required` | **真偽値なら受けるが、保存しない**（**この実装は必ず `iss` と `sid` を付ける**）。**応答では、URL が在るときだけ `true` を返す**（#426） |
 | **`client_name`** | **画面に出す名前の列（`ClientDisplayName`）に入れ、応答の `client_name` で返す**（#430。OIDC Registration 1.0 §2。**256 文字まで**）。**承認の画面（同意・認可の要求から来たサインイン）に出す**（#427 のロゴ・リンクと並べて）。**`ClientName` の列（識別の名前）には入れない** — **そちらは利用者名**で、**`Helper.GetClientName` が「登録が在るか」の判定に使っている**（#430 までは、`client_name` を受け取っても無視していた）。**`PUT` で省けば消える** |
 | 上記以外 | **無視する**（§3.2.1） |
 
@@ -2138,8 +2158,8 @@ curl -X DELETE "https://localhost:44300/MultiPurposeAuthSite/register/<client_id
 
 | | 列 |
 |---|---|
-| **要求から作り直す**（**省いたら消える**） | `redirect_uris` / `scope` / `grant_types` / `response_types` / `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` / `subject_type` / `id_token_signed_response_alg` |
-| **持ち越す**（**要求では変えられない**） | `client_id` / `client_secret` / `ClientName`（所有者の利用者名）/ `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `PostLogoutRedirectUri` / `WebOrigins` / `Jwk*` / `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` / `RequestObjectSigningAlg`） |
+| **要求から作り直す**（**省いたら消える**） | `redirect_uris` / `scope` / `grant_types` / `response_types` / `client_uri` / `logo_uri` / `tos_uri` / `policy_uri` / `contacts` / `software_id` / `software_version` / `subject_type` / `id_token_signed_response_alg` / **`post_logout_redirect_uris` / `frontchannel_logout_uri` / `backchannel_logout_uri`**（#426。**管理画面から入れた値も、省いた `PUT` で消える**） |
+| **持ち越す**（**要求では変えられない**） | `client_id` / `client_secret` / `ClientName`（所有者の利用者名）/ `ClientMode` / `RequirePkce` / `registration_access_token` のハッシュ ＋ **動的登録では設定できない列**（`RedirectUriSaml` / `WebOrigins` / `Jwk*` / `TlsClientAuthSubjectDn` / `TokenEndpointAuthSigningAlg` / `RequestObjectSigningAlg`） |
 
 > **動的登録で設定できない列を持ち越すのは、全置換の例外ではない** —
 > **それらは「このクライアントが動的登録で登録したメタデータ」ではない。**

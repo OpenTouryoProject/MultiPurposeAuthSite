@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus
+1. GET /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=c709eeeb-da19-423d-b2b4-7848891da291&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=4c96c3e9-6db4-474a-bff9-e6e1fdafdc50&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -9425,7 +9425,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 所有者の一覧に、まだ出る（所有者が保たれている）
 - 行の redirect_uri は B（置き換わる）
 - 行の scope は openid（置き換わる）
-- 行の post_logout_redirect_uri は残る（画面から入れた列）
+- 行の post_logout_redirect_uri は消える（#426 で動的登録が持つ列になった。省いた PUT は消す）
 - 行の web_origins は残る（画面から入れた列）
 - HTTP の状態は 200
 - redirect_uris は B
@@ -14074,6 +14074,112 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 401
 - 200
 
+## RT-426.1 **`post_logout_redirect_uri` を 2 件登録したクライアントで、2 件目（記号）にも 1 件目（512 文字を超える URL）にも戻る。どれとも完全一致しない値には戻さない**
+
+| | |
+|---|---|
+| 観点 | **§3.1 の `post_logout_redirect_uris` は配列で、§3 は登録値と完全一致しなければ戻してはならない。****以前は 1 本だけ持てた**（#232）。**#426 で `redirect_uri` と同じ空白区切りの n 件にした**（動的登録の値を受けるため）。**1 件目を 512 文字より長くしてある**ので、**列を広げ忘れると 3 方言では保存できないか、2 件目が落ちる。** |
+| 根拠 | RP-Initiated Logout 1.0 §3.1 / §3 / #426 |
+| テスト | `RT42601_登録したn件のどれかと完全一致すれば戻す` |
+
+**手順**
+
+1. 2 件目（記号。解決後の URL）を指定する
+1. 1 件目（512 文字を超える URL）を指定する
+1. どれとも完全一致しない値を指定する（並べたまま・1 件目の前方・1 件目の後ろに足したもの）
+
+**検証（合否を判定する）**
+
+- HTTP 302
+- 2 件目へ戻す
+- HTTP 302
+- 1 件目へ戻す
+- 登録を並べたままの値 : HTTP 200（確認画面。リダイレクトしない）
+- 1 件目の前方（? より前） : HTTP 200（確認画面。リダイレクトしない）
+- 1 件目の後ろに足した値 : HTTP 200（確認画面。リダイレクトしない）
+- セッションは残っている（勝手にログアウトしない）
+
+## RT-426.2 **動的登録で `post_logout_redirect_uris`（2 件）・`frontchannel_logout_uri`・`backchannel_logout_uri` を登録でき、応答と `GET` で返る。`/end_session` は 2 件目へ戻し、`backchannel_logout_uri` へ `logout_token` が届く。`PUT` で省けば消える**
+
+| | |
+|---|---|
+| 観点 | **3 つとも OIDC の動的登録のメタデータ**（RP-Initiated Logout 1.0 §3.1・Front-Channel Logout 1.0 §2・Back-Channel Logout 1.0 §2.2）。**以前は「RFC 7591 のメタデータではない」として受けず、黙って捨てていた**（#310）。**原典と合わなかったので受ける**（#426）。**動的登録したクライアントへの通知は、行き先のアドレスを確かめる HttpClient で送る**（`OutboundUrlPolicy`。E2E はループバックを許して起動する）。**`PUT` は全置換**（RFC 7592 §2.2 の MUST：省いた項目は消す要求）。 |
+| 根拠 | RP-Initiated Logout 1.0 §3.1 / Back-Channel Logout 1.0 §2.2・§2.5 / Front-Channel Logout 1.0 §2 / RFC 7592 §2.2 / #426 |
+| テスト | `RT42602_動的登録でログアウトのURLを登録でき効きPUTで省けば消える` |
+
+**手順**
+
+1. ログアウトの URL を付けて登録する
+1. 登録したクライアントでトークンを取り、/end_session で 2 件目へ進む（frontchannel_logout_uri の画面を挟む）
+1. backchannel_logout_uri に logout_token が届く（背景で送られるので待つ）
+1. ログアウトの URL を省いて PUT する
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201
+- 応答の post_logout_redirect_uris は、送った 2 件
+- 応答の frontchannel_logout_uri
+- 応答の backchannel_logout_uri
+- 応答の backchannel_logout_session_required は true（必ず sid を付ける）
+- GET の backchannel_logout_uri も、登録した値
+- ログアウトの画面が返る（HTTP 200）
+- iframe が、動的登録した frontchannel_logout_uri を開く
+- 画面の後に、2 件目（動的登録した値）へ進む
+- このクライアント宛ての logout_token が届いた
+- PUT は 200
+- GET で post_logout_redirect_uris が無い（消えた）
+- GET で frontchannel_logout_uri が無い（消えた）
+- GET で backchannel_logout_uri が無い（消えた）
+
+## RT-426.3 **動的登録で、フラグメントを持つ `post_logout_redirect_uris`・https でない `frontchannel_logout_uri`・https でない／内部のアドレスを指す `backchannel_logout_uri`・真偽値でない `*_session_required` は `invalid_client_metadata`。https（ループバックは http）でない `post_logout_redirect_uris`、フラグメントを持つ `frontchannel_logout_uri`・`backchannel_logout_uri`、`redirect_uris` とスキーム・ホスト・ポートの違う `frontchannel_logout_uri` も**
+
+| | |
+|---|---|
+| 観点 | **`post_logout_redirect_uri` は完全一致で照合する戻り先**なので、`redirect_uris` と同じ形だけを受ける。**さらに https に限る**（**Front-Channel Logout の画面が、リンクと meta refresh に出す**ので、`javascript:` などを登録させない。#426）。**`backchannel_logout_uri` は OP が POST する先**で、**登録する側が決められる**ので、**`jwks_uri`・`request_uris` と同じく、行き先のアドレスも確かめる**（`OutboundUrlPolicy`。#376）。**ログアウトの URL はフラグメントを持たない**（Front-Channel §2・Back-Channel §2.2 の MUST NOT）。**`frontchannel_logout_uri` のスキーム・ホスト・ポートは、登録した `redirect_uris` のどれかと同じ**（Front-Channel §2 の MUST）。 |
+| 根拠 | RFC 7591 §3.2.2 / Front-Channel Logout 1.0 §2 / Back-Channel Logout 1.0 §2.2 / #376 / #426 |
+| テスト | `RT42603_動的登録のログアウトのURLは使う側と同じ規則で確かめる` |
+
+**手順**
+
+1. フラグメントを持つ post_logout_redirect_uris
+1. https でない frontchannel_logout_uri
+1. https でない backchannel_logout_uri
+1. 内部のアドレス（プライベート）を指す backchannel_logout_uri
+1. 真偽値でない backchannel_logout_session_required
+1. javascript: の post_logout_redirect_uris（ログアウトの画面がリンクに出す）
+1. http（ループバックでない）の post_logout_redirect_uris
+1. フラグメントを持つ frontchannel_logout_uri（redirect_uris と同じオリジン）
+1. redirect_uris とホストの違う frontchannel_logout_uri
+1. フラグメントを持つ backchannel_logout_uri（ループバック）
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- HTTP 400
+- invalid_client_metadata
+- 断る理由（error_description）
+- HTTP 400
+- invalid_client_metadata
+- 断る理由（error_description）
+- HTTP 400
+- invalid_client_metadata
+- 断る理由（error_description）
+- HTTP 400
+- invalid_client_metadata
+- 断る理由（error_description）
+- HTTP 400
+- invalid_client_metadata
+- 断る理由（error_description）
+
 ## RT-427.1 **同意の画面に、クライアントのロゴ（`logo_uri`）・ポリシー（`policy_uri`）・利用規約（`tos_uri`）が出る**
 
 | | |
@@ -14322,6 +14428,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 名前の欄に、保存した表示名が出る
 - 同意の画面が出る
 - 見えない文字を含む表示名は、名前の欄に出さない
+
+## RT-433 **`response_mode=form_post` の応答は、`redirect_uri` が `http` / `https` のときだけ返す。`javascript:` スキームの `redirect_uri` は、自動 submit の form の action に出さず、エラー画面にする**
+
+| | |
+|---|---|
+| 観点 | **form_post の画面は form の action を `onload` で自動 submit する**ので、**`http` / `https` 以外（`javascript:` など）は、OP のオリジンのスクリプトとして動く**（登録経由の XSS）。**`redirect_uris` はネイティブ アプリのカスタム スキームを正当に含む**ので登録側では絞らず、**出す側（form_post のシンク）で絞る**（#426 の post_logout とは違い、登録は通す）。 |
+| 根拠 | OAuth 2.0 Form Post Response Mode / 設計：CreateAuthorizationResponse（form_post のシンクを http・https に限る。#433） |
+| テスト | `RT433_formpostの応答はhttpかhttpsのredirect_uriのときだけ出す` |
+
+**手順**
+
+1. javascript: の redirect_uri を動的登録する（登録側はスキームを絞らないので通る）
+1. その client で、response_mode=form_post・prompt=none の認可要求を送る（consent_required が form_post のシンクを通る）
+1. (2b) form_post.jwt（JARM）でも同じ（ガードは JARM の分岐より前にある）
+1. 対照：https の redirect_uri なら、form_post は従来どおり出る
+
+**検証（合否を判定する）**
+
+- HTTP の状態は 201（登録は通る）
+- 自動 submit の form を出さない
+- http/https を求める理由つきのエラー画面
+- form_post.jwt でも、自動 submit の form を出さずエラー画面にする
+- HTTP の状態は 201
+- http/https の form_post は、自動 submit の form を出す
+- その action は、登録した https の redirect_uri
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

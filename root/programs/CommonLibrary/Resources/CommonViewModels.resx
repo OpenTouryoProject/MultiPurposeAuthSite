@@ -298,7 +298,7 @@
     <value>Where tokens are returned for the implicit / hybrid flows. Put a hyphen when the client does not use them.</value>
   </data>
   <data name="PostLogoutRedirectUriDescription" xml:space="preserve">
-    <value>Where the RP may be sent back after logout (/end_session). Matched exactly.</value>
+    <value>Where the RP may be sent back after logout (/end_session). Separate multiple URLs with spaces. Matched exactly against one of them.</value>
   </data>
   <data name="BackChannelLogoutUriDescription" xml:space="preserve">
     <value>Where a logout_token is POSTed when the OP session ends. https only (loopback http is allowed). Put a hyphen when the client does not receive it.</value>

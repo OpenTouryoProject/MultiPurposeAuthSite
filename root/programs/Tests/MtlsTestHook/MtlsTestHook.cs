@@ -30,9 +30,11 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#226 : mTLS の経路を E2E で確かめる）
 //*  2026/11/10  玄人 幸道         スタブ（ASPNETCORE_ENVIRONMENT=Stub）でも効くようにした（外の RP から MTLS を通すため。#351）
+//*  2026/11/27  玄人 幸道         環境変数 MPAS_TEST_UI_CULTURE があれば、既定の表示の言語と書式をその言語にする（英語の OS の GitHub Actions のランナーでも E2E を日本語の画面で回すため。#348）
 //**********************************************************************************
 
 using System;
+using System.Globalization;
 using System.IO;
 using System.Runtime.Loader;
 
@@ -69,6 +71,22 @@ internal class StartupHook
         {
             Console.Error.WriteLine("[MtlsTestHook] ASPNETCORE_ENVIRONMENT が Development・Stub ではないので、何もしない。");
             return;
+        }
+
+        // **表示の言語（#348）**：test.ps1 が MPAS_TEST_UI_CULTURE（ja-JP）を渡したときだけ、既定の言語と書式を替える。
+        //   **net10.0 版は要求の言語を見ず、OS の表示言語で画面を出す**（リソースの既定は英語、日本語は .ja.resx）。
+        //   **E2E は画面の文言を日本語で見分ける**ので、英語の OS（GitHub Actions のランナー）でも日本語にそろえる。
+        //   **渡さなければ何もしない**（スタブ #351 などは、これまでどおり OS の言語）。
+        string culture = Environment.GetEnvironmentVariable("MPAS_TEST_UI_CULTURE");
+
+        if (!string.IsNullOrEmpty(culture))
+        {
+            CultureInfo c = CultureInfo.GetCultureInfo(culture);
+            CultureInfo.DefaultThreadCurrentCulture = c;
+            CultureInfo.DefaultThreadCurrentUICulture = c;
+            CultureInfo.CurrentCulture = c;
+            CultureInfo.CurrentUICulture = c;
+            Console.WriteLine("[MtlsTestHook] 表示の言語と書式を {0} にする（テスト専用。#348）", c.Name);
         }
 
         string self = typeof(StartupHook).Assembly.Location;

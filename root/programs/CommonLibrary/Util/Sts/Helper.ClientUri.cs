@@ -33,6 +33,7 @@
 //*  2026/10/31  玄人 幸道         画面登録の値が無いときも空を返す。CORS の public の判定に token_endpoint_auth_method を使う（#294）
 //*  2026/10/31  玄人 幸道         IsPublicClientForCors を static の region へ移し、none は Const から取る（#294）
 //*  2026/11/06  玄人 幸道         Open棟梁 の OAuth2AndOIDCConst に在る名前は、そちらを使うようにした（OpenTouryo#663。#337）
+//*  2026/11/25  玄人 幸道         post_logout_redirect_uri を n 件（空白区切り）で返すようにした（GetClientsPostLogoutRedirectUris。#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -243,7 +244,7 @@ namespace MultiPurposeAuthSite.Util.Sts
         /// <remarks>
         /// **登録が無い相手には、ログアウトを伝えない**
         /// （**Back-Channel Logout に対応していない RP** である）。
-        /// 登録は 1 本（既存の `post_logout_redirect_uri` と同じ形）。
+        /// 登録は 1 本（Back-Channel Logout 1.0 §2.2 も 1 つの URL。`post_logout_redirect_uri` は #426 で n 件にした）。
         /// 定数値（`test_self_bclogout`）の解決は、呼び出し側（`BackChannelLogout`）で行う。
         /// </remarks>
         public string GetClientsBackChannelLogoutUri(string client_id)
@@ -275,41 +276,40 @@ namespace MultiPurposeAuthSite.Util.Sts
 
         #endregion
 
-        #region GetClientsPostLogoutRedirectUri
+        #region GetClientsPostLogoutRedirectUris
 
-        /// <summary>client_idからpost_logout_redirect_uriを取得する（#232）。</summary>
+        /// <summary>client_idからpost_logout_redirect_uriを全件取得する（#232。#426 で n 件にした）。</summary>
         /// <param name="client_id">client_id</param>
-        /// <returns>post_logout_redirect_uri（登録が無ければ空）</returns>
+        /// <returns>post_logout_redirect_uri の並び（登録が無ければ 0 件）</returns>
         /// <remarks>
         /// **RP-Initiated Logout 1.0 §3 は、登録値と完全一致しなければ戻してはならない**としている。
-        /// 登録は 1 本（既存の redirect_uri_code / redirect_uri_token と同じ形）。
-        /// 定数値（test_self_logout）の解決は、呼び出し側（CmnEndpoints）で行う。
+        /// **登録は n 件を空白区切りの 1 つの文字列で持つ**（redirect_uri_code / redirect_uri_token と同じ形。#306）。
+        /// **以前は 1 本だった**（#426 で、動的登録の `post_logout_redirect_uris`（§3.1。配列）を受けるため n 件にした）。
+        /// 定数値（test_self_logout）の解決は、呼び出し側（CmnLogoutEndpoint）で要素ごとに行う。
         /// </remarks>
-        public string GetClientsPostLogoutRedirectUri(string client_id)
+        public string[] GetClientsPostLogoutRedirectUris(string client_id)
         {
             client_id = client_id ?? "";
+            string list = "";
 
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (this.Oauth2ClientsInfo[client_id].ContainsKey(OAuth2AndOIDCConst.post_logout_redirect_uri))
-                {
-                    return this.Oauth2ClientsInfo[client_id][OAuth2AndOIDCConst.post_logout_redirect_uri];
-                }
-
-                // **構成ファイルに在るクライアントは、ここで打ち切る**（#294）。
-                return "";
+                // **構成ファイルに在るクライアントは、画面登録を読みに行かない**（#294）。
+                this.Oauth2ClientsInfo[client_id].TryGetValue(OAuth2AndOIDCConst.post_logout_redirect_uri, out list);
             }
-
-            // Saml2OAuth2Dataを検索
-            ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
-
-            if (model != null)
+            else
             {
-                return model.PostLogoutRedirectUri ?? "";
+                // Saml2OAuth2Dataを検索
+                ManageAddSaml2OAuth2DataViewModel model = Saml2OAuth2DataProvider.Get(client_id);
+
+                if (model != null)
+                {
+                    list = model.PostLogoutRedirectUri;
+                }
             }
 
-            return "";
+            return OAuth2AndOIDCSpec.SplitSpaceDelimited(list ?? "");
         }
 
         #endregion

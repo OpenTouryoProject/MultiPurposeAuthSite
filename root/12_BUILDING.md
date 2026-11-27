@@ -29,6 +29,7 @@ cd root
 .\1_BuildAll.ps1 -Only net10.0 -SkipClean
 .\1_BuildAll.ps1 -WarnDetail    # 警告の内訳を出す
 .\1_BuildAll.ps1 -Libs Force    # OpenTouryo のアセンブリを取り直す
+.\1_BuildAll.ps1 -OpenTouryoDir C:\OpenTouryo -FailOnWarnings   # 手元の OpenTouryo から建て、警告でも落とす（CI と同じ。#348）
 ```
 
 ビルドとは別に、**DDL がミラーかを確かめるスクリプト**がある（#206）。
@@ -50,6 +51,10 @@ cd root
 | `-WarnDetail` | 警告を種類ごとに集計して出す |
 | `-IgnoreErrors` | 既知のエラーとして合否から外す正規表現。**除外分は別枠で必ず表示する** |
 | `-OutputDir` | ログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
+| `-OpenTouryoDir` | **OpenTouryo のアセンブリを、develop の ZIP ではなく、手元に取った OpenTouryo（clone の根）から建てて写す**（#348）。在っても建て直す。`-Libs None` とは一緒に使えない。建てるのは `3_BuildLibsFromLocalRepo.bat`（ZIP 版と同じ 4 つ） |
+| `-FailOnWarnings` | **警告が 1 つでもあれば NG**（#348。CI が使う）。依存パッケージの監査（`NU1901`〜`NU1904`）は別に数え、それだけなら終了コード `3`。**Libs の手順（OpenTouryo のビルド）の警告は数えない** |
+
+> **`-OpenTouryoDir` は、手元の `OpenTouryoAssemblies` を上書きする。** 手元で入れ替えた部品（`mpas_dev.bat`）を残したいなら、使わない。
 
 ## 2. なぜラッパーが必要か
 
@@ -95,6 +100,17 @@ cd root
 飛ばしたことが見えないと「通った」と読めてしまう。
 
 終了コードは、NG が 0 件なら `0`、1 件以上なら `1`。
+
+**`-FailOnWarnings` を付けたときだけ**、警告も合否に入る（#348）。
+
+| 終了コード | 意味 |
+|---|---|
+| `0` | NG が 0 件で、警告も 0 件 |
+| `1` | NG が 1 件以上、または**監査以外の警告が 1 件以上**（一覧を「警告一覧」に出す） |
+| `3` | NG も監査以外の警告も無いが、**依存パッケージの監査の警告（`NU1901`〜`NU1904`）がある**（一覧を出す） |
+
+- **監査を別に数えるのは、MPAS を変えなくても増えるから**（CVE の公表）。止めるかどうかは呼び出し側が決める（CI は PR では止めず、週 1 回・手動で止める。11 節）
+- **Libs の手順の警告は数えない。** OpenTouryo のコードの警告で、MPAS では直せない（`081aadfc` で 45 件）
 
 ### `-Only` が空振りしたら止める
 
@@ -388,3 +404,44 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 - **ログの保存先（`Tests\E2ETests\Result`）の `*.log` も消える。**
   毎回きれいになるのは都合がよいが、
   **失敗したログを読む前に建て直すと、その内容を失う**（`.trx` は残る）
+
+## 11. CI（GitHub Actions。#348）
+
+**`.github/workflows/build-and-test.yml` が、`windows-latest` で、本書の全ビルドと単体テスト（ジョブ `build`）、両版の E2E（ジョブ `e2e-windows`）を回す。**
+判定はここに書かず、`1_BuildAll.ps1`・`dotnet test`・`2_RunAllTests.ps1` の終了コードで決める（OpenTouryo の `build-and-test.yml` と同じ線引き）。
+
+| 項目 | 内容 |
+|---|---|
+| 契機 | **master 宛ての PR**・手動（`workflow_dispatch`）・**週 1 回**（月曜 09:00 JST。既定のブランチの版で動く）。**develop 宛ての PR では回さない** |
+| OpenTouryo | **コミットに固定して取る**（`OTR_REF`）。`1_BuildAll.ps1 -OpenTouryoDir` で基盤を建てて写す。**上げるときは、手元で建ててから `OTR_REF` を変える**（タグ `03-20` は OpenTouryo#718 より前で、MPAS が建たない） |
+| ビルド | `1_BuildAll.ps1 -FailOnWarnings`。**警告が 1 つでもあれば落ちる**（3 節） |
+| 監査の警告 | 終了コード `3`。**PR では注釈とジョブのまとめに留め、週 1 回・手動では最後に落とす**。見つけたら、その場で直す（`AGENTS.md`「依存パッケージの脆弱性を見つけたら」） |
+| 単体テスト | `Tests/UnitTests` を `dotnet test` で回す（**`2_RunAllTests.ps1` には入っていない**）。ビルドが警告で落ちても回す |
+| 残すもの | ビルドのログ（`build-logs`）と単体テストの TRX（`unit-test-results`）。成果物として、失敗したときも残す |
+| 設定ファイル | ビルドには要らない（雛形が無くても通る。10 節「設定ファイルが無いと実行できない」）。E2E は下の表 |
+
+**E2E（ジョブ `e2e-windows`）は、`build` とは別のランナーで、自分で建ててから `2_RunAllTests.ps1 -Launch` を回す**（IIS Express が動かすサイトのフォルダは大きいので、成果物では渡さない）。
+**ストアの種類ごとに、並べて回す**（matrix）。手元と同じ結果（成功・失敗・Skip の数）になることを確かめた（#348）。
+
+| ストア | 回し方 | #348 の結果（成功 / 失敗 / Skip） |
+|---|---|---|
+| `mem` | ID 連携の IdP のコンテナ（`container/E2E`）を起動して回す（手元の通しと同じ） | 1287 / 0 / 10 |
+| `sql`・`ora` | その DB（`container/Store`）だけを起動し、`-UserStoreType <種類> -NoStoreContainer` で回す。ID 連携のコンテナは起動しない（その分は Skip） | 1208 / 0 / 89 |
+| `npg` | 同上。**net48 版は PostgreSQL を使えないので、net10.0 版だけ**（手元と同じ） | 621 / 0 / 676 |
+
+- **DB の準備の待ち方は、`test.ps1` の `Wait-Store` と同じ**（SQL Server は初期化の `done.`、Oracle は healthcheck、PostgreSQL はポート）。接続文字列は `container/Store/README.md` から読む（手元と同じ E2E 専用の値）
+- **.NET Framework の SqlClient は `localhost` を NIC のアドレスにつなぐ**ので、NIC のアドレスの DB のポートをループバックへ転送する（`netsh portproxy`。WSL2 の公開ポートはループバックにしか転送されない。OpenTouryo#712）
+
+| 項目 | 内容 |
+|---|---|
+| 設定ファイル | **雛形から作り、E2E に要る 4 つだけを CI 用の値に替える**（`AdministratorUID`・`AdministratorPWD`・`TestUserPWD`・`SaltParameter`。テスト専用で秘密ではない）。E2E のテストも同じ設定ファイルを読む |
+| `C:\root\files\resource` | **OpenTouryo のリソースに MPAS のリソースを重ねて置く**（手元の構成を写す）。net10.0 版の雛形が OpenTouryo のリソースを指しているための回避（#434） |
+| 証明書 | Kestrel は開発用証明書、IIS Express は自己署名の証明書を 44302 に登録し直す（ランナーの既存の証明書はハンドシェイクで切られる。OpenTouryo#712）。どちらも `LocalMachine\Root` に入れる |
+| サービス | `aspnet_state` を起動する（net48 版のセッション） |
+| 画面の言語 | **ランナーの表示言語は英語で、変えられない。** テストの足場が日本語にそろえる（[`14_TESTING.md`](14_TESTING.md) 5 節「画面の言語」） |
+| ID 連携のコンテナ | **WSL2 の Ubuntu に Docker を入れて動かす**（`container/E2E`。リソースの場所は `E2E_RESOURCE_DIR`）。**Windows の `docker` から、WSL2 の Docker に TCP（`127.0.0.1:2375`。`localhost` は `::1` に解決されることがあり、届かない）でつなぐ**（コンテナのテストが `docker inspect` で読むため。手元の Rancher Desktop と同じ形） |
+| 残すもの | E2E の結果（`Result` の下）・ビルドのログ・コンテナのログ（`e2e-windows-results-<ストア>`） |
+
+- **Linux ランナーで net10.0 を回すのは、まだ載せていない**（`test.ps1` が Windows 前提のため。#435）
+- **アクションは SHA で固定し、`run:` の中は ASCII だけにする**（`AGENTS.md`「GitHub Actions を書き足すとき」）
+- 必須のチェックにするかは、人が決める（[`QUALITY.md`](../QUALITY.md) の「このリポジトリの値」）

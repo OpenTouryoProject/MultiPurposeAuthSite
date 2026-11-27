@@ -35,6 +35,7 @@
 //*  2026/10/25  玄人 幸道         auth も動的登録で付けさせない（#294）
 //*  2026/10/26  玄人 幸道         PUT は現行の行を土台にし、動的登録が持つ列だけを置き換えるようにした（所有者が消えていた。#294）
 //*  2026/10/26  玄人 幸道         DELETE で、所有者だけでなく全利用者の同意を消すようにした（#294）
+//*  2026/11/25  玄人 幸道         ログアウトの登録項目（post_logout_redirect_uris・frontchannel/backchannel_logout_uri）を、動的登録で受けるようにした（#310 の決めを改めた。#426）
 //**********************************************************************************
 
 /*
@@ -45,6 +46,7 @@
  * client_secret と registration_access_token は、登録の応答で 1 回だけ返す（後者はハッシュで保管）。
  * 管理は、その登録の registration_access_token でだけ行え、PUT は全置換、DELETE は全利用者の同意も消す。
  * client_registration と auth の scope は、動的登録では付けられない（管理画面で付ける）。
+ * ログアウトの登録項目（post_logout_redirect_uris・frontchannel_logout_uri・backchannel_logout_uri）は、動的登録でも受ける（#426）。
  *
  * | | ROPC（Resource Owner Password Credentials） | CC（Client Credentials） |
  * |---|---|---|

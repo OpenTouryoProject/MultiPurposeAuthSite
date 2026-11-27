@@ -59,6 +59,25 @@
     バッチ側は「在れば飛ばす」作りで、**古い OpenTouryo を掴み続けても何も言わない**ため。
     取得が成功したら、そのキャッシュも片付ける（失敗したときは、原因を見るため残す）。
 
+.PARAMETER OpenTouryoDir
+    OpenTouryo のアセンブリを、develop の ZIP ではなく、**手元に取った OpenTouryo**（clone の根。
+    root\programs\CS が在るフォルダ）から建てて写す（#348）。
+    Libs の手順は、在っても建て直す（-Libs Force と同じ）。-Libs None とは一緒に使えない。
+
+    **CI（.github/workflows/build-and-test.yml）は、コミットに固定して取った OpenTouryo（OTR_REF）を渡す。**
+    手元に OpenTouryo を置いている人も使える（建てるのは 3_BuildLibsFromLocalRepo.bat。
+    ZIP 版と同じ 4 つ（NuGet と Business の net48・netcore100）を建てて、OpenTouryoAssemblies に写す）。
+
+.PARAMETER FailOnWarnings
+    警告が 1 つでもあれば NG にする（#348。CI が使う）。
+    **依存パッケージの監査の警告（NU1901〜NU1904）は別に数え、それだけなら終了コード 3 で返す**
+    （公表された CVE で、MPAS を変えなくても増えるため。PR では止めず、週 1 回・手動で止めるのは呼び出し側が決める）。
+    **Libs の手順（OpenTouryo のビルド）の警告は数えない**（上流のコードの警告で、MPAS では直せない）。
+    付けなければ、従来どおりエラーだけで合否を決める。
+
+.OUTPUTS
+    終了コード：0 = OK、1 = NG、3 = OK だが監査の警告がある（-FailOnWarnings のときだけ）。
+
 .PARAMETER WarnDetail
     警告の内訳（種類ごとの件数と代表例）を出す。
 
@@ -91,12 +110,16 @@
 .EXAMPLE
     .\1_BuildAll.ps1 -WarnDetail
 
+.EXAMPLE
+    .\1_BuildAll.ps1 -OpenTouryoDir C:\OpenTouryo -FailOnWarnings
+
 .NOTES
     作成者          ：玄人 幸道
     更新履歴        ：
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/09/08  玄人 幸道         新規作成（OpenTouryo の 1_BuildAll.ps1 に倣う）
+     2026/11/26  玄人 幸道         -OpenTouryoDir（手元の OpenTouryo から建てる）と -FailOnWarnings（警告で NG。監査だけなら 3）を足した（#348）
 #>
 [CmdletBinding()]
 param(
@@ -109,7 +132,9 @@ param(
     [string]$Libs = 'Auto',
     [switch]$WarnDetail,
     [string]$OutputDir,
-    [string[]]$IgnoreErrors = @()
+    [string[]]$IgnoreErrors = @(),
+    [string]$OpenTouryoDir,
+    [switch]$FailOnWarnings
 )
 
 # ------------------------------------------------------------------
@@ -150,10 +175,15 @@ New-Item -ItemType Directory -Force $OutputDir | Out-Null
 #
 # **Libs はクリーンの後、ビルドの前に置く。**
 #   クリーン（1_DeleteDir.bat）は Temp を消すため、先に取得すると展開物を捨てることになる。
+#
+# **-OpenTouryoDir のときは、Libs のバッチを手元の OpenTouryo から建てるものに替える**（#348）。
+#   引数（Arg）に OpenTouryo の場所を渡す。
+$libsBat = if ($OpenTouryoDir) { "3_BuildLibsFromLocalRepo.bat" } else { "3_BuildLibsAtOtherReposInTimeOfDev.bat" }
+
 $steps = @(
     @{ Name = "Clean (dir)";     Bat = "1_DeleteDir.bat";                 Clean = $true }
     @{ Name = "Clean (file)";    Bat = "2_DeleteFile.bat";                Clean = $true }
-    @{ Name = "Libs";            Bat = "3_BuildLibsAtOtherReposInTimeOfDev.bat"; Libs = $true }
+    @{ Name = "Libs";            Bat = $libsBat; Libs = $true; Arg = $OpenTouryoDir }
     @{ Name = "net48";           Bat = "10_MultiPurposeAuthSite.bat" }
     @{ Name = "net10.0";         Bat = "10_MultiPurposeAuthSiteCore.bat" }
 )
@@ -288,6 +318,28 @@ $libsDirs = @(
 
 $libsMissing = @($libsDirs | Where-Object { -not (Test-Path $_) })
 
+# **手元の OpenTouryo から建てるなら、場所を先に確かめる**（#348）。
+#   違う場所を渡したまま進むと、Libs の手順が何も建てず、遠くの参照解決の失敗で知らされる。
+if ($OpenTouryoDir)
+{
+    if ($Libs -eq 'None')
+    {
+        Write-Host "  **-OpenTouryoDir と -Libs None は一緒に使えません**（建てると言いながら、建てないことになる）。" -ForegroundColor Red
+        exit 1
+    }
+
+    $otrCsBat = Join-Path $OpenTouryoDir "root\programs\CS\2_Build_NuGet_net48.bat"
+
+    if (-not (Test-Path $otrCsBat))
+    {
+        Write-Host ("  **OpenTouryo が見つかりません（-OpenTouryoDir）** : {0}" -f $otrCsBat) -ForegroundColor Red
+        Write-Host "  clone の根（root\programs\CS が在るフォルダ）を渡してください。" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $OpenTouryoDir = (Resolve-Path $OpenTouryoDir).Path
+}
+
 switch ($Libs)
 {
     'None'  { $runLibs = $false; $libsWhy = "-Libs None" }
@@ -295,9 +347,12 @@ switch ($Libs)
     default { $runLibs = ($libsMissing.Count -gt 0); $libsWhy = "取得済み" }
 }
 
+# 手元の OpenTouryo を渡したなら、在っても建て直す（渡した版で建てるため）。
+if ($OpenTouryoDir) { $runLibs = $true }
+
 if ($runLibs)
 {
-    $libsNote = if ($Libs -eq 'Force') { "-Libs Force" } else { ("{0} が無い" -f (($libsMissing | Split-Path -Leaf) -join " / ")) }
+    $libsNote = if ($OpenTouryoDir) { "-OpenTouryoDir {0}" -f $OpenTouryoDir } elseif ($Libs -eq 'Force') { "-Libs Force" } else { ("{0} が無い" -f (($libsMissing | Split-Path -Leaf) -join " / ")) }
     Write-Host ("OpenTouryo のアセンブリを取得します（{0}）" -f $libsNote) -ForegroundColor Cyan
 }
 elseif ($libsMissing.Count -gt 0)
@@ -374,7 +429,8 @@ foreach ($s in $steps)
     #   バッチは Temp.zip が在れば再ダウンロードせず、Temp\ が在れば再展開せず、
     #   Build_netcore100 が在れば再ビルドしない。
     #   **古い OpenTouryo を掴み続けても、何も言わない。**
-    if ($s.Libs)
+    #   **手元の OpenTouryo から建てるときは、キャッシュを使わないので触らない。**
+    if ($s.Libs -and -not $OpenTouryoDir)
     {
         foreach ($c in @((Join-Path $progRoot "Temp.zip"), (Join-Path $progRoot "Temp")))
         {
@@ -431,8 +487,12 @@ foreach ($s in $steps)
     #
     # **バッチは自分のフォルダから呼ぶ。** 相対パスで参照を解決しているため、
     # 呼び出し元のカレントが違うと、ソリューションを見つけられない。
+    #
+    # **引数（Arg）があれば、引用符で囲んで渡す**（-OpenTouryoDir の場所。空白を含みうる。#348）。
+    $batArg = if ($s.Arg) { " `"$($s.Arg)`"" } else { "" }
+
     Push-Location $progRoot
-    cmd /c "echo. | call `"$bat`"" *>&1 | Out-File $log -Encoding UTF8
+    cmd /c "echo. | call `"$bat`"$batArg" *>&1 | Out-File $log -Encoding UTF8
     Pop-Location
 
     if ($hadNoCurDir)
@@ -479,7 +539,7 @@ foreach ($s in $steps)
     #   方針は「取得前に消す」なので、残しても使わない。
     #   21 MB の Temp.zip を置いておくと、未追跡のまま目に入り続ける。
     #   **失敗したときは残す。** Libs.log と併せて原因を見るため。
-    if ($s.Libs -and $verdict -eq "OK")
+    if ($s.Libs -and $verdict -eq "OK" -and -not $OpenTouryoDir)
     {
         foreach ($c in @((Join-Path $progRoot "Temp.zip"), (Join-Path $progRoot "Temp")))
         {
@@ -600,17 +660,80 @@ if ($allKnown.Count -gt 0)
     }
 }
 
+# ------------------------------------------------------------------
+# 警告で落とす（-FailOnWarnings。#348）
+# ------------------------------------------------------------------
+# **依存パッケージの監査（NU1901〜NU1904）は別に数える。** 公表された CVE で、MPAS を変えなくても増えるため、
+#   止めるかどうか（PR では止めず、週 1 回・手動で止める）は呼び出し側が決める。ここでは終了コード 3 で知らせる。
+# **Libs の手順（OpenTouryo のビルド）の警告は数えない。** 上流のコードの警告で、MPAS では直せない。
+$auditWarnings = New-Object System.Collections.Generic.List[string]
+$otherWarnings = New-Object System.Collections.Generic.List[string]
+
+if ($FailOnWarnings)
+{
+    foreach ($r in $results)
+    {
+        if ($r.ステップ -eq "Libs" -or -not $r.警告詳細) { continue }
+
+        foreach ($w in $r.警告詳細)
+        {
+            if ($w -match ':\s*warning\s+NU190[1-4]\s*:')
+            {
+                $auditWarnings.Add(("[{0}] {1}" -f $r.ステップ, $w))
+            }
+            else
+            {
+                $otherWarnings.Add(("[{0}] {1}" -f $r.ステップ, $w))
+            }
+        }
+    }
+
+    if ($otherWarnings.Count -gt 0)
+    {
+        Write-Host ""
+        Write-Host "================ 警告一覧（-FailOnWarnings で NG） ================" -ForegroundColor Red
+        $otherWarnings | Select-Object -First 30 | ForEach-Object { Write-Host ("  " + $_) }
+        if ($otherWarnings.Count -gt 30)
+        {
+            Write-Host ("  ... 他 {0} 件（詳細はログを参照）" -f ($otherWarnings.Count - 30))
+        }
+    }
+
+    if ($auditWarnings.Count -gt 0)
+    {
+        Write-Host ""
+        Write-Host "======== 依存パッケージの監査の警告（NU1901〜NU1904） ========" -ForegroundColor Yellow
+        $auditWarnings | Select-Object -First 30 | ForEach-Object { Write-Host ("  " + $_) }
+        Write-Host "  **見つけたら、その場で直す**（AGENTS.md「依存パッケージの脆弱性を見つけたら」）。"
+    }
+}
+
 # 「見送り」は飛ばした印であって失敗ではないので、NG に数えない。
 $ng = @($results | Where-Object { $_.結果 -ne "OK" -and $_.結果 -ne "見送り" })
 
 Write-Host ""
-if ($ng.Count -eq 0)
+if ($ng.Count -eq 0 -and $otherWarnings.Count -eq 0)
 {
+    if ($auditWarnings.Count -gt 0)
+    {
+        Write-Host ("  全ステップ OK（ただし監査の警告 {0} 件）" -f $auditWarnings.Count) -ForegroundColor Yellow
+        exit 3
+    }
+
     Write-Host "  全ステップ OK" -ForegroundColor Green
     exit 0
 }
 else
 {
-    Write-Host ("  {0} ステップが NG" -f $ng.Count) -ForegroundColor Red
+    if ($ng.Count -gt 0)
+    {
+        Write-Host ("  {0} ステップが NG" -f $ng.Count) -ForegroundColor Red
+    }
+
+    if ($otherWarnings.Count -gt 0)
+    {
+        Write-Host ("  警告 {0} 件で NG（-FailOnWarnings）" -f $otherWarnings.Count) -ForegroundColor Red
+    }
+
     exit 1
 }

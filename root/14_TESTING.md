@@ -4834,6 +4834,20 @@ The ID federation did not complete. (the error view was returned)
 > **Cookie は 1 つの入れ物で扱う**（`IdPClient` の `CookieContainer`。ブラウザと同じ）。
 > **上流と下流が同じホストでも成り立つのは、Cookie 名を分けたからである**（#250 の段階 4）。
 
+### 画面の言語（#348）
+
+**テストは、画面の文言を日本語で見分ける**（「エラーが発生しました」など。SAML・CIBA の自己テストの画面）。
+**リソースの既定（ニュートラル）は英語で、日本語は `.ja.resx`** なので、**OS の表示言語が英語の機械では、そのままだと英語の画面になって落ちる**
+（GitHub Actions のランナーで 18 件が落ちた）。**テストの足場が日本語にそろえる**（製品は変えていない）。
+
+| 版 | 画面の言語の決まり方 | そろえ方 |
+|---|---|---|
+| net48 | `Web.config` の `uiCulture="auto"`（**要求の `Accept-Language`**） | **E2E のクライアントが `Accept-Language: ja-JP` を送る**（`IdPClient.UseJapanese`。ブラウザは Playwright の `Locale = "ja-JP"`） |
+| net10.0 | **要求の言語を見ず、OS の表示言語** | **`-Launch` が起動のフック（`MtlsTestHook`）に `MPAS_TEST_UI_CULTURE=ja-JP` を渡し、既定の表示言語と書式を ja-JP にする**（渡さなければ何もしない。スタブは渡さない） |
+
+- **日本語の OS の手元では、結果は変わらない。** 日本語でない OS の開発機でも、E2E が通るようになる
+- **既に動いているサイトへ向けたとき（`-Launch` 無し）の net10.0 版は、そのサイトの OS の言語のまま**である
+
 ### 画面を駆動するテスト（#257）
 
 **サインアップ（`/Account/Register`）と管理画面（`/UsersAdmin` / `/RolesAdmin`）を、HTTP で叩いている。**
@@ -5366,7 +5380,7 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 |---|---|
 | 置き場所 | **`container/CTS/`**（Conformance Suite（版を固定）と、相手の OP（net10.0 版・`mem`）。手順と仕組みは `container/CTS/README.md`） |
 | 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan <プラン>`** → `3_DockerComposeDown.bat`。プランの一覧は `container/CTS/README.md`（OIDC の 11・FAPI の 14。FAPI の組は、MPAS が対応する認証・縛り・要求と応答の形を確かめるもの。足さないものと理由も同じ README。#416） |
-| いつ回すか | **リリースの前に全プラン**、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（`QUALITY.md` 2 節）。全プランで 2 時間ほど、OIDC だけなら 30 分ほど（25 プランで 2 時間 10 分。うち OIDC の 11 プランで 23 分。#416 の実測） |
+| いつ回すか | **リリースの前に全プラン**、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（`QUALITY.md` 2 節）。全プランで 3 時間ほど、OIDC だけなら 1 時間 15 分ほど（56 の組で 3 時間。うち OIDC の 42 の組で 75 分、#426 で足した 31 の組がその 52 分。#426 の実測。#416 の 25 プランでは 2 時間 10 分） |
 | 相手 | **net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る） |
 | 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む） |
 | 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。`RunTestPlan.ps1` の終了コードは、FAILED・時間切れが 1 つでもあれば 1（WARNING・REVIEW は数えない） |

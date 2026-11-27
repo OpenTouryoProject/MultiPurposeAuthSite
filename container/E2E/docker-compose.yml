@@ -14,6 +14,8 @@
 #
 #   **イメージの中の appsettings.json は雛形**（1_PublishIdP.ps1 が差し替える。手元の秘密を入れない）。
 #   **手元の appsettings.json は、起動時にマウントする**（各サービスの volumes。#340）。
+#   **ホストのリソース（C:\root\files\resource）の場所は、環境変数 E2E_RESOURCE_DIR で替えられる**（既定は C:/root/files/resource。
+#   WSL2 の中の Docker から起動するとき（GitHub Actions。#348）は /mnt/c/root/files/resource を渡す。..\Stub\ の STUB_RESOURCE_DIR と同じ作法）。
 #   **E2E のテストも同じファイルを、コンテナの構成として読む**（Tests/Container/ContainerTargets.cs）。
 #
 # --------------------------------------------------------------------------------------------------
@@ -204,7 +206,7 @@ services:
       - ./keys:/keys
       # **ホストのリソースを、そのまま読ませる**（署名鍵を含むのでイメージには入れない）。
       #   このパスは Readme.ja.md の手順で用意されるもので、**プロジェクトの決め打ちである。**
-      - C:/root/files/resource:/resource:ro
+      - ${E2E_RESOURCE_DIR:-C:/root/files/resource}:/resource:ro
       # **ログをホストから読めるようにする**（#140 の目視で要る）
       - ./logs:/app/logs
     healthcheck:
@@ -281,7 +283,7 @@ services:
       - ./cert:/https:ro
       # **鍵の置き場とログは、上流 1・下流と分ける**（#279 / #281 と同じ理由）
       - ./keys-upstream2:/keys
-      - C:/root/files/resource:/resource:ro
+      - ${E2E_RESOURCE_DIR:-C:/root/files/resource}:/resource:ro
       - ./logs-upstream2:/app/logs
     healthcheck:
       test: ["CMD", "dotnet", "--info"]
@@ -488,7 +490,7 @@ services:
       - ./cert:/https:ro
       # **上流とは別の置き場**（上の DataProtectionKeyPath のコメント）
       - ./keys-downstream:/keys
-      - C:/root/files/resource:/resource:ro
+      - ${E2E_RESOURCE_DIR:-C:/root/files/resource}:/resource:ro
       # **ログも上流と分ける**（どちらのログか分からなくなる）
       - ./logs-downstream:/app/logs
     healthcheck:

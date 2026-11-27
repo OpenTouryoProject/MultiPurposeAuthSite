@@ -298,7 +298,7 @@
     <value>インプリシット・ハイブリッドでトークンを返す先。**使わないならハイフン（-）を入れる。**</value>
   </data>
   <data name="PostLogoutRedirectUriDescription" xml:space="preserve">
-    <value>RP からのログアウト後に戻ってよい URL（/end_session）。**完全一致で照合する。**</value>
+    <value>RP からのログアウト後に戻ってよい URL（/end_session）。**複数なら空白で区切る。** **どれかと完全一致で照合する。**</value>
   </data>
   <data name="BackChannelLogoutUriDescription" xml:space="preserve">
     <value>OP のセッションが終わったときに logout_token を POST する先。**https のみ**（ループバックの http は許す）。**受け取らないならハイフン（-）を入れる。**</value>

@@ -39,6 +39,9 @@
 //*  2026/11/08  玄人 幸道         RT-346.1（プロファイルを強制する 4 つのメタデータを、動的登録で立てて読み戻す）を追加（#346 の段階 1）
 //*  2026/11/17  玄人 幸道         client_assertion の aud を issuer にした（クライアント認証は issuer だけを受ける。RFC 10070 §4。#398）
 //*  2026/11/24  玄人 幸道         RT-430.3（動的登録の client_name は応答で返り、同意の画面に出る）・.4（GET・PUT・断る値）を足し、RT-307.1 の補足を直した（#430）
+//*  2026/11/25  玄人 幸道         RT-426.2（動的登録でログアウトの URL を登録でき、効き、PUT で省けば消える）・.3（断る値）を足した（#426）
+//*  2026/11/25  玄人 幸道         RT-426.3 に、post_logout_redirect_uris のスキーム、ログアウトの URL のフラグメント、frontchannel_logout_uri の同一オリジンを足した（#426）
+//*  2026/11/26  玄人 幸道         RT-433（form_post の応答は http/https の redirect_uri のときだけ出す。javascript: は <form action> に出さない）を足した（#433）
 //**********************************************************************************
 
 using System;
@@ -383,6 +386,265 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         + ",\"client_name\":" + JsonSerializer.Serialize(new string('a', 256)) + "}");
 
                     r.VerifyEqual("HTTP 201", "201", ((int)max.StatusCode).ToString());
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-426.2
+
+        /// <summary>RT-426.2 動的登録でログアウトの URL を登録でき、効き、PUT で省けば消える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42602_動的登録でログアウトのURLを登録でき効きPUTで省けば消える(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-426.2",
+                    "**動的登録で `post_logout_redirect_uris`（2 件）・`frontchannel_logout_uri`・`backchannel_logout_uri` を登録でき、応答と `GET` で返る。"
+                    + "`/end_session` は 2 件目へ戻し、`backchannel_logout_uri` へ `logout_token` が届く。`PUT` で省けば消える**",
+                    "**3 つとも OIDC の動的登録のメタデータ**（RP-Initiated Logout 1.0 §3.1・Front-Channel Logout 1.0 §2・Back-Channel Logout 1.0 §2.2）。"
+                    + "**以前は「RFC 7591 のメタデータではない」として受けず、黙って捨てていた**（#310）。**原典と合わなかったので受ける**（#426）。"
+                    + "**動的登録したクライアントへの通知は、行き先のアドレスを確かめる HttpClient で送る**（`OutboundUrlPolicy`。E2E はループバックを許して起動する）。"
+                    + "**`PUT` は全置換**（RFC 7592 §2.2 の MUST：省いた項目は消す要求）。",
+                    "RP-Initiated Logout 1.0 §3.1 / Back-Channel Logout 1.0 §2.2・§2.5 / Front-Channel Logout 1.0 §2 / RFC 7592 §2.2 / #426");
+
+                r.Target("POST・GET・PUT registration_endpoint（ログアウトの URL）→ 認可 → /end_session → 受信箱");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    const string logoutA = "https://localhost:44300/e2e/rt426/logged_out_a";
+                    const string logoutB = "https://localhost:44300/e2e/rt426/logged_out_b";
+                    const string frontChannel = "https://localhost:44300/e2e/rt426/fclogout";
+
+                    //  **受け口はサイト自身**（`/Account/BackChannelLogoutClient`。`IsLockedDownTestEndpoints` で閉じる）。**ループバックの https。**
+                    //    **動的登録は記号（`test_self_bclogout`）を受けない**（絶対 URI だけ）ので、**このサイトの URL で書く。**
+                    //    **`/Account/BackChannelLogoutClient` は、ログアウトの後に戻す先（test_self_logout の `/Home/Index`）と同じ口の根にある。**
+                    string logoutReturn = KnownClients.PostLogoutRedirectUri(client);
+                    string backChannel = logoutReturn.Substring(0, logoutReturn.Length - "/Home/Index".Length)
+                        + "/Account/BackChannelLogoutClient";
+
+                    r.Step("(1) ログアウトの URL を付けて登録する");
+
+                    JsonResponse created = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token, JsonSerializer.Serialize(new Dictionary<string, object>()
+                        {
+                            { "redirect_uris", new string[] { UriA } },
+                            { "post_logout_redirect_uris", new string[] { logoutA, logoutB } },
+                            { "frontchannel_logout_uri", frontChannel },
+                            { "frontchannel_logout_session_required", true },
+                            { "backchannel_logout_uri", backChannel },
+                            { "backchannel_logout_session_required", true }
+                        }));
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)created.StatusCode).ToString()
+                        + ((int)created.StatusCode == 201 ? "" : "（" + (created.ErrorDescription ?? "") + "）"));
+
+                    string[] returned = created.Strings("post_logout_redirect_uris") ?? new string[0];
+
+                    r.VerifyEqual("応答の post_logout_redirect_uris は、送った 2 件",
+                        logoutA + " " + logoutB, string.Join(" ", returned));
+                    r.VerifyEqual("応答の frontchannel_logout_uri", frontChannel, created.String("frontchannel_logout_uri") ?? "（無い）");
+                    r.VerifyEqual("応答の backchannel_logout_uri", backChannel, created.String("backchannel_logout_uri") ?? "（無い）");
+                    r.VerifyEqual("応答の backchannel_logout_session_required は true（必ず sid を付ける）",
+                        "true", (created.String("backchannel_logout_session_required") ?? "（無い）").ToLower());
+
+                    string clientId = created.String("client_id");
+                    string uri = created.String("registration_client_uri");
+                    string rat = created.String("registration_access_token");
+
+                    JsonResponse read = await DynamicClientRegistration.ReadAsync(client, uri, rat);
+
+                    r.VerifyEqual("GET の backchannel_logout_uri も、登録した値", backChannel, read.String("backchannel_logout_uri") ?? "（無い）");
+
+                    r.Step("(2) 登録したクライアントでトークンを取り、/end_session で 2 件目へ進む（frontchannel_logout_uri の画面を挟む）");
+
+                    //  **受信箱を空にする**（閉じた配備は `WithDcrAsync` が先に Skip している）。
+                    JsonResponse box = await client.GetJsonAsync("/Account/BackChannelLogoutBox?clear=true");
+
+                    Assert.True(box.Strings("logout_tokens") != null,
+                        "前提: 受信箱（/Account/BackChannelLogoutBox）が読めること");
+
+                    ClientRegistration reg = new ClientRegistration()
+                    {
+                        ClientId = clientId,
+                        ClientSecret = created.String("client_secret"),
+                        RedirectUri = UriA
+                    };
+
+                    //  **テスト利用者でサインインし直す**（`/end_session` が、`id_token_hint` の利用者といまの利用者が同じと確かめられるように）。
+                    await client.SignInAsync(force: true);
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, reg, "openid email", "state-rt42602", "nonce-rt42602", UriA);
+
+                    Assert.False(string.IsNullOrEmpty(authz.Code),
+                        "前提: 認可コードが取得できること（" + authz.ToString() + "）");
+
+                    JsonResponse tokens = await Flows.ExchangeCodeAsync(client, reg, authz.Code, UriA);
+
+                    Assert.False(string.IsNullOrEmpty(tokens.IdToken),
+                        "前提: id_token が取得できること（" + tokens.ToString() + "）");
+
+                    System.Net.Http.HttpResponseMessage ended = await client.EndSessionAsync(
+                        tokens.IdToken, null, logoutB, "s42602");
+
+                    //  **`frontchannel_logout_uri` を登録したので、応答はリダイレクトではなく、`iframe` を並べた画面（200）になる**（#310 の段階 3。`RT-310.8`）。
+                    //    **画面の `iframe` が登録した `frontchannel_logout_uri` を開き、画面の後（meta refresh）に 2 件目へ進む。**
+                    r.VerifyEqual("ログアウトの画面が返る（HTTP 200）", "200", ((int)ended.StatusCode).ToString());
+
+                    string endedHtml = WebUtility.HtmlDecode(await ended.Content.ReadAsStringAsync());
+
+                    r.Verify("iframe が、動的登録した frontchannel_logout_uri を開く",
+                        Regex.IsMatch(endedHtml, "<iframe[^>]*src=\"" + Regex.Escape(frontChannel) + "\\?"),
+                        frontChannel + "?iss=…&sid=…", endedHtml.Contains(frontChannel) ? "在る（iframe の外）" : "**無い**");
+
+                    r.Verify("画面の後に、2 件目（動的登録した値）へ進む",
+                        endedHtml.Contains(logoutB + "?state=s42602"),
+                        logoutB + "?state=s42602", endedHtml.Contains(logoutB) ? "在る（state が違う）" : "**無い**");
+
+                    r.Step("(3) backchannel_logout_uri に logout_token が届く（背景で送られるので待つ）");
+
+                    bool delivered = false;
+
+                    for (int i = 0; i < 30 && !delivered; i++)
+                    {
+                        JsonResponse inbox = await client.GetJsonAsync("/Account/BackChannelLogoutBox");
+
+                        foreach (string t in inbox.Strings("logout_tokens") ?? new string[0])
+                        {
+                            if (Jwt.String(Jwt.Payload(t), "aud") == clientId)
+                            {
+                                delivered = true;
+                            }
+                        }
+
+                        if (!delivered)
+                        {
+                            await Task.Delay(300);
+                        }
+                    }
+
+                    r.Verify("このクライアント宛ての logout_token が届いた", delivered,
+                        "届いた", delivered ? "届いた" : "**届かない**");
+
+                    r.Step("(4) ログアウトの URL を省いて PUT する");
+
+                    JsonResponse updated = await DynamicClientRegistration.UpdateAsync(client, uri, rat,
+                        DynamicClientRegistration.UpdateMetadata(clientId, null, UriA));
+
+                    r.VerifyEqual("PUT は 200", "200", ((int)updated.StatusCode).ToString());
+
+                    JsonResponse reread = await DynamicClientRegistration.ReadAsync(client, uri, rat);
+
+                    foreach (string name in new string[] { "post_logout_redirect_uris", "frontchannel_logout_uri", "backchannel_logout_uri" })
+                    {
+                        r.Verify("GET で " + name + " が無い（消えた）", string.IsNullOrEmpty(reread.String(name)),
+                            "無い", reread.String(name) ?? "無い");
+                    }
+                });
+
+                r.Done();
+            }
+        }
+
+        #endregion
+
+        #region RT-426.3
+
+        /// <summary>RT-426.3 動的登録のログアウトの URL は、使う側と同じ規則で確かめる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT42603_動的登録のログアウトのURLは使う側と同じ規則で確かめる(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-426.3",
+                    "**動的登録で、フラグメントを持つ `post_logout_redirect_uris`・https でない `frontchannel_logout_uri`・"
+                    + "https でない／内部のアドレスを指す `backchannel_logout_uri`・真偽値でない `*_session_required` は `invalid_client_metadata`。"
+                    + "https（ループバックは http）でない `post_logout_redirect_uris`、フラグメントを持つ `frontchannel_logout_uri`・`backchannel_logout_uri`、"
+                    + "`redirect_uris` とスキーム・ホスト・ポートの違う `frontchannel_logout_uri` も**",
+                    "**`post_logout_redirect_uri` は完全一致で照合する戻り先**なので、`redirect_uris` と同じ形だけを受ける。"
+                    + "**さらに https に限る**（**Front-Channel Logout の画面が、リンクと meta refresh に出す**ので、`javascript:` などを登録させない。#426）。"
+                    + "**`backchannel_logout_uri` は OP が POST する先**で、**登録する側が決められる**ので、"
+                    + "**`jwks_uri`・`request_uris` と同じく、行き先のアドレスも確かめる**（`OutboundUrlPolicy`。#376）。"
+                    + "**ログアウトの URL はフラグメントを持たない**（Front-Channel §2・Back-Channel §2.2 の MUST NOT）。"
+                    + "**`frontchannel_logout_uri` のスキーム・ホスト・ポートは、登録した `redirect_uris` のどれかと同じ**（Front-Channel §2 の MUST）。",
+                    "RFC 7591 §3.2.2 / Front-Channel Logout 1.0 §2 / Back-Channel Logout 1.0 §2.2 / #376 / #426");
+
+                r.Target("POST registration_endpoint（受けてはならないログアウトの URL）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    foreach (KeyValuePair<string, KeyValuePair<string, object>> bad in new Dictionary<string, KeyValuePair<string, object>>()
+                    {
+                        { "(1) フラグメントを持つ post_logout_redirect_uris",
+                            new KeyValuePair<string, object>("post_logout_redirect_uris", new string[] { "https://rp.e2e.example/out#x" }) },
+                        { "(2) https でない frontchannel_logout_uri",
+                            new KeyValuePair<string, object>("frontchannel_logout_uri", "http://rp.e2e.example/fc") },
+                        { "(3) https でない backchannel_logout_uri",
+                            new KeyValuePair<string, object>("backchannel_logout_uri", "http://rp.e2e.example/bc") },
+                        { "(4) 内部のアドレス（プライベート）を指す backchannel_logout_uri",
+                            new KeyValuePair<string, object>("backchannel_logout_uri", "https://10.0.0.1/bc") },
+                        { "(5) 真偽値でない backchannel_logout_session_required",
+                            new KeyValuePair<string, object>("backchannel_logout_session_required", "true") }
+                    })
+                    {
+                        r.Step(bad.Key);
+
+                        JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token, JsonSerializer.Serialize(new Dictionary<string, object>()
+                            {
+                                { "redirect_uris", new string[] { UriA } },
+                                { bad.Value.Key, bad.Value.Value }
+                            }));
+
+                        r.VerifyEqual("HTTP 400", "400", ((int)res.StatusCode).ToString());
+                        r.VerifyEqual("invalid_client_metadata", "invalid_client_metadata", res.Error ?? "（無い）");
+                    }
+
+                    //  **スキーム・フラグメント・同一オリジン**（#426 の別モデルのレビューの指摘）。**ほかの理由で先に断られていないかを、`error_description` で確かめる。**
+                    //    **値はループバック（E2E は許して起動する）か、`redirect_uris`（`UriA`）と同じオリジンにして、確かめたい理由だけで断られるようにする。**
+                    foreach (KeyValuePair<string, KeyValuePair<KeyValuePair<string, object>, string>> bad in new Dictionary<string, KeyValuePair<KeyValuePair<string, object>, string>>()
+                    {
+                        { "(6) javascript: の post_logout_redirect_uris（ログアウトの画面がリンクに出す）",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("post_logout_redirect_uris", new string[] { "javascript:void(426)" }), "absolute https URI") },
+                        { "(7) http（ループバックでない）の post_logout_redirect_uris",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("post_logout_redirect_uris", new string[] { "http://rp.e2e.example/out" }), "absolute https URI") },
+                        { "(8) フラグメントを持つ frontchannel_logout_uri（redirect_uris と同じオリジン）",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("frontchannel_logout_uri", "https://localhost:44300/e2e/rt426/fc#f"), "fragment") },
+                        { "(9) redirect_uris とホストの違う frontchannel_logout_uri",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("frontchannel_logout_uri", "https://rp.e2e.example/fc"), "same as one of the redirect_uris") },
+                        { "(10) フラグメントを持つ backchannel_logout_uri（ループバック）",
+                            new KeyValuePair<KeyValuePair<string, object>, string>(
+                                new KeyValuePair<string, object>("backchannel_logout_uri", "https://localhost:44300/e2e/rt426/bc#f"), "fragment") }
+                    })
+                    {
+                        r.Step(bad.Key);
+
+                        JsonResponse res = await DynamicClientRegistration.RegisterAsync(
+                            client, endpoint, token, JsonSerializer.Serialize(new Dictionary<string, object>()
+                            {
+                                { "redirect_uris", new string[] { UriA } },
+                                { bad.Value.Key.Key, bad.Value.Key.Value }
+                            }));
+
+                        r.VerifyEqual("HTTP 400", "400", ((int)res.StatusCode).ToString());
+                        r.VerifyEqual("invalid_client_metadata", "invalid_client_metadata", res.Error ?? "（無い）");
+                        r.Verify("断る理由（error_description）", (res.ErrorDescription ?? "").Contains(bad.Value.Value),
+                            "「" + bad.Value.Value + "」を含む", res.ErrorDescription ?? "（無い）");
+                    }
                 });
 
                 r.Done();
@@ -3111,7 +3373,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// | | 確かめること |
         /// |---|---|
         /// | **作る**（`POST`） | **所有者の一覧に出る**（`OwnerUserId` が書かれた） |
-        /// | **直す**（`PUT`） | **要求の列は置き換わり、それ以外は持ち越される** — **所有者**と、**画面から入れた列**（`PostLogoutRedirectUri` / `WebOrigins`） |
+        /// | **直す**（`PUT`） | **要求の列は置き換わり、それ以外は持ち越される** — **所有者**と、**画面から入れた列**（`WebOrigins`）。**`PostLogoutRedirectUri` は #426 で動的登録が持つ列になった**ので、**省いた `PUT` で消える**（RFC 7592 §2.2） |
         /// | **読む**（`GET`） | **直した値が返る** |
         /// | **消す**（`DELETE`） | **一覧から消え、`GET` は `401`** |
         /// | **所有者を消す** | **`PUT` した登録も一緒に消える**（**所有者が保たれているから**、cascade が効く） |
@@ -3199,8 +3461,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.VerifyEqual("行の scope は openid（置き換わる）", "openid",
                         Html.FieldValue(after, "Scopes") ?? "（無い）");
 
-                    r.VerifyEqual("行の post_logout_redirect_uri は残る（画面から入れた列）", postLogout,
-                        Html.FieldValue(after, "PostLogoutRedirectUri") ?? "（無い）");
+                    //  **#426 で、`post_logout_redirect_uris` は動的登録が持つ列になった**（OIDC RP-Initiated Logout 1.0 §3.1）。
+                    //    **`PUT` は全置換なので、省けば消える**（RFC 7592 §2.2 の MUST）。**以前は「画面から入れた列」として残ることを見ていた。**
+                    r.VerifyEqual("行の post_logout_redirect_uri は消える（#426 で動的登録が持つ列になった。省いた PUT は消す）", "",
+                        Html.FieldValue(after, "PostLogoutRedirectUri") ?? "");
 
                     r.VerifyEqual("行の web_origins は残る（画面から入れた列）", webOrigin,
                         Html.FieldValue(after, "WebOrigins") ?? "（無い）");
@@ -3866,6 +4130,126 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     return "false";
                 default:
                     return value.GetRawText();
+            }
+        }
+
+        #endregion
+
+        #region RT-433
+
+        /// <summary>RT-433 form_post の応答は、redirect_uri が http / https のときだけ出す（javascript: などを form の action に出さない）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT433_formpostの応答はhttpかhttpsのredirect_uriのときだけ出す(string targetKey)
+        {
+            using (IdPClient admin = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-433",
+                    "**`response_mode=form_post` の応答は、`redirect_uri` が `http` / `https` のときだけ返す。"
+                    + "`javascript:` スキームの `redirect_uri` は、自動 submit の form の action に出さず、エラー画面にする**",
+                    "**form_post の画面は form の action を `onload` で自動 submit する**ので、"
+                    + "**`http` / `https` 以外（`javascript:` など）は、OP のオリジンのスクリプトとして動く**（登録経由の XSS）。"
+                    + "**`redirect_uris` はネイティブ アプリのカスタム スキームを正当に含む**ので登録側では絞らず、**出す側（form_post のシンク）で絞る**（#426 の post_logout とは違い、登録は通す）。",
+                    "OAuth 2.0 Form Post Response Mode / 設計：CreateAuthorizationResponse（form_post のシンクを http・https に限る。#433）");
+
+                r.Target("POST registration_endpoint（javascript: の redirect_uri）→ GET /authorize（response_mode=form_post・prompt=none）");
+
+                await this.WithDcrAsync(admin, targetKey, async (client, endpoint, token, ctx) =>
+                {
+                    const string jsUri = "javascript:alert(document.domain)//";
+
+                    r.Step("(1) javascript: の redirect_uri を動的登録する（登録側はスキームを絞らないので通る）");
+
+                    JsonResponse js = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { jsUri })
+                        + ",\"response_types\":[\"code\"],\"grant_types\":[\"authorization_code\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 201（登録は通る）", "201", ((int)js.StatusCode).ToString());
+
+                    r.Step("(2) その client で、response_mode=form_post・prompt=none の認可要求を送る（consent_required が form_post のシンクを通る）");
+
+                    AuthZResponse jsAuthz = await client.AuthorizeAsync(new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", js.String("client_id") },
+                        { "redirect_uri", jsUri },
+                        { "scope", "openid" },
+                        { "state", "state-rt433" },
+                        { "nonce", "nonce-rt433" },
+                        { "response_mode", "form_post" },
+                        { "prompt", "none" }
+                    });
+
+                    string jsBody = jsAuthz.Body ?? "";
+
+                    r.Verify("自動 submit の form を出さない",
+                        !jsBody.Contains("document.forms[0].submit"),
+                        "出さない", jsBody.Contains("document.forms[0].submit") ? "**自動 submit の form が出た**" : "出さない");
+
+                    r.Verify("http/https を求める理由つきのエラー画面",
+                        jsBody.Contains("form_post requires an http or https redirect_uri"),
+                        "理由つきのエラー画面", jsBody.Contains("form_post requires an http or https redirect_uri") ? "理由つきのエラー画面" : "**別の応答**");
+
+                    r.Step("(2b) form_post.jwt（JARM）でも同じ（ガードは JARM の分岐より前にある）");
+
+                    AuthZResponse jsJarm = await client.AuthorizeAsync(new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", js.String("client_id") },
+                        { "redirect_uri", jsUri },
+                        { "scope", "openid" },
+                        { "state", "state-rt433jarm" },
+                        { "nonce", "nonce-rt433jarm" },
+                        { "response_mode", "form_post.jwt" },
+                        { "prompt", "none" }
+                    });
+
+                    string jsJarmBody = jsJarm.Body ?? "";
+
+                    r.Verify("form_post.jwt でも、自動 submit の form を出さずエラー画面にする",
+                        !jsJarmBody.Contains("document.forms[0].submit")
+                        && jsJarmBody.Contains("form_post requires an http or https redirect_uri"),
+                        "理由つきのエラー画面",
+                        (!jsJarmBody.Contains("document.forms[0].submit")
+                        && jsJarmBody.Contains("form_post requires an http or https redirect_uri"))
+                        ? "理由つきのエラー画面" : "**別の応答**");
+
+                    r.Step("(3) 対照：https の redirect_uri なら、form_post は従来どおり出る");
+
+                    JsonResponse ok = await DynamicClientRegistration.RegisterAsync(
+                        client, endpoint, token,
+                        "{\"redirect_uris\":" + JsonSerializer.Serialize(new string[] { UriA })
+                        + ",\"response_types\":[\"code\"],\"grant_types\":[\"authorization_code\"]}");
+
+                    r.VerifyEqual("HTTP の状態は 201", "201", ((int)ok.StatusCode).ToString());
+
+                    AuthZResponse okAuthz = await client.AuthorizeAsync(new Dictionary<string, string>()
+                    {
+                        { "response_type", "code" },
+                        { "client_id", ok.String("client_id") },
+                        { "redirect_uri", UriA },
+                        { "scope", "openid" },
+                        { "state", "state-rt433b" },
+                        { "nonce", "nonce-rt433b" },
+                        { "response_mode", "form_post" },
+                        { "prompt", "none" }
+                    });
+
+                    string okBody = okAuthz.Body ?? "";
+
+                    r.Verify("http/https の form_post は、自動 submit の form を出す",
+                        okBody.Contains("document.forms[0].submit"),
+                        "出す", okBody.Contains("document.forms[0].submit") ? "出す" : "**出ない**");
+
+                    r.Verify("その action は、登録した https の redirect_uri",
+                        okBody.Contains("action=\"" + UriA + "\""),
+                        UriA, okBody.Contains("action=\"" + UriA + "\"") ? UriA : "**別の action**");
+                });
+
+                r.Done();
             }
         }
 

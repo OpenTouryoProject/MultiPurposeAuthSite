@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/10  玄人 幸道         新規（#277 の段階 7）
 //*  2026/11/01  玄人 幸道         サインイン後の遷移で load を待たない（#325）
+//*  2026/11/27  玄人 幸道         ブラウザの言語を日本語にする（Locale = ja-JP。英語の OS の GitHub Actions のランナーでも同じ画面になるように。#348）
 //**********************************************************************************
 
 using System;
@@ -182,8 +183,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             /// </remarks>
             public Task<IBrowserContext> NewContextAsync(TargetInfo target = null)
             {
+                //  **言語は日本語にする**（Accept-Language と navigator.language。#348）。
+                //    **net48 版は要求の言語に従う**ので、英語の OS（GitHub Actions のランナー）でも日本語の画面にそろえる（IdPClient.UseJapanese と同じ）。
                 BrowserNewContextOptions options =
-                    new BrowserNewContextOptions() { IgnoreHTTPSErrors = true };
+                    new BrowserNewContextOptions() { IgnoreHTTPSErrors = true, Locale = "ja-JP" };
 
                 if (target != null)
                 {

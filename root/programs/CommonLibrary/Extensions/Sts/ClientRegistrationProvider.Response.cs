@@ -36,6 +36,7 @@
 //*  2026/11/13  玄人 幸道         authorization_signed_response_alg を応答に返す（#370）
 //*  2026/11/19  玄人 幸道         応答に request_uris を返すようにした（#374）
 //*  2026/11/24  玄人 幸道         応答の client_name に、画面に出す名前を返すようにした（#430）
+//*  2026/11/25  玄人 幸道         応答にログアウトの登録項目（post_logout_redirect_uris・frontchannel/backchannel_logout_uri・*_session_required）を返すようにした（#426）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -297,6 +298,26 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (!string.IsNullOrEmpty(model.Contacts))
             {
                 ret.Add(Const.ClientContacts, OAuth2AndOIDCSpec.ToDistinctList(model.Contacts));
+            }
+
+            //  **ログアウトの登録項目も返す**（#426。登録したメタデータは返す。**`PUT` は返された全てを入れ直す**ので、返さないと次の `PUT` で消える）。
+            //    **管理画面から入れた値も返る。** **記号（`test_self_logout` など）は、登録のまま返す**（`redirect_uris` と同じ）。
+            if (!string.IsNullOrEmpty(model.PostLogoutRedirectUri))
+            {
+                ret.Add(Const.ClientPostLogoutRedirectUris, OAuth2AndOIDCSpec.ToDistinctList(model.PostLogoutRedirectUri));
+            }
+
+            //    **`*_session_required` は、URL が在るときだけ true で返す** — **この実装は必ず `iss` と `sid` を付ける**ので、それが実際の振る舞いである。
+            if (!string.IsNullOrEmpty(model.FrontChannelLogoutUri))
+            {
+                ret.Add(Const.ClientFrontChannelLogoutUri, model.FrontChannelLogoutUri);
+                ret.Add(Const.ClientFrontChannelLogoutSessionRequired, true);
+            }
+
+            if (!string.IsNullOrEmpty(model.BackChannelLogoutUri))
+            {
+                ret.Add(Const.ClientBackChannelLogoutUri, model.BackChannelLogoutUri);
+                ret.Add(Const.ClientBackChannelLogoutSessionRequired, true);
             }
 
             //  **プロファイルの強制**（#346 の段階 1）。**立っているものだけ返す**
