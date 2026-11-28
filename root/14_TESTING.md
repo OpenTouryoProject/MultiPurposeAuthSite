@@ -5401,11 +5401,11 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 | | |
 |---|---|
 | 置き場所 | **`container/CTS/`**（Conformance Suite（版を固定）と、相手の OP（net10.0 版・`mem`）。手順と仕組みは `container/CTS/README.md`） |
-| 回し方 | `2_DockerComposeUp.bat` → **`RunTestPlan.ps1 -Plan <プラン>`** → `3_DockerComposeDown.bat`。プランの一覧は `container/CTS/README.md`（OIDC の 11・FAPI の 14。FAPI の組は、MPAS が対応する認証・縛り・要求と応答の形を確かめるもの。足さないものと理由も同じ README。#416） |
-| いつ回すか | **リリースの前に全プラン**、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（`QUALITY.md` 2 節）。全プランで 3 時間ほど、OIDC だけなら 1 時間 15 分ほど（56 の組で 3 時間。うち OIDC の 42 の組で 75 分、#426 で足した 31 の組がその 52 分。#426 の実測。#416 の 25 プランでは 2 時間 10 分） |
+| 回し方 | `2_DockerComposeUp.ps1`（`.bat` でもよい。Linux は pwsh）→ **`RunTestPlan.ps1 -Plan <プラン>`** → `CompareResults.ps1`（基準と比べる）→ `3_DockerComposeDown.ps1`。並べて回して基準と比べるまでを 1 回で行うなら `RunPlans.ps1`（#439）。プランの一覧は `container/CTS/README.md`（OIDC の 11・FAPI の 14。FAPI の組は、MPAS が対応する認証・縛り・要求と応答の形を確かめるもの。足さないものと理由も同じ README。#416） |
+| いつ回すか | **リリースの前に全プラン**（**CI の `conformance.yml` が master 宛ての PR で回す**。#439）、**適合性テストで見つかった不適合を直す Issue では `fixed` の前にそのプラン**（手元。報告書で理由を読むため）（`QUALITY.md` 2 節）。手元で 1 つずつ回すと、全プランで 3 時間ほど、OIDC だけなら 1 時間 15 分ほど（56 の組で 3 時間。うち OIDC の 42 の組で 75 分、#426 で足した 31 の組がその 52 分。#426 の実測。#416 の 25 プランでは 2 時間 10 分） |
 | 相手 | **net10.0 版だけ**（判定の大半は `CommonLibrary` で共通。両版の差は E2E が測る） |
 | 結果 | `container/CTS/out/`（結果の JSON・報告書の zip）と、Conformance Suite の画面。**コミットしない**（配備ごとの値と、テスト利用者のパスワード・クライアントの秘密鍵を含む） |
-| 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。`RunTestPlan.ps1` の終了コードは、FAILED・時間切れが 1 つでもあれば 1（WARNING・REVIEW は数えない） |
+| 合否 | **E2E の通しには入れない**（Conformance Suite とメモリを使うため、別に回す）。`RunTestPlan.ps1` の終了コードは、FAILED・時間切れが 1 つでもあれば 1（WARNING・REVIEW は数えない）。**今の正しい形でも FAILED・時間切れが残るので、合否はモジュールごとの基準（`container/CTS/ResultBaseline.csv`）との比較で決める**（`CompareResults.ps1`。良くなった方向も差とする。#439） |
 
 **落ちたものは、次の順で仕分ける**（#350 の段階 2〜4 で回したときの型）。
 
@@ -5421,7 +5421,10 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
   **`*/test/*/callback*` は認可のエラー画面にも当たる**（#368。callback を待つ手順は `https://localhost.emobix.co.uk:8443/test/*/callback*` と、先頭から書く）
 - **REVIEW（画面の写しで合否を付ける判定）は、エージェントが合否を付け、人がその表を承認する。** 自動では、待った画面が出たことまでしか確かめていないので、
   `container\CTS\ExtractReview.ps1` で報告書から OP の応答を取り出し、基準（`ReviewBaseline.csv`）と比べる（全プランの実行のたび。#417。`container/CTS/README.md` の「REVIEW の見方」）
-- **CI には載せていない**（#348（ビルドの CI）の後に決める）
+- **CI（`.github/workflows/conformance.yml`。#439）**：`ubuntu-latest` で、56 の組を 10 の群に分けて並列に回す（`RunPlans.ps1`。基準と比べ、違ったモジュールだけを回し直し、REVIEW の材料も比べる）。
+  契機は **master 宛ての PR・手動（入力 `plans` でプランを絞れる）・週 1 回**。**残すのは結果の JSON と差の一覧だけ**（設定の JSON と報告書は秘密を含むので残さない）。
+  **回し直しても残った差が少なく、すべて自動操作のぶれ（WebRunner）なら、落とさずに警告に留める**（CI のランナーでは、手元よりぶれが多い。**警告を読み、同じモジュールが続けて残るなら回帰を疑う**）。
+  **CI で差が出たら、手元でそのプランを回して報告書で理由を読み、上の表で仕分ける**（`container/CTS/README.md`「基準との比較と、CI」）
 
 ## 6. 未修正の項目の扱い
 

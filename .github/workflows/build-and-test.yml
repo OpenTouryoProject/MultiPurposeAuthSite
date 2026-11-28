@@ -5,15 +5,16 @@
 #   e2e-windows … 手元の root\2_RunAllTests.ps1 -Launch（両版の E2E）を、windows-latest で、ストアの種類ごと（mem・sql・ora・npg）に回す。
 #                 ID 連携の IdP のコンテナ（container/E2E）と DB（container/Store）は WSL2 の Docker
 #   e2e-linux   … net10.0 版の E2E を、ubuntu-latest で、ストアの種類ごとに回す（#435。net48 版の分は Skip）。
-#                 OpenTouryo の部品は build から受け取り、MPAS は Linux で建てる。ID 連携のコンテナと DB はランナーの Docker
+#                 OpenTouryo の部品は otr から受け取り、MPAS は Linux で建てる。ID 連携のコンテナと DB はランナーの Docker
 #   「何をビルドするか」の正はバッチ側、「合否の判定」の正は 1_BuildAll.ps1・2_RunAllTests.ps1・test.ps1 にある。
 #   ここには判定を書かない（書くと二重管理になる。OpenTouryo の build-and-test.yml と同じ線引き）。
 #
 # ＜OpenTouryo のアセンブリ＞
 #   MPAS は OpenTouryo のアセンブリを HintPath で参照する（root/programs/OpenTouryoAssemblies。.gitignore 済み）。
-#   **OpenTouryo をコミットに固定して取り（OTR_REF）、1_BuildAll.ps1 -OpenTouryoDir で基盤を建てて写す。**
-#   向こうの変更が、こちらの CI に黙って届かないようにする（OpenTouryo が MPAS_REF で MPAS を固定しているのと対）。
-#   **上げるときは、手元で建ててから OTR_REF を変える。**（タグ 03-20 は OpenTouryo#718 より前で、MPAS が建たない）
+#   **ジョブ otr（再利用のワークフロー otr-assemblies.yml）が、コミットに固定した OpenTouryo（OTR_REF）から 1 回だけ建てて、
+#   成果物 otr-assemblies で渡す**（#439。conformance.yml も同じものを使う。**OTR_REF は otr-assemblies.yml の 1 か所**）。
+#   build・e2e-windows・e2e-linux は、それを OpenTouryoAssemblies に落とし、1_BuildAll.ps1 -Libs None で MPAS だけを建てる。
+#   以前は build と e2e-windows が、それぞれ OpenTouryo を取って建てていた（OTR_REF が 2 か所にあった）。
 #
 # ＜警告＞
 #   1_BuildAll.ps1 -FailOnWarnings：警告が 1 つでもあれば NG（今は両版とも 0）。
@@ -44,12 +45,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # OpenTouryo の部品（#439。OTR_REF はこの中）
+  otr:
+    uses: ./.github/workflows/otr-assemblies.yml
+
   build:
+    needs: otr
     runs-on: windows-latest
     timeout-minutes: 60
-    env:
-      OTR_REPO: OpenTouryoProject/OpenTouryo
-      OTR_REF: 081aadfc9c5c93025595ca377564a54377539d4c
 
     steps:
       - name: Checkout
@@ -57,18 +60,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout OpenTouryo
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ env.OTR_REPO }}
-          ref: ${{ env.OTR_REF }}
-          path: OpenTouryo
-          persist-credentials: false
-
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
+
+      - name: Download OpenTouryo assemblies
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: otr-assemblies
+          path: root/programs/OpenTouryoAssemblies
 
       # 終了コード 3 は「OK だが監査の警告がある」（1_BuildAll.ps1）。ここでは止めず、最後の手順で扱う。
       - name: Build all
@@ -76,7 +77,7 @@ jobs:
         shell: pwsh
         working-directory: root
         run: |
-          .\1_BuildAll.ps1 -OpenTouryoDir "$env:GITHUB_WORKSPACE\OpenTouryo" -FailOnWarnings -WarnDetail -OutputDir "$env:RUNNER_TEMP\BuildLogs"
+          .\1_BuildAll.ps1 -Libs None -FailOnWarnings -WarnDetail -OutputDir "$env:RUNNER_TEMP\BuildLogs"
           $code = $LASTEXITCODE
           "## Build (1_BuildAll.ps1 -FailOnWarnings, exit $code)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           if ($code -eq 3)
@@ -112,16 +113,6 @@ jobs:
           path: ${{ runner.temp }}\TestResults
           if-no-files-found: warn
 
-      # e2e-linux が使う OpenTouryo の net10.0 の部品（OpenTouryo のビルドは bat なので、Windows でしか作れない。#435。
-      # OpenTouryo の linux-stub と同じ受け渡し）。
-      - name: Upload OpenTouryo assemblies (net10.0)
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: otr-assemblies-net10
-          path: root/programs/OpenTouryoAssemblies/Build_netcore100
-          if-no-files-found: error
-          retention-days: 3
-
       # 週 1 回・手動の実行だけ、監査の警告で落とす（採取の後に置く。落としても、ログと結果は残す）。
       - name: Fail on vulnerable packages (schedule / manual)
         if: always() && steps.build.outputs.audit == '1' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -153,6 +144,7 @@ jobs:
   #     （npg は net48 版が PostgreSQL を使えないので、net10.0 版だけ。手元と同じ）。ID 連携のコンテナは起動しない（その分は Skip）
   e2e-windows:
     name: e2e-windows (${{ matrix.store }})
+    needs: otr
     runs-on: windows-latest
     timeout-minutes: 90
     strategy:
@@ -160,8 +152,6 @@ jobs:
       matrix:
         store: [mem, sql, ora, npg]
     env:
-      OTR_REPO: OpenTouryoProject/OpenTouryo
-      OTR_REF: 081aadfc9c5c93025595ca377564a54377539d4c
       CI_ADMIN_UID: 'administrator@example.com'
       CI_ADMIN_PWD: 'Ci-Admin-Pwd-1!'
       CI_TEST_USER_PWD: 'Ci-Test-User-Pwd-1!'
@@ -173,18 +163,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Checkout OpenTouryo
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ env.OTR_REPO }}
-          ref: ${{ env.OTR_REF }}
-          path: OpenTouryo
-          persist-credentials: false
-
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
+
+      - name: Download OpenTouryo assemblies
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: otr-assemblies
+          path: root/programs/OpenTouryoAssemblies
 
       # **C:\root\files\resource には、このリポジトリの root/files/resource だけを置く**（Readme.ja.md の初回の準備と同じ。Open棟梁 のリソースは要らない。#434）。
       #   以前は、net10.0 版の雛形が Open棟梁 のリソース（resource/Log・resource/XML）を指していたので、Open棟梁 のリソースを重ねていた。
@@ -233,7 +221,7 @@ jobs:
       - name: Build all
         shell: pwsh
         working-directory: root
-        run: .\1_BuildAll.ps1 -OpenTouryoDir "$env:GITHUB_WORKSPACE\OpenTouryo" -OutputDir "$env:RUNNER_TEMP\BuildLogs"
+        run: .\1_BuildAll.ps1 -Libs None -OutputDir "$env:RUNNER_TEMP\BuildLogs"
 
       # net48 uses the ASP.NET state service (Web.config: sessionState mode="StateServer"). It is Stopped (Manual) on the runner.
       - name: Start ASP.NET state service
@@ -478,7 +466,7 @@ jobs:
   # 手元では、.NET 10 の SDK のコンテナの pwsh で同じことができる（14_TESTING.md「Linux で回す」）。
   #
   # ＜ビルド＞
-  #   OpenTouryo の部品（OpenTouryoAssemblies）は build が作って渡す（OpenTouryo のビルドは bat で、Windows でしか作れない）。
+  #   OpenTouryo の部品（OpenTouryoAssemblies）は otr が作って渡す（OpenTouryo のビルドは bat で、Windows でしか作れない。#439）。
   #   MPAS の net10.0 版とテストは、ここ（Linux）で建てる。
   #
   # ＜設定ファイル＞
@@ -494,7 +482,7 @@ jobs:
   #   e2e-windows と同じ。DB と ID 連携のコンテナは、ランナーの Docker で動かす（WSL2・portproxy の手当ては要らない）。
   e2e-linux:
     name: e2e-linux (${{ matrix.store }})
-    needs: build
+    needs: otr
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -518,11 +506,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Download OpenTouryo assemblies (net10.0)
+      - name: Download OpenTouryo assemblies
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: otr-assemblies-net10
-          path: root/programs/OpenTouryoAssemblies/Build_netcore100
+          name: otr-assemblies
+          path: root/programs/OpenTouryoAssemblies
 
       # The settings from the templates; C:/root/files/resource is replaced with $RUNNER_TEMP/resource (a copy of root/files/resource).
       - name: Prepare the configuration files from the templates

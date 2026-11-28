@@ -121,6 +121,13 @@ services:
       # **認可コードの期限を 60 秒にする**（#350 ph4。FAPI 2.0 Security Profile は 60 秒以下を求める。雛形の既定は 600 秒）。
       #   **この設定はサーバ全体に効く**（登録種別ごとには決められない）
       - appSettings__OAuth2AuthorizationCodeExpireTimeSpanFromSeconds=60
+      # **プランが使うグラントを開く**（#439。雛形の既定はどちらも false）。**手元の appsettings.json の値に頼らない**
+      #   （以前は手元の値が true だったので動いていたが、雛形から作る CI では、Implicit・Hybrid の response_type がすべて落ち、
+      #   CIBA の端末役のトークン（ROPC。RunTestPlan.ps1）が 400 になった）
+      #   Implicit・Hybrid（oidcc-implicit・oidcc-hybrid とその form_post・動的登録版、ログアウトと oidcc-dynamic の code 以外の response_type）
+      - appSettings__EnableImplicitGrantType=true
+      #   ROPC（FAPI-CIBA の端末役が、テスト利用者のトークンを取る。RunTestPlan.ps1 の「CIBA の端末役」）
+      - appSettings__EnableResourceOwnerPasswordCredentialsGrantType=true
       # **Conformance Suite の nginx の証明書だけを信頼する**（#350 ph3。Back-Channel Logout の POST の宛先）。
       #   .NET（Linux）は OpenSSL の SSL_CERT_FILE を信頼の起点に使う。**OP の検証は緩めていない**（名前と信頼の両方を確かめる）。
       - SSL_CERT_FILE=/cts-ca/nginx.crt
@@ -441,5 +448,7 @@ services:
       - ./tls/openssl.cnf:/cts-tls/openssl.cnf:ro
       - ./hooks:/hooks:ro
       - ./fcm:/fcm
-      - C:/root/files/resource:/resource:ro
+      # **ホストのリソースの場所は、..\E2E\ と同じ環境変数 E2E_RESOURCE_DIR で替えられる**（既定は C:/root/files/resource。
+      #   Linux（GitHub Actions の ubuntu-latest）では、New-E2ESettings.ps1 -ResourceDir で写した場所を渡す。#439）
+      - ${E2E_RESOURCE_DIR:-C:/root/files/resource}:/resource:ro
       - ./logs:/app/logs

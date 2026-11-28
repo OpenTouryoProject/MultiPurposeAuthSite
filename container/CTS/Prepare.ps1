@@ -3,7 +3,8 @@
     適合性テストの環境を用意する（nginx の証明書、compose に渡す値、MTLS のフック、FAPI の鍵・証明書。#350 の段階 3・4）。
 
 .DESCRIPTION
-    2_DockerComposeUp.bat が、起動の前に呼ぶ。**作った物はどれも Git の管理外**である。
+    2_DockerComposeUp.ps1（Windows なら 2_DockerComposeUp.bat から）が、起動の前に呼ぶ。**作った物はどれも Git の管理外**である。
+    **Linux（GitHub Actions の ubuntu-latest）の pwsh でも動く**（#439。パスの区切りは / で書く）。
 
     ＜1. nginx の証明書（certs\nginx.crt・certs\nginx.key）＞
       **OP から Conformance Suite へ、サーバ間で TLS の要求を送るプランがある**（Back-Channel Logout の logout_token の POST）。
@@ -40,6 +41,7 @@
      ----------  ----------------  -------------------------------------------------
      2026/11/10  玄人 幸道         新規（#350）
      2026/11/11  玄人 幸道         MTLS のフックと、FAPI のクライアントの鍵・証明書を作るようにした（#350 の段階 4）
+     2026/11/27  玄人 幸道         Linux の pwsh でも動くようにした（パスの区切りを / に、openssl のコンテナを呼んだ利用者で動かす。#439）
 #>
 [CmdletBinding()]
 param()
@@ -48,6 +50,15 @@ $ErrorActionPreference = 'Stop'
 
 # パスの既定値は param() に書かない（5.1 の -File で $PSScriptRoot が空になる。11_CODING.md 5 節）
 $here = Split-Path -Parent $PSCommandPath
+
+# **Linux では、openssl のコンテナを呼んだ利用者の uid・gid で動かす**（#439）。
+#   既定の root で動かすと、certs/ の秘密鍵（モード 600）が root の持ち物になり、RunTestPlan.ps1（手元の利用者）が読めない。
+#   Windows（Docker Desktop・Rancher Desktop）はホストのファイルの持ち主を問わないので、付けない
+$dockerUser = @()
+if ($IsLinux)
+{
+    $dockerUser = @('--user', ('{0}:{1}' -f (& id -u), (& id -g)))
+}
 
 #region 1. nginx の証明書
 
@@ -67,8 +78,8 @@ else
     $image = 'registry.gitlab.com/openid/conformance-suite/nginx:release-v5.3.4'
 
     # **SAN に localhost.emobix.co.uk を入れる**（OP は SAN で名前を照合する）。localhost も入れる（手元のブラウザ用）
-    $opensslArgs = @(
-        'run', '--rm', '--entrypoint', 'openssl',
+    $opensslArgs = @('run', '--rm') + $dockerUser + @(
+        '--entrypoint', 'openssl',
         '-v', ($certDir + ':/out'),
         $image,
         'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '825',
@@ -106,7 +117,7 @@ else
     New-Item -ItemType Directory -Force -Path $hookDir | Out-Null
     $hookArt = Join-Path $here 'hooks-build'
 
-    & dotnet build (Join-Path $here '..\..\root\programs\Tests\MtlsTestHook\MtlsTestHook.csproj') `
+    & dotnet build (Join-Path $here '../../root/programs/Tests/MtlsTestHook/MtlsTestHook.csproj') `
         -c Debug -o $hookDir --artifacts-path $hookArt --nologo -v quiet | Out-Null
 
     if (($LASTEXITCODE -ne 0) -or -not (Test-Path -LiteralPath (Join-Path $hookDir 'MtlsTestHook.dll')))
@@ -167,8 +178,8 @@ foreach ($n in 1, 2)
     if (-not ((Test-Path -LiteralPath $mtlsCrt) -and (Test-Path -LiteralPath $mtlsKey)))
     {
         # **Subject は docker-compose.yml の tls_client_auth_subject_dn と同じにする**
-        $mtlsArgs = @(
-            'run', '--rm', '--entrypoint', 'openssl',
+        $mtlsArgs = @('run', '--rm') + $dockerUser + @(
+            '--entrypoint', 'openssl',
             '-v', ($certDir + ':/out'),
             'registry.gitlab.com/openid/conformance-suite/nginx:release-v5.3.4',
             'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '825',
@@ -190,7 +201,7 @@ foreach ($n in 1, 2)
 
 #region 2. compose に渡す値（最後に書く。3・4 の値も入れる）
 
-$appsettings = Join-Path $here '..\..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\appsettings.json'
+$appsettings = Join-Path $here '../../root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json'
 if (-not (Test-Path -LiteralPath $appsettings))
 {
     Write-Host ('手元の appsettings.json がありません : {0}' -f $appsettings) -ForegroundColor Red

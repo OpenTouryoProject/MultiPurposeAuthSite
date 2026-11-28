@@ -1,0 +1,197 @@
+# 適合性テスト（OpenID Foundation の Conformance Suite。container/CTS）を、GitHub Actions の ubuntu-latest で回す（#439）。
+#
+# ＜位置づけ＞
+#   手元の container/CTS（2_DockerComposeUp.ps1 → RunTestPlan.ps1 → 3_DockerComposeDown.ps1）を、ランナーの Docker でそのまま回す。
+#   **リリースの前の全プランは、ここ（master 宛ての PR）で満たす**（QUALITY.md 2 節）。
+#   適合性テストで見つかった不適合を直す Issue の fixed の前は、今までどおり手元で回す（報告書で理由を読むため）。
+#
+# ＜合否＞
+#   **今の正しい形でも FAILED・時間切れが残るモジュールがある**ので、RunTestPlan.ps1 の終了コードでは決めない。
+#   container/CTS/RunPlans.ps1 が、モジュールごとの基準（ResultBaseline.csv）と比べ、違ったモジュールだけを回し直し（自動操作のぶれ）、
+#   REVIEW の材料も基準（ReviewBaseline.csv）と比べる。**差があれば落とす**（良くなった方向も。基準の更新を促す）。
+#   「何を正とするか」は RunPlans.ps1・CompareResults.ps1・基準のファイルにある。ここには判定を書かない。
+#
+# ＜成果物＞
+#   **結果の JSON（out/*-result.json）と差の一覧（out/diff.json）だけを残す。**
+#   設定の JSON（out/<プラン>.json）と報告書の zip は、クライアントの秘密鍵とテスト利用者のパスワードを含むので残さない
+#   （公開リポジトリの成果物は、ログインした人なら誰でも落とせる）。理由を詳しく読むなら、手元でそのプランを回す。
+#
+# ＜群（matrix）＞
+#   プラン（-ResponseType を含めて 56 の組）を、所要時間で 10 の群に分けて並列に回す（ジョブごとに Conformance Suite と OP を 1 組）。
+#   **1 つの群を長くしない**（静的なクライアントの Implicit・Hybrid を 10 プランの群で回したら、後ろほど自動操作のぶれが増え、回し直しても残った。#439 の試行）。
+#   手動の実行で plans を渡すと、そのプランだけを 1 つのジョブで回す（不適合を直す Issue で、そのプランだけを回すなど）。
+#
+# ＜OpenTouryo の部品＞ otr-assemblies.yml（再利用のワークフロー。OTR_REF はそこ 1 か所）。
+#
+# ＜run: の中は ASCII だけ＞（AGENTS.md「GitHub Actions を書き足すとき」）
+
+name: Conformance
+
+on:
+  # **master 宛ての PR で、リリースの関所として回す**（build-and-test.yml と同じ。develop 宛ての PR では回さない）。
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      plans:
+        description: 'Plans to run in one job, comma separated (the names of out/*-result.json, e.g. oidcc-basic,oidcc-dynamic-code-id_token). Empty = all groups.'
+        required: false
+        default: ''
+  # develop に入った回帰（#423 のような組み合わせ）に、リリースより前に気付くため。
+  # 毎週月曜 12:00 JST（03:00 UTC）。build-and-test.yml（09:00 JST）とずらす。schedule は既定のブランチ（develop）の版で動く。
+  schedule:
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  otr:
+    uses: ./.github/workflows/otr-assemblies.yml
+
+  # 群を決める（手動で plans を渡したら、その 1 つ）。
+  groups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      groups: ${{ steps.groups.outputs.groups }}
+    steps:
+      - name: Decide the groups
+        id: groups
+        shell: pwsh
+        env:
+          INPUT_PLANS: ${{ github.event.inputs.plans }}
+        run: |
+          $groups = [ordered]@{
+              'oidcc-static'  = 'oidcc-basic,oidcc-config,oidcc-formpost-basic,oidcc-rp-initiated-logout,oidcc-frontchannel-rp-initiated-logout,oidcc-backchannel-rp-initiated-logout'
+              'oidcc-implicit' = 'oidcc-implicit,oidcc-formpost-implicit'
+              'oidcc-hybrid'  = 'oidcc-hybrid,oidcc-formpost-hybrid'
+              'oidcc-dcr'     = 'oidcc-basic-dynamic,oidcc-implicit-dynamic,oidcc-hybrid-dynamic,oidcc-formpost-basic-dynamic,oidcc-formpost-implicit-dynamic,oidcc-formpost-hybrid-dynamic'
+              'oidcc-logout-dcr' = ''
+              'oidcc-dynamic' = ''
+              'oidcc-mtls-ciba' = 'oidcc-mtls,oidcc-mtls-formpost,fapi-ciba-private-key-jwt-poll,fapi-ciba-mtls-poll'
+              'fapi2-sp'      = 'fapi2-sp-private-key-jwt-dpop,fapi2-sp-mtls,fapi2-sp-private-key-jwt-mtls,fapi2-sp-mtls-dpop,fapi2-sp-plain-oauth,fapi2-sp-client-credentials'
+              'fapi2-ms'      = 'fapi2-ms-private-key-jwt-dpop,fapi2-ms-mtls,fapi2-ms-signed-plain-response,fapi2-ms-unsigned-jarm'
+              'fapi1'         = 'fapi1-adv-private-key-jwt-par,fapi1-adv-mtls-par'
+          }
+          # The plans with the response_type axis: all six response types (README.md).
+          $rts = @('', '-id_token', '-id_token-token', '-code-id_token', '-code-token', '-code-id_token-token')
+          $groups['oidcc-logout-dcr'] = (@('oidcc-rp-initiated-logout-dynamic', 'oidcc-frontchannel-rp-initiated-logout-dynamic', 'oidcc-backchannel-rp-initiated-logout-dynamic') | ForEach-Object { $p = $_; $rts | ForEach-Object { $p + $_ } }) -join ','
+          $groups['oidcc-dynamic'] = ($rts | ForEach-Object { 'oidcc-dynamic' + $_ }) -join ','
+
+          $list = @($groups.Keys | ForEach-Object { [ordered]@{ name = $_; plans = $groups[$_] } })
+          if ($env:INPUT_PLANS) { $list = @([ordered]@{ name = 'selected'; plans = $env:INPUT_PLANS }) }
+
+          $json = ConvertTo-Json -InputObject $list -Compress
+          "groups=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $json
+
+  conformance:
+    name: conformance (${{ matrix.group.name }})
+    needs: [otr, groups]
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(needs.groups.outputs.groups) }}
+    env:
+      # The same values as e2e-linux in build-and-test.yml (for the tests only; not secrets).
+      CI_ADMIN_UID: 'administrator@example.com'
+      CI_ADMIN_PWD: 'Ci-Admin-Pwd-1!'
+      CI_TEST_USER_PWD: 'Ci-Test-User-Pwd-1!'
+      CI_SALT: 'ci-salt-for-e2e-only-0123456789'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download OpenTouryo assemblies
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: otr-assemblies
+          path: root/programs/OpenTouryoAssemblies
+
+      # The settings from the templates (the OP mounts appsettings.json); C:/root/files/resource -> $RUNNER_TEMP/resource.
+      - name: Prepare the configuration files from the templates
+        shell: pwsh
+        run: |
+          $res = Join-Path $env:RUNNER_TEMP 'resource'
+          ./root/programs/Tests/New-E2ESettings.ps1 -AdministratorUID $env:CI_ADMIN_UID -AdministratorPWD $env:CI_ADMIN_PWD `
+              -TestUserPWD $env:CI_TEST_USER_PWD -SaltParameter $env:CI_SALT -ResourceDir $res
+          "E2E_RESOURCE_DIR=$res" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # The suite and the OP are reached by these names from the runner (the public DNS also returns 127.0.0.1 for the first).
+      - name: Map the host names
+        shell: bash
+        run: echo "127.0.0.1 localhost.emobix.co.uk mpas-cts.localhost" | sudo tee -a /etc/hosts
+
+      - name: Start the conformance suite and the OP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./container/E2E/1_PublishIdP.ps1
+          if ($LASTEXITCODE -ne 0) { throw "1_PublishIdP.ps1 failed ($LASTEXITCODE)" }
+          ./container/CTS/2_DockerComposeUp.ps1
+          if ($LASTEXITCODE -ne 0) { throw "2_DockerComposeUp.ps1 failed ($LASTEXITCODE)" }
+          foreach ($url in 'https://localhost.emobix.co.uk:8443/api/currentuser', 'https://localhost:44311/.well-known/openid-configuration')
+          {
+              $ok = $false
+              for ($i = 0; $i -lt 60; $i++)
+              {
+                  try
+                  {
+                      $r = Invoke-WebRequest -Uri $url -SkipCertificateCheck -TimeoutSec 5
+                      if ($r.StatusCode -eq 200) { $ok = $true; break }
+                  }
+                  catch { }
+                  Start-Sleep -Seconds 5
+              }
+              if (-not $ok) { throw "Not ready: $url" }
+              "ready : $url"
+          }
+
+      - name: Run the plans and compare with the baseline
+        shell: pwsh
+        working-directory: container/CTS
+        env:
+          PLANS: ${{ matrix.group.plans }}
+        run: |
+          "## Conformance (${{ matrix.group.name }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          ./RunPlans.ps1 -Plan $env:PLANS -SummaryPath $env:GITHUB_STEP_SUMMARY
+          exit $LASTEXITCODE
+
+      - name: Show the containers
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        working-directory: container/CTS
+        run: docker compose --env-file ../E2E/.env --env-file .env.cts ps -a
+
+      # Only the results and the differences (the configs and the reports contain the keys and the password).
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: conformance-results-${{ matrix.group.name }}
+          path: |
+            container/CTS/out/*-result.json
+            container/CTS/out/diff.json
+          if-no-files-found: warn
+
+      - name: Stop the conformance suite
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        run: ./container/CTS/3_DockerComposeDown.ps1

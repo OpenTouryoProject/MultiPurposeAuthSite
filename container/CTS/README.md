@@ -6,7 +6,8 @@
 - 原本：https://gitlab.com/openid/conformance-suite（ビルド済みのイメージ。`docker-compose-prebuilt.yml` を元にした）
 - **版は固定する**（`release-v5.3.4`）。上げるときは、`docker-compose.yml` の server と nginx のタグを、同じ版に手で上げる
 - **認定（certification）を取るためのものではない。** 手元で回して、不適合を見つけて直すためのもの
-- **いつ回すか・結果の仕分け**は `QUALITY.md` 2 節と `root/14_TESTING.md` 5 節「適合性テスト」（リリースの前に全プラン、適合性テストで見つかった不適合を直すときにそのプラン）
+- **いつ回すか・結果の仕分け**は `QUALITY.md` 2 節と `root/14_TESTING.md` 5 節「適合性テスト」（リリースの前に全プラン（CI。#439）、適合性テストで見つかった不適合を直すときにそのプラン（手元））
+- **GitHub Actions（`.github/workflows/conformance.yml`）でも回す**（#439。下の「基準との比較と、CI」）
 
 ## 手順
 
@@ -15,11 +16,16 @@ cd container\E2E
 .\1_PublishIdP.ps1          # OP の発行物と証明書（E2E と共用。MPAS を直したら、先にこれ）
 
 cd ..\CTS
-.\2_DockerComposeUp.bat     # Conformance Suite と OP を起動する（Conformance Suite の起動には 1〜2 分かかる。先に Prepare.ps1 を呼ぶ）
+.\2_DockerComposeUp.ps1     # Conformance Suite と OP を起動する（.bat でもよい。Conformance Suite の起動には 1〜2 分かかる。先に Prepare.ps1 を呼ぶ）
 .\RunTestPlan.ps1 -Plan oidcc-basic    # プランを回す（下の表）
+.\CompareResults.ps1        # 結果を、モジュールごとの基準（ResultBaseline.csv）と比べる（下の「基準との比較と、CI」）
 .\ExtractReview.ps1         # REVIEW の判定と材料を、報告書から取り出す（下の「REVIEW の見方」。コンテナは要らない）
-.\3_DockerComposeDown.bat   # 止める
+.\3_DockerComposeDown.ps1   # 止める（.bat でもよい）
 ```
+
+- **起動と停止の手順の本体は `.ps1`**（`.bat` は呼ぶだけ。#439。`..\Stub\` と同じ形）。**Linux では pwsh で呼ぶ**（`pwsh ./2_DockerComposeUp.ps1`）。
+  ホストのリソース（`C:\root\files\resource`）の場所は、`..\E2E\` と同じ環境変数 `E2E_RESOURCE_DIR` で替えられる
+- **プランを並べて回し、基準と比べ、違ったモジュールだけを回し直すまでを 1 回で行う**なら `.\RunPlans.ps1 -Plan oidcc-basic, oidcc-config`（CI が呼ぶもの）
 
 | `-Plan` | Conformance Suite のプラン | 設定の雛形 |
 |---|---|---|
@@ -288,9 +294,40 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 | 待つ・結果を読む | `GET api/info/{id}`（`status` が `FINISHED`・`INTERRUPTED` になるまで。**上限は `-ModuleTimeoutSec`**。ブラウザの自動操作が合わないと `WAITING` のまま止まる） |
 | 報告書 | `GET api/plan/exporthtml/{id}`（zip。**`api/plan/{id}/exporthtml` は 404**。release-v5.3.4 で確かめた） |
 
-- 終了コード：0（FAILED・INTERRUPTED・時間切れが無い）／1（どれかがある）／2（前提の誤り）
+- 終了コード：0（FAILED・INTERRUPTED・時間切れが無い）／1（どれかがある）／2（前提の誤り）。
+  **今の正しい形でも FAILED・時間切れが残るプランがある**ので、合否は終了コードではなく、基準との比較で決める（下の「基準との比較と、CI」）
 - **WARNING・REVIEW は失敗に数えない**（Conformance Suite の判定のまま、結果に出す）
-- PowerShell 5.1・7 の両方で動く（自己署名の証明書の扱いを分けている。`root\11_CODING.md` 5 節）
+- **`-Module <名前>` で、そのモジュールだけを回し直せる**（#439。自動操作のぶれで落ちたものなど）。結果は前の `out\<プラン>-result.json` の同じモジュール・同じバリアントの行を置き換え、報告書は `out\<プラン>-retry<N>.zip` に書く（プラン全体の報告書は残す。`ExtractReview.ps1` が番号の順に重ね、同じモジュールのログを置き換えて読む。プラン全体を回すと、前の回し直しの報告書は消す）
+- PowerShell 5.1・7（Windows・Linux）で動く（自己署名の証明書の扱いを分けている。`root\11_CODING.md` 5 節）
+
+### 基準との比較と、CI（`CompareResults.ps1`・`RunPlans.ps1`・`conformance.yml`。#439）
+
+**今の正しい形でも、FAILED・時間切れが残るモジュールがある**（自動では回せないもの、RFC 10070 で落ちるのが正しいもの（#397・#398）、CIBA の利用者の拒否など）。
+そこで、**モジュールごとに「今の正しい結果」を基準 [`ResultBaseline.csv`](ResultBaseline.csv) に持ち、それと違うものだけを差とする**（`CompareResults.ps1`）。
+
+| 項目 | 中身 |
+|---|---|
+| 比べる単位 | プラン（`out\` のファイルの名前。`-ResponseType` を添えたものを含む）・モジュール・バリアント（全項目を名前順に並べたもの）。結果は `RunTestPlan.ps1` の結果（`PASSED`・`FAILED`・`WARNING`・`REVIEW`・`SKIPPED`・`TIMEOUT（状態）`） |
+| 差の種類 | 変わった（**良くなった方向も差とする**。基準の更新を促す）・増えた（基準に無いモジュール）・無い（比べたプランで、基準にだけ在る） |
+| 基準を直す | 差を確かめてから `.\CompareResults.ps1 -Plan <プラン> -Update`（そのプランの行だけを置き換える）。**不適合を直したら、そのコミットで基準も直す**（`ReviewBaseline.csv` と同じ） |
+| 終了コード | 0（差が無い）／1（差がある）／2（前提の誤り） |
+
+**`RunPlans.ps1` は、プランを順に回し → 基準と比べ → 差が出たモジュールだけを回し直し（既定で 8 回まで。CI のランナーでは自動操作のぶれが手元より多く、Implicit・Hybrid では 1 回目に 2〜3 割がぶれる。本当の回帰は何回回しても落ちる）→ 最後の比較の表を出し → REVIEW の材料も `ReviewBaseline.csv` と比べる**（`ExtractReview.ps1`）。
+**自動操作のぶれ**（サインインの要求が OP に届かず INTERRUPTED になる。#350）は、回し直しで拾う。**基準に無いモジュールは回し直さない。**
+
+**CI（`.github/workflows/conformance.yml`）は、`ubuntu-latest` で `RunPlans.ps1` を呼ぶ。**
+
+| 項目 | 中身 |
+|---|---|
+| 契機 | **master 宛ての PR**（リリースの関所）・手動（`workflow_dispatch`。入力 `plans` にプランを渡すと、それだけを 1 つのジョブで回す）・**週 1 回**（月曜 12:00 JST） |
+| 群 | 56 の組を、所要時間で 10 の群に分けて並列に回す（ジョブごとに Conformance Suite と OP を 1 組。群はワークフローに書いてある） |
+| Open棟梁 の部品 | 再利用のワークフロー `otr-assemblies.yml`（`OTR_REF` はそこ 1 か所。`build-and-test.yml` も使う） |
+| 設定ファイル | `root/programs/Tests/New-E2ESettings.ps1 -ResourceDir` で雛形から作る（`build-and-test.yml` の `e2e-linux` と同じ値。テスト専用で秘密ではない） |
+| 合否 | `RunPlans.ps1` の終了コード（基準と違えば落ちる。REVIEW の材料の形が変わっても落ちる）。**ただし、回し直しても残った差が 3 件以下で、すべて自動操作のぶれ（基準が PASSED・WARNING、結果が FAILED、落ちた判定が WebRunner とそのモジュールだけ）なら、落とさずに警告（注釈とジョブのまとめ）に留める**（#439。CI では、2 回サインインするモジュールの WebRunner の「Verify Complete」が、回し直しを 8 回しても 1 件ほど残る。**特定の画面だけが壊れた回帰も同じ形で警告になりうるので、警告を読む。同じモジュールが続けて残るなら、回帰を疑う**） |
+| 残すもの | **結果の JSON（`out/*-result.json`）と差の一覧（`out/diff.json`）だけ**（`conformance-results-<群>`）。**設定の JSON と報告書の zip は残さない**（クライアントの秘密鍵とテスト利用者のパスワードを含む。公開リポジトリの成果物は、ログインした人なら誰でも落とせる） |
+
+- **CI で差が出たら**：差の表（ジョブのまとめ）を見て、**手元でそのプランを回し**（報告書で理由を読む）、仕分ける（[`root/14_TESTING.md`](../../root/14_TESTING.md) 5 節「適合性テスト」の表）。良くなった方向なら、確かめて基準を直す
+- **REVIEW の差**は、ジョブのログの `ExtractReview.ps1` の出力（違うものだけ）で分かる。合否を付け直すには、手元で回して `out\review\<プラン>.json` を読む
 
 ### REVIEW の見方（`ExtractReview.ps1`。#417）
 
@@ -352,7 +389,7 @@ Conformance Suite は dev の構成なので、**API は認証なしで呼べる
 |---|---|
 | `mongo\` | Conformance Suite の結果（MongoDB のデータ）。**消すと、画面の一覧も消える** |
 | `keys\`・`logs\` | OP の DataProtection の鍵とログ |
-| `out\` | 実行用の設定（**テスト利用者のパスワード・initial access token・FAPI のクライアントの秘密鍵を埋めたもの**）と、結果の JSON・報告書の zip |
+| `out\` | 実行用の設定（**テスト利用者のパスワード・initial access token・FAPI のクライアントの秘密鍵を埋めたもの**）と、結果の JSON・報告書の zip（回し直しの報告書は `-retry<N>.zip`）・差の一覧（`diff.json`。`RunPlans.ps1`） |
 | `certs\` | nginx の証明書と秘密鍵（`Prepare.ps1`。適合性テストの環境だけで使う自己署名） |
 | `.env.cts` | compose に渡す値（`Prepare.ps1`。DCR の管理クライアントの所有者の利用者名、FAPI のクライアントの公開鍵） |
 | `certs\fapi-client*.jwk.json`・`certs\mtls-client*` | FAPI のクライアントの秘密鍵とクライアント証明書（`Prepare.ps1`。**秘密鍵を含む**） |
