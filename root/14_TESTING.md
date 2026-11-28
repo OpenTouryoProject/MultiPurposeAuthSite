@@ -5413,7 +5413,7 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 |---|---|---|
 | **環境の不足** | 設定の欄が無い（`GetStaticClientConfiguration`）、ブラウザの自動操作が合わない（`WebRunner` の `Unable to locate element`・`Unexpected URL`）、登録の項目の立て忘れ（FAPI の強制の項目は既定で false。#346）など | `container/CTS` を直す（設定の雛形・`docker-compose.yml`・`RunTestPlan.ps1`） |
 | **自動では回せない** | 利用者の拒否や、同じ画面への 2 回の訪問を区別する操作が要る | `container/CTS/README.md` に書き、合否から外して読む |
-| **自動操作のぶれ** | サインインのボタンを押しても `POST /Account/Login` が OP に届いていない（OP の ACCESS ログで見る） | 回し直す。同じモジュールで続けて落ちるなら、改めて見る |
+| **自動操作のぶれ** | サインインのボタンを押しても `POST /Account/Login` が OP に届いていない（OP の ACCESS ログで見る）。**#440 で原因（ボタンのハンドラを jQuery の ready の後に付けていた）を直したので、今は出ないはず** | 回し直す。同じモジュールで続けて落ちるなら、改めて見る（**画面がボタンの送信を、ready の後のハンドラに頼っていないか**） |
 | **OP の不適合** | 上のどれでもなく、仕様の節と照らして OP の振る舞いが外れている | **原因ごとに Issue にする**（仕様の節を原典で確かめてから。セキュリティの弱点の疑いなら、公開する前に人に聞く） |
 
 - **1 つの不適合で、プランの大半が止まることがある**（#370・#371）。そのときは、直した後に回し直し、その先の結果を改めて仕分ける
@@ -5423,7 +5423,7 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
   `container\CTS\ExtractReview.ps1` で報告書から OP の応答を取り出し、基準（`ReviewBaseline.csv`）と比べる（全プランの実行のたび。#417。`container/CTS/README.md` の「REVIEW の見方」）
 - **CI（`.github/workflows/conformance.yml`。#439）**：`ubuntu-latest` で、56 の組を 10 の群に分けて並列に回す（`RunPlans.ps1`。基準と比べ、違ったモジュールだけを回し直し、REVIEW の材料も比べる）。
   契機は **master 宛ての PR・手動（入力 `plans` でプランを絞れる）・週 1 回**。**残すのは結果の JSON と差の一覧だけ**（設定の JSON と報告書は秘密を含むので残さない）。
-  **回し直しても残った差が少なく、すべて自動操作のぶれ（WebRunner）なら、落とさずに警告に留める**（CI のランナーでは、手元よりぶれが多い。**警告を読み、同じモジュールが続けて残るなら回帰を疑う**）。
+  **違ったモジュールは 2 回まで回し直し、それでも残った差は落とす**（#439 では 8 回にし、残ったぶれを警告に留めていた。原因を #440 で直したので外した）。
   **CI で差が出たら、手元でそのプランを回して報告書で理由を読み、上の表で仕分ける**（`container/CTS/README.md`「基準との比較と、CI」）
 
 ## 6. 未修正の項目の扱い

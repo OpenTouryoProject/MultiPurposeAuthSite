@@ -22,6 +22,7 @@
     //*  2026/10/11  玄人 幸道         ID 連携の導線を、設定が揃っているときだけ出す（#286 の段階 2）
     //*  2026/10/13  玄人 幸道         ID 連携の導線を上流の登録ごとに出した（#292 の段階 1）
     //*  2026/11/24  玄人 幸道         認可の要求から来たときは、クライアントのロゴ・ポリシー・利用規約を出す（#427）
+    //*  2026/11/28  玄人 幸道         ボタンのハンドラを、jQuery の ready を待たずに付ける（#440）
     //**********************************************************************************
 *@
 
@@ -215,31 +216,32 @@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
     <script>
-        $(function () {
-            $("#normal_signin").on("click", function () {
-                // button name
-                $("#submitButtonName").val(this.value);
-                // submit
-                $("#LoginForm").submit();
-            });
+        //  **ボタンのハンドラは、ready を待たずに、この場で付ける**（document への委譲。#440）。
+        //    **ボタンは type="button" で、送信するのはこのハンドラだけ**である。
+        //    **jQuery 3 は $(function) をタイマーで後から呼ぶ**ので、それまでに押すと何も起きなかった
+        //    （読み込みの途中で押した利用者、適合性テストの自動操作のブラウザ。RT-440.1）。
+        $(document).on("click", "#normal_signin", function () {
+            // button name
+            $("#submitButtonName").val(this.value);
+            // submit
+            $("#LoginForm").submit();
         });
     </script>
 
     <script>
         // Id federationLogin
-        $(function () {
-            //  **ID 連携のボタンは、OIDC も SAML2 も、1 件でも n 件でも同じ扱い**（#292 の段階 1）。
-            //    **class で束ねる。** **id で束ねていた頃は、SAML2 のボタンに
-            //    ハンドラが付いておらず、ブラウザでは押しても何も起きなかった**
-            //    （E2E はフォームを直接 POST するので、気付けなかった）。
-            $(".id_federation_button").on("click", function () {
-                // button name
-                $("#submitButtonName").val(this.value);
-                // **どの上流か**（空なら既定）
-                $("#IdpKey").val($(this).data("idp-key"));
-                // submit
-                $("#LoginForm").submit();
-            });
+        //  **ID 連携のボタンは、OIDC も SAML2 も、1 件でも n 件でも同じ扱い**（#292 の段階 1）。
+        //    **class で束ねる。** **id で束ねていた頃は、SAML2 のボタンに
+        //    ハンドラが付いておらず、ブラウザでは押しても何も起きなかった**
+        //    （E2E はフォームを直接 POST するので、気付けなかった）。
+        //  **サインインのボタンと同じく、ready を待たずに付ける**（#440）。
+        $(document).on("click", ".id_federation_button", function () {
+            // button name
+            $("#submitButtonName").val(this.value);
+            // **どの上流か**（空なら既定）
+            $("#IdpKey").val($(this).data("idp-key"));
+            // submit
+            $("#LoginForm").submit();
         });
     </script>
     @if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
