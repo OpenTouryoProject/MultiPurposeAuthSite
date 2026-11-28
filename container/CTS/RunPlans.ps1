@@ -9,10 +9,9 @@
     1. **プランを 1 つずつ回す**（RunTestPlan.ps1。終了コードの 1（FAILED がある）は、ここでは見ない。基準と比べて決める）
     2. **基準（ResultBaseline.csv）と比べる**（CompareResults.ps1）
     3. **差が出たモジュールだけを回し直す**（RunTestPlan.ps1 -Module。-Retry 回まで）。
-       **自動操作のぶれ**（サインインの要求が OP に届かず INTERRUPTED になる。#350）を、回し直しで拾う。
+       **まれな自動操作のぶれ**（ランナーの一時的な遅れなど）を、回し直しで拾う。
        **基準に無いモジュール（増えた）は回し直さない**（ぶれではない）
-    4. **最後の比較の結果を、差の表として出す**（-SummaryPath）。
-       **残った差が少なく（-FlakyLimit 件以下）、すべて自動操作のぶれ（WebRunner）なら、落とさずに警告に留める**
+    4. **最後の比較の結果を、差の表として出す**（-SummaryPath）。**回し直しても残った差は落とす**
     5. **REVIEW の材料を、基準（ReviewBaseline.csv）と比べる**（ExtractReview.ps1。#417）。
        **報告書から取り出すので、ランナーの上で回す**（報告書は CI の成果物には残さない。秘密を含む）
 
@@ -21,20 +20,18 @@
       例：oidcc-basic、oidcc-dynamic-code-id_token、oidcc-rp-initiated-logout-dynamic-id_token-token
 
     ＜終了コード＞
-      0 : 基準と同じ（REVIEW も同じ）。残った差が自動操作のぶれだけで、警告に留めたときも 0
+      0 : 基準と同じ（REVIEW も同じ）
       1 : 基準と違う（回し直しても残った）、または REVIEW の材料の形が変わった
       2 : 前提の誤り（Conformance Suite に届かない、プランの名前の誤り など）
 
 .PARAMETER Plan
     回すプラン（上の書き方。カンマ区切りの 1 つの文字列も受ける）。
 .PARAMETER Retry
-    差が出たモジュールを回し直す回数の上限（既定は 8）。
-    **CI のランナーでは、自動操作のぶれ（WebRunner の「unexpected url for task: Verify Complete」）が手元より多い**（#439 の試行で、
-    Implicit・Hybrid の 1 回目に 2〜3 割。回し直したモジュールの半分ほどがまた落ちる）ので、5 回でも 1 件ずつ残ることがあった。
-    **本当の回帰は、何回回し直しても落ちる**ので、回数を増やしても落とす基準は緩まない。
-.PARAMETER FlakyLimit
-    回し直しても残った差が、この件数以下で、すべて自動操作のぶれ（基準が PASSED・WARNING、結果が FAILED、落ちた判定が WebRunner とそのモジュールだけ）なら、
-    落とさずに警告に留める（既定は 3。0 にすると、ぶれでも落とす）。
+    差が出たモジュールを回し直す回数の上限（既定は 2）。
+    **#439 では 8 回にし、残ったぶれを警告に留めていた。** CI で、WebRunner の「unexpected url for task: Verify Complete」が
+    OIDC の群の 1 回目に 1〜2 割出ていたため。**原因は OP のサインインの画面だった**（ボタンのハンドラを jQuery の ready の後に付けていたので、
+    自動操作のブラウザが速く押すと送られなかった。#440）。**直した後は、全プランの 1 回目の差が 0 件になった**ので、2 回に戻し、警告に留める規則を外した。
+    **本当の回帰は、何回回し直しても落ちる。**
 .PARAMETER SummaryPath
     差の表（Markdown）を書き足すファイル（GitHub Actions の $GITHUB_STEP_SUMMARY など）。
 .PARAMETER NoReview
@@ -52,13 +49,13 @@
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/11/27  玄人 幸道         新規（#439）
+     2026/11/28  玄人 幸道         回し直しの既定を 2 回にし、残ったぶれを警告に留める規則（-FlakyLimit）を外した（#440）
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string[]] $Plan,
-    [int] $Retry = 8,
-    [int] $FlakyLimit = 3,
+    [int] $Retry = 2,
     [string] $SummaryPath,
     [switch] $NoReview
 )
@@ -173,40 +170,7 @@ if ($SummaryPath) { $a.SummaryPath = $SummaryPath }
 $resultCode = $LASTEXITCODE
 if ($resultCode -eq 2) { exit 2 }
 
-# **回し直しても残った差が、自動操作のぶれだけなら、落とさずに警告に留める**（#439 で決めた）。条件はすべて満たすこと：
-#   - 残った差が -FlakyLimit 件以下
-#   - すべて「変わった」で、基準が PASSED・WARNING、結果が FAILED
-#   - 落ちた判定（Failures）が WebRunner を含み、ほかはそのモジュール自身（モジュールの失敗の印）だけ
-#   **CI のランナーでは、2 回サインインするモジュール（max-age-10000 など）の WebRunner の「Verify Complete」が手元より多く、
-#   回し直しを 8 回しても 1 件ほど残る**（#439 の試行。原因は別に追う）。
-#   **特定の画面だけが壊れた回帰も、同じ形で警告になりうる**ので、警告（GitHub の注釈とジョブのまとめ）を読む
-if ($resultCode -eq 1)
-{
-    $left = @([IO.File]::ReadAllText($diffPath) | ConvertFrom-Json)
-    $flaky = @(foreach ($d in $left)
-    {
-        $mod = ([string]$d.Module) -replace '#\d+$', ''
-        $srcs = @(([string]$d.Failures) -split ',' | Where-Object { $_ })
-        $others = @($srcs | Where-Object { ($_ -ne 'WebRunner') -and ($_ -ne $mod) })
-        if (($d.Kind -eq '変わった') -and (@('PASSED', 'WARNING') -contains $d.Expected) -and ($d.Actual -eq 'FAILED') -and
-            ($srcs -contains 'WebRunner') -and ($others.Count -eq 0)) { $d }
-    })
-    if (($left.Count -le $FlakyLimit) -and ($flaky.Count -eq $left.Count))
-    {
-        foreach ($d in $left)
-        {
-            # GitHub Actions の注釈（手元では、そのまま 1 行出るだけ）。run: の外なので ASCII に限らないが、注釈は英語にしておく
-            Write-Host ('::warning::Conformance: only the browser automation (WebRunner) failed after {0} retries: {1} / {2} ({3})' -f $Retry, $d.Plan, $d.Module, $d.Variant)
-        }
-        if ($SummaryPath)
-        {
-            $line = '**残った差 {0} 件は、自動操作のぶれ（WebRunner）だけなので、落とさずに警告に留めた**（回し直し {1} 回の後。同じモジュールが続けて残るなら、回帰を疑う）。' -f $left.Count, $Retry
-            [IO.File]::AppendAllText($SummaryPath, ($line + "`n`n"), (New-Object Text.UTF8Encoding $false))
-        }
-        Write-Host ('残った差 {0} 件は、自動操作のぶれ（WebRunner）だけなので、警告に留めます。' -f $left.Count) -ForegroundColor Yellow
-        $resultCode = 0
-    }
-}
+# **回し直しても残った差は、落とす**（#439 では、自動操作のぶれだけなら警告に留めていた。原因を直したので外した。#440）
 
 #endregion
 
