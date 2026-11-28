@@ -6884,7 +6884,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **手順**
 
 1. GET /Account/EmailConfirmation
-1. GET /Account/EmailConfirmation?userId=4bbbf393-6319-473f-82e8-0d6722804622&code=bogus
+1. GET /Account/EmailConfirmation?userId=7ca55b6f-3720-4f83-b19d-61371f0d1dda&code=bogus
 1. GET /Account/ResetPassword
 1. POST /Account/ResetPassword（code が違う）
 1. POST /Account/ResetPassword（確認の入力が合わない）
@@ -6893,8 +6893,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - /Account/EmailConfirmation : HTTP 200（500 にならない）
 - /Account/EmailConfirmation : **エラー画面になる**
-- /Account/EmailConfirmation?userId=4bbbf393-6319-473f-82e8-0d6722804622&code=bogus : HTTP 200（500 にならない）
-- /Account/EmailConfirmation?userId=4bbbf393-6319-473f-82e8-0d6722804622&code=bogus : **エラー画面になる**
+- /Account/EmailConfirmation?userId=7ca55b6f-3720-4f83-b19d-61371f0d1dda&code=bogus : HTTP 200（500 にならない）
+- /Account/EmailConfirmation?userId=7ca55b6f-3720-4f83-b19d-61371f0d1dda&code=bogus : **エラー画面になる**
 - /Account/ResetPassword : HTTP 200（500 にならない）
 - /Account/ResetPassword : **エラー画面になる**
 - code が違う : **リセットの画面を出し直し、エラーを出す**
@@ -14482,6 +14482,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 符号化していない値は 400
 - error は invalid_redirect_uri
 - 符号化した値は 201
+
+## RT-440.1 サインインの画面で、jQuery の ready のハンドラが動く前にボタンを押しても、サインインできる
+
+| | |
+|---|---|
+| 観点 | **ボタンは `type="button"` で、送信するのはハンドラだけ**である。**ハンドラを `$(function)` の中で付けると、jQuery 3 はタイマーで後から呼ぶ**ので、**それまでに押すと何も起きない**（適合性テストの自動操作のブラウザが落ちていた）。**ready のハンドラを止めて**、押した瞬間にハンドラが付いていない状態を作る。 |
+| 根拠 | #440 |
+| テスト | `RT440_1_readyの前に押してもサインインできる` |
+
+**手順**
+
+1. ready のハンドラを止めて、サインインの画面を開く
+1. ready のハンドラが止まったまま、入力してボタンを押す
+
+**検証（合否を判定する）**
+
+- jQuery の ready を止める差し込みが効いている
+- サインインの画面から移る
+
+**観測（判定しない）**
+
+- 使っているブラウザ
+- 止めた ready のハンドラの数
+  - **直した後は、サインインのボタンは ready に頼らない**ので、0 でもよい
+- 移った先
 
 # FA. FAPI（クライアント登録ごとに通る経路）
 

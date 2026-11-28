@@ -29,10 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/11/28  玄人 幸道         新規（#440）
+//*  2026/11/28  玄人 幸道         ready のハンドラを時間で遅らせず、テストの間ずっと止めるようにした（通しの負荷で、遅れの後に押したことがあった。#440）
 //**********************************************************************************
 
 using System;
-using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Microsoft.Playwright;
@@ -53,40 +53,39 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.WebUI
     /// **以前は `$(function)` の中で付けていた。** **jQuery 3 は `$(function)` をタイマーで後から呼ぶ**ので、
     /// **それまでに押すと何も起きなかった**（適合性テストの自動操作のブラウザが、CI で 1 回目に 1〜2 割落ちていた。#440）。
     ///
-    /// **ready が動くのを遅らせて、押した瞬間の状態を作る。**
-    /// 文書の前に差し込むスクリプトで、jQuery が `window.jQuery` に入った時点で `jQuery.fn.ready` を包み、
-    /// **ready のハンドラを <see cref="ReadyDelayMs"/> だけ遅らせる**（`$(function)` は `jQuery.fn.ready` を通る）。
-    /// **直す前は、押しても画面が移らず、遅れの後にハンドラが付いても、押した後なので送られない。**
+    /// **ready のハンドラを、テストの間ずっと止めて、押した瞬間の状態を作る。**
+    /// 文書の前に差し込むスクリプトで、jQuery が `window.jQuery` に入った時点で `jQuery.fn.ready` を置き換え、
+    /// **ready のハンドラを呼ばずに溜める**（`$(function)` は `jQuery.fn.ready` を通る）。
+    /// **時間で遅らせない**（最初は 5 秒遅らせたが、通しの負荷で、入力して押すまでに 8.7 秒かかり、遅れの後に押したことがある）。
+    /// **直す前は、押しても画面が移らない。**
     ///
     /// **測るのは通常のサインインのボタンだけ**である。ID 連携のボタンは上流の IdP が要るので、ここでは押さない
     /// （同じ形に直した。`Login.cshtml`）。
     /// </remarks>
     public class SignInBeforeReadyTests : TargetTestBase
     {
-        /// <summary>ready のハンドラを遅らせる時間（ミリ秒）</summary>
-        private const int ReadyDelayMs = 5000;
+        /// <summary>押した後に、画面が移るのを待つ上限（秒）</summary>
+        private const int WaitSeconds = 30;
 
         /// <summary>
-        /// 文書の前に差し込むスクリプト。**jQuery の ready のハンドラを遅らせる**。
-        /// **`window.__readyDelayed` で、差し込みが効いたかを確かめる**（効いていなければ、測れていない）。
+        /// 文書の前に差し込むスクリプト。**jQuery の ready のハンドラを呼ばずに溜める**（`window.__heldReady`）。
+        /// **`jQuery.fn.__heldReady` で、差し込みが効いたことを確かめる**（効いていなければ、測れていない）。
         /// </summary>
-        private const string DelayReadyScript = @"
+        private const string HoldReadyScript = @"
 (() => {
   let jq;
+  window.__heldReady = [];
   Object.defineProperty(window, 'jQuery', {
     configurable: true,
     get() { return jq; },
     set(v) {
       jq = v;
-      if (v && v.fn && v.fn.ready && !v.fn.__delayedReady) {
-        const ready = v.fn.ready;
+      if (v && v.fn && v.fn.ready && !v.fn.__heldReady) {
         v.fn.ready = function (fn) {
-          const self = this;
-          setTimeout(() => ready.call(self, fn), " + "READY_DELAY_MS" + @");
+          window.__heldReady.push(fn);
           return this;
         };
-        v.fn.__delayedReady = true;
-        window.__readyDelayed = true;
+        v.fn.__heldReady = true;
       }
     }
   });
@@ -115,14 +114,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.WebUI
                 "**ボタンは `type=\"button\"` で、送信するのはハンドラだけ**である。"
                 + "**ハンドラを `$(function)` の中で付けると、jQuery 3 はタイマーで後から呼ぶ**ので、"
                 + "**それまでに押すと何も起きない**（適合性テストの自動操作のブラウザが落ちていた）。"
-                + "**ready を遅らせて**、押した瞬間にハンドラが付いていない状態を作る。",
+                + "**ready のハンドラを止めて**、押した瞬間にハンドラが付いていない状態を作る。",
                 "#440");
 
             using (WebUi.Session session = await WebUi.OpenAsync())
             await using (IBrowserContext context = await session.NewContextAsync(target))
             {
-                await context.AddInitScriptAsync(
-                    DelayReadyScript.Replace("READY_DELAY_MS", ReadyDelayMs.ToString()));
+                await context.AddInitScriptAsync(HoldReadyScript);
 
                 IPage page = await context.NewPageAsync();
 
@@ -130,36 +128,34 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.WebUI
 
                 r.Target("GET /Account/Login → ボタン normal_signin（" + target.BaseUrl + "）");
 
-                r.Step("(1) ready を " + ReadyDelayMs + " ミリ秒遅らせて、サインインの画面を開く");
+                r.Step("(1) ready のハンドラを止めて、サインインの画面を開く");
 
                 await WebUi.GotoAsync(page, target.Url("/Account/Login"));
 
-                bool delayed = await page.EvaluateAsync<bool>("() => window.__readyDelayed === true");
+                //  **前提は「jQuery の ready を止める差し込みが効いていること」**（溜まった数ではない）。
+                //    **直した後の net48 版は、サインインの画面に ready のハンドラが 1 つも無い**ので、溜まる数は 0 になる
+                //    （直す前は、Login.cshtml の 2 つが溜まった。net10.0 版は、ほかのスクリプトの分も溜まる）。
+                bool hooked = await page.EvaluateAsync<bool>(
+                    "() => !!(window.jQuery && window.jQuery.fn && window.jQuery.fn.__heldReady)");
 
-                r.Verify("ready を遅らせる差し込みが効いている", delayed,
-                    "効いている", delayed ? "効いている" : "**効いていない（測れていない）**");
+                r.Verify("jQuery の ready を止める差し込みが効いている", hooked,
+                    "効いている", hooked ? "効いている" : "**効いていない（測れていない）**");
 
-                Assert.True(delayed, "前提: ready を遅らせる差し込みが効くこと");
+                Assert.True(hooked, "前提: ready のハンドラを止める差し込みが効くこと");
 
-                r.Step("(2) ready が動く前に、入力してボタンを押す");
+                r.Observe("止めた ready のハンドラの数",
+                    (await page.EvaluateAsync<int>("() => window.__heldReady.length")).ToString(),
+                    "**直した後は、サインインのボタンは ready に頼らない**ので、0 でもよい");
 
-                Stopwatch sw = Stopwatch.StartNew();
+                r.Step("(2) ready のハンドラが止まったまま、入力してボタンを押す");
 
                 await page.FillAsync("#Email", TestEnv.TestUserName(targetKey));
                 await page.FillAsync("#Password", target.Config.Get("TestUserPWD"));
                 await page.ClickAsync("#normal_signin");
 
-                long clickedMs = sw.ElapsedMilliseconds;
-
-                //  **押すまでが遅れより短くなければ、ハンドラが付いた後に押したことになり、測れていない。**
-                r.Verify("ready が動く前に押した", clickedMs < ReadyDelayMs,
-                    ReadyDelayMs + " ミリ秒より前", clickedMs + " ミリ秒");
-
-                Assert.True(clickedMs < ReadyDelayMs, "前提: ready が動く前に押せること");
-
                 //  **`WaitForURLAsync` を使わず、`page.Url` を見る**（`WebUi.SignInAsync` と同じ。#325）。
-                //    **遅れの後も待つ**（直す前は、遅れの後にハンドラが付いても、押した後なので移らない）。
-                DateTime deadline = DateTime.UtcNow.AddMilliseconds(ReadyDelayMs + 10000);
+                //    **ready のハンドラは最後まで動かない**ので、待つ長さで結果は変わらない（上限は、遅い応答のため）。
+                DateTime deadline = DateTime.UtcNow.AddSeconds(WaitSeconds);
 
                 while (page.Url.Contains("/Account/Login") && DateTime.UtcNow < deadline)
                 {
